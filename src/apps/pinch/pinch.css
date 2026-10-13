@@ -78,7 +78,7 @@ html.pinch-theme button[class*='justify-between'][class*='w-full'][class*='borde
 
 /* A text field beside a select (amount and unit) must be as tall as the select. */
 html.pinch-theme
-  :is(input[type='text'], input[type='number'], input[type='search'], input[type='url'], input:not([type])) {
+  :is(input[type='text'], input[type='number'], input[type='search'], input[type='url'], input:not([type])):not([class*='min-h-']) {
   min-height: 2.625rem;
 }
 

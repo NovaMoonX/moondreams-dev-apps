@@ -129,17 +129,20 @@ export async function extractRecipeFromFile(
   ]);
 }
 
-/** Reads a recipe from a web page's own recipe data and text. Not cached: every reading is a fresh call. */
+/** Reads a recipe from a web page's text and any Recipe data it publishes: the model writes the draft, so a page with partial or no data still reads. Not cached: every reading is a fresh call. */
 export async function extractRecipeFromPage(
   page: PageContent,
 ): Promise<ExtractedRecipe> {
-  const structured = page.structured
-    ? `Recipe data from the page:\n${page.structured}\n\n`
+  const data = page.structuredData?.length
+    ? `Recipe data the page publishes (may be incomplete):\n${JSON.stringify(page.structuredData)}\n\n`
     : '';
+  const heading = [page.title, page.meta?.description]
+    .filter(Boolean)
+    .join('\n');
 
   return generate([
     {
-      text: `${PROMPT}\n\n--- BEGIN RECIPE ---\n${structured}Page text:\n${page.text}\n--- END RECIPE ---`,
+      text: `${PROMPT}\n\nThis came from a web page, so ignore ads, comments and related links.\n\n--- BEGIN RECIPE ---\n${heading}\n\n${data}Page text:\n${page.text ?? ''}\n--- END RECIPE ---`,
     },
   ]);
 }

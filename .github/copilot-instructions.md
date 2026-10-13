@@ -246,7 +246,7 @@ type Status = 'idle' | 'loading' | 'success';
 ```
 
 ### Functions over loose variables
-- Don't declare a `let` and then assign it in each branch of an `if`/`else if`/`else` chain (or a `switch`) to feed a later `return`. Put the branching in a small function whose branches `return` the value directly (early returns), then call it once and destructure or use the result. This is what keeps a component's branches, their data, and their handlers colocated in one place instead of scattered across mutated variables.
+- Don't declare a `let` and then assign it in each branch of an `if`/`else if`/`else` chain (or a `switch`) to feed a later `return`. Put the branching in a small function whose branches `return` the value directly (early returns), then call it once and destructure or use the result. This is what keeps a component's branches, their data, and their handlers colocated instead of scattered across mutated variables.
 - Prefer expressions over statements for building values: `.reduce` over a `for` loop that pushes into or mutates an accumulator, `.map`/`.filter`/`.flatMap` over `for` + `push`, `Object.fromEntries` / `new Map(...)` / `new Set(...)` over manual insertion loops.
 - Default to `const`. A `let` is only acceptable when a value genuinely must be reassigned over time (a counter inside a closure, a retry loop's state) and no returning function or reduce expresses it more compactly.
 - Prefer compact, colocated code: keep a helper next to the single place that uses it (inside the component or the same file) rather than a separate file or abstraction, and don't split a short piece of logic across several one-use variables.

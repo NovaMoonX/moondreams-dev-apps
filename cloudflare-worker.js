@@ -50,7 +50,7 @@ const APP_REGISTRY = [
         isValid: hasInviteCode,
         title: "You're invited to plan a trip together on Waypoint",
         description:
-          "Someone saved you a seat on their trip. Request to join and, once you're approved, you'll see the itinerary, stays, and shared expenses all in one place.",
+          "Someone saved you a seat on their trip. Request to join and, once you're approved, you'll see the itinerary, stays, and shared expenses.",
       },
       {
         name: 'trip',

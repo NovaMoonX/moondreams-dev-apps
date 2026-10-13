@@ -67,7 +67,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
       ? "Add today's photos to the album so everyone can relive the day."
       : "Add an album link so everyone can share today's photos."
     : trip.sharedAlbumUrl
-      ? "Keep everyone's trip photos in one place."
+      ? "Keep everyone's trip photos together."
       : canSet
         ? 'Add a link (Google Photos works great) to start capturing memories together.'
         : "An Editor or Admin can start the shared album whenever they're ready.";

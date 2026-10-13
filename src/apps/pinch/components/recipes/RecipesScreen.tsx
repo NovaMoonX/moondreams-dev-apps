@@ -8,17 +8,21 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import LazyMount from '@/components/LazyMount';
 import SectionHeader from '@/components/SectionHeader';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
+import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import MealDrawer from '@apps/pinch/components/recipes/MealDrawer';
 import MealRow from '@apps/pinch/components/recipes/MealRow';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import RecipeRow from '@apps/pinch/components/recipes/RecipeRow';
+import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
 import {
   LIST_SEARCH_THRESHOLD,
   RECIPES_VIEW_LABELS,
   RECIPES_VIEWS,
 } from '@apps/pinch/constants';
+import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectCostContext,
@@ -46,6 +50,8 @@ interface RecipesScreenProps {
 
 function RecipesScreen({ uid }: RecipesScreenProps) {
   const { openSubview } = usePinchOverlay();
+  const isPhone = useMediaQuery().isBelow('sm');
+  const viewOptions = useListViewOptions(uid, 'recipes');
   const recipes = useAppSelector(selectRecipes);
   const costs = useAppSelector(selectRecipeCosts);
   const meals = useAppSelector(selectMeals);
@@ -55,6 +61,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
+  const [isStartOpen, setIsStartOpen] = useState(false);
 
   const total = view === 'meals' ? meals.length : recipes.length;
   const hasSearch = total >= LIST_SEARCH_THRESHOLD;
@@ -101,6 +108,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               <MealRow
                 meal={meal}
                 cost={getMealCost(meal.items, costContext)}
+                showPrices={viewOptions.options.showPrices}
+                showMacros={viewOptions.options.showMacros}
                 onOpen={setOpenMealId}
               />
             </li>
@@ -157,6 +166,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                         <RecipeRow
                           recipe={recipe}
                           cost={costs.get(recipe.id)}
+                          showPrices={viewOptions.options.showPrices}
+                          showMacros={viewOptions.options.showMacros}
                           onOpen={setOpenId}
                         />
                       </li>
@@ -171,6 +182,18 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     );
   };
 
+  const handleNew = () => {
+    if (view === 'meals') {
+      openSubview({ kind: 'meal', id: null });
+      return;
+    }
+    if (isPhone) {
+      setIsStartOpen(true);
+      return;
+    }
+    openSubview({ kind: 'recipe', id: null });
+  };
+
   return (
     <div className='space-y-4'>
       <SectionHeader
@@ -181,29 +204,34 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             size='sm'
             rounded='full'
             className='gap-1'
-            onClick={() =>
-              openSubview(
-                view === 'meals'
-                  ? { kind: 'meal', id: null }
-                  : { kind: 'recipe', id: null },
-              )
-            }
+            onClick={handleNew}
           >
             <Plus className='h-4 w-4' aria-hidden='true' />
             New
           </Button>
         }
       />
-      <PillGroup
-        label='Recipes or meals'
-        options={VIEW_OPTIONS}
-        value={view}
-        onChange={(next) => {
-          setQuery('');
-          setView(next);
-        }}
-        isThin
-      />
+      <div className='flex items-center justify-between gap-3'>
+        <div className='min-w-0'>
+          <PillGroup
+            label='Recipes or meals'
+            options={VIEW_OPTIONS}
+            value={view}
+            onChange={(next) => {
+              setQuery('');
+              setView(next);
+            }}
+            isThin
+          />
+        </div>
+        <ListViewControls
+          options={viewOptions.options}
+          customizedCount={viewOptions.customizedCount}
+          onChange={viewOptions.update}
+          onReset={viewOptions.reset}
+          className='h-10 w-10'
+        />
+      </div>
       {hasSearch && (
         <SearchInput
           value={query}
@@ -263,6 +291,15 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           onFillIn={(gaps) => {
             setOpenMealId(null);
             setFillIn(gaps);
+          }}
+        />
+      )}
+      {isStartOpen && (
+        <RecipeStartDrawer
+          onClose={() => setIsStartOpen(false)}
+          onPick={(method) => {
+            setIsStartOpen(false);
+            openSubview({ kind: 'recipe', id: null, method });
           }}
         />
       )}

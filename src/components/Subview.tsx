@@ -41,6 +41,8 @@ interface SubviewProps {
   onClose: () => void;
   /** Omit when the content draws its own `SubviewHeader` because its back step changes. */
   title?: string;
+  /** What the header's back button does when it steps back inside the subview instead of leaving it; the browser's back and Escape still call `onClose`. */
+  onBack?: () => void;
   className?: string;
   /**
    * Render as a full-screen layer on top of the page instead of in its place, for a subview opened
@@ -58,6 +60,7 @@ function Subview({
   children,
   onClose,
   title,
+  onBack,
   className,
   overlay = false,
 }: SubviewProps) {
@@ -115,7 +118,7 @@ function Subview({
           {title !== undefined && (
             <SubviewHeader
               title={title}
-              onBack={onClose}
+              onBack={onBack ?? onClose}
               className='bg-background sticky top-0 z-20 -mx-4 -mt-6 px-4 pt-6 pb-3'
             />
           )}
@@ -134,7 +137,7 @@ function Subview({
         {title !== undefined && (
           <SubviewHeader
             title={title}
-            onBack={onClose}
+            onBack={onBack ?? onClose}
             className='sticky-app-bar bg-background/80 -mx-4 backdrop-blur mb-3 min-h-14 px-4 py-2.5'
           />
         )}

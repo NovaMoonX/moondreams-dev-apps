@@ -499,7 +499,6 @@ function MealBuilder({
                 <HelpTip
                   variant='warning'
                   title='Not everything is counted'
-                  noModal
                   placement='top'
                 >
                   This {formatLeftOut(cost.leftOut)} because there’s no price

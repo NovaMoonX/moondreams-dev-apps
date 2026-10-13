@@ -5,7 +5,6 @@ import {
   Form,
   FormFactories,
   Input,
-  Label,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { Gauge, Scale } from 'lucide-react';
@@ -14,17 +13,35 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import AddFieldChips, {
   RemovableField,
 } from '@/components/forms/AddFieldChips';
+import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
+import MacroStats from '@/components/MacroStats';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import Pill from '@/components/Pill';
+import { PillRow } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
-import { MAX_NAME_LENGTH, MAX_SERVING_AMOUNT } from '@apps/pinch/constants';
+import {
+  MAX_NAME_LENGTH,
+  MAX_NUTRITION_VALUE,
+  MAX_SERVING_AMOUNT,
+  NUTRITION_ENTRY_UNITS,
+  NUTRITION_METRICS,
+} from '@apps/pinch/constants';
 import {
   removeIngredient,
   saveIngredient,
 } from '@apps/pinch/store/actions/ingredientActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
+import {
+  getEntryGrams,
+  getServingGrams,
+  toPer100g,
+  type NutritionEntryUnit,
+} from '@apps/pinch/utils/nutritionBasis';
+import type { Conversions } from '@apps/pinch/utils/quantity';
+import { formatSize } from '@apps/pinch/utils/productFormat';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 import {
   selectIngredientFamilies,
@@ -49,8 +66,14 @@ interface NutritionText {
   fat: string;
 }
 
+interface NutritionEntry {
+  /** What the typed numbers are for: "28 g", "1 oz", "1 serving". */
+  basis: { amount: string; unit: NutritionEntryUnit };
+  values: NutritionText;
+}
+
 interface Extras {
-  nutrition: Reveal<NutritionText>;
+  nutrition: Reveal<NutritionEntry>;
   serving: Reveal<{ amount: string; unit: Unit }>;
 }
 
@@ -67,13 +90,77 @@ const NUTRITION_FIELDS: { key: keyof NutritionText; label: string }[] = [
   { key: 'fat', label: 'Fat (g)' },
 ];
 
+const BASIS_DEFAULT_AMOUNTS: Record<NutritionEntryUnit, string> = {
+  G: '100',
+  OZ: '1',
+  SERVING: '1',
+};
+const EMPTY_NUTRITION: NutritionEntry = {
+  basis: { amount: BASIS_DEFAULT_AMOUNTS.G, unit: 'G' },
+  values: { calories: '', protein: '', carbs: '', fat: '' },
+};
+
 const { custom, input } = FormFactories;
 
 const toText = (value: number | null) => (value === null ? '' : String(value));
 const parseAmount = (text: string) =>
   text.trim() === '' ? null : Number(text);
-const isNonNegative = (value: number | null) =>
-  value === null || (Number.isFinite(value) && value >= 0 && value <= 100000);
+const isPositive = (value: number | null, max: number): value is number =>
+  value !== null && Number.isFinite(value) && value > 0 && value <= max;
+const isMetric = (value: number | null) =>
+  value === null ||
+  (Number.isFinite(value) && value >= 0 && value <= MAX_NUTRITION_VALUE);
+
+/** Grams in one serving as the form stands now; null while the serving is off, blank or can't be weighed. */
+const getFormServingGrams = (extras: Extras, conversions: Conversions) => {
+  const amount = parseAmount(extras.serving.value.amount);
+  return !extras.serving.enabled || !isPositive(amount, MAX_SERVING_AMOUNT)
+    ? null
+    : getServingGrams({ amount, unit: extras.serving.value.unit }, conversions);
+};
+
+/** The typed numbers as the per-100 g values that are stored; null while the amount they are for is unusable. */
+const getPer100g = (
+  extras: Extras,
+  conversions: Conversions,
+): NutritionValues | null => {
+  const { basis, values } = extras.nutrition.value;
+  const amount = parseAmount(basis.amount);
+  const grams = isPositive(amount, MAX_SERVING_AMOUNT)
+    ? getEntryGrams(
+        amount,
+        basis.unit,
+        getFormServingGrams(extras, conversions),
+      )
+    : null;
+  if (grams === null || grams <= 0) {
+    return null;
+  }
+
+  return Object.fromEntries(
+    NUTRITION_METRICS.map((metric) => {
+      const typed = parseAmount(values[metric]);
+      return [metric, typed === null ? null : toPer100g(typed, grams)];
+    }),
+  ) as unknown as NutritionValues;
+};
+
+const getBasisLabel = (extras: Extras, servingGrams: number | null) => {
+  const { basis } = extras.nutrition.value;
+  const amount = basis.amount.trim() || '?';
+  if (basis.unit !== 'SERVING') {
+    return `${amount} ${basis.unit === 'G' ? 'g' : 'oz'}`;
+  }
+
+  const servingAmount = parseAmount(extras.serving.value.amount);
+  const typed = Number(amount);
+  const noun = amount === '1' ? 'serving' : 'servings';
+  return servingGrams === null ||
+    !Number.isFinite(typed) ||
+    !isPositive(servingAmount, MAX_SERVING_AMOUNT)
+    ? `${amount} ${noun}`
+    : `${amount} ${noun} (${formatSize(servingAmount * typed, extras.serving.value.unit)})`;
+};
 
 const getInitialData = (
   ingredient: ResolvedIngredient | null,
@@ -91,10 +178,13 @@ const getInitialData = (
       nutrition: {
         enabled: isCatalog || hasNutrition,
         value: {
-          calories: toText(ingredient?.per100g.calories ?? null),
-          protein: toText(ingredient?.per100g.protein ?? null),
-          carbs: toText(ingredient?.per100g.carbs ?? null),
-          fat: toText(ingredient?.per100g.fat ?? null),
+          basis: EMPTY_NUTRITION.basis,
+          values: {
+            calories: toText(ingredient?.per100g.calories ?? null),
+            protein: toText(ingredient?.per100g.protein ?? null),
+            carbs: toText(ingredient?.per100g.carbs ?? null),
+            fat: toText(ingredient?.per100g.fat ?? null),
+          },
         },
       },
       serving: {
@@ -110,20 +200,21 @@ const getInitialData = (
 
 interface ExtrasFieldsProps {
   extras: Extras;
+  conversions: Conversions;
   onChange: (extras: Extras) => void;
 }
 
-function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
+function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
   const chips = [
-    {
-      key: 'nutrition',
-      label: 'Nutrition',
-      icon: <Gauge className='h-4 w-4' />,
-    },
     {
       key: 'serving',
       label: 'Serving size',
       icon: <Scale className='h-4 w-4' />,
+    },
+    {
+      key: 'nutrition',
+      label: 'Nutrition',
+      icon: <Gauge className='h-4 w-4' />,
     },
   ].filter((chip) => !extras[chip.key as keyof Extras].enabled);
 
@@ -134,50 +225,29 @@ function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
     });
   const remove = (key: keyof Extras, empty: Extras[keyof Extras]) =>
     onChange({ ...extras, [key]: empty });
+  const setEntry = (entry: Partial<NutritionEntry>) =>
+    onChange({
+      ...extras,
+      nutrition: {
+        ...extras.nutrition,
+        value: { ...extras.nutrition.value, ...entry },
+      },
+    });
+
+  const { basis, values } = extras.nutrition.value;
+  const servingGrams = getFormServingGrams(extras, conversions);
+  const per100g = getPer100g(extras, conversions);
+  const isPer100g = basis.unit === 'G' && parseAmount(basis.amount) === 100;
+  const getServingHint = () => {
+    if (servingGrams !== null) return null;
+    return extras.serving.enabled
+      ? 'To type it per serving, set one serving in grams or ounces above.'
+      : 'To type it per serving, set the serving size in grams or ounces first.';
+  };
+  const servingHint = getServingHint();
 
   return (
     <div className='space-y-4'>
-      {extras.nutrition.enabled && (
-        <RemovableField
-          label='Nutrition per 100 g'
-          removeLabel='Remove nutrition'
-          onRemove={() =>
-            remove('nutrition', {
-              enabled: false,
-              value: { calories: '', protein: '', carbs: '', fat: '' },
-            })
-          }
-        >
-          <div className='grid grid-cols-2 gap-3'>
-            {NUTRITION_FIELDS.map((field) => (
-              <div key={field.key} className='space-y-1.5'>
-                <Label>{field.label}</Label>
-                <Input
-                  type='number'
-                  inputMode='decimal'
-                  min={0}
-                  step='any'
-                  variant='outline'
-                  aria-label={field.label}
-                  value={extras.nutrition.value[field.key]}
-                  onChange={(event) =>
-                    onChange({
-                      ...extras,
-                      nutrition: {
-                        ...extras.nutrition,
-                        value: {
-                          ...extras.nutrition.value,
-                          [field.key]: event.target.value,
-                        },
-                      },
-                    })
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        </RemovableField>
-      )}
       {extras.serving.enabled && (
         <RemovableField
           label='One serving is'
@@ -226,6 +296,112 @@ function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
           </div>
         </RemovableField>
       )}
+      {extras.nutrition.enabled && (
+        <RemovableField
+          label={`Nutrition per ${getBasisLabel(extras, servingGrams)}`}
+          removeLabel='Remove nutrition'
+          onRemove={() =>
+            remove('nutrition', { enabled: false, value: EMPTY_NUTRITION })
+          }
+        >
+          <div className='space-y-3'>
+            <div className='flex flex-wrap items-center gap-x-2 gap-y-2'>
+              <span className='text-sm font-medium'>Per</span>
+              <div className='w-24 shrink-0'>
+                <Input
+                  type='number'
+                  inputMode='decimal'
+                  min={0}
+                  step='any'
+                  variant='outline'
+                  aria-label='Amount the nutrition is for'
+                  className={COMPACT_INPUT_CLASS}
+                  value={basis.amount}
+                  onChange={(event) =>
+                    setEntry({
+                      basis: { ...basis, amount: event.target.value },
+                    })
+                  }
+                />
+              </div>
+              <PillRow label='What the nutrition is per'>
+                {NUTRITION_ENTRY_UNITS.map((option) => (
+                  <Pill
+                    key={option.value}
+                    isSelected={basis.unit === option.value}
+                    isDisabled={
+                      option.value === 'SERVING' && servingGrams === null
+                    }
+                    onClick={() =>
+                      setEntry({
+                        basis: {
+                          unit: option.value,
+                          amount:
+                            basis.amount === BASIS_DEFAULT_AMOUNTS[basis.unit]
+                              ? BASIS_DEFAULT_AMOUNTS[option.value]
+                              : basis.amount,
+                        },
+                      })
+                    }
+                  >
+                    {option.label}
+                  </Pill>
+                ))}
+              </PillRow>
+            </div>
+            {servingHint && (
+              <p className='text-muted-foreground text-xs'>
+                {servingHint}
+                {!extras.serving.enabled && (
+                  <>
+                    {' '}
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      className='h-auto min-h-0 p-0 align-baseline text-xs'
+                      onClick={() => reveal('serving')}
+                    >
+                      Add serving size
+                    </Button>
+                  </>
+                )}
+              </p>
+            )}
+            <div className='grid grid-cols-2 gap-3'>
+              {NUTRITION_FIELDS.map((field) => (
+                <Field key={field.key} label={field.label} isCompact>
+                  {(id) => (
+                    <Input
+                      id={id}
+                      type='number'
+                      inputMode='decimal'
+                      min={0}
+                      step='any'
+                      variant='outline'
+                      className={COMPACT_INPUT_CLASS}
+                      value={values[field.key]}
+                      onChange={(event) =>
+                        setEntry({
+                          values: {
+                            ...values,
+                            [field.key]: event.target.value,
+                          },
+                        })
+                      }
+                    />
+                  )}
+                </Field>
+              ))}
+            </div>
+            {!isPer100g && per100g && (
+              <p className='text-muted-foreground text-xs'>
+                Saved as per 100 g: <MacroStats values={per100g} />
+              </p>
+            )}
+          </div>
+        </RemovableField>
+      )}
       <AddFieldChips chips={chips} onAdd={reveal} />
     </div>
   );
@@ -258,23 +434,25 @@ function IngredientFormSheet({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { extras } = formData;
-  const nutritionValues = Object.values(extras.nutrition.value).map(
-    parseAmount,
+  const gramsPerMl = ingredient?.gramsPerMl ?? null;
+  const gramsEach = ingredient?.gramsEach ?? null;
+  const conversions = useMemo(
+    () => ({ gramsPerMl, gramsEach }),
+    [gramsPerMl, gramsEach],
   );
-  const servingAmount = parseAmount(extras.serving.value.amount);
+
+  const { extras } = formData;
+  const per100g = getPer100g(extras, conversions);
   const isFormComplete =
     (isCatalog ||
       (formData.name.trim() !== '' &&
         formData.name.length <= MAX_NAME_LENGTH)) &&
     (formData.family.choice !== NEW_CHOICE ||
       formData.family.newText.trim() !== '') &&
-    (!extras.nutrition.enabled || nutritionValues.every(isNonNegative)) &&
+    (!extras.nutrition.enabled ||
+      (per100g !== null && Object.values(per100g).every(isMetric))) &&
     (!extras.serving.enabled ||
-      (servingAmount !== null &&
-        Number.isFinite(servingAmount) &&
-        servingAmount > 0 &&
-        servingAmount <= MAX_SERVING_AMOUNT));
+      isPositive(parseAmount(extras.serving.value.amount), MAX_SERVING_AMOUNT));
 
   const familyOptions = useMemo(
     () => families.map((family) => ({ value: family.id, label: family.name })),
@@ -324,12 +502,13 @@ function IngredientFormSheet({
         renderComponent: (props) => (
           <ExtrasFields
             extras={props.value as Extras}
+            conversions={conversions}
             onChange={props.onValueChange}
           />
         ),
       }),
     ],
-    [isCatalog, familyOptions],
+    [isCatalog, familyOptions, conversions],
   );
 
   const handleDelete = async () => {
@@ -380,16 +559,14 @@ function IngredientFormSheet({
   };
 
   const handleSubmit = async (data: FormData) => {
+    const nutrition = data.extras.nutrition.enabled
+      ? getPer100g(data.extras, conversions)
+      : null;
+    if (data.extras.nutrition.enabled && nutrition === null) {
+      return;
+    }
     setError(null);
     setIsSubmitting(true);
-    const nutrition: NutritionValues | null = data.extras.nutrition.enabled
-      ? {
-          calories: parseAmount(data.extras.nutrition.value.calories),
-          protein: parseAmount(data.extras.nutrition.value.protein),
-          carbs: parseAmount(data.extras.nutrition.value.carbs),
-          fat: parseAmount(data.extras.nutrition.value.fat),
-        }
-      : null;
     const isServingOn = data.extras.serving.enabled;
 
     const isUnchangedCatalog =

@@ -1,13 +1,8 @@
 import HelpTip from '@/components/HelpTip';
 
-interface WeekResetHelpProps {
-  /** For a spot inside a drawer, modal or subview, where a phone must not open a modal. */
-  noModal?: boolean;
-}
-
-function WeekResetHelp({ noModal }: WeekResetHelpProps) {
+function WeekResetHelp() {
   return (
-    <HelpTip title='Friday to Friday' noModal={noModal}>
+    <HelpTip title='Friday to Friday'>
       <p>
         AMC's week starts on Friday, when new movies open, and that's when your
         weekly count starts over.

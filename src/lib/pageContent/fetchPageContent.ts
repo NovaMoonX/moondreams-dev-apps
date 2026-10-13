@@ -2,22 +2,48 @@ import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '@/lib/firebase/config';
 
+export type PageContentKind =
+  'text' | 'structuredData' | 'meta' | 'headings' | 'images';
+
+export interface PageContentRequest {
+  url: string;
+  /** Which kinds of content to read; the page's text and meta tags when omitted. */
+  include?: PageContentKind[];
+  /** Keeps only the schema.org nodes of these types (`['Recipe']`, `['Product']`); every node when omitted. */
+  schemaTypes?: string[];
+  /** Caps the page text; the function clamps it to its own limits. */
+  maxTextChars?: number;
+}
+
+export interface PageMeta {
+  description: string | null;
+  /** An absolute web address; load it through `FallbackImage`. */
+  image: string | null;
+  siteName: string | null;
+  author: string | null;
+}
+
+/** A page's content: `url` and `title` always, and only the kinds asked for. */
 export interface PageContent {
   url: string;
   title: string | null;
-  /** The page's schema.org Recipe data as JSON, when it publishes any. */
-  structured: string | null;
-  /** The page's visible text, capped. */
-  text: string;
+  text?: string;
+  structuredData?: Record<string, unknown>[];
+  meta?: PageMeta;
+  headings?: string[];
+  /** Absolute web addresses of the page's images; load them through `FallbackImage`. */
+  images?: string[];
 }
 
-const fetchPageContentCallable = httpsCallable<{ url: string }, PageContent>(
+const fetchPageContentCallable = httpsCallable<PageContentRequest, PageContent>(
   functions,
   'fetchPageContent',
 );
 
-/** Raw callable: call through `pageContentQueryOptions` so a repeat of the same link isn't fetched twice. */
-export async function fetchPageContent(url: string): Promise<PageContent> {
-  const result = await fetchPageContentCallable({ url });
+/** Raw callable: call through `pageContentQueryOptions` so a repeat of the same request isn't fetched twice. */
+export async function fetchPageContent(
+  request: PageContentRequest,
+): Promise<PageContent> {
+  const result = await fetchPageContentCallable(request);
   return result.data;
 }

@@ -4,6 +4,7 @@ import type {
   MealType,
   PinchTab,
   RecipesView,
+  RecipeStartMethod,
   Unit,
 } from '@apps/pinch/types';
 
@@ -93,6 +94,38 @@ export const MAX_DISMISSED_NUDGES = 500;
 export const MAX_PASTE_CHARS = 20_000;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
+
+export const RECIPE_START_METHODS: {
+  id: RecipeStartMethod;
+  emoji: string;
+  title: string;
+  description: string;
+}[] = [
+  {
+    id: 'text',
+    emoji: '📝',
+    title: 'From text',
+    description: 'Paste a recipe, say from a chat',
+  },
+  {
+    id: 'file',
+    emoji: '📎',
+    title: 'From a file',
+    description: 'A photo, screenshot or PDF',
+  },
+  {
+    id: 'link',
+    emoji: '🔗',
+    title: 'From a link',
+    description: 'A recipe page on the web',
+  },
+  {
+    id: 'manual',
+    emoji: '✍️',
+    title: 'Write it yourself',
+    description: 'Start with a blank recipe',
+  },
+];
 /** Months loaded on each side of the window's centre: enough that paging a month or a few weeks seldom restarts the listener. */
 export const MONTH_WINDOW_PADDING = 2;
 
@@ -229,3 +262,19 @@ export const PRODUCT_DEFAULT_FILTER_OPTIONS = [
 
 /** Rows a long list draws before "Show more". */
 export const LIST_PAGE_SIZE = 60;
+
+/** The most one nutrition value can be, per 100 g: the same cap the rules enforce. */
+export const MAX_NUTRITION_VALUE = 100_000;
+
+/** What a typed nutrition label is "per" in the ingredient form. */
+export const NUTRITION_ENTRY_UNITS = [
+  { value: 'G', label: 'g' },
+  { value: 'OZ', label: 'oz' },
+  { value: 'SERVING', label: 'serving' },
+] as const;
+
+/** What an ingredient's calories and macros are shown per: its serving, or 100 g. */
+export const NUTRITION_BASIS_OPTIONS = [
+  { value: 'SERVING', label: 'Per serving' },
+  { value: 'PER_100G', label: 'Per 100 g' },
+] as const;

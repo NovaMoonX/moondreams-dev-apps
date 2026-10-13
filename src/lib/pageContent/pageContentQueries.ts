@@ -1,17 +1,29 @@
 import { queryOptions } from '@tanstack/react-query';
 
-import { fetchPageContent } from './fetchPageContent';
+import { fetchPageContent, type PageContentRequest } from './fetchPageContent';
 
 export const pageContentQueryKeys = {
   all: ['pageContent'] as const,
-  byUrl: (url: string) => [...pageContentQueryKeys.all, url] as const,
+  byRequest: ({
+    url,
+    include,
+    schemaTypes,
+    maxTextChars,
+  }: PageContentRequest) =>
+    [
+      ...pageContentQueryKeys.all,
+      url,
+      include?.join(',') ?? '',
+      schemaTypes?.join(',') ?? '',
+      maxTextChars ?? 0,
+    ] as const,
 };
 
-/** A page read once for a form: kept a few minutes so a retry of a failed reading doesn't refetch it, never persisted. */
-export function pageContentQueryOptions(url: string) {
+/** A page read once for a screen: kept a few minutes so a retry of the same request isn't fetched again, never persisted. */
+export function pageContentQueryOptions(request: PageContentRequest) {
   return queryOptions({
-    queryKey: pageContentQueryKeys.byUrl(url),
-    queryFn: () => fetchPageContent(url),
+    queryKey: pageContentQueryKeys.byRequest(request),
+    queryFn: () => fetchPageContent(request),
     staleTime: 10 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: false,

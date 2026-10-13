@@ -4,6 +4,7 @@ import SectionDivider from '@/components/SectionDivider';
 import LazyMount from '@/components/LazyMount';
 import IngredientRow from '@apps/pinch/components/kitchen/IngredientRow';
 import type { FamilyGroupData } from '@apps/pinch/utils/catalogSearch';
+import type { NutritionBasis } from '@apps/pinch/utils/nutritionBasis';
 
 const ROW_HEIGHT = 57;
 const DIVIDER_HEIGHT = 36;
@@ -11,10 +12,20 @@ const DIVIDER_HEIGHT = 36;
 interface FamilyGroupProps {
   group: FamilyGroupData;
   isEager: boolean;
+  showPrices: boolean;
+  showMacros: boolean;
+  basis: NutritionBasis;
   onOpen: (id: string) => void;
 }
 
-function FamilyGroup({ group, isEager, onOpen }: FamilyGroupProps) {
+function FamilyGroup({
+  group,
+  isEager,
+  showPrices,
+  showMacros,
+  basis,
+  onOpen,
+}: FamilyGroupProps) {
   const estimatedHeight =
     DIVIDER_HEIGHT + group.ingredients.length * ROW_HEIGHT;
 
@@ -36,7 +47,13 @@ function FamilyGroup({ group, isEager, onOpen }: FamilyGroupProps) {
         <ul className='divide-border divide-y'>
           {group.ingredients.map((ingredient) => (
             <li key={ingredient.id}>
-              <IngredientRow ingredient={ingredient} onOpen={onOpen} />
+              <IngredientRow
+                ingredient={ingredient}
+                showPrices={showPrices}
+                showMacros={showMacros}
+                basis={basis}
+                onOpen={onOpen}
+              />
             </li>
           ))}
         </ul>

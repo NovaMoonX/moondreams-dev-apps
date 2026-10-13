@@ -104,14 +104,10 @@ function RecipeDrawer({
             className='h-40 w-full'
           />
         )}
-        <ul className='flex flex-wrap gap-2'>
+        <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
           {facts.map((fact) => (
-            <li
-              key={fact.text}
-              className='bg-accent text-accent-foreground flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium'
-            >
-              <span aria-hidden='true'>{fact.emoji}</span>
-              {fact.text}
+            <li key={fact.text} className='whitespace-nowrap'>
+              <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
             </li>
           ))}
         </ul>
@@ -132,7 +128,6 @@ function RecipeDrawer({
                   <HelpTip
                     variant='warning'
                     title='Not everything is counted'
-                    noModal
                     placement='top'
                   >
                     This {formatLeftOut(cost.leftOut)} because there’s no price

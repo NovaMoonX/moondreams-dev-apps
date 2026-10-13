@@ -173,11 +173,14 @@ export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
 export type NutritionMetric = keyof NutritionValues;
 export type RecipesView = 'recipes' | 'meals';
 
+export type RecipeStartMethod = 'text' | 'file' | 'link' | 'manual';
+
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
 export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
-  | { kind: 'recipe'; id: string | null }
+  /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
+  | { kind: 'recipe'; id: string | null; method?: RecipeStartMethod }
   | {
       kind: 'plan';
       dayKey: string;

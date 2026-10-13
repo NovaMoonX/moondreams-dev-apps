@@ -63,7 +63,7 @@ const { custom } = FormFactories;
 
 function ChecklistHelp() {
   return (
-    <HelpTip title='Checklist due dates' placement='top' noModal>
+    <HelpTip title='Checklist due dates' placement='top'>
       <p>Due dates on your checklist always move with the trip, however far ahead they are.</p>
     </HelpTip>
   );

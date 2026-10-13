@@ -27,7 +27,7 @@ function MealRow({ meal, title, subtitle, onOpen }: MealRowProps) {
       variant='tertiary'
       aria-label={`Open ${typeLabel.toLowerCase()}: ${title}`}
       onClick={onOpen}
-      className='h-auto w-full justify-start gap-3 px-0! py-2 text-left font-normal'
+      className='h-auto w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
     >
       <MealChip
         mealType={meal.mealType}

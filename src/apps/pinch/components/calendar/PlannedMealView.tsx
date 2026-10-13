@@ -231,7 +231,6 @@ function PlannedMealView({
                 variant='warning'
                 title="What's left out"
                 placement='top'
-                noModal
               >
                 <p>
                   Leaves out {leftOutCount}{' '}

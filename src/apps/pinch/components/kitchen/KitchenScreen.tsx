@@ -18,12 +18,14 @@ import {
   type IngredientFilters,
 } from '@apps/pinch/components/kitchen/ingredientFilters';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
+import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import {
   INGREDIENT_FLAG_OPTIONS,
   INGREDIENT_PRICE_FILTER_OPTIONS,
   KITCHEN_VIEW_LABELS,
   KITCHEN_VIEWS,
 } from '@apps/pinch/constants';
+import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectDefaultProducts,
@@ -113,21 +115,21 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const usedIds = useAppSelector(selectUsedIngredientIds);
   const { openSubview } = usePinchOverlay();
+  const viewOptions = useListViewOptions(uid, 'ingredients');
 
   const trimmed = query.trim();
-  const scoped = useMemo(
+  const yours = useMemo(
     () =>
-      view === 'all' || trimmed !== ''
-        ? ingredients
-        : ingredients.filter(
-            (ingredient) =>
-              ingredient.isCustom ||
-              ingredient.isAdjusted ||
-              defaultProducts.has(ingredient.id) ||
-              usedIds.has(ingredient.id),
-          ),
-    [ingredients, view, trimmed, defaultProducts, usedIds],
+      ingredients.filter(
+        (ingredient) =>
+          ingredient.isCustom ||
+          ingredient.isAdjusted ||
+          defaultProducts.has(ingredient.id) ||
+          usedIds.has(ingredient.id),
+      ),
+    [ingredients, defaultProducts, usedIds],
   );
+  const scoped = view === 'all' || trimmed !== '' ? ingredients : yours;
   const filtered = useMemo(
     () => applyIngredientFilters(scoped, filters, { defaultProducts, usedIds }),
     [scoped, filters, defaultProducts, usedIds],
@@ -165,20 +167,38 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   );
 
   const hasFilters = activeFilters.length > 0;
+  const isPriceFiltered = filters.price !== 'any';
+  const totalCount = isPriceFiltered ? yours.length : scoped.length;
   const countText =
     hasFilters || trimmed !== ''
-      ? `${shown.length} of ${scoped.length}`
+      ? `${shown.length} of ${totalCount}`
       : `${shown.length}`;
   const clearFilters = () => setFilters(NO_INGREDIENT_FILTERS);
 
   const getEmptyState = () => {
     if (hasFilters) {
+      const isNothingNeeded =
+        filters.price === 'needs' &&
+        filters.flags.length === 0 &&
+        filters.familyIds.length === 0 &&
+        trimmed === '';
+      const canWiden =
+        view === 'yours' &&
+        trimmed === '' &&
+        applyIngredientFilters(ingredients, filters, {
+          defaultProducts,
+          usedIds,
+        }).length > 0;
+      const scopeText =
+        isPriceFiltered || (view === 'yours' && trimmed === '')
+          ? ' in Yours'
+          : '';
       return (
         <div className='space-y-3 py-6 text-center'>
-          <p className='text-muted-foreground text-sm'>
-            Nothing{view === 'yours' && trimmed === '' ? ' in Yours' : ''}{' '}
-            matches
-            {trimmed !== '' ? ` “${trimmed}” with` : ''} these filters.
+          <p className='text-muted-foreground text-sm wrap-break-word'>
+            {isNothingNeeded
+              ? 'Nothing needs a price: everything your recipes, meals and plans use has a product.'
+              : `Nothing${scopeText} matches${trimmed !== '' ? ` “${trimmed}” with` : ''} these filters.`}
           </p>
           <div className='flex flex-wrap justify-center gap-2'>
             <Button
@@ -189,7 +209,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
             >
               Clear filters
             </Button>
-            {view === 'yours' && trimmed === '' && (
+            {canWiden && (
               <Button
                 type='button'
                 variant='secondary'
@@ -231,7 +251,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     <div className='space-y-4'>
       <SectionHeader
         title='Kitchen'
-        subtitle='Your ingredients, products and stores, in one place.'
+        subtitle='Your ingredients, products and stores.'
       />
       <div className='grid grid-cols-2 gap-2'>
         <EntryRow
@@ -285,6 +305,15 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
             isThin
           />
         }
+        trailing={
+          <ListViewControls
+            options={viewOptions.options}
+            customizedCount={viewOptions.customizedCount}
+            onChange={viewOptions.update}
+            onReset={viewOptions.reset}
+            hasBasis
+          />
+        }
       >
         <FilterSection title='Price'>
           <PillGroup
@@ -295,6 +324,14 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
               setFilters((current) => ({ ...current, price }))
             }
           />
+          <p className='text-muted-foreground text-xs'>
+            <strong className='text-foreground font-medium'>
+              Needs a price
+            </strong>{' '}
+            is what your recipes, meals and plans use that has no product yet.{' '}
+            <strong className='text-foreground font-medium'>Has a price</strong>{' '}
+            is anything you have a product for. Both only look through Yours.
+          </p>
         </FilterSection>
         <FilterSection title='Show only'>
           <MultiPillGroup
@@ -328,6 +365,9 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
               key={group.family.id || 'none'}
               group={group}
               isEager={index < EAGER_GROUPS}
+              showPrices={viewOptions.options.showPrices}
+              showMacros={viewOptions.options.showMacros}
+              basis={viewOptions.options.basis}
               onOpen={(id) => setOverlay({ kind: 'details', id })}
             />
           ))}

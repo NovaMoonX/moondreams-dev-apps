@@ -3,14 +3,32 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { fetchPublicPage, MAX_URL_LENGTH } from './safeFetch.js';
 
 /**
- * Reads the text of one web page a signed-in person pasted, so a client can have it read into a form
- * (a recipe). It returns the page's schema.org Recipe data when it has one, plus the page's visible text,
- * both capped. Nothing is stored, and it never runs on a schedule.
+ * Reads one web page a signed-in person pasted and returns only the kinds of content the caller asks for
+ * (its text, its schema.org data, its headings, its meta tags, its images), so any app can hand a page to
+ * its own reader. Nothing app-specific lives here, and nothing is stored or scheduled.
  */
 
 const MAX_BODY_BYTES = 1536 * 1024;
-const MAX_TEXT_CHARS = 30000;
-const MAX_STRUCTURED_CHARS = 20000;
+const DEFAULT_TEXT_CHARS = 30000;
+const MIN_TEXT_CHARS = 1000;
+const MAX_TEXT_CHARS = 60000;
+const MAX_STRUCTURED_CHARS = 30000;
+const MAX_HEADINGS = 40;
+const MAX_IMAGES = 20;
+const MAX_TAG_CHARS = 2000;
+const MAX_SCHEMA_TYPES = 10;
+
+export const CONTENT_KINDS = [
+  'text',
+  'structuredData',
+  'meta',
+  'headings',
+  'images',
+] as const;
+
+export type ContentKind = (typeof CONTENT_KINDS)[number];
+
+const DEFAULT_KINDS: ContentKind[] = ['text', 'meta'];
 
 const NAMED_ENTITIES: Record<string, string> = {
   amp: '&',
@@ -45,47 +63,54 @@ const decodeEntities = (value: string) =>
     return NAMED_ENTITIES[entity.toLowerCase()] ?? match;
   });
 
-const isRecipeNode = (node: unknown): node is Record<string, unknown> => {
-  if (!node || typeof node !== 'object') return false;
-  const type = (node as Record<string, unknown>)['@type'];
-  return Array.isArray(type) ? type.includes('Recipe') : type === 'Recipe';
+const typesOf = (node: Record<string, unknown>): string[] => {
+  const type = node['@type'];
+  if (typeof type === 'string') return [type];
+  return Array.isArray(type)
+    ? type.filter((entry): entry is string => typeof entry === 'string')
+    : [];
 };
 
-const findRecipeNode = (value: unknown): Record<string, unknown> | null => {
+const flattenNodes = (value: unknown, depth = 0): Record<string, unknown>[] => {
+  if (depth > 4) return [];
   if (Array.isArray(value)) {
-    return value.map(findRecipeNode).find((node) => node !== null) ?? null;
+    return value.flatMap((entry) => flattenNodes(entry, depth + 1));
   }
-  if (isRecipeNode(value)) return value;
-  if (value && typeof value === 'object') {
-    const graph = (value as Record<string, unknown>)['@graph'];
-    return graph ? findRecipeNode(graph) : null;
-  }
-  return null;
+  if (!value || typeof value !== 'object') return [];
+  const node = value as Record<string, unknown>;
+  return node['@graph'] ? flattenNodes(node['@graph'], depth + 1) : [node];
 };
 
-const toStructured = (node: Record<string, unknown>) =>
-  JSON.stringify({
-    name: node.name,
-    description: node.description,
-    recipeYield: node.recipeYield,
-    prepTime: node.prepTime,
-    cookTime: node.cookTime,
-    totalTime: node.totalTime,
-    recipeIngredient: node.recipeIngredient,
-    recipeInstructions: node.recipeInstructions,
-  }).slice(0, MAX_STRUCTURED_CHARS);
-
-const parseRecipeJson = (blocks: string[]): string | null => {
-  const node = blocks
-    .map((block) => {
+/** The page's schema.org nodes (optionally only the given types), whole nodes only, up to the size cap. */
+const pickStructuredData = (blocks: string[], schemaTypes: string[]) => {
+  const nodes = blocks
+    .flatMap((block) => {
       try {
-        return findRecipeNode(JSON.parse(block));
+        return flattenNodes(JSON.parse(block));
       } catch {
-        return null;
+        return [];
       }
     })
-    .find((found) => found !== null);
-  return node ? toStructured(node) : null;
+    .filter(
+      (node) =>
+        schemaTypes.length === 0 ||
+        typesOf(node).some((type) => schemaTypes.includes(type)),
+    )
+    .map((node) =>
+      Object.fromEntries(
+        Object.entries(node).filter(([key]) => key !== '@context'),
+      ),
+    );
+
+  return nodes.reduce<{ kept: Record<string, unknown>[]; size: number }>(
+    (acc, node) => {
+      const size = acc.size + JSON.stringify(node).length;
+      return size > MAX_STRUCTURED_CHARS
+        ? acc
+        : { kept: [...acc.kept, node], size };
+    },
+    { kept: [], size: 0 },
+  ).kept;
 };
 
 const SKIPPED_TAGS = new Set([
@@ -133,20 +158,73 @@ const findClosing = (html: string, name: string, from: number) => {
   return html.length;
 };
 
+interface PageMeta {
+  description: string | null;
+  image: string | null;
+  siteName: string | null;
+  author: string | null;
+}
+
 interface PageParts {
   title: string | null;
-  recipeJson: string | null;
   text: string;
+  jsonBlocks: string[];
+  meta: PageMeta;
+  headings: string[];
+  imageSources: string[];
 }
+
+const ATTRIBUTE =
+  /\s*([^\s=/>"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/y;
+
+/** Reads a tag's attributes in one pass, skipping anything that doesn't parse. */
+const parseAttributes = (tag: string, from: number): Record<string, string> => {
+  const attributes: Record<string, string> = {};
+  let position = from;
+  while (position < tag.length) {
+    ATTRIBUTE.lastIndex = position;
+    const match = ATTRIBUTE.exec(tag);
+    if (!match) {
+      position += 1;
+      continue;
+    }
+    attributes[match[1].toLowerCase()] = decodeEntities(
+      match[2] ?? match[3] ?? match[4] ?? '',
+    );
+    position = ATTRIBUTE.lastIndex;
+  }
+  return attributes;
+};
+
+const HEADING_TAGS = new Set(['h1', 'h2', 'h3']);
+
+const toMeta = (tags: Record<string, string>[]): PageMeta => {
+  const content = (...keys: string[]) =>
+    tags
+      .find((tag) =>
+        keys.includes((tag.property ?? tag.name ?? '').toLowerCase()),
+      )
+      ?.content?.trim() || null;
+  return {
+    description: content('og:description', 'description'),
+    image: content('og:image', 'twitter:image'),
+    siteName: content('og:site_name'),
+    author: content('author'),
+  };
+};
 
 /**
  * One left-to-right pass over the page, so a hostile page can't make it slow: every step moves forward
- * with `indexOf`, and no pattern has to be retried from each position.
+ * with `indexOf` or a sticky pattern with nothing to retry, and each tag is read once and capped.
  */
 const readPage = (html: string): PageParts => {
   const chunks: string[] = [];
   const blocks: string[] = [];
+  const metaTags: Record<string, string>[] = [];
+  const headings: string[] = [];
+  const imageSources: string[] = [];
   let title: string | null = null;
+  let headingFrom: number | null = null;
   let length = 0;
   let at = 0;
 
@@ -169,7 +247,7 @@ const readPage = (html: string): PageParts => {
     const close = html.indexOf('>', open + 1);
     if (close === -1) break;
 
-    const tag = html.slice(open + 1, Math.min(close, open + 301));
+    const tag = html.slice(open + 1, Math.min(close, open + 1 + MAX_TAG_CHARS));
     const name = /^\/?([a-z][a-z0-9]*)/i.exec(tag)?.[1]?.toLowerCase() ?? '';
     const isClosing = tag.startsWith('/');
     at = close + 1;
@@ -180,7 +258,10 @@ const readPage = (html: string): PageParts => {
       if (name === 'title' && title === null) {
         title = decodeEntities(body).trim() || null;
       }
-      if (name === 'script' && /application\/ld\+json/i.test(tag)) {
+      if (
+        name === 'script' &&
+        /application\/ld\+json/i.test(tag.slice(0, 300))
+      ) {
         blocks.push(body);
       }
       const end = html.indexOf('>', bodyEnd);
@@ -188,17 +269,94 @@ const readPage = (html: string): PageParts => {
       continue;
     }
 
-    chunks.push(isClosing || BREAKING_TAGS.has(name) ? '\n' : ' ');
+    if (!isClosing && name === 'meta') {
+      metaTags.push(parseAttributes(tag, name.length + 1));
+    }
+    if (!isClosing && name === 'img') {
+      const { src, 'data-src': lazySrc } = parseAttributes(
+        tag,
+        name.length + 1,
+      );
+      const source = src || lazySrc;
+      if (source) imageSources.push(source);
+    }
+    if (HEADING_TAGS.has(name)) {
+      if (!isClosing) {
+        headingFrom = chunks.length;
+      } else if (headingFrom !== null) {
+        const heading = decodeEntities(chunks.slice(headingFrom).join(' '))
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (heading && headings.length < MAX_HEADINGS) headings.push(heading);
+        headingFrom = null;
+      }
+    }
+
+    chunks.push(BREAKING_TAGS.has(name) ? '\n' : isClosing ? '' : ' ');
   }
 
   const text = decodeEntities(chunks.join(''))
     .split('\n')
     .map((line) => line.replace(/[ \t\xa0]+/g, ' ').trim())
     .filter(Boolean)
-    .join('\n')
-    .slice(0, MAX_TEXT_CHARS);
+    .join('\n');
 
-  return { title, recipeJson: parseRecipeJson(blocks), text };
+  return {
+    title,
+    text,
+    jsonBlocks: blocks,
+    meta: toMeta(metaTags),
+    headings,
+    imageSources,
+  };
+};
+
+/** Absolute web addresses only, resolved against the page, without repeats. */
+const toImageUrls = (sources: string[], base: string, first: string | null) =>
+  [first, ...sources]
+    .flatMap((source) => {
+      if (!source) return [];
+      try {
+        const url = new URL(source, base);
+        return ['http:', 'https:'].includes(url.protocol) &&
+          url.href.length <= MAX_URL_LENGTH
+          ? [url.href]
+          : [];
+      } catch {
+        return [];
+      }
+    })
+    .filter((href, index, all) => all.indexOf(href) === index)
+    .slice(0, MAX_IMAGES);
+
+const readKinds = (value: unknown): ContentKind[] | null => {
+  if (value === undefined) return DEFAULT_KINDS;
+  if (!Array.isArray(value) || value.length === 0) return null;
+  return value.every((kind) => CONTENT_KINDS.includes(kind as ContentKind))
+    ? (value as ContentKind[])
+    : null;
+};
+
+const readSchemaTypes = (value: unknown): string[] | null => {
+  if (value === undefined) return [];
+  if (
+    !Array.isArray(value) ||
+    value.length > MAX_SCHEMA_TYPES ||
+    !value.every(
+      (type) =>
+        typeof type === 'string' && type.length > 0 && type.length <= 60,
+    )
+  ) {
+    return null;
+  }
+  return value as string[];
+};
+
+const readTextLimit = (value: unknown): number | null => {
+  if (value === undefined) return DEFAULT_TEXT_CHARS;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(MAX_TEXT_CHARS, Math.max(MIN_TEXT_CHARS, Math.floor(value)))
+    : null;
 };
 
 export const fetchPageContent = onCall(
@@ -231,6 +389,16 @@ export const fetchPageContent = onCall(
       throw new HttpsError('invalid-argument', 'Provide a valid web link.');
     }
 
+    const kinds = readKinds(request.data?.include);
+    const schemaTypes = readSchemaTypes(request.data?.schemaTypes);
+    const textLimit = readTextLimit(request.data?.maxTextChars);
+    if (!kinds || !schemaTypes || textLimit === null) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Ask for a supported kind of content.',
+      );
+    }
+
     try {
       const { html, finalUrl } = await fetchPublicPage(rawUrl, {
         maxBytes: MAX_BODY_BYTES,
@@ -243,9 +411,27 @@ export const fetchPageContent = onCall(
         );
       }
 
-      const { title, recipeJson, text } = readPage(html);
+      const page = readPage(html);
+      const has = (kind: ContentKind) => kinds.includes(kind);
 
-      return { url: finalUrl, title, structured: recipeJson, text };
+      return {
+        url: finalUrl,
+        title: page.title,
+        ...(has('text') && { text: page.text.slice(0, textLimit) }),
+        ...(has('structuredData') && {
+          structuredData: pickStructuredData(page.jsonBlocks, schemaTypes),
+        }),
+        ...(has('meta') && {
+          meta: {
+            ...page.meta,
+            image: toImageUrls([], finalUrl, page.meta.image)[0] ?? null,
+          },
+        }),
+        ...(has('headings') && { headings: page.headings }),
+        ...(has('images') && {
+          images: toImageUrls(page.imageSources, finalUrl, page.meta.image),
+        }),
+      };
     } catch (error) {
       if (error instanceof HttpsError) {
         throw error;

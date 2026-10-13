@@ -6,7 +6,7 @@ Pinch is a calm, personal kitchen planner. It comes stocked with a catalog of ev
 
 ## The Story
 
-Planning meals with an AI chat is easy to start and hard to keep going. Every conversation begins from scratch: it can't see what's in your kitchen, doesn't remember what you cooked last week, and has no idea what any of it costs. The recipes are good, but the context is gone by tomorrow. Pinch is where that context lives. Your ingredients, the products you buy, your recipes, and your plan sit together in one place, and a recipe from any chat, photo or web page can be brought straight in.
+Planning meals with an AI chat is easy to start and hard to keep going. Every conversation begins from scratch: it can't see what's in your kitchen, doesn't remember what you cooked last week, and has no idea what any of it costs. The recipes are good, but the context is gone by tomorrow. Pinch keeps that context: your ingredients, the products you buy, your recipes and your plan, with a recipe from any chat, photo or web page easy to bring in.
 
 ## How It Works
 

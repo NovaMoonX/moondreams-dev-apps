@@ -6,13 +6,14 @@ import { Plus, Star } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import MacroStats from '@/components/MacroStats';
+import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
 import { setDefaultProduct } from '@apps/pinch/store/actions/productActions';
-import { UNIT_LABELS } from '@apps/pinch/constants';
+import { NUTRITION_BASIS_OPTIONS, UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectDefaultProducts,
   selectIngredientFamiliesById,
@@ -21,8 +22,15 @@ import {
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
+import {
+  getServingGrams,
+  scaleNutrition,
+  type NutritionBasis,
+} from '@apps/pinch/utils/nutritionBasis';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 import { formatSize } from '@apps/pinch/utils/productFormat';
+
+const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
 
 interface IngredientDrawerProps {
   uid: string;
@@ -49,6 +57,7 @@ function IngredientDrawer({
     useAppSelector(selectDefaultProducts).get(ingredientId)?.id ?? null;
   const storesById = useAppSelector(selectStoresById);
   const [error, setError] = useState<string | null>(null);
+  const [pickedBasis, setPickedBasis] = useState<NutritionBasis | null>(null);
 
   const ingredient = useAppSelector(selectIngredientsById).get(ingredientId);
   const family = useAppSelector(selectIngredientFamiliesById).get(
@@ -60,6 +69,16 @@ function IngredientDrawer({
   }
 
   const servingText = `${Math.round(ingredient.serving.amount * 100) / 100} ${UNIT_LABELS[ingredient.serving.unit]}`;
+  const servingGrams = getServingGrams(ingredient.serving, ingredient);
+  const hasServingChoice =
+    servingGrams !== null && Math.abs(servingGrams - 100) > 0.005;
+  const basis: NutritionBasis = hasServingChoice
+    ? (pickedBasis ?? 'SERVING')
+    : 'PER_100G';
+  const isPerServing = basis === 'SERVING' && servingGrams !== null;
+  const nutritionCaption = isPerServing
+    ? `Per 1 serving (${servingText})`
+    : 'Per 100 g';
 
   return (
     <DetailSheet
@@ -112,12 +131,27 @@ function IngredientDrawer({
         )}
 
         {hasAnyMetricOn(show) && (
-          <section aria-label='Nutrition per 100 g' className='space-y-2'>
-            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              Per 100 g
-            </h3>
+          <section aria-label={nutritionCaption} className='space-y-2'>
+            <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2'>
+              <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+                {nutritionCaption}
+              </h3>
+              {hasServingChoice && (
+                <PillGroup
+                  label='Nutrition per'
+                  options={BASIS_CHOICES}
+                  value={basis}
+                  onChange={setPickedBasis}
+                  isThin
+                />
+              )}
+            </div>
             <MacroStats
-              values={ingredient.per100g}
+              values={
+                isPerServing
+                  ? scaleNutrition(ingredient.per100g, servingGrams / 100)
+                  : ingredient.per100g
+              }
               show={show}
               variant='tiles'
             />

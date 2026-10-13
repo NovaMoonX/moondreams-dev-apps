@@ -9,16 +9,56 @@ import {
   selectStoresById,
   selectUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
-import type { ResolvedIngredient } from '@apps/pinch/types';
-import { formatPriceAndSize } from '@apps/pinch/utils/productFormat';
+import type { NutritionSwitches, ResolvedIngredient } from '@apps/pinch/types';
+import {
+  getServingGrams,
+  scaleNutrition,
+  type NutritionBasis,
+} from '@apps/pinch/utils/nutritionBasis';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
+import {
+  formatPriceAndSize,
+  formatSize,
+} from '@apps/pinch/utils/productFormat';
+
+const getRowNutrition = (
+  ingredient: ResolvedIngredient,
+  basis: NutritionBasis,
+  show: NutritionSwitches,
+) => {
+  if (!hasShownValue(ingredient.per100g, show)) {
+    return null;
+  }
+
+  const servingGrams =
+    basis === 'SERVING'
+      ? getServingGrams(ingredient.serving, ingredient)
+      : null;
+  if (servingGrams === null) {
+    return { values: ingredient.per100g, label: 'per 100 g' };
+  }
+
+  return {
+    values: scaleNutrition(ingredient.per100g, servingGrams / 100),
+    label: `per serving (${formatSize(ingredient.serving.amount, ingredient.serving.unit)})`,
+  };
+};
 
 interface IngredientRowProps {
   ingredient: ResolvedIngredient;
+  showPrices: boolean;
+  showMacros: boolean;
+  basis: NutritionBasis;
   onOpen: (id: string) => void;
 }
 
-function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
+function IngredientRow({
+  ingredient,
+  showPrices,
+  showMacros,
+  basis,
+  onOpen,
+}: IngredientRowProps) {
   const defaultProduct = useAppSelector((state) =>
     selectDefaultProducts(state).get(ingredient.id),
   );
@@ -34,6 +74,17 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
         selectStoresById(state).get(defaultProduct?.storeId ?? '')?.name,
     ) ?? 'Removed store';
 
+  const getPriceLine = () => {
+    if (!showPrices) return null;
+    if (defaultProduct)
+      return `${storeName} · ${formatPriceAndSize(defaultProduct)}`;
+    return isUsedWithoutPrice ? 'No price yet' : null;
+  };
+  const priceLine = getPriceLine();
+  const nutrition = showMacros
+    ? getRowNutrition(ingredient, basis, show)
+    : null;
+
   return (
     <Button
       type='button'
@@ -45,21 +96,16 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
         <span className='text-foreground block truncate font-medium'>
           {ingredient.name}
         </span>
-        {defaultProduct ? (
+        {priceLine && (
           <span className='text-muted-foreground block truncate text-xs font-normal'>
-            {storeName} · {formatPriceAndSize(defaultProduct)}
+            {priceLine}
           </span>
-        ) : isUsedWithoutPrice ? (
-          <span className='text-muted-foreground block truncate text-xs font-normal'>
-            No price yet
+        )}
+        {nutrition && (
+          <span className='text-muted-foreground block text-xs font-normal'>
+            <MacroStats values={nutrition.values} show={show} />{' '}
+            <span className='whitespace-nowrap'>{nutrition.label}</span>
           </span>
-        ) : (
-          hasShownValue(ingredient.per100g, show) && (
-            <span className='text-muted-foreground block text-xs font-normal'>
-              <MacroStats values={ingredient.per100g} show={show} />{' '}
-              <span className='whitespace-nowrap'>per 100 g</span>
-            </span>
-          )
         )}
       </span>
       <ChevronRight

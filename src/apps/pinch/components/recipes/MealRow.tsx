@@ -21,24 +21,29 @@ import {
 interface MealRowProps {
   meal: Meal;
   cost: MealCost;
+  showPrices: boolean;
+  showMacros: boolean;
   onOpen: (id: string) => void;
 }
 
-function MealRow({ meal, cost, onOpen }: MealRowProps) {
+function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const costContext = useAppSelector(selectCostContext);
   const show = useAppSelector(selectShowNutrition);
-  const nutrition = getMealNutrition(
-    meal.items,
-    costContext.recipeNutrition,
-    costContext.ingredientsById,
-  );
+  const nutrition = showMacros
+    ? getMealNutrition(
+        meal.items,
+        costContext.recipeNutrition,
+        costContext.ingredientsById,
+      )
+    : null;
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
   const detail = [
     `${meal.items.length} ${meal.items.length === 1 ? 'item' : 'items'}`,
-    cost.totalCents === null ? 'No price yet' : formatCost(cost.totalCents),
-    cost.totalCents !== null && leftOutCount > 0
+    showPrices &&
+      (cost.totalCents === null ? 'No price yet' : formatCost(cost.totalCents)),
+    showPrices && cost.totalCents !== null && leftOutCount > 0
       ? `leaves out ${leftOutCount}`
       : null,
   ]
@@ -53,7 +58,7 @@ function MealRow({ meal, cost, onOpen }: MealRowProps) {
       type='button'
       variant='tertiary'
       onClick={() => onOpen(meal.id)}
-      className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-2 text-left'
+      className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
     >
       <span
         className='bg-accent text-accent-foreground flex size-14 shrink-0 items-center justify-center rounded-xl text-2xl'
@@ -68,7 +73,7 @@ function MealRow({ meal, cost, onOpen }: MealRowProps) {
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {detail}
         </span>
-        {hasShownValue(nutrition.values, show) && (
+        {nutrition && hasShownValue(nutrition.values, show) && (
           <MacroStats
             values={nutrition.values}
             show={show}
@@ -80,7 +85,7 @@ function MealRow({ meal, cost, onOpen }: MealRowProps) {
         </span>
       </span>
       <ChevronRight
-        className='text-muted-foreground h-5 w-5 shrink-0'
+        className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
         aria-hidden='true'
       />
     </Button>
