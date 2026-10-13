@@ -11,10 +11,10 @@
 | The counter, not a form | Pinch asks for a name and little else. A price, a package size or a nutrition value is invited by a quiet line exactly where it changes a number, and always optional |
 | Drawers for looking and quick edits, subviews for building | an ingredient, a day, a planned meal and a recipe's detail open in `DetailSheet` drawers; a recipe, a meal and the stores and products lists are page-sized and open as `Subview`s; short forms (ingredient, product, store, settings) are `FormSheet`s |
 | Never overlay on overlay | whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a drawer whose action opens a form or another container closes first. Only a destructive confirm may sit on top |
-| Numbers explain themselves | a cost with gaps says what it leaves out ("$14.20 · leaves out 2 ingredients"); a stat that isn't self-evident carries a `HelpTip`; past days are labelled as frozen |
-| Nothing leaves without saying what | every copy-to-Markdown opens a small sheet that previews the text and states what is and isn't included |
-| Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Drawer`, `Popover`, `Tabs`, `Badge`, `CopyButton` — custom only where the catalog has nothing: the meal-bar cell and the store logo tile |
-| Honest AI | an AI reads a pasted recipe, photo or PDF and fills the real form; it names what it couldn't read; nothing is saved until the person confirms |
+| Numbers explain themselves | a cost with gaps carries a warning icon (`HelpTip variant='warning'`) that says what the total leaves out; a stat that isn't self-evident carries a `HelpTip`; past days are labelled as frozen |
+| Nothing leaves without saying what | an AI reads what the person hands it (pasted text, a photo or PDF, or a recipe page's data and text) and says so, and that nothing is saved; a link goes to our server, which fetches the page, and nothing else leaves the app |
+| Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Drawer`, `Popover`, `Tabs`, `Badge` — custom only where the catalog has nothing: the day cell and the store logo tile |
+| Honest AI | an AI reads a pasted recipe, photo, PDF or web link and fills the real form; it names what it couldn't read; nothing is saved until the person confirms |
 
 
 ```mermaid
@@ -30,7 +30,7 @@ block-beta
   style N3 fill:transparent,stroke:#888888,stroke-width:1px;
   style N4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Honest caveats: (1) Dreamer UI's `Calendar` hands `renderCell` only the date (a local-midnight `Date`) and no month-change callback, so each cell's meal bars come from a day-keyed lookup built up front, not a per-cell query. (2) A cell that holds up to three bars plus a "+N" is taller than Dreamer UI's default square; like A-List's poster cells it needs `cellClassName` and `monthGridClassName` overrides, which the TDD flags as a first spike. (3) Store logos come from a third-party logo service and can be missing, so every logo tile has a letter fallback.*
+*Honest caveats: (1) Dreamer UI's `Calendar` hands `renderCell` only the date (a local-midnight `Date`) and no month-change callback, so each cell's meal chips come from a day-keyed lookup built up front, not a per-cell query. (2) A cell that holds up to three chips or pills plus a "+N" is taller than Dreamer UI's default square; like A-List's poster cells it needs `cellClassName` and `monthGridClassName` overrides. (3) Store logos come from a third-party logo service and can be missing, so every logo tile has a letter fallback.*
 
 ## Sitemap
 
@@ -46,6 +46,7 @@ flowchart TD
     D --> D2
     D2 ~~~ R ~~~ K
     D2 -->|gear| SET["Settings sheet · nutrition switches"]
+    D2 -->|switch view| VW["Month · Week · Day · Today button"]
     D2 -->|tap the stats row| BRK["Breakdown drawer · by day / by meal"]
     D2 -->|tap a day| DD["Day drawer"]
     D2 -.->|hover a day, desktop| PK["Day peek popover"]
@@ -53,27 +54,25 @@ flowchart TD
     DD -->|tap a meal| PMD["Planned meal · swaps in place"]
     PMD -->|Change items or servings| PM
     PMD --> SAV["Save as a meal · swaps in place"]
-    PMD --> CP1["Copy sheet"]
     PMD --> RM["Remove confirm"]
-    DD --> CP2["Copy day sheet"]
     R --> RL["Recipes list · pills: Recipes / Meals"]
-    RL -->|+ New| RF["Recipe subview · upload or paste fills it in"]
+    RL -->|+ New| RS["Start picker · text, photo, link or write it yourself"]
+    RS --> RF["Recipe subview · the reading fills the form"]
     RL -->|tap a recipe| RD["Recipe drawer · cost, nutrition, ingredients, steps"]
     RD -->|Modify| RF
     RD -->|Add to calendar| PM
-    RD --> CP3["Copy sheet"]
     RL -->|Meals pill| ML["Saved meals list"]
     ML -->|+ New or tap Modify| MF["Meal subview · same builder, no day"]
     ML -->|tap a meal| MD["Meal drawer"]
     MD -->|Plan it| PM
-    K --> KL["Ingredients list · Yours / All · search"]
+    K --> KL["Ingredients list · Yours / All · search and filters"]
     KL -->|+ New| IF["Ingredient form sheet"]
     KL -->|tap an ingredient| ID["Ingredient drawer · nutrition, products, used in"]
     ID -->|Add a product| PF["Product form sheet · store picker"]
     KL --> ST["Stores subview"]
     ST -->|+ Add| SF["Store form sheet · pick from the list or add your own"]
     KL --> PR["Products subview · by store"]
-    KL --> CP4["Copy my ingredients sheet"]
+    PR -->|+ New product| PF
     RD -.->|nudge| FI["Fill-in sheet · prices and sizes"]
     KL -.->|nudge| FI
     D2 -.->|nudge| FI
@@ -96,9 +95,9 @@ block-beta
   style B2 fill:transparent,stroke:#888888,stroke-width:3px;
   style B3 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Navigation is a floating pill at the bottom of a phone, as wide as its three tabs (never stretched edge to edge), and a rail on the left from `lg` up. The app opens to Calendar, the left tab; the active tab gets a soft fill and a drizzle of orange on its icon, the only orange in the bar. Later Kitchen entries (stock, prepared servings, shopping list) join the Kitchen tab and do not add a fourth tab.*
+*Navigation is a floating pill at the bottom of a phone, as wide as its three tabs (never stretched edge to edge), and a rail on the left from `lg` up. The app opens to Calendar, the left tab; the active tab gets a soft peach fill and orange on its icon, the only orange in the bar. Later Kitchen entries (stock, prepared servings, shopping list) join the Kitchen tab and do not add a fourth tab.*
 
-*From `lg` up the screens use the width: the calendar fills the page and each cell names its meal (first item, `+N` for more) instead of a colour bar, and Recipes and Kitchen run in two columns. The phone layout is unchanged.*
+*From `lg` up the screens use the width: the month's cells become Google-Calendar-style pills that name each meal (its first item, `+N` for more) where a phone shows emoji chips, Week is seven columns where a phone has a vertical agenda, and Recipes and Kitchen run in two columns. The phone layout is unchanged.*
 
 **First launch — Calendar, empty** (no setup steps: Pinch is usable the moment it opens)
 
@@ -106,9 +105,9 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
+  F3["Calendar   ⚙️   + Add"]:2
   F1["Spent this month<br/>$0.00"]:1
   F2["Average per meal<br/>—"]:1
-  F3["‹   October 2026   ›   ⚙️"]:2
   F4["An empty month is fine. Plan your first meal, or add a recipe to plan from."]:2
   F5["Plan your first meal"]:1
   F6["Add a recipe"]:1
@@ -127,31 +126,34 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 7
-  C1["Spent<br/>$412.60<br/>leaves out 2 items · Add prices"]:3
-  C2["Avg / meal<br/>$5.80"]:2
-  C3["$ / g protein<br/>$0.04"]:2
-  C4["‹   October 2026   ›   ⚙️"]:7
-  C5["M"]:1
-  C6["T"]:1
-  C7["W"]:1
-  C8["T"]:1
-  C9["F"]:1
-  C10["S"]:1
-  C11["S"]:1
-  C12["12"]:1
-  C13["13 ● today<br/>🍳 ▬<br/>🍝 ▬<br/>🍰 ▬"]:1
-  C14["14<br/>🥪 ▬"]:1
-  C15["15"]:1
-  C16["16<br/>🍝 ▬<br/>🍿 ▬"]:1
-  C17["17"]:1
-  C18["18"]:1
-  C19["19"]:1
-  C20["20"]:1
-  C21["21"]:1
-  C22["22"]:1
-  C23["23"]:1
-  C24["24"]:1
-  C25["25"]:1
+  C1["Calendar   ⚙️   + Add"]:7
+  C2["‹   October 2026   ›   [ Month ] Week Day"]:7
+  C3["Spent this month<br/>$412.60 ⚠"]:3
+  C4["Avg per meal<br/>$5.80"]:2
+  C5["Per g protein<br/>$0.04"]:2
+  C6["Daily average this month<br/>🔥 1,840 · 💪 96g (the ones switched on)"]:7
+  C7["2 ingredients need a price · Add prices   ✕"]:7
+  C8["S"]:1
+  C9["M"]:1
+  C10["T"]:1
+  C11["W"]:1
+  C12["T"]:1
+  C13["F"]:1
+  C14["S"]:1
+  C15["11"]:1
+  C16["12"]:1
+  C17["13 ● today<br/>🍳 🍝 🍰"]:1
+  C18["14<br/>🥪"]:1
+  C19["15"]:1
+  C20["16<br/>🍝 🍿"]:1
+  C21["17"]:1
+  C22["18"]:1
+  C23["19"]:1
+  C24["20"]:1
+  C25["21"]:1
+  C26["22"]:1
+  C27["23"]:1
+  C28["24"]:1
   style C1 fill:transparent,stroke:#888888,stroke-width:1px;
   style C2 fill:transparent,stroke:#888888,stroke-width:1px;
   style C3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -177,15 +179,51 @@ block-beta
   style C23 fill:transparent,stroke:#888888,stroke-width:1px;
   style C24 fill:transparent,stroke:#888888,stroke-width:1px;
   style C25 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C26 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C27 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C28 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Month view. The grid starts on Sunday because Dreamer UI's `Calendar` can't start a week on Monday; Monday–Sunday applies to week copies. The month title and arrows are Pinch's own row above the grid (the Calendar's own header is hidden), so the shown month can drive which planned meals are loaded. Each planned meal is one thin bar in its meal-type colour with its emoji (🍳 breakfast, 🥪 lunch, 🍝 dinner, 🍿 snack, 🍰 dessert, 🥤 drink); a cell shows up to three and a "+N" for the rest. Today takes the accent on its number and the selected day a ring. Past days read exactly as they were that day. The stats row sits above the month and covers the month shown: spend and average cost per meal always, price per gram of protein when protein is on, and a single compact line of daily averages for each nutrition metric that is on. Tapping the row opens the breakdown, and tapping a day opens its drawer (below). On a computer, hovering a day opens a peek popover with the same content as its drawer; on a phone, tapping opens the drawer.*
+*Month view, the default (`?view=week|day` switches). The grid starts on Sunday because Dreamer UI's `Calendar` can't start a week on Monday, and the week view starts on Sunday to match. Under the header's gear and Add, the period row above the grid is Pinch's own (the Calendar's own header is hidden): arrows that step by the view's unit, the period's title, a thin Month / Week / Day switch, and a **Today** button that appears only while today is outside the period shown. Each planned meal is a chip on a soft tint of its meal-type colour (🍳 breakfast, 🥪 lunch, 🍝 dinner, 🍿 snack, 🍰 dessert, 🥤 drink); a phone's cell shows meal emoji chips, with a fourth meal becoming "+N", and from `lg` the chips become Google-Calendar-style pills with the meal's truncated title (its first item, "+N" for more). Today takes the orange dot on its number and the selected day a ring. Past days read exactly as they were that day. The stats row sits above the grid and describes the period shown ("Spent this week" in Week): Spent (with a warning icon in place of a "leaves out" line), Avg per meal and, when protein is on, Per g protein, then the calories and macros switched on as small emoji tiles labelled "Daily average this month" ("this week"; "Nutrition that day" in Day), at most one quiet nudge line ("2 ingredients need a price · Add prices"), and a "See the breakdown" link that opens the drawer. Tapping a day opens its drawer; on a computer, hovering a day opens a peek popover with the same content.*
 
-| Cell contents | What `renderCell` draws |
+| View | Phone (below `lg`) | From `lg` |
+|---|---|---|
+| Month | emoji chips on a soft tint, 3 at most, a fourth becomes "+N" | pills with the meal's truncated title (first item, "+N"), 3 at most then "+N more" |
+| Week | a vertical agenda of 7 days, 6 meal rows a day then "Show N more" | 7 columns, 5 meals a day then "+N more" |
+| Day | the day's meals grouped in meal order, each as a row | the same |
+
+| Month cell contents | What `renderCell` draws |
 |---|---|
 | no meals | the date number only |
-| 1–3 meals | one bar per meal in time-of-day order (meal type order), emoji at the start of each bar |
-| 4+ meals | the first three bars and a small "+N" |
+| 1–3 meals | one chip (or pill) per meal in meal-type order |
+| 4+ meals | the first chips and a small "+N" |
 | past day with a meal that was never marked made | shown the same; marking made arrives with stock tracking |
+
+**Week** (phone agenda)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  C1["‹   Oct 11 – 17   ›   Month [ Week ] Day   Today"]:2
+  C2["Spent this week<br/>$96.20 ⚠"]:1
+  C3["Avg per meal<br/>$5.10"]:1
+  C4["Sun 11"]:1
+  C5["—"]:1
+  C6["Tue 13 ●"]:1
+  C7["🍳 Oats · 🍝 Adobo chicken +1"]:1
+  C8["Wed 14"]:1
+  C9["🥪 Burrito bowl"]:1
+  style C1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C9 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*A day with meals lists them as rows (the meal's emoji and title); a day with none is a quiet dash that still opens its drawer. Switching views keeps you on the selected day (or today), and Day shows that one day's meals with its own totals.*
 
 **Day drawer** (tap a day; swaps in place to a planned meal)
 
@@ -204,7 +242,6 @@ block-beta
   D9["Cilantro lime rice · 2 servings"]:1
   D10["$2.70"]:1
   D11["+ Add to this day"]:2
-  D12["Copy day as Markdown"]:2
   style D1 fill:transparent,stroke:#888888,stroke-width:1px;
   style D2 fill:transparent,stroke:#888888,stroke-width:1px;
   style D3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -216,9 +253,8 @@ block-beta
   style D9 fill:transparent,stroke:#888888,stroke-width:1px;
   style D10 fill:transparent,stroke:#888888,stroke-width:1px;
   style D11 fill:transparent,stroke:#888888,stroke-width:1px;
-  style D12 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Meals are grouped by meal type, each group under its emoji; a meal with several items lists them as flat rows beneath one heading, so a meal never looks like several separate meals. A day with no meals says so in one muted line with "+ Add to this day" in the header. A past day shows a muted "Prices as they were that day" line under the title. A past meal opened from it has no "Change items or servings": a muted line says the day has passed and to remove the meal and add it again.*
+*Meals are grouped by meal type, each group under its emoji; a meal with several items lists them as flat rows beneath one heading, so a meal never looks like several separate meals. A day with no meals says so in one muted line with "+ Add to this day" in the header. A past day shows a muted "Prices as they were that day" line under the title. A past meal opened from it has no Modify: a muted line says the day has passed and to remove the meal and add it again.*
 
 **Planned meal** (tap a meal in the day drawer; swaps in place with "‹ Back")
 
@@ -234,10 +270,10 @@ block-beta
   P6["2 servings · $2.70"]:1
   P7["Salsa"]:1
   P8["1 serving · $0.80"]:1
-  P9["Calories 640 · Protein 48 g (per serving, when on)"]:2
-  P10["✏️ Change items or servings"]:2
-  P11["💾 Save as a meal · 📋 Copy"]:2
-  P12["Remove from this day"]:2
+  P9["Cost $9.90 ⚠ · 🔥 640 · 💪 48g (for the plate, when on)"]:2
+  P10["Remove from this day"]:2
+  P11["Modify"]:1
+  P12["Save as a meal"]:1
   style P1 fill:transparent,stroke:#888888,stroke-width:1px;
   style P2 fill:transparent,stroke:#888888,stroke-width:1px;
   style P3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -251,7 +287,7 @@ block-beta
   style P11 fill:transparent,stroke:#888888,stroke-width:1px;
   style P12 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Totals for the meal and, when nutrition is on, per-serving values sit under the items. "Change items or servings" closes the drawer and opens the Plan a meal subview; "Remove from this day" is last, in red, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button.*
+*A Cost tile (its warning icon says what the total leaves out) and, when nutrition is on, the plate's calories and macros as emoji tiles sit above the items. The footer holds Modify (secondary, left) beside the one primary, "Save as a meal"; Modify closes the drawer and opens the Plan a meal subview, and is absent on a past day. "Remove from this day" is the red row at the end of the body, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button.*
 
 **Plan a meal** (subview; also the editor for an already planned meal)
 
@@ -259,7 +295,7 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
-  M1["‹ Meal"]:2
+  M1["‹ Adobo chicken +2"]:2
   M2["Tue, Oct 13 · 🍝 Dinner      Change"]:2
   M3["Start from a saved meal"]:2
   M4["+ New"]:1
@@ -268,13 +304,13 @@ block-beta
   M7["Breakfast bowl"]:1
   M8["What's on the plate?"]:2
   M9["🔍 Search recipes, ingredients"]:2
-  M10["🍲 Adobo chicken"]:1
+  M10["Adobo chicken"]:1
   M11["− 2 +"]:1
-  M12["🍲 Cilantro lime rice"]:1
+  M12["Cilantro lime rice"]:1
   M13["− 2 +"]:1
-  M14["🥣 Doritos (nacho cheese)"]:1
+  M14["Doritos (nacho cheese)"]:1
   M15["− 1 +"]:1
-  M16["Cost $11.20 · leaves out 1 ingredient"]:2
+  M16["Cost $11.20 ⚠ · 🔥 1,150 · 💪 64g"]:2
   M17["Cancel"]:1
   M18["Add to today"]:1
   style M1 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -296,7 +332,7 @@ block-beta
   style M17 fill:transparent,stroke:#888888,stroke-width:1px;
   style M18 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Opens on the day and meal type it came from (pills under "Change"). "Start from a saved meal" is a captioned row of pills shown while the plate is empty (nothing preselected); picking one copies its items onto the day. The search finds recipes and ingredients in one list with a small kind label on each result; a picked one joins the plate with one serving. Each row has its name on its own line (it wraps, never truncates), what one serving is ("1 serving = 28 g", "Recipe serves 4"), its serving stepper labelled "servings" (halves allowed) and a remove control. The footer says "Add to today" when the day is today. When the meal has two or more items a "Save as a meal" switch appears above the footer and reveals a name field. Adding a one-item meal is the same screen with one row.*
+*Opens on the day and meal type it came from (pills under "Change"). "Start from a saved meal" is a captioned row of pills shown while the plate is empty (nothing preselected); picking one copies its items onto the day. The search finds recipes and ingredients in one list with a small kind label on each result; a picked one joins the plate with one serving. Each row has its name on its own line (it wraps, never truncates) and, beneath it, a compact `Stepper` for servings (halves allowed) with what one serving is ("servings · 1 serving = 28 g", "Recipe serves 4") and a remove control. The header carries the meal's name, or the first item and "+N" while a plate is being planned, and a tinted summary at the end shows the cost, a warning icon that says what it leaves out (a tooltip, never a sheet) and the plate's emoji macros when nutrition is on. The footer says "Add to today" when the day is today. When the meal has two or more items a "Save as a meal" switch appears above the footer and reveals a name field. Adding a one-item meal is the same screen with one row.*
 
 **Recipes tab**
 
@@ -310,7 +346,7 @@ block-beta
   R4["🔍 Search (from 8 recipes)"]:2
   R5["🖼️ Adobo chicken"]:1
   R6["$3.20 / serving"]:1
-  R7["4 servings · 45 min · 520 cal (when on)"]:2
+  R7["4 servings · 45 min · 🔥 520 (when on)"]:2
   R8["🖼️ Cilantro lime rice"]:1
   R9["$1.35 / serving"]:1
   R10["4 servings · 25 min"]:2
@@ -325,7 +361,7 @@ block-beta
   style R9 fill:transparent,stroke:#888888,stroke-width:1px;
   style R10 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Two thin pills switch between Recipes and Meals (saved meals). A recipe row shows its cover (or a tinted emoji tile), title, cost per serving, and a muted line of servings and time, with nutrition per serving when it is on. A recipe with an unpriced ingredient shows the cost it can stand behind and a muted "leaves out 1" beside it. A meal row shows its items as a comma line and the total.*
+*Two thin pills switch between Recipes and Meals (saved meals). A recipe row shows its cover (or a tinted emoji tile), title, cost per serving, and a muted line of servings and time, with calories and macros per serving, as emoji figures, when they are on. A recipe with an unpriced ingredient shows the cost it can stand behind with a small warning icon beside it that says what it leaves out. A meal row shows its items as a comma line and the total.*
 
 **New recipe — how to start** (subview; a new recipe opens here, editing one skips it)
 
@@ -441,20 +477,21 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
-  K1["Ingredients"]:1
-  K2["+ New  ·  📋"]:1
-  K3["🏪 Stores  ·  6"]:1
-  K4["🛒 Products  ·  14"]:1
-  K5["[ Yours ]   All"]:2
-  K6["🔍 Search"]:2
-  K7["— Chicken —"]:2
-  K8["🍗 Chicken breast"]:1
-  K9["Walmart · $9.48 / 3 lb"]:1
-  K10["🍗 Chicken thighs"]:1
-  K11["No product yet"]:1
-  K12["— Rice —"]:2
-  K13["🍚 Jasmine rice"]:1
-  K14["Costco · $14.99 / 20 lb"]:1
+  K1["Kitchen"]:2
+  K2["🏪 Stores  ·  6"]:1
+  K3["🛒 Products  ·  14"]:1
+  K4["INGREDIENTS  42"]:1
+  K5["+ New"]:1
+  K6["[ Yours ]   All   🔍 Search   ⧩ 2"]:2
+  K7["Price: Needs a price  ✕   Clear"]:2
+  K8["— Chicken —"]:2
+  K9["Chicken breast"]:1
+  K10["Walmart · $9.48 / 3 lb"]:1
+  K11["Chicken thighs"]:1
+  K12["No product yet"]:1
+  K13["— Rice —"]:2
+  K14["Jasmine rice"]:1
+  K15["Costco · $14.99 / 20 lb"]:1
   style K1 fill:transparent,stroke:#888888,stroke-width:1px;
   style K2 fill:transparent,stroke:#888888,stroke-width:1px;
   style K3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -469,8 +506,9 @@ block-beta
   style K12 fill:transparent,stroke:#888888,stroke-width:1px;
   style K13 fill:transparent,stroke:#888888,stroke-width:1px;
   style K14 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K15 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Yours is the default and holds the ingredients you added, the ones with a product, and the ones your recipes use; All is the full catalog. Families are `SectionDivider` groups. A row shows the icon, name and the default product's store, price and size, or a muted "No product yet". The 📋 icon opens the copy sheet for your ingredient list. Stores and Products are entry rows that open subviews; later Kitchen entries (Stock, Prepared servings, Shopping list) join them.*
+*The screen is titled Kitchen; Stores and Products are entry rows that open subviews (later Kitchen entries, Stock, Prepared servings and Shopping list, join them), then an "Ingredients" eyebrow with its count and **+ New** beside it. The Yours / All pills stay visible beside the search and a filter icon (a count badge when filters are on); on a phone the filters open in a drawer and from `sm` in a popover, and each active filter also shows as a dismissible chip with "Clear". The filters are Price (Any / Needs a price / Has a price), Show only (Missing nutrition, Custom only) and Family. Yours is the default and holds the ingredients you added, the ones with a product, and the ones your recipes, saved meals and planned days that aren't frozen yet use; All is the full catalog. Families are `SectionDivider` groups. A row shows the name, its calories and macros as emoji figures per 100 g when nutrition is on, and the default product's store, price and size, or a muted "No product yet". Rows carry no icon. When the filters hide everything the empty state names the filters that are hiding things and offers "Clear filters" and "Look through everything".*
 
 **Ingredient details** (drawer)
 
@@ -478,9 +516,9 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
-  I1["🍗 Chicken breast"]:1
+  I1["Chicken breast"]:1
   I2["Chicken"]:1
-  I3["Per 100 g · 165 cal · 31 g protein · 0 g carbs · 3.6 g fat"]:2
+  I3["Per 100 g · 🔥 165 · 💪 31g · 🌾 0g · 🥑 3.6g"]:2
   I4["Products"]:2
   I5["⭐ Walmart · Great Value 3 lb"]:1
   I6["$9.48"]:1
@@ -499,7 +537,7 @@ block-beta
   style I9 fill:transparent,stroke:#888888,stroke-width:1px;
   style I11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g and can be adjusted in Modify. There is no "Used in" line in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
+*"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g as emoji `MacroStats` and can be adjusted in Modify. There is no "Used in" line in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
 
 **Product** (form sheet)
 
@@ -507,8 +545,7 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
-  PR1["Product"]:2
-  PR2["For<br/>Chicken breast"]:2
+  PR1["Chicken breast · Walmart"]:2
   PR3["Where do you buy it?"]:2
   PR4["+ New store"]:1
   PR5["Walmart"]:1
@@ -521,7 +558,6 @@ block-beta
   PR12["🗑"]:1
   PR13["Cancel  ·  Save"]:1
   style PR1 fill:transparent,stroke:#888888,stroke-width:1px;
-  style PR2 fill:transparent,stroke:#888888,stroke-width:1px;
   style PR3 fill:transparent,stroke:#888888,stroke-width:1px;
   style PR4 fill:transparent,stroke:#888888,stroke-width:1px;
   style PR5 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -534,7 +570,7 @@ block-beta
   style PR12 fill:transparent,stroke:#888888,stroke-width:1px;
   style PR13 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The store question comes first because the price and size are about that shop. The store row is a `PickOrCreate`: a dashed "New store" pill first, then your stores as logo pills, with "Show all" opening the well-known list inside the same row (capped height, a search past 12). A well-known store joins "your stores" the first time a product uses it. Price and size are two short fields side by side; the size field takes an amount and a unit. Label ("Great Value") and a link are "+ Add X" chips. The first product on an ingredient is made the default without asking, and "Make this the default" appears from the second.*
+*The sheet's title names what it is about ("{Ingredient} · {store or label}", "{Ingredient} · new product"), so there is no separate "For" block. The store question comes first because the price and size are about that shop. The store row is a `PickOrCreate`: a dashed "New store" pill first, then your stores as logo pills, with "Show all" opening the well-known list inside the same row (capped height, a search past 12). A well-known store joins "your stores" the first time a product uses it. Price and size are two short fields side by side; the size field takes an amount and a unit. Label ("Great Value") and a link are "+ Add X" chips. The first product on an ingredient is made the default without asking, and "Make this the default" appears from the second.*
 
 **Stores** (subview) and **Store** (form sheet)
 
@@ -588,7 +624,7 @@ block-beta
   style SF10 fill:transparent,stroke:#888888,stroke-width:1px;
   style SF11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The list shows each store's logo in a round tile with a letter tile as the fallback. A well-known store is picked from the list; "Can't find it? Add your own" reveals a name and an image field (`PhotoPicker`), and a store with no image gets a letter tile in a soft tint. Removing a store that has products asks first and keeps those products, with their store shown as "Removed store". The Products subview lists every product grouped by store with its ingredient, price and size, searchable from 8.*
+*The list shows each store's logo in a round tile with a letter tile as the fallback. A well-known store is picked from the list; "Can't find it? Add your own" reveals a name and an image field (`PhotoPicker`), and a store with no image gets a letter tile in a soft tint. Removing a store that has products asks first and keeps those products, with their store shown as "Removed store". The Products subview lists every product with its ingredient, price and size and has **+ New product** beside its title (pick the ingredient first, then the product sheet). From 8 products it shows a search and the filter and sort controls: filters are Store, Family and Default only / Not the default; sort is by store (grouped, the default), ingredient, price or date added. Rows are capped at 60 with "Show 60 more", and an ingredient's default star shows only when it has several products.*
 
 **Nudge and fill-in** (the quiet line, and the sheet it opens)
 
@@ -617,14 +653,14 @@ block-beta
   style G9 fill:transparent,stroke:#888888,stroke-width:1px;
   style G10 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*One sheet handles every kind of gap: a price, a package size, a nutrition value, or a missing conversion, one row per ingredient, with just the fields that gap needs. Rows left blank stay as they were, "Skip" moves on without saving, "Save" turns on once the row is filled in, and ✕ on the nudge hides that line for those ingredients. The same line appears in the recipe, saved meal, day and planned-meal views, the calendar stats row. The meal builder is a full-screen subview, so it states the cost and what it leaves out in text and opens nothing over itself; a frozen day has no line, since a new price can't change it.*
+*One sheet handles every kind of gap: a price, a package size, a nutrition value, or a missing conversion, one row per ingredient, with just the fields that gap needs. Rows left blank stay as they were, "Skip" moves on without saving, "Save" turns on once the row is filled in, and ✕ on the nudge hides that line for those ingredients. The same line appears in the recipe, saved meal, day and planned-meal views and the calendar stats row. The meal builder is a full-screen subview, so it states the cost and what it leaves out in text and opens nothing over itself; a frozen day has no line, since a new price can't change it.*
 
 | Where the gap shows | Nudge wording | What the fill-in sheet asks |
 |---|---|---|
 | a recipe, meal or day cost | "2 ingredients need a price · Add prices" | price and package size for each |
 | a cost that can't be compared | "Rice vinegar can't be compared with its package size · Add a size" | the package size in a comparable unit, for the ingredient's default product |
 | a nutrition metric that is on | "3 ingredients have no protein · Add values" | the missing metric for each |
-| the stats row | "leaves out 2 items · Add prices" | the same sheet, covering the month |
+| the stats row | a warning icon on Spent that names what it leaves out, and the nudge line under the tiles | the same sheet, covering the period shown |
 
 **Settings** (form sheet from the Calendar gear)
 
@@ -657,23 +693,6 @@ block-beta
 ```
 *Switches take effect immediately, so they are `AppToggle`s, not checkboxes. Nutrition is always stored; the switches only choose what is shown.*
 
-**Copy** (sheet used by every copy action)
-
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
-block-beta
-  columns 2
-  CP1["Copy my ingredients"]:2
-  CP2["Chicken: breast, thighs · Rice: jasmine · Salt · Doritos (nacho cheese) …"]:2
-  CP3["Includes ingredient names grouped by family. Prices, stores and products are not included."]:2
-  CP4["Copy"]:2
-  style CP1 fill:transparent,stroke:#888888,stroke-width:1px;
-  style CP2 fill:transparent,stroke:#888888,stroke-width:1px;
-  style CP3 fill:transparent,stroke:#888888,stroke-width:1px;
-  style CP4 fill:transparent,stroke:#888888,stroke-width:1px;
-```
-*A scrollable preview, one sentence on what is and isn't in the copy, and Dreamer UI's `CopyButton` (the shared `CopyPanel`). Inside a recipe, meal, day or planned-meal drawer it swaps in place with a Back link (never a second overlay); the Kitchen's 📋 icon opens it in its own sheet (`CopySheet`). The day drawer offers "Copy this day" and "Copy this week" (the Monday-to-Sunday week that holds the day). A copy never carries money, stores or products.*
-
 **Breakdown** (drawer from the calendar stats row)
 
 ```mermaid
@@ -697,7 +716,7 @@ block-beta
   style BK7 fill:transparent,stroke:#888888,stroke-width:1px;
   style BK8 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The two thin pills switch between days and meal types; rows show spend and, for each nutrition metric that is on, its total. It is a single scrolling list under a fixed header.*
+*The title names the period shown (a month, a week or a day). The two thin pills switch between days and meal types; rows show spend and, for each nutrition metric that is on, its total. It is a single scrolling list under a fixed header.*
 
 ## Reusable Components
 
