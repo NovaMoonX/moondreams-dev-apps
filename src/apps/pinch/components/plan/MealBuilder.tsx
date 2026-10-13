@@ -250,7 +250,7 @@ function MealBuilder({
       }
       addToast({
         title: existingPlanned
-          ? `Saved ${MEAL_TYPE_LABELS[mealType].toLowerCase()} on ${getDayWord(dayKey)}`
+          ? `Saved ${MEAL_TYPE_LABELS[mealType].toLowerCase()} for ${getDayWord(dayKey)}`
           : `Added ${source?.name ?? getItemTitle(items[0], recipesById, ingredientsById)}${!source && items.length > 1 ? ` and ${items.length - 1} more` : ''} to ${getDayWord(dayKey)}`,
         type: 'success',
       });
@@ -435,7 +435,7 @@ function MealBuilder({
                       <X className='h-4 w-4' aria-hidden='true' />
                     </Button>
                   </div>
-                  <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-11'>
+                  <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-10'>
                     <span className='text-muted-foreground text-xs'>
                       {getServingCaption(item)}
                     </span>

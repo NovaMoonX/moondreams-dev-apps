@@ -265,16 +265,16 @@ block-beta
   M6["Chicken + rice"]:1
   M7["Breakfast bowl"]:1
   M8["What's on the plate?"]:2
-  M9["🔍 Search recipes, meals and ingredients"]:2
+  M9["🔍 Search recipes, ingredients"]:2
   M10["🍲 Adobo chicken"]:1
   M11["− 2 +"]:1
   M12["🍲 Cilantro lime rice"]:1
   M13["− 2 +"]:1
   M14["🥣 Doritos (nacho cheese)"]:1
   M15["− 1 +"]:1
-  M16["Cost $11.20 · leaves out 1 item · Add price"]:2
+  M16["Cost $11.20 · leaves out 1 ingredient"]:2
   M17["Cancel"]:1
-  M18["Add to Tuesday"]:1
+  M18["Add to today"]:1
   style M1 fill:transparent,stroke:#888888,stroke-width:1px;
   style M2 fill:transparent,stroke:#888888,stroke-width:1px;
   style M3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -465,8 +465,7 @@ block-beta
   I7["Costco · 6.5 lb"]:1
   I8["$19.99"]:1
   I9["+ Add a product"]:2
-  I10["Used in 3 recipes"]:2
-  I11["✏️ Modify · Delete"]:2
+  I11["✏️ Modify"]:2
   style I1 fill:transparent,stroke:#888888,stroke-width:1px;
   style I2 fill:transparent,stroke:#888888,stroke-width:1px;
   style I3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -476,10 +475,9 @@ block-beta
   style I7 fill:transparent,stroke:#888888,stroke-width:1px;
   style I8 fill:transparent,stroke:#888888,stroke-width:1px;
   style I9 fill:transparent,stroke:#888888,stroke-width:1px;
-  style I10 fill:transparent,stroke:#888888,stroke-width:1px;
   style I11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g and can be adjusted in Modify. "Used in" lists recipe titles. "Used in" is not shown in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
+*"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g and can be adjusted in Modify. There is no "Used in" line in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
 
 **Product** (form sheet)
 
@@ -597,7 +595,7 @@ block-beta
   style G9 fill:transparent,stroke:#888888,stroke-width:1px;
   style G10 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*One sheet handles every kind of gap: a price, a package size, a nutrition value, or a missing conversion, one row per ingredient, with just the fields that gap needs. Rows left blank stay as they were, "Save" is always available, and ✕ on the nudge hides that line for those ingredients. The same line appears in the recipe, saved meal, day and planned-meal views, the calendar stats row and an ingredient's row ("No price yet"). The meal builder is a full-screen subview, so it states the cost and what it leaves out in text and opens nothing over itself; a frozen day has no line, since a new price can't change it.*
+*One sheet handles every kind of gap: a price, a package size, a nutrition value, or a missing conversion, one row per ingredient, with just the fields that gap needs. Rows left blank stay as they were, "Skip" moves on without saving, "Save" turns on once the row is filled in, and ✕ on the nudge hides that line for those ingredients. The same line appears in the recipe, saved meal, day and planned-meal views, the calendar stats row. The meal builder is a full-screen subview, so it states the cost and what it leaves out in text and opens nothing over itself; a frozen day has no line, since a new price can't change it.*
 
 | Where the gap shows | Nudge wording | What the fill-in sheet asks |
 |---|---|---|
@@ -685,11 +683,11 @@ block-beta
 |---|---|---|
 | MealBarCell | Calendar `renderCell` | up to three thin meal-type bars with emoji and a "+N"; date number, today accent, selected ring |
 | StatsRow | Calendar | spend, average per meal, price per gram of protein when protein is on, and a compact line of nutrition averages; tap opens the breakdown; carries the nudge |
-| GapNudge | recipe, meal, day and planned-meal drawers, stats row, ingredient rows | the one quiet line (muted text + link + ✕) that offers the fill-in sheet; renders only when there is a gap |
+| GapNudge | recipe, meal, day and planned-meal drawers, stats row | the one quiet line (muted text + link + ✕) that offers the fill-in sheet; renders only when there is a gap |
 | FillInSheet | behind every nudge | a `FormSheet` with one row per ingredient and only the fields that gap needs |
 | DayDrawer / DayPeek | Calendar | the same content as a `DetailSheet` on phones and a hover `Popover` from `sm` up (`max-sm:hidden`) |
 | PlannedMealView | Day drawer | items with servings, totals, grouped actions, swapped in place |
-| MealBuilder | Plan a meal, Meal subview | day and type pills, a pill row of saved meals while the plate is empty, one item search, per-item serving steppers, cost line with nudge, Save-as-meal switch |
+| MealBuilder | Plan a meal, Meal subview | day and type pills, a pill row of saved meals while the plate is empty, one item search, per-item serving steppers, a cost line that states what it leaves out (no nudge: the fill-in sheet never opens over this subview), Save-as-meal switch |
 | ItemSearch | MealBuilder, Recipe form | one search over recipes, meals and ingredients with kind labels; also offers "New ingredient" |
 | ServingStepper | MealBuilder, Recipe form | half-step stepper, 40px targets |
 | RecipeForm | Recipe subview | title, servings, ingredient rows, chips; hosts `RecipeAutofill` |

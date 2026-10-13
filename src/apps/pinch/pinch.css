@@ -117,7 +117,7 @@ html.pinch-theme button[class*='underline-offset'] {
 }
 
 /* The soft tinted blocks that group a drawer's actions need an edge in dark, where the tint all but disappears into the sheet. */
-html.pinch-theme.dark [class*='bg-muted/50'] {
+html.pinch-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
