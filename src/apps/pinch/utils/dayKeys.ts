@@ -55,15 +55,7 @@ export const formatMonthTitle = (monthKey: string) => {
 export const formatDayTitle = (dayKey: string) =>
   dayTitleFormatter.format(getDateOfDayKey(dayKey));
 
-const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
-  weekday: 'long',
-  timeZone: 'UTC',
-});
-
 /** "Tuesday". */
-export const formatWeekday = (dayKey: string) =>
-  weekdayFormatter.format(getDateOfDayKey(dayKey));
-
 /** The `[start, end)` of stored dates the listener covers for a shown month. */
 export const getMonthWindow = (monthKey: string) => {
   const [year, month] = monthKey.split('-').map(Number);
@@ -110,10 +102,8 @@ export function getVisibleRange(
 ): DayRange {
   const { startKey, endKey } = getPeriodRange(view, anchorKey);
   if (view !== 'month') return { startKey, endKey };
-  return {
-    startKey: getWeekStartKey(startKey),
-    endKey: addDaysToKey(getWeekStartKey(endKey), 6),
-  };
+  const gridStart = getWeekStartKey(startKey);
+  return { startKey: gridStart, endKey: addDaysToKey(gridStart, 41) };
 }
 
 /** The anchor day one step away: a month, a week or a day. */

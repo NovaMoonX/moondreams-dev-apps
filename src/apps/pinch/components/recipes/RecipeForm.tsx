@@ -18,6 +18,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
@@ -181,7 +182,10 @@ function RecipeForm({
           const set = (patch: Partial<RecipeFormData['basics']>) =>
             props.onValueChange({ ...basics, ...patch });
           return (
-            <div className='grid grid-cols-2 gap-3'>
+            <div
+              className='grid grid-cols-2 gap-3'
+              onKeyDown={blockEnterSubmit}
+            >
               <div className='col-span-2 flex items-center justify-between gap-3'>
                 <span className='text-sm font-medium'>Servings</span>
                 <Stepper

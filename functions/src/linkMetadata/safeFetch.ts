@@ -28,15 +28,13 @@ function isPrivateIPv4(ip: string): boolean {
   return false;
 }
 
+/** Only global unicast (2000::/3) is allowed, minus 6to4 and Teredo/documentation space; loopback, link-local, unique-local, mapped, NAT64 and the unspecified address all fall outside it. */
 function isPrivateIPv6(ip: string): boolean {
-  const normalized = ip.toLowerCase();
-  if (normalized === '::1') return true; // loopback
-  if (normalized.startsWith('fe80:')) return true; // link-local
-  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // unique local
-  if (normalized.startsWith('::ffff:')) {
-    // IPv4-mapped — check the embedded v4 address
-    return isPrivateIPv4(normalized.slice('::ffff:'.length));
-  }
+  const first = parseInt(ip.split(':')[0] || '0', 16);
+  const second = parseInt(ip.split(':')[1] || '0', 16);
+  if (Number.isNaN(first) || (first & 0xe000) !== 0x2000) return true;
+  if (first === 0x2002) return true; // 6to4 embeds an IPv4 address
+  if (first === 0x2001 && (second === 0 || second === 0xdb8)) return true;
   return false;
 }
 

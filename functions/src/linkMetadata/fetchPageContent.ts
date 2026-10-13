@@ -63,64 +63,142 @@ const findRecipeNode = (value: unknown): Record<string, unknown> | null => {
   return null;
 };
 
-const extractRecipeJson = (html: string): string | null => {
-  const scripts = [
-    ...html.matchAll(
-      /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
-    ),
-  ];
-  const node = scripts
-    .map((script) => {
+const toStructured = (node: Record<string, unknown>) =>
+  JSON.stringify({
+    name: node.name,
+    description: node.description,
+    recipeYield: node.recipeYield,
+    prepTime: node.prepTime,
+    cookTime: node.cookTime,
+    totalTime: node.totalTime,
+    recipeIngredient: node.recipeIngredient,
+    recipeInstructions: node.recipeInstructions,
+  }).slice(0, MAX_STRUCTURED_CHARS);
+
+const parseRecipeJson = (blocks: string[]): string | null => {
+  const node = blocks
+    .map((block) => {
       try {
-        return findRecipeNode(JSON.parse(script[1]));
+        return findRecipeNode(JSON.parse(block));
       } catch {
         return null;
       }
     })
     .find((found) => found !== null);
-  if (!node) return null;
-
-  // Keep the fields a recipe form reads and drop the rest (images, reviews, video).
-  const { name, description, recipeYield, prepTime, cookTime, totalTime } =
-    node as Record<string, unknown>;
-  const kept = {
-    name,
-    description,
-    recipeYield,
-    prepTime,
-    cookTime,
-    totalTime,
-    recipeIngredient: node.recipeIngredient,
-    recipeInstructions: node.recipeInstructions,
-  };
-  return JSON.stringify(kept).slice(0, MAX_STRUCTURED_CHARS);
+  return node ? toStructured(node) : null;
 };
 
-const extractTitle = (html: string): string | null => {
-  const match = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-  return match?.[1] ? decodeEntities(match[1]).trim() : null;
+const SKIPPED_TAGS = new Set([
+  'script',
+  'style',
+  'noscript',
+  'svg',
+  'nav',
+  'header',
+  'footer',
+  'form',
+  'iframe',
+  'title',
+]);
+const BREAKING_TAGS = new Set([
+  'p',
+  'div',
+  'li',
+  'ul',
+  'ol',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'tr',
+  'section',
+  'article',
+  'br',
+]);
+const MAX_SCANNED_TEXT_CHARS = 200000;
+
+/** Where a skipped tag's body ends: the next `</name` (any case) at or after `from`, or the end of the page. */
+const findClosing = (html: string, name: string, from: number) => {
+  for (
+    let at = html.indexOf('</', from);
+    at !== -1;
+    at = html.indexOf('</', at + 2)
+  ) {
+    if (html.slice(at + 2, at + 2 + name.length).toLowerCase() === name) {
+      return at;
+    }
+  }
+  return html.length;
 };
 
-const extractVisibleText = (html: string): string => {
-  const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] ?? html;
-  const text = body
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(
-      /<(script|style|noscript|svg|nav|header|footer|form|iframe)\b[\s\S]*?<\/\1>/gi,
-      ' ',
-    )
-    .replace(
-      /<\/(p|div|li|ul|ol|h[1-6]|tr|section|article|br)>|<br\s*\/?>/gi,
-      '\n',
-    )
-    .replace(/<[^>]+>/g, ' ');
+interface PageParts {
+  title: string | null;
+  recipeJson: string | null;
+  text: string;
+}
 
-  return decodeEntities(text)
+/**
+ * One left-to-right pass over the page, so a hostile page can't make it slow: every step moves forward
+ * with `indexOf`, and no pattern has to be retried from each position.
+ */
+const readPage = (html: string): PageParts => {
+  const chunks: string[] = [];
+  const blocks: string[] = [];
+  let title: string | null = null;
+  let length = 0;
+  let at = 0;
+
+  while (at < html.length && length < MAX_SCANNED_TEXT_CHARS) {
+    const open = html.indexOf('<', at);
+    const textEnd = open === -1 ? html.length : open;
+    if (textEnd > at) {
+      const text = html.slice(at, textEnd);
+      chunks.push(text);
+      length += text.length;
+    }
+    if (open === -1) break;
+
+    if (html.startsWith('<!--', open)) {
+      const end = html.indexOf('-->', open + 4);
+      at = end === -1 ? html.length : end + 3;
+      continue;
+    }
+
+    const close = html.indexOf('>', open + 1);
+    if (close === -1) break;
+
+    const tag = html.slice(open + 1, Math.min(close, open + 301));
+    const name = /^\/?([a-z][a-z0-9]*)/i.exec(tag)?.[1]?.toLowerCase() ?? '';
+    const isClosing = tag.startsWith('/');
+    at = close + 1;
+
+    if (!isClosing && SKIPPED_TAGS.has(name)) {
+      const bodyEnd = findClosing(html, name, at);
+      const body = html.slice(at, bodyEnd);
+      if (name === 'title' && title === null) {
+        title = decodeEntities(body).trim() || null;
+      }
+      if (name === 'script' && /application\/ld\+json/i.test(tag)) {
+        blocks.push(body);
+      }
+      const end = html.indexOf('>', bodyEnd);
+      at = end === -1 ? html.length : end + 1;
+      continue;
+    }
+
+    chunks.push(isClosing || BREAKING_TAGS.has(name) ? '\n' : ' ');
+  }
+
+  const text = decodeEntities(chunks.join(''))
     .split('\n')
     .map((line) => line.replace(/[ \t\xa0]+/g, ' ').trim())
     .filter(Boolean)
     .join('\n')
     .slice(0, MAX_TEXT_CHARS);
+
+  return { title, recipeJson: parseRecipeJson(blocks), text };
 };
 
 export const fetchPageContent = onCall(
@@ -165,12 +243,9 @@ export const fetchPageContent = onCall(
         );
       }
 
-      return {
-        url: finalUrl,
-        title: extractTitle(html),
-        structured: extractRecipeJson(html),
-        text: extractVisibleText(html),
-      };
+      const { title, recipeJson, text } = readPage(html);
+
+      return { url: finalUrl, title, structured: recipeJson, text };
     } catch (error) {
       if (error instanceof HttpsError) {
         throw error;

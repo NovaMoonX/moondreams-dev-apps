@@ -37,13 +37,6 @@ export interface RecipeFormData {
   nutrition: Record<NutritionMetric, string>;
 }
 
-export const EMPTY_NUTRITION: Record<NutritionMetric, string> = {
-  calories: '',
-  protein: '',
-  carbs: '',
-  fat: '',
-};
-
 export const getInitialData = (recipe: Recipe | null): RecipeFormData => ({
   title: recipe?.title ?? '',
   basics: {
@@ -72,33 +65,46 @@ export const getInitialData = (recipe: Recipe | null): RecipeFormData => ({
   ) as Record<NutritionMetric, string>,
 });
 
-/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. */
+/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. A second line for an ingredient already listed adds to it when the units agree and stays its own line when they don't, so no amount is lost. */
 export const getDataFromExtracted = (
   extracted: ExtractedRecipe,
   ingredients: ResolvedIngredient[],
 ): RecipeFormData => {
   const blank = getInitialData(null);
-  const known = new Set<string>();
-  const rows = extracted.ingredients.flatMap((line) => {
+  const rows = extracted.ingredients.reduce<IngredientRow[]>((acc, line) => {
     const match = matchIngredient(line.name, ingredients);
-    if (match && known.has(match.id)) {
-      return [];
+    const unit = line.unit ?? match?.serving.unit ?? 'EACH';
+    const { amount } = line;
+    const existing = match
+      ? acc.find(
+          (row) =>
+            row.ingredientId === match.id &&
+            row.unit === unit &&
+            row.amount.trim() !== '' &&
+            amount !== null,
+        )
+      : undefined;
+    if (existing && amount !== null) {
+      return acc.map((row) =>
+        row === existing
+          ? { ...row, amount: String(Number(row.amount) + amount) }
+          : row,
+      );
     }
-    if (match) {
-      known.add(match.id);
-    }
+
     return [
+      ...acc,
       {
         id: generateUuid(),
         ingredientId: match?.id ?? '',
-        amount: line.amount === null ? '' : String(line.amount),
-        unit: line.unit ?? match?.serving.unit ?? 'EACH',
+        amount: amount === null ? '' : String(amount),
+        unit,
         note: line.note,
         proposedName: match ? null : line.name,
         newName: null,
-      } satisfies IngredientRow,
+      },
     ];
-  });
+  }, []);
 
   return {
     ...blank,

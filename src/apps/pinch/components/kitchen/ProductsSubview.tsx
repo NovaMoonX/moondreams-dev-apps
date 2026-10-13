@@ -154,14 +154,20 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
   const storesById = useAppSelector(selectStoresById);
   const allStores = useAppSelector(selectAllStores);
   const families = useAppSelector(selectIngredientFamilies);
-  const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState<ProductFilters>(NO_FILTERS);
-  const [sort, setSort] = useState<ProductSort>(DEFAULT_SORT);
-  const [order, setOrder] = useState<SortOrder>('natural');
+  const [typedQuery, setQuery] = useState('');
+  const [pickedFilters, setFilters] = useState<ProductFilters>(NO_FILTERS);
+  const [pickedSort, setSort] = useState<ProductSort>(DEFAULT_SORT);
+  const [pickedOrder, setOrder] = useState<SortOrder>('natural');
   const [paging, setPaging] = useState({ key: '', limit: LIST_PAGE_SIZE });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
   const [newIngredientId, setNewIngredientId] = useState<string | null>(null);
+
+  const hasControls = products.length >= LIST_SEARCH_THRESHOLD;
+  const query = hasControls ? typedQuery : '';
+  const filters = hasControls ? pickedFilters : NO_FILTERS;
+  const sort = hasControls ? pickedSort : DEFAULT_SORT;
+  const order = hasControls ? pickedOrder : 'natural';
 
   const rows = useMemo(
     () =>
@@ -386,7 +392,7 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
             </Button>
           }
         />
-        {products.length >= LIST_SEARCH_THRESHOLD && (
+        {hasControls && (
           <FilterBar
             query={query}
             onQueryChange={setQuery}

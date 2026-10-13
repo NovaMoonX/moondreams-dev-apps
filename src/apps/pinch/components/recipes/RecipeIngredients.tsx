@@ -9,19 +9,19 @@ import Field from '@/components/forms/Field';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
+import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
 import type { IngredientRow } from '@apps/pinch/components/recipes/recipeFormModel';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   DEFAULT_SERVING,
+  MAX_NOTE_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_SERVING_AMOUNT,
   UNIT_LABELS,
 } from '@apps/pinch/constants';
 import { selectIngredientsById } from '@apps/pinch/store/selectors';
 import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
-
-const MAX_NOTE_LENGTH = 80;
 
 const isAmountValid = (row: IngredientRow) => {
   const amount = Number(row.amount);
@@ -121,7 +121,7 @@ function IngredientEditor({
   }
 
   return (
-    <div className='space-y-3'>
+    <div className='space-y-3' onKeyDown={blockEnterSubmit}>
       <div className='grid grid-cols-2 gap-3'>
         <Field label='Amount'>
           {(id) => (

@@ -55,7 +55,7 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
           </span>
         ) : (
           hasShownValue(ingredient.per100g, show) && (
-            <span className='text-muted-foreground block truncate text-xs font-normal'>
+            <span className='text-muted-foreground block text-xs font-normal'>
               <MacroStats values={ingredient.per100g} show={show} /> per 100 g
             </span>
           )

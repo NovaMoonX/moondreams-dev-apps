@@ -5,6 +5,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import Field from '@/components/forms/Field';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
+import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import { formatMacro } from '@/utils/macroUtils';
 import { NUTRITION_CELLS, NUTRITION_METRICS } from '@apps/pinch/constants';
 import type { NutritionMetric, NutritionValues } from '@apps/pinch/types';
@@ -76,7 +77,7 @@ function NutritionReview({
   };
 
   return (
-    <div className='space-y-3'>
+    <div className='space-y-3' onKeyDown={blockEnterSubmit}>
       <div className='flex items-center justify-between gap-3'>
         <p className='text-muted-foreground text-xs'>
           {isEdited

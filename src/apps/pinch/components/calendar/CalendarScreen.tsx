@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -73,11 +73,14 @@ function CalendarScreen({
   const todayKey = getCellDayKey(new Date(now));
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const getMealTitle = (meal: PlannedMeal) =>
-    meal.items.length === 0
-      ? ''
-      : getItemTitle(meal.items[0], recipesById, ingredientsById) +
-        (meal.items.length > 1 ? ` +${meal.items.length - 1}` : '');
+  const getMealTitle = useCallback(
+    (meal: PlannedMeal) =>
+      meal.items.length === 0
+        ? ''
+        : getItemTitle(meal.items[0], recipesById, ingredientsById) +
+          (meal.items.length > 1 ? ` +${meal.items.length - 1}` : ''),
+    [recipesById, ingredientsById],
+  );
   const [anchorKey, setAnchorKey] = useState(() =>
     shownMonth === getLocalMonthKey(new Date(now))
       ? todayKey
