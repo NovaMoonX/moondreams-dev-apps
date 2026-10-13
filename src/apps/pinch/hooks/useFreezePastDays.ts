@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { freezePastMeals } from '@apps/pinch/store/actions/freezeActions';
 import {
   selectIsPinchLoaded,
+  selectPinchLoadError,
   selectPlannedMeals,
 } from '@apps/pinch/store/selectors';
 import { getLocalTodayDate } from '@apps/pinch/utils/dayKeys';
@@ -12,6 +13,7 @@ import { getLocalTodayDate } from '@apps/pinch/utils/dayKeys';
 export function useFreezePastDays(uid: string | null) {
   const dispatch = useAppDispatch();
   const isLoaded = useAppSelector(selectIsPinchLoaded);
+  const hasLoadError = useAppSelector(selectPinchLoadError) !== null;
   const dueKey = useAppSelector((state) => {
     const today = getLocalTodayDate();
     return selectPlannedMeals(state)
@@ -23,7 +25,12 @@ export function useFreezePastDays(uid: string | null) {
   const submitted = useRef(new Set<string>());
 
   useEffect(() => {
-    if (!uid || !isLoaded || dueKey === '') {
+    if (!uid) {
+      submitted.current.clear();
+      return;
+    }
+
+    if (!isLoaded || hasLoadError || dueKey === '') {
       return;
     }
 
@@ -34,5 +41,5 @@ export function useFreezePastDays(uid: string | null) {
 
     fresh.forEach((id) => submitted.current.add(id));
     void dispatch(freezePastMeals({ uid, onlyIds: new Set(fresh) }));
-  }, [dispatch, dueKey, isLoaded, uid]);
+  }, [dispatch, dueKey, hasLoadError, isLoaded, uid]);
 }

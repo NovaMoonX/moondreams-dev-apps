@@ -1,6 +1,7 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
 import { PillGroup } from '@/components/PillGroup';
@@ -125,27 +126,42 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       <div>
         {Array.from(
           { length: Math.ceil(shown.length / RECIPE_CHUNK) },
-          (_, chunk) => (
-            <LazyMount
-              key={`${trimmed}-${chunk}`}
-              estimatedHeight={RECIPE_CHUNK * RECIPE_ROW_HEIGHT}
-              eager={chunk < EAGER_RECIPE_CHUNKS}
-            >
-              <ul className='divide-border divide-y'>
-                {shown
-                  .slice(chunk * RECIPE_CHUNK, (chunk + 1) * RECIPE_CHUNK)
-                  .map((recipe) => (
-                    <li key={recipe.id}>
-                      <RecipeRow
-                        recipe={recipe}
-                        cost={costs.get(recipe.id)}
-                        onOpen={setOpenId}
-                      />
-                    </li>
-                  ))}
-              </ul>
-            </LazyMount>
-          ),
+          (_, chunk) => {
+            const rows = shown.slice(
+              chunk * RECIPE_CHUNK,
+              (chunk + 1) * RECIPE_CHUNK,
+            );
+            const estimatedHeight = rows.length * RECIPE_ROW_HEIGHT;
+            return (
+              <div
+                key={`${trimmed}-${chunk}`}
+                className={join(
+                  'defer-offscreen',
+                  chunk > 0 && 'border-border border-t',
+                )}
+                style={
+                  { '--defer-size': `${estimatedHeight}px` } as CSSProperties
+                }
+              >
+                <LazyMount
+                  estimatedHeight={estimatedHeight}
+                  eager={chunk < EAGER_RECIPE_CHUNKS}
+                >
+                  <ul className='divide-border divide-y'>
+                    {rows.map((recipe) => (
+                      <li key={recipe.id}>
+                        <RecipeRow
+                          recipe={recipe}
+                          cost={costs.get(recipe.id)}
+                          onOpen={setOpenId}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </LazyMount>
+              </div>
+            );
+          },
         )}
       </div>
     );

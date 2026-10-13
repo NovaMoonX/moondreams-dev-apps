@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -39,6 +41,7 @@ function MealBarCell({
   isPeekOpen,
   onPeekOpenChange,
 }: MealBarCellProps) {
+  const [hasPeeked, setHasPeeked] = useState(false);
   const face = (
     <span
       className={join(
@@ -96,14 +99,19 @@ function MealBarCell({
         <Popover
           hoverable
           isOpen={isPeekOpen}
-          onOpenChange={onPeekOpenChange}
+          onOpenChange={(isOpen) => {
+            if (isOpen) setHasPeeked(true);
+            onPeekOpenChange(isOpen);
+          }}
           placement='bottom'
           alignment={getPopoverAlignment(date)}
           className='w-64 p-3'
           trigger={face}
           offset={4}
         >
-          {isPeekOpen && <DayPeek dayKey={dayKey} meals={meals} />}
+          {(isPeekOpen || hasPeeked) && (
+            <DayPeek dayKey={dayKey} meals={meals} />
+          )}
         </Popover>
       ) : (
         face
