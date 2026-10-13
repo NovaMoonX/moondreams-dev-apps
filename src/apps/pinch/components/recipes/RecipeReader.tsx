@@ -244,7 +244,7 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
           className={join(
             'flex flex-col items-center gap-3 rounded-2xl border border-dashed px-4 py-8 text-center',
             isDragging
-              ? 'bg-accent border-[var(--pinch-drizzle)]'
+              ? 'bg-accent/40 border-[var(--pinch-drizzle)]'
               : 'border-border',
           )}
           onDragOver={(event) => {
@@ -264,7 +264,10 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
           >
             📎
           </span>
-          <p className='text-sm'>A photo, screenshot or PDF, up to 10 MB.</p>
+          <p className='text-sm'>
+            A photo, screenshot or PDF,{' '}
+            <span className='whitespace-nowrap'>up to 10 MB.</span>
+          </p>
           <Button
             type='button'
             loading={isReading}
