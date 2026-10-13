@@ -18,7 +18,7 @@ import {
   ensureCatalogStore,
   saveStore,
 } from '@apps/pinch/store/actions/storeActions';
-import { selectStores, selectStoresById } from '@apps/pinch/store/selectors';
+import { selectStores } from '@apps/pinch/store/selectors';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 
 interface StorePickerProps {
@@ -32,7 +32,6 @@ interface StorePickerProps {
 function StorePicker({ uid, value, onChange }: StorePickerProps) {
   const dispatch = useAppDispatch();
   const stores = useAppSelector(selectStores);
-  const storesById = useAppSelector(selectStoresById);
   const [isAdding, setIsAdding] = useState(stores.length === 0);
   const [query, setQuery] = useState('');
   const [ownName, setOwnName] = useState('');
@@ -65,11 +64,12 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
     () =>
       searchByName(
         CATALOG_STORES.filter(
-          (catalogStore) => !storesById.has(catalogStore.id),
+          (catalogStore) =>
+            !stores.some((store) => store.id === catalogStore.id),
         ),
         query,
       ),
-    [storesById, query],
+    [stores, query],
   );
 
   const finish = (storeId: string) => {

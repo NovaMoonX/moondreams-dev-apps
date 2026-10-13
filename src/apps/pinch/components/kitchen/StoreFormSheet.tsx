@@ -27,7 +27,7 @@ import {
 } from '@apps/pinch/store/actions/storeActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
-import { selectStoresById } from '@apps/pinch/store/selectors';
+import { selectStores } from '@apps/pinch/store/selectors';
 import type { Store } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 
@@ -279,7 +279,7 @@ interface CatalogPickerProps {
 
 function CatalogPicker({ uid, onOwn, onClose }: CatalogPickerProps) {
   const dispatch = useAppDispatch();
-  const storesById = useAppSelector(selectStoresById);
+  const stores = useAppSelector(selectStores);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const matches = searchByName(CATALOG_STORES, query);
@@ -308,7 +308,9 @@ function CatalogPicker({ uid, onOwn, onClose }: CatalogPickerProps) {
       ) : (
         <ul className='divide-border max-h-64 divide-y overflow-y-auto'>
           {matches.map((catalogStore) => {
-            const isAdded = storesById.has(catalogStore.id);
+            const isAdded = stores.some(
+              (store) => store.id === catalogStore.id,
+            );
             return (
               <li key={catalogStore.id}>
                 <Button
