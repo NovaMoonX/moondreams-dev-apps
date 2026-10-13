@@ -384,7 +384,7 @@ function IngredientFormSheet({
       message: isCatalog
         ? `Put ${ingredient.name} back to its built-in nutrition, serving size and icon? Your changes to it are removed.`
         : usage !== null && isUsed
-          ? `"${ingredient.name}" is used in ${describeUsage(usage)}, so it will be hidden, not erased. Those keep its name and numbers.`
+          ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be hidden, not erased. Everything that uses it keeps its name and numbers.`
           : `Delete "${ingredient.name}"? This action cannot be undone.`,
       confirmText: isCatalog ? 'Reset' : isUsed ? 'Hide' : 'Delete',
       destructive: true,

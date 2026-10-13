@@ -141,7 +141,7 @@ For a catalog ingredient the document id *is* the catalog id, so there is exactl
 ### 3. `Family` — `…/families/{id}`
 
 ```typescript
-interface Family { id: string; name: string; isArchived: boolean; createdAt: number; updatedAt: number }
+interface Family { id: string; name: string; createdAt: number; updatedAt: number }
 ```
 
 Only the person's own families live here. Catalog families (`cat-fam-chicken`) are constants. A family is a grouping label with no data of its own and no parent.
@@ -174,13 +174,12 @@ interface Product {
   sizeAmount: number;                          // > 0
   sizeUnit: Unit;
   url: string | null;                          // https only
-  isArchived: boolean;
   createdAt: number;
   updatedAt: number;
 }
 ```
 
-The default product is the ingredient's `defaultProductId`, not a flag on the product, so changing the default is one field write on one document. The first non-archived product added to an ingredient becomes its default in the same batch.
+The default product is the ingredient's `defaultProductId`, not a flag on the product, so changing the default is one field write on one document. The first product added to an ingredient becomes its default in the same batch.
 
 ### 6. `Recipe` — `…/recipes/{id}`
 
@@ -284,7 +283,7 @@ Files: `catalog/catalogIngredients.ts`, `catalog/catalogFamilies.ts`, `catalog/c
 | Resolved ingredient | catalog entry + `IngredientRecord` | `selectIngredientsById` |
 | Quantity in base units | `amount × UNIT_TO_BASE[unit]`, in the unit's dimension | `utils/quantity.ts` |
 | Bridged quantity | base units converted to another dimension via `gramsPerMl` (mass ↔ volume) or `gramsEach` (mass ↔ count); `null` when no bridge | `utils/quantity.ts` |
-| Ingredient unit cost | default (else first non-archived) product: `priceCents ÷ sizeInBase`, per base unit of the product's dimension | `utils/unitCost.ts` |
+| Ingredient unit cost | default (else first) product: `priceCents ÷ sizeInBase`, per base unit of the product's dimension | `utils/unitCost.ts` |
 | Line cost | recipe line amount bridged into the product's dimension × unit cost; otherwise a `NOT_COMPARABLE` gap; no product → `NO_PRODUCT` | `utils/recipeMath.ts` |
 | Recipe cost | sum of the priced lines; `{ totalCents, perServingCents, leftOut: Gap[], lines }` (`lines`: each recipe line's own cost or gap, for the drawer); `null` totals when nothing could be priced | `utils/recipeMath.ts` |
 | Recipe nutrition per serving | per metric: override if non-null, else sum of line grams × `per100g ÷ 100` ÷ servings; a line with no per-100 g value or no gram bridge is left out of that metric (never counted as 0) and adds a `NO_NUTRITION` gap for it | `utils/nutritionMath.ts` |
@@ -356,12 +355,12 @@ A frozen meal still lists its items from the live recipes and ingredients (so a 
 ```
 removeRecipe(id):
   usedInMeals    = meals.some(m => m.items.some(i => i.kind === 'RECIPE' && i.refId === id))
-  usedInPlanned  = (await getDocs(query(plannedMeals, where('refIds', 'array-contains', id), limit(1)))).size > 0
+  usedInPlanned  = (await getCountFromServer(query(plannedMeals, where('refIds', 'array-contains', id)))).data().count > 0
   usedInPlanned || usedInMeals  → updateDoc({ isArchived: true, updatedAt })   // hidden from lists and pickers
   otherwise                     → deleteDoc  (+ delete the cover from Storage)
 ```
 
-The same shape serves ingredients (also checked against `recipes.ingredients[].ingredientId` and `products`), products (against nothing but a default pointer: the ingredient's `defaultProductId` is re-pointed to another non-archived product, or `null`), stores (against products) and families (an archived family's ingredients keep showing under its name). The confirm names what will happen ("…is used in 3 planned meals and 1 saved meal, so it will be hidden, not erased"), from `getUsage` (the loaded collections plus one read of the planned meals that list the id); the remove action asks again itself, so the confirm text can never disagree with what is done to a record that changed in between. The read is a query, so it can't sit inside the delete's transaction: a planned meal added in the instant between the read and the delete is the one race left, and it would show the removed record as "Removed recipe" until the person re-adds it.
+The same shape serves custom ingredients (also checked against `recipes.ingredients[].ingredientId`, saved meals and `products`) and stores (against products). Products are deleted outright (the ingredient's `defaultProductId` is re-pointed to another product, or `null`, in the same transaction), and the MVP has no way to delete a family. The confirm names what will happen ("…is used in 3 planned meals and 1 saved meal, so it will be hidden, not erased"), from `getUsage` (the loaded collections plus one server-side count of the planned meals that list the id, so offline it says it can't check instead of undercounting); the remove action asks again itself, so the confirm text can never disagree with what is done to a record that changed in between. The read is a query, so it can't sit inside the delete's transaction: a planned meal added in the instant between the read and the delete is the one race left, and it would show the removed record as "Removed recipe" until the person re-adds it.
 
 Archived items never appear in pickers, search or lists (`selectRecipes`, `selectIngredients`, `selectStores` are the visible lists; the `selectAll…` ones and every `…ById` map still hold them, so `Retired chili` keeps its title and cost on the day that used it). A catalog store the person archived shows as addable again in the store pickers. Selectors that resolve a reference (`resolveIngredient`, recipe titles for planned items) still find them.
 
@@ -369,7 +368,7 @@ Archived items never appear in pickers, search or lists (`selectRecipes`, `selec
 
 `getGaps(scope)` walks the lines in a scope (one recipe, one meal, a day, the month) and returns `{ kind, ingredientId, detail }[]`:
 
-- `NO_PRODUCT` — a priced ingredient with no non-archived product, or a recipe/ingredient item with no price at all
+- `NO_PRODUCT` — a priced ingredient with no product, or a recipe/ingredient item with no price at all
 - `NOT_COMPARABLE` — a product exists but the amount and the package size can't be bridged
 - `NO_NUTRITION` — only for a metric in `showNutrition`
 
@@ -504,7 +503,7 @@ Every slice resets on the shared `resetAllState`, so a user switch never shows t
 | `removeStore(id)` | archive when any product points at it, else delete + delete the image |
 | `saveProduct(draft)` | one `writeBatch`: the product document and, when it's the ingredient's first live product or "Make this the default" was chosen, the record's `defaultProductId` (an upsert for a catalog ingredient with no record); also clears the matching `dismissedNudges` keys; preceded by `freezePastMeals` |
 | `removeProduct(id)` | delete; re-points `defaultProductId` to another live product or `null` in the same batch |
-| `setDefaultProduct(ingredientId, productId)` | field-scoped `updateDoc` of the record's `defaultProductId` (a transaction confirms the product still exists and isn't archived, so a stale device can't leave it dangling) |
+| `setDefaultProduct(ingredientId, productId)` | field-scoped `updateDoc` of the record's `defaultProductId` (a transaction confirms the product still exists, so a stale device can't leave it dangling) |
 | `saveRecipe(draft)` | `setDoc`/field-scoped `updateDoc` of what the form owns (never the whole cached object); new custom ingredients from an AI draft are created in the same `writeBatch`; a cover goes to Storage first; preceded by `freezePastMeals` |
 | `removeRecipe(id)` | the archive-or-delete check, preceded by `freezePastMeals` |
 | `saveMeal(draft)` / `removeMeal(id)` | `setDoc`/`updateDoc`; meals are referenced only by `sourceMealId` (never read for display), so a meal is always deletable |
