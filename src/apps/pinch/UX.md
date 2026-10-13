@@ -98,6 +98,8 @@ block-beta
 ```
 *Navigation is a floating pill at the bottom of a phone, as wide as its three tabs (never stretched edge to edge), and a rail on the left from `lg` up. The app opens to Calendar, the left tab; the active tab gets a soft fill and a drizzle of orange on its icon, the only orange in the bar. Later Kitchen entries (stock, prepared servings, shopping list) join the Kitchen tab and do not add a fourth tab.*
 
+*From `lg` up the screens use the width: the calendar fills the page and each cell names its meal (first item, `+N` for more) instead of a colour bar, and Recipes and Kitchen run in two columns. The phone layout is unchanged.*
+
 **First launch — Calendar, empty** (no setup steps: Pinch is usable the moment it opens)
 
 ```mermaid

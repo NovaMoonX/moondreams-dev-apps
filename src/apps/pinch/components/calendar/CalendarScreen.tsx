@@ -15,9 +15,11 @@ import DayDrawer from '@apps/pinch/components/calendar/DayDrawer';
 import MealBarCell from '@apps/pinch/components/calendar/MealBarCell';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectIngredientsById,
   selectMonthStats,
   selectPlannedByDay,
   selectPlannedMeals,
+  selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
 import {
@@ -26,6 +28,7 @@ import {
   getLocalMonthKey,
   shiftMonthKey,
 } from '@apps/pinch/utils/dayKeys';
+import { getItemTitle } from '@apps/pinch/utils/mealFormat';
 
 const NO_MEALS: PlannedMeal[] = [];
 
@@ -36,7 +39,7 @@ const CALENDAR_STYLES = {
   headerClassName: 'hidden',
   monthGridClassName: 'gap-1',
   cellClassName:
-    'group relative h-[4.75rem] min-h-0 w-full rounded-lg border-0 p-0 bg-muted hover:bg-muted/70 focus:bg-muted',
+    'group relative h-[4.75rem] min-h-0 w-full lg:h-28 rounded-lg border-0 p-0 bg-muted hover:bg-muted/70 focus:bg-muted',
   selectedCellClassName: 'bg-muted text-foreground',
   todayCellClassName: 'border-0',
 };
@@ -61,6 +64,13 @@ function CalendarScreen({
   const now = useNow();
   const todayKey = getCellDayKey(new Date(now));
   const isPhone = useMediaQuery().isBelow('sm');
+  const recipesById = useAppSelector(selectRecipesById);
+  const ingredientsById = useAppSelector(selectIngredientsById);
+  const getMealTitle = (meal: PlannedMeal) =>
+    meal.items.length === 0
+      ? ''
+      : getItemTitle(meal.items[0], recipesById, ingredientsById) +
+        (meal.items.length > 1 ? ` +${meal.items.length - 1}` : '');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
   const [peekDayKey, setPeekDayKey] = useState<string | null>(null);
@@ -205,7 +215,7 @@ function CalendarScreen({
         key={shownMonth}
         mode='single'
         size='auto'
-        className='mx-auto max-w-2xl'
+        className='mx-auto max-w-2xl lg:max-w-none'
         initialDate={new Date(year, month - 1, 1)}
         showNavigation={false}
         onDateSelect={(date) => {
@@ -226,6 +236,7 @@ function CalendarScreen({
               isToday={isToday}
               isOutsideMonth={dayKey.slice(0, 7) !== shownMonth}
               hasPeek={!isPhone}
+              getMealTitle={isPhone ? null : getMealTitle}
               isPeekOpen={peekDayKey === dayKey}
               onPeekOpenChange={(isOpen) =>
                 setPeekDayKey((current) => {

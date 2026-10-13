@@ -203,7 +203,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
       {groups.length === 0 ? (
         getEmptyState()
       ) : (
-        <div className='space-y-4'>
+        <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
           {groups.map((group, index) => (
             <FamilyGroup
               key={group.family.id || 'none'}
