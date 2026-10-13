@@ -1,5 +1,10 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import {
+  collection,
+  getCountFromServer,
+  query,
+  where,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -13,16 +18,16 @@ import {
 
 export type UsageKind = 'RECIPE' | 'INGREDIENT' | 'STORE';
 
-/** How many planned meals, in any month, list this id: the loaded window can't answer that. */
+/** How many planned meals, in any month, list this id: the loaded window can't answer that, and the offline cache would undercount, so it fails offline instead. */
 const countPlannedMeals = async (uid: string, id: string) =>
   (
-    await getDocs(
+    await getCountFromServer(
       query(
         collection(db, 'apps', 'pinch', 'kitchens', uid, 'plannedMeals'),
         where('refIds', 'array-contains', id),
       ),
     )
-  ).size;
+  ).data().count;
 
 /** What still points at a recipe, ingredient or store: the loaded collections plus one read of the planned meals that list it. */
 export async function readUsage(

@@ -827,7 +827,7 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
     const confirmed = await confirm({
       title: isUsed ? 'Hide recipe' : 'Delete recipe',
       message: isUsed
-        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be hidden, not erased. Those keep its name and numbers.`
+        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be hidden, not erased. Everything that uses it keeps its name and numbers.`
         : `Delete "${recipe.title}"? This action cannot be undone.`,
       confirmText: isUsed ? 'Hide' : 'Delete',
       destructive: true,

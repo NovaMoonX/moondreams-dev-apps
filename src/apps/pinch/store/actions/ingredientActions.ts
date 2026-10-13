@@ -172,7 +172,11 @@ export const removeIngredient = createAsyncThunk<
   async ({ uid, id }, { getState, rejectWithValue }) => {
     try {
       await freezeBeforeEdit(uid, getState());
-      const inUse = isInUse(await readUsage(uid, getState(), 'INGREDIENT', id));
+      const isCustom =
+        getState().pinch.ingredients.records.find((record) => record.id === id)
+          ?.catalogId === null;
+      const inUse =
+        isCustom && isInUse(await readUsage(uid, getState(), 'INGREDIENT', id));
       const recordRef = kitchenDoc(uid, 'ingredients', id);
       await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(recordRef);
