@@ -78,11 +78,11 @@ function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
 
     const isUsed = isInUse(usage);
     const confirmed = await confirm({
-      title: isUsed ? 'Hide store' : 'Delete store',
+      title: isUsed ? 'Remove store' : 'Delete store',
       message: isUsed
-        ? `"${store.name}" is used by ${describeUsage(usage)}, so it will be hidden, not erased. They keep their price, size and where they were bought.`
+        ? `"${store.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. They keep their price, size and where they were bought.`
         : `Delete "${store.name}"? This action cannot be undone.`,
-      confirmText: isUsed ? 'Hide' : 'Delete',
+      confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,
     });
     if (!confirmed) {
@@ -225,11 +225,11 @@ function CatalogStoreView({ uid, store, onClose }: CatalogStoreViewProps) {
 
     const isUsed = isInUse(usage);
     const confirmed = await confirm({
-      title: isUsed ? 'Hide store' : 'Delete store',
+      title: isUsed ? 'Remove store' : 'Delete store',
       message: isUsed
-        ? `"${store.name}" is used by ${describeUsage(usage)}, so it will be hidden, not erased. They keep their price, size and where they were bought. You can add it again from the list.`
+        ? `"${store.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. They keep their price, size and where they were bought. You can add it again from the list.`
         : `Delete "${store.name}"? You can add it again from the list.`,
-      confirmText: isUsed ? 'Hide' : 'Delete',
+      confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,
     });
     if (!confirmed) {

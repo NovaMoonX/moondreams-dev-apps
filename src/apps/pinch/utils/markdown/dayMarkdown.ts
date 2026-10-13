@@ -91,7 +91,7 @@ export function weekMarkdown(
   );
 
   return [
-    `# Week of ${formatDayTitle(monday)}`,
+    `# Week of ${formatDayTitle(monday)} to ${formatDayTitle(days[6])}`,
     ...days.map((key) =>
       dayBlock(key, mealsByDay.get(key) ?? [], lookups, '##'),
     ),

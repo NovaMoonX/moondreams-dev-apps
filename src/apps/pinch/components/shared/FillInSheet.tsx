@@ -21,7 +21,6 @@ import { saveProduct } from '@apps/pinch/store/actions/productActions';
 import {
   selectDefaultProducts,
   selectIngredientsById,
-  selectProducts,
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
@@ -50,17 +49,6 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const storesById = useAppSelector(selectStoresById);
-  const products = useAppSelector(selectProducts);
-  const lastStoreId = useMemo(
-    () =>
-      [...products]
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .find((product) => {
-          const store = storesById.get(product.storeId);
-          return store !== undefined && store.isArchived !== true;
-        })?.storeId ?? null,
-    [products, storesById],
-  );
   const rows = useMemo(
     () => [...new Map(gaps.map((gap) => [getGapKey(gap), gap])).values()],
     [gaps],
@@ -75,7 +63,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
 
   const getRow = (gap: Gap): RowState =>
     values[getGapKey(gap)] ?? {
-      storeId: lastStoreId,
+      storeId: null,
       price: '',
       sizeAmount: '',
       sizeUnit: 'LB',
@@ -283,7 +271,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
           <div
             className={
               gap.kind === 'NO_PRODUCT'
-                ? 'grid grid-cols-[1fr_1.4fr] items-start gap-3'
+                ? 'grid items-start gap-3 min-[400px]:grid-cols-[1fr_1.4fr]'
                 : ''
             }
           >
@@ -291,6 +279,8 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
               <div className='space-y-1.5'>
                 <Label>Price</Label>
                 <MoneyInput
+                  variant='outline'
+                  className='h-10'
                   ariaLabel={`Price of ${name}`}
                   placeholder='9.48'
                   value={row.price}
@@ -309,7 +299,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
                   variant='outline'
                   aria-label={`Package size of ${name}`}
                   placeholder='3'
-                  className='min-w-0'
+                  className='h-10 min-w-0'
                   value={row.sizeAmount}
                   onChange={(event) =>
                     update(getGapKey(gap), gap, {
@@ -319,7 +309,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
                 />
                 <UnitSelect
                   value={row.sizeUnit}
-                  className='w-20 shrink-0'
+                  className='h-10 w-20 shrink-0'
                   onChange={(sizeUnit) =>
                     update(getGapKey(gap), gap, { sizeUnit })
                   }

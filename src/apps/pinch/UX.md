@@ -98,6 +98,8 @@ block-beta
 ```
 *Navigation is a floating pill at the bottom of a phone, as wide as its three tabs (never stretched edge to edge), and a rail on the left from `lg` up. The app opens to Calendar, the left tab; the active tab gets a soft fill and a drizzle of orange on its icon, the only orange in the bar. Later Kitchen entries (stock, prepared servings, shopping list) join the Kitchen tab and do not add a fourth tab.*
 
+*From `lg` up the screens use the width: the calendar fills the page and each cell names its meal (first item, `+N` for more) instead of a colour bar, and Recipes and Kitchen run in two columns. The phone layout is unchanged.*
+
 **First launch — Calendar, empty** (no setup steps: Pinch is usable the moment it opens)
 
 ```mermaid
@@ -265,16 +267,16 @@ block-beta
   M6["Chicken + rice"]:1
   M7["Breakfast bowl"]:1
   M8["What's on the plate?"]:2
-  M9["🔍 Search recipes, meals and ingredients"]:2
+  M9["🔍 Search recipes, ingredients"]:2
   M10["🍲 Adobo chicken"]:1
   M11["− 2 +"]:1
   M12["🍲 Cilantro lime rice"]:1
   M13["− 2 +"]:1
   M14["🥣 Doritos (nacho cheese)"]:1
   M15["− 1 +"]:1
-  M16["Cost $11.20 · leaves out 1 item · Add price"]:2
+  M16["Cost $11.20 · leaves out 1 ingredient"]:2
   M17["Cancel"]:1
-  M18["Add to Tuesday"]:1
+  M18["Add to today"]:1
   style M1 fill:transparent,stroke:#888888,stroke-width:1px;
   style M2 fill:transparent,stroke:#888888,stroke-width:1px;
   style M3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -294,7 +296,7 @@ block-beta
   style M17 fill:transparent,stroke:#888888,stroke-width:1px;
   style M18 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Opens on the day and meal type it came from (pills under "Change"). "Start from a saved meal" is a row of pills shown while the plate is empty (nothing preselected); picking one copies its items onto the day. The search finds recipes and ingredients in one list with a small kind label on each result; a picked one joins the plate with one serving. Each row has its own serving stepper (halves allowed) and a remove control. When the meal has two or more items a "Save as a meal" switch appears above the footer and reveals a name field. Adding a one-item meal is the same screen with one row.*
+*Opens on the day and meal type it came from (pills under "Change"). "Start from a saved meal" is a captioned row of pills shown while the plate is empty (nothing preselected); picking one copies its items onto the day. The search finds recipes and ingredients in one list with a small kind label on each result; a picked one joins the plate with one serving. Each row has its name on its own line (it wraps, never truncates), what one serving is ("1 serving = 28 g", "Recipe serves 4"), its serving stepper labelled "servings" (halves allowed) and a remove control. The footer says "Add to today" when the day is today. When the meal has two or more items a "Save as a meal" switch appears above the footer and reveals a name field. Adding a one-item meal is the same screen with one row.*
 
 **Recipes tab**
 
@@ -409,7 +411,7 @@ block-beta
   style T13 fill:transparent,stroke:#888888,stroke-width:1px;
   style T14 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*"Add to calendar" is the one primary button; it closes the drawer and opens Plan a meal with this recipe on the plate. Modify, Copy and Delete sit in one muted block, Delete last in red (deleting a recipe used on planned days archives it and says so in the confirm). The nudge line is where a gap meets a number; ✕ closes it for these ingredients.*
+*"Add to calendar" is the one primary button; it closes the drawer and opens Plan a meal with this recipe on the plate. Modify and Copy sit in one muted block; Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm. The nudge line is where a gap meets a number; ✕ closes it for these ingredients.*
 
 **Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with the items and servings, total cost, per-serving nutrition when on, and one primary "Plan it" that closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. Copy and Delete sit in the muted block.
 
@@ -465,8 +467,7 @@ block-beta
   I7["Costco · 6.5 lb"]:1
   I8["$19.99"]:1
   I9["+ Add a product"]:2
-  I10["Used in 3 recipes"]:2
-  I11["✏️ Modify · Delete"]:2
+  I11["✏️ Modify"]:2
   style I1 fill:transparent,stroke:#888888,stroke-width:1px;
   style I2 fill:transparent,stroke:#888888,stroke-width:1px;
   style I3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -476,10 +477,9 @@ block-beta
   style I7 fill:transparent,stroke:#888888,stroke-width:1px;
   style I8 fill:transparent,stroke:#888888,stroke-width:1px;
   style I9 fill:transparent,stroke:#888888,stroke-width:1px;
-  style I10 fill:transparent,stroke:#888888,stroke-width:1px;
   style I11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g and can be adjusted in Modify. "Used in" lists recipe titles. Deleting an ingredient that is in use archives it and the confirm says what happens to its recipes and days.*
+*"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g and can be adjusted in Modify. There is no "Used in" line in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
 
 **Product** (form sheet)
 
@@ -597,7 +597,7 @@ block-beta
   style G9 fill:transparent,stroke:#888888,stroke-width:1px;
   style G10 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*One sheet handles every kind of gap: a price, a package size, a nutrition value, or a missing conversion, one row per ingredient, with just the fields that gap needs. Rows left blank stay as they were, "Save" is always available, and ✕ on the nudge hides that line for those ingredients. The same line appears in the recipe drawer, the meal builder, the calendar stats row and an ingredient's row ("No price yet").*
+*One sheet handles every kind of gap: a price, a package size, a nutrition value, or a missing conversion, one row per ingredient, with just the fields that gap needs. Rows left blank stay as they were, "Skip" moves on without saving, "Save" turns on once the row is filled in, and ✕ on the nudge hides that line for those ingredients. The same line appears in the recipe, saved meal, day and planned-meal views, the calendar stats row. The meal builder is a full-screen subview, so it states the cost and what it leaves out in text and opens nothing over itself; a frozen day has no line, since a new price can't change it.*
 
 | Where the gap shows | Nudge wording | What the fill-in sheet asks |
 |---|---|---|
@@ -685,11 +685,11 @@ block-beta
 |---|---|---|
 | MealBarCell | Calendar `renderCell` | up to three thin meal-type bars with emoji and a "+N"; date number, today accent, selected ring |
 | StatsRow | Calendar | spend, average per meal, price per gram of protein when protein is on, and a compact line of nutrition averages; tap opens the breakdown; carries the nudge |
-| GapNudge | recipe drawer, meal builder, stats row, ingredient rows | the one quiet line (muted text + link + ✕) that offers the fill-in sheet; renders only when there is a gap |
+| GapNudge | recipe, meal, day and planned-meal drawers, stats row | the one quiet line (muted text + link + ✕) that offers the fill-in sheet; renders only when there is a gap |
 | FillInSheet | behind every nudge | a `FormSheet` with one row per ingredient and only the fields that gap needs |
 | DayDrawer / DayPeek | Calendar | the same content as a `DetailSheet` on phones and a hover `Popover` from `sm` up (`max-sm:hidden`) |
 | PlannedMealView | Day drawer | items with servings, totals, grouped actions, swapped in place |
-| MealBuilder | Plan a meal, Meal subview | day and type pills, a pill row of saved meals while the plate is empty, one item search, per-item serving steppers, cost line with nudge, Save-as-meal switch |
+| MealBuilder | Plan a meal, Meal subview | day and type pills, a pill row of saved meals while the plate is empty, one item search, per-item serving steppers, a cost line that states what it leaves out (no nudge: the fill-in sheet never opens over this subview), Save-as-meal switch |
 | ItemSearch | MealBuilder, Recipe form | one search over recipes, meals and ingredients with kind labels; also offers "New ingredient" |
 | ServingStepper | MealBuilder, Recipe form | half-step stepper, 40px targets |
 | RecipeForm | Recipe subview | title, servings, ingredient rows, chips; hosts `RecipeAutofill` |
@@ -737,7 +737,7 @@ flowchart LR
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
     A[Tap a day] --> B[+ Add] --> C["Pick 'Taco night' from Start from a saved meal"] --> D["Items copied onto this day"]
-    D --> E["Skip the peppers, double the rice"] --> F[Add to Tuesday]
+    D --> E["Skip the peppers, double the rice"] --> F[Add to today]
     F --> G["Calendar bar appears"] --> H["Open it: Save as a meal"] --> I["Saved with a new name; Taco night is unchanged"]
 ```
 

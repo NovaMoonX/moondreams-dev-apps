@@ -12,6 +12,8 @@ interface MoneyInputProps {
   ariaLabel?: string;
   className?: string;
   autoFocus?: boolean;
+  /** `outline` leaves the fill clear so it matches an outline `Input` beside it in a modal or drawer. */
+  variant?: 'solid' | 'outline';
 }
 
 /** A dollar amount typed as text: a number input's spinner and float parsing are wrong for money. It settles to two decimals when the field loses focus or Enter is pressed. */
@@ -24,6 +26,7 @@ function MoneyInput({
   ariaLabel,
   className,
   autoFocus,
+  variant = 'solid',
 }: MoneyInputProps) {
   const settle = () => {
     const settled = toTwoDecimalAmount(value);
@@ -36,7 +39,8 @@ function MoneyInput({
     <div className='space-y-1'>
       <div
         className={join(
-          'border-border bg-background flex items-center rounded-full border pl-4 focus-within:border-current/60',
+          'border-border flex items-center rounded-full border pl-4 focus-within:border-current/60',
+          variant === 'solid' ? 'bg-background' : 'bg-transparent',
           errorMessage && 'border-destructive!',
           disabled && 'opacity-60',
         )}

@@ -21,7 +21,7 @@ function FamilyGroup({ group, isEager, onOpen }: FamilyGroupProps) {
   return (
     <section
       aria-label={group.family.name}
-      className='defer-offscreen'
+      className='defer-offscreen lg:mb-4 lg:break-inside-avoid'
       style={{ '--defer-size': `${estimatedHeight}px` } as React.CSSProperties}
     >
       <LazyMount estimatedHeight={estimatedHeight} eager={isEager}>

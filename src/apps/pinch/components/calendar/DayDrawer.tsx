@@ -7,6 +7,7 @@ import CopyPanel from '@/components/CopyPanel';
 import DetailSheet from '@/components/DetailSheet';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
+import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   MEAL_TYPE_EMOJIS,
@@ -19,7 +20,7 @@ import {
   selectPlannedByDay,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { MealType, PlannedMeal } from '@apps/pinch/types';
+import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
 import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import {
@@ -41,10 +42,18 @@ interface DayDrawerProps {
   onClose: () => void;
   onAdd: (mealType: MealType | null) => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
+  onFillIn: (gaps: Gap[]) => void;
 }
 
 /** One day's meals grouped by type; picking one swaps the drawer to that meal, with a way back. */
-function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
+function DayDrawer({
+  uid,
+  dayKey,
+  onClose,
+  onAdd,
+  onEdit,
+  onFillIn,
+}: DayDrawerProps) {
   const mealsByDay = useAppSelector(selectPlannedByDay);
   const meals = mealsByDay.get(dayKey) ?? NO_MEALS;
   const costContext = useAppSelector(selectCostContext);
@@ -59,6 +68,9 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
   const dayCost = combineMealCosts(
     meals.map((meal) => getPlannedMealCost(meal, costContext)),
   );
+  const openGaps = meals
+    .filter((meal) => !meal.snapshot)
+    .flatMap((meal) => getPlannedMealCost(meal, costContext).leftOut);
   const isFrozen = meals.length > 0 && meals.every((meal) => meal.snapshot);
   const leftOutCount = countLeftOutIngredients(dayCost.leftOut);
 
@@ -105,6 +117,7 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
           plannedMealId={plannedMealId}
           onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
+          onFillIn={onFillIn}
         />
       ) : (
         <div className='space-y-5'>
@@ -132,6 +145,7 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
                   </span>
                 )}
               </p>
+              <GapNudge uid={uid} gaps={openGaps} onFillIn={onFillIn} />
               {MEAL_TYPES.map((type) => {
                 const ofType = meals.filter((meal) => meal.mealType === type);
                 return ofType.length === 0 ? null : (
@@ -203,26 +217,28 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
               })}
             </>
           )}
-          <div className='bg-muted/50 rounded-2xl p-1'>
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-11 w-full gap-2'
-              onClick={() => setCopying('day')}
-            >
-              <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
-              Copy this day
-            </Button>
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-11 w-full gap-2'
-              onClick={() => setCopying('week')}
-            >
-              <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
-              Copy this week
-            </Button>
-          </div>
+          {meals.length > 0 && (
+            <div className='bg-muted/50 rounded-2xl p-1'>
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-11 w-full gap-2'
+                onClick={() => setCopying('day')}
+              >
+                <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
+                Copy this day
+              </Button>
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-11 w-full gap-2'
+                onClick={() => setCopying('week')}
+              >
+                <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
+                Copy this week
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </DetailSheet>

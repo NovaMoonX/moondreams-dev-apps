@@ -64,6 +64,11 @@ function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
             {leftOutCount > 0 && ` · leaves out ${leftOutCount}`}
           </span>
         )}
+        {cost && cost.perServingCents == null && (
+          <span className='text-muted-foreground block text-xs font-normal'>
+            No price yet
+          </span>
+        )}
         {nutrition && hasShownValue(nutrition.values, show) && (
           <span className='text-muted-foreground block truncate text-xs font-normal'>
             <NutritionLine values={nutrition.values} show={show} /> per serving

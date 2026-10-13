@@ -9,6 +9,7 @@ interface PlanMealSubviewProps {
   mealType: MealType | null;
   plannedMealId: string | null;
   fromMealId: string | null;
+  fromRecipeId: string | null;
 }
 
 /** The meal builder as a full-screen layer over the calendar, so its footer stays pinned however long the plate gets. */
@@ -18,6 +19,7 @@ function PlanMealSubview({
   mealType,
   plannedMealId,
   fromMealId,
+  fromRecipeId,
 }: PlanMealSubviewProps) {
   const { closeSubview } = usePinchOverlay();
 
@@ -30,6 +32,7 @@ function PlanMealSubview({
         mealType={mealType}
         plannedMealId={plannedMealId}
         mealId={fromMealId}
+        recipeId={fromRecipeId}
       />
     </Subview>
   );
