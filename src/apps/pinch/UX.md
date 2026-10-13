@@ -722,28 +722,29 @@ block-beta
 
 | Component | Used in | Purpose |
 |---|---|---|
-| MealBarCell | Calendar `renderCell` | up to three thin meal-type bars with emoji and a "+N"; date number, today accent, selected ring |
-| StatsRow | Calendar | spend, average per meal, price per gram of protein when protein is on, and a compact line of nutrition averages; tap opens the breakdown; carries the nudge |
+| DayCell | Month view's `renderCell` | up to three meal chips (a soft tint of the meal's colour, its emoji) on a phone or pills with the truncated title from `lg`, and a "+N"; date number, today dot, selected ring |
+| MonthView, WeekView, DayView, MealRow, MealChip | Calendar | the three views: the grid, a 7-day agenda (7 columns from `lg`) and one day's meals grouped in meal order |
+| PeriodSwitcher | Calendar (shared) | arrows by the view's unit, the period title, a thin view switch and a Today button shown only while today is out of sight |
+| StatsRow | Calendar | the shown period's Spent (warning icon), Avg per meal, Per g protein when on, then calories and macros as small `MacroStats` tiles; one nudge line; "See the breakdown" opens the drawer |
+| MacroStats | rows and summaries everywhere (shared) | 🔥 calories (whole numbers), 💪 protein, 🌾 carbs, 🥑 fat in grams for the metrics switched on: inline in a row, tiles in a summary |
 | GapNudge | recipe, meal, day and planned-meal drawers, stats row | the one quiet line (muted text + link + ✕) that offers the fill-in sheet; renders only when there is a gap |
 | FillInSheet | behind every nudge | a `FormSheet` with one row per ingredient and only the fields that gap needs |
 | DayDrawer / DayPeek | Calendar | the same content as a `DetailSheet` on phones and a hover `Popover` from `sm` up (`max-sm:hidden`) |
 | PlannedMealView | Day drawer | items with servings, totals, grouped actions, swapped in place |
-| MealBuilder | Plan a meal, Meal subview | day and type pills, a pill row of saved meals while the plate is empty, one item search, per-item serving steppers, a cost line that states what it leaves out (no nudge: the fill-in sheet never opens over this subview), Save-as-meal switch |
+| MealBuilder | Plan a meal, Meal subview (renders its own `Subview`) | day and type pills, a pill row of saved meals while the plate is empty, one item search, rows with a compact `Stepper` for servings, a tinted summary with cost, warning icon and emoji macros (no nudge: the fill-in sheet never opens over this subview), Save-as-meal switch |
 | ItemSearch | MealBuilder, Recipe form | one search over recipes, meals and ingredients with kind labels; also offers "New ingredient" |
-| ServingStepper | MealBuilder, Recipe form | half-step stepper, 40px targets |
-| RecipeForm | Recipe subview | title, servings, ingredient rows, chips; hosts `RecipeAutofill` |
-| RecipeAutofill | Recipe form | the "Have a recipe?" and "Copied one?" rows, built on the repo's `UploadAutofill` pattern for the states and the 10 MB cap |
+| Stepper | MealBuilder, Recipe form (shared) | half-step stepper, `isCompact` for rows, 40px targets |
+| RecipeStart | Recipe subview, before the form | the four ways to begin a recipe through the shared `MethodPicker`; link reading calls `fetchPageContent` |
+| RecipeForm | Recipe subview | all sections visible via `FormSection` and `Field`: servings and times, photo, description, `RecipeIngredients` (a drawer on a phone, rows open in place from `sm`), `RecipeSteps`, `NutritionReview` |
 | RecipeRow, MealRow | Recipes tab | cover or emoji tile, title, cost per serving, muted details |
-| IngredientRow, FamilyGroup | Kitchen | icon, name, default product line; `SectionDivider` groups |
-| IngredientIcon | rows, drawers, pickers | the vendored emoji SVG matched by ingredient, with a generic jar fallback |
-| NutritionLine | rows, drawers | the metrics that are switched on, per serving; renders nothing when all are off |
-| ProductForm, ProductRow | Ingredient drawer, Products subview | store question first, price and size side by side, chips for label and link |
+| IngredientRow, FamilyGroup | Kitchen | name, emoji macros and default product line; `SectionDivider` groups |
+| FilterBar | Kitchen ingredients, Products (shared) | search plus a filter icon with a count badge (a drawer on phones, a popover from `sm`), dismissible chips and "Clear" |
+| ProductForm, ProductRow | Ingredient drawer, Products subview | titled by ingredient and store, store question first, price and size side by side, chips for label and link |
 | StorePicker | Product form | `PickOrCreate` of your stores plus "Show all" for the well-known list |
 | StoreLogo | pickers, rows, subview | the logo tile with a letter fallback; app-aware, so it stays in the app |
 | StoreForm | Stores subview | search of well-known stores, or name plus `PhotoPicker` image |
-| CopySheet | every copy action | preview, what's included, `CopyButton` |
 | CoverImage | recipe rows and drawer | `FallbackImage` with a tinted emoji tile as its `fallback` |
-| `SectionHeader`, `Subview`, `FormSheet`, `DetailSheet`, `ModalFooterActions`, `DeleteIconButton`, `PillGroup`, `PickOrCreate`, `SearchInput`, `SectionDivider`, `MoneyInput`, `AppToggle`, `StatTile` | everywhere | the shared pieces in `src/components` and `src/ui`; Pinch builds only what is app-specific |
+| `SectionHeader`, `Subview`, `FormSheet`, `DetailSheet`, `ModalFooterActions`, `DeleteIconButton`, `PillGroup`, `PickOrCreate`, `SearchInput`, `SectionDivider`, `MoneyInput`, `AppToggle`, `StatTile`, `HelpTip` (with its `warning` variant), `MethodPicker`, `FormSection`, `Field` | everywhere | the shared pieces in `src/components` and `src/ui`; Pinch builds only what is app-specific |
 | Empty state | every list and the empty Calendar | an icon, one muted line, and the call to action in the header |
 
 ## User Journeys
@@ -754,7 +755,7 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
     A[Open Pinch] --> B["Calendar, empty"] --> C{"What now?"}
-    C -->|Plan your first meal| D["Plan a meal subview"] --> E["Search 'chicken breast'"] --> F["Pick an ingredient from the catalog"] --> G["Add to today"] --> H["Calendar shows a bar for it; cost line says 'No price yet'"]
+    C -->|Plan your first meal| D["Plan a meal subview"] --> E["Search 'chicken breast'"] --> F["Pick an ingredient from the catalog"] --> G["Add to today"] --> H["Calendar shows a chip for it; cost line says 'No price yet'"]
     C -->|Add a recipe| I["Recipe subview"]
 ```
 
@@ -763,7 +764,7 @@ flowchart LR
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Recipes] --> B[+ New] --> C["Upload a photo or PDF"] --> D["Reading…"] --> E["Form filled in; 'We couldn't read: cook time'"]
+    A[Recipes] --> B[+ New] --> C["Start picker: From a photo"] --> D["Reading…"] --> E["Form filled in; 'We couldn't read: cook time'"]
     E --> F{"Unknown ingredient?"}
     F -->|Yes| G["'Add as new ingredient' on its row"] --> H[Review and edit]
     F -->|No| H
@@ -777,7 +778,7 @@ flowchart LR
 flowchart LR
     A[Tap a day] --> B[+ Add] --> C["Pick 'Taco night' from Start from a saved meal"] --> D["Items copied onto this day"]
     D --> E["Skip the peppers, double the rice"] --> F[Add to today]
-    F --> G["Calendar bar appears"] --> H["Open it: Save as a meal"] --> I["Saved with a new name; Taco night is unchanged"]
+    F --> G["Calendar chip appears"] --> H["Open it: Save as a meal"] --> I["Saved with a new name; Taco night is unchanged"]
 ```
 
 **Add a product with a store**
@@ -798,17 +799,21 @@ flowchart LR
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
     A["Recipe drawer: '2 ingredients need a price'"] --> B[Add prices] --> C["Fill-in sheet: one row each"] --> D{"Fill them all?"}
-    D -->|Some| E[Save] --> F["Cost updates; line now says 'leaves out 1'"]
+    D -->|Some| E[Save] --> F["Cost updates; its warning icon now says it leaves out 1"]
     D -->|None| G[Skip for now] --> H["Line stays; ✕ hides it for these ingredients"]
 ```
 
-**Take it to a chat and bring a recipe back**
+**Bring a recipe in from a chat or a web page**
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Kitchen 📋] --> B["Copy sheet: names only"] --> C[Copy] --> D[Paste into any AI chat]
-    D --> E[Copy the recipe it suggests] --> F[Recipes + New → Paste] --> G["Form filled in for review"] --> H[Save]
+    A[Copy a recipe from any AI chat] --> B[Recipes + New] --> C{"How to start?"}
+    C -->|From text| D[Paste it]
+    C -->|From a link| E[Paste the page's address]
+    D --> F["Form filled in for review"]
+    E --> F
+    F --> G[Save]
 ```
 
 ## Form Field Organization
@@ -817,8 +822,8 @@ flowchart LR
 
 | Entity | Initial (create) | Later (edit only) | Later-set entry point | Grouping | "Other" option? |
 |---|---|---|---|---|---|
-| Recipe | title, servings, ingredients (ingredient + amount + unit) | description, times, cover photo, steps, own nutrition | "+ Add X" chips on the form; the recipe drawer's Modify | none; chips for extras | none |
-| Ingredient | name, family (`PickOrCreate`: existing family, new family, or none) | icon, nutrition per 100 g, unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value | none; chips for icon and nutrition | family: "New family" is the dashed first pill |
+| Recipe | how to start (text, photo, link or by hand), then title and ingredients (ingredient + amount + unit) | everything else is a visible section of the same form: servings, times, photo, description, steps, own nutrition | the recipe drawer's Modify | none; `FormSection`s, no chips | none |
+| Ingredient | name, family (`PickOrCreate`: existing family, new family, or none) | nutrition per 100 g, unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value | none; chips for nutrition | family: "New family" is the dashed first pill |
 | Product | store (`PickOrCreate`), price, package size | label, link, default flag | the ingredient drawer's product rows; the fill-in sheet for a missing price or size | none | store: "New store" is the dashed first pill |
 | Store | pick from the well-known list, or name | image | the Stores subview row | none | "Can't find it? Add your own" reveals the name and image fields |
 | Meal (saved) | name, items (recipe or ingredient + servings) | — | Meal subview's Modify; "Save as a meal" on a planned meal | none | none |
@@ -832,7 +837,8 @@ flowchart LR
 - **Comparable amounts** — a recipe's amount and a product's package size must share a dimension (mass, volume, count) or have a catalog-known conversion; anything else is excluded from the total and named in a nudge.
 - **Nudge dismissals** — "✕ hides it for those ingredients" needs a small per-gap dismissal record on the user's settings document.
 - **Unknown stock vs zero stock** — when stock tracking arrives, "not tracked" is its own state, separate from 0.
+- **Recipe from a link** — a server function fetches the page (signed-in only, public http/https only), so the person's device never contacts the site; its recipe data and text go to the AI reader, which fills the form for review.
 - **Store logos** — the well-known list is a constant of names and domains, logos load in the browser from a logo service, and a letter tile covers every failure; the service and its terms are to be settled.
-- **Week** — Monday to Sunday; a week copy covers those seven days.
+- **Week** — Sunday to Saturday, to match the month grid; the week view shows those seven days and its stats describe them.
 - **Money** — integer cents everywhere; nutrition per 100 g with servings computed from the recipe's own amounts.
 - **A well-known store joins "your stores" on first use** — so a product always points at a store document of the person's own.
