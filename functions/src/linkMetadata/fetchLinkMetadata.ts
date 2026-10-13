@@ -106,30 +106,6 @@ function parseGoogleMapsPlace(
   };
 }
 
-async function readCappedBody(response: Response): Promise<string> {
-  const reader = response.body?.getReader();
-  if (!reader) {
-    return '';
-  }
-
-  const decoder = new TextDecoder();
-  let result = '';
-  let bytesRead = 0;
-
-  while (bytesRead < MAX_BODY_BYTES) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    bytesRead += value.byteLength;
-    result += decoder.decode(value, { stream: true });
-
-    // Head-only content is all we parse, so stop once we have it.
-    if (/<\/head>/i.test(result)) break;
-  }
-
-  await reader.cancel().catch(() => undefined);
-  return result;
-}
-
 function parseMetadata(html: string, finalUrl: string): LinkMetadataResult {
   const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
   const head = headMatch?.[1] ?? html;

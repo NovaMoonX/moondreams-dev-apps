@@ -18,7 +18,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   gt: '>',
   quot: '"',
   apos: "'",
-  nbsp: ' ',
+  nbsp: '\u00a0',
   frac12: '½',
   frac14: '¼',
   frac34: '¾',
@@ -117,7 +117,7 @@ const extractVisibleText = (html: string): string => {
 
   return decodeEntities(text)
     .split('\n')
-    .map((line) => line.replace(/[ \t ]+/g, ' ').trim())
+    .map((line) => line.replace(/[ \t\xa0]+/g, ' ').trim())
     .filter(Boolean)
     .join('\n')
     .slice(0, MAX_TEXT_CHARS);
