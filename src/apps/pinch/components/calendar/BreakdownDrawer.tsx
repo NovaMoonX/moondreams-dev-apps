@@ -2,15 +2,19 @@ import { useState } from 'react';
 
 import DetailSheet from '@/components/DetailSheet';
 import { useAppSelector } from '@/store';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
+import MacroStats from '@/components/MacroStats';
 import { selectShowNutrition } from '@apps/pinch/store/selectors';
 import { PillGroup } from '@/components/PillGroup';
 import { MEAL_TYPE_EMOJIS, MEAL_TYPE_LABELS } from '@apps/pinch/constants';
-import { formatDayTitle, formatMonthTitle } from '@apps/pinch/utils/dayKeys';
+import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
 import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
-import type { MonthStats, Totals } from '@apps/pinch/utils/stats';
+import {
+  withWholeCalories,
+  type PeriodStats,
+  type Totals,
+} from '@apps/pinch/utils/stats';
 
 type BreakdownView = 'day' | 'meal';
 
@@ -20,13 +24,21 @@ const VIEW_OPTIONS: { value: BreakdownView; label: string }[] = [
 ];
 
 interface BreakdownDrawerProps {
-  monthKey: string;
-  stats: MonthStats;
+  /** The period shown, already worded ("October 2026", "Oct 11 – 17"). */
+  periodTitle: string;
+  stats: PeriodStats;
+  /** A single day has one row by day, so it opens on its meals. */
+  isSingleDay: boolean;
   onClose: () => void;
 }
 
-function BreakdownDrawer({ monthKey, stats, onClose }: BreakdownDrawerProps) {
-  const [view, setView] = useState<BreakdownView>('day');
+function BreakdownDrawer({
+  periodTitle,
+  stats,
+  isSingleDay,
+  onClose,
+}: BreakdownDrawerProps) {
+  const [view, setView] = useState<BreakdownView>(isSingleDay ? 'meal' : 'day');
   const show = useAppSelector(selectShowNutrition);
 
   const rows: { key: string; label: string; totals: Totals }[] =
@@ -46,7 +58,7 @@ function BreakdownDrawer({ monthKey, stats, onClose }: BreakdownDrawerProps) {
     <DetailSheet
       isOpen
       onClose={onClose}
-      title={`${formatMonthTitle(monthKey)} · ${formatCost(stats.spendCents)}`}
+      title={`${periodTitle} · ${formatCost(stats.spendCents)}`}
     >
       <div className='flex max-h-[max(12rem,calc(92dvh-22rem))] flex-col gap-3'>
         <div className='shrink-0 space-y-3'>
@@ -73,16 +85,14 @@ function BreakdownDrawer({ monthKey, stats, onClose }: BreakdownDrawerProps) {
                 <span className='block'>{row.label}</span>
                 <span className='text-muted-foreground block text-xs'>
                   {row.totals.count} {row.totals.count === 1 ? 'meal' : 'meals'}
-                  {hasShownValue(row.totals.nutrition, show) && (
-                    <>
-                      {' · '}
-                      <NutritionLine
-                        values={row.totals.nutrition}
-                        show={show}
-                      />
-                    </>
-                  )}
                 </span>
+                {hasShownValue(row.totals.nutrition, show) && (
+                  <MacroStats
+                    className='text-muted-foreground block text-xs'
+                    values={withWholeCalories(row.totals.nutrition)}
+                    show={show}
+                  />
+                )}
                 {row.totals.leftOut.length > 0 && (
                   <span className='text-muted-foreground block text-xs'>
                     {formatLeftOut(row.totals.leftOut)}

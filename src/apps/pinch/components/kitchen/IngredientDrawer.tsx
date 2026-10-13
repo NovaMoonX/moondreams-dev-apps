@@ -5,13 +5,14 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus, Star } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
+import MacroStats from '@/components/MacroStats';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
 import { setDefaultProduct } from '@apps/pinch/store/actions/productActions';
-import { NUTRITION_CELLS, UNIT_LABELS } from '@apps/pinch/constants';
+import { UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectDefaultProducts,
   selectIngredientFamiliesById,
@@ -78,49 +79,32 @@ function IngredientDrawer({
       }
     >
       <div className='space-y-5'>
-        <div className='flex items-center gap-3'>
-          <div className='min-w-0'>
-            {family && (
-              <p className='text-muted-foreground text-sm'>{family.name}</p>
-            )}
-            {ingredient.isCustom && (
-              <p className='text-muted-foreground text-sm'>One you added</p>
-            )}
-            {ingredient.isAdjusted && (
-              <p className='text-muted-foreground text-sm'>
-                Built in · you adjusted it
-              </p>
-            )}
+        {(family ||
+          ingredient.isCustom ||
+          ingredient.isAdjusted ||
+          ingredient.aliases.length > 0) && (
+          <div className='text-muted-foreground min-w-0 text-sm'>
+            {family && <p>{family.name}</p>}
+            {ingredient.isCustom && <p>One you added</p>}
+            {ingredient.isAdjusted && <p>Built in · you adjusted it</p>}
             {ingredient.aliases.length > 0 && (
-              <p className='text-muted-foreground truncate text-sm'>
+              <p className='truncate'>
                 Also called {ingredient.aliases.join(', ')}
               </p>
             )}
           </div>
-        </div>
+        )}
 
         {hasAnyMetricOn(show) && (
           <section aria-label='Nutrition per 100 g' className='space-y-2'>
             <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
               Per 100 g
             </h3>
-            <dl className='grid grid-cols-2 gap-2 text-center sm:grid-cols-4'>
-              {NUTRITION_CELLS.filter((cell) => show[cell.key]).map((cell) => {
-                const value = ingredient.per100g[cell.key];
-                return (
-                  <div key={cell.key} className='bg-muted rounded-xl px-1 py-2'>
-                    <dd className='text-foreground text-base font-semibold whitespace-nowrap'>
-                      {value === null
-                        ? '—'
-                        : `${Math.round(value * 10) / 10}${cell.unit}`}
-                    </dd>
-                    <dt className='text-muted-foreground text-xs'>
-                      {cell.label}
-                    </dt>
-                  </div>
-                );
-              })}
-            </dl>
+            <MacroStats
+              values={ingredient.per100g}
+              show={show}
+              variant='tiles'
+            />
           </section>
         )}
 

@@ -20,6 +20,7 @@ Server-side code for the mini-apps. Every function:
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every event, stay, rental and expense on its calendar day ("keep original dates"); checklist due days stay relative to the trip's start and are left alone |
 | `rescheduleTripReminders` | Firestore update on `apps/waypoint/trips/{tripId}` | Waypoint | Re-times event reminders when a relative trip's dates or time zone change |
 | `fetchLinkMetadata` | callable | shared | Reads a link's Open Graph preview (title, description, image, site name) |
+| `fetchPageContent` | callable | shared | `{ url }` → `{ url, title, structured, text }`: one web page's schema.org Recipe data (when it has any) and visible text, capped at 20k and 30k characters, for a client to have read into a form (Pinch's "from a link" recipe). Fetches through the same private-network guard as `fetchLinkMetadata`, stores nothing |
 | `sendScheduledReminders` | schedule, every 5 minutes | shared | Sends due push reminders from `reminders` through FCM |
 
 Every callable requires a signed-in caller, except `getCalendarShare`, which exists to serve people who have no account.

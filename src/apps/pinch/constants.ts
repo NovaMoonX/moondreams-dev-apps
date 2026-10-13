@@ -94,8 +94,8 @@ export const MAX_COPIED_INGREDIENTS = 200;
 export const MAX_PASTE_CHARS = 20_000;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
-/** Months loaded on each side of the one shown. */
-export const MONTH_WINDOW_PADDING = 1;
+/** Months loaded on each side of the window's centre: enough that paging a month or a few weeks seldom restarts the listener. */
+export const MONTH_WINDOW_PADDING = 2;
 
 export const MEAL_TYPES: MealType[] = [
   'BREAKFAST',
@@ -155,3 +155,78 @@ export const UNIT_TO_BASE: Record<Unit, number> = {
   PINCH: 0.308,
   EACH: 1,
 };
+
+export const CALENDAR_VIEWS = ['month', 'week', 'day'] as const;
+export type CalendarView = (typeof CALENDAR_VIEWS)[number];
+export const DEFAULT_CALENDAR_VIEW: CalendarView = 'month';
+export const CALENDAR_VIEW_LABELS: Record<CalendarView, string> = {
+  month: 'Month',
+  week: 'Week',
+  day: 'Day',
+};
+
+/** The meal type's colour tokens from `pinch.css`: the solid for an edge or a dot, the soft tint for a chip or a pill. */
+export const MEAL_TYPE_COLORS: Record<
+  MealType,
+  { solid: string; soft: string }
+> = {
+  BREAKFAST: {
+    solid: 'var(--pinch-meal-breakfast)',
+    soft: 'var(--pinch-meal-breakfast-soft)',
+  },
+  LUNCH: {
+    solid: 'var(--pinch-meal-lunch)',
+    soft: 'var(--pinch-meal-lunch-soft)',
+  },
+  DINNER: {
+    solid: 'var(--pinch-meal-dinner)',
+    soft: 'var(--pinch-meal-dinner-soft)',
+  },
+  SNACK: {
+    solid: 'var(--pinch-meal-snack)',
+    soft: 'var(--pinch-meal-snack-soft)',
+  },
+  DESSERT: {
+    solid: 'var(--pinch-meal-dessert)',
+    soft: 'var(--pinch-meal-dessert-soft)',
+  },
+  DRINK: {
+    solid: 'var(--pinch-meal-drink)',
+    soft: 'var(--pinch-meal-drink-soft)',
+  },
+};
+
+export const INGREDIENT_PRICE_FILTER_OPTIONS = [
+  { value: 'any', label: 'Any' },
+  { value: 'needs', label: 'Needs a price', emoji: '🏷️' },
+  { value: 'has', label: 'Has a price', emoji: '💰' },
+] as const;
+
+export const INGREDIENT_FLAG_OPTIONS = [
+  { value: 'noNutrition', label: 'Missing nutrition', emoji: '📊' },
+  { value: 'custom', label: 'Custom only', emoji: '🧑‍🍳' },
+] as const;
+
+export const PRODUCT_SORT_OPTIONS = [
+  { value: 'store', label: 'By store', emoji: '🏪' },
+  { value: 'ingredient', label: 'By ingredient', emoji: '🔤' },
+  { value: 'price', label: 'By price', emoji: '💰' },
+  { value: 'newest', label: 'By date added', emoji: '🆕' },
+] as const;
+
+/** Each product sort's two directions, the first being the one it starts in. */
+export const PRODUCT_SORT_ORDER_LABELS = {
+  store: ['A to Z', 'Z to A'],
+  ingredient: ['A to Z', 'Z to A'],
+  price: ['Lowest first', 'Highest first'],
+  newest: ['Newest first', 'Oldest first'],
+} as const;
+
+export const PRODUCT_DEFAULT_FILTER_OPTIONS = [
+  { value: 'any', label: 'Any' },
+  { value: 'default', label: 'Default only', emoji: '⭐' },
+  { value: 'other', label: 'Not the default' },
+] as const;
+
+/** Rows a long list draws before "Show more". */
+export const LIST_PAGE_SIZE = 60;

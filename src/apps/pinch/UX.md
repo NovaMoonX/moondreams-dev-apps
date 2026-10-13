@@ -327,28 +327,56 @@ block-beta
 ```
 *Two thin pills switch between Recipes and Meals (saved meals). A recipe row shows its cover (or a tinted emoji tile), title, cost per serving, and a muted line of servings and time, with nutrition per serving when it is on. A recipe with an unpriced ingredient shows the cost it can stand behind and a muted "leaves out 1" beside it. A meal row shows its items as a comma line and the total.*
 
+**New recipe — how to start** (subview; a new recipe opens here, editing one skips it)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 1
+  S1["‹ New recipe"]
+  S2["📝 From text · Paste a recipe, say from a chat"]
+  S3["📷 From a photo · A picture, screenshot or PDF"]
+  S4["🔗 From a link · A recipe page on the web"]
+  S5["✍️ Write it yourself · Start with a blank recipe"]
+  style S1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style S2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style S3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style S4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style S5 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*Four ways in, in this order, with writing it yourself last and quieter (dashed). Text and link open their input in place under the row, one at a time; a photo opens the file picker straight away. Each AI reading fills the real form and says so ("Filled in from {source}. Take a look before you save." plus "We couldn't read: …"); nothing is saved until the form is. Link reading opens the page on our server (never the person's device) and sends its recipe data and text to the reader. The header names the recipe as it is typed ("New recipe" until then).*
+
+| Reading state | What you see |
+|---|---|
+| reading | "Reading {source}…" with the rows disabled |
+| failed | one warm sentence under the rows ("We couldn't open that link. Try again, or paste the recipe's text instead."), details logged, never the service's message |
+| too big | "That file is too big to read. Try a photo or a PDF under 10 MB." |
+| no recipe found | "We couldn't find a recipe in that. Try a clearer photo or paste the text." |
+
 **Recipe** (subview — create and edit)
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
-  E1["‹ Recipe"]:2
-  E2["📷 Have a recipe on paper or a screenshot?"]:1
-  E3["Upload"]:1
-  E4["📝 Copied one from a chat?"]:1
-  E5["Paste"]:1
-  E6["Title<br/>Adobo chicken"]:2
-  E7["Servings<br/>[ − 4 + ]"]:2
-  E8["Ingredients"]:2
-  E9["🍗 Chicken thighs"]:1
-  E10["2 lb"]:1
-  E11["🥫 Soy sauce"]:1
-  E12["¼ cup"]:1
-  E13["+ Add ingredient"]:2
-  E14["+ Steps   + Description   + Times   + Cover photo   + My own nutrition"]:2
-  E15["Cancel"]:1
-  E16["Save"]:1
+  E1["‹ Adobo chicken"]:2
+  E2["Title"]:2
+  E3["Servings"]:1
+  E4["[ − 4 + ]"]:1
+  E5["Prep (min)"]:1
+  E6["Cook (min)"]:1
+  E7["Photo"]:2
+  E8["Description"]:2
+  E9["INGREDIENTS 6"]:2
+  E10["Chicken thighs"]:1
+  E11["2 lb"]:1
+  E12["+ Add ingredient"]:2
+  E13["STEPS"]:2
+  E14["+ Add a step"]:2
+  E15["NUTRITION · calculated, per serving   Edit"]:2
+  E16["🔥 495 · 💪 61g · 🌾 3g · 🥑 25g"]:2
+  E17["Cancel"]:1
+  E18["Save"]:1
   style E1 fill:transparent,stroke:#888888,stroke-width:1px;
   style E2 fill:transparent,stroke:#888888,stroke-width:1px;
   style E3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -365,16 +393,10 @@ block-beta
   style E14 fill:transparent,stroke:#888888,stroke-width:1px;
   style E15 fill:transparent,stroke:#888888,stroke-width:1px;
   style E16 fill:transparent,stroke:#888888,stroke-width:1px;
+  style E17 fill:transparent,stroke:#888888,stroke-width:1px;
+  style E18 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A recipe needs a title and at least one ingredient. Servings is a visible question because cost and nutrition per serving depend on it. Upload and Paste sit at the top: either one fills the real fields, shows what it couldn't read ("We couldn't read: cook time."), and leaves everything editable before Save; an unknown ingredient arrives as "Add as new ingredient" on its row. The ingredient search is the same picker the meal builder uses, with a "New ingredient" entry at the end. Everything past ingredients is a "+ Add X" chip with a remove, and "My own nutrition" appears whether or not nutrition is on, since the numbers still count when it's switched on later. This is a page-sized form, so it is a Subview, not a modal.*
-
-| Upload / Paste state | What you see |
-|---|---|
-| idle | the two quiet rows above the title |
-| reading | "Reading {file}…" with the row disabled |
-| done | "Filled in from {file}. Take a look before you save." plus a "We couldn't read: …" line when something was missed |
-| failed | one warm sentence ("We couldn't read that right now. Try a clearer photo or a PDF, or fill it in below."), details logged, never the service's message |
-| too big | "That file is too big to read. Try a photo or a PDF under 10 MB." |
+*A recipe needs a title and at least one ingredient. Everything a recipe normally has is part of the flow, not a button at the bottom: servings and times, a photo, a description, the ingredients, the steps and the nutrition. Ingredients and steps are one-line summaries; the one being edited is the only one open. On a phone adding an ingredient and editing its details happen in a drawer that never leaves the form (search, then amount, unit and a note, then "Add another" or Done, and "Remove from this recipe" for an existing one); from `sm` up a row opens its fields in place. A name the reader found that no ingredient matches arrives as "Add as new ingredient" / "Choose another". Nutrition shows what we added up from the ingredients as small emoji tiles, per serving, with a warning icon when some ingredients have no nutrition info; Edit turns the four tiles into inputs holding those numbers, any number changed becomes the person's own and "Reset to what we calculated" brings back the calculated ones. This is a page-sized form, so it is a Subview; the drawer on top of it is the one allowed exception to "no overlay on a subview" because it is the form's own row editor, one level deep.*
 
 **Recipe details** (drawer — tap a recipe in the list)
 
@@ -382,20 +404,19 @@ block-beta
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
-  T1["🖼️ Adobo chicken"]:2
-  T2["4 servings · 45 min"]:1
-  T3["$12.80 total · $3.20 / serving"]:1
-  T4["2 ingredients need a price · Add prices   ✕"]:2
-  T5["Nutrition per serving (when on): 520 cal · 42 g protein"]:2
-  T6["Ingredients"]:2
-  T7["Chicken thighs"]:1
-  T8["2 lb"]:1
-  T9["Soy sauce"]:1
-  T10["¼ cup"]:1
-  T11["Steps"]:2
-  T12["1. Marinate the chicken…"]:2
-  T13["🗓️ Add to calendar"]:2
-  T14["✏️ Modify · 📋 Copy · Delete"]:2
+  T1["Adobo chicken"]:2
+  T2["🍽️ 4 servings"]:1
+  T3["🔪 Prep 10 min · ⏲️ Cook 35 min"]:1
+  T4["Cost $12.80 ⚠ · $3.20 per serving"]:2
+  T5["🔥 495 · 💪 61g · 🌾 3g · 🥑 25g (when on)"]:2
+  T6["2 ingredients need a price · Add prices   ✕"]:2
+  T7["INGREDIENTS 6"]:2
+  T8["Chicken thighs"]:1
+  T9["2 lb"]:1
+  T10["STEPS"]:2
+  T11["1. Marinate the chicken…"]:2
+  T12["Modify"]:1
+  T13["Add to calendar"]:1
   style T1 fill:transparent,stroke:#888888,stroke-width:1px;
   style T2 fill:transparent,stroke:#888888,stroke-width:1px;
   style T3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -409,11 +430,10 @@ block-beta
   style T11 fill:transparent,stroke:#888888,stroke-width:1px;
   style T12 fill:transparent,stroke:#888888,stroke-width:1px;
   style T13 fill:transparent,stroke:#888888,stroke-width:1px;
-  style T14 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*"Add to calendar" is the one primary button; it closes the drawer and opens Plan a meal with this recipe on the plate. Modify and Copy sit in one muted block; Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm. The nudge line is where a gap meets a number; ✕ closes it for these ingredients.*
+*The front matter is built to be seen: soft peach chips for servings and times, a Cost tile whose warning icon says what the total leaves out (it opens like the help icon), calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm.*
 
-**Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with the items and servings, total cost, per-serving nutrition when on, and one primary "Plan it" that closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. Copy and Delete sit in the muted block.
+**Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with a Cost tile (warning icon when it leaves something out), the plate's calories and macros as emoji tiles when on, the items with servings and cost, and in the footer Modify beside the one primary "Plan it", which closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. The builder's header carries the meal's name (or the plate's first item while planning), its rows are a title with a compact servings stepper beneath (40px hit areas from a pseudo-element), and a tinted summary shows the cost, its warning icon and the plate's emoji macros. Adding stays the search field in the form.
 
 **Kitchen tab**
 

@@ -6,7 +6,7 @@ import { MEAL_TYPES } from '@apps/pinch/constants';
 import type { PlannedMeal, Product, ResolvedFamily } from '@apps/pinch/types';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
-import { getMonthStats } from '@apps/pinch/utils/stats';
+import { getPeriodStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 
@@ -184,15 +184,27 @@ const NO_DISMISSALS: Record<string, number> = {};
 export const selectDismissedNudges = (state: RootState) =>
   state.pinch.settings.settings?.dismissedNudges ?? NO_DISMISSALS;
 
-/** The ingredients some recipe uses: the ones whose missing price changes a number. */
+/** The ingredients a recipe, a saved meal or a day not yet frozen uses: the ones whose missing price changes a number. */
 export const selectUsedIngredientIds = createSelector(
-  [selectAllRecipes],
-  (recipes) =>
-    new Set(
-      recipes.flatMap((recipe) =>
+  [
+    selectAllRecipes,
+    (state: RootState) => state.pinch.meals.items,
+    (state: RootState) => state.pinch.plannedMeals.items,
+  ],
+  (recipes, meals, plannedMeals) =>
+    new Set([
+      ...recipes.flatMap((recipe) =>
         recipe.ingredients.map((line) => line.ingredientId),
       ),
-    ),
+      ...[
+        ...meals.flatMap((meal) => meal.items),
+        ...plannedMeals
+          .filter((planned) => planned.snapshot === null)
+          .flatMap((planned) => planned.items),
+      ]
+        .filter((item) => item.kind === 'INGREDIENT')
+        .map((item) => item.refId),
+    ]),
 );
 
 export const selectPlannedMeals = (state: RootState) =>
@@ -257,15 +269,16 @@ export const selectMealsById = createSelector(
   (meals) => new Map(meals.map((meal) => [meal.id, meal])),
 );
 
-/** The shown month's spend, average per meal and breakdowns, computed once per change of meals, prices or month. */
-export const selectMonthStats = createSelector(
+/** The shown period's spend, average per meal and breakdowns, computed once per change of meals, prices or days shown. */
+export const selectPeriodStats = createSelector(
   [
     selectPlannedMeals,
     selectCostContext,
-    (_state: RootState, monthKey: string) => monthKey,
+    (_state: RootState, startKey: string) => startKey,
+    (_state: RootState, _startKey: string, endKey: string) => endKey,
   ],
-  (plannedMeals, context, monthKey) =>
-    getMonthStats(plannedMeals, monthKey, context),
+  (plannedMeals, context, startKey, endKey) =>
+    getPeriodStats(plannedMeals, { startKey, endKey }, context),
 );
 
 const NO_SWITCHES = {

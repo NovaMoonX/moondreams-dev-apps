@@ -1,8 +1,8 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import {
   selectDefaultProducts,
   selectShowNutrition,
@@ -56,8 +56,7 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
         ) : (
           hasShownValue(ingredient.per100g, show) && (
             <span className='text-muted-foreground block truncate text-xs font-normal'>
-              <NutritionLine values={ingredient.per100g} show={show} /> per 100
-              g
+              <MacroStats values={ingredient.per100g} show={show} /> per 100 g
             </span>
           )
         )}

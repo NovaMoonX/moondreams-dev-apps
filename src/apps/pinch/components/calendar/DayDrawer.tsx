@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import DetailSheet from '@/components/DetailSheet';
+import HelpTip from '@/components/HelpTip';
+import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
@@ -14,17 +17,18 @@ import {
 import {
   selectCostContext,
   selectIngredientsById,
+  selectPeriodStats,
   selectPlannedByDay,
   selectRecipesById,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
 import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
-import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
+import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
-import {
-  combineMealCosts,
-  getPlannedMealCost,
-} from '@apps/pinch/utils/mealMath';
+import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
+import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
+import { withWholeCalories } from '@apps/pinch/utils/stats';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const NO_MEALS: PlannedMeal[] = [];
@@ -32,6 +36,8 @@ const NO_MEALS: PlannedMeal[] = [];
 interface DayDrawerProps {
   uid: string;
   dayKey: string;
+  /** Opens straight onto this planned meal, with the day's list one Back away. */
+  initialMealId?: string | null;
   onClose: () => void;
   onAdd: (mealType: MealType | null) => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
@@ -42,6 +48,7 @@ interface DayDrawerProps {
 function DayDrawer({
   uid,
   dayKey,
+  initialMealId = null,
   onClose,
   onAdd,
   onEdit,
@@ -52,19 +59,20 @@ function DayDrawer({
   const costContext = useAppSelector(selectCostContext);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const [pickedMealId, setPickedMealId] = useState<string | null>(null);
+  const [pickedMealId, setPickedMealId] = useState<string | null>(
+    initialMealId,
+  );
   const plannedMealId = meals.some((meal) => meal.id === pickedMealId)
     ? pickedMealId
     : null;
 
-  const dayCost = combineMealCosts(
-    meals.map((meal) => getPlannedMealCost(meal, costContext)),
+  const stats = useAppSelector((state) =>
+    selectPeriodStats(state, dayKey, dayKey),
   );
-  const openGaps = meals
-    .filter((meal) => !meal.snapshot)
-    .flatMap((meal) => getPlannedMealCost(meal, costContext).leftOut);
+  const show = useAppSelector(selectShowNutrition);
+  const [footerEl, setFooterEl] = useState<HTMLElement | null>(null);
   const isFrozen = meals.length > 0 && meals.every((meal) => meal.snapshot);
-  const leftOutCount = countLeftOutIngredients(dayCost.leftOut);
+  const leftOutCount = countLeftOutIngredients(stats.leftOut);
 
   return (
     <DetailSheet
@@ -72,7 +80,7 @@ function DayDrawer({
       onClose={onClose}
       title={formatDayTitle(dayKey)}
       footer={
-        plannedMealId === null && (
+        plannedMealId === null ? (
           <div className='px-4 pb-4'>
             <Button
               type='button'
@@ -82,6 +90,8 @@ function DayDrawer({
               + Add to this day
             </Button>
           </div>
+        ) : (
+          <div ref={setFooterEl} className='px-4 pb-4' />
         )
       }
     >
@@ -92,6 +102,7 @@ function DayDrawer({
           onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
           onFillIn={onFillIn}
+          footerEl={footerEl}
         />
       ) : (
         <div className='space-y-5'>
@@ -101,25 +112,53 @@ function DayDrawer({
             </p>
           ) : (
             <>
-              <p className='text-sm'>
-                <span className='font-medium'>
-                  {dayCost.totalCents === null
-                    ? 'No prices yet'
-                    : formatCost(dayCost.totalCents)}
-                </span>
-                {leftOutCount > 0 && dayCost.totalCents !== null && (
-                  <span className='text-muted-foreground'>
-                    {' '}
-                    · {formatLeftOut(dayCost.leftOut)}
-                  </span>
+              <div className='space-y-3'>
+                <StatTile
+                  label='Cost'
+                  value={
+                    stats.mealsPriced === 0
+                      ? 'No prices yet'
+                      : formatCost(stats.spendCents)
+                  }
+                  detail={isFrozen ? 'Prices as they were that day' : undefined}
+                  help={
+                    leftOutCount > 0 && stats.mealsPriced > 0 ? (
+                      <HelpTip
+                        variant='warning'
+                        title="What's left out"
+                        placement='top'
+                        noModal
+                      >
+                        <p>
+                          Leaves out {leftOutCount}{' '}
+                          {leftOutCount === 1 ? 'ingredient' : 'ingredients'}{' '}
+                          with no price yet.
+                        </p>
+                        <p className='text-muted-foreground'>
+                          The cost goes up once they're priced.
+                        </p>
+                      </HelpTip>
+                    ) : undefined
+                  }
+                />
+                {hasShownValue(stats.dailyNutrition, show) && (
+                  <div className='space-y-1.5'>
+                    <p className='text-muted-foreground text-xs font-medium'>
+                      For the day
+                    </p>
+                    <MacroStats
+                      variant='tiles'
+                      values={withWholeCalories(stats.dailyNutrition)}
+                      show={show}
+                    />
+                  </div>
                 )}
-                {isFrozen && (
-                  <span className='text-muted-foreground block text-xs'>
-                    Prices as they were that day
-                  </span>
-                )}
-              </p>
-              <GapNudge uid={uid} gaps={openGaps} onFillIn={onFillIn} />
+                <GapNudge
+                  uid={uid}
+                  gaps={stats.openLeftOut}
+                  onFillIn={onFillIn}
+                />
+              </div>
               {MEAL_TYPES.map((type) => {
                 const ofType = meals.filter((meal) => meal.mealType === type);
                 return ofType.length === 0 ? null : (

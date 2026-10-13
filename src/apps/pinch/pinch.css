@@ -127,3 +127,22 @@ html.pinch-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
 html.pinch-theme input[type='search']::-webkit-search-cancel-button {
   filter: grayscale(1);
 }
+
+/* A meal's soft tint: its colour thinned into the page, for an emoji chip or a calendar pill. */
+html.pinch-theme {
+  --pinch-meal-breakfast-soft: color-mix(in oklch, var(--pinch-meal-breakfast) 38%, var(--color-background));
+  --pinch-meal-lunch-soft: color-mix(in oklch, var(--pinch-meal-lunch) 38%, var(--color-background));
+  --pinch-meal-dinner-soft: color-mix(in oklch, var(--pinch-meal-dinner) 38%, var(--color-background));
+  --pinch-meal-snack-soft: color-mix(in oklch, var(--pinch-meal-snack) 38%, var(--color-background));
+  --pinch-meal-dessert-soft: color-mix(in oklch, var(--pinch-meal-dessert) 38%, var(--color-background));
+  --pinch-meal-drink-soft: color-mix(in oklch, var(--pinch-meal-drink) 38%, var(--color-background));
+}
+
+html.pinch-theme.dark {
+  --pinch-meal-breakfast-soft: color-mix(in oklch, var(--pinch-meal-breakfast) 36%, var(--color-background));
+  --pinch-meal-lunch-soft: color-mix(in oklch, var(--pinch-meal-lunch) 36%, var(--color-background));
+  --pinch-meal-dinner-soft: color-mix(in oklch, var(--pinch-meal-dinner) 36%, var(--color-background));
+  --pinch-meal-snack-soft: color-mix(in oklch, var(--pinch-meal-snack) 36%, var(--color-background));
+  --pinch-meal-dessert-soft: color-mix(in oklch, var(--pinch-meal-dessert) 36%, var(--color-background));
+  --pinch-meal-drink-soft: color-mix(in oklch, var(--pinch-meal-drink) 36%, var(--color-background));
+}

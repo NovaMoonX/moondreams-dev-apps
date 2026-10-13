@@ -1,6 +1,7 @@
 import { SchemaType } from 'firebase/ai';
 
 import { generativeModel } from '@/lib/firebase/ai';
+import type { PageContent } from '@/lib/pageContent/fetchPageContent';
 import { compressIngestionImage } from '@/utils/imageCompression';
 import { getUploadMimeType } from '@/utils/uploadMimeType';
 import { UNITS } from '@apps/pinch/constants';
@@ -125,5 +126,20 @@ export async function extractRecipeFromFile(
   return generate([
     { text: PROMPT },
     { inlineData: { data, mimeType: getUploadMimeType(inputFile) } },
+  ]);
+}
+
+/** Reads a recipe from a web page's own recipe data and text. Not cached: every reading is a fresh call. */
+export async function extractRecipeFromPage(
+  page: PageContent,
+): Promise<ExtractedRecipe> {
+  const structured = page.structured
+    ? `Recipe data from the page:\n${page.structured}\n\n`
+    : '';
+
+  return generate([
+    {
+      text: `${PROMPT}\n\n--- BEGIN RECIPE ---\n${structured}Page text:\n${page.text}\n--- END RECIPE ---`,
+    },
   ]);
 }

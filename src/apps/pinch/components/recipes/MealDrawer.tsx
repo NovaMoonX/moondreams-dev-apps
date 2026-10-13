@@ -1,9 +1,12 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import DetailSheet from '@/components/DetailSheet';
+import FormSection from '@/components/FormSection';
+import HelpTip from '@/components/HelpTip';
+import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import {
   selectCostContext,
   selectIngredientsById,
@@ -63,10 +66,18 @@ function MealDrawer({
       onClose={onClose}
       title={meal.name}
       footer={
-        <div className='px-4 pb-4'>
+        <div className='flex gap-2 px-4 pb-4'>
           <Button
             type='button'
-            className='w-full'
+            variant='secondary'
+            className='shrink-0'
+            onClick={() => onModify(meal.id)}
+          >
+            Modify
+          </Button>
+          <Button
+            type='button'
+            className='min-w-0 flex-1'
             onClick={() => onPlan(meal.id)}
           >
             Plan it
@@ -75,47 +86,36 @@ function MealDrawer({
       }
     >
       <div className='space-y-5'>
-        <ul className='divide-border divide-y'>
-          {meal.items.map((item) => {
-            const itemCost = cost.items.get(item.id);
-            return (
-              <li key={item.id} className='flex items-start gap-3 py-2.5'>
-                <span className='min-w-0 flex-1'>
-                  <span className='block'>
-                    {getItemTitle(item, recipesById, ingredientsById)}
-                  </span>
-                  <span className='text-muted-foreground block text-xs'>
-                    {formatServings(item.servings)}
-                  </span>
-                </span>
-                <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                  {itemCost?.cents == null
-                    ? 'No price yet'
-                    : formatCost(itemCost.cents)}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-        <div>
-          <p className='text-sm'>
-            <span className='font-medium'>
-              {cost.totalCents === null
-                ? 'No prices yet'
-                : formatCost(cost.totalCents)}
-            </span>
-            {leftOutCount > 0 && cost.totalCents !== null && (
-              <span className='text-muted-foreground'>
-                {' '}
-                · {formatLeftOut(cost.leftOut)}
-              </span>
-            )}
-          </p>
+        <div className='space-y-3'>
+          <StatTile
+            label='Cost'
+            value={cost.totalCents === null ? '—' : formatCost(cost.totalCents)}
+            detail={
+              cost.totalCents === null ? 'No prices yet' : 'For the plate'
+            }
+            help={
+              leftOutCount > 0 && cost.totalCents !== null ? (
+                <HelpTip
+                  variant='warning'
+                  title='Not everything is counted'
+                  noModal
+                  placement='top'
+                >
+                  This {formatLeftOut(cost.leftOut)} because there’s no price
+                  for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                </HelpTip>
+              ) : undefined
+            }
+          />
           {hasShownValue(nutrition.values, show) && (
-            <p className='text-muted-foreground text-sm'>
-              <NutritionLine values={nutrition.values} show={show} /> for the
-              plate
-            </p>
+            <div className='space-y-1.5'>
+              <MacroStats
+                values={nutrition.values}
+                show={show}
+                variant='tiles'
+              />
+              <p className='text-muted-foreground text-xs'>For the plate</p>
+            </div>
           )}
           <GapNudge
             uid={uid}
@@ -126,16 +126,30 @@ function MealDrawer({
             onFillIn={onFillIn}
           />
         </div>
-        <div className='bg-muted/50 rounded-2xl p-1'>
-          <Button
-            type='button'
-            variant='tertiary'
-            className='h-11 w-full'
-            onClick={() => onModify(meal.id)}
-          >
-            Modify
-          </Button>
-        </div>
+        <FormSection title='On the plate' detail={meal.items.length}>
+          <ul className='divide-border divide-y'>
+            {meal.items.map((item) => {
+              const itemCost = cost.items.get(item.id);
+              return (
+                <li key={item.id} className='flex items-start gap-3 py-2.5'>
+                  <span className='min-w-0 flex-1'>
+                    <span className='block'>
+                      {getItemTitle(item, recipesById, ingredientsById)}
+                    </span>
+                    <span className='text-muted-foreground block text-xs'>
+                      {formatServings(item.servings)}
+                    </span>
+                  </span>
+                  <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                    {itemCost?.cents == null
+                      ? 'No price yet'
+                      : formatCost(itemCost.cents)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </FormSection>
       </div>
     </DetailSheet>
   );

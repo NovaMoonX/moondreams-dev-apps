@@ -230,7 +230,7 @@ export interface Product {
   updatedAt: number;
 }
 
-export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE';
+export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE' | 'AI_LINK';
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {

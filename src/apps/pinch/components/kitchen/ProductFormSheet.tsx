@@ -354,14 +354,14 @@ function ProductFormSheet({
     }
   };
 
+  const title = product
+    ? [ingredient.name, product.label ?? storesById.get(product.storeId)?.name]
+        .filter(Boolean)
+        .join(' · ')
+    : `${ingredient.name} · new product`;
+
   return (
-    <FormSheet isOpen onClose={onClose} title='Product'>
-      <div className='mb-4 flex items-center gap-3'>
-        <div className='min-w-0'>
-          <p className='text-muted-foreground text-xs'>For</p>
-          <p className='truncate font-medium'>{ingredient.name}</p>
-        </div>
-      </div>
+    <FormSheet isOpen onClose={onClose} title={title}>
       <Form
         id='pinch-product'
         form={fields}

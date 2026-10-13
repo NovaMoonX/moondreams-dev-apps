@@ -4,12 +4,14 @@ import { Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DayPeek from '@apps/pinch/components/calendar/DayPeek';
-import { MEAL_TYPE_EMOJIS } from '@apps/pinch/constants';
+import MealChip from '@apps/pinch/components/calendar/MealChip';
+import { MEAL_TYPE_COLORS, MEAL_TYPE_EMOJIS } from '@apps/pinch/constants';
 import type { PlannedMeal } from '@apps/pinch/types';
 
-const MAX_BARS = 3;
+const MAX_PILLS = 3;
+const MAX_CHIPS = 3;
 
-interface MealBarCellProps {
+interface DayCellProps {
   date: Date;
   dayKey: string;
   meals: PlannedMeal[];
@@ -18,7 +20,7 @@ interface MealBarCellProps {
   isOutsideMonth: boolean;
   /** The hover card is for a computer; a phone's cell is just the face, with no popover built behind it. */
   hasPeek: boolean;
-  /** A wide screen's cell is tall enough to name each meal's first item; narrower screens show only the colour bar. */
+  /** A wide screen's cell is tall enough for a pill per meal that names its first item; narrower screens show an emoji chip. */
   getMealTitle: ((meal: PlannedMeal) => string) | null;
   /** Controlled by the calendar so only one day's peek is ever open. */
   isPeekOpen: boolean;
@@ -31,8 +33,8 @@ function getPopoverAlignment(date: Date) {
   return 'center';
 }
 
-/** One day: its number and a thin bar per planned meal in the meal type's colour, three at most and then "+N". */
-function MealBarCell({
+/** One day of the month grid: its number and its meals, a titled pill each on a wide screen or an emoji chip on a small one, with "+N" for the rest. */
+function DayCell({
   date,
   dayKey,
   meals,
@@ -43,12 +45,17 @@ function MealBarCell({
   getMealTitle,
   isPeekOpen,
   onPeekOpenChange,
-}: MealBarCellProps) {
+}: DayCellProps) {
   const [hasPeeked, setHasPeeked] = useState(false);
+  // Three rows is all a phone's cell holds at 320px, so a fourth meal turns the last chip into the count.
+  const chipsShown = meals.length > MAX_CHIPS ? MAX_CHIPS - 1 : MAX_CHIPS;
+  const shownCount = getMealTitle ? MAX_PILLS : chipsShown;
+  const hiddenCount = Math.max(0, meals.length - shownCount);
+
   const face = (
     <span
       className={join(
-        'relative flex h-full w-full flex-col gap-0.5 overflow-hidden rounded-lg px-1 pt-1 pb-1',
+        'relative flex h-full w-full flex-col gap-0.5 overflow-hidden rounded-lg px-0.5 pt-1 pb-1 lg:px-1',
         isOutsideMonth && 'opacity-40',
       )}
     >
@@ -61,36 +68,46 @@ function MealBarCell({
       >
         {date.getDate()}
       </span>
-      {meals.slice(0, MAX_BARS).map((meal) => (
-        <span key={meal.id} className='flex items-center gap-0.5'>
+      {getMealTitle ? (
+        meals.slice(0, shownCount).map((meal) => (
           <span
-            className='w-3 shrink-0 text-center text-[9px] leading-none'
-            aria-hidden='true'
+            key={meal.id}
+            className='flex h-5 min-w-0 items-center gap-1 rounded-md border-l-[3px] pr-1 pl-1'
+            style={{
+              backgroundColor: MEAL_TYPE_COLORS[meal.mealType].soft,
+              borderLeftColor: MEAL_TYPE_COLORS[meal.mealType].solid,
+            }}
           >
-            {MEAL_TYPE_EMOJIS[meal.mealType]}
-          </span>
-          {getMealTitle ? (
             <span
-              className='min-w-0 flex-1 truncate border-l-2 pl-1 text-left text-[11px] leading-4 font-medium'
-              style={{
-                borderLeftColor: `var(--pinch-meal-${meal.mealType.toLowerCase()})`,
-              }}
+              className='w-3 shrink-0 text-center text-[10px] leading-none'
+              aria-hidden='true'
             >
+              {MEAL_TYPE_EMOJIS[meal.mealType]}
+            </span>
+            <span className='min-w-0 flex-1 truncate text-left text-[11px] leading-4 font-medium'>
               {getMealTitle(meal)}
             </span>
-          ) : (
-            <span
-              className='h-1.5 flex-1 rounded-full'
-              style={{
-                backgroundColor: `var(--pinch-meal-${meal.mealType.toLowerCase()})`,
-              }}
+          </span>
+        ))
+      ) : (
+        <span className='flex flex-wrap gap-0.5'>
+          {meals.slice(0, shownCount).map((meal) => (
+            <MealChip
+              key={meal.id}
+              mealType={meal.mealType}
+              className='size-[18px] text-[11px]'
             />
+          ))}
+          {hiddenCount > 0 && (
+            <span className='text-muted-foreground grid h-[18px] min-w-[18px] place-items-center text-[10px] leading-none font-semibold'>
+              +{hiddenCount}
+            </span>
           )}
         </span>
-      ))}
-      {meals.length > MAX_BARS && (
-        <span className='text-muted-foreground text-[10px] leading-none font-medium'>
-          +{meals.length - MAX_BARS}
+      )}
+      {getMealTitle && hiddenCount > 0 && (
+        <span className='text-muted-foreground pl-1 text-left text-[10px] leading-none font-medium'>
+          +{hiddenCount} more
         </span>
       )}
       {isSelected && (
@@ -134,4 +151,4 @@ function MealBarCell({
   );
 }
 
-export default MealBarCell;
+export default DayCell;

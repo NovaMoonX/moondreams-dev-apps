@@ -5,6 +5,9 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import HelpTip from '@/components/HelpTip';
+import MacroStats from '@/components/MacroStats';
+import Subview from '@/components/Subview';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
@@ -13,7 +16,7 @@ import { generateUuid } from '@/utils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
-import ServingStepper from '@apps/pinch/components/plan/ServingStepper';
+import Stepper from '@/components/Stepper';
 import {
   MAX_MEAL_ITEMS,
   MAX_NAME_LENGTH,
@@ -35,6 +38,7 @@ import {
   selectMealsById,
   selectPlannedMeals,
   selectRecipesById,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { ItemKind, MealItem, MealType } from '@apps/pinch/types';
 import {
@@ -45,6 +49,10 @@ import {
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
+import {
+  getMealNutrition,
+  hasShownValue,
+} from '@apps/pinch/utils/nutritionMath';
 
 const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((value) => ({
   value,
@@ -141,6 +149,30 @@ function MealBuilder({
     [items, costContext],
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
+  const show = useAppSelector(selectShowNutrition);
+  const nutrition = useMemo(
+    () =>
+      getMealNutrition(
+        items,
+        costContext.recipeNutrition,
+        costContext.ingredientsById,
+      ),
+    [items, costContext],
+  );
+  const getTitle = () => {
+    if (mode === 'meal') {
+      return name.trim() || existingMeal?.name || 'New meal';
+    }
+    if (source) {
+      return source.name;
+    }
+    if (items.length === 0) {
+      return existingPlanned?.name ?? 'New meal';
+    }
+    const first = getItemTitle(items[0], recipesById, ingredientsById);
+    return items.length > 1 ? `${first} +${items.length - 1}` : first;
+  };
+  const title = getTitle();
   const isFull = items.length >= MAX_MEAL_ITEMS;
   const isMissing =
     (mode === 'plan' && plannedMealId !== null && existingPlanned === null) ||
@@ -154,16 +186,18 @@ function MealBuilder({
 
   if (isMissing) {
     return (
-      <div className='space-y-3 py-6 text-center'>
-        <p className='text-muted-foreground text-sm'>
-          {mode === 'plan'
-            ? 'This meal has been removed from its day.'
-            : 'This meal has been deleted.'}
-        </p>
-        <Button type='button' variant='secondary' onClick={closeSubview}>
-          Close
-        </Button>
-      </div>
+      <Subview overlay title='Meal' onClose={closeSubview}>
+        <div className='space-y-3 py-6 text-center'>
+          <p className='text-muted-foreground text-sm'>
+            {mode === 'plan'
+              ? 'This meal has been removed from its day.'
+              : 'This meal has been deleted.'}
+          </p>
+          <Button type='button' variant='secondary' onClick={closeSubview}>
+            Close
+          </Button>
+        </div>
+      </Subview>
     );
   }
 
@@ -307,130 +341,132 @@ function MealBuilder({
   };
 
   return (
-    <div className='flex flex-1 flex-col gap-5'>
-      {mode === 'plan' ? (
-        <div className='space-y-3'>
-          <div className='flex items-center justify-between gap-3'>
-            <p className='min-w-0 font-medium'>
-              {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
-              <span className='whitespace-nowrap'>
-                {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
-              </span>
-            </p>
-            <Button
-              type='button'
-              variant='link'
-              className='h-10 shrink-0'
-              onClick={() => setIsChanging((current) => !current)}
-            >
-              {isChanging ? 'Done' : 'Change'}
-            </Button>
-          </div>
-          {isChanging && (
-            <div className='space-y-3'>
-              <PillGroup
-                label='Meal'
-                options={MEAL_TYPE_OPTIONS}
-                value={mealType}
-                onChange={setMealType}
-              />
-              <div className='space-y-1.5'>
-                <Label>Day</Label>
-                <Input
-                  type='date'
-                  variant='outline'
-                  aria-label='Day'
-                  value={dayKey}
-                  onChange={(event) => setDayKey(event.target.value)}
-                />
-              </div>
+    <Subview overlay title={title} onClose={closeSubview}>
+      <div className='flex flex-1 flex-col gap-5'>
+        {mode === 'plan' ? (
+          <div className='space-y-3'>
+            <div className='flex items-center justify-between gap-3'>
+              <p className='min-w-0 font-medium'>
+                {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
+                <span className='whitespace-nowrap'>
+                  {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
+                </span>
+              </p>
+              <Button
+                type='button'
+                variant='link'
+                className='h-10 shrink-0'
+                onClick={() => setIsChanging((current) => !current)}
+              >
+                {isChanging ? 'Done' : 'Change'}
+              </Button>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className='space-y-1.5'>
-          <Label>Name</Label>
-          <Input
-            variant='outline'
-            aria-label='Meal name'
-            placeholder='Taco night'
-            maxLength={MAX_NAME_LENGTH}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </div>
-      )}
-
-      {mode === 'plan' &&
-        !existingPlanned &&
-        savedMeals.length > 0 &&
-        items.length === 0 && (
-          <div className='space-y-2'>
-            <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              Start from a saved meal
-            </h2>
-            <PillGroup
-              label='Start from a saved meal'
-              options={savedMeals.map((meal) => ({
-                value: meal.id,
-                label: meal.name,
-              }))}
-              value={source?.id ?? null}
-              onChange={pickSavedMeal}
+            {isChanging && (
+              <div className='space-y-3'>
+                <PillGroup
+                  label='Meal'
+                  options={MEAL_TYPE_OPTIONS}
+                  value={mealType}
+                  onChange={setMealType}
+                />
+                <div className='space-y-1.5'>
+                  <Label>Day</Label>
+                  <Input
+                    type='date'
+                    variant='outline'
+                    aria-label='Day'
+                    value={dayKey}
+                    onChange={(event) => setDayKey(event.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className='space-y-1.5'>
+            <Label>Name</Label>
+            <Input
+              variant='outline'
+              aria-label='Meal name'
+              placeholder='Taco night'
+              maxLength={MAX_NAME_LENGTH}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
             />
           </div>
         )}
 
-      <section aria-label="What's on the plate" className='space-y-3'>
-        <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-          What's on the plate?
-        </h2>
-        {isFull ? (
-          <p className='text-muted-foreground text-sm'>
-            A meal holds up to {MAX_MEAL_ITEMS} items. Remove one to add
-            another.
-          </p>
-        ) : (
-          <ItemSearch
-            uid={uid}
-            excludeIds={items.map((item) => item.refId)}
-            onPick={(id) => addItem('INGREDIENT', id)}
-            onPickRecipe={(id) => addItem('RECIPE', id)}
-          />
-        )}
-        {items.length > 0 && (
-          <ul className='divide-border divide-y'>
-            {items.map((item) => {
-              const title = getItemTitle(item, recipesById, ingredientsById);
-              return (
-                <li key={item.id} className='space-y-1 py-2'>
-                  <div className='flex items-start gap-3'>
-                    <span className='min-w-0 flex-1 pt-2 font-medium wrap-break-word'>
-                      {title}
-                    </span>
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      size='icon'
-                      aria-label={`Remove ${title}`}
-                      className='size-10 shrink-0'
-                      onClick={() => {
-                        if (items.length === 1) setSource(null);
-                        setItems((current) =>
-                          current.filter((row) => row.id !== item.id),
-                        );
-                      }}
-                    >
-                      <X className='h-4 w-4' aria-hidden='true' />
-                    </Button>
-                  </div>
-                  <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-10'>
-                    <span className='text-muted-foreground text-xs'>
-                      {getServingCaption(item)}
-                    </span>
-                    <span className='flex items-center gap-2'>
-                      <ServingStepper
-                        label={`Servings of ${title}`}
+        {mode === 'plan' &&
+          !existingPlanned &&
+          savedMeals.length > 0 &&
+          items.length === 0 && (
+            <div className='space-y-2'>
+              <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+                Start from a saved meal
+              </h2>
+              <PillGroup
+                label='Start from a saved meal'
+                options={savedMeals.map((meal) => ({
+                  value: meal.id,
+                  label: meal.name,
+                }))}
+                value={source?.id ?? null}
+                onChange={pickSavedMeal}
+              />
+            </div>
+          )}
+
+        <section aria-label="What's on the plate" className='space-y-3'>
+          <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+            What's on the plate?
+          </h2>
+          {isFull ? (
+            <p className='text-muted-foreground text-sm'>
+              A meal holds up to {MAX_MEAL_ITEMS} items. Remove one to add
+              another.
+            </p>
+          ) : (
+            <ItemSearch
+              uid={uid}
+              excludeIds={items.map((item) => item.refId)}
+              onPick={(id) => addItem('INGREDIENT', id)}
+              onPickRecipe={(id) => addItem('RECIPE', id)}
+            />
+          )}
+          {items.length > 0 && (
+            <ul className='divide-border divide-y'>
+              {items.map((item) => {
+                const itemTitle = getItemTitle(
+                  item,
+                  recipesById,
+                  ingredientsById,
+                );
+                return (
+                  <li key={item.id} className='py-2'>
+                    <div className='flex items-start gap-3'>
+                      <span className='min-w-0 flex-1 pt-2 font-medium wrap-break-word'>
+                        {itemTitle}
+                      </span>
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        size='icon'
+                        aria-label={`Remove ${itemTitle}`}
+                        className='size-10 shrink-0'
+                        onClick={() => {
+                          if (items.length === 1) setSource(null);
+                          setItems((current) =>
+                            current.filter((row) => row.id !== item.id),
+                          );
+                        }}
+                      >
+                        <X className='h-4 w-4' aria-hidden='true' />
+                      </Button>
+                    </div>
+                    <div className='-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1'>
+                      <Stepper
+                        isCompact
+                        label={`Servings of ${itemTitle}`}
                         value={item.servings}
                         onChange={(servings) =>
                           setItems((current) =>
@@ -441,90 +477,103 @@ function MealBuilder({
                         }
                       />
                       <span className='text-muted-foreground text-xs'>
-                        servings
+                        servings · {getServingCaption(item)}
                       </span>
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      {items.length > 0 && (
-        <div>
-          <p className='text-sm'>
-            <span className='font-medium'>
-              {cost.totalCents === null
-                ? 'No prices yet'
-                : `Cost ${formatCost(cost.totalCents)}`}
-            </span>
-            {leftOutCount > 0 && cost.totalCents !== null && (
-              <span className='text-muted-foreground'>
-                {' '}
-                · {formatLeftOut(cost.leftOut)}
-              </span>
-            )}
-          </p>
-        </div>
-      )}
-
-      {mode === 'plan' && items.length >= 2 && (
-        <div className='space-y-3'>
-          <div className='flex items-center justify-between gap-3'>
-            <span className='text-sm font-medium'>Save as a meal</span>
-            <AppToggle
-              aria-label='Save as a meal'
-              checked={saveAsMeal}
-              onCheckedChange={setSaveAsMeal}
-            />
-          </div>
-          {saveAsMeal && (
-            <Input
-              variant='outline'
-              aria-label='Name for the saved meal'
-              placeholder='Taco night'
-              maxLength={MAX_NAME_LENGTH}
-              value={newMealName}
-              onChange={(event) => setNewMealName(event.target.value)}
-            />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
-        </div>
-      )}
-      {error && <p className='text-destructive text-sm'>{error}</p>}
+        </section>
 
-      <ModalFooterActions
-        leftActions={
-          existingMeal && (
-            <DeleteIconButton
-              onClick={() => void handleDelete()}
+        {items.length > 0 && (
+          <div className='bg-accent/60 space-y-2 rounded-2xl p-3'>
+            <p className='flex items-center gap-1.5 text-sm'>
+              <span className='font-semibold'>
+                {cost.totalCents === null
+                  ? 'No prices yet'
+                  : `Cost ${formatCost(cost.totalCents)}`}
+              </span>
+              {leftOutCount > 0 && cost.totalCents !== null && (
+                <HelpTip
+                  variant='warning'
+                  title='Not everything is counted'
+                  noModal
+                  placement='top'
+                >
+                  This {formatLeftOut(cost.leftOut)} because there’s no price
+                  for {leftOutCount === 1 ? 'it' : 'them'} yet. Add prices from
+                  the meal once it’s saved.
+                </HelpTip>
+              )}
+            </p>
+            {hasShownValue(nutrition.values, show) && (
+              <MacroStats
+                values={nutrition.values}
+                show={show}
+                className='text-sm'
+              />
+            )}
+          </div>
+        )}
+
+        {mode === 'plan' && items.length >= 2 && (
+          <div className='space-y-3'>
+            <div className='flex items-center justify-between gap-3'>
+              <span className='text-sm font-medium'>Save as a meal</span>
+              <AppToggle
+                aria-label='Save as a meal'
+                checked={saveAsMeal}
+                onCheckedChange={setSaveAsMeal}
+              />
+            </div>
+            {saveAsMeal && (
+              <Input
+                variant='outline'
+                aria-label='Name for the saved meal'
+                placeholder='Taco night'
+                maxLength={MAX_NAME_LENGTH}
+                value={newMealName}
+                onChange={(event) => setNewMealName(event.target.value)}
+              />
+            )}
+          </div>
+        )}
+        {error && <p className='text-destructive text-sm'>{error}</p>}
+
+        <ModalFooterActions
+          leftActions={
+            existingMeal && (
+              <DeleteIconButton
+                onClick={() => void handleDelete()}
+                disabled={isSubmitting}
+              />
+            )
+          }
+          cancelAction={
+            <Button
+              type='button'
+              variant='secondary'
+              onClick={closeSubview}
               disabled={isSubmitting}
-            />
-          )
-        }
-        cancelAction={
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={closeSubview}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        }
-        rightActions={
-          <Button
-            type='button'
-            loading={isSubmitting}
-            disabled={isSubmitting || !isValid}
-            onClick={() => void handleSubmit()}
-          >
-            {getSubmitLabel()}
-          </Button>
-        }
-      />
-    </div>
+            >
+              Cancel
+            </Button>
+          }
+          rightActions={
+            <Button
+              type='button'
+              loading={isSubmitting}
+              disabled={isSubmitting || !isValid}
+              onClick={() => void handleSubmit()}
+            >
+              {getSubmitLabel()}
+            </Button>
+          }
+        />
+      </div>
+    </Subview>
   );
 }
 

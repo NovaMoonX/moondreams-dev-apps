@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import { Button, Modal, Tooltip } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CircleHelp } from 'lucide-react';
+import { CircleHelp, TriangleAlert } from 'lucide-react';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -15,6 +15,8 @@ interface HelpTipProps {
   /** Keeps a phone from opening a modal, for a help icon that sits inside a drawer, modal or subview. */
   noModal?: boolean;
   placement?: 'top' | 'bottom';
+  /** A caution ("this number leaves something out") instead of a question mark; opens the same way. */
+  variant?: 'help' | 'warning';
   className?: string;
 }
 
@@ -25,6 +27,7 @@ function HelpTip({
   linkLabel,
   noModal = false,
   placement = 'bottom',
+  variant = 'help',
   className,
 }: HelpTipProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -86,14 +89,18 @@ function HelpTip({
       variant='tertiary'
       size='icon'
       rounded='full'
-      aria-label={`Help: ${title}`}
+      aria-label={`${variant === 'warning' ? 'Heads up' : 'Help'}: ${title}`}
       className={join(
         "relative -my-1 h-5 w-5 after:absolute after:-inset-2.5 after:content-['']",
         className,
       )}
       onClick={usesModal ? () => setIsOpen(true) : undefined}
     >
-      <CircleHelp className='text-muted-foreground h-3.5 w-3.5' />
+      {variant === 'warning' ? (
+        <TriangleAlert className='text-warning h-3.5 w-3.5' />
+      ) : (
+        <CircleHelp className='text-muted-foreground h-3.5 w-3.5' />
+      )}
     </Button>
   );
 

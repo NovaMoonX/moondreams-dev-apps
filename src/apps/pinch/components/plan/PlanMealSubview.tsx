@@ -1,6 +1,4 @@
-import Subview from '@/components/Subview';
 import MealBuilder from '@apps/pinch/components/plan/MealBuilder';
-import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import type { MealType } from '@apps/pinch/types';
 
 interface PlanMealSubviewProps {
@@ -21,20 +19,16 @@ function PlanMealSubview({
   fromMealId,
   fromRecipeId,
 }: PlanMealSubviewProps) {
-  const { closeSubview } = usePinchOverlay();
-
   return (
-    <Subview overlay title='Meal' onClose={closeSubview}>
-      <MealBuilder
-        uid={uid}
-        mode='plan'
-        dayKey={dayKey}
-        mealType={mealType}
-        plannedMealId={plannedMealId}
-        mealId={fromMealId}
-        recipeId={fromRecipeId}
-      />
-    </Subview>
+    <MealBuilder
+      uid={uid}
+      mode='plan'
+      dayKey={dayKey}
+      mealType={mealType}
+      plannedMealId={plannedMealId}
+      mealId={fromMealId}
+      recipeId={fromRecipeId}
+    />
   );
 }
 

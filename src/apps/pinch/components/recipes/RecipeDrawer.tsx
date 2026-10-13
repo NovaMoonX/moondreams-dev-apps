@@ -1,20 +1,24 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import DetailSheet from '@/components/DetailSheet';
+import FormSection from '@/components/FormSection';
+import HelpTip from '@/components/HelpTip';
+import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import CostLine from '@apps/pinch/components/shared/CostLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
+import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import { UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectIngredientsById,
   selectRecipeCosts,
   selectRecipeNutrition,
-  selectShowNutrition,
   selectRecipesById,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { Gap, GapKind } from '@apps/pinch/types';
+import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
+import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getNutritionGaps,
   hasShownValue,
@@ -54,10 +58,18 @@ function RecipeDrawer({
     return null;
   }
 
-  const times = [
-    recipe.prepMinutes != null && `Prep ${formatMinutes(recipe.prepMinutes)}`,
-    recipe.cookMinutes != null && `Cook ${formatMinutes(recipe.cookMinutes)}`,
-  ].filter(Boolean);
+  const facts = [
+    { emoji: '🍽️', text: formatServings(recipe.servings) },
+    recipe.prepMinutes != null && {
+      emoji: '🔪',
+      text: `Prep ${formatMinutes(recipe.prepMinutes)}`,
+    },
+    recipe.cookMinutes != null && {
+      emoji: '⏲️',
+      text: `Cook ${formatMinutes(recipe.cookMinutes)}`,
+    },
+  ].filter((fact) => fact !== false);
+  const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
 
   return (
     <DetailSheet
@@ -65,10 +77,18 @@ function RecipeDrawer({
       onClose={onClose}
       title={recipe.title}
       footer={
-        <div className='px-4 pb-4'>
+        <div className='flex gap-2 px-4 pb-4'>
           <Button
             type='button'
-            className='w-full'
+            variant='secondary'
+            className='shrink-0'
+            onClick={() => onModify(recipe.id)}
+          >
+            Modify
+          </Button>
+          <Button
+            type='button'
+            className='min-w-0 flex-1'
             onClick={() => onPlan(recipe.id)}
           >
             Add to calendar
@@ -84,19 +104,52 @@ function RecipeDrawer({
             className='h-40 w-full'
           />
         )}
-        <p className='text-muted-foreground text-sm'>
-          {[formatServings(recipe.servings), ...times].join(' · ')}
-        </p>
+        <ul className='flex flex-wrap gap-2'>
+          {facts.map((fact) => (
+            <li
+              key={fact.text}
+              className='bg-accent text-accent-foreground flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium'
+            >
+              <span aria-hidden='true'>{fact.emoji}</span>
+              {fact.text}
+            </li>
+          ))}
+        </ul>
         {cost && (
-          <div>
-            <p className='text-sm font-medium'>
-              <CostLine cost={cost} />
-            </p>
+          <div className='space-y-3'>
+            <StatTile
+              label='Cost'
+              value={
+                cost.totalCents === null ? '—' : formatCost(cost.totalCents)
+              }
+              detail={
+                cost.totalCents === null
+                  ? 'No prices yet'
+                  : `${formatCost(cost.perServingCents ?? 0)} per serving`
+              }
+              help={
+                leftOutCount > 0 && cost.totalCents !== null ? (
+                  <HelpTip
+                    variant='warning'
+                    title='Not everything is counted'
+                    noModal
+                    placement='top'
+                  >
+                    This {formatLeftOut(cost.leftOut)} because there’s no price
+                    for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                  </HelpTip>
+                ) : undefined
+              }
+            />
             {nutrition && hasShownValue(nutrition.values, show) && (
-              <p className='text-muted-foreground text-sm'>
-                <NutritionLine values={nutrition.values} show={show} /> per
-                serving
-              </p>
+              <div className='space-y-1.5'>
+                <MacroStats
+                  values={nutrition.values}
+                  show={show}
+                  variant='tiles'
+                />
+                <p className='text-muted-foreground text-xs'>Per serving</p>
+              </div>
             )}
             <GapNudge
               uid={uid}
@@ -112,10 +165,7 @@ function RecipeDrawer({
           <p className='text-sm whitespace-pre-wrap'>{recipe.description}</p>
         )}
 
-        <section aria-label='Ingredients' className='space-y-2'>
-          <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-            Ingredients
-          </h3>
+        <FormSection title='Ingredients' detail={recipe.ingredients.length}>
           <ul className='divide-border divide-y'>
             {recipe.ingredients.map((line) => {
               const gap = gapLabel(cost?.lines.get(line.id)?.gap?.kind);
@@ -146,36 +196,22 @@ function RecipeDrawer({
               );
             })}
           </ul>
-        </section>
+        </FormSection>
 
         {recipe.steps.length > 0 && (
-          <section aria-label='Steps' className='space-y-2'>
-            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              Steps
-            </h3>
+          <FormSection title='Steps'>
             <ol className='space-y-3'>
               {recipe.steps.map((step, index) => (
                 <li key={index} className='flex gap-3 text-sm'>
-                  <span className='bg-secondary text-secondary-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
+                  <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
                     {index + 1}
                   </span>
                   <span className='min-w-0 whitespace-pre-wrap'>{step}</span>
                 </li>
               ))}
             </ol>
-          </section>
+          </FormSection>
         )}
-
-        <div className='bg-muted/50 rounded-2xl p-1'>
-          <Button
-            type='button'
-            variant='tertiary'
-            className='h-11 w-full'
-            onClick={() => onModify(recipe.id)}
-          >
-            Modify
-          </Button>
-        </div>
       </div>
     </DetailSheet>
   );

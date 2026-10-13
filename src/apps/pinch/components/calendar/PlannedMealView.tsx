@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -6,7 +7,9 @@ import { ChevronLeft } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
+import HelpTip from '@/components/HelpTip';
+import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import {
   MAX_NAME_LENGTH,
@@ -24,10 +27,11 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Gap, MealType } from '@apps/pinch/types';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
-import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
+import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
+import { withWholeCalories } from '@apps/pinch/utils/stats';
 import {
   getPlannedMealNutrition,
   hasShownValue,
@@ -39,6 +43,8 @@ interface PlannedMealViewProps {
   onBack: () => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
   onFillIn: (gaps: Gap[]) => void;
+  /** Where the drawer's pinned footer is: this view puts its actions there, a quiet Modify on the left and the one primary on the right. */
+  footerEl: HTMLElement | null;
 }
 
 /** A planned meal inside the day drawer: its items, servings and cost, and the way to take it off the day. */
@@ -48,6 +54,7 @@ function PlannedMealView({
   onBack,
   onEdit,
   onFillIn,
+  footerEl,
 }: PlannedMealViewProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -115,6 +122,51 @@ function PlannedMealView({
     }
   };
 
+  const footer = footerEl
+    ? createPortal(
+        isNaming ? (
+          <div className='flex gap-2'>
+            <Button
+              type='button'
+              variant='secondary'
+              onClick={() => setIsNaming(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type='button'
+              className='flex-1'
+              loading={isSaving}
+              disabled={isSaving || mealName.trim() === ''}
+              onClick={() => void handleSaveAsMeal()}
+            >
+              Save
+            </Button>
+          </div>
+        ) : (
+          <div className='flex gap-2'>
+            {!meal.snapshot && (
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={() => onEdit(meal.id, meal.mealType)}
+              >
+                Modify
+              </Button>
+            )}
+            <Button
+              type='button'
+              className='flex-1'
+              onClick={() => setIsNaming(true)}
+            >
+              Save as a meal
+            </Button>
+          </div>
+        ),
+        footerEl,
+      )
+    : null;
+
   if (isNaming) {
     return (
       <div className='space-y-5'>
@@ -144,15 +196,7 @@ function PlannedMealView({
           </p>
         </div>
         {error && <p className='text-destructive text-sm'>{error}</p>}
-        <Button
-          type='button'
-          className='w-full'
-          loading={isSaving}
-          disabled={isSaving || mealName.trim() === ''}
-          onClick={() => void handleSaveAsMeal()}
-        >
-          Save
-        </Button>
+        {footer}
       </div>
     );
   }
@@ -173,6 +217,51 @@ function PlannedMealView({
         {MEAL_TYPE_LABELS[meal.mealType]} ·{' '}
         {formatDayTitle(getPlannedDayKey(meal.date))}
       </p>
+      <div className='space-y-3'>
+        <StatTile
+          label='Cost'
+          value={
+            cost.totalCents === null
+              ? 'No prices yet'
+              : formatCost(cost.totalCents)
+          }
+          detail={meal.snapshot ? 'Prices as they were that day' : undefined}
+          help={
+            leftOutCount > 0 && cost.totalCents !== null ? (
+              <HelpTip
+                variant='warning'
+                title="What's left out"
+                placement='top'
+                noModal
+              >
+                <p>
+                  Leaves out {leftOutCount}{' '}
+                  {leftOutCount === 1 ? 'ingredient' : 'ingredients'} with no
+                  price yet.
+                </p>
+                <p className='text-muted-foreground'>
+                  The cost goes up once they're priced.
+                </p>
+              </HelpTip>
+            ) : undefined
+          }
+        />
+        {hasShownValue(nutrition.values, show) && (
+          <div className='space-y-1.5'>
+            <p className='text-muted-foreground text-xs font-medium'>
+              For the plate
+            </p>
+            <MacroStats
+              variant='tiles'
+              values={withWholeCalories(nutrition.values)}
+              show={show}
+            />
+          </div>
+        )}
+        {!meal.snapshot && (
+          <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={onFillIn} />
+        )}
+      </div>
       <ul className='divide-border divide-y'>
         {meal.items.map((item) => {
           const itemCost = cost.items.get(item.id);
@@ -195,56 +284,13 @@ function PlannedMealView({
           );
         })}
       </ul>
-      <p className='text-sm'>
-        <span className='font-medium'>
-          {cost.totalCents === null
-            ? 'No prices yet'
-            : formatCost(cost.totalCents)}
-        </span>
-        {leftOutCount > 0 && cost.totalCents !== null && (
-          <span className='text-muted-foreground'>
-            {' '}
-            · {formatLeftOut(cost.leftOut)}
-          </span>
-        )}
-        {meal.snapshot && (
-          <span className='text-muted-foreground block text-xs'>
-            Prices as they were that day
-          </span>
-        )}
-      </p>
-      {!meal.snapshot && (
-        <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={onFillIn} />
-      )}
-      {hasShownValue(nutrition.values, show) && (
-        <p className='text-muted-foreground text-sm'>
-          <NutritionLine values={nutrition.values} show={show} /> for the plate
-        </p>
-      )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
-      {meal.snapshot ? (
+      {meal.snapshot && (
         <p className='text-muted-foreground text-sm'>
           This day has passed, so its meals stay as they were. Remove one and
           add it again to change it.
         </p>
-      ) : (
-        <Button
-          type='button'
-          variant='secondary'
-          className='h-11 w-full'
-          onClick={() => onEdit(meal.id, meal.mealType)}
-        >
-          Change items or servings
-        </Button>
       )}
-      <Button
-        type='button'
-        variant='secondary'
-        className='h-11 w-full'
-        onClick={() => setIsNaming(true)}
-      >
-        Save as a meal
-      </Button>
       <Button
         type='button'
         variant='tertiary'
@@ -253,6 +299,7 @@ function PlannedMealView({
       >
         Remove from this day
       </Button>
+      {footer}
     </div>
   );
 }

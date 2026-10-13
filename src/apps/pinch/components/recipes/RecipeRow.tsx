@@ -1,10 +1,10 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import {
   selectRecipeNutrition,
   selectShowNutrition,
@@ -70,9 +70,11 @@ function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
           </span>
         )}
         {nutrition && hasShownValue(nutrition.values, show) && (
-          <span className='text-muted-foreground block truncate text-xs font-normal'>
-            <NutritionLine values={nutrition.values} show={show} /> per serving
-          </span>
+          <MacroStats
+            values={nutrition.values}
+            show={show}
+            className='text-muted-foreground mt-0.5 text-xs font-normal'
+          />
         )}
       </span>
       <ChevronRight

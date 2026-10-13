@@ -3,19 +3,32 @@ import { memo, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Plus, ShoppingCart, Store } from 'lucide-react';
 
-import { PillGroup } from '@/components/PillGroup';
-import SearchInput from '@/components/SearchInput';
+import FilterBar, { FilterSection } from '@/components/FilterBar';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
 import FamilyGroup from '@apps/pinch/components/kitchen/FamilyGroup';
 import IngredientDrawer from '@apps/pinch/components/kitchen/IngredientDrawer';
 import IngredientFormSheet from '@apps/pinch/components/kitchen/IngredientFormSheet';
+import {
+  applyIngredientFilters,
+  getActiveIngredientFilters,
+  NO_INGREDIENT_FILTERS,
+  removeIngredientFilter,
+  type IngredientFilters,
+} from '@apps/pinch/components/kitchen/ingredientFilters';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
-import { KITCHEN_VIEW_LABELS, KITCHEN_VIEWS } from '@apps/pinch/constants';
+import {
+  INGREDIENT_FLAG_OPTIONS,
+  INGREDIENT_PRICE_FILTER_OPTIONS,
+  KITCHEN_VIEW_LABELS,
+  KITCHEN_VIEWS,
+} from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectDefaultProducts,
   selectIngredientFamilies,
+  selectIngredientFamiliesById,
   selectIngredients,
   selectIngredientsById,
   selectProducts,
@@ -34,6 +47,10 @@ const VIEW_OPTIONS = KITCHEN_VIEWS.map((value) => ({
   value,
   label: KITCHEN_VIEW_LABELS[value],
 }));
+const PRICE_OPTIONS = INGREDIENT_PRICE_FILTER_OPTIONS.map((option) => ({
+  ...option,
+}));
+const FLAG_OPTIONS = INGREDIENT_FLAG_OPTIONS.map((option) => ({ ...option }));
 
 type Overlay =
   | { kind: 'details'; id: string }
@@ -57,9 +74,14 @@ function EntryRow({ icon, label, count, onClick }: EntryRowProps) {
       type='button'
       variant='secondary'
       onClick={onClick}
-      className='h-12 min-w-0 justify-start gap-2 rounded-2xl px-3'
+      className='h-14 min-w-0 justify-start gap-2.5 rounded-2xl px-3'
     >
-      {icon}
+      <span
+        className='flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)] max-[360px]:hidden'
+        aria-hidden='true'
+      >
+        {icon}
+      </span>
       <span className='min-w-0 flex-1 truncate text-left'>{label}</span>
       {count > 0 && (
         <span className='text-muted-foreground text-sm font-normal'>
@@ -77,10 +99,14 @@ function EntryRow({ icon, label, count, onClick }: EntryRowProps) {
 function KitchenScreen({ uid }: KitchenScreenProps) {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<KitchenView>('yours');
+  const [filters, setFilters] = useState<IngredientFilters>(
+    NO_INGREDIENT_FILTERS,
+  );
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const families = useAppSelector(selectIngredientFamilies);
+  const familiesById = useAppSelector(selectIngredientFamiliesById);
   const storeCount = useAppSelector(selectStores).length;
   const productCount = useAppSelector(selectProducts).length;
   const productsById = useAppSelector(selectProductsById);
@@ -102,15 +128,73 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           ),
     [ingredients, view, trimmed, defaultProducts, usedIds],
   );
+  const filtered = useMemo(
+    () => applyIngredientFilters(scoped, filters, { defaultProducts, usedIds }),
+    [scoped, filters, defaultProducts, usedIds],
+  );
+  const shown = useMemo(
+    () => searchIngredients(filtered, trimmed),
+    [filtered, trimmed],
+  );
   const groups = useMemo(
-    () => groupByFamily(searchIngredients(scoped, trimmed), families),
-    [scoped, trimmed, families],
+    () => groupByFamily(shown, families),
+    [shown, families],
+  );
+  const familyOptions = useMemo(() => {
+    const present = new Set(
+      ingredients.map((ingredient) => ingredient.familyId ?? ''),
+    );
+    return families
+      .filter((family) => present.has(family.id))
+      .map((family) => ({ value: family.id, label: family.name }));
+  }, [ingredients, families]);
+  const activeFilters = useMemo(
+    () => getActiveIngredientFilters(filters, familiesById),
+    [filters, familiesById],
   );
 
+  const hasFilters = activeFilters.length > 0;
+  const countText =
+    hasFilters || trimmed !== ''
+      ? `${shown.length} of ${scoped.length}`
+      : `${shown.length}`;
+  const clearFilters = () => setFilters(NO_INGREDIENT_FILTERS);
+
   const getEmptyState = () => {
+    if (hasFilters) {
+      return (
+        <div className='space-y-3 py-6 text-center'>
+          <p className='text-muted-foreground text-sm'>
+            Nothing{view === 'yours' && trimmed === '' ? ' in Yours' : ''}{' '}
+            matches
+            {trimmed !== '' ? ` “${trimmed}” with` : ''} these filters.
+          </p>
+          <div className='flex flex-wrap justify-center gap-2'>
+            <Button
+              type='button'
+              variant='secondary'
+              className='h-10'
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+            {view === 'yours' && trimmed === '' && (
+              <Button
+                type='button'
+                variant='secondary'
+                className='h-10'
+                onClick={() => setView('all')}
+              >
+                Look through everything
+              </Button>
+            )}
+          </div>
+        </div>
+      );
+    }
     if (trimmed !== '') {
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
+        <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
           Nothing matches “{trimmed}” yet. Try another name.
         </p>
       );
@@ -135,51 +219,95 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title='Ingredients'
-        subtitle={`${ingredients.length} ingredients, ready to use`}
-        action={
-          <div className='flex items-center gap-1'>
-            <Button
-              type='button'
-              size='sm'
-              rounded='full'
-              className='gap-1'
-              onClick={() => setOverlay({ kind: 'form', id: null })}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              New
-            </Button>
-          </div>
-        }
+        title='Kitchen'
+        subtitle='Your ingredients, products and stores, in one place.'
       />
       <div className='grid grid-cols-2 gap-2'>
         <EntryRow
-          icon={<Store className='h-5 w-5 shrink-0' aria-hidden='true' />}
+          icon={<Store className='h-4 w-4' />}
           label='Stores'
           count={storeCount}
           onClick={() => openSubview({ kind: 'stores' })}
         />
         <EntryRow
-          icon={
-            <ShoppingCart className='h-5 w-5 shrink-0' aria-hidden='true' />
-          }
+          icon={<ShoppingCart className='h-4 w-4' />}
           label='Products'
           count={productCount}
           onClick={() => openSubview({ kind: 'products' })}
         />
       </div>
-      <PillGroup
-        label='Which ingredients'
-        options={VIEW_OPTIONS}
-        value={view}
-        onChange={setView}
-        isThin
-      />
-      <SearchInput
-        value={query}
-        onChange={setQuery}
-        placeholder='Search ingredients'
-      />
+      <div className='flex h-10 items-center justify-between gap-3'>
+        <h3 className='text-muted-foreground flex min-w-0 items-baseline gap-2 text-xs font-semibold tracking-wide uppercase'>
+          Ingredients
+          <span className='text-xs font-normal tracking-normal whitespace-nowrap normal-case'>
+            {countText}
+          </span>
+        </h3>
+        <Button
+          type='button'
+          size='sm'
+          rounded='full'
+          className='gap-1'
+          onClick={() => setOverlay({ kind: 'form', id: null })}
+        >
+          <Plus className='h-4 w-4' aria-hidden='true' />
+          New
+        </Button>
+      </div>
+      <FilterBar
+        query={query}
+        onQueryChange={setQuery}
+        searchPlaceholder='Search ingredients'
+        filterLabel='Filter ingredients'
+        activeFilters={activeFilters}
+        onRemoveFilter={(key) =>
+          setFilters((current) => removeIngredientFilter(current, key))
+        }
+        onClearFilters={clearFilters}
+        doneLabel={`Show ${shown.length} ${shown.length === 1 ? 'ingredient' : 'ingredients'}`}
+        leading={
+          <PillGroup
+            label='Which ingredients'
+            options={VIEW_OPTIONS}
+            value={view}
+            onChange={setView}
+            isThin
+          />
+        }
+      >
+        <FilterSection title='Price'>
+          <PillGroup
+            label='Price'
+            options={PRICE_OPTIONS}
+            value={filters.price}
+            onChange={(price) =>
+              setFilters((current) => ({ ...current, price }))
+            }
+          />
+        </FilterSection>
+        <FilterSection title='Show only'>
+          <MultiPillGroup
+            label='Show only'
+            options={FLAG_OPTIONS}
+            values={filters.flags}
+            onChange={(flags) =>
+              setFilters((current) => ({ ...current, flags }))
+            }
+          />
+        </FilterSection>
+        {familyOptions.length > 0 && (
+          <FilterSection title='Family'>
+            <MultiPillGroup
+              label='Families'
+              options={familyOptions}
+              values={filters.familyIds}
+              onChange={(familyIds) =>
+                setFilters((current) => ({ ...current, familyIds }))
+              }
+            />
+          </FilterSection>
+        )}
+      </FilterBar>
       {groups.length === 0 ? (
         getEmptyState()
       ) : (
