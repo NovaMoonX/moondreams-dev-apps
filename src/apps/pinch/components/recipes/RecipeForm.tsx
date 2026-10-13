@@ -247,7 +247,8 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
             if (row.ingredientId === '') {
               return (
                 <li key={row.id} className='space-y-2 py-2'>
-                  <div className='flex items-center gap-1'>
+                  <div className='flex items-center gap-3'>
+                    <IngredientIcon iconKey={null} size={28} />
                     <div className='min-w-0 flex-1'>
                       <p className='truncate font-medium'>{displayName}</p>
                       <p className='text-muted-foreground text-xs'>
@@ -342,11 +343,18 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                       iconKey={ingredient?.iconKey ?? null}
                       size={28}
                     />
-                    <span className='min-w-0 flex-1 truncate font-medium'>
-                      {displayName}
-                      {row.newName && (
-                        <span className='text-muted-foreground ml-1.5 text-xs font-normal'>
-                          new
+                    <span className='min-w-0 flex-1'>
+                      <span className='block truncate font-medium'>
+                        {displayName}
+                        {row.newName && (
+                          <span className='text-muted-foreground ml-1.5 text-xs font-normal'>
+                            new
+                          </span>
+                        )}
+                      </span>
+                      {row.note && (
+                        <span className='text-muted-foreground block truncate text-xs font-normal'>
+                          {row.note}
                         </span>
                       )}
                     </span>
@@ -825,11 +833,11 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
 
     const isUsed = isInUse(usage);
     const confirmed = await confirm({
-      title: isUsed ? 'Hide recipe' : 'Delete recipe',
+      title: isUsed ? 'Remove recipe' : 'Delete recipe',
       message: isUsed
-        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be hidden, not erased. Everything that uses it keeps its name and numbers.`
+        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers, but you can't bring it back to your lists.`
         : `Delete "${recipe.title}"? This action cannot be undone.`,
-      confirmText: isUsed ? 'Hide' : 'Delete',
+      confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,
     });
     if (!confirmed) {
@@ -992,7 +1000,7 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
 
   return (
     <>
-      <RecipeAutofill onFilled={applyExtracted} />
+      {!recipe && <RecipeAutofill onFilled={applyExtracted} />}
       <Form
         key={seed.key}
         id='pinch-recipe'

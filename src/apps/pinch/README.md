@@ -73,11 +73,12 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Nutrition is yours to enter, and yours to show.** Built-in ingredients arrive with calories, protein, carbs, and fat. You can add or adjust them on any ingredient. A recipe's nutrition adds up from its ingredients, and you can type your own numbers over it, handy when a recipe comes with its own from the web.
 - **Showing nutrition is opt-in.** In settings, calories, protein, carbs, and fat are four separate switches, all off to start. Turning one on shows it per serving on recipes and meals and as a daily average on the calendar's stats row. With protein on, the stats row also shows your average price per gram of protein.
 - **Blanks are named.** An ingredient with no nutrition entered is called out with a nudge and left out of the totals while that metric is on.
-- **A week runs Monday to Sunday.**
+- **A week runs Monday to Sunday.** The calendar grid starts on Sunday (the calendar component can't do otherwise); week copies are Monday to Sunday.
+- **A meal holds up to 10 items.** Planning more than that is a recipe's job.
 
 ### Chat Hand-off, In Detail
 
-- **Copy out:** recipes, a single day's plan, and a week's plan can each be copied as clean Markdown. Prices, stores, and products are never included.
+- **Copy out:** a recipe, a saved meal, a planned meal, a day's plan and a week's plan can each be copied as clean Markdown (a week is Monday to Sunday, even though the calendar grid starts on Sunday). Prices, stores, and products are never included.
 - **Copy your ingredients:** a Markdown list of the ingredients you work with, grouped by family, so a chat knows what's in your kitchen. "Your ingredients" are the ones you've added or adjusted, the ones you've attached a product to, and the ones your recipes use; the full catalog stays in Browse all. When stock tracking arrives, the copy also carries what you have on hand and what's running low.
 - **Paste in:** a paste box accepts up to 20,000 characters of text. The AI reads it and fills in a new recipe for you to review.
 - **From a file:** a photo, screenshot, or PDF (up to 10 MB) works the same way.
@@ -156,6 +157,6 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
 - **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, meals, calendar entries, and per-user settings; Firebase Storage for recipe and store images
 - **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return structured drafts for review
-- **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (license to be confirmed before the catalog ships), stored per 100 g alongside common unit conversions; money is stored as whole cents
-- **Store logos:** a curated list of well-known stores (names and web domains) whose logos load from a logo service in the person's browser, with a letter tile whenever one isn't available; stores you add keep their own uploaded image in Firebase Storage. The logo service and its terms are to be confirmed before launch.
-- **Ingredient icons:** open-license SVG food emoji sets (Fluent Emoji under MIT, Noto Emoji under Apache-2.0, or Twemoji under CC-BY-4.0), vendored into the app with their license notices; spices and anything without a matching emoji fall back to a generic jar glyph
+- **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (licence not yet confirmed from here: to be checked before launch), stored per 100 g alongside common unit conversions; money is stored as whole cents
+- **Store logos:** a curated list of well-known stores (names and web domains) whose logos load from a logo service in the person's browser, with a letter tile whenever one isn't available; stores you add keep their own uploaded image in Firebase Storage. The logo service (Logo.dev) and its terms are to be confirmed before launch.
+- **Ingredient icons:** Twemoji (CC-BY-4.0) SVG food emoji, vendored into the app with their licence notice and credited in Settings; spices and anything without a matching emoji fall back to a generic jar glyph

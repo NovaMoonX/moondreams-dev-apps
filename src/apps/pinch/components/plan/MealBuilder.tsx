@@ -14,8 +14,6 @@ import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
 import ServingStepper from '@apps/pinch/components/plan/ServingStepper';
-import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   MAX_MEAL_ITEMS,
@@ -23,6 +21,7 @@ import {
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
   MEAL_TYPES,
+  UNIT_LABELS,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { removeMeal, saveMeal } from '@apps/pinch/store/actions/mealActions';
@@ -38,10 +37,10 @@ import {
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { Gap, ItemKind, MealItem, MealType } from '@apps/pinch/types';
+import type { ItemKind, MealItem, MealType } from '@apps/pinch/types';
 import {
   formatDayTitle,
-  formatWeekday,
+  getCellDayKey,
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
@@ -67,6 +66,8 @@ interface MealBuilderProps {
   plannedMealId: string | null;
   /** A saved meal whose items start the plate (plan), or the saved meal being changed (meal). */
   mealId: string | null;
+  /** A recipe that starts the plate (plan). */
+  recipeId?: string | null;
 }
 
 /** Builds a meal from any mix of recipes and ingredients with servings on each, then plans it on a day or saves it for later. */
@@ -77,6 +78,7 @@ function MealBuilder({
   mealType: initialType,
   plannedMealId,
   mealId,
+  recipeId = null,
 }: MealBuilderProps) {
   const { closeSubview } = usePinchOverlay();
   const dispatch = useAppDispatch();
@@ -97,6 +99,10 @@ function MealBuilder({
     mode === 'plan' && !existingPlanned && mealId
       ? (savedMealsById.get(mealId) ?? null)
       : null;
+  const startRecipeId =
+    mode === 'plan' && !existingPlanned && !mealId && recipeId
+      ? recipeId
+      : null;
   const [dayKey, setDayKey] = useState(
     existingPlanned ? getPlannedDayKey(existingPlanned.date) : initialDayKey,
   );
@@ -107,7 +113,18 @@ function MealBuilder({
   const [items, setItems] = useState<MealItem[]>(
     existingPlanned?.items ??
       existingMeal?.items ??
-      (starter ? copyItems(starter.items) : []),
+      (starter
+        ? copyItems(starter.items)
+        : startRecipeId
+          ? [
+              {
+                id: generateUuid(),
+                kind: 'RECIPE' as const,
+                refId: startRecipeId,
+                servings: 1,
+              },
+            ]
+          : []),
   );
   const [source, setSource] = useState<{ id: string; name: string } | null>(
     starter ? { id: starter.id, name: starter.name } : null,
@@ -116,7 +133,6 @@ function MealBuilder({
   const [saveAsMeal, setSaveAsMeal] = useState(false);
   const [newMealName, setNewMealName] = useState('');
   const [createdMealId, setCreatedMealId] = useState<string | null>(null);
-  const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -234,8 +250,8 @@ function MealBuilder({
       }
       addToast({
         title: existingPlanned
-          ? `Saved ${MEAL_TYPE_LABELS[mealType].toLowerCase()} on ${formatWeekday(dayKey)}`
-          : `Added ${source?.name ?? getItemTitle(items[0], recipesById, ingredientsById)}${!source && items.length > 1 ? ` and ${items.length - 1} more` : ''} to ${formatWeekday(dayKey)}`,
+          ? `Saved ${MEAL_TYPE_LABELS[mealType].toLowerCase()} on ${getDayWord(dayKey)}`
+          : `Added ${source?.name ?? getItemTitle(items[0], recipesById, ingredientsById)}${!source && items.length > 1 ? ` and ${items.length - 1} more` : ''} to ${getDayWord(dayKey)}`,
         type: 'success',
       });
       closeSubview();
@@ -270,9 +286,25 @@ function MealBuilder({
     }
   };
 
+  const getServingCaption = (item: MealItem) => {
+    if (item.kind === 'RECIPE') {
+      const recipe = recipesById.get(item.refId);
+      return recipe
+        ? `Recipe serves ${Math.round(recipe.servings * 100) / 100}`
+        : '';
+    }
+    const serving = ingredientsById.get(item.refId)?.serving;
+    return serving
+      ? `1 serving = ${Math.round(serving.amount * 100) / 100} ${UNIT_LABELS[serving.unit]}`
+      : '';
+  };
+
+  const getDayWord = (key: string) =>
+    key === getCellDayKey(new Date()) ? 'today' : formatDayTitle(key);
+
   const getSubmitLabel = () => {
     if (mode === 'meal' || existingPlanned || date === null) return 'Save';
-    return `Add to ${formatWeekday(dayKey)}`;
+    return `Add to ${getDayWord(dayKey)}`;
   };
 
   return (
@@ -334,15 +366,20 @@ function MealBuilder({
         !existingPlanned &&
         savedMeals.length > 0 &&
         items.length === 0 && (
-          <PillGroup
-            label='Start from a saved meal'
-            options={savedMeals.map((meal) => ({
-              value: meal.id,
-              label: meal.name,
-            }))}
-            value={source?.id ?? null}
-            onChange={pickSavedMeal}
-          />
+          <div className='space-y-2'>
+            <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+              Start from a saved meal
+            </h2>
+            <PillGroup
+              label='Start from a saved meal'
+              options={savedMeals.map((meal) => ({
+                value: meal.id,
+                label: meal.name,
+              }))}
+              value={source?.id ?? null}
+              onChange={pickSavedMeal}
+            />
+          </div>
         )}
 
       <section aria-label="What's on the plate" className='space-y-3'>
@@ -367,44 +404,58 @@ function MealBuilder({
             {items.map((item) => {
               const title = getItemTitle(item, recipesById, ingredientsById);
               return (
-                <li key={item.id} className='flex items-center gap-3 py-2'>
-                  <ItemIcon
-                    kind={item.kind}
-                    iconKey={
-                      item.kind === 'INGREDIENT'
-                        ? (ingredientsById.get(item.refId)?.iconKey ?? null)
-                        : null
-                    }
-                  />
-                  <span className='min-w-0 flex-1 truncate font-medium'>
-                    {title}
-                  </span>
-                  <ServingStepper
-                    label={`Servings of ${title}`}
-                    value={item.servings}
-                    onChange={(servings) =>
-                      setItems((current) =>
-                        current.map((row) =>
-                          row.id === item.id ? { ...row, servings } : row,
-                        ),
-                      )
-                    }
-                  />
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='icon'
-                    aria-label={`Remove ${title}`}
-                    className='size-10 shrink-0'
-                    onClick={() => {
-                      if (items.length === 1) setSource(null);
-                      setItems((current) =>
-                        current.filter((row) => row.id !== item.id),
-                      );
-                    }}
-                  >
-                    <X className='h-4 w-4' aria-hidden='true' />
-                  </Button>
+                <li key={item.id} className='space-y-1 py-2'>
+                  <div className='flex items-start gap-3'>
+                    <span className='flex h-10 shrink-0 items-center'>
+                      <ItemIcon
+                        kind={item.kind}
+                        iconKey={
+                          item.kind === 'INGREDIENT'
+                            ? (ingredientsById.get(item.refId)?.iconKey ?? null)
+                            : null
+                        }
+                      />
+                    </span>
+                    <span className='min-w-0 flex-1 pt-2 font-medium wrap-break-word'>
+                      {title}
+                    </span>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='icon'
+                      aria-label={`Remove ${title}`}
+                      className='size-10 shrink-0'
+                      onClick={() => {
+                        if (items.length === 1) setSource(null);
+                        setItems((current) =>
+                          current.filter((row) => row.id !== item.id),
+                        );
+                      }}
+                    >
+                      <X className='h-4 w-4' aria-hidden='true' />
+                    </Button>
+                  </div>
+                  <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-11'>
+                    <span className='text-muted-foreground text-xs'>
+                      {getServingCaption(item)}
+                    </span>
+                    <span className='flex items-center gap-2'>
+                      <ServingStepper
+                        label={`Servings of ${title}`}
+                        value={item.servings}
+                        onChange={(servings) =>
+                          setItems((current) =>
+                            current.map((row) =>
+                              row.id === item.id ? { ...row, servings } : row,
+                            ),
+                          )
+                        }
+                      />
+                      <span className='text-muted-foreground text-xs'>
+                        servings
+                      </span>
+                    </span>
+                  </div>
                 </li>
               );
             })}
@@ -427,7 +478,6 @@ function MealBuilder({
               </span>
             )}
           </p>
-          <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={setFillIn} />
         </div>
       )}
 
@@ -485,9 +535,6 @@ function MealBuilder({
           </Button>
         }
       />
-      {fillIn && (
-        <FillInSheet uid={uid} gaps={fillIn} onClose={() => setFillIn(null)} />
-      )}
     </div>
   );
 }

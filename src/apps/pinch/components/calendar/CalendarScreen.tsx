@@ -83,6 +83,7 @@ function CalendarScreen({
       mealType,
       plannedMealId,
       fromMealId: null,
+      fromRecipeId: null,
     });
 
   const goToMonth = (monthKey: string) => {
@@ -182,6 +183,7 @@ function CalendarScreen({
             <Button
               type='button'
               size='sm'
+              variant='secondary'
               rounded='full'
               onClick={() => openPlan(todayKey, null)}
             >
@@ -263,6 +265,10 @@ function CalendarScreen({
             const dayKey = openDayKey;
             setOpenDayKey(null);
             openPlan(dayKey, mealType, plannedMealId);
+          }}
+          onFillIn={(gaps) => {
+            setOpenDayKey(null);
+            setFillIn(gaps);
           }}
         />
       )}

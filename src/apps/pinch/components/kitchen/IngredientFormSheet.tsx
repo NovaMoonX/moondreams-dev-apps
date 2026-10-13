@@ -379,14 +379,14 @@ function IngredientFormSheet({
       title: isCatalog
         ? 'Use the built-in values'
         : isUsed
-          ? 'Hide ingredient'
+          ? 'Remove ingredient'
           : 'Delete ingredient',
       message: isCatalog
         ? `Put ${ingredient.name} back to its built-in nutrition, serving size and icon? Your changes to it are removed.`
         : usage !== null && isUsed
-          ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be hidden, not erased. Everything that uses it keeps its name and numbers.`
+          ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers, but you can't bring it back to your lists.`
           : `Delete "${ingredient.name}"? This action cannot be undone.`,
-      confirmText: isCatalog ? 'Reset' : isUsed ? 'Hide' : 'Delete',
+      confirmText: isCatalog ? 'Reset' : isUsed ? 'Remove' : 'Delete',
       destructive: true,
     });
     if (!confirmed) {

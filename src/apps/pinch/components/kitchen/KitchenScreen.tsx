@@ -100,15 +100,16 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const trimmed = query.trim();
   const scoped = useMemo(
     () =>
-      view === 'all'
+      view === 'all' || trimmed !== ''
         ? ingredients
         : ingredients.filter(
             (ingredient) =>
               ingredient.isCustom ||
               ingredient.isAdjusted ||
-              defaultProducts.has(ingredient.id),
+              defaultProducts.has(ingredient.id) ||
+              usedIds.has(ingredient.id),
           ),
-    [ingredients, view, defaultProducts],
+    [ingredients, view, trimmed, defaultProducts, usedIds],
   );
   const groups = useMemo(
     () => groupByFamily(searchIngredients(scoped, trimmed), families),
@@ -130,7 +131,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         </p>
         <Button
           type='button'
-          variant='link'
+          variant='secondary'
           className='h-10'
           onClick={() => setView('all')}
         >

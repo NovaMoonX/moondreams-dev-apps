@@ -208,10 +208,12 @@ function ProductFormSheet({
         name: 'price',
         label: '',
         renderComponent: () => (
-          <div className='grid grid-cols-2 items-start gap-3'>
+          <div className='grid items-start gap-3 min-[400px]:grid-cols-2'>
             <div className='space-y-1.5'>
               <Label>Price</Label>
               <MoneyInput
+                variant='outline'
+                className='h-10'
                 ariaLabel='Price'
                 placeholder='9.48'
                 value={formData.price}
@@ -231,7 +233,7 @@ function ProductFormSheet({
                   variant='outline'
                   aria-label='Package size'
                   placeholder='3'
-                  className='min-w-0'
+                  className='h-10 min-w-0'
                   value={formData.sizeAmount}
                   onChange={(event) =>
                     setFormData((current) => ({
@@ -242,7 +244,7 @@ function ProductFormSheet({
                 />
                 <UnitSelect
                   value={formData.sizeUnit}
-                  className='w-24 shrink-0'
+                  className='h-10 w-24 shrink-0'
                   onChange={(sizeUnit) =>
                     setFormData((current) => ({ ...current, sizeUnit }))
                   }

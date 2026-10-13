@@ -1,8 +1,14 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import { useAppSelector } from '@/store';
+import {
+  selectIngredientsById,
+  selectRecipesById,
+} from '@apps/pinch/store/selectors';
 import type { Meal } from '@apps/pinch/types';
-import { formatCost } from '@apps/pinch/utils/mealFormat';
+import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import type { MealCost } from '@apps/pinch/utils/mealMath';
 
 interface MealRowProps {
@@ -12,12 +18,21 @@ interface MealRowProps {
 }
 
 function MealRow({ meal, cost, onOpen }: MealRowProps) {
+  const recipesById = useAppSelector(selectRecipesById);
+  const ingredientsById = useAppSelector(selectIngredientsById);
+  const leftOutCount = countLeftOutIngredients(cost.leftOut);
   const detail = [
     `${meal.items.length} ${meal.items.length === 1 ? 'item' : 'items'}`,
-    cost.totalCents === null ? null : formatCost(cost.totalCents),
+    cost.totalCents === null ? 'No price yet' : formatCost(cost.totalCents),
+    cost.totalCents !== null && leftOutCount > 0
+      ? `leaves out ${leftOutCount}`
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
+  const itemNames = meal.items
+    .map((item) => getItemTitle(item, recipesById, ingredientsById))
+    .join(', ');
 
   return (
     <Button
@@ -27,7 +42,7 @@ function MealRow({ meal, cost, onOpen }: MealRowProps) {
       className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-2 text-left'
     >
       <span
-        className='flex h-10 w-10 shrink-0 items-center justify-center text-2xl'
+        className='bg-accent text-accent-foreground flex size-14 shrink-0 items-center justify-center rounded-xl text-2xl'
         aria-hidden='true'
       >
         🍽️
@@ -38,6 +53,9 @@ function MealRow({ meal, cost, onOpen }: MealRowProps) {
         </span>
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {detail}
+        </span>
+        <span className='text-muted-foreground block truncate text-xs font-normal'>
+          {itemNames}
         </span>
       </span>
       <ChevronRight

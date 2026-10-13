@@ -214,6 +214,17 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           uid={uid}
           recipeId={openId}
           onClose={() => setOpenId(null)}
+          onPlan={(id) => {
+            setOpenId(null);
+            openSubview({
+              kind: 'plan',
+              dayKey: getCellDayKey(new Date()),
+              mealType: null,
+              plannedMealId: null,
+              fromMealId: null,
+              fromRecipeId: id,
+            });
+          }}
           onModify={(id) => {
             setOpenId(null);
             openSubview({ kind: 'recipe', id });
@@ -238,6 +249,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               mealType: null,
               plannedMealId: null,
               fromMealId: id,
+              fromRecipeId: null,
             });
           }}
           onModify={(id) => {
