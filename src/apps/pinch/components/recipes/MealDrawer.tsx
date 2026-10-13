@@ -109,12 +109,12 @@ function MealDrawer({
           />
           {hasShownValue(nutrition.values, show) && (
             <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>For the plate</p>
               <MacroStats
                 values={nutrition.values}
                 show={show}
                 variant='tiles'
               />
-              <p className='text-muted-foreground text-xs'>For the plate</p>
             </div>
           )}
           <GapNudge

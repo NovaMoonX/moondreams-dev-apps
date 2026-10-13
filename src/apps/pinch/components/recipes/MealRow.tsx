@@ -1,15 +1,22 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
 import {
+  selectCostContext,
   selectIngredientsById,
   selectRecipesById,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { Meal } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import type { MealCost } from '@apps/pinch/utils/mealMath';
+import {
+  getMealNutrition,
+  hasShownValue,
+} from '@apps/pinch/utils/nutritionMath';
 
 interface MealRowProps {
   meal: Meal;
@@ -20,6 +27,13 @@ interface MealRowProps {
 function MealRow({ meal, cost, onOpen }: MealRowProps) {
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const costContext = useAppSelector(selectCostContext);
+  const show = useAppSelector(selectShowNutrition);
+  const nutrition = getMealNutrition(
+    meal.items,
+    costContext.recipeNutrition,
+    costContext.ingredientsById,
+  );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
   const detail = [
     `${meal.items.length} ${meal.items.length === 1 ? 'item' : 'items'}`,
@@ -54,6 +68,13 @@ function MealRow({ meal, cost, onOpen }: MealRowProps) {
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {detail}
         </span>
+        {hasShownValue(nutrition.values, show) && (
+          <MacroStats
+            values={nutrition.values}
+            show={show}
+            className='text-muted-foreground mt-0.5 text-xs font-normal'
+          />
+        )}
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {itemNames}
         </span>

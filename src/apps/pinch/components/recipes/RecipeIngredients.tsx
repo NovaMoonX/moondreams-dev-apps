@@ -263,23 +263,21 @@ function RecipeIngredients({ uid, rows, onChange }: RecipeIngredientsProps) {
                       {(row.note || isUnresolved) && (
                         <span className='text-muted-foreground block truncate text-xs font-normal'>
                           {isUnresolved
-                            ? 'Not in your ingredients yet'
+                            ? 'Not in your ingredients yet · tap to add or choose'
                             : row.note}
                         </span>
                       )}
                     </span>
-                    {!isUnresolved && (
-                      <span
-                        className={join(
-                          'shrink-0 text-sm font-normal whitespace-nowrap',
-                          isAmountValid(row)
-                            ? 'text-muted-foreground'
-                            : 'text-destructive',
-                        )}
-                      >
-                        {label}
-                      </span>
-                    )}
+                    <span
+                      className={join(
+                        'shrink-0 text-sm font-normal whitespace-nowrap',
+                        isAmountValid(row)
+                          ? 'text-muted-foreground'
+                          : 'text-destructive',
+                      )}
+                    >
+                      {label}
+                    </span>
                   </Button>
                   <Button
                     type='button'
@@ -416,7 +414,7 @@ function IngredientDrawer({
           row={row}
           rows={rows}
           displayName={getName(row)}
-          showRemove
+          showRemove={mode.kind === 'edit'}
           onUpdate={(patch) => onUpdate(row.id, patch)}
           onRemove={() => {
             onRemove(row.id);

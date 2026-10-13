@@ -141,13 +141,24 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     [shown, families],
   );
   const familyOptions = useMemo(() => {
-    const present = new Set(
-      ingredients.map((ingredient) => ingredient.familyId ?? ''),
+    const counts = scoped.reduce(
+      (acc, ingredient) =>
+        acc.set(
+          ingredient.familyId ?? '',
+          (acc.get(ingredient.familyId ?? '') ?? 0) + 1,
+        ),
+      new Map<string, number>(),
     );
     return families
-      .filter((family) => present.has(family.id))
-      .map((family) => ({ value: family.id, label: family.name }));
-  }, [ingredients, families]);
+      .filter(
+        (family) =>
+          counts.has(family.id) || filters.familyIds.includes(family.id),
+      )
+      .map((family) => ({
+        value: family.id,
+        label: `${family.name} · ${counts.get(family.id) ?? 0}`,
+      }));
+  }, [scoped, families, filters.familyIds]);
   const activeFilters = useMemo(
     () => getActiveIngredientFilters(filters, familiesById),
     [filters, familiesById],

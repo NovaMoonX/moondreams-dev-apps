@@ -111,7 +111,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     if (recipes.length === 0) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Write down the recipes you cook and they'll be here, ready to plan.
+          Add the recipes you cook, from a photo, a link, a chat or by hand, and
+          they'll be here, ready to plan.
         </p>
       );
     }

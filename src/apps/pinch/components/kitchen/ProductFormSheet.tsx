@@ -42,6 +42,8 @@ import type { Product, ResolvedIngredient, Unit } from '@apps/pinch/types';
 
 const { custom } = FormFactories;
 
+import { formatPriceAndSize } from '@apps/pinch/utils/productFormat';
+
 interface Reveal<T> {
   enabled: boolean;
   value: T;
@@ -302,7 +304,7 @@ function ProductFormSheet({
     }
     const confirmed = await confirm({
       title: 'Delete product',
-      message: `Delete this ${ingredient.name} product? Recipes keep working: they only name the ingredient. This action cannot be undone.`,
+      message: `Delete ${ingredient.name} from ${storesById.get(product.storeId)?.name ?? 'a removed store'} (${formatPriceAndSize(product)})? Recipes keep working: they only name the ingredient. This action cannot be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });

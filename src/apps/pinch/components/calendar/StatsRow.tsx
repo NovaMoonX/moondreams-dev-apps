@@ -111,7 +111,9 @@ function StatsRow({
               >
                 <p>Leaves out {reasons.join(' and ')}.</p>
                 <p className='text-muted-foreground'>
-                  The total goes up once they're priced.
+                  The total goes up once they're priced. This counts days that
+                  are already behind you, so it can be more than the line below,
+                  which counts only what you can still change.
                 </p>
               </HelpTip>
             ) : undefined
@@ -150,6 +152,7 @@ function StatsRow({
           </p>
           <MacroStats
             variant='tiles'
+            isCompact
             values={withWholeCalories(stats.dailyNutrition)}
             show={show}
           />

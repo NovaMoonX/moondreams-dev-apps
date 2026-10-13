@@ -5,6 +5,8 @@ interface ModalFooterActionsProps {
   /** Cancel / Close, kept on the left edge after any destructive icon so the primary action stands alone on the right. */
   cancelAction?: ReactNode;
   rightActions: ReactNode;
+  /** Why the primary action is disabled, kept in the pinned footer so it is on screen with the button. */
+  note?: ReactNode;
 }
 
 /**
@@ -14,14 +16,21 @@ interface ModalFooterActionsProps {
  * clear belongs in a wider layout, not a wrapped stack here. On a phone the right group takes
  * the row's remaining width and its last button (the primary) grows.
  */
-function ModalFooterActions({ leftActions, cancelAction, rightActions }: ModalFooterActionsProps) {
+function ModalFooterActions({ leftActions, cancelAction, rightActions, note }: ModalFooterActionsProps) {
   return (
-    <div className='form-footer col-span-full flex flex-row items-center justify-between gap-2'>
-      <div className='flex items-center gap-2'>
-        {leftActions}
-        {cancelAction}
+    <div className='form-footer col-span-full'>
+      {note && (
+        <p className='text-muted-foreground mb-2 text-xs' role='status'>
+          {note}
+        </p>
+      )}
+      <div className='flex flex-row items-center justify-between gap-2'>
+        <div className='flex items-center gap-2'>
+          {leftActions}
+          {cancelAction}
+        </div>
+        <div className='flex items-center justify-end gap-2 max-sm:flex-1 max-sm:[&>:last-child]:flex-1'>{rightActions}</div>
       </div>
-      <div className='flex items-center justify-end gap-2 max-sm:flex-1 max-sm:[&>:last-child]:flex-1'>{rightActions}</div>
     </div>
   );
 }

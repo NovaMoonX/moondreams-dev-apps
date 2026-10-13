@@ -214,8 +214,7 @@ function PlannedMealView({
       </Button>
       <p className='font-medium'>
         <span aria-hidden='true'>{MEAL_TYPE_EMOJIS[meal.mealType]}</span>{' '}
-        {MEAL_TYPE_LABELS[meal.mealType]} ·{' '}
-        {formatDayTitle(getPlannedDayKey(meal.date))}
+        {MEAL_TYPE_LABELS[meal.mealType]}
       </p>
       <div className='space-y-3'>
         <StatTile

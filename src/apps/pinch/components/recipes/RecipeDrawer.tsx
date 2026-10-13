@@ -143,12 +143,12 @@ function RecipeDrawer({
             />
             {nutrition && hasShownValue(nutrition.values, show) && (
               <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>Per serving</p>
                 <MacroStats
                   values={nutrition.values}
                   show={show}
                   variant='tiles'
                 />
-                <p className='text-muted-foreground text-xs'>Per serving</p>
               </div>
             )}
             <GapNudge

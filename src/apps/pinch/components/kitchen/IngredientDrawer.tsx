@@ -67,32 +67,48 @@ function IngredientDrawer({
       onClose={onClose}
       title={ingredient.name}
       footer={
-        <div className='px-4 pb-4'>
+        <div className='flex gap-2 px-4 pb-4'>
           <Button
             type='button'
-            className='w-full'
+            variant='secondary'
+            className='shrink-0'
             onClick={() => onModify(ingredient.id)}
           >
-            {ingredient.isCustom ? 'Modify' : 'Adjust nutrition or serving'}
+            {ingredient.isCustom ? 'Modify' : 'Adjust'}
+          </Button>
+          <Button
+            type='button'
+            className='min-w-0 flex-1 gap-1'
+            onClick={() => onAddProduct(ingredient.id)}
+          >
+            <Plus className='h-4 w-4' aria-hidden='true' />
+            Add a product
           </Button>
         </div>
       }
     >
       <div className='space-y-5'>
-        {(family ||
-          ingredient.isCustom ||
-          ingredient.isAdjusted ||
-          ingredient.aliases.length > 0) && (
-          <div className='text-muted-foreground min-w-0 text-sm'>
-            {family && <p>{family.name}</p>}
-            {ingredient.isCustom && <p>One you added</p>}
-            {ingredient.isAdjusted && <p>Built in · you adjusted it</p>}
-            {ingredient.aliases.length > 0 && (
-              <p className='truncate'>
-                Also called {ingredient.aliases.join(', ')}
-              </p>
-            )}
-          </div>
+        <ul className='flex flex-wrap gap-2'>
+          {[
+            family?.name,
+            ingredient.isCustom && 'One you added',
+            ingredient.isAdjusted && 'Adjusted by you',
+            `1 serving = ${servingText}`,
+          ]
+            .filter((chip): chip is string => typeof chip === 'string')
+            .map((chip) => (
+              <li
+                key={chip}
+                className='bg-accent text-accent-foreground rounded-full px-3 py-1.5 text-sm font-medium'
+              >
+                {chip}
+              </li>
+            ))}
+        </ul>
+        {ingredient.aliases.length > 0 && (
+          <p className='text-muted-foreground text-sm'>
+            Also called {ingredient.aliases.join(', ')}
+          </p>
         )}
 
         {hasAnyMetricOn(show) && (
@@ -108,25 +124,11 @@ function IngredientDrawer({
           </section>
         )}
 
-        <p className='text-muted-foreground text-sm'>
-          One serving is {servingText}.
-        </p>
-
         <section aria-label='Products' className='space-y-2'>
           <div className='flex items-center justify-between gap-3'>
             <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
               Products
             </h3>
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className='h-10 gap-1 px-0!'
-              onClick={() => onAddProduct(ingredient.id)}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              Add a product
-            </Button>
           </div>
           {products.length === 0 ? (
             <p className='text-muted-foreground text-sm'>

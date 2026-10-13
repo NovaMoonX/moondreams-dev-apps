@@ -380,7 +380,7 @@ block-beta
   style S4 fill:transparent,stroke:#888888,stroke-width:1px;
   style S5 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Four ways in, in this order, with writing it yourself last and quieter (dashed). Text and link open their input in place under the row, one at a time; a photo opens the file picker straight away. Each AI reading fills the real form and says so ("Filled in from {source}. Take a look before you save." plus "We couldn't read: …"); nothing is saved until the form is. Link reading opens the page on our server (never the person's device) and sends its recipe data and text to the reader. The header names the recipe as it is typed ("New recipe" until then).*
+*Four ways in, in this order, with writing it yourself last and quieter (dashed). Text and link open their input in place under the row, one at a time; the photo way opens its own line ("An AI reads the picture and fills in the form. It isn’t saved.") and a "Choose a file" button first. Each AI reading fills the real form and says so ("Filled in from {source}. Take a look before you save." plus "We couldn't read: …"); nothing is saved until the form is. Link reading opens the page on our server (never the person's device) and sends its recipe data and text to the reader. The header names the recipe as it is typed ("New recipe" until then).*
 
 | Reading state | What you see |
 |---|---|
@@ -517,15 +517,15 @@ block-beta
 block-beta
   columns 2
   I1["Chicken breast"]:1
-  I2["Chicken"]:1
+  I2["Chicken · Adjusted by you · 1 serving = 5 oz"]:1
   I3["Per 100 g · 🔥 165 · 💪 31g · 🌾 0g · 🥑 3.6g"]:2
   I4["Products"]:2
   I5["⭐ Walmart · Great Value 3 lb"]:1
   I6["$9.48"]:1
   I7["Costco · 6.5 lb"]:1
   I8["$19.99"]:1
-  I9["+ Add a product"]:2
-  I11["✏️ Modify"]:2
+  I9["Adjust"]:1
+  I11["+ Add a product"]:1
   style I1 fill:transparent,stroke:#888888,stroke-width:1px;
   style I2 fill:transparent,stroke:#888888,stroke-width:1px;
   style I3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -537,7 +537,7 @@ block-beta
   style I9 fill:transparent,stroke:#888888,stroke-width:1px;
   style I11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*"Add a product" closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g as emoji `MacroStats` and can be adjusted in Modify. There is no "Used in" line in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
+*The front matter is peach chips (family, "One you added" or "Adjusted by you", the serving) and the footer holds Adjust (Modify for your own ingredient) beside the primary "+ Add a product", which closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g as emoji `MacroStats` and can be adjusted in Modify. There is no "Used in" line in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
 
 **Product** (form sheet)
 

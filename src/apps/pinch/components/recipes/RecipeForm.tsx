@@ -11,6 +11,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
+import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
 import Field from '@/components/forms/Field';
 import PhotoPicker from '@/components/forms/PhotoPicker';
@@ -157,14 +158,43 @@ function RecipeForm({
       ingredientsById,
     );
 
+    const unresolved = formData.ingredients.filter(
+      (row) => row.ingredientId === '',
+    ).length;
+
     return {
       values: result.values,
       leftOut: {
-        count: new Set(result.missing.map((entry) => entry.ingredientId)).size,
-        total: lines.length,
+        count:
+          new Set(result.missing.map((entry) => entry.ingredientId)).size +
+          unresolved,
+        total: lines.length + unresolved,
       },
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
+
+  const unresolvedCount = formData.ingredients.filter(
+    (row) => row.ingredientId === '',
+  ).length;
+  const getBlocker = () => {
+    if (
+      !recipe &&
+      formData.title.trim() === '' &&
+      formData.ingredients.length === 0
+    ) {
+      return null;
+    }
+    if (formData.title.trim() === '') return 'Give it a title to save.';
+    if (formData.ingredients.length === 0) return 'Add an ingredient to save.';
+    if (unresolvedCount > 0) {
+      return `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`;
+    }
+    if (!formData.ingredients.every(isRowValid)) {
+      return 'Check the ingredient amounts to save.';
+    }
+    return null;
+  };
+  const blocker = getBlocker();
 
   const fields = useMemo(
     () => [
@@ -231,19 +261,36 @@ function RecipeForm({
         label: '',
         renderComponent: () => (
           <FormSection title='Photo'>
-            <PhotoPicker
-              photoUrl={coverUrl}
-              initials='🍲'
-              error={coverError}
-              onSelect={(file) => {
-                pickCover(file);
-                setIsCoverRemoved(false);
-              }}
-              onRemove={() => {
-                clearCover();
-                setIsCoverRemoved(true);
-              }}
-            />
+            <div className='flex items-center gap-4'>
+              <span
+                className='bg-accent grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl text-3xl'
+                aria-hidden='true'
+              >
+                {coverUrl ? (
+                  <FallbackImage
+                    src={coverUrl}
+                    alt=''
+                    fallback='🍲'
+                    className='size-full object-cover'
+                  />
+                ) : (
+                  '🍲'
+                )}
+              </span>
+              <PhotoPicker
+                photoUrl={coverUrl}
+                showPreview={false}
+                error={coverError}
+                onSelect={(file) => {
+                  pickCover(file);
+                  setIsCoverRemoved(false);
+                }}
+                onRemove={() => {
+                  clearCover();
+                  setIsCoverRemoved(true);
+                }}
+              />
+            </div>
           </FormSection>
         ),
       }),
@@ -449,6 +496,7 @@ function RecipeForm({
         }}
         submitButton={
           <ModalFooterActions
+            note={blocker}
             leftActions={
               recipe && (
                 <DeleteIconButton

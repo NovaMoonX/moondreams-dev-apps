@@ -32,15 +32,9 @@ const asWebLink = (text: string) => {
   }
 };
 
-const getFailureMessage = (error: unknown) => {
+const getFailureMessage = (error: unknown, source: RecipeSource) => {
   if (error instanceof FirebaseError && error.code.startsWith('functions/')) {
-    if (error.code === 'functions/invalid-argument') {
-      return "That doesn't look like a web link. Check it and try again.";
-    }
-    if (error.code === 'functions/failed-precondition') {
-      return "That link isn't a page we can read. Paste the recipe's text instead.";
-    }
-    return "We couldn't open that link. Try again, or paste the recipe's text instead.";
+    return "We couldn't open that link. Check the address, or paste the recipe's text instead.";
   }
 
   const status =
@@ -57,6 +51,12 @@ const getFailureMessage = (error: unknown) => {
   }
   if (status === 403 || status === 404) {
     return "The recipe reader isn't available right now. You can write it yourself below.";
+  }
+  if (source === 'AI_LINK') {
+    return "We couldn't read a recipe from that page. Paste its text instead, or write it yourself below.";
+  }
+  if (source === 'AI_TEXT') {
+    return "We couldn't read that text right now. Try again, or write it yourself below.";
   }
   return "We couldn't read that right now. Try a clearer photo or a PDF, or write it yourself below.";
 };
@@ -111,7 +111,7 @@ function RecipeStart({ onRead, onManual }: RecipeStartProps) {
         error,
         error instanceof AIError ? error.customErrorData : null,
       );
-      setState({ status: 'failed', message: getFailureMessage(error) });
+      setState({ status: 'failed', message: getFailureMessage(error, source) });
     } finally {
       setPickerKey((current) => current + 1);
     }
@@ -147,6 +147,25 @@ function RecipeStart({ onRead, onManual }: RecipeStartProps) {
       ),
     );
   };
+
+  const photoPanel = (
+    <div className='flex items-center justify-between gap-3'>
+      <span className='text-muted-foreground text-xs'>
+        An AI reads the picture and fills in the form. It isn’t saved.
+      </span>
+      <Button
+        type='button'
+        size='sm'
+        rounded='full'
+        className='shrink-0 whitespace-nowrap'
+        loading={isReading}
+        disabled={isReading}
+        onClick={() => fileRef.current?.click()}
+      >
+        Choose a file
+      </Button>
+    </div>
+  );
 
   const handleOpenChange = (id: string | null) => {
     setState({ status: 'idle' });
@@ -244,7 +263,7 @@ function RecipeStart({ onRead, onManual }: RecipeStartProps) {
             emoji: '📷',
             title: 'From a photo',
             description: 'A picture, screenshot or PDF',
-            onPick: () => fileRef.current?.click(),
+            panel: photoPanel,
           },
           {
             id: 'link',

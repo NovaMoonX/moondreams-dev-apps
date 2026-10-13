@@ -25,7 +25,7 @@ html.pinch-theme {
   --pinch-drizzle: var(--color-orange-600);
   --pinch-drizzle-fill: var(--color-orange-700);
   --pinch-drizzle-fill-foreground: var(--color-white);
-  --pinch-drizzle-soft: color-mix(in oklch, var(--pinch-drizzle) 11%, var(--color-background));
+  --pinch-drizzle-soft: color-mix(in oklab, var(--pinch-drizzle) 11%, var(--color-background));
 
   --pinch-meal-breakfast: var(--color-amber-400);
   --pinch-meal-lunch: var(--color-lime-500);
@@ -51,7 +51,7 @@ html.pinch-theme.dark {
   --pinch-drizzle: var(--color-orange-400);
   --pinch-drizzle-fill: var(--color-orange-400);
   --pinch-drizzle-fill-foreground: oklch(0.2 0.012 55);
-  --pinch-drizzle-soft: color-mix(in oklch, var(--pinch-drizzle) 16%, var(--color-background));
+  --pinch-drizzle-soft: color-mix(in oklab, var(--pinch-drizzle) 16%, var(--color-background));
 
   --pinch-meal-breakfast: var(--color-amber-300);
   --pinch-meal-lunch: var(--color-lime-400);
@@ -74,6 +74,12 @@ html.pinch-theme
   ),
 html.pinch-theme button[class*='justify-between'][class*='w-full'][class*='border']:not([class*='pl-']) {
   padding-inline: 1rem;
+}
+
+/* A text field beside a select (amount and unit) must be as tall as the select. */
+html.pinch-theme
+  :is(input[type='text'], input[type='number'], input[type='search'], input[type='url'], input:not([type])) {
+  min-height: 2.625rem;
 }
 
 html.pinch-theme button[class*='justify-between'][class*='w-full'][class*='border'][class*='py-1']:not([class*='pl-']) {
@@ -130,19 +136,19 @@ html.pinch-theme input[type='search']::-webkit-search-cancel-button {
 
 /* A meal's soft tint: its colour thinned into the page, for an emoji chip or a calendar pill. */
 html.pinch-theme {
-  --pinch-meal-breakfast-soft: color-mix(in oklch, var(--pinch-meal-breakfast) 38%, var(--color-background));
-  --pinch-meal-lunch-soft: color-mix(in oklch, var(--pinch-meal-lunch) 38%, var(--color-background));
-  --pinch-meal-dinner-soft: color-mix(in oklch, var(--pinch-meal-dinner) 38%, var(--color-background));
-  --pinch-meal-snack-soft: color-mix(in oklch, var(--pinch-meal-snack) 38%, var(--color-background));
-  --pinch-meal-dessert-soft: color-mix(in oklch, var(--pinch-meal-dessert) 38%, var(--color-background));
-  --pinch-meal-drink-soft: color-mix(in oklch, var(--pinch-meal-drink) 38%, var(--color-background));
+  --pinch-meal-breakfast-soft: color-mix(in oklab, var(--pinch-meal-breakfast) 30%, var(--color-background));
+  --pinch-meal-lunch-soft: color-mix(in oklab, var(--pinch-meal-lunch) 30%, var(--color-background));
+  --pinch-meal-dinner-soft: color-mix(in oklab, var(--pinch-meal-dinner) 30%, var(--color-background));
+  --pinch-meal-snack-soft: color-mix(in oklab, var(--pinch-meal-snack) 30%, var(--color-background));
+  --pinch-meal-dessert-soft: color-mix(in oklab, var(--pinch-meal-dessert) 30%, var(--color-background));
+  --pinch-meal-drink-soft: color-mix(in oklab, var(--pinch-meal-drink) 30%, var(--color-background));
 }
 
 html.pinch-theme.dark {
-  --pinch-meal-breakfast-soft: color-mix(in oklch, var(--pinch-meal-breakfast) 36%, var(--color-background));
-  --pinch-meal-lunch-soft: color-mix(in oklch, var(--pinch-meal-lunch) 36%, var(--color-background));
-  --pinch-meal-dinner-soft: color-mix(in oklch, var(--pinch-meal-dinner) 36%, var(--color-background));
-  --pinch-meal-snack-soft: color-mix(in oklch, var(--pinch-meal-snack) 36%, var(--color-background));
-  --pinch-meal-dessert-soft: color-mix(in oklch, var(--pinch-meal-dessert) 36%, var(--color-background));
-  --pinch-meal-drink-soft: color-mix(in oklch, var(--pinch-meal-drink) 36%, var(--color-background));
+  --pinch-meal-breakfast-soft: color-mix(in oklab, var(--pinch-meal-breakfast) 36%, var(--color-background));
+  --pinch-meal-lunch-soft: color-mix(in oklab, var(--pinch-meal-lunch) 36%, var(--color-background));
+  --pinch-meal-dinner-soft: color-mix(in oklab, var(--pinch-meal-dinner) 36%, var(--color-background));
+  --pinch-meal-snack-soft: color-mix(in oklab, var(--pinch-meal-snack) 36%, var(--color-background));
+  --pinch-meal-dessert-soft: color-mix(in oklab, var(--pinch-meal-dessert) 36%, var(--color-background));
+  --pinch-meal-drink-soft: color-mix(in oklab, var(--pinch-meal-drink) 36%, var(--color-background));
 }

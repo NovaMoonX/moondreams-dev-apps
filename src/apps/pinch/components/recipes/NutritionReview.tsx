@@ -6,16 +6,9 @@ import Field from '@/components/forms/Field';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
-import { formatMacro } from '@/utils/macroUtils';
+import { formatMacro, MACRO_EMOJIS } from '@/utils/macroUtils';
 import { NUTRITION_CELLS, NUTRITION_METRICS } from '@apps/pinch/constants';
 import type { NutritionMetric, NutritionValues } from '@apps/pinch/types';
-
-const EMOJIS: Record<NutritionMetric, string> = {
-  calories: '🔥',
-  protein: '💪',
-  carbs: '🌾',
-  fat: '🥑',
-};
 
 const getText = (metric: NutritionMetric, value: number | null) =>
   value === null ? '' : formatMacro(metric, value);
@@ -133,7 +126,7 @@ function NutritionReview({
           {NUTRITION_CELLS.map((cell) => (
             <Field
               key={cell.key}
-              label={`${EMOJIS[cell.key]} ${cell.label}${cell.unit === '' ? '' : ' (g)'}`}
+              label={`${MACRO_EMOJIS[cell.key]} ${cell.label}${cell.unit === '' ? '' : ' (g)'}`}
             >
               {(id) => (
                 <Input

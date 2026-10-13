@@ -1,6 +1,6 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { formatMacro } from '@/utils/macroUtils';
+import { formatMacro, MACRO_EMOJIS } from '@/utils/macroUtils';
 
 export interface MacroValues {
   calories: number | null;
@@ -13,10 +13,20 @@ type MacroKey = keyof MacroValues;
 
 const MACROS: { key: MacroKey; emoji: string; label: string; unit: string }[] =
   [
-    { key: 'calories', emoji: '🔥', label: 'Calories', unit: '' },
-    { key: 'protein', emoji: '💪', label: 'Protein', unit: 'g' },
-    { key: 'carbs', emoji: '🌾', label: 'Carbs', unit: 'g' },
-    { key: 'fat', emoji: '🥑', label: 'Fat', unit: 'g' },
+    {
+      key: 'calories',
+      emoji: MACRO_EMOJIS.calories,
+      label: 'Calories',
+      unit: '',
+    },
+    {
+      key: 'protein',
+      emoji: MACRO_EMOJIS.protein,
+      label: 'Protein',
+      unit: 'g',
+    },
+    { key: 'carbs', emoji: MACRO_EMOJIS.carbs, label: 'Carbs', unit: 'g' },
+    { key: 'fat', emoji: MACRO_EMOJIS.fat, label: 'Fat', unit: 'g' },
   ];
 
 interface MacroStatsProps {
@@ -25,6 +35,8 @@ interface MacroStatsProps {
   show?: Partial<Record<MacroKey, boolean>>;
   /** A line of emoji and numbers for a row or a drawer, or small tiles for a summary. */
   variant?: 'inline' | 'tiles';
+  /** Tiles as one short line each (emoji and number), the caption left to a screen reader, for a summary that has to stay small. */
+  isCompact?: boolean;
   className?: string;
 }
 
@@ -33,6 +45,7 @@ function MacroStats({
   values,
   show,
   variant = 'inline',
+  isCompact = false,
   className,
 }: MacroStatsProps) {
   const shown = MACROS.filter(
@@ -52,12 +65,25 @@ function MacroStats({
         {shown.map((macro) => (
           <li
             key={macro.key}
-            className='bg-secondary flex flex-col items-center rounded-xl px-1 py-2 text-center'
+            className={join(
+              'bg-secondary flex items-center rounded-xl text-center',
+              isCompact
+                ? 'justify-center gap-1 px-1 py-1.5'
+                : 'flex-col px-1 py-2',
+            )}
           >
-            <span aria-hidden='true' className='text-base leading-none'>
+            <span
+              aria-hidden='true'
+              className={isCompact ? 'text-sm' : 'text-base leading-none'}
+            >
               {macro.emoji}
             </span>
-            <span className='mt-1 text-sm font-semibold tabular-nums'>
+            <span
+              className={join(
+                'text-sm font-semibold tabular-nums',
+                !isCompact && 'mt-1',
+              )}
+            >
               {formatMacro(macro.key, values[macro.key] as number)}
               {macro.unit && (
                 <span className='text-muted-foreground text-xs font-normal'>
@@ -65,7 +91,13 @@ function MacroStats({
                 </span>
               )}
             </span>
-            <span className='text-muted-foreground text-[0.6875rem] leading-tight'>
+            <span
+              className={
+                isCompact
+                  ? 'sr-only'
+                  : 'text-muted-foreground text-[0.6875rem] leading-tight'
+              }
+            >
               {macro.label}
             </span>
           </li>

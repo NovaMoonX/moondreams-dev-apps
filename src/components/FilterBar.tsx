@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { SlidersHorizontal, X } from 'lucide-react';
 
@@ -74,13 +75,13 @@ function FilterBar({
     <span className='relative inline-flex shrink-0'>
       <Button
         type='button'
-        variant={hasActive ? 'secondary' : 'outline'}
+        variant='secondary'
         rounded='full'
         aria-label={
           hasActive ? `${filterLabel}, ${activeCount} on` : filterLabel
         }
         aria-expanded={isOpen}
-        className='h-12 w-12 shrink-0 p-0'
+        className={join('h-12 w-12 shrink-0 p-0', hasActive && 'bg-accent!')}
         onClick={() => setIsOpen((open) => !open)}
       >
         <SlidersHorizontal className='h-5 w-5' aria-hidden='true' />
