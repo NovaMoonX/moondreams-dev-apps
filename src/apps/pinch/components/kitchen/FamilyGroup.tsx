@@ -7,6 +7,7 @@ import type { FamilyGroupData } from '@apps/pinch/utils/catalogSearch';
 import type { NutritionBasis } from '@apps/pinch/utils/nutritionBasis';
 
 const ROW_HEIGHT = 57;
+const ROW_HEIGHT_WITH_NUTRITION_LINE = 73;
 const DIVIDER_HEIGHT = 36;
 
 interface FamilyGroupProps {
@@ -26,8 +27,9 @@ function FamilyGroup({
   basis,
   onOpen,
 }: FamilyGroupProps) {
-  const estimatedHeight =
-    DIVIDER_HEIGHT + group.ingredients.length * ROW_HEIGHT;
+  const rowHeight =
+    showPrices && showMacros ? ROW_HEIGHT_WITH_NUTRITION_LINE : ROW_HEIGHT;
+  const estimatedHeight = DIVIDER_HEIGHT + group.ingredients.length * rowHeight;
 
   return (
     <section

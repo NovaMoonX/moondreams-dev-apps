@@ -29,11 +29,13 @@ import {
   selectMeals,
   selectRecipeCosts,
   selectRecipes,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { Gap, RecipesView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
+import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 
 const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
   value,
@@ -42,7 +44,12 @@ const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
 
 const RECIPE_CHUNK = 20;
 const EAGER_RECIPE_CHUNKS = 1;
-const RECIPE_ROW_HEIGHT = 89;
+const COVER_SIZE = 56;
+const ROW_PADDING_AND_RULE = 17;
+/** A row is its title and detail, plus a price line and a macro line when those are shown, and never shorter than its cover. */
+const getRecipeRowHeight = (showPrices: boolean, showMacros: boolean) =>
+  Math.max(COVER_SIZE, 40 + (showPrices ? 16 : 0) + (showMacros ? 22 : 0)) +
+  ROW_PADDING_AND_RULE;
 
 interface RecipesScreenProps {
   uid: string;
@@ -52,6 +59,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const { openSubview } = usePinchOverlay();
   const isPhone = useMediaQuery().isBelow('sm');
   const viewOptions = useListViewOptions(uid, 'recipes');
+  const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
   const recipes = useAppSelector(selectRecipes);
   const costs = useAppSelector(selectRecipeCosts);
   const meals = useAppSelector(selectMeals);
@@ -141,7 +149,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               chunk * RECIPE_CHUNK,
               (chunk + 1) * RECIPE_CHUNK,
             );
-            const estimatedHeight = rows.length * RECIPE_ROW_HEIGHT;
+            const estimatedHeight =
+              rows.length *
+              getRecipeRowHeight(
+                viewOptions.options.showPrices,
+                viewOptions.options.showMacros && isAnyMetricOn,
+              );
             return (
               <div
                 key={`${trimmed}-${chunk}`}

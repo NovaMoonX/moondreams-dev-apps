@@ -35,6 +35,7 @@ import {
   selectIngredientsById,
   selectProducts,
   selectProductsById,
+  selectShowNutrition,
   selectStores,
   selectUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
@@ -43,6 +44,7 @@ import {
   groupByFamily,
   searchIngredients,
 } from '@apps/pinch/utils/catalogSearch';
+import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 
 const EAGER_GROUPS = 3;
 const VIEW_OPTIONS = KITCHEN_VIEWS.map((value) => ({
@@ -116,6 +118,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const usedIds = useAppSelector(selectUsedIngredientIds);
   const { openSubview } = usePinchOverlay();
   const viewOptions = useListViewOptions(uid, 'ingredients');
+  const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
 
   const trimmed = query.trim();
   const yours = useMemo(
@@ -330,7 +333,8 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
             </strong>{' '}
             is what your recipes, meals and plans use that has no product yet.{' '}
             <strong className='text-foreground font-medium'>Has a price</strong>{' '}
-            is anything you have a product for. Both only look through Yours.
+            is anything you have a product for. Both only look through Yours,
+            even when All is picked.
           </p>
         </FilterSection>
         <FilterSection title='Show only'>
@@ -366,7 +370,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
               group={group}
               isEager={index < EAGER_GROUPS}
               showPrices={viewOptions.options.showPrices}
-              showMacros={viewOptions.options.showMacros}
+              showMacros={viewOptions.options.showMacros && isAnyMetricOn}
               basis={viewOptions.options.basis}
               onOpen={(id) => setOverlay({ kind: 'details', id })}
             />
