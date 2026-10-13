@@ -40,8 +40,6 @@ export interface CatalogIngredient {
   serving: { amount: number; unit: Unit };
   gramsPerMl: number | null;
   gramsEach: number | null;
-  /** The vendored icon's file name (without `.svg`), or null for the jar glyph. */
-  iconKey: string | null;
 }
 
 /** The person's own record for an ingredient: a custom one, or a catalog one they adjusted (its id is then the catalog id). */
@@ -53,6 +51,7 @@ export interface IngredientRecord {
   name: string | null;
   /** A catalog family id (`cat-fam-…`) or a `Family` id; null leaves a catalog ingredient where it is, and puts a custom one on its own. */
   familyId: string | null;
+  /** @deprecated Icons were removed from the app. Existing documents may carry a value; new ones write null. */
   iconKey: string | null;
   nutritionPer100g: NutritionValues | null;
   servingAmount: number | null;
@@ -83,7 +82,6 @@ export interface ResolvedIngredient {
   name: string;
   familyId: string | null;
   aliases: string[];
-  iconKey: string | null;
   per100g: NutritionValues;
   serving: { amount: number; unit: Unit };
   gramsPerMl: number | null;

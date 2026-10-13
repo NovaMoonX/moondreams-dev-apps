@@ -34,7 +34,6 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import RecipeAutofill from '@apps/pinch/components/recipes/RecipeAutofill';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
 import ServingStepper from '@apps/pinch/components/plan/ServingStepper';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   DEFAULT_SERVING,
@@ -248,7 +247,6 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
               return (
                 <li key={row.id} className='space-y-2 py-2'>
                   <div className='flex items-center gap-3'>
-                    <IngredientIcon iconKey={null} size={28} />
                     <div className='min-w-0 flex-1'>
                       <p className='truncate font-medium'>{displayName}</p>
                       <p className='text-muted-foreground text-xs'>
@@ -339,10 +337,6 @@ function IngredientRows({ uid, rows, onChange }: IngredientRowsProps) {
                     }
                     className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
                   >
-                    <IngredientIcon
-                      iconKey={ingredient?.iconKey ?? null}
-                      size={28}
-                    />
                     <span className='min-w-0 flex-1'>
                       <span className='block truncate font-medium'>
                         {displayName}

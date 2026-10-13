@@ -11,7 +11,6 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
 import { setDefaultProduct } from '@apps/pinch/store/actions/productActions';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import { NUTRITION_CELLS, UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectDefaultProducts,
@@ -80,7 +79,6 @@ function IngredientDrawer({
     >
       <div className='space-y-5'>
         <div className='flex items-center gap-3'>
-          <IngredientIcon iconKey={ingredient.iconKey} size={48} />
           <div className='min-w-0'>
             {family && (
               <p className='text-muted-foreground text-sm'>{family.name}</p>

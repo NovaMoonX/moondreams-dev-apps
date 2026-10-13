@@ -14,7 +14,6 @@ import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
 import ServingStepper from '@apps/pinch/components/plan/ServingStepper';
-import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   MAX_MEAL_ITEMS,
   MAX_NAME_LENGTH,
@@ -406,16 +405,6 @@ function MealBuilder({
               return (
                 <li key={item.id} className='space-y-1 py-2'>
                   <div className='flex items-start gap-3'>
-                    <span className='flex h-10 shrink-0 items-center'>
-                      <ItemIcon
-                        kind={item.kind}
-                        iconKey={
-                          item.kind === 'INGREDIENT'
-                            ? (ingredientsById.get(item.refId)?.iconKey ?? null)
-                            : null
-                        }
-                      />
-                    </span>
                     <span className='min-w-0 flex-1 pt-2 font-medium wrap-break-word'>
                       {title}
                     </span>

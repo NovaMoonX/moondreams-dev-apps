@@ -2,14 +2,12 @@ import { useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft, ClipboardCopy } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 
-import CopyPanel from '@/components/CopyPanel';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   MAX_NAME_LENGTH,
   MEAL_TYPE_EMOJIS,
@@ -27,7 +25,6 @@ import {
 import type { Gap, MealType } from '@apps/pinch/types';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
-import { mealMarkdown } from '@apps/pinch/utils/markdown/dayMarkdown';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
@@ -66,7 +63,6 @@ function PlannedMealView({
   const [isNaming, setIsNaming] = useState(false);
   const [mealName, setMealName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isCopying, setIsCopying] = useState(false);
 
   if (!meal) {
     return null;
@@ -118,20 +114,6 @@ function PlannedMealView({
       setError(getErrorMessage(removeError, 'Unable to remove this meal.'));
     }
   };
-
-  if (isCopying) {
-    return (
-      <CopyPanel
-        text={mealMarkdown(
-          `${MEAL_TYPE_LABELS[meal.mealType]} · ${formatDayTitle(getPlannedDayKey(meal.date))}`,
-          meal.items,
-          { recipesById, ingredientsById },
-        )}
-        note='The plate, with each recipe’s ingredients. No prices or stores.'
-        onBack={() => setIsCopying(false)}
-      />
-    );
-  }
 
   if (isNaming) {
     return (
@@ -196,14 +178,6 @@ function PlannedMealView({
           const itemCost = cost.items.get(item.id);
           return (
             <li key={item.id} className='flex items-start gap-3 py-2.5'>
-              <ItemIcon
-                kind={item.kind}
-                iconKey={
-                  item.kind === 'INGREDIENT'
-                    ? (ingredientsById.get(item.refId)?.iconKey ?? null)
-                    : null
-                }
-              />
               <span className='min-w-0 flex-1'>
                 <span className='block'>
                   {getItemTitle(item, recipesById, ingredientsById)}
@@ -270,15 +244,6 @@ function PlannedMealView({
         onClick={() => setIsNaming(true)}
       >
         Save as a meal
-      </Button>
-      <Button
-        type='button'
-        variant='secondary'
-        className='h-11 w-full gap-2'
-        onClick={() => setIsCopying(true)}
-      >
-        <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
-        Copy for a chat
       </Button>
       <Button
         type='button'

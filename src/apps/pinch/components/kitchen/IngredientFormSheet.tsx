@@ -8,7 +8,7 @@ import {
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Gauge, Scale, Smile } from 'lucide-react';
+import { Gauge, Scale } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
 import AddFieldChips, {
@@ -18,8 +18,6 @@ import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAppDispatch, useAppSelector } from '@/store';
-import IconPicker from '@apps/pinch/components/kitchen/IconPicker';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import { MAX_NAME_LENGTH, MAX_SERVING_AMOUNT } from '@apps/pinch/constants';
 import {
@@ -54,7 +52,6 @@ interface NutritionText {
 interface Extras {
   nutrition: Reveal<NutritionText>;
   serving: Reveal<{ amount: string; unit: Unit }>;
-  icon: Reveal<string | null>;
 }
 
 interface FormData {
@@ -107,21 +104,16 @@ const getInitialData = (
           unit: ingredient?.serving.unit ?? 'G',
         },
       },
-      icon: {
-        enabled: ingredient?.iconKey != null && ingredient.isCustom,
-        value: ingredient?.iconKey ?? null,
-      },
     },
   };
 };
 
 interface ExtrasFieldsProps {
   extras: Extras;
-  isCatalog: boolean;
   onChange: (extras: Extras) => void;
 }
 
-function ExtrasFields({ extras, isCatalog, onChange }: ExtrasFieldsProps) {
+function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
   const chips = [
     {
       key: 'nutrition',
@@ -133,9 +125,6 @@ function ExtrasFields({ extras, isCatalog, onChange }: ExtrasFieldsProps) {
       label: 'Serving size',
       icon: <Scale className='h-4 w-4' />,
     },
-    ...(isCatalog
-      ? []
-      : [{ key: 'icon', label: 'Icon', icon: <Smile className='h-4 w-4' /> }]),
   ].filter((chip) => !extras[chip.key as keyof Extras].enabled);
 
   const reveal = (key: string) =>
@@ -237,20 +226,6 @@ function ExtrasFields({ extras, isCatalog, onChange }: ExtrasFieldsProps) {
           </div>
         </RemovableField>
       )}
-      {extras.icon.enabled && (
-        <RemovableField
-          label='Icon'
-          removeLabel='Remove icon'
-          onRemove={() => remove('icon', { enabled: false, value: null })}
-        >
-          <IconPicker
-            value={extras.icon.value}
-            onChange={(iconKey) =>
-              onChange({ ...extras, icon: { enabled: true, value: iconKey } })
-            }
-          />
-        </RemovableField>
-      )}
       <AddFieldChips chips={chips} onAdd={reveal} />
     </div>
   );
@@ -349,7 +324,6 @@ function IngredientFormSheet({
         renderComponent: (props) => (
           <ExtrasFields
             extras={props.value as Extras}
-            isCatalog={isCatalog}
             onChange={props.onValueChange}
           />
         ),
@@ -382,7 +356,7 @@ function IngredientFormSheet({
           ? 'Remove ingredient'
           : 'Delete ingredient',
       message: isCatalog
-        ? `Put ${ingredient.name} back to its built-in nutrition, serving size and icon? Your changes to it are removed.`
+        ? `Put ${ingredient.name} back to its built-in nutrition and serving size? Your changes to it are removed.`
         : usage !== null && isUsed
           ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers, but you can't bring it back to your lists.`
           : `Delete "${ingredient.name}"? This action cannot be undone.`,
@@ -448,7 +422,6 @@ function IngredientFormSheet({
                 : data.family.choice,
             newFamilyName:
               data.family.choice === NEW_CHOICE ? data.family.newText : null,
-            iconKey: data.extras.icon.enabled ? data.extras.icon.value : null,
             nutrition,
             servingAmount: isServingOn
               ? parseAmount(data.extras.serving.value.amount)
@@ -468,7 +441,6 @@ function IngredientFormSheet({
     <FormSheet isOpen onClose={onClose} title='Ingredient'>
       {isCatalog && (
         <div className='mb-4 flex items-center gap-3'>
-          <IngredientIcon iconKey={ingredient.iconKey} size={40} />
           <div className='min-w-0'>
             <p className='truncate font-medium'>{ingredient.name}</p>
             <p className='text-muted-foreground text-sm'>

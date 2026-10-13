@@ -9,7 +9,6 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { parseMoneyToCents } from '@/utils/moneyUtils';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   MAX_PRICE_CENTS,
@@ -175,7 +174,6 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
               name: ingredient.name,
               familyId: ingredient.familyId,
               newFamilyName: null,
-              iconKey: ingredient.iconKey,
               nutrition: {
                 ...ingredient.per100g,
                 ...Object.fromEntries(
@@ -208,7 +206,6 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
     >
       <div className='grid gap-4'>
         <div className='flex items-center gap-3'>
-          <IngredientIcon iconKey={ingredient?.iconKey ?? null} size={32} />
           <p className='min-w-0 flex-1 truncate text-lg font-medium'>{name}</p>
           {rows.length > 1 && (
             <span className='text-muted-foreground text-sm whitespace-nowrap'>

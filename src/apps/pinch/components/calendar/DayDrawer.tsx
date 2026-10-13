@@ -1,14 +1,11 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ClipboardCopy } from 'lucide-react';
 
-import CopyPanel from '@/components/CopyPanel';
 import DetailSheet from '@/components/DetailSheet';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
@@ -23,10 +20,6 @@ import {
 import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
 import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
-import {
-  dayMarkdown,
-  weekMarkdown,
-} from '@apps/pinch/utils/markdown/dayMarkdown';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import {
   combineMealCosts,
@@ -60,7 +53,6 @@ function DayDrawer({
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [pickedMealId, setPickedMealId] = useState<string | null>(null);
-  const [copying, setCopying] = useState<'day' | 'week' | null>(null);
   const plannedMealId = meals.some((meal) => meal.id === pickedMealId)
     ? pickedMealId
     : null;
@@ -80,8 +72,7 @@ function DayDrawer({
       onClose={onClose}
       title={formatDayTitle(dayKey)}
       footer={
-        plannedMealId === null &&
-        copying === null && (
+        plannedMealId === null && (
           <div className='px-4 pb-4'>
             <Button
               type='button'
@@ -94,24 +85,7 @@ function DayDrawer({
         )
       }
     >
-      {copying !== null ? (
-        <CopyPanel
-          text={
-            copying === 'day'
-              ? dayMarkdown(dayKey, meals, { recipesById, ingredientsById })
-              : weekMarkdown(dayKey, mealsByDay, {
-                  recipesById,
-                  ingredientsById,
-                })
-          }
-          note={
-            copying === 'day'
-              ? 'Each meal with its items and the recipes’ ingredients. No prices or stores.'
-              : 'Monday to Sunday, each day in the same shape. No prices or stores.'
-          }
-          onBack={() => setCopying(null)}
-        />
-      ) : plannedMealId !== null ? (
+      {plannedMealId !== null ? (
         <PlannedMealView
           uid={uid}
           plannedMealId={plannedMealId}
@@ -177,16 +151,6 @@ function DayDrawer({
                                     key={item.id}
                                     className='flex items-center gap-3 py-1.5'
                                   >
-                                    <ItemIcon
-                                      kind={item.kind}
-                                      iconKey={
-                                        item.kind === 'INGREDIENT'
-                                          ? (ingredientsById.get(item.refId)
-                                              ?.iconKey ?? null)
-                                          : null
-                                      }
-                                      size={24}
-                                    />
                                     <span className='min-w-0 flex-1'>
                                       <span className='text-foreground block truncate'>
                                         {getItemTitle(
@@ -216,28 +180,6 @@ function DayDrawer({
                 );
               })}
             </>
-          )}
-          {meals.length > 0 && (
-            <div className='bg-muted/50 rounded-2xl p-1'>
-              <Button
-                type='button'
-                variant='tertiary'
-                className='h-11 w-full gap-2'
-                onClick={() => setCopying('day')}
-              >
-                <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
-                Copy this day
-              </Button>
-              <Button
-                type='button'
-                variant='tertiary'
-                className='h-11 w-full gap-2'
-                onClick={() => setCopying('week')}
-              >
-                <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
-                Copy this week
-              </Button>
-            </div>
           )}
         </div>
       )}

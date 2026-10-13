@@ -2,7 +2,6 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import {
   selectDefaultProducts,
@@ -42,7 +41,6 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
       onClick={() => onOpen(ingredient.id)}
       className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-2 text-left'
     >
-      <IngredientIcon iconKey={ingredient.iconKey} size={32} />
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block truncate font-medium'>
           {ingredient.name}

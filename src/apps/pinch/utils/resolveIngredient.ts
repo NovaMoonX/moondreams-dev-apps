@@ -29,7 +29,6 @@ const mergeNutrition = (
 const hasAdjustments = (record: IngredientRecord) =>
   record.name != null ||
   record.familyId != null ||
-  record.iconKey != null ||
   record.nutritionPer100g != null ||
   record.servingAmount != null ||
   record.gramsPerMl != null ||
@@ -49,7 +48,6 @@ export function resolveCatalogIngredient(
     name: record?.name ?? catalog.name,
     familyId: record?.familyId ?? catalog.familyId,
     aliases: catalog.aliases,
-    iconKey: record?.iconKey ?? catalog.iconKey,
     per100g: mergeNutrition(record?.nutritionPer100g ?? null, catalog.per100g),
     serving: hasServing
       ? {
@@ -75,7 +73,6 @@ export function resolveCustomIngredient(
     name: record.name ?? 'Unnamed ingredient',
     familyId: record.familyId,
     aliases: [],
-    iconKey: record.iconKey,
     per100g: mergeNutrition(record.nutritionPer100g, NO_NUTRITION),
     serving: hasServing
       ? {

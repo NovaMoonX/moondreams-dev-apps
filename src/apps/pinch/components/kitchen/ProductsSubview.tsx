@@ -10,7 +10,6 @@ import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import { LIST_SEARCH_THRESHOLD } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
@@ -129,13 +128,6 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
                       onClick={() => setEditingId(product.id)}
                       className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-2 text-left'
                     >
-                      <IngredientIcon
-                        iconKey={
-                          ingredientsById.get(product.ingredientId)?.iconKey ??
-                          null
-                        }
-                        size={32}
-                      />
                       <span className='min-w-0 flex-1'>
                         <span className='block truncate font-medium'>
                           {name}

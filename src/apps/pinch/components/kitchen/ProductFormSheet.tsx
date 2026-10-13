@@ -23,7 +23,6 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   MAX_NAME_LENGTH,
@@ -358,7 +357,6 @@ function ProductFormSheet({
   return (
     <FormSheet isOpen onClose={onClose} title='Product'>
       <div className='mb-4 flex items-center gap-3'>
-        <IngredientIcon iconKey={ingredient.iconKey} size={36} />
         <div className='min-w-0'>
           <p className='text-muted-foreground text-xs'>For</p>
           <p className='truncate font-medium'>{ingredient.name}</p>

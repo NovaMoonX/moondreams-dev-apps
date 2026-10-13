@@ -6,7 +6,6 @@ import { Plus } from 'lucide-react';
 import SearchInput from '@/components/SearchInput';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
 import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
 import { selectIngredients, selectRecipes } from '@apps/pinch/store/selectors';
@@ -82,7 +81,6 @@ function ItemSearch({
             name: trimmed,
             familyId: null,
             newFamilyName: null,
-            iconKey: null,
             nutrition: null,
             servingAmount: null,
             servingUnit: null,
@@ -158,7 +156,6 @@ function ItemSearch({
                 }}
                 className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
               >
-                <IngredientIcon iconKey={ingredient.iconKey} size={28} />
                 <span className='min-w-0 flex-1 truncate font-medium'>
                   {ingredient.name}
                 </span>

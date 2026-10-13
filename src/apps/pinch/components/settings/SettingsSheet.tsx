@@ -74,10 +74,6 @@ function SettingsSheet({ uid, onClose }: SettingsSheetProps) {
           </h3>
           <ul className='text-muted-foreground space-y-2 text-sm'>
             <li>
-              Ingredient icons are Twemoji, © Twitter, Inc. and other
-              contributors, used under CC-BY 4.0.
-            </li>
-            <li>
               The built-in nutrition values are approximate, based on USDA
               FoodData Central.
             </li>
