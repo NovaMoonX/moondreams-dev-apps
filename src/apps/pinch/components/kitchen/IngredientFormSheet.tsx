@@ -147,7 +147,7 @@ const getPer100g = (
 
 const getBasisLabel = (extras: Extras, servingGrams: number | null) => {
   const { basis } = extras.nutrition.value;
-  const amount = basis.amount.trim() || '?';
+  const amount = basis.amount.trim() || '…';
   if (basis.unit !== 'SERVING') {
     return `${amount} ${basis.unit === 'G' ? 'g' : 'oz'}`;
   }
@@ -245,6 +245,14 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
       : 'To type it per serving, set the serving size in grams or ounces first.';
   };
   const servingHint = getServingHint();
+  const getProblem = () => {
+    if (!isPositive(parseAmount(basis.amount), MAX_SERVING_AMOUNT))
+      return 'Add the amount these numbers are for.';
+    return per100g && !Object.values(per100g).every(isMetric)
+      ? 'Check the numbers: each one is 0 to 100,000 per 100 g.'
+      : null;
+  };
+  const problem = getProblem();
 
   return (
     <div className='space-y-4'>
@@ -371,9 +379,8 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
             <div className='grid grid-cols-2 gap-3'>
               {NUTRITION_FIELDS.map((field) => (
                 <Field key={field.key} label={field.label} isCompact>
-                  {(id) => (
+                  {() => (
                     <Input
-                      id={id}
                       type='number'
                       inputMode='decimal'
                       min={0}
@@ -394,7 +401,8 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
                 </Field>
               ))}
             </div>
-            {!isPer100g && per100g && (
+            {problem && <p className='text-destructive text-xs'>{problem}</p>}
+            {!problem && !isPer100g && per100g && (
               <p className='text-muted-foreground text-xs'>
                 Saved as per 100 g: <MacroStats values={per100g} />
               </p>

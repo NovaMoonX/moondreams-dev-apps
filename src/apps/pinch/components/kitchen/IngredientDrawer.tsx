@@ -107,20 +107,17 @@ function IngredientDrawer({
       }
     >
       <div className='space-y-5'>
-        <ul className='flex flex-wrap gap-2'>
+        <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
           {[
             family?.name,
             ingredient.isCustom && 'One you added',
             ingredient.isAdjusted && 'Adjusted by you',
             `1 serving = ${servingText}`,
           ]
-            .filter((chip): chip is string => typeof chip === 'string')
-            .map((chip) => (
-              <li
-                key={chip}
-                className='bg-accent text-accent-foreground rounded-full px-3 py-1.5 text-sm font-medium'
-              >
-                {chip}
+            .filter((fact): fact is string => typeof fact === 'string')
+            .map((fact) => (
+              <li key={fact} className='whitespace-nowrap'>
+                {fact}
               </li>
             ))}
         </ul>
