@@ -11,8 +11,9 @@
 | The counter, not a form | Pinch asks for a name and little else. A price, a package size or a nutrition value is invited by a quiet line exactly where it changes a number, and always optional |
 | Drawers for looking and quick edits, subviews for building | an ingredient, a day, a planned meal and a recipe's detail open in `DetailSheet` drawers; a recipe, a meal and the stores and products lists are page-sized and open as `Subview`s; short forms (ingredient, product, store, settings) are `FormSheet`s |
 | Never overlay on overlay | whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a drawer whose action opens a form or another container closes first. Only a destructive confirm may sit on top |
-| Numbers explain themselves | a cost with gaps carries a warning icon (`HelpTip variant='warning'`) that says what the total leaves out; a stat that isn't self-evident carries a `HelpTip`; past days are labelled as frozen |
-| Nothing leaves without saying what | an AI reads what the person hands it (pasted text, a photo or PDF, or a recipe page's data and text) and says so, and that nothing is saved; a link goes to our server, which fetches the page, and nothing else leaves the app |
+| Numbers explain themselves | a cost with gaps carries a warning icon (`HelpTip variant='warning'`) that says what the total leaves out, as a small modal on a phone and a tooltip from `sm`; a stat that isn't self-evident carries a `HelpTip`; past days are labelled as frozen |
+| Rows show what you choose | an eye button on Kitchen and Recipes hides prices or calories and macros on the rows and picks the nutrition basis of ingredient rows; it is remembered on the device, and no total or drawer changes |
+| Nothing leaves without saying what | an AI reads what the person hands it (pasted text, a photo, screenshot or PDF, or a recipe page's text and recipe data) and says so, and nothing is saved until the person saves the form; a link goes to our server, which fetches the page, and nothing else leaves the app |
 | Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Drawer`, `Popover`, `Tabs`, `Badge` — custom only where the catalog has nothing: the day cell and the store logo tile |
 | Honest AI | an AI reads a pasted recipe, photo, PDF or web link and fills the real form; it names what it couldn't read; nothing is saved until the person confirms |
 
@@ -56,8 +57,13 @@ flowchart TD
     PMD --> SAV["Save as a meal · swaps in place"]
     PMD --> RM["Remove confirm"]
     R --> RL["Recipes list · pills: Recipes / Meals"]
-    RL -->|+ New| RS["Start picker · text, photo, link or write it yourself"]
-    RS --> RF["Recipe subview · the reading fills the form"]
+    RL -->|+ New| RS["Ways to start · a drawer on a phone, the subview's first page from sm · text, file, link or write it yourself"]
+    D -->|Add a recipe| RS
+    RS -->|text, file or link| RR["Reading screen · its own view, one way at a time"]
+    RR -->|the reading fills the form| RF["Recipe subview · the form"]
+    RR -->|Write it yourself instead| RF
+    RS -->|write it yourself| RF
+    RL -->|eye button| VO["View options · hide prices or calories and macros on rows"]
     RL -->|tap a recipe| RD["Recipe drawer · cost, nutrition, ingredients, steps"]
     RD -->|Modify| RF
     RD -->|Add to calendar| PM
@@ -66,8 +72,9 @@ flowchart TD
     ML -->|tap a meal| MD["Meal drawer"]
     MD -->|Plan it| PM
     K --> KL["Ingredients list · Yours / All · search and filters"]
-    KL -->|+ New| IF["Ingredient form sheet"]
-    KL -->|tap an ingredient| ID["Ingredient drawer · nutrition, products, used in"]
+    KL -->|eye button| VO
+    KL -->|+ New| IF["Ingredient form sheet · nutrition typed as the label prints it"]
+    KL -->|tap an ingredient| ID["Ingredient drawer · nutrition per serving or per 100 g, products"]
     ID -->|Add a product| PF["Product form sheet · store picker"]
     KL --> ST["Stores subview"]
     ST -->|+ Add| SF["Store form sheet · pick from the list or add your own"]
@@ -118,7 +125,7 @@ block-beta
   style F5 fill:transparent,stroke:#888888,stroke-width:1px;
   style F6 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Two nudges and nothing else: no setup modal, no required choices. Nutrition stays off until the person turns it on in settings; the stats row's help link ("Want calories or protein here?") opens the same settings sheet.*
+*Two nudges and nothing else: no setup modal, no required choices. "Add a recipe" opens the same list of ways to start as the Recipes tab's New (a drawer on a phone, the recipe subview's first page from `sm`). Nutrition stays off until the person turns it on in settings; the stats row's help link ("Want calories or protein here?") opens the same settings sheet.*
 
 **Calendar** (home tab)
 
@@ -342,28 +349,43 @@ block-beta
   columns 2
   R1["Recipes"]:1
   R2["+ New"]:1
-  R3["[ Recipes ]   Meals"]:2
+  R3["[ Recipes ]   Meals   👁"]:2
   R4["🔍 Search (from 8 recipes)"]:2
-  R5["🖼️ Adobo chicken"]:1
-  R6["$3.20 / serving"]:1
-  R7["4 servings · 45 min · 🔥 520 (when on)"]:2
-  R8["🖼️ Cilantro lime rice"]:1
-  R9["$1.35 / serving"]:1
-  R10["4 servings · 25 min"]:2
+  R5["🖼️ Adobo chicken<br/>4 servings · 45 min<br/>$3.20 / serving<br/>🔥 520 · 💪 38g (when on)"]:2
+  R6["🖼️ Cilantro lime rice<br/>4 servings · 25 min<br/>$1.35 / serving · leaves out 1"]:2
   style R1 fill:transparent,stroke:#888888,stroke-width:1px;
   style R2 fill:transparent,stroke:#888888,stroke-width:1px;
   style R3 fill:transparent,stroke:#888888,stroke-width:1px;
   style R4 fill:transparent,stroke:#888888,stroke-width:1px;
   style R5 fill:transparent,stroke:#888888,stroke-width:1px;
   style R6 fill:transparent,stroke:#888888,stroke-width:1px;
-  style R7 fill:transparent,stroke:#888888,stroke-width:1px;
-  style R8 fill:transparent,stroke:#888888,stroke-width:1px;
-  style R9 fill:transparent,stroke:#888888,stroke-width:1px;
-  style R10 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Two thin pills switch between Recipes and Meals (saved meals). A recipe row shows its cover (or a tinted emoji tile), title, cost per serving, and a muted line of servings and time, with calories and macros per serving, as emoji figures, when they are on. A recipe with an unpriced ingredient shows the cost it can stand behind with a small warning icon beside it that says what it leaves out. A meal row shows its items as a comma line and the total.*
+*Two thin pills switch between Recipes and Meals (saved meals), with the View options eye button at the end of that row. A recipe row shows its cover (or a tinted emoji tile), its title, a muted line of servings and time, then a cost per serving line and calories and macros per serving as emoji figures, the last two only while shown (View options) and, for macros, switched on. A recipe with an unpriced ingredient shows the cost it can stand behind and says "leaves out 1" in the same line; one with no price at all says "No price yet". A meal row shows its item count, total (the same "leaves out" or "No price yet" wording), macros when shown, and its items as a comma line. In every row the cover or tile and the text share a top edge, and the chevron sits on the first line.*
 
-**New recipe — how to start** (subview; a new recipe opens here, editing one skips it)
+**View options** (the eye button: a drawer on a phone, a popover from `sm`; Kitchen's ingredient list has the same one)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  V1["View options"]:2
+  V2["Show prices"]:1
+  V3["◉ on"]:1
+  V4["Show calories and macros"]:1
+  V5["◉ on"]:1
+  V6["Nutrition numbers (Kitchen only)<br/>Per serving   [ Per 100 g ]"]:2
+  V7["Reset  ·  Done"]:2
+  style V1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style V2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style V3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style V4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style V5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style V6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style V7 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*The switches are `AppToggle`s and take effect at once: "Show prices" hides the cost on recipe and meal rows and the store, price and size line on ingredient rows, and "Show calories and macros" hides the emoji figures. "Show calories and macros" is disabled, with "Switch some on in Settings first, and they show here." under it, while no metric is on in Settings; the "Nutrition numbers" pills (Per serving / Per 100 g, for ingredient rows only) appear only when one is. Defaults are prices on, macros on and per 100 g. Once a choice differs from its default the eye button takes a soft tint and "Reset" appears (in the phone drawer's footer beside Done, at the bottom of the popover). Each list's choice is remembered for this person on this device (`pinch:{uid}:view:{recipes|ingredients}`; Recipes and Meals share one), so it is not on another device. A hidden line is simply not drawn: a total, a drawer and a fill-in sheet are the same with or without it.*
+
+**New recipe — how to start** (a drawer on a phone, the recipe subview's first page from `sm`; editing a recipe skips it)
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
@@ -371,7 +393,7 @@ block-beta
   columns 1
   S1["‹ New recipe"]
   S2["📝 From text · Paste a recipe, say from a chat"]
-  S3["📷 From a photo · A picture, screenshot or PDF"]
+  S3["📎 From a file · A photo, screenshot or PDF"]
   S4["🔗 From a link · A recipe page on the web"]
   S5["✍️ Write it yourself · Start with a blank recipe"]
   style S1 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -380,12 +402,30 @@ block-beta
   style S4 fill:transparent,stroke:#888888,stroke-width:1px;
   style S5 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Four ways in, in this order, with writing it yourself last and quieter (dashed). Text and link open their input in place under the row, one at a time; the photo way opens its own line ("An AI reads the picture and fills in the form. It isn’t saved.") and a "Choose a file" button first. Each AI reading fills the real form and says so ("Filled in from {source}. Take a look before you save." plus "We couldn't read: …"); nothing is saved until the form is. Link reading opens the page on our server (never the person's device) and sends its recipe data and text to the reader. The header names the recipe as it is typed ("New recipe" until then).*
+*Four ways in, in this order, with writing it yourself last and quieter (dashed), under "Start from something you already have, or write it yourself. You'll look it over before anything is saved." The list is rows only: picking one only picks. On a phone, the Recipes tab's New and the Calendar's "Add a recipe" open it in a drawer titled "New recipe"; picking a way closes the drawer and opens the recipe subview already on that way's screen. From `sm` up it is the subview's first page, with the header's back button closing the subview. Each way finishes on its own screen, never revealed under the list (below), and the header names it ("From text", "From a file", "From a link"). Back returns to the list when the subview opened on it, and leaves the subview when the way was picked in the phone drawer. Each AI reading fills the real form and says so ("Filled in from {your text, the file's name or the page's website}. Take a look before you save." plus "We couldn't read: …"); nothing is saved until the form is. Link reading opens the page on our server (never the person's device) and sends its text and any recipe data to the reader. The form's header names the recipe as it is typed ("New recipe" until then).*
+
+**From a file** (one of the three reading screens; the text and link screens have the same shape)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 1
+  W1["‹ From a file"]
+  W2["An AI reads the file and fills in the form. It isn't saved."]
+  W3["📎 A photo, screenshot or PDF, up to 10 MB<br/>Choose a file · or drop it here (hint hidden on a phone)"]
+  W4["Write it yourself instead"]
+  style W1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style W2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style W3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style W4 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*Each screen has one plain line saying what will happen (above the file box, under the paste box and the address field) before anything is sent, and always ends with a link to "Write it yourself instead" (disabled while a reading runs). **From text** is a paste box (up to 20,000 characters) under "An AI reads it and fills in the form. It isn't saved." and a "Read it" button. **From a link** is an address field, "We open the page and an AI reads the recipe from it.", and "Read it" (Enter reads it too); an address with no `https://` gets one. **From a file** takes a photo, screenshot or PDF by "Choose a file", or dropped on the box (the "or drop it here" hint is hidden on a phone).*
 
 | Reading state | What you see |
 |---|---|
-| reading | "Reading {source}…" with the rows disabled |
-| failed | one warm sentence under the rows ("We couldn't open that link. Try again, or paste the recipe's text instead."), details logged, never the service's message |
+| reading | "Reading {your text, the file's name or the page's website}…" under the input, with the button busy |
+| failed | one warm sentence under the input ("We couldn't open that link. Check the address, or paste the recipe's text instead."), details logged, never the service's message |
+| not a link | "That doesn't look like a web link. Check it and try again." before anything is sent |
 | too big | "That file is too big to read. Try a photo or a PDF under 10 MB." |
 | no recipe found | "We couldn't find a recipe in that. Try a clearer photo or paste the text." |
 
@@ -432,7 +472,7 @@ block-beta
   style E17 fill:transparent,stroke:#888888,stroke-width:1px;
   style E18 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A recipe needs a title and at least one ingredient. Everything a recipe normally has is part of the flow, not a button at the bottom: servings and times, a photo, a description, the ingredients, the steps and the nutrition. Ingredients and steps are one-line summaries; the one being edited is the only one open. On a phone adding an ingredient and editing its details happen in a drawer that never leaves the form (search, then amount, unit and a note, then "Add another" or Done, and "Remove from this recipe" for an existing one); from `sm` up a row opens its fields in place. A name the reader found that no ingredient matches arrives as "Add as new ingredient" / "Choose another". Nutrition shows what we added up from the ingredients as small emoji tiles, per serving, with a warning icon when some ingredients have no nutrition info; Edit turns the four tiles into inputs holding those numbers, any number changed becomes the person's own and "Reset to what we calculated" brings back the calculated ones. This is a page-sized form, so it is a Subview; the drawer on top of it is the one allowed exception to "no overlay on a subview" because it is the form's own row editor, one level deep.*
+*A recipe needs a title and at least one ingredient. Everything a recipe normally has is part of the flow, not a button at the bottom: servings and times, a photo, a description, the ingredients, the steps and the nutrition. Ingredients and steps are one-line summaries; the one being edited is the only one open. On a phone each row editor is a drawer that never leaves the form: an ingredient (search, then amount, unit and a note, then "Add another" or Done, and "Remove from this recipe" for an existing one), a step (one text box titled "Step 3", Done, "Add another" only while adding, "Remove step" for an existing one, and a step left blank is dropped when the drawer closes) and the nutrition numbers (four compact fields, Done, and "Reset to what we calculated", which refills the fields and keeps the drawer open). From `sm` up a row opens its fields in place. A name the reader found that no ingredient matches arrives as "Add as new ingredient" / "Choose another". Nutrition shows what we added up from the ingredients as small emoji tiles, per serving, with a warning icon when some ingredients have no nutrition info (a small modal on a phone, a tooltip from `sm`); Edit opens the four numbers (the drawer on a phone, inputs in place with Done from `sm`), any number changed becomes the person's own and "Reset to what we calculated" brings back the calculated ones. This is a page-sized form, so it is a Subview; the drawers on top of it are the allowed exception to "no overlay on a subview" because they are the form's own row editors, one level deep.*
 
 **Recipe details** (drawer — tap a recipe in the list)
 
@@ -441,8 +481,7 @@ block-beta
 block-beta
   columns 2
   T1["Adobo chicken"]:2
-  T2["🍽️ 4 servings"]:1
-  T3["🔪 Prep 10 min · ⏲️ Cook 35 min"]:1
+  T2["🍽️ 4 servings · 🔪 Prep 10 min · ⏲️ Cook 35 min"]:2
   T4["Cost $12.80 ⚠ · $3.20 per serving"]:2
   T5["🔥 495 · 💪 61g · 🌾 3g · 🥑 25g (when on)"]:2
   T6["2 ingredients need a price · Add prices   ✕"]:2
@@ -455,7 +494,6 @@ block-beta
   T13["Add to calendar"]:1
   style T1 fill:transparent,stroke:#888888,stroke-width:1px;
   style T2 fill:transparent,stroke:#888888,stroke-width:1px;
-  style T3 fill:transparent,stroke:#888888,stroke-width:1px;
   style T4 fill:transparent,stroke:#888888,stroke-width:1px;
   style T5 fill:transparent,stroke:#888888,stroke-width:1px;
   style T6 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -467,7 +505,7 @@ block-beta
   style T12 fill:transparent,stroke:#888888,stroke-width:1px;
   style T13 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The front matter is built to be seen: soft peach chips for servings and times, a Cost tile whose warning icon says what the total leaves out (it opens like the help icon), calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm.*
+*The front matter is one plain line of emoji and text for servings and times (never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone, a tooltip from `sm`), calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm.*
 
 **Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with a Cost tile (warning icon when it leaves something out), the plate's calories and macros as emoji tiles when on, the items with servings and cost, and in the footer Modify beside the one primary "Plan it", which closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. The builder's header carries the meal's name (or the plate's first item while planning), its rows are a title with a compact servings stepper beneath (40px hit areas from a pseudo-element), and a tinted summary shows the cost, its warning icon and the plate's emoji macros. Adding stays the search field in the form.
 
@@ -482,33 +520,29 @@ block-beta
   K3["🛒 Products  ·  14"]:1
   K4["INGREDIENTS  42"]:1
   K5["+ New"]:1
-  K6["[ Yours ]   All   🔍 Search   ⧩ 2"]:2
+  K6["🔍 Search   ⧩ 2   👁"]:2
+  K6b["[ Yours ]   All"]:2
   K7["Price: Needs a price  ✕   Clear"]:2
   K8["— Chicken —"]:2
-  K9["Chicken breast"]:1
-  K10["Walmart · $9.48 / 3 lb"]:1
-  K11["Chicken thighs"]:1
-  K12["No product yet"]:1
+  K9["Chicken breast<br/>Walmart · $9.48 / 3 lb<br/>🔥 165 · 💪 31g per 100 g"]:2
+  K11["Chicken thighs<br/>No price yet<br/>🔥 209 · 💪 26g per 100 g"]:2
   K13["— Rice —"]:2
-  K14["Jasmine rice"]:1
-  K15["Costco · $14.99 / 20 lb"]:1
+  K14["Jasmine rice<br/>Costco · $14.99 / 20 lb<br/>🔥 360 · 💪 7g per 100 g"]:2
   style K1 fill:transparent,stroke:#888888,stroke-width:1px;
   style K2 fill:transparent,stroke:#888888,stroke-width:1px;
   style K3 fill:transparent,stroke:#888888,stroke-width:1px;
   style K4 fill:transparent,stroke:#888888,stroke-width:1px;
   style K5 fill:transparent,stroke:#888888,stroke-width:1px;
   style K6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K6b fill:transparent,stroke:#888888,stroke-width:1px;
   style K7 fill:transparent,stroke:#888888,stroke-width:1px;
   style K8 fill:transparent,stroke:#888888,stroke-width:1px;
   style K9 fill:transparent,stroke:#888888,stroke-width:1px;
-  style K10 fill:transparent,stroke:#888888,stroke-width:1px;
   style K11 fill:transparent,stroke:#888888,stroke-width:1px;
-  style K12 fill:transparent,stroke:#888888,stroke-width:1px;
   style K13 fill:transparent,stroke:#888888,stroke-width:1px;
   style K14 fill:transparent,stroke:#888888,stroke-width:1px;
-  style K15 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The screen is titled Kitchen; Stores and Products are entry rows that open subviews (later Kitchen entries, Stock, Prepared servings and Shopping list, join them), then an "Ingredients" eyebrow with its count and **+ New** beside it. The Yours / All pills stay visible beside the search and a filter icon (a count badge when filters are on); on a phone the filters open in a drawer and from `sm` in a popover, and each active filter also shows as a dismissible chip with "Clear". The filters are Price (Any / Needs a price / Has a price), Show only (Missing nutrition, Custom only) and Family. Yours is the default and holds the ingredients you added, the ones with a product, and the ones your recipes, saved meals and planned days that aren't frozen yet use; All is the full catalog. Families are `SectionDivider` groups. A row shows the name, its calories and macros as emoji figures per 100 g when nutrition is on, and the default product's store, price and size, or a muted "No product yet". Rows carry no icon. When the filters hide everything the empty state names the filters that are hiding things and offers "Clear filters" and "Look through everything".*
+*The screen is titled Kitchen, with the subtitle "Your ingredients, products and stores."; Stores and Products are entry rows that open subviews (later Kitchen entries, Stock, Prepared servings and Shopping list, join them), then an "Ingredients" eyebrow with its count and **+ New** beside it. The search field has the filter icon (a count badge when filters are on) and the View options eye button at its end, with the Yours / All pills under it; on a phone the filters open in a drawer and from `sm` in a popover, and each active filter also shows as a dismissible chip with "Clear". The filters are Price (Any / Needs a price / Has a price), Show only (Missing nutrition, Custom only) and Family. Yours is the default and holds the ingredients you added, the ones with a product, and the ones your recipes, saved meals and planned days that aren't frozen yet use; All is the full catalog. **Both price filters only ever look through Yours**, even with All picked, and the Price section says so under its pills; while one is on, the count beside "Ingredients" reads "N of M" with M counting Yours. Families are `SectionDivider` groups. A row is its name and then, each on its own line, the default product's store, price and size (a muted "No price yet" for an ingredient something uses but that has no product) and, when nutrition is on, its calories and macros as emoji figures with what they are per ("per 100 g", or "per serving (5 oz)" when the list's View options say so and the serving can be weighed). Prices and macros hide independently, and rows carry no icon. When the filters hide everything the empty state names the filters that are hiding things and offers "Clear filters" and, only when All would find something, "Look through everything"; "Needs a price" alone with nothing left says "Nothing needs a price: everything your recipes, meals and plans use has a product."*
 
 **Ingredient details** (drawer)
 
@@ -518,7 +552,7 @@ block-beta
   columns 2
   I1["Chicken breast"]:1
   I2["Chicken · Adjusted by you · 1 serving = 5 oz"]:1
-  I3["Per 100 g · 🔥 165 · 💪 31g · 🌾 0g · 🥑 3.6g"]:2
+  I3["Per 1 serving (5 oz)      [ Per serving ]  Per 100 g<br/>🔥 234 · 💪 44g · 🌾 0g · 🥑 5g"]:2
   I4["Products"]:2
   I5["⭐ Walmart · Great Value 3 lb"]:1
   I6["$9.48"]:1
@@ -537,7 +571,44 @@ block-beta
   style I9 fill:transparent,stroke:#888888,stroke-width:1px;
   style I11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The front matter is peach chips (family, "One you added" or "Adjusted by you", the serving) and the footer holds Adjust (Modify for your own ingredient) beside the primary "+ Add a product", which closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). Nutrition is shown per 100 g as emoji `MacroStats` and can be adjusted in Modify. There is no "Used in" line in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
+*The front matter is one plain line (family, "One you added" or "Adjusted by you", the serving), never chips, and the footer holds Adjust (Modify for your own ingredient) beside the primary "+ Add a product", which closes the drawer and opens the product form sheet already tied to this ingredient. Tapping the star changes the default product (a quiet icon action; there is no hidden gesture). When a metric is switched on, nutrition opens per serving ("Per 1 serving (5 oz)") as emoji `MacroStats` tiles with a thin Per serving / Per 100 g switch beside the caption; the switch is left out, and the numbers are per 100 g, when one serving is exactly 100 g or can't be weighed. The drawer's choice is its own and doesn't follow the list's View options. Numbers are adjusted in Adjust / Modify. There is no "Used in" line in the drawer yet. Removing a custom ingredient that is in use takes it off the lists and the confirm says what still uses it; a catalog ingredient can only be reset to its built-in values. The default-product star has no label of its own yet.*
+
+**Ingredient** (form sheet)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  IF1["Ingredient"]:2
+  IF2["Name<br/>Doritos nacho cheese"]:2
+  IF3["Which family does it join?"]:2
+  IF4["+ New family"]:1
+  IF5["Chips"]:1
+  IF6["Nutrition per 28 g"]:2
+  IF7["Per [ 28 ]   g   oz   serving"]:2
+  IF8["Calories<br/>130"]:1
+  IF9["Protein (g)<br/>2"]:1
+  IF10["Carbs (g)<br/>18"]:1
+  IF11["Fat (g)<br/>6"]:1
+  IF12["Saved as per 100 g: 🔥 464 · 💪 7g · 🌾 64g · 🥑 21g"]:2
+  IF13["+ Serving size"]:2
+  IF14["Cancel  ·  Add"]:2
+  style IF1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF9 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF10 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF11 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF12 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF13 fill:transparent,stroke:#888888,stroke-width:1px;
+  style IF14 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*Name and family are the essentials ("Not sure? Skip it and the ingredient stands on its own."); a serving size and nutrition are "+ Add X" chips on a new ingredient, and a built-in ingredient opens with both showing under "Built in. Change what you like and it stays yours." Nutrition is typed the way the label prints it: "Per [amount] [g | oz | serving]" sits above four compact fields, starting at 100 g, and the section's heading follows ("Nutrition per 28 g"). Pinch stores it per 100 g and shows what it saved ("Saved as per 100 g: …") whenever the basis isn't exactly 100 g. The serving pill is disabled until the serving size converts to grams, with "To type it per serving, set the serving size in grams or ounces first." and an "Add serving size" link (or "…set one serving in grams or ounces above." when the size is on but can't be weighed, say a cup of something with no density). A blank amount ("Add the amount these numbers are for.") or a number over 100,000 per 100 g ("Check the numbers: each one is 0 to 100,000 per 100 g.") shows one line in red and keeps Save off. An existing ingredient reopens in per 100 g, since that is what it holds. The footer has Cancel and the primary, with the trash beside them when there is something to delete (or, for a built-in ingredient, to reset to its built-in values).*
 
 **Product** (form sheet)
 
@@ -734,17 +805,21 @@ block-beta
 | MealBuilder | Plan a meal, Meal subview (renders its own `Subview`) | day and type pills, a pill row of saved meals while the plate is empty, one item search, rows with a compact `Stepper` for servings, a tinted summary with cost, warning icon and emoji macros (no nudge: the fill-in sheet never opens over this subview), Save-as-meal switch |
 | ItemSearch | MealBuilder, Recipe form | one search over recipes, meals and ingredients with kind labels; also offers "New ingredient" |
 | Stepper | MealBuilder, Recipe form (shared) | half-step stepper, `isCompact` for rows, 40px targets |
-| RecipeStart | Recipe subview, before the form | the four ways to begin a recipe through the shared `MethodPicker`; link reading calls `fetchPageContent` |
-| RecipeForm | Recipe subview | all sections visible via `FormSection` and `Field`: servings and times, photo, description, `RecipeIngredients` (a drawer on a phone, rows open in place from `sm`), `RecipeSteps`, `NutritionReview` |
-| RecipeRow, MealRow | Recipes tab | cover or emoji tile, title, cost per serving, muted details |
-| IngredientRow, FamilyGroup | Kitchen | name, emoji macros and default product line; `SectionDivider` groups |
-| FilterBar | Kitchen ingredients, Products (shared) | search plus a filter icon with a count badge (a drawer on phones, a popover from `sm`), dismissible chips and "Clear" |
+| RecipeStart, RecipeStartDrawer | Recipes tab and Calendar (phone drawer), Recipe subview (first page from `sm`) | the four ways to begin a recipe as rows through the shared `MethodPicker` (rows only; each way's `onPick` opens its own screen) |
+| RecipeReader | Recipe subview | the text, file and link screens of a way in: its own disclosure line, its input, a reading state and failure line, and "Write it yourself instead"; link reading calls `fetchPageContent` through `recipePageQueryOptions` |
+| RecipeForm | Recipe subview | all sections visible via `FormSection` and `Field`: servings and times, photo, description, `RecipeIngredients`, `RecipeSteps` and `NutritionReview` (each a drawer on a phone, rows open in place from `sm`) |
+| RecipeRow, MealRow | Recipes tab | cover or emoji tile, title, muted details, then the cost and macro lines when shown; the tile and text share a top edge and the chevron sits on the first line |
+| IngredientRow, FamilyGroup | Kitchen | name, a price line and a macro line (each can be hidden); `SectionDivider` groups |
+| FilterBar | Kitchen ingredients, Products (shared) | search plus a filter icon with a count badge (a drawer on phones, a popover from `sm`) and an optional trailing button (Kitchen's eye), dismissible chips and "Clear" |
+| ViewOptions, ListViewControls | Kitchen filter bar, beside the Recipes / Meals pills | the eye button (a drawer on a phone, a popover from `sm`, tinted once something differs, with Reset): Show prices, Show calories and macros and, for ingredients, the nutrition basis; `ViewOptions` is shared, `ListViewControls` is Pinch's contents; kept per person and list on the device (`useListViewOptions`) |
+| HelpTip | cost warnings, stats help (shared) | a help or warning icon: a small modal on a phone, a hover/focus tooltip from `sm` that places itself above or below and inside the screen, its arrow on the icon |
+| PillGroup | everywhere options are picked (shared) | choosing never reorders visible options: a chosen option that was hidden behind "Show all" takes the last visible slot, and the fully open list keeps its original order |
 | ProductForm, ProductRow | Ingredient drawer, Products subview | titled by ingredient and store, store question first, price and size side by side, chips for label and link |
 | StorePicker | Product form | `PickOrCreate` of your stores plus "Show all" for the well-known list |
 | StoreLogo | pickers, rows, subview | the logo tile with a letter fallback; app-aware, so it stays in the app |
 | StoreForm | Stores subview | search of well-known stores, or name plus `PhotoPicker` image |
 | CoverImage | recipe rows and drawer | `FallbackImage` with a tinted emoji tile as its `fallback` |
-| `SectionHeader`, `Subview`, `FormSheet`, `DetailSheet`, `ModalFooterActions`, `DeleteIconButton`, `PillGroup`, `PickOrCreate`, `SearchInput`, `SectionDivider`, `MoneyInput`, `AppToggle`, `StatTile`, `HelpTip` (with its `warning` variant), `MethodPicker`, `FormSection`, `Field` | everywhere | the shared pieces in `src/components` and `src/ui`; Pinch builds only what is app-specific |
+| `SectionHeader`, `Subview`, `FormSheet`, `DetailSheet`, `ModalFooterActions`, `DeleteIconButton`, `PickOrCreate`, `SearchInput`, `SectionDivider`, `MoneyInput`, `AppToggle`, `StatTile`, `MethodPicker`, `FormSection`, `Field` | everywhere | the shared pieces in `src/components` and `src/ui`; Pinch builds only what is app-specific. `Field` has an `isCompact` form for a grid of short fields (small captions, a 40px input whose typed text stays 16px) and wraps its control in a native label, so no `Select` goes inside one |
 | Empty state | every list and the empty Calendar | an icon, one muted line, and the call to action in the header |
 
 ## User Journeys
@@ -756,15 +831,15 @@ block-beta
 flowchart LR
     A[Open Pinch] --> B["Calendar, empty"] --> C{"What now?"}
     C -->|Plan your first meal| D["Plan a meal subview"] --> E["Search 'chicken breast'"] --> F["Pick an ingredient from the catalog"] --> G["Add to today"] --> H["Calendar shows a chip for it; cost line says 'No price yet'"]
-    C -->|Add a recipe| I["Recipe subview"]
+    C -->|Add a recipe| I["Ways to start a recipe"]
 ```
 
-**Add a recipe from a photo**
+**Add a recipe from a photo or PDF**
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Recipes] --> B[+ New] --> C["Start picker: From a photo"] --> D["Reading…"] --> E["Form filled in; 'We couldn't read: cook time'"]
+    A[Recipes] --> B[+ New] --> C["Ways to start: From a file"] --> C2["File screen: Choose a file"] --> D["Reading…"] --> E["Form filled in; 'We couldn't read: cook time'"]
     E --> F{"Unknown ingredient?"}
     F -->|Yes| G["'Add as new ingredient' on its row"] --> H[Review and edit]
     F -->|No| H
@@ -809,11 +884,24 @@ flowchart LR
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
     A[Copy a recipe from any AI chat] --> B[Recipes + New] --> C{"How to start?"}
-    C -->|From text| D[Paste it]
-    C -->|From a link| E[Paste the page's address]
+    C -->|From text| D["Text screen: paste it, Read it"]
+    C -->|From a link| E["Link screen: paste the page's address, Read it"]
     D --> F["Form filled in for review"]
     E --> F
     F --> G[Save]
+```
+
+**Type nutrition off a label**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
+flowchart LR
+    A[Kitchen + New] --> B["Name it; pick a family or skip"] --> C["+ Nutrition"] --> D{"What does the label say?"}
+    D -->|Per 28 g| E["Per 28 g, then the four numbers"]
+    D -->|Per serving| F["Add the serving size first, then Per serving"]
+    E --> G["'Saved as per 100 g: 🔥 464 …'"]
+    F --> G
+    G --> H[Add] --> I["Drawer shows the numbers; with a serving size set, per serving and per 100 g are one tap apart"]
 ```
 
 ## Form Field Organization
@@ -822,8 +910,8 @@ flowchart LR
 
 | Entity | Initial (create) | Later (edit only) | Later-set entry point | Grouping | "Other" option? |
 |---|---|---|---|---|---|
-| Recipe | how to start (text, photo, link or by hand), then title and ingredients (ingredient + amount + unit) | everything else is a visible section of the same form: servings, times, photo, description, steps, own nutrition | the recipe drawer's Modify | none; `FormSection`s, no chips | none |
-| Ingredient | name, family (`PickOrCreate`: existing family, new family, or none) | nutrition per 100 g, unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value | none; chips for nutrition | family: "New family" is the dashed first pill |
+| Recipe | how to start (text, file, link or by hand; each way its own screen), then title and ingredients (ingredient + amount + unit) | everything else is a visible section of the same form: servings, times, photo, description, steps, own nutrition | the recipe drawer's Modify | none; `FormSection`s, no chips | none |
+| Ingredient | name, family (`PickOrCreate`: existing family, new family, or none) | serving size and nutrition (typed per an amount of g, oz or servings as the label prints it, stored per 100 g), unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value | none; chips for serving size and nutrition | family: "New family" is the dashed first pill |
 | Product | store (`PickOrCreate`), price, package size | label, link, default flag | the ingredient drawer's product rows; the fill-in sheet for a missing price or size | none | store: "New store" is the dashed first pill |
 | Store | pick from the well-known list, or name | image | the Stores subview row | none | "Can't find it? Add your own" reveals the name and image fields |
 | Meal (saved) | name, items (recipe or ingredient + servings) | — | Meal subview's Modify; "Save as a meal" on a planned meal | none | none |
@@ -837,8 +925,9 @@ flowchart LR
 - **Comparable amounts** — a recipe's amount and a product's package size must share a dimension (mass, volume, count) or have a catalog-known conversion; anything else is excluded from the total and named in a nudge.
 - **Nudge dismissals** — "✕ hides it for those ingredients" needs a small per-gap dismissal record on the user's settings document.
 - **Unknown stock vs zero stock** — when stock tracking arrives, "not tracked" is its own state, separate from 0.
-- **Recipe from a link** — a server function fetches the page (signed-in only, public http/https only), so the person's device never contacts the site; its recipe data and text go to the AI reader, which fills the form for review.
+- **Recipe from a link** — a server function fetches the page (signed-in only, public http/https only), so the person's device never contacts the site; its text and any recipe data go to the AI reader, which writes the draft for the form to review.
 - **Store logos** — the well-known list is a constant of names and domains, logos load in the browser from a logo service, and a letter tile covers every failure; the service and its terms are to be settled.
 - **Week** — Sunday to Saturday, to match the month grid; the week view shows those seven days and its stats describe them.
-- **Money** — integer cents everywhere; nutrition per 100 g with servings computed from the recipe's own amounts.
+- **Money** — integer cents everywhere; nutrition stored per 100 g (typed on a label's basis and converted on save, shown per serving only as a display) with servings computed from the recipe's own amounts.
+- **View options** — which lines a list's rows show is a per-person, per-device choice in the browser, not a field, so no rule or listener is involved and nothing syncs.
 - **A well-known store joins "your stores" on first use** — so a product always points at a store document of the person's own.

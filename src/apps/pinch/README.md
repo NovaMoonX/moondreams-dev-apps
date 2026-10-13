@@ -13,7 +13,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 1. **Start with a stocked kitchen.** A ready-made catalog of everyday ingredients and seasonings is waiting, each with its nutrition.
 2. **Add what's missing.** Create your own ingredients, from a variant of an existing one (Chicken → Chicken breast) to a ready-to-eat food like Doritos. A name is all it takes to start.
 3. **Add the products you buy.** Attach a store, a price, and a package size to any ingredient, like chicken breast from Walmart, whenever you have them handy. Pick the store from a list of well-known ones with their logos, or add your own.
-4. **Build recipes.** Write one by hand, or pick a start (text, a photo or PDF, or a link to a recipe page) and the AI fills in the recipe for you to review.
+4. **Build recipes.** Write one by hand, or start from text, a file (a photo, screenshot or PDF) or a link to a recipe page, and the AI fills in the recipe for you to review.
 5. **Bring recipes in from anywhere.** Paste a recipe copied from any chat, snap a photo of a cookbook page, or hand it a link.
 6. **Put meals together.** A meal is a list of items, each a recipe or an ingredient, each with its own serving count. Save the ones you eat again.
 7. **Plan your days.** Put a meal, a single recipe, or a single ingredient on the calendar under breakfast, lunch, dinner, snack, dessert, or drink.
@@ -21,6 +21,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 9. **See your week at a glance.** Switch between a month, a week and a single day. Days show a soft-tinted chip per meal (the meal's title on a wide screen), a Today button brings you back, and a stats row describes the period you're looking at.
 10. **Fill in the details as you go.** A missing price, package size, or nutrition value shows up as a quiet line right where it matters ("2 ingredients need a price · Add prices"), so nothing is demanded up front and a tap fills it in.
 11. **Turn on nutrition if you want it.** Calories, protein, carbs, and fat each stay hidden until you switch them on.
+12. **Show only what you want on a list.** An eye button on Kitchen and Recipes hides the prices or the calories and macros on the rows, whenever you like.
 
 ### Finding Your Way, In Detail
 
@@ -70,17 +71,20 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Cost appears when amounts can be compared.** A recipe's amount and a product's package size line up when they measure the same kind of thing (pounds with ounces, cups with tablespoons), or when the catalog knows the conversion (a cup of flour to grams). Anything that can't be compared is called out by name with a nudge to fix it and is left out of the totals, so every number shown is one the app can stand behind.
 - **Past days keep their numbers.** Once a day has passed, its cost and nutrition are fixed as they were that day. Updating a price or editing a recipe changes what's ahead, not last month's totals.
 - **Nutrition is yours to enter, and yours to show.** Built-in ingredients arrive with calories, protein, carbs, and fat. You can add or adjust them on any ingredient. A recipe's nutrition adds up from its ingredients, and you can type your own numbers over it, handy when a recipe comes with its own from the web.
+- **Type nutrition the way the label prints it.** Per 28 g, per ounce or per serving: Pinch converts it to per 100 g and says what it saved. A serving needs a size Pinch can weigh, and a blank or impossible number is called out before you save.
+- **See it per serving or per 100 g.** An ingredient's drawer opens per serving and switches to per 100 g (with no switch when a serving is exactly 100 g or can't be weighed). Ingredient rows follow the list's view options, which start at per 100 g.
 - **Showing nutrition is opt-in.** In settings, calories, protein, carbs, and fat are four separate switches, all off to start. Turning one on shows it per serving on recipes and meals and as a daily average on the calendar's stats row. With protein on, the stats row also shows your average price per gram of protein.
+- **View options are for the rows only.** The eye button turns prices and calories and macros on or off for a list's rows, and picks per serving or per 100 g for ingredients. Totals, drawers and nudges don't change, and Reset puts the list back. Each list's choice is kept on this device, for you.
 - **Blanks are named.** An ingredient with no nutrition entered is called out with a nudge and left out of the totals while that metric is on.
 - **A week runs Sunday to Saturday.** The month grid and the week view both start on Sunday.
 - **A meal holds up to 10 items.** Planning more than that is a recipe's job.
 
 ### Bringing Recipes In, In Detail
 
-- **Paste in:** a paste box accepts up to 20,000 characters of text. The AI reads it and fills in a new recipe for you to review.
+- **Four ways to start:** a new recipe begins with a short list: From text, From a file, From a link, or Write it yourself. On a phone it's a drawer; on a wider screen it's the first page. Picking one opens that way's own screen, which says what the AI will do, and each has "Write it yourself instead". The form is never the first thing you face.
+- **From text:** a paste box accepts up to 20,000 characters. The AI reads it and fills in a new recipe for you to review.
 - **From a file:** a photo, screenshot, or PDF (up to 10 MB) works the same way.
-- **From a link:** Pinch fetches the page, takes its recipe data and text, and the AI fills in the form from that. The link goes to Pinch's own function, which reads the page from Google's servers; nothing is stored.
-- **Start picker:** a new recipe opens on four ways to begin (text, photo, link, or write it yourself), so the form is never the first thing you face.
+- **From a link:** Pinch fetches the page, and the AI reads its text, along with any recipe data the page publishes, and fills in the form from that, so a page with partial or no recipe data still reads. The link goes to a shared function that reads the page from Google's servers; nothing is stored.
 - **Always reviewed:** the AI fills in the recipe form and tells you what it couldn't read, but nothing is saved until you confirm.
 - **Unknown ingredients:** if a recipe mentions something that isn't in the catalog, it's offered as a new custom ingredient during review, so you decide what joins your catalog.
 
@@ -101,11 +105,11 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Add, edit, and delete your own ingredients, including ready-to-eat foods, as a new family or a variant of an existing one
 - [x] Pick a store from a list of well-known ones with their logos, or add your own with a name and image; browse, edit, and remove your stores
 - [x] Add products to an ingredient (store, label, price, package size), choose a default, and edit or remove them
-- [x] Enter or adjust nutrition on any ingredient
+- [x] Enter or adjust nutrition on any ingredient, typed the way its label prints it (per amount of grams, ounces or servings) and stored per 100 g; see it per serving or per 100 g
 - [x] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
 - [x] See a recipe's nutrition added up from its ingredients, or type your own over it
 - [x] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
-- [x] Create a recipe from pasted text, a photo, a PDF or a web link, with the AI filling in the form for you to review before saving
+- [x] Create a recipe from pasted text, a photo, screenshot or PDF, or a web link, each on its own screen, with the AI filling in the form for you to review before saving
 - [x] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
 - [x] Meal calendar with month, week and day views: meal chips per day (titles on wide screens) and a Today button
 - [x] Plan a saved meal, a single recipe, or a single ingredient on a day under a meal type; tweak that day's items and servings; move or remove it
@@ -113,6 +117,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Past days keep the cost and nutrition they had: a new price or an edited recipe changes what's ahead, not last month's totals
 - [x] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
+- [x] View options on Kitchen and Recipes: hide prices or calories and macros on the rows, and pick per serving or per 100 g for ingredients, remembered per person on the device
 - [x] Stays quick with a big kitchen: hundreds of ingredients and recipes and a thousand planned meals
 
 ### Next Steps
@@ -151,6 +156,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Frontend:** React 19, TypeScript, Vite, TailwindCSS 4, DreamerUI (including its `Calendar` for the month view)
 - **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
 - **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, meals, calendar entries, and per-user settings; Firebase Storage for recipe and store images
-- **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return structured drafts for review; for links, a Cloud Function (`fetchPageContent`) fetches the page first
+- **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review; for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them
+- **On the device:** a list's view options are kept in the browser's local storage, per person; nothing else of yours is kept there beyond Firestore's own cache
 - **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (licence not yet confirmed from here: to be checked before launch), stored per 100 g alongside common unit conversions; money is stored as whole cents
 - **Store logos:** a curated list of well-known stores (names and web domains) whose logos load from a logo service in the person's browser, with a letter tile whenever one isn't available; stores you add keep their own uploaded image in Firebase Storage. The logo service (Logo.dev) and its terms are to be confirmed before launch.
