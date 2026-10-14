@@ -116,11 +116,13 @@ function RecipeDrawer({
             <StatTile
               label='Cost'
               value={
-                cost.totalCents === null ? '—' : formatCost(cost.totalCents)
+                cost.totalCents === null
+                  ? 'No prices yet'
+                  : formatCost(cost.totalCents)
               }
               detail={
                 cost.totalCents === null
-                  ? 'No prices yet'
+                  ? undefined
                   : `${formatCost(cost.perServingCents ?? 0)} per serving`
               }
               help={

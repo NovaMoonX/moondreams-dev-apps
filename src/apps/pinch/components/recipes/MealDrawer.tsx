@@ -93,10 +93,12 @@ function MealDrawer({
         <div className='space-y-3'>
           <StatTile
             label='Cost'
-            value={cost.totalCents === null ? '—' : formatCost(cost.totalCents)}
-            detail={
-              cost.totalCents === null ? 'No prices yet' : 'For the plate'
+            value={
+              cost.totalCents === null
+                ? 'No prices yet'
+                : formatCost(cost.totalCents)
             }
+            detail={cost.totalCents === null ? undefined : 'For the plate'}
             help={
               leftOutCount > 0 && cost.totalCents !== null ? (
                 <HelpTip
