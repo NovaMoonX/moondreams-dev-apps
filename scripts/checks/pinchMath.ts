@@ -388,6 +388,42 @@ assert.deepEqual(
   'a checked item is in "Got it", not in its group',
 );
 
+const heldItems = [
+  shopItem('rice', 'CUP', 1, true),
+  shopItem('salt', 'TSP', 1, false),
+  shopItem('chips', 'G', 28, true),
+];
+const heldGrouped = groupShoppingItems(
+  heldItems,
+  shopIngredients,
+  shopFamilies,
+  new Map([
+    ['rice__CUP', false],
+    ['salt__TSP', true],
+  ]),
+);
+assert.deepEqual(
+  heldGrouped.groups.map((group) => [
+    group.name,
+    group.rows.map((row) => [row.id, row.isChecked]),
+  ]),
+  [['Rice', [['rice__CUP', true]]]],
+  'a row just ticked stays in its group, still carrying its stored checked flag',
+);
+assert.deepEqual(
+  heldGrouped.checked.map((row) => [row.id, row.isChecked]),
+  [
+    ['chips__G', true],
+    ['salt__TSP', false],
+  ],
+  'a row just unticked stays in "Got it" until it is let go, and the unheld rows follow the stored flag',
+);
+assert.deepEqual(
+  groupShoppingItems(heldItems, shopIngredients, shopFamilies, new Map()),
+  groupShoppingItems(heldItems, shopIngredients, shopFamilies),
+  'an empty hold changes nothing',
+);
+
 const shopCost = getShoppingCost(
   [
     { ingredientId: 'chicken', amount: 2, unit: 'LB' },
