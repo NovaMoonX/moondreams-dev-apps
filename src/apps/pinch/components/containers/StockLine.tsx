@@ -13,7 +13,6 @@ interface StockLineProps {
   summary: StockSummary | undefined;
 }
 
-/** What is put away of a recipe or meal, only where it is above zero: "🧊 2 servings · ❄️ 6 servings", with the nearest eat-by once it is close. */
 function StockLine({ summary }: StockLineProps) {
   if (!summary) {
     return null;

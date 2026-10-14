@@ -269,7 +269,6 @@ export const selectCooksLoadError = (state: RootState) =>
 
 const selectContainerItems = (state: RootState) => state.pinch.containers.items;
 
-/** What is in stock, soonest eat-by first. */
 export const selectContainers = createSelector(
   [selectContainerItems],
   (containers) => [...containers].sort(byEatBy),
@@ -283,7 +282,6 @@ export const selectContainersById = createSelector(
 
 const selectStock = createSelector([selectContainers], getStockMaps);
 
-/** Servings in the fridge and freezer per recipe, from one pass over the containers. */
 export const selectStockByRecipe = createSelector(
   [selectStock],
   (stock) => stock.byRecipe,

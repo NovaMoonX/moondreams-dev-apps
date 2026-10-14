@@ -8,7 +8,6 @@ interface EntryRowProps {
   icon: ReactNode;
   label: string;
   count: number;
-  /** Quiet lines under the label; the row grows to hold them. */
   detail?: ReactNode;
   onClick: () => void;
   className?: string;

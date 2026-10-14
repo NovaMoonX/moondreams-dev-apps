@@ -21,7 +21,6 @@ export interface ContainerFieldValues {
 
 interface ContainerFieldsProps {
   draft: ContainerFieldValues;
-  /** The place is already answered (the freezer pill was tapped), so only how many and eat by are asked. */
   isPlaceFixed?: boolean;
 }
 

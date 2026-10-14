@@ -27,7 +27,6 @@ import {
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
-/** The containers a planned meal can be eaten from: those of its recipes, and of the saved meal it came from. */
 const useMealContainers = (meal: PlannedMeal) => {
   const containers = useAppSelector(selectContainers);
   return useMemo(
@@ -50,7 +49,6 @@ interface EatFromStockRowsProps {
   onOpen: (place: ContainerPlace) => void;
 }
 
-/** One quiet row per place that holds something this meal could be eaten from; render inside an `ActionGroup`. */
 export function EatFromStockRows({ meal, onOpen }: EatFromStockRowsProps) {
   const candidates = useMealContainers(meal);
 
@@ -89,7 +87,6 @@ interface EatFromStockViewProps {
   onBack: () => void;
 }
 
-/** Records what was eaten against a container, and nothing else: the plan, its prices and its cooks stay as they are. */
 export function EatFromStockView({
   uid,
   meal,

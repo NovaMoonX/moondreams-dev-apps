@@ -149,7 +149,6 @@ export function startCooksListener(
   );
 }
 
-/** Only what is in stock: finished containers are history, read on demand when the Finished view opens. */
 export function startContainersListener(
   uid: string,
   onChange: (containers: Container[]) => void,

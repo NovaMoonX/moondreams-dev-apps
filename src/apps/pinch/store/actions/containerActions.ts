@@ -40,7 +40,7 @@ const getWriteMessage = (error: unknown, fallback: string) => {
 const refreshFinished = (uid: string) =>
   queryClient.invalidateQueries({ queryKey: containerKeys.all(uid) });
 
-/** Re-reads the container inside a transaction and writes only what the plan changes, so another device's change is never written over; an impossible plan stops with one plain sentence. */
+/** Reads the container inside the transaction, so another device's change is never written over. */
 const applyPlan = (
   uid: string,
   id: string,
@@ -110,7 +110,6 @@ interface ChangeInput {
 }
 
 interface ChangeResult {
-  /** The instant of the event the change appended, which an undo names. */
   at: number;
   isFinished: boolean;
 }
@@ -120,7 +119,7 @@ const toResult = (fields: Awaited<ReturnType<typeof applyPlan>>) => ({
   isFinished: fields.status === 'DONE',
 });
 
-/** `ALL` eats whatever is left when the transaction reads it; a count above that stops the change. */
+/** `ALL` eats what is left when the transaction reads it. */
 export const eatContainer = createAsyncThunk<
   ChangeResult,
   ChangeInput & { count: number | 'ALL' },
@@ -203,7 +202,6 @@ export const changeContainerEatBy = createAsyncThunk<
   return id;
 });
 
-/** Deleting erases the history with it; finishing a container is how its history is kept. */
 export const removeContainer = createAsyncThunk<
   string,
   ChangeInput,

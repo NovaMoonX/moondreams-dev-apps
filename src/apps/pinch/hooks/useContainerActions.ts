@@ -21,7 +21,6 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const UNDO_TOAST_MS = 6000;
 
-/** Putting food away and eating it, each with its toast and an Undo; every call rejects with one sentence for the caller to show. */
 export function useContainerActions(uid: string) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();

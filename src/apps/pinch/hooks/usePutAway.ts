@@ -24,18 +24,15 @@ import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 interface UsePutAwayInput {
   uid: string;
   recipe: Recipe;
-  /** What this cooking session makes. */
   servings: number;
-  /** What the sitting just cooked for uses, when the plan says; else one sitting is taken to be a couple of servings. */
   eatenTonight: number | null;
-  /** The cook the containers come from; null until the cook exists. */
+  /** Null until the cook exists. */
   cookId: string | null;
 }
 
 interface Details {
   place: ContainerPlace;
   openedPlace: ContainerPlace;
-  /** The place was an answer to the question, so the details don't ask it again. */
   isPlaceFixed: boolean;
   servings: number;
   typedEatBy: string | null;
@@ -43,7 +40,6 @@ interface Details {
 
 const NO_CONTAINERS: never[] = [];
 
-/** Cooking mode's "Putting any away?": the question, the container's details in place, and what was saved from this cook. Nothing here is required, and the details are typed work only once changed. */
 export function usePutAway({
   uid,
   recipe,

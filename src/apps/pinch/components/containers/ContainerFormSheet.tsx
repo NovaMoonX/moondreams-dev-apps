@@ -293,12 +293,10 @@ function DetailsForm({
 
 interface ContainerFormSheetProps {
   uid: string;
-  /** What is being put away when the sheet opens from a recipe or meal; without it, the sheet asks first. */
   initial: ContainerSubject | null;
   onClose: () => void;
 }
 
-/** Puts food in the fridge or freezer: asks what it is first, then how many, where and eat by. */
 function ContainerFormSheet({
   uid,
   initial,

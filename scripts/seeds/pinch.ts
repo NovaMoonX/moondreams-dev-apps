@@ -212,9 +212,6 @@ const seedEvent = (
   note: details.note ?? null,
 });
 
-// Prepared meals in every state: a fridge one due tomorrow (from the planned dinner's cook, so that cook says "Put away 4 servings"),
-// one in four days, a freezer one with eighty days to go (from a cook), a freezer one past its date, one thawed after two freezes,
-// one from a saved meal, one with a typed name, and two finished (eaten in two sittings, and thrown out). Nachos and the retired chili have none.
 const SEED_CONTAINERS = [
   {
     id: 'seed-pinch-container-adobo-fridge',

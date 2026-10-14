@@ -16,7 +16,7 @@ interface ContainerDraftOptions {
   initialServings: number;
 }
 
-/** The three answers a container needs: how many, where, and eat by. Eat by follows the default for the place until the person types a date, and a typed date is kept when the place changes. */
+/** A typed eat-by date survives a change of place. */
 export function useContainerDraft({
   care,
   initialPlace,

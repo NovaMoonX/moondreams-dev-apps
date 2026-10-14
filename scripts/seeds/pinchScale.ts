@@ -193,7 +193,6 @@ const BIG_TWEAK = [
   'Ingredients reordered',
   'and 3 more',
 ];
-// Containers in stock per recipe by recipe index (about 290 in all); recipe 1 gets twelve, enough for the stock list's "Show N more", and three in ten recipes have none.
 const CONTAINERS_PER_RECIPE = [0, 1, 2, 0, 3, 1, 2, 0, 2, 3];
 const MEAL_CONTAINER_COUNT = 10;
 const FINISHED_CONTAINER_COUNT = 260;
@@ -608,7 +607,7 @@ export async function seedPinchScale(
     });
   });
 
-  // Its own generator again. About 300 containers in stock (some past their date) and a few hundred finished ones, spread over recipes and saved meals.
+  // Its own generator, so the rest of the fixture is unchanged.
   const containerRandom = makeRandom(20260404);
   const containerInt = (min: number, max: number) =>
     min + Math.floor(containerRandom() * (max - min + 1));

@@ -13,7 +13,6 @@ interface CookPutAwayProps {
   putAway: ReturnType<typeof usePutAway>;
 }
 
-/** What follows "I cooked this": a calm question for a bulk meal, a quiet link for any other, then the container's details in place. */
 function CookPutAway({ putAway }: CookPutAwayProps) {
   if (!putAway.isAvailable) {
     return null;
