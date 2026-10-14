@@ -43,6 +43,8 @@ function Pinch() {
     () => ({
       subview,
       openSubview: setSubview,
+      openSubviewIfNone: (next: PinchSubview) =>
+        setSubview((current) => current ?? next),
       closeSubview: () => setSubview(null),
       isStartOpen,
       setIsStartOpen,

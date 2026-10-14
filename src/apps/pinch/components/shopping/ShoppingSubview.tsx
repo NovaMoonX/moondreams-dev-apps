@@ -1,4 +1,10 @@
-import { memo, useCallback, useState, type CSSProperties } from 'react';
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react';
 
 import { Button, Disclosure } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -6,6 +12,7 @@ import { Plus } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
+import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import Subview from '@/components/Subview';
@@ -15,6 +22,7 @@ import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
 import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
+  LIST_SEARCH_THRESHOLD,
   SHOPPING_GROUP_PAGE_SIZE,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
@@ -33,6 +41,7 @@ import {
   selectShoppingRows,
 } from '@apps/pinch/store/selectors';
 import type { Gap } from '@apps/pinch/types';
+import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import type {
@@ -96,27 +105,47 @@ interface ShoppingGroupSectionProps {
   onOpen: (id: string) => void;
 }
 
-const ShoppingGroupSection = memo(function ShoppingGroupSection({
-  group,
-  isEager,
-  onToggle,
-  onOpen,
-}: ShoppingGroupSectionProps) {
-  const estimatedHeight = DIVIDER_HEIGHT + group.rows.length * ROW_HEIGHT;
+const isSameRow = (a: ShoppingRowData, b: ShoppingRowData) =>
+  a.id === b.id &&
+  a.name === b.name &&
+  a.amount === b.amount &&
+  a.unit === b.unit &&
+  a.isChecked === b.isChecked;
 
-  return (
-    <section
-      aria-label={group.name}
-      className='defer-offscreen space-y-1'
-      style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
-    >
-      <LazyMount estimatedHeight={estimatedHeight} eager={isEager}>
-        <SectionDivider label={group.name} />
-        <ShoppingRows rows={group.rows} onToggle={onToggle} onOpen={onOpen} />
-      </LazyMount>
-    </section>
-  );
-});
+const isSameGroup = (a: ShoppingGroup, b: ShoppingGroup) =>
+  a.id === b.id &&
+  a.name === b.name &&
+  a.rows.length === b.rows.length &&
+  a.rows.every((row, index) => isSameRow(row, b.rows[index]));
+
+const ShoppingGroupSection = memo(
+  function ShoppingGroupSection({
+    group,
+    isEager,
+    onToggle,
+    onOpen,
+  }: ShoppingGroupSectionProps) {
+    const estimatedHeight = DIVIDER_HEIGHT + group.rows.length * ROW_HEIGHT;
+
+    return (
+      <section
+        aria-label={group.name}
+        className='defer-offscreen space-y-1'
+        style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
+      >
+        <LazyMount estimatedHeight={estimatedHeight} eager={isEager}>
+          <SectionDivider label={group.name} />
+          <ShoppingRows rows={group.rows} onToggle={onToggle} onOpen={onOpen} />
+        </LazyMount>
+      </section>
+    );
+  },
+  (prev, next) =>
+    prev.isEager === next.isEager &&
+    prev.onToggle === next.onToggle &&
+    prev.onOpen === next.onOpen &&
+    isSameGroup(prev.group, next.group),
+);
 
 type Overlay = { kind: 'add' } | { kind: 'item'; id: string };
 
@@ -140,10 +169,29 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [isGotOpen, setIsGotOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [query, setQuery] = useState('');
 
   const isFull = itemCount >= SOFT_MAX_SHOPPING_ITEMS;
   const canAdd = loadError === null && !isFull;
   const openItem = overlay?.kind === 'item' ? itemsById.get(overlay.id) : null;
+  const hasSearch = itemCount >= LIST_SEARCH_THRESHOLD;
+  const activeQuery = hasSearch ? query.trim() : '';
+  const shownGroups = useMemo(
+    () =>
+      activeQuery === ''
+        ? groups
+        : groups
+            .map((group) => ({
+              ...group,
+              rows: searchByName(group.rows, activeQuery),
+            }))
+            .filter((group) => group.rows.length > 0),
+    [groups, activeQuery],
+  );
+  const shownChecked = useMemo(
+    () => searchByName(checked, activeQuery),
+    [checked, activeQuery],
+  );
 
   const handleToggle = useCallback(
     (id: string, isChecked: boolean) => {
@@ -177,7 +225,20 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
 
     setIsClearing(true);
     try {
-      await dispatch(clearCheckedShoppingItems({ uid })).unwrap();
+      const deleted = await dispatch(
+        clearCheckedShoppingItems({ uid }),
+      ).unwrap();
+      addToast({
+        title:
+          deleted === 0
+            ? 'Nothing was left to clear'
+            : `Cleared ${deleted === 1 ? '1 item' : `${deleted} items`}`,
+        description:
+          deleted < checked.length
+            ? 'The rest changed in the meantime.'
+            : undefined,
+        type: deleted === 0 ? 'info' : 'success',
+      });
     } catch (error) {
       addToast({
         title: "Couldn't clear your list",
@@ -226,7 +287,7 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
     }
     return (
       <>
-        {groups.map((group, index) => (
+        {shownGroups.map((group, index) => (
           <ShoppingGroupSection
             key={group.id || 'other'}
             group={group}
@@ -235,22 +296,33 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
             onOpen={handleOpen}
           />
         ))}
-        {groups.length === 0 && (
+        {activeQuery === '' && groups.length === 0 && (
           <p className='text-muted-foreground py-4 text-center text-sm'>
             You've got everything. Clear it when you're ready for the next list.
           </p>
         )}
-        {checked.length > 0 && (
+        {activeQuery !== '' &&
+          shownGroups.length === 0 &&
+          shownChecked.length === 0 && (
+            <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
+              Nothing on your list matches “{activeQuery}”.
+            </p>
+          )}
+        {shownChecked.length > 0 && (
           <div className='relative'>
             <Disclosure
-              label={`Got it · ${checked.length}`}
+              label={
+                shownChecked.length === checked.length
+                  ? `Got it · ${checked.length}`
+                  : `Got it · ${shownChecked.length} of ${checked.length}`
+              }
               isOpen={isGotOpen}
               onToggle={setIsGotOpen}
               buttonClassName='min-h-10 px-0! py-2 pr-20! hover:bg-transparent!'
             >
               {isGotOpen && (
                 <ShoppingRows
-                  rows={checked}
+                  rows={shownChecked}
                   onToggle={handleToggle}
                   onOpen={handleOpen}
                 />
@@ -306,34 +378,47 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
               'No prices yet'
             ) : (
               <span>
-                About{' '}
+                Amounts on your list: about{' '}
                 <span className='text-foreground font-semibold'>
                   {formatCost(cost.totalCents)}
-                </span>{' '}
-                for what's left
+                </span>
               </span>
             )}
-            {cost.leftOut.length > 0 && (
-              <HelpTip
-                variant='warning'
-                title="What's left out"
-                placement='top'
-              >
+            <HelpTip
+              variant={cost.leftOut.length > 0 ? 'warning' : 'help'}
+              title='About this price'
+              placement='top'
+            >
+              <p>
+                This prices just the amounts on your list, from each
+                ingredient's default product. Stores sell whole packages, so
+                what you pay at the till is usually more.
+              </p>
+              {cost.leftOut.length > 0 && (
                 <p>This {formatLeftOut(cost.leftOut)}.</p>
-                {noProductNames.length > 0 && (
-                  <p className='text-muted-foreground'>
-                    No price yet: {formatNames(noProductNames)}.
-                  </p>
-                )}
-                {notComparableNames.length > 0 && (
-                  <p className='text-muted-foreground'>
-                    Can't compare the amount with the package size:{' '}
-                    {formatNames(notComparableNames)}.
-                  </p>
-                )}
-              </HelpTip>
-            )}
+              )}
+              {noProductNames.length > 0 && (
+                <p className='text-muted-foreground'>
+                  No price yet: {formatNames(noProductNames)}. Add a price from
+                  the ingredient in Kitchen.
+                </p>
+              )}
+              {notComparableNames.length > 0 && (
+                <p className='text-muted-foreground'>
+                  Can't compare the amount with the package size:{' '}
+                  {formatNames(notComparableNames)}. Change the package size
+                  from the ingredient in Kitchen.
+                </p>
+              )}
+            </HelpTip>
           </p>
+        )}
+        {hasSearch && loadError === null && (
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder='Search your list'
+          />
         )}
         {getBody()}
       </div>

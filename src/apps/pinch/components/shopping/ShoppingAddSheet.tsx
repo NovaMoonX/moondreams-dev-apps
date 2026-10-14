@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -6,9 +6,17 @@ import FormSheet from '@/components/FormSheet';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
-import { DEFAULT_SERVING } from '@apps/pinch/constants';
+import {
+  DEFAULT_SERVING,
+  SOFT_MAX_SHOPPING_ITEMS,
+} from '@apps/pinch/constants';
 import { addToShoppingList } from '@apps/pinch/store/actions/shoppingActions';
-import { selectIngredientsById } from '@apps/pinch/store/selectors';
+import {
+  selectIngredientsById,
+  selectShoppingById,
+  selectShoppingLoadError,
+} from '@apps/pinch/store/selectors';
+import { getShoppingItemId } from '@apps/pinch/utils/shopping';
 
 interface ShoppingAddSheetProps {
   uid: string;
@@ -19,17 +27,39 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const onList = useAppSelector(selectShoppingById);
+  const loadError = useAppSelector(selectShoppingLoadError);
+  const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const [error, setError] = useState<string | null>(null);
-  const isAdding = useRef(false);
+  const [isAdding, setIsAdding] = useState(false);
+
+  const isReady = isLoaded && loadError === null;
+  const getNote = () => {
+    if (loadError !== null)
+      return "Your list couldn't load, so adding is paused.";
+    if (!isLoaded) return 'Loading your list…';
+    return isAdding ? 'Adding…' : null;
+  };
+  const note = getNote();
 
   const handlePick = async (ingredientId: string) => {
-    if (isAdding.current) {
+    if (isAdding || !isReady) {
       return;
     }
-    isAdding.current = true;
     const ingredient = ingredientsById.get(ingredientId);
     const serving = ingredient?.serving ?? DEFAULT_SERVING;
+    const isNewLine = !onList.has(
+      getShoppingItemId(ingredientId, serving.unit),
+    );
+    if (isNewLine && onList.size >= SOFT_MAX_SHOPPING_ITEMS) {
+      setError(
+        "Your list is full: take something off or clear what you've got.",
+      );
+      return;
+    }
+
     setError(null);
+    setIsAdding(true);
     try {
       await dispatch(
         addToShoppingList({
@@ -50,7 +80,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
       });
     } catch (addError) {
       setError(getErrorMessage(addError, 'Unable to add this to your list.'));
-      isAdding.current = false;
+      setIsAdding(false);
     }
   };
 
@@ -64,9 +94,15 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
         <ItemSearch
           uid={uid}
           autoFocus
+          isDisabled={isAdding || !isReady}
           resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto'
           onPick={(ingredientId) => void handlePick(ingredientId)}
         />
+        {note && (
+          <p className='text-muted-foreground text-sm' role='status'>
+            {note}
+          </p>
+        )}
         {error && <p className='text-destructive text-sm'>{error}</p>}
       </div>
     </FormSheet>

@@ -19,6 +19,7 @@ import {
   selectRecipesById,
   selectShoppingById,
   selectShoppingItems,
+  selectShoppingLoadError,
 } from '@apps/pinch/store/selectors';
 import type { ShoppingRequest } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
@@ -41,12 +42,14 @@ function AddToShoppingSheet({
   onClose,
 }: AddToShoppingSheetProps) {
   const dispatch = useAppDispatch();
-  const { addToast } = useToast();
-  const { openSubview } = usePinchOverlay();
+  const { addToast, removeToast } = useToast();
+  const { openSubviewIfNone } = usePinchOverlay();
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const onList = useAppSelector(selectShoppingById);
   const listCount = useAppSelector(selectShoppingItems).length;
+  const loadError = useAppSelector(selectShoppingLoadError);
+  const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const recipe =
     request.kind === 'recipe'
       ? (recipesById.get(request.recipeId) ?? null)
@@ -71,6 +74,7 @@ function AddToShoppingSheet({
     }));
   }, [request, recipe, recipesById, ingredientsById, servings]);
 
+  const isReady = isLoaded && loadError === null;
   const isOnList = (id: string) => onList.get(id)?.isChecked === false;
   const isTicked = (id: string) => choices[id] ?? !isOnList(id);
   const selected = rows.filter((row) => isTicked(row.id));
@@ -80,6 +84,12 @@ function AddToShoppingSheet({
     request.kind === 'recipe' ? (recipe?.title ?? '') : request.label;
 
   const getBlock = () => {
+    if (loadError !== null) {
+      return "Your list couldn't load, so adding is paused.";
+    }
+    if (!isLoaded) {
+      return 'Loading your list…';
+    }
     if (selected.length === 0) {
       return rows.length === 0
         ? 'There is nothing here to add.'
@@ -109,7 +119,7 @@ function AddToShoppingSheet({
         addToShoppingList({ uid, lines: selected.map((row) => row.line) }),
       ).unwrap();
       onClose();
-      addToast({
+      const toastId = addToast({
         title:
           count === 1
             ? `Added ${selected[0].name} to your shopping list`
@@ -117,7 +127,10 @@ function AddToShoppingSheet({
         type: 'success',
         action: {
           label: 'View',
-          onClick: () => openSubview({ kind: 'shopping' }),
+          onClick: () => {
+            removeToast(toastId);
+            openSubviewIfNone({ kind: 'shopping' });
+          },
         },
       });
     } catch (addError) {
@@ -156,6 +169,7 @@ function AddToShoppingSheet({
                 variant='link'
                 size='sm'
                 className='h-10 px-0!'
+                disabled={!isReady}
                 onClick={() =>
                   setChoices(
                     Object.fromEntries(
@@ -184,6 +198,7 @@ function AddToShoppingSheet({
                       <Checkbox
                         aria-label={`Add ${row.name}`}
                         checked={isTicked(row.id)}
+                        disabled={!isReady}
                         onCheckedChange={(checked) =>
                           setChoices((current) => ({
                             ...current,

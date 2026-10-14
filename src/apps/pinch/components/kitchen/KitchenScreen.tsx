@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ListChecks, Plus, ShoppingCart, Store } from 'lucide-react';
+import { Plus, ShoppingCart, Store } from 'lucide-react';
 
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -21,6 +21,7 @@ import {
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
 import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
+import ShoppingEntry from '@apps/pinch/components/shopping/ShoppingEntry';
 import {
   INGREDIENT_FLAG_OPTIONS,
   INGREDIENT_PRICE_FILTER_OPTIONS,
@@ -37,7 +38,6 @@ import {
   selectIngredientsById,
   selectProducts,
   selectProductsById,
-  selectShoppingOpenCount,
   selectShowNutrition,
   selectStores,
   selectUsedIngredientIds,
@@ -81,7 +81,6 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const familiesById = useAppSelector(selectIngredientFamiliesById);
   const storeCount = useAppSelector(selectStores).length;
   const productCount = useAppSelector(selectProducts).length;
-  const shoppingCount = useAppSelector(selectShoppingOpenCount);
   const productsById = useAppSelector(selectProductsById);
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const usedIds = useAppSelector(selectUsedIngredientIds);
@@ -224,7 +223,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     <div className='space-y-4'>
       <SectionHeader
         title='Kitchen'
-        subtitle='Your ingredients, products and stores.'
+        subtitle='Your ingredients, products, stores and shopping list.'
       />
       <div className='grid grid-cols-2 gap-2'>
         <EntryRow
@@ -239,13 +238,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           count={productCount}
           onClick={() => openSubview({ kind: 'products' })}
         />
-        <EntryRow
-          icon={<ListChecks className='h-4 w-4' />}
-          label='Shopping list'
-          count={shoppingCount}
-          onClick={() => openSubview({ kind: 'shopping' })}
-          className='col-span-2'
-        />
+        <ShoppingEntry className='col-span-2' />
       </div>
       <div className='flex h-10 items-center justify-between gap-3'>
         <h3 className='text-muted-foreground flex min-w-0 items-baseline gap-2 text-xs font-semibold tracking-wide uppercase'>

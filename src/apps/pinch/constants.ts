@@ -105,8 +105,8 @@ export const MAX_MEAL_ITEMS = 10;
 export const MAX_SHOPPING_LINES_PER_ADD = 200;
 export const SOFT_MAX_SHOPPING_ITEMS = 300;
 export const SHOPPING_GROUP_PAGE_SIZE = 100;
-/** Under Firestore's limit of 500 writes per batch. */
-export const SHOPPING_BATCH_SIZE = 400;
+/** A chunk reads then deletes each item, two operations apiece, under Firestore's 500 per transaction. */
+export const SHOPPING_BATCH_SIZE = 250;
 export const MAX_SHOPPING_AMOUNT = 1_000_000;
 
 export const RECIPE_START_METHODS: {
