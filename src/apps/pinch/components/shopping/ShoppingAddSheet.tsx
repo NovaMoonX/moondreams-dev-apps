@@ -15,7 +15,6 @@ interface ShoppingAddSheetProps {
   onClose: () => void;
 }
 
-/** Search an ingredient and put it on the list at its serving size; how much is changed from its row afterwards. */
 function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();

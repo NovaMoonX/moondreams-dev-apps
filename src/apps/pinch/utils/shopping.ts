@@ -11,7 +11,6 @@ import type {
 } from '@apps/pinch/types';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
-/** An amount of one ingredient in one unit: what an add carries before it becomes a list item. */
 export interface ShoppingLine {
   ingredientId: string;
   amount: number;
@@ -37,11 +36,11 @@ export const OTHER_GROUP_NAME = 'Other';
 
 export const roundAmount = (value: number) => Math.round(value * 100) / 100;
 
-/** The list item for an ingredient in a unit. Units hold no double underscore, so the last `__` always splits them off. */
+/** Units never contain `__`, so no two items share an id. */
 export const getShoppingItemId = (ingredientId: string, unit: Unit) =>
   `${ingredientId}__${unit}`;
 
-/** Lines with the same ingredient and unit added together, rounded once at the end; units are never converted, and a line that rounds to nothing is dropped. */
+/** Adds up lines with the same ingredient and unit, rounding once at the end; units are never converted. */
 export function mergeLines(lines: ShoppingLine[]): ShoppingLine[] {
   const sums = lines.reduce((acc, line) => {
     const id = getShoppingItemId(line.ingredientId, line.unit);
@@ -72,7 +71,7 @@ const getRecipeRawLines = (
       unit: line.unit,
     }));
 
-/** What cooking `servings` of a recipe takes: each line scaled by servings over the recipe's own, and a line whose ingredient is gone left out. */
+/** A recipe's lines scaled from its own servings to `servings`; a line whose ingredient is gone is left out. */
 export function getRecipeLines(
   recipe: Recipe,
   ingredientsById: Map<string, ResolvedIngredient>,
@@ -81,7 +80,7 @@ export function getRecipeLines(
   return mergeLines(getRecipeRawLines(recipe, servings, ingredientsById));
 }
 
-/** What a meal, a planned meal or a whole day takes: a recipe item scales its recipe by its servings, an ingredient item is its servings of the ingredient's serving size, and anything whose recipe or ingredient is gone is left out. */
+/** The lines of a meal or a day: a recipe item scales its recipe by its servings, an ingredient item is its servings of one serving size. */
 export function getItemsLines(
   items: MealItem[],
   recipesById: Map<string, Recipe>,
@@ -112,7 +111,7 @@ export function getItemsLines(
 const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit);
 
-/** The list in one pass: what is left to buy grouped by ingredient family, in the Kitchen's family order with the ones that have none last as "Other", and what is checked off on its own. */
+/** Groups what is left by ingredient family, with "Other" last, and keeps what is checked off apart. */
 export function groupShoppingItems(
   items: ShoppingItem[],
   ingredientsById: Map<string, ResolvedIngredient>,
@@ -161,13 +160,12 @@ export function groupShoppingItems(
 }
 
 export interface ShoppingCost {
-  /** Unrounded cents of the lines that could be priced; null when none could. */
+  /** Unrounded; null when no line could be priced. */
   totalCents: number | null;
-  /** One entry per ingredient and kind that is missing from the total. */
   leftOut: Gap[];
 }
 
-/** About what the amounts on the list cost, priced from each ingredient's default product like a recipe's lines, and what that leaves out. It prices the amount, not whole packages. */
+/** Prices the amounts on the list, not whole packages, and says what it could not price. */
 export function getShoppingCost(
   lines: ShoppingLine[],
   ingredientsById: Map<string, ResolvedIngredient>,

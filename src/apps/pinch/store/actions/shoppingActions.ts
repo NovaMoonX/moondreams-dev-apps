@@ -44,7 +44,7 @@ const isValidLine = (line: ShoppingLine) =>
 
 const BAD_AMOUNT = 'Enter an amount above zero.';
 
-/** Our own sentences reach the screen as written; a Firebase error is logged and replaced by the fallback. */
+/** A Firebase error is logged and replaced by the fallback; our own sentences are shown as written. */
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
     console.error('Pinch shopping list write failed', error);
@@ -53,7 +53,7 @@ const getWriteMessage = (error: unknown, fallback: string) => {
   return getErrorMessage(error, fallback);
 };
 
-/** What a line does to the item it lands on, read in the same transaction: a missing item is created, an unchecked one gains the amount, and one already checked off starts again unchecked. */
+/** An item already checked off starts again with the new amount instead of adding to it. */
 function writeLine(
   transaction: Transaction,
   line: ShoppingLine,
@@ -94,7 +94,7 @@ interface AddToShoppingListInput {
   lines: ShoppingLine[];
 }
 
-/** Adds lines to the list in one transaction that reads every item they land on first, so two devices adding at once never lose an amount. Returns how many distinct lines it added. */
+/** One transaction reads every target first, so two devices adding at once never lose an amount. */
 export const addToShoppingList = createAsyncThunk<
   number,
   AddToShoppingListInput,
@@ -170,7 +170,7 @@ interface UpdateShoppingItemInput {
   unit: Unit;
 }
 
-/** Changes an item's amount with a field-scoped write. A different unit is a different item, so it moves in one transaction: the old item goes and the amount lands on the item of the new unit. */
+/** A different unit is a different item, so changing it moves the amount in one transaction. */
 export const updateShoppingItem = createAsyncThunk<
   void,
   UpdateShoppingItemInput,
@@ -239,7 +239,7 @@ interface ClearCheckedInput {
   uid: string;
 }
 
-/** Deletes what is checked off, as the list stands when the person taps, in batches under the write limit. Returns how many it took off. */
+/** Deletes the items checked off when it is tapped, in batches under the write limit. */
 export const clearCheckedShoppingItems = createAsyncThunk<
   number,
   ClearCheckedInput,

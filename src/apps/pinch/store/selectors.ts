@@ -210,7 +210,6 @@ export const selectShoppingItems = (state: RootState) =>
 export const selectShoppingLoadError = (state: RootState) =>
   state.pinch.shopping.loadError;
 
-/** How many things are left to buy: the Kitchen entry's count. */
 export const selectShoppingOpenCount = (state: RootState) =>
   state.pinch.shopping.items.filter((item) => !item.isChecked).length;
 
@@ -219,14 +218,12 @@ export const selectShoppingById = createSelector(
   (items) => new Map(items.map((item) => [item.id, item])),
 );
 
-/** The shopping list's rows grouped by ingredient family, computed once per change of the list, ingredients or families. */
 export const selectShoppingRows = createSelector(
   [selectShoppingItems, selectIngredientsById, selectIngredientFamilies],
   (items, ingredientsById, families) =>
     groupShoppingItems(items, ingredientsById, families),
 );
 
-/** About what is left to buy costs, priced from each ingredient's default product. */
 export const selectShoppingCost = createSelector(
   [selectShoppingItems, selectIngredientsById, selectDefaultProducts],
   (items, ingredientsById, defaultProducts) =>

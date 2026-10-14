@@ -17,7 +17,7 @@ interface ShoppingRowProps {
   onOpen: (id: string) => void;
 }
 
-/** One thing to buy: a tick on the first line, its name and amount, and a tap anywhere else to change how much. Props are plain values so a tick re-renders only its own row. */
+/** Props are plain values so a tick re-renders only its own row. */
 function ShoppingRow({
   id,
   name,

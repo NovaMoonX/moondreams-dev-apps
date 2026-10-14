@@ -26,7 +26,6 @@ interface ItemSearchProps {
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
   autoFocus?: boolean;
-  /** Classes for the results list, so a caller can cap its height and let only the list scroll. */
   resultsClassName?: string;
 }
 

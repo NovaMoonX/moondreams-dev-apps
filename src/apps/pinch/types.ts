@@ -253,7 +253,7 @@ export interface Source {
   updatedAt: number;
 }
 
-/** One thing to buy: an ingredient in one unit. Its id is `{ingredientId}__{unit}`, so adding the same thing again merges into it. */
+/** One thing to buy: an ingredient in one unit, so adding it again merges into it. */
 export interface ShoppingItem {
   /** Immutable. */
   id: string;
@@ -263,13 +263,11 @@ export interface ShoppingItem {
   amount: number;
   /** Immutable: a different unit is a different item. */
   unit: Unit;
-  /** Got it: it moves to the "Got it" group until cleared. */
   isChecked: boolean;
   createdAt: number;
   updatedAt: number;
 }
 
-/** What a drawer hands the "Add to shopping list" sheet: one recipe, or the items of a meal, a planned meal or a day. */
 export type ShoppingRequest =
   | { kind: 'recipe'; recipeId: string }
   | { kind: 'items'; items: MealItem[]; label: string };

@@ -101,13 +101,11 @@ export const MAX_PASTE_CHARS = 20_000;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
 
-/** The most distinct lines one add to the shopping list takes: a UI and action limit, not a rule. */
+/** The caps on lines per add and on items are not enforced by the rules. */
 export const MAX_SHOPPING_LINES_PER_ADD = 200;
-/** How many things the list holds before adding asks to clear what is checked off: a UI limit, not a rule. */
 export const SOFT_MAX_SHOPPING_ITEMS = 300;
-/** Rows a shopping group draws before "Show more". */
 export const SHOPPING_GROUP_PAGE_SIZE = 100;
-/** Deletes per batch when clearing what is checked off: under Firestore's 500. */
+/** Under Firestore's limit of 500 writes per batch. */
 export const SHOPPING_BATCH_SIZE = 400;
 export const MAX_SHOPPING_AMOUNT = 1_000_000;
 

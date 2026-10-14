@@ -7,7 +7,6 @@ interface AddToShoppingRowProps {
   onClick: () => void;
 }
 
-/** A drawer's way into the shopping list sheet: one tinted action row with a line saying what it will offer. */
 function AddToShoppingRow({
   subtitle,
   label = 'Add to shopping list',

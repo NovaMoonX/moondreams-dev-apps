@@ -34,7 +34,7 @@ interface AddToShoppingSheetProps {
   onClose: () => void;
 }
 
-/** Pick which of a recipe's, meal's or day's ingredients go on the shopping list. What is already on the list starts unticked and says how much, since ticking it adds more. */
+/** What is already on the list starts unticked, since ticking it adds more. */
 function AddToShoppingSheet({
   uid,
   request,
