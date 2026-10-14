@@ -33,7 +33,8 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 - **Calendar** (first): what you plan to eat, by month, week or day, with the period's stats above it.
 - **Recipes** (second): your recipes, saved meals and recipe ideas, and the sources your recipes came from.
-- **Kitchen** (third): everything you buy. Ingredients, their products and your stores live here and, as it grows, how much you have on hand and the servings you've prepared.
+- **Kitchen** (third): everything you buy. Ingredients, their products and your stores live here. Later it will also hold how much you have on hand and the servings you've prepared.
+
 - **Shopping** (fourth): what you still need to buy, grouped by ingredient family, with a count on the tab while anything is left.
 
 ### Filling In As You Go, In Detail
@@ -75,7 +76,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 ### Cost and Nutrition, In Detail
 
-- **Cost is always on.** A recipe shows its total and cost per serving, a meal shows the sum of its items, and the calendar's stats row shows spend and average cost per meal for the period you're viewing. Tapping it breaks the numbers down by day and by meal.
+- **Cost is always on.** A recipe shows its total and cost per serving, a meal shows the sum of its items, and the calendar's stats row shows its cost and average cost per meal for the period you're viewing. Tapping it breaks the numbers down by day and by meal.
 - **Cost appears when amounts can be compared.** A recipe's amount and a product's package size line up when they measure the same kind of thing (pounds with ounces, cups with tablespoons), or when the catalog knows the conversion (a cup of flour to grams). Anything that can't be compared is called out by name with a nudge to fix it and is left out of the totals, so every number shown is one the app can stand behind.
 - **Past days keep their numbers.** Once a day has passed, its cost and nutrition are fixed as they were that day. Updating a price or editing a recipe changes what's ahead, not last month's totals.
 - **Nutrition is yours to enter, and yours to show.** Built-in ingredients arrive with calories, protein, carbs, and fat. You can add or adjust them on any ingredient. A recipe's nutrition adds up from its ingredients, and you can type your own numbers over it, handy when a recipe comes with its own from the web.
@@ -94,7 +95,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Add from where you are.** A recipe, a saved meal, a planned meal and a day each have an "Add to shopping list" row in their drawer (not on days that have passed). It opens a sheet with every ingredient ticked, so you untick what you already have. A recipe also asks how many servings you're cooking, and every amount scales to that.
 - **One line per ingredient and unit.** Adding chicken thigh twice makes one line with both amounts added. A line that is already on the list starts unticked and says how much is there ("On your list · 2 lb"), since ticking it adds more. Units are never converted: a cup and a tablespoon of the same ingredient are two lines.
 - **A day adds up.** An ingredient on its own counts as its serving size times the servings; a recipe counts its ingredient lines scaled by the servings planned.
-- **Tick off what you got.** A tick moves the line to "Got it", a collapsed group at the bottom. Add the same thing again and it starts over, unticked. "Clear" takes everything in "Got it" off the list, after asking, and says how many it cleared. If another device un-ticked one in the meantime, that one stays.
+- **Tick off what you got.** A tick strikes the line through where it is and, a moment later, moves it to "Got it", a collapsed group at the bottom, so the lines below don't jump if you tick the next one right away. Add the same thing again and it starts over, unticked. "Clear" takes everything in "Got it" off the list, after asking, and says how many it cleared. If another device un-ticked one in the meantime, that one stays.
 - **Change a line.** Tap a row to change how much and which unit, or take it off. A ticked line that changes unit stays ticked. Moving a line into a unit that is already on the list adds to it, or, if that one is ticked, puts it back on the list at the moved amount, and the sheet says so before you save. "+ Add" at the top finds any ingredient and puts it on at its usual serving.
 - **Find a line.** From 8 things on, a search field sits above the list and narrows it by name as you type.
 - **An approximate cost.** A line under the title says "Amounts on your list: about $12.40", worked out from each ingredient's default product and the amount on the list. Stores sell whole packages, so the till total is usually higher, and the help icon beside it says so. The icon turns into a warning when something is left out, like an ingredient with no price yet, and names it and where to add the price.
@@ -106,11 +107,11 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 - **A place for "I'd like to make something like this".** Ideas sit beside Recipes and Meals as a third pill. An idea is a link, a photo, or a few words, with a title and an optional note.
 - **Three ways to add one.** "New idea" lists them: *From a link* (paste a recipe page), *From a photo* (a picture or screenshot of a dish or recipe) and *Jot it down* (just a few words). Each opens on its own screen, and back returns to the list.
-- **A link finds its own title and picture.** Pinch fetches the page to read its title, site name and picture address, and shows what it found, with the title ready to change. Nothing else from the page is kept. If the page can't be read, or takes too long, the idea saves with the site's address as its title, and you can type your own. Saving never waits for the lookup.
+- **A link finds its own title and picture.** Pinch fetches the page to read its title, site name and picture address, and shows what it found, with the title ready to change. Nothing else from the page is kept. "Save idea" waits until the lookup has finished (six seconds at most), so the idea is named after its page. If the page can't be read, takes too long or has no title, you're asked for one; left blank, the site's address is used.
 - **No duplicates.** Pasting a page that is already on the list ("That one's already in your ideas") offers to open it instead, however the link was spelled (with or without `www.`, a trailing slash or tracking parameters).
 - **A note is optional.** "+ Add a note" on a link or a photo; the jotted-down way shows it from the start.
 - **Open an idea to see it whole.** The picture, the title, the note, "Open <site>" for a link (it opens the page in a new tab), and "Modify" and "Turn it into a recipe" in the footer.
-- **Turn it into a recipe.** The recipe form opens with the idea's title, its note as the description and, for a link, its website's address as "Where it's from" (an existing source with that name is picked). Nothing is saved until you add the ingredients and save; leaving the form changes nothing. When the recipe is saved, the idea moves to "Made into recipes" right after, and its button becomes "Open the recipe". If the idea can't be updated (say it was deleted on another device a moment earlier), the recipe is still saved. A photo stays with the idea and isn't copied to the recipe.
+- **Turn it into a recipe.** An idea that holds a link opens "From a link" with its address already filled in, so one tap on "Fill in the recipe" reads the page into the form (the idea's own title and note are kept, and its website is "Where it's from"); nothing is sent until you tap it. If the page can't be read, "Write it yourself instead" opens the form with the idea's title, its note as the description and its website as "Where it's from". A photo or a few words open that form directly; a photo stays with the idea and isn't copied to the recipe (the form says so and points to "From a file"). Nothing is saved until you look it over and save; back or leaving the form changes nothing. When the recipe is saved, the idea moves to "Made into recipes" right after, and its button becomes "Open the recipe". If the idea can't be updated (say it was deleted on another device a moment earlier), the recipe is still saved.
 - **Deleting asks first.** Deleting an idea asks first, and for one that became a recipe says the recipe stays. Deleting the recipe later just puts the idea back among the ones still to try.
 - **Limits.** 120 characters for a title, 1,000 for a note, and about 200 ideas before the list asks you to delete one; the 200 is a limit in the app, not in the database.
 - **Private.** Ideas are yours alone. A link idea's picture is loaded from the website it came from when you look at it.
@@ -187,7 +188,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
 - [x] Meal calendar with month, week and day views: meal chips per day (titles on wide screens) and a Today button
 - [x] Plan a saved meal, a single recipe, or a single ingredient on a day under a meal type; tweak that day's items and servings; move or remove it
-- [x] Stats row on the calendar: total spend and average cost per meal for the shown month, week or day, with a breakdown by day and by meal
+- [x] Stats row on the calendar: total cost and average cost per meal for the shown month, week or day, with a breakdown by day and by meal
 - [x] Past days keep the cost and nutrition they had: a new price or an edited recipe changes what's ahead, not last month's totals
 - [x] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on

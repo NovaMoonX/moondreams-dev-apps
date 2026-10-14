@@ -130,8 +130,8 @@ function RecipeForm({
 }: RecipeFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { subview, closeSubviewIf } = usePinchOverlay();
   const { addToast } = useToast();
+  const { subview, closeSubviewIf } = usePinchOverlay();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -610,6 +610,15 @@ function RecipeForm({
             : undefined,
           type: 'success',
         });
+      } else if (
+        !recipe &&
+        subview?.kind === 'recipe' &&
+        subview.fromCalendar
+      ) {
+        addToast({
+          title: `Added ${data.title.trim()} to your recipes`,
+          type: 'success',
+        });
       }
       closeSubviewIf((current) => current === subview);
     } catch (submitError) {
@@ -635,6 +644,12 @@ function RecipeForm({
           <span className='text-foreground font-medium'>
             {initialIdea.title}
           </span>
+          {initialIdea.kind === 'PHOTO' && (
+            <span className='mt-1 block text-xs'>
+              Its photo stays with the idea. To have an AI read a picture, start
+              a new recipe with “From a file”.
+            </span>
+          )}
         </p>
       )}
       {initialNote && (
