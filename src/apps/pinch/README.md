@@ -108,7 +108,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **No duplicates.** Pasting a page that is already on the list ("That one's already in your ideas") offers to open it instead, however the link was spelled (with or without `www.`, a trailing slash or tracking parameters).
 - **A note is optional.** "+ Add a note" on a link or a photo; the jotted-down way shows it from the start.
 - **Open an idea to see it whole.** The picture, the title, the note, "Open <site>" for a link (it opens the page in a new tab), and "Modify" and "Turn it into a recipe" in the footer.
-- **Turn it into a recipe.** The recipe form opens with the idea's title, its note as the description and, for a link, the site as "Where it's from". Nothing is saved until you add the ingredients and save; leaving the form changes nothing. When the recipe is saved, the idea moves to "Made into recipes" in the same step, and its button becomes "Open the recipe". A photo stays with the idea and isn't copied to the recipe.
+- **Turn it into a recipe.** The recipe form opens with the idea's title, its note as the description and, for a link, its website's address as "Where it's from" (an existing source with that name is picked). Nothing is saved until you add the ingredients and save; leaving the form changes nothing. When the recipe is saved, the idea moves to "Made into recipes" right after, and its button becomes "Open the recipe". If the idea can't be updated (say it was deleted on another device a moment earlier), the recipe is still saved. A photo stays with the idea and isn't copied to the recipe.
 - **Deleting asks first.** Deleting an idea asks first, and for one that became a recipe says the recipe stays. Deleting the recipe later just puts the idea back among the ones still to try.
 - **Limits.** 120 characters for a title, 1,000 for a note, and about 200 ideas before the list asks you to delete one; the 200 is a limit in the app, not in the database.
 - **Private.** Ideas are yours alone. A link idea's picture is loaded from the website it came from when you look at it.
@@ -168,7 +168,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Shopping tab: add a recipe's (at the servings you pick), a saved meal's, a planned meal's or a day's ingredients, or a single ingredient; lines merge by ingredient and unit, group by family, tick off to "Got it", and show an approximate cost with what it leaves out
 - [x] Recipe ideas on the Recipes screen: save a link (with its title, site and picture), a photo or a few words, open it, change it, and turn it into a recipe that arrives with the idea's title, note and site; ideas that became recipes move to "Made into recipes"
 - [x] Cooking mode from a recipe or a planned meal: one step at a time in big type, the ingredients scaled to the servings you're making, timers for the times a step mentions, and the screen kept awake where the browser allows it
-- [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals, a shopping list of a few hundred things and a couple of hundred ideas
+- [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals, a shopping list of a few hundred things and dozens of ideas
 
 ### Next Steps
 - [ ] Track how much of each ingredient you have, with ingredients you haven't counted marked "not tracked" until you count them, which is different from "out"

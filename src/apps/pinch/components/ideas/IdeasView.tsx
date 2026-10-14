@@ -118,7 +118,13 @@ function IdeasView({
         </p>
       );
     }
-    if (!isLoaded) return null;
+    if (!isLoaded) {
+      return (
+        <p className='text-muted-foreground py-6 text-center text-sm'>
+          Loading your ideas…
+        </p>
+      );
+    }
     if (ideas.length === 0) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>

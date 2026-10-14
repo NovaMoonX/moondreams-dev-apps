@@ -18,6 +18,7 @@ import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
+import { hasSeveralWebLinks, toWebLink } from '@/utils/urlUtils';
 import IdeaNoteField from '@apps/pinch/components/ideas/IdeaNoteField';
 import {
   IDEA_KIND_EMOJIS,
@@ -66,7 +67,9 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
   const getBlocker = () => {
     if (data.title.trim() === '') return 'Give it a title to save.';
     if (isLink && url === null) {
-      return "That doesn't look like a web link. Paste the address from your browser.";
+      return hasSeveralWebLinks(data.url)
+        ? 'That looks like more than one link. Paste one at a time.'
+        : "That doesn't look like a web link. Paste the address from your browser.";
     }
     return duplicate ? "That one's already in your ideas." : null;
   };
@@ -110,6 +113,15 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
                         onChange={(event) =>
                           props.onValueChange(event.target.value)
                         }
+                        onPaste={(event) => {
+                          const pasted = event.clipboardData.getData('text');
+                          if (!/\s/.test(pasted.trim())) return;
+                          event.preventDefault();
+                          props.onValueChange(
+                            toWebLink(pasted) ??
+                              pasted.trim().replace(/\s+/g, ' '),
+                          );
+                        }}
                       />
                     )}
                   </Field>
@@ -147,7 +159,10 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
                       showPreview={false}
                       changeLabel='Replace photo'
                       error={photoError}
-                      onSelect={pickPhoto}
+                      onSelect={(file) => {
+                        setError(null);
+                        pickPhoto(file);
+                      }}
                     />
                   </div>
                 </div>
@@ -224,13 +239,19 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
         form={fields}
         initialData={data}
         columns={1}
-        onDataChange={(next) => setData(next as IdeaFormData)}
+        onDataChange={(next) => {
+          setData(next as IdeaFormData);
+          setError(null);
+        }}
         onSubmit={() => {
           void handleSubmit();
         }}
         submitButton={
           <ModalFooterActions
-            note={blocker}
+            note={
+              blocker ??
+              (error && <span className='text-destructive'>{error}</span>)
+            }
             leftActions={
               <DeleteIconButton
                 onClick={() => void handleDelete()}
@@ -260,7 +281,6 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
           />
         }
       />
-      {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
     </FormSheet>
   );
 }

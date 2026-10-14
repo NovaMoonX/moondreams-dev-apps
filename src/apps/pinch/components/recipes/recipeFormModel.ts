@@ -1,5 +1,6 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { generateUuid } from '@/utils';
+import { getWebLinkHost } from '@/utils/urlUtils';
 import {
   MAX_MINUTES,
   MAX_RECIPE_INGREDIENTS,
@@ -7,7 +8,6 @@ import {
 } from '@apps/pinch/constants';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
 import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
-import { getIdeaSiteName } from '@apps/pinch/utils/ideas';
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
   Idea,
@@ -167,8 +167,8 @@ export const getDataFromIdea = (
   title: idea.title,
   description: idea.note ?? '',
   sourceChoice:
-    idea.kind === 'LINK'
-      ? getSiteSourceChoice(getIdeaSiteName(idea) ?? '', sources)
+    idea.kind === 'LINK' && idea.url
+      ? getSiteSourceChoice(getWebLinkHost(idea.url) ?? '', sources)
       : NO_SOURCE_CHOICE,
 });
 
