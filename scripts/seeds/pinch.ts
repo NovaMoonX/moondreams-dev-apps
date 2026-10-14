@@ -401,6 +401,14 @@ const SEED_RECIPES = [
       'Simmer everything with the bay leaves and pepper, covered, for 25 minutes.',
       'Uncover and reduce the sauce until it clings to the chicken.',
     ],
+    // Nachos and the chili keep the older shape (no `care` key) so the legacy path stays exercised.
+    care: {
+      fridgeDays: 3,
+      freezerDays: 90,
+      reheat:
+        'Warm it in a covered pan over low heat with a splash of water, about 10 minutes.',
+      tip: 'Keep the sauce with the chicken. It thickens in the fridge, so loosen it with a little water.',
+    },
     nutritionOverride: null,
     source: 'MANUAL',
     sourceId: 'seed-pinch-source-recipe-cards',
@@ -424,6 +432,7 @@ const SEED_RECIPES = [
       'Cook the rice.',
       'Fold in the cilantro, lime juice, salt and olive oil.',
     ],
+    care: { fridgeDays: 3, freezerDays: null, reheat: null, tip: null },
     nutritionOverride: null,
     source: 'MANUAL',
     sourceId: 'seed-pinch-source-serious-eats',

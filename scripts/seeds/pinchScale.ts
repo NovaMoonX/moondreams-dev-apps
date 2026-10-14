@@ -237,7 +237,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list, 80 recipe ideas, about 330 cooks and about 310 notes. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list, 80 recipe ideas, about 330 cooks and about 310 notes. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -372,6 +372,26 @@ export async function seedPinchScale(
     return slot >= 15 ? null : sources[Math.max(0, slot - 3)].id;
   };
 
+  // Draws no random number, so nothing else in the fixture moves.
+  const getCare = (index: number) => {
+    if (index % 4 === 0) {
+      return {
+        care: {
+          fridgeDays: 4,
+          freezerDays: 90,
+          reheat: 'Warm it in a covered pan over low heat, about 10 minutes.',
+          tip: 'Keep any sauce in its own container.',
+        },
+      };
+    }
+    if (index % 4 === 1) {
+      return {
+        care: { fridgeDays: 3, freezerDays: null, reheat: null, tip: null },
+      };
+    }
+    return {};
+  };
+
   const recipes = Array.from({ length: RECIPE_COUNT }, (_, index) => {
     const lineCount = 3 + Math.floor(random() * 6);
     return {
@@ -391,6 +411,7 @@ export async function seedPinchScale(
         note: null,
       })),
       steps: ['Prep everything.', 'Cook until done.', 'Season and serve.'],
+      ...getCare(index),
       nutritionOverride: null,
       source: 'MANUAL',
       sourceId: getSourceId(index),

@@ -58,13 +58,21 @@ const hostile = normalizeExtractedRecipe({
     null,
   ],
   steps: ['Chop.', '', 7, 'Simmer.'],
+  fridgeDays: 800,
+  tip: 7,
   unread: ['the last line is cut off', 42],
 });
 assert.equal(hostile.title, 'Soup');
 assert.equal(hostile.servings, null, 'a negative serving count is not read');
 assert.equal(hostile.prepMinutes, 12);
 assert.equal(hostile.cookMinutes, null);
+assert.equal(
+  hostile.care,
+  null,
+  'days past a year and a tip that is no text are not read',
+);
 assert.deepEqual(Object.keys(hostile).sort(), [
+  'care',
   'cookMinutes',
   'description',
   'ingredients',

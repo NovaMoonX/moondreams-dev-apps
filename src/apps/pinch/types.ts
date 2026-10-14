@@ -352,6 +352,13 @@ export interface RecipeIngredient {
   note: string | null;
 }
 
+export interface RecipeCare {
+  fridgeDays: number | null;
+  freezerDays: number | null;
+  reheat: string | null;
+  tip: string | null;
+}
+
 export interface Recipe {
   id: string;
   title: string;
@@ -368,6 +375,8 @@ export interface Recipe {
   source: RecipeSource;
   /** The `Source` it came from. A missing key (recipes written before sources) or an id no source has reads as no source. */
   sourceId: string | null;
+  /** A recipe written before care lacks the key, which reads as null. */
+  care: RecipeCare | null;
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
   createdAt: number;
