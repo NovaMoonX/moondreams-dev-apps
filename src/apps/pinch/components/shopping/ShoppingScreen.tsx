@@ -321,7 +321,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
               }
               isOpen={isGotOpen}
               onToggle={setIsGotOpen}
-              buttonClassName='min-h-10 px-0! py-2 pr-20! hover:bg-transparent!'
+              buttonClassName='min-h-10 px-0! py-2 pr-20! hover:bg-transparent! [&>div>span]:flex-none'
             >
               {isGotOpen && (
                 <ShoppingRows
