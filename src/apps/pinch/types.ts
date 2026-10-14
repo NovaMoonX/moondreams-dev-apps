@@ -194,9 +194,16 @@ export type PinchSubview =
       fromIdeaId?: string;
       /** The note the form was opened from: shown as a quote, never changed by the save. */
       fromNoteId?: string;
+      /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
+      fromCalendar?: boolean;
     }
-  /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. */
-  | { kind: 'cook'; recipeId: string; servings?: number }
+  /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. A `plannedMealId` makes Finish mark that planned meal's cook. */
+  | {
+      kind: 'cook';
+      recipeId: string;
+      servings?: number;
+      plannedMealId?: string;
+    }
   | {
       kind: 'plan';
       dayKey: string;

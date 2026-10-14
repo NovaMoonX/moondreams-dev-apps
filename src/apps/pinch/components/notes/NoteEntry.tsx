@@ -1,6 +1,7 @@
 import { memo } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ClampedText from '@/components/ClampedText';
 import { formatDateShort } from '@/utils/formatUtils';
@@ -13,7 +14,8 @@ interface NoteEntryProps {
   cook: Cook | null;
   /** The day of the recipe's latest tweak when this note was written before it. */
   writtenBefore: number | null;
-  onEdit: (id: string) => void;
+  /** Null reads the entry without the Edit button. */
+  onEdit: ((id: string) => void) | null;
 }
 
 function NoteEntry({ note, cook, writtenBefore, onEdit }: NoteEntryProps) {
@@ -23,7 +25,12 @@ function NoteEntry({ note, cook, writtenBefore, onEdit }: NoteEntryProps) {
 
   return (
     <li className='py-1'>
-      <div className='flex min-h-10 items-center justify-between gap-3'>
+      <div
+        className={join(
+          'flex items-center justify-between gap-3',
+          onEdit && 'min-h-10',
+        )}
+      >
         <p className='flex min-w-0 flex-wrap items-center gap-x-2 text-sm font-medium'>
           <span className='whitespace-nowrap'>
             {isTweak ? `Changed on ${date}` : date}
@@ -34,16 +41,18 @@ function NoteEntry({ note, cook, writtenBefore, onEdit }: NoteEntryProps) {
             </span>
           )}
         </p>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          aria-label={`Edit the ${isTweak ? 'tweak' : 'note'} from ${date}`}
-          className='-mr-2 h-10 shrink-0 px-2!'
-          onClick={() => onEdit(note.id)}
-        >
-          Edit
-        </Button>
+        {onEdit && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            aria-label={`Edit the ${isTweak ? 'tweak' : 'note'} from ${date}`}
+            className='-mr-2 h-10 shrink-0 px-2!'
+            onClick={() => onEdit(note.id)}
+          >
+            Edit
+          </Button>
+        )}
       </div>
       <div className='space-y-2 pb-2'>
         {cook && (

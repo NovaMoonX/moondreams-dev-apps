@@ -1,11 +1,14 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChefHat } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDateTime } from '@/utils/formatUtils';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import {
   selectCooksByRecipe,
@@ -24,6 +27,8 @@ interface PlannedCookRowProps {
   plannedMealId: string;
   plannedDate: number;
   markable: MarkableRecipe;
+  /** Inside an `ActionGroup`, which draws the one frame. */
+  isGrouped?: boolean;
 }
 
 function PlannedCookRow({
@@ -31,6 +36,7 @@ function PlannedCookRow({
   plannedMealId,
   plannedDate,
   markable: { recipe, servings },
+  isGrouped = false,
 }: PlannedCookRowProps) {
   const cookId = getCookId(plannedMealId, recipe.id);
   const cook = useAppSelector(selectCooksById).get(cookId);
@@ -38,6 +44,7 @@ function PlannedCookRow({
     isCookHistoryFull(selectCooksByRecipe(state).get(recipe.id)?.length ?? 0),
   );
   const { isReady, markPlannedRecipeCooked, undoCook } = useCookActions(uid);
+  const { confirm } = useActionModal();
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +58,18 @@ function PlannedCookRow({
     } finally {
       setIsWorking(false);
     }
+  };
+
+  const handleUndo = async (cookedAt: number) => {
+    const isConfirmed = await confirm({
+      title: 'Delete this cook?',
+      message: `The cook from ${formatDateTime(cookedAt)} comes off your history. This can't be undone.`,
+      confirmText: 'Delete',
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+
+    await run(() => undoCook(cookId), 'Unable to undo this.');
   };
 
   const handleMark = () =>
@@ -74,9 +93,14 @@ function PlannedCookRow({
   };
 
   return (
-    <div className='space-y-1.5'>
+    <div className={join(!isGrouped && 'space-y-1.5')}>
       {cook ? (
-        <div className='bg-muted/50 border-border flex min-h-12 items-center gap-3 rounded-2xl border py-1 pr-2 pl-4'>
+        <div
+          className={join(
+            'flex min-h-12 items-center gap-3 py-1 pr-2 pl-4',
+            !isGrouped && 'bg-muted/50 border-border rounded-2xl border',
+          )}
+        >
           <span className='w-5 shrink-0' aria-hidden='true'>
             <ChefHat className='h-4 w-4' />
           </span>
@@ -91,9 +115,7 @@ function PlannedCookRow({
             variant='tertiary'
             className='h-10 shrink-0 px-3 underline'
             disabled={isWorking}
-            onClick={() =>
-              void run(() => undoCook(cookId), 'Unable to undo this.')
-            }
+            onClick={() => void handleUndo(cook.cookedAt)}
           >
             Undo
           </Button>
@@ -105,10 +127,14 @@ function PlannedCookRow({
           subtitle={getSubtitle()}
           isDisabled={!isReady || isWorking || isHistoryFull}
           onClick={() => void handleMark()}
+          isGrouped={isGrouped}
         />
       )}
       {error && (
-        <p className='text-destructive text-sm' role='alert'>
+        <p
+          className={join('text-destructive text-sm', isGrouped && 'px-4 py-2')}
+          role='alert'
+        >
           {error}
         </p>
       )}

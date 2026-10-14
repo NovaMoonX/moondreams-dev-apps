@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChefHat, History } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
@@ -18,6 +19,7 @@ import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection'
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import StartCookingRow from '@apps/pinch/components/shared/StartCookingRow';
 import { UNIT_LABELS } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
@@ -194,7 +196,7 @@ function RecipeDrawer({
           </ul>
           {cookSummary && (
             <p className='text-muted-foreground text-sm'>
-              <span aria-hidden='true'>🍳</span>{' '}
+              <span aria-hidden='true'>✅</span>{' '}
               {getCookFactText(
                 cookSummary.count,
                 formatDateShort(cookSummary.lastCookedAt),
@@ -207,11 +209,13 @@ function RecipeDrawer({
             <StatTile
               label='Cost'
               value={
-                cost.totalCents === null ? '—' : formatCost(cost.totalCents)
+                cost.totalCents === null
+                  ? 'No prices yet'
+                  : formatCost(cost.totalCents)
               }
               detail={
                 cost.totalCents === null
-                  ? 'No prices yet'
+                  ? undefined
                   : `${formatCost(cost.perServingCents ?? 0)} per serving`
               }
               help={
@@ -221,8 +225,14 @@ function RecipeDrawer({
                     title="What's left out"
                     placement='top'
                   >
-                    This {formatLeftOut(cost.leftOut)} because there’s no price
-                    for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                    <p>
+                      This {formatLeftOut(cost.leftOut)} because there’s no
+                      price for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                    </p>
+                    <NudgeCountNote
+                      leftOut={cost.leftOut}
+                      open={cost.leftOut}
+                    />
                   </HelpTip>
                 ) : undefined
               }
@@ -285,37 +295,43 @@ function RecipeDrawer({
         </FormSection>
 
         <div className='space-y-2'>
-          {recipe.steps.length > 0 && (
-            <StartCookingRow
-              onClick={() => {
-                onClose();
-                openSubview({ kind: 'cook', recipeId: recipe.id });
-              }}
+          <ActionGroup>
+            {recipe.steps.length > 0 && (
+              <StartCookingRow
+                isGrouped
+                onClick={() => {
+                  onClose();
+                  openSubview({ kind: 'cook', recipeId: recipe.id });
+                }}
+              />
+            )}
+            {loadError === null && (
+              <ActionRow
+                isGrouped
+                icon={<ChefHat className='h-4 w-4' />}
+                label='I cooked this'
+                subtitle={getMarkSubtitle()}
+                isDisabled={!isLoaded || isHistoryFull || isMarking}
+                onClick={() => void handleMarkCooked()}
+              />
+            )}
+            <AddToShoppingRow
+              isGrouped
+              subtitle='Choose what you need for this recipe'
+              onClick={() =>
+                onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
+              }
             />
-          )}
-          {loadError === null && (
-            <ActionRow
-              icon={<ChefHat className='h-4 w-4' />}
-              label='I cooked this'
-              subtitle={getMarkSubtitle()}
-              isDisabled={!isLoaded || isHistoryFull || isMarking}
-              onClick={() => void handleMarkCooked()}
-            />
-          )}
-          <AddToShoppingRow
-            subtitle='Choose what you need for this recipe'
-            onClick={() =>
-              onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
-            }
-          />
-          {cookSummary && (
-            <ActionRow
-              icon={<History className='h-4 w-4' />}
-              label='Cooking history'
-              subtitle='Fix a date or add one you missed'
-              onClick={() => onOpenHistory(recipe.id)}
-            />
-          )}
+            {cookSummary && (
+              <ActionRow
+                isGrouped
+                icon={<History className='h-4 w-4' />}
+                label='Cooking history'
+                subtitle='Fix a date or add one you missed'
+                onClick={() => onOpenHistory(recipe.id)}
+              />
+            )}
+          </ActionGroup>
           {markError && (
             <p className='text-destructive text-sm' role='alert'>
               {markError}

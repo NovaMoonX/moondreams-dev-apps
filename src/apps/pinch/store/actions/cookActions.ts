@@ -1,11 +1,15 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
 import {
+  collection,
   deleteDoc,
   doc,
+  getDocs,
+  query,
   runTransaction,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -239,18 +243,24 @@ export const removeCook = createAsyncThunk<
   return id;
 });
 
-/** A failure is the caller's to ignore: a cook whose recipe is gone is never read. */
-export async function deleteCooks(uid: string, cooks: Cook[]) {
+/** Reads the recipe's cooks from Firestore, since the store is empty while they load or after they fail to. A failure is the caller's to ignore: a cook whose recipe is gone is never read. */
+export async function deleteCooks(uid: string, recipeId: string) {
+  const { docs } = await getDocs(
+    query(
+      collection(db, 'apps', 'pinch', 'kitchens', uid, 'cooks'),
+      where('recipeId', '==', recipeId),
+    ),
+  );
   const groups = Array.from(
-    { length: Math.ceil(cooks.length / COOK_BATCH_SIZE) },
+    { length: Math.ceil(docs.length / COOK_BATCH_SIZE) },
     (_, index) =>
-      cooks.slice(index * COOK_BATCH_SIZE, (index + 1) * COOK_BATCH_SIZE),
+      docs.slice(index * COOK_BATCH_SIZE, (index + 1) * COOK_BATCH_SIZE),
   );
 
   await Promise.all(
     groups.map((group) => {
       const batch = writeBatch(db);
-      group.forEach((cook) => batch.delete(cookDoc(uid, cook.id)));
+      group.forEach((cook) => batch.delete(cook.ref));
       return batch.commit();
     }),
   );

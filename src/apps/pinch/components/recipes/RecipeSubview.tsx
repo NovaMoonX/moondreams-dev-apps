@@ -17,6 +17,7 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeStartMethod } from '@apps/pinch/types';
+import { getReadingForIdea } from '@apps/pinch/utils/ideas';
 
 type Stage = 'start' | 'form' | Exclude<RecipeStartMethod, 'manual'>;
 
@@ -40,6 +41,8 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     subview?.kind === 'recipe' ? (subview.fromIdeaId ?? null) : null;
   const fromNoteId =
     subview?.kind === 'recipe' ? (subview.fromNoteId ?? null) : null;
+  const fromCalendar =
+    subview?.kind === 'recipe' && subview.fromCalendar === true;
   const isDirtyRef = useRef(false);
   const existing =
     useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
@@ -76,9 +79,13 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   };
 
   const goBack = () => {
+    if (isReaderStage && fromIdea) {
+      closeSubview();
+      return;
+    }
     if (isReaderStage && fromDrawer) {
       closeSubview();
-      setIsStartOpen(true);
+      setIsStartOpen(true, fromCalendar);
       return;
     }
     if (isReaderStage) {
@@ -118,17 +125,35 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
       );
     }
     return (
-      <RecipeReader
-        key={stage}
-        method={stage}
-        onRead={(recipe, source, label) => {
-          isDirtyRef.current = true;
-          setRead({ recipe, source, label });
-          setTitle(recipe.title ?? '');
-          setStage('form');
-        }}
-        onManual={() => setStage('form')}
-      />
+      <>
+        {fromIdea && (
+          <p className='text-muted-foreground mb-4 text-sm wrap-break-word'>
+            From your idea:{' '}
+            <span className='text-foreground font-medium'>
+              {fromIdea.title}
+            </span>
+          </p>
+        )}
+        <RecipeReader
+          key={stage}
+          method={stage}
+          initialUrl={
+            stage === 'link' && fromIdea?.kind === 'LINK'
+              ? (fromIdea.url ?? undefined)
+              : undefined
+          }
+          onRead={(recipe, source, label) => {
+            const reading = fromIdea
+              ? getReadingForIdea(recipe, fromIdea)
+              : recipe;
+            isDirtyRef.current = true;
+            setRead({ recipe: reading, source, label });
+            setTitle(reading.title ?? '');
+            setStage('form');
+          }}
+          onManual={() => setStage('form')}
+        />
+      </>
     );
   };
 

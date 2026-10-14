@@ -7,12 +7,14 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import ActionGroup from '@/components/ActionGroup';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import StartCookingRow from '@apps/pinch/components/shared/StartCookingRow';
 import {
   MAX_NAME_LENGTH,
@@ -37,7 +39,11 @@ import {
 } from '@apps/pinch/utils/dayKeys';
 import { getMarkableRecipes } from '@apps/pinch/utils/cooks';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  formatCost,
+  formatRowCost,
+  getItemTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
@@ -314,6 +320,10 @@ function PlannedMealView({
                   {leftOutCount === 1 ? 'ingredient' : 'ingredients'} with no
                   price yet.
                 </p>
+                <NudgeCountNote
+                  leftOut={cost.leftOut}
+                  open={meal.snapshot ? [] : cost.leftOut}
+                />
                 <p className='text-muted-foreground'>
                   {meal.snapshot
                     ? 'This day has passed, so a price you add now counts from today on.'
@@ -353,11 +363,7 @@ function PlannedMealView({
                 </span>
               </span>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                {itemCost?.cents == null
-                  ? meal.snapshot
-                    ? "Wasn't priced"
-                    : 'No price yet'
-                  : formatCost(itemCost.cents)}
+                {formatRowCost(itemCost?.cents, meal.snapshot !== null)}
               </span>
             </li>
           );
@@ -371,9 +377,10 @@ function PlannedMealView({
         </p>
       )}
       {(canPlanAhead || markable.length > 0) && (
-        <div className='space-y-2'>
+        <ActionGroup>
           {canPlanAhead && cookable.length > 0 && (
             <StartCookingRow
+              isGrouped
               onClick={() =>
                 cookable.length === 1
                   ? onStartCooking(
@@ -387,6 +394,7 @@ function PlannedMealView({
           {markable.map((entry) => (
             <PlannedCookRow
               key={entry.recipe.id}
+              isGrouped
               uid={uid}
               plannedMealId={meal.id}
               plannedDate={meal.date}
@@ -395,6 +403,7 @@ function PlannedMealView({
           ))}
           {canPlanAhead && (
             <AddToShoppingRow
+              isGrouped
               subtitle='Choose what you need for this meal'
               onClick={() =>
                 onAddToShopping({
@@ -405,7 +414,7 @@ function PlannedMealView({
               }
             />
           )}
-        </div>
+        </ActionGroup>
       )}
       <Button
         type='button'
