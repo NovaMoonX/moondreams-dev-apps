@@ -80,7 +80,8 @@ flowchart TD
     IA -.->|a link already saved| ID2
     IL -->|tap an idea| ID2["Idea drawer · picture, title, note, Open site, Made into recipe"]
     ID2 -->|Modify| IE["Idea sheet · title, link or photo, note, delete"]
-    ID2 -->|Turn it into a recipe| RF
+    ID2 -->|Turn it into a recipe, a link idea| RR
+    ID2 -->|Turn it into a recipe, a photo or a few words| RF
     ID2 -->|Open the recipe, once made| RD
     RL -->|Meals pill| ML["Saved meals list"]
     ML -->|+ New or tap Modify| MF["Meal subview · same builder, no day"]
@@ -514,7 +515,7 @@ block-beta
 ```
 *The drawer shows the idea whole: the picture (a link's own picture, or the photo; an idea with neither, or one whose picture can't load, shows nothing in its place), the title, the note with its line breaks, for a link idea a quiet "Open <site>" row that opens the page in a new tab straight from the tap (with "Opens in a new tab" beneath), and, for an idea that became a recipe, a tinted "Made into <recipe>" row that opens the recipe's own drawer. The footer is Modify (secondary, left) beside the one primary, which takes the leftover width: "Turn it into a recipe", or "Open the recipe" once made. Modify closes the drawer and opens the Idea sheet (a drawer on a phone, a modal from `sm`): Title, the Link for a link idea (a changed link to another page drops the old picture and takes the new site's name; the same page spelled differently keeps both; another idea's page is refused with "That one's already in your ideas."), the picture with "Replace photo" for a photo idea (there is no way to remove it), and the Note. The footer is the trash at the bottom left, Cancel and Save. Deleting asks "Delete this idea?" over the sheet and names it; for an idea that became a recipe it adds "The recipe you made from it, Adobo chicken, stays."*
 
-**From an idea to a recipe** (the Recipe subview's form, opened by "Turn it into a recipe")
+**From an idea to a recipe** (the Recipe subview, opened by "Turn it into a recipe": on "From a link" for a link idea, on the form for a photo or a few words)
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
@@ -535,7 +536,7 @@ block-beta
   style P6 fill:transparent,stroke:#888888,stroke-width:1px;
   style P7 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The primary closes the drawer and opens the recipe form itself (not the list of ways) with what the idea knows: its title, its note as the description and, for a link, the link's website as "Where it's from" (the source already named for its address, such as "seriouseats.com", or "New source" with that address, which is created with the recipe). A muted "From your idea: …" line says why the form isn't blank, and nothing else is filled in: a photo stays with the idea. Nothing is saved until the person adds ingredients and saves, and leaving the form changes nothing (an untouched form closes without asking; one with typing asks Keep editing / Discard, like any new recipe). Saving creates the recipe, then marks the idea made in a write of its own, and the toast says "Recipe added: “…” moved to Made into recipes." and the idea moves to "Made into recipes". If the idea was deleted in the meantime (or can't be updated) the recipe still saves and the toast is just "Recipe added".*
+*The primary closes the drawer and opens the recipe subview itself (not the list of ways). For a link idea it opens the link way ("From a link") with the idea's address already in the field, under a muted "From your idea: …" line and the usual "We open the page and an AI reads the recipe from it."; nothing is sent until the person taps "Fill in the recipe", and the reading fills the real form for review (the idea's own title and note are kept, a title that is only the site's name gives way to the recipe's, the website is "Where it's from"). A failed reading names the link and, since the text way isn't one tap away from here, offers only "Write it yourself instead"; that, and a photo idea or a few words, open the form with what the idea knows: its title, its note as the description and, for a link, the link's website as "Where it's from" (the source already named for its address, such as "seriouseats.com", or "New source" with that address, which is created with the recipe). Back, Escape and the phone's back gesture on the link way return to the Ideas list. A muted "From your idea: …" line says why the form isn't blank, and nothing else is filled in by hand: a photo stays with the idea, and its form line says so and points to "From a file". Nothing is saved until the person adds ingredients and saves, and leaving the form changes nothing (an untouched form closes without asking; one with typing asks Keep editing / Discard, like any new recipe). Saving creates the recipe, then marks the idea made in a write of its own, and the toast says "Recipe added: “…” moved to Made into recipes." and the idea moves to "Made into recipes". If the idea was deleted in the meantime (or can't be updated) the recipe still saves and the toast is just "Recipe added".*
 
 **New recipe — how to start** (a drawer on a phone, the recipe subview's first page from `sm`; editing a recipe skips it)
 
@@ -1094,7 +1095,7 @@ flowchart LR
     C -->|From a link| D["Paste · 'Looking up the page…' · Looks like: title · site"] --> G["Save idea"]
     C -->|From a photo| E["Choose a picture · title"] --> G
     C -->|Jot it down| F["A few words"] --> G
-    G --> H["Top of Still to try"] --> I["Tap it: idea drawer"] --> J["Turn it into a recipe"] --> K["Recipe form, prefilled · add ingredients"] --> L["Add"]
+    G --> H["Top of Still to try"] --> I["Tap it: idea drawer"] --> J["Turn it into a recipe"] --> K["Link idea: From a link, address filled in · Fill in the recipe · review the form (or Write it yourself instead). Photo or note: the form, prefilled · add ingredients"] --> L["Add"]
     L --> M["Idea moves to Made into recipes"] --> N["Open the recipe"]
     I -->|Open the site| O["Page opens in a new tab"]
     D -.->|page can't be read| P["Host as the title · type your own"] -.-> G
@@ -1179,7 +1180,7 @@ flowchart LR
 |---|---|---|---|---|---|
 | Recipe | how to start (text, file, link or by hand; each way its own screen), then title and ingredients (ingredient + amount + unit) | everything else is a visible section of the same form: servings, times, photo, description, where it's from, steps, own nutrition | the recipe drawer's Modify | none; `FormSection`s, no chips | none |
 | Source | name | — | the Sources subview row; "New source" in the recipe form's "Where it's from" | none | none |
-| Idea | how to start (a link, a photo or a few words; each way its own view in the sheet), then one thing: a link, a picture with a title, or a title | the note (a "+ Add a note" link on the link and photo ways, shown from the start when jotting down), and in the edit sheet the title, link, picture and note | the Idea drawer's Modify; "Turn it into a recipe" fills a new recipe form from it | none | none |
+| Idea | how to start (a link, a photo or a few words; each way its own view in the sheet), then one thing: a link, a picture with a title, or a title | the note (a "+ Add a note" link on the link and photo ways, shown from the start when jotting down), and in the edit sheet the title, link, picture and note | the Idea drawer's Modify; "Turn it into a recipe" reads a link idea's page into a new recipe form (or fills the form with its title and note) | none | none |
 | Ingredient | name, family (`PickOrCreate`: existing family, new family, or none) | serving size and nutrition (typed per an amount of g, oz or servings as the label prints it, stored per 100 g), unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value | none; chips for serving size and nutrition | family: "New family" is the dashed first pill |
 | Product | store (`PickOrCreate`), price, package size | label, link, default flag | the ingredient drawer's product rows; the fill-in sheet for a missing price or size | none | store: "New store" is the dashed first pill |
 | Store | pick from the well-known list, or name | image | the Stores subview row | none | "Can't find it? Add your own" reveals the name and image fields |
