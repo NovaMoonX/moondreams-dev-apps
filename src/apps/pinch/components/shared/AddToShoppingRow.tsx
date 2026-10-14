@@ -1,31 +1,26 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ShoppingBasket } from 'lucide-react';
+
+import ActionRow from '@/components/ActionRow';
 
 interface AddToShoppingRowProps {
   subtitle: string;
   onClick: () => void;
+  isGrouped?: boolean;
 }
 
-function AddToShoppingRow({ subtitle, onClick }: AddToShoppingRowProps) {
+function AddToShoppingRow({
+  subtitle,
+  onClick,
+  isGrouped,
+}: AddToShoppingRowProps) {
   return (
-    <div className='bg-muted/50 border-border overflow-hidden rounded-2xl border'>
-      <Button
-        type='button'
-        variant='tertiary'
-        className='text-foreground! h-auto min-h-12 w-full justify-start gap-3 rounded-none py-2 text-left'
-        onClick={onClick}
-      >
-        <span className='w-5 shrink-0' aria-hidden='true'>
-          <ShoppingBasket className='h-4 w-4' />
-        </span>
-        <span className='min-w-0 text-left'>
-          <span className='block'>Add to shopping list</span>
-          <span className='text-muted-foreground block text-xs font-normal'>
-            {subtitle}
-          </span>
-        </span>
-      </Button>
-    </div>
+    <ActionRow
+      icon={<ShoppingBasket className='h-4 w-4' />}
+      label='Add to shopping list'
+      subtitle={subtitle}
+      onClick={onClick}
+      isGrouped={isGrouped}
+    />
   );
 }
 

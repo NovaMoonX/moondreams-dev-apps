@@ -66,6 +66,11 @@ html[data-site-banner='true'] [data-subview-overlay] {
   top: 2.25rem;
 }
 
+/* Drawers and modals are `z-[100]`, so a toast with an action (Undo) raised from one would sit under its overlay and could not be tapped. */
+[role='region'][aria-label='Notifications'] {
+  z-index: 110;
+}
+
 /* The library's toast stack is `w-full max-w-sm` pinned with `right-4`, which on a phone pushes its left edge off the screen. */
 @media (max-width: 639.98px) {
   [role='region'][aria-label='Notifications'] {

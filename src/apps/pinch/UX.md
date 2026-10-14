@@ -75,6 +75,11 @@ flowchart TD
     RD -->|Add to calendar| PM
     RD -->|Add to shopping list| AS["Shopping list sheet · servings, tick what you need"]
     AS -.->|toast View, unless a subview is open| SH
+    RD -->|I cooked this| CT["Cook added · toast: Marked … as cooked · Undo"]
+    RD -->|Cooking history, once cooked| CH["Cooking history sheet · newest first, + Add an earlier cook"]
+    CH -->|tap a cook, or + Add| CE["Cook view · day, time, servings, trash · swaps in place, ‹ Back"]
+    CE -->|trash| CD["Delete confirm · names the day"]
+    PMD -->|Mark as cooked, today or a past day| CP["Cooked ✓ · Undo · in the row"]
     RL -->|Ideas pill| IL["Ideas list · still to try, then made into recipes"]
     IL -->|+ New idea| IA["Add sheet · a drawer on a phone, a modal from sm · link, photo or jot it down, each in the sheet's own view with a Back link"]
     IA -.->|a link already saved| ID2
@@ -84,6 +89,8 @@ flowchart TD
     ID2 -->|Turn it into a recipe, a photo or a few words| RF
     ID2 -->|Open the recipe, once made| RD
     RD -->|Start cooking, with steps| CK["Cooking mode subview · Steps and Ingredients, timers"]
+    CK -->|Finish, then I cooked this| CT
+    CK -->|Finish, started from a planned meal| CP
     PMD -->|Start cooking, one recipe| CK
     PMD -->|Start cooking, several recipes| CKP["Which one? swaps in place · ‹ Back"]
     CKP --> CK
@@ -322,7 +329,10 @@ block-beta
   style P11 fill:transparent,stroke:#888888,stroke-width:1px;
   style P12 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A Cost tile (its warning icon says what the total leaves out) and, when nutrition is on, the plate's calories and macros as emoji tiles sit above the items. The footer holds Modify (secondary, left) beside the one primary, "Save as a meal"; Modify closes the drawer and opens the Plan a meal subview, and is absent on a past day. "Remove from this day" is the red row at the end of the body, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button. In the body, above Modify's footer, a tinted "Start cooking" row (only when a recipe in the meal has steps) and a tinted "Add to shopping list" row ("Choose what you need for this meal") sit together; neither is there once the day has passed. Add to shopping list closes the drawer and opens the shopping list sheet. Start cooking closes the drawer and opens Cooking mode at the servings planned for that recipe, or, when more than one recipe has steps, swaps the drawer in place to a short "Which one are you cooking?" list with a "‹ Back" link.*
+*A Cost tile (its warning icon says what the total leaves out) and, when nutrition is on, the plate's calories and macros as emoji tiles sit above the items. The footer holds Modify (secondary, left) beside the one primary, "Save as a meal"; Modify closes the drawer and opens the Plan a meal subview, and is absent on a past day. "Remove from this day" is the red row at the end of the body, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button. In the body, above Modify's footer, a "Start cooking" row (only when a recipe in the meal has steps) and an "Add to shopping list" row ("Choose what you need for this meal") sit together in one tinted block with hairline dividers; neither is there once the day has passed. Add to shopping list closes the drawer and opens the shopping list sheet. Start cooking closes the drawer and opens Cooking mode at the servings planned for that recipe, or, when more than one recipe has steps, swaps the drawer in place to a short "Which one are you cooking?" list with a "‹ Back" link.*
+
+*Cooked: on today or a day that has passed, each recipe in the meal has a "Mark as cooked" row ("Adobo chicken · 2 servings") in that same block as Start cooking and Add to shopping list. Tapping it records the cook at the planned servings: now for today, noon of that day for a day that has passed (a passed day is when a person remembers). Then the row reads "Cooked ✓" with an Undo that deletes that cook, after the same question the history's trash asks ("Delete this cook?", naming the day). A meal that lists one recipe twice has one row with the servings added up (and cooking either copy finishes into that row's cook), an ingredient has no row, a day still ahead has none, and marking a meal that is already marked says "Already marked" and changes nothing.*
+
 
 **Plan a meal** (subview; also the editor for an already planned meal)
 
@@ -639,6 +649,7 @@ block-beta
   columns 2
   T1["Adobo chicken"]:2
   T2["🍽️ 4 servings · 🔪 Prep 10 min · ⏲️ Cook 35 min · 📖 From Serious Eats"]:2
+  T3["✅ Cooked 3 times · last Oct 12 (only once it has been cooked)"]:2
   T4["Cost $12.80 ⚠ · $3.20 per serving"]:2
   T5["🔥 495 · 💪 61g · 🌾 3g · 🥑 25g (when on)"]:2
   T6["2 ingredients need a price · Add prices   ✕"]:2
@@ -651,6 +662,7 @@ block-beta
   T13["Add to calendar"]:1
   style T1 fill:transparent,stroke:#888888,stroke-width:1px;
   style T2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style T3 fill:transparent,stroke:#888888,stroke-width:1px;
   style T4 fill:transparent,stroke:#888888,stroke-width:1px;
   style T5 fill:transparent,stroke:#888888,stroke-width:1px;
   style T6 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -662,10 +674,45 @@ block-beta
   style T12 fill:transparent,stroke:#888888,stroke-width:1px;
   style T13 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The front matter is one plain line of emoji and text for servings, times and, when the recipe has a source that still exists, "📖 From {source}" (a long name wraps inside the line; never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone or touch screen, a tooltip with a mouse) and whose value reads "No prices yet" while nothing is priced, as every Cost tile does, calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm. A tinted "Start cooking" row ("Steps one at a time, with a timer", only when the recipe has a step) and a tinted "Add to shopping list" row ("Choose what you need for this recipe") sit together under the ingredients; Start cooking closes the drawer and opens Cooking mode at the recipe's own servings, and Add to shopping list closes it and opens the sheet, which starts at the recipe's own servings.*
+*The front matter is one plain line of emoji and text for servings, times and, when the recipe has a source that still exists, "📖 From {source}" (a long name wraps inside the line; never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone or touch screen, a tooltip with a mouse) and whose value reads "No prices yet" while nothing is priced, as every Cost tile does, calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm. A "Start cooking" row ("Steps one at a time, with a timer", only when the recipe has a step) and an "Add to shopping list" row ("Choose what you need for this recipe") sit together under the ingredients, in one tinted block with hairline dividers (the "I cooked this" and "Cooking history" rows below join it, so a cooked recipe has one block of four rows, not four cards); Start cooking closes the drawer and opens Cooking mode at the recipe's own servings, and Add to shopping list closes it and opens the sheet, which starts at the recipe's own servings.*
+
+*Cooked: once a recipe has been cooked, a quiet muted line under the front matter says "✅ Cooked 3 times · last Oct 12" ("Cooked once · Oct 12" for one), the day in local time. An "I cooked this" row ("Keeps a record. You can change the date later.") sits in that block with Start cooking and Add to shopping list; one tap adds a cook at the recipe's own servings, now, and a toast says "Marked Adobo chicken as cooked" with Undo, which takes back exactly that cook (the toast stack sits above the drawer so it can be tapped). The drawer stays open and the line above updates. A second tap is a second cook. A "Cooking history" row, only once there is a cook, closes the drawer and opens the history sheet (a recipe never cooked keeps its action block at three rows, so it has no history row: mark it, then change the date there). The "I cooked this" row is disabled until its write settles. While the history loads the row says so and is disabled, at 500 cooks it says the history is full, and if the history can't load neither row nor line appears.*
 
 **Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with a Cost tile (warning icon when it leaves something out, "No prices yet" while nothing is priced), the plate's calories and macros as emoji tiles when on, the items with servings and cost, and in the footer Modify beside the one primary "Plan it", which closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. The builder's header carries the meal's name (or the plate's first item while planning), its rows are a title with a compact servings stepper beneath (40px hit areas from a pseudo-element), and a tinted summary shows the cost, its warning icon and the plate's emoji macros. Adding stays the search field in the form. Removing an item from the plate shows "Removed Taco shells · Undo · 6" above the footer, and Undo puts it back in its place with its servings. The meal drawer has the same "Add to shopping list" row ("Choose what you need for this meal") under its items.
 
+
+**Cooking history** (sheet — the recipe drawer's row; a drawer on a phone, a modal from `sm`)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  H1["Cooking history"]:2
+  H2["Adobo chicken"]:2
+  H3["+ Add an earlier cook"]:2
+  H4["Oct 11 · 4 servings  ›"]:2
+  H5["From your plan for Sun, Oct 11"]:2
+  H6["Oct 5 · 2 servings  ›"]:2
+  H7["Sep 27 · 6 servings  ›"]:2
+  H8["Show 4 more (from 12 cooks)"]:2
+  E1["‹ Back"]:2
+  E2["Day · Time"]:2
+  E3["Servings  – 4 +"]:2
+  E4["🗑  Cancel  Save"]:2
+  style H1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style E1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style E2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style E3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style E4 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*The title is the plain noun "Cooking history", with the recipe's name and "+ Add an earlier cook" fixed above the one list that scrolls. A row is the day and the servings ("Oct 11 · 4 servings"), with "From your plan for Sun, Oct 11" under a cook marked from a planned meal, and the first eight show; "Show N more" appears only when more than three would be hidden (11 cooks show all of them, 12 show eight and "Show 4 more") and "Show fewer" folds it back. A row, or the add link, swaps the sheet's content in place for the cook's own view (a "Back" link, never a second overlay): a Day and a Time (stacked below 304px, so "10/08/2026" is never clipped), a Servings stepper in halves, Cancel and Save, and for an existing cook the trash on the footer's left, whose confirm ("Delete this cook?") names the day and time. Save waits for a change and a time that has already passed. "+ Add an earlier cook" opens the same view with today, now and the recipe's servings. A full history (500 cooks) says so in place of the add link, and a history that can't load says that and offers no add.*
 
 **Kitchen tab**
 
@@ -966,7 +1013,9 @@ block-beta
   style I9 fill:transparent,stroke:#888888,stroke-width:1px;
   style I10 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Cooking mode is an overlay `Subview` titled with the recipe's name, so its header holds only the back button and the title; Finish, the header's back, Escape and the phone's back gesture all do the same thing: leave at once, or, while a timer is running or paused, ask "Stop timers and leave?" ("2 timers are still going. Timers only run while this screen is open, so leaving stops them.", with Stay, the safe answer, above a red Leave); a finished or dismissed timer doesn't count, and nothing else is stored, so there is nothing else to confirm. One Escape or back gesture over that question closes only the question. It opens on Steps. The step is the one big thing on the screen (`text-2xl`, `text-xl` for a long step or a short landscape screen), under "Step 2 of 3" and a dot per step (the count alone past twelve steps). Back and Next are 56px tall and pinned at the bottom with the timer strip above them (Next is the wide one and reads Finish on the last step, which leaves the way the back arrow does); swipe left or right, or the arrow keys, change step, and a long step scrolls between the fixed header and the buttons. Under the step, a dashed chip starts a timer for each length of time the text mentions ("⏲️ Start 25 min timer"; a range like 10-15 minutes uses its longer end); the chip is gone once that timer is running, and with four timers going (running or paused; a finished one waits for Dismiss and doesn't count) the chips are disabled with a line that says why ("4 timers are going. Dismiss or finish one to start another."). A time written with a comma ("1,5 hours", "2,500 seconds") gets no chip, since it could mean two things. Each running timer is a pill in the strip with its countdown, "Step 1", Pause (Resume once paused) and a close button, each 40×40; when one ends its pill turns peach with "Step 3 · 30 sec is done" and Dismiss, and a toast, a buzz and a beep go with it where the device allows. The first time a timer starts, a muted line says "Timers only run while this screen is open." The step and the ticks stay put when the person switches between Steps and Ingredients and back, and a recipe that is edited, archived or deleted on another device doesn't end the screen: it carries on with what it last had and one muted line says "This recipe was changed or removed elsewhere." Ingredients says "Making 6 servings" once, beside the servings stepper (it starts at the recipe's own servings, or the planned ones), with a muted line when the servings differ ("Scaled from 4 servings. Amounts written in the steps stay as they are."), then one checkbox row per ingredient (name and note on the left, the scaled amount on the right) with "Reset" once something is ticked; the footer is one "Back to the steps" button. When the screen can't keep the display on, one muted line above the footer says "Your screen may turn off while you cook." On a phone held sideways the header, the step and the one-row footer all stay on screen.*
+*Cooking mode is an overlay `Subview` titled with the recipe's name, so its header holds only the back button and the title; the header's back, Escape and the phone's back gesture all do the same thing: leave at once, or, while a timer is running or paused, ask "Stop timers and leave?" ("2 timers are still going. Timers only run while this screen is open, so leaving stops them.", with Stay, the safe answer, above a red Leave); a finished or dismissed timer doesn't count, and nothing is stored unless "I cooked this" on the last panel is tapped, so there is nothing else to confirm. One Escape or back gesture over that question closes only the question. It opens on Steps. The step is the one big thing on the screen (`text-2xl`, `text-xl` for a long step or a short landscape screen), under "Step 2 of 3" and a dot per step (the count alone past twelve steps). Back and Next are 56px tall and pinned at the bottom with the timer strip above them (Next is the wide one and reads Finish on the last step, which opens the final panel); swipe left or right, or the arrow keys, change step, and a long step scrolls between the fixed header and the buttons. Under the step, a dashed chip starts a timer for each length of time the text mentions ("⏲️ Start 25 min timer"; a range like 10-15 minutes uses its longer end); the chip is gone once that timer is running, and with four timers going (running or paused; a finished one waits for Dismiss and doesn't count) the chips are disabled with a line that says why ("4 timers are going. Dismiss or finish one to start another."). A time written with a comma ("1,5 hours", "2,500 seconds") gets no chip, since it could mean two things. Each running timer is a pill in the strip with its countdown, "Step 1", Pause (Resume once paused) and a close button, each 40×40; when one ends its pill turns peach with "Step 3 · 30 sec is done" and Dismiss, and a toast, a buzz and a beep go with it where the device allows. The first time a timer starts, a muted line above the strip says "Keep this screen open: timers stop if you leave it." (when the browser can't keep the screen awake, the one line in the body says "This phone may turn the screen off; timers keep running only while this screen is open." instead, so two notices never sit together). The step and the ticks stay put when the person switches between Steps and Ingredients and back, and a recipe that is edited, archived or deleted on another device doesn't end the screen: it carries on with what it last had and one muted line says "This recipe was changed or removed elsewhere." Ingredients says "Making 6 servings" once, beside the servings stepper (it starts at the recipe's own servings, or the planned ones), with a muted line when the servings differ ("Scaled from 4 servings. Amounts written in the steps stay as they are."), then one checkbox row per ingredient (name and note on the left, the scaled amount on the right) with "Reset" once something is ticked; the footer is one "Back to the steps" button. When the screen can't keep the display on, one muted line above the footer says "This phone may turn the screen off; timers keep running only while this screen is open." On a phone held sideways the header, the step and the one-row footer all stay on screen.*
+
+*The final panel: Finish on the last step swaps the screen's content, in place and inside the same overlay, for "Nice work. Mark it as cooked?" (`text-2xl`, centered) with the servings being cooked in medium weight ("4 servings", whatever the Ingredients stepper says) and "Keeps a record. You can change the date later." under it. The Steps / Ingredients switch is hidden there and the footer becomes "Not now" (secondary, compact) beside the wide primary "I cooked this" (the timer strip stays above them); a quiet "Back to the last step" link sits in the panel and ArrowLeft does the same. "I cooked this" closes the screen, then a toast says "Marked Adobo chicken as cooked" with Undo over whatever screen the person came from; while a timer is running or paused it first asks "Stop timers and leave?" like every other way out, and Stay keeps the panel and writes nothing. "Not now", the header's back, Escape and the back gesture write nothing. Started from a planned meal, "I cooked this" marks that meal's own cook (so the meal reads "Cooked ✓" and one dinner is one cook, with the same toast and Undo), and when that cook already exists the panel says "Already marked as cooked", with a single "Done" and nothing written; started from a recipe's drawer it writes a fresh cook as before. A full history (500 cooks) says so and disables the primary; if the cooks listener failed or hasn't loaded, Finish just leaves as it did, so a screen never offers what it can't do.*
 
 *Entry: a tinted "Start cooking" row ("Steps one at a time, with a timer") above "Add to shopping list" in the recipe drawer, shown only when the recipe has a step, and the same row in a planned meal's view when a recipe in it has steps (never on a day that has passed). With one such recipe it opens that recipe at the planned servings; with several the drawer swaps in place to "Which one are you cooking?" with each recipe and its servings as a row and a "‹ Back" link.*
 
@@ -1084,8 +1133,11 @@ block-beta
 | SourcesSubview, SourceFormSheet | Recipes tab's Sources entry | the list of sources with their recipe counts and the one-field Source sheet (rename, add, delete); a `Subview` and a `FormSheet`, mirroring Stores |
 | EntryRow | Kitchen (Stores, Products), Recipes (Sources) | the tinted-icon entry tile with its count and chevron (the icon hides at 360px and under, the chevron at 400px and under); a `className` lets one span both columns |
 | ShoppingScreen, ShoppingRow, ShoppingItemSheet, ShoppingAddSheet, ShoppingTabBadge | the Shopping tab | the list by family with a checkbox on each row's first line, "Got it" and "Clear", the cost line with its warning icon, the row sheet (amount, unit, remove) and the add sheet (an `ItemSearch`); groups after the first three mount near the viewport |
-| CookingSubview, CookStepView, CookIngredientsView, CookTimerStrip | recipe drawer and planned meal view's Start cooking | the overlay `Subview` with its Steps / Ingredients `PillGroup`, the big step with dots and swipe, the scaled and tickable ingredients, and the pinned timer strip, and the "Stop timers and leave?" question; all state lives in the session and nothing is stored |
+| CookingSubview, CookStepView, CookIngredientsView, CookTimerStrip | recipe drawer and planned meal view's Start cooking | the overlay `Subview` with its Steps / Ingredients `PillGroup`, the big step with dots and swipe, the scaled and tickable ingredients, and the pinned timer strip, the "Stop timers and leave?" question and the final "Nice work. Mark it as cooked?" panel; all state lives in the session and nothing is stored unless "I cooked this" is tapped |
 | StartCookingRow | recipe drawer, planned meal view | the tinted entry row ("Start cooking", "Steps one at a time, with a timer"), shown only when there is a step to cook and not on a day that has passed |
+| ActionRow, ActionGroup (shared) | recipe drawer ("I cooked this", "Cooking history"), planned meal view ("Mark as cooked") | the tinted drawer row: an icon, what it does and a line on what to expect, with no app words (`StartCookingRow` and `AddToShoppingRow` are thin wrappers over it that supply an icon and their words); a lone row keeps its own frame (day and meal drawers), and related rows go in one `ActionGroup` (rows with `isGrouped`) that draws a single tinted block with hairline dividers and nothing while it has no rows |
+| PlannedCookRow | planned meal view, on today or a day that has passed | one recipe of the meal: "Mark as cooked" until its cook exists, then "Cooked ✓" with an Undo that asks first; re-renders with any cook change, which costs nothing for the few rows of a meal |
+| CookingHistorySheet, CookEditView | recipe drawer's "Cooking history" row | a `FormSheet` whose list (8 rows, "Show N more", fixed header) and one cook's view (day, time, servings, trash) swap in place with a Back link |
 | AddToShoppingSheet, AddToShoppingRow | recipe, meal, planned meal and day drawers | the tinted row that closes the drawer and opens the `FormSheet` where a recipe's, meal's or day's lines are ticked (a servings `Stepper` for a recipe) and added in one write |
 | RecipeRow, MealRow | Recipes tab | cover or emoji tile, title, muted details, then the cost and macro lines when shown; the tile and text share a top edge and the chevron sits on the first line |
 | IngredientRow, FamilyGroup | Kitchen | name, a price line and a macro line (each can be hidden), the chevron on the name's line; `SectionDivider` groups |
@@ -1196,8 +1248,24 @@ flowchart LR
     D --> E["Back to the steps"] --> F["Next, Next"]
     F --> G["A step says 25 minutes: Start 25 min timer"] --> H["Timer runs above the buttons; keep cooking"]
     H --> I["Done: the strip lights up, a toast and a beep"] --> J[Dismiss] --> K[Finish]
+    K --> L["Nice work. Mark it as cooked?"] --> M["I cooked this: toast with Undo, the screen closes"]
+    L --> N["Not now: closes, nothing saved"]
     H --> L["Leave with a timer going"] --> M["Stop timers and leave? Stay or Leave"]
 ```
+
+**Mark a recipe cooked, and fix the record later**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
+flowchart LR
+    A["Open a recipe"] --> B["I cooked this"] --> C["Toast: Marked Adobo chicken as cooked · Undo"]
+    C -->|Undo| D["That cook is gone"]
+    C --> E["Line: Cooked 4 times · last today"]
+    F["Last night's dinner on the calendar"] --> G["Mark as cooked"] --> H["Cooked ✓ · Undo"]
+    E --> I["Cooking history"] --> J["Tap a cook: change the day or servings, or delete"]
+    I --> K["+ Add an earlier cook: last Sunday's dinner"]
+```
+
 
 **Add a product with a store**
 

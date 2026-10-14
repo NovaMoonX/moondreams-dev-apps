@@ -1,20 +1,29 @@
+import { useState } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChefHat, History } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
+import { formatDateShort } from '@/utils/formatUtils';
+import { getErrorMessage } from '@/utils/errorUtils';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import StartCookingRow from '@apps/pinch/components/shared/StartCookingRow';
 import { UNIT_LABELS } from '@apps/pinch/constants';
+import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectCookSummaries,
   selectIngredientsById,
   selectRecipeCosts,
   selectRecipeNutrition,
@@ -23,6 +32,11 @@ import {
   selectSourcesById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, GapKind, ShoppingRequest } from '@apps/pinch/types';
+import {
+  getCookFactText,
+  getCookServings,
+  isCookHistoryFull,
+} from '@apps/pinch/utils/cooks';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
@@ -52,6 +66,7 @@ interface RecipeDrawerProps {
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
+  onOpenHistory: (id: string) => void;
 }
 
 function RecipeDrawer({
@@ -62,6 +77,7 @@ function RecipeDrawer({
   onModify,
   onFillIn,
   onAddToShopping,
+  onOpenHistory,
 }: RecipeDrawerProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -69,11 +85,36 @@ function RecipeDrawer({
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
   const show = useAppSelector(selectShowNutrition);
   const sourcesById = useAppSelector(selectSourcesById);
+  const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
   const { openSubview } = usePinchOverlay();
+  const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
+  const [markError, setMarkError] = useState<string | null>(null);
+  const [isMarking, setIsMarking] = useState(false);
 
   if (!recipe) {
     return null;
   }
+
+  const isHistoryFull = isCookHistoryFull(cookSummary?.count ?? 0);
+  const getMarkSubtitle = () => {
+    if (!isLoaded) return 'Loading your cooking history…';
+    if (isHistoryFull) {
+      return "This recipe's history is full. Delete an older cook to add more.";
+    }
+    return 'Keeps a record. You can change the date later.';
+  };
+
+  const handleMarkCooked = async () => {
+    setMarkError(null);
+    setIsMarking(true);
+    try {
+      await markRecipeCooked(recipe, getCookServings(recipe.servings));
+    } catch (error) {
+      setMarkError(getErrorMessage(error, 'Unable to mark this as cooked.'));
+    } finally {
+      setIsMarking(false);
+    }
+  };
 
   const source = getRecipeSource(recipe, sourcesById);
 
@@ -124,18 +165,31 @@ function RecipeDrawer({
             className='h-40 w-full'
           />
         )}
-        <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
-          {facts.map((fact) => (
-            <li
-              key={fact.text}
-              className={join(
-                fact.canWrap ? 'min-w-0 wrap-break-word' : 'whitespace-nowrap',
+        <div className='space-y-1.5'>
+          <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
+            {facts.map((fact) => (
+              <li
+                key={fact.text}
+                className={join(
+                  fact.canWrap
+                    ? 'min-w-0 wrap-break-word'
+                    : 'whitespace-nowrap',
+                )}
+              >
+                <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
+              </li>
+            ))}
+          </ul>
+          {cookSummary && (
+            <p className='text-muted-foreground text-sm'>
+              <span aria-hidden='true'>✅</span>{' '}
+              {getCookFactText(
+                cookSummary.count,
+                formatDateShort(cookSummary.lastCookedAt),
               )}
-            >
-              <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
-            </li>
-          ))}
-        </ul>
+            </p>
+          )}
+        </div>
         {cost && (
           <div className='space-y-3'>
             <StatTile
@@ -227,20 +281,48 @@ function RecipeDrawer({
         </FormSection>
 
         <div className='space-y-2'>
-          {recipe.steps.length > 0 && (
-            <StartCookingRow
-              onClick={() => {
-                onClose();
-                openSubview({ kind: 'cook', recipeId: recipe.id });
-              }}
+          <ActionGroup>
+            {recipe.steps.length > 0 && (
+              <StartCookingRow
+                isGrouped
+                onClick={() => {
+                  onClose();
+                  openSubview({ kind: 'cook', recipeId: recipe.id });
+                }}
+              />
+            )}
+            {loadError === null && (
+              <ActionRow
+                isGrouped
+                icon={<ChefHat className='h-4 w-4' />}
+                label='I cooked this'
+                subtitle={getMarkSubtitle()}
+                isDisabled={!isLoaded || isHistoryFull || isMarking}
+                onClick={() => void handleMarkCooked()}
+              />
+            )}
+            <AddToShoppingRow
+              isGrouped
+              subtitle='Choose what you need for this recipe'
+              onClick={() =>
+                onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
+              }
             />
+            {cookSummary && (
+              <ActionRow
+                isGrouped
+                icon={<History className='h-4 w-4' />}
+                label='Cooking history'
+                subtitle='Fix a date or add one you missed'
+                onClick={() => onOpenHistory(recipe.id)}
+              />
+            )}
+          </ActionGroup>
+          {markError && (
+            <p className='text-destructive text-sm' role='alert'>
+              {markError}
+            </p>
           )}
-          <AddToShoppingRow
-            subtitle='Choose what you need for this recipe'
-            onClick={() =>
-              onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
-            }
-          />
         </div>
 
         {recipe.steps.length > 0 && (

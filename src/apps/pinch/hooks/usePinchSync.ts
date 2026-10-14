@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
+  startCooksListener,
   startFamiliesListener,
   startMealsListener,
   startPlannedMealsListener,
@@ -15,6 +16,11 @@ import {
   startSourcesListener,
   startStoresListener,
 } from '@apps/pinch/store/listeners/kitchenListeners';
+import {
+  clearCooks,
+  setCooks,
+  setCooksLoadError,
+} from '@apps/pinch/store/slices/cooksSlice';
 import {
   clearFamilies,
   setFamilies,
@@ -87,6 +93,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearSources());
       dispatch(clearShopping());
       dispatch(clearIdeas());
+      dispatch(clearCooks());
       dispatch(clearSettings());
       dispatch(clearPlannedMeals());
       dispatch(clearMeals());
@@ -186,6 +193,19 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       },
     );
 
+    const unsubscribeCooks = startCooksListener(
+      uid,
+      (cooks) => dispatch(setCooks(cooks)),
+      (error) => {
+        console.error('Pinch cooks listener failed', error);
+        dispatch(
+          setCooksLoadError(
+            getErrorMessage(error, 'Unable to load your cooking history.'),
+          ),
+        );
+      },
+    );
+
     const unsubscribeSettings = startSettingsListener(
       uid,
       (settings) => dispatch(setSettings(settings)),
@@ -211,6 +231,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
     return () => {
       unsubscribeMeals();
       unsubscribeSettings();
+      unsubscribeCooks();
       unsubscribeIdeas();
       unsubscribeShopping();
       unsubscribeSources();

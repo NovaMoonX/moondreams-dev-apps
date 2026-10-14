@@ -20,6 +20,21 @@ import {
   toWebLink,
 } from '../../src/utils/urlUtils.ts';
 import {
+  getCookFactText,
+  getCookId,
+  getCookServings,
+  getCookSummaries,
+  getMarkableRecipes,
+  getMissingCookFields,
+  getPlannedCookId,
+  getPlannedCookedAt,
+  groupCooksByRecipe,
+  isCookHistoryFull,
+  isValidCookServings,
+  mergePlannedCook,
+} from '../../src/apps/pinch/utils/cooks.ts';
+import { toLocalDateInputValue } from '../../src/utils/dateInputUtils.ts';
+import {
   findIdeaByUrl,
   getIdeaDetail,
   getIdeaRecipeMethod,
@@ -42,6 +57,7 @@ import {
 } from '../../src/apps/pinch/utils/shopping.ts';
 import type { ExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import type {
+  Cook,
   Idea,
   MealItem,
   Gap,
@@ -879,6 +895,227 @@ assert.deepEqual(
   getMissingIdeaFields(idea({})),
   {},
   'a whole idea lacks nothing',
+);
+
+const cookOf = (
+  id: string,
+  recipeId: string,
+  cookedAt: number,
+  createdAt = 1,
+) =>
+  ({
+    id,
+    recipeId,
+    plannedMealId: null,
+    servings: 4,
+    cookedAt,
+    createdAt,
+    updatedAt: createdAt,
+  }) as Cook;
+
+assert.equal(
+  getCookId('planned-1', 'recipe-9'),
+  'planned-1__recipe-9',
+  'a planned meal and a recipe give one deterministic cook id',
+);
+assert.notEqual(
+  getCookId('planned-1', 'recipe-9'),
+  getCookId('recipe-9', 'planned-1'),
+  'the id is not symmetric',
+);
+assert.equal(
+  getPlannedCookId(null, 'recipe-9'),
+  null,
+  'cooking started from a recipe has no planned cook: Finish writes a fresh one',
+);
+assert.equal(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getCookId('planned-1', 'recipe-9'),
+  "cooking started from a planned meal marks that meal's own cook, the one its row looks up",
+);
+assert.notEqual(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getPlannedCookId('planned-2', 'recipe-9'),
+  'the same recipe on two meals is two cooks',
+);
+assert.notEqual(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getPlannedCookId('planned-1', 'recipe-8'),
+  'two recipes of one meal are two cooks',
+);
+
+const cookList = [
+  cookOf('a', 'adobo', 100),
+  cookOf('b', 'rice', 300),
+  cookOf('c', 'adobo', 500),
+  cookOf('d', 'adobo', 500, 9),
+  cookOf('e', 'adobo', 200),
+];
+assert.deepEqual(
+  groupCooksByRecipe(cookList)
+    .get('adobo')
+    ?.map((cook) => cook.id),
+  ['d', 'c', 'e', 'a'],
+  'a recipe lists its cooks newest first, a tie by creation',
+);
+assert.deepEqual(
+  [...groupCooksByRecipe(cookList).keys()].sort(),
+  ['adobo', 'rice'],
+  'one group per recipe that has a cook',
+);
+assert.equal(groupCooksByRecipe([]).size, 0, 'no cooks gives no groups');
+assert.deepEqual(
+  [...getCookSummaries(cookList).entries()].sort(([x], [y]) =>
+    x.localeCompare(y),
+  ),
+  [
+    ['adobo', { count: 4, lastCookedAt: 500 }],
+    ['rice', { count: 1, lastCookedAt: 300 }],
+  ],
+  'the summary counts each recipe and keeps its latest cook, in one pass',
+);
+assert.equal(
+  getCookSummaries(cookList).get('nachos'),
+  undefined,
+  'a recipe with no cook has no summary',
+);
+assert.equal(
+  getCookSummaries([cookOf('n', 'adobo', -1_000_000_000_000)]).get('adobo')
+    ?.lastCookedAt,
+  -1_000_000_000_000,
+  'a cook before 1970 keeps its own time as the last one',
+);
+assert.equal(
+  getCookSummaries([cookOf('x', 'adobo', 700), cookOf('y', 'adobo', 100)]).get(
+    'adobo',
+  )?.lastCookedAt,
+  700,
+  'the last cook is the latest time, whatever the order they arrive in',
+);
+assert.equal(
+  getCookFactText(3, 'Oct 12'),
+  'Cooked 3 times · last Oct 12',
+  'the fact line for several cooks',
+);
+assert.equal(
+  getCookFactText(1, 'Oct 12'),
+  'Cooked once · Oct 12',
+  'the fact line for one cook',
+);
+assert.equal(isCookHistoryFull(499), false, '499 cooks still fits');
+assert.equal(isCookHistoryFull(500), true, '500 cooks is full');
+assert.deepEqual(
+  [0, -1, 0.5, 1, 1000, 1000.5, 1001, Number.NaN, Number.POSITIVE_INFINITY].map(
+    isValidCookServings,
+  ),
+  [false, false, true, true, true, false, false, false, false],
+  'servings above zero and up to 1,000',
+);
+assert.deepEqual(
+  [4, 0, -3, 1_000_000, Number.NaN, 0.5].map(getCookServings),
+  [4, 1, 1, 1000, 1, 0.5],
+  "a recipe's servings are kept inside what a cook holds",
+);
+
+const localNoon = (year: number, monthIndex: number, day: number) =>
+  new Date(year, monthIndex, day, 12).getTime();
+const planNow = new Date(2026, 9, 14, 8, 30).getTime();
+assert.equal(
+  getPlannedCookedAt(Date.UTC(2026, 9, 14), planNow),
+  planNow,
+  'a meal planned for today is cooked now',
+);
+const pastCookedAt = getPlannedCookedAt(Date.UTC(2026, 9, 12), planNow);
+assert.equal(
+  pastCookedAt,
+  localNoon(2026, 9, 12),
+  'a meal on a day that has passed is cooked at local noon of that day',
+);
+assert.equal(
+  toLocalDateInputValue(pastCookedAt),
+  '2026-10-12',
+  "that noon falls on the planned day in the viewer's own time zone",
+);
+assert.equal(
+  getPlannedCookedAt(Date.UTC(2026, 9, 15), planNow),
+  null,
+  'a day still ahead has nothing to mark',
+);
+assert.equal(
+  getPlannedCookedAt(
+    Date.UTC(2026, 9, 14),
+    new Date(2026, 9, 14, 23, 59).getTime(),
+  ),
+  new Date(2026, 9, 14, 23, 59).getTime(),
+  'today is still today at 23:59 local',
+);
+
+const recipeOf = (id: string) => ({ id, title: id }) as Recipe;
+const knownRecipes = new Map([
+  ['adobo', recipeOf('adobo')],
+  ['rice', recipeOf('rice')],
+]);
+assert.deepEqual(
+  getMarkableRecipes(
+    [
+      { id: '1', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+      { id: '2', kind: 'INGREDIENT', refId: 'adobo', servings: 1 },
+      { id: '3', kind: 'RECIPE', refId: 'rice', servings: 1.5 },
+      { id: '4', kind: 'RECIPE', refId: 'adobo', servings: 3 },
+      { id: '5', kind: 'RECIPE', refId: 'gone', servings: 1 },
+    ],
+    knownRecipes,
+  ).map(({ recipe, servings }) => [recipe.id, servings]),
+  [
+    ['adobo', 5],
+    ['rice', 1.5],
+  ],
+  'one row per recipe, in first-seen order, servings added up, ingredients and unknown recipes left out',
+);
+assert.equal(
+  getMarkableRecipes(
+    [
+      { id: '1', kind: 'RECIPE', refId: 'adobo', servings: 900 },
+      { id: '2', kind: 'RECIPE', refId: 'adobo', servings: 900 },
+    ],
+    knownRecipes,
+  )[0].servings,
+  1000,
+  'added-up servings stay within what a cook holds',
+);
+assert.deepEqual(
+  getMarkableRecipes(
+    [
+      { id: '1', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+      { id: '2', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+    ],
+    knownRecipes,
+  ).map(({ recipe }) => getCookId('plan-1', recipe.id)),
+  [getPlannedCookId('plan-1', 'adobo')],
+  "a recipe twice in one meal has one row and one cook, and cooking either copy finishes into that row's cook",
+);
+
+const firstCook = cookOf('plan-1__adobo', 'adobo', 1000, 5);
+const secondTry = { ...firstCook, servings: 9, cookedAt: 9999, createdAt: 8 };
+assert.deepEqual(
+  mergePlannedCook(null, firstCook),
+  { isNew: true, cook: firstCook },
+  'the first mark of a planned meal creates the cook',
+);
+assert.deepEqual(
+  mergePlannedCook(firstCook, secondTry),
+  { isNew: false, cook: firstCook },
+  'marking it again changes nothing: the first cook stays as it was',
+);
+assert.deepEqual(
+  getMissingCookFields({ id: 'x', recipeId: 'adobo' }),
+  { plannedMealId: null },
+  'an older cook gets the key it lacks, as null',
+);
+assert.deepEqual(
+  getMissingCookFields({ plannedMealId: null }),
+  {},
+  'a cook with the key, even a null one, lacks nothing',
 );
 
 assert.equal(
