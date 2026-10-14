@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Plus, X } from 'lucide-react';
 
@@ -32,7 +32,7 @@ import {
   selectMealsById,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { Container, ContainerPlace } from '@apps/pinch/types';
+import type { Container, ContainerPlace, Meal } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import {
   getContainerTitle,
@@ -50,15 +50,43 @@ interface ContainersSubviewProps {
   mealId: string | null;
 }
 
-const isOfScope = (
-  container: Container,
-  recipeId: string | null,
-  mealId: string | null,
-) => {
-  if (recipeId !== null) return container.recipeId === recipeId;
-  if (mealId !== null) return container.mealId === mealId;
-  return true;
+interface Scope {
+  recipeId: string | null;
+  mealId: string | null;
+}
+
+const getRecipeIdsOf = (meal: Meal | undefined) =>
+  Array.from(
+    new Set(
+      (meal?.items ?? [])
+        .filter((item) => item.kind === 'RECIPE')
+        .map((item) => item.refId),
+    ),
+  );
+
+const getScopeLookups = (scope: Scope, meal: Meal | undefined) => {
+  if (scope.recipeId !== null) {
+    return [{ field: 'recipeId' as const, id: scope.recipeId }];
+  }
+  return scope.mealId === null
+    ? []
+    : [
+        { field: 'mealId' as const, id: scope.mealId },
+        ...getRecipeIdsOf(meal).map((id) => ({
+          field: 'recipeId' as const,
+          id,
+        })),
+      ];
 };
+
+const combineScoped = (
+  results: { data?: Container[]; isError: boolean }[],
+) => ({
+  data: results.some((result) => result.data === undefined)
+    ? undefined
+    : results.flatMap((result) => result.data ?? []),
+  isError: results.some((result) => result.isError),
+});
 
 function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const { closeSubview } = usePinchOverlay();
@@ -80,25 +108,38 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const [isAdding, setIsAdding] = useState(false);
 
   const isScoped = scope.recipeId !== null || scope.mealId !== null;
+  const scopeMeal =
+    scope.mealId === null ? undefined : mealsById.get(scope.mealId);
+  const lookups = getScopeLookups(scope, scopeMeal);
   const latestFinished = useQuery({
     ...finishedContainersQueryOptions(uid, finishedCount),
     enabled: view === 'finished' && !isScoped,
     placeholderData: keepPreviousData,
   });
-  const scopedFinished = useQuery({
-    ...(scope.mealId !== null
-      ? scopedContainersQueryOptions(uid, 'mealId', scope.mealId)
-      : scopedContainersQueryOptions(uid, 'recipeId', scope.recipeId ?? '')),
-    enabled: view === 'finished' && isScoped,
+  const scopedFinished = useQueries({
+    queries: lookups.map(({ field, id }) => ({
+      ...scopedContainersQueryOptions(uid, field, id),
+      enabled: view === 'finished',
+    })),
+    combine: combineScoped,
   });
   const finishedQuery = isScoped ? scopedFinished : latestFinished;
 
+  const isOfScope = useMemo(() => {
+    const recipeIds = new Set(getRecipeIdsOf(scopeMeal));
+    return (container: Container) => {
+      if (scope.recipeId !== null) return container.recipeId === scope.recipeId;
+      if (scope.mealId === null) return true;
+      return (
+        container.mealId === scope.mealId ||
+        (container.recipeId !== null && recipeIds.has(container.recipeId))
+      );
+    };
+  }, [scope, scopeMeal]);
+
   const inScope = useMemo(
-    () =>
-      containers.filter((container) =>
-        isOfScope(container, scope.recipeId, scope.mealId),
-      ),
-    [containers, scope],
+    () => containers.filter(isOfScope),
+    [containers, isOfScope],
   );
   const summary = useMemo(() => getPreparedSummary(inScope), [inScope]);
   const trimmed = inScope.length >= LIST_SEARCH_THRESHOLD ? query.trim() : '';
@@ -118,9 +159,13 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const finished = useMemo(
     () =>
       isScoped
-        ? (scopedFinished.data ?? [])
-            .filter((container) => container.status === 'DONE')
-            .sort((a, b) => b.updatedAt - a.updatedAt)
+        ? Array.from(
+            new Map(
+              (scopedFinished.data ?? [])
+                .filter((container) => container.status === 'DONE')
+                .map((container) => [container.id, container]),
+            ).values(),
+          ).sort((a, b) => b.updatedAt - a.updatedAt)
         : (latestFinished.data ?? []),
     [isScoped, scopedFinished.data, latestFinished.data],
   );
@@ -133,21 +178,39 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
         : undefined;
   const clearScope = () => setScope({ recipeId: null, mealId: null });
 
+  const twins = useMemo(() => {
+    const counts = inScope.reduce((map, container) => {
+      const key = `${container.place}|${getContainerTitle(container, recipesById, mealsById)}`;
+      return map.set(key, (map.get(key) ?? 0) + 1);
+    }, new Map<string, number>());
+    return new Set(
+      [...counts].filter(([, count]) => count > 1).map(([key]) => key),
+    );
+  }, [inScope, recipesById, mealsById]);
+
   const getSubtitle = () => {
-    if (view === 'finished' || summary.containerCount === 0) return undefined;
+    if (view === 'finished') return "What you've eaten or thrown out.";
+    if (summary.containerCount === 0) return undefined;
     const containerText = `${summary.containerCount} ${summary.containerCount === 1 ? 'container' : 'containers'}`;
     return `${formatServings(summary.fridgeServings + summary.freezerServings)} in ${containerText}`;
   };
 
-  const renderRow = (container: Container) => (
-    <li key={container.id}>
-      <ContainerRow
-        container={container}
-        title={getContainerTitle(container, recipesById, mealsById)}
-        onOpen={setOpen}
-      />
-    </li>
-  );
+  const renderRow = (container: Container) => {
+    const title = getContainerTitle(container, recipesById, mealsById);
+    return (
+      <li key={container.id}>
+        <ContainerRow
+          container={container}
+          title={title}
+          isTwin={
+            container.status === 'IN_STOCK' &&
+            twins.has(`${container.place}|${title}`)
+          }
+          onOpen={setOpen}
+        />
+      </li>
+    );
+  };
 
   const getStockBody = () => {
     if (loadError !== null) {
@@ -170,7 +233,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
           <p className='text-muted-foreground text-sm wrap-break-word'>
             {scopeName
               ? `Nothing from ${scopeName} is in the fridge or freezer.`
-              : 'Nothing is put away yet. When you make extra, put some in the fridge or freezer and it shows up here.'}
+              : 'Nothing in the fridge or freezer right now. When you make extra, put some away and it shows up here.'}
           </p>
           {scopeName && (
             <Button

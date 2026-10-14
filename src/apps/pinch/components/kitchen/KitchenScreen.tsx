@@ -223,7 +223,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     <div className='space-y-4'>
       <SectionHeader
         title='Kitchen'
-        subtitle='Your ingredients, products and stores.'
+        subtitle="Your ingredients, products, stores and what you've put away."
       />
       <div className='grid grid-cols-2 gap-2'>
         <EntryRow

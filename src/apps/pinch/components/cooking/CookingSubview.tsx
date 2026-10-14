@@ -109,7 +109,9 @@ function CookingSession({
     recipeId: recipe.id,
     recipeTitle: recipe.title,
     cookId: isCooked ? cookedId : null,
-    onSaved: closeIfStillOpen,
+    onSaved: () => {
+      if (!putAway.isAsking) closeIfStillOpen();
+    },
   });
 
   const isAlreadyMarked = hasPlannedCook && cookedId === null && !isMarking;
@@ -188,7 +190,6 @@ function CookingSession({
   };
 
   const leave = async () => {
-    if (putAway.isSaving) return;
     if (!(await confirmDiscard())) return;
     if (await confirmLeave()) closeIfStillOpen();
   };
@@ -342,9 +343,17 @@ function CookingSession({
                 </p>
               </div>
               {leftoversLine && (
-                <p className='text-muted-foreground text-sm text-balance'>
+                <p
+                  className={join(
+                    'text-muted-foreground text-sm text-balance',
+                    putAway.isOpen && 'max-[360px]:hidden',
+                  )}
+                >
                   {leftoversLine}
                 </p>
+              )}
+              {note.isSaved && (
+                <p className='text-muted-foreground text-sm'>Note saved.</p>
               )}
               {!note.isOpen && <CookPutAway putAway={putAway} />}
               {note.isOpen ? (
@@ -365,6 +374,7 @@ function CookingSession({
                 </div>
               ) : (
                 note.isAvailable &&
+                !note.isSaved &&
                 !putAway.isOpen && (
                   <Button
                     type='button'
@@ -395,7 +405,12 @@ function CookingSession({
                 </p>
               </div>
               {leftoversLine && (
-                <p className='text-muted-foreground text-sm text-balance'>
+                <p
+                  className={join(
+                    'text-muted-foreground text-sm text-balance',
+                    putAway.isOpen && 'max-[360px]:hidden',
+                  )}
+                >
                   {leftoversLine}
                 </p>
               )}

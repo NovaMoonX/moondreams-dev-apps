@@ -11,6 +11,7 @@ import type {
 } from '@apps/pinch/types';
 import {
   byEatBy,
+  getMealStockMap,
   getStockMaps,
   groupContainersByCook,
 } from '@apps/pinch/utils/containers';
@@ -474,6 +475,11 @@ const selectMealItems = (state: RootState) => state.pinch.meals.items;
 /** The saved meals, newest first. */
 export const selectMeals = createSelector([selectMealItems], (meals) =>
   [...meals].sort((a, b) => b.createdAt - a.createdAt),
+);
+
+export const selectStockByMealWithRecipes = createSelector(
+  [selectMeals, selectStockByRecipe, selectStockByMeal],
+  getMealStockMap,
 );
 
 export const selectMealsById = createSelector(

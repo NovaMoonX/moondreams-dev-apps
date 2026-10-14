@@ -10,20 +10,22 @@ import type { Container } from '@apps/pinch/types';
 import {
   getEatByPhrase,
   getEatByState,
-  getEndText,
-  getStartServings,
+  getFinishedText,
+  getLastPlaceEvent,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface ContainerRowProps {
   container: Container;
   title: string;
+  /** Another row in the same place has this title, so the tags tell them apart. */
+  isTwin: boolean;
   onOpen: (container: Container) => void;
 }
 
-function ContainerRow({ container, title, onOpen }: ContainerRowProps) {
+function ContainerRow({ container, title, isTwin, onOpen }: ContainerRowProps) {
   const isFinished = container.status === 'DONE';
-  const started = getStartServings(container);
+  const isThawed = getLastPlaceEvent(container.history)?.kind === 'THAW';
 
   return (
     <Button
@@ -44,16 +46,10 @@ function ContainerRow({ container, title, onOpen }: ContainerRowProps) {
         </span>
         <span className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-normal'>
           {isFinished ? (
-            <>
-              <span className='whitespace-nowrap'>
-                {getEndText(container)} · {formatDateShort(container.updatedAt)}
-              </span>
-              {started !== null && (
-                <span className='whitespace-nowrap'>
-                  {formatServings(started)}
-                </span>
-              )}
-            </>
+            <span className='whitespace-nowrap'>
+              {getFinishedText(container)} ·{' '}
+              {formatDateShort(container.updatedAt)}
+            </span>
           ) : (
             <>
               <span className='whitespace-nowrap'>
@@ -63,6 +59,16 @@ function ContainerRow({ container, title, onOpen }: ContainerRowProps) {
                 Eat by {getEatByPhrase(container.eatBy)}
               </span>
               <EatByBadge state={getEatByState(container.eatBy)} />
+              {(isThawed || isTwin) && (
+                <span className='whitespace-nowrap'>
+                  {[
+                    isThawed && 'Thawed',
+                    isTwin && `Made ${formatDateShort(container.createdAt)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              )}
             </>
           )}
         </span>

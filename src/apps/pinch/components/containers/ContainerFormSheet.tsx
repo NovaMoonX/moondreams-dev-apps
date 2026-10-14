@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -10,6 +10,7 @@ import { Plus } from 'lucide-react';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ContainerFields from '@apps/pinch/components/containers/ContainerFields';
@@ -28,6 +29,8 @@ import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 const { custom } = FormFactories;
 
 const MAX_RESULTS = 4;
+const PHONE_FOCUS_DELAY_MS = 350;
+const DESKTOP_FOCUS_DELAY_MS = 30;
 
 export type ContainerSubject =
   | { kind: 'recipe'; id: string }
@@ -42,7 +45,17 @@ function SubjectPicker({ onPick }: SubjectPickerProps) {
   const recipes = useAppSelector(selectRecipes);
   const meals = useAppSelector(selectMeals);
   const [query, setQuery] = useState('');
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const isPhone = useMediaQuery().isBelow('sm');
   const trimmed = query.trim();
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => bodyRef.current?.querySelector('input')?.focus(),
+      isPhone ? PHONE_FOCUS_DELAY_MS : DESKTOP_FOCUS_DELAY_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [isPhone]);
 
   const matches = useMemo(() => {
     if (trimmed === '') return [];
@@ -74,6 +87,7 @@ function SubjectPicker({ onPick }: SubjectPickerProps) {
 
   return (
     <div
+      ref={bodyRef}
       className='space-y-3'
       onKeyDown={(event) =>
         event.key === 'Enter' &&
@@ -203,20 +217,24 @@ function DetailsForm({
   ];
 
   const handleSubmit = async () => {
-    if (!canSave || draft.eatBy === null) return;
+    const { eatBy } = draft;
+    if (!canSave || eatBy === null) return;
 
     setError(null);
     setIsSubmitting(true);
     try {
-      await putAway({
-        title,
-        recipeId: subject.kind === 'recipe' ? subject.id : null,
-        mealId: subject.kind === 'meal' ? subject.id : null,
-        cookId: null,
-        servings: draft.servings,
-        place: draft.place,
-        eatBy: draft.eatBy,
-      });
+      await putAway(
+        draft.split.map((servings) => ({
+          title,
+          recipeId: subject.kind === 'recipe' ? subject.id : null,
+          mealId: subject.kind === 'meal' ? subject.id : null,
+          cookId: null,
+          madeServings: null,
+          servings,
+          place: draft.place,
+          eatBy,
+        })),
+      );
       onClose();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this container.'));

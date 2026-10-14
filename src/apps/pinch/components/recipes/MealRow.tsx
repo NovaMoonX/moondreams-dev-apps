@@ -11,7 +11,7 @@ import {
   selectIngredientsById,
   selectRecipesById,
   selectShowNutrition,
-  selectStockByMeal,
+  selectStockByMealWithRecipes,
 } from '@apps/pinch/store/selectors';
 import type { Meal } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
@@ -36,7 +36,7 @@ function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
   const costContext = useAppSelector(selectCostContext);
   const show = useAppSelector(selectShowNutrition);
   const stock = useAppSelector(
-    (state) => selectStockByMeal(state).get(meal.id),
+    (state) => selectStockByMealWithRecipes(state).get(meal.id),
     shallowEqual,
   );
   const nutrition = showMacros

@@ -4,9 +4,10 @@ import type { EatByState } from '@apps/pinch/utils/containers';
 
 interface EatByBadgeProps {
   state: EatByState;
+  label?: string;
 }
 
-function EatByBadge({ state }: EatByBadgeProps) {
+function EatByBadge({ state, label }: EatByBadgeProps) {
   if (state === 'LATER') {
     return null;
   }
@@ -20,7 +21,7 @@ function EatByBadge({ state }: EatByBadgeProps) {
           : 'text-foreground bg-destructive/10 ring-destructive/30 ring-1 ring-inset',
       )}
     >
-      {state === 'SOON' ? 'Eat soon' : 'Past its date'}
+      {label ?? (state === 'SOON' ? 'Eat soon' : 'Past its date')}
     </span>
   );
 }

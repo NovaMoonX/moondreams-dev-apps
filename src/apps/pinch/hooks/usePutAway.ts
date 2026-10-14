@@ -10,14 +10,20 @@ import {
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type { ContainerPlace, Recipe } from '@apps/pinch/types';
+import { CONTAINER_SITTING_SERVINGS } from '@apps/pinch/constants';
 import {
+  getContainerCountMax,
   getEatByDefault,
   getEatByHint,
   getMoveForPlace,
+  getPutAwayBasis,
   getPutAwayServings,
+  getSplitText,
+  getStartServings,
   isBulkMeal,
   isValidContainerServings,
   isValidEatBy,
+  splitServings,
 } from '@apps/pinch/utils/containers';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 
@@ -35,6 +41,7 @@ interface Details {
   openedPlace: ContainerPlace;
   isPlaceFixed: boolean;
   servings: number;
+  containers: number;
   typedEatBy: string | null;
 }
 
@@ -62,7 +69,18 @@ export function usePutAway({
   const [error, setError] = useState<string | null>(null);
 
   const care = getRecipeCare(recipe);
-  const defaultServings = getPutAwayServings(servings, eatenTonight);
+  const savedTotal = saved.reduce(
+    (sum, container) => sum + (getStartServings(container) ?? 0),
+    0,
+  );
+  const left = Math.floor(
+    servings - (eatenTonight ?? CONTAINER_SITTING_SERVINGS) - savedTotal,
+  );
+  const defaultServings = getPutAwayServings(left);
+  const containers =
+    details === null
+      ? 1
+      : Math.min(details.containers, getContainerCountMax(details.servings));
   const move = getMoveForPlace(details?.place ?? 'FRIDGE', null);
   const preset = getEatByDefault(move, care);
   const eatByText = details?.typedEatBy ?? toDateInputValue(preset.eatBy);
@@ -83,15 +101,18 @@ export function usePutAway({
     setError(null);
     setIsSaving(true);
     try {
-      await putAway({
-        title: recipe.title,
-        recipeId: recipe.id,
-        mealId: null,
-        cookId,
-        servings: details.servings,
-        place: details.place,
-        eatBy,
-      });
+      await putAway(
+        splitServings(details.servings, containers).map((each) => ({
+          title: recipe.title,
+          recipeId: recipe.id,
+          mealId: null,
+          cookId,
+          madeServings: servings,
+          servings: each,
+          place: details.place,
+          eatBy,
+        })),
+      );
       setDetails(null);
       setIsSaving(false);
     } catch (saveError) {
@@ -102,8 +123,11 @@ export function usePutAway({
 
   return {
     isAvailable: isReady && cookId !== null,
-    isBulk: isBulkMeal({ servings, care, hasStock }),
-    isDismissed,
+    isAsking:
+      isBulkMeal({ servings, care, hasStock }) &&
+      left > 0 &&
+      !isDismissed &&
+      saved.length === 0,
     saved,
     isOpen: details !== null,
     isSaving,
@@ -113,6 +137,7 @@ export function usePutAway({
       details !== null &&
       !isSaving &&
       (details.servings !== defaultServings ||
+        details.containers !== 1 ||
         details.typedEatBy !== null ||
         details.place !== details.openedPlace),
     fields:
@@ -123,6 +148,19 @@ export function usePutAway({
             setPlace: (place: ContainerPlace) => update({ place }),
             servings: details.servings,
             setServings: (next: number) => update({ servings: next }),
+            containers,
+            setContainers: (next: number) => update({ containers: next }),
+            maxContainers: getContainerCountMax(details.servings),
+            splitText: getSplitText(details.servings, containers),
+            basis: getPutAwayBasis({
+              made: servings,
+              eatenTonight,
+              saved: savedTotal,
+            }),
+            overNote:
+              savedTotal + details.servings > Math.round(servings)
+                ? `That's more than the ${Math.round(servings)} you made.`
+                : null,
             eatByText,
             setEatByText: (text: string) => update({ typedEatBy: text }),
             hint: getEatByHint(move, preset),
@@ -135,6 +173,7 @@ export function usePutAway({
         openedPlace: place,
         isPlaceFixed,
         servings: defaultServings,
+        containers: 1,
         typedEatBy: null,
       });
     },

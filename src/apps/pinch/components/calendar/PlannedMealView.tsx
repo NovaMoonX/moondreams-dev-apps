@@ -117,6 +117,7 @@ function PlannedMealView({
 
   const today = getLocalTodayDate();
   const canPlanAhead = meal.date >= today;
+  const canEatFromStock = meal.date <= today;
   const markable =
     meal.date <= today && cooksLoadError === null
       ? getMarkableRecipes(meal.items, recipesById)
@@ -216,7 +217,7 @@ function PlannedMealView({
       )
     : null;
 
-  if (eatingPlace !== null && canPlanAhead) {
+  if (eatingPlace !== null && canEatFromStock) {
     return (
       <EatFromStockView
         uid={uid}
@@ -407,7 +408,10 @@ function PlannedMealView({
             : `This day was priced on ${formatDateShort(repricedAt)}, so its meals keep those prices and numbers.`}
         </p>
       )}
-      {(canPlanAhead || markable.length > 0 || meal.snapshot) && (
+      {(canPlanAhead ||
+        canEatFromStock ||
+        markable.length > 0 ||
+        meal.snapshot) && (
         <ActionGroup>
           {canPlanAhead && cookable.length > 0 && (
             <StartCookingRow
@@ -437,7 +441,7 @@ function PlannedMealView({
             dayKey={getPlannedDayKey(meal.date)}
             isGrouped
           />
-          {canPlanAhead && (
+          {canEatFromStock && (
             <EatFromStockRows meal={meal} onOpen={setEatingPlace} />
           )}
           {canPlanAhead && (

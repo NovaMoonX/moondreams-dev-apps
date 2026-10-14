@@ -14,6 +14,12 @@ export interface ContainerFieldValues {
   setPlace: (place: ContainerPlace) => void;
   servings: number;
   setServings: (servings: number) => void;
+  containers: number;
+  setContainers: (containers: number) => void;
+  maxContainers: number;
+  splitText: string | null;
+  basis?: string | null;
+  overNote?: string | null;
   eatByText: string;
   setEatByText: (text: string) => void;
   hint: string;
@@ -35,11 +41,17 @@ function ContainerFields({
         <Stepper
           value={draft.servings}
           onChange={draft.setServings}
-          label='Servings in the container'
+          label='Servings to put away'
           min={1}
           max={MAX_CONTAINER_SERVINGS}
           step={1}
         />
+        {draft.basis && (
+          <p className='text-muted-foreground text-xs'>{draft.basis}</p>
+        )}
+        {draft.overNote && (
+          <p className='text-muted-foreground text-xs'>{draft.overNote}</p>
+        )}
       </div>
       {!isPlaceFixed && (
         <div className='space-y-1'>
@@ -52,6 +64,22 @@ function ContainerFields({
           />
         </div>
       )}
+      <div className='space-y-1'>
+        <Label className='text-muted-foreground text-xs'>
+          How many containers?
+        </Label>
+        <Stepper
+          value={draft.containers}
+          onChange={draft.setContainers}
+          label='Containers'
+          min={1}
+          max={draft.maxContainers}
+          step={1}
+        />
+        {draft.splitText && (
+          <p className='text-muted-foreground text-xs'>{draft.splitText}</p>
+        )}
+      </div>
       <EatByField
         value={draft.eatByText}
         onChange={draft.setEatByText}

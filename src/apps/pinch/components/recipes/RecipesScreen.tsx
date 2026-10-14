@@ -48,7 +48,7 @@ import {
   selectSourceCounts,
   selectSources,
   selectSourcesById,
-  selectStockByMeal,
+  selectStockByMealWithRecipes,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type {
@@ -58,7 +58,12 @@ import type {
   ShoppingRequest,
 } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
-import { getStockPlaceCounts, hasStockIn } from '@apps/pinch/utils/containers';
+import {
+  getStockParts,
+  getStockPlaceCounts,
+  hasStockIn,
+  type StockSummary,
+} from '@apps/pinch/utils/containers';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
@@ -77,12 +82,24 @@ const ROW_PADDING_AND_RULE = 17;
 const getRecipeRowHeight = (
   showPrices: boolean,
   showMacros: boolean,
-  hasStock: boolean,
+  stockHeight: number,
 ) =>
   Math.max(
     COVER_SIZE,
-    40 + (showPrices ? 16 : 0) + (showMacros ? 22 : 0) + (hasStock ? 16 : 0),
+    40 + (showPrices ? 16 : 0) + (showMacros ? 22 : 0) + stockHeight,
   ) + ROW_PADDING_AND_RULE;
+
+const getStockHeight = (
+  summary: StockSummary | undefined,
+  isPhone: boolean,
+) => {
+  if (summary === undefined) return 0;
+
+  const lines = getStockParts(summary).map((part) => (part.due ? 20 : 16));
+  return isPhone
+    ? lines.reduce((sum, line) => sum + line, 0) + 2 * (lines.length - 1)
+    : Math.max(...lines);
+};
 
 interface RecipesScreenProps {
   uid: string;
@@ -101,7 +118,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
   const stockByRecipe = useAppSelector(selectStockByRecipe);
-  const stockByMeal = useAppSelector(selectStockByMeal);
+  const stockByMeal = useAppSelector(selectStockByMealWithRecipes);
   const ideaCount = useAppSelector((state) => state.pinch.ideas.items.length);
   const ideasLoadError = useAppSelector(selectIdeasLoadError);
   const isIdeasLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
@@ -377,7 +394,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 getRecipeRowHeight(
                   viewOptions.options.showPrices,
                   viewOptions.options.showMacros && isAnyMetricOn,
-                  stockByRecipe.has(recipe.id),
+                  getStockHeight(stockByRecipe.get(recipe.id), isPhone),
                 ),
               0,
             );

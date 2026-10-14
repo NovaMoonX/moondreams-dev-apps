@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 
+import { Refrigerator } from 'lucide-react';
+
 import { useAppSelector } from '@/store';
 import EntryRow from '@apps/pinch/components/shared/EntryRow';
-import { CONTAINER_EMOJI } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectContainers,
@@ -31,7 +32,7 @@ function PreparedEntry() {
 
   return (
     <EntryRow
-      icon={<span className='text-base leading-none'>{CONTAINER_EMOJI}</span>}
+      icon={<Refrigerator className='h-4 w-4' />}
       label='Prepared meals'
       count={0}
       className='col-span-2'

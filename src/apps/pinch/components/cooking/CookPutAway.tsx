@@ -7,7 +7,7 @@ import {
   CONTAINER_PLACE_LABELS,
 } from '@apps/pinch/constants';
 import type { usePutAway } from '@apps/pinch/hooks/usePutAway';
-import { getSavedText } from '@apps/pinch/utils/containers';
+import { getSavedText, groupSavedBatches } from '@apps/pinch/utils/containers';
 
 interface CookPutAwayProps {
   putAway: ReturnType<typeof usePutAway>;
@@ -41,16 +41,15 @@ function CookPutAway({ putAway }: CookPutAwayProps) {
   }
 
   const hasSaved = putAway.saved.length > 0;
-  const isAsking = putAway.isBulk && !putAway.isDismissed && !hasSaved;
 
   return (
     <div className='flex flex-col items-center gap-2'>
-      {putAway.saved.map((container) => (
-        <p key={container.id} className='text-sm text-balance'>
-          {getSavedText(container)}
+      {groupSavedBatches(putAway.saved).map((batch) => (
+        <p key={batch[0].id} className='text-sm text-balance'>
+          {getSavedText(batch)}
         </p>
       ))}
-      {isAsking ? (
+      {putAway.isAsking ? (
         <div className='space-y-2'>
           <p className='font-medium'>Putting any away?</p>
           <div className='flex flex-wrap justify-center gap-2'>

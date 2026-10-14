@@ -7,6 +7,7 @@ import {
   CalendarClock,
   ChevronLeft,
   CircleCheck,
+  PencilLine,
   Utensils,
 } from 'lucide-react';
 
@@ -17,7 +18,7 @@ import FormSection from '@/components/FormSection';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
@@ -26,13 +27,9 @@ import EatByField from '@apps/pinch/components/containers/EatByField';
 import {
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
+  MAX_CONTAINER_SERVINGS,
 } from '@apps/pinch/constants';
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
-import {
-  changeContainerEatBy,
-  moveContainer,
-  removeContainer,
-} from '@apps/pinch/store/actions/containerActions';
 import {
   selectContainersById,
   selectMealsById,
@@ -45,11 +42,12 @@ import {
   getEatByHint,
   getEatByPhrase,
   getEatByState,
-  getEndText,
+  getFinishedText,
   getEventText,
   getFreezeLine,
   getLastPlaceEvent,
   getMoveForPlace,
+  getMoveNotes,
   isValidEatBy,
 } from '@apps/pinch/utils/containers';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
@@ -59,7 +57,8 @@ type SheetView =
   | { kind: 'details' }
   | { kind: 'eat' }
   | { kind: 'move'; to: ContainerPlace }
-  | { kind: 'eatBy' };
+  | { kind: 'eatBy' }
+  | { kind: 'count' };
 
 interface SubviewProps {
   uid: string;
@@ -98,10 +97,13 @@ function EatView({
   const amount = Math.min(count, container.servings);
 
   const handleEat = async () => {
+    if (isSaving) return;
+
     setError(null);
     setIsSaving(true);
     try {
       const isFinished = await eat(container, amount);
+      if (isFinished === undefined) return;
       if (isFinished) {
         onFinished();
         return;
@@ -167,12 +169,18 @@ function MoveView({
   to,
   onBack,
 }: SubviewProps & { to: ContainerPlace }) {
-  const dispatch = useAppDispatch();
+  const { move: moveContainer } = useContainerActions(uid);
   const recipe = useAppSelector(selectRecipesById).get(
     container.recipeId ?? '',
   );
   const move = getMoveForPlace(to, container.place);
-  const preset = getEatByDefault(move, recipe ? getRecipeCare(recipe) : null);
+  const preset = getEatByDefault(
+    move,
+    recipe ? getRecipeCare(recipe) : null,
+    undefined,
+    container.eatBy,
+  );
+  const notes = getMoveNotes(container, move, preset);
   const [typedEatBy, setTypedEatBy] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -183,14 +191,12 @@ function MoveView({
   const label = to === 'FREEZER' ? 'Put in the freezer' : 'Thaw in the fridge';
 
   const handleMove = async () => {
-    if (!isValid) return;
+    if (!isValid || isSaving) return;
 
     setError(null);
     setIsSaving(true);
     try {
-      await dispatch(
-        moveContainer({ uid, id: container.id, to, eatBy }),
-      ).unwrap();
+      await moveContainer(container, to, eatBy);
       onBack();
     } catch (moveError) {
       setError(getErrorMessage(moveError, 'Unable to save this.'));
@@ -208,6 +214,9 @@ function MoveView({
           {to === 'FREEZER' ? 'freezer' : 'fridge'}.
         </p>
       </div>
+      {notes.length > 0 && (
+        <p className='text-muted-foreground text-sm'>{notes.join(' ')}</p>
+      )}
       <EatByField
         value={eatByText}
         onChange={setTypedEatBy}
@@ -245,7 +254,7 @@ function MoveView({
 }
 
 function EatByView({ uid, container, onBack }: SubviewProps) {
-  const dispatch = useAppDispatch();
+  const { changeEatBy } = useContainerActions(uid);
   const [typedEatBy, setTypedEatBy] = useState(
     toDateInputValue(container.eatBy),
   );
@@ -257,14 +266,12 @@ function EatByView({ uid, container, onBack }: SubviewProps) {
     eatBy !== null && isValidEatBy(eatBy) && eatBy !== container.eatBy;
 
   const handleSave = async () => {
-    if (!canSave) return;
+    if (!canSave || isSaving) return;
 
     setError(null);
     setIsSaving(true);
     try {
-      await dispatch(
-        changeContainerEatBy({ uid, id: container.id, eatBy }),
-      ).unwrap();
+      await changeEatBy(container, eatBy);
       onBack();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this.'));
@@ -312,6 +319,76 @@ function EatByView({ uid, container, onBack }: SubviewProps) {
   );
 }
 
+function CountView({ uid, container, onBack }: SubviewProps) {
+  const { correctCount } = useContainerActions(uid);
+  const [count, setCount] = useState(container.servings);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canSave = count !== container.servings;
+
+  const handleSave = async () => {
+    if (!canSave || isSaving) return;
+
+    setError(null);
+    setIsSaving(true);
+    try {
+      await correctCount(container, count);
+      onBack();
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, 'Unable to save this.'));
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className='grid gap-4'>
+      <BackLink onClick={onBack} />
+      <div className='space-y-1'>
+        <p className='font-medium'>How many are really left?</p>
+        <p className='text-muted-foreground text-sm'>
+          The count says {formatServings(container.servings)} now. The history
+          notes the change.
+        </p>
+      </div>
+      <Stepper
+        value={count}
+        onChange={setCount}
+        label='Servings left'
+        min={1}
+        max={MAX_CONTAINER_SERVINGS}
+        step={1}
+      />
+      {error && (
+        <p className='text-destructive text-sm' role='alert'>
+          {error}
+        </p>
+      )}
+      <ModalFooterActions
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={onBack}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || !canSave}
+            onClick={() => void handleSave()}
+          >
+            Save
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
 interface ContainerSheetProps {
   uid: string;
   containerId: string;
@@ -326,9 +403,8 @@ function ContainerSheet({
   finished,
   onClose,
 }: ContainerSheetProps) {
-  const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { eat, toss } = useContainerActions(uid);
+  const { eat, toss, remove } = useContainerActions(uid);
   const live = useAppSelector(selectContainersById).get(containerId);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
@@ -365,7 +441,7 @@ function ContainerSheet({
           </p>
           <ModalFooterActions
             rightActions={
-              <Button type='button' onClick={onClose}>
+              <Button type='button' data-modal-action='true' onClick={onClose}>
                 Done
               </Button>
             }
@@ -406,6 +482,11 @@ function ContainerSheet({
         <EatByView uid={uid} container={container} onBack={backToDetails} />
       );
     }
+    if (view.kind === 'count' && isInStock) {
+      return (
+        <CountView uid={uid} container={container} onBack={backToDetails} />
+      );
+    }
 
     const handleDelete = async () => {
       const isConfirmed = await confirm({
@@ -421,8 +502,7 @@ function ContainerSheet({
       await run(
         'delete',
         async () => {
-          await dispatch(removeContainer({ uid, id: container.id })).unwrap();
-          onClose();
+          if ((await remove(container)) !== undefined) onClose();
         },
         'Unable to delete this container.',
       );
@@ -441,8 +521,7 @@ function ContainerSheet({
       await run(
         'toss',
         async () => {
-          await toss(container);
-          onClose();
+          if ((await toss(container)) !== undefined) onClose();
         },
         'Unable to save this.',
       );
@@ -494,7 +573,8 @@ function ContainerSheet({
             </>
           ) : (
             <p className='text-muted-foreground text-sm'>
-              {getEndText(container)} · {formatDateShort(container.updatedAt)}
+              {getFinishedText(container)} ·{' '}
+              {formatDateShort(container.updatedAt)}
             </p>
           )}
         </div>
@@ -515,7 +595,7 @@ function ContainerSheet({
                   void run(
                     'eat-one',
                     async () => {
-                      if (await eat(container, 1)) onClose();
+                      if ((await eat(container, 1)) === true) onClose();
                     },
                     'Unable to save this.',
                   )
@@ -540,8 +620,9 @@ function ContainerSheet({
                   void run(
                     'eat-all',
                     async () => {
-                      await eat(container, 'ALL');
-                      onClose();
+                      if ((await eat(container, 'ALL')) !== undefined) {
+                        onClose();
+                      }
                     },
                     'Unable to save this.',
                   )
@@ -559,11 +640,7 @@ function ContainerSheet({
                     ? 'Put in the freezer'
                     : 'Thaw in the fridge'
                 }
-                subtitle={
-                  otherPlace === 'FREEZER'
-                    ? 'Moves the eat-by date out'
-                    : 'Moves the eat-by date up'
-                }
+                subtitle='Sets a new eat-by date'
                 onClick={() => setView({ kind: 'move', to: otherPlace })}
               />
               <ActionRow
@@ -572,6 +649,13 @@ function ContainerSheet({
                 label='Change eat-by date'
                 subtitle={`Now ${getEatByPhrase(container.eatBy)}`}
                 onClick={() => setView({ kind: 'eatBy' })}
+              />
+              <ActionRow
+                isGrouped
+                icon={<PencilLine className='h-4 w-4' />}
+                label='Correct the count'
+                subtitle='Fix how many are left'
+                onClick={() => setView({ kind: 'count' })}
               />
               <ActionRow
                 isGrouped
@@ -615,7 +699,7 @@ function ContainerSheet({
             />
           }
           rightActions={
-            <Button type='button' onClick={onClose}>
+            <Button type='button' data-modal-action='true' onClick={onClose}>
               Done
             </Button>
           }

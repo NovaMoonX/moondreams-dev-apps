@@ -3,11 +3,14 @@ import { useState } from 'react';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import type { ContainerPlace, RecipeCare } from '@apps/pinch/types';
 import {
+  getContainerCountMax,
   getEatByDefault,
   getEatByHint,
   getMoveForPlace,
+  getSplitText,
   isValidContainerServings,
   isValidEatBy,
+  splitServings,
 } from '@apps/pinch/utils/containers';
 
 interface ContainerDraftOptions {
@@ -25,7 +28,10 @@ export function useContainerDraft({
   const [place, setPlace] = useState(initialPlace);
   const [servings, setServings] = useState(initialServings);
   const [typedEatBy, setTypedEatBy] = useState<string | null>(null);
+  const [wantedContainers, setContainers] = useState(1);
 
+  const maxContainers = getContainerCountMax(servings);
+  const containers = Math.min(wantedContainers, maxContainers);
   const move = getMoveForPlace(place, null);
   const preset = getEatByDefault(move, care);
   const eatByText = typedEatBy ?? toDateInputValue(preset.eatBy);
@@ -38,6 +44,11 @@ export function useContainerDraft({
     setPlace,
     servings,
     setServings,
+    containers,
+    setContainers,
+    maxContainers,
+    split: splitServings(servings, containers),
+    splitText: getSplitText(servings, containers),
     eatByText,
     setEatByText: setTypedEatBy,
     eatBy,
@@ -46,6 +57,7 @@ export function useContainerDraft({
     isDirty:
       place !== initialPlace ||
       servings !== initialServings ||
+      containers !== 1 ||
       typedEatBy !== null,
   };
 }

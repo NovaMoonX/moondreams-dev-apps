@@ -411,6 +411,7 @@ export const CONTAINER_EVENT_KINDS: ContainerEventKind[] = [
   'EDIT',
 ];
 export const MAX_CONTAINER_SERVINGS = 100;
+export const MAX_CONTAINERS_PER_PUT_AWAY = 20;
 /** Set by the rules evaluator's budget of 1,000 expressions a request, not only by the length check: ten events with servings and place each pass; ten that also carry a note can fail. */
 export const MAX_CONTAINER_HISTORY = 10;
 export const MAX_CONTAINER_NOTE_LENGTH = 80;

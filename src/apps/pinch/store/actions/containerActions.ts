@@ -1,24 +1,20 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { deleteDoc, doc, runTransaction, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, runTransaction, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { queryClient } from '@/lib/query/queryClient';
-import type { RootState } from '@/store';
-import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { containerKeys } from '@apps/pinch/queries/containerQueries';
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
-  buildContainer,
-  getNewContainerProblem,
+  planCount,
   planEat,
   planEatBy,
   planMove,
   planToss,
   planUndoEnd,
   type ContainerPlan,
-  type NewContainerInput,
 } from '@apps/pinch/utils/containers';
 
 const containerDoc = (uid: string, id: string) =>
@@ -58,51 +54,69 @@ const applyPlan = (
     return plan.fields;
   });
 
-const getAddProblem = (
-  state: RootState,
-  input: Omit<NewContainerInput, 'id'>,
-) => {
-  const { isLoaded, loadError, items } = state.pinch.containers;
-  if (loadError !== null) {
-    return "Your prepared meals couldn't load, so adding is paused.";
-  }
-  if (!isLoaded) {
-    return 'Your prepared meals are still loading. Try again in a moment.';
-  }
-  return getNewContainerProblem(input, items.length);
-};
-
-interface AddContainerInput {
+interface WriteContainersInput {
   uid: string;
-  container: Omit<NewContainerInput, 'id'>;
+  containers: Container[];
 }
 
-export const addContainer = createAsyncThunk<
-  Container,
-  AddContainerInput,
-  { state: RootState; rejectValue: string }
+/** One batch, so a put-away of several containers lands whole or not at all. */
+export const writeContainers = createAsyncThunk<
+  string[],
+  WriteContainersInput,
+  { rejectValue: string }
 >(
-  'pinch/containers/add',
-  async ({ uid, container }, { getState, rejectWithValue }) => {
-    const problem = getAddProblem(getState(), container);
-    if (problem !== null) return rejectWithValue(problem);
-
-    const created = buildContainer(
-      { ...container, id: generateUuid() },
-      Date.now(),
-    );
-
+  'pinch/containers/write',
+  async ({ uid, containers }, { rejectWithValue }) => {
     try {
-      await setDoc(containerDoc(uid, created.id), created);
+      const batch = writeBatch(db);
+      containers.forEach((container) =>
+        batch.set(containerDoc(uid, container.id), container),
+      );
+      await batch.commit();
     } catch (error) {
       return rejectWithValue(
         getWriteMessage(error, 'Unable to save this container.'),
       );
     }
 
-    return created;
+    return containers.map((container) => container.id);
   },
 );
+
+interface UndoBatchInput {
+  uid: string;
+  ids: string[];
+}
+
+/** Takes back a put-away only while none of its containers has been touched since it was written. */
+export const undoContainerBatch = createAsyncThunk<
+  string[],
+  UndoBatchInput,
+  { rejectValue: string }
+>('pinch/containers/undoBatch', async ({ uid, ids }, { rejectWithValue }) => {
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snapshots = await Promise.all(
+        ids.map((id) => transaction.get(containerDoc(uid, id))),
+      );
+      const existing = snapshots.filter((snapshot) => snapshot.exists());
+      const isChanged = existing.some((snapshot) => {
+        const container = snapshot.data() as Container;
+        return container.updatedAt !== container.createdAt;
+      });
+      if (isChanged) {
+        throw new Error(
+          'One of them has changed since, so it was left as it is.',
+        );
+      }
+      existing.forEach((snapshot) => transaction.delete(snapshot.ref));
+    });
+  } catch (error) {
+    return rejectWithValue(getWriteMessage(error, "Couldn't undo that."));
+  }
+
+  return ids;
+});
 
 interface ChangeInput {
   uid: string;
@@ -185,6 +199,22 @@ export const moveContainer = createAsyncThunk<
     return id;
   },
 );
+
+export const correctContainerCount = createAsyncThunk<
+  string,
+  ChangeInput & { count: number },
+  { rejectValue: string }
+>('pinch/containers/count', async ({ uid, id, count }, { rejectWithValue }) => {
+  try {
+    await applyPlan(uid, id, (container, now) =>
+      planCount(container, count, now),
+    );
+  } catch (error) {
+    return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
+  }
+
+  return id;
+});
 
 export const changeContainerEatBy = createAsyncThunk<
   string,

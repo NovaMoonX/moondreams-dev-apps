@@ -103,13 +103,14 @@ export function EatFromStockView({
   const [error, setError] = useState<string | null>(null);
 
   const handleEat = async (container: Container, count: number) => {
+    if (busyId !== null) return;
+
     setError(null);
     setBusyId(container.id);
     try {
-      await eat(container, count);
+      if ((await eat(container, count)) !== undefined) onBack();
     } catch (eatError) {
       setError(getErrorMessage(eatError, 'Unable to save this.'));
-    } finally {
       setBusyId(null);
     }
   };

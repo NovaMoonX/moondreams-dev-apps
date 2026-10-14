@@ -7,6 +7,7 @@ import {
   CONTAINER_PLACE_LABELS,
   CONTAINER_SITTING_SERVINGS,
   CONTAINER_THAWED_DAYS,
+  MAX_CONTAINERS_PER_PUT_AWAY,
   MAX_CONTAINER_HISTORY,
   MAX_CONTAINER_NOTE_LENGTH,
   MAX_CONTAINER_SERVINGS,
@@ -48,6 +49,18 @@ export interface StockSummary {
   freezer: number;
   containers: number;
   nearestEatBy: number | null;
+  fridgeEatBy: number | null;
+  freezerEatBy: number | null;
+}
+
+export interface StockSource {
+  kind: 'recipe' | 'meal';
+  id: string;
+  servings: number;
+}
+
+export interface MealStock extends StockSummary {
+  sources: StockSource[];
 }
 
 export type EatByMove = 'FRIDGE' | 'FREEZER' | 'THAW';
@@ -56,6 +69,8 @@ export interface EatByDefault {
   eatBy: number;
   days: number;
   isFromRecipe: boolean;
+  isKept: boolean;
+  wasPast: boolean;
 }
 
 export const isValidContainerServings = (servings: number) =>
@@ -69,8 +84,8 @@ export const isValidEatBy = (eatBy: number) =>
   eatBy >= MIN_EAT_BY_DATE &&
   eatBy <= MAX_EAT_BY_DATE;
 
-export const isContainerListFull = (inStockCount: number) =>
-  inStockCount >= SOFT_MAX_CONTAINERS;
+export const isContainerListFull = (inStockCount: number, adding = 1) =>
+  inStockCount + adding > SOFT_MAX_CONTAINERS;
 
 export const getDaysLeft = (eatBy: number, now = Date.now()) =>
   Math.round((eatBy - getLocalTodayDate(now)) / DAY_MS);
@@ -92,7 +107,9 @@ export const getEatByDefault = (
   move: EatByMove,
   care: RecipeCare | null,
   now = Date.now(),
+  currentEatBy: number | null = null,
 ): EatByDefault => {
+  const today = getLocalTodayDate(now);
   const recipeDays =
     (move === 'FREEZER' ? care?.freezerDays : care?.fridgeDays) ?? null;
   const getDays = () => {
@@ -108,18 +125,35 @@ export const getEatByDefault = (
     );
   };
   const days = getDays();
+  const fresh = today + days * DAY_MS;
+  const wasPast = currentEatBy !== null && currentEatBy < today;
+  const getEatBy = () => {
+    if (currentEatBy === null) return fresh;
+    if (wasPast) return currentEatBy;
+    return move === 'THAW' ? Math.min(currentEatBy, fresh) : fresh;
+  };
+  const eatBy = getEatBy();
+  const isKept = eatBy !== fresh;
+
   const result = {
-    eatBy: getLocalTodayDate(now) + days * DAY_MS,
-    days,
+    eatBy,
+    days: Math.round((eatBy - today) / DAY_MS),
     isFromRecipe:
+      !isKept &&
       recipeDays !== null &&
       (move !== 'THAW' || recipeDays < CONTAINER_THAWED_DAYS),
+    isKept,
+    wasPast,
   };
 
   return result;
 };
 
 export const getEatByHint = (move: EatByMove, preset: EatByDefault) => {
+  if (preset.wasPast) return 'Your call. The date stays as it was.';
+  if (preset.isKept) {
+    return 'Your call. It already had an earlier date, so that stays.';
+  }
   if (preset.isFromRecipe) {
     return `Your call. Taken from the ${move === 'FREEZER' ? 'freezer' : 'fridge'} time in your recipe.`;
   }
@@ -127,6 +161,23 @@ export const getEatByHint = (move: EatByMove, preset: EatByDefault) => {
     return `Your call. Once thawed, this starts at ${formatCareDays(preset.days)}.`;
   }
   return `Your call. A starting point of ${formatCareDays(preset.days)}; change it to what you trust.`;
+};
+
+/** Quiet facts about a move, in plain words and with no claim about safety. */
+export const getMoveNotes = (
+  container: Pick<Container, 'history'>,
+  move: EatByMove,
+  preset: EatByDefault,
+) => {
+  const frozen = getFreezeCount(container.history);
+  const frozenText =
+    frozen === 1 ? 'once' : frozen === 2 ? 'twice' : `${frozen} times`;
+  return [
+    preset.wasPast && 'It was past its date before it was moved.',
+    move === 'FREEZER' &&
+      frozen > 0 &&
+      `It's been frozen ${frozenText} before.`,
+  ].filter((note) => note !== false);
 };
 
 export const getMoveForPlace = (
@@ -146,30 +197,49 @@ export const isBulkMeal = (input: {
   input.care?.freezerDays != null ||
   input.hasStock;
 
-export const getPutAwayServings = (
-  servings: number,
-  eatenTonight: number | null,
-) => {
-  const left = Math.floor(
-    servings - (eatenTonight ?? CONTAINER_SITTING_SERVINGS),
+export const getPutAwayServings = (left: number) =>
+  Math.min(MAX_CONTAINER_SERVINGS, Math.max(1, Math.floor(left)));
+
+/** How the default is worked out, so it never looks like a guess: "6 left after the 2 you're eating tonight". */
+export const getPutAwayBasis = (input: {
+  made: number;
+  eatenTonight: number | null;
+  saved: number;
+}) => {
+  const left = Math.max(
+    0,
+    Math.floor(
+      input.made -
+        (input.eatenTonight ?? CONTAINER_SITTING_SERVINGS) -
+        input.saved,
+    ),
   );
-  return Math.min(MAX_CONTAINER_SERVINGS, Math.max(1, left));
+  const parts = [
+    input.eatenTonight === null
+      ? `about ${CONTAINER_SITTING_SERVINGS} for tonight`
+      : `the ${input.eatenTonight} you're eating tonight`,
+    input.saved > 0 && `the ${input.saved} already put away`,
+  ].filter((part) => part !== false);
+
+  return `${left > 0 ? left : 'Nothing'} left after ${parts.join(' and ')}`;
 };
 
 const getDroppedIndex = (history: ContainerEvent[]) => {
-  const oldestOf = (kind: ContainerEventKind) =>
+  const oldestWhere = (matches: (event: ContainerEvent) => boolean) =>
     history.findIndex(
       (event, index) =>
-        index > 0 && index < history.length - 1 && event.kind === kind,
+        index > 0 && index < history.length - 1 && matches(event),
     );
   return (
-    ['EAT' as const, 'EDIT' as const]
-      .map(oldestOf)
-      .find((index) => index !== -1) ?? 1
+    [
+      oldestWhere((event) => event.kind === 'EAT'),
+      oldestWhere((event) => event.kind === 'EDIT'),
+      oldestWhere((event) => event.kind !== 'FREEZE'),
+    ].find((index) => index !== -1) ?? 1
   );
 };
 
-/** Past the cap the oldest EAT goes first, then the oldest EDIT: the place events are what the freeze count and the thaw line read. */
+/** Past the cap the oldest EAT goes first, then the oldest EDIT, then any other move before a FREEZE: the freeze count and the thaw line read the place events. */
 export const appendEvent = (
   history: ContainerEvent[],
   event: ContainerEvent,
@@ -214,31 +284,64 @@ export interface NewContainerInput {
   recipeId: string | null;
   mealId: string | null;
   cookId: string | null;
+  /** What the cook made; null for a container added by hand, which starts with where it went. */
+  madeServings: number | null;
   servings: number;
   place: ContainerPlace;
   eatBy: number;
 }
 
 export const buildContainer = (
-  input: NewContainerInput,
+  { madeServings, ...input }: NewContainerInput,
   now: number,
 ): Container => ({
   ...input,
   title: input.title.trim().slice(0, MAX_CONTAINER_TITLE_LENGTH),
   status: 'IN_STOCK',
   history: [
-    ...(input.cookId === null
+    ...(madeServings === null
       ? []
-      : [makeEvent('MADE', now, { servings: input.servings })]),
+      : [
+          makeEvent('MADE', now, {
+            servings: Math.min(
+              MAX_CONTAINER_SERVINGS,
+              Math.max(1, Math.round(madeServings)),
+            ),
+          }),
+        ]),
     getPlaceEvent(input.place, now, input.servings),
   ],
   createdAt: now,
   updatedAt: now,
 });
 
+/** `total` split into `count` containers, the extra servings going one each to the first. */
+export const splitServings = (total: number, count: number) =>
+  Array.from(
+    { length: count },
+    (_, index) => Math.floor(total / count) + (index < total % count ? 1 : 0),
+  );
+
+export const getContainerCountMax = (servings: number) =>
+  Math.min(MAX_CONTAINERS_PER_PUT_AWAY, Math.max(1, Math.floor(servings)));
+
+export const getSplitText = (total: number, count: number) => {
+  if (count <= 1) return null;
+
+  const parts = splitServings(total, count);
+  const big = parts[0];
+  const small = parts[parts.length - 1];
+  if (big === small) return `${formatServings(big)} in each`;
+
+  const bigCount = parts.filter((part) => part === big).length;
+  const smallCount = count - bigCount;
+  return `${formatServings(big)} in ${bigCount === 1 ? 'the first' : `each of the first ${bigCount}`}, ${small} in ${smallCount === 1 ? 'the other' : 'each of the others'}`;
+};
+
 export const getNewContainerProblem = (
   input: Omit<NewContainerInput, 'id'>,
   inStockCount: number,
+  adding = 1,
 ) => {
   if (input.title.trim() === '') return 'Name what you are putting away.';
   if (input.recipeId !== null && input.mealId !== null) {
@@ -248,11 +351,21 @@ export const getNewContainerProblem = (
     return `Pick a number of servings from 1 to ${MAX_CONTAINER_SERVINGS}.`;
   }
   if (!isValidEatBy(input.eatBy)) return 'Pick a day to eat it by.';
-  if (isContainerListFull(inStockCount)) {
-    return `You have ${SOFT_MAX_CONTAINERS} containers in stock. Finish or delete one to add more.`;
+  if (isContainerListFull(inStockCount, adding)) {
+    return inStockCount >= SOFT_MAX_CONTAINERS
+      ? `You have ${SOFT_MAX_CONTAINERS} containers in stock. Finish or delete one to add more.`
+      : `That would pass the ${SOFT_MAX_CONTAINERS} containers you can keep in stock. Finish or delete some first.`;
   }
   return null;
 };
+
+export const getNewContainersProblem = (
+  inputs: Omit<NewContainerInput, 'id'>[],
+  inStockCount: number,
+) =>
+  inputs
+    .map((input) => getNewContainerProblem(input, inStockCount, inputs.length))
+    .find((problem) => problem !== null) ?? null;
 
 const FINISHED = 'This one is already finished.';
 
@@ -359,6 +472,33 @@ export const planEatBy = (
   };
 };
 
+export const planCount = (
+  container: Container,
+  count: number,
+  now: number,
+): ContainerPlan => {
+  if (container.status !== 'IN_STOCK') return { error: FINISHED };
+  if (!isValidContainerServings(count)) {
+    return { error: `Pick a count from 1 to ${MAX_CONTAINER_SERVINGS}.` };
+  }
+  if (count === container.servings) {
+    return { error: 'That is already the count.' };
+  }
+
+  return {
+    fields: {
+      servings: count,
+      history: appendEvent(
+        container.history,
+        makeEvent('EDIT', now, {
+          note: `Count ${container.servings} → ${count}`,
+        }),
+      ),
+      updatedAt: now,
+    },
+  };
+};
+
 /** Only while the EAT or TOSS is still the last event, so a later change is never rewound. */
 export const planUndoEnd = (
   container: Container,
@@ -431,14 +571,21 @@ export const getEventText = (event: ContainerEvent) => {
   }
 };
 
-export const getEndText = (container: Container) => {
-  const last = container.history.at(-1);
-  return last?.kind === 'TOSS' ? 'Threw it out' : 'Ate it all';
-};
-
-/** The first event always carries the portions. */
+/** The first place event says how many went in; a cook's MADE before it counts what the cook made. */
 export const getStartServings = (container: Container) =>
-  container.history[0]?.servings ?? null;
+  container.history.find((event) => event.place !== null)?.servings ?? null;
+
+export const getFinishedText = (container: Container) => {
+  const last = container.history.at(-1);
+  const started = getStartServings(container);
+  if (last?.kind === 'TOSS') {
+    const tossed = last.servings ?? container.servings;
+    return started !== null && started > tossed
+      ? `Threw out ${tossed} of ${started}`
+      : `Threw out ${formatServings(tossed)}`;
+  }
+  return started === null ? 'Ate it all' : `Ate ${formatServings(started)}`;
+};
 
 export const byEatBy = (a: Container, b: Container) =>
   a.eatBy - b.eatBy || a.createdAt - b.createdAt || a.id.localeCompare(b.id);
@@ -458,18 +605,21 @@ export const getStockMaps = (containers: Container[]) =>
       if (map === null || key === null) return maps;
 
       const known = map.get(key);
+      const isFridge = container.place === 'FRIDGE';
       map.set(key, {
-        fridge:
-          (known?.fridge ?? 0) +
-          (container.place === 'FRIDGE' ? container.servings : 0),
-        freezer:
-          (known?.freezer ?? 0) +
-          (container.place === 'FREEZER' ? container.servings : 0),
+        fridge: (known?.fridge ?? 0) + (isFridge ? container.servings : 0),
+        freezer: (known?.freezer ?? 0) + (isFridge ? 0 : container.servings),
         containers: (known?.containers ?? 0) + 1,
         nearestEatBy: Math.min(
           known?.nearestEatBy ?? Infinity,
           container.eatBy,
         ),
+        fridgeEatBy: isFridge
+          ? Math.min(known?.fridgeEatBy ?? Infinity, container.eatBy)
+          : (known?.fridgeEatBy ?? null),
+        freezerEatBy: isFridge
+          ? (known?.freezerEatBy ?? null)
+          : Math.min(known?.freezerEatBy ?? Infinity, container.eatBy),
       });
       return maps;
     },
@@ -486,17 +636,26 @@ export const hasStockIn = (
   summary !== undefined &&
   (place === 'FRIDGE' ? summary.fridge : summary.freezer) > 0;
 
-export const getStockParts = (summary: StockSummary) =>
-  [
-    summary.fridge > 0 && {
-      place: 'FRIDGE' as const,
-      servings: summary.fridge,
-    },
-    summary.freezer > 0 && {
-      place: 'FREEZER' as const,
-      servings: summary.freezer,
-    },
-  ].filter((part) => part !== false);
+export const getStockParts = (summary: StockSummary, now = Date.now()) =>
+  (['FRIDGE', 'FREEZER'] as const).flatMap((place) => {
+    const servings = place === 'FRIDGE' ? summary.fridge : summary.freezer;
+    if (servings <= 0) return [];
+
+    const eatBy =
+      place === 'FRIDGE' ? summary.fridgeEatBy : summary.freezerEatBy;
+    const state = eatBy === null ? 'LATER' : getEatByState(eatBy, now);
+    const due =
+      eatBy === null || state === 'LATER'
+        ? null
+        : {
+            state,
+            label:
+              state === 'PAST'
+                ? 'Past its date'
+                : `Eat by ${getEatByPhrase(eatBy, now)}`,
+          };
+    return [{ place, servings, due }];
+  });
 
 export const getStockDueText = (summary: StockSummary, now = Date.now()) => {
   if (summary.nearestEatBy === null) return null;
@@ -588,10 +747,28 @@ export const getPutAwayText = (containers: Container[]) => {
 };
 
 export const getSavedText = (
-  container: Pick<Container, 'servings' | 'place' | 'eatBy'>,
+  batch: Pick<Container, 'servings' | 'place' | 'eatBy'>[],
   now = Date.now(),
-) =>
-  `Saved ${formatServings(container.servings)} in the ${CONTAINER_PLACE_LABELS[container.place].toLowerCase()}, eat by ${getEatByPhrase(container.eatBy, now)}`;
+) => {
+  const { place, eatBy } = batch[0];
+  const total = batch.reduce((sum, container) => sum + container.servings, 0);
+  const what =
+    batch.length === 1
+      ? formatServings(total)
+      : `${batch.length} containers (${formatServings(total)})`;
+  return `Saved ${what} in the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}, eat by ${getEatByPhrase(eatBy, now)}`;
+};
+
+/** The containers one put-away wrote, which share a moment, a place and a date. */
+export const groupSavedBatches = (containers: Container[]) =>
+  Array.from(
+    containers
+      .reduce((groups, container) => {
+        const key = `${container.createdAt}|${container.place}|${container.eatBy}`;
+        return groups.set(key, [...(groups.get(key) ?? []), container]);
+      }, new Map<string, Container[]>())
+      .values(),
+  );
 
 export const getContainerTitle = (
   container: Container,
@@ -605,6 +782,77 @@ export const getContainerTitle = (
     ? undefined
     : mealsById.get(container.mealId)?.name) ??
   container.title;
+
+const minOf = (a: number | null, b: number | null) =>
+  a === null ? b : b === null ? a : Math.min(a, b);
+
+/** A saved meal's stock: containers put away as that meal plus those of its own recipes, each recipe counted once. */
+export const getMealStockMap = (
+  meals: Pick<Meal, 'id' | 'items'>[],
+  byRecipe: Map<string, StockSummary>,
+  byMeal: Map<string, StockSummary>,
+) =>
+  meals.reduce((map, meal) => {
+    const recipeIds = Array.from(
+      new Set(
+        meal.items
+          .filter((item) => item.kind === 'RECIPE')
+          .map((item) => item.refId),
+      ),
+    );
+    const sources = [
+      ...[byMeal.get(meal.id)].flatMap((summary) =>
+        summary ? [{ kind: 'meal' as const, id: meal.id, summary }] : [],
+      ),
+      ...recipeIds.flatMap((id) => {
+        const summary = byRecipe.get(id);
+        return summary ? [{ kind: 'recipe' as const, id, summary }] : [];
+      }),
+    ];
+    if (sources.length === 0) return map;
+
+    return map.set(meal.id, {
+      fridge: sources.reduce((sum, { summary }) => sum + summary.fridge, 0),
+      freezer: sources.reduce((sum, { summary }) => sum + summary.freezer, 0),
+      containers: sources.reduce(
+        (sum, { summary }) => sum + summary.containers,
+        0,
+      ),
+      nearestEatBy: sources.reduce<number | null>(
+        (nearest, { summary }) => minOf(nearest, summary.nearestEatBy),
+        null,
+      ),
+      fridgeEatBy: sources.reduce<number | null>(
+        (nearest, { summary }) => minOf(nearest, summary.fridgeEatBy),
+        null,
+      ),
+      freezerEatBy: sources.reduce<number | null>(
+        (nearest, { summary }) => minOf(nearest, summary.freezerEatBy),
+        null,
+      ),
+      sources: sources.map(({ kind, id, summary }) => ({
+        kind,
+        id,
+        servings: summary.fridge + summary.freezer,
+      })),
+    });
+  }, new Map<string, MealStock>());
+
+/** "Adobo chicken 10 · Cilantro lime rice 3", or "13 servings from 2 recipes" once there are more than three sources. */
+export const getStockSourcesText = (
+  sources: StockSource[],
+  getName: (source: StockSource) => string,
+) => {
+  if (sources.length < 2) return null;
+
+  const total = sources.reduce((sum, source) => sum + source.servings, 0);
+  if (sources.length <= 3) {
+    return sources
+      .map((source) => `${getName(source)} ${source.servings}`)
+      .join(' · ');
+  }
+  return `${formatServings(total)} from ${sources.length} ${sources.every((source) => source.kind === 'recipe') ? 'recipes' : 'recipes and meals'}`;
+};
 
 export const getStockPlaceCounts = (
   ids: string[],
@@ -675,17 +923,14 @@ export const getShoppingStockLine = (
   }
 
   const [{ name, summary }] = stocked;
-  const places = [
-    summary.fridge > 0 && `${summary.fridge} in the fridge`,
-    summary.freezer > 0 && `${summary.freezer} in the freezer`,
-  ].filter((part) => part !== false);
-  const head = `${formatServings(summary.fridge + summary.freezer)}${isNamed ? ` of ${name}` : ''}`;
-  const quantity =
-    places.length === 1
-      ? `${head} in the ${summary.fridge > 0 ? 'fridge' : 'freezer'}`
-      : `${head} (${places.join(' and ')})`;
+  const places = getPlacesText({
+    fridgeServings: summary.fridge,
+    freezerServings: summary.freezer,
+  });
 
-  return `You already have ${quantity}.`;
+  return isNamed
+    ? `You already have ${name}: ${places}.`
+    : `You already have ${places}.`;
 };
 
 export const groupContainersByCook = (containers: Container[]) =>

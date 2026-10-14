@@ -37,6 +37,7 @@ export function useCookNote({
     isNoteHistoryFull(selectNoteSummaries(state).get(recipeId)?.count ?? 0),
   );
   const [isOpen, setIsOpen] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const [text, setText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +57,9 @@ export function useCookNote({
     try {
       await dispatch(addNote({ uid, recipeId, text, cookId })).unwrap();
       addToast({ title: `Added a note to ${recipeTitle}`, type: 'success' });
+      setIsSaved(true);
+      setIsSaving(false);
+      reset();
       onSaved();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this note.'));
@@ -66,6 +70,7 @@ export function useCookNote({
   return {
     isAvailable: isNotesReady && !isFull,
     isOpen,
+    isSaved,
     hasDraft: cookId !== null && isOpen && !isSaving && text.trim() !== '',
     canSave: isValidNoteText(text),
     text,
