@@ -108,17 +108,24 @@ export const getCareProblem = (text: CareText) => {
   return null;
 };
 
-/** The form row's summary as a short phrase, "Fridge 3 days, freezer 3 months, reheating, tip", or empty. Commas, not dots, so a wrap never leaves a separator at the end of a line. */
-export const getCareSummary = (care: RecipeCare | null) => {
+/** The form row's summary as a short phrase, "Fridge 3 days, freezer 3 months, reheating, tip", or empty; days that can't be used show as typed, so the row never claims there is nothing while it names a problem. Commas, not dots, so a wrap never leaves a separator at the end of a line. */
+export const getCareSummary = (text: CareText) => {
+  const getDaysPart = (label: string, typed: string) => {
+    const days = typed.trim();
+    if (days === '') return false;
+    return `${label} ${isDaysText(days) ? formatCareDays(Number(days)) : `${days} days`}`;
+  };
   const parts = [
-    care?.fridgeDays != null && `Fridge ${formatCareDays(care.fridgeDays)}`,
-    care?.freezerDays != null && `freezer ${formatCareDays(care.freezerDays)}`,
-    care?.reheat != null && 'reheating',
-    care?.tip != null && 'tip',
+    getDaysPart('Fridge', text.fridge),
+    getDaysPart('freezer', text.freezer),
+    text.reheat.trim() !== '' && 'reheating',
+    text.tip.trim() !== '' && 'tip',
   ].filter((part) => part !== false);
-  const text = parts.join(', ');
+  const phrase = parts.join(', ');
 
-  return text === '' ? text : text.charAt(0).toUpperCase() + text.slice(1);
+  return phrase === ''
+    ? phrase
+    : phrase.charAt(0).toUpperCase() + phrase.slice(1);
 };
 
 /** "Leftovers keep 3 days in the fridge, 3 months in the freezer", or null when the recipe names neither. */

@@ -83,7 +83,7 @@ export const getInitialData = (
     newName: null,
   })),
   steps: recipe?.steps ?? [],
-  care: recipe ? getCareText(getRecipeCare(recipe)) : EMPTY_CARE_TEXT,
+  care: recipe ? getCareText(getRecipeCare(recipe)) : { ...EMPTY_CARE_TEXT },
   sourceChoice: {
     choice: recipe ? (getRecipeSource(recipe, sourcesById)?.id ?? '') : '',
     newText: '',

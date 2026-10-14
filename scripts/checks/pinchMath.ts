@@ -1941,26 +1941,39 @@ assert.deepEqual(
   'a recipe with care reads as it was written',
 );
 
-assert.equal(getCareSummary(null), '', 'no care has no summary');
+const summaryOf = (parts: Parameters<typeof toCare>[0]) =>
+  getCareSummary(getCareText(toCare(parts)));
+assert.equal(getCareSummary(EMPTY_CARE_TEXT), '', 'no care has no summary');
 assert.equal(
-  getCareSummary(toCare({ fridgeDays: 3, freezerDays: 90 })),
+  summaryOf({ fridgeDays: 3, freezerDays: 90 }),
   'Fridge 3 days, freezer 3 months',
   'the summary names each time',
 );
 assert.equal(
-  getCareSummary(toCare({ fridgeDays: 1, reheat: 'Oven.', tip: 'Apart.' })),
+  summaryOf({ fridgeDays: 1, reheat: 'Oven.', tip: 'Apart.' }),
   'Fridge 1 day, reheating, tip',
   'reheating and a tip are named, not copied',
 );
+assert.equal(summaryOf({ tip: 'Apart.' }), 'Tip', 'a tip alone is just Tip');
 assert.equal(
-  getCareSummary(toCare({ tip: 'Apart.' })),
-  'Tip',
-  'a tip alone is just Tip',
-);
-assert.equal(
-  getCareSummary(toCare({ freezerDays: 60, tip: 'Apart.' })),
+  summaryOf({ freezerDays: 60, tip: 'Apart.' }),
   'Freezer 2 months, tip',
   'the first word is capitalised whichever part comes first',
+);
+assert.equal(
+  getCareSummary({ ...EMPTY_CARE_TEXT, fridge: '400' }),
+  'Fridge 400 days',
+  'days that cannot be used show as typed',
+);
+assert.equal(
+  getCareSummary({
+    ...EMPTY_CARE_TEXT,
+    fridge: ' 2 ',
+    freezer: '2.5',
+    reheat: '  ',
+  }),
+  'Fridge 2 days, freezer 2.5 days',
+  'typed days are trimmed, a bad one shows as typed and a blank reheating line is not named',
 );
 
 assert.equal(

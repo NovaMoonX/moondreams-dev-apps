@@ -11,7 +11,6 @@ import {
 import {
   getCareProblem,
   getCareSummary,
-  parseCareText,
   type CareText,
 } from '@apps/pinch/utils/recipeCare';
 
@@ -66,7 +65,7 @@ function RecipeCareField({ value, onChange }: RecipeCareFieldProps) {
     <SummaryEditor
       label='Keeping it'
       title='Keeping it'
-      summary={getCareSummary(parseCareText(value))}
+      summary={getCareSummary(value)}
       placeholder='Add how to keep it'
       problem={problem}
       lines={2}
