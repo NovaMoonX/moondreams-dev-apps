@@ -1,11 +1,13 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChefHat } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDateTime } from '@/utils/formatUtils';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import {
   selectCooksByRecipe,
@@ -38,6 +40,7 @@ function PlannedCookRow({
     isCookHistoryFull(selectCooksByRecipe(state).get(recipe.id)?.length ?? 0),
   );
   const { isReady, markPlannedRecipeCooked, undoCook } = useCookActions(uid);
+  const { confirm } = useActionModal();
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +54,18 @@ function PlannedCookRow({
     } finally {
       setIsWorking(false);
     }
+  };
+
+  const handleUndo = async (cookedAt: number) => {
+    const isConfirmed = await confirm({
+      title: 'Delete this cook?',
+      message: `The cook from ${formatDateTime(cookedAt)} comes off your history. This can't be undone.`,
+      confirmText: 'Delete',
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+
+    await run(() => undoCook(cookId), 'Unable to undo this.');
   };
 
   const handleMark = () =>
@@ -91,9 +106,7 @@ function PlannedCookRow({
             variant='tertiary'
             className='h-10 shrink-0 px-3 underline'
             disabled={isWorking}
-            onClick={() =>
-              void run(() => undoCook(cookId), 'Unable to undo this.')
-            }
+            onClick={() => void handleUndo(cook.cookedAt)}
           >
             Undo
           </Button>
