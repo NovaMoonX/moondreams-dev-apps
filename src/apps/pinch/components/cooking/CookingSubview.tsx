@@ -288,7 +288,7 @@ function CookingSession({
             <Button
               type='button'
               variant='tertiary'
-              className='h-10'
+              className='h-10 underline'
               onClick={() => setIsFinished(false)}
             >
               Back to the last step
