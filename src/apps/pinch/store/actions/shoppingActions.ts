@@ -5,7 +5,6 @@ import {
   doc,
   runTransaction,
   updateDoc,
-  writeBatch,
   type DocumentSnapshot,
   type Transaction,
 } from 'firebase/firestore';
@@ -14,14 +13,15 @@ import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
-  MAX_SHOPPING_AMOUNT,
   MAX_SHOPPING_LINES_PER_ADD,
   SHOPPING_BATCH_SIZE,
   UNITS,
 } from '@apps/pinch/constants';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import {
+  getMergedFields,
   getShoppingItemId,
+  isValidAmount,
   mergeLines,
   roundAmount,
   type ShoppingLine,
@@ -33,9 +33,6 @@ const shoppingDoc = (uid: string, id: string) =>
 const lineDoc = (uid: string, line: ShoppingLine) =>
   shoppingDoc(uid, getShoppingItemId(line.ingredientId, line.unit));
 
-const isValidAmount = (amount: number) =>
-  Number.isFinite(amount) && amount > 0 && amount <= MAX_SHOPPING_AMOUNT;
-
 const isValidLine = (line: ShoppingLine) =>
   line.ingredientId !== '' &&
   line.ingredientId.length <= 80 &&
@@ -43,50 +40,41 @@ const isValidLine = (line: ShoppingLine) =>
   isValidAmount(line.amount);
 
 const BAD_AMOUNT = 'Enter an amount above zero.';
+const OFFLINE_MESSAGE = 'Check your connection and try again.';
 
-/** A Firebase error is logged and replaced by the fallback; our own sentences are shown as written. */
+/** A Firebase error is logged and replaced by one sentence; our own sentences are shown as written. */
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
     console.error('Pinch shopping list write failed', error);
-    return fallback;
+    return error.code === 'unavailable' || !navigator.onLine
+      ? OFFLINE_MESSAGE
+      : fallback;
   }
   return getErrorMessage(error, fallback);
 };
 
-/** An item already checked off starts again with the new amount instead of adding to it. */
 function writeLine(
   transaction: Transaction,
   line: ShoppingLine,
   snapshot: DocumentSnapshot,
   now: number,
+  isChecked = false,
 ) {
-  if (!snapshot.exists()) {
-    const item: ShoppingItem = {
-      id: snapshot.id,
-      ingredientId: line.ingredientId,
-      amount: line.amount,
-      unit: line.unit,
-      isChecked: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-    transaction.set(snapshot.ref, item);
+  const existing = snapshot.exists() ? (snapshot.data() as ShoppingItem) : null;
+  const fields = getMergedFields(existing, line, now, isChecked);
+  if (existing) {
+    transaction.update(snapshot.ref, { ...fields });
     return;
   }
 
-  const existing = snapshot.data() as ShoppingItem;
-  transaction.update(
-    snapshot.ref,
-    existing.isChecked
-      ? { amount: line.amount, isChecked: false, updatedAt: now }
-      : {
-          amount: Math.min(
-            roundAmount(existing.amount + line.amount),
-            MAX_SHOPPING_AMOUNT,
-          ),
-          updatedAt: now,
-        },
-  );
+  const item: ShoppingItem = {
+    id: snapshot.id,
+    ingredientId: line.ingredientId,
+    unit: line.unit,
+    createdAt: now,
+    ...fields,
+  };
+  transaction.set(snapshot.ref, item);
 }
 
 interface AddToShoppingListInput {
@@ -206,7 +194,13 @@ export const updateShoppingItem = createAsyncThunk<
           throw new Error('This is already off your list.');
         }
         transaction.delete(current.ref);
-        writeLine(transaction, line, target, Date.now());
+        writeLine(
+          transaction,
+          line,
+          target,
+          Date.now(),
+          (current.data() as ShoppingItem).isChecked,
+        );
       });
     } catch (error) {
       return rejectWithValue(
@@ -239,7 +233,7 @@ interface ClearCheckedInput {
   uid: string;
 }
 
-/** Deletes the items checked off when it is tapped, in batches under the write limit. */
+/** Resolves to how many items it deleted, which is fewer than were ticked at the tap when another device un-ticked or removed one. */
 export const clearCheckedShoppingItems = createAsyncThunk<
   number,
   ClearCheckedInput,
@@ -247,32 +241,43 @@ export const clearCheckedShoppingItems = createAsyncThunk<
 >(
   'pinch/shopping/clearChecked',
   async ({ uid }, { getState, rejectWithValue }) => {
-    const checked = getState().pinch.shopping.items.filter(
-      (item) => item.isChecked,
-    );
-    const groups = Array.from(
-      { length: Math.ceil(checked.length / SHOPPING_BATCH_SIZE) },
+    const ids = getState()
+      .pinch.shopping.items.filter((item) => item.isChecked)
+      .map((item) => item.id);
+    const chunks = Array.from(
+      { length: Math.ceil(ids.length / SHOPPING_BATCH_SIZE) },
       (_, index) =>
-        checked.slice(
+        ids.slice(
           index * SHOPPING_BATCH_SIZE,
           (index + 1) * SHOPPING_BATCH_SIZE,
         ),
     );
 
     try {
-      await Promise.all(
-        groups.map((group) => {
-          const batch = writeBatch(db);
-          group.forEach((item) => batch.delete(shoppingDoc(uid, item.id)));
-          return batch.commit();
-        }),
+      // Each chunk is its own transaction, so one that fails leaves the others cleared.
+      const counts = await Promise.all(
+        chunks.map((chunk) =>
+          runTransaction(db, async (transaction) => {
+            const snapshots = await Promise.all(
+              chunk.map((id) => transaction.get(shoppingDoc(uid, id))),
+            );
+            const stillChecked = snapshots.filter(
+              (snapshot) => snapshot.data()?.isChecked === true,
+            );
+            stillChecked.forEach((snapshot) =>
+              transaction.delete(snapshot.ref),
+            );
+            return stillChecked.length;
+          }),
+        ),
       );
+      const deleted = counts.reduce((sum, count) => sum + count, 0);
+
+      return deleted;
     } catch (error) {
       return rejectWithValue(
         getWriteMessage(error, 'Unable to clear what you got.'),
       );
     }
-
-    return checked.length;
   },
 );

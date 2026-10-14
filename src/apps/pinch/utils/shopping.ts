@@ -37,6 +37,10 @@ export const OTHER_GROUP_NAME = 'Other';
 
 export const roundAmount = (value: number) => Math.round(value * 100) / 100;
 
+/** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
+export const isValidAmount = (amount: number) =>
+  Number.isFinite(amount) && amount > 0 && amount <= MAX_SHOPPING_AMOUNT;
+
 /** Units never contain `__`, so no two items share an id. */
 export const getShoppingItemId = (ingredientId: string, unit: Unit) =>
   `${ingredientId}__${unit}`;
@@ -52,6 +56,7 @@ export function mergeLines(lines: ShoppingLine[]): ShoppingLine[] {
   }, new Map<string, ShoppingLine>());
 
   return [...sums.values()]
+    .filter((line) => Number.isFinite(line.amount))
     .map((line) => ({
       ...line,
       amount: Math.min(roundAmount(line.amount), MAX_SHOPPING_AMOUNT),
@@ -59,18 +64,43 @@ export function mergeLines(lines: ShoppingLine[]): ShoppingLine[] {
     .filter((line) => line.amount > 0);
 }
 
+export interface ShoppingFields {
+  amount: number;
+  isChecked: boolean;
+  updatedAt: number;
+}
+
+/** What a line writes onto its item. One already checked off starts again with just this amount, an open one gains it, and a missing one is created with `isChecked`. */
+export function getMergedFields(
+  existing: Pick<ShoppingItem, 'amount' | 'isChecked'> | null,
+  line: ShoppingLine,
+  now: number,
+  isChecked = false,
+): ShoppingFields {
+  const gained = existing && !existing.isChecked ? existing.amount : 0;
+  const fields: ShoppingFields = {
+    amount: Math.min(roundAmount(gained + line.amount), MAX_SHOPPING_AMOUNT),
+    isChecked: existing ? false : isChecked,
+    updatedAt: now,
+  };
+
+  return fields;
+}
+
 const getRecipeRawLines = (
   recipe: Recipe,
   servings: number,
   ingredientsById: Map<string, ResolvedIngredient>,
 ): ShoppingLine[] =>
-  recipe.ingredients
-    .filter((line) => ingredientsById.has(line.ingredientId))
-    .map((line) => ({
-      ingredientId: line.ingredientId,
-      amount: scaleAmount(line.amount, servings, recipe.servings),
-      unit: line.unit,
-    }));
+  recipe.servings > 0
+    ? recipe.ingredients
+        .filter((line) => ingredientsById.has(line.ingredientId))
+        .map((line) => ({
+          ingredientId: line.ingredientId,
+          amount: scaleAmount(line.amount, servings, recipe.servings),
+          unit: line.unit,
+        }))
+    : [];
 
 /** A recipe's lines scaled from its own servings to `servings`; a line whose ingredient is gone is left out. */
 export function getRecipeLines(

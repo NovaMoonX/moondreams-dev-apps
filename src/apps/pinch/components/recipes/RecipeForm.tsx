@@ -5,7 +5,7 @@ import {
   Form,
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -31,6 +31,7 @@ import {
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
 import {
   getDataFromExtracted,
+  getDataFromIdea,
   getInitialData,
   getReadSourceChoice,
   isValidMinutes,
@@ -58,6 +59,7 @@ import {
 } from '@apps/pinch/store/actions/recipeActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
+  selectIdeasById,
   selectIngredients,
   selectIngredientsById,
   selectRecipesById,
@@ -65,7 +67,12 @@ import {
   selectSourcesById,
   selectSourcesLoadError,
 } from '@apps/pinch/store/selectors';
-import type { NutritionMetric, Recipe, RecipeSource } from '@apps/pinch/types';
+import type {
+  Idea,
+  NutritionMetric,
+  Recipe,
+  RecipeSource,
+} from '@apps/pinch/types';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
@@ -94,6 +101,8 @@ interface RecipeFormProps {
   recipeId: string | null;
   /** What a reader found for a new recipe; the form opens filled in with it. */
   initialRead: RecipeRead | null;
+  /** The idea a new recipe is made from: the form opens with what it knows, and saving marks it made. */
+  initialIdea: Idea | null;
   /** Keeps the screen's header on the recipe's name as it is typed. */
   onTitleChange: (title: string) => void;
   /** Tells the screen whether leaving now would throw work away. */
@@ -106,6 +115,7 @@ function RecipeForm({
   uid,
   recipeId,
   initialRead,
+  initialIdea,
   onTitleChange,
   isDirtyRef,
   onLeave,
@@ -113,11 +123,13 @@ function RecipeForm({
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { closeSubview } = usePinchOverlay();
+  const { addToast } = useToast();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
+  const ideasById = useAppSelector(selectIdeasById);
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
   const existingCoverUrl = useStorageImageUrl(
     recipe?.coverPath ?? null,
@@ -136,7 +148,9 @@ function RecipeForm({
             sources,
           ),
         }
-      : getInitialData(recipe, sourcesById),
+      : initialIdea
+        ? getDataFromIdea(initialIdea, sources)
+        : getInitialData(recipe, sourcesById),
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
@@ -204,7 +218,8 @@ function RecipeForm({
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
 
-  const isBlankByHand = recipeId === null && initialRead === null;
+  const isBlankByHand =
+    recipeId === null && initialRead === null && initialIdea === null;
   const unresolvedCount = formData.ingredients.filter(
     (row) => row.ingredientId === '',
   ).length;
@@ -525,9 +540,17 @@ function RecipeForm({
             steps: data.steps.map((step) => step.trim()).filter(Boolean),
             coverFile: upload.file,
             removeCover: isCoverRemoved,
+            fromIdeaId: initialIdea?.id ?? null,
           },
         }),
       ).unwrap();
+      if (initialIdea && ideasById.has(initialIdea.id)) {
+        addToast({
+          title: 'Recipe added',
+          description: `“${initialIdea.title}” moved to Made into recipes.`,
+          type: 'success',
+        });
+      }
       closeSubview();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this recipe.'));
@@ -546,6 +569,14 @@ function RecipeForm({
   return (
     <>
       <UndoSnackbar pending={pending} onUndo={undo} />
+      {initialIdea && (
+        <p className='text-muted-foreground mb-4 text-sm wrap-break-word'>
+          From your idea:{' '}
+          <span className='text-foreground font-medium'>
+            {initialIdea.title}
+          </span>
+        </p>
+      )}
       {initialRead && !isNoteClosed && (
         <div
           className='bg-accent mb-4 flex items-start gap-2 rounded-2xl p-3 text-sm'

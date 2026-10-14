@@ -17,7 +17,6 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
-import { MAX_SHOPPING_AMOUNT } from '@apps/pinch/constants';
 import {
   removeShoppingItem,
   updateShoppingItem,
@@ -28,7 +27,11 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
-import { getShoppingItemId, roundAmount } from '@apps/pinch/utils/shopping';
+import {
+  getShoppingItemId,
+  isValidAmount,
+  roundAmount,
+} from '@apps/pinch/utils/shopping';
 
 const { custom } = FormFactories;
 
@@ -52,17 +55,23 @@ function ShoppingItemSheet({ uid, item, onClose }: ShoppingItemSheetProps) {
     ingredientsById.get(item.ingredientId)?.name ?? 'Removed ingredient';
   const amount =
     amountText.trim() === '' ? null : roundAmount(Number(amountText));
-  const isValid =
-    amount !== null &&
-    Number.isFinite(amount) &&
-    amount > 0 &&
-    amount <= MAX_SHOPPING_AMOUNT;
+  const isValid = amount !== null && isValidAmount(amount);
   const isChanged = amount !== item.amount || unit !== item.unit;
   const inNewUnit =
     unit === item.unit
       ? undefined
       : itemsById.get(getShoppingItemId(item.ingredientId, unit));
-  const addsToExisting = inNewUnit?.isChecked === false;
+
+  const getNote = () => {
+    if (!inNewUnit) return null;
+    const there = formatSize(inNewUnit.amount, inNewUnit.unit);
+    if (!inNewUnit.isChecked) {
+      return `You already have ${there} on your list. This adds to it.`;
+    }
+    return isValid
+      ? `You already got ${there}. This puts it back on your list at ${formatSize(amount, unit)}.`
+      : `You already got ${there}. This puts it back on your list.`;
+  };
 
   const fields = useMemo(
     () => [
@@ -149,11 +158,7 @@ function ShoppingItemSheet({ uid, item, onClose }: ShoppingItemSheetProps) {
         }}
         submitButton={
           <ModalFooterActions
-            note={
-              addsToExisting && inNewUnit
-                ? `You already have ${formatSize(inNewUnit.amount, inNewUnit.unit)} on your list. This adds to it.`
-                : null
-            }
+            note={getNote()}
             leftActions={
               <DeleteIconButton
                 label='Remove'

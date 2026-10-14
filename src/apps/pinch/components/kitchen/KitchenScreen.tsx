@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ListChecks, Plus, ShoppingCart, Store } from 'lucide-react';
+import { Plus, ShoppingCart, Store } from 'lucide-react';
 
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -37,7 +37,6 @@ import {
   selectIngredientsById,
   selectProducts,
   selectProductsById,
-  selectShoppingOpenCount,
   selectShowNutrition,
   selectStores,
   selectUsedIngredientIds,
@@ -81,7 +80,6 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const familiesById = useAppSelector(selectIngredientFamiliesById);
   const storeCount = useAppSelector(selectStores).length;
   const productCount = useAppSelector(selectProducts).length;
-  const shoppingCount = useAppSelector(selectShoppingOpenCount);
   const productsById = useAppSelector(selectProductsById);
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const usedIds = useAppSelector(selectUsedIngredientIds);
@@ -238,13 +236,6 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           label='Products'
           count={productCount}
           onClick={() => openSubview({ kind: 'products' })}
-        />
-        <EntryRow
-          icon={<ListChecks className='h-4 w-4' />}
-          label='Shopping list'
-          count={shoppingCount}
-          onClick={() => openSubview({ kind: 'shopping' })}
-          className='col-span-2'
         />
       </div>
       <div className='flex h-10 items-center justify-between gap-3'>

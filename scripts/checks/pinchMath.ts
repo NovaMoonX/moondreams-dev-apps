@@ -9,14 +9,31 @@ import {
 import { scaleAmount } from '../../src/apps/pinch/utils/quantity.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
+  getComparableUrl,
+  getWebLinkHost,
+  toWebLink,
+} from '../../src/utils/urlUtils.ts';
+import {
+  findIdeaByUrl,
+  getIdeaDetail,
+  getIdeaSearchText,
+  getMissingIdeaFields,
+  toIdeaImageUrl,
+  toIdeaUrl,
+} from '../../src/apps/pinch/utils/ideas.ts';
+import {
   getItemsLines,
+  getMergedFields,
   getRecipeLines,
   getShoppingCost,
   getShoppingItemId,
   groupShoppingItems,
+  isValidAmount,
   mergeLines,
+  roundAmount,
 } from '../../src/apps/pinch/utils/shopping.ts';
 import type {
+  Idea,
   MealItem,
   Product,
   Recipe,
@@ -277,7 +294,8 @@ assert.deepEqual(
     shopIngredients,
     6,
   ),
-  [{ ingredientId: 'rice', amount: 1, unit: 'CUP' }],
+  [],
+  'a shopping line for a recipe with no servings is left out',
 );
 
 assert.deepEqual(
@@ -435,6 +453,300 @@ assert.equal(
   ).leftOut[0]?.kind,
   'NOT_COMPARABLE',
   'a unit that cannot be compared with the package is left out',
+);
+
+// Merging a line into an item
+const NOW = 1_800_000_000_000;
+const flour = (amount: number) => ({
+  ingredientId: 'flour',
+  amount,
+  unit: 'CUP' as Unit,
+});
+assert.deepEqual(
+  getMergedFields(null, flour(1.5), NOW),
+  { amount: 1.5, isChecked: false, updatedAt: NOW },
+  'a new line starts unchecked with its amount',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 0.1, isChecked: false }, flour(0.2), NOW),
+  { amount: 0.3, isChecked: false, updatedAt: NOW },
+  'an open item gains the amount, rounded to two decimals',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 5, isChecked: true }, flour(2), NOW),
+  { amount: 2, isChecked: false, updatedAt: NOW },
+  'an item already checked off starts again with only the new amount',
+);
+assert.equal(
+  getMergedFields({ amount: 999_999.5, isChecked: false }, flour(5), NOW)
+    .amount,
+  1_000_000,
+  'an open item stops at the cap',
+);
+assert.equal(
+  getMergedFields(null, flour(2_000_000), NOW).amount,
+  1_000_000,
+  'a new item stops at the cap',
+);
+assert.equal(
+  getMergedFields({ amount: 5, isChecked: true }, flour(2_000_000), NOW).amount,
+  1_000_000,
+  'a restarted item stops at the cap',
+);
+assert.deepEqual(
+  mergeLines([flour(600_000), flour(600_000)]),
+  [flour(1_000_000)],
+  'lines that add past the cap stop at it',
+);
+
+// Moving a line to another unit carries whether it was checked off
+assert.equal(
+  getMergedFields(null, flour(8), NOW, true).isChecked,
+  true,
+  'a checked line moved into a unit with no item stays checked',
+);
+assert.equal(
+  getMergedFields(null, flour(8), NOW, false).isChecked,
+  false,
+  'an open line moved into a unit with no item stays open',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 4, isChecked: false }, flour(8), NOW, true),
+  { amount: 12, isChecked: false, updatedAt: NOW },
+  'moving into an open item adds to it and it stays open, whichever way the moved line was',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 4, isChecked: true }, flour(8), NOW, true),
+  { amount: 8, isChecked: false, updatedAt: NOW },
+  'moving into a checked item starts it again with the moved amount',
+);
+
+// Amounts that scale to nothing, or can't be held
+const pinchOfSalt = shopRecipe('pinch', 4, [
+  ['salt', 0.01, 'TSP'],
+  ['rice', 1, 'CUP'],
+]);
+assert.deepEqual(
+  getRecipeLines(pinchOfSalt, shopIngredients, 1),
+  [{ ingredientId: 'rice', amount: 0.25, unit: 'CUP' }],
+  'an amount that rounds to zero after scaling is left out, and the rest stays',
+);
+assert.deepEqual(
+  getRecipeLines(
+    shopRecipe('only-a-pinch', 4, [['salt', 0.01, 'TSP']]),
+    shopIngredients,
+    1,
+  ),
+  [],
+  'a recipe whose every line rounds to zero gives no lines to add',
+);
+assert.equal(
+  isValidAmount(roundAmount(0.004)),
+  false,
+  'a typed amount that rounds to zero is refused',
+);
+assert.equal(isValidAmount(roundAmount(0.006)), true, 'two decimals are kept');
+assert.deepEqual(
+  [0, -1, NaN, Infinity, 1_000_000.01].map(isValidAmount),
+  [false, false, false, false, false],
+  'zero, negative, not-a-number, infinite and over-cap amounts are refused',
+);
+assert.equal(isValidAmount(1_000_000), true, 'the cap itself is allowed');
+const noServings = shopRecipe('no-servings', 0, [['rice', 1, 'CUP']]);
+assert.deepEqual(
+  [
+    getRecipeLines(noServings, shopIngredients),
+    getRecipeLines(noServings, shopIngredients, 2),
+  ],
+  [[], []],
+  'a recipe with no servings gives no lines, never an endless amount',
+);
+assert.deepEqual(
+  getItemsLines(
+    [mealItem('z', 'RECIPE', 'no-servings', 2)],
+    new Map([[noServings.id, noServings]]),
+    shopIngredients,
+  ),
+  [],
+  'a meal item over a recipe with no servings gives no lines',
+);
+assert.equal(
+  toWebLink('  https://www.Example.com/a b/ \n'),
+  'https://www.example.com/ab/',
+  'a pasted link loses stray spaces and breaks, and its host is lower-cased',
+);
+assert.equal(
+  toWebLink('seriouseats.com/recipes/x'),
+  'https://seriouseats.com/recipes/x',
+  'a link with no scheme is read as https',
+);
+assert.equal(
+  toWebLink('http://example.com'),
+  'http://example.com/',
+  'http stays http',
+);
+[
+  'javascript:alert(1)',
+  'ftp://files.example.com/x',
+  'mailto:a@example.com',
+  'data:text/html,hi',
+  'https://user:secret@example.com/x',
+  'not a link',
+  'localhost:3000',
+  '',
+  '   ',
+].forEach((text) =>
+  assert.equal(
+    toWebLink(text),
+    null,
+    `${JSON.stringify(text)} is not a web link`,
+  ),
+);
+assert.equal(
+  getWebLinkHost('https://www.seriouseats.com/x'),
+  'seriouseats.com',
+  'the host drops www',
+);
+
+const comparable = (text: string) => getComparableUrl(text);
+const samePage = [
+  'https://www.example.com/recipes/lemon-bars',
+  'http://example.com/recipes/lemon-bars/',
+  'EXAMPLE.com/recipes/lemon-bars?utm_source=news&utm_medium=email#comments',
+  'https://example.com/recipes/lemon-bars?fbclid=abc&gclid=def',
+  ' https://example.com/recipes/lemon-bars/?igshid=1 ',
+];
+samePage.forEach((text) =>
+  assert.equal(
+    comparable(text),
+    'example.com/recipes/lemon-bars',
+    `${text} is the same page`,
+  ),
+);
+assert.notEqual(
+  comparable('https://example.com/recipes/lemon-bars'),
+  comparable('https://example.com/recipes/lemon-cake'),
+  'another path is another page',
+);
+assert.notEqual(
+  comparable('https://example.com/watch?v=1'),
+  comparable('https://example.com/watch?v=2'),
+  'a parameter that picks the page keeps it apart',
+);
+assert.equal(
+  comparable('https://example.com/p?b=2&a=1'),
+  comparable('https://example.com/p?a=1&b=2'),
+  'parameter order does not matter',
+);
+assert.equal(
+  comparable('https://example.com'),
+  'example.com',
+  'a bare site has no trailing slash',
+);
+assert.equal(comparable('hello'), null, 'text is not a page');
+
+const idea = (fields: Partial<Idea>): Idea => ({
+  id: 'idea',
+  kind: 'TEXT',
+  title: 'Lemon bars',
+  note: null,
+  url: null,
+  siteName: null,
+  imageUrl: null,
+  photoPath: null,
+  recipeId: null,
+  createdAt: 1,
+  updatedAt: 1,
+  ...fields,
+});
+const saved = [
+  idea({ id: 'a', kind: 'LINK', url: 'https://www.example.com/lemon-bars/' }),
+  idea({ id: 'b', kind: 'TEXT' }),
+];
+assert.equal(
+  findIdeaByUrl(saved, 'http://example.com/lemon-bars?utm_source=x')?.id,
+  'a',
+  'a link already saved is found by its page',
+);
+assert.equal(
+  findIdeaByUrl(saved, 'https://example.com/lemon-bars', 'a'),
+  null,
+  'the idea being edited is not its own duplicate',
+);
+assert.equal(
+  findIdeaByUrl(saved, 'https://example.com/other'),
+  null,
+  'a new page is not a duplicate',
+);
+assert.equal(findIdeaByUrl(saved, 'nonsense'), null, 'text matches nothing');
+
+assert.equal(
+  toIdeaUrl(`https://example.com/${'a'.repeat(2000)}`),
+  null,
+  'a link over 2,000 characters is not kept',
+);
+assert.equal(
+  toIdeaImageUrl('https://images.example.com/a.jpg'),
+  'https://images.example.com/a.jpg',
+  'an https picture is kept',
+);
+assert.equal(
+  toIdeaImageUrl('http://images.example.com/a.jpg'),
+  null,
+  'an http picture is not kept',
+);
+assert.equal(
+  toIdeaImageUrl('javascript:alert(1)'),
+  null,
+  'a script address is not kept',
+);
+assert.equal(toIdeaImageUrl(null), null, 'no picture is none');
+
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      siteName: 'Serious Eats',
+      url: 'https://www.example.com/x',
+      note: 'Chill overnight',
+    }),
+  ),
+  'Serious Eats',
+  'a link row says its site, not its note',
+);
+assert.equal(
+  getIdeaDetail(idea({ kind: 'LINK', url: 'https://www.example.com/x' })),
+  'example.com',
+  'a link with no site name says its host',
+);
+assert.equal(
+  getIdeaDetail(idea({ note: '\n  First line  \nSecond line' })),
+  'First line',
+  'a jotted idea says the first line of its note',
+);
+assert.equal(getIdeaDetail(idea({})), null, 'nothing to say gives no line');
+assert.equal(
+  getIdeaSearchText(
+    idea({ kind: 'LINK', siteName: 'NYT Cooking', note: 'overnight' }),
+  ),
+  'Lemon bars NYT Cooking overnight',
+  'search covers the title, site and note',
+);
+assert.deepEqual(
+  getMissingIdeaFields({ id: 'x', title: 't', note: null }),
+  {
+    url: null,
+    siteName: null,
+    imageUrl: null,
+    photoPath: null,
+    recipeId: null,
+  },
+  'an older idea gets the keys it lacks, as null',
+);
+assert.deepEqual(
+  getMissingIdeaFields(idea({})),
+  {},
+  'a whole idea lacks nothing',
 );
 
 console.log('pinchMath: all checks passed');

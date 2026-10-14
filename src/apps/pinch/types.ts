@@ -1,4 +1,4 @@
-export type PinchTab = 'calendar' | 'recipes' | 'kitchen';
+export type PinchTab = 'calendar' | 'recipes' | 'kitchen' | 'shopping';
 
 export type Unit =
   | 'G'
@@ -171,16 +171,19 @@ export interface PlannedMeal {
 export type KitchenView = 'yours' | 'all';
 export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
 export type NutritionMetric = keyof NutritionValues;
-export type RecipesView = 'recipes' | 'meals';
+export type RecipesView = 'recipes' | 'meals' | 'ideas';
 
 export type RecipeStartMethod = 'text' | 'file' | 'link' | 'manual';
+
+export type IdeaKind = 'LINK' | 'PHOTO' | 'TEXT';
+
+export type IdeaStartMethod = 'link' | 'photo' | 'text';
 
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
 export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
   | { kind: 'sources' }
-  | { kind: 'shopping' }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
   | {
       kind: 'recipe';
@@ -188,6 +191,7 @@ export type PinchSubview =
       method?: RecipeStartMethod;
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
+      fromIdeaId?: string;
     }
   /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. */
   | { kind: 'cook'; recipeId: string; servings?: number }
@@ -266,6 +270,23 @@ export interface ShoppingItem {
   /** Immutable: a different unit is a different item. */
   unit: Unit;
   isChecked: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Idea {
+  id: string;
+  kind: IdeaKind;
+  title: string;
+  note: string | null;
+  /** http(s) only. */
+  url: string | null;
+  siteName: string | null;
+  /** https only: the page's own picture, a third party's address. */
+  imageUrl: string | null;
+  photoPath: string | null;
+  /** The recipe this became. A missing key, an id no recipe has, or an archived recipe reads as not made yet. */
+  recipeId: string | null;
   createdAt: number;
   updatedAt: number;
 }

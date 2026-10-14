@@ -19,6 +19,7 @@ import {
   selectRecipesById,
   selectShoppingById,
   selectShoppingItems,
+  selectShoppingLoadError,
 } from '@apps/pinch/store/selectors';
 import type { ShoppingRequest } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
@@ -42,11 +43,13 @@ function AddToShoppingSheet({
 }: AddToShoppingSheetProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
-  const { openSubview } = usePinchOverlay();
+  const { showShoppingTab } = usePinchOverlay();
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const onList = useAppSelector(selectShoppingById);
   const listCount = useAppSelector(selectShoppingItems).length;
+  const loadError = useAppSelector(selectShoppingLoadError);
+  const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const recipe =
     request.kind === 'recipe'
       ? (recipesById.get(request.recipeId) ?? null)
@@ -71,6 +74,7 @@ function AddToShoppingSheet({
     }));
   }, [request, recipe, recipesById, ingredientsById, servings]);
 
+  const isReady = isLoaded && loadError === null;
   const isOnList = (id: string) => onList.get(id)?.isChecked === false;
   const isTicked = (id: string) => choices[id] ?? !isOnList(id);
   const selected = rows.filter((row) => isTicked(row.id));
@@ -80,6 +84,12 @@ function AddToShoppingSheet({
     request.kind === 'recipe' ? (recipe?.title ?? '') : request.label;
 
   const getBlock = () => {
+    if (loadError !== null) {
+      return "Your list couldn't load, so adding is paused.";
+    }
+    if (!isLoaded) {
+      return 'Loading your list…';
+    }
     if (selected.length === 0) {
       return rows.length === 0
         ? 'There is nothing here to add.'
@@ -89,10 +99,10 @@ function AddToShoppingSheet({
       return `Pick up to ${MAX_SHOPPING_LINES_PER_ADD} at a time.`;
     }
     if (listCount >= SOFT_MAX_SHOPPING_ITEMS && newCount > 0) {
-      return "Your list is full: take something off or clear what you've got.";
+      return "Your list is full. Take something off or clear what you've got in the Shopping tab.";
     }
     if (listCount + newCount > SOFT_MAX_SHOPPING_ITEMS) {
-      return `Your list holds up to ${SOFT_MAX_SHOPPING_ITEMS}: untick a few, or clear what you've got.`;
+      return `Your list holds up to ${SOFT_MAX_SHOPPING_ITEMS}. Untick a few here, or clear what you've got in the Shopping tab.`;
     }
     return null;
   };
@@ -117,7 +127,7 @@ function AddToShoppingSheet({
         type: 'success',
         action: {
           label: 'View',
-          onClick: () => openSubview({ kind: 'shopping' }),
+          onClick: showShoppingTab,
         },
       });
     } catch (addError) {
@@ -156,6 +166,7 @@ function AddToShoppingSheet({
                 variant='link'
                 size='sm'
                 className='h-10 px-0!'
+                disabled={!isReady}
                 onClick={() =>
                   setChoices(
                     Object.fromEntries(
@@ -184,6 +195,7 @@ function AddToShoppingSheet({
                       <Checkbox
                         aria-label={`Add ${row.name}`}
                         checked={isTicked(row.id)}
+                        disabled={!isReady}
                         onCheckedChange={(checked) =>
                           setChoices((current) => ({
                             ...current,

@@ -1,5 +1,7 @@
 import type {
   Dimension,
+  IdeaKind,
+  IdeaStartMethod,
   KitchenView,
   MealType,
   PinchTab,
@@ -8,13 +10,19 @@ import type {
   Unit,
 } from '@apps/pinch/types';
 
-export const PINCH_TABS: PinchTab[] = ['calendar', 'recipes', 'kitchen'];
+export const PINCH_TABS: PinchTab[] = [
+  'calendar',
+  'recipes',
+  'kitchen',
+  'shopping',
+];
 export const DEFAULT_PINCH_TAB: PinchTab = 'calendar';
 
 export const PINCH_TAB_LABELS: Record<PinchTab, string> = {
   calendar: 'Calendar',
   recipes: 'Recipes',
   kitchen: 'Kitchen',
+  shopping: 'Shopping',
 };
 
 export const UNIT_LABELS: Record<Unit, string> = {
@@ -105,9 +113,49 @@ export const MAX_MEAL_ITEMS = 10;
 export const MAX_SHOPPING_LINES_PER_ADD = 200;
 export const SOFT_MAX_SHOPPING_ITEMS = 300;
 export const SHOPPING_GROUP_PAGE_SIZE = 100;
-/** Under Firestore's limit of 500 writes per batch. */
-export const SHOPPING_BATCH_SIZE = 400;
+/** A chunk reads then deletes each item, two operations apiece, under Firestore's 500 per transaction. */
+export const SHOPPING_BATCH_SIZE = 250;
 export const MAX_SHOPPING_AMOUNT = 1_000_000;
+
+export const MAX_IDEA_TITLE_LENGTH = 120;
+export const MAX_IDEA_NOTE_LENGTH = 1000;
+export const MAX_IDEA_URL_LENGTH = 2000;
+export const MAX_IDEA_SITE_NAME_LENGTH = 120;
+/** The most ideas the list takes before asking to delete one: the action and the screens, not the rules. */
+export const SOFT_MAX_IDEAS = 200;
+export const IDEA_LOOKUP_TIMEOUT_MS = 6000;
+export const IDEA_PHOTO_MAX_DIMENSION = 1280;
+export const IDEA_KIND_EMOJIS: Record<IdeaKind, string> = {
+  LINK: '🔗',
+  PHOTO: '📷',
+  TEXT: '📝',
+};
+
+export const IDEA_START_METHODS: {
+  id: IdeaStartMethod;
+  emoji: string;
+  title: string;
+  description: string;
+}[] = [
+  {
+    id: 'link',
+    emoji: IDEA_KIND_EMOJIS.LINK,
+    title: 'From a link',
+    description: 'Paste a recipe page you like',
+  },
+  {
+    id: 'photo',
+    emoji: IDEA_KIND_EMOJIS.PHOTO,
+    title: 'From a photo',
+    description: 'A picture or screenshot of a dish or recipe',
+  },
+  {
+    id: 'text',
+    emoji: IDEA_KIND_EMOJIS.TEXT,
+    title: 'Jot it down',
+    description: 'Just a few words',
+  },
+];
 
 export const RECIPE_START_METHODS: {
   id: RecipeStartMethod;
@@ -180,10 +228,11 @@ export const MAX_MINUTES = 100_000;
 /** The longest edge of a recipe cover: it shows in a list row and a drawer header. */
 export const RECIPE_COVER_MAX_DIMENSION = 1280;
 
-export const RECIPES_VIEWS: RecipesView[] = ['recipes', 'meals'];
+export const RECIPES_VIEWS: RecipesView[] = ['recipes', 'meals', 'ideas'];
 export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {
   recipes: 'Recipes',
   meals: 'Meals',
+  ideas: 'Ideas',
 };
 
 /** Grams for a mass unit, millilitres for a volume unit, 1 for a count. */
