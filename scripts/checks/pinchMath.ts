@@ -758,6 +758,46 @@ assert.equal(
 );
 assert.equal(getIdeaDetail(idea({})), null, 'nothing to say gives no line');
 assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: 'seriouseats.com',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  null,
+  'a link saved with its host as the title does not say the host twice',
+);
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: ' SeriousEats.com ',
+      siteName: 'seriouseats.com',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  null,
+  'the comparison ignores case and spaces',
+);
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: 'seriouseats.com',
+      note: 'Sunday project',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  'Sunday project',
+  'a repeated site gives way to the first line of the note',
+);
+assert.equal(
+  getIdeaDetail(idea({ title: 'Sunday project', note: 'sunday project' })),
+  null,
+  'a note that is only the title says nothing more',
+);
+assert.equal(
   getIdeaSearchText(
     idea({ kind: 'LINK', siteName: 'NYT Cooking', note: 'overnight' }),
   ),

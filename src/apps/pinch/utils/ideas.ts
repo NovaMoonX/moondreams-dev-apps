@@ -60,8 +60,13 @@ export const getIdeaDetail = (idea: Idea) => {
       .split('\n')
       .map((line) => line.trim())
       .find(Boolean) ?? null;
+  const title = idea.title.trim().toLowerCase();
 
-  return site ?? firstLine;
+  return (
+    [site, firstLine].find(
+      (line) => line !== null && line.trim().toLowerCase() !== title,
+    ) ?? null
+  );
 };
 
 export const getIdeaSearchText = (idea: Idea) =>
