@@ -83,20 +83,32 @@ const fitNode = (
   node: Record<string, unknown>,
 ): Record<string, unknown> | null => {
   if (JSON.stringify(node).length <= MAX_STRUCTURED_CHARS) return node;
-  const droppable = Object.entries(node).filter(
-    ([key]) => !key.startsWith('@'),
-  );
-  if (droppable.length === 0) return null;
-  const largest = droppable.reduce((biggest, entry) =>
-    JSON.stringify(entry[1]).length > JSON.stringify(biggest[1]).length
-      ? entry
-      : biggest,
-  );
-  return fitNode(
-    Object.fromEntries(
-      Object.entries(node).filter(([key]) => key !== largest[0]),
-    ),
-  );
+  // Re-measuring the node per dropped field is quadratic on a node with thousands of fields, so each is measured
+  // once (key, value, colon, comma); the 1 is the braces less the last comma, making the sum the node's own length.
+  const sizes = Object.entries(node).map(([key, value]) => {
+    const valueSize = JSON.stringify(value).length;
+    return { key, valueSize, size: JSON.stringify(key).length + valueSize + 2 };
+  });
+  const excess =
+    sizes.reduce((sum, field) => sum + field.size, 1) - MAX_STRUCTURED_CHARS;
+  const { freed, dropped } = sizes
+    .filter(({ key }) => !key.startsWith('@'))
+    .sort((a, b) => b.valueSize - a.valueSize)
+    .reduce(
+      (acc, field) =>
+        acc.freed >= excess
+          ? acc
+          : {
+              freed: acc.freed + field.size,
+              dropped: acc.dropped.add(field.key),
+            },
+      { freed: 0, dropped: new Set<string>() },
+    );
+  return freed < excess
+    ? null
+    : Object.fromEntries(
+        Object.entries(node).filter(([key]) => !dropped.has(key)),
+      );
 };
 
 const pickStructuredData = (blocks: string[], schemaTypes: string[]) => {
