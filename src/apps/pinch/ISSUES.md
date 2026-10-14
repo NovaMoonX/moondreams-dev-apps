@@ -363,7 +363,7 @@ A month calendar where each planned meal is a thin meal-type bar with its emoji.
 **Target PR Size:** ~400 lines
 **Files:**
 - `src/apps/pinch/components/plan/MealBuilder.tsx`, `ItemSearch.tsx`, `ServingStepper.tsx`, `PlanMealSubview.tsx`
-- `src/apps/pinch/components/calendar/PlannedMealView.tsx` ("Change items or servings")
+- `src/apps/pinch/components/calendar/PlannedMealView.tsx` (Modify)
 - `src/apps/pinch/store/actions/plannedMealActions.ts` (`updatePlannedMeal`)
 - `src/apps/pinch/utils/mealMath.ts`
 - `scripts/seeds/pinch.ts`
@@ -376,11 +376,11 @@ A planned meal can hold any mix of recipes and ingredients, each with its own se
 ### Possible Approach
 1. `mealMath.ts`: item cost (`servings ×` recipe per-serving cost, or an ingredient's per-serving cost through its serving size, default 100 g for a custom ingredient) and planned-meal totals with `leftOut`.
 2. `MealBuilder`: day and type pills with "Change", the item search (recipes, ingredients, and later saved meals) with kind labels, per-row steppers and remove controls, a cost line with the `GapNudge`, footer `Cancel` / `Add to Tuesday` (or `Save` when editing).
-3. `updatePlannedMeal`: a field-scoped `updateDoc` of `date`, `mealType`, `items`, `refIds`, `name`. "Change items or servings" in the planned meal view closes the drawer and opens the subview.
+3. `updatePlannedMeal`: a field-scoped `updateDoc` of `date`, `mealType`, `items`, `refIds`, `name`. Modify in the planned meal view closes the drawer and opens the subview.
 4. Add an optional serving-size chip to the ingredient form (so a Doritos item can say what "1 serving" is).
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** + Add with several items. **Read:** the planned meal view lists items and totals. **Update:** Change items or servings (items, servings, day, type). **Delete:** Remove from this day (Issue 9).
+- [ ] **Create:** + Add with several items. **Read:** the planned meal view lists items and totals. **Update:** Modify (items, servings, day, type). **Delete:** Remove from this day (Issue 9).
 - [ ] **Entry point:** reachable from a day's drawer on the calendar.
 
 ### Success Criteria

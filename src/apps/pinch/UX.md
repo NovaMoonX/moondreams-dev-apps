@@ -56,7 +56,7 @@ flowchart TD
     DD -->|tap a meal| PMD["Planned meal · swaps in place"]
     DD -->|Add to shopping list| AS
     PMD -->|Add to shopping list| AS
-    PMD -->|Change items or servings| PM
+    PMD -->|Modify| PM
     PMD --> SAV["Save as a meal · swaps in place"]
     PMD --> RM["Remove confirm"]
     R --> RL["Recipes list · pills: Recipes / Meals / Ideas"]
@@ -1433,7 +1433,7 @@ flowchart LR
 | Product | store (`PickOrCreate`), price, package size | label, link, default flag | the ingredient drawer's product rows; the fill-in sheet for a missing price or size | none | store: "New store" is the dashed first pill |
 | Store | pick from the well-known list, or name | image | the Stores subview row | none | "Can't find it? Add your own" reveals the name and image fields |
 | Meal (saved) | name, items (recipe or ingredient + servings) | — | Meal subview's Modify; "Save as a meal" on a planned meal | none | none |
-| Planned meal | day and meal type (prefilled from where it started), items with servings | — | the planned meal's "Change items or servings" | none | none |
+| Planned meal | day and meal type (prefilled from where it started), items with servings | — | the planned meal's Modify | none | none |
 | Settings | four nutrition switches (all off) | — | the Calendar gear; the stats row's help link | none | none |
 
 **Flagged for the TDD** (none of these change the screens above, but each shapes the data):
