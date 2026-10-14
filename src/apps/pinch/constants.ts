@@ -430,5 +430,5 @@ export const BULK_MEAL_SERVINGS = 5;
 export const CONTAINER_SITTING_SERVINGS = 2;
 /** In-stock containers before adding asks to finish or delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_CONTAINERS = 500;
-export const CONTAINER_LIST_PAGE_SIZE = 40;
+export const CONTAINER_LIST_PAGE_SIZE = 20;
 export const CONTAINER_FINISHED_PAGE_SIZE = 25;

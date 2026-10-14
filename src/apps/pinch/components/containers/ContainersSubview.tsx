@@ -324,7 +324,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
           <SearchInput
             value={query}
             onChange={setQuery}
-            placeholder='Search your prepared meals'
+            placeholder='Search prepared meals'
           />
         )}
         {view === 'stock' ? getStockBody() : getFinishedBody()}
