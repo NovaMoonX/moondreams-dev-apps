@@ -157,6 +157,7 @@ function Pinch() {
       {subview?.kind === 'cook' && (
         <CookingSubview
           key={subview.recipeId}
+          uid={user.uid}
           recipeId={subview.recipeId}
           servings={subview.servings}
         />
