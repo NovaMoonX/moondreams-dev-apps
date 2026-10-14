@@ -15,7 +15,7 @@ import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   COOK_BATCH_SIZE,
-  MAX_COOK_SERVINGS,
+  MAX_COOKED_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
 import type { Cook } from '@apps/pinch/types';
@@ -30,7 +30,7 @@ import {
 const cookDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'cooks', id);
 
-const BAD_SERVINGS = `Pick a number of servings above zero, up to ${MAX_COOK_SERVINGS.toLocaleString('en-US')}.`;
+const BAD_SERVINGS = `Pick a number of servings above zero, up to ${MAX_COOKED_SERVINGS.toLocaleString('en-US')}.`;
 const BAD_TIME = 'Pick a time that has already passed.';
 const FULL = `A recipe's history holds up to ${SOFT_MAX_COOKS_PER_RECIPE} cooks. Delete an older one to make room.`;
 const MINUTE_MS = 60_000;

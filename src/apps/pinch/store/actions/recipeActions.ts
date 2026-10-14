@@ -1,5 +1,4 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { FirebaseError } from 'firebase/app';
 import { deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
@@ -10,12 +9,11 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
+import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
-import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import type {
-  Idea,
   IngredientRecord,
   NutritionValues,
   Recipe,
@@ -59,7 +57,7 @@ export interface RecipeDraft {
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
   removeCover: boolean;
-  /** Its `recipeId` is set in the same batch, unless the idea is gone by then. */
+  /** Set on its own after the recipe has committed, and only if the idea is still there. */
   fromIdeaId: string | null;
 }
 
@@ -68,9 +66,14 @@ interface SaveRecipeInput {
   draft: RecipeDraft;
 }
 
+interface SaveRecipeResult {
+  recipeId: string;
+  linkedIdea: boolean;
+}
+
 /** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). The cover goes to Storage first and is cleaned up if the write fails. */
 export const saveRecipe = createAsyncThunk<
-  string,
+  SaveRecipeResult,
   SaveRecipeInput,
   { state: RootState; rejectValue: string }
 >(
@@ -124,83 +127,62 @@ export const saveRecipe = createAsyncThunk<
         updatedAt: now,
       };
 
-      const buildBatch = (linkedIdea: Idea | null) => {
-        const batch = writeBatch(db);
-        if (draft.newSource) {
-          const source: Source = {
-            id: draft.newSource.id,
-            label: draft.newSource.label,
-            createdAt: now,
-            updatedAt: now,
-          };
-          batch.set(sourceDoc(uid, source.id), source);
-        }
-        draft.newIngredients.forEach((ingredient) => {
-          const record: IngredientRecord = {
-            id: ingredient.id,
-            catalogId: null,
-            name: ingredient.name.trim(),
-            familyId: null,
-            iconKey: null,
-            nutritionPer100g: null,
-            servingAmount: null,
-            servingUnit: null,
-            gramsPerMl: null,
-            gramsEach: null,
-            defaultProductId: null,
-            isArchived: false,
-            createdAt: now,
-            updatedAt: now,
-          };
-          batch.set(
-            doc(
-              db,
-              'apps',
-              'pinch',
-              'kitchens',
-              uid,
-              'ingredients',
-              ingredient.id,
-            ),
-            record,
-          );
-        });
-        if (existing) {
-          batch.update(recipeDoc(uid, recipeId), {
-            ...fields,
-            ...('isArchived' in existing ? {} : { isArchived: false }),
-          });
-        } else {
-          const recipe: Recipe = {
-            id: recipeId,
-            ...fields,
-            source: draft.source,
-            isArchived: false,
-            createdAt: now,
-          };
-          batch.set(recipeDoc(uid, recipeId), recipe);
-        }
-        if (linkedIdea) {
-          batch.update(ideaDoc(uid, linkedIdea.id), {
-            ...getMissingIdeaFields(linkedIdea),
-            recipeId,
-            updatedAt: now,
-          });
-        }
-        return batch;
-      };
-
-      try {
-        await buildBatch(idea).commit();
-      } catch (error) {
-        // Rules answer an update of a missing document with permission-denied, not not-found.
-        const isIdeaGone =
-          idea !== null &&
-          error instanceof FirebaseError &&
-          ['not-found', 'permission-denied'].includes(error.code);
-        if (!isIdeaGone) throw error;
-        await buildBatch(null).commit();
+      const batch = writeBatch(db);
+      if (draft.newSource) {
+        const source: Source = {
+          id: draft.newSource.id,
+          label: draft.newSource.label,
+          createdAt: now,
+          updatedAt: now,
+        };
+        batch.set(sourceDoc(uid, source.id), source);
       }
+      draft.newIngredients.forEach((ingredient) => {
+        const record: IngredientRecord = {
+          id: ingredient.id,
+          catalogId: null,
+          name: ingredient.name.trim(),
+          familyId: null,
+          iconKey: null,
+          nutritionPer100g: null,
+          servingAmount: null,
+          servingUnit: null,
+          gramsPerMl: null,
+          gramsEach: null,
+          defaultProductId: null,
+          isArchived: false,
+          createdAt: now,
+          updatedAt: now,
+        };
+        batch.set(
+          doc(
+            db,
+            'apps',
+            'pinch',
+            'kitchens',
+            uid,
+            'ingredients',
+            ingredient.id,
+          ),
+          record,
+        );
+      });
+      if (existing) {
+        batch.update(recipeDoc(uid, recipeId), {
+          ...fields,
+          ...('isArchived' in existing ? {} : { isArchived: false }),
+        });
+      } else {
+        const recipe: Recipe = {
+          id: recipeId,
+          ...fields,
+          source: draft.source,
+          isArchived: false,
+          createdAt: now,
+        };
+        batch.set(recipeDoc(uid, recipeId), recipe);
+      }
+      await batch.commit();
     } catch (error) {
       if (draft.coverFile && existing?.coverPath !== path) {
         await deleteFile(path).catch(() => undefined);
@@ -214,7 +196,21 @@ export const saveRecipe = createAsyncThunk<
       await deleteFile(existing.coverPath).catch(() => undefined);
     }
 
-    return recipeId;
+    const linkedIdea =
+      idea !== null &&
+      (await updateDoc(ideaDoc(uid, idea.id), {
+        ...getMissingIdeaFields(idea),
+        recipeId,
+        updatedAt: Date.now(),
+      }).then(
+        () => true,
+        (error: unknown) => {
+          console.error('Pinch could not link the idea to its recipe', error);
+          return false;
+        },
+      ));
+
+    return { recipeId, linkedIdea };
   },
 );
 

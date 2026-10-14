@@ -20,12 +20,33 @@ export function isValidHttpsUrl(value: string) {
   return parseHttpUrl(value)?.protocol === 'https:';
 }
 
-/** A pasted web link as an http(s) address, or null; spaces are dropped and a missing scheme is read as https. */
+const getLinkTokens = (text: string) =>
+  text
+    .trim()
+    .split(/\s+/)
+    .filter((token) => /^https?:\/\//i.test(token));
+
+/** True when pasted text holds two or more links. */
+export function hasSeveralWebLinks(text: string) {
+  return getLinkTokens(text).length > 1;
+}
+
+/** A pasted web link as an http(s) address, or null; one link among other words is picked out, and a link wrapped over lines with no scheme is joined. */
 export function toWebLink(text: string) {
-  const compact = text.replace(/\s+/g, '');
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(compact) ? compact : `https://${compact}`;
-  const parsed = compact === '' ? null : parseHttpUrl(withScheme);
-  const result = parsed && parsed.username === '' && parsed.password === '' ? parsed.toString() : null;
+  const trimmed = text.trim();
+  const tokens = getLinkTokens(trimmed);
+  const candidate = /\s/.test(trimmed)
+    ? (tokens[0] ?? trimmed.replace(/\s+/g, ''))
+    : trimmed;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)
+    ? candidate
+    : `https://${candidate}`;
+  const parsed =
+    tokens.length > 1 || candidate === '' ? null : parseHttpUrl(withScheme);
+  const result =
+    parsed && parsed.username === '' && parsed.password === ''
+      ? parsed.toString()
+      : null;
   return result;
 }
 
@@ -35,7 +56,8 @@ export function getWebLinkHost(text: string) {
   return link ? new URL(link).hostname.replace(/^www\./i, '') : null;
 }
 
-const TRACKING_PARAMETER = /^(utm_.*|fbclid|gclid|igshid|mc_cid|mc_eid)$/i;
+const TRACKING_PARAMETER =
+  /^(utm_.*|fbclid|gclid|igshid|igsh|mc_cid|mc_eid|si|mibextid)$/i;
 
 /** What makes two web links the same page: no scheme, `www.`, fragment, trailing slash or tracking parameters. */
 export function getComparableUrl(text: string) {

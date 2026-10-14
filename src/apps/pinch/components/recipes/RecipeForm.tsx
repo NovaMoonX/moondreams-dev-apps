@@ -59,7 +59,6 @@ import {
 } from '@apps/pinch/store/actions/recipeActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
-  selectIdeasById,
   selectIngredients,
   selectIngredientsById,
   selectRecipesById,
@@ -129,7 +128,6 @@ function RecipeForm({
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
-  const ideasById = useAppSelector(selectIdeasById);
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
   const existingCoverUrl = useStorageImageUrl(
     recipe?.coverPath ?? null,
@@ -506,7 +504,7 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
-      await dispatch(
+      const { linkedIdea } = await dispatch(
         saveRecipe({
           uid,
           draft: {
@@ -544,10 +542,12 @@ function RecipeForm({
           },
         }),
       ).unwrap();
-      if (initialIdea && ideasById.has(initialIdea.id)) {
+      if (initialIdea) {
         addToast({
           title: 'Recipe added',
-          description: `“${initialIdea.title}” moved to Made into recipes.`,
+          description: linkedIdea
+            ? `“${initialIdea.title}” moved to Made into recipes.`
+            : undefined,
           type: 'success',
         });
       }

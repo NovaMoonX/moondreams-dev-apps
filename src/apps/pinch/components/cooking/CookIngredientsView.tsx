@@ -1,10 +1,11 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Stepper from '@/components/Stepper';
 import { useAppSelector } from '@/store';
+import { MAX_COOK_SERVINGS, MIN_COOK_SERVINGS } from '@apps/pinch/constants';
 import { selectIngredientsById } from '@apps/pinch/store/selectors';
 import type { Recipe } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
@@ -71,16 +72,21 @@ const CookIngredientRow = memo(function CookIngredientRow({
 interface CookIngredientsViewProps {
   recipe: Recipe;
   servings: number;
+  gotOut: Record<string, boolean>;
   onServingsChange: (servings: number) => void;
+  onToggle: (id: string, isOut: boolean) => void;
+  onReset: () => void;
 }
 
 function CookIngredientsView({
   recipe,
   servings,
+  gotOut,
   onServingsChange,
+  onToggle,
+  onReset,
 }: CookIngredientsViewProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const [gotOut, setGotOut] = useState<Record<string, boolean>>({});
 
   const rows = useMemo(
     () =>
@@ -96,11 +102,6 @@ function CookIngredientsView({
       })),
     [recipe.ingredients, recipe.servings, ingredientsById, servings],
   );
-  const handleToggle = useCallback(
-    (id: string, isOut: boolean) =>
-      setGotOut((current) => ({ ...current, [id]: isOut })),
-    [],
-  );
   const outCount = rows.filter((row) => gotOut[row.id]).length;
   const isScaled = recipe.servings > 0 && servings !== recipe.servings;
 
@@ -114,6 +115,8 @@ function CookIngredientsView({
           <Stepper
             label='Servings'
             value={servings}
+            min={MIN_COOK_SERVINGS}
+            max={MAX_COOK_SERVINGS}
             onChange={onServingsChange}
           />
         </div>
@@ -142,7 +145,7 @@ function CookIngredientsView({
                 variant='link'
                 size='sm'
                 className='h-10 px-0!'
-                onClick={() => setGotOut({})}
+                onClick={onReset}
               >
                 Reset
               </Button>
@@ -154,7 +157,7 @@ function CookIngredientsView({
                 key={row.id}
                 {...row}
                 isOut={gotOut[row.id] === true}
-                onToggle={handleToggle}
+                onToggle={onToggle}
               />
             ))}
           </ul>

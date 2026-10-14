@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type Ref } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -14,14 +14,18 @@ const TICK_MS = 250;
 
 interface CookTimerStripProps {
   timers: CookTimer[];
+  listRef: Ref<HTMLUListElement>;
+  onTick: () => void;
   onPause: (id: string) => void;
   onResume: (id: string) => void;
   onDismiss: (id: string) => void;
 }
 
-/** The running timers, one pill each. Only this strip re-renders as the seconds pass. */
+/** The tick lives here, so only the pills re-render as the seconds pass. */
 function CookTimerStrip({
   timers,
+  listRef,
+  onTick,
   onPause,
   onResume,
   onDismiss,
@@ -34,9 +38,12 @@ function CookTimerStrip({
       return;
     }
 
-    const intervalId = window.setInterval(() => setNow(Date.now()), TICK_MS);
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+      onTick();
+    }, TICK_MS);
     return () => window.clearInterval(intervalId);
-  }, [hasRunning]);
+  }, [hasRunning, onTick]);
 
   if (timers.length === 0) {
     return null;
@@ -44,8 +51,10 @@ function CookTimerStrip({
 
   return (
     <ul
+      ref={listRef}
+      tabIndex={-1}
       aria-label='Timers'
-      className='grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2'
+      className='grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 outline-none'
     >
       {timers.map((timer) => {
         const caption = `Step ${timer.stepNumber} · ${timer.label}`;

@@ -17,7 +17,11 @@ import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
-import { getWebLinkHost } from '@/utils/urlUtils';
+import {
+  getWebLinkHost,
+  hasSeveralWebLinks,
+  toWebLink,
+} from '@/utils/urlUtils';
 import IdeaNoteField from '@apps/pinch/components/ideas/IdeaNoteField';
 import { IDEA_KIND_EMOJIS, MAX_IDEA_TITLE_LENGTH } from '@apps/pinch/constants';
 import { ideaPageQueryOptions } from '@apps/pinch/queries/ideaPageQueries';
@@ -58,20 +62,29 @@ function useCreateIdea(uid: string, onDone: () => void) {
     }
   };
 
-  return { submit, isSubmitting, error };
+  return { submit, isSubmitting, error, clearError: () => setError(null) };
 }
 
 interface WayFooterProps {
   canSave: boolean;
   isSubmitting: boolean;
   note?: ReactNode;
+  error: string | null;
   onCancel: () => void;
 }
 
-function WayFooter({ canSave, isSubmitting, note, onCancel }: WayFooterProps) {
+function WayFooter({
+  canSave,
+  isSubmitting,
+  note,
+  error,
+  onCancel,
+}: WayFooterProps) {
   return (
     <ModalFooterActions
-      note={note}
+      note={
+        note ?? (error && <span className='text-destructive'>{error}</span>)
+      }
       cancelAction={
         <Button
           type='button'
@@ -136,7 +149,10 @@ interface LinkWayProps extends WayProps {
 
 export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
   const ideas = useAppSelector(selectIdeas);
-  const { submit, isSubmitting, error } = useCreateIdea(uid, onClose);
+  const { submit, isSubmitting, error, clearError } = useCreateIdea(
+    uid,
+    onClose,
+  );
   const bodyRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState({ url: '', note: '' });
   const [typed, setTyped] = useState<{ link: string; title: string } | null>(
@@ -195,13 +211,22 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
                 placeholder='Paste a link'
                 value={String(props.value)}
                 onChange={(event) => props.onValueChange(event.target.value)}
+                onPaste={(event) => {
+                  const pasted = event.clipboardData.getData('text');
+                  if (!/\s/.test(pasted.trim())) return;
+                  event.preventDefault();
+                  props.onValueChange(
+                    toWebLink(pasted) ?? pasted.trim().replace(/\s+/g, ' '),
+                  );
+                }}
               />
             )}
           </Field>
           {isInvalid && (
             <p className='text-destructive text-sm' role='status'>
-              That doesn't look like a web link. Paste the address from your
-              browser.
+              {hasSeveralWebLinks(data.url)
+                ? 'That looks like more than one link. Paste one at a time.'
+                : "That doesn't look like a web link. Paste the address from your browser."}
             </p>
           )}
         </div>
@@ -311,7 +336,10 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
         form={fields}
         initialData={{ url: '', note: '' }}
         columns={1}
-        onDataChange={(next) => setData(next as typeof data)}
+        onDataChange={(next) => {
+          setData(next as typeof data);
+          clearError();
+        }}
         onSubmit={() => {
           if (!canSave) return;
           void submit({
@@ -328,17 +356,20 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
           <WayFooter
             canSave={canSave}
             isSubmitting={isSubmitting}
+            error={error}
             onCancel={onClose}
           />
         }
       />
-      {error && <p className='text-destructive text-sm'>{error}</p>}
     </div>
   );
 }
 
 export function IdeaPhotoWay({ uid, onClose }: WayProps) {
-  const { submit, isSubmitting, error } = useCreateIdea(uid, onClose);
+  const { submit, isSubmitting, error, clearError } = useCreateIdea(
+    uid,
+    onClose,
+  );
   const upload = useImageUpload(null);
   const { pick, clear } = upload;
   const [data, setData] = useState({ title: '', note: '' });
@@ -375,7 +406,10 @@ export function IdeaPhotoWay({ uid, onClose }: WayProps) {
               uploadLabel='Choose a picture'
               changeLabel='Choose another'
               error={upload.error}
-              onSelect={pick}
+              onSelect={(file) => {
+                clearError();
+                pick(file);
+              }}
               onRemove={clear}
             />
           </div>
@@ -413,7 +447,10 @@ export function IdeaPhotoWay({ uid, onClose }: WayProps) {
         form={fields}
         initialData={{ title: '', note: '' }}
         columns={1}
-        onDataChange={(next) => setData(next as typeof data)}
+        onDataChange={(next) => {
+          setData(next as typeof data);
+          clearError();
+        }}
         onSubmit={() => {
           if (!canSave) return;
           void submit({
@@ -430,6 +467,7 @@ export function IdeaPhotoWay({ uid, onClose }: WayProps) {
           <WayFooter
             canSave={canSave}
             isSubmitting={isSubmitting}
+            error={error}
             note={
               upload.file !== null && title === ''
                 ? 'Give it a title to save.'
@@ -439,13 +477,15 @@ export function IdeaPhotoWay({ uid, onClose }: WayProps) {
           />
         }
       />
-      {error && <p className='text-destructive text-sm'>{error}</p>}
     </div>
   );
 }
 
 export function IdeaTextWay({ uid, onClose }: WayProps) {
-  const { submit, isSubmitting, error } = useCreateIdea(uid, onClose);
+  const { submit, isSubmitting, error, clearError } = useCreateIdea(
+    uid,
+    onClose,
+  );
   const bodyRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState({ title: '', note: '' });
 
@@ -493,7 +533,10 @@ export function IdeaTextWay({ uid, onClose }: WayProps) {
         form={fields}
         initialData={{ title: '', note: '' }}
         columns={1}
-        onDataChange={(next) => setData(next as typeof data)}
+        onDataChange={(next) => {
+          setData(next as typeof data);
+          clearError();
+        }}
         onSubmit={() => {
           if (!canSave) return;
           void submit({
@@ -510,11 +553,11 @@ export function IdeaTextWay({ uid, onClose }: WayProps) {
           <WayFooter
             canSave={canSave}
             isSubmitting={isSubmitting}
+            error={error}
             onCancel={onClose}
           />
         }
       />
-      {error && <p className='text-destructive text-sm'>{error}</p>}
     </div>
   );
 }

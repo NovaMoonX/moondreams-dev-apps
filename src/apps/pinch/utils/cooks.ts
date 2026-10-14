@@ -1,6 +1,6 @@
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
-  MAX_COOK_SERVINGS,
+  MAX_COOKED_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
 import type { Cook, MealItem, Recipe } from '@apps/pinch/types';
@@ -61,7 +61,7 @@ export const isCookHistoryFull = (count: number) =>
   count >= SOFT_MAX_COOKS_PER_RECIPE;
 
 export const isValidCookServings = (servings: number) =>
-  Number.isFinite(servings) && servings > 0 && servings <= MAX_COOK_SERVINGS;
+  Number.isFinite(servings) && servings > 0 && servings <= MAX_COOKED_SERVINGS;
 
 /** Now on today, local noon on a day already past, null on a day still ahead. */
 export const getPlannedCookedAt = (plannedDate: number, now = Date.now()) => {
@@ -88,7 +88,7 @@ export const getMarkableRecipes = (
       acc.set(recipe.id, {
         recipe,
         servings: Math.min(
-          MAX_COOK_SERVINGS,
+          MAX_COOKED_SERVINGS,
           (acc.get(recipe.id)?.servings ?? 0) + item.servings,
         ),
       });
@@ -110,4 +110,4 @@ export const getMissingCookFields = (existing: object) =>
   'plannedMealId' in existing ? {} : { plannedMealId: null };
 
 export const getCookServings = (servings: number) =>
-  servings > 0 ? Math.min(servings, MAX_COOK_SERVINGS) : 1;
+  servings > 0 ? Math.min(servings, MAX_COOKED_SERVINGS) : 1;

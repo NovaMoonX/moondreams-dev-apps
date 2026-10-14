@@ -9,7 +9,7 @@ import {
 const seconds = (text: string) =>
   findDurations(text).map((found) => found.seconds);
 
-// One length of time, in each way a step writes it
+// One length of time, in each way a text writes it
 assert.deepEqual(seconds('Simmer for 25 minutes.'), [1500]);
 assert.deepEqual(seconds('Bake 25 min'), [1500]);
 assert.deepEqual(seconds('Bake 25min.'), [1500]);
@@ -19,7 +19,6 @@ assert.deepEqual(seconds('Roast 2 hrs'), [7200]);
 assert.deepEqual(seconds('Whisk for 30 seconds'), [30]);
 assert.deepEqual(seconds('Toast 45 secs'), [45]);
 assert.deepEqual(seconds('Simmer for 25 MINUTES'), [1500]);
-assert.deepEqual(seconds('Let it rest for a 10-minute stretch'), [600]);
 
 // A length written in two parts is one length
 assert.deepEqual(seconds('Braise for 1 hr 30 min'), [5400]);
@@ -37,6 +36,7 @@ assert.deepEqual(seconds('Bake 1 to 1½ hours'), [5400]);
 
 // Fractions and decimals
 assert.deepEqual(seconds('Rest 1.5 hours'), [5400]);
+assert.deepEqual(seconds('Rest 1.25 hours'), [4500]);
 assert.deepEqual(seconds('Rest 1/2 hour'), [1800]);
 assert.deepEqual(seconds('Rest 1 1/2 hours'), [5400]);
 assert.deepEqual(seconds('Rest 1½ hours'), [5400]);
@@ -44,7 +44,7 @@ assert.deepEqual(seconds('Rest ½ hour'), [1800]);
 assert.deepEqual(seconds('Bake for half an hour'), [1800]);
 assert.deepEqual(seconds('Simmer about an hour'), [3600]);
 
-// Several in a step, in order, without repeats
+// Several in one text, in order, without repeats
 assert.deepEqual(
   seconds('Sear 3 minutes per side, then rest 10 minutes'),
   [180, 600],
@@ -64,8 +64,25 @@ assert.deepEqual(seconds('Stir until golden'), []);
 assert.deepEqual(seconds('Season with 2 pinches of salt'), []);
 assert.deepEqual(seconds('Cook for 0 minutes'), []);
 assert.deepEqual(seconds('Marinate for 48 hours'), []);
-assert.deepEqual(seconds('Slice it into 3 minute pieces'), [180]);
 assert.deepEqual(seconds(''), []);
+
+// A length that describes a noun is still a length
+assert.deepEqual(seconds('Let it rest for a 10-minute stretch'), [600]);
+assert.deepEqual(seconds('Slice it into 3 minute pieces'), [180]);
+
+// A comma inside a number means the number is ambiguous, so it gives no length
+assert.deepEqual(seconds('Simmer 1,5 hours'), []);
+assert.deepEqual(seconds('Cook 2,500 seconds'), []);
+assert.deepEqual(seconds('Wait 1,000 minutes'), []);
+assert.deepEqual(seconds('Wait 1,250 minutes'), []);
+assert.deepEqual(seconds('Rest 12,5 min'), []);
+assert.deepEqual(seconds('Rest 1,234,567 seconds'), []);
+assert.deepEqual(seconds('Cook 1,5 hours, then rest 10 minutes'), [600]);
+assert.deepEqual(seconds('Wait 1,000 minutes, then rest 5 minutes'), [300]);
+assert.deepEqual(seconds('Cook 1.5 hours'), [5400]);
+assert.deepEqual(seconds('Cook 1 hour 30 minutes'), [5400]);
+assert.deepEqual(seconds('Cook 25, 30 minutes'), [1800]);
+assert.deepEqual(seconds('Cook 2 hours,30 minutes'), [9000]);
 
 // Labels and countdowns
 assert.equal(formatDuration(1500), '25 min');
@@ -81,10 +98,29 @@ assert.equal(formatClock(-500), '0:00');
 assert.equal(formatClock(5_400_000), '1:30:00');
 assert.equal(formatClock(59_999), '1:00');
 
-// A hostile step reads in linear time
-const hostile = `${'1 '.repeat(20_000)}${'9'.repeat(20_000)} minutes`;
-const started = performance.now();
-findDurations(hostile);
-assert.ok(performance.now() - started < 1000, 'findDurations is slow');
+// Past the first 5,000 characters of a text is ignored
+assert.deepEqual(seconds(`${' '.repeat(4_900)}7 minutes`), [420]);
+assert.deepEqual(seconds(`${' '.repeat(5_000)}7 minutes`), []);
+assert.deepEqual(seconds(`${'5 min '.repeat(1_000)}then 7 minutes`), [300]);
+
+// The parser is linear on its own: the cap is raised so it cannot be what keeps these fast
+const readsUnderASecond = (name: string, text: string) => {
+  const elapsed = Math.min(
+    ...[0, 1].map(() => {
+      const started = performance.now();
+      findDurations(text, Infinity);
+      return performance.now() - started;
+    }),
+  );
+  assert.ok(elapsed < 1000, `${name} took ${Math.round(elapsed)} ms`);
+};
+readsUnderASecond('250,000 repeats', '5 min '.repeat(250_000));
+readsUnderASecond('250,000 pieces to join', '1 h 5 min, '.repeat(125_000));
+readsUnderASecond('100,000 spoken', 'half an hour, '.repeat(100_000));
+readsUnderASecond(
+  'a long number',
+  `${'1 '.repeat(20_000)}${'9'.repeat(20_000)} minutes`,
+);
+readsUnderASecond('a long run of commas', '1,'.repeat(100_000) + ' 5 min');
 
 console.log('duration checks passed');

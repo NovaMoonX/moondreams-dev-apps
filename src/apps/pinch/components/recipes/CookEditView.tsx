@@ -24,7 +24,7 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateTime } from '@/utils/formatUtils';
-import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
+import { MAX_COOKED_SERVINGS } from '@apps/pinch/constants';
 import {
   addCook,
   removeCook,
@@ -124,7 +124,7 @@ function CookEditView({
               value={servings}
               onChange={setServings}
               label='Servings cooked'
-              max={MAX_COOK_SERVINGS}
+              max={MAX_COOKED_SERVINGS}
             />
           </div>
         ),

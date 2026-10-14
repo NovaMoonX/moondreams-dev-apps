@@ -342,18 +342,19 @@ export const NUTRITION_BASIS_OPTIONS = [
   { value: 'PER_100G', label: 'Per 100 g' },
 ] as const;
 
-/** Timers running at once in cooking mode: the screen's limit, nothing is stored. */
 export const MAX_COOK_TIMERS = 4;
+
+export const MIN_COOK_SERVINGS = 0.5;
+export const MAX_COOK_SERVINGS = 1000;
 
 export const COOK_VIEW_OPTIONS = [
   { value: 'steps', label: 'Steps' },
   { value: 'ingredients', label: 'Ingredients' },
 ] as const;
 
-/** Past this many steps cooking mode says "Step 3 of 14" without a dot per step. */
 export const MAX_STEP_DOTS = 12;
 
-export const MAX_COOK_SERVINGS = 1000;
+export const MAX_COOKED_SERVINGS = 1000;
 /** The most cooks one recipe's history takes before asking to delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_COOKS_PER_RECIPE = 500;
 /** Under Firestore's 500 writes per batch. */
