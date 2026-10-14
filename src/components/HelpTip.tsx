@@ -27,7 +27,6 @@ interface HelpTipProps {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), Math.max(min, max));
 
-/** Puts the tooltip beside the trigger, inside the viewport, with its arrow under the trigger's center. */
 function placeTooltip(
   trigger: HTMLElement,
   tip: HTMLElement,

@@ -4,25 +4,31 @@ const listeners = new Set<() => void>();
 const memory = new Map<string, string>();
 
 const subscribe = (listener: () => void) => {
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key) {
+      memory.delete(event.key);
+    }
+    listener();
+  };
   listeners.add(listener);
-  window.addEventListener('storage', listener);
+  window.addEventListener('storage', handleStorage);
 
   return () => {
     listeners.delete(listener);
-    window.removeEventListener('storage', listener);
+    window.removeEventListener('storage', handleStorage);
   };
 };
 
 const readRaw = (key: string) => {
-  try {
-    const stored = localStorage.getItem(key);
-    if (stored !== null) {
-      return stored;
-    }
-  } catch {
-    // Blocked storage falls back to this session's memory.
+  const remembered = memory.get(key);
+  if (remembered !== undefined) {
+    return remembered;
   }
-  return memory.get(key) ?? null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
 };
 
 /** A per-viewer value remembered in this browser and shared by every component reading the key; `parse` returns null for an unusable stored value, and `defaultValue` and `parse` live at module level. */

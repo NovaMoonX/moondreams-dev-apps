@@ -111,7 +111,6 @@ const isMetric = (value: number | null) =>
   value === null ||
   (Number.isFinite(value) && value >= 0 && value <= MAX_NUTRITION_VALUE);
 
-/** Grams in one serving as the form stands now; null while the serving is off, blank or can't be weighed. */
 const getFormServingGrams = (extras: Extras, conversions: Conversions) => {
   const amount = parseAmount(extras.serving.value.amount);
   return !extras.serving.enabled || !isPositive(amount, MAX_SERVING_AMOUNT)
@@ -119,7 +118,6 @@ const getFormServingGrams = (extras: Extras, conversions: Conversions) => {
     : getServingGrams({ amount, unit: extras.serving.value.unit }, conversions);
 };
 
-/** The typed numbers as the per-100 g values that are stored; null while the amount they are for is unusable. */
 const getPer100g = (
   extras: Extras,
   conversions: Conversions,

@@ -7,7 +7,7 @@ export const COMPACT_INPUT_CLASS = 'min-h-10 h-10 placeholder:text-sm';
 
 interface FieldProps {
   label: ReactNode;
-  /** A smaller caption and tighter spacing for a grid of short fields (four nutrition numbers). */
+  /** A smaller caption and tighter spacing for a grid of short fields. */
   isCompact?: boolean;
   children: (id: string) => ReactNode;
 }

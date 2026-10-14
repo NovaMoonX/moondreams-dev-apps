@@ -2,11 +2,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { fetchPublicPage, MAX_URL_LENGTH } from './safeFetch.js';
 
-/**
- * Reads one web page a signed-in person pasted and returns only the kinds of content the caller asks for
- * (its text, its schema.org data, its headings, its meta tags, its images), so any app can hand a page to
- * its own reader. Nothing app-specific lives here, and nothing is stored or scheduled.
- */
+/** Reads one web page a signed-in person pasted and returns only the kinds of content the caller asks for, so any app can hand a page to its own reader. */
 
 const MAX_BODY_BYTES = 1536 * 1024;
 const DEFAULT_TEXT_CHARS = 30000;
@@ -15,6 +11,7 @@ const MAX_TEXT_CHARS = 60000;
 const MAX_STRUCTURED_CHARS = 30000;
 const MAX_HEADINGS = 40;
 const MAX_IMAGES = 20;
+const MAX_IMAGE_SOURCES = 100;
 const MAX_TAG_CHARS = 2000;
 const MAX_SCHEMA_TYPES = 10;
 
@@ -81,7 +78,27 @@ const flattenNodes = (value: unknown, depth = 0): Record<string, unknown>[] => {
   return node['@graph'] ? flattenNodes(node['@graph'], depth + 1) : [node];
 };
 
-/** The page's schema.org nodes (optionally only the given types), whole nodes only, up to the size cap. */
+/** A node larger than the cap keeps its smaller fields (an article without its embedded comments) instead of vanishing. */
+const fitNode = (
+  node: Record<string, unknown>,
+): Record<string, unknown> | null => {
+  if (JSON.stringify(node).length <= MAX_STRUCTURED_CHARS) return node;
+  const droppable = Object.entries(node).filter(
+    ([key]) => !key.startsWith('@'),
+  );
+  if (droppable.length === 0) return null;
+  const largest = droppable.reduce((biggest, entry) =>
+    JSON.stringify(entry[1]).length > JSON.stringify(biggest[1]).length
+      ? entry
+      : biggest,
+  );
+  return fitNode(
+    Object.fromEntries(
+      Object.entries(node).filter(([key]) => key !== largest[0]),
+    ),
+  );
+};
+
 const pickStructuredData = (blocks: string[], schemaTypes: string[]) => {
   const nodes = blocks
     .flatMap((block) => {
@@ -102,15 +119,18 @@ const pickStructuredData = (blocks: string[], schemaTypes: string[]) => {
       ),
     );
 
-  return nodes.reduce<{ kept: Record<string, unknown>[]; size: number }>(
-    (acc, node) => {
-      const size = acc.size + JSON.stringify(node).length;
-      return size > MAX_STRUCTURED_CHARS
-        ? acc
-        : { kept: [...acc.kept, node], size };
-    },
-    { kept: [], size: 0 },
-  ).kept;
+  return nodes
+    .map(fitNode)
+    .filter((node): node is Record<string, unknown> => node !== null)
+    .reduce<{ kept: Record<string, unknown>[]; size: number }>(
+      (acc, node) => {
+        const size = acc.size + JSON.stringify(node).length;
+        return size > MAX_STRUCTURED_CHARS
+          ? acc
+          : { kept: [...acc.kept, node], size };
+      },
+      { kept: [], size: 0 },
+    ).kept;
 };
 
 const SKIPPED_TAGS = new Set([
@@ -119,7 +139,6 @@ const SKIPPED_TAGS = new Set([
   'noscript',
   'svg',
   'nav',
-  'header',
   'footer',
   'form',
   'iframe',
@@ -141,10 +160,22 @@ const BREAKING_TAGS = new Set([
   'section',
   'article',
   'br',
+  'aside',
+  'main',
+  'blockquote',
+  'dl',
+  'dd',
+  'dt',
+  'figure',
+  'figcaption',
+  'table',
+  'td',
+  'th',
+  'pre',
+  'header',
 ]);
 const MAX_SCANNED_TEXT_CHARS = 200000;
 
-/** Where a skipped tag's body ends: the next `</name` (any case) at or after `from`, or the end of the page. */
 const findClosing = (html: string, name: string, from: number) => {
   for (
     let at = html.indexOf('</', from);
@@ -175,9 +206,8 @@ interface PageParts {
 }
 
 const ATTRIBUTE =
-  /\s*([^\s=/>"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/y;
+  /([^\s=/>"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/y;
 
-/** Reads a tag's attributes in one pass, skipping anything that doesn't parse. */
 const parseAttributes = (tag: string, from: number): Record<string, string> => {
   const attributes: Record<string, string> = {};
   let position = from;
@@ -215,7 +245,7 @@ const toMeta = (tags: Record<string, string>[]): PageMeta => {
 
 /**
  * One left-to-right pass over the page, so a hostile page can't make it slow: every step moves forward
- * with `indexOf` or a sticky pattern with nothing to retry, and each tag is read once and capped.
+ * with `indexOf` or a sticky pattern that starts on a token, and each tag is read once and capped.
  */
 const readPage = (html: string): PageParts => {
   const chunks: string[] = [];
@@ -278,7 +308,8 @@ const readPage = (html: string): PageParts => {
         name.length + 1,
       );
       const source = src || lazySrc;
-      if (source) imageSources.push(source);
+      if (source && imageSources.length < MAX_IMAGE_SOURCES)
+        imageSources.push(source);
     }
     if (HEADING_TAGS.has(name)) {
       if (!isClosing) {
@@ -311,23 +342,22 @@ const readPage = (html: string): PageParts => {
   };
 };
 
-/** Absolute web addresses only, resolved against the page, without repeats. */
-const toImageUrls = (sources: string[], base: string, first: string | null) =>
-  [first, ...sources]
-    .flatMap((source) => {
-      if (!source) return [];
-      try {
-        const url = new URL(source, base);
-        return ['http:', 'https:'].includes(url.protocol) &&
-          url.href.length <= MAX_URL_LENGTH
-          ? [url.href]
-          : [];
-      } catch {
-        return [];
-      }
-    })
-    .filter((href, index, all) => all.indexOf(href) === index)
-    .slice(0, MAX_IMAGES);
+const toImageUrls = (sources: string[], base: string, first: string | null) => {
+  const hrefs = [first, ...sources].flatMap((source) => {
+    if (!source) return [];
+    try {
+      const url = new URL(source, base);
+      return ['http:', 'https:'].includes(url.protocol) &&
+        url.href.length <= MAX_URL_LENGTH
+        ? [url.href]
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const result = [...new Set(hrefs)].slice(0, MAX_IMAGES);
+  return result;
+};
 
 const readKinds = (value: unknown): ContentKind[] | null => {
   if (value === undefined) return DEFAULT_KINDS;

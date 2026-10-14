@@ -44,7 +44,7 @@ import type { Product, ResolvedIngredient, Unit } from '@apps/pinch/types';
 
 const { custom } = FormFactories;
 
-// MoneyInput draws a 1px border around its input, so the input is 2px shorter to make the whole field 40px.
+// The field draws a 1px border around its input, so the input is 2px shorter to make the whole field 40px.
 const MONEY_INPUT_CLASS = 'min-h-9.5 h-9.5 placeholder:text-sm';
 
 import { formatPriceAndSize } from '@apps/pinch/utils/productFormat';

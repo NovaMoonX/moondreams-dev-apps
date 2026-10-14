@@ -9,7 +9,7 @@ export interface PageContentRequest {
   url: string;
   /** Which kinds of content to read; the page's text and meta tags when omitted. */
   include?: PageContentKind[];
-  /** Keeps only the schema.org nodes of these types (`['Recipe']`, `['Product']`); every node when omitted. */
+  /** Keeps only the schema.org nodes of these types (`['Article']`, `['Product']`); every node when omitted. */
   schemaTypes?: string[];
   /** Caps the page text; the function clamps it to its own limits. */
   maxTextChars?: number;

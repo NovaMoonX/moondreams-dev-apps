@@ -145,7 +145,7 @@ export function PillOptions<T extends string>({
         return;
       }
       const chosen = pills[leadingCount + slot];
-      if (chosen && isClipped(chosen)) {
+      if (chosen && slot > 0 && isClipped(chosen)) {
         setTrim({
           key: trimKey,
           count: (trim?.key === trimKey ? trim.count : 0) + 1,
