@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
@@ -25,7 +25,8 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 const NO_COOKS: Cook[] = [];
 const HIDDEN_WORTH_A_BUTTON = 3;
 
-type HistoryView = { kind: 'list' } | { kind: 'edit'; cookId: string | null };
+type HistoryView =
+  { kind: 'list' } | { kind: 'edit'; cookId: string | null; token: number };
 
 interface CookingHistorySheetProps {
   uid: string;
@@ -45,6 +46,7 @@ function CookingHistorySheet({
   const plannedMeals = useAppSelector(selectPlannedMeals);
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
+  const lastToken = useRef(0);
 
   const plannedById = useMemo(
     () => new Map(plannedMeals.map((planned) => [planned.id, planned])),
@@ -58,14 +60,24 @@ function CookingHistorySheet({
       : 'From your plan';
   };
 
+  const editing = view.kind === 'edit' ? view : null;
   const editedCook =
-    view.kind === 'edit' && view.cookId !== null
-      ? cooks.find((cook) => cook.id === view.cookId)
+    editing !== null && editing.cookId !== null
+      ? cooks.find((cook) => cook.id === editing.cookId)
       : undefined;
   const isEditing =
-    view.kind === 'edit' && (view.cookId === null || editedCook !== undefined);
+    editing !== null && (editing.cookId === null || editedCook !== undefined);
   const isFull = isCookHistoryFull(cooks.length);
-  const backToList = () => setView({ kind: 'list' });
+  const openEdit = (cookId: string | null) => {
+    lastToken.current += 1;
+    setView({ kind: 'edit', cookId, token: lastToken.current });
+  };
+  const closeEdit = (token: number) =>
+    setView((current) =>
+      current.kind === 'edit' && current.token === token
+        ? { kind: 'list' }
+        : current,
+    );
 
   const hidden = cooks.length - limit;
   const visibleCount = hidden > HIDDEN_WORTH_A_BUTTON ? limit : cooks.length;
@@ -74,17 +86,17 @@ function CookingHistorySheet({
     cooks.length > COOK_HISTORY_FIRST_PAGE + HIDDEN_WORTH_A_BUTTON;
 
   const getBody = () => {
-    if (isEditing) {
+    if (editing !== null && isEditing) {
       return (
         <CookEditView
-          key={editedCook?.id ?? 'new'}
+          key={editing.token}
           uid={uid}
           recipeId={recipeId}
           recipeTitle={recipe?.title ?? 'This recipe'}
           cook={editedCook ?? null}
           defaultServings={getCookServings(recipe?.servings ?? 1)}
           planNote={editedCook ? getPlanNote(editedCook) : null}
-          onBack={backToList}
+          onBack={() => closeEdit(editing.token)}
         />
       );
     }
@@ -119,7 +131,7 @@ function CookingHistorySheet({
               type='button'
               variant='tertiary'
               className='h-10 justify-start px-0!'
-              onClick={() => setView({ kind: 'edit', cookId: null })}
+              onClick={() => openEdit(null)}
             >
               + Add an earlier cook
             </Button>
@@ -133,20 +145,19 @@ function CookingHistorySheet({
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
             {cooks.slice(0, visibleCount).map((cook) => {
               const planNote = getPlanNote(cook);
+              const day = formatDateShort(cook.cookedAt);
               return (
                 <li key={cook.id}>
                   <Button
                     type='button'
                     variant='tertiary'
-                    aria-label={`Change the cook from ${formatDateShort(cook.cookedAt)}`}
+                    aria-label={`Change the cook from ${day}`}
                     className='h-auto min-h-12 w-full items-start justify-start gap-3 px-0! py-2.5 text-left'
-                    onClick={() => setView({ kind: 'edit', cookId: cook.id })}
+                    onClick={() => openEdit(cook.id)}
                   >
                     <span className='min-w-0 flex-1'>
                       <span className='text-foreground block font-medium'>
-                        <span className='whitespace-nowrap'>
-                          {formatDateShort(cook.cookedAt)}
-                        </span>
+                        <span className='whitespace-nowrap'>{day}</span>
                         {' · '}
                         <span className='whitespace-nowrap'>
                           {formatServings(cook.servings)}

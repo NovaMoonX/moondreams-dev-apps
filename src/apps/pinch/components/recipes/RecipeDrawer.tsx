@@ -87,6 +87,7 @@ function RecipeDrawer({
   const { openSubview } = usePinchOverlay();
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
   const [markError, setMarkError] = useState<string | null>(null);
+  const [isMarking, setIsMarking] = useState(false);
 
   if (!recipe) {
     return null;
@@ -103,10 +104,13 @@ function RecipeDrawer({
 
   const handleMarkCooked = async () => {
     setMarkError(null);
+    setIsMarking(true);
     try {
       await markRecipeCooked(recipe, getCookServings(recipe.servings));
     } catch (error) {
       setMarkError(getErrorMessage(error, 'Unable to mark this as cooked.'));
+    } finally {
+      setIsMarking(false);
     }
   };
 
@@ -280,7 +284,7 @@ function RecipeDrawer({
               icon={<ChefHat className='h-4 w-4' />}
               label='I cooked this'
               subtitle={getMarkSubtitle()}
-              isDisabled={!isLoaded || isHistoryFull}
+              isDisabled={!isLoaded || isHistoryFull || isMarking}
               onClick={() => void handleMarkCooked()}
             />
           )}

@@ -874,6 +874,12 @@ assert.equal(
   'a recipe with no cook has no summary',
 );
 assert.equal(
+  getCookSummaries([cookOf('n', 'adobo', -1_000_000_000_000)]).get('adobo')
+    ?.lastCookedAt,
+  -1_000_000_000_000,
+  'a cook before 1970 keeps its own time as the last one',
+);
+assert.equal(
   getCookSummaries([cookOf('x', 'adobo', 700), cookOf('y', 'adobo', 100)]).get(
     'adobo',
   )?.lastCookedAt,

@@ -52,7 +52,7 @@ function CookingSession({
   isRemoved,
   initialServings,
 }: CookingSessionProps) {
-  const { closeSubview } = usePinchOverlay();
+  const { closeSubview, closeSubviewIf } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
   const [stepIndex, setStepIndex] = useState(0);
@@ -143,7 +143,9 @@ function CookingSession({
         return;
       }
       await markRecipeCooked(recipe, servings);
-      closeSubview();
+      closeSubviewIf(
+        (current) => current?.kind === 'cook' && current.recipeId === recipe.id,
+      );
     } catch (error) {
       setMarkError(getErrorMessage(error, 'Unable to mark this as cooked.'));
       setIsMarking(false);
@@ -335,7 +337,7 @@ function CookingSession({
                     '[@media(max-height:500px)]:h-11',
                   )}
                   loading={isMarking}
-                  disabled={isMarking || isHistoryFull}
+                  disabled={isMarking || isHistoryFull || !canMark}
                   onClick={() => void handleMarkCooked()}
                 >
                   I cooked this

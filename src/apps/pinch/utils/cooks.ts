@@ -16,7 +16,6 @@ export interface MarkableRecipe {
   servings: number;
 }
 
-/** Marking a planned meal again finds the first cook by this id. */
 export const getCookId = (plannedMealId: string, recipeId: string) =>
   `${plannedMealId}__${recipeId}`;
 
@@ -44,7 +43,7 @@ export const getCookSummaries = (cooks: Cook[]) => {
     const known = summaries.get(cook.recipeId);
     summaries.set(cook.recipeId, {
       count: (known?.count ?? 0) + 1,
-      lastCookedAt: Math.max(known?.lastCookedAt ?? 0, cook.cookedAt),
+      lastCookedAt: Math.max(known?.lastCookedAt ?? -Infinity, cook.cookedAt),
     });
     return summaries;
   }, new Map<string, CookSummary>());
@@ -77,7 +76,6 @@ export const getPlannedCookedAt = (plannedDate: number, now = Date.now()) => {
   return result;
 };
 
-/** One entry per recipe of a meal (a recipe listed twice adds up its servings), in first-seen order. */
 export const getMarkableRecipes = (
   items: MealItem[],
   recipesById: Map<string, Recipe>,
@@ -99,7 +97,6 @@ export const getMarkableRecipes = (
   return [...byRecipe.values()];
 };
 
-/** Marking a planned meal again leaves the first cook exactly as it was. */
 export const mergePlannedCook = (existing: Cook | null, incoming: Cook) =>
   existing === null
     ? { isNew: true, cook: incoming }

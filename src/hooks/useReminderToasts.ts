@@ -6,6 +6,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { APP_REGISTRY_ID_MAP } from '@lib/app';
 import { TOAST_APP_LABELS } from '@components/toastTypeStyles';
 import { isUsingFirebaseEmulators } from '@/lib/firebase/config';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
 import type { Reminder, ReminderStatus } from '@/lib/notifications/types';
 import { useAppSelector } from '@/store';
 
@@ -46,6 +47,9 @@ export function useReminderToasts() {
         action: {
           label: 'View',
           onClick: () => {
+            if (hasDialogOnTop()) {
+              return;
+            }
             const target = reminder.link ?? APP_REGISTRY_ID_MAP[reminder.appId]?.path;
             if (target && target !== `${location.pathname}${location.search}`) {
               navigate(target);
