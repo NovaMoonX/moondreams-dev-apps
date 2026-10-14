@@ -113,7 +113,7 @@ block-beta
 block-beta
   columns 2
   F3["Calendar   ⚙️   + Add"]:2
-  F1["Spent this month<br/>$0.00"]:1
+  F1["Cost this month<br/>$0.00"]:1
   F2["Average per meal<br/>—"]:1
   F4["An empty month is fine. Plan your first meal, or add a recipe to plan from."]:2
   F5["Plan your first meal"]:1
@@ -135,7 +135,7 @@ block-beta
   columns 7
   C1["Calendar   ⚙️   + Add"]:7
   C2["‹   October 2026   ›   [ Month ] Week Day"]:7
-  C3["Spent this month<br/>$412.60 ⚠"]:3
+  C3["Cost this month<br/>$412.60 ⚠"]:3
   C4["Avg per meal<br/>$5.80"]:2
   C5["Per g protein<br/>$0.04"]:2
   C6["Daily average this month<br/>🔥 1,840 · 💪 96g (the ones switched on)"]:7
@@ -190,7 +190,7 @@ block-beta
   style C27 fill:transparent,stroke:#888888,stroke-width:1px;
   style C28 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Month view, the default (`?view=week|day` switches). The grid starts on Sunday because Dreamer UI's `Calendar` can't start a week on Monday, and the week view starts on Sunday to match. Under the header's gear and Add, the period row above the grid is Pinch's own (the Calendar's own header is hidden): arrows that step by the view's unit, the period's title, a thin Month / Week / Day switch, and a **Today** button that appears only while today is outside the period shown. Each planned meal is a chip on a soft tint of its meal-type colour (🍳 breakfast, 🥪 lunch, 🍝 dinner, 🍿 snack, 🍰 dessert, 🥤 drink); a phone's cell shows meal emoji chips, with a fourth meal becoming "+N", and from `lg` the chips become Google-Calendar-style pills with the meal's truncated title (its first item, "+N" for more). Today takes the orange dot on its number and the selected day a ring. Past days read exactly as they were that day. The stats row sits above the grid and describes the period shown ("Spent this week" in Week): Spent (with a warning icon in place of a "leaves out" line), Avg per meal and, when protein is on, Per g protein, then the calories and macros switched on as small emoji tiles labelled "Daily average this month" ("this week"; "Nutrition that day" in Day), at most one quiet nudge line ("2 ingredients need a price · Add prices"), and a "See the breakdown" link that opens the drawer. Tapping a day opens its drawer; on a computer, hovering a day opens a peek popover with the same content.*
+*Month view, the default (`?view=week|day` switches). The grid starts on Sunday because Dreamer UI's `Calendar` can't start a week on Monday, and the week view starts on Sunday to match. Under the header's gear and Add, the period row above the grid is Pinch's own (the Calendar's own header is hidden): arrows that step by the view's unit, the period's title, a thin Month / Week / Day switch, and a **Today** button that appears only while today is outside the period shown. Each planned meal is a chip on a soft tint of its meal-type colour (🍳 breakfast, 🥪 lunch, 🍝 dinner, 🍿 snack, 🍰 dessert, 🥤 drink); a phone's cell shows meal emoji chips, with a fourth meal becoming "+N", and from `lg` the chips become Google-Calendar-style pills with the meal's truncated title (its first item, "+N" for more). Today takes the orange dot on its number and the selected day a ring. Past days read exactly as they were that day. The stats row sits above the grid and describes the period shown ("Cost this week" in Week, "Cost that day" in Day, a plain "Cost" on a phone, since it adds up every planned meal of the period including ones still ahead and so never says "Spent"): Cost (with a warning icon in place of a "leaves out" line), Avg per meal and, when protein is on, Per g protein, then the calories and macros switched on as small emoji tiles labelled "Daily average this month" ("this week"; "Nutrition that day" in Day), at most one quiet nudge line ("2 ingredients need a price · Add prices"), and a "See the breakdown" link that opens the drawer. Tapping a day opens its drawer; on a computer, hovering a day opens a peek popover with the same content.*
 
 | View | Phone (below `lg`) | From `lg` |
 |---|---|---|
@@ -212,7 +212,7 @@ block-beta
 block-beta
   columns 2
   C1["‹   Oct 11 – 17   ›   Month [ Week ] Day   Today"]:2
-  C2["Spent this week<br/>$96.20 ⚠"]:1
+  C2["Cost this week<br/>$96.20 ⚠"]:1
   C3["Avg per meal<br/>$5.10"]:1
   C4["Sun 11"]:1
   C5["—"]:1
@@ -729,7 +729,7 @@ block-beta
 | a recipe, meal or day cost | "2 ingredients need a price · Add prices" | price and package size for each |
 | a cost that can't be compared | "Rice vinegar can't be compared with its package size · Add a size" | the package size in a comparable unit, for the ingredient's default product |
 | a nutrition metric that is on | "3 ingredients have no protein · Add values" | the missing metric for each |
-| the stats row | a warning icon on Spent that names what it leaves out (and says when the nudge line under the tiles asks about fewer because some are hidden or in days that have passed), and that nudge line | the same sheet, covering the period shown |
+| the stats row | a warning icon on Cost that names what it leaves out (and says when the nudge line under the tiles asks about fewer because some are hidden or in days that have passed), and that nudge line | the same sheet, covering the period shown |
 
 **Settings** (form sheet from the Calendar gear)
 
@@ -785,7 +785,7 @@ block-beta
   style BK7 fill:transparent,stroke:#888888,stroke-width:1px;
   style BK8 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The title names the period shown (a month, a week or a day). The two thin pills switch between days and meal types; rows show spend and, for each nutrition metric that is on, its total. It is a single scrolling list under a fixed header.*
+*The title names the period shown (a month, a week or a day). The two thin pills switch between days and meal types; rows show their cost and, for each nutrition metric that is on, its total. It is a single scrolling list under a fixed header.*
 
 ## Reusable Components
 
@@ -794,7 +794,7 @@ block-beta
 | DayCell | Month view's `renderCell` | up to three meal chips (a soft tint of the meal's colour, its emoji) on a phone or pills with the truncated title from `lg`, and a "+N"; date number, today dot, selected ring |
 | MonthView, WeekView, DayView, MealRow, MealChip | Calendar | the three views: the grid, a 7-day agenda (7 columns from `lg`) and one day's meals grouped in meal order |
 | PeriodSwitcher | Calendar (shared) | arrows by the view's unit, the period title, a thin view switch and a Today button shown only while today is out of sight |
-| StatsRow | Calendar | the shown period's Spent (warning icon), Avg per meal, Per g protein when on, then calories and macros as small `MacroStats` tiles; one nudge line; "See the breakdown" opens the drawer. A tile's number steps down a size on a phone as it gets longer (and again at 360px and under), and the tile keeps room for its help icon, so a long total never runs under it |
+| StatsRow | Calendar | the shown period's Cost (warning icon), Avg per meal, Per g protein when on, then calories and macros as small `MacroStats` tiles; one nudge line; "See the breakdown" opens the drawer. A tile's number steps down a size on a phone as it gets longer (and again at 360px and under), and the tile keeps room for its help icon, so a long total never runs under it |
 | MacroStats | rows and summaries everywhere (shared) | 🔥 calories (whole numbers), 💪 protein, 🌾 carbs, 🥑 fat in grams for the metrics switched on: inline in a row, tiles in a summary |
 | GapNudge | recipe, meal, day and planned-meal drawers, stats row | the one quiet line (muted text + link + ✕) that offers the fill-in sheet; renders only when there is a gap |
 | FillInSheet | behind every nudge | a `FormSheet` with one row per ingredient and only the fields that gap needs |

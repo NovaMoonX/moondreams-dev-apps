@@ -303,7 +303,7 @@ Files: `catalog/catalogIngredients.ts`, `catalog/catalogFamilies.ts`, `catalog/c
 | Gaps | the union of left-out ingredients for a scope, minus dismissed ones | `utils/gaps.ts` |
 | Day key | `toDateInputValue(date)` for a stored date; `toLocalDateInputValue(cell.getTime())` for a Dreamer UI cell | `utils/dayKeys.ts` |
 
-*Daily nutrition* is the period's total of a metric divided by the number of days that know it (for a single day, that day's own total), so a day with nothing known doesn't pull it toward zero. *Average per meal* divides the period's spend by the number of planned meals that have at least one priced item, so an unpriced meal doesn't pull the average toward zero. *Price per gram of protein* divides spend by protein grams over only the meals where both are known. Both say how many items they left out.
+*Daily nutrition* is the period's total of a metric divided by the number of days that know it (for a single day, that day's own total), so a day with nothing known doesn't pull it toward zero. *Average per meal* divides the period's cost by the number of planned meals that have at least one priced item, so an unpriced meal doesn't pull the average toward zero. *Price per gram of protein* divides spend by protein grams over only the meals where both are known. Both say how many items they left out.
 
 ---
 
@@ -520,7 +520,7 @@ No cached document is ever written back whole. There is no cross-person concurre
 - `selectDefaultProducts` — `Map<ingredientId, Product>`
 - `selectRecipeCosts` — `Map<recipeId, RecipeCost>` computed once per change of recipes, products or ingredients
 - `selectPlannedByDay` — `Map<dayKey, PlannedMeal[]>` read by the Calendar's `renderCell` and the day drawer, so a cell never filters the list
-- `selectPeriodStats(state, startKey, endKey)` — one pass over the planned meals of the shown month, week or day (`getPeriodStats(range)`): spend, average per meal, what it leaves out, and the totals by day and by meal type that the breakdown reads (there is no separate day-totals selector)
+- `selectPeriodStats(state, startKey, endKey)` — one pass over the planned meals of the shown month, week or day (`getPeriodStats(range)`): cost, average per meal, what it leaves out, and the totals by day and by meal type that the breakdown reads (there is no separate day-totals selector)
 - `selectUsedIngredientIds` — the ingredients a recipe, a saved meal or an unfrozen planned day uses; Kitchen's "Yours", "Needs a price" and the "No price yet" notes read it
 - `selectGaps(scope)` — scope-parameterized via a small factory; takes `showNutrition` and `dismissedNudges`
 - Time-dependent selectors take `todayKey` as an argument (`useNow()` supplies it in the component)

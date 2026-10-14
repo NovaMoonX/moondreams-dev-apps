@@ -67,7 +67,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 ### Cost and Nutrition, In Detail
 
-- **Cost is always on.** A recipe shows its total and cost per serving, a meal shows the sum of its items, and the calendar's stats row shows spend and average cost per meal for the period you're viewing. Tapping it breaks the numbers down by day and by meal.
+- **Cost is always on.** A recipe shows its total and cost per serving, a meal shows the sum of its items, and the calendar's stats row shows its cost and average cost per meal for the period you're viewing. Tapping it breaks the numbers down by day and by meal.
 - **Cost appears when amounts can be compared.** A recipe's amount and a product's package size line up when they measure the same kind of thing (pounds with ounces, cups with tablespoons), or when the catalog knows the conversion (a cup of flour to grams). Anything that can't be compared is called out by name with a nudge to fix it and is left out of the totals, so every number shown is one the app can stand behind.
 - **Past days keep their numbers.** Once a day has passed, its cost and nutrition are fixed as they were that day. Updating a price or editing a recipe changes what's ahead, not last month's totals.
 - **Nutrition is yours to enter, and yours to show.** Built-in ingredients arrive with calories, protein, carbs, and fat. You can add or adjust them on any ingredient. A recipe's nutrition adds up from its ingredients, and you can type your own numbers over it, handy when a recipe comes with its own from the web.
@@ -115,7 +115,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
 - [x] Meal calendar with month, week and day views: meal chips per day (titles on wide screens) and a Today button
 - [x] Plan a saved meal, a single recipe, or a single ingredient on a day under a meal type; tweak that day's items and servings; move or remove it
-- [x] Stats row on the calendar: total spend and average cost per meal for the shown month, week or day, with a breakdown by day and by meal
+- [x] Stats row on the calendar: total cost and average cost per meal for the shown month, week or day, with a breakdown by day and by meal
 - [x] Past days keep the cost and nutrition they had: a new price or an edited recipe changes what's ahead, not last month's totals
 - [x] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
