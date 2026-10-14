@@ -29,7 +29,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 - **Calendar** (first): what you plan to eat, by month, week or day, with the period's stats above it.
 - **Recipes** (second): your recipes and saved meals, and the sources your recipes came from.
-- **Kitchen** (third): everything you buy. Ingredients, their products and your stores live here and, as it grows, how much you have on hand and the servings you've prepared.
+- **Kitchen** (third): everything you buy. Ingredients, their products and your stores live here. Later it will also hold how much you have on hand and the servings you've prepared.
 - **Shopping** (fourth): what you still need to buy, grouped by ingredient family, with a count on the tab while anything is left.
 
 ### Filling In As You Go, In Detail

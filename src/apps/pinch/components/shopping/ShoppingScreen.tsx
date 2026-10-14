@@ -281,8 +281,8 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     if (itemCount === 0) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Nothing on your list. Add a recipe's ingredients from its page, or add
-          one here.
+          Nothing on your list. Add what you need from a recipe, a meal or a
+          day, or add one here.
         </p>
       );
     }
