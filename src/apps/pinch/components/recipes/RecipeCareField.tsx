@@ -1,6 +1,7 @@
 import { Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import Field from '@/components/forms/Field';
+import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import SummaryEditor from '@/components/SummaryEditor';
 import {
   MAX_CARE_DAYS,
@@ -22,7 +23,7 @@ interface DaysInputProps {
 
 function DaysInput({ label, value, onChange }: DaysInputProps) {
   return (
-    <Field label={label}>
+    <Field label={label} isCompact>
       {() => (
         <div className='relative'>
           <Input
@@ -33,7 +34,10 @@ function DaysInput({ label, value, onChange }: DaysInputProps) {
             max={MAX_CARE_DAYS}
             variant='outline'
             aria-label={`${label} in days`}
-            className='[appearance:textfield] pr-14! [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+            className={join(
+              COMPACT_INPUT_CLASS,
+              '[appearance:textfield] pr-14! [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+            )}
             value={value}
             onChange={(event) => onChange(event.target.value)}
           />
@@ -80,24 +84,28 @@ function RecipeCareField({ value, onChange }: RecipeCareFieldProps) {
         />
       </div>
       <p className='text-muted-foreground text-xs'>
-        How many days it keeps. A month is 30 days, so 90 shows as 3 months.
+        Whole days. A month is 30, so 90 shows as 3 months.
       </p>
-      <Field label='Reheat'>
+      <Field label='Reheat' isCompact>
         {() => (
           <Input
             variant='outline'
-            placeholder='Oven at 350°F for 15 minutes, covered'
+            aria-label='Reheat'
+            className={COMPACT_INPUT_CLASS}
+            placeholder='Oven at 350°F, 15 minutes, covered'
             maxLength={MAX_CARE_REHEAT_LENGTH}
             value={value.reheat}
             onChange={(event) => set({ reheat: event.target.value })}
           />
         )}
       </Field>
-      <Field label='Tip'>
+      <Field label='Tip' isCompact>
         {() => (
           <Textarea
-            rows={3}
+            rows={2}
             variant='outline'
+            aria-label='Tip'
+            className='placeholder:text-sm max-sm:min-h-21'
             placeholder='Keep the sauce in its own container'
             maxLength={MAX_CARE_TIP_LENGTH}
             value={value.tip}

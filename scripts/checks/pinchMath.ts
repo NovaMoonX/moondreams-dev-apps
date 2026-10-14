@@ -1878,18 +1878,23 @@ assert.deepEqual(
 assert.equal(getCareSummary(null), '', 'no care has no summary');
 assert.equal(
   getCareSummary(toCare({ fridgeDays: 3, freezerDays: 90 })),
-  'Fridge 3 days · Freezer 3 months',
+  'Fridge 3 days, freezer 3 months',
   'the summary names each time',
 );
 assert.equal(
   getCareSummary(toCare({ fridgeDays: 1, reheat: 'Oven.', tip: 'Apart.' })),
-  'Fridge 1 day · Reheat · Tip',
+  'Fridge 1 day, reheating, tip',
   'reheating and a tip are named, not copied',
 );
 assert.equal(
   getCareSummary(toCare({ tip: 'Apart.' })),
   'Tip',
   'a tip alone is just Tip',
+);
+assert.equal(
+  getCareSummary(toCare({ freezerDays: 60, tip: 'Apart.' })),
+  'Freezer 2 months, tip',
+  'the first word is capitalised whichever part comes first',
 );
 
 assert.equal(

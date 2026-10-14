@@ -283,7 +283,9 @@ function CookingSession({
                 </p>
               </div>
               {leftoversLine && (
-                <p className='text-muted-foreground text-sm'>{leftoversLine}</p>
+                <p className='text-muted-foreground text-sm text-balance'>
+                  {leftoversLine}
+                </p>
               )}
               {note.isOpen ? (
                 <div className='w-full max-w-md space-y-2 text-left'>
@@ -325,7 +327,9 @@ function CookingSession({
                 </p>
               </div>
               {leftoversLine && (
-                <p className='text-muted-foreground text-sm'>{leftoversLine}</p>
+                <p className='text-muted-foreground text-sm text-balance'>
+                  {leftoversLine}
+                </p>
               )}
               {isHistoryFull && (
                 <p className='text-muted-foreground text-sm'>

@@ -1430,7 +1430,7 @@ service cloud.firestore {
         return value == null || (value is int && value >= 1 && value <= 365);
       }
 
-      // How to keep a recipe's leftovers. A recipe written before care existed has no key; a recipe with nothing to say is null, and the client never writes a map whose four parts are all null (the rules don't insist on it).
+      // A recipe written before care existed has no key. A map of four nulls passes here, though the client writes null instead.
       function isRecipeCare(value) {
         return value == null || (value is map
           && value.keys().hasOnly(['fridgeDays', 'freezerDays', 'reheat', 'tip'])
