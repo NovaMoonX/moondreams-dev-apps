@@ -22,6 +22,18 @@ type Notice = 'unseen' | 'showing' | 'seen';
 const BEEP_OFFSETS_SECONDS = [0, 0.4, 0.8];
 const SETTLE_SLACK_MS = 20;
 
+const isLive = (timer: CookTimer) => timer.status !== 'done';
+
+const dropOldFinished = (timers: CookTimer[]) => {
+  const finishedIds = timers
+    .filter((timer) => !isLive(timer))
+    .map((timer) => timer.id);
+  const stale = new Set(
+    finishedIds.slice(0, Math.max(0, finishedIds.length - MAX_COOK_TIMERS)),
+  );
+  return timers.filter((timer) => !stale.has(timer.id));
+};
+
 export const getRemainingMs = (timer: CookTimer, now: number) => {
   if (timer.status === 'running')
     return Math.max(0, timer.endsAt - Math.max(now, timer.startedAt));
@@ -44,7 +56,7 @@ const playBeeps = (context: AudioContext) =>
     oscillator.stop(startAt + 0.3);
   });
 
-/** The timers of one cooking session, in memory only. Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it. */
+/** Timers kept in memory only. Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it. */
 export function useCookTimers() {
   const { addToast } = useToast();
   const [timers, setTimers] = useState<CookTimer[]>([]);
@@ -98,6 +110,7 @@ export function useCookTimers() {
       console.error('Timer buzz is not available', error);
     }
     try {
+      audioRef.current?.resume().catch(() => undefined);
       if (audioRef.current) playBeeps(audioRef.current);
     } catch (error) {
       console.error('Timer sound is not available', error);
@@ -140,33 +153,39 @@ export function useCookTimers() {
       return;
     }
 
-    const timeoutId = window.setTimeout(
-      settle,
-      Math.max(0, nextDeadline - Date.now()) + SETTLE_SLACK_MS,
-    );
+    let timeoutId = 0;
+    const arm = () => {
+      timeoutId = window.setTimeout(
+        () => (Date.now() < nextDeadline ? arm() : settle()),
+        Math.max(0, nextDeadline - Date.now()) + SETTLE_SLACK_MS,
+      );
+    };
+    arm();
     return () => window.clearTimeout(timeoutId);
   }, [nextDeadline, settle]);
 
   useOnTabReturn(settle);
 
   const start = (stepNumber: number, seconds: number, label: string) => {
-    if (timersRef.current.length >= MAX_COOK_TIMERS) {
+    if (timersRef.current.filter(isLive).length >= MAX_COOK_TIMERS) {
       return;
     }
 
     prepareSound();
     const now = Date.now();
-    commit([
-      ...timersRef.current,
-      {
-        id: generateUuid(),
-        stepNumber,
-        label,
-        status: 'running',
-        startedAt: now,
-        endsAt: now + seconds * 1000,
-      },
-    ]);
+    commit(
+      dropOldFinished([
+        ...timersRef.current,
+        {
+          id: generateUuid(),
+          stepNumber,
+          label,
+          status: 'running',
+          startedAt: now,
+          endsAt: now + seconds * 1000,
+        },
+      ]),
+    );
     setNotice((current) => (current === 'unseen' ? 'showing' : current));
   };
 
@@ -180,7 +199,7 @@ export function useCookTimers() {
               stepNumber: timer.stepNumber,
               label: timer.label,
               status: 'paused',
-              remainingMs: Math.max(0, timer.endsAt - now),
+              remainingMs: getRemainingMs(timer, now),
             }
           : timer,
       ),
@@ -213,10 +232,14 @@ export function useCookTimers() {
     }
   };
 
+  const liveCount = timers.filter(isLive).length;
+
   return {
     timers,
-    isFull: timers.length >= MAX_COOK_TIMERS,
+    liveCount,
+    isFull: liveCount >= MAX_COOK_TIMERS,
     isNoticeShown: notice === 'showing',
+    settle,
     start,
     pause,
     resume,

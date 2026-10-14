@@ -5,9 +5,7 @@ import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 const getIsSupported = () =>
   typeof navigator !== 'undefined' && 'wakeLock' in navigator;
 
-/**
- * Asks the browser to keep the screen on while `isActive`, and again each time the page comes back to the front, since a browser lets go of it when the page is hidden. Needs a secure page; a refusal is logged and never thrown.
- */
+/** Asks the browser to keep the screen on while `isActive`, and again each time the page comes back to the front, since a browser lets go of it when the page is hidden. Needs a secure page; a refusal is logged and never thrown. */
 export function useWakeLock(isActive: boolean) {
   const sentinelRef = useRef<WakeLockSentinel | null>(null);
   const isActiveRef = useRef(isActive);
@@ -17,10 +15,11 @@ export function useWakeLock(isActive: boolean) {
   const isSupported = getIsSupported();
 
   const acquire = useCallback(() => {
+    const held = sentinelRef.current;
     if (
       !getIsSupported() ||
       !isActiveRef.current ||
-      sentinelRef.current !== null ||
+      (held !== null && !held.released) ||
       isAskingRef.current
     ) {
       return;
@@ -31,13 +30,17 @@ export function useWakeLock(isActive: boolean) {
       .request('screen')
       .then((sentinel) => {
         if (!isActiveRef.current) {
-          return sentinel.release();
+          sentinel.release().catch((error: unknown) => {
+            console.error('The screen lock could not be released', error);
+          });
+          return;
         }
         sentinelRef.current = sentinel;
         sentinel.addEventListener('release', () => {
-          if (sentinelRef.current === sentinel) {
-            sentinelRef.current = null;
+          if (sentinelRef.current !== sentinel) {
+            return;
           }
+          sentinelRef.current = null;
           setIsHeld(false);
         });
         setHasFailed(false);
@@ -63,6 +66,7 @@ export function useWakeLock(isActive: boolean) {
       isActiveRef.current = false;
       const sentinel = sentinelRef.current;
       sentinelRef.current = null;
+      setIsHeld(false);
       sentinel?.release().catch((error: unknown) => {
         console.error('The screen lock could not be released', error);
       });

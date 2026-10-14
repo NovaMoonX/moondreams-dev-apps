@@ -10,6 +10,7 @@ import type { CookTimer } from '@apps/pinch/hooks/useCookTimers';
 const SWIPE_MIN_PX = 60;
 const SWIPE_AXIS_RATIO = 1.5;
 const LONG_STEP_CHARS = 160;
+const ZOOMED_SCALE = 1.05;
 
 interface CookStepViewProps {
   steps: string[];
@@ -50,7 +51,7 @@ function CookStepView({
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     swipeStart.current =
-      event.pointerType === 'mouse'
+      event.pointerType === 'mouse' || !event.isPrimary
         ? null
         : { x: event.clientX, y: event.clientY };
   };
@@ -58,7 +59,7 @@ function CookStepView({
   const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
     const start = swipeStart.current;
     swipeStart.current = null;
-    if (!start) {
+    if (!start || (window.visualViewport?.scale ?? 1) > ZOOMED_SCALE) {
       return;
     }
 
@@ -74,45 +75,44 @@ function CookStepView({
 
   return (
     <div
-      className='flex flex-1 touch-pan-y flex-col gap-4'
+      className='flex flex-1 touch-pan-y touch-pinch-zoom flex-col gap-4'
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={() => {
         swipeStart.current = null;
       }}
     >
-      <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+      <div aria-live='polite' aria-atomic='true' className='space-y-4'>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+          <p className='text-muted-foreground text-sm font-medium whitespace-nowrap'>
+            Step {stepNumber} of {steps.length}
+          </p>
+          {steps.length > 1 && steps.length <= MAX_STEP_DOTS && (
+            <div className='flex items-center gap-1.5' aria-hidden='true'>
+              {steps.map((_, dotIndex) => (
+                <span
+                  key={dotIndex}
+                  className={join(
+                    'h-2 rounded-full',
+                    dotIndex === index ? 'bg-primary w-5' : 'w-2',
+                    dotIndex < index && 'bg-primary/50',
+                    dotIndex > index && 'bg-border',
+                  )}
+                />
+              ))}
+            </div>
+          )}
+        </div>
         <p
-          aria-live='polite'
-          className='text-muted-foreground text-sm font-medium whitespace-nowrap'
+          className={join(
+            'leading-snug font-medium wrap-break-word whitespace-pre-wrap',
+            step.length > LONG_STEP_CHARS ? 'text-xl' : 'text-2xl',
+            '[@media(max-height:500px)]:text-xl',
+          )}
         >
-          Step {stepNumber} of {steps.length}
+          {step}
         </p>
-        {steps.length > 1 && steps.length <= MAX_STEP_DOTS && (
-          <div className='flex items-center gap-1.5' aria-hidden='true'>
-            {steps.map((_, dotIndex) => (
-              <span
-                key={dotIndex}
-                className={join(
-                  'h-2 rounded-full',
-                  dotIndex === index ? 'bg-primary w-5' : 'w-2',
-                  dotIndex < index && 'bg-primary/50',
-                  dotIndex > index && 'bg-border',
-                )}
-              />
-            ))}
-          </div>
-        )}
       </div>
-      <p
-        className={join(
-          'leading-snug font-medium wrap-break-word whitespace-pre-wrap',
-          step.length > LONG_STEP_CHARS ? 'text-xl' : 'text-2xl',
-          '[@media(max-height:500px)]:text-xl',
-        )}
-      >
-        {step}
-      </p>
       {chips.length > 0 && (
         <div className='space-y-2'>
           <SuggestionChips
@@ -124,11 +124,14 @@ function CookStepView({
               if (chip) onStartTimer(stepNumber, chip.seconds, chip.label);
             }}
           />
-          {isTimersFull && (
-            <p className='text-muted-foreground text-xs'>
-              {MAX_COOK_TIMERS} timers are going. Dismiss one to start another.
-            </p>
-          )}
+          <div role='status' className='empty:hidden'>
+            {isTimersFull && (
+              <p className='text-muted-foreground text-xs'>
+                {MAX_COOK_TIMERS} timers are going. Dismiss or finish one to
+                start another.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>
