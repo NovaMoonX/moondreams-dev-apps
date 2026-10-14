@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -32,6 +32,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const fieldRef = useRef<HTMLDivElement>(null);
 
   const isReady = isLoaded && loadError === null;
   const getNote = () => {
@@ -41,6 +42,15 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
     return isAdding ? 'Adding…' : null;
   };
   const note = getNote();
+
+  // The drawer takes focus itself while it slides in, so the field is focused once that settles.
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => fieldRef.current?.querySelector('input')?.focus(),
+      350,
+    );
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const handlePick = async (ingredientId: string) => {
     if (isAdding || !isReady) {
@@ -91,13 +101,14 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
           What do you need? It goes on the list at a typical serving, and a tap
           on its row changes how much.
         </p>
-        <ItemSearch
-          uid={uid}
-          autoFocus
-          isDisabled={isAdding || !isReady}
-          resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto'
-          onPick={(ingredientId) => void handlePick(ingredientId)}
-        />
+        <div ref={fieldRef}>
+          <ItemSearch
+            uid={uid}
+            isDisabled={isAdding || !isReady}
+            resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto'
+            onPick={(ingredientId) => void handlePick(ingredientId)}
+          />
+        </div>
         {note && (
           <p className='text-muted-foreground text-sm' role='status'>
             {note}
