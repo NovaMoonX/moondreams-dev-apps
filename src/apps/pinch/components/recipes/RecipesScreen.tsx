@@ -11,6 +11,7 @@ import LazyMount from '@/components/LazyMount';
 import SectionHeader from '@/components/SectionHeader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
+import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
@@ -37,7 +38,7 @@ import {
   selectSources,
   selectSourcesById,
 } from '@apps/pinch/store/selectors';
-import type { Gap, RecipesView } from '@apps/pinch/types';
+import type { Gap, RecipesView, ShoppingRequest } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
@@ -80,6 +81,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
+  const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
 
   const total = view === 'meals' ? meals.length : recipes.length;
   const hasFilterBar = view === 'recipes' && sourceCounts.bySource.size > 0;
@@ -414,6 +416,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenId(null);
             setFillIn(gaps);
           }}
+          onAddToShopping={(request) => {
+            setOpenId(null);
+            setShopping(request);
+          }}
         />
       )}
       {openMealId && (
@@ -441,10 +447,21 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenMealId(null);
             setFillIn(gaps);
           }}
+          onAddToShopping={(request) => {
+            setOpenMealId(null);
+            setShopping(request);
+          }}
         />
       )}
       {fillIn && (
         <FillInSheet uid={uid} gaps={fillIn} onClose={() => setFillIn(null)} />
+      )}
+      {shopping && (
+        <AddToShoppingSheet
+          uid={uid}
+          request={shopping}
+          onClose={() => setShopping(null)}
+        />
       )}
     </div>
   );

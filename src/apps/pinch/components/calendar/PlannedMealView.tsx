@@ -10,6 +10,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
+import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import {
   MAX_NAME_LENGTH,
@@ -25,8 +26,12 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { Gap, MealType } from '@apps/pinch/types';
-import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
+import type { Gap, MealType, ShoppingRequest } from '@apps/pinch/types';
+import {
+  formatDayTitle,
+  getLocalTodayDate,
+  getPlannedDayKey,
+} from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -43,6 +48,7 @@ interface PlannedMealViewProps {
   onBack: () => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
   onFillIn: (gaps: Gap[]) => void;
+  onAddToShopping: (request: ShoppingRequest) => void;
   /** Where the drawer's pinned footer is: this view puts its actions there, a quiet Modify on the left and the one primary on the right. */
   footerEl: HTMLElement | null;
 }
@@ -54,6 +60,7 @@ function PlannedMealView({
   onBack,
   onEdit,
   onFillIn,
+  onAddToShopping,
   footerEl,
 }: PlannedMealViewProps) {
   const dispatch = useAppDispatch();
@@ -294,6 +301,18 @@ function PlannedMealView({
           This day has passed, so its meals keep the prices and numbers they
           had. Remove one and add it again to use today's.
         </p>
+      )}
+      {meal.date >= getLocalTodayDate() && (
+        <AddToShoppingRow
+          subtitle='Choose what you need for this meal'
+          onClick={() =>
+            onAddToShopping({
+              kind: 'items',
+              items: meal.items,
+              label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
+            })
+          }
+        />
       )}
       <Button
         type='button'

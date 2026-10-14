@@ -180,6 +180,7 @@ export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
   | { kind: 'sources' }
+  | { kind: 'shopping' }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
   | {
       kind: 'recipe';
@@ -251,6 +252,27 @@ export interface Source {
   createdAt: number;
   updatedAt: number;
 }
+
+/** One thing to buy: an ingredient in one unit. Its id is `{ingredientId}__{unit}`, so adding the same thing again merges into it. */
+export interface ShoppingItem {
+  /** Immutable. */
+  id: string;
+  /** Immutable. */
+  ingredientId: string;
+  /** Above zero, at most 1,000,000, two decimals. */
+  amount: number;
+  /** Immutable: a different unit is a different item. */
+  unit: Unit;
+  /** Bought: it moves to "Got it" until cleared. */
+  isChecked: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** What a drawer hands the "Add to shopping list" sheet: one recipe, or the items of a meal, a planned meal or a day. */
+export type ShoppingRequest =
+  | { kind: 'recipe'; recipeId: string }
+  | { kind: 'items'; items: MealItem[]; label: string };
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {

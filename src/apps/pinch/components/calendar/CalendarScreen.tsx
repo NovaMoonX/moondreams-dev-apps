@@ -16,6 +16,7 @@ import MonthView from '@apps/pinch/components/calendar/MonthView';
 import StatsRow from '@apps/pinch/components/calendar/StatsRow';
 import WeekView from '@apps/pinch/components/calendar/WeekView';
 import SettingsSheet from '@apps/pinch/components/settings/SettingsSheet';
+import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import {
   CALENDAR_VIEW_LABELS,
@@ -31,7 +32,12 @@ import {
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
+import type {
+  Gap,
+  MealType,
+  PlannedMeal,
+  ShoppingRequest,
+} from '@apps/pinch/types';
 import {
   formatPeriodTitle,
   getCellDayKey,
@@ -95,6 +101,7 @@ function CalendarScreen({
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
+  const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const isPhone = useMediaQuery().isBelow('sm');
 
   const requestedView = searchParams.get('view');
@@ -302,6 +309,17 @@ function CalendarScreen({
             setOpenDay(null);
             setFillIn(gaps);
           }}
+          onAddToShopping={(request) => {
+            setOpenDay(null);
+            setShopping(request);
+          }}
+        />
+      )}
+      {shopping && (
+        <AddToShoppingSheet
+          uid={uid}
+          request={shopping}
+          onClose={() => setShopping(null)}
         />
       )}
     </section>

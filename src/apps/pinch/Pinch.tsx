@@ -12,6 +12,7 @@ import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
+import ShoppingSubview from '@apps/pinch/components/shopping/ShoppingSubview';
 import MealSubview from '@apps/pinch/components/recipes/MealSubview';
 import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
 import RecipeSubview from '@apps/pinch/components/recipes/RecipeSubview';
@@ -124,6 +125,7 @@ function Pinch() {
       {subview?.kind === 'stores' && <StoresSubview uid={user.uid} />}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
+      {subview?.kind === 'shopping' && <ShoppingSubview uid={user.uid} />}
       {subview?.kind === 'recipe' && (
         <RecipeSubview uid={user.uid} recipeId={subview.id} />
       )}

@@ -9,6 +9,10 @@ import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getPeriodStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
+import {
+  getShoppingCost,
+  groupShoppingItems,
+} from '@apps/pinch/utils/shopping';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const selectRecords = (state: RootState) => state.pinch.ingredients.records;
@@ -199,6 +203,39 @@ export const selectSourceCounts = createSelector(
 
     return { bySource, withoutSource: recipes.length - sourced };
   },
+);
+
+export const selectShoppingItems = (state: RootState) =>
+  state.pinch.shopping.items;
+
+export const selectShoppingLoadError = (state: RootState) =>
+  state.pinch.shopping.loadError;
+
+/** How many things are left to buy: the Kitchen entry's count. */
+export const selectShoppingOpenCount = (state: RootState) =>
+  state.pinch.shopping.items.filter((item) => !item.isChecked).length;
+
+export const selectShoppingById = createSelector(
+  [selectShoppingItems],
+  (items) => new Map(items.map((item) => [item.id, item])),
+);
+
+/** The shopping list's rows grouped by ingredient family, computed once per change of the list, ingredients or families. */
+export const selectShoppingRows = createSelector(
+  [selectShoppingItems, selectIngredientsById, selectIngredientFamilies],
+  (items, ingredientsById, families) =>
+    groupShoppingItems(items, ingredientsById, families),
+);
+
+/** About what is left to buy costs, priced from each ingredient's default product. */
+export const selectShoppingCost = createSelector(
+  [selectShoppingItems, selectIngredientsById, selectDefaultProducts],
+  (items, ingredientsById, defaultProducts) =>
+    getShoppingCost(
+      items.filter((item) => !item.isChecked),
+      ingredientsById,
+      defaultProducts,
+    ),
 );
 
 /** Every recipe's cost, computed once per change of recipes, ingredients or products. */

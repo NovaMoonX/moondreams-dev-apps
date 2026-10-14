@@ -148,6 +148,9 @@ const DISH_WORDS = [
   'dumplings',
 ];
 const MASS_UNITS = ['G', 'OZ', 'LB', 'KG'] as const;
+const SHOPPING_UNITS = ['G', 'EACH', 'LB', 'CUP', 'OZ'] as const;
+const SHOPPING_ITEM_COUNT = 80;
+const SHOPPING_FAMILY_COUNT = 25;
 // The last label is long on purpose, to see a name wrap on a phone.
 const SOURCE_LABELS = [
   'Serious Eats',
@@ -191,7 +194,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals and about 1,100 planned meals over three months. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals, about 1,100 planned meals over three months and an 80-item shopping list. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -354,6 +357,33 @@ export async function seedPinchScale(
   });
   recipes.forEach((recipe) =>
     add(`recipes/${recipe.id}`, { ...recipe, createdAt, updatedAt: createdAt }),
+  );
+
+  // 80 things across 25 families, every fifth already bought.
+  const shoppingItems = Array.from(
+    { length: SHOPPING_ITEM_COUNT },
+    (_, index) => {
+      const ingredient =
+        ingredients[
+          (index % SHOPPING_FAMILY_COUNT) +
+            FAMILY_COUNT * Math.floor(index / SHOPPING_FAMILY_COUNT)
+        ];
+      const unit = SHOPPING_UNITS[index % SHOPPING_UNITS.length];
+      return {
+        id: `${ingredient.id}__${unit}`,
+        ingredientId: ingredient.id,
+        amount: unit === 'G' ? 100 + index * 5 : 1 + (index % 4) / 2,
+        unit,
+        isChecked: index % 5 === 4,
+      };
+    },
+  );
+  shoppingItems.forEach((entry, index) =>
+    add(`shoppingItems/${entry.id}`, {
+      ...entry,
+      createdAt: createdAt + index,
+      updatedAt: createdAt + index,
+    }),
   );
 
   const mealItems = (count: number, salt: number) =>

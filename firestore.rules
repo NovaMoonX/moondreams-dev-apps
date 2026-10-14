@@ -1454,6 +1454,18 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      function isShoppingItem(data, id) {
+        return data.keys().hasOnly(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.ingredientId, 80)
+          && isPositiveAmount(data.amount)
+          && isUnit(data.unit)
+          && id == data.ingredientId + '__' + data.unit
+          && data.isChecked is bool
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
       function isStore(data, id) {
         return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
@@ -1598,6 +1610,15 @@ service cloud.firestore {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isSource(request.resource.data, id);
         allow update: if isKitchenOwner() && isSource(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /shoppingItems/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isShoppingItem(request.resource.data, id);
+        allow update: if isKitchenOwner() && isShoppingItem(request.resource.data, id)
+          && request.resource.data.ingredientId == resource.data.ingredientId
+          && request.resource.data.unit == resource.data.unit
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

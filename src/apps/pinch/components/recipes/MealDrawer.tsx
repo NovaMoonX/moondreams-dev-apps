@@ -6,6 +6,7 @@ import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
+import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import {
   selectCostContext,
@@ -14,7 +15,7 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { Gap } from '@apps/pinch/types';
+import type { Gap, ShoppingRequest } from '@apps/pinch/types';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
@@ -32,6 +33,7 @@ interface MealDrawerProps {
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
+  onAddToShopping: (request: ShoppingRequest) => void;
 }
 
 function MealDrawer({
@@ -41,6 +43,7 @@ function MealDrawer({
   onPlan,
   onModify,
   onFillIn,
+  onAddToShopping,
 }: MealDrawerProps) {
   const meal = useAppSelector(selectMealsById).get(mealId);
   const costContext = useAppSelector(selectCostContext);
@@ -149,6 +152,16 @@ function MealDrawer({
             })}
           </ul>
         </FormSection>
+        <AddToShoppingRow
+          subtitle='Choose what you need for this meal'
+          onClick={() =>
+            onAddToShopping({
+              kind: 'items',
+              items: meal.items,
+              label: meal.name,
+            })
+          }
+        />
       </div>
     </DetailSheet>
   );
