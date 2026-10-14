@@ -89,7 +89,7 @@ function Subview({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     // Capture, so a dialog on top is still there to be seen before it closes itself on this keydown; an open
-    // dropdown is found by where focus is, since its own Escape handler hasn't run yet.
+    // dropdown is found by where focus is and a tooltip by being on screen, as neither has handled it yet.
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
         event.key !== 'Escape' ||
@@ -98,10 +98,11 @@ function Subview({
       ) {
         return;
       }
-      const isInOpenPopup =
-        event.target instanceof Element &&
-        event.target.closest(OPEN_POPUP_SELECTOR) !== null;
-      if (!isInOpenPopup) {
+      const isPopupOpen =
+        (event.target instanceof Element &&
+          event.target.closest(OPEN_POPUP_SELECTOR) !== null) ||
+        document.querySelector('[role="tooltip"]') !== null;
+      if (!isPopupOpen) {
         goBack();
       }
     };
