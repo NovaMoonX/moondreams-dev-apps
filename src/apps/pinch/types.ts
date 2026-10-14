@@ -1,4 +1,4 @@
-export type PinchTab = 'calendar' | 'recipes' | 'kitchen';
+export type PinchTab = 'calendar' | 'recipes' | 'kitchen' | 'shopping';
 
 export type Unit =
   | 'G'
@@ -184,7 +184,6 @@ export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
   | { kind: 'sources' }
-  | { kind: 'shopping' }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
   | {
       kind: 'recipe';

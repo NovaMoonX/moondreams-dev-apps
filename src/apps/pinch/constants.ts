@@ -10,13 +10,19 @@ import type {
   Unit,
 } from '@apps/pinch/types';
 
-export const PINCH_TABS: PinchTab[] = ['calendar', 'recipes', 'kitchen'];
+export const PINCH_TABS: PinchTab[] = [
+  'calendar',
+  'recipes',
+  'kitchen',
+  'shopping',
+];
 export const DEFAULT_PINCH_TAB: PinchTab = 'calendar';
 
 export const PINCH_TAB_LABELS: Record<PinchTab, string> = {
   calendar: 'Calendar',
   recipes: 'Recipes',
   kitchen: 'Kitchen',
+  shopping: 'Shopping',
 };
 
 export const UNIT_LABELS: Record<Unit, string> = {
@@ -107,8 +113,8 @@ export const MAX_MEAL_ITEMS = 10;
 export const MAX_SHOPPING_LINES_PER_ADD = 200;
 export const SOFT_MAX_SHOPPING_ITEMS = 300;
 export const SHOPPING_GROUP_PAGE_SIZE = 100;
-/** Under Firestore's limit of 500 writes per batch. */
-export const SHOPPING_BATCH_SIZE = 400;
+/** A chunk reads then deletes each item, two operations apiece, under Firestore's 500 per transaction. */
+export const SHOPPING_BATCH_SIZE = 250;
 export const MAX_SHOPPING_AMOUNT = 1_000_000;
 
 export const MAX_IDEA_TITLE_LENGTH = 120;

@@ -22,11 +22,14 @@ import {
 } from '../../src/apps/pinch/utils/ideas.ts';
 import {
   getItemsLines,
+  getMergedFields,
   getRecipeLines,
   getShoppingCost,
   getShoppingItemId,
   groupShoppingItems,
+  isValidAmount,
   mergeLines,
+  roundAmount,
 } from '../../src/apps/pinch/utils/shopping.ts';
 import type {
   Idea,
@@ -434,6 +437,121 @@ assert.equal(
   'a unit that cannot be compared with the package is left out',
 );
 
+// Merging a line into an item
+const NOW = 1_800_000_000_000;
+const flour = (amount: number) => ({
+  ingredientId: 'flour',
+  amount,
+  unit: 'CUP' as Unit,
+});
+assert.deepEqual(
+  getMergedFields(null, flour(1.5), NOW),
+  { amount: 1.5, isChecked: false, updatedAt: NOW },
+  'a new line starts unchecked with its amount',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 0.1, isChecked: false }, flour(0.2), NOW),
+  { amount: 0.3, isChecked: false, updatedAt: NOW },
+  'an open item gains the amount, rounded to two decimals',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 5, isChecked: true }, flour(2), NOW),
+  { amount: 2, isChecked: false, updatedAt: NOW },
+  'an item already checked off starts again with only the new amount',
+);
+assert.equal(
+  getMergedFields({ amount: 999_999.5, isChecked: false }, flour(5), NOW)
+    .amount,
+  1_000_000,
+  'an open item stops at the cap',
+);
+assert.equal(
+  getMergedFields(null, flour(2_000_000), NOW).amount,
+  1_000_000,
+  'a new item stops at the cap',
+);
+assert.equal(
+  getMergedFields({ amount: 5, isChecked: true }, flour(2_000_000), NOW).amount,
+  1_000_000,
+  'a restarted item stops at the cap',
+);
+assert.deepEqual(
+  mergeLines([flour(600_000), flour(600_000)]),
+  [flour(1_000_000)],
+  'lines that add past the cap stop at it',
+);
+
+// Moving a line to another unit carries whether it was checked off
+assert.equal(
+  getMergedFields(null, flour(8), NOW, true).isChecked,
+  true,
+  'a checked line moved into a unit with no item stays checked',
+);
+assert.equal(
+  getMergedFields(null, flour(8), NOW, false).isChecked,
+  false,
+  'an open line moved into a unit with no item stays open',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 4, isChecked: false }, flour(8), NOW, true),
+  { amount: 12, isChecked: false, updatedAt: NOW },
+  'moving into an open item adds to it and it stays open, whichever way the moved line was',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 4, isChecked: true }, flour(8), NOW, true),
+  { amount: 8, isChecked: false, updatedAt: NOW },
+  'moving into a checked item starts it again with the moved amount',
+);
+
+// Amounts that scale to nothing, or can't be held
+const pinchOfSalt = shopRecipe('pinch', 4, [
+  ['salt', 0.01, 'TSP'],
+  ['rice', 1, 'CUP'],
+]);
+assert.deepEqual(
+  getRecipeLines(pinchOfSalt, shopIngredients, 1),
+  [{ ingredientId: 'rice', amount: 0.25, unit: 'CUP' }],
+  'an amount that rounds to zero after scaling is left out, and the rest stays',
+);
+assert.deepEqual(
+  getRecipeLines(
+    shopRecipe('only-a-pinch', 4, [['salt', 0.01, 'TSP']]),
+    shopIngredients,
+    1,
+  ),
+  [],
+  'a recipe whose every line rounds to zero gives no lines to add',
+);
+assert.equal(
+  isValidAmount(roundAmount(0.004)),
+  false,
+  'a typed amount that rounds to zero is refused',
+);
+assert.equal(isValidAmount(roundAmount(0.006)), true, 'two decimals are kept');
+assert.deepEqual(
+  [0, -1, NaN, Infinity, 1_000_000.01].map(isValidAmount),
+  [false, false, false, false, false],
+  'zero, negative, not-a-number, infinite and over-cap amounts are refused',
+);
+assert.equal(isValidAmount(1_000_000), true, 'the cap itself is allowed');
+const noServings = shopRecipe('no-servings', 0, [['rice', 1, 'CUP']]);
+assert.deepEqual(
+  [
+    getRecipeLines(noServings, shopIngredients),
+    getRecipeLines(noServings, shopIngredients, 2),
+  ],
+  [[], []],
+  'a recipe with no servings gives no lines, never an endless amount',
+);
+assert.deepEqual(
+  getItemsLines(
+    [mealItem('z', 'RECIPE', 'no-servings', 2)],
+    new Map([[noServings.id, noServings]]),
+    shopIngredients,
+  ),
+  [],
+  'a meal item over a recipe with no servings gives no lines',
+);
 assert.equal(
   toWebLink('  https://www.Example.com/a b/ \n'),
   'https://www.example.com/ab/',

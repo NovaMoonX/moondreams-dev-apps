@@ -366,7 +366,6 @@ export async function seedPinchScale(
     add(`recipes/${recipe.id}`, { ...recipe, createdAt, updatedAt: createdAt }),
   );
 
-  // 80 things across 25 families, every fifth already bought.
   const shoppingItems = Array.from(
     { length: SHOPPING_ITEM_COUNT },
     (_, index) => {

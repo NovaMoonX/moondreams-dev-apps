@@ -7,7 +7,7 @@
 | Principle | Means |
 |---|---|
 | One border, not nested ones | a card gets a single bordered shell with a flat interior — never border-in-a-border; groups inside a screen are separated with `SectionDivider` or spacing |
-| Phone first | one narrow column with a floating pill at the bottom — Calendar · **Recipes** · Kitchen, as wide as its three tabs; from `lg` up the same tabs stand in a rail on the left edge, and the rest reflows with no parallel desktop layout |
+| Phone first | one narrow column with a floating pill at the bottom — Calendar · Recipes · Kitchen · Shopping, as wide as its four tabs; from `lg` up the same tabs stand in a rail on the left edge, and the rest reflows with no parallel desktop layout |
 | The counter, not a form | Pinch asks for a name and little else. A price, a package size or a nutrition value is invited by a quiet line exactly where it changes a number, and always optional |
 | Drawers for looking and quick edits, subviews for building | an ingredient, a day, a planned meal and a recipe's detail open in `DetailSheet` drawers; a recipe, a meal and the stores and products lists are page-sized and open as `Subview`s; short forms (ingredient, product, store, settings) are `FormSheet`s |
 | Never overlay on overlay | whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a drawer whose action opens a form or another container closes first. Only a destructive confirm may sit on top |
@@ -41,11 +41,12 @@ flowchart TD
     A[First launch] --> D["Calendar, empty: zeros and two nudges 'Plan your first meal' · 'Add a recipe'"]
     subgraph Bar["Bottom bar"]
         D2["Calendar"]
-        R["Recipes · centre"]
+        R["Recipes"]
         K["Kitchen"]
+        SH["Shopping · count left to buy"]
     end
     D --> D2
-    D2 ~~~ R ~~~ K
+    D2 ~~~ R ~~~ K ~~~ SH
     D2 -->|gear| SET["Settings sheet · nutrition switches"]
     D2 -->|switch view| VW["Month · Week · Day · Today button"]
     D2 -->|tap the stats row| BRK["Breakdown drawer · by day / by meal"]
@@ -73,7 +74,7 @@ flowchart TD
     RD -->|Modify| RF
     RD -->|Add to calendar| PM
     RD -->|Add to shopping list| AS["Add to shopping list sheet · servings, tick what you need"]
-    AS -.->|toast View| SL
+    AS -.->|toast View, unless a subview is open| SH
     RL -->|Ideas pill| IL["Ideas list · still to try, then made into recipes"]
     IL -->|+ New idea| IA["Add sheet · a drawer on a phone, a modal from sm · link, photo or jot it down, each in the sheet's own view with a Back link"]
     IA -.->|a link already saved| ID2
@@ -94,10 +95,11 @@ flowchart TD
     KL --> ST["Stores subview"]
     ST -->|+ Add| SF["Store form sheet · pick from the list or add your own"]
     KL --> PR["Products subview · by store"]
-    KL --> SL["Shopping list subview · what is left to buy by family, then Got it"]
+    SH --> SL["Shopping list · what is left to buy by family, then Got it · search from 8 things"]
     SL -->|+ Add| SLA["Add sheet · search an ingredient"]
     SL -->|tap a row| SLR["Row sheet · how much and which unit, remove"]
     SL -->|Clear| SLC["Clear confirm · takes the Got it items off"]
+    SL -->|help icon by the cost line| SLH["What the cost covers · amounts only, not packages"]
     PR -->|+ New product| PF
     RD -.->|nudge| FI["Fill-in sheet · prices and sizes"]
     KL -.->|nudge| FI
@@ -115,15 +117,17 @@ flowchart TD
 block-beta
   columns 4
   B1["🗓️ Calendar"]:1
-  B2["[ 🍲 RECIPES ]"]:2
+  B2["🍲 Recipes"]:1
   B3["🧺 Kitchen"]:1
+  B4["📋 Shopping  ⑦"]:1
   style B1 fill:transparent,stroke:#888888,stroke-width:1px;
-  style B2 fill:transparent,stroke:#888888,stroke-width:3px;
+  style B2 fill:transparent,stroke:#888888,stroke-width:1px;
   style B3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style B4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Navigation is a floating pill at the bottom of a phone, as wide as its three tabs (never stretched edge to edge), and a rail on the left from `lg` up. The app opens to Calendar, the left tab; the active tab gets a soft peach fill and orange on its icon, the only orange in the bar. Later Kitchen entries (stock, prepared servings) join the Kitchen tab and do not add a fourth tab.*
+*Navigation is a floating pill at the bottom of a phone, as wide as its four tabs (never stretched edge to edge; each tab has a 64px minimum and a 55px height, so all four fit 320px on one line), and a rail on the left from `lg` up. The app opens to Calendar, the first tab; the active tab gets a soft peach fill and orange on its icon, the only orange in the bar. The Shopping tab (`?tab=shopping`) shows what is left to buy as a small dark badge on its icon, only above zero and as "99+" past 99. A later feature joins the tab it belongs to (stock and prepared servings to Kitchen).*
 
-*From `lg` up the screens use the width: the month's cells become Google-Calendar-style pills that name each meal (its first item, `+N` for more) where a phone shows emoji chips, Week is seven columns where a phone has a vertical agenda, and Recipes and Kitchen run in two columns. The phone layout is unchanged.*
+*From `lg` up the screens use the width: the month's cells become Google-Calendar-style pills that name each meal (its first item, `+N` for more) where a phone shows emoji chips, Week is seven columns where a phone has a vertical agenda, and Recipes, Kitchen and the Shopping list run in two columns. The phone layout is unchanged.*
 
 **First launch — Calendar, empty** (no setup steps: Pinch is usable the moment it opens)
 
@@ -666,7 +670,6 @@ block-beta
   K1["Kitchen"]:2
   K2["🏪 Stores  ·  6"]:1
   K3["🛒 Products  ·  14"]:1
-  K3b["📋 Shopping list  ·  7"]:2
   K4["INGREDIENTS  42"]:1
   K5["+ New"]:1
   K6["🔍 Search   ⧩ 2   👁"]:2
@@ -680,7 +683,6 @@ block-beta
   style K1 fill:transparent,stroke:#888888,stroke-width:1px;
   style K2 fill:transparent,stroke:#888888,stroke-width:1px;
   style K3 fill:transparent,stroke:#888888,stroke-width:1px;
-  style K3b fill:transparent,stroke:#888888,stroke-width:1px;
   style K4 fill:transparent,stroke:#888888,stroke-width:1px;
   style K5 fill:transparent,stroke:#888888,stroke-width:1px;
   style K6 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -692,7 +694,7 @@ block-beta
   style K13 fill:transparent,stroke:#888888,stroke-width:1px;
   style K14 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The screen is titled Kitchen, with the subtitle "Your ingredients, products and stores."; Stores and Products are entry rows that open subviews, and Shopping list is a full-width row under them that shows how many things are left to buy (later Kitchen entries, Stock and Prepared servings, join them), then an "Ingredients" eyebrow with its count and **+ New** beside it. The search field ("Search" on a phone, "Search ingredients" from `sm`) has the filter icon (a count badge when filters are on) and the View options eye button at its end, with the Yours / All pills under it; on a phone the filters open in a drawer, whose button shows the count ("Show 12 ingredients", shortened to "Show 12" at 360px and under), and from `sm` in a popover, and each active filter also shows as a dismissible chip with "Clear" (the price one reads "Needs a price · in Yours"). The filters are Price (Any / Needs a price / Has a price), Show only (Missing nutrition, Custom only) and Family. Yours is the default and holds the ingredients you added, the ones with a product, and the ones your recipes, saved meals and planned days that aren't frozen yet use; All is the full catalog. **Both price filters only ever look through Yours**, even with All picked, and the Price section says so under its pills; while one is on, the count beside "Ingredients" reads "N of M" with M counting Yours. Families are `SectionDivider` groups. A row is its name and then, each on its own line, the default product's store, price and size (a muted "No price yet" for an ingredient something uses but that has no product) and, when nutrition is on, its calories and macros as emoji figures with what they are per ("per 100 g", or "per serving (5 oz)" when the list's View options say so and the serving can be weighed). Prices and macros hide independently, rows carry no icon, and the chevron sits on the name's line however many lines follow (a product row in the Products subview keeps its price there too). When the filters hide everything the empty state names the filters that are hiding things and offers "Clear filters" and, only when All would find something, "Look through everything"; "Needs a price" alone with nothing left says "Nothing is waiting on a price."*
+*The screen is titled Kitchen, with the subtitle "Your ingredients, products and stores."; Stores and Products are entry rows that open subviews (later Kitchen entries, Stock and Prepared servings, join them), then an "Ingredients" eyebrow with its count and **+ New** beside it. The search field ("Search" on a phone, "Search ingredients" from `sm`) has the filter icon (a count badge when filters are on) and the View options eye button at its end, with the Yours / All pills under it; on a phone the filters open in a drawer, whose button shows the count ("Show 12 ingredients", shortened to "Show 12" at 360px and under), and from `sm` in a popover, and each active filter also shows as a dismissible chip with "Clear" (the price one reads "Needs a price · in Yours"). The filters are Price (Any / Needs a price / Has a price), Show only (Missing nutrition, Custom only) and Family. Yours is the default and holds the ingredients you added, the ones with a product, and the ones your recipes, saved meals and planned days that aren't frozen yet use; All is the full catalog. **Both price filters only ever look through Yours**, even with All picked, and the Price section says so under its pills; while one is on, the count beside "Ingredients" reads "N of M" with M counting Yours. Families are `SectionDivider` groups. A row is its name and then, each on its own line, the default product's store, price and size (a muted "No price yet" for an ingredient something uses but that has no product) and, when nutrition is on, its calories and macros as emoji figures with what they are per ("per 100 g", or "per serving (5 oz)" when the list's View options say so and the serving can be weighed). Prices and macros hide independently, rows carry no icon, and the chevron sits on the name's line however many lines follow (a product row in the Products subview keeps its price there too). When the filters hide everything the empty state names the filters that are hiding things and offers "Clear filters" and, only when All would find something, "Look through everything"; "Needs a price" alone with nothing left says "Nothing is waiting on a price."*
 
 **Ingredient details** (drawer)
 
@@ -847,16 +849,17 @@ block-beta
 ```
 *The list shows each store's logo in a round tile with a letter tile as the fallback. A well-known store is picked from the list; "Can't find it? Add your own" reveals a name and an image field (`PhotoPicker`), and a store with no image gets a letter tile in a soft tint. Removing a store that has products asks first and keeps those products, with their store shown as "Removed store". The Products subview lists every product with its ingredient, price and size and has **+ New product** beside its title (pick the ingredient first, then the product sheet). From 8 products it shows a search and the filter and sort controls: filters are Store, Family and Default only / Not the default; sort is by store (grouped, the default), ingredient, price or date added. Rows are capped at 60 with "Show 60 more", and an ingredient's default star shows only when it has several products.*
 
-**Shopping list** (subview from Kitchen) and **Add to shopping list** (sheet)
+**Shopping tab** and **Add to shopping list** (sheet)
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
   columns 2
-  L1["‹ Shopping list"]:2
-  L2["7 to buy"]:1
+  L1["Shopping list"]:1
   L3["+ Add"]:1
-  L4["About $12.40 for what's left ⚠"]:2
+  L2["7 to buy"]:2
+  L4["Amounts on your list: about $12.40 ⚠"]:2
+  L4b["🔍 Search your list  (from 8 things)"]:2
   L5["— Chicken —"]:2
   L6["☐ Chicken breast ›<br/>1 lb"]:2
   L7["☐ Chicken thigh ›<br/>2 lb"]:2
@@ -868,6 +871,7 @@ block-beta
   style L2 fill:transparent,stroke:#888888,stroke-width:1px;
   style L3 fill:transparent,stroke:#888888,stroke-width:1px;
   style L4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L4b fill:transparent,stroke:#888888,stroke-width:1px;
   style L5 fill:transparent,stroke:#888888,stroke-width:1px;
   style L6 fill:transparent,stroke:#888888,stroke-width:1px;
   style L7 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -899,11 +903,11 @@ block-beta
   style A8 fill:transparent,stroke:#888888,stroke-width:1px;
   style A9 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The Shopping list is a `Subview` reached from Kitchen's full-width row, which shows how many things are left to buy. Its subtitle says "7 to buy" (or "Got everything"), the one "+ Add" sits beside it, and a line under them says "About $12.40 for what's left" with a warning icon (`HelpTip`, a modal on a phone) that names what the figure leaves out ("No price yet: …", "Can't compare the amount with the package size: …"); it prices the amounts on the list from each ingredient's default product, not whole packages, and says "No prices yet" when none could be priced. What is left is grouped by ingredient family under `SectionDivider`s in Kitchen's family order, with "Other" last for ingredients that have no family. A row is a checkbox on the first line, the ingredient's name and a muted amount line ("2 lb"), and a chevron; ticking writes in the background and moves the row to "Got it", which stays collapsed and carries "Clear". Clear asks first ("Take the 3 items you've got off your list? This action cannot be undone."). A group draws 100 rows and then "Show N more" (nothing is hidden for 103 or fewer), and the first three groups draw at once while the rest mount as they near the screen. An empty list says "Nothing on your list. Add a recipe's ingredients from its page, or add one here."; with 300 things the Add button goes and a line says the list is full. When the shopping listener fails the screen says it couldn't load the list and offers no Add.*
+*The Shopping list is the fourth tab, with no back button (it is reached from the nav, or from the add toast's "View"). The header is "Shopping list" with its subtitle "7 to buy" (or "Got everything") and the one "+ Add" beside it; a first-run kitchen with nothing on its list sees one warm muted line ("Nothing on your list. Add a recipe's ingredients from its page, or add one here.") under that header. Under the header a line says "Amounts on your list: about $12.40", always followed by a help icon (`HelpTip`, a modal on a phone or touch screen and a tooltip with a mouse): "This prices just the amounts on your list, from each ingredient's default product. Stores sell whole packages, so what you pay at the till is usually more." The icon turns into a warning when something is left out and then also names it, with where to fix it ("No price yet: Chicken thigh. Add a price from the ingredient in Kitchen." and "Can't compare the amount with the package size: …"); the line says "No prices yet" when none could be priced. From 8 things on a search field ("Search your list") sits above the groups and filters them and "Got it" by name as you type, and says "Nothing on your list matches “milk”." when nothing does. What is left is grouped by ingredient family under `SectionDivider`s in Kitchen's family order, with "Other" last for ingredients that have no family, in two columns from `lg`. A row is a checkbox on the first line, the ingredient's name and a muted amount line ("2 lb"), and a chevron; ticking writes in the background and moves the row to "Got it", which stays collapsed and carries "Clear". Clear asks first ("Take the 3 items you've got off your list? This action cannot be undone.") and then a toast says how many it cleared (fewer than were ticked when another device un-ticked one, and it says so). A group draws 100 rows and then "Show N more" (nothing is hidden for 103 or fewer), and the first three groups draw at once while the rest mount as they near the screen. With 300 things the Add button goes and a line says the list is full. While the first snapshot hasn't landed the body says "Loading your list…", and when the shopping listener fails it says it couldn't load the list and offers no Add. The row and add sheets open over the tab like any other sheet, with a destructive confirm allowed on top; Escape closes one sheet and leaves the tab.*
 
-*Tapping a row opens its sheet (a drawer on a phone, titled with the ingredient): "How much" with the amount and a unit select, the trash at the bottom left (a destructive confirm), Cancel and Save. Another unit is another item, so Save moves the amount to that unit, and the footer says "You already have 1 lb on your list. This adds to it." when that item is already there unchecked. "+ Add" opens a drawer with one search over the catalog and the person's ingredients (the same search the meal builder uses, results capped to a scrolling list under the field) and "New ingredient" when nothing has the typed name; a pick goes on the list at the ingredient's serving size, closes the sheet and says "Added Cheddar cheese".*
+*Tapping a row opens its sheet (a drawer on a phone, titled with the ingredient): "How much" with the amount and a unit select, the trash at the bottom left (a destructive confirm), Cancel and Save. Another unit is another item, so Save moves the amount to that unit (a ticked line stays ticked), and the footer says "You already have 1 lb on your list. This adds to it." when that item is already there open, or "You already got 4 oz. This puts it back on your list at 32 oz." when it is there ticked. "+ Add" opens a drawer with one search over the catalog and the person's ingredients (the same search the meal builder uses, results capped to a scrolling list under the field) and "New ingredient" when nothing has the typed name; a pick goes on the list at the ingredient's serving size, closes the sheet and says "Added Cheddar cheese". The field takes focus once the drawer has settled (on a phone the drawer holds focus while it slides in). While the write is in flight the results are locked and a quiet "Adding…" shows; while the list is still loading, or failed to load, they are locked with "Loading your list…" or "Your list couldn't load, so adding is paused."; and a list at 300 says it is full when a new ingredient is picked.*
 
-*The Add to shopping list sheet is a `FormSheet` (a tall drawer on a phone, a modal from `sm`). It opens from the recipe, meal, planned meal and day drawers, which close first. It names what it is for (the recipe's title, the meal's name, "Dinner on Wed, Oct 14", or the day), a recipe gets a "For [stepper] servings" row that starts at the recipe's own servings and scales every line, and a count with "Tick all" / "Untick all" sits above the lines (one scrolling list, header and footer fixed). Each line is a checkbox, the name and its amount; a line already on the list starts unticked and says "On your list · 2 lb", since ticking it adds more, and one already got is treated as new (adding starts it again). "Add 3" is the one primary; a note beside it says why it can't be pressed (nothing ticked, more than 200 things, the list would pass 300). Afterwards a toast says "Added 5 to your shopping list" with a "View" button that opens the list.*
+*The Add to shopping list sheet is a `FormSheet` (a tall drawer on a phone, a modal from `sm`). It opens from the recipe, meal, planned meal and day drawers, which close first. It names what it is for (the recipe's title, the meal's name, "Dinner on Wed, Oct 14", or the day), a recipe gets a "For [stepper] servings" row that starts at the recipe's own servings and scales every line, and a count with "Tick all" / "Untick all" sits above the lines (one scrolling list, header and footer fixed). Each line is a checkbox, the name and its amount; a line already on the list starts unticked and says "On your list · 2 lb", since ticking it adds more, and one already got is treated as new (adding starts it again). "Add 3" is the one primary; a note beside it says why it can't be pressed (nothing ticked, more than 200 things, the list would pass 300). Until the shopping list has loaded (or when it failed to load) Add, "Tick all" and the checkboxes are off and the note says "Loading your list…" or "Your list couldn't load, so adding is paused."; the full-list notes point to the Shopping tab. Afterwards a toast says "Added 5 to your shopping list" with a "View" button that switches to the Shopping tab, unless a full-page screen such as a recipe form is open by then, when it only closes the toast.*
 
 
 **Nudge and fill-in** (the quiet line, and the sheet it opens)
@@ -1018,8 +1022,8 @@ block-beta
 | RecipeReader | Recipe subview | the text, file and link screens of a way in: its own disclosure line above its input, a "Fill in the recipe" button (text and link), a reading state and failure line, and "Write it yourself instead"; link reading calls `fetchPageContent` through `recipePageQueryOptions` |
 | RecipeForm | Recipe subview | all sections visible via `FormSection` and `Field`: servings and times, photo, description, where it's from (`PickOrCreate`), `RecipeIngredients`, `RecipeSteps` and `NutritionReview` (each a drawer on a phone, rows open in place from `sm`) |
 | SourcesSubview, SourceFormSheet | Recipes tab's Sources entry | the list of sources with their recipe counts and the one-field Source sheet (rename, add, delete); a `Subview` and a `FormSheet`, mirroring Stores |
-| EntryRow | Kitchen (Stores, Products, and the full-width Shopping list), Recipes (Sources) | the tinted-icon entry tile with its count and chevron (the icon hides at 360px and under, the chevron at 400px and under); a `className` lets one span both columns |
-| ShoppingSubview, ShoppingRow, ShoppingItemSheet, ShoppingAddSheet | Kitchen's Shopping list entry | the list by family with a checkbox on each row's first line, "Got it" and "Clear", the cost line with its warning icon, the row sheet (amount, unit, remove) and the add sheet (an `ItemSearch`); groups after the first three mount near the viewport |
+| EntryRow | Kitchen (Stores, Products), Recipes (Sources) | the tinted-icon entry tile with its count and chevron (the icon hides at 360px and under, the chevron at 400px and under); a `className` lets one span both columns |
+| ShoppingScreen, ShoppingRow, ShoppingItemSheet, ShoppingAddSheet, ShoppingTabBadge | the Shopping tab | the list by family with a checkbox on each row's first line, "Got it" and "Clear", the cost line with its warning icon, the row sheet (amount, unit, remove) and the add sheet (an `ItemSearch`); groups after the first three mount near the viewport |
 | AddToShoppingSheet, AddToShoppingRow | recipe, meal, planned meal and day drawers | the tinted row that closes the drawer and opens the `FormSheet` where a recipe's, meal's or day's lines are ticked (a servings `Stepper` for a recipe) and added in one write |
 | RecipeRow, MealRow | Recipes tab | cover or emoji tile, title, muted details, then the cost and macro lines when shown; the tile and text share a top edge and the chevron sits on the first line |
 | IngredientRow, FamilyGroup | Kitchen | name, a price line and a macro line (each can be hidden), the chevron on the name's line; `SectionDivider` groups |
@@ -1113,7 +1117,7 @@ flowchart LR
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
     A[Tap a day] --> B["Add this day's ingredients"] --> C["Sheet: tick what you need"] --> D[Add 12]
-    D --> E["Toast: Added 12 to your shopping list · View"] --> F["Shopping list, by family"]
+    D --> E["Toast: Added 12 to your shopping list · View"] --> F["Shopping tab, by family"]
     F --> G["At the store: tick what is in the cart"] --> H["Got it moves down"] --> I[Clear]
     A2[Open a recipe] --> B2["Add to shopping list · for 6 servings"] --> C
 ```

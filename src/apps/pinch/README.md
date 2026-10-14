@@ -23,14 +23,15 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 11. **Turn on nutrition if you want it.** Calories, protein, carbs, and fat each stay hidden until you switch them on.
 12. **Lists stay short, and you choose what they show.** Rows start with prices and leave out calories and macros; an eye button on Kitchen and Recipes turns either one on or off, whenever you like.
 13. **Remember where a recipe came from.** Tag a recipe with a source, like a favorite site or a stack of cookbooks, then find your recipes by it.
-14. **Make a shopping list.** From a recipe, a saved meal, a planned meal or a whole day, pick what you need and it goes on one list in Kitchen, grouped by ingredient family. Tick things off at the store.
+14. **Make a shopping list.** From a recipe, a saved meal, a planned meal or a whole day, pick what you need and it goes on one list, the Shopping tab, grouped by ingredient family. Tick things off at the store.
 15. **Keep recipe ideas.** A link to a page you like, a photo, or a few words about something you'd like to make someday. When you're ready, an idea turns into a recipe with its title, note and site already filled in.
 
 ### Finding Your Way, In Detail
 
-- **Calendar** (left): what you plan to eat, by month, week or day, with the period's stats above it.
-- **Recipes** (center): your recipes, saved meals and recipe ideas, and the sources your recipes came from.
-- **Kitchen** (right): everything you buy. Ingredients, their products, and your stores live here your shopping list and, as it grows, how much you have on hand, servings you've prepared, and a section of the list for what's running low.
+- **Calendar** (first): what you plan to eat, by month, week or day, with the period's stats above it.
+- **Recipes** (second): your recipes, saved meals and recipe ideas, and the sources your recipes came from.
+- **Kitchen** (third): everything you buy. Ingredients, their products and your stores live here and, as it grows, how much you have on hand and the servings you've prepared.
+- **Shopping** (fourth): what you still need to buy, grouped by ingredient family, with a count on the tab while anything is left.
 
 ### Filling In As You Go, In Detail
 
@@ -90,9 +91,11 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Add from where you are.** A recipe, a saved meal, a planned meal and a day each have an "Add to shopping list" row in their drawer (not on days that have passed). It opens a sheet with every ingredient ticked, so you untick what you already have. A recipe also asks how many servings you're cooking, and every amount scales to that.
 - **One line per ingredient and unit.** Adding chicken thigh twice makes one line with both amounts added. A line that is already on the list starts unticked and says how much is there ("On your list · 2 lb"), since ticking it adds more. Units are never converted: a cup and a tablespoon of the same ingredient are two lines.
 - **A day adds up.** An ingredient on its own counts as its serving size times the servings; a recipe counts its ingredient lines scaled by the servings planned.
-- **Tick off what you got.** A tick moves the line to "Got it", a collapsed group at the bottom. Add the same thing again and it starts over, unticked. "Clear" takes everything in "Got it" off the list, after asking.
-- **Change a line.** Tap a row to change how much and which unit, or take it off. "+ Add" at the top finds any ingredient and puts it on at its usual serving.
-- **An approximate cost.** A line under the title says "About $12.40 for what's left", worked out from each ingredient's default product and the amount on the list, not whole packages. Its warning icon names what it leaves out, like an ingredient with no price yet.
+- **Tick off what you got.** A tick moves the line to "Got it", a collapsed group at the bottom. Add the same thing again and it starts over, unticked. "Clear" takes everything in "Got it" off the list, after asking, and says how many it cleared. If another device un-ticked one in the meantime, that one stays.
+- **Change a line.** Tap a row to change how much and which unit, or take it off. A ticked line that changes unit stays ticked. Moving a line into a unit that is already on the list adds to it, or, if that one is ticked, puts it back on the list at the moved amount, and the sheet says so before you save. "+ Add" at the top finds any ingredient and puts it on at its usual serving.
+- **Find a line.** From 8 things on, a search field sits above the list and narrows it by name as you type.
+- **An approximate cost.** A line under the title says "Amounts on your list: about $12.40", worked out from each ingredient's default product and the amount on the list. Stores sell whole packages, so the till total is usually higher, and the help icon beside it says so. The icon turns into a warning when something is left out, like an ingredient with no price yet, and names it and where to add the price.
+- **A toast takes you there.** After adding, "View" switches to the Shopping tab, unless you have already opened a full-page screen such as a recipe form, which it never replaces.
 - **It's just a list.** It doesn't follow the calendar: changing a meal later leaves the list as it was. Nothing on it is shared, copied out or sent anywhere.
 - **Limits.** One add takes up to 200 lines, and the list holds about 300 things before it asks you to clear what you've got. Both are limits in the app, not in the database.
 
@@ -149,7 +152,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
 - [x] View options on Kitchen and Recipes: prices show and calories and macros stay hidden until you turn them on, and pick per serving or per 100 g for ingredients, remembered per person on the device
-- [x] Shopping list in Kitchen: add a recipe's (at the servings you pick), a saved meal's, a planned meal's or a day's ingredients, or a single ingredient; lines merge by ingredient and unit, group by family, tick off to "Got it", and show an approximate cost with what it leaves out
+- [x] Shopping tab: add a recipe's (at the servings you pick), a saved meal's, a planned meal's or a day's ingredients, or a single ingredient; lines merge by ingredient and unit, group by family, tick off to "Got it", and show an approximate cost with what it leaves out
 - [x] Recipe ideas on the Recipes screen: save a link (with its title, site and picture), a photo or a few words, open it, change it, and turn it into a recipe that arrives with the idea's title, note and site; ideas that became recipes move to "Made into recipes"
 - [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals, a shopping list of a few hundred things and a couple of hundred ideas
 

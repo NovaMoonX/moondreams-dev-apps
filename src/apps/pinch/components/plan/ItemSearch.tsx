@@ -27,6 +27,8 @@ interface ItemSearchProps {
   excludeIds?: readonly string[];
   autoFocus?: boolean;
   resultsClassName?: string;
+  /** The field still takes typing, but no result can be picked. */
+  isDisabled?: boolean;
 }
 
 /** One search over the catalog and the person's own ingredients, capped at a few rows, that ends with "add this as a new ingredient" when nothing has exactly the typed name. */
@@ -37,6 +39,7 @@ function ItemSearch({
   excludeIds = [],
   autoFocus = false,
   resultsClassName,
+  isDisabled = false,
 }: ItemSearchProps) {
   const dispatch = useAppDispatch();
   const ingredients = useAppSelector(selectIngredients);
@@ -127,6 +130,7 @@ function ItemSearch({
               <Button
                 type='button'
                 variant='tertiary'
+                disabled={isDisabled}
                 onClick={() => {
                   setQuery('');
                   onPickRecipe?.(recipe.id);
@@ -153,6 +157,7 @@ function ItemSearch({
               <Button
                 type='button'
                 variant='tertiary'
+                disabled={isDisabled}
                 onClick={() => {
                   setQuery('');
                   onPick(ingredient.id);
@@ -175,7 +180,7 @@ function ItemSearch({
               <Button
                 type='button'
                 variant='tertiary'
-                disabled={isCreating}
+                disabled={isCreating || isDisabled}
                 onClick={() => void createFromName()}
                 className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
               >

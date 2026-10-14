@@ -31,7 +31,6 @@ const shoppingItem = (
   isChecked,
 });
 
-// Four things left to buy in three families (the breast has a product, so the list shows a price with a caveat) and two already bought.
 const SEED_SHOPPING = [
   shoppingItem('cat-chicken-thigh', 'LB', 2, false),
   shoppingItem('cat-chicken-breast', 'LB', 1, false),

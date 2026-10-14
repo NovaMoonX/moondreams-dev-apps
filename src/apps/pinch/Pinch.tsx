@@ -1,4 +1,11 @@
-import { useMemo, useState, useTransition } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -12,7 +19,7 @@ import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
-import ShoppingSubview from '@apps/pinch/components/shopping/ShoppingSubview';
+import ShoppingScreen from '@apps/pinch/components/shopping/ShoppingScreen';
 import MealSubview from '@apps/pinch/components/recipes/MealSubview';
 import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
 import RecipeSubview from '@apps/pinch/components/recipes/RecipeSubview';
@@ -39,19 +46,33 @@ function Pinch() {
   const [subview, setSubview] = useState<PinchSubview | null>(null);
   const [isStartOpen, setIsStartOpen] = useState(false);
   const [shownMonth, setShownMonth] = useState(getLocalMonthKey);
+  const subviewRef = useRef<PinchSubview | null>(null);
+  const showShoppingTab = useCallback(() => {
+    if (subviewRef.current !== null) {
+      return;
+    }
+    const next = new URLSearchParams(window.location.search);
+    next.set('tab', 'shopping');
+    startTransition(() => setSearchParams(next));
+  }, [setSearchParams]);
   const overlayContext = useMemo(
     () => ({
       subview,
       openSubview: setSubview,
+      showShoppingTab,
       closeSubview: () => setSubview(null),
       isStartOpen,
       setIsStartOpen,
     }),
-    [subview, isStartOpen],
+    [subview, isStartOpen, showShoppingTab],
   );
 
   const isLoaded = useAppSelector(selectIsPinchLoaded);
   const loadError = useAppSelector(selectPinchLoadError);
+
+  useEffect(() => {
+    subviewRef.current = subview;
+  }, [subview]);
 
   usePinchTheme();
   usePinchSync(user?.uid ?? null, shownMonth);
@@ -102,6 +123,7 @@ function Pinch() {
   const getScreen = () => {
     if (activeTab === 'recipes') return <RecipesScreen uid={user.uid} />;
     if (activeTab === 'kitchen') return <KitchenScreen uid={user.uid} />;
+    if (activeTab === 'shopping') return <ShoppingScreen uid={user.uid} />;
     return (
       <CalendarScreen
         uid={user.uid}
@@ -125,7 +147,6 @@ function Pinch() {
       {subview?.kind === 'stores' && <StoresSubview uid={user.uid} />}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
-      {subview?.kind === 'shopping' && <ShoppingSubview uid={user.uid} />}
       {subview?.kind === 'recipe' && (
         <RecipeSubview uid={user.uid} recipeId={subview.id} />
       )}
