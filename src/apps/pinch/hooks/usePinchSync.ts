@@ -143,12 +143,14 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
     const unsubscribeSources = startSourcesListener(
       uid,
       (sources) => dispatch(setSources(sources)),
-      (error) =>
+      (error) => {
+        console.error('Pinch sources listener failed', error);
         dispatch(
           setSourcesLoadError(
             getErrorMessage(error, 'Unable to load your recipe sources.'),
           ),
-        ),
+        );
+      },
     );
 
     const unsubscribeShopping = startShoppingListener(

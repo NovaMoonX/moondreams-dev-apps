@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { Plus } from 'lucide-react';
 
 import Pill from '@/components/Pill';
@@ -24,13 +24,28 @@ interface PickOrCreateProps {
   maxLength?: number;
   /** Whether the text field takes focus when it is on screen at the start (it always does after a tap on the "New" pill). Turn off where it can start filled in. */
   isFocusedOnOpen?: boolean;
+  /** A visible way to unset the choice ("Remove source"), shown while something is chosen; without it the only way is tapping the chosen pill again. */
+  clearLabel?: string;
 }
 
 /** Pick an existing name or make a new one: nothing starts selected, and the dashed "New" pill comes first. With no names yet it is just the text field. */
-function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel, newPlaceholder, showAll, maxLength, isFocusedOnOpen = true }: PickOrCreateProps) {
+function PickOrCreate({
+  label,
+  options,
+  choice,
+  newText,
+  onChange,
+  newPillLabel,
+  newPlaceholder,
+  showAll,
+  maxLength,
+  isFocusedOnOpen = true,
+  clearLabel,
+}: PickOrCreateProps) {
   const [isCreating, setIsCreating] = useState(choice === NEW_CHOICE);
   const [hasTappedNew, setHasTappedNew] = useState(false);
-  const showCreate = isCreating || choice === NEW_CHOICE || options.length === 0;
+  const showCreate =
+    isCreating || choice === NEW_CHOICE || options.length === 0;
 
   const newInput = (
     <Input
@@ -77,6 +92,20 @@ function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel,
         }}
       />
       {showCreate && newInput}
+      {clearLabel && (choice !== '' || isCreating) && (
+        <Button
+          type='button'
+          variant='link'
+          size='sm'
+          className='h-10 px-0!'
+          onClick={() => {
+            setIsCreating(false);
+            onChange('', '');
+          }}
+        >
+          {clearLabel}
+        </Button>
+      )}
     </div>
   );
 }

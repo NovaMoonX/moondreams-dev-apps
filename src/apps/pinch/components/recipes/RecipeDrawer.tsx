@@ -1,4 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
@@ -37,7 +38,6 @@ const gapLabel = (kind: GapKind | undefined) => {
 interface Fact {
   emoji: string;
   text: string;
-  /** A long, typed fact wraps inside the line instead of running past the sheet. */
   canWrap?: boolean;
 }
 
@@ -124,9 +124,9 @@ function RecipeDrawer({
           {facts.map((fact) => (
             <li
               key={fact.text}
-              className={
-                fact.canWrap ? 'min-w-0 wrap-break-word' : 'whitespace-nowrap'
-              }
+              className={join(
+                fact.canWrap ? 'min-w-0 wrap-break-word' : 'whitespace-nowrap',
+              )}
             >
               <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
             </li>

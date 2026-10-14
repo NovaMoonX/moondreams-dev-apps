@@ -188,7 +188,6 @@ export const selectSourcesById = createSelector(
 export const selectSourcesLoadError = (state: RootState) =>
   state.pinch.sources.loadError;
 
-/** How many listed recipes each source has, and how many name none, counted in one pass. */
 export const selectSourceCounts = createSelector(
   [selectRecipes, selectSourcesById],
   (recipes, sourcesById) => {
