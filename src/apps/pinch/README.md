@@ -28,6 +28,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 16. **Cook it step by step.** Start cooking from a recipe, or from a meal you planned: one step at a time in big type, the ingredients for the servings you're making, a timer for any time a step mentions, and the screen kept on where your browser allows it.
 17. **Keep a record of what you cooked.** One tap on a recipe, or on a meal you planned, notes that you made it, when, and for how many. It's a quiet history you can correct later, and a recipe shows how many times you've cooked it.
 18. **Keep notes on a recipe, and see when you changed it.** Write down what you'd do differently, after a cook or any time. When you edit a recipe you've cooked, Pinch adds a note with the date and what changed, so you can always tell which version a note was about.
+19. **Say how to keep it.** A recipe can say how many days it keeps in the fridge and the freezer, how to reheat it, and a tip such as "keep the sauce separate". It shows on the recipe, and cooking mode's last screen says how long the leftovers keep.
 
 ### Finding Your Way, In Detail
 
@@ -139,6 +140,17 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Limits.** A note holds up to 2,000 characters, a tweak lists up to eight changes (the last may say "and 3 more"), and about 300 notes for one recipe before it asks you to delete an older one; the 300 is a limit in the app, not in the database.
 - **Private.** Your notes are yours alone and are never shared or sent anywhere. A tweak's lines can carry your ingredient names and the first words of a step you changed.
 
+### Keeping Leftovers, In Detail
+
+- **One row in the recipe form.** "Keeping it" sits between the steps and the nutrition. It reads "Add how to keep it" while it is empty and "Fridge 3 days, freezer 3 months, reheating, tip" once it isn't. Tap it to type days for the fridge and the freezer, a line on how to reheat it and a tip. Every part is optional.
+- **Days, said the way you'd say them.** You type whole days, 1 to 365. A month is 30 days, so 90 shows as "3 months", 14 as "2 weeks" and 3 as "3 days".
+- **On the recipe.** The drawer gets a "Keeping it" section under the steps: "Keeps 3 days in the fridge", "Keeps 3 months in the freezer", "Reheat: …" and your tip. It only shows when there is something to say, and sits above the notes.
+- **On cooking mode's last screen.** One quiet line, "Leftovers keep 3 days in the fridge, 3 months in the freezer", for a recipe that has it. Nothing else on that screen changes.
+- **Read from the source.** A text, photo or link reading fills the row in when the source itself says how long it keeps, how to reheat it or how to store it ("keeps 4 days in the fridge, freezes up to 3 months"). A range uses the shorter end, weeks and months become days, and the reader is told never to guess a time the source doesn't give. Like everything a reading finds, it is for you to review, and nothing is saved until you save the recipe.
+- **Changing it is a change.** For a recipe you've cooked, editing this adds a tweak note like any other edit ("Fridge storage 3 days → 5 days", "Added a storage tip").
+- **Older recipes keep working.** A recipe written before this simply shows no storage notes. Saving it from the form adds an empty record, and nothing else about it changes.
+- **Private, and short.** Your storage notes are yours alone, like the rest of the recipe. Days go up to 365; the reheating line and the tip hold up to 300 characters each.
+
 ### Cooking Mode, In Detail
 
 - **Start from a recipe or a planned meal.** "Start cooking" is a row in a recipe's drawer (when it has steps) and in a planned meal's drawer (not on a day that has passed). A meal with several recipes asks which one first, and opens it at the servings you planned.
@@ -196,6 +208,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Cooking mode from a recipe or a planned meal: one step at a time in big type, the ingredients scaled to the servings you're making, timers for the times a step mentions, and the screen kept awake where the browser allows it
 - [x] Mark a recipe cooked from its drawer or from a meal on a planned day, see "Cooked 3 times" on the recipe and "Cooked 3×" in the list, and keep a cooking history you can correct, add to and delete from
 - [x] Notes on a recipe: write one any time or after a cook, and every edit to a recipe you've cooked is recorded as a dated tweak with what changed, so you can see when you improved it and which version a note was about
+- [x] Say how long a recipe keeps in the fridge and the freezer, how to reheat it and a tip, in the recipe form's "Keeping it" row; see it on the recipe and as one line on cooking mode's last screen, and have a text, photo or link reading fill it in when the source says so
 - [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals, a shopping list of a few hundred things and dozens of ideas
 
 
@@ -234,7 +247,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Frontend:** React 19, TypeScript, Vite, TailwindCSS 4, DreamerUI (including its `Calendar` for the month view)
 - **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
 - **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, recipe ideas, cooking history, recipe notes, meals, calendar entries, the shopping list and per-user settings (adding to the list merges into existing lines in one transaction, so two devices adding at once never lose an amount); Firebase Storage for recipe, store and idea images
-- **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review; for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them; the same function gives a recipe idea its link's title, site name and picture address (no AI involved)
+- **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review (including how long a dish keeps and how to reheat it, only when the source says so); for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them; the same function gives a recipe idea its link's title, site name and picture address (no AI involved)
 - **On the device:** a list's view options are kept in the browser's local storage, per person; nothing else of yours is kept there beyond Firestore's own cache. Cooking mode keeps nothing of its own (the only things it can write are the cooking-history entry from "I cooked this" and a note about it): it asks the browser to keep the screen awake and plays a short beep when a timer ends, and nothing about either is stored or sent
 - **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (licence not yet confirmed from here: to be checked before launch), stored per 100 g alongside common unit conversions; money is stored as whole cents
 - **Store logos:** a curated list of well-known stores (names and web domains) whose logos load from a logo service in the person's browser, with a letter tile whenever one isn't available; stores you add keep their own uploaded image in Firebase Storage. The logo service (Logo.dev) and its terms are to be confirmed before launch.
