@@ -192,10 +192,11 @@ export const saveRecipe = createAsyncThunk<
       try {
         await buildBatch(idea).commit();
       } catch (error) {
+        // Rules answer an update of a missing document with permission-denied, not not-found.
         const isIdeaGone =
           idea !== null &&
           error instanceof FirebaseError &&
-          error.code === 'not-found';
+          ['not-found', 'permission-denied'].includes(error.code);
         if (!isIdeaGone) throw error;
         await buildBatch(null).commit();
       }

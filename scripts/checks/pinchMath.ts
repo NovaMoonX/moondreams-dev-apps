@@ -8,6 +8,19 @@ import {
 } from '../../src/apps/pinch/utils/nutritionBasis.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
+  getComparableUrl,
+  getWebLinkHost,
+  toWebLink,
+} from '../../src/utils/urlUtils.ts';
+import {
+  findIdeaByUrl,
+  getIdeaDetail,
+  getIdeaSearchText,
+  getMissingIdeaFields,
+  toIdeaImageUrl,
+  toIdeaUrl,
+} from '../../src/apps/pinch/utils/ideas.ts';
+import {
   getItemsLines,
   getRecipeLines,
   getShoppingCost,
@@ -16,6 +29,7 @@ import {
   mergeLines,
 } from '../../src/apps/pinch/utils/shopping.ts';
 import type {
+  Idea,
   MealItem,
   Product,
   Recipe,
@@ -418,6 +432,185 @@ assert.equal(
   ).leftOut[0]?.kind,
   'NOT_COMPARABLE',
   'a unit that cannot be compared with the package is left out',
+);
+
+assert.equal(
+  toWebLink('  https://www.Example.com/a b/ \n'),
+  'https://www.example.com/ab/',
+  'a pasted link loses stray spaces and breaks, and its host is lower-cased',
+);
+assert.equal(
+  toWebLink('seriouseats.com/recipes/x'),
+  'https://seriouseats.com/recipes/x',
+  'a link with no scheme is read as https',
+);
+assert.equal(
+  toWebLink('http://example.com'),
+  'http://example.com/',
+  'http stays http',
+);
+[
+  'javascript:alert(1)',
+  'ftp://files.example.com/x',
+  'mailto:a@example.com',
+  'data:text/html,hi',
+  'https://user:secret@example.com/x',
+  'not a link',
+  'localhost:3000',
+  '',
+  '   ',
+].forEach((text) =>
+  assert.equal(
+    toWebLink(text),
+    null,
+    `${JSON.stringify(text)} is not a web link`,
+  ),
+);
+assert.equal(
+  getWebLinkHost('https://www.seriouseats.com/x'),
+  'seriouseats.com',
+  'the host drops www',
+);
+
+const comparable = (text: string) => getComparableUrl(text);
+const samePage = [
+  'https://www.example.com/recipes/lemon-bars',
+  'http://example.com/recipes/lemon-bars/',
+  'EXAMPLE.com/recipes/lemon-bars?utm_source=news&utm_medium=email#comments',
+  'https://example.com/recipes/lemon-bars?fbclid=abc&gclid=def',
+  ' https://example.com/recipes/lemon-bars/?igshid=1 ',
+];
+samePage.forEach((text) =>
+  assert.equal(
+    comparable(text),
+    'example.com/recipes/lemon-bars',
+    `${text} is the same page`,
+  ),
+);
+assert.notEqual(
+  comparable('https://example.com/recipes/lemon-bars'),
+  comparable('https://example.com/recipes/lemon-cake'),
+  'another path is another page',
+);
+assert.notEqual(
+  comparable('https://example.com/watch?v=1'),
+  comparable('https://example.com/watch?v=2'),
+  'a parameter that picks the page keeps it apart',
+);
+assert.equal(
+  comparable('https://example.com/p?b=2&a=1'),
+  comparable('https://example.com/p?a=1&b=2'),
+  'parameter order does not matter',
+);
+assert.equal(
+  comparable('https://example.com'),
+  'example.com',
+  'a bare site has no trailing slash',
+);
+assert.equal(comparable('hello'), null, 'text is not a page');
+
+const idea = (fields: Partial<Idea>): Idea => ({
+  id: 'idea',
+  kind: 'TEXT',
+  title: 'Lemon bars',
+  note: null,
+  url: null,
+  siteName: null,
+  imageUrl: null,
+  photoPath: null,
+  recipeId: null,
+  createdAt: 1,
+  updatedAt: 1,
+  ...fields,
+});
+const saved = [
+  idea({ id: 'a', kind: 'LINK', url: 'https://www.example.com/lemon-bars/' }),
+  idea({ id: 'b', kind: 'TEXT' }),
+];
+assert.equal(
+  findIdeaByUrl(saved, 'http://example.com/lemon-bars?utm_source=x')?.id,
+  'a',
+  'a link already saved is found by its page',
+);
+assert.equal(
+  findIdeaByUrl(saved, 'https://example.com/lemon-bars', 'a'),
+  null,
+  'the idea being edited is not its own duplicate',
+);
+assert.equal(
+  findIdeaByUrl(saved, 'https://example.com/other'),
+  null,
+  'a new page is not a duplicate',
+);
+assert.equal(findIdeaByUrl(saved, 'nonsense'), null, 'text matches nothing');
+
+assert.equal(
+  toIdeaUrl(`https://example.com/${'a'.repeat(2000)}`),
+  null,
+  'a link over 2,000 characters is not kept',
+);
+assert.equal(
+  toIdeaImageUrl('https://images.example.com/a.jpg'),
+  'https://images.example.com/a.jpg',
+  'an https picture is kept',
+);
+assert.equal(
+  toIdeaImageUrl('http://images.example.com/a.jpg'),
+  null,
+  'an http picture is not kept',
+);
+assert.equal(
+  toIdeaImageUrl('javascript:alert(1)'),
+  null,
+  'a script address is not kept',
+);
+assert.equal(toIdeaImageUrl(null), null, 'no picture is none');
+
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      siteName: 'Serious Eats',
+      url: 'https://www.example.com/x',
+      note: 'Chill overnight',
+    }),
+  ),
+  'Serious Eats',
+  'a link row says its site, not its note',
+);
+assert.equal(
+  getIdeaDetail(idea({ kind: 'LINK', url: 'https://www.example.com/x' })),
+  'example.com',
+  'a link with no site name says its host',
+);
+assert.equal(
+  getIdeaDetail(idea({ note: '\n  First line  \nSecond line' })),
+  'First line',
+  'a jotted idea says the first line of its note',
+);
+assert.equal(getIdeaDetail(idea({})), null, 'nothing to say gives no line');
+assert.equal(
+  getIdeaSearchText(
+    idea({ kind: 'LINK', siteName: 'NYT Cooking', note: 'overnight' }),
+  ),
+  'Lemon bars NYT Cooking overnight',
+  'search covers the title, site and note',
+);
+assert.deepEqual(
+  getMissingIdeaFields({ id: 'x', title: 't', note: null }),
+  {
+    url: null,
+    siteName: null,
+    imageUrl: null,
+    photoPath: null,
+    recipeId: null,
+  },
+  'an older idea gets the keys it lacks, as null',
+);
+assert.deepEqual(
+  getMissingIdeaFields(idea({})),
+  {},
+  'a whole idea lacks nothing',
 );
 
 console.log('pinchMath: all checks passed');

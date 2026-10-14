@@ -13,7 +13,7 @@
 | Never overlay on overlay | whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a drawer whose action opens a form or another container closes first. Only a destructive confirm may sit on top |
 | Numbers explain themselves | a cost with gaps carries a warning icon (`HelpTip variant='warning'`) that says what the total leaves out, as a small modal on a phone or any touch screen and a tooltip with a mouse; a stat that isn't self-evident carries a `HelpTip`; past days are labelled as frozen |
 | Rows show what you choose | an eye button on Kitchen and Recipes turns prices or calories and macros on or off on the rows (calories and macros start off) and picks the nutrition basis of ingredient rows; it is remembered on the device, and no total or drawer changes |
-| Nothing leaves without saying what | an AI reads what the person hands it (pasted text, a photo, screenshot or PDF, or a recipe page's text and recipe data) and says so, and nothing is saved until the person saves the form; a link goes to our server, which fetches the page, and nothing else leaves the app |
+| Nothing leaves without saying what | an AI reads what the person hands it (pasted text, a photo, screenshot or PDF, or a recipe page's text and recipe data) and says so, and nothing is saved until the person saves the form; a link goes to our server, which fetches the page, and nothing else leaves the app; an idea's link is fetched for its title, site and picture only, and says exactly that before it is pasted |
 | Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Drawer`, `Popover`, `Tabs`, `Badge` — custom only where the catalog has nothing: the day cell and the store logo tile |
 | Honest AI | an AI reads a pasted recipe, photo, PDF or web link and fills the real form; it names what it couldn't read; nothing is saved until the person confirms |
 
@@ -58,7 +58,7 @@ flowchart TD
     PMD -->|Change items or servings| PM
     PMD --> SAV["Save as a meal · swaps in place"]
     PMD --> RM["Remove confirm"]
-    R --> RL["Recipes list · pills: Recipes / Meals"]
+    R --> RL["Recipes list · pills: Recipes / Meals / Ideas"]
     RL -->|+ New| RS["Ways to start · a drawer on a phone, the subview's first page from sm · text, file, link or write it yourself"]
     D -->|Add a recipe| RS
     RS -->|text, file or link| RR["Reading screen · its own view, one way at a time"]
@@ -74,6 +74,13 @@ flowchart TD
     RD -->|Add to calendar| PM
     RD -->|Add to shopping list| AS["Add to shopping list sheet · servings, tick what you need"]
     AS -.->|toast View| SL
+    RL -->|Ideas pill| IL["Ideas list · still to try, then made into recipes"]
+    IL -->|+ New idea| IA["Add sheet · a drawer on a phone, a modal from sm · link, photo or jot it down, each in the sheet's own view with a Back link"]
+    IA -.->|a link already saved| ID2
+    IL -->|tap an idea| ID2["Idea drawer · picture, title, note, Open site, Made into recipe"]
+    ID2 -->|Modify| IE["Idea sheet · title, link or photo, note, delete"]
+    ID2 -->|Turn it into a recipe| RF
+    ID2 -->|Open the recipe, once made| RD
     RL -->|Meals pill| ML["Saved meals list"]
     ML -->|+ New or tap Modify| MF["Meal subview · same builder, no day"]
     ML -->|tap a meal| MD["Meal drawer"]
@@ -361,7 +368,7 @@ block-beta
   columns 2
   R1["Recipes"]:1
   R2["+ New"]:1
-  R3["[ Recipes ]   Meals   👁 (when no recipe has a source)"]:2
+  R3["[ Recipes ]   Meals   Ideas   👁 (when no recipe has a source)"]:2
   R7["📖 Sources · 3 ›  (once a source exists)"]:2
   R4["🔍 Search · filter · 👁 (from 8 recipes, or once a recipe has a source)"]:2
   R5["🖼️ Adobo chicken<br/>4 servings · 45 min<br/>$3.20 / serving<br/>🔥 520 · 💪 38g (when on)"]:2
@@ -374,7 +381,7 @@ block-beta
   style R5 fill:transparent,stroke:#888888,stroke-width:1px;
   style R6 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Two thin pills switch between Recipes and Meals (saved meals). Until a recipe has a source, the View options eye button sits at the end of that row (it appears once the shown list has something in it, so an empty Recipes or Meals list has no eye) and the search field shows from 8 recipes. Once a recipe has a source, Recipes gains a search field with a filter button and the same eye beside it, and, once any source exists, a "Sources" entry row (Kitchen's entry-row look, with the count) under the pills; Meals keep the plain layout and show neither. A recipe row shows its cover (or a tinted emoji tile), its title, a muted line of servings and time, then a cost per serving line and calories and macros per serving as emoji figures, the last two only while shown (View options) and, for macros, switched on. A recipe with an unpriced ingredient shows the cost it can stand behind and says "leaves out 1" in the same line; one with no price at all says "No price yet". A meal row shows its item count, total (the same "leaves out" or "No price yet" wording), macros when shown, and its items as a comma line. In every row the cover or tile and the text share a top edge, and the chevron sits on the first line.*
+*Three thin pills switch between Recipes, Meals (saved meals) and Ideas (below); the header's title and button follow the pill (Recipes with "+ New" or, on Ideas, "Ideas" with "+ New idea"), and the eye button belongs to Recipes and Meals only. Until a recipe has a source, the View options eye button sits at the end of that row (it appears once the shown list has something in it, so an empty Recipes or Meals list has no eye) and the search field shows from 8 recipes. Once a recipe has a source, Recipes gains a search field with a filter button and the same eye beside it, and, once any source exists, a "Sources" entry row (Kitchen's entry-row look, with the count) under the pills; Meals keep the plain layout and show neither. A recipe row shows its cover (or a tinted emoji tile), its title, a muted line of servings and time, then a cost per serving line and calories and macros per serving as emoji figures, the last two only while shown (View options) and, for macros, switched on. A recipe with an unpriced ingredient shows the cost it can stand behind and says "leaves out 1" in the same line; one with no price at all says "No price yet". A meal row shows its item count, total (the same "leaves out" or "No price yet" wording), macros when shown, and its items as a comma line. In every row the cover or tile and the text share a top edge, and the chevron sits on the first line.*
 
 **View options** (the eye button: a drawer on a phone, a popover from `sm`; Kitchen's ingredient list has the same one)
 
@@ -421,6 +428,110 @@ block-beta
   style F7 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
 *A source is just a name for where a recipe came from. The Sources subview (a `Subview`, like Stores) lists them A to Z with how many of the listed recipes each has (a source with none shows no count), a "+ New source" action beside the title and a search from 8 sources. A row opens the Source sheet (a drawer on a phone, a modal from `sm`, titled "Source"): one Name field and, for an existing source, the trash at the bottom left, Cancel, and Save (Add for a new one). A name another source already has, ignoring case, disables Save and says so in the pinned footer ("You already have a source called “Serious Eats”."). Deleting asks first, over the sheet (a destructive confirm): "Serious Eats" is on 2 recipes. They stay, and only lose this label. When no recipe has it the confirm is the plain "Delete … This action cannot be undone." The Recipes tab's filter appears once at least one recipe has a source: a filter button beside the search field opens a drawer on a phone and a popover from `sm` with one question, Source, as pills: "Any", each source that at least one recipe has with its count ("Serious Eats · 3"), and "No source · n" only when some recipe has none (a search is added past 12 pills). A picked source shows as a chip under the search field ("From Serious Eats", with its ✕ and Clear); with nothing to show the list says "No recipes from Serious Eats yet." or "Nothing from Serious Eats matches “nachos” yet." with a "Clear filter" button. The filter and its chip leave when no recipe has a source any more, and Meals are never filtered.*
+
+**Ideas** (the third pill on the Recipes tab)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  I1["Ideas"]:1
+  I2["+ New idea"]:1
+  I3["Recipes   Meals   [ Ideas ]"]:2
+  I4["🔍 Search ideas (from 8 ideas)"]:2
+  I5["── Still to try ──"]:2
+  I6["🖼️ Lemon bars with a shortbread crust<br/>Smitten Kitchen"]:2
+  I7["📝 Something like Mom's lemon bars"]:2
+  I8["🔗 Brown butter chocolate chip cookies<br/>NYT Cooking"]:2
+  I9["── Made into recipes ──"]:2
+  I10["🔗 Sticky chicken adobo<br/>Serious Eats"]:2
+  style I1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I9 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I10 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*An idea is something you'd like to make someday: a link, a photo, or a few words. The list is newest first. Once any idea has become a recipe, a hairline divider labelled "Still to try" separates the two groups, and "Made into recipes" (ideas whose recipe is still on your lists; a deleted or archived recipe puts the idea back among the ones still to try) comes after. A row is a 56px picture (a link's own picture, a photo, or a soft tile with 🔗, 📷 or 📝), a title of up to three lines, and one muted line: the site of a link, otherwise the first line of the note; the picture and the title share a top edge and the chevron sits on the first line, and a row is as tall as its lines, never shorter than its picture. From `lg` the rows run in two columns. An empty list is one warm line: "Saw something you'd like to cook someday? Keep it here." A search (title, site, note) shows from 8 ideas, with "Nothing matches “…” yet." when nothing does. At 200 ideas "+ New idea" gives way to "Your list holds up to 200 ideas. Delete one to add another." If the ideas can't be read, the list says "We couldn't load your ideas just now" and offers no "+ New idea"; Recipes, Meals and Kitchen carry on.*
+
+**New idea** (a drawer on a phone, a modal from `sm`: one sheet whose view changes in place)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  N1["New idea"]:2
+  N2["🔗 From a link — Paste a recipe page you like ›"]:2
+  N3["📷 From a photo — A picture or screenshot of a dish or recipe ›"]:2
+  N4["📝 Jot it down — Just a few words ›  (dashed, last)"]:2
+  N5["‹ Back · Idea"]:2
+  N6["We fetch the page to find its title and picture. Nothing is saved from it except those.<br/>Link [ paste a link ]<br/>[pic] Looks like [ Best Lemon Bars Recipe ] · Example Kitchen<br/>+ Add a note"]:2
+  N7["Cancel · Save idea"]:2
+  style N1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style N2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style N3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style N4 fill:transparent,stroke:#888888,stroke-width:1px,stroke-dasharray:4 3;
+  style N5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style N6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style N7 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*The list of ways only picks (the shared `MethodPicker`, rows only, the manual way last and quieter); a way's own view takes its place in the same sheet with a "‹ Back" link to the list, so there is never a second overlay. Each way is titled "Idea", asks its one question, ends in Cancel and "Save idea" (disabled until valid), and has no required-field asterisks. **From a link**: one field (a web link; stray spaces are dropped, `https://` is added when missing, and anything that isn't an http or https address says "That doesn't look like a web link. Paste the address from your browser."). After a short pause the page is looked up ("Looking up the page…" while it runs, six seconds at most) and a preview appears: the page's picture, a "Looks like" title the person can change, and the site name. If the page can't be read or is slow, the title field is empty with the site's address as its placeholder and "Couldn't read that page. You can type your own title." Saving never waits: tapping "Save idea" at once keeps the site's address as the title. A link already on the list (however it was spelled: with or without `www.`, a trailing slash or tracking parameters) shows a tinted "That one's already in your ideas" with an "Open it" button, which opens that idea instead, and Save is off. **From a photo**: a 96px picture tile with "Choose a picture" (then "Choose another" and "Remove"; images only, up to 5 MB, resized before it is kept), a "Title" field that starts empty with "What is it?", and the footer says "Give it a title to save." once a picture is picked. A failed upload keeps the form and says "We couldn't save that picture. Check your connection and try again." **Jot it down**: a title ("Something like Mom's lemon bars") and a note box shown from the start. On the link and photo ways the note is a quiet "+ Add a note" link that opens the box (focused) with a "Remove note" link under it. On a phone the link or title box is focused as the view opens. After a save the sheet closes and the new idea is the top row.*
+
+**Idea details** (drawer on a phone, modal from `sm`) and **Idea** (form sheet)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  D1["Idea"]:2
+  D2["🖼️ picture (link's own or the photo; none shows nothing)"]:2
+  D3["Lemon bars with a shortbread crust"]:2
+  D4["Note, as typed, line breaks kept"]:2
+  D5["Made into Sticky chicken adobo ›  (tinted, once made)"]:2
+  D6["↗ Open smittenkitchen.com — Opens in a new tab"]:2
+  D7["Modify"]:1
+  D8["Turn it into a recipe  /  Open the recipe"]:1
+  F1["Idea (sheet) · Title · Link (links) · Replace photo (photos) · Note"]:2
+  F2["🗑️  Cancel  Save"]:2
+  style D1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style D2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style D3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style D4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style D5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style D6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style D7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style D8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style F1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style F2 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*The drawer shows the idea whole: the picture (a link's own picture, or the photo; an idea with neither, or one whose picture can't load, shows nothing in its place), the title, the note with its line breaks, for a link idea a quiet "Open <site>" row that opens the page in a new tab straight from the tap (with "Opens in a new tab" beneath), and, for an idea that became a recipe, a tinted "Made into <recipe>" row that opens the recipe's own drawer. The footer is Modify (secondary, left) beside the one primary, which takes the leftover width: "Turn it into a recipe", or "Open the recipe" once made. Modify closes the drawer and opens the Idea sheet (a drawer on a phone, a modal from `sm`): Title, the Link for a link idea (a changed link to another page drops the old picture and takes the new site's name; the same page spelled differently keeps both; another idea's page is refused with "That one's already in your ideas."), the picture with "Replace photo" for a photo idea (there is no way to remove it), and the Note. The footer is the trash at the bottom left, Cancel and Save. Deleting asks "Delete this idea?" over the sheet and names it; for an idea that became a recipe it adds "The recipe you made from it, Adobo chicken, stays."*
+
+**From an idea to a recipe** (the Recipe subview's form, opened by "Turn it into a recipe")
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  P1["‹ Crispy smashed potatoes"]:2
+  P2["From your idea: Crispy smashed potatoes"]:2
+  P3["Title · Servings · Prep and cook · Photo"]:2
+  P4["Description  (the idea's note, if it has one)"]:2
+  P5["WHERE IT'S FROM<br/>Serious Eats (the site's source, or New source)"]:2
+  P6["INGREDIENTS 0 · + Add ingredient"]:2
+  P7["Cancel · Add"]:2
+  style P1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P7 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*The primary closes the drawer and opens the recipe form itself (not the list of ways) with what the idea knows: its title, its note as the description and, for a link, the site as "Where it's from" (the source already named for that site, or "New source" with the site's name, which is created with the recipe). A muted "From your idea: …" line says why the form isn't blank, and nothing else is filled in: a photo stays with the idea. Nothing is saved until the person adds ingredients and saves, and leaving the form changes nothing (an untouched form closes without asking; one with typing asks Keep editing / Discard, like any new recipe). Saving creates the recipe and marks the idea made in the same write, a toast says "Recipe added" and the idea moves to "Made into recipes". If the idea was deleted in the meantime the recipe still saves.*
 
 **New recipe — how to start** (a drawer on a phone, the recipe subview's first page from `sm`; editing a recipe skips it)
 
@@ -925,6 +1036,9 @@ block-beta
 | StoreLogo | pickers, rows, subview | the logo tile with a letter fallback; app-aware, so it stays in the app |
 | StoreForm | Stores subview | search of well-known stores, or name plus `PhotoPicker` image |
 | CoverImage | recipe rows and drawer | `FallbackImage` with a tinted emoji tile as its `fallback` |
+| IdeasView, IdeaRow, IdeaThumbnail | Recipes tab's Ideas pill | the two groups ("Still to try", "Made into recipes") with `SectionDivider`, a `SearchInput` from 8 ideas, rows in chunks of twenty that mount near the viewport; a row is a 56px thumbnail (the link's own picture or the photo through `FallbackImage`, else a soft tile with 🔗, 📷 or 📝), a title of up to three lines, one muted line and a first-line chevron |
+| IdeaAddSheet, IdeaWays, IdeaNoteField | New idea | one `FormSheet` for the `MethodPicker` of three ways and each way's own view (link, photo, text) with a "Back" link; "+ Add a note" reveals the note box |
+| IdeaDrawer, IdeaFormSheet | tapping an idea; its Modify | the details drawer (picture, title, note, Open site, Made into recipe row, Modify beside the one primary) and the Idea sheet (title, link or photo, note, trash, Cancel, Save) |
 | `SectionHeader`, `Subview`, `FormSheet`, `DetailSheet`, `ModalFooterActions`, `DeleteIconButton`, `PickOrCreate`, `SearchInput`, `SectionDivider`, `MoneyInput`, `AppToggle`, `StatTile`, `MethodPicker`, `FormSection`, `Field` | everywhere | the shared pieces in `src/components` and `src/ui`; Pinch builds only what is app-specific. `Field` has an `isCompact` form for a grid of short fields (small captions, a 40px input whose typed text stays 16px) and wraps its control in a native label, so no `Select` goes inside one |
 | Empty state | every list and the empty Calendar | an icon, one muted line, and the call to action in the header |
 
@@ -965,6 +1079,22 @@ flowchart LR
     D --> F["Recipes: Sources entry and a filter appear"]
     F --> G["Filter by Serious Eats · 3"] --> H["Chip: From Serious Eats ✕"]
     F --> I["Sources subview: rename or delete"] --> J["Delete: the recipes stay and lose the label"]
+```
+
+**Keep an idea, then make it**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
+flowchart LR
+    A["Recipes · Ideas pill"] --> B["+ New idea"] --> C{"How?"}
+    C -->|From a link| D["Paste · 'Looking up the page…' · Looks like: title · site"] --> G["Save idea"]
+    C -->|From a photo| E["Choose a picture · title"] --> G
+    C -->|Jot it down| F["A few words"] --> G
+    G --> H["Top of Still to try"] --> I["Tap it: idea drawer"] --> J["Turn it into a recipe"] --> K["Recipe form, prefilled · add ingredients"] --> L["Add"]
+    L --> M["Idea moves to Made into recipes"] --> N["Open the recipe"]
+    I -->|Open the site| O["Page opens in a new tab"]
+    D -.->|page can't be read| P["Host as the title · type your own"] -.-> G
+    D -.->|already saved| Q["That one's already in your ideas · Open it"]
 ```
 
 **Plan a meal, tweak a day, keep it**
@@ -1045,6 +1175,7 @@ flowchart LR
 |---|---|---|---|---|---|
 | Recipe | how to start (text, file, link or by hand; each way its own screen), then title and ingredients (ingredient + amount + unit) | everything else is a visible section of the same form: servings, times, photo, description, where it's from, steps, own nutrition | the recipe drawer's Modify | none; `FormSection`s, no chips | none |
 | Source | name | — | the Sources subview row; "New source" in the recipe form's "Where it's from" | none | none |
+| Idea | how to start (a link, a photo or a few words; each way its own view in the sheet), then one thing: a link, a picture with a title, or a title | the note (a "+ Add a note" link on the link and photo ways, shown from the start when jotting down), and in the edit sheet the title, link, picture and note | the Idea drawer's Modify; "Turn it into a recipe" fills a new recipe form from it | none | none |
 | Ingredient | name, family (`PickOrCreate`: existing family, new family, or none) | serving size and nutrition (typed per an amount of g, oz or servings as the label prints it, stored per 100 g), unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value | none; chips for serving size and nutrition | family: "New family" is the dashed first pill |
 | Product | store (`PickOrCreate`), price, package size | label, link, default flag | the ingredient drawer's product rows; the fill-in sheet for a missing price or size | none | store: "New store" is the dashed first pill |
 | Store | pick from the well-known list, or name | image | the Stores subview row | none | "Can't find it? Add your own" reveals the name and image fields |
@@ -1059,7 +1190,9 @@ flowchart LR
 - **Comparable amounts** — a recipe's amount and a product's package size must share a dimension (mass, volume, count) or have a catalog-known conversion; anything else is excluded from the total and named in a nudge.
 - **Nudge dismissals** — "✕ hides it for those ingredients" needs a small per-gap dismissal record on the user's settings document.
 - **Unknown stock vs zero stock** — when stock tracking arrives, "not tracked" is its own state, separate from 0.
-- **Recipe from a link** — a server function fetches the page (signed-in only, public http/https only), so the person's device never contacts the site; its text and any recipe data go to the AI reader, which writes the draft for the form to review.
+- **Recipe from a link** — a server function fetches the page (signed-in only, public http/https only), so the person's device never contacts the site to read it; its text and any recipe data go to the AI reader, which writes the draft for the form to review.
+- **An idea's link** — the same function is asked for the page's title, site name and picture address only, and no AI reads anything; the idea keeps those three, and the person's browser requests the picture from the site when the idea is shown (through `FallbackImage`). A link's picture must be https, and the link itself http or https and nothing else.
+- **An idea points at its recipe, once** — `Idea.recipeId` is written in the same batch that creates the recipe; a deleted or archived recipe leaves the idea reading as not made yet, nothing is cascaded either way, and a photo is not copied to the recipe.
 - **Store logos** — the well-known list is a constant of names and domains, logos load in the browser from a logo service, and a letter tile covers every failure; the service and its terms are to be settled.
 - **Week** — Sunday to Saturday, to match the month grid; the week view shows those seven days and its stats describe them.
 - **Money** — integer cents everywhere; nutrition stored per 100 g (typed on a label's basis and converted on save, shown per serving only as a display) with servings computed from the recipe's own amounts.
