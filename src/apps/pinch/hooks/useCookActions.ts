@@ -16,6 +16,8 @@ interface MarkPlannedInput {
   recipe: Pick<Recipe, 'id' | 'title'>;
   servings: number;
   cookedAt: number;
+  /** A planned meal's row holds its own Undo, so only a caller with none asks for the toast. */
+  isToasted?: boolean;
 }
 
 /** Marking a recipe cooked, with its toast; each call rejects with a sentence for the caller to show. */
@@ -66,8 +68,9 @@ export function useCookActions(uid: string) {
     recipe,
     servings,
     cookedAt,
+    isToasted = false,
   }: MarkPlannedInput) => {
-    const { isNew } = await dispatch(
+    const { id, isNew } = await dispatch(
       markPlannedCooked({
         uid,
         plannedMealId,
@@ -81,6 +84,13 @@ export function useCookActions(uid: string) {
         title: 'Already marked',
         description: `${recipe.title} is already marked as cooked for this meal.`,
         type: 'info',
+      });
+    } else if (isToasted) {
+      addToast({
+        title: `Marked ${recipe.title} as cooked`,
+        type: 'success',
+        duration: UNDO_TOAST_MS,
+        action: { label: 'Undo', onClick: () => void undoFromToast(id) },
       });
     }
   };

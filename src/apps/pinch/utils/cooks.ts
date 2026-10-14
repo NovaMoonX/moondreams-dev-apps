@@ -19,6 +19,12 @@ export interface MarkableRecipe {
 export const getCookId = (plannedMealId: string, recipeId: string) =>
   `${plannedMealId}__${recipeId}`;
 
+/** The cook that cooking started from a planned meal marks, null for any other start. */
+export const getPlannedCookId = (
+  plannedMealId: string | null,
+  recipeId: string,
+) => (plannedMealId === null ? null : getCookId(plannedMealId, recipeId));
+
 const byNewest = (a: Cook, b: Cook) =>
   b.cookedAt - a.cookedAt ||
   b.createdAt - a.createdAt ||

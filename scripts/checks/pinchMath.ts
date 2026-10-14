@@ -21,6 +21,7 @@ import {
   getCookSummaries,
   getMarkableRecipes,
   getMissingCookFields,
+  getPlannedCookId,
   getPlannedCookedAt,
   groupCooksByRecipe,
   isCookHistoryFull,
@@ -837,6 +838,26 @@ assert.notEqual(
   getCookId('recipe-9', 'planned-1'),
   'the id is not symmetric',
 );
+assert.equal(
+  getPlannedCookId(null, 'recipe-9'),
+  null,
+  'cooking started from a recipe has no planned cook: Finish writes a fresh one',
+);
+assert.equal(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getCookId('planned-1', 'recipe-9'),
+  "cooking started from a planned meal marks that meal's own cook, the one its row looks up",
+);
+assert.notEqual(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getPlannedCookId('planned-2', 'recipe-9'),
+  'the same recipe on two meals is two cooks',
+);
+assert.notEqual(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getPlannedCookId('planned-1', 'recipe-8'),
+  'two recipes of one meal are two cooks',
+);
 
 const cookList = [
   cookOf('a', 'adobo', 100),
@@ -976,6 +997,17 @@ assert.equal(
   )[0].servings,
   1000,
   'added-up servings stay within what a cook holds',
+);
+assert.deepEqual(
+  getMarkableRecipes(
+    [
+      { id: '1', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+      { id: '2', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+    ],
+    knownRecipes,
+  ).map(({ recipe }) => getCookId('plan-1', recipe.id)),
+  [getPlannedCookId('plan-1', 'adobo')],
+  "a recipe twice in one meal has one row and one cook, and cooking either copy finishes into that row's cook",
 );
 
 const firstCook = cookOf('plan-1__adobo', 'adobo', 1000, 5);
