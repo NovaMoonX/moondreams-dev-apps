@@ -729,7 +729,7 @@ block-beta
 | a recipe, meal or day cost | "2 ingredients need a price · Add prices" | price and package size for each |
 | a cost that can't be compared | "Rice vinegar can't be compared with its package size · Add a size" | the package size in a comparable unit, for the ingredient's default product |
 | a nutrition metric that is on | "3 ingredients have no protein · Add values" | the missing metric for each |
-| the stats row | a warning icon on Spent that names what it leaves out, and the nudge line under the tiles | the same sheet, covering the period shown |
+| the stats row | a warning icon on Spent that names what it leaves out (and says when the nudge line under the tiles asks about fewer because some are hidden or in days that have passed), and that nudge line | the same sheet, covering the period shown |
 
 **Settings** (form sheet from the Calendar gear)
 

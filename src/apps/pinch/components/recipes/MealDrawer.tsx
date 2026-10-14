@@ -7,6 +7,7 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   selectCostContext,
   selectIngredientsById,
@@ -106,8 +107,11 @@ function MealDrawer({
                   title="What's left out"
                   placement='top'
                 >
-                  This {formatLeftOut(cost.leftOut)} because there’s no price
-                  for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                  <p>
+                    This {formatLeftOut(cost.leftOut)} because there’s no price
+                    for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                  </p>
+                  <NudgeCountNote leftOut={cost.leftOut} open={cost.leftOut} />
                 </HelpTip>
               ) : undefined
             }

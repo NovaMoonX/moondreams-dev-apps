@@ -9,6 +9,7 @@ import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
@@ -139,6 +140,10 @@ function DayDrawer({
                           {leftOutCount === 1 ? 'ingredient' : 'ingredients'}{' '}
                           with no price yet.
                         </p>
+                        <NudgeCountNote
+                          leftOut={stats.leftOut}
+                          open={stats.openLeftOut}
+                        />
                         <p className='text-muted-foreground'>
                           {isFrozen
                             ? 'This day has passed, so a price you add now counts from today on.'

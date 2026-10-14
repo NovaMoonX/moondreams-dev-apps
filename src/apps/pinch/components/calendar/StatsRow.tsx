@@ -8,6 +8,7 @@ import StatTile from '@/components/StatTile';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import type { CalendarView } from '@apps/pinch/constants';
 import {
   selectDismissedNudges,
@@ -116,6 +117,10 @@ function StatsRow({
                 placement='bottom'
               >
                 <p>Leaves out {reasons.join(' and ')}.</p>
+                <NudgeCountNote
+                  leftOut={stats.leftOut}
+                  open={stats.openLeftOut}
+                />
                 <p className='text-muted-foreground'>
                   A price you add now counts from today on: days that have
                   passed keep the prices they had.

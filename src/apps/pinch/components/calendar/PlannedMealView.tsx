@@ -11,6 +11,7 @@ import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   MAX_NAME_LENGTH,
   MEAL_TYPE_EMOJIS,
@@ -243,6 +244,10 @@ function PlannedMealView({
                   {leftOutCount === 1 ? 'ingredient' : 'ingredients'} with no
                   price yet.
                 </p>
+                <NudgeCountNote
+                  leftOut={cost.leftOut}
+                  open={meal.snapshot ? [] : cost.leftOut}
+                />
                 <p className='text-muted-foreground'>
                   {meal.snapshot
                     ? 'This day has passed, so a price you add now counts from today on.'
