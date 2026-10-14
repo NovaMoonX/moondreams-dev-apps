@@ -16,6 +16,7 @@ import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet
 import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
+import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
 import MealDrawer from '@apps/pinch/components/recipes/MealDrawer';
 import MealRow from '@apps/pinch/components/recipes/MealRow';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
@@ -85,6 +86,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [pickedSource, setPickedSource] = useState(SOURCE_FILTER_ANY);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
@@ -444,6 +446,18 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenId(null);
             setShopping(request);
           }}
+          onOpenHistory={(id) => {
+            setOpenId(null);
+            setHistoryId(id);
+          }}
+        />
+      )}
+      {historyId && (
+        <CookingHistorySheet
+          key={historyId}
+          uid={uid}
+          recipeId={historyId}
+          onClose={() => setHistoryId(null)}
         />
       )}
       {openMealId && (

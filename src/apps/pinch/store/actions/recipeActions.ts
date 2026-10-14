@@ -7,6 +7,7 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import { isInUse } from '@apps/pinch/utils/references';
@@ -222,7 +223,7 @@ interface RemoveRecipeInput {
   id: string;
 }
 
-/** Deletes the recipe and its cover, or archives it (cover kept) when a planned day or saved meal still uses it. */
+/** Deletes the recipe, its cover and its cooks, or archives it (cover and cooks kept) when a planned day or saved meal still uses it. */
 export const removeRecipe = createAsyncThunk<
   string,
   RemoveRecipeInput,
@@ -250,6 +251,13 @@ export const removeRecipe = createAsyncThunk<
         getErrorMessage(error, 'Unable to delete this recipe.'),
       );
     }
+
+    await deleteCooks(
+      uid,
+      getState().pinch.cooks.items.filter((cook) => cook.recipeId === id),
+    ).catch((error) =>
+      console.error("Pinch could not clear a deleted recipe's cooks", error),
+    );
 
     if (existing?.coverPath) {
       await deleteFile(existing.coverPath).catch(() => undefined);

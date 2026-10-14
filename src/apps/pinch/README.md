@@ -26,6 +26,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 14. **Make a shopping list.** From a recipe, a saved meal, a planned meal or a whole day, pick what you need and it goes on one list, the Shopping tab, grouped by ingredient family. Tick things off at the store.
 15. **Keep recipe ideas.** A link to a page you like, a photo, or a few words about something you'd like to make someday. When you're ready, an idea turns into a recipe with its title, note and site already filled in.
 16. **Cook it step by step.** Start cooking from a recipe, or from a meal you planned: one step at a time in big type, the ingredients for the servings you're making, a timer for any time a step mentions, and the screen kept on where your browser allows it.
+17. **Keep a record of what you cooked.** One tap on a recipe, or on a meal you planned, notes that you made it, when, and for how many. It's a quiet history you can correct later, and a recipe shows how many times you've cooked it.
 
 ### Finding Your Way, In Detail
 
@@ -113,6 +114,16 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Limits.** 120 characters for a title, 1,000 for a note, and about 200 ideas before the list asks you to delete one; the 200 is a limit in the app, not in the database.
 - **Private.** Ideas are yours alone. A link idea's picture is loaded from the website it came from when you look at it.
 
+### Marking a Recipe Cooked, In Detail
+
+- **A quiet record, not a to-do.** "I cooked this" is a row in a recipe's drawer ("Keeps a record. You can change the date later."). One tap adds an entry at the recipe's own servings, for now, and a note says "Marked Adobo chicken as cooked" with **Undo**, which takes back exactly that entry. Tap again and you've cooked it twice.
+- **From the calendar.** A meal planned for today or a day that has passed has a "Mark as cooked" row for each recipe in it (not for a plain ingredient, and not for a day still ahead). Today counts as now; a day that has passed counts as noon that day, since that's when you remember. The row then reads "Cooked ✓ · Undo". Marking the same meal twice never makes two entries: the second says "Already marked".
+- **You see it where you look.** A recipe that has been cooked says "🍳 Cooked 3 times · last Oct 12" (or "Cooked once · Oct 12") under its details, and its row in the Recipes list says "Cooked 3×".
+- **Cooking history.** A "Cooking history" row in the drawer lists each time, newest first ("Oct 12 · 6 servings", with "From your plan for Sun, Oct 11" when it came from the calendar). Tap one to change its day, time or servings, or to delete it, and "+ Add an earlier cook" adds one you forgot (last Sunday's dinner). It shows the first 8 and "Show N more" past that, and a day in the future is refused.
+- **Removing a recipe.** Taking a recipe off your lists because a planned day or saved meal still uses it keeps its history. Deleting a recipe outright deletes its history with it.
+- **Limits.** Up to 1,000 servings per entry, and about 500 entries for one recipe before it asks you to delete an older one; the 500 is a limit in the app, not in the database.
+- **Private, and it counts nothing else.** The history is yours alone. It doesn't change a price, a total or your shopping list, and nothing else reads it.
+
 ### Cooking Mode, In Detail
 
 - **Start from a recipe or a planned meal.** "Start cooking" is a row in a recipe's drawer (when it has steps) and in a planned meal's drawer (not on a day that has passed). A meal with several recipes asks which one first, and opens it at the servings you planned.
@@ -166,6 +177,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Shopping tab: add a recipe's (at the servings you pick), a saved meal's, a planned meal's or a day's ingredients, or a single ingredient; lines merge by ingredient and unit, group by family, tick off to "Got it", and show an approximate cost with what it leaves out
 - [x] Recipe ideas on the Recipes screen: save a link (with its title, site and picture), a photo or a few words, open it, change it, and turn it into a recipe that arrives with the idea's title, note and site; ideas that became recipes move to "Made into recipes"
 - [x] Cooking mode from a recipe or a planned meal: one step at a time in big type, the ingredients scaled to the servings you're making, timers for the times a step mentions, and the screen kept awake where the browser allows it
+- [x] Mark a recipe cooked from its drawer or from a meal on a planned day, see "Cooked 3 times" on the recipe and "Cooked 3×" in the list, and keep a cooking history you can correct, add to and delete from
 - [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals, a shopping list of a few hundred things and a couple of hundred ideas
 
 ### Next Steps
@@ -202,7 +214,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 - **Frontend:** React 19, TypeScript, Vite, TailwindCSS 4, DreamerUI (including its `Calendar` for the month view)
 - **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
-- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, recipe ideas, meals, calendar entries, the shopping list and per-user settings (adding to the list merges into existing lines in one transaction, so two devices adding at once never lose an amount); Firebase Storage for recipe, store and idea images
+- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, recipe ideas, cooking history, meals, calendar entries, the shopping list and per-user settings (adding to the list merges into existing lines in one transaction, so two devices adding at once never lose an amount); Firebase Storage for recipe, store and idea images
 - **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review; for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them; the same function gives a recipe idea its link's title, site name and picture address (no AI involved)
 - **On the device:** a list's view options are kept in the browser's local storage, per person; nothing else of yours is kept there beyond Firestore's own cache. Cooking mode keeps nothing at all: it asks the browser to keep the screen awake and plays a short beep when a timer ends, and nothing about either is stored or sent
 - **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (licence not yet confirmed from here: to be checked before launch), stored per 100 g alongside common unit conversions; money is stored as whole cents

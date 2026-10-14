@@ -10,6 +10,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
+import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import StartCookingRow from '@apps/pinch/components/shared/StartCookingRow';
@@ -21,6 +22,7 @@ import {
 import { savePlannedAsMeal } from '@apps/pinch/store/actions/mealActions';
 import { removePlannedMeal } from '@apps/pinch/store/actions/plannedMealActions';
 import {
+  selectCooksLoadError,
   selectCostContext,
   selectIngredientsById,
   selectPlannedMeals,
@@ -33,6 +35,7 @@ import {
   getLocalTodayDate,
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
+import { getMarkableRecipes } from '@apps/pinch/utils/cooks';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -76,6 +79,7 @@ function PlannedMealView({
   const show = useAppSelector(selectShowNutrition);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const cooksLoadError = useAppSelector(selectCooksLoadError);
   const [error, setError] = useState<string | null>(null);
   const [isNaming, setIsNaming] = useState(false);
   const [mealName, setMealName] = useState('');
@@ -91,6 +95,13 @@ function PlannedMealView({
       item.kind === 'RECIPE' ? recipesById.get(item.refId) : undefined;
     return recipe && recipe.steps.length > 0 ? [{ item, recipe }] : [];
   });
+
+  const today = getLocalTodayDate();
+  const canPlanAhead = meal.date >= today;
+  const markable =
+    meal.date <= today && cooksLoadError === null
+      ? getMarkableRecipes(meal.items, recipesById)
+      : [];
 
   const cost = getPlannedMealCost(meal, costContext);
   const nutrition = getPlannedMealNutrition(
@@ -359,9 +370,9 @@ function PlannedMealView({
           had. Remove one and add it again to use today's.
         </p>
       )}
-      {meal.date >= getLocalTodayDate() && (
+      {(canPlanAhead || markable.length > 0) && (
         <div className='space-y-2'>
-          {cookable.length > 0 && (
+          {canPlanAhead && cookable.length > 0 && (
             <StartCookingRow
               onClick={() =>
                 cookable.length === 1
@@ -373,16 +384,27 @@ function PlannedMealView({
               }
             />
           )}
-          <AddToShoppingRow
-            subtitle='Choose what you need for this meal'
-            onClick={() =>
-              onAddToShopping({
-                kind: 'items',
-                items: meal.items,
-                label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
-              })
-            }
-          />
+          {markable.map((entry) => (
+            <PlannedCookRow
+              key={entry.recipe.id}
+              uid={uid}
+              plannedMealId={meal.id}
+              plannedDate={meal.date}
+              markable={entry}
+            />
+          ))}
+          {canPlanAhead && (
+            <AddToShoppingRow
+              subtitle='Choose what you need for this meal'
+              onClick={() =>
+                onAddToShopping({
+                  kind: 'items',
+                  items: meal.items,
+                  label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
+                })
+              }
+            />
+          )}
         </div>
       )}
       <Button

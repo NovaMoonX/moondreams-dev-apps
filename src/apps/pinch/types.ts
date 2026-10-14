@@ -291,6 +291,23 @@ export interface Idea {
   updatedAt: number;
 }
 
+/** A record that a recipe was made: when, and at how many servings. The person's own history, which they can correct. */
+export interface Cook {
+  /** Immutable. `{plannedMealId}__{recipeId}` for a cook marked from a planned meal, so marking it twice is one cook; a UUID otherwise. */
+  id: string;
+  /** Immutable. A recipe that has since been deleted reads as no recipe: its cooks are ignored. */
+  recipeId: string;
+  /** Immutable. The planned meal it was marked from; null when marked from the recipe, from cooking mode, or added by hand. */
+  plannedMealId: string | null;
+  /** Above zero, at most 1,000; halves allowed. */
+  servings: number;
+  /** An instant: when it was made, shown in local time. */
+  cookedAt: number;
+  /** Immutable. */
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type ShoppingRequest =
   | { kind: 'recipe'; recipeId: string }
   | { kind: 'items'; items: MealItem[]; label: string };

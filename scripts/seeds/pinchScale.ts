@@ -158,6 +158,9 @@ const IDEA_SITES = [
 const SHOPPING_UNITS = ['G', 'EACH', 'LB', 'CUP', 'OZ'] as const;
 const SHOPPING_ITEM_COUNT = 80;
 const IDEA_COUNT = 80;
+// Cooks per recipe, repeating by recipe index: about 330 in all, one recipe (index 1) with twelve for the history sheet's "Show more".
+const COOKS_PER_RECIPE = [0, 1, 2, 3, 1, 1, 5, 0, 1, 2];
+const COOK_DAYS_BACK = 60;
 const SHOPPING_FAMILY_COUNT = 25;
 // The last label is long on purpose, to see a name wrap on a phone.
 const SOURCE_LABELS = [
@@ -202,7 +205,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list and 80 recipe ideas. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list, 80 recipe ideas and about 330 cooks. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -426,6 +429,39 @@ export async function seedPinchScale(
       ...entry,
       createdAt: createdAt + index,
       updatedAt: createdAt + index,
+    }),
+  );
+
+  // Its own generator, so adding cooks leaves every earlier part of the fixture as it was.
+  const cookRandom = makeRandom(20260202);
+  const cooks = recipes.flatMap((recipe, recipeIndex) =>
+    Array.from(
+      {
+        length:
+          recipeIndex === 1
+            ? 12
+            : COOKS_PER_RECIPE[recipeIndex % COOKS_PER_RECIPE.length],
+      },
+      (_, cookIndex) => {
+        const cookedAt =
+          today -
+          Math.floor(cookRandom() * COOK_DAYS_BACK) * DAY_MS +
+          (11 + Math.floor(cookRandom() * 10)) * 3_600_000;
+        return {
+          id: `scale-cook-${recipeIndex}-${cookIndex}`,
+          recipeId: recipe.id,
+          plannedMealId: null,
+          servings: 1 + Math.floor(cookRandom() * 8) / 2,
+          cookedAt,
+        };
+      },
+    ),
+  );
+  cooks.forEach((cook) =>
+    add(`cooks/${cook.id}`, {
+      ...cook,
+      createdAt: cook.cookedAt,
+      updatedAt: cook.cookedAt,
     }),
   );
 

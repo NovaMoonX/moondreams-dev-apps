@@ -9,6 +9,7 @@ import type {
   Product,
   ResolvedFamily,
 } from '@apps/pinch/types';
+import { getCookSummaries, groupCooksByRecipe } from '@apps/pinch/utils/cooks';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getPeriodStats } from '@apps/pinch/utils/stats';
@@ -34,7 +35,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded &&
   state.pinch.sources.isLoaded;
 
-/** Sources, the shopping list and ideas are optional extras: their failures are left out so each only takes its own UI away. */
+/** Sources, the shopping list, ideas and cooking history are optional extras: their failures are left out so each only takes its own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
@@ -237,6 +238,26 @@ export const selectIdeaGroups = createSelector(
     };
   },
 );
+
+const selectCookItems = (state: RootState) => state.pinch.cooks.items;
+
+export const selectCooksByRecipe = createSelector(
+  [selectCookItems],
+  groupCooksByRecipe,
+);
+
+export const selectCookSummaries = createSelector(
+  [selectCookItems],
+  getCookSummaries,
+);
+
+export const selectCooksById = createSelector(
+  [selectCookItems],
+  (cooks) => new Map(cooks.map((cook) => [cook.id, cook])),
+);
+
+export const selectCooksLoadError = (state: RootState) =>
+  state.pinch.cooks.loadError;
 
 export const selectShoppingItems = (state: RootState) =>
   state.pinch.shopping.items;
