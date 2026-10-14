@@ -15,6 +15,7 @@ import {
   selectCooksById,
   selectNoteSummaries,
   selectNotesByRecipe,
+  selectNotesLoadError,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
 import { getNoteSummary, getWrittenBefore } from '@apps/pinch/utils/notes';
@@ -33,7 +34,7 @@ function CookNotes({ recipeId }: CookNotesProps) {
   const cooksById = useAppSelector(selectCooksById);
   const isReady = useAppSelector(
     (state) =>
-      state.pinch.notes.isLoaded && state.pinch.notes.loadError === null,
+      state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
   );
   const [isOpen, setIsOpen] = useState(false);
   const [limit, setLimit] = useState(RECIPE_NOTES_FIRST_PAGE);

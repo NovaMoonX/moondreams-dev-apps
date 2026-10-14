@@ -5,7 +5,10 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { addNote } from '@apps/pinch/store/actions/noteActions';
-import { selectNoteSummaries } from '@apps/pinch/store/selectors';
+import {
+  selectNoteSummaries,
+  selectNotesLoadError,
+} from '@apps/pinch/store/selectors';
 import { isNoteHistoryFull, isValidNoteText } from '@apps/pinch/utils/notes';
 
 interface UseCookNoteInput {
@@ -28,7 +31,7 @@ export function useCookNote({
   const { addToast } = useToast();
   const isNotesReady = useAppSelector(
     (state) =>
-      state.pinch.notes.isLoaded && state.pinch.notes.loadError === null,
+      state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
   );
   const isFull = useAppSelector((state) =>
     isNoteHistoryFull(selectNoteSummaries(state).get(recipeId)?.count ?? 0),

@@ -22,7 +22,12 @@ import {
   getDateOfDayKey,
   getLocalTodayDate,
 } from '@apps/pinch/utils/dayKeys';
-import { wouldRepriceChange } from '@apps/pinch/utils/mealMath';
+import { getRepriceLines } from '@apps/pinch/utils/mealFormat';
+import {
+  getRepricedAt,
+  getRepricePreview,
+  wouldRepriceChange,
+} from '@apps/pinch/utils/mealMath';
 
 const NO_MEALS: PlannedMeal[] = [];
 
@@ -62,9 +67,35 @@ function RepriceDayRow({ uid, dayKey, isGrouped }: RepriceDayRowProps) {
     setIsBusy(true);
     try {
       const dayName = formatDayShort(dayKey);
+      const lines = getRepriceLines(
+        getRepricePreview(meals, costContext),
+        meals.some(
+          (meal) => meal.snapshot && getRepricedAt(meal.snapshot) !== null,
+        ),
+      );
       const confirmed = await confirm({
         title: `Use today's prices for ${dayName}?`,
-        message: `This replaces the prices ${dayName} was fixed with, and you can't undo it. Your meals stay as they are.`,
+        message: (
+          <div className='space-y-3 text-left'>
+            <dl className='space-y-1'>
+              <div className='flex items-baseline justify-between gap-4'>
+                <dt className='text-muted-foreground'>Before</dt>
+                <dd className='font-medium whitespace-nowrap'>
+                  {lines.before}
+                </dd>
+              </div>
+              <div className='flex items-baseline justify-between gap-4'>
+                <dt className='text-muted-foreground'>After</dt>
+                <dd className='font-medium whitespace-nowrap'>{lines.after}</dd>
+              </div>
+            </dl>
+            {lines.leftOut && <p>{lines.leftOut}.</p>}
+            <p>
+              This redoes {dayName}'s cost and nutrition from today's prices and
+              recipes. You can't undo it. Your meals stay on the day.
+            </p>
+          </div>
+        ),
         confirmText: "Use today's prices",
         cancelText: 'Cancel',
         destructive: true,
@@ -97,7 +128,7 @@ function RepriceDayRow({ uid, dayKey, isGrouped }: RepriceDayRowProps) {
         <ActionRow
           icon={<RefreshCw className='h-4 w-4' />}
           label="Price this day with today's prices"
-          subtitle='Replaces the prices this day was fixed with'
+          subtitle="Redoes this day's cost and nutrition from today"
           isDisabled={isBusy}
           isGrouped={isGrouped}
           onClick={() => void handleReprice()}
@@ -107,7 +138,10 @@ function RepriceDayRow({ uid, dayKey, isGrouped }: RepriceDayRowProps) {
                 A day is fixed when it passes, so adding a price later doesn't
                 change it.
               </p>
-              <p>This redoes the day with the prices you have now.</p>
+              <p>
+                This redoes the day with the prices and recipes you have now, so
+                calories can change too.
+              </p>
             </HelpTip>
           }
         />

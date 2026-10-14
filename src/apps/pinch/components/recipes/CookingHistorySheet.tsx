@@ -20,6 +20,7 @@ import { recipeContainersQueryOptions } from '@apps/pinch/queries/containerQueri
 import {
   selectContainersByCookId,
   selectCooksByRecipe,
+  selectNotesLoadError,
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
@@ -58,7 +59,7 @@ function CookingHistorySheet({
   const plannedMeals = useAppSelector(selectPlannedMeals);
   const isNotesReady = useAppSelector(
     (state) =>
-      state.pinch.notes.isLoaded && state.pinch.notes.loadError === null,
+      state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
   );
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);

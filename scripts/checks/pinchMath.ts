@@ -12,6 +12,7 @@ import {
   buildRepricedSnapshot,
   buildSnapshot,
   getRepricedAt,
+  getRepricePreview,
   wouldRepriceChange,
   type CostContext,
 } from '../../src/apps/pinch/utils/mealMath.ts';
@@ -22,6 +23,7 @@ import {
 import {
   formatRowCost,
   getFixedNote,
+  getRepriceLines,
 } from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
@@ -1466,6 +1468,115 @@ assert.match(
   getFixedNote([repriced, fixedThen]),
   /^Some meals priced with today's prices on /,
   'a day with only some of its meals re-priced says some',
+);
+
+const previewNow = getRepricePreview([fixedMeal], nowContext);
+assert.equal(
+  previewNow.beforeCents,
+  null,
+  'a day nothing was priced on reads null before',
+);
+assert.equal(
+  previewNow.afterCents,
+  repriced.costCents,
+  'the preview is the cost the re-price writes, from the same function',
+);
+assert.equal(
+  previewNow.leftOutCount,
+  new Set(repriced.leftOut.map((gap) => gap.ingredientId)).size,
+  'and counts the ingredients it still cannot price, once each',
+);
+const previewNothing = getRepricePreview([fixedMeal], thenContext);
+assert.deepEqual(
+  [previewNothing.beforeCents, previewNothing.afterCents],
+  [null, null],
+  'a day with nothing priced then or now previews no total',
+);
+assert.equal(
+  previewNothing.leftOutCount,
+  3,
+  'and names its three unpriced ingredients',
+);
+assert.deepEqual(
+  getRepricePreview([plannedOf([adoboItem], null)], nowContext),
+  { beforeCents: null, afterCents: null, leftOutCount: 0 },
+  'a meal that is not fixed is left out of the preview',
+);
+const secondMeal = plannedOf(
+  [feetItem],
+  buildSnapshot([feetItem], thenContext, 1000),
+);
+const previewTwo = getRepricePreview([fixedMeal, secondMeal], nowContext);
+assert.equal(
+  previewTwo.afterCents,
+  (buildSnapshot(fixedMeal.items, nowContext, 1).costCents ?? 0) +
+    (buildSnapshot([feetItem], nowContext, 1).costCents ?? 0),
+  'several meals add up, each from its own items',
+);
+const longerAdobo = {
+  ...adoboRecipe,
+  ingredients: adoboRecipe.ingredients.map((line) => ({
+    ...line,
+    amount: line.amount * 2,
+  })),
+} as Recipe;
+const pricedFixed = buildSnapshot(fixedMeal.items, nowContext, 1000);
+const tweakedContext = repriceContext(
+  [longerAdobo],
+  repriceIngredients,
+  nowProducts,
+);
+const tweakedMeal = plannedOf(fixedMeal.items, pricedFixed);
+assert.equal(
+  wouldRepriceChange(tweakedMeal, tweakedContext),
+  true,
+  'a recipe changed since the day passed makes the row appear with no price changed',
+);
+const previewTweaked = getRepricePreview([tweakedMeal], tweakedContext);
+assert.equal(
+  (previewTweaked.afterCents ?? 0) > (previewTweaked.beforeCents ?? 0),
+  true,
+  'and the preview shows the new total against the old one',
+);
+
+assert.deepEqual(
+  getRepriceLines(
+    { beforeCents: null, afterCents: 66.0285, leftOutCount: 0 },
+    false,
+  ),
+  { before: "Wasn't priced", after: 'about $0.66', leftOut: null },
+  "an unpriced day says Wasn't priced, the result says about, nothing unpriced adds no line",
+);
+assert.equal(
+  getRepriceLines(
+    { beforeCents: null, afterCents: null, leftOutCount: 1 },
+    true,
+  ).before,
+  'Still no price',
+  'a day already priced again says Still no price',
+);
+assert.deepEqual(
+  getRepriceLines(
+    { beforeCents: 1066.4, afterCents: null, leftOutCount: 2 },
+    false,
+  ),
+  {
+    before: '$10.66',
+    after: 'Still no price',
+    leftOut: '2 ingredients still have no price',
+  },
+  'a priced day shows its total as the tile does, a result with no price says so, and the count is plural',
+);
+assert.equal(
+  getRepriceLines({ beforeCents: 0, afterCents: 99.6, leftOutCount: 1 }, false)
+    .leftOut,
+  '1 ingredient still has no price',
+  'one ingredient is singular',
+);
+assert.equal(
+  getRepriceLines({ beforeCents: 0, afterCents: 99.6, leftOutCount: 1 }, false)
+    .before,
+  '$0.00',
 );
 
 const names = new Map([
