@@ -18,11 +18,7 @@ import {
   selectMealsById,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type {
-  Container,
-  ContainerPlace,
-  PlannedMeal,
-} from '@apps/pinch/types';
+import type { Container, ContainerPlace, PlannedMeal } from '@apps/pinch/types';
 import {
   getContainerTitle,
   getEatByPhrase,
@@ -61,7 +57,9 @@ export function EatFromStockRows({ meal, onOpen }: EatFromStockRowsProps) {
   return (
     <>
       {CONTAINER_PLACES.map((place) => {
-        const here = candidates.filter((container) => container.place === place);
+        const here = candidates.filter(
+          (container) => container.place === place,
+        );
         if (here.length === 0) return null;
 
         const label = `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`;
@@ -75,7 +73,7 @@ export function EatFromStockRows({ meal, onOpen }: EatFromStockRowsProps) {
               </span>
             }
             label={label}
-            subtitle={`${here.length} ${here.length === 1 ? 'container' : 'containers'} match this meal`}
+            subtitle={`${here.length} ${here.length === 1 ? 'container matches' : 'containers match'} this meal`}
             onClick={() => onOpen(place)}
           />
         );

@@ -107,6 +107,17 @@ flowchart TD
     ML -->|tap a meal| MD["Meal drawer"]
     MD -->|Plan it| PM
     MD -->|Add to shopping list| AS
+    K --> PE["Prepared meals row · a prompt while empty, then what is in each place and how many to eat soon"]
+    PE --> PL["Prepared meals subview · Fridge and Freezer, soonest eat-by first · In stock / Finished"]
+    PL -->|+ Add| CF["Container sheet · what is it, servings, where, eat by"]
+    PL -->|tap a container| CS["Container sheet · servings left, eat by, actions, history"]
+    CS --> CSV["Ate some · Put in the freezer / Thaw in the fridge · Change eat-by date · swap in place, ‹ Back"]
+    CS -->|trash| CSD["Delete confirm · says the history goes too"]
+    RD -->|Put some away, In your freezer| CF
+    RD -.->|In your freezer, scoped to the recipe| PL
+    MD -->|Put some away, In your fridge| CF
+    CK -->|I cooked this, then Putting any away? or Put some away| CKP2["Container details · in place on the last screen · Skip, Save"]
+    PMD -->|Eat from your fridge or freezer| EF["Eat from stock · swaps in place · Ate 2 · ‹ Back"]
     K --> KL["Ingredients list · Yours / All · search and filters"]
     KL -->|eye button| VO
     KL -->|+ New| IF["Ingredient form sheet · nutrition typed as the label prints it"]
@@ -1092,6 +1103,89 @@ block-beta
 
 *Entry: a tinted "Start cooking" row ("Steps one at a time, with a timer") above "Add to shopping list" in the recipe drawer, shown only when the recipe has a step, and the same row in a planned meal's view when a recipe in it has steps (never on a day that has passed). With one such recipe it opens that recipe at the planned servings; with several the drawer swaps in place to "Which one are you cooking?" with each recipe and its servings as a row and a "‹ Back" link.*
 
+**Prepared meals** (Kitchen's row and list, the container sheet, and putting some away from cooking mode)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  P1["‹  Prepared meals"]:2
+  P2["25 servings in 7 containers"]:1
+  P3["+ Add"]:1
+  P4["In stock  ·  Finished"]:2
+  P5["🧊 Fridge ───── 4"]:2
+  P6["🧊 Adobo chicken · 2 servings · Eat by tomorrow  [Eat soon]"]:2
+  P7["🧊 Cilantro lime rice · 3 servings · Eat by Oct 18"]:2
+  P8["❄️ Freezer ───── 3"]:2
+  P9["❄️ Chicken stock · 4 servings · Eat by Oct 11  [Past its date]"]:2
+  style P1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P9 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*Kitchen's third entry, under Stores and Products and across the whole row, is "Prepared meals": a quiet prompt ("Keep track of what is in your fridge and freezer") while nothing is put away, then "10 servings in the fridge, 15 in the freezer" (the word "servings" once) and, in a soft peach tint, "2 to eat soon, 1 past its date" whenever something is due. If the containers can't load, it says "Couldn't load just now" and the rest of Kitchen is untouched. It opens a subview (the back button and the phone's back gesture close it, and a sheet over it takes the gesture first) with the count in plain words ("25 servings in 7 containers", "2 servings in 1 container") and "Add" beside it, a thin In stock / Finished switch, and a search from eight containers on. In stock is grouped by place with a hairline divider and a count, each place soonest eat-by first and drawing 40 rows before "Show N more" (only when more than three would hide). A row is the place's emoji in a tinted tile, the name, "2 servings", "Eat by tomorrow" (today, tomorrow or the date) and, only when it applies, a soft-tinted word: "Eat soon" for today and the next two days, "Past its date" after, never a solid fill and never alarming. Opened from a recipe's or meal's drawer it shows only that one, with an "Only Adobo chicken ×" chip that clears the filter. Finished is the same list for what was eaten or thrown out ("Ate it all · Oct 12", "Threw it out · Oct 6", and what it held), read when the view opens and shown 25 at a time.*
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  C1["Container                                  ✕"]:2
+  C2["Grandma's lentil soup"]:2
+  C3["❄️ Freezer · 6 servings left"]:2
+  C4["Eat by Nov 28"]:2
+  C5["Ate 1 · Leaves 5 servings"]:2
+  C6["Ate some… · Choose how many"]:2
+  C7["Ate it all · Moves it to Finished"]:2
+  C8["🧊 Thaw in the fridge · Moves the eat-by date up"]:2
+  C9["Change eat-by date · Now Nov 28"]:2
+  C10["Threw it out · Keeps it in Finished"]:2
+  C11["HISTORY<br/>Put in the freezer · 6 servings · Sep 14, 9:00 AM"]:2
+  C12["🗑️            Done"]:2
+  style C1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C9 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C10 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C11 fill:transparent,stroke:#888888,stroke-width:1px;
+  style C12 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*A container is one physical container of food, and the sheet ("Container": a drawer on a phone, a modal from `sm`) is where it lives. Top to bottom: its name (the recipe's or meal's current name while it exists), where it is and how many servings are left, "Eat by Oct 16" with its tint, "Thawed in the fridge on Oct 14 · Frozen twice" when that is so, then one `bg-muted/50` block of actions named by what happens: "Ate 1", "Ate some…" (only past two servings), "Ate it all", "Put in the freezer" or "Thaw in the fridge", "Change eat-by date" and "Threw it out" (which asks, naming what is lost). The history is a plain list, newest first, each line with its local date and time ("Ate 3 servings", "Put in the freezer · 6 servings", "Eat by Jan 12 → Dec 25"). The trash is bottom-left in the pinned footer beside Done, and its confirm says the history is erased and points an eaten one at "Ate it all", which keeps it. "Ate some…", the move and the eat-by change swap the sheet's content in place with a "‹ Back", never a second overlay: a move shows the eat-by it will set, already filled in, under "Your call. Based on how long your recipe says it keeps in the freezer." or "Your call. Thawed food keeps a shorter time, so this starts at 2 days." or "Your call. A starting point of 4 days; change it to what you trust.". Eating and throwing out raise a toast with Undo that gives the portions back. A failed write is one plain sentence inside the sheet; if another device finished the container meanwhile, the sheet says "This container isn't in stock anymore" and offers Done. "Add" opens the same sheet, titled the same, but first asks "What are you putting away?" (a search over recipes and saved meals capped at four results, ending in "Call it “…”" for anything else), then shows how many (a stepper, 1 to 100), where (Fridge or Freezer pills) and eat by, with "Put away" in the footer.*
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  U1["‹  Adobo chicken"]:2
+  U2["Marked as cooked<br/>4 servings<br/>Saved to your cooking history.<br/>Leftovers keep 3 days in the fridge, 3 months in the freezer"]:2
+  U3["Putting any away?"]:2
+  U4["Not this time"]:1
+  U5["🧊 In the fridge"]:1
+  U6["❄️ In the freezer"]:2
+  U7["Add a note about it"]:2
+  U8["Done"]:2
+  style U1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style U2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style U3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style U4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style U5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style U6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style U7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style U8 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*Cooking mode knows a bulk meal: five or more servings, a recipe that says it freezes, or one already put away. After "I cooked this" (and on the "Already marked as cooked" panel) a bulk meal asks "Putting any away?" with three answers; any other meal has only a quiet underlined "Put some away" link, and after "Not this time" or Skip the link is what remains. It is never a required step, and Done is always there. An answer opens the container's details on the panel itself, with Skip and Save in the pinned footer: how many servings (starting at what is left after tonight's meal: the session's servings minus what the plan says tonight uses, else minus two), the eat-by already filled in from the recipe's keeping times, and, for the link, the Fridge and Freezer pills too. Save writes one container tied to this cook (its history starts "Made 6 servings", then "Put in the freezer"), toasts "Saved 4 servings in the freezer, eat by Jan 12" with Undo, and the panel keeps saying it, with "Put another away". Leaving with details that were changed asks "Discard this container? · Keep editing / Discard" (the header's back, Escape and the back gesture alike), a save in flight can't be left, and the note box and the details are never open together. If the containers couldn't load, the panel is exactly what it was. A cook in the cooking history says "Put away 4 servings" under its date when containers came from it, finished ones included.*
+
+*The same containers show up where the food is: a recipe's or saved meal's row says "🧊 5 servings · ❄️ 5 servings" and "eat by tomorrow" (or "past its date") only when there is something, on the Recipes and Meals lists and in the plate builder's search results; both lists' filter gains an "In stock" question (Fridge · 2, Freezer · 1, only what is there, both chosen means either) beside Source; and the recipe and meal drawers add two rows to their action block, "In your fridge and freezer · 5 servings in the fridge, 5 in the freezer, eat by tomorrow" (it closes the drawer and opens the list scoped to that recipe) and "Put some away · Fridge or freezer, with an eat-by date". A planned meal for today or a day ahead gets "Eat from your fridge" or "Eat from your freezer" ("2 containers match this meal") in its action block: it swaps the view in place for the matching containers, soonest first, each with "Ate 2" (the planned servings, never more than is left, or one plate of a saved meal's container); it writes only the eating, never the plan. The shopping sheet adds one muted line under its heading, "You already have 3 servings in the freezer.", and changes nothing else on the list.*
+
 **Nudge and fill-in** (the quiet line, and the sheet it opens)
 
 ```mermaid
@@ -1405,6 +1499,20 @@ flowchart LR
     D --> F["Form filled in for review"]
     E --> F
     F --> G[Save]
+```
+
+**Cook extra, put some in the freezer, eat it later**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
+flowchart LR
+    A["Recipe drawer: Start cooking"] --> B["Servings 8 in Ingredients"] --> C["Finish, I cooked this"] --> D["Putting any away?"]
+    D -->|In the freezer| E["6 servings, eat by Jan 12 · Save"] --> F["Saved 6 servings in the freezer · Undo"]
+    D -->|Not this time| G["Done"]
+    F --> H["Kitchen: Prepared meals · 6 servings in the freezer"]
+    H --> I["Weeks later: the planned dinner · Eat from your freezer · Ate 2"]
+    I --> J["Thaw in the fridge · eat by moves to two days out"]
+    J --> K["Ate it all · Finished keeps what happened"]
 ```
 
 **Type nutrition off a label**

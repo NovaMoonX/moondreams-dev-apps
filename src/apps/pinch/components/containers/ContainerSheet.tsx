@@ -203,9 +203,8 @@ function MoveView({
       <div className='space-y-1'>
         <p className='font-medium'>{label}</p>
         <p className='text-muted-foreground text-sm'>
-          {move === 'THAW'
-            ? 'Thawed food keeps a shorter time, so the eat-by date moves up.'
-            : 'The whole container goes in, and the eat-by date moves out.'}
+          The whole container goes in the{' '}
+          {to === 'FREEZER' ? 'freezer' : 'fridge'}.
         </p>
       </div>
       <EatByField
