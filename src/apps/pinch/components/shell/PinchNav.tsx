@@ -45,7 +45,7 @@ function PinchNav({ value, onChange }: PinchNavProps) {
                 aria-current={isSelected ? 'page' : undefined}
                 onClick={() => onChange(tab)}
                 className={join(
-                  'h-auto min-w-16 flex-col gap-0.5 rounded-full! px-3 py-2 text-[11px] font-medium focus:outline-transparent! sm:min-w-20 sm:px-4 lg:min-w-16 lg:rounded-2xl!',
+                  'h-auto min-w-16 flex-col gap-0.5 rounded-full! px-2.5! py-2 text-[11px] font-medium focus:outline-transparent! sm:min-w-20 sm:px-4! lg:min-w-16 lg:rounded-2xl!',
                   isSelected
                     ? 'bg-accent text-foreground! font-semibold'
                     : 'text-muted-foreground!',

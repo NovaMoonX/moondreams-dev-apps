@@ -700,10 +700,10 @@ Marking a meal made takes its ingredients out of stock. Making a batch adds prep
 
 ### Issue 21: The shopping list with stock, low stock and stores
 
-**Prerequisites:** Issue 19, Issue 9. The list itself has shipped: a stored `shoppingItems` collection in Kitchen, filled from a recipe, saved meal, planned meal or day (or one ingredient), merged by ingredient and unit, grouped by family, with "Got it" and an approximate cost (TECHNICAL.md §5b).
+**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal, planned meal or day (or one ingredient), merged by ingredient and unit, grouped by family, with "Got it" and an approximate cost (TECHNICAL.md §5b).
 **Target PR Size:** ~350 lines
 **Files:**
-- Kitchen: the Shopping list subview (`components/shopping/`), `utils/shopping.ts`, a low-stock section and a group-by-store option
+- Shopping tab: `ShoppingScreen` (`components/shopping/`), `utils/shopping.ts`, a low-stock section and a group-by-store option
 
 **Context:** README Next Steps; UX Shopping list.
 
