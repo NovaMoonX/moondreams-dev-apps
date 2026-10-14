@@ -121,7 +121,6 @@ export const freezePastMeals = createAsyncThunk<
 
 const OFFLINE_MESSAGE = 'Check your connection and try again.';
 
-/** A Firebase error is logged and replaced by one sentence; our own sentences are shown as written. */
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
     console.error('Pinch re-price write failed', error);

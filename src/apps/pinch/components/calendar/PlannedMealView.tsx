@@ -380,7 +380,7 @@ function PlannedMealView({
         </p>
       )}
       {(canPlanAhead || markable.length > 0 || meal.snapshot) && (
-        <div className='space-y-2'>
+        <div className='space-y-2 empty:hidden'>
           {canPlanAhead && cookable.length > 0 && (
             <StartCookingRow
               onClick={() =>

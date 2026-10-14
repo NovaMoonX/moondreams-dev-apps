@@ -15,6 +15,7 @@ import {
   selectCostContext,
   selectPlannedByDay,
 } from '@apps/pinch/store/selectors';
+import { MAX_REPRICE_MEALS } from '@apps/pinch/constants';
 import type { PlannedMeal } from '@apps/pinch/types';
 import {
   formatDayShort,
@@ -46,6 +47,7 @@ function RepriceDayRow({ uid, dayKey }: RepriceDayRowProps) {
     () =>
       hasPassed &&
       hasCompleteData &&
+      meals.length <= MAX_REPRICE_MEALS &&
       meals.some((meal) => wouldRepriceChange(meal, costContext)),
     [hasPassed, hasCompleteData, meals, costContext],
   );
@@ -70,11 +72,12 @@ function RepriceDayRow({ uid, dayKey }: RepriceDayRowProps) {
         return;
       }
 
-      await dispatch(repriceDay({ uid, dayKey })).unwrap();
-      addToast({
-        title: `${dayName} now uses today's prices`,
-        type: 'success',
-      });
+      const changed = await dispatch(repriceDay({ uid, dayKey })).unwrap();
+      addToast(
+        changed === 0
+          ? { title: `${dayName} already uses today's prices`, type: 'info' }
+          : { title: `${dayName} now uses today's prices`, type: 'success' },
+      );
     } catch (repriceError) {
       setError(
         getErrorMessage(
@@ -99,8 +102,8 @@ function RepriceDayRow({ uid, dayKey }: RepriceDayRowProps) {
           trailing={
             <HelpTip title="Today's prices" placement='top'>
               <p>
-                A day is fixed with the prices it had when it passed, so adding
-                a price later doesn't change it.
+                A day is fixed when it passes, so adding a price later doesn't
+                change it.
               </p>
               <p>This redoes the day with the prices you have now.</p>
             </HelpTip>
