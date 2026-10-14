@@ -29,10 +29,14 @@ const STEP_QUOTE_LENGTH = 80;
 const TITLE_QUOTE_LENGTH = 80;
 const METRIC_KEYS = NUTRITION_CELLS.map((cell) => cell.key);
 
-const clip = (text: string, max: number) => {
-  const flat = text.replace(/\s+/g, ' ').trim();
-  return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
+const truncate = (text: string, max: number) => {
+  if (text.length <= max) return text;
+  const end = /[\uDC00-\uDFFF]/.test(text.charAt(max - 1)) ? max - 2 : max - 1;
+  return `${text.slice(0, end).trimEnd()}…`;
 };
+
+const clip = (text: string, max: number) =>
+  truncate(text.replace(/\s+/g, ' ').trim(), max);
 
 const formatAmount = (amount: number) => String(Math.round(amount * 100) / 100);
 
@@ -82,7 +86,8 @@ const getLineChanges = (
 ) => {
   const name = getName(after.ingredientId);
   const isAmountChanged =
-    before.amount !== after.amount || before.unit !== after.unit;
+    formatAmount(before.amount) !== formatAmount(after.amount) ||
+    before.unit !== after.unit;
   const amountLine =
     before.unit === after.unit
       ? `${name} ${formatAmount(before.amount)} → ${formatAmount(after.amount)} ${UNIT_LABELS[after.unit]}`
@@ -201,7 +206,7 @@ const getTextChanges = (before: Normalized, after: Normalized) => {
       ? []
       : [`Renamed to “${clip(after.title, TITLE_QUOTE_LENGTH)}”`];
   const servingsChange =
-    before.servings === after.servings
+    formatAmount(before.servings) === formatAmount(after.servings)
       ? []
       : [
           `Serves ${formatAmount(before.servings)} → ${formatAmount(after.servings)}`,
@@ -225,7 +230,7 @@ const capLines = (lines: string[]) => {
           `and ${lines.length - (MAX_TWEAK_CHANGES - 1)} more`,
         ];
 
-  return fitted.map((line) => line.slice(0, MAX_TWEAK_CHANGE_LENGTH));
+  return fitted.map((line) => truncate(line, MAX_TWEAK_CHANGE_LENGTH));
 };
 
 /**

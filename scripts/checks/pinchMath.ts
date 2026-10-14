@@ -1433,6 +1433,72 @@ assert.ok(
   ).every((line) => line.length <= 200),
   'no line is longer than the rules allow',
 );
+const lastLine = (name: string) =>
+  getRecipeChanges(
+    baseRecipe,
+    {
+      ...baseRecipe,
+      ingredients: [
+        ...baseRecipe.ingredients,
+        recipeLine('l9', 'long', 1, 'CUP'),
+      ],
+    },
+    new Map([...names, ['long', { name }]]),
+  )[0] ?? '';
+const longLine = lastLine(`${'a'.repeat(192)}😀${'b'.repeat(50)}`);
+assert.equal(
+  longLine,
+  `Added ${'a'.repeat(192)}…`,
+  'a line cut inside an emoji drops the whole emoji instead of leaving half of it',
+);
+const emojiLine = lastLine('😀'.repeat(150));
+assert.ok(
+  emojiLine.length <= 200 && emojiLine.endsWith('…'),
+  'a long line of emoji is cut by the rules’ count of 16-bit units and ends with …',
+);
+assert.equal(
+  /[\uD800-\uDBFF]$/.test(emojiLine.slice(0, -1)),
+  false,
+  'a cut line never ends on half of an emoji',
+);
+assert.equal(
+  lastLine('c'.repeat(193)),
+  `Added ${'c'.repeat(193)}, 1 cup`.slice(0, 199).trimEnd() + '…',
+  'a plain long line is cut at 199 characters and ends with …',
+);
+assert.equal(
+  lastLine('d'.repeat(180)),
+  `Added ${'d'.repeat(180)}, 1 cup`,
+  'a line within the limit is not touched',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      recipeLine('l1', 'garlic', 4.001, 'EACH'),
+      baseRecipe.ingredients[1],
+      baseRecipe.ingredients[2],
+    ],
+  }),
+  ['The recipe changed'],
+  'an amount that moved less than it prints never reads "4 → 4"',
+);
+assert.deepEqual(
+  changesFor({ servings: 4.001 }),
+  ['The recipe changed'],
+  'servings that move less than they print never read "Serves 4 → 4"',
+);
+assert.deepEqual(
+  changesFor({
+    title: 'Adobo chicken thighs',
+    ingredients: [
+      recipeLine('l1', 'garlic', 4.001, 'EACH'),
+      baseRecipe.ingredients[1],
+      baseRecipe.ingredients[2],
+    ],
+  }),
+  ['Renamed to “Adobo chicken thighs”'],
+  'an unprinted amount change beside a real one adds no line of its own',
+);
 assert.deepEqual(
   getRecipeChanges(
     baseRecipe,
