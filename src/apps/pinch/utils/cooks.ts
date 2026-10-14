@@ -16,7 +16,7 @@ export interface MarkableRecipe {
   servings: number;
 }
 
-/** The one cook a planned meal can have for a recipe, so marking it again finds the first. */
+/** Marking a planned meal again finds the first cook by this id. */
 export const getCookId = (plannedMealId: string, recipeId: string) =>
   `${plannedMealId}__${recipeId}`;
 
@@ -25,7 +25,6 @@ const byNewest = (a: Cook, b: Cook) =>
   b.createdAt - a.createdAt ||
   a.id.localeCompare(b.id);
 
-/** Each recipe's cooks, newest first. */
 export const groupCooksByRecipe = (cooks: Cook[]) => {
   const result = [...cooks].sort(byNewest).reduce((byRecipe, cook) => {
     const list = byRecipe.get(cook.recipeId);
@@ -40,7 +39,6 @@ export const groupCooksByRecipe = (cooks: Cook[]) => {
   return result;
 };
 
-/** How many times each recipe was cooked and when last, in one pass over every cook. */
 export const getCookSummaries = (cooks: Cook[]) => {
   const result = cooks.reduce((summaries, cook) => {
     const known = summaries.get(cook.recipeId);
@@ -54,7 +52,6 @@ export const getCookSummaries = (cooks: Cook[]) => {
   return result;
 };
 
-/** "Cooked 3 times · last Oct 12", or "Cooked once · Oct 12". */
 export const getCookFactText = (count: number, lastText: string) =>
   count === 1
     ? `Cooked once · ${lastText}`
@@ -66,7 +63,7 @@ export const isCookHistoryFull = (count: number) =>
 export const isValidCookServings = (servings: number) =>
   Number.isFinite(servings) && servings > 0 && servings <= MAX_COOK_SERVINGS;
 
-/** When a planned meal's cook happened: now on today, local noon on a day already past, and null on a day still ahead (nothing to mark yet). */
+/** Now on today, local noon on a day already past, null on a day still ahead. */
 export const getPlannedCookedAt = (plannedDate: number, now = Date.now()) => {
   const today = getLocalTodayDate(now);
   if (plannedDate > today) return null;
@@ -80,7 +77,7 @@ export const getPlannedCookedAt = (plannedDate: number, now = Date.now()) => {
   return result;
 };
 
-/** The recipes of a planned meal that can be marked, one per recipe (a recipe listed twice adds up its servings), in the order they first appear. A recipe that isn't in the kitchen is left out. */
+/** One entry per recipe of a meal (a recipe listed twice adds up its servings), in first-seen order. */
 export const getMarkableRecipes = (
   items: MealItem[],
   recipesById: Map<string, Recipe>,
@@ -108,10 +105,9 @@ export const mergePlannedCook = (existing: Cook | null, incoming: Cook) =>
     ? { isNew: true, cook: incoming }
     : { isNew: false, cook: existing };
 
-/** The keys an older cook may lack, as the null they read as, so an edit writes a whole document. */
+/** The rules want every key on the merged document, so an edit writes back the one an older cook lacks. */
 export const getMissingCookFields = (existing: object) =>
   'plannedMealId' in existing ? {} : { plannedMealId: null };
 
-/** The servings a cook starts at: the recipe's own, kept inside what a cook can hold. */
 export const getCookServings = (servings: number) =>
   servings > 0 ? Math.min(servings, MAX_COOK_SERVINGS) : 1;

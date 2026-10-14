@@ -158,7 +158,7 @@ const IDEA_SITES = [
 const SHOPPING_UNITS = ['G', 'EACH', 'LB', 'CUP', 'OZ'] as const;
 const SHOPPING_ITEM_COUNT = 80;
 const IDEA_COUNT = 80;
-// Cooks per recipe, repeating by recipe index: about 330 in all, one recipe (index 1) with twelve for the history sheet's "Show more".
+// Cooks per recipe by recipe index (about 330 in all); recipe 1 gets twelve, enough for the history's "Show N more".
 const COOKS_PER_RECIPE = [0, 1, 2, 3, 1, 1, 5, 0, 1, 2];
 const COOK_DAYS_BACK = 60;
 const SHOPPING_FAMILY_COUNT = 25;

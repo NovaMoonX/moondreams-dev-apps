@@ -18,7 +18,7 @@ interface MarkPlannedInput {
   cookedAt: number;
 }
 
-/** What marking a recipe cooked does and says, shared by the recipe drawer, cooking mode and a planned meal. Each call rejects with a sentence the caller shows. */
+/** Marking a recipe cooked, with its toast; each call rejects with a sentence for the caller to show. */
 export function useCookActions(uid: string) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();

@@ -41,14 +41,11 @@ interface CookEditViewProps {
   recipeTitle: string;
   /** The cook being corrected; null adds an earlier one. */
   cook: Cook | null;
-  /** What a new cook's servings start at. */
   defaultServings: number;
-  /** "From your plan for Fri, Oct 9" for a cook marked from a planned meal. */
   planNote: string | null;
   onBack: () => void;
 }
 
-/** Date, time and servings of one cook, shown in place of the history list. */
 function CookEditView({
   uid,
   recipeId,

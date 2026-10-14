@@ -26,7 +26,6 @@ interface PlannedCookRowProps {
   markable: MarkableRecipe;
 }
 
-/** One recipe of a planned meal: "Mark as cooked" until it has a cook, then "Cooked ✓" with an Undo that deletes that cook. */
 function PlannedCookRow({
   uid,
   plannedMealId,

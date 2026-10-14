@@ -33,7 +33,6 @@ interface CookingHistorySheetProps {
   onClose: () => void;
 }
 
-/** Every time a recipe was cooked, newest first: each opens in place to change its day, time or servings, and one more can be added from memory. */
 function CookingHistorySheet({
   uid,
   recipeId,

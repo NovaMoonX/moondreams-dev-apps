@@ -10,7 +10,7 @@ interface ActionRowProps {
   isDisabled?: boolean;
 }
 
-/** A tinted row in a drawer's block of actions: an icon, what it does, and a line on what to expect. */
+/** A tinted row for a drawer's block of actions. */
 function ActionRow({
   icon,
   label,

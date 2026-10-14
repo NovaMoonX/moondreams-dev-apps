@@ -43,7 +43,6 @@ const getWriteMessage = (error: unknown, fallback: string) => {
   return getErrorMessage(error, fallback);
 };
 
-/** Why a cook can't be added right now, or null: the history hasn't loaded, the recipe or the numbers are off, or the recipe's history is full. */
 const getAddProblem = (
   state: RootState,
   recipeId: string,
@@ -75,7 +74,6 @@ interface AddCookInput {
   cookedAt: number;
 }
 
-/** A cook with its own fresh id: from a recipe, from cooking mode, or one the person adds from memory. */
 export const addCook = createAsyncThunk<
   string,
   AddCookInput,
@@ -122,11 +120,10 @@ interface MarkPlannedCookedInput {
 
 export interface MarkPlannedCookedResult {
   id: string;
-  /** False when the meal was already marked, which leaves the first cook as it is. */
   isNew: boolean;
 }
 
-/** A transaction, so two taps (or two devices) leave one cook: the second finds the first and writes nothing. It needs a connection, like every transaction. */
+/** A transaction, so it needs a connection: two taps or two devices leave one cook. */
 export const markPlannedCooked = createAsyncThunk<
   MarkPlannedCookedResult,
   MarkPlannedCookedInput,
@@ -183,7 +180,6 @@ interface UpdateCookInput {
   cookedAt: number;
 }
 
-/** Field-scoped: only the date and servings a person can correct. */
 export const updateCook = createAsyncThunk<
   string,
   UpdateCookInput,
@@ -240,7 +236,7 @@ export const removeCook = createAsyncThunk<
   return id;
 });
 
-/** Deletes the given cooks in batches under the write limit; the caller treats a failure as best effort, since a cook whose recipe is gone is ignored by every reader. */
+/** A failure is the caller's to ignore: a cook whose recipe is gone is never read. */
 export async function deleteCooks(uid: string, cooks: Cook[]) {
   const groups = Array.from(
     { length: Math.ceil(cooks.length / COOK_BATCH_SIZE) },
