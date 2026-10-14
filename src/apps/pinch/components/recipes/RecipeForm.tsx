@@ -5,7 +5,7 @@ import {
   Form,
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -104,7 +104,8 @@ function RecipeForm({
 }: RecipeFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { closeSubview } = usePinchOverlay();
+  const { addToast } = useToast();
+  const { subview, closeSubview } = usePinchOverlay();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -443,6 +444,12 @@ function RecipeForm({
           },
         }),
       ).unwrap();
+      if (!recipe && subview?.kind === 'recipe' && subview.fromCalendar) {
+        addToast({
+          title: `Added ${data.title.trim()} to your recipes`,
+          type: 'success',
+        });
+      }
       closeSubview();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this recipe.'));

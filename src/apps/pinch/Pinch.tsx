@@ -1,4 +1,4 @@
-import { useMemo, useState, useTransition } from 'react';
+import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -36,6 +36,11 @@ function Pinch() {
   const [, startTransition] = useTransition();
   const [subview, setSubview] = useState<PinchSubview | null>(null);
   const [isStartOpen, setIsStartOpen] = useState(false);
+  const isStartFromCalendarRef = useRef(false);
+  const openStart = useCallback((isOpen: boolean, fromCalendar = false) => {
+    if (isOpen) isStartFromCalendarRef.current = fromCalendar;
+    setIsStartOpen(isOpen);
+  }, []);
   const [shownMonth, setShownMonth] = useState(getLocalMonthKey);
   const overlayContext = useMemo(
     () => ({
@@ -43,9 +48,9 @@ function Pinch() {
       openSubview: setSubview,
       closeSubview: () => setSubview(null),
       isStartOpen,
-      setIsStartOpen,
+      setIsStartOpen: openStart,
     }),
-    [subview, isStartOpen],
+    [subview, isStartOpen, openStart],
   );
 
   const isLoaded = useAppSelector(selectIsPinchLoaded);
@@ -116,7 +121,13 @@ function Pinch() {
           onClose={() => setIsStartOpen(false)}
           onPick={(method) => {
             setIsStartOpen(false);
-            setSubview({ kind: 'recipe', id: null, method, fromDrawer: true });
+            setSubview({
+              kind: 'recipe',
+              id: null,
+              method,
+              fromDrawer: true,
+              fromCalendar: isStartFromCalendarRef.current,
+            });
           }}
         />
       )}

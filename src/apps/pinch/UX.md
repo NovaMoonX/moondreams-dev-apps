@@ -125,7 +125,7 @@ block-beta
   style F5 fill:transparent,stroke:#888888,stroke-width:1px;
   style F6 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Two nudges and nothing else: no setup modal, no required choices. "Add a recipe" opens the same list of ways to start as the Recipes tab's New (a drawer on a phone, the recipe subview's first page from `sm`). Nutrition stays off until the person turns it on in settings; the stats row's help link ("Want calories or protein here?") opens the same settings sheet.*
+*Two nudges and nothing else: no setup modal, no required choices. "Add a recipe" opens the same list of ways to start as the Recipes tab's New (a drawer on a phone, the recipe subview's first page from `sm`), and saving the recipe returns to the calendar with a toast that says what was added ("Added Cucumber salad to your recipes"), since the calendar shows no new row. Once there is a recipe the box only offers "Plan your first meal". Nutrition stays off until the person turns it on in settings; the stats row's help link ("Want calories or protein here?") opens the same settings sheet.*
 
 **Calendar** (home tab)
 
