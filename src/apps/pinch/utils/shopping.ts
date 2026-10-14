@@ -112,7 +112,7 @@ export function getItemsLines(
 const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit);
 
-/** The list in one pass: what is left to buy grouped by ingredient family, in the Kitchen's family order with the ones that have none last as "Other", and what is bought on its own. */
+/** The list in one pass: what is left to buy grouped by ingredient family, in the Kitchen's family order with the ones that have none last as "Other", and what is checked off on its own. */
 export function groupShoppingItems(
   items: ShoppingItem[],
   ingredientsById: Map<string, ResolvedIngredient>,

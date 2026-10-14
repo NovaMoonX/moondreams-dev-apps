@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useState, type CSSProperties } from 'react';
 
 import { Button, Disclosure } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Plus } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
+import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import Subview from '@/components/Subview';
@@ -34,7 +35,14 @@ import {
 import type { Gap } from '@apps/pinch/types';
 import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
-import type { ShoppingRowData } from '@apps/pinch/utils/shopping';
+import type {
+  ShoppingGroup,
+  ShoppingRowData,
+} from '@apps/pinch/utils/shopping';
+
+const EAGER_GROUPS = 3;
+const ROW_HEIGHT = 57;
+const DIVIDER_HEIGHT = 36;
 
 const MAX_NAMES_SHOWN = 4;
 
@@ -80,6 +88,35 @@ function ShoppingRows({ rows, onToggle, onOpen }: ShoppingRowsProps) {
     </>
   );
 }
+
+interface ShoppingGroupSectionProps {
+  group: ShoppingGroup;
+  isEager: boolean;
+  onToggle: (id: string, isChecked: boolean) => void;
+  onOpen: (id: string) => void;
+}
+
+const ShoppingGroupSection = memo(function ShoppingGroupSection({
+  group,
+  isEager,
+  onToggle,
+  onOpen,
+}: ShoppingGroupSectionProps) {
+  const estimatedHeight = DIVIDER_HEIGHT + group.rows.length * ROW_HEIGHT;
+
+  return (
+    <section
+      aria-label={group.name}
+      className='defer-offscreen space-y-1'
+      style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
+    >
+      <LazyMount estimatedHeight={estimatedHeight} eager={isEager}>
+        <SectionDivider label={group.name} />
+        <ShoppingRows rows={group.rows} onToggle={onToggle} onOpen={onOpen} />
+      </LazyMount>
+    </section>
+  );
+});
 
 type Overlay = { kind: 'add' } | { kind: 'item'; id: string };
 
@@ -189,19 +226,14 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
     }
     return (
       <>
-        {groups.map((group) => (
-          <section
+        {groups.map((group, index) => (
+          <ShoppingGroupSection
             key={group.id || 'other'}
-            aria-label={group.name}
-            className='space-y-1'
-          >
-            <SectionDivider label={group.name} />
-            <ShoppingRows
-              rows={group.rows}
-              onToggle={handleToggle}
-              onOpen={handleOpen}
-            />
-          </section>
+            group={group}
+            isEager={index < EAGER_GROUPS}
+            onToggle={handleToggle}
+            onOpen={handleOpen}
+          />
         ))}
         {groups.length === 0 && (
           <p className='text-muted-foreground py-4 text-center text-sm'>
@@ -265,7 +297,7 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
         />
         {isFull && loadError === null && (
           <p className='text-muted-foreground text-sm'>
-            Your list is full: clear what you've bought.
+            Your list is full: take something off or clear what you've got.
           </p>
         )}
         {openCount > 0 && (

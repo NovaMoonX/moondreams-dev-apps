@@ -1,4 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import { FirebaseError } from 'firebase/app';
 import {
   deleteDoc,
   doc,
@@ -43,7 +44,16 @@ const isValidLine = (line: ShoppingLine) =>
 
 const BAD_AMOUNT = 'Enter an amount above zero.';
 
-/** What a line does to the item it lands on, read in the same transaction: a missing item is created, an unchecked one gains the amount, and one already bought starts again unchecked. */
+/** Our own sentences reach the screen as written; a Firebase error is logged and replaced by the fallback. */
+const getWriteMessage = (error: unknown, fallback: string) => {
+  if (error instanceof FirebaseError) {
+    console.error('Pinch shopping list write failed', error);
+    return fallback;
+  }
+  return getErrorMessage(error, fallback);
+};
+
+/** What a line does to the item it lands on, read in the same transaction: a missing item is created, an unchecked one gains the amount, and one already checked off starts again unchecked. */
 function writeLine(
   transaction: Transaction,
   line: ShoppingLine,
@@ -119,7 +129,7 @@ export const addToShoppingList = createAsyncThunk<
       });
     } catch (error) {
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to add to your shopping list.'),
+        getWriteMessage(error, 'Unable to add to your shopping list.'),
       );
     }
 
@@ -147,7 +157,7 @@ export const setShoppingItemChecked = createAsyncThunk<
       });
     } catch (error) {
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to update your shopping list.'),
+        getWriteMessage(error, 'Unable to update your shopping list.'),
       );
     }
   },
@@ -200,7 +210,7 @@ export const updateShoppingItem = createAsyncThunk<
       });
     } catch (error) {
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to save this change.'),
+        getWriteMessage(error, 'Unable to save this change.'),
       );
     }
   },
@@ -220,7 +230,7 @@ export const removeShoppingItem = createAsyncThunk<
     await deleteDoc(shoppingDoc(uid, id));
   } catch (error) {
     return rejectWithValue(
-      getErrorMessage(error, 'Unable to take this off your list.'),
+      getWriteMessage(error, 'Unable to take this off your list.'),
     );
   }
 });
@@ -229,7 +239,7 @@ interface ClearCheckedInput {
   uid: string;
 }
 
-/** Deletes what is bought, as the list stands when the person taps, in batches under the write limit. Returns how many it took off. */
+/** Deletes what is checked off, as the list stands when the person taps, in batches under the write limit. Returns how many it took off. */
 export const clearCheckedShoppingItems = createAsyncThunk<
   number,
   ClearCheckedInput,
@@ -259,7 +269,7 @@ export const clearCheckedShoppingItems = createAsyncThunk<
       );
     } catch (error) {
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to clear what you bought.'),
+        getWriteMessage(error, 'Unable to clear what you got.'),
       );
     }
 

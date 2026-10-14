@@ -65,6 +65,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
         <ItemSearch
           uid={uid}
           autoFocus
+          resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto'
           onPick={(ingredientId) => void handlePick(ingredientId)}
         />
         {error && <p className='text-destructive text-sm'>{error}</p>}

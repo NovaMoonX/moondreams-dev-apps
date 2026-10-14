@@ -89,10 +89,10 @@ function AddToShoppingSheet({
       return `Pick up to ${MAX_SHOPPING_LINES_PER_ADD} at a time.`;
     }
     if (listCount >= SOFT_MAX_SHOPPING_ITEMS && newCount > 0) {
-      return "Your list is full: clear what you've bought.";
+      return "Your list is full: take something off or clear what you've got.";
     }
     if (listCount + newCount > SOFT_MAX_SHOPPING_ITEMS) {
-      return `Your list holds up to ${SOFT_MAX_SHOPPING_ITEMS}: untick a few, or clear what you've bought.`;
+      return `Your list holds up to ${SOFT_MAX_SHOPPING_ITEMS}: untick a few, or clear what you've got.`;
     }
     return null;
   };

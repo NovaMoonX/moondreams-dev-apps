@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
@@ -25,6 +26,8 @@ interface ItemSearchProps {
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
   autoFocus?: boolean;
+  /** Classes for the results list, so a caller can cap its height and let only the list scroll. */
+  resultsClassName?: string;
 }
 
 /** One search over the catalog and the person's own ingredients, capped at a few rows, that ends with "add this as a new ingredient" when nothing has exactly the typed name. */
@@ -34,6 +37,7 @@ function ItemSearch({
   onPickRecipe,
   excludeIds = [],
   autoFocus = false,
+  resultsClassName,
 }: ItemSearchProps) {
   const dispatch = useAppDispatch();
   const ingredients = useAppSelector(selectIngredients);
@@ -118,7 +122,7 @@ function ItemSearch({
           Type a name to find it, or add one that isn't in the list.
         </p>
       ) : (
-        <ul className='divide-border divide-y'>
+        <ul className={join('divide-border divide-y', resultsClassName)}>
           {recipeMatches.map((recipe) => (
             <li key={recipe.id}>
               <Button

@@ -263,7 +263,7 @@ export interface ShoppingItem {
   amount: number;
   /** Immutable: a different unit is a different item. */
   unit: Unit;
-  /** Bought: it moves to "Got it" until cleared. */
+  /** Got it: it moves to the "Got it" group until cleared. */
   isChecked: boolean;
   createdAt: number;
   updatedAt: number;

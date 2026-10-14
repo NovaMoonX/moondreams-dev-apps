@@ -23,12 +23,13 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 11. **Turn on nutrition if you want it.** Calories, protein, carbs, and fat each stay hidden until you switch them on.
 12. **Show only what you want on a list.** An eye button on Kitchen and Recipes hides the prices or the calories and macros on the rows, whenever you like.
 13. **Remember where a recipe came from.** Tag a recipe with a source, like a favorite site or a stack of cookbooks, then find your recipes by it.
+14. **Make a shopping list.** From a recipe, a saved meal, a planned meal or a whole day, pick what you need and it goes on one list in Kitchen, grouped by ingredient family. Tick things off at the store.
 
 ### Finding Your Way, In Detail
 
 - **Calendar** (left): what you plan to eat, by month, week or day, with the period's stats above it.
 - **Recipes** (center): your recipes and saved meals, and the sources your recipes came from.
-- **Kitchen** (right): everything you buy. Ingredients, their products, and your stores live here and, as it grows, how much you have on hand, servings you've prepared, and your shopping list with a section for what's running low.
+- **Kitchen** (right): everything you buy. Ingredients, their products, and your stores live here your shopping list and, as it grows, how much you have on hand, servings you've prepared, and a section of the list for what's running low.
 
 ### Filling In As You Go, In Detail
 
@@ -65,7 +66,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **A list of well-known stores is ready.** Pinch includes the grocery stores and warehouse clubs most people shop at, each with its logo, so adding "Walmart" is a tap, not typing.
 - **Add your own.** The corner market, a farm stand, an online shop: give it a name and, if you like, a photo or logo. Without an image it gets a tile with its first letter.
 - **Pick a store when you add a product.** The picker shows your stores first, then the well-known ones, with a search once the list grows.
-- **Stores are for you.** They group your products and, later, your shopping list. They aren't part of anything you share.
+- **Stores are for you.** They group your products. They aren't part of anything you share.
 
 ### Cost and Nutrition, In Detail
 
@@ -80,6 +81,17 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Blanks are named.** An ingredient with no nutrition entered is called out with a nudge and left out of the totals while that metric is on.
 - **A week runs Sunday to Saturday.** The month grid and the week view both start on Sunday.
 - **A meal holds up to 10 items.** Planning more than that is a recipe's job.
+
+### Shopping List, In Detail
+
+- **Add from where you are.** A recipe, a saved meal, a planned meal and a day each have an "Add to shopping list" row in their drawer (not on days that have passed). It opens a sheet with every ingredient ticked, so you untick what you already have. A recipe also asks how many servings you're cooking, and every amount scales to that.
+- **One line per ingredient and unit.** Adding chicken thigh twice makes one line with both amounts added. A line that is already on the list starts unticked and says how much is there ("On your list · 2 lb"), since ticking it adds more. Units are never converted: a cup and a tablespoon of the same ingredient are two lines.
+- **A day adds up.** An ingredient on its own counts as its serving size times the servings; a recipe counts its ingredient lines scaled by the servings planned.
+- **Tick off what you got.** A tick moves the line to "Got it", a collapsed group at the bottom. Add the same thing again and it starts over, unticked. "Clear" takes everything in "Got it" off the list, after asking.
+- **Change a line.** Tap a row to change how much and which unit, or take it off. "+ Add" at the top finds any ingredient and puts it on at its usual serving.
+- **An approximate cost.** A line under the title says "About $12.40 for what's left", worked out from each ingredient's default product and the amount on the list, not whole packages. Its warning icon names what it leaves out, like an ingredient with no price yet.
+- **It's just a list.** It doesn't follow the calendar: changing a meal later leaves the list as it was. Nothing on it is shared, copied out or sent anywhere.
+- **Limits.** One add takes up to 200 lines, and the list holds about 300 things before it asks you to clear what you've got. Both are limits in the app, not in the database.
 
 ### Bringing Recipes In, In Detail
 
@@ -121,12 +133,13 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
 - [x] View options on Kitchen and Recipes: hide prices or calories and macros on the rows, and pick per serving or per 100 g for ingredients, remembered per person on the device
-- [x] Stays quick with a big kitchen: hundreds of ingredients and recipes and a thousand planned meals
+- [x] Shopping list in Kitchen: add a recipe's (at the servings you pick), a saved meal's, a planned meal's or a day's ingredients, or a single ingredient; lines merge by ingredient and unit, group by family, tick off to "Got it", and show an approximate cost with what it leaves out
+- [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals and a shopping list of a few hundred things
 
 ### Next Steps
 - [ ] Track how much of each ingredient you have, with ingredients you haven't counted marked "not tracked" until you count them, which is different from "out"
 - [ ] Mark a meal as made: its ingredients come out of your stock, and a batch adds prepared servings you can plan meals from
-- [ ] Shopping list built from the meals you've planned, with a section for low-stock ingredients and totals from your products, grouped by store
+- [ ] Shopping list: subtract what you have on hand, add a section for low-stock ingredients, and group by store with totals from your products
 - [ ] Add ingredients, stock, and products in bulk from photos of your fridge, your cabinets, or a grocery receipt, reviewed before saving
 - [ ] Update an existing recipe by pasting changes into it, reviewing what would change before applying
 - [ ] Use one recipe inside another, like a house sauce in a dish
@@ -158,7 +171,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 - **Frontend:** React 19, TypeScript, Vite, TailwindCSS 4, DreamerUI (including its `Calendar` for the month view)
 - **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
-- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, meals, calendar entries, and per-user settings; Firebase Storage for recipe and store images
+- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, meals, calendar entries, the shopping list and per-user settings (adding to the list merges into existing lines in one transaction, so two devices adding at once never lose an amount); Firebase Storage for recipe and store images
 - **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review; for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them
 - **On the device:** a list's view options are kept in the browser's local storage, per person; nothing else of yours is kept there beyond Firestore's own cache
 - **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (licence not yet confirmed from here: to be checked before launch), stored per 100 g alongside common unit conversions; money is stored as whole cents
