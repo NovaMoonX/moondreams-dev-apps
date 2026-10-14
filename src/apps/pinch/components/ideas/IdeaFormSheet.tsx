@@ -124,29 +124,32 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
               name: 'photo',
               label: '',
               renderComponent: () => (
-                <div className='flex items-center gap-4'>
-                  <span
-                    className='bg-accent grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl text-3xl'
-                    aria-hidden='true'
-                  >
-                    {photoUrl ? (
-                      <FallbackImage
-                        src={photoUrl}
-                        alt=''
-                        fallback={IDEA_KIND_EMOJIS.PHOTO}
-                        className='size-full object-cover'
-                      />
-                    ) : (
-                      IDEA_KIND_EMOJIS.PHOTO
-                    )}
-                  </span>
-                  <PhotoPicker
-                    photoUrl={photoUrl}
-                    showPreview={false}
-                    changeLabel='Replace photo'
-                    error={photoError}
-                    onSelect={pickPhoto}
-                  />
+                <div className='space-y-2'>
+                  <span className='block text-sm font-medium'>Picture</span>
+                  <div className='flex items-center gap-4'>
+                    <span
+                      className='bg-accent grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl text-3xl'
+                      aria-hidden='true'
+                    >
+                      {photoUrl ? (
+                        <FallbackImage
+                          src={photoUrl}
+                          alt=''
+                          fallback={IDEA_KIND_EMOJIS.PHOTO}
+                          className='size-full object-cover'
+                        />
+                      ) : (
+                        IDEA_KIND_EMOJIS.PHOTO
+                      )}
+                    </span>
+                    <PhotoPicker
+                      photoUrl={photoUrl}
+                      showPreview={false}
+                      changeLabel='Replace photo'
+                      error={photoError}
+                      onSelect={pickPhoto}
+                    />
+                  </div>
                 </div>
               ),
             }),
