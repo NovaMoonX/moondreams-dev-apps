@@ -171,9 +171,14 @@ export interface PlannedMeal {
 export type KitchenView = 'yours' | 'all';
 export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
 export type NutritionMetric = keyof NutritionValues;
-export type RecipesView = 'recipes' | 'meals';
+export type RecipesView = 'recipes' | 'meals' | 'ideas';
 
 export type RecipeStartMethod = 'text' | 'file' | 'link' | 'manual';
+
+export type IdeaKind = 'LINK' | 'PHOTO' | 'TEXT';
+
+/** How a new idea begins: a link, a photo, or a few words. */
+export type IdeaStartMethod = 'link' | 'photo' | 'text';
 
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
 export type PinchSubview =
@@ -188,6 +193,8 @@ export type PinchSubview =
       method?: RecipeStartMethod;
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
+      /** The idea this recipe is being made from; the form opens with what it knows, and saving links the two. */
+      fromIdeaId?: string;
     }
   | {
       kind: 'plan';
@@ -264,6 +271,25 @@ export interface ShoppingItem {
   /** Immutable: a different unit is a different item. */
   unit: Unit;
   isChecked: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Something the person would like to cook someday: a link, a photo or a few words, which can later become a recipe. */
+export interface Idea {
+  id: string;
+  kind: IdeaKind;
+  title: string;
+  note: string | null;
+  /** http(s) only; the page of a LINK idea. */
+  url: string | null;
+  siteName: string | null;
+  /** https only; the page's own picture, a third party's address. */
+  imageUrl: string | null;
+  /** Storage path of a PHOTO idea's picture. */
+  photoPath: string | null;
+  /** The recipe this became. A missing key, an id no recipe has, or an archived recipe reads as not made yet. */
+  recipeId: string | null;
   createdAt: number;
   updatedAt: number;
 }

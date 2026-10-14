@@ -1,4 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import { FirebaseError } from 'firebase/app';
 import { deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
@@ -11,7 +12,9 @@ import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
+import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import type {
+  Idea,
   IngredientRecord,
   NutritionValues,
   Recipe,
@@ -25,6 +28,9 @@ const recipeDoc = (uid: string, id: string) =>
 
 const sourceDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'sources', id);
+
+const ideaDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'ideas', id);
 
 export const getRecipeCoverPath = (uid: string, recipeId: string) =>
   `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
@@ -52,6 +58,8 @@ export interface RecipeDraft {
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
   removeCover: boolean;
+  /** The idea a new recipe is made from: its `recipeId` is set in the same batch, unless the idea is gone by then. */
+  fromIdeaId: string | null;
 }
 
 interface SaveRecipeInput {
@@ -79,6 +87,12 @@ export const saveRecipe = createAsyncThunk<
         'This recipe is gone, so there is nothing to save.',
       );
     }
+    const idea =
+      existing === null && draft.fromIdeaId !== null
+        ? (getState().pinch.ideas.items.find(
+            (entry) => entry.id === draft.fromIdeaId,
+          ) ?? null)
+        : null;
     const path = getRecipeCoverPath(uid, recipeId);
 
     try {
@@ -109,62 +123,82 @@ export const saveRecipe = createAsyncThunk<
         updatedAt: now,
       };
 
-      const batch = writeBatch(db);
-      if (draft.newSource) {
-        const source: Source = {
-          id: draft.newSource.id,
-          label: draft.newSource.label,
-          createdAt: now,
-          updatedAt: now,
-        };
-        batch.set(sourceDoc(uid, source.id), source);
-      }
-      draft.newIngredients.forEach((ingredient) => {
-        const record: IngredientRecord = {
-          id: ingredient.id,
-          catalogId: null,
-          name: ingredient.name.trim(),
-          familyId: null,
-          iconKey: null,
-          nutritionPer100g: null,
-          servingAmount: null,
-          servingUnit: null,
-          gramsPerMl: null,
-          gramsEach: null,
-          defaultProductId: null,
-          isArchived: false,
-          createdAt: now,
-          updatedAt: now,
-        };
-        batch.set(
-          doc(
-            db,
-            'apps',
-            'pinch',
-            'kitchens',
-            uid,
-            'ingredients',
-            ingredient.id,
-          ),
-          record,
-        );
-      });
-      if (existing) {
-        batch.update(recipeDoc(uid, recipeId), {
-          ...fields,
-          ...('isArchived' in existing ? {} : { isArchived: false }),
+      const buildBatch = (linkedIdea: Idea | null) => {
+        const batch = writeBatch(db);
+        if (draft.newSource) {
+          const source: Source = {
+            id: draft.newSource.id,
+            label: draft.newSource.label,
+            createdAt: now,
+            updatedAt: now,
+          };
+          batch.set(sourceDoc(uid, source.id), source);
+        }
+        draft.newIngredients.forEach((ingredient) => {
+          const record: IngredientRecord = {
+            id: ingredient.id,
+            catalogId: null,
+            name: ingredient.name.trim(),
+            familyId: null,
+            iconKey: null,
+            nutritionPer100g: null,
+            servingAmount: null,
+            servingUnit: null,
+            gramsPerMl: null,
+            gramsEach: null,
+            defaultProductId: null,
+            isArchived: false,
+            createdAt: now,
+            updatedAt: now,
+          };
+          batch.set(
+            doc(
+              db,
+              'apps',
+              'pinch',
+              'kitchens',
+              uid,
+              'ingredients',
+              ingredient.id,
+            ),
+            record,
+          );
         });
-      } else {
-        const recipe: Recipe = {
-          id: recipeId,
-          ...fields,
-          source: draft.source,
-          isArchived: false,
-          createdAt: now,
-        };
-        batch.set(recipeDoc(uid, recipeId), recipe);
+        if (existing) {
+          batch.update(recipeDoc(uid, recipeId), {
+            ...fields,
+            ...('isArchived' in existing ? {} : { isArchived: false }),
+          });
+        } else {
+          const recipe: Recipe = {
+            id: recipeId,
+            ...fields,
+            source: draft.source,
+            isArchived: false,
+            createdAt: now,
+          };
+          batch.set(recipeDoc(uid, recipeId), recipe);
+        }
+        if (linkedIdea) {
+          batch.update(ideaDoc(uid, linkedIdea.id), {
+            ...getMissingIdeaFields(linkedIdea),
+            recipeId,
+            updatedAt: now,
+          });
+        }
+        return batch;
+      };
+
+      try {
+        await buildBatch(idea).commit();
+      } catch (error) {
+        const isIdeaGone =
+          idea !== null &&
+          error instanceof FirebaseError &&
+          error.code === 'not-found';
+        if (!isIdeaGone) throw error;
+        await buildBatch(null).commit();
       }
-      await batch.commit();
     } catch (error) {
       if (draft.coverFile && existing?.coverPath !== path) {
         await deleteFile(path).catch(() => undefined);

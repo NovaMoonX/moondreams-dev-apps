@@ -16,8 +16,12 @@ interface PhotoPickerProps {
   variant?: PhotoPickerVariant;
   /** Minimal variant only: set false when the caller already renders its own preview bound to the same `photoUrl`. */
   showPreview?: boolean;
+  /** Button text before a photo is picked and once there is one. */
+  uploadLabel?: string;
+  changeLabel?: string;
   onSelect: (file: File | null) => void;
-  onRemove: () => void;
+  /** Without it there is no Remove button, for a photo that is required. */
+  onRemove?: () => void;
 }
 
 function PhotoPicker({
@@ -29,6 +33,8 @@ function PhotoPicker({
   loading = false,
   variant = 'minimal',
   showPreview = true,
+  uploadLabel = 'Upload photo',
+  changeLabel = 'Change photo',
   onSelect,
   onRemove,
 }: PhotoPickerProps) {
@@ -62,9 +68,9 @@ function PhotoPicker({
         disabled={isBusy}
         onClick={() => inputRef.current?.click()}
       >
-        {photoUrl ? 'Change photo' : 'Upload photo'}
+        {photoUrl ? changeLabel : uploadLabel}
       </Button>
-      {photoUrl && (
+      {photoUrl && onRemove && (
         <Button
           type='button'
           variant='link'

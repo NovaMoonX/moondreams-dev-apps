@@ -11,7 +11,10 @@ import RecipeReader from '@apps/pinch/components/recipes/RecipeReader';
 import RecipeStart from '@apps/pinch/components/recipes/RecipeStart';
 import { RECIPE_START_METHODS } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import { selectRecipesById } from '@apps/pinch/store/selectors';
+import {
+  selectIdeasById,
+  selectRecipesById,
+} from '@apps/pinch/store/selectors';
 import type { RecipeStartMethod } from '@apps/pinch/types';
 
 type Stage = 'start' | 'form' | Exclude<RecipeStartMethod, 'manual'>;
@@ -32,14 +35,20 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const { confirm } = useActionModal();
   const startMethod = subview?.kind === 'recipe' ? subview.method : undefined;
   const fromDrawer = subview?.kind === 'recipe' && subview.fromDrawer === true;
+  const fromIdeaId =
+    subview?.kind === 'recipe' ? (subview.fromIdeaId ?? null) : null;
   const isDirtyRef = useRef(false);
   const existing =
     useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
+  const ideasById = useAppSelector(selectIdeasById);
+  const [fromIdea] = useState(() =>
+    recipeId === null ? (ideasById.get(fromIdeaId ?? '') ?? null) : null,
+  );
   const [stage, setStage] = useState<Stage>(
     recipeId === null ? getStage(startMethod) : 'form',
   );
   const [read, setRead] = useState<RecipeRead | null>(null);
-  const [title, setTitle] = useState(existing?.title ?? '');
+  const [title, setTitle] = useState(existing?.title ?? fromIdea?.title ?? '');
 
   const isReaderStage = stage !== 'start' && stage !== 'form';
 
@@ -92,6 +101,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           uid={uid}
           recipeId={recipeId}
           initialRead={read}
+          initialIdea={fromIdea}
           isDirtyRef={isDirtyRef}
           onLeave={() => void leave()}
           onTitleChange={setTitle}
