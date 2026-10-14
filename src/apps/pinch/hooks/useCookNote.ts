@@ -42,10 +42,15 @@ export function useCookNote({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const reset = () => {
+  const close = () => {
     setIsOpen(false);
     setText('');
     setError(null);
+  };
+
+  const reset = () => {
+    close();
+    setIsSaved(false);
   };
 
   const save = async () => {
@@ -59,7 +64,7 @@ export function useCookNote({
       addToast({ title: `Added a note to ${recipeTitle}`, type: 'success' });
       setIsSaved(true);
       setIsSaving(false);
-      reset();
+      close();
       onSaved();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this note.'));
@@ -78,7 +83,7 @@ export function useCookNote({
     isSaving,
     error,
     open: () => setIsOpen(true),
-    cancel: reset,
+    cancel: close,
     reset,
     save,
   };

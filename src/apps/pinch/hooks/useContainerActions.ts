@@ -28,9 +28,9 @@ import {
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const UNDO_TOAST_MS = 6000;
-const PUT_AWAY_KEY = 'put-away';
 
 const inFlight = new Set<string>();
+const undone = new Set<string>();
 
 /** Ignores a second tap on the same container while its first change is still being written. */
 const once = async <T>(key: string, run: () => Promise<T>) => {
@@ -46,7 +46,7 @@ const once = async <T>(key: string, run: () => Promise<T>) => {
 
 export function useContainerActions(uid: string) {
   const dispatch = useAppDispatch();
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
   const isReady = useAppSelector(selectIsContainersReady);
   const loadError = useAppSelector(selectContainersLoadError);
   const inStockCount = useAppSelector(
@@ -55,6 +55,31 @@ export function useContainerActions(uid: string) {
 
   const showUndoFailed = (description: string) =>
     addToast({ title: "Couldn't undo that", description, type: 'error' });
+
+  const addUndoToast = (
+    title: string,
+    description: string | undefined,
+    undo: () => Promise<void>,
+  ) => {
+    const id = generateUuid();
+    addToast({
+      id,
+      title,
+      description,
+      type: 'success',
+      duration: UNDO_TOAST_MS,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          removeToast(id);
+          if (undone.has(id)) return;
+
+          undone.add(id);
+          void undo();
+        },
+      },
+    });
+  };
 
   const undoPutAway = async (ids: string[]) => {
     try {
@@ -88,39 +113,27 @@ export function useContainerActions(uid: string) {
     const problem = getProblem(inputs);
     if (problem !== null) throw new Error(problem);
 
-    const created = await once(PUT_AWAY_KEY, async () => {
-      const now = Date.now();
-      const containers = inputs.map((input) =>
-        buildContainer({ ...input, id: generateUuid() }, now),
+    const now = Date.now();
+    const created = inputs.map((input) =>
+      buildContainer({ ...input, id: generateUuid() }, now),
+    );
+    dispatch(writeContainers({ uid, containers: created }))
+      .unwrap()
+      .catch((error: string) =>
+        addToast({
+          title: "That didn't save",
+          description: error,
+          type: 'error',
+        }),
       );
-      dispatch(writeContainers({ uid, containers }))
-        .unwrap()
-        .catch((error) =>
-          addToast({
-            title: "That didn't save",
-            description: getErrorMessage(
-              error,
-              `${containers[0].title} was taken off your list.`,
-            ),
-            type: 'error',
-          }),
-        );
-      return containers;
-    });
-    if (created === undefined) return [];
 
-    addToast({
-      title: getSavedText(created),
-      description: navigator.onLine
+    addUndoToast(
+      getSavedText(created),
+      navigator.onLine
         ? created[0].title
         : `${created[0].title} · Saved on this phone, it will sync when you're online`,
-      type: 'success',
-      duration: UNDO_TOAST_MS,
-      action: {
-        label: 'Undo',
-        onClick: () => void undoPutAway(created.map(({ id }) => id)),
-      },
-    });
+      () => undoPutAway(created.map(({ id }) => id)),
+    );
     return created;
   };
 
@@ -130,18 +143,13 @@ export function useContainerActions(uid: string) {
         eatContainer({ uid, id: container.id, count }),
       ).unwrap();
       const eaten = count === 'ALL' ? container.servings : count;
-      addToast({
-        title: isFinished
+      addUndoToast(
+        isFinished
           ? `Finished ${container.title}`
           : `Ate ${formatServings(eaten)}`,
-        description: isFinished ? undefined : container.title,
-        type: 'success',
-        duration: UNDO_TOAST_MS,
-        action: {
-          label: 'Undo',
-          onClick: () => void undoEnd(container.id, at),
-        },
-      });
+        isFinished ? undefined : container.title,
+        () => undoEnd(container.id, at),
+      );
       return isFinished;
     });
 
@@ -150,15 +158,9 @@ export function useContainerActions(uid: string) {
       const { at } = await dispatch(
         tossContainer({ uid, id: container.id }),
       ).unwrap();
-      addToast({
-        title: `Threw out ${container.title}`,
-        type: 'success',
-        duration: UNDO_TOAST_MS,
-        action: {
-          label: 'Undo',
-          onClick: () => void undoEnd(container.id, at),
-        },
-      });
+      addUndoToast(`Threw out ${container.title}`, undefined, () =>
+        undoEnd(container.id, at),
+      );
       return true;
     });
 

@@ -53,21 +53,21 @@ export async function readUsage(
     return getStoreUsage(products.items, id);
   }
 
-  const plannedMeals = await countPlannedMeals(uid, id);
-  return kind === 'RECIPE'
-    ? getRecipeUsage(
-        meals.items,
-        id,
-        plannedMeals,
-        await countContainers(uid, id),
-      )
-    : getIngredientUsage(
-        recipes.items,
-        meals.items,
-        products.items,
-        id,
-        plannedMeals,
-      );
+  if (kind === 'RECIPE') {
+    const [plannedMeals, containers] = await Promise.all([
+      countPlannedMeals(uid, id),
+      countContainers(uid, id),
+    ]);
+    return getRecipeUsage(meals.items, id, plannedMeals, containers);
+  }
+
+  return getIngredientUsage(
+    recipes.items,
+    meals.items,
+    products.items,
+    id,
+    await countPlannedMeals(uid, id),
+  );
 }
 
 interface GetUsageInput {

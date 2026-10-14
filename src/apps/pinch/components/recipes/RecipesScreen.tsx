@@ -39,7 +39,6 @@ import {
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
-  selectCostContext,
   selectIdeasLoadError,
   selectMeals,
   selectRecipeCosts,
@@ -65,7 +64,6 @@ import {
   type StockSummary,
 } from '@apps/pinch/utils/containers';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
-import { getMealCost } from '@apps/pinch/utils/mealMath';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
@@ -113,7 +111,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const recipes = useAppSelector(selectRecipes);
   const costs = useAppSelector(selectRecipeCosts);
   const meals = useAppSelector(selectMeals);
-  const costContext = useAppSelector(selectCostContext);
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
@@ -321,7 +318,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             <li key={meal.id}>
               <MealRow
                 meal={meal}
-                cost={getMealCost(meal.items, costContext)}
                 showPrices={viewOptions.options.showPrices}
                 showMacros={viewOptions.options.showMacros}
                 onOpen={setOpenMealId}

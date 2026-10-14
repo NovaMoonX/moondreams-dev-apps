@@ -64,10 +64,11 @@ export function usePutAway({
       cookId === null ? undefined : selectContainersByCookId(state).get(cookId),
     ) ?? NO_CONTAINERS;
   const [details, setDetails] = useState<Details | null>(null);
-  const [isDismissed, setIsDismissed] = useState(false);
+  const [dismissedCookId, setDismissedCookId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isDismissed = cookId !== null && dismissedCookId === cookId;
   const care = getRecipeCare(recipe);
   const savedTotal = saved.reduce(
     (sum, container) => sum + (getStartServings(container) ?? 0),
@@ -177,11 +178,11 @@ export function usePutAway({
         typedEatBy: null,
       });
     },
-    dismiss: () => setIsDismissed(true),
+    dismiss: () => setDismissedCookId(cookId),
     skip: () => {
       setDetails(null);
       setError(null);
-      setIsDismissed(true);
+      setDismissedCookId(cookId);
     },
     save,
   };

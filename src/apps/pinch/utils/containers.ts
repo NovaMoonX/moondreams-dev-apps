@@ -225,21 +225,28 @@ export const getPutAwayBasis = (input: {
 };
 
 const getDroppedIndex = (history: ContainerEvent[]) => {
-  const oldestWhere = (matches: (event: ContainerEvent) => boolean) =>
+  const firstPlace = Math.max(
+    0,
+    history.findIndex((event) => event.place !== null),
+  );
+  const oldestAfter = (
+    start: number,
+    matches: (event: ContainerEvent) => boolean,
+  ) =>
     history.findIndex(
       (event, index) =>
-        index > 0 && index < history.length - 1 && matches(event),
+        index > start && index < history.length - 1 && matches(event),
     );
   return (
     [
-      oldestWhere((event) => event.kind === 'EAT'),
-      oldestWhere((event) => event.kind === 'EDIT'),
-      oldestWhere((event) => event.kind !== 'FREEZE'),
-    ].find((index) => index !== -1) ?? 1
+      oldestAfter(0, (event) => event.kind === 'EAT'),
+      oldestAfter(0, (event) => event.kind === 'EDIT'),
+      oldestAfter(firstPlace, (event) => event.kind !== 'FREEZE'),
+    ].find((index) => index !== -1) ?? firstPlace + 1
   );
 };
 
-/** Past the cap the oldest EAT goes first, then the oldest EDIT, then any other move before a FREEZE: the freeze count and the thaw line read the place events. */
+/** Past the cap the oldest EAT goes first, then the oldest EDIT, then the oldest move after the first place event that isn't a FREEZE: how many went in, the freeze count and where it is now stay readable. */
 export const appendEvent = (
   history: ContainerEvent[],
   event: ContainerEvent,
@@ -656,16 +663,6 @@ export const getStockParts = (summary: StockSummary, now = Date.now()) =>
           };
     return [{ place, servings, due }];
   });
-
-export const getStockDueText = (summary: StockSummary, now = Date.now()) => {
-  if (summary.nearestEatBy === null) return null;
-
-  const state = getEatByState(summary.nearestEatBy, now);
-  if (state === 'LATER') return null;
-  return state === 'PAST'
-    ? 'past its date'
-    : `eat by ${getEatByPhrase(summary.nearestEatBy, now)}`;
-};
 
 export interface PreparedSummary {
   fridgeServings: number;

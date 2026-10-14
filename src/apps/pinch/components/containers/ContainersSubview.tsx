@@ -104,6 +104,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const [finishedCount, setFinishedCount] = useState(
     CONTAINER_FINISHED_PAGE_SIZE,
   );
+  const [scopedLimit, setScopedLimit] = useState(CONTAINER_FINISHED_PAGE_SIZE);
   const [open, setOpen] = useState<Container | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -327,21 +328,37 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       );
     }
 
-    const hasMore = !isScoped && finishedQuery.data.length >= finishedCount;
+    const scopedHidden =
+      isScoped && finished.length - scopedLimit > HIDDEN_WORTH_A_BUTTON
+        ? finished.length - scopedLimit
+        : 0;
+    const rows = scopedHidden > 0 ? finished.slice(0, scopedLimit) : finished;
+    const hasMore = isScoped
+      ? scopedHidden > 0
+      : finishedQuery.data.length >= finishedCount;
+    const moreCount = isScoped
+      ? Math.min(CONTAINER_FINISHED_PAGE_SIZE, scopedHidden)
+      : CONTAINER_FINISHED_PAGE_SIZE;
     return (
       <div className='space-y-1'>
-        <ul className='divide-border divide-y'>{finished.map(renderRow)}</ul>
+        <ul className='divide-border divide-y'>{rows.map(renderRow)}</ul>
         {hasMore && (
           <Button
             type='button'
             variant='tertiary'
             className='h-10 justify-start px-0!'
-            loading={latestFinished.isFetching}
+            loading={!isScoped && latestFinished.isFetching}
             onClick={() =>
-              setFinishedCount((count) => count + CONTAINER_FINISHED_PAGE_SIZE)
+              isScoped
+                ? setScopedLimit(
+                    (count) => count + CONTAINER_FINISHED_PAGE_SIZE,
+                  )
+                : setFinishedCount(
+                    (count) => count + CONTAINER_FINISHED_PAGE_SIZE,
+                  )
             }
           >
-            Show {CONTAINER_FINISHED_PAGE_SIZE} more
+            Show {moreCount} more
           </Button>
         )}
       </div>

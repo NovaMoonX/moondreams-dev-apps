@@ -111,6 +111,7 @@ function EatView({
       onBack();
     } catch (eatError) {
       setError(getErrorMessage(eatError, 'Unable to save this.'));
+    } finally {
       setIsSaving(false);
     }
   };

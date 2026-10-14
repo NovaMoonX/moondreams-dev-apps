@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { shallowEqual } from 'react-redux';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -16,7 +17,7 @@ import {
 import type { Meal } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
-import type { MealCost } from '@apps/pinch/utils/mealMath';
+import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
   hasShownValue,
@@ -24,21 +25,33 @@ import {
 
 interface MealRowProps {
   meal: Meal;
-  cost: MealCost;
   showPrices: boolean;
   showMacros: boolean;
   onOpen: (id: string) => void;
 }
 
-function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
+function MealRow({ meal, showPrices, showMacros, onOpen }: MealRowProps) {
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const costContext = useAppSelector(selectCostContext);
-  const show = useAppSelector(selectShowNutrition);
-  const stock = useAppSelector(
-    (state) => selectStockByMealWithRecipes(state).get(meal.id),
-    shallowEqual,
+  const cost = useMemo(
+    () => getMealCost(meal.items, costContext),
+    [meal.items, costContext],
   );
+  const show = useAppSelector(selectShowNutrition);
+  const stock = useAppSelector((state) => {
+    const found = selectStockByMealWithRecipes(state).get(meal.id);
+    return (
+      found && {
+        fridge: found.fridge,
+        freezer: found.freezer,
+        containers: found.containers,
+        nearestEatBy: found.nearestEatBy,
+        fridgeEatBy: found.fridgeEatBy,
+        freezerEatBy: found.freezerEatBy,
+      }
+    );
+  }, shallowEqual);
   const nutrition = showMacros
     ? getMealNutrition(
         meal.items,
@@ -101,4 +114,4 @@ function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
   );
 }
 
-export default MealRow;
+export default memo(MealRow);

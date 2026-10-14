@@ -111,6 +111,7 @@ export function EatFromStockView({
       if ((await eat(container, count)) !== undefined) onBack();
     } catch (eatError) {
       setError(getErrorMessage(eatError, 'Unable to save this.'));
+    } finally {
       setBusyId(null);
     }
   };

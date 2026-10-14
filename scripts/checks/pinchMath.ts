@@ -82,7 +82,6 @@ import {
   getServingsToEat,
   getShoppingStockLine,
   getStockDetail,
-  getStockDueText,
   getStockMaps,
   getStockParts,
   getStockPlaceCounts,
@@ -3095,6 +3094,31 @@ assert.deepEqual(
   [0, 2, 3],
   'with no EAT to drop, the oldest event after the first goes',
 );
+const longRunOfMoves = [
+  makeEvent('MADE', 0, { servings: 12 }),
+  makeEvent('FRIDGE', 1, { servings: 8, place: 'FRIDGE' }),
+  ...Array.from({ length: MAX_CONTAINER_HISTORY - 2 }, (_, i) =>
+    makeEvent(i % 2 === 0 ? 'FREEZE' : 'THAW', i + 2, {
+      servings: 6,
+      place: i % 2 === 0 ? 'FREEZER' : 'FRIDGE',
+    }),
+  ),
+];
+const afterOneMoreFreeze = appendEvent(
+  longRunOfMoves,
+  makeEvent('FREEZE', 99, { servings: 6, place: 'FREEZER' }),
+);
+assert.deepEqual(
+  [
+    afterOneMoreFreeze.length,
+    afterOneMoreFreeze.map((entry) => entry.kind).slice(0, 2),
+    getStartServings({ history: afterOneMoreFreeze } as Container),
+    getFreezeCount(afterOneMoreFreeze),
+    afterOneMoreFreeze.map((entry) => entry.at).slice(2, 4),
+  ],
+  [MAX_CONTAINER_HISTORY, ['MADE', 'FRIDGE'], 8, 5, [2, 4]],
+  'a long run of moves drops the oldest thaw after the first place event: the 8 that went in and every freeze stay',
+);
 const cookEdits = [
   makeEvent('MADE', 0, { servings: 4 }),
   makeEvent('FREEZE', 1, { servings: 4, place: 'FREEZER' }),
@@ -3586,20 +3610,6 @@ assert.deepEqual(
   ),
   [{ place: 'FREEZER', servings: 3, due: null }],
   'a far eat-by adds nothing to its place',
-);
-assert.equal(
-  getStockDueText(adoboStock, lateOnThe14th),
-  'past its date',
-  'the nearest eat-by being behind today says so',
-);
-assert.equal(
-  getStockDueText({ ...adoboStock, nearestEatBy: dayOf(15) }, lateOnThe14th),
-  'eat by tomorrow',
-);
-assert.equal(
-  getStockDueText({ ...adoboStock, nearestEatBy: dayOf(30) }, lateOnThe14th),
-  null,
-  'a far eat-by adds nothing to the row',
 );
 assert.deepEqual(
   [
