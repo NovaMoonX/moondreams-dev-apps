@@ -12,6 +12,7 @@ import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
+import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
@@ -42,10 +43,12 @@ import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCost,
   formatRowCost,
+  getFixedNote,
   getItemTitle,
 } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
-import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
+import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
+import { formatDateShort } from '@/utils/formatUtils';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import {
   getPlannedMealNutrition,
@@ -116,6 +119,8 @@ function PlannedMealView({
     costContext.ingredientsById,
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
+  const repricedAt = meal.snapshot ? getRepricedAt(meal.snapshot) : null;
+  const noPriceText = repricedAt === null ? "Wasn't priced" : 'Still no price';
 
   const handleSaveAsMeal = async () => {
     setError(null);
@@ -303,11 +308,11 @@ function PlannedMealView({
           value={
             cost.totalCents === null
               ? meal.snapshot
-                ? "Wasn't priced"
+                ? noPriceText
                 : 'No prices yet'
               : formatCost(cost.totalCents)
           }
-          detail={meal.snapshot ? 'Fixed when the day passed' : undefined}
+          detail={meal.snapshot ? getFixedNote([meal.snapshot]) : undefined}
           help={
             leftOutCount > 0 && cost.totalCents !== null ? (
               <HelpTip
@@ -363,7 +368,11 @@ function PlannedMealView({
                 </span>
               </span>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                {formatRowCost(itemCost?.cents, meal.snapshot !== null)}
+                {formatRowCost(
+                  itemCost?.cents,
+                  meal.snapshot !== null,
+                  repricedAt !== null,
+                )}
               </span>
             </li>
           );
@@ -372,11 +381,12 @@ function PlannedMealView({
       {error && <p className='text-destructive text-sm'>{error}</p>}
       {meal.snapshot && (
         <p className='text-muted-foreground text-sm'>
-          This day has passed, so its meals keep the prices and numbers they
-          had. Remove one and add it again to use today's.
+          {repricedAt === null
+            ? 'This day has passed, so its meals keep the prices and numbers they had.'
+            : `This day was priced on ${formatDateShort(repricedAt)}, so its meals keep those prices and numbers.`}
         </p>
       )}
-      {(canPlanAhead || markable.length > 0) && (
+      {(canPlanAhead || markable.length > 0 || meal.snapshot) && (
         <ActionGroup>
           {canPlanAhead && cookable.length > 0 && (
             <StartCookingRow
@@ -401,6 +411,11 @@ function PlannedMealView({
               markable={entry}
             />
           ))}
+          <RepriceDayRow
+            uid={uid}
+            dayKey={getPlannedDayKey(meal.date)}
+            isGrouped
+          />
           {canPlanAhead && (
             <AddToShoppingRow
               isGrouped

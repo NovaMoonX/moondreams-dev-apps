@@ -123,7 +123,8 @@ function StatsRow({
                 />
                 <p className='text-muted-foreground'>
                   A price you add now counts from today on: days that have
-                  passed keep the prices they had.
+                  passed keep the prices they had. To count it on one, open that
+                  day.
                 </p>
               </HelpTip>
             ) : undefined

@@ -381,3 +381,5 @@ export const RECIPE_NOTES_FIRST_PAGE = 5;
 export const RECIPE_NOTES_PAGE_SIZE = 50;
 /** How many of a recipe's latest cooks the note sheet offers as answers. */
 export const NOTE_COOK_CHOICES = 4;
+/** The most meals one day can have priced again in the one transaction that does it, under Firestore's 500 writes: the action's limit, not the rules'. */
+export const MAX_REPRICE_MEALS = 400;

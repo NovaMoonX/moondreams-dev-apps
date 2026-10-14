@@ -17,6 +17,17 @@ const dayTitleFormatter = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
   timeZone: 'UTC',
 });
+const shortDayFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+const shortDayWithYearFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
 
 /** `"2026-10-13"` for a planned day's stored date (UTC midnight). */
 export const getPlannedDayKey = (date: number) => toDateInputValue(date);
@@ -54,6 +65,13 @@ export const formatMonthTitle = (monthKey: string) => {
 
 export const formatDayTitle = (dayKey: string) =>
   dayTitleFormatter.format(getDateOfDayKey(dayKey));
+
+/** "Oct 12", with the year when it isn't the viewer's current one. */
+export const formatDayShort = (dayKey: string, now = Date.now()) =>
+  (dayKey.slice(0, 4) === toLocalDateInputValue(now).slice(0, 4)
+    ? shortDayFormatter
+    : shortDayWithYearFormatter
+  ).format(getDateOfDayKey(dayKey));
 
 /** "Tuesday". */
 /** The `[start, end)` of stored dates the listener covers for a shown month. */

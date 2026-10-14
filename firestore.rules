@@ -1584,11 +1584,14 @@ service cloud.firestore {
       }
 
       // What a meal cost when its day passed. The client lists at most 10 lines and as many left-out ingredients as its recipes hold; rules can't loop over them, so their elements are the client's.
+      // `repricedAt` is null when the day passed and an instant once the person asked for today's prices; older snapshots lack the key.
       function isSnapshot(value) {
         return value is map
-          && value.keys().hasOnly(['frozenAt', 'costCents', 'leftOut', 'nutrition', 'lines'])
+          && value.keys().hasOnly(['frozenAt', 'repricedAt', 'costCents', 'leftOut', 'nutrition', 'lines'])
           && value.keys().hasAll(['frozenAt', 'costCents', 'leftOut', 'nutrition', 'lines'])
           && value.frozenAt is int && value.frozenAt <= request.time.toMillis() + 300000
+          && (value.get('repricedAt', null) == null
+            || (value.repricedAt is int && value.repricedAt <= request.time.toMillis() + 300000))
           && isTotal(value.costCents)
           && value.leftOut is list && value.leftOut.size() <= 1000
           && value.nutrition is map
@@ -1597,6 +1600,19 @@ service cloud.firestore {
           && isTotal(value.nutrition.calories) && isTotal(value.nutrition.protein)
           && isTotal(value.nutrition.carbs) && isTotal(value.nutrition.fat)
           && value.lines is list && value.lines.size() <= 10;
+      }
+
+      // The one way a fixed snapshot changes: the person asks for today's prices. The write that fixes a day never sets an instant `repricedAt`,
+      // and the meal is otherwise untouched, so its id and whatever points at it stay.
+      function isRepricedFrom(before, after) {
+        return after.snapshot.get('repricedAt', null) is int
+          && after.snapshot.frozenAt == before.snapshot.frozenAt
+          && after.date == before.date
+          && after.mealType == before.mealType
+          && after.name == before.name
+          && after.sourceMealId == before.sourceMealId
+          && after.items == before.items
+          && after.refIds == before.refIds;
       }
 
       function isPlannedMeal(data, id) {
@@ -1656,7 +1672,8 @@ service cloud.firestore {
         allow update: if isKitchenOwner() && isPlannedMeal(request.resource.data, id)
           && request.resource.data.createdAt == resource.data.createdAt
           && (resource.data.get('snapshot', null) == null
-            || request.resource.data.snapshot == resource.data.snapshot);
+            || request.resource.data.snapshot == resource.data.snapshot
+            || isRepricedFrom(resource.data, request.resource.data));
       }
 
       match /products/{id} {
