@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import ActionGroup from '@/components/ActionGroup';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
@@ -371,9 +372,10 @@ function PlannedMealView({
         </p>
       )}
       {(canPlanAhead || markable.length > 0) && (
-        <div className='space-y-2'>
+        <ActionGroup>
           {canPlanAhead && cookable.length > 0 && (
             <StartCookingRow
+              isGrouped
               onClick={() =>
                 cookable.length === 1
                   ? onStartCooking(
@@ -387,6 +389,7 @@ function PlannedMealView({
           {markable.map((entry) => (
             <PlannedCookRow
               key={entry.recipe.id}
+              isGrouped
               uid={uid}
               plannedMealId={meal.id}
               plannedDate={meal.date}
@@ -395,6 +398,7 @@ function PlannedMealView({
           ))}
           {canPlanAhead && (
             <AddToShoppingRow
+              isGrouped
               subtitle='Choose what you need for this meal'
               onClick={() =>
                 onAddToShopping({
@@ -405,7 +409,7 @@ function PlannedMealView({
               }
             />
           )}
-        </div>
+        </ActionGroup>
       )}
       <Button
         type='button'

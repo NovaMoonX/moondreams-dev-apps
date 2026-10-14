@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChefHat, History } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
@@ -191,7 +192,7 @@ function RecipeDrawer({
           </ul>
           {cookSummary && (
             <p className='text-muted-foreground text-sm'>
-              <span aria-hidden='true'>🍳</span>{' '}
+              <span aria-hidden='true'>✅</span>{' '}
               {getCookFactText(
                 cookSummary.count,
                 formatDateShort(cookSummary.lastCookedAt),
@@ -282,37 +283,43 @@ function RecipeDrawer({
         </FormSection>
 
         <div className='space-y-2'>
-          {recipe.steps.length > 0 && (
-            <StartCookingRow
-              onClick={() => {
-                onClose();
-                openSubview({ kind: 'cook', recipeId: recipe.id });
-              }}
+          <ActionGroup>
+            {recipe.steps.length > 0 && (
+              <StartCookingRow
+                isGrouped
+                onClick={() => {
+                  onClose();
+                  openSubview({ kind: 'cook', recipeId: recipe.id });
+                }}
+              />
+            )}
+            {loadError === null && (
+              <ActionRow
+                isGrouped
+                icon={<ChefHat className='h-4 w-4' />}
+                label='I cooked this'
+                subtitle={getMarkSubtitle()}
+                isDisabled={!isLoaded || isHistoryFull || isMarking}
+                onClick={() => void handleMarkCooked()}
+              />
+            )}
+            <AddToShoppingRow
+              isGrouped
+              subtitle='Choose what you need for this recipe'
+              onClick={() =>
+                onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
+              }
             />
-          )}
-          {loadError === null && (
-            <ActionRow
-              icon={<ChefHat className='h-4 w-4' />}
-              label='I cooked this'
-              subtitle={getMarkSubtitle()}
-              isDisabled={!isLoaded || isHistoryFull || isMarking}
-              onClick={() => void handleMarkCooked()}
-            />
-          )}
-          <AddToShoppingRow
-            subtitle='Choose what you need for this recipe'
-            onClick={() =>
-              onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
-            }
-          />
-          {cookSummary && (
-            <ActionRow
-              icon={<History className='h-4 w-4' />}
-              label='Cooking history'
-              subtitle='Fix a date or add one you missed'
-              onClick={() => onOpenHistory(recipe.id)}
-            />
-          )}
+            {cookSummary && (
+              <ActionRow
+                isGrouped
+                icon={<History className='h-4 w-4' />}
+                label='Cooking history'
+                subtitle='Fix a date or add one you missed'
+                onClick={() => onOpenHistory(recipe.id)}
+              />
+            )}
+          </ActionGroup>
           {markError && (
             <p className='text-destructive text-sm' role='alert'>
               {markError}

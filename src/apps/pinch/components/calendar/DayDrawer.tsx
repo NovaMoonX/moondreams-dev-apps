@@ -119,7 +119,12 @@ function DayDrawer({
           onAddToShopping={onAddToShopping}
           onStartCooking={(recipeId, servings) => {
             onClose();
-            openSubview({ kind: 'cook', recipeId, servings });
+            openSubview({
+              kind: 'cook',
+              recipeId,
+              servings,
+              plannedMealId,
+            });
           }}
           footerEl={footerEl}
         />

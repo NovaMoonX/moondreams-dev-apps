@@ -31,7 +31,7 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { CookView, Recipe } from '@apps/pinch/types';
-import { isCookHistoryFull } from '@apps/pinch/utils/cooks';
+import { getPlannedCookId, isCookHistoryFull } from '@apps/pinch/utils/cooks';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const getStartServings = (recipe: Recipe, servings: number | undefined) => {
@@ -48,6 +48,7 @@ interface CookingSessionProps {
   recipe: Recipe;
   isRemoved: boolean;
   initialServings: number | undefined;
+  plannedMealId: string | null;
 }
 
 function CookingSession({
@@ -55,6 +56,7 @@ function CookingSession({
   recipe,
   isRemoved,
   initialServings,
+  plannedMealId,
 }: CookingSessionProps) {
   const { closeSubview, closeSubviewIf } = usePinchOverlay();
   const { confirm } = useActionModal();
@@ -74,9 +76,18 @@ function CookingSession({
   const primaryRef = useRef<HTMLButtonElement>(null);
   const timers = useCookTimers();
   const wakeLock = useWakeLock(true);
-  const { isReady: isCooksReady, markRecipeCooked } = useCookActions(uid);
+  const {
+    isReady: isCooksReady,
+    markRecipeCooked,
+    markPlannedRecipeCooked,
+  } = useCookActions(uid);
   const isHistoryFull = useAppSelector((state) =>
     isCookHistoryFull(selectCookSummaries(state).get(recipe.id)?.count ?? 0),
+  );
+  const plannedCookId = getPlannedCookId(plannedMealId, recipe.id);
+  const hasPlannedCook = useAppSelector(
+    (state) =>
+      plannedCookId !== null && selectCooksById(state).has(plannedCookId),
   );
 
   const isCooked = useAppSelector(
@@ -84,7 +95,10 @@ function CookingSession({
   );
   const closeIfStillOpen = () =>
     closeSubviewIf(
-      (current) => current?.kind === 'cook' && current.recipeId === recipe.id,
+      (current) =>
+        current?.kind === 'cook' &&
+        current.recipeId === recipe.id &&
+        (current.plannedMealId ?? null) === plannedMealId,
     );
   const note = useCookNote({
     uid,
@@ -101,6 +115,7 @@ function CookingSession({
   const isStepsView = view === 'steps';
   const isFinishShown = isFinished && isStepsView && hasSteps;
   const canMark = isCooksReady && !isRemoved;
+  const isAlreadyMarked = hasPlannedCook && cookedId === null && !isMarking;
 
   const scrollToTop = () =>
     rootRef.current
@@ -185,7 +200,16 @@ function CookingSession({
         setIsMarking(false);
         return;
       }
-      const id = await markRecipeCooked(recipe, servings);
+      const id =
+        plannedMealId === null
+          ? await markRecipeCooked(recipe, servings)
+          : await markPlannedRecipeCooked({
+              plannedMealId,
+              recipe,
+              servings,
+              cookedAt: Date.now(),
+              isToasted: true,
+            });
       timers.clear();
       note.reset();
       setCookedId(id);
@@ -322,21 +346,27 @@ function CookingSession({
           ) : (
             <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
               <p className='text-2xl leading-snug font-medium'>
-                Nice work. Mark it as cooked?
+                {isAlreadyMarked
+                  ? 'Already marked as cooked'
+                  : 'Nice work. Mark it as cooked?'}
               </p>
               <div className='space-y-0.5'>
-                <p className='font-medium'>{formatServings(servings)}</p>
+                {!isAlreadyMarked && (
+                  <p className='font-medium'>{formatServings(servings)}</p>
+                )}
                 <p className='text-muted-foreground text-sm'>
-                  Keeps a record. You can change the date later.
+                  {isAlreadyMarked
+                    ? "It's in your cooking history, so nothing more is saved."
+                    : 'Keeps a record. You can change the date later.'}
                 </p>
               </div>
-              {isHistoryFull && (
+              {isHistoryFull && !isAlreadyMarked && (
                 <p className='text-muted-foreground text-sm'>
                   This recipe's history is full. Delete an older cook to add
                   more.
                 </p>
               )}
-              {markError && (
+              {markError && !isAlreadyMarked && (
                 <p className='text-destructive text-sm' role='alert'>
                   {markError}
                 </p>
@@ -344,7 +374,7 @@ function CookingSession({
               <Button
                 type='button'
                 variant='tertiary'
-                className='h-10'
+                className='h-10 underline'
                 onClick={() => setIsFinished(false)}
               >
                 Back to the last step
@@ -384,15 +414,16 @@ function CookingSession({
           )}
           {showLockNote && (
             <p className='text-muted-foreground text-xs'>
-              Your screen may turn off while you cook.
+              This phone may turn the screen off; timers keep running only while
+              this screen is open.
             </p>
           )}
         </div>
         <div className='form-footer space-y-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
           <div role='status' className='empty:hidden'>
-            {timers.isNoticeShown && (
+            {timers.isNoticeShown && !showLockNote && (
               <p className='text-muted-foreground text-xs'>
-                Timers only run while this screen is open.
+                Keep this screen open: timers stop if you leave it.
               </p>
             )}
           </div>
@@ -432,7 +463,7 @@ function CookingSession({
                   Save note
                 </Button>
               </>
-            ) : isFinishShown && isCooked ? (
+            ) : isFinishShown && (isCooked || isAlreadyMarked) ? (
               <Button
                 ref={primaryRef}
                 type='button'
@@ -523,9 +554,15 @@ interface CookingSubviewProps {
   uid: string;
   recipeId: string;
   servings?: number;
+  plannedMealId: string | null;
 }
 
-function CookingSubview({ uid, recipeId, servings }: CookingSubviewProps) {
+function CookingSubview({
+  uid,
+  recipeId,
+  servings,
+  plannedMealId,
+}: CookingSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const store = useStore<RootState>();
   const live = useAppSelector(selectRecipesById).get(recipeId);
@@ -558,6 +595,7 @@ function CookingSubview({ uid, recipeId, servings }: CookingSubviewProps) {
       recipe={recipe}
       isRemoved={live === undefined}
       initialServings={servings}
+      plannedMealId={plannedMealId}
     />
   );
 }
