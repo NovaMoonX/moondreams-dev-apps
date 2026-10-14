@@ -145,7 +145,7 @@ function NoteForm({
                 <div className='space-y-2'>
                   <p className='text-muted-foreground text-xs'>
                     {note.kind === 'TWEAK' ? 'Changed on' : 'Note from'}{' '}
-                    {formatDateTime(note.createdAt)}
+                    {formatDateShort(note.createdAt)}
                     {noteCook &&
                       ` · after cooking on ${formatDateShort(noteCook.cookedAt)}`}
                   </p>
@@ -162,7 +162,7 @@ function NoteForm({
         label: '',
         renderComponent: (props) => (
           <NoteTextField
-            label={isTweak ? 'Why you changed it' : 'Your note'}
+            label={isTweak ? 'What changed and why?' : 'Your note'}
             placeholder={
               isTweak
                 ? 'Optional'

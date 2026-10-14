@@ -8,6 +8,7 @@ import StatTile from '@/components/StatTile';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import type { CalendarView } from '@apps/pinch/constants';
 import {
   selectDismissedNudges,
@@ -50,7 +51,7 @@ const formatTileCost = (cents: number) =>
 const pluralize = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? '' : 's'}`;
 
-/** What the shown period costs, as a few tiles: spend, average per meal, cost per gram of protein, and the daily calories and macros the person switched on. */
+/** What the shown period costs, as a few tiles: its cost, average per meal, cost per gram of protein, and the daily calories and macros the person switched on. */
 /** A tile's number, a size smaller on a phone as it grows so it never runs under the tile's help icon. */
 function FittedValue({ text }: { text: string }) {
   return (
@@ -106,7 +107,7 @@ function StatsRow({
         }
       >
         <StatTile
-          label={isPhone ? 'Spent' : `Spent ${phrase}`}
+          label={isPhone ? 'Cost' : `Cost ${phrase}`}
           value={<FittedValue text={formatTileCost(stats.spendCents)} />}
           help={
             leftOutCount > 0 ? (
@@ -116,6 +117,10 @@ function StatsRow({
                 placement='bottom'
               >
                 <p>Leaves out {reasons.join(' and ')}.</p>
+                <NudgeCountNote
+                  leftOut={stats.leftOut}
+                  open={stats.openLeftOut}
+                />
                 <p className='text-muted-foreground'>
                   A price you add now counts from today on: days that have
                   passed keep the prices they had. To count it on one, open that
@@ -138,7 +143,7 @@ function StatsRow({
           }
           help={
             <HelpTip title='Average per meal' placement='bottom'>
-              Spend divided by the meals that have a price.
+              Cost divided by the meals that have a price.
             </HelpTip>
           }
         />

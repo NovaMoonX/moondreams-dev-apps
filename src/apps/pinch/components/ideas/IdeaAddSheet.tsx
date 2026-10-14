@@ -47,9 +47,8 @@ function IdeaAddSheet({ uid, onClose, onOpenExisting }: IdeaAddSheetProps) {
         <div className='space-y-3'>
           <Button
             type='button'
-            variant='link'
-            size='sm'
-            className='-ml-1 h-10 gap-1 px-1!'
+            variant='tertiary'
+            className='h-10 gap-1 px-0!'
             onClick={() => setStage('pick')}
           >
             <ChevronLeft className='h-4 w-4' aria-hidden='true' />

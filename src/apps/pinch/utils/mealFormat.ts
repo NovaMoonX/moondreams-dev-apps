@@ -36,3 +36,14 @@ export function getFixedNote(snapshots: PlannedSnapshot[]): string {
     ? `Priced with today's prices on ${day}`
     : `Some meals priced with today's prices on ${day}`;
 }
+
+/** A row's price, or in a few words why it has none ("Wasn't priced" once its day has passed, "Still no price" once that day was priced again). */
+export const formatRowCost = (
+  cents: number | null | undefined,
+  isFrozen: boolean,
+  isRepriced = false,
+) => {
+  if (cents != null) return formatCost(cents);
+  if (!isFrozen) return 'No price yet';
+  return isRepriced ? 'Still no price' : "Wasn't priced";
+};

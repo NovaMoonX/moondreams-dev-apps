@@ -168,8 +168,8 @@ export function buildSnapshot(
 }
 
 /** Null for a snapshot that was never priced again, including one written before the key existed. */
-export const getRepricedAt = (snapshot: PlannedSnapshot) =>
-  snapshot.repricedAt ?? null;
+export const getRepricedAt = (snapshot: PlannedSnapshot | null) =>
+  snapshot?.repricedAt ?? null;
 
 const centsDiffer = (before: number | null, after: number | null) =>
   before === null || after === null

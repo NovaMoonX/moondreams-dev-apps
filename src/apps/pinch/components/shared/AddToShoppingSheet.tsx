@@ -139,7 +139,7 @@ function AddToShoppingSheet({
   };
 
   return (
-    <FormSheet isOpen onClose={onClose} title='Add to shopping list'>
+    <FormSheet isOpen onClose={onClose} title='Shopping list'>
       <div className='grid gap-4'>
         <div className='space-y-3'>
           <p className='text-lg font-medium wrap-break-word'>{label}</p>

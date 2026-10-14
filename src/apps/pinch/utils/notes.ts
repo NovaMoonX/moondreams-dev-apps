@@ -53,6 +53,25 @@ export const isValidNoteText = (text: string) => {
   return trimmed !== '' && trimmed.length <= MAX_RECIPE_NOTE_LENGTH;
 };
 
+/** One journal entry in a line: a note says its day and words, a tweak what changed and why. */
+export const getNoteSummary = (
+  note: RecipeNote,
+  formatDay: (at: number) => string,
+) => {
+  const day = formatDay(note.createdAt);
+  const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
+  const body =
+    note.kind === 'TWEAK'
+      ? [(note.changes ?? []).map(squash).join('; '), squash(note.text ?? '')]
+          .filter(Boolean)
+          .join('. ')
+      : squash(note.text ?? '');
+  const title =
+    note.kind === 'TWEAK' ? `Changed on ${day}` : `Your latest note (${day})`;
+
+  return { label: body === '' ? title : `${title}:`, body };
+};
+
 export const getTweakReason = (text: string) => text.trim() || null;
 
 /** A note written before the recipe's latest tweak was about the earlier version of the recipe, so it says so. */

@@ -314,10 +314,20 @@ export const selectShoppingById = createSelector(
   (items) => new Map(items.map((item) => [item.id, item])),
 );
 
+const selectHeldShoppingRows = (
+  _state: RootState,
+  held: ReadonlyMap<string, boolean>,
+) => held;
+
 export const selectShoppingRows = createSelector(
-  [selectShoppingItems, selectIngredientsById, selectIngredientFamilies],
-  (items, ingredientsById, families) =>
-    groupShoppingItems(items, ingredientsById, families),
+  [
+    selectShoppingItems,
+    selectIngredientsById,
+    selectIngredientFamilies,
+    selectHeldShoppingRows,
+  ],
+  (items, ingredientsById, families, held) =>
+    groupShoppingItems(items, ingredientsById, families, held),
 );
 
 export const selectShoppingCost = createSelector(

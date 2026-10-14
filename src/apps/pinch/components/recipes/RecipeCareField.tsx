@@ -88,10 +88,11 @@ function RecipeCareField({ value, onChange }: RecipeCareFieldProps) {
       </p>
       <Field label='Reheat' isCompact>
         {() => (
-          <Input
+          <Textarea
+            rows={2}
             variant='outline'
             aria-label='Reheat'
-            className={COMPACT_INPUT_CLASS}
+            className='placeholder:text-sm max-sm:min-h-21'
             placeholder='Oven at 350°F, 15 minutes, covered'
             maxLength={MAX_CARE_REHEAT_LENGTH}
             value={value.reheat}

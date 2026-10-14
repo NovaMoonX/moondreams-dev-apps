@@ -14,7 +14,14 @@ import {
   wouldRepriceChange,
   type CostContext,
 } from '../../src/apps/pinch/utils/mealMath.ts';
-import { getFixedNote } from '../../src/apps/pinch/utils/mealFormat.ts';
+import {
+  countLeftOutIngredients,
+  countUnaskedIngredients,
+} from '../../src/apps/pinch/utils/gaps.ts';
+import {
+  formatRowCost,
+  getFixedNote,
+} from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
@@ -30,6 +37,7 @@ import {
   getCookSummaries,
   getMarkableRecipes,
   getMissingCookFields,
+  getPlannedCookId,
   getPlannedCookedAt,
   groupCooksByRecipe,
   isCookHistoryFull,
@@ -39,6 +47,7 @@ import {
 import {
   getCookChoiceLabels,
   getMissingNoteFields,
+  getNoteSummary,
   getNoteCookChoices,
   getNoteSummaries,
   getTweakReason,
@@ -68,8 +77,10 @@ import { toLocalDateInputValue } from '../../src/utils/dateInputUtils.ts';
 import {
   findIdeaByUrl,
   getIdeaDetail,
+  getIdeaRecipeMethod,
   getIdeaSearchText,
   getMissingIdeaFields,
+  getReadingForIdea,
   toIdeaImageUrl,
   toIdeaUrl,
 } from '../../src/apps/pinch/utils/ideas.ts';
@@ -84,10 +95,12 @@ import {
   mergeLines,
   roundAmount,
 } from '../../src/apps/pinch/utils/shopping.ts';
+import type { ExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import type {
   Cook,
   Idea,
   MealItem,
+  Gap,
   PlannedMeal,
   PlannedSnapshot,
   Product,
@@ -476,6 +489,42 @@ assert.deepEqual(
   'a checked item is in "Got it", not in its group',
 );
 
+const heldItems = [
+  shopItem('rice', 'CUP', 1, true),
+  shopItem('salt', 'TSP', 1, false),
+  shopItem('chips', 'G', 28, true),
+];
+const heldGrouped = groupShoppingItems(
+  heldItems,
+  shopIngredients,
+  shopFamilies,
+  new Map([
+    ['rice__CUP', false],
+    ['salt__TSP', true],
+  ]),
+);
+assert.deepEqual(
+  heldGrouped.groups.map((group) => [
+    group.name,
+    group.rows.map((row) => [row.id, row.isChecked]),
+  ]),
+  [['Rice', [['rice__CUP', true]]]],
+  'a row just ticked stays in its group, still carrying its stored checked flag',
+);
+assert.deepEqual(
+  heldGrouped.checked.map((row) => [row.id, row.isChecked]),
+  [
+    ['chips__G', true],
+    ['salt__TSP', false],
+  ],
+  'a row just unticked stays in "Got it" until it is let go, and the unheld rows follow the stored flag',
+);
+assert.deepEqual(
+  groupShoppingItems(heldItems, shopIngredients, shopFamilies, new Map()),
+  groupShoppingItems(heldItems, shopIngredients, shopFamilies),
+  'an empty hold changes nothing',
+);
+
 const shopCost = getShoppingCost(
   [
     { ingredientId: 'chicken', amount: 2, unit: 'LB' },
@@ -828,6 +877,46 @@ assert.equal(
 );
 assert.equal(getIdeaDetail(idea({})), null, 'nothing to say gives no line');
 assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: 'seriouseats.com',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  null,
+  'a link saved with its host as the title does not say the host twice',
+);
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: ' SeriousEats.com ',
+      siteName: 'seriouseats.com',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  null,
+  'the comparison ignores case and spaces',
+);
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: 'seriouseats.com',
+      note: 'Sunday project',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  'Sunday project',
+  'a repeated site gives way to the first line of the note',
+);
+assert.equal(
+  getIdeaDetail(idea({ title: 'Sunday project', note: 'sunday project' })),
+  null,
+  'a note that is only the title says nothing more',
+);
+assert.equal(
   getIdeaSearchText(
     idea({ kind: 'LINK', siteName: 'NYT Cooking', note: 'overnight' }),
   ),
@@ -876,6 +965,26 @@ assert.notEqual(
   getCookId('planned-1', 'recipe-9'),
   getCookId('recipe-9', 'planned-1'),
   'the id is not symmetric',
+);
+assert.equal(
+  getPlannedCookId(null, 'recipe-9'),
+  null,
+  'cooking started from a recipe has no planned cook: Finish writes a fresh one',
+);
+assert.equal(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getCookId('planned-1', 'recipe-9'),
+  "cooking started from a planned meal marks that meal's own cook, the one its row looks up",
+);
+assert.notEqual(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getPlannedCookId('planned-2', 'recipe-9'),
+  'the same recipe on two meals is two cooks',
+);
+assert.notEqual(
+  getPlannedCookId('planned-1', 'recipe-9'),
+  getPlannedCookId('planned-1', 'recipe-8'),
+  'two recipes of one meal are two cooks',
 );
 
 const cookList = [
@@ -1016,6 +1125,17 @@ assert.equal(
   )[0].servings,
   1000,
   'added-up servings stay within what a cook holds',
+);
+assert.deepEqual(
+  getMarkableRecipes(
+    [
+      { id: '1', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+      { id: '2', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+    ],
+    knownRecipes,
+  ).map(({ recipe }) => getCookId('plan-1', recipe.id)),
+  [getPlannedCookId('plan-1', 'adobo')],
+  "a recipe twice in one meal has one row and one cook, and cooking either copy finishes into that row's cook",
 );
 
 const firstCook = cookOf('plan-1__adobo', 'adobo', 1000, 5);
@@ -1987,6 +2107,61 @@ assert.equal(
   null,
   'no tweak, no label',
 );
+const summaryDay = (at: number) => (at === 100 ? 'Oct 12' : 'Oct 6');
+const summaryOf = (patch: Partial<RecipeNote>) =>
+  getNoteSummary(
+    { ...noteOf('s', 'adobo', 'NOTE', 100), ...patch },
+    summaryDay,
+  );
+assert.deepEqual(
+  summaryOf({ text: 'Use 6 cloves, it was bland' }),
+  { label: 'Your latest note (Oct 12):', body: 'Use 6 cloves, it was bland' },
+  'a note says its day and its words',
+);
+assert.deepEqual(
+  summaryOf({ text: '  Use 6 cloves,\n\n  less\tvinegar  ' }).body,
+  'Use 6 cloves, less vinegar',
+  'line breaks and runs of spaces read as one space in the summary',
+);
+assert.deepEqual(
+  summaryOf({
+    kind: 'TWEAK',
+    text: null,
+    changes: ['White vinegar 0.5 → 0.25 cup'],
+    createdAt: 200,
+  }),
+  { label: 'Changed on Oct 6:', body: 'White vinegar 0.5 → 0.25 cup' },
+  'a tweak says what changed, so the recipe reads as having moved on',
+);
+assert.deepEqual(
+  summaryOf({
+    kind: 'TWEAK',
+    text: 'Too sour',
+    changes: ['White vinegar 0.5 → 0.25 cup', 'Serves 4 → 6'],
+    createdAt: 200,
+  }).body,
+  'White vinegar 0.5 → 0.25 cup; Serves 4 → 6. Too sour',
+  "a tweak lists its lines, then the reason in the person's words",
+);
+assert.deepEqual(
+  summaryOf({ kind: 'TWEAK', text: null, changes: [], createdAt: 200 }),
+  { label: 'Changed on Oct 6', body: '' },
+  'a tweak with nothing to say keeps its heading without a colon',
+);
+assert.deepEqual(
+  getNoteSummary(
+    {
+      id: 'x',
+      recipeId: 'adobo',
+      kind: 'NOTE',
+      text: 'Old',
+      createdAt: 100,
+    } as RecipeNote,
+    summaryDay,
+  ).body,
+  'Old',
+  'an older note without the changes key still reads',
+);
 assert.deepEqual(
   getMissingNoteFields({ id: 'x', kind: 'NOTE', text: 't' }),
   { changes: [], cookId: null },
@@ -2147,22 +2322,26 @@ assert.deepEqual(
   'a recipe with care reads as it was written',
 );
 
-const summaryOf = (parts: Parameters<typeof toCare>[0]) =>
+const careSummaryOf = (parts: Parameters<typeof toCare>[0]) =>
   getCareSummary(getCareText(toCare(parts)));
 assert.equal(getCareSummary(EMPTY_CARE_TEXT), '', 'no care has no summary');
 assert.equal(
-  summaryOf({ fridgeDays: 3, freezerDays: 90 }),
+  careSummaryOf({ fridgeDays: 3, freezerDays: 90 }),
   'Fridge 3 days, freezer 3 months',
   'the summary names each time',
 );
 assert.equal(
-  summaryOf({ fridgeDays: 1, reheat: 'Oven.', tip: 'Apart.' }),
+  careSummaryOf({ fridgeDays: 1, reheat: 'Oven.', tip: 'Apart.' }),
   'Fridge 1 day, reheating, tip',
   'reheating and a tip are named, not copied',
 );
-assert.equal(summaryOf({ tip: 'Apart.' }), 'Tip', 'a tip alone is just Tip');
 assert.equal(
-  summaryOf({ freezerDays: 60, tip: 'Apart.' }),
+  careSummaryOf({ tip: 'Apart.' }),
+  'Tip',
+  'a tip alone is just Tip',
+);
+assert.equal(
+  careSummaryOf({ freezerDays: 60, tip: 'Apart.' }),
   'Freezer 2 months, tip',
   'the first word is capitalised whichever part comes first',
 );
@@ -2304,6 +2483,128 @@ assert.equal(
   normalizeExtractedRecipe({ fridgeDays: 'a week', reheat: 5, tip: {} }).care,
   null,
   'a reading with the wrong types keeps nothing',
+);
+
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: 'https://example.com/a' })),
+  'link',
+  'a link idea starts from the link way',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: 'not a link' })),
+  'manual',
+  'a link idea whose address can not be opened starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: null })),
+  'manual',
+  'a link idea with no address starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'PHOTO', url: null })),
+  'manual',
+  'a photo idea starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'TEXT', url: 'https://example.com/a' })),
+  'manual',
+  'a typed note starts by hand',
+);
+
+const reading: ExtractedRecipe = {
+  title: 'Chicken adobo',
+  servings: 4,
+  prepMinutes: 10,
+  cookMinutes: 40,
+  description: 'Soy and vinegar, braised.',
+  ingredients: [{ name: 'chicken thigh', amount: 2, unit: 'LB', note: null }],
+  steps: ['Braise.'],
+  unread: [],
+};
+const linkIdea = idea({
+  kind: 'LINK',
+  url: 'https://www.seriouseats.com/adobo',
+  title: 'My adobo',
+  note: 'Mom likes it',
+});
+assert.deepEqual(
+  getReadingForIdea(reading, linkIdea),
+  { ...reading, title: 'My adobo', description: 'Mom likes it' },
+  "a reading keeps the idea's own title and note and fills the rest",
+);
+assert.equal(
+  getReadingForIdea(reading, { ...linkIdea, note: '  ' }).description,
+  'Soy and vinegar, braised.',
+  'a blank note leaves the page description',
+);
+assert.equal(
+  getReadingForIdea(reading, { ...linkIdea, title: 'SeriousEats.com' }).title,
+  'Chicken adobo',
+  "a title that is only the site's name gives way to the recipe's",
+);
+assert.equal(
+  getReadingForIdea(
+    { ...reading, title: null },
+    {
+      ...linkIdea,
+      title: 'seriouseats.com',
+    },
+  ).title,
+  'seriouseats.com',
+  'no recipe title leaves the idea title as it was',
+);
+assert.deepEqual(
+  getReadingForIdea(reading, linkIdea).ingredients,
+  reading.ingredients,
+  'the ingredients and steps are the reading’s own',
+);
+
+assert.equal(formatRowCost(null, false), 'No price yet');
+assert.equal(formatRowCost(undefined, false), 'No price yet');
+assert.equal(
+  formatRowCost(null, true),
+  "Wasn't priced",
+  'a frozen day says it was not priced, not that it has no price yet',
+);
+assert.equal(
+  formatRowCost(null, true, true),
+  'Still no price',
+  'an unpriced item on a day that was priced again says so',
+);
+assert.equal(formatRowCost(15.4, true), '$0.15');
+assert.equal(formatRowCost(0, false), '$0.00', 'a known free item is priced');
+
+const gap = (kind: Gap['kind'], ingredientId: string) =>
+  ({ kind, ingredientId }) as Gap;
+const leftOutOnDay = [
+  gap('NO_PRODUCT', 'garlic'),
+  gap('NO_PRODUCT', 'garlic'),
+  gap('NO_PRODUCT', 'vinegar'),
+  gap('NOT_COMPARABLE', 'soy'),
+  gap('NO_PRODUCT', 'rice'),
+];
+const stillOpen = leftOutOnDay.filter((entry) => entry.ingredientId !== 'rice');
+assert.equal(
+  countLeftOutIngredients(leftOutOnDay),
+  4,
+  'an ingredient in several meals counts once',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, {}),
+  1,
+  'an ingredient only in a day that has passed is left out but not asked about',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, {
+    'NO_PRODUCT:vinegar': 1,
+  }),
+  2,
+  'a hidden note takes its ingredient off the note but not off the total',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, { 'NO_PRODUCT:soy': 1 }),
+  1,
+  'an ingredient whose package size is still open stays in the note when only its price note was hidden',
 );
 
 console.log('pinchMath: all checks passed');
