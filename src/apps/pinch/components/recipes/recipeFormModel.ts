@@ -45,7 +45,7 @@ export interface RecipeFormData {
   description: string;
   ingredients: IngredientRow[];
   steps: string[];
-  source: SourceChoice;
+  sourceChoice: SourceChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
   nutrition: Record<NutritionMetric, string>;
 }
@@ -71,7 +71,7 @@ export const getInitialData = (
     newName: null,
   })),
   steps: recipe?.steps ?? [],
-  source: {
+  sourceChoice: {
     choice: recipe ? (getRecipeSource(recipe, sourcesById)?.id ?? '') : '',
     newText: '',
   },

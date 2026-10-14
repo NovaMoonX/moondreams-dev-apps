@@ -19,6 +19,7 @@ import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
@@ -43,6 +44,7 @@ import {
   MAX_SERVING_AMOUNT,
   MAX_SOURCE_LABEL_LENGTH,
 } from '@apps/pinch/constants';
+import { findSourceByLabel } from '@apps/pinch/utils/sources';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
@@ -50,7 +52,6 @@ import {
   removeRecipe,
   saveRecipe,
 } from '@apps/pinch/store/actions/recipeActions';
-import { createSource } from '@apps/pinch/store/actions/sourceActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
   selectIngredients,
@@ -125,7 +126,7 @@ function RecipeForm({
     initialRead
       ? {
           ...getDataFromExtracted(initialRead.recipe, ingredients),
-          source: getReadSourceChoice(
+          sourceChoice: getReadSourceChoice(
             initialRead.source,
             initialRead.label,
             sources,
@@ -348,10 +349,10 @@ function RecipeForm({
         ? []
         : [
             custom({
-              name: 'source',
+              name: 'sourceChoice',
               label: '',
               renderComponent: (props) => {
-                const value = props.value as RecipeFormData['source'];
+                const value = props.value as RecipeFormData['sourceChoice'];
                 return (
                   <FormSection title="Where it's from">
                     <div className='space-y-2' onKeyDown={blockEnterSubmit}>
@@ -364,6 +365,7 @@ function RecipeForm({
                         newPlaceholder='Serious Eats'
                         maxLength={MAX_SOURCE_LABEL_LENGTH}
                         isFocusedOnOpen={false}
+                        clearLabel='Remove source'
                         onChange={(choice, newText) =>
                           props.onValueChange({ choice, newText })
                         }
@@ -473,21 +475,32 @@ function RecipeForm({
     }
   };
 
-  const getSourceId = async ({ choice, newText }: RecipeFormData['source']) => {
-    if (hasSourcesFailed) return recipe?.sourceId ?? null;
-    if (choice === NEW_CHOICE) {
-      return newText.trim() === ''
-        ? null
-        : await dispatch(createSource({ uid, label: newText })).unwrap();
+  const getSourceDraft = ({
+    choice,
+    newText,
+  }: RecipeFormData['sourceChoice']) => {
+    if (hasSourcesFailed) {
+      return { sourceId: recipe?.sourceId ?? null, newSource: null };
     }
-    return sourcesById.has(choice) ? choice : null;
+    if (choice !== NEW_CHOICE) {
+      return {
+        sourceId: sourcesById.has(choice) ? choice : null,
+        newSource: null,
+      };
+    }
+    const label = newText.trim();
+    if (label === '') return { sourceId: null, newSource: null };
+    const existing = findSourceByLabel([...sourcesById.values()], label);
+    if (existing) return { sourceId: existing.id, newSource: null };
+    const newSource = { id: generateUuid(), label };
+    return { sourceId: newSource.id, newSource };
   };
 
   const handleSubmit = async (data: RecipeFormData) => {
     setError(null);
     setIsSubmitting(true);
     try {
-      const sourceId = await getSourceId(data.source);
+      const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
       await dispatch(
         saveRecipe({
           uid,
@@ -507,6 +520,7 @@ function RecipeForm({
             })),
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
             sourceId,
+            newSource,
             newIngredients: [
               ...new Map(
                 data.ingredients

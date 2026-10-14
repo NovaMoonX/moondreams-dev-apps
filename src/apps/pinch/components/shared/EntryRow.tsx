@@ -10,7 +10,6 @@ interface EntryRowProps {
   onClick: () => void;
 }
 
-/** An entry tile: a round tinted icon, a name and how many it holds. */
 function EntryRow({ icon, label, count, onClick }: EntryRowProps) {
   return (
     <Button

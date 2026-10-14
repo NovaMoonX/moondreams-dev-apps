@@ -321,7 +321,6 @@ export async function seedPinchScale(
     }),
   );
 
-  // The first source holds the most, and two recipes in seventeen have none.
   const getSourceId = (index: number) => {
     const slot = index % 17;
     return slot >= 15 ? null : sources[Math.max(0, slot - 3)].id;

@@ -26,6 +26,7 @@ export const sourcesSlice = createSlice({
     },
     setSourcesLoadError(state, action: PayloadAction<string>) {
       state.isLoaded = true;
+      state.items = [];
       state.loadError = action.payload;
     },
     clearSources: () => initialState,

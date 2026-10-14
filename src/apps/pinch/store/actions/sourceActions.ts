@@ -70,7 +70,6 @@ interface RenameSourceInput {
   label: string;
 }
 
-/** Changes only the label (and when), refusing one another source already has. */
 export const renameSource = createAsyncThunk<
   string,
   RenameSourceInput,
