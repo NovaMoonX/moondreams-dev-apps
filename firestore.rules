@@ -1535,27 +1535,25 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
-      // Rules can't loop and the evaluator stops at 1,000 expressions, so each of the (at most 10) events is checked by index: exactly its five keys, a known kind, an instant, whole portions or null, a place or null, a short note or null.
+      // Rules can't loop and the evaluator stops at 1,000 expressions, so each of the (at most 10) events is checked by index and kept cheap:
+      // exactly its five keys, a known kind, an instant, whole portions or null, a place or null, a short note or null. `matches` is a whole-string match.
       function isContainerEvent(e) {
         return e.size() == 5
-          && e.kind in ['MADE', 'FRIDGE', 'FREEZE', 'THAW', 'EAT', 'TOSS', 'EDIT']
+          && e.kind.matches('MADE|FRIDGE|FREEZE|THAW|EAT|TOSS|EDIT')
           && e.at is int
-          && (e.servings == null || (e.servings is int && e.servings >= 1 && e.servings <= 100))
-          && (e.place == null || e.place in ['FRIDGE', 'FREEZER'])
+          && (e.servings == null || (e.servings is int && e.servings > 0 && e.servings < 101))
+          && (e.place == null || e.place.matches('FRIDGE|FREEZER'))
           && (e.note == null || (e.note is string && e.note.size() <= 80));
       }
 
-      function isContainerEventAt(history, i) {
-        return history.size() <= i || isContainerEvent(history[i]);
-      }
-
       function isContainerHistory(history) {
-        return history is list && history.size() >= 1 && history.size() <= 10
-          && isContainerEventAt(history, 0) && isContainerEventAt(history, 1)
-          && isContainerEventAt(history, 2) && isContainerEventAt(history, 3)
-          && isContainerEventAt(history, 4) && isContainerEventAt(history, 5)
-          && isContainerEventAt(history, 6) && isContainerEventAt(history, 7)
-          && isContainerEventAt(history, 8) && isContainerEventAt(history, 9);
+        let n = history.size();
+        return history is list && n >= 1 && n <= 10
+          && (n <= 0 || isContainerEvent(history[0])) && (n <= 1 || isContainerEvent(history[1]))
+          && (n <= 2 || isContainerEvent(history[2])) && (n <= 3 || isContainerEvent(history[3]))
+          && (n <= 4 || isContainerEvent(history[4])) && (n <= 5 || isContainerEvent(history[5]))
+          && (n <= 6 || isContainerEvent(history[6])) && (n <= 7 || isContainerEvent(history[7]))
+          && (n <= 8 || isContainerEvent(history[8])) && (n <= 9 || isContainerEvent(history[9]));
       }
 
       // Food made ahead, one document per physical container. `eatBy` is a date-only value (UTC midnight, 2000 to 2100); a finished container keeps the portions it had.

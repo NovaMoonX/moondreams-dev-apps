@@ -162,7 +162,8 @@ export const getPutAwayServings = (
 
 const getDroppedIndex = (history: ContainerEvent[]) => {
   const oldestEat = history.findIndex(
-    (event, index) => index > 0 && event.kind === 'EAT',
+    (event, index) =>
+      index > 0 && index < history.length - 1 && event.kind === 'EAT',
   );
   return oldestEat === -1 ? 1 : oldestEat;
 };

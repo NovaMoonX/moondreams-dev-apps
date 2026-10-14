@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   getEntryGrams,
@@ -30,6 +31,49 @@ import {
   hasSeveralWebLinks,
   toWebLink,
 } from '../../src/utils/urlUtils.ts';
+import {
+  MAX_CONTAINER_HISTORY,
+  MAX_CONTAINER_NOTE_LENGTH,
+  MAX_CONTAINER_SERVINGS,
+  MAX_EAT_BY_DATE,
+  MIN_EAT_BY_DATE,
+} from '../../src/apps/pinch/constants.ts';
+import {
+  appendEvent,
+  buildContainer,
+  getContainerTitle,
+  getDaysLeft,
+  getDueText,
+  getEatByDefault,
+  getEatByHint,
+  getEatByPhrase,
+  getEatByState,
+  getFreezeLine,
+  getNewContainerProblem,
+  getPlacesText,
+  getPreparedSummary,
+  getPutAwayServings,
+  getPutAwayText,
+  getSavedText,
+  getServingsToEat,
+  getShoppingStockLine,
+  getStockDetail,
+  getStockDueText,
+  getStockMaps,
+  getStockParts,
+  getStockPlaceCounts,
+  getStockTitle,
+  groupContainersByCook,
+  isBulkMeal,
+  isValidContainerServings,
+  isValidEatBy,
+  makeEvent,
+  planEat,
+  planEatBy,
+  planMove,
+  planToss,
+  planUndoEnd,
+} from '../../src/apps/pinch/utils/containers.ts';
 import {
   getCookFactText,
   getCookId,
@@ -97,6 +141,8 @@ import {
 } from '../../src/apps/pinch/utils/shopping.ts';
 import type { ExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import type {
+  Container,
+  ContainerEvent,
   Cook,
   Idea,
   MealItem,
@@ -2606,5 +2652,676 @@ assert.equal(
   1,
   'an ingredient whose package size is still open stays in the note when only its price note was hidden',
 );
+
+// Prepared containers
+const DAY = 86_400_000;
+const localAt = (day: number, hour: number, minute = 0) =>
+  new Date(2026, 9, day, hour, minute).getTime();
+const dayOf = (day: number) => Date.UTC(2026, 9, day);
+const lateOnThe14th = localAt(14, 23, 30);
+const earlyOnThe15th = localAt(15, 0, 30);
+
+assert.equal(
+  getDaysLeft(dayOf(14), lateOnThe14th),
+  0,
+  "eat-by today is today at 23:30 local, whatever the zone's offset from UTC",
+);
+assert.equal(
+  getDaysLeft(dayOf(14), earlyOnThe15th),
+  -1,
+  'a minute past local midnight, yesterday is yesterday',
+);
+assert.deepEqual(
+  [12, 13, 14, 15, 16, 17, 18].map((day) =>
+    getEatByState(dayOf(day), lateOnThe14th),
+  ),
+  ['PAST', 'PAST', 'SOON', 'SOON', 'SOON', 'LATER', 'LATER'],
+  'eat soon is today and the next two days, past its date is any day before today',
+);
+assert.deepEqual(
+  [13, 14, 15, 17, 18].map((day) => getEatByState(dayOf(day), earlyOnThe15th)),
+  ['PAST', 'PAST', 'SOON', 'SOON', 'LATER'],
+  'the same classification just after local midnight',
+);
+assert.deepEqual(
+  [14, 15, 16].map((day) => getEatByPhrase(dayOf(day), lateOnThe14th)),
+  [
+    'today',
+    'tomorrow',
+    new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(dayOf(16)),
+  ],
+  'today and tomorrow are named, any other day is the date read in UTC',
+);
+
+const careOf = (fridgeDays: number | null, freezerDays: number | null) => ({
+  fridgeDays,
+  freezerDays,
+  reheat: null,
+  tip: null,
+});
+const todayOn14 = Date.UTC(2026, 9, 14);
+assert.deepEqual(
+  [
+    getEatByDefault('FRIDGE', null, lateOnThe14th),
+    getEatByDefault('FREEZER', null, lateOnThe14th),
+    getEatByDefault('THAW', null, lateOnThe14th),
+  ].map((preset) => [
+    preset.days,
+    preset.eatBy - todayOn14,
+    preset.isFromRecipe,
+  ]),
+  [
+    [4, 4 * DAY, false],
+    [90, 90 * DAY, false],
+    [2, 2 * DAY, false],
+  ],
+  'with no care, the fridge starts at a few days, the freezer at a few months and a thawed one at a short window, counted from the local day',
+);
+assert.deepEqual(
+  [
+    getEatByDefault('FRIDGE', careOf(3, 120), lateOnThe14th),
+    getEatByDefault('FREEZER', careOf(3, 120), lateOnThe14th),
+    getEatByDefault('FREEZER', careOf(3, null), lateOnThe14th),
+  ].map((preset) => [preset.days, preset.isFromRecipe]),
+  [
+    [3, true],
+    [120, true],
+    [90, false],
+  ],
+  "a recipe's own days win where it has them, and a missing freezer time falls back",
+);
+assert.deepEqual(
+  [
+    getEatByDefault('THAW', careOf(5, 90), lateOnThe14th),
+    getEatByDefault('THAW', careOf(1, 90), lateOnThe14th),
+  ].map((preset) => [preset.days, preset.isFromRecipe]),
+  [
+    [2, false],
+    [1, true],
+  ],
+  'a thawed container takes the shorter of the thawed window and the recipe fridge time',
+);
+assert.match(
+  getEatByHint('FREEZER', getEatByDefault('FREEZER', careOf(3, 90))),
+  /^Your call\. Based on how long your recipe says it keeps in the freezer\.$/,
+  'the hint says whose call it is and never claims the food is safe',
+);
+assert.match(
+  getEatByHint('THAW', getEatByDefault('THAW', null)),
+  /^Your call\. Thawed food keeps a shorter time, so this starts at 2 days\.$/,
+);
+assert.doesNotMatch(
+  [
+    getEatByHint('FRIDGE', getEatByDefault('FRIDGE', null)),
+    getEatByHint('FRIDGE', getEatByDefault('FRIDGE', careOf(3, null))),
+  ].join(' '),
+  /safe/i,
+  'no copy about eat-by dates claims food safety',
+);
+
+const container = (over: Partial<Container> = {}): Container => ({
+  id: 'c1',
+  title: 'Adobo chicken',
+  recipeId: 'adobo',
+  mealId: null,
+  cookId: null,
+  servings: 4,
+  status: 'IN_STOCK',
+  place: 'FRIDGE',
+  eatBy: dayOf(17),
+  history: [makeEvent('FRIDGE', 1000, { servings: 4, place: 'FRIDGE' })],
+  createdAt: 1000,
+  updatedAt: 1000,
+  ...over,
+});
+const planOf = (plan: ReturnType<typeof planEat>) => {
+  assert.ok('fields' in plan, 'expected a change, got an error');
+  return plan.fields;
+};
+const errorOf = (plan: ReturnType<typeof planEat>) => {
+  assert.ok('error' in plan, 'expected an error, got a change');
+  return plan.error;
+};
+
+const ate = planOf(planEat(container(), 1, 5000));
+assert.deepEqual(
+  [
+    ate.servings,
+    ate.status,
+    ate.history?.at(-1)?.kind,
+    ate.history?.at(-1)?.servings,
+  ],
+  [3, undefined, 'EAT', 1],
+  'eating one lowers the servings and adds an EAT',
+);
+const ateAll = planOf(planEat(container({ servings: 2 }), 'ALL', 5000));
+assert.deepEqual(
+  [ateAll.status, ateAll.servings, ateAll.history?.at(-1)?.servings],
+  ['DONE', undefined, 2],
+  'eating all that is left finishes it and keeps the history, writing no servings',
+);
+assert.equal(
+  planOf(planEat(container({ servings: 2 }), 2, 5000)).status,
+  'DONE',
+  'eating exactly what is left finishes it too',
+);
+assert.match(
+  errorOf(planEat(container({ servings: 1 }), 2, 5000)),
+  /Only 1 serving is left/,
+  'a count above what another device left stops the change with one sentence',
+);
+assert.deepEqual(
+  [0, -1, 1.5, Number.NaN].map(
+    (count) => 'error' in planEat(container(), count, 5000),
+  ),
+  [true, true, true, true],
+  'eating needs whole portions above zero',
+);
+assert.match(
+  errorOf(planEat(container({ status: 'DONE' }), 1, 5000)),
+  /already finished/,
+  'a finished container cannot be eaten again',
+);
+assert.equal(
+  planOf(planToss(container({ servings: 3 }), 5000)).history?.at(-1)?.servings,
+  3,
+  'throwing it out records what was left',
+);
+assert.equal(planOf(planToss(container(), 5000)).status, 'DONE');
+assert.match(
+  errorOf(planToss(container({ status: 'DONE' }), 5000)),
+  /already finished/,
+);
+
+const toFreezer = planOf(planMove(container(), 'FREEZER', dayOf(20), 6000));
+assert.deepEqual(
+  [
+    toFreezer.place,
+    toFreezer.eatBy,
+    toFreezer.history?.at(-1)?.kind,
+    toFreezer.history?.at(-1)?.place,
+    toFreezer.history?.at(-1)?.servings,
+  ],
+  ['FREEZER', dayOf(20), 'FREEZE', 'FREEZER', 4],
+  'putting it in the freezer moves it whole, sets the eat-by and adds a FREEZE',
+);
+const toFridge = planOf(
+  planMove(container({ place: 'FREEZER' }), 'FRIDGE', dayOf(16), 6000),
+);
+assert.deepEqual(
+  [toFridge.place, toFridge.history?.at(-1)?.kind],
+  ['FRIDGE', 'THAW'],
+  'moving it out of the freezer is a THAW',
+);
+assert.match(
+  errorOf(planMove(container(), 'FRIDGE', dayOf(20), 6000)),
+  /already in the fridge/,
+);
+assert.match(
+  errorOf(planMove(container(), 'FREEZER', dayOf(20) + 3_600_000, 6000)),
+  /day to eat it by/,
+  'an eat-by that is not a whole UTC day is refused',
+);
+assert.match(
+  errorOf(planMove(container({ status: 'DONE' }), 'FREEZER', dayOf(20), 6000)),
+  /already finished/,
+);
+
+const edited = planOf(planEatBy(container(), dayOf(19), 7000));
+assert.deepEqual(
+  [
+    edited.eatBy,
+    edited.history?.at(-1)?.kind,
+    edited.history?.at(-1)?.note?.includes('→'),
+  ],
+  [dayOf(19), 'EDIT', true],
+  'changing the eat-by adds an EDIT that names both days',
+);
+assert.match(
+  errorOf(planEatBy(container(), dayOf(17), 7000)),
+  /already the eat-by/,
+);
+assert.match(errorOf(planEatBy(container(), 5.5, 7000)), /day to eat it by/);
+assert.ok(
+  (edited.history?.at(-1)?.note?.length ?? 0) <= MAX_CONTAINER_NOTE_LENGTH,
+  'the note fits what the rules allow',
+);
+
+const afterEat = container({
+  servings: 3,
+  history: [...container().history, makeEvent('EAT', 5000, { servings: 1 })],
+});
+const undone = planOf(planUndoEnd(afterEat, 5000, 9000));
+assert.deepEqual(
+  [undone.servings, undone.status, undone.history?.length],
+  [4, 'IN_STOCK', 1],
+  'undoing an eat gives the portion back and removes the event',
+);
+const afterAll = container({
+  servings: 2,
+  status: 'DONE',
+  history: [...container().history, makeEvent('EAT', 5000, { servings: 2 })],
+});
+const reopened = planOf(planUndoEnd(afterAll, 5000, 9000));
+assert.deepEqual(
+  [reopened.servings, reopened.status],
+  [2, 'IN_STOCK'],
+  'undoing the last portion reopens it with the portions it ended with',
+);
+assert.match(
+  errorOf(planUndoEnd(afterEat, 4999, 9000)),
+  /could not be undone/,
+  'an undo for a different moment does nothing',
+);
+const followedByMove = {
+  ...afterEat,
+  history: [
+    ...afterEat.history,
+    makeEvent('FREEZE', 6000, { servings: 3, place: 'FREEZER' }),
+  ],
+};
+assert.match(
+  errorOf(planUndoEnd(followedByMove, 5000, 9000)),
+  /could not be undone/,
+  'an eat that something else followed is not undone',
+);
+
+const eventAt = (n: number, kind: ContainerEvent['kind'] = 'EAT') =>
+  makeEvent(kind, n, { servings: 1 });
+const fullHistory = Array.from({ length: MAX_CONTAINER_HISTORY }, (_, i) =>
+  i === 0
+    ? makeEvent('FREEZE', 0, { servings: 8, place: 'FREEZER' })
+    : eventAt(i),
+);
+const capped = appendEvent(fullHistory, eventAt(99));
+assert.equal(
+  capped.length,
+  MAX_CONTAINER_HISTORY,
+  'the history never grows past the cap',
+);
+assert.deepEqual(
+  [capped[0].kind, capped[0].at, capped[1].at, capped.at(-1)?.at],
+  ['FREEZE', 0, 2, 99],
+  'past the cap the first event stays and the oldest EAT goes',
+);
+const movesOnly = Array.from({ length: MAX_CONTAINER_HISTORY }, (_, i) =>
+  makeEvent(i % 2 === 0 ? 'FREEZE' : 'THAW', i, {
+    servings: 2,
+    place: i % 2 === 0 ? 'FREEZER' : 'FRIDGE',
+  }),
+);
+assert.deepEqual(
+  appendEvent(movesOnly, eventAt(99))
+    .map((entry) => entry.at)
+    .slice(0, 3),
+  [0, 2, 3],
+  'with no EAT to drop, the oldest event after the first goes',
+);
+assert.equal(
+  appendEvent([eventAt(1)], eventAt(2)).length,
+  2,
+  'a short history only grows',
+);
+assert.equal(
+  makeEvent('EDIT', 1, { note: 'x'.repeat(200) }).note?.length,
+  MAX_CONTAINER_NOTE_LENGTH,
+  'a long note is cut to what the rules allow',
+);
+
+assert.deepEqual(
+  [
+    getFreezeLine([]),
+    getFreezeLine([makeEvent('FREEZE', 1, { servings: 1, place: 'FREEZER' })]),
+    getFreezeLine([
+      makeEvent('FREEZE', 1, { servings: 1, place: 'FREEZER' }),
+      makeEvent('THAW', 2, { servings: 1, place: 'FRIDGE' }),
+      makeEvent('FREEZE', 3, { servings: 1, place: 'FREEZER' }),
+    ]),
+    getFreezeLine(
+      [1, 2, 3].map((n) =>
+        makeEvent('FREEZE', n, { servings: 1, place: 'FREEZER' }),
+      ),
+    ),
+  ],
+  [null, null, 'Frozen twice', 'Frozen 3 times'],
+  'the history says "Frozen twice" once it has gone in more than once, and nothing for one freeze',
+);
+
+const fromCook = buildContainer(
+  {
+    id: 'c2',
+    title: '  Adobo chicken ',
+    recipeId: 'adobo',
+    mealId: null,
+    cookId: 'cook-1',
+    servings: 4,
+    place: 'FREEZER',
+    eatBy: dayOf(30),
+  },
+  8000,
+);
+assert.deepEqual(
+  [
+    fromCook.history.map((entry) => entry.kind),
+    fromCook.title,
+    fromCook.status,
+  ],
+  [['MADE', 'FREEZE'], 'Adobo chicken', 'IN_STOCK'],
+  'a container from a cook starts with MADE, then where it went',
+);
+assert.deepEqual(
+  buildContainer(
+    { ...fromCook, cookId: null, place: 'FRIDGE' },
+    8000,
+  ).history.map((entry) => entry.kind),
+  ['FRIDGE'],
+  'any other container starts with where it went',
+);
+assert.deepEqual(
+  [
+    getNewContainerProblem({ ...fromCook, title: ' ' }, 0),
+    getNewContainerProblem({ ...fromCook, mealId: 'meal' }, 0),
+    getNewContainerProblem({ ...fromCook, servings: 0 }, 0),
+    getNewContainerProblem({ ...fromCook, servings: 1.5 }, 0),
+    getNewContainerProblem(
+      { ...fromCook, servings: MAX_CONTAINER_SERVINGS + 1 },
+      0,
+    ),
+    getNewContainerProblem({ ...fromCook, eatBy: dayOf(30) + 5 }, 0),
+    getNewContainerProblem(fromCook, 500),
+    getNewContainerProblem(fromCook, 499),
+  ].map((problem) => problem !== null),
+  [true, true, true, true, true, true, true, false],
+  'a new container needs a name, one source, whole servings from 1 to 100, a whole-day eat-by, and room on the list',
+);
+assert.deepEqual(
+  [
+    isValidEatBy(MIN_EAT_BY_DATE),
+    isValidEatBy(MAX_EAT_BY_DATE),
+    isValidEatBy(MIN_EAT_BY_DATE - DAY),
+    isValidEatBy(MAX_EAT_BY_DATE + DAY),
+    isValidEatBy(dayOf(14) + 1),
+    isValidEatBy(Number.NaN),
+  ],
+  [true, true, false, false, false, false],
+  'an eat-by is a whole UTC day between 2000 and 2100',
+);
+assert.deepEqual([0, 1, 100, 101, 2.5].map(isValidContainerServings), [
+  false,
+  true,
+  true,
+  false,
+  false,
+]);
+
+const rulesText = readFileSync('firestore.rules', 'utf8');
+assert.ok(
+  rulesText.includes(`n <= ${MAX_CONTAINER_HISTORY}`) &&
+    rulesText.includes(`data.servings <= ${MAX_CONTAINER_SERVINGS}`) &&
+    rulesText.includes(`data.eatBy >= ${MIN_EAT_BY_DATE}`) &&
+    rulesText.includes(`data.eatBy <= ${MAX_EAT_BY_DATE}`) &&
+    rulesText.includes(`e.note.size() <= ${MAX_CONTAINER_NOTE_LENGTH}`) &&
+    rulesText.includes(`e.servings < ${MAX_CONTAINER_SERVINGS + 1}`) &&
+    Array.from({ length: MAX_CONTAINER_HISTORY }).every((_, index) =>
+      rulesText.includes(`isContainerEvent(history[${index}])`),
+    ) &&
+    !rulesText.includes(`isContainerEvent(history[${MAX_CONTAINER_HISTORY}])`),
+  "the rules' history cap, servings and eat-by bounds and note length match the constants, and every slot up to the cap is checked",
+);
+
+const stocked = [
+  container({ id: 'a', servings: 2, place: 'FRIDGE', eatBy: dayOf(15) }),
+  container({ id: 'b', servings: 3, place: 'FREEZER', eatBy: dayOf(60) }),
+  container({ id: 'c', servings: 1, place: 'FREEZER', eatBy: dayOf(12) }),
+  container({
+    id: 'd',
+    recipeId: null,
+    mealId: 'meal-1',
+    servings: 2,
+    eatBy: dayOf(16),
+  }),
+  container({ id: 'e', recipeId: 'rice', servings: 5, status: 'DONE' }),
+  container({ id: 'f', recipeId: null, mealId: null, servings: 4 }),
+];
+const maps = getStockMaps(stocked);
+assert.deepEqual(
+  maps.byRecipe.get('adobo'),
+  { fridge: 2, freezer: 4, containers: 3, nearestEatBy: dayOf(12) },
+  'one pass sums a recipe across containers and places and keeps its nearest eat-by',
+);
+assert.equal(
+  maps.byRecipe.has('rice'),
+  false,
+  'a finished container is not stock',
+);
+assert.deepEqual(
+  maps.byMeal.get('meal-1'),
+  { fridge: 2, freezer: 0, containers: 1, nearestEatBy: dayOf(16) },
+  'a saved meal has its own stock',
+);
+assert.equal(
+  maps.byRecipe.size + maps.byMeal.size,
+  2,
+  'a typed container belongs to no recipe or meal',
+);
+const adoboStock = maps.byRecipe.get('adobo')!;
+assert.deepEqual(
+  getStockParts(adoboStock),
+  [
+    { place: 'FRIDGE', servings: 2 },
+    { place: 'FREEZER', servings: 4 },
+  ],
+  'fridge first, then freezer, each only above zero',
+);
+assert.deepEqual(
+  getStockParts({
+    fridge: 0,
+    freezer: 3,
+    containers: 1,
+    nearestEatBy: dayOf(30),
+  }),
+  [{ place: 'FREEZER', servings: 3 }],
+);
+assert.equal(
+  getStockDueText(adoboStock, lateOnThe14th),
+  'past its date',
+  'the nearest eat-by being behind today says so',
+);
+assert.equal(
+  getStockDueText({ ...adoboStock, nearestEatBy: dayOf(15) }, lateOnThe14th),
+  'eat by tomorrow',
+);
+assert.equal(
+  getStockDueText({ ...adoboStock, nearestEatBy: dayOf(30) }, lateOnThe14th),
+  null,
+  'a far eat-by adds nothing to the row',
+);
+assert.deepEqual(
+  [
+    getStockTitle(adoboStock),
+    getStockTitle({ ...adoboStock, fridge: 0 }),
+    getStockTitle({ ...adoboStock, freezer: 0 }),
+  ],
+  ['In your fridge and freezer', 'In your freezer', 'In your fridge'],
+);
+assert.equal(
+  getStockDetail(
+    { ...adoboStock, fridge: 0, nearestEatBy: dayOf(15) },
+    lateOnThe14th,
+  ),
+  '4 servings, eat by tomorrow',
+);
+assert.equal(
+  getStockDetail({ ...adoboStock, nearestEatBy: dayOf(15) }, lateOnThe14th),
+  '2 servings in the fridge, 4 in the freezer, eat by tomorrow',
+);
+assert.deepEqual(
+  getStockPlaceCounts(['adobo', 'rice', 'nope'], maps.byRecipe),
+  { FRIDGE: 1, FREEZER: 1 },
+  'the filter counts recipes with stock in each place, not servings',
+);
+
+const summary = getPreparedSummary(stocked, lateOnThe14th);
+assert.deepEqual(
+  summary,
+  {
+    fridgeServings: 2 + 2 + 4,
+    freezerServings: 3 + 1,
+    containerCount: 5,
+    soonCount: 2,
+    pastCount: 1,
+  },
+  'the Kitchen row counts servings by place, containers, those to eat soon and those past their date; finished ones are left out',
+);
+assert.equal(
+  getPlacesText(summary),
+  '8 servings in the fridge, 4 in the freezer',
+  'the word servings appears once',
+);
+assert.equal(
+  getPlacesText({ fridgeServings: 0, freezerServings: 1 }),
+  '1 serving in the freezer',
+);
+assert.deepEqual(
+  [getDueText(2, 1), getDueText(1, 0), getDueText(0, 2), getDueText(0, 0)],
+  ['2 to eat soon, 1 past its date', '1 to eat soon', '2 past their date', ''],
+);
+
+assert.deepEqual(
+  [
+    isBulkMeal({ servings: 4, care: null, hasStock: false }),
+    isBulkMeal({ servings: 5, care: null, hasStock: false }),
+    isBulkMeal({ servings: 2, care: careOf(3, 90), hasStock: false }),
+    isBulkMeal({ servings: 2, care: careOf(3, null), hasStock: false }),
+    isBulkMeal({ servings: 2, care: null, hasStock: true }),
+  ],
+  [false, true, true, false, true],
+  'a bulk meal is five or more servings, a recipe that says it freezes, or one already put away; fridge time alone is not a signal',
+);
+assert.deepEqual(
+  [
+    getPutAwayServings(8, null),
+    getPutAwayServings(8, 4),
+    getPutAwayServings(4, 4),
+    getPutAwayServings(3, null),
+    getPutAwayServings(0.5, null),
+    getPutAwayServings(500, null),
+    getPutAwayServings(7.5, 2),
+  ],
+  [6, 4, 1, 1, 1, 100, 5],
+  'what is left after tonight, as whole portions, at least one and at most 100',
+);
+assert.deepEqual(
+  [
+    getServingsToEat(container(), {
+      items: [{ id: 'i', kind: 'RECIPE', refId: 'adobo', servings: 2 }],
+    }),
+    getServingsToEat(container(), {
+      items: [{ id: 'i', kind: 'RECIPE', refId: 'adobo', servings: 1.5 }],
+    }),
+    getServingsToEat(container({ servings: 1 }), {
+      items: [{ id: 'i', kind: 'RECIPE', refId: 'adobo', servings: 3 }],
+    }),
+    getServingsToEat(container(), {
+      items: [
+        { id: 'i', kind: 'RECIPE', refId: 'adobo', servings: 1 },
+        { id: 'j', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+        { id: 'k', kind: 'RECIPE', refId: 'rice', servings: 9 },
+      ],
+    }),
+    getServingsToEat(container({ recipeId: null, mealId: 'meal-1' }), {
+      items: [],
+    }),
+  ],
+  [2, 2, 1, 3, 1],
+  'a planned meal eats its planned servings of the recipe, whole, never more than is left, and one plate of a saved meal',
+);
+
+const stockOf = (name: string, fridge: number, freezer: number) => ({
+  name,
+  summary: { fridge, freezer, containers: 1, nearestEatBy: null },
+});
+assert.deepEqual(
+  [
+    getShoppingStockLine([], false),
+    getShoppingStockLine([stockOf('Adobo', 0, 3)], false),
+    getShoppingStockLine([stockOf('Adobo', 2, 0)], true),
+    getShoppingStockLine([stockOf('Adobo', 2, 3)], false),
+    getShoppingStockLine([stockOf('Adobo', 1, 1)], true),
+    getShoppingStockLine([stockOf('Adobo', 1, 0), stockOf('Rice', 0, 2)], true),
+  ],
+  [
+    null,
+    'You already have 3 servings in the freezer.',
+    'You already have 2 servings of Adobo in the fridge.',
+    'You already have 5 servings (2 in the fridge and 3 in the freezer).',
+    'You already have 2 servings of Adobo (1 in the fridge and 1 in the freezer).',
+    'You already have prepared servings of Adobo and Rice.',
+  ],
+  'the shopping sheet says what is already put away, in one line, and never subtracts it',
+);
+assert.equal(
+  getSavedText(
+    { servings: 4, place: 'FREEZER', eatBy: dayOf(16) },
+    lateOnThe14th,
+  ),
+  'Saved 4 servings in the freezer, eat by ' +
+    getEatByPhrase(dayOf(16), lateOnThe14th),
+);
+assert.equal(
+  getSavedText(
+    { servings: 1, place: 'FRIDGE', eatBy: dayOf(15) },
+    lateOnThe14th,
+  ),
+  'Saved 1 serving in the fridge, eat by tomorrow',
+);
+
+assert.deepEqual(
+  [
+    getContainerTitle(
+      container(),
+      new Map([['adobo', { title: 'Adobo, renamed' } as Recipe]]),
+      new Map(),
+    ),
+    getContainerTitle(container(), new Map(), new Map()),
+    getContainerTitle(
+      container({ recipeId: null, mealId: 'm' }),
+      new Map(),
+      new Map([['m', { name: 'Taco night' } as never]]),
+    ),
+    getContainerTitle(container({ recipeId: null }), new Map(), new Map()),
+  ],
+  ['Adobo, renamed', 'Adobo chicken', 'Taco night', 'Adobo chicken'],
+  "a container shows its recipe's or meal's current name, and keeps its own title when that is gone",
+);
+const byCook = groupContainersByCook([
+  container({
+    id: 'a',
+    cookId: 'k1',
+    servings: 4,
+    history: [makeEvent('MADE', 1, { servings: 4 })],
+  }),
+  container({
+    id: 'b',
+    cookId: 'k1',
+    servings: 2,
+    history: [makeEvent('FREEZE', 2, { servings: 2, place: 'FREEZER' })],
+  }),
+  container({ id: 'c', cookId: null }),
+]);
+assert.deepEqual(
+  [
+    byCook.size,
+    byCook.get('k1')?.length,
+    getPutAwayText(byCook.get('k1') ?? []),
+  ],
+  [1, 2, 'Put away 6 servings'],
+  'a cook says how many servings were put away across its containers',
+);
+assert.equal(getPutAwayText([]), null);
 
 console.log('pinchMath: all checks passed');
