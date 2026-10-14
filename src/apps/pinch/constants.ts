@@ -361,3 +361,6 @@ export const SOFT_MAX_COOKS_PER_RECIPE = 500;
 export const COOK_BATCH_SIZE = 400;
 export const COOK_HISTORY_FIRST_PAGE = 8;
 export const COOK_HISTORY_PAGE_SIZE = 50;
+
+/** The most meals one day can have priced again in the one transaction that does it, under Firestore's 500 writes: the action's limit, not the rules'. */
+export const MAX_REPRICE_MEALS = 400;

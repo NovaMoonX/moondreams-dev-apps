@@ -12,6 +12,7 @@ import {
   getMealNutrition,
   type NutritionResult,
 } from '@apps/pinch/utils/nutritionMath';
+import { getGapKey } from '@apps/pinch/utils/gaps';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
 export interface CostContext {
@@ -137,7 +138,7 @@ export function combineMealCosts(costs: MealCost[]): Omit<MealCost, 'items'> {
   };
 }
 
-/** The write-once record of a meal's cost and nutrition, taken from the data as it is now. */
+/** A meal's cost and nutrition, taken from the data as it is now. */
 export function buildSnapshot(
   items: MealItem[],
   context: CostContext,
@@ -152,6 +153,7 @@ export function buildSnapshot(
 
   return {
     frozenAt,
+    repricedAt: null,
     costCents: cost.totalCents,
     leftOut: cost.leftOut.map(({ kind, ingredientId }) => ({
       kind,
@@ -162,5 +164,56 @@ export function buildSnapshot(
       itemId: item.id,
       costCents: cost.items.get(item.id)?.cents ?? null,
     })),
+  };
+}
+
+/** Null for a snapshot that was never priced again, including one written before the key existed. */
+export const getRepricedAt = (snapshot: PlannedSnapshot) =>
+  snapshot.repricedAt ?? null;
+
+const centsDiffer = (before: number | null, after: number | null) =>
+  before === null || after === null
+    ? before !== after
+    : Math.round(before) !== Math.round(after);
+
+/** Whether today's data would show a fixed meal differently: its total, a line or what it leaves out. Cents compare as shown, so sub-cent noise never offers a pointless re-price. */
+export function wouldRepriceChange(
+  meal: PlannedMeal,
+  context: CostContext,
+): boolean {
+  const { snapshot } = meal;
+  if (!snapshot) {
+    return false;
+  }
+
+  const cost = getMealCost(meal.items, context);
+  const fixedLines = new Map(
+    snapshot.lines.map((line) => [line.itemId, line.costCents]),
+  );
+  const fixedLeftOut = new Set(snapshot.leftOut.map(getGapKey));
+  const result =
+    centsDiffer(snapshot.costCents, cost.totalCents) ||
+    meal.items.some((item) =>
+      centsDiffer(
+        fixedLines.get(item.id) ?? null,
+        cost.items.get(item.id)?.cents ?? null,
+      ),
+    ) ||
+    cost.leftOut.length !== fixedLeftOut.size ||
+    cost.leftOut.some((gap) => !fixedLeftOut.has(getGapKey(gap)));
+
+  return result;
+}
+
+/** A fixed meal's snapshot worked out from today's data, keeping when the day was first fixed. */
+export function buildRepricedSnapshot(
+  snapshot: PlannedSnapshot,
+  items: MealItem[],
+  context: CostContext,
+  repricedAt: number,
+): PlannedSnapshot {
+  return {
+    ...buildSnapshot(items, context, snapshot.frozenAt),
+    repricedAt,
   };
 }

@@ -141,9 +141,11 @@ export interface Meal {
   updatedAt: number;
 }
 
-/** What a past meal cost, written once after its day so later price changes don't rewrite history. */
+/** What a past meal cost, written when its day passed so later price changes don't rewrite history. */
 export interface PlannedSnapshot {
   frozenAt: number;
+  /** When the person asked for the day to be priced again; null for the snapshot written when the day passed. Older snapshots lack the key. */
+  repricedAt: number | null;
   costCents: number | null;
   /** The ingredients the cost left out, so a day or month still names them. */
   leftOut: Gap[];

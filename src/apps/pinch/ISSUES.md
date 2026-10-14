@@ -572,7 +572,7 @@ Once a day has passed, its cost and nutrition are fixed. Changing a price or edi
 ### Possible Approach
 1. `freezePastMeals`: one `writeBatch` of field-scoped `snapshot` writes for loaded unfrozen past meals, run once after the window first loads and as the first step of any action that changes a price, size, recipe or ingredient nutrition. A meal planned on a past day is frozen in the same write.
 2. `mealMath` and `stats` read `snapshot` when present. The day drawer shows "Prices as they were that day" on a frozen day.
-3. Rules: `snapshot` is writable only while the stored value is `null` and is then immutable; `frozenAt ≤ request.time`.
+3. Rules: `snapshot` is writable only while the stored value is `null` and is then immutable; `frozenAt ≤ request.time`. (Later, the owner can have a day priced again with today's prices, the one write that replaces a snapshot: it must carry an instant `repricedAt`; see `TECHNICAL.md` decision 20.)
 4. Verify the sequence on the emulator: plan yesterday's meal, change a price, confirm the day didn't move; try overwriting a snapshot as the owner and expect a denial.
 
 ### CRUD & Entry-Point Requirements

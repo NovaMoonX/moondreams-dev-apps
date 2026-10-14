@@ -7,6 +7,15 @@ import {
   toPer100g,
 } from '../../src/apps/pinch/utils/nutritionBasis.ts';
 import { scaleAmount } from '../../src/apps/pinch/utils/quantity.ts';
+import {
+  buildRepricedSnapshot,
+  buildSnapshot,
+  getRepricedAt,
+  wouldRepriceChange,
+  type CostContext,
+} from '../../src/apps/pinch/utils/mealMath.ts';
+import { getFixedNote } from '../../src/apps/pinch/utils/mealFormat.ts';
+import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
   getComparableUrl,
@@ -51,6 +60,8 @@ import type {
   Cook,
   Idea,
   MealItem,
+  PlannedMeal,
+  PlannedSnapshot,
   Product,
   Recipe,
   ResolvedFamily,
@@ -999,6 +1010,267 @@ assert.deepEqual(
   getMissingCookFields({ plannedMealId: null }),
   {},
   'a cook with the key, even a null one, lacks nothing',
+);
+
+const repriceIngredient = (id: string) =>
+  ({
+    id,
+    name: id,
+    familyId: null,
+    aliases: [],
+    per100g: { calories: 200, protein: 20, carbs: 10, fat: 5 },
+    serving: { amount: 100, unit: 'G' },
+    gramsPerMl: null,
+    gramsEach: null,
+    isCustom: false,
+    isAdjusted: false,
+    isArchived: false,
+  }) as ResolvedIngredient;
+
+const repriceContext = (
+  recipes: Recipe[],
+  ingredients: ResolvedIngredient[],
+  products: Product[],
+): CostContext => {
+  const ingredientsById = new Map(
+    ingredients.map((entry) => [entry.id, entry]),
+  );
+  const defaultProducts = new Map(
+    products.map((entry) => [entry.ingredientId, entry]),
+  );
+  return {
+    recipeCosts: new Map(
+      recipes.map((entry) => [
+        entry.id,
+        getRecipeCost(entry, ingredientsById, defaultProducts),
+      ]),
+    ),
+    ingredientsById,
+    defaultProducts,
+    recipeNutrition: new Map(
+      recipes.map((entry) => [
+        entry.id,
+        getRecipeNutrition(entry, ingredientsById),
+      ]),
+    ),
+  };
+};
+
+const adoboRecipe = {
+  ...recipe(4, [
+    ['thigh', 2, 'LB'],
+    ['soy', 1, 'CUP'],
+  ]),
+  id: 'adobo',
+} as Recipe;
+const repriceIngredients = ['thigh', 'soy', 'feet'].map(repriceIngredient);
+const adoboItem: MealItem = {
+  id: 'a',
+  kind: 'RECIPE',
+  refId: 'adobo',
+  servings: 2,
+};
+const feetItem: MealItem = {
+  id: 'b',
+  kind: 'INGREDIENT',
+  refId: 'feet',
+  servings: 1,
+};
+const plannedOf = (
+  items: MealItem[],
+  snapshot: PlannedSnapshot | null,
+): PlannedMeal =>
+  ({
+    id: 'planned',
+    date: 0,
+    mealType: 'DINNER',
+    name: null,
+    sourceMealId: null,
+    items,
+    refIds: items.map((entry) => entry.refId),
+    snapshot,
+    createdAt: 1,
+    updatedAt: 1,
+  }) as PlannedMeal;
+
+const thenContext = repriceContext([adoboRecipe], repriceIngredients, []);
+const fixedThen = buildSnapshot([adoboItem, feetItem], thenContext, 1000);
+assert.equal(fixedThen.repricedAt, null, 'a freeze writes a null repricedAt');
+assert.equal(fixedThen.costCents, null, 'nothing was priced when it froze');
+const fixedMeal = plannedOf([adoboItem, feetItem], fixedThen);
+assert.equal(
+  wouldRepriceChange(fixedMeal, thenContext),
+  false,
+  'same prices, nothing to change',
+);
+assert.equal(
+  wouldRepriceChange(plannedOf([adoboItem], null), thenContext),
+  false,
+  'a day that is not fixed has nothing to re-price',
+);
+
+const nowProducts = [
+  product('thigh', 600, 3, 'LB'),
+  product('feet', 599, 2, 'LB'),
+];
+const nowContext = repriceContext(
+  [adoboRecipe],
+  repriceIngredients,
+  nowProducts,
+);
+assert.equal(
+  wouldRepriceChange(fixedMeal, nowContext),
+  true,
+  'a price added since fills in a line that had none',
+);
+const repriced = buildRepricedSnapshot(
+  fixedThen,
+  fixedMeal.items,
+  nowContext,
+  5000,
+);
+assert.deepEqual(
+  repriced,
+  { ...buildSnapshot(fixedMeal.items, nowContext, 1000), repricedAt: 5000 },
+  "a re-priced snapshot is what the freeze would write from today's data, plus when, with the day's first fixing time kept",
+);
+assert.equal(repriced.frozenAt, 1000);
+assert.equal(getRepricedAt(repriced), 5000);
+assert.notEqual(repriced.costCents, null);
+assert.deepEqual(
+  repriced.lines.map((entry) => entry.itemId),
+  ['a', 'b'],
+  'every item keeps a line, in the same order',
+);
+assert.equal(
+  wouldRepriceChange(plannedOf(fixedMeal.items, repriced), nowContext),
+  false,
+  'pricing again with nothing new changes nothing, so the offer goes away',
+);
+assert.equal(
+  wouldRepriceChange(plannedOf(fixedMeal.items, repriced), thenContext),
+  true,
+  'a price taken away would change it back',
+);
+
+const onlyFeet = repriceContext([adoboRecipe], repriceIngredients, [
+  product('feet', 599, 2, 'LB'),
+]);
+const partlyPriced = buildRepricedSnapshot(
+  fixedThen,
+  fixedMeal.items,
+  onlyFeet,
+  5000,
+);
+assert.equal(
+  partlyPriced.lines.find((entry) => entry.itemId === 'a')?.costCents,
+  null,
+  'a line whose product is still missing stays unpriced',
+);
+assert.notEqual(
+  partlyPriced.lines.find((entry) => entry.itemId === 'b')?.costCents,
+  null,
+  'and the one that now has a product is priced',
+);
+assert.equal(
+  partlyPriced.leftOut.every((entry) => entry.ingredientId !== 'feet'),
+  true,
+  'what is still left out no longer names the priced ingredient',
+);
+
+const noneAtAll = buildRepricedSnapshot(
+  fixedThen,
+  fixedMeal.items,
+  thenContext,
+  5000,
+);
+assert.equal(noneAtAll.costCents, null);
+assert.deepEqual(
+  noneAtAll.lines.map((entry) => entry.costCents),
+  [null, null],
+  'a day with nothing priced stays unpriced',
+);
+
+const withoutKey = {
+  ...fixedThen,
+  repricedAt: undefined,
+} as unknown as PlannedSnapshot;
+assert.equal(
+  getRepricedAt(withoutKey),
+  null,
+  'a snapshot written before the key existed reads as not re-priced',
+);
+assert.equal(
+  wouldRepriceChange(plannedOf(fixedMeal.items, withoutKey), nowContext),
+  true,
+  'and can be re-priced like any other',
+);
+
+const subCent = repriceContext([adoboRecipe], repriceIngredients, [
+  product('thigh', 600, 3, 'LB'),
+  product('soy', 300, 1, 'L'),
+  product('feet', 599, 2, 'LB'),
+]);
+const settled = buildSnapshot(fixedMeal.items, subCent, 1000);
+const nudged = {
+  ...settled,
+  costCents: Math.round(settled.costCents ?? 0) + 0.2,
+  lines: settled.lines.map((entry) => ({
+    ...entry,
+    costCents: Math.round(entry.costCents ?? 0) + 0.2,
+  })),
+};
+assert.equal(
+  wouldRepriceChange(plannedOf(fixedMeal.items, nudged), subCent),
+  false,
+  'a stored cost off by a fraction of a cent shows the same amount, so it is not offered',
+);
+
+const withGoneIngredient = [
+  adoboItem,
+  { id: 'c', kind: 'INGREDIENT', refId: 'removed', servings: 1 } as MealItem,
+];
+const goneThen = buildSnapshot(withGoneIngredient, nowContext, 1000);
+assert.doesNotThrow(() =>
+  buildRepricedSnapshot(goneThen, withGoneIngredient, nowContext, 5000),
+);
+const goneNow = buildRepricedSnapshot(
+  goneThen,
+  withGoneIngredient,
+  nowContext,
+  5000,
+);
+assert.deepEqual(
+  goneNow.lines.map((entry) => entry.itemId),
+  ['a', 'c'],
+  'a meal naming an ingredient that is gone keeps a line for it',
+);
+assert.equal(goneNow.lines[1].costCents, null);
+assert.equal(
+  goneNow.leftOut.some((entry) => entry.ingredientId === 'removed'),
+  true,
+  'and names it as left out',
+);
+
+assert.equal(
+  getFixedNote([fixedThen]),
+  'Fixed when the day passed',
+  'a day nobody re-priced says it was fixed when it passed',
+);
+assert.equal(
+  getFixedNote([withoutKey]),
+  'Fixed when the day passed',
+  'and so does one written before the key existed',
+);
+assert.match(
+  getFixedNote([repriced, { ...repriced, repricedAt: 4000 }]),
+  /^Priced with today's prices on /,
+  'a day with every meal re-priced says so',
+);
+assert.match(
+  getFixedNote([repriced, fixedThen]),
+  /^Some meals priced with today's prices on /,
+  'a day with only some of its meals re-priced says some',
 );
 
 console.log('pinchMath: all checks passed');
