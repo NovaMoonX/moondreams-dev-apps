@@ -236,7 +236,6 @@ function DayDrawer({
               })}
               {getDateOfDayKey(dayKey) >= getLocalTodayDate() && (
                 <AddToShoppingRow
-                  label="Add this day's ingredients"
                   subtitle='Choose what you need for the day'
                   onClick={() =>
                     onAddToShopping({

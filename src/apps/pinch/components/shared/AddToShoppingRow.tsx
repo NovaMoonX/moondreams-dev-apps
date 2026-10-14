@@ -3,15 +3,10 @@ import { ShoppingBasket } from 'lucide-react';
 
 interface AddToShoppingRowProps {
   subtitle: string;
-  label?: string;
   onClick: () => void;
 }
 
-function AddToShoppingRow({
-  subtitle,
-  label = 'Add to shopping list',
-  onClick,
-}: AddToShoppingRowProps) {
+function AddToShoppingRow({ subtitle, onClick }: AddToShoppingRowProps) {
   return (
     <div className='bg-muted/50 border-border overflow-hidden rounded-2xl border'>
       <Button
@@ -24,7 +19,7 @@ function AddToShoppingRow({
           <ShoppingBasket className='h-4 w-4' />
         </span>
         <span className='min-w-0 text-left'>
-          <span className='block'>{label}</span>
+          <span className='block'>Add to shopping list</span>
           <span className='text-muted-foreground block text-xs font-normal'>
             {subtitle}
           </span>

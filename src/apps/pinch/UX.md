@@ -54,7 +54,7 @@ flowchart TD
     D2 -.->|hover a day, desktop| PK["Day peek popover"]
     DD -->|+ Add| PM["Plan a meal subview · day, meal type, items with servings"]
     DD -->|tap a meal| PMD["Planned meal · swaps in place"]
-    DD -->|Add this day's ingredients| AS
+    DD -->|Add to shopping list| AS
     PMD -->|Add to shopping list| AS
     PMD -->|Change items or servings| PM
     PMD --> SAV["Save as a meal · swaps in place"]
@@ -277,7 +277,7 @@ block-beta
   style D10 fill:transparent,stroke:#888888,stroke-width:1px;
   style D11 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Meals are grouped by meal type, each group under its emoji; a meal with several items lists them as flat rows beneath one heading, so a meal never looks like several separate meals. A day with no meals says so in one muted line with "+ Add to this day" in the header. On a past day the Cost tile carries "Fixed when the day passed" (and reads "Wasn't priced" when nothing was priced), and its warning adds that a price you add now counts from today on. A past meal opened from it has no Modify: a muted line says its meals keep the prices and numbers they had, and that removing one and adding it again uses today's; an item with no price reads "Wasn't priced" there. From today on, a block under the meals reads "Add this day's ingredients" ("Choose what you need for the day"); it closes the drawer and opens the Add to shopping list sheet with every item of the day. A day that has passed has no such block.*
+*Meals are grouped by meal type, each group under its emoji; a meal with several items lists them as flat rows beneath one heading, so a meal never looks like several separate meals. A day with no meals says so in one muted line with "+ Add to this day" in the header. On a past day the Cost tile carries "Fixed when the day passed" (and reads "Wasn't priced" when nothing was priced), and its warning adds that a price you add now counts from today on. A past meal opened from it has no Modify: a muted line says its meals keep the prices and numbers they had, and that removing one and adding it again uses today's; an item with no price reads "Wasn't priced" there. From today on, a block under the meals reads "Add to shopping list" ("Choose what you need for the day"), as on a recipe, a meal and a planned meal; it closes the drawer and opens the shopping list sheet with every item of the day. A day that has passed has no such block.*
 
 **Planned meal** (tap a meal in the day drawer; swaps in place with "‹ Back")
 
@@ -310,7 +310,7 @@ block-beta
   style P11 fill:transparent,stroke:#888888,stroke-width:1px;
   style P12 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A Cost tile (its warning icon says what the total leaves out) and, when nutrition is on, the plate's calories and macros as emoji tiles sit above the items. The footer holds Modify (secondary, left) beside the one primary, "Save as a meal"; Modify closes the drawer and opens the Plan a meal subview, and is absent on a past day. "Remove from this day" is the red row at the end of the body, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button. In the body, above Modify's footer, a tinted "Add to shopping list" row ("Choose what you need for this meal") closes the drawer and opens the Add to shopping list sheet; it isn't there once the day has passed.*
+*A Cost tile (its warning icon says what the total leaves out) and, when nutrition is on, the plate's calories and macros as emoji tiles sit above the items. The footer holds Modify (secondary, left) beside the one primary, "Save as a meal"; Modify closes the drawer and opens the Plan a meal subview, and is absent on a past day. "Remove from this day" is the red row at the end of the body, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button. In the body, above Modify's footer, a tinted "Add to shopping list" row ("Choose what you need for this meal") closes the drawer and opens the shopping list sheet; it isn't there once the day has passed.*
 
 **Plan a meal** (subview; also the editor for an already planned meal)
 
@@ -546,7 +546,7 @@ block-beta
   style T12 fill:transparent,stroke:#888888,stroke-width:1px;
   style T13 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The front matter is one plain line of emoji and text for servings, times and, when the recipe has a source that still exists, "📖 From {source}" (a long name wraps inside the line; never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone or touch screen, a tooltip with a mouse), calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm. A tinted "Add to shopping list" row ("Choose what you need for this recipe") sits under the ingredients; it closes the drawer and opens the Add to shopping list sheet, which starts at the recipe's own servings.*
+*The front matter is one plain line of emoji and text for servings, times and, when the recipe has a source that still exists, "📖 From {source}" (a long name wraps inside the line; never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone or touch screen, a tooltip with a mouse), calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm. A tinted "Add to shopping list" row ("Choose what you need for this recipe") sits under the ingredients; it closes the drawer and opens the shopping list sheet, which starts at the recipe's own servings.*
 
 **Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with a Cost tile (warning icon when it leaves something out), the plate's calories and macros as emoji tiles when on, the items with servings and cost, and in the footer Modify beside the one primary "Plan it", which closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. The builder's header carries the meal's name (or the plate's first item while planning), its rows are a title with a compact servings stepper beneath (40px hit areas from a pseudo-element), and a tinted summary shows the cost, its warning icon and the plate's emoji macros. Adding stays the search field in the form. Removing an item from the plate shows "Removed Taco shells · Undo · 6" above the footer, and Undo puts it back in its place with its servings. The meal drawer has the same "Add to shopping list" row ("Choose what you need for this meal") under its items.
 
@@ -986,7 +986,7 @@ flowchart LR
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Tap a day] --> B["Add this day's ingredients"] --> C["Sheet: tick what you need"] --> D[Add 12]
+    A[Tap a day] --> B["Add to shopping list"] --> C["Sheet: tick what you need"] --> D[Add 12]
     D --> E["Toast: Added 12 to your shopping list · View"] --> F["Shopping tab, by family"]
     F --> G["At the store: tick what is in the cart"] --> H["Got it moves down"] --> I[Clear]
     A2[Open a recipe] --> B2["Add to shopping list · for 6 servings"] --> C
