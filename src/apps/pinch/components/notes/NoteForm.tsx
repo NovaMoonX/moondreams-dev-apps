@@ -144,7 +144,7 @@ function NoteForm({
               renderComponent: () => (
                 <div className='space-y-2'>
                   <p className='text-muted-foreground text-xs'>
-                    {note.kind === 'TWEAK' ? 'Tweak' : 'Note'} from{' '}
+                    {note.kind === 'TWEAK' ? 'Changed on' : 'Note from'}{' '}
                     {formatDateTime(note.createdAt)}
                     {noteCook &&
                       ` · after cooking on ${formatDateShort(noteCook.cookedAt)}`}
