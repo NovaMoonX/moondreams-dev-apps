@@ -83,7 +83,7 @@ function StoresSubview({ uid }: StoresSubviewProps) {
                   type='button'
                   variant='tertiary'
                   onClick={() => setForm({ storeId: store.id })}
-                  className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+                  className='h-auto w-full items-start justify-start gap-3 px-0! py-2 text-left'
                 >
                   <StoreLogo
                     name={store.name}

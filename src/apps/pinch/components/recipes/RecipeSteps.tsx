@@ -17,11 +17,18 @@ interface StepDrawerProps {
   steps: string[];
   mode: StepDrawerMode;
   onChange: (steps: string[]) => void;
+  onRemove: (index: number) => void;
   onClose: () => void;
 }
 
 /** Writes one step without leaving the recipe; a step left blank is dropped when the drawer closes. */
-function StepDrawer({ steps, mode, onChange, onClose }: StepDrawerProps) {
+function StepDrawer({
+  steps,
+  mode,
+  onChange,
+  onRemove,
+  onClose,
+}: StepDrawerProps) {
   const [index, setIndex] = useState(mode.index);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const step = steps[index] ?? '';
@@ -90,7 +97,7 @@ function StepDrawer({ steps, mode, onChange, onClose }: StepDrawerProps) {
             variant='tertiary'
             className='text-destructive! h-10 w-full'
             onClick={() => {
-              removeStep();
+              onRemove(index);
               onClose();
             }}
           >
@@ -105,13 +112,31 @@ function StepDrawer({ steps, mode, onChange, onClose }: StepDrawerProps) {
 interface RecipeStepsProps {
   steps: string[];
   onChange: (steps: string[]) => void;
+  /** Called with what a removal says and how to take it back. */
+  onRemoved: (message: string, restore: () => void) => void;
 }
 
 /** The method as a column of one-line summaries. On a phone writing a step happens in a drawer; from `sm` up the step being written is the one row open in place. */
-function RecipeSteps({ steps, onChange }: RecipeStepsProps) {
+function RecipeSteps({ steps, onChange, onRemoved }: RecipeStepsProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const [openStep, setOpenStep] = useState<number | null>(null);
   const [drawer, setDrawer] = useState<StepDrawerMode | null>(null);
+  const latest = useRef({ steps, onChange });
+  useEffect(() => {
+    latest.current = { steps, onChange };
+  });
+
+  const remove = (index: number) => {
+    const removed = steps[index];
+    onChange(steps.filter((_, at) => at !== index));
+    onRemoved(`Removed step ${index + 1}`, () =>
+      latest.current.onChange([
+        ...latest.current.steps.slice(0, index),
+        removed,
+        ...latest.current.steps.slice(index),
+      ]),
+    );
+  };
 
   return (
     <div className='space-y-2'>
@@ -130,7 +155,7 @@ function RecipeSteps({ steps, onChange }: RecipeStepsProps) {
                 }
                 setOpenStep((current) => (current === index ? null : index));
               }}
-              className='h-auto min-h-12 min-w-0 flex-1 items-start justify-start gap-3 px-0! py-2 text-left'
+              className='h-auto min-w-0 flex-1 items-start justify-start gap-3 px-0! py-2 text-left'
             >
               <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
                 {index + 1}
@@ -152,7 +177,7 @@ function RecipeSteps({ steps, onChange }: RecipeStepsProps) {
               className='size-10 shrink-0'
               onClick={() => {
                 setOpenStep(null);
-                onChange(steps.filter((_, at) => at !== index));
+                remove(index);
               }}
             >
               <Trash2 className='h-4 w-4' aria-hidden='true' />
@@ -201,6 +226,7 @@ function RecipeSteps({ steps, onChange }: RecipeStepsProps) {
           steps={steps}
           mode={drawer}
           onChange={onChange}
+          onRemove={remove}
           onClose={() => setDrawer(null)}
         />
       )}

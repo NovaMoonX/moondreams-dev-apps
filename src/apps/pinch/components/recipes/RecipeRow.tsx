@@ -50,7 +50,7 @@ function RecipeRow({
       type='button'
       variant='tertiary'
       onClick={() => onOpen(recipe.id)}
-      className='h-auto min-h-16 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+      className='h-auto w-full items-start justify-start gap-3 px-0! py-2 text-left'
     >
       <CoverImage
         coverPath={recipe.coverPath ?? null}

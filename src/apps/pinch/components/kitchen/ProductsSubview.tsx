@@ -113,7 +113,7 @@ function ProductRow({ row, showStore, onOpen }: ProductRowProps) {
       type='button'
       variant='tertiary'
       onClick={() => onOpen(product.id)}
-      className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+      className='h-auto w-full items-start justify-start gap-3 px-0! py-2.5 text-left'
     >
       <span className='min-w-0 flex-1'>
         <span className='flex items-center gap-1.5'>

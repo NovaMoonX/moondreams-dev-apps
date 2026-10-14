@@ -1,14 +1,49 @@
 import { memo } from 'react';
 
-import SectionDivider from '@/components/SectionDivider';
 import LazyMount from '@/components/LazyMount';
+import SectionDivider from '@/components/SectionDivider';
+import { useAppSelector } from '@/store';
 import IngredientRow from '@apps/pinch/components/kitchen/IngredientRow';
+import {
+  selectDefaultProducts,
+  selectShowNutrition,
+  selectUsedIngredientIds,
+} from '@apps/pinch/store/selectors';
+import type { NutritionSwitches, ResolvedIngredient } from '@apps/pinch/types';
+import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import type { FamilyGroupData } from '@apps/pinch/utils/catalogSearch';
 import type { NutritionBasis } from '@apps/pinch/utils/nutritionBasis';
 
-const ROW_HEIGHT = 57;
-const ROW_HEIGHT_WITH_NUTRITION_LINE = 73;
-const DIVIDER_HEIGHT = 36;
+const DIVIDER_HEIGHT = 20;
+const ROW_HEIGHT = 45;
+const LINE_HEIGHT = 16;
+
+interface RowHeightInputs {
+  ingredient: ResolvedIngredient;
+  showPrices: boolean;
+  showMacros: boolean;
+  defaultProducts: ReadonlyMap<string, unknown>;
+  usedIds: ReadonlySet<string>;
+  show: NutritionSwitches;
+}
+
+const estimateRowHeight = ({
+  ingredient,
+  showPrices,
+  showMacros,
+  defaultProducts,
+  usedIds,
+  show,
+}: RowHeightInputs) => {
+  const hasPriceLine =
+    showPrices &&
+    (defaultProducts.has(ingredient.id) || usedIds.has(ingredient.id));
+  const hasNutritionLine =
+    showMacros && hasShownValue(ingredient.per100g, show);
+  return (
+    ROW_HEIGHT + LINE_HEIGHT * (Number(hasPriceLine) + Number(hasNutritionLine))
+  );
+};
 
 interface FamilyGroupProps {
   group: FamilyGroupData;
@@ -27,9 +62,22 @@ function FamilyGroup({
   basis,
   onOpen,
 }: FamilyGroupProps) {
-  const rowHeight =
-    showPrices && showMacros ? ROW_HEIGHT_WITH_NUTRITION_LINE : ROW_HEIGHT;
-  const estimatedHeight = DIVIDER_HEIGHT + group.ingredients.length * rowHeight;
+  const defaultProducts = useAppSelector(selectDefaultProducts);
+  const usedIds = useAppSelector(selectUsedIngredientIds);
+  const show = useAppSelector(selectShowNutrition);
+  const estimatedHeight = group.ingredients.reduce(
+    (sum, ingredient) =>
+      sum +
+      estimateRowHeight({
+        ingredient,
+        showPrices,
+        showMacros,
+        defaultProducts,
+        usedIds,
+        show,
+      }),
+    DIVIDER_HEIGHT,
+  );
 
   return (
     <section

@@ -4,8 +4,6 @@ import {
   Button,
   Form,
   FormFactories,
-  Input,
-  Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
@@ -13,17 +11,23 @@ import { X } from 'lucide-react';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
-import Field from '@/components/forms/Field';
 import PhotoPicker from '@/components/forms/PhotoPicker';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import UndoSnackbar from '@/components/UndoSnackbar';
 import { useImageUpload } from '@/hooks/useImageUpload';
+import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
+import {
+  RecipeDescriptionField,
+  RecipeTimesField,
+  RecipeTitleField,
+} from '@apps/pinch/components/recipes/RecipeBasics';
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
 import {
   getDataFromExtracted,
@@ -65,7 +69,7 @@ import type { NutritionMetric, Recipe, RecipeSource } from '@apps/pinch/types';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
-const { custom, input } = FormFactories;
+const { custom } = FormFactories;
 
 export interface RecipeRead {
   recipe: ExtractedRecipe;
@@ -136,6 +140,7 @@ function RecipeForm({
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
+  const { pending, showUndo, undo } = useUndoRemoval();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,6 +151,7 @@ function RecipeForm({
   const isFormComplete =
     formData.title.trim() !== '' &&
     formData.title.length <= MAX_RECIPE_TITLE_LENGTH &&
+    formData.description.length <= MAX_RECIPE_DESCRIPTION_LENGTH &&
     formData.ingredients.length >= 1 &&
     formData.ingredients.length <= MAX_RECIPE_INGREDIENTS &&
     formData.ingredients.every(isRowValid) &&
@@ -198,6 +204,7 @@ function RecipeForm({
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
 
+  const isBlankByHand = recipeId === null && initialRead === null;
   const unresolvedCount = formData.ingredients.filter(
     (row) => row.ingredientId === '',
   ).length;
@@ -210,12 +217,21 @@ function RecipeForm({
       return null;
     }
     if (formData.title.trim() === '') return 'Give it a title to save.';
+    if (formData.title.length > MAX_RECIPE_TITLE_LENGTH) {
+      return 'Shorten the title to save.';
+    }
+    if (formData.description.length > MAX_RECIPE_DESCRIPTION_LENGTH) {
+      return 'Shorten the description to save.';
+    }
     if (formData.ingredients.length === 0) return 'Add an ingredient to save.';
     if (unresolvedCount > 0) {
       return `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`;
     }
     if (!formData.ingredients.every(isRowValid)) {
       return 'Check the ingredient amounts to save.';
+    }
+    if (!isValidMinutes(prep) || !isValidMinutes(cook)) {
+      return 'Check the prep and cook time to save.';
     }
     return null;
   };
@@ -228,11 +244,16 @@ function RecipeForm({
 
   const fields = useMemo(
     () => [
-      input({
+      custom({
         name: 'title',
-        label: 'Title',
-        variant: 'outline',
-        placeholder: 'Adobo chicken',
+        label: '',
+        renderComponent: (props) => (
+          <RecipeTitleField
+            value={String(props.value)}
+            onChange={props.onValueChange}
+            defaultOpen={isBlankByHand}
+          />
+        ),
       }),
       custom({
         name: 'basics',
@@ -242,11 +263,8 @@ function RecipeForm({
           const set = (patch: Partial<RecipeFormData['basics']>) =>
             props.onValueChange({ ...basics, ...patch });
           return (
-            <div
-              className='grid grid-cols-2 gap-3'
-              onKeyDown={blockEnterSubmit}
-            >
-              <div className='col-span-2 flex items-center justify-between gap-3'>
+            <div className='space-y-1' onKeyDown={blockEnterSubmit}>
+              <div className='flex min-h-11 items-center justify-between gap-3'>
                 <span className='text-sm font-medium'>Servings</span>
                 <Stepper
                   label='Servings'
@@ -254,34 +272,11 @@ function RecipeForm({
                   onChange={(servings) => set({ servings })}
                 />
               </div>
-              <Field label='Prep (minutes)'>
-                {(id) => (
-                  <Input
-                    id={id}
-                    type='number'
-                    inputMode='numeric'
-                    min={0}
-                    step={1}
-                    variant='outline'
-                    value={basics.prep}
-                    onChange={(event) => set({ prep: event.target.value })}
-                  />
-                )}
-              </Field>
-              <Field label='Cook (minutes)'>
-                {(id) => (
-                  <Input
-                    id={id}
-                    type='number'
-                    inputMode='numeric'
-                    min={0}
-                    step={1}
-                    variant='outline'
-                    value={basics.cook}
-                    onChange={(event) => set({ cook: event.target.value })}
-                  />
-                )}
-              </Field>
+              <RecipeTimesField
+                prep={basics.prep}
+                cook={basics.cook}
+                onChange={set}
+              />
             </div>
           );
         },
@@ -330,19 +325,10 @@ function RecipeForm({
         name: 'description',
         label: '',
         renderComponent: (props) => (
-          <Field label='Description'>
-            {(id) => (
-              <Textarea
-                id={id}
-                rows={2}
-                variant='outline'
-                placeholder='A line about this dish'
-                maxLength={MAX_RECIPE_DESCRIPTION_LENGTH}
-                value={String(props.value)}
-                onChange={(event) => props.onValueChange(event.target.value)}
-              />
-            )}
-          </Field>
+          <RecipeDescriptionField
+            value={String(props.value)}
+            onChange={props.onValueChange}
+          />
         ),
       }),
       ...(hasSourcesFailed
@@ -392,6 +378,7 @@ function RecipeForm({
               uid={uid}
               rows={props.value as IngredientRow[]}
               onChange={props.onValueChange}
+              onRemoved={showUndo}
             />
           </FormSection>
         ),
@@ -404,6 +391,7 @@ function RecipeForm({
             <RecipeSteps
               steps={props.value as string[]}
               onChange={props.onValueChange}
+              onRemoved={showUndo}
             />
           </FormSection>
         ),
@@ -433,6 +421,8 @@ function RecipeForm({
       isDirtyRef,
       hasSourcesFailed,
       sourceOptions,
+      isBlankByHand,
+      showUndo,
     ],
   );
 
@@ -555,6 +545,7 @@ function RecipeForm({
 
   return (
     <>
+      <UndoSnackbar pending={pending} onUndo={undo} />
       {initialRead && !isNoteClosed && (
         <div
           className='bg-accent mb-4 flex items-start gap-2 rounded-2xl p-3 text-sm'

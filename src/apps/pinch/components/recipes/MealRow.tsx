@@ -58,7 +58,7 @@ function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
       type='button'
       variant='tertiary'
       onClick={() => onOpen(meal.id)}
-      className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+      className='h-auto w-full items-start justify-start gap-3 px-0! py-2 text-left'
     >
       <span
         className='bg-accent text-accent-foreground flex size-14 shrink-0 items-center justify-center rounded-xl text-2xl'

@@ -21,7 +21,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 9. **See your week at a glance.** Switch between a month, a week and a single day. Days show a soft-tinted chip per meal (the meal's title on a wide screen), a Today button brings you back, and a stats row describes the period you're looking at.
 10. **Fill in the details as you go.** A missing price, package size, or nutrition value shows up as a quiet line right where it matters ("2 ingredients need a price · Add prices"), so nothing is demanded up front and a tap fills it in.
 11. **Turn on nutrition if you want it.** Calories, protein, carbs, and fat each stay hidden until you switch them on.
-12. **Show only what you want on a list.** An eye button on Kitchen and Recipes hides the prices or the calories and macros on the rows, whenever you like.
+12. **Lists stay short, and you choose what they show.** Rows start with prices and leave out calories and macros; an eye button on Kitchen and Recipes turns either one on or off, whenever you like.
 13. **Remember where a recipe came from.** Tag a recipe with a source, like a favorite site or a stack of cookbooks, then find your recipes by it.
 
 ### Finding Your Way, In Detail
@@ -76,7 +76,9 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Type nutrition the way the label prints it.** Per 28 g, per ounce or per serving: Pinch converts it to per 100 g and says what it saved. Switching between g, oz and serving before you've typed a number converts the ones already there; once you've typed, it only changes what your numbers are for. A serving needs a size Pinch can weigh, and a blank or impossible number is called out before you save.
 - **See it per serving or per 100 g.** An ingredient's drawer and the Kitchen list's rows share one choice, which starts at per 100 g. Flip it in the drawer (the switch is left out when a serving is exactly 100 g or can't be weighed) or in the list's view options.
 - **Showing nutrition is opt-in.** In settings, calories, protein, carbs, and fat are four separate switches, all off to start. Turning one on shows it per serving on recipes and meals and as a daily average on the calendar's stats row. With protein on, the stats row also shows your average price per gram of protein.
-- **View options are for the rows only.** The eye button turns prices and calories and macros on or off for a list's rows, and picks per serving or per 100 g for ingredients. Totals, drawers and nudges don't change, and Reset puts the list back. Each list's choice is kept on this device, for you.
+- **View options are for the rows only.** The eye button turns prices and calories and macros on or off for a list's rows (prices start on, calories and macros start off), and picks per serving or per 100 g for ingredients. Totals, drawers and nudges don't change, and Reset puts the list back. Each list's choice is kept on this device, for you. A row is only as tall as the lines it shows.
+- **A recipe's basics open one at a time.** The title, the prep and cook time and the description are one-line summaries; tap one to change it in a drawer on a phone or a small popover on a bigger screen, and press Enter or Done to close it. A recipe written from scratch opens its title for you.
+- **Removing something from a recipe can be taken back.** Taking out an ingredient or a step (or an item from a meal's plate) shows "Removed Salt · Undo" with a few seconds counting down; Undo puts it back where it was.
 - **Blanks are named.** An ingredient with no nutrition entered is called out with a nudge and left out of the totals while that metric is on.
 - **A week runs Sunday to Saturday.** The month grid and the week view both start on Sunday.
 - **A meal holds up to 10 items.** Planning more than that is a recipe's job.
@@ -120,7 +122,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Past days keep the cost and nutrition they had: a new price or an edited recipe changes what's ahead, not last month's totals
 - [x] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
-- [x] View options on Kitchen and Recipes: hide prices or calories and macros on the rows, and pick per serving or per 100 g for ingredients, remembered per person on the device
+- [x] View options on Kitchen and Recipes: prices show and calories and macros stay hidden until you turn them on, and pick per serving or per 100 g for ingredients, remembered per person on the device
 - [x] Stays quick with a big kitchen: hundreds of ingredients and recipes and a thousand planned meals
 
 ### Next Steps
