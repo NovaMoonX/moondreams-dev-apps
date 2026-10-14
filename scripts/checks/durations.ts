@@ -44,7 +44,7 @@ assert.deepEqual(seconds('Rest ½ hour'), [1800]);
 assert.deepEqual(seconds('Bake for half an hour'), [1800]);
 assert.deepEqual(seconds('Simmer about an hour'), [3600]);
 
-// Several in a step, in order, without repeats
+// Several in one text, in order, without repeats
 assert.deepEqual(
   seconds('Sear 3 minutes per side, then rest 10 minutes'),
   [180, 600],

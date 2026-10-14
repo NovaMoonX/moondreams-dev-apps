@@ -975,23 +975,23 @@ Paste a link and a recipe form fills in for review.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
-### Issue 33: Cook mode: one step at a time
+### Issue 33: Cooking mode: one step at a time
 
 **Prerequisites:** Issue 6
-**Target PR Size:** ~300 lines
+**Target PR Size:** ~300 lines (as built it also carries the timers and the ingredients view)
 **Files:**
-- `CookMode` subview, a keep-awake hook
+- `CookingSubview` (an overlay `Subview`) with `CookStepView`, `CookIngredientsView` and `CookTimerStrip`, the `useCookTimers` hook, and a general `useWakeLock` hook
 
 **Context:** UX Recipe details.
 
 ### Description
-A big-type, one-step-at-a-time view that keeps the screen awake.
+A big-type, one-step-at-a-time view that keeps the screen awake. As built, the planned "ingredient peek" is an Ingredients view beside Steps (scaled to the servings being made and tickable), a step's times become timers, and leaving while a timer is going asks first.
 
 ### Possible Approach
-1. Wake Lock API with a graceful fallback; step navigation; ingredient peek.
+1. Wake Lock API with a graceful fallback; step navigation by buttons, swipe and arrow keys; an Ingredients view that scales amounts with the shopping list's own `scaleAmount`; timers that run to a clock deadline.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Read:** a recipe in cook mode.
+- [ ] **Read:** a recipe in cooking mode, from the recipe drawer and from a planned meal.
 
 ### Success Criteria
 - [ ] The screen stays awake on supported browsers and the view works without it.
@@ -1001,14 +1001,14 @@ A big-type, one-step-at-a-time view that keeps the screen awake.
 
 ## Beyond
 
-### Issue 34: Hands-free voice navigation in cook mode
+### Issue 34: Hands-free voice navigation in cooking mode
 
-**Prerequisites:** Cook mode
+**Prerequisites:** Cooking mode (Issue 33)
 **Target PR Size:** ~400 lines
 **Files:**
 - Speech commands hook
 
-**Context:** Cook mode.
+**Context:** Cooking mode.
 
 ### Description
 Say "next" and "back" with messy hands.
@@ -1017,7 +1017,7 @@ Say "next" and "back" with messy hands.
 1. Web Speech API with an on-device fallback if available; clear on/off control.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Read:** cook mode.
+- [ ] **Read:** cooking mode.
 
 ### Success Criteria
 - [ ] Works hands-free where supported and is invisible where it isn't.
