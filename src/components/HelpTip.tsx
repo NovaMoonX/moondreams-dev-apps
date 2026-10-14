@@ -109,19 +109,19 @@ function HelpTip({
   const tipId = useId();
   const isTipShown = isOpen && !usesModal;
 
-  // A modal can sit over a drawer, and both close on one Escape: capture it so only the modal does.
+  // A modal or tooltip can sit over a drawer, and both close on one Escape: capture it so only it does.
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (usesModal) event.stopImmediatePropagation();
+        event.stopImmediatePropagation();
         setIsOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen, usesModal]);
+  }, [isOpen]);
 
   useLayoutEffect(() => {
     if (!isTipShown) return;
