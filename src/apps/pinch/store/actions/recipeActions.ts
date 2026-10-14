@@ -248,10 +248,7 @@ export const removeRecipe = createAsyncThunk<
       );
     }
 
-    await deleteCooks(
-      uid,
-      getState().pinch.cooks.items.filter((cook) => cook.recipeId === id),
-    ).catch((error) =>
+    await deleteCooks(uid, id).catch((error) =>
       console.error("Pinch could not clear a deleted recipe's cooks", error),
     );
 
