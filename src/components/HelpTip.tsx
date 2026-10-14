@@ -29,6 +29,20 @@ const subscribeToHover = (onChange: () => void) => {
 
 const getCanHover = () => window.matchMedia(CAN_HOVER_QUERY).matches;
 
+// A dialog moves focus to its first control on its own, which is also `:focus-visible` after Enter, so
+// focus only counts as the person's when the key before it was Tab.
+const lastKey = { isTab: false };
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      lastKey.isTab = event.key === 'Tab';
+    },
+    true,
+  );
+  window.addEventListener('pointerdown', () => (lastKey.isTab = false), true);
+}
+
 interface HelpTipProps {
   title: string;
   children: ReactNode;
@@ -204,7 +218,9 @@ function HelpTip({
         usesModal
           ? undefined
           : (event) =>
-              event.currentTarget.matches(':focus-visible') && setIsOpen(true)
+              lastKey.isTab &&
+              event.currentTarget.matches(':focus-visible') &&
+              setIsOpen(true)
       }
       onBlur={usesModal ? undefined : () => setIsOpen(false)}
     >
