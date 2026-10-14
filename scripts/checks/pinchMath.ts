@@ -43,6 +43,18 @@ import {
   getRecipeChanges,
   type RecipeContent,
 } from '../../src/apps/pinch/utils/recipeChanges.ts';
+import { normalizeExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
+import {
+  EMPTY_CARE_TEXT,
+  formatCareDays,
+  getCareProblem,
+  getCareSummary,
+  getCareText,
+  getLeftoversLine,
+  getRecipeCare,
+  parseCareText,
+  toCare,
+} from '../../src/apps/pinch/utils/recipeCare.ts';
 import { toLocalDateInputValue } from '../../src/utils/dateInputUtils.ts';
 import {
   findIdeaByUrl,
@@ -1048,6 +1060,7 @@ const baseRecipe: RecipeContent = {
     recipeLine('l3', 'butter', 2, 'TBSP', 'cold'),
   ],
   steps: ['Marinate.', 'Simmer for 25 minutes.', 'Reduce the sauce.'],
+  care: null,
   nutritionOverride: null,
   sourceId: null,
 };
@@ -1449,6 +1462,88 @@ assert.deepEqual(
   'a line whose ingredient is gone still reads, as the drawer does',
 );
 
+const careOf = (parts: Partial<Parameters<typeof toCare>[0] & object>) =>
+  toCare({
+    fridgeDays: null,
+    freezerDays: null,
+    reheat: null,
+    tip: null,
+    ...parts,
+  });
+assert.deepEqual(
+  changesFor({ care: careOf({ fridgeDays: 3 }) }),
+  ['Fridge storage set to 3 days'],
+  'a fridge time added reads as set',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    { ...baseRecipe, care: careOf({ fridgeDays: 3, freezerDays: 90 }) },
+    {
+      ...baseRecipe,
+      care: careOf({
+        fridgeDays: 5,
+        freezerDays: 90,
+        reheat: 'Warm it gently.',
+      }),
+    },
+    names,
+  ),
+  ['Fridge storage 3 days → 5 days', 'Added reheating directions'],
+  'a changed fridge time shows both values and an added reheating line is named, an unchanged freezer is not',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    {
+      ...baseRecipe,
+      care: careOf({ freezerDays: 90, tip: 'Keep the sauce apart.' }),
+    },
+    baseRecipe,
+    names,
+  ),
+  ['Freezer storage removed', 'Removed the storage tip'],
+  'taking care away is named part by part',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    {
+      ...baseRecipe,
+      care: careOf({ freezerDays: 30, reheat: 'Oven.', tip: 'A.' }),
+    },
+    {
+      ...baseRecipe,
+      care: careOf({ freezerDays: 60, reheat: 'Microwave.', tip: 'B.' }),
+    },
+    names,
+  ),
+  [
+    'Freezer storage 1 month → 2 months',
+    'Reheating directions changed',
+    'Storage tip changed',
+  ],
+  'months read as months and a changed reheating line or tip says only that it changed',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    { ...baseRecipe, care: undefined } as unknown as RecipeContent,
+    baseRecipe,
+    names,
+  ),
+  [],
+  'a recipe from before care existed (no key) and one with care null are the same',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    baseRecipe,
+    {
+      ...baseRecipe,
+      care: { fridgeDays: null, freezerDays: null, reheat: '  ', tip: null },
+    },
+    names,
+  ),
+  [],
+  'a care record with nothing in it is no care',
+);
+
 const fuzzRandom = ((seed) => () => {
   seed = (seed * 1664525 + 1013904223) % 4294967296;
   return seed / 4294967296;
@@ -1495,6 +1590,18 @@ const mutations: ((r: RecipeContent) => RecipeContent)[] = [
     nutritionOverride: { calories: 400, protein: null, carbs: null, fat: null },
   }),
   (r) => ({ ...r, sourceId: r.sourceId === null ? 's1' : null }),
+  (r) => ({
+    ...r,
+    care: toCare({ ...r.care, fridgeDays: (r.care?.fridgeDays ?? 2) + 1 }),
+  }),
+  (r) => ({
+    ...r,
+    care: toCare({
+      ...r.care,
+      tip: r.care?.tip ? null : 'Keep the sauce apart.',
+    }),
+  }),
+  (r) => ({ ...r, care: toCare({ ...r.care, reheat: 'Warm it gently.' }) }),
 ];
 const fuzzMismatches = Array.from({ length: 600 }, () => {
   const before = mutations.reduce<RecipeContent>(
@@ -1687,6 +1794,212 @@ assert.deepEqual(
   ),
   ['Oct 12, 3 PM', 'Oct 12, 2 PM', 'Oct 11'],
   'two cooks on one day show their times, and a day to itself stays short',
+);
+
+// Recipe care: the pure parts the form, the drawer, the Finish panel and the readers share.
+assert.deepEqual(
+  [1, 2, 6, 7, 10, 14, 21, 29, 30, 31, 60, 90, 180, 360, 365].map(
+    formatCareDays,
+  ),
+  [
+    '1 day',
+    '2 days',
+    '6 days',
+    '1 week',
+    '10 days',
+    '2 weeks',
+    '3 weeks',
+    '29 days',
+    '1 month',
+    '31 days',
+    '2 months',
+    '3 months',
+    '6 months',
+    '12 months',
+    '365 days',
+  ],
+  'days read as the largest of months and weeks that fit exactly, else days, with the singular for one',
+);
+assert.equal(
+  formatCareDays(210),
+  '7 months',
+  'a count that fits both months and weeks reads as months',
+);
+assert.equal(formatCareDays(28), '4 weeks', 'twenty-eight days is four weeks');
+
+assert.equal(toCare(null), null, 'no care is null');
+assert.equal(toCare(undefined), null, 'a missing key is null');
+assert.equal(
+  toCare({ fridgeDays: null, freezerDays: null, reheat: ' ', tip: '' }),
+  null,
+  'a record with nothing in it is null',
+);
+assert.deepEqual(
+  toCare({ fridgeDays: 3, freezerDays: 0, reheat: ' Oven. ', tip: 7 }),
+  { fridgeDays: 3, freezerDays: null, reheat: 'Oven.', tip: null },
+  'a usable part is kept and trimmed; zero days and a non-string tip are dropped',
+);
+assert.deepEqual(
+  toCare({ fridgeDays: 365 }),
+  { fridgeDays: 365, freezerDays: null, reheat: null, tip: null },
+  'a year is the longest and a partial record gains its missing keys as null',
+);
+assert.equal(toCare({ fridgeDays: 366 }), null, 'more than a year is not kept');
+assert.equal(toCare({ fridgeDays: 2.5 }), null, 'part of a day is not kept');
+assert.equal(toCare({ fridgeDays: '3' }), null, 'days must be a number');
+assert.equal(
+  toCare({ tip: 'x'.repeat(301) })?.tip?.length,
+  300,
+  'a long tip is cut to 300',
+);
+assert.equal(
+  toCare({ reheat: 'y'.repeat(500) })?.reheat?.length,
+  300,
+  'a long reheating line is cut to 300',
+);
+assert.equal(
+  getRecipeCare({}),
+  null,
+  'a recipe with no care key reads as no care',
+);
+assert.equal(
+  getRecipeCare({ care: null }),
+  null,
+  'a recipe with care null reads as no care',
+);
+assert.deepEqual(
+  getRecipeCare({
+    care: { fridgeDays: 3, freezerDays: null, reheat: null, tip: null },
+  }),
+  { fridgeDays: 3, freezerDays: null, reheat: null, tip: null },
+  'a recipe with care reads as it was written',
+);
+
+assert.equal(getCareSummary(null), '', 'no care has no summary');
+assert.equal(
+  getCareSummary(toCare({ fridgeDays: 3, freezerDays: 90 })),
+  'Fridge 3 days · Freezer 3 months',
+  'the summary names each time',
+);
+assert.equal(
+  getCareSummary(toCare({ fridgeDays: 1, reheat: 'Oven.', tip: 'Apart.' })),
+  'Fridge 1 day · Reheat · Tip',
+  'reheating and a tip are named, not copied',
+);
+assert.equal(
+  getCareSummary(toCare({ tip: 'Apart.' })),
+  'Tip',
+  'a tip alone is just Tip',
+);
+
+assert.equal(
+  getLeftoversLine(null),
+  null,
+  'no care says nothing about leftovers',
+);
+assert.equal(
+  getLeftoversLine(toCare({ fridgeDays: 3, freezerDays: 90 })),
+  'Leftovers keep 3 days in the fridge, 3 months in the freezer',
+  'the Finish line names both',
+);
+assert.equal(
+  getLeftoversLine(toCare({ fridgeDays: 1 })),
+  'Leftovers keep 1 day in the fridge',
+  'one day is singular',
+);
+assert.equal(
+  getLeftoversLine(toCare({ freezerDays: 60 })),
+  'Leftovers keep 2 months in the freezer',
+  'a freezer alone is named alone',
+);
+assert.equal(
+  getLeftoversLine(toCare({ reheat: 'Oven.', tip: 'Apart.' })),
+  null,
+  'reheating and a tip alone give no keeping line',
+);
+
+assert.deepEqual(
+  getCareText(null),
+  EMPTY_CARE_TEXT,
+  'no care opens the editor empty',
+);
+assert.deepEqual(
+  getCareText(toCare({ fridgeDays: 3, reheat: 'Oven.' })),
+  { fridge: '3', freezer: '', reheat: 'Oven.', tip: '' },
+  'care opens the editor as text',
+);
+assert.equal(
+  parseCareText(EMPTY_CARE_TEXT),
+  null,
+  'an empty editor is no care',
+);
+assert.deepEqual(
+  parseCareText({ fridge: ' 3 ', freezer: '90', reheat: ' Oven. ', tip: '' }),
+  { fridgeDays: 3, freezerDays: 90, reheat: 'Oven.', tip: null },
+  'typed care is trimmed and blanks are null',
+);
+assert.equal(
+  getCareProblem(EMPTY_CARE_TEXT),
+  null,
+  'nothing typed has no problem',
+);
+assert.equal(
+  getCareProblem({ ...EMPTY_CARE_TEXT, fridge: '365', freezer: '1' }),
+  null,
+  'the ends of the range are fine',
+);
+['0', '366', '2.5', '-1', '1e2', 'abc', '3 days'].forEach((typed) => {
+  assert.equal(
+    getCareProblem({ ...EMPTY_CARE_TEXT, fridge: typed }),
+    'Use whole days from 1 to 365 for the fridge',
+    `fridge "${typed}" is a problem`,
+  );
+});
+assert.equal(
+  getCareProblem({ ...EMPTY_CARE_TEXT, fridge: '0', freezer: '400' }),
+  'Use whole days from 1 to 365 for the fridge and freezer',
+  'both bad days are named',
+);
+assert.equal(
+  getCareProblem({ ...EMPTY_CARE_TEXT, reheat: 'y'.repeat(301) }),
+  'Keep the reheating line to 300 characters or fewer',
+  'a long reheating line is named',
+);
+assert.equal(
+  getCareProblem({ ...EMPTY_CARE_TEXT, tip: 'x'.repeat(301) }),
+  'Keep the tip to 300 characters or fewer',
+  'a long tip is named',
+);
+assert.equal(
+  getCareProblem({ ...EMPTY_CARE_TEXT, tip: 'x'.repeat(300) }),
+  null,
+  'a tip of exactly 300 is fine',
+);
+
+assert.equal(
+  normalizeExtractedRecipe({ ingredients: [], steps: [], unread: [] }).care,
+  null,
+  'a reading that finds no storage lines leaves care null',
+);
+assert.deepEqual(
+  normalizeExtractedRecipe({
+    fridgeDays: 4.4,
+    freezerDays: 90,
+    reheat: ' Warm it in the oven. ',
+    tip: null,
+  }).care,
+  { fridgeDays: 4, freezerDays: 90, reheat: 'Warm it in the oven.', tip: null },
+  'a reading keeps what it found, rounded to whole days',
+);
+assert.equal(
+  normalizeExtractedRecipe({ fridgeDays: 800, freezerDays: -2 }).care,
+  null,
+  'a reading with days outside 1 to 365 keeps neither',
+);
+assert.equal(
+  normalizeExtractedRecipe({ fridgeDays: 'a week', reheat: 5, tip: {} }).care,
+  null,
+  'a reading with the wrong types keeps nothing',
 );
 
 console.log('pinchMath: all checks passed');

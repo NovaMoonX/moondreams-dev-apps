@@ -7,8 +7,10 @@ import {
 import type {
   NutritionValues,
   Recipe,
+  RecipeCare,
   RecipeIngredient,
 } from '@apps/pinch/types';
+import { formatCareDays, toCare } from '@apps/pinch/utils/recipeCare';
 import { formatMinutes } from '@apps/pinch/utils/recipeFormat';
 
 /** What a tweak looks at: everything a recipe's form edits except the cover picture. */
@@ -21,6 +23,7 @@ export type RecipeContent = Pick<
   | 'cookMinutes'
   | 'ingredients'
   | 'steps'
+  | 'care'
   | 'nutritionOverride'
   | 'sourceId'
 >;
@@ -52,6 +55,7 @@ const normalize = (content: RecipeContent) => ({
   cookMinutes: content.cookMinutes ?? null,
   ingredients: content.ingredients.map(normalizeLine),
   steps: content.steps.map((step) => step.trim()).filter(Boolean),
+  care: toCare(content.care),
   nutrition: Object.fromEntries(
     METRIC_KEYS.map((key) => [key, content.nutritionOverride?.[key] ?? null]),
   ) as unknown as NutritionValues,
@@ -185,6 +189,54 @@ const getStepChanges = (before: string[], after: string[]) => {
   return [...changed, ...added, ...removed];
 };
 
+const getCareDaysLine = (
+  label: string,
+  before: number | null,
+  after: number | null,
+) => {
+  if (before === after) return [];
+  if (after === null) return [`${label} removed`];
+  if (before === null) return [`${label} set to ${formatCareDays(after)}`];
+  return [`${label} ${formatCareDays(before)} → ${formatCareDays(after)}`];
+};
+
+const getCareTextLine = (
+  before: string | null,
+  after: string | null,
+  words: { added: string; changed: string; removed: string },
+) => {
+  if (before === after) return [];
+  if (before === null) return [words.added];
+  if (after === null) return [words.removed];
+  return [words.changed];
+};
+
+const getCareChanges = (
+  before: RecipeCare | null,
+  after: RecipeCare | null,
+) => [
+  ...getCareDaysLine(
+    'Fridge storage',
+    before?.fridgeDays ?? null,
+    after?.fridgeDays ?? null,
+  ),
+  ...getCareDaysLine(
+    'Freezer storage',
+    before?.freezerDays ?? null,
+    after?.freezerDays ?? null,
+  ),
+  ...getCareTextLine(before?.reheat ?? null, after?.reheat ?? null, {
+    added: 'Added reheating directions',
+    changed: 'Reheating directions changed',
+    removed: 'Removed the reheating directions',
+  }),
+  ...getCareTextLine(before?.tip ?? null, after?.tip ?? null, {
+    added: 'Added a storage tip',
+    changed: 'Storage tip changed',
+    removed: 'Removed the storage tip',
+  }),
+];
+
 const getNutritionChanges = (before: NutritionValues, after: NutritionValues) =>
   NUTRITION_CELLS.flatMap(({ key, label, unit }) => {
     const was = before[key];
@@ -258,6 +310,7 @@ export const getRecipeChanges = (
     ...getSourceLine(),
     ...getIngredientChanges(was.ingredients, now.ingredients, getName),
     ...getStepChanges(was.steps, now.steps),
+    ...getCareChanges(was.care, now.care),
     ...getNutritionChanges(was.nutrition, now.nutrition),
   ];
   const hasMissedChange =

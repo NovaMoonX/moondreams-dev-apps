@@ -345,6 +345,15 @@ export interface RecipeIngredient {
   note: string | null;
 }
 
+/** How to keep what a recipe makes. Every key is always present; a part the person left out is null. */
+export interface RecipeCare {
+  /** Whole days, 1 to `MAX_CARE_DAYS`. */
+  fridgeDays: number | null;
+  freezerDays: number | null;
+  reheat: string | null;
+  tip: string | null;
+}
+
 export interface Recipe {
   id: string;
   title: string;
@@ -361,6 +370,8 @@ export interface Recipe {
   source: RecipeSource;
   /** The `Source` it came from. A missing key (recipes written before sources) or an id no source has reads as no source. */
   sourceId: string | null;
+  /** How to keep the leftovers; null when none of its four parts is filled in. A recipe written before care lacks the key, which reads as null. */
+  care: RecipeCare | null;
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
   createdAt: number;

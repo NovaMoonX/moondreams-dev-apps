@@ -14,6 +14,7 @@ import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
+import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
@@ -44,6 +45,7 @@ import {
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { formatMinutes, formatServings } from '@apps/pinch/utils/recipeFormat';
+import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -122,6 +124,7 @@ function RecipeDrawer({
   };
 
   const source = getRecipeSource(recipe, sourcesById);
+  const care = getRecipeCare(recipe);
 
   const facts: Fact[] = [
     { emoji: '🍽️', text: formatServings(recipe.servings) },
@@ -334,6 +337,8 @@ function RecipeDrawer({
             </ol>
           </FormSection>
         )}
+
+        {care && <RecipeCareSection care={care} />}
 
         <RecipeNotes
           recipeId={recipe.id}

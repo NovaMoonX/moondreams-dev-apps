@@ -26,6 +26,7 @@ import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
 import ClampedText from '@apps/pinch/components/notes/ClampedText';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
+import RecipeCareField from '@apps/pinch/components/recipes/RecipeCareField';
 import {
   RecipeDescriptionField,
   RecipeTimesField,
@@ -79,6 +80,7 @@ import type {
   RecipeSource,
 } from '@apps/pinch/types';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
+import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
@@ -185,6 +187,7 @@ function RecipeForm({
     formData.basics.servings > 0 &&
     isValidMinutes(prep) &&
     isValidMinutes(cook) &&
+    getCareProblem(formData.care) === null &&
     isValidNutrition(formData.nutrition);
 
   const calculation = useMemo(() => {
@@ -206,6 +209,7 @@ function RecipeForm({
           note: null,
         })),
         steps: [],
+        care: null,
         nutritionOverride: null,
         source: 'MANUAL',
         sourceId: null,
@@ -260,6 +264,9 @@ function RecipeForm({
     }
     if (!isValidMinutes(prep) || !isValidMinutes(cook)) {
       return 'Check the prep and cook time to save.';
+    }
+    if (getCareProblem(formData.care) !== null) {
+      return 'Check the fridge and freezer days to save.';
     }
     return null;
   };
@@ -422,6 +429,16 @@ function RecipeForm({
               onRemoved={showUndo}
             />
           </FormSection>
+        ),
+      }),
+      custom({
+        name: 'care',
+        label: '',
+        renderComponent: (props) => (
+          <RecipeCareField
+            value={props.value as RecipeFormData['care']}
+            onChange={props.onValueChange}
+          />
         ),
       }),
       custom({
@@ -594,6 +611,7 @@ function RecipeForm({
               ).values(),
             ],
             nutritionOverride: parseNutrition(data.nutrition),
+            care: parseCareText(data.care),
             steps: data.steps.map((step) => step.trim()).filter(Boolean),
             coverFile: upload.file,
             removeCover: isCoverRemoved,

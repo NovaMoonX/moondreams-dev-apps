@@ -26,6 +26,7 @@ import type {
   IngredientRecord,
   NutritionValues,
   Recipe,
+  RecipeCare,
   RecipeIngredient,
   RecipeNote,
   RecipeSource,
@@ -70,6 +71,8 @@ export interface RecipeDraft {
   cookMinutes: number | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** How to keep the leftovers, or null; written on every save, so older recipes gain the key. */
+  care: RecipeCare | null;
   /** Per serving, typed over the added-up value; null keeps every metric derived. */
   nutritionOverride: NutritionValues | null;
   /** How a new recipe came to be; an edit keeps the recipe's own. */
@@ -133,6 +136,7 @@ const getTweak = (
       cookMinutes: draft.cookMinutes,
       ingredients: draft.ingredients,
       steps: draft.steps,
+      care: draft.care,
       nutritionOverride: draft.nutritionOverride,
       sourceId: draft.sourceId,
     },
@@ -207,6 +211,7 @@ export const saveRecipe = createAsyncThunk<
         coverPath,
         ingredients: draft.ingredients,
         steps: draft.steps,
+        care: draft.care,
         nutritionOverride: draft.nutritionOverride,
         sourceId: draft.sourceId,
         updatedAt: now,
