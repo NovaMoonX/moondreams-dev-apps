@@ -18,6 +18,7 @@ import type {
   PlannedMeal,
   Product,
   Recipe,
+  RecipeNote,
   ShoppingItem,
   Source,
   Store,
@@ -143,6 +144,19 @@ export function startCooksListener(
     kitchenCollection(uid, 'cooks'),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Cook)),
+    onError,
+  );
+}
+
+export function startNotesListener(
+  uid: string,
+  onChange: (notes: RecipeNote[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    kitchenCollection(uid, 'notes'),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as RecipeNote)),
     onError,
   );
 }

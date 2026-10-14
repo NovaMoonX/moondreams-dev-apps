@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, NotebookPen } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
+import NoteForm from '@apps/pinch/components/notes/NoteForm';
 import CookEditView from '@apps/pinch/components/recipes/CookEditView';
 import {
   COOK_HISTORY_FIRST_PAGE,
@@ -25,7 +26,10 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 const NO_COOKS: Cook[] = [];
 const HIDDEN_WORTH_A_BUTTON = 3;
 
-type HistoryView = { kind: 'list' } | { kind: 'edit'; cookId: string | null };
+type HistoryView =
+  | { kind: 'list' }
+  | { kind: 'edit'; cookId: string | null }
+  | { kind: 'note'; cookId: string };
 
 interface CookingHistorySheetProps {
   uid: string;
@@ -43,6 +47,10 @@ function CookingHistorySheet({
   const isLoaded = useAppSelector((state) => state.pinch.cooks.isLoaded);
   const loadError = useAppSelector((state) => state.pinch.cooks.loadError);
   const plannedMeals = useAppSelector(selectPlannedMeals);
+  const isNotesReady = useAppSelector(
+    (state) =>
+      state.pinch.notes.isLoaded && state.pinch.notes.loadError === null,
+  );
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
 
@@ -74,6 +82,41 @@ function CookingHistorySheet({
     cooks.length > COOK_HISTORY_FIRST_PAGE + HIDDEN_WORTH_A_BUTTON;
 
   const getBody = () => {
+    if (view.kind === 'note') {
+      const noteCook = cooks.find((cook) => cook.id === view.cookId);
+      return (
+        <div className='space-y-4'>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='h-10 gap-1 px-0!'
+            onClick={backToList}
+          >
+            <ChevronLeft className='h-4 w-4' aria-hidden='true' />
+            Back
+          </Button>
+          <div className='space-y-0.5'>
+            <p className='font-medium wrap-break-word'>
+              {recipe?.title ?? 'This recipe'}
+            </p>
+            <p className='text-muted-foreground text-sm'>
+              {noteCook
+                ? `A note about the cook from ${formatDateShort(noteCook.cookedAt)}`
+                : 'A note about a cook'}
+            </p>
+          </div>
+          <NoteForm
+            key={view.cookId}
+            uid={uid}
+            recipeId={recipeId}
+            noteId={null}
+            initialCookId={view.cookId}
+            onCancel={backToList}
+            onDone={backToList}
+          />
+        </div>
+      );
+    }
     if (isEditing) {
       return (
         <CookEditView
@@ -85,6 +128,11 @@ function CookingHistorySheet({
           defaultServings={getCookServings(recipe?.servings ?? 1)}
           planNote={editedCook ? getPlanNote(editedCook) : null}
           onBack={backToList}
+          onAddNote={
+            editedCook && isNotesReady
+              ? () => setView({ kind: 'note', cookId: editedCook.id })
+              : null
+          }
         />
       );
     }
@@ -134,7 +182,7 @@ function CookingHistorySheet({
             {cooks.slice(0, visibleCount).map((cook) => {
               const planNote = getPlanNote(cook);
               return (
-                <li key={cook.id}>
+                <li key={cook.id} className='pb-1'>
                   <Button
                     type='button'
                     variant='tertiary'
@@ -163,6 +211,19 @@ function CookingHistorySheet({
                       aria-hidden='true'
                     />
                   </Button>
+                  {isNotesReady && (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='sm'
+                      aria-label={`Add a note about the cook from ${formatDateShort(cook.cookedAt)}`}
+                      className='-mt-1 h-10 gap-1.5 px-0! text-sm font-normal'
+                      onClick={() => setView({ kind: 'note', cookId: cook.id })}
+                    >
+                      <NotebookPen className='h-4 w-4' aria-hidden='true' />
+                      Add a note
+                    </Button>
+                  )}
                 </li>
               );
             })}

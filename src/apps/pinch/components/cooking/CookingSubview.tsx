@@ -14,15 +14,18 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookStepView from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
+import NoteTextField from '@apps/pinch/components/notes/NoteTextField';
 import {
   COOK_VIEW_OPTIONS,
   MAX_COOK_SERVINGS,
   MIN_COOK_SERVINGS,
 } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
+import { useCookNote } from '@apps/pinch/hooks/useCookNote';
 import { useCookTimers } from '@apps/pinch/hooks/useCookTimers';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectCooksById,
   selectCookSummaries,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
@@ -63,6 +66,7 @@ function CookingSession({
   const [isFinished, setIsFinished] = useState(false);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
+  const [cookedId, setCookedId] = useState<string | null>(null);
   const [openedUpdatedAt] = useState(recipe.updatedAt);
   const rootRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLUListElement>(null);
@@ -73,6 +77,17 @@ function CookingSession({
   const isHistoryFull = useAppSelector((state) =>
     isCookHistoryFull(selectCookSummaries(state).get(recipe.id)?.count ?? 0),
   );
+
+  const isCooked = useAppSelector(
+    (state) => cookedId !== null && selectCooksById(state).has(cookedId),
+  );
+  const note = useCookNote({
+    uid,
+    recipeId: recipe.id,
+    recipeTitle: recipe.title,
+    cookId: isCooked ? cookedId : null,
+    onSaved: closeSubview,
+  });
 
   const lastIndex = recipe.steps.length - 1;
   const index = Math.min(stepIndex, lastIndex);
@@ -89,7 +104,7 @@ function CookingSession({
 
   const goBy = (direction: 1 | -1) => {
     if (isFinished) {
-      if (direction === -1) setIsFinished(false);
+      if (direction === -1 && !isCooked) setIsFinished(false);
       return;
     }
     const next = index + direction;
@@ -115,8 +130,24 @@ function CookingSession({
   };
 
   const leave = async () => {
+    if (note.hasDraft) {
+      const isDiscarded = await confirm({
+        title: 'Discard this note?',
+        message:
+          "It isn't saved yet. If you leave now, what you typed is lost.",
+        confirmText: 'Discard',
+        cancelText: 'Keep editing',
+        destructive: true,
+      });
+      if (!isDiscarded) return;
+    }
     if (await confirmLeave()) closeSubview();
   };
+
+  const focusPrimary = () =>
+    window.requestAnimationFrame(() =>
+      primaryRef.current?.focus({ preventScroll: true }),
+    );
 
   const handleNext = () => {
     if (!isLast) {
@@ -129,9 +160,7 @@ function CookingSession({
     }
     setIsFinished(true);
     scrollToTop();
-    window.requestAnimationFrame(() =>
-      primaryRef.current?.focus({ preventScroll: true }),
-    );
+    focusPrimary();
   };
 
   const handleMarkCooked = async () => {
@@ -142,8 +171,12 @@ function CookingSession({
         setIsMarking(false);
         return;
       }
-      await markRecipeCooked(recipe, servings);
-      closeSubview();
+      const id = await markRecipeCooked(recipe, servings);
+      timers.clear();
+      note.reset();
+      setCookedId(id);
+      setIsMarking(false);
+      focusPrimary();
     } catch (error) {
       setMarkError(getErrorMessage(error, 'Unable to mark this as cooked.'));
       setIsMarking(false);
@@ -207,7 +240,8 @@ function CookingSession({
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
-  const showLockNote = !wakeLock.isSupported || wakeLock.hasFailed;
+  const showLockNote =
+    !isCooked && (!wakeLock.isSupported || wakeLock.hasFailed);
   const isChanged =
     isRemoved ||
     recipe.isArchived === true ||
@@ -231,35 +265,77 @@ function CookingSession({
           />
         )}
         {isFinishShown ? (
-          <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
-            <p className='text-2xl leading-snug font-medium'>
-              Nice work. Mark it as cooked?
-            </p>
-            <div className='space-y-0.5'>
-              <p className='font-medium'>{formatServings(servings)}</p>
-              <p className='text-muted-foreground text-sm'>
-                Keeps a record. You can change the date later.
+          isCooked ? (
+            <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
+              <p className='text-2xl leading-snug font-medium'>
+                Marked as cooked
               </p>
+              <div className='space-y-0.5'>
+                <p className='font-medium'>{formatServings(servings)}</p>
+                <p className='text-muted-foreground text-sm'>
+                  Saved to your cooking history.
+                </p>
+              </div>
+              {note.isOpen ? (
+                <div className='w-full max-w-md space-y-2 text-left'>
+                  <NoteTextField
+                    label='Your note'
+                    placeholder='Less vinegar next time, the sauce was ready early'
+                    value={note.text}
+                    onChange={note.setText}
+                    shouldFocus
+                  />
+                  {note.error && (
+                    <p className='text-destructive text-sm' role='alert'>
+                      {note.error}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                note.isAvailable && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    className='h-10'
+                    onClick={note.open}
+                  >
+                    Add a note about it
+                  </Button>
+                )
+              )}
             </div>
-            {isHistoryFull && (
-              <p className='text-muted-foreground text-sm'>
-                This recipe's history is full. Delete an older cook to add more.
+          ) : (
+            <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
+              <p className='text-2xl leading-snug font-medium'>
+                Nice work. Mark it as cooked?
               </p>
-            )}
-            {markError && (
-              <p className='text-destructive text-sm' role='alert'>
-                {markError}
-              </p>
-            )}
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-10'
-              onClick={() => setIsFinished(false)}
-            >
-              Back to the last step
-            </Button>
-          </div>
+              <div className='space-y-0.5'>
+                <p className='font-medium'>{formatServings(servings)}</p>
+                <p className='text-muted-foreground text-sm'>
+                  Keeps a record. You can change the date later.
+                </p>
+              </div>
+              {isHistoryFull && (
+                <p className='text-muted-foreground text-sm'>
+                  This recipe's history is full. Delete an older cook to add
+                  more.
+                </p>
+              )}
+              {markError && (
+                <p className='text-destructive text-sm' role='alert'>
+                  {markError}
+                </p>
+              )}
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-10'
+                onClick={() => setIsFinished(false)}
+              >
+                Back to the last step
+              </Button>
+            </div>
+          )
         ) : isStepsView ? (
           hasSteps ? (
             <CookStepView
@@ -314,7 +390,49 @@ function CookingSession({
             onDismiss={handleDismissTimer}
           />
           <div className='flex gap-3'>
-            {isFinishShown ? (
+            {isFinishShown && isCooked && note.isOpen ? (
+              <>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  className={join(
+                    'h-14 shrink-0 px-6 text-base',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  disabled={note.isSaving}
+                  onClick={() => {
+                    note.cancel();
+                    focusPrimary();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type='button'
+                  className={join(
+                    'h-14 min-w-0 flex-1 text-lg',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  loading={note.isSaving}
+                  disabled={note.isSaving || !note.canSave}
+                  onClick={() => void note.save()}
+                >
+                  Save note
+                </Button>
+              </>
+            ) : isFinishShown && isCooked ? (
+              <Button
+                ref={primaryRef}
+                type='button'
+                className={join(
+                  'h-14 min-w-0 flex-1 text-lg',
+                  '[@media(max-height:500px)]:h-11',
+                )}
+                onClick={() => void leave()}
+              >
+                Done
+              </Button>
+            ) : isFinishShown ? (
               <>
                 <Button
                   type='button'

@@ -13,6 +13,7 @@ import { RECIPE_START_METHODS } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectIdeasById,
+  selectNotesById,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeStartMethod } from '@apps/pinch/types';
@@ -37,10 +38,17 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const fromDrawer = subview?.kind === 'recipe' && subview.fromDrawer === true;
   const fromIdeaId =
     subview?.kind === 'recipe' ? (subview.fromIdeaId ?? null) : null;
+  const fromNoteId =
+    subview?.kind === 'recipe' ? (subview.fromNoteId ?? null) : null;
   const isDirtyRef = useRef(false);
   const existing =
     useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ideasById = useAppSelector(selectIdeasById);
+  const notesById = useAppSelector(selectNotesById);
+  const [fromNote] = useState(() => {
+    const note = notesById.get(fromNoteId ?? '') ?? null;
+    return note !== null && note.recipeId === recipeId ? note : null;
+  });
   const [fromIdea] = useState(() =>
     recipeId === null ? (ideasById.get(fromIdeaId ?? '') ?? null) : null,
   );
@@ -102,6 +110,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           recipeId={recipeId}
           initialRead={read}
           initialIdea={fromIdea}
+          initialNote={fromNote}
           isDirtyRef={isDirtyRef}
           onLeave={() => void leave()}
           onTitleChange={setTitle}

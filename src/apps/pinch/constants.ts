@@ -361,3 +361,16 @@ export const SOFT_MAX_COOKS_PER_RECIPE = 500;
 export const COOK_BATCH_SIZE = 400;
 export const COOK_HISTORY_FIRST_PAGE = 8;
 export const COOK_HISTORY_PAGE_SIZE = 50;
+
+export const MAX_RECIPE_NOTE_LENGTH = 2000;
+/** A tweak's lines, the "and N more" one included: the cap the rules enforce. */
+export const MAX_TWEAK_CHANGES = 8;
+export const MAX_TWEAK_CHANGE_LENGTH = 200;
+/** The most notes one recipe's journal takes before asking to delete one: the action and the screens, not the rules. */
+export const SOFT_MAX_RECIPE_NOTES = 300;
+/** Under Firestore's 500 writes per batch. */
+export const RECIPE_NOTE_BATCH_SIZE = 400;
+export const RECIPE_NOTES_FIRST_PAGE = 5;
+export const RECIPE_NOTES_PAGE_SIZE = 50;
+/** How many of a recipe's latest cooks the note sheet offers as answers. */
+export const NOTE_COOK_CHOICES = 4;

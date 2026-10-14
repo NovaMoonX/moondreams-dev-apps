@@ -27,6 +27,22 @@ import {
   isValidCookServings,
   mergePlannedCook,
 } from '../../src/apps/pinch/utils/cooks.ts';
+import {
+  getCookChoiceLabels,
+  getMissingNoteFields,
+  getNoteCookChoices,
+  getNoteSummaries,
+  getTweakReason,
+  getTweakTracking,
+  getWrittenBefore,
+  groupNotesByRecipe,
+  isNoteHistoryFull,
+  isValidNoteText,
+} from '../../src/apps/pinch/utils/notes.ts';
+import {
+  getRecipeChanges,
+  type RecipeContent,
+} from '../../src/apps/pinch/utils/recipeChanges.ts';
 import { toLocalDateInputValue } from '../../src/utils/dateInputUtils.ts';
 import {
   findIdeaByUrl,
@@ -53,6 +69,7 @@ import type {
   MealItem,
   Product,
   Recipe,
+  RecipeNote,
   ResolvedFamily,
   ResolvedIngredient,
   ShoppingItem,
@@ -993,6 +1010,669 @@ assert.deepEqual(
   getMissingCookFields({ plannedMealId: null }),
   {},
   'a cook with the key, even a null one, lacks nothing',
+);
+
+const names = new Map([
+  ['garlic', { name: 'Garlic' }],
+  ['lime', { name: 'Lime juice' }],
+  ['salt', { name: 'Salt' }],
+  ['butter', { name: 'Butter' }],
+  ['oil', { name: 'Olive oil' }],
+]);
+const sourceNames = new Map([
+  ['s1', { label: 'Serious Eats' }],
+  ['s2', { label: "Mom's recipe cards" }],
+]);
+const recipeLine = (
+  id: string,
+  ingredientId: string,
+  amount: number,
+  unit: Unit,
+  note: string | null = null,
+) => ({ id, ingredientId, amount, unit, note });
+const baseRecipe: RecipeContent = {
+  title: 'Adobo chicken',
+  description: 'Sticky and tangy.',
+  servings: 4,
+  prepMinutes: 10,
+  cookMinutes: 35,
+  ingredients: [
+    recipeLine('l1', 'garlic', 4, 'EACH'),
+    recipeLine('l2', 'salt', 1, 'TSP'),
+    recipeLine('l3', 'butter', 2, 'TBSP', 'cold'),
+  ],
+  steps: ['Marinate.', 'Simmer for 25 minutes.', 'Reduce the sauce.'],
+  nutritionOverride: null,
+  sourceId: null,
+};
+const changesFor = (patch: Partial<RecipeContent>) =>
+  getRecipeChanges(baseRecipe, { ...baseRecipe, ...patch }, names, sourceNames);
+
+assert.deepEqual(
+  changesFor({}),
+  [],
+  'an edit that changes nothing has no lines',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    baseRecipe,
+    {
+      ...baseRecipe,
+      title: '  Adobo chicken ',
+      description: ' Sticky and tangy.\n',
+      steps: [
+        ' Marinate.',
+        'Simmer for 25 minutes.  ',
+        'Reduce the sauce.',
+        '  ',
+      ],
+      ingredients: baseRecipe.ingredients.map((line) => ({
+        ...line,
+        note: line.note === null ? '  ' : line.note,
+      })),
+    },
+    names,
+  ),
+  [],
+  'stray spaces, an empty step and a blank note are not changes',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    { ...baseRecipe, description: null, sourceId: null },
+    { ...baseRecipe, description: '', sourceId: null },
+    names,
+  ),
+  [],
+  'an empty description is the same as none',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      recipeLine('l1', 'garlic', 6, 'EACH'),
+      baseRecipe.ingredients[1],
+      baseRecipe.ingredients[2],
+    ],
+  }),
+  ['Garlic 4 → 6 each'],
+  'an amount change names the ingredient, both amounts and the unit once',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      recipeLine('l1', 'garlic', 0.5, 'CUP'),
+      baseRecipe.ingredients[1],
+      baseRecipe.ingredients[2],
+    ],
+  }),
+  ['Garlic 4 each → 0.5 cup'],
+  'a unit change shows both units',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      recipeLine('l1', 'garlic', 1.005, 'EACH'),
+      baseRecipe.ingredients[1],
+      baseRecipe.ingredients[2],
+    ],
+  }),
+  ['Garlic 4 → 1 each'],
+  'amounts show at most two decimals',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      ...baseRecipe.ingredients,
+      recipeLine('l4', 'lime', 2, 'TBSP'),
+    ],
+  }),
+  ['Added Lime juice, 2 tbsp'],
+  'a new line is added with its amount',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: baseRecipe.ingredients.filter((l) => l.id !== 'l2'),
+  }),
+  ['Removed Salt'],
+  'a line taken out is removed by name',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      baseRecipe.ingredients[0],
+      baseRecipe.ingredients[1],
+      recipeLine('l3', 'oil', 2, 'TBSP', 'cold'),
+    ],
+  }),
+  ['Swapped Butter for Olive oil'],
+  'another ingredient on the same line is a swap, and the amount is only repeated when it changed',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      baseRecipe.ingredients[0],
+      baseRecipe.ingredients[1],
+      recipeLine('l3', 'oil', 3, 'TBSP', 'cold'),
+    ],
+  }),
+  ['Swapped Butter for Olive oil, 3 tbsp'],
+  'a swap that also changes the amount says the new amount',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      baseRecipe.ingredients[0],
+      recipeLine('l2', 'salt', 1, 'TSP', 'flaky'),
+      recipeLine('l3', 'butter', 2, 'TBSP', 'softened'),
+    ],
+  }),
+  ['Added a note to Salt', 'Note on Butter changed'],
+  'a line note added or edited is said',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      baseRecipe.ingredients[0],
+      baseRecipe.ingredients[1],
+      recipeLine('l3', 'butter', 2, 'TBSP', null),
+    ],
+  }),
+  ['Removed the note from Butter'],
+  'a line note taken off is said',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      baseRecipe.ingredients[2],
+      baseRecipe.ingredients[0],
+      baseRecipe.ingredients[1],
+    ],
+  }),
+  ['Ingredients reordered'],
+  'the same lines in another order are reordered, and nothing else',
+);
+assert.deepEqual(
+  changesFor({
+    ingredients: [
+      baseRecipe.ingredients[1],
+      recipeLine('l1', 'garlic', 5, 'EACH'),
+      baseRecipe.ingredients[2],
+    ],
+  }),
+  ['Garlic 4 → 5 each', 'Ingredients reordered'],
+  'a change and a move are both said',
+);
+assert.deepEqual(
+  changesFor({
+    steps: ['Marinate.', 'Simmer for 35 minutes.', 'Reduce the sauce.'],
+  }),
+  ['Step 2 now reads: “Simmer for 35 minutes.”'],
+  'an edited step says its number and the new text',
+);
+const longStep = `Simmer ${'gently and slowly '.repeat(20)}until done.`;
+const longChange = changesFor({
+  steps: ['Marinate.', longStep, 'Reduce the sauce.'],
+})[0];
+assert.ok(
+  longChange.endsWith('…”') && longChange.length < 130,
+  'a long step is quoted in part, with an ellipsis',
+);
+assert.deepEqual(
+  changesFor({
+    steps: [
+      'Marinate.',
+      'Rest it.',
+      'Simmer for 25 minutes.',
+      'Reduce the sauce.',
+    ],
+  }),
+  ['Added step 2: “Rest it.”'],
+  'a step put in the middle is one added step, not a rewrite of what follows',
+);
+assert.deepEqual(
+  changesFor({ steps: [...baseRecipe.steps, 'Serve.'] }),
+  ['Added step 4: “Serve.”'],
+  'a step added at the end',
+);
+assert.deepEqual(
+  changesFor({ steps: ['Marinate.', 'Reduce the sauce.'] }),
+  ['Removed step 2: “Simmer for 25 minutes.”'],
+  'a step taken out is removed with its old number and text',
+);
+assert.deepEqual(
+  changesFor({
+    steps: ['Simmer for 25 minutes.', 'Marinate.', 'Reduce the sauce.'],
+  }),
+  ['Steps reordered'],
+  'the same steps in another order are reordered',
+);
+assert.deepEqual(
+  changesFor({
+    steps: ['Marinate hard.', 'Simmer for 25 minutes.', 'Reduce it.'],
+  }),
+  ['Step 1 now reads: “Marinate hard.”', 'Step 3 now reads: “Reduce it.”'],
+  'two separate edits are two lines',
+);
+assert.deepEqual(
+  changesFor({ steps: [] }),
+  [
+    'Removed step 1: “Marinate.”',
+    'Removed step 2: “Simmer for 25 minutes.”',
+    'Removed step 3: “Reduce the sauce.”',
+  ],
+  'every step taken out',
+);
+assert.deepEqual(changesFor({ cookMinutes: 45 }), ['Cook time 35 → 45 min']);
+assert.deepEqual(changesFor({ prepMinutes: 5 }), ['Prep time 10 → 5 min']);
+assert.deepEqual(
+  changesFor({ cookMinutes: 70 }),
+  ['Cook time 35 min → 1 h 10 min'],
+  'a time past an hour is written out in hours on both sides',
+);
+assert.deepEqual(changesFor({ prepMinutes: null }), ['Prep time removed']);
+assert.deepEqual(
+  getRecipeChanges({ ...baseRecipe, cookMinutes: null }, baseRecipe, names),
+  ['Cook time set to 35 min'],
+);
+assert.deepEqual(changesFor({ servings: 6 }), ['Serves 4 → 6']);
+assert.deepEqual(changesFor({ servings: 2.5 }), ['Serves 4 → 2.5']);
+assert.deepEqual(
+  changesFor({ description: 'Sticky, tangy and a little sweet.' }),
+  ['Description changed'],
+);
+assert.deepEqual(changesFor({ description: null }), [
+  'Removed the description',
+]);
+assert.deepEqual(
+  getRecipeChanges({ ...baseRecipe, description: null }, baseRecipe, names),
+  ['Added a description'],
+);
+assert.deepEqual(changesFor({ title: 'Better adobo' }), [
+  'Renamed to “Better adobo”',
+]);
+assert.deepEqual(
+  changesFor({
+    nutritionOverride: { calories: 520, protein: null, carbs: null, fat: 20 },
+  }),
+  ['Calories set to 520', 'Fat set to 20 g'],
+  'a typed-over number is set, and macros carry their unit',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    {
+      ...baseRecipe,
+      nutritionOverride: { calories: 520, protein: 30, carbs: null, fat: null },
+    },
+    {
+      ...baseRecipe,
+      nutritionOverride: {
+        calories: 600,
+        protein: null,
+        carbs: null,
+        fat: null,
+      },
+    },
+    names,
+  ),
+  ['Calories 520 → 600', 'Protein back to the calculated number'],
+  'a typed number changed, and one handed back to the calculation',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    {
+      ...baseRecipe,
+      nutritionOverride: {
+        calories: null,
+        protein: null,
+        carbs: null,
+        fat: null,
+      },
+    },
+    baseRecipe,
+    names,
+  ),
+  [],
+  'an override with nothing typed is the same as none',
+);
+assert.deepEqual(changesFor({ sourceId: 's1' }), [
+  'Source set to Serious Eats',
+]);
+assert.deepEqual(
+  getRecipeChanges(
+    { ...baseRecipe, sourceId: 's1' },
+    { ...baseRecipe, sourceId: 's2' },
+    names,
+    sourceNames,
+  ),
+  ["Source changed to Mom's recipe cards"],
+);
+assert.deepEqual(
+  getRecipeChanges(
+    { ...baseRecipe, sourceId: 's1' },
+    baseRecipe,
+    names,
+    sourceNames,
+  ),
+  ['Source removed'],
+);
+assert.deepEqual(
+  getRecipeChanges(baseRecipe, { ...baseRecipe, sourceId: 'gone' }, names),
+  ['Source set to another source'],
+  'a source nobody knows by name is still said',
+);
+assert.deepEqual(
+  changesFor({
+    title: 'Better adobo',
+    servings: 6,
+    cookMinutes: 45,
+    ingredients: [
+      recipeLine('l1', 'garlic', 6, 'EACH'),
+      ...baseRecipe.ingredients.slice(1),
+    ],
+  }),
+  [
+    'Renamed to “Better adobo”',
+    'Serves 4 → 6',
+    'Cook time 35 → 45 min',
+    'Garlic 4 → 6 each',
+  ],
+  'lines come in the order the recipe form shows things',
+);
+
+const manyLines = (count: number) =>
+  Array.from({ length: count }, (_, index) =>
+    recipeLine(`m${index}`, 'salt', index + 2, 'TSP'),
+  );
+const manyBase = { ...baseRecipe, ingredients: manyLines(12) };
+const manyAfter = (changed: number) => ({
+  ...baseRecipe,
+  ingredients: manyLines(12).map((line, index) =>
+    index < changed ? { ...line, amount: line.amount + 1 } : line,
+  ),
+});
+assert.equal(
+  getRecipeChanges(manyBase, manyAfter(8), names).length,
+  8,
+  'eight changes are all kept',
+);
+assert.equal(
+  getRecipeChanges(manyBase, manyAfter(8), names).some((line) =>
+    line.startsWith('and '),
+  ),
+  false,
+  'and none is folded into "and N more"',
+);
+const nineChanges = getRecipeChanges(manyBase, manyAfter(9), names);
+assert.equal(nineChanges.length, 8, 'nine changes fit the rules’ eight');
+assert.deepEqual(
+  nineChanges.slice(0, 7),
+  getRecipeChanges(manyBase, manyAfter(7), names),
+  'the first seven are kept as they are',
+);
+assert.equal(
+  nineChanges[7],
+  'and 2 more',
+  'the eighth says how many were left out',
+);
+assert.equal(
+  getRecipeChanges(manyBase, manyAfter(12), names)[7],
+  'and 5 more',
+  'twelve changes: seven shown and five more',
+);
+const hugeName = new Map([['salt', { name: 'S'.repeat(500) }]]);
+assert.ok(
+  getRecipeChanges(
+    baseRecipe,
+    { ...baseRecipe, ingredients: [recipeLine('l2', 'salt', 9, 'TSP')] },
+    hugeName,
+  ).every((line) => line.length <= 200),
+  'no line is longer than the rules allow',
+);
+assert.deepEqual(
+  getRecipeChanges(
+    baseRecipe,
+    {
+      ...baseRecipe,
+      ingredients: [
+        ...baseRecipe.ingredients,
+        recipeLine('l9', 'ghost', 1, 'EACH'),
+      ],
+    },
+    names,
+  ),
+  ['Added Removed ingredient, 1 each'],
+  'a line whose ingredient is gone still reads, as the drawer does',
+);
+
+const fuzzRandom = ((seed) => () => {
+  seed = (seed * 1664525 + 1013904223) % 4294967296;
+  return seed / 4294967296;
+})(7);
+const mutations: ((r: RecipeContent) => RecipeContent)[] = [
+  (r) => ({ ...r, title: `${r.title}!` }),
+  (r) => ({ ...r, servings: r.servings + 1 }),
+  (r) => ({ ...r, prepMinutes: (r.prepMinutes ?? 0) + 1 }),
+  (r) => ({ ...r, cookMinutes: null }),
+  (r) => ({ ...r, description: r.description === null ? 'New.' : null }),
+  (r) => ({ ...r, ingredients: r.ingredients.slice(1) }),
+  (r) => ({ ...r, ingredients: [...r.ingredients].reverse() }),
+  (r) => ({
+    ...r,
+    ingredients: [
+      ...r.ingredients,
+      recipeLine(`n${r.ingredients.length}`, 'lime', 1, 'TBSP'),
+    ],
+  }),
+  (r) => ({
+    ...r,
+    ingredients: r.ingredients.map((l, i) =>
+      i === 0 ? { ...l, amount: l.amount + 1 } : l,
+    ),
+  }),
+  (r) => ({
+    ...r,
+    ingredients: r.ingredients.map((l, i) =>
+      i === 1 ? { ...l, unit: 'CUP' as Unit } : l,
+    ),
+  }),
+  (r) => ({
+    ...r,
+    ingredients: r.ingredients.map((l, i) =>
+      i === 0 ? { ...l, note: 'fresh' } : l,
+    ),
+  }),
+  (r) => ({ ...r, steps: r.steps.slice(0, -1) }),
+  (r) => ({ ...r, steps: [...r.steps, 'Serve.'] }),
+  (r) => ({ ...r, steps: [...r.steps].reverse() }),
+  (r) => ({ ...r, steps: r.steps.map((s, i) => (i === 0 ? `${s} Well.` : s)) }),
+  (r) => ({
+    ...r,
+    nutritionOverride: { calories: 400, protein: null, carbs: null, fat: null },
+  }),
+  (r) => ({ ...r, sourceId: r.sourceId === null ? 's1' : null }),
+];
+const fuzzMismatches = Array.from({ length: 600 }, () => {
+  const before = mutations.reduce<RecipeContent>(
+    (acc, mutate) => (fuzzRandom() < 0.2 ? mutate(acc) : acc),
+    baseRecipe,
+  );
+  const after = mutations.reduce<RecipeContent>(
+    (acc, mutate) => (fuzzRandom() < 0.2 ? mutate(acc) : acc),
+    before,
+  );
+  const lines = getRecipeChanges(before, after, names, sourceNames);
+  const isSame = JSON.stringify(before) === JSON.stringify(after);
+  return (lines.length === 0) !== isSame || lines.length > 8
+    ? { before, after, lines }
+    : null;
+}).filter((entry) => entry !== null);
+assert.deepEqual(
+  fuzzMismatches,
+  [],
+  'across 600 random pairs of edits, there are lines exactly when the recipe changed, never more than eight',
+);
+
+const noteOf = (
+  id: string,
+  recipeId: string,
+  kind: 'NOTE' | 'TWEAK',
+  createdAt: number,
+) =>
+  ({
+    id,
+    recipeId,
+    kind,
+    text: kind === 'NOTE' ? 'text' : null,
+    changes: kind === 'NOTE' ? [] : ['Serves 4 → 6'],
+    cookId: null,
+    createdAt,
+    updatedAt: createdAt,
+  }) as RecipeNote;
+const noteList = [
+  noteOf('a', 'adobo', 'NOTE', 100),
+  noteOf('b', 'rice', 'NOTE', 300),
+  noteOf('c', 'adobo', 'TWEAK', 500),
+  noteOf('d', 'adobo', 'NOTE', 500),
+  noteOf('e', 'adobo', 'TWEAK', 200),
+  noteOf('f', 'rice', 'NOTE', 50),
+];
+assert.deepEqual(
+  groupNotesByRecipe(noteList)
+    .get('adobo')
+    ?.map((note) => note.id),
+  ['c', 'd', 'e', 'a'],
+  'a recipe lists its notes newest first, a tie by id',
+);
+assert.deepEqual(
+  [...groupNotesByRecipe(noteList).keys()].sort(),
+  ['adobo', 'rice'],
+  'one group per recipe that has a note',
+);
+assert.equal(groupNotesByRecipe([]).size, 0, 'no notes gives no groups');
+assert.deepEqual(
+  [...getNoteSummaries(noteList).entries()].sort(([x], [y]) =>
+    x.localeCompare(y),
+  ),
+  [
+    ['adobo', { count: 4, lastTweakAt: 500 }],
+    ['rice', { count: 2, lastTweakAt: null }],
+  ],
+  'the summary counts each recipe and keeps its latest tweak, in one pass',
+);
+assert.equal(
+  getNoteSummaries([
+    noteOf('x', 'adobo', 'TWEAK', 100),
+    noteOf('y', 'adobo', 'TWEAK', 900),
+    noteOf('z', 'adobo', 'NOTE', 1000),
+  ]).get('adobo')?.lastTweakAt,
+  900,
+  'the last tweak is the latest tweak, not the latest note and not the order they arrive in',
+);
+assert.equal(getNoteSummaries(noteList).get('nachos'), undefined);
+assert.equal(
+  getWrittenBefore(noteOf('p', 'adobo', 'NOTE', 100), 500),
+  500,
+  'a note older than the latest tweak is labelled with that tweak',
+);
+assert.equal(
+  getWrittenBefore(noteOf('p', 'adobo', 'NOTE', 500), 500),
+  null,
+  'a note made at the tweak’s moment is not before it',
+);
+assert.equal(
+  getWrittenBefore(noteOf('p', 'adobo', 'NOTE', 900), 500),
+  null,
+  'a note after the tweak is not labelled',
+);
+assert.equal(
+  getWrittenBefore(noteOf('p', 'adobo', 'TWEAK', 100), 500),
+  null,
+  'a tweak is never labelled',
+);
+assert.equal(
+  getWrittenBefore(noteOf('p', 'adobo', 'NOTE', 100), null),
+  null,
+  'no tweak, no label',
+);
+assert.deepEqual(
+  getMissingNoteFields({ id: 'x', kind: 'NOTE', text: 't' }),
+  { changes: [], cookId: null },
+  'an older note gets the keys it lacks, empty',
+);
+assert.deepEqual(
+  getMissingNoteFields({ text: null, changes: [], cookId: null }),
+  {},
+  'a note with every key, even null ones, lacks nothing',
+);
+assert.deepEqual(
+  [
+    '',
+    '   ',
+    'a',
+    ' a ',
+    'x'.repeat(2000),
+    'x'.repeat(2001),
+    `${' '.repeat(10)}${'x'.repeat(2000)}`,
+  ].map(isValidNoteText),
+  [false, false, true, true, true, false, true],
+  'a note is 1 to 2,000 characters once trimmed',
+);
+assert.equal(getTweakReason('  because  '), 'because', 'a reason is trimmed');
+assert.equal(getTweakReason('  \n '), null, 'a blank reason is none');
+assert.equal(isNoteHistoryFull(299), false, '299 notes still fits');
+assert.equal(isNoteHistoryFull(300), true, '300 notes is full');
+const tracking = (
+  isCooksReady: boolean,
+  isNotesReady: boolean,
+  cookCount: number,
+  noteCount: number,
+) => getTweakTracking({ isCooksReady, isNotesReady, cookCount, noteCount });
+assert.equal(tracking(true, true, 3, 5), 'on', 'a cooked recipe is tracked');
+assert.equal(tracking(true, true, 0, 5), 'off', 'a recipe never cooked is not');
+assert.equal(
+  tracking(false, true, 3, 5),
+  'off',
+  'nor while the cooks are unknown',
+);
+assert.equal(
+  tracking(true, false, 3, 5),
+  'off',
+  'nor while the notes are unknown or failed',
+);
+assert.equal(tracking(true, true, 3, 300), 'full', 'a full journal says so');
+assert.equal(
+  tracking(true, true, 0, 300),
+  'off',
+  'a full journal of a recipe never cooked is still off',
+);
+
+const cookAt = (id: string, cookedAt: number) =>
+  ({ id, recipeId: 'adobo', cookedAt }) as Cook;
+const sixCooks = ['f', 'e', 'd', 'c', 'b', 'a'].map((id, index) =>
+  cookAt(id, 6000 - index * 1000),
+);
+assert.deepEqual(
+  getNoteCookChoices(sixCooks, null).map((cook) => cook.id),
+  ['f', 'e', 'd', 'c'],
+  'the latest four cooks are the answers',
+);
+assert.deepEqual(
+  getNoteCookChoices(sixCooks, 'a').map((cook) => cook.id),
+  ['f', 'e', 'd', 'c', 'a'],
+  'an older cook already picked is kept, in its place by date',
+);
+assert.deepEqual(
+  getNoteCookChoices(sixCooks.slice(0, 2), null).map((cook) => cook.id),
+  ['f', 'e'],
+  'fewer cooks give fewer answers',
+);
+assert.deepEqual(
+  getCookChoiceLabels(
+    [cookAt('x', 3), cookAt('y', 2), cookAt('z', 1)],
+    (at) => (at === 1 ? 'Oct 11' : 'Oct 12'),
+    (at) => `Oct 12, ${at} PM`,
+  ),
+  ['Oct 12, 3 PM', 'Oct 12, 2 PM', 'Oct 11'],
+  'two cooks on one day show their times, and a day to itself stays short',
 );
 
 console.log('pinchMath: all checks passed');

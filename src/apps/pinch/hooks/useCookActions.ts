@@ -18,7 +18,7 @@ interface MarkPlannedInput {
   cookedAt: number;
 }
 
-/** Marking a recipe cooked, with its toast; each call rejects with a sentence for the caller to show. */
+/** Marking a recipe cooked, with its toast; each call rejects with a sentence for the caller to show, and marking a recipe resolves with the new cook's id. */
 export function useCookActions(uid: string) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
@@ -59,6 +59,7 @@ export function useCookActions(uid: string) {
       duration: UNDO_TOAST_MS,
       action: { label: 'Undo', onClick: () => void undoFromToast(id) },
     });
+    return id;
   };
 
   const markPlannedRecipeCooked = async ({

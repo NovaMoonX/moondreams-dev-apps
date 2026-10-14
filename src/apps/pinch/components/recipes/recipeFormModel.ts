@@ -50,6 +50,8 @@ export interface RecipeFormData {
   sourceChoice: SourceChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
   nutrition: Record<NutritionMetric, string>;
+  /** Why the recipe is being changed; becomes the tweak's note when saving records one. */
+  why: string;
 }
 
 export const getInitialData = (
@@ -85,6 +87,7 @@ export const getInitialData = (
         : '',
     ]),
   ) as Record<NutritionMetric, string>,
+  why: '',
 });
 
 /** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. A second line for an ingredient already listed adds to it when the units agree and stays its own line when they don't, so no amount is lost. */
