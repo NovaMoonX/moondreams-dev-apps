@@ -124,7 +124,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Removing a recipe.** Taking a recipe off your lists because a planned day or saved meal still uses it keeps its history. Deleting a recipe outright deletes its history with it.
 - **From cooking mode.** Finish on the last step asks "Nice work. Mark it as cooked?" with the servings you were cooking (change them in Ingredients first). "I cooked this" adds the entry and the screen says "Marked as cooked" (with "Marked Adobo chicken as cooked" and Undo above it) until you tap **Done**, with a quiet "Add a note about it" to write what you'd do next time. "Not now" closes without an entry, and a quiet "Back to the last step" returns to the step. The back arrow, Escape and the back gesture never add an entry. If a timer is still going they ask "Stop timers and leave?" first, and if your history can't load, Finish just leaves.
 - **Limits.** Up to 1,000 servings per entry, and about 500 entries for one recipe before it asks you to delete an older one; the 500 is a limit in the app, not in the database.
-- **Private, and it counts nothing else.** The history is yours alone. It doesn't change a price, a total or your shopping list, and nothing else reads it.
+- **Private, and prices ignore it.** The history is yours alone. Prices, totals and your shopping list ignore it. Notes can follow a cook, and a change to a recipe is only recorded as a tweak once the recipe has been cooked.
 
 ### Recipe Notes, In Detail
 
