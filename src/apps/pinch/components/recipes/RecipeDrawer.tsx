@@ -10,6 +10,7 @@ import { useAppSelector } from '@/store';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import StartCookingRow from '@apps/pinch/components/shared/StartCookingRow';
 import { UNIT_LABELS } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
@@ -140,11 +141,13 @@ function RecipeDrawer({
             <StatTile
               label='Cost'
               value={
-                cost.totalCents === null ? '—' : formatCost(cost.totalCents)
+                cost.totalCents === null
+                  ? 'No prices yet'
+                  : formatCost(cost.totalCents)
               }
               detail={
                 cost.totalCents === null
-                  ? 'No prices yet'
+                  ? undefined
                   : `${formatCost(cost.perServingCents ?? 0)} per serving`
               }
               help={
@@ -154,8 +157,14 @@ function RecipeDrawer({
                     title="What's left out"
                     placement='top'
                   >
-                    This {formatLeftOut(cost.leftOut)} because there’s no price
-                    for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                    <p>
+                      This {formatLeftOut(cost.leftOut)} because there’s no
+                      price for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                    </p>
+                    <NudgeCountNote
+                      leftOut={cost.leftOut}
+                      open={cost.leftOut}
+                    />
                   </HelpTip>
                 ) : undefined
               }

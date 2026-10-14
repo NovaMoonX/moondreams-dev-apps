@@ -491,7 +491,8 @@ function MealBuilder({
                         }
                       />
                       <span className='text-muted-foreground text-xs'>
-                        servings · {getServingCaption(item)}
+                        {item.servings === 1 ? 'serving' : 'servings'} ·{' '}
+                        {getServingCaption(item)}
                       </span>
                     </div>
                   </li>

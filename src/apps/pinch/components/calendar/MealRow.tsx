@@ -5,7 +5,7 @@ import MealChip from '@apps/pinch/components/calendar/MealChip';
 import { MEAL_TYPE_LABELS } from '@apps/pinch/constants';
 import { selectCostContext } from '@apps/pinch/store/selectors';
 import type { PlannedMeal } from '@apps/pinch/types';
-import { formatCost } from '@apps/pinch/utils/mealFormat';
+import { formatRowCost } from '@apps/pinch/utils/mealFormat';
 import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 
 interface MealRowProps {
@@ -43,11 +43,9 @@ function MealRow({ meal, title, subtitle, onOpen }: MealRowProps) {
           </span>
         )}
       </span>
-      {totalCents !== null && (
-        <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-          {formatCost(totalCents)}
-        </span>
-      )}
+      <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+        {formatRowCost(totalCents, meal.snapshot !== null)}
+      </span>
     </Button>
   );
 }

@@ -8,6 +8,7 @@ import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   selectCostContext,
   selectIngredientsById,
@@ -17,7 +18,11 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Gap, ShoppingRequest } from '@apps/pinch/types';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  formatCost,
+  formatRowCost,
+  getItemTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
@@ -92,10 +97,12 @@ function MealDrawer({
         <div className='space-y-3'>
           <StatTile
             label='Cost'
-            value={cost.totalCents === null ? '—' : formatCost(cost.totalCents)}
-            detail={
-              cost.totalCents === null ? 'No prices yet' : 'For the plate'
+            value={
+              cost.totalCents === null
+                ? 'No prices yet'
+                : formatCost(cost.totalCents)
             }
+            detail={cost.totalCents === null ? undefined : 'For the plate'}
             help={
               leftOutCount > 0 && cost.totalCents !== null ? (
                 <HelpTip
@@ -103,8 +110,11 @@ function MealDrawer({
                   title="What's left out"
                   placement='top'
                 >
-                  This {formatLeftOut(cost.leftOut)} because there’s no price
-                  for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                  <p>
+                    This {formatLeftOut(cost.leftOut)} because there’s no price
+                    for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                  </p>
+                  <NudgeCountNote leftOut={cost.leftOut} open={cost.leftOut} />
                 </HelpTip>
               ) : undefined
             }
@@ -143,9 +153,7 @@ function MealDrawer({
                     </span>
                   </span>
                   <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                    {itemCost?.cents == null
-                      ? 'No price yet'
-                      : formatCost(itemCost.cents)}
+                    {formatRowCost(itemCost?.cents, false)}
                   </span>
                 </li>
               );

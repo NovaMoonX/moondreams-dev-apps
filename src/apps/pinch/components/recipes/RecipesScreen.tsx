@@ -217,7 +217,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     if (recipes.length === 0) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Add the recipes you cook, from a photo, a link, a chat or by hand, and
+          Add the recipes you cook, from text, a file, a link or by hand, and
           they'll be here, ready to plan.
         </p>
       );
@@ -328,7 +328,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title={isIdeas ? 'Ideas' : 'Recipes'}
+        title={RECIPES_VIEW_LABELS[view]}
         action={
           (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
             <Button
@@ -364,7 +364,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             customizedCount={viewOptions.customizedCount}
             onChange={viewOptions.update}
             onReset={viewOptions.reset}
-            className='h-10 w-10'
+            className='-my-3'
           />
         )}
       </div>

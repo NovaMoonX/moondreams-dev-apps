@@ -142,11 +142,12 @@ export function getItemsLines(
 const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit);
 
-/** Groups what is left by ingredient family, with "Other" last, and keeps what is checked off apart. */
+/** Groups what is left by ingredient family, with "Other" last, and keeps what is checked off apart. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
 export function groupShoppingItems(
   items: ShoppingItem[],
   ingredientsById: Map<string, ResolvedIngredient>,
   families: ResolvedFamily[],
+  held: ReadonlyMap<string, boolean> = new Map(),
 ): { groups: ShoppingGroup[]; checked: ShoppingRowData[] } {
   const familyOrder = new Map(
     families.map((family, index) => [family.id, index]),
@@ -166,11 +167,15 @@ export function groupShoppingItems(
       unit: item.unit,
       isChecked: item.isChecked,
     };
-    return { row, familyId: familyOrder.has(familyId) ? familyId : '' };
+    return {
+      row,
+      isGot: held.get(item.id) ?? item.isChecked,
+      familyId: familyOrder.has(familyId) ? familyId : '',
+    };
   });
 
   const buckets = entries
-    .filter(({ row }) => !row.isChecked)
+    .filter(({ isGot }) => !isGot)
     .reduce((acc, { row, familyId }) => {
       acc.set(familyId, [...(acc.get(familyId) ?? []), row]);
       return acc;
@@ -183,7 +188,7 @@ export function groupShoppingItems(
     }))
     .sort((a, b) => getRank(a.id) - getRank(b.id));
   const checked = entries
-    .filter(({ row }) => row.isChecked)
+    .filter(({ isGot }) => isGot)
     .map(({ row }) => row)
     .sort(byName);
 

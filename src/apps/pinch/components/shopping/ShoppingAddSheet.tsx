@@ -95,7 +95,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   };
 
   return (
-    <FormSheet isOpen onClose={onClose} title='Add to shopping list'>
+    <FormSheet isOpen onClose={onClose} title='Shopping list'>
       <div className='space-y-3 pb-4'>
         <p className='text-muted-foreground text-sm'>
           What do you need? It goes on the list at a typical serving, and a tap

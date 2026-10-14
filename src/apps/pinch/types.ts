@@ -192,6 +192,8 @@ export type PinchSubview =
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
       fromIdeaId?: string;
+      /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
+      fromCalendar?: boolean;
     }
   /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. */
   | { kind: 'cook'; recipeId: string; servings?: number }

@@ -18,7 +18,10 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Idea } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
-import { getIdeaSearchText } from '@apps/pinch/utils/ideas';
+import {
+  getIdeaRecipeMethod,
+  getIdeaSearchText,
+} from '@apps/pinch/utils/ideas';
 
 const filterIdeas = (ideas: Idea[], query: string) =>
   searchByName(
@@ -201,7 +204,7 @@ function IdeasView({
             openSubview({
               kind: 'recipe',
               id: null,
-              method: 'manual',
+              method: getIdeaRecipeMethod(openIdea),
               fromIdeaId: id,
             });
           }}
