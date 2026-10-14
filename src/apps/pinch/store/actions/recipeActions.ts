@@ -8,6 +8,7 @@ import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
+import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
@@ -25,6 +26,9 @@ const recipeDoc = (uid: string, id: string) =>
 
 const sourceDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'sources', id);
+
+const ideaDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'ideas', id);
 
 export const getRecipeCoverPath = (uid: string, recipeId: string) =>
   `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
@@ -52,6 +56,8 @@ export interface RecipeDraft {
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
   removeCover: boolean;
+  /** Set on its own after the recipe has committed, and only if the idea is still there. */
+  fromIdeaId: string | null;
 }
 
 interface SaveRecipeInput {
@@ -59,9 +65,14 @@ interface SaveRecipeInput {
   draft: RecipeDraft;
 }
 
+interface SaveRecipeResult {
+  recipeId: string;
+  linkedIdea: boolean;
+}
+
 /** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). The cover goes to Storage first and is cleaned up if the write fails. */
 export const saveRecipe = createAsyncThunk<
-  string,
+  SaveRecipeResult,
   SaveRecipeInput,
   { state: RootState; rejectValue: string }
 >(
@@ -79,6 +90,12 @@ export const saveRecipe = createAsyncThunk<
         'This recipe is gone, so there is nothing to save.',
       );
     }
+    const idea =
+      existing === null && draft.fromIdeaId !== null
+        ? (getState().pinch.ideas.items.find(
+            (entry) => entry.id === draft.fromIdeaId,
+          ) ?? null)
+        : null;
     const path = getRecipeCoverPath(uid, recipeId);
 
     try {
@@ -178,7 +195,21 @@ export const saveRecipe = createAsyncThunk<
       await deleteFile(existing.coverPath).catch(() => undefined);
     }
 
-    return recipeId;
+    const linkedIdea =
+      idea !== null &&
+      (await updateDoc(ideaDoc(uid, idea.id), {
+        ...getMissingIdeaFields(idea),
+        recipeId,
+        updatedAt: Date.now(),
+      }).then(
+        () => true,
+        (error: unknown) => {
+          console.error('Pinch could not link the idea to its recipe', error);
+          return false;
+        },
+      ));
+
+    return { recipeId, linkedIdea };
   },
 );
 

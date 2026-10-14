@@ -32,9 +32,15 @@ const asWebLink = (text: string) => {
   }
 };
 
-const getFailureMessage = (error: unknown, source: RecipeSource) => {
+const getFailureMessage = (
+  error: unknown,
+  source: RecipeSource,
+  canPasteText: boolean,
+) => {
   if (error instanceof FirebaseError && error.code.startsWith('functions/')) {
-    return "We couldn't open that link. Check the address, or paste the recipe's text instead.";
+    return canPasteText
+      ? "We couldn't open that link. Check the address, or paste the recipe's text instead."
+      : "We couldn't open that link. Check the address, or write it yourself below.";
   }
 
   const status =
@@ -53,12 +59,23 @@ const getFailureMessage = (error: unknown, source: RecipeSource) => {
     return "The recipe reader isn't available right now. You can write it yourself below.";
   }
   if (source === 'AI_LINK') {
-    return "We couldn't read a recipe from that page. Paste its text instead, or write it yourself below.";
+    return canPasteText
+      ? "We couldn't read a recipe from that page. Paste its text instead, or write it yourself below."
+      : "We couldn't read a recipe from that page. You can write it yourself below.";
   }
   if (source === 'AI_TEXT') {
     return "We couldn't read that text right now. Try again, or write it yourself below.";
   }
   return "We couldn't read that right now. Try a clearer photo or a PDF, or write it yourself below.";
+};
+
+const getEmptyMessage = (source: RecipeSource, canPasteText: boolean) => {
+  if (source !== 'AI_LINK') {
+    return "We couldn't find a recipe in that. Try a clearer photo or paste the text.";
+  }
+  return canPasteText
+    ? "We couldn't find a recipe on that page. Paste its text instead, or write it yourself below."
+    : "We couldn't find a recipe on that page. You can write it yourself below.";
 };
 
 type State =
@@ -68,6 +85,8 @@ type State =
 
 interface RecipeReaderProps {
   method: Exclude<RecipeStartMethod, 'manual'>;
+  /** A link the person already has, so the link way opens with it filled in; nothing is sent until they tap the button. */
+  initialUrl?: string;
   /** Called with what the reader found; the form fills what was read and the person reviews it before saving. */
   onRead: (
     recipe: ExtractedRecipe,
@@ -78,15 +97,21 @@ interface RecipeReaderProps {
 }
 
 /** One way of starting a recipe, finished on its own screen: say what the AI will do, take the text, link or file, and read it. */
-function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
+function RecipeReader({
+  method,
+  initialUrl,
+  onRead,
+  onManual,
+}: RecipeReaderProps) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<State>({ status: 'idle' });
   const [text, setText] = useState('');
-  const [link, setLink] = useState('');
+  const [link, setLink] = useState(initialUrl ?? '');
   const [fileKey, setFileKey] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const isReading = state.status === 'reading';
+  const canPasteText = initialUrl === undefined;
 
   const run = async (
     label: string,
@@ -99,8 +124,7 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
       if (extracted.ingredients.length === 0) {
         setState({
           status: 'failed',
-          message:
-            "We couldn't find a recipe in that. Try a clearer photo or paste the text.",
+          message: getEmptyMessage(source, canPasteText),
         });
         return;
       }
@@ -112,7 +136,10 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
         error,
         error instanceof AIError ? error.customErrorData : null,
       );
-      setState({ status: 'failed', message: getFailureMessage(error, source) });
+      setState({
+        status: 'failed',
+        message: getFailureMessage(error, source, canPasteText),
+      });
     } finally {
       setFileKey((current) => current + 1);
     }

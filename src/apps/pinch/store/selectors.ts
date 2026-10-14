@@ -3,7 +3,12 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
 import { MEAL_TYPES } from '@apps/pinch/constants';
-import type { PlannedMeal, Product, ResolvedFamily } from '@apps/pinch/types';
+import type {
+  Idea,
+  PlannedMeal,
+  Product,
+  ResolvedFamily,
+} from '@apps/pinch/types';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getPeriodStats } from '@apps/pinch/utils/stats';
@@ -29,7 +34,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded &&
   state.pinch.sources.isLoaded;
 
-/** Sources and the shopping list are optional extras: their failures are left out so each only takes its own UI away. */
+/** Sources, the shopping list and ideas are optional extras: their failures are left out so each only takes its own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
@@ -201,6 +206,35 @@ export const selectSourceCounts = createSelector(
     );
 
     return { bySource, withoutSource: recipes.length - sourced };
+  },
+);
+
+const selectIdeaItems = (state: RootState) => state.pinch.ideas.items;
+
+export const selectIdeas = createSelector([selectIdeaItems], (ideas) =>
+  [...ideas].sort((a, b) => b.createdAt - a.createdAt),
+);
+
+export const selectIdeasById = createSelector(
+  [selectIdeas],
+  (ideas) => new Map(ideas.map((idea) => [idea.id, idea])),
+);
+
+export const selectIdeasLoadError = (state: RootState) =>
+  state.pinch.ideas.loadError;
+
+/** An idea is made only while its recipe is still on the person's lists: a deleted or archived recipe reads as not made yet. */
+export const selectIdeaGroups = createSelector(
+  [selectIdeas, selectRecipes],
+  (ideas, recipes) => {
+    const liveIds = new Set(recipes.map((recipe) => recipe.id));
+    const isMade = (idea: Idea) =>
+      idea.recipeId != null && liveIds.has(idea.recipeId);
+
+    return {
+      toTry: ideas.filter((idea) => !isMade(idea)),
+      made: ideas.filter(isMade),
+    };
   },
 );
 

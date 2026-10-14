@@ -1466,6 +1466,21 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      function isIdea(data, id) {
+        return data.keys().hasOnly(['id', 'kind', 'title', 'note', 'url', 'siteName', 'imageUrl', 'photoPath', 'recipeId', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'kind', 'title', 'note', 'url', 'siteName', 'imageUrl', 'photoPath', 'recipeId', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && data.kind in ['LINK', 'PHOTO', 'TEXT']
+          && isShortText(data.title, 120)
+          && (data.note == null || isShortText(data.note, 1000))
+          && (data.url == null || (data.url is string && data.url.size() <= 2000 && data.url.matches('https?://.+') && !data.url.matches('https?://[^/?#]*@.*')))
+          && (data.siteName == null || isShortText(data.siteName, 120))
+          && (data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 2000 && data.imageUrl.matches('https://.+') && !data.imageUrl.matches('https://[^/?#]*@.*')))
+          && (data.photoPath == null || data.photoPath == 'apps/pinch/kitchens/' + uid + '/ideas/' + id + '/photo.webp')
+          && (data.recipeId == null || isShortText(data.recipeId, 80))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
       function isStore(data, id) {
         return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
@@ -1619,6 +1634,14 @@ service cloud.firestore {
         allow update: if isKitchenOwner() && isShoppingItem(request.resource.data, id)
           && request.resource.data.ingredientId == resource.data.ingredientId
           && request.resource.data.unit == resource.data.unit
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /ideas/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isIdea(request.resource.data, id);
+        allow update: if isKitchenOwner() && isIdea(request.resource.data, id)
+          && request.resource.data.kind == resource.data.kind
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

@@ -40,6 +40,64 @@ const SEED_SHOPPING = [
   shoppingItem('cat-cilantro', 'CUP', 0.25, true),
 ];
 
+const idea = (
+  id: string,
+  kind: 'LINK' | 'TEXT',
+  title: string,
+  fields: {
+    note?: string;
+    url?: string;
+    siteName?: string;
+    imageUrl?: string;
+    recipeId?: string;
+  } = {},
+) => ({
+  id: `seed-pinch-idea-${id}`,
+  kind,
+  title,
+  note: fields.note ?? null,
+  url: fields.url ?? null,
+  siteName: fields.siteName ?? null,
+  imageUrl: fields.imageUrl ?? null,
+  photoPath: null,
+  recipeId: fields.recipeId ?? null,
+});
+
+const LONG_NOTE = [
+  "Had this at a friend's place in the spring: a bowl of rice, miso-glazed salmon and a pile of quick-pickled cucumbers.",
+  'The glaze was white miso, mirin and a little honey, brushed on and broiled until it caught at the edges.',
+  'Things to work out: how long the salmon sits in the glaze (she said overnight, the recipe I found says 20 minutes), whether the cucumbers need sesame, and what to serve it with so it still feels like a weeknight dinner.',
+  'Maybe try it once with the cilantro lime rice before changing anything.',
+].join('\n\n');
+
+// Two links with a site and no picture, one whose picture address cannot load offline (so the fallback shows),
+// two jotted ideas (one with a long note) and one link already turned into the adobo recipe.
+const SEED_IDEAS = [
+  idea('smashed-potatoes', 'LINK', 'Crispy smashed potatoes', {
+    url: 'https://www.seriouseats.com/crispy-smashed-potatoes',
+    siteName: 'Serious Eats',
+  }),
+  idea('brown-butter-cookies', 'LINK', 'Brown butter chocolate chip cookies', {
+    url: 'https://cooking.nytimes.com/recipes/brown-butter-chocolate-chip-cookies',
+    siteName: 'NYT Cooking',
+    note: 'Chill the dough overnight.',
+  }),
+  idea('lemon-bars-link', 'LINK', 'Lemon bars with a shortbread crust', {
+    url: 'https://smittenkitchen.com/lemon-bars',
+    siteName: 'Smitten Kitchen',
+    imageUrl: 'https://images.example.test/lemon-bars.jpg',
+  }),
+  idea('moms-lemon-bars', 'TEXT', "Something like Mom's lemon bars"),
+  idea('miso-salmon', 'TEXT', 'Miso salmon and quick pickles', {
+    note: LONG_NOTE,
+  }),
+  idea('adobo', 'LINK', 'Sticky chicken adobo', {
+    url: 'https://www.seriouseats.com/chicken-adobo',
+    siteName: 'Serious Eats',
+    recipeId: 'seed-pinch-recipe-adobo',
+  }),
+];
+
 const nutrition = (
   calories: number,
   protein: number,
@@ -497,6 +555,16 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(source.id)
         .set({ ...source, createdAt, updatedAt: createdAt }),
     ),
+    ...SEED_IDEAS.map((entry, index) =>
+      kitchenRef
+        .collection('ideas')
+        .doc(entry.id)
+        .set({
+          ...entry,
+          createdAt: createdAt + index,
+          updatedAt: createdAt + index,
+        }),
+    ),
     ...SEED_SHOPPING.map((entry, index) =>
       kitchenRef
         .collection('shoppingItems')
@@ -565,6 +633,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_FAMILIES.length +
       SEED_SOURCES.length +
       SEED_SHOPPING.length +
+      SEED_IDEAS.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +
       SEED_RECIPES.length +

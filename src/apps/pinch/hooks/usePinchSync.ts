@@ -6,6 +6,7 @@ import {
   startFamiliesListener,
   startMealsListener,
   startPlannedMealsListener,
+  startIdeasListener,
   startIngredientsListener,
   startProductsListener,
   startRecipesListener,
@@ -19,6 +20,11 @@ import {
   setFamilies,
   setFamiliesLoadError,
 } from '@apps/pinch/store/slices/familiesSlice';
+import {
+  clearIdeas,
+  setIdeas,
+  setIdeasLoadError,
+} from '@apps/pinch/store/slices/ideasSlice';
 import {
   clearIngredients,
   setIngredients,
@@ -80,6 +86,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearRecipes());
       dispatch(clearSources());
       dispatch(clearShopping());
+      dispatch(clearIdeas());
       dispatch(clearSettings());
       dispatch(clearPlannedMeals());
       dispatch(clearMeals());
@@ -166,6 +173,19 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       },
     );
 
+    const unsubscribeIdeas = startIdeasListener(
+      uid,
+      (ideas) => dispatch(setIdeas(ideas)),
+      (error) => {
+        console.error('Pinch ideas listener failed', error);
+        dispatch(
+          setIdeasLoadError(
+            getErrorMessage(error, 'Unable to load your recipe ideas.'),
+          ),
+        );
+      },
+    );
+
     const unsubscribeSettings = startSettingsListener(
       uid,
       (settings) => dispatch(setSettings(settings)),
@@ -191,6 +211,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
     return () => {
       unsubscribeMeals();
       unsubscribeSettings();
+      unsubscribeIdeas();
       unsubscribeShopping();
       unsubscribeSources();
       unsubscribeRecipes();

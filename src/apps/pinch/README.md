@@ -24,12 +24,14 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 12. **Lists stay short, and you choose what they show.** Rows start with prices and leave out calories and macros; an eye button on Kitchen and Recipes turns either one on or off, whenever you like.
 13. **Remember where a recipe came from.** Tag a recipe with a source, like a favorite site or a stack of cookbooks, then find your recipes by it.
 14. **Make a shopping list.** From a recipe, a saved meal, a planned meal or a whole day, pick what you need and it goes on one list, the Shopping tab, grouped by ingredient family. Tick things off at the store.
+15. **Keep recipe ideas.** A link to a page you like, a photo, or a few words about something you'd like to make someday. When you're ready, an idea turns into a recipe with its title, note and site already filled in.
 
 ### Finding Your Way, In Detail
 
 - **Calendar** (first): what you plan to eat, by month, week or day, with the period's stats above it.
-- **Recipes** (second): your recipes and saved meals, and the sources your recipes came from.
+- **Recipes** (second): your recipes, saved meals and recipe ideas, and the sources your recipes came from.
 - **Kitchen** (third): everything you buy. Ingredients, their products and your stores live here. Later it will also hold how much you have on hand and the servings you've prepared.
+
 - **Shopping** (fourth): what you still need to buy, grouped by ingredient family, with a count on the tab while anything is left.
 
 ### Filling In As You Go, In Detail
@@ -98,6 +100,19 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **It's just a list.** It doesn't follow the calendar: changing a meal later leaves the list as it was. Nothing on it is shared, copied out or sent anywhere.
 - **Limits.** One add takes up to 200 lines, and the list holds about 300 things before it asks you to clear what you've got. Both are limits in the app, not in the database.
 
+### Recipe Ideas, In Detail
+
+- **A place for "I'd like to make something like this".** Ideas sit beside Recipes and Meals as a third pill. An idea is a link, a photo, or a few words, with a title and an optional note.
+- **Three ways to add one.** "New idea" lists them: *From a link* (paste a recipe page), *From a photo* (a picture or screenshot of a dish or recipe) and *Jot it down* (just a few words). Each opens on its own screen, and back returns to the list.
+- **A link finds its own title and picture.** Pinch fetches the page to read its title, site name and picture address, and shows what it found, with the title ready to change. Nothing else from the page is kept. "Save idea" waits until the lookup has finished (six seconds at most), so the idea is named after its page. If the page can't be read, takes too long or has no title, you're asked for one; left blank, the site's address is used.
+- **No duplicates.** Pasting a page that is already on the list ("That one's already in your ideas") offers to open it instead, however the link was spelled (with or without `www.`, a trailing slash or tracking parameters).
+- **A note is optional.** "+ Add a note" on a link or a photo; the jotted-down way shows it from the start.
+- **Open an idea to see it whole.** The picture, the title, the note, "Open <site>" for a link (it opens the page in a new tab), and "Modify" and "Turn it into a recipe" in the footer.
+- **Turn it into a recipe.** An idea that holds a link opens "From a link" with its address already filled in, so one tap on "Fill in the recipe" reads the page into the form (the idea's own title and note are kept, and its website is "Where it's from"); nothing is sent until you tap it. If the page can't be read, "Write it yourself instead" opens the form with the idea's title, its note as the description and its website as "Where it's from". A photo or a few words open that form directly; a photo stays with the idea and isn't copied to the recipe (the form says so and points to "From a file"). Nothing is saved until you look it over and save; back or leaving the form changes nothing. When the recipe is saved, the idea moves to "Made into recipes" right after, and its button becomes "Open the recipe". If the idea can't be updated (say it was deleted on another device a moment earlier), the recipe is still saved.
+- **Deleting asks first.** Deleting an idea asks first, and for one that became a recipe says the recipe stays. Deleting the recipe later just puts the idea back among the ones still to try.
+- **Limits.** 120 characters for a title, 1,000 for a note, and about 200 ideas before the list asks you to delete one; the 200 is a limit in the app, not in the database.
+- **Private.** Ideas are yours alone. A link idea's picture is loaded from the website it came from when you look at it.
+
 ### Bringing Recipes In, In Detail
 
 - **Four ways to start:** a new recipe begins with a short list: From text, From a file, From a link, or Write it yourself. On a phone it's a drawer; on a wider screen it's the first page. Picking one opens that way's own screen, which says what the AI will do, and each has "Write it yourself instead"; back from it returns to the list. The form is never the first thing you face, and leaving it with something typed or read in asks before the work is thrown away.
@@ -139,7 +154,8 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
 - [x] View options on Kitchen and Recipes: prices show and calories and macros stay hidden until you turn them on, and pick per serving or per 100 g for ingredients, remembered per person on the device
 - [x] Shopping tab: add a recipe's (at the servings you pick), a saved meal's, a planned meal's or a day's ingredients, or a single ingredient; lines merge by ingredient and unit, group by family, tick off to "Got it", and show an approximate cost with what it leaves out
-- [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals and a shopping list of a few hundred things
+- [x] Recipe ideas on the Recipes screen: save a link (with its title, site and picture), a photo or a few words, open it, change it, and turn it into a recipe that arrives with the idea's title, note and site; ideas that became recipes move to "Made into recipes"
+- [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals, a shopping list of a few hundred things and dozens of ideas
 
 ### Next Steps
 - [ ] Track how much of each ingredient you have, with ingredients you haven't counted marked "not tracked" until you count them, which is different from "out"
@@ -176,8 +192,8 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 - **Frontend:** React 19, TypeScript, Vite, TailwindCSS 4, DreamerUI (including its `Calendar` for the month view)
 - **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
-- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, meals, calendar entries, the shopping list and per-user settings (adding to the list merges into existing lines in one transaction, so two devices adding at once never lose an amount); Firebase Storage for recipe and store images
-- **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review; for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them
+- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, recipe ideas, meals, calendar entries, the shopping list and per-user settings (adding to the list merges into existing lines in one transaction, so two devices adding at once never lose an amount); Firebase Storage for recipe, store and idea images
+- **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review; for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them; the same function gives a recipe idea its link's title, site name and picture address (no AI involved)
 - **On the device:** a list's view options are kept in the browser's local storage, per person; nothing else of yours is kept there beyond Firestore's own cache
 - **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (licence not yet confirmed from here: to be checked before launch), stored per 100 g alongside common unit conversions; money is stored as whole cents
 - **Store logos:** a curated list of well-known stores (names and web domains) whose logos load from a logo service in the person's browser, with a letter tile whenever one isn't available; stores you add keep their own uploaded image in Firebase Storage. The logo service (Logo.dev) and its terms are to be confirmed before launch.

@@ -10,6 +10,7 @@ import {
 import { db } from '@/lib/firebase/config';
 import type {
   Family,
+  Idea,
   IngredientRecord,
   KitchenSettings,
   Meal,
@@ -115,6 +116,19 @@ export function startShoppingListener(
       onChange(
         snapshot.docs.map((document) => document.data() as ShoppingItem),
       ),
+    onError,
+  );
+}
+
+export function startIdeasListener(
+  uid: string,
+  onChange: (ideas: Idea[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    kitchenCollection(uid, 'ideas'),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as Idea)),
     onError,
   );
 }
