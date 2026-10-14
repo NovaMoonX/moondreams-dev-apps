@@ -328,7 +328,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title={isIdeas ? 'Ideas' : 'Recipes'}
+        title={RECIPES_VIEW_LABELS[view]}
         action={
           (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
             <Button
@@ -364,7 +364,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             customizedCount={viewOptions.customizedCount}
             onChange={viewOptions.update}
             onReset={viewOptions.reset}
-            className='h-10 w-10'
+            className='-my-3'
           />
         )}
       </div>
