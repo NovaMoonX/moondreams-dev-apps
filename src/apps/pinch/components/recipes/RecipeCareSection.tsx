@@ -26,7 +26,6 @@ interface RecipeCareSectionProps {
   care: RecipeCare;
 }
 
-/** What the person wrote about keeping and reheating what the recipe makes, as plain lines. */
 function RecipeCareSection({ care }: RecipeCareSectionProps) {
   return (
     <FormSection title='Keeping it'>

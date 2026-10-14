@@ -53,7 +53,6 @@ export interface RecipeFormData {
   description: string;
   ingredients: IngredientRow[];
   steps: string[];
-  /** How to keep the leftovers, each part as typed; blank parts are null when saved. */
   care: CareText;
   sourceChoice: SourceChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */

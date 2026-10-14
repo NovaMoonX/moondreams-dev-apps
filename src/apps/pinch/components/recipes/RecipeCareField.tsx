@@ -4,6 +4,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import SummaryEditor from '@/components/SummaryEditor';
 import {
+  CARE_DAYS_PER_MONTH,
   MAX_CARE_DAYS,
   MAX_CARE_REHEAT_LENGTH,
   MAX_CARE_TIP_LENGTH,
@@ -83,7 +84,7 @@ function RecipeCareField({ value, onChange }: RecipeCareFieldProps) {
         />
       </div>
       <p className='text-muted-foreground text-xs'>
-        Whole days. A month is 30, so 90 shows as 3 months.
+        {`Whole days. A month is ${CARE_DAYS_PER_MONTH}, so ${CARE_DAYS_PER_MONTH * 3} shows as 3 months.`}
       </p>
       <Field label='Reheat' isCompact>
         {() => (

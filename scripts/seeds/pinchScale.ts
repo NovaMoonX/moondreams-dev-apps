@@ -372,7 +372,7 @@ export async function seedPinchScale(
     return slot >= 15 ? null : sources[Math.max(0, slot - 3)].id;
   };
 
-  // Two recipes in four carry care and the rest keep the older shape with no key. It draws no random number, so nothing else in the fixture moves.
+  // Draws no random number, so nothing else in the fixture moves.
   const getCare = (index: number) => {
     if (index % 4 === 0) {
       return {

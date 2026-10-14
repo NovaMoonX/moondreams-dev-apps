@@ -1,11 +1,12 @@
 import {
+  CARE_DAYS_PER_MONTH,
+  CARE_DAYS_PER_WEEK,
   MAX_CARE_DAYS,
   MAX_CARE_REHEAT_LENGTH,
   MAX_CARE_TIP_LENGTH,
 } from '@apps/pinch/constants';
 import type { Recipe, RecipeCare } from '@apps/pinch/types';
 
-/** The four parts of a recipe's care as the form holds them while the person types. */
 export interface CareText {
   fridge: string;
   freezer: string;
@@ -33,7 +34,6 @@ const asText = (value: unknown, max: number) => {
   return text === '' ? null : text.slice(0, max);
 };
 
-/** Cleans whatever it is given into a care record: a part that isn't usable becomes null, and a record with nothing in it is null. */
 export const toCare = (
   parts: Partial<Record<keyof RecipeCare, unknown>> | null | undefined,
 ): RecipeCare | null => {
@@ -50,18 +50,16 @@ export const toCare = (
   return result;
 };
 
-/** A recipe written before care existed has no key, which reads as no care. */
 export const getRecipeCare = (recipe: { care?: Recipe['care'] }) =>
   toCare(recipe.care);
 
-/** "1 day", "5 days", "2 weeks", "3 months": the largest of weeks and months that fits the days exactly. */
 export const formatCareDays = (days: number) => {
-  if (days >= 30 && days % 30 === 0) {
-    const months = days / 30;
+  if (days >= CARE_DAYS_PER_MONTH && days % CARE_DAYS_PER_MONTH === 0) {
+    const months = days / CARE_DAYS_PER_MONTH;
     return `${months} ${months === 1 ? 'month' : 'months'}`;
   }
-  if (days >= 7 && days % 7 === 0) {
-    const weeks = days / 7;
+  if (days >= CARE_DAYS_PER_WEEK && days % CARE_DAYS_PER_WEEK === 0) {
+    const weeks = days / CARE_DAYS_PER_WEEK;
     return `${weeks} ${weeks === 1 ? 'week' : 'weeks'}`;
   }
   return `${days} ${days === 1 ? 'day' : 'days'}`;
@@ -80,7 +78,6 @@ const parseDays = (text: string) =>
 const isDaysText = (text: string) =>
   text.trim() === '' || asDays(parseDays(text)) !== null;
 
-/** What was typed as a care record; days that aren't whole numbers from 1 to the cap are left out here and named by `getCareProblem`. */
 export const parseCareText = (text: CareText) =>
   toCare({
     fridgeDays: parseDays(text.fridge),
@@ -89,7 +86,6 @@ export const parseCareText = (text: CareText) =>
     tip: text.tip,
   });
 
-/** What stops the typed care from being saved, in a few plain words, or null. */
 export const getCareProblem = (text: CareText) => {
   const badDays = [
     !isDaysText(text.fridge) && 'fridge',
@@ -108,7 +104,7 @@ export const getCareProblem = (text: CareText) => {
   return null;
 };
 
-/** The form row's summary as a short phrase, "Fridge 3 days, freezer 3 months, reheating, tip", or empty; days that can't be used show as typed, so the row never claims there is nothing while it names a problem. Commas, not dots, so a wrap never leaves a separator at the end of a line. */
+/** Commas, not dots, so a wrap never leaves a separator at the end of a line. */
 export const getCareSummary = (text: CareText) => {
   const getDaysPart = (label: string, typed: string) => {
     const days = typed.trim();
@@ -128,7 +124,6 @@ export const getCareSummary = (text: CareText) => {
     : phrase.charAt(0).toUpperCase() + phrase.slice(1);
 };
 
-/** "Leftovers keep 3 days in the fridge, 3 months in the freezer", or null when the recipe names neither. */
 export const getLeftoversLine = (care: RecipeCare | null) => {
   const parts = [
     care?.fridgeDays != null &&

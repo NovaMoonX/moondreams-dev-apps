@@ -29,7 +29,7 @@ export interface ExtractedRecipe {
   description: string | null;
   ingredients: ExtractedIngredient[];
   steps: string[];
-  /** Only what the source says about keeping and reheating the leftovers; null when it says nothing. */
+  /** Only what the source says, never a guess. */
   care: RecipeCare | null;
   /** Parts of the recipe the reader could not make out. */
   unread: string[];
@@ -53,7 +53,7 @@ const asMinutes = (value: unknown) =>
     : null;
 
 const asWholeDays = (value: unknown) =>
-  typeof value === 'number' ? Math.round(value) : null;
+  typeof value === 'number' ? Math.floor(value) : null;
 
 /** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real. */
 export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
