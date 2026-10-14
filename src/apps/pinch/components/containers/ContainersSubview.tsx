@@ -23,7 +23,10 @@ import {
 } from '@apps/pinch/constants';
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import { finishedContainersQueryOptions } from '@apps/pinch/queries/containerQueries';
+import {
+  finishedContainersQueryOptions,
+  scopedContainersQueryOptions,
+} from '@apps/pinch/queries/containerQueries';
 import {
   selectContainers,
   selectMealsById,
@@ -57,7 +60,6 @@ const isOfScope = (
   return true;
 };
 
-/** What is in the fridge and freezer, soonest eat-by first in each, and a Finished view of what was eaten or thrown out. */
 function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const { isReady, loadError } = useContainerActions(uid);
@@ -77,11 +79,19 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const [open, setOpen] = useState<Container | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
-  const finishedQuery = useQuery({
+  const isScoped = scope.recipeId !== null || scope.mealId !== null;
+  const latestFinished = useQuery({
     ...finishedContainersQueryOptions(uid, finishedCount),
-    enabled: view === 'finished',
+    enabled: view === 'finished' && !isScoped,
     placeholderData: keepPreviousData,
   });
+  const scopedFinished = useQuery({
+    ...(scope.mealId !== null
+      ? scopedContainersQueryOptions(uid, 'mealId', scope.mealId)
+      : scopedContainersQueryOptions(uid, 'recipeId', scope.recipeId ?? '')),
+    enabled: view === 'finished' && isScoped,
+  });
+  const finishedQuery = isScoped ? scopedFinished : latestFinished;
 
   const inScope = useMemo(
     () =>
@@ -107,10 +117,12 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
 
   const finished = useMemo(
     () =>
-      (finishedQuery.data ?? []).filter((container) =>
-        isOfScope(container, scope.recipeId, scope.mealId),
-      ),
-    [finishedQuery.data, scope],
+      isScoped
+        ? (scopedFinished.data ?? [])
+            .filter((container) => container.status === 'DONE')
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+        : (latestFinished.data ?? []),
+    [isScoped, scopedFinished.data, latestFinished.data],
   );
 
   const scopeName =
@@ -252,7 +264,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       );
     }
 
-    const hasMore = finishedQuery.data.length >= finishedCount;
+    const hasMore = !isScoped && finishedQuery.data.length >= finishedCount;
     return (
       <div className='space-y-1'>
         <ul className='divide-border divide-y'>{finished.map(renderRow)}</ul>
@@ -261,7 +273,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
             type='button'
             variant='tertiary'
             className='h-10 justify-start px-0!'
-            loading={finishedQuery.isFetching}
+            loading={latestFinished.isFetching}
             onClick={() =>
               setFinishedCount((count) => count + CONTAINER_FINISHED_PAGE_SIZE)
             }

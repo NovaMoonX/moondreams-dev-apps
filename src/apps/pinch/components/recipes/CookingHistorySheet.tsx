@@ -16,7 +16,7 @@ import {
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
 import { CONTAINER_EMOJI } from '@apps/pinch/constants';
-import { recipeContainersQueryOptions } from '@apps/pinch/queries/containerQueries';
+import { scopedContainersQueryOptions } from '@apps/pinch/queries/containerQueries';
 import {
   selectContainersByCookId,
   selectCooksByRecipe,
@@ -67,7 +67,7 @@ function CookingHistorySheet({
 
   const stockByCook = useAppSelector(selectContainersByCookId);
   const recipeContainers = useQuery(
-    recipeContainersQueryOptions(uid, recipeId),
+    scopedContainersQueryOptions(uid, 'recipeId', recipeId),
   ).data;
   const putAwayByCook = useMemo(() => {
     const merged = new Map<string, Container>(
