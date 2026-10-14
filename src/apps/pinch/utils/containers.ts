@@ -10,6 +10,7 @@ import {
   MAX_CONTAINER_HISTORY,
   MAX_CONTAINER_NOTE_LENGTH,
   MAX_CONTAINER_SERVINGS,
+  MAX_CONTAINER_TITLE_LENGTH,
   MAX_EAT_BY_DATE,
   MIN_EAT_BY_DATE,
   SOFT_MAX_CONTAINERS,
@@ -35,7 +36,6 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 export type EatByState = 'PAST' | 'SOON' | 'LATER';
 
-/** What a change writes: only the fields it owns, with the history it appended to and a new `updatedAt`. */
 export type ContainerFields = Partial<
   Pick<Container, 'servings' | 'status' | 'place' | 'eatBy'>
 > &
@@ -72,7 +72,6 @@ export const isValidEatBy = (eatBy: number) =>
 export const isContainerListFull = (inStockCount: number) =>
   inStockCount >= SOFT_MAX_CONTAINERS;
 
-/** Whole days from the viewer's today to the eat-by day; negative once it has passed. */
 export const getDaysLeft = (eatBy: number, now = Date.now()) =>
   Math.round((eatBy - getLocalTodayDate(now)) / DAY_MS);
 
@@ -82,7 +81,6 @@ export const getEatByState = (eatBy: number, now = Date.now()): EatByState => {
   return days <= CONTAINER_EAT_SOON_DAYS ? 'SOON' : 'LATER';
 };
 
-/** "today", "tomorrow" or "Oct 16", to follow "Eat by ". */
 export const getEatByPhrase = (eatBy: number, now = Date.now()) => {
   const days = getDaysLeft(eatBy, now);
   if (days === 0) return 'today';
@@ -121,13 +119,12 @@ export const getEatByDefault = (
   return result;
 };
 
-/** The line under an eat-by date: it is the person's own call, and says where the starting point came from. */
 export const getEatByHint = (move: EatByMove, preset: EatByDefault) => {
   if (preset.isFromRecipe) {
-    return `Your call. Based on how long your recipe says it keeps in the ${move === 'FREEZER' ? 'freezer' : 'fridge'}.`;
+    return `Your call. Taken from the ${move === 'FREEZER' ? 'freezer' : 'fridge'} time in your recipe.`;
   }
   if (move === 'THAW') {
-    return `Your call. Thawed food keeps a shorter time, so this starts at ${formatCareDays(preset.days)}.`;
+    return `Your call. Once thawed, this starts at ${formatCareDays(preset.days)}.`;
   }
   return `Your call. A starting point of ${formatCareDays(preset.days)}; change it to what you trust.`;
 };
@@ -149,7 +146,6 @@ export const isBulkMeal = (input: {
   input.care?.freezerDays != null ||
   input.hasStock;
 
-/** What is left after the sitting that was just cooked for, as whole portions and at least one. */
 export const getPutAwayServings = (
   servings: number,
   eatenTonight: number | null,
@@ -161,14 +157,19 @@ export const getPutAwayServings = (
 };
 
 const getDroppedIndex = (history: ContainerEvent[]) => {
-  const oldestEat = history.findIndex(
-    (event, index) =>
-      index > 0 && index < history.length - 1 && event.kind === 'EAT',
+  const oldestOf = (kind: ContainerEventKind) =>
+    history.findIndex(
+      (event, index) =>
+        index > 0 && index < history.length - 1 && event.kind === kind,
+    );
+  return (
+    ['EAT' as const, 'EDIT' as const]
+      .map(oldestOf)
+      .find((index) => index !== -1) ?? 1
   );
-  return oldestEat === -1 ? 1 : oldestEat;
 };
 
-/** Adds an event; past the cap the oldest EAT goes first (the moves are what the freeze count reads), then the oldest after the first. */
+/** Past the cap the oldest EAT goes first, then the oldest EDIT: the place events are what the freeze count and the thaw line read. */
 export const appendEvent = (
   history: ContainerEvent[],
   event: ContainerEvent,
@@ -218,13 +219,12 @@ export interface NewContainerInput {
   eatBy: number;
 }
 
-/** A container made from a cook starts with MADE, then where it went; any other starts with where it went. */
 export const buildContainer = (
   input: NewContainerInput,
   now: number,
 ): Container => ({
   ...input,
-  title: input.title.trim(),
+  title: input.title.trim().slice(0, MAX_CONTAINER_TITLE_LENGTH),
   status: 'IN_STOCK',
   history: [
     ...(input.cookId === null
@@ -256,7 +256,6 @@ export const getNewContainerProblem = (
 
 const FINISHED = 'This one is already finished.';
 
-/** Eating lowers the servings; the last portion, or all of what is left, finishes it. A count above what is left stops the change. */
 export const planEat = (
   container: Container,
   count: number | 'ALL',
@@ -360,7 +359,7 @@ export const planEatBy = (
   };
 };
 
-/** Takes back the last EAT or TOSS if it is still the last thing that happened; returns the portions it gave back. */
+/** Only while the EAT or TOSS is still the last event, so a later change is never rewound. */
 export const planUndoEnd = (
   container: Container,
   at: number,
@@ -394,10 +393,12 @@ export const planUndoEnd = (
   };
 };
 
+export const getLastPlaceEvent = (history: ContainerEvent[]) =>
+  history.filter((event) => event.place !== null).at(-1);
+
 export const getFreezeCount = (history: ContainerEvent[]) =>
   history.filter((event) => event.kind === 'FREEZE').length;
 
-/** "Frozen twice" once it has gone in more than once; nothing for a first freeze. */
 export const getFreezeLine = (history: ContainerEvent[]) => {
   const count = getFreezeCount(history);
   if (count < 2) return null;
@@ -430,13 +431,12 @@ export const getEventText = (event: ContainerEvent) => {
   }
 };
 
-/** How a finished container ended, from its last event. */
 export const getEndText = (container: Container) => {
   const last = container.history.at(-1);
   return last?.kind === 'TOSS' ? 'Threw it out' : 'Ate it all';
 };
 
-/** What the container held when it was put away: its first event always carries the portions. */
+/** The first event always carries the portions. */
 export const getStartServings = (container: Container) =>
   container.history[0]?.servings ?? null;
 
@@ -486,7 +486,6 @@ export const hasStockIn = (
   summary !== undefined &&
   (place === 'FRIDGE' ? summary.fridge : summary.freezer) > 0;
 
-/** The places a recipe or meal has stock in, fridge first, each with its servings. */
 export const getStockParts = (summary: StockSummary) =>
   [
     summary.fridge > 0 && {
@@ -499,7 +498,6 @@ export const getStockParts = (summary: StockSummary) =>
     },
   ].filter((part) => part !== false);
 
-/** "eat by tomorrow" or "past its date" when the nearest one is close or gone, else nothing. */
 export const getStockDueText = (summary: StockSummary, now = Date.now()) => {
   if (summary.nearestEatBy === null) return null;
 
@@ -548,7 +546,6 @@ export const getPreparedSummary = (
     },
   );
 
-/** "2 servings in the fridge, 6 in the freezer": the word "servings" once. */
 export const getPlacesText = (summary: {
   fridgeServings: number;
   freezerServings: number;
@@ -582,7 +579,6 @@ export const getDueText = (soonCount: number, pastCount: number) =>
     .filter((part) => part !== false)
     .join(', ');
 
-/** "Put away 4 servings": everything the containers made from one cook held when they were put away. */
 export const getPutAwayText = (containers: Container[]) => {
   const total = containers.reduce(
     (sum, container) => sum + (getStartServings(container) ?? 0),
@@ -597,7 +593,6 @@ export const getSavedText = (
 ) =>
   `Saved ${formatServings(container.servings)} in the ${CONTAINER_PLACE_LABELS[container.place].toLowerCase()}, eat by ${getEatByPhrase(container.eatBy, now)}`;
 
-/** The recipe's or meal's current name while it exists, else the title the container was saved with. */
 export const getContainerTitle = (
   container: Container,
   recipesById: Map<string, Recipe>,
@@ -611,7 +606,6 @@ export const getContainerTitle = (
     : mealsById.get(container.mealId)?.name) ??
   container.title;
 
-/** How many of the given recipes or meals have stock in each place. */
 export const getStockPlaceCounts = (
   ids: string[],
   stock: Map<string, StockSummary>,
@@ -627,13 +621,11 @@ export const getStockPlaceCounts = (
     { FRIDGE: 0, FREEZER: 0 },
   );
 
-/** "In your freezer", "In your fridge" or "In your fridge and freezer", for the row a drawer shows when something is put away. */
 export const getStockTitle = (summary: StockSummary) =>
   summary.fridge > 0 && summary.freezer > 0
     ? 'In your fridge and freezer'
     : `In your ${summary.fridge > 0 ? 'fridge' : 'freezer'}`;
 
-/** "3 servings, eat by Nov 3"; with both places, "2 servings in the fridge, 3 in the freezer, eat by Nov 3". */
 export const getStockDetail = (summary: StockSummary, now = Date.now()) => {
   const places =
     summary.fridge > 0 && summary.freezer > 0
@@ -650,7 +642,6 @@ export const getStockDetail = (summary: StockSummary, now = Date.now()) => {
   return [places, nearest].filter((part) => part !== null).join(', ');
 };
 
-/** What a planned meal eats of a container: the servings planned of its recipe, or one plate of a saved meal, as whole portions and never more than is left. */
 export const getServingsToEat = (
   container: Container,
   meal: { items: MealItem[] },
@@ -673,7 +664,7 @@ export interface StockedItem {
   summary: StockSummary;
 }
 
-/** One muted line for the shopping sheet: what is already put away of what is being added. The app never subtracts it from the list. */
+/** Informational only: the app never subtracts stock from the list. */
 export const getShoppingStockLine = (
   stocked: StockedItem[],
   isNamed: boolean,

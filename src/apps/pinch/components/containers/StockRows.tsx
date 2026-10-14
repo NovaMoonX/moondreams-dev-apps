@@ -1,6 +1,6 @@
 import ActionRow from '@/components/ActionRow';
 import { useAppSelector } from '@/store';
-import { CONTAINER_EMOJI } from '@apps/pinch/constants';
+import { CONTAINER_EMOJI, CONTAINER_PLACE_EMOJIS } from '@apps/pinch/constants';
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
 import {
   selectStockByMeal,
@@ -10,13 +10,11 @@ import { getStockDetail, getStockTitle } from '@apps/pinch/utils/containers';
 
 interface StockRowsProps {
   uid: string;
-  /** A recipe's or a saved meal's id; its stock is what the first row says and opens. */
   target: { kind: 'recipe' | 'meal'; id: string };
   onOpenStock: () => void;
   onPutAway: () => void;
 }
 
-/** A drawer's two rows for prepared food: what is in the fridge or freezer (it opens the list of them) and the way to put some away. Render inside an `ActionGroup`. */
 function StockRows({ uid, target, onOpenStock, onPutAway }: StockRowsProps) {
   const stock = useAppSelector((state) =>
     target.kind === 'recipe'
@@ -37,9 +35,9 @@ function StockRows({ uid, target, onOpenStock, onPutAway }: StockRowsProps) {
           icon={
             <span className='text-base leading-none'>
               {stock.fridge > 0 && stock.freezer === 0
-                ? '🧊'
+                ? CONTAINER_PLACE_EMOJIS.FRIDGE
                 : stock.freezer > 0 && stock.fridge === 0
-                  ? '❄️'
+                  ? CONTAINER_PLACE_EMOJIS.FREEZER
                   : CONTAINER_EMOJI}
             </span>
           }

@@ -391,7 +391,6 @@ export const CONTAINER_PLACE_LABELS: Record<ContainerPlace, string> = {
   FRIDGE: 'Fridge',
   FREEZER: 'Freezer',
 };
-/** The care section's fridge and freezer emoji, so one place has one emoji everywhere. */
 export const CONTAINER_PLACE_EMOJIS: Record<ContainerPlace, string> = {
   FRIDGE: '🧊',
   FREEZER: '❄️',
@@ -412,23 +411,21 @@ export const CONTAINER_EVENT_KINDS: ContainerEventKind[] = [
   'EDIT',
 ];
 export const MAX_CONTAINER_SERVINGS = 100;
-/** The cap the rules enforce; past it the oldest events after the first fall off. */
+/** Set by the rules evaluator's budget of 1,000 expressions a request, not only by the length check: ten events with servings and place each pass; ten that also carry a note can fail. */
 export const MAX_CONTAINER_HISTORY = 10;
 export const MAX_CONTAINER_NOTE_LENGTH = 80;
-/** The earliest and latest eat-by the rules take: 2000-01-01 and 2100-01-01, both UTC midnight. */
+export const MAX_CONTAINER_TITLE_LENGTH = 120;
+// 2000-01-01 and 2100-01-01, UTC midnight: the bounds the rules take.
 export const MIN_EAT_BY_DATE = 946_684_800_000;
 export const MAX_EAT_BY_DATE = 4_102_444_800_000;
-/** The person's own call, offered as a starting point: a few days in the fridge, a few months in the freezer, a short window once thawed. */
 export const CONTAINER_FRIDGE_DAYS = 4;
 export const CONTAINER_FREEZER_DAYS = 90;
 export const CONTAINER_THAWED_DAYS = 2;
-/** Today and this many days after it read as "eat soon". */
 export const CONTAINER_EAT_SOON_DAYS = 2;
-/** A cooking session at or above this many servings is more than one sitting, so it asks about putting some away. */
 export const BULK_MEAL_SERVINGS = 5;
-/** What one sitting is taken to use when nothing says otherwise, for the put-away default. */
 export const CONTAINER_SITTING_SERVINGS = 2;
-/** In-stock containers before adding asks to finish or delete one: the action and the screens, not the rules. */
+/** Counted by the client only; the rules do not count documents. */
 export const SOFT_MAX_CONTAINERS = 500;
 export const CONTAINER_LIST_PAGE_SIZE = 20;
 export const CONTAINER_FINISHED_PAGE_SIZE = 25;
+export const CONTAINER_QUERY_LIMIT = 200;

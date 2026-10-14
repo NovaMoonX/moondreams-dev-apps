@@ -14,7 +14,6 @@ import {
   getPreparedSummary,
 } from '@apps/pinch/utils/containers';
 
-/** Kitchen's way into the fridge and freezer: a prompt while nothing is put away, then what is in each and, when something is close, how many to eat soon. */
 function PreparedEntry() {
   const { openSubview } = usePinchOverlay();
   const containers = useAppSelector(selectContainers);
@@ -42,7 +41,7 @@ function PreparedEntry() {
             {getDetail()}
           </span>
           {due !== '' && loadError === null && (
-            <span className='text-foreground mt-1 inline-block rounded-full bg-[var(--pinch-drizzle-soft)] px-2 py-0.5 text-xs font-medium'>
+            <span className='text-foreground mt-1 inline-block rounded-full bg-[var(--pinch-drizzle-soft)] px-2 py-0.5 text-xs font-medium ring-1 ring-[var(--pinch-drizzle)]/40 ring-inset'>
               {due}
             </span>
           )}

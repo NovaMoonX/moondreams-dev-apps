@@ -34,9 +34,11 @@ import {
   toWebLink,
 } from '../../src/utils/urlUtils.ts';
 import {
+  CONTAINER_EVENT_KINDS,
   MAX_CONTAINER_HISTORY,
   MAX_CONTAINER_NOTE_LENGTH,
   MAX_CONTAINER_SERVINGS,
+  MAX_CONTAINER_TITLE_LENGTH,
   MAX_EAT_BY_DATE,
   MIN_EAT_BY_DATE,
 } from '../../src/apps/pinch/constants.ts';
@@ -50,7 +52,9 @@ import {
   getEatByHint,
   getEatByPhrase,
   getEatByState,
+  getFreezeCount,
   getFreezeLine,
+  getLastPlaceEvent,
   getNewContainerProblem,
   getPlacesText,
   getPreparedSummary,
@@ -2764,7 +2768,6 @@ assert.equal(
   'an ingredient whose package size is still open stays in the note when only its price note was hidden',
 );
 
-// Prepared containers
 const DAY = 86_400_000;
 const localAt = (day: number, hour: number, minute = 0) =>
   new Date(2026, 9, day, hour, minute).getTime();
@@ -2858,20 +2861,22 @@ assert.deepEqual(
 );
 assert.match(
   getEatByHint('FREEZER', getEatByDefault('FREEZER', careOf(3, 90))),
-  /^Your call\. Based on how long your recipe says it keeps in the freezer\.$/,
+  /^Your call\. Taken from the freezer time in your recipe\.$/,
   'the hint says whose call it is and never claims the food is safe',
 );
 assert.match(
   getEatByHint('THAW', getEatByDefault('THAW', null)),
-  /^Your call\. Thawed food keeps a shorter time, so this starts at 2 days\.$/,
+  /^Your call\. Once thawed, this starts at 2 days\.$/,
 );
 assert.doesNotMatch(
   [
     getEatByHint('FRIDGE', getEatByDefault('FRIDGE', null)),
     getEatByHint('FRIDGE', getEatByDefault('FRIDGE', careOf(3, null))),
+    getEatByHint('FREEZER', getEatByDefault('FREEZER', careOf(3, 90))),
+    getEatByHint('THAW', getEatByDefault('THAW', null)),
   ].join(' '),
-  /safe/i,
-  'no copy about eat-by dates claims food safety',
+  /safe|keeps|spoil|fresh/i,
+  'no copy about eat-by dates claims food safety or says how long food keeps',
 );
 
 const container = (over: Partial<Container> = {}): Container => ({
@@ -3072,6 +3077,52 @@ assert.deepEqual(
   [0, 2, 3],
   'with no EAT to drop, the oldest event after the first goes',
 );
+const cookEdits = [
+  makeEvent('MADE', 0, { servings: 4 }),
+  makeEvent('FREEZE', 1, { servings: 4, place: 'FREEZER' }),
+  ...Array.from({ length: MAX_CONTAINER_HISTORY - 2 }, (_, i) =>
+    makeEvent('EDIT', i + 2, { note: 'Eat by moved' }),
+  ),
+];
+const afterNineEdits = appendEvent(cookEdits, makeEvent('EDIT', 99));
+assert.deepEqual(
+  [
+    afterNineEdits.length,
+    afterNineEdits.map((entry) => entry.kind).slice(0, 2),
+    afterNineEdits.map((entry) => entry.at).slice(2, 4),
+    getFreezeCount(afterNineEdits),
+  ],
+  [MAX_CONTAINER_HISTORY, ['MADE', 'FREEZE'], [3, 4], 1],
+  'a cook container with many eat-by edits keeps where it went: the oldest EDIT goes, not its FREEZE',
+);
+assert.deepEqual(
+  appendEvent(
+    [
+      makeEvent('MADE', 0, { servings: 4 }),
+      makeEvent('EDIT', 1, { note: 'x' }),
+      makeEvent('EAT', 2, { servings: 1 }),
+      ...cookEdits.slice(3),
+    ],
+    makeEvent('EDIT', 99),
+  )
+    .map((entry) => entry.at)
+    .slice(0, 3),
+  [0, 1, 3],
+  'an EAT goes before an EDIT, wherever each sits',
+);
+assert.deepEqual(
+  [
+    getLastPlaceEvent([]),
+    getLastPlaceEvent([
+      makeEvent('FREEZE', 1, { servings: 4, place: 'FREEZER' }),
+      makeEvent('THAW', 2, { servings: 4, place: 'FRIDGE' }),
+      eventAt(3),
+      makeEvent('EDIT', 4, { note: 'x' }),
+    ])?.kind,
+  ],
+  [undefined, 'THAW'],
+  'the last place event is the last one that says where it went, whatever came after',
+);
 assert.equal(
   appendEvent([eventAt(1)], eventAt(2)).length,
   2,
@@ -3169,9 +3220,25 @@ assert.deepEqual([0, 1, 100, 101, 2.5].map(isValidContainerServings), [
   false,
 ]);
 
+const longTitle = buildContainer(
+  { ...fromCook, title: `  ${'Sheet-pan chicken '.repeat(9)}` },
+  8000,
+).title;
+assert.deepEqual(
+  [longTitle.length, longTitle.startsWith('Sheet-pan chicken')],
+  [MAX_CONTAINER_TITLE_LENGTH, true],
+  'a recipe title past what the rules take is cut, so it can still be put away',
+);
+
 const rulesText = readFileSync('firestore.rules', 'utf8');
 assert.ok(
-  rulesText.includes(`n <= ${MAX_CONTAINER_HISTORY}`) &&
+  rulesText.includes(
+    `isShortText(data.title, ${MAX_CONTAINER_TITLE_LENGTH})`,
+  ) &&
+    rulesText.includes(
+      `e.kind.matches('${CONTAINER_EVENT_KINDS.join('|')}')`,
+    ) &&
+    rulesText.includes(`n <= ${MAX_CONTAINER_HISTORY}`) &&
     rulesText.includes(`data.servings <= ${MAX_CONTAINER_SERVINGS}`) &&
     rulesText.includes(`data.eatBy >= ${MIN_EAT_BY_DATE}`) &&
     rulesText.includes(`data.eatBy <= ${MAX_EAT_BY_DATE}`) &&
@@ -3181,7 +3248,7 @@ assert.ok(
       rulesText.includes(`isContainerEvent(history[${index}])`),
     ) &&
     !rulesText.includes(`isContainerEvent(history[${MAX_CONTAINER_HISTORY}])`),
-  "the rules' history cap, servings and eat-by bounds and note length match the constants, and every slot up to the cap is checked",
+  "the rules' title length, event kinds, history cap, servings and eat-by bounds and note length match the constants, and every slot up to the cap is checked",
 );
 
 const stocked = [

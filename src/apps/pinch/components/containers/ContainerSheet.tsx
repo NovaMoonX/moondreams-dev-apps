@@ -48,6 +48,7 @@ import {
   getEndText,
   getEventText,
   getFreezeLine,
+  getLastPlaceEvent,
   getMoveForPlace,
   isValidEatBy,
 } from '@apps/pinch/utils/containers';
@@ -314,12 +315,11 @@ function EatByView({ uid, container, onBack }: SubviewProps) {
 interface ContainerSheetProps {
   uid: string;
   containerId: string;
-  /** A finished container comes from the Finished view, not the live store. */
+  /** Finished containers are not in the live store. */
   finished: Container | null;
   onClose: () => void;
 }
 
-/** One container: where it is, how much is left, when to eat it by, what has happened to it, and what can be done. */
 function ContainerSheet({
   uid,
   containerId,
@@ -449,7 +449,8 @@ function ContainerSheet({
     };
 
     const freezeLine = getFreezeLine(container.history);
-    const last = container.history.at(-1);
+    const lastPlace = getLastPlaceEvent(container.history);
+    const thawedAt = lastPlace?.kind === 'THAW' ? lastPlace.at : null;
     const state = getEatByState(container.eatBy);
     const otherPlace: ContainerPlace =
       container.place === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
@@ -478,11 +479,11 @@ function ContainerSheet({
                 </span>
                 <EatByBadge state={state} />
               </p>
-              {(freezeLine || last?.kind === 'THAW') && (
+              {(freezeLine || thawedAt !== null) && (
                 <p className='text-muted-foreground text-sm'>
                   {[
-                    last?.kind === 'THAW'
-                      ? `Thawed in the fridge on ${formatDateShort(last.at)}`
+                    thawedAt !== null
+                      ? `Thawed in the fridge on ${formatDateShort(thawedAt)}`
                       : null,
                     freezeLine,
                   ]
