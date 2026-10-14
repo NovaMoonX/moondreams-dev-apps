@@ -181,7 +181,7 @@ function RecipeDrawer({
           </ul>
           {cookSummary && (
             <p className='text-muted-foreground text-sm'>
-              <span aria-hidden='true'>🍳</span>{' '}
+              <span aria-hidden='true'>✅</span>{' '}
               {getCookFactText(
                 cookSummary.count,
                 formatDateShort(cookSummary.lastCookedAt),
