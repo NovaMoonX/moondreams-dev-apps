@@ -9,6 +9,7 @@ import {
 
 import { db } from '@/lib/firebase/config';
 import type {
+  Container,
   Cook,
   Family,
   Idea,
@@ -144,6 +145,23 @@ export function startCooksListener(
     kitchenCollection(uid, 'cooks'),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Cook)),
+    onError,
+  );
+}
+
+/** Only what is in stock: finished containers are history, read on demand when the Finished view opens. */
+export function startContainersListener(
+  uid: string,
+  onChange: (containers: Container[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(
+      kitchenCollection(uid, 'containers'),
+      where('status', '==', 'IN_STOCK'),
+    ),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as Container)),
     onError,
   );
 }

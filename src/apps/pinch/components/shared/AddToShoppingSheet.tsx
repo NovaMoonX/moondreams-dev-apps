@@ -16,12 +16,19 @@ import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { addToShoppingList } from '@apps/pinch/store/actions/shoppingActions';
 import {
   selectIngredientsById,
+  selectMealsById,
   selectRecipesById,
   selectShoppingById,
   selectShoppingItems,
   selectShoppingLoadError,
+  selectStockByMeal,
+  selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type { ShoppingRequest } from '@apps/pinch/types';
+import {
+  getShoppingStockLine,
+  type StockedItem,
+} from '@apps/pinch/utils/containers';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import {
   getItemsLines,
@@ -49,6 +56,9 @@ function AddToShoppingSheet({
   const onList = useAppSelector(selectShoppingById);
   const listCount = useAppSelector(selectShoppingItems).length;
   const loadError = useAppSelector(selectShoppingLoadError);
+  const stockByRecipe = useAppSelector(selectStockByRecipe);
+  const stockByMeal = useAppSelector(selectStockByMeal);
+  const mealsById = useAppSelector(selectMealsById);
   const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const recipe =
     request.kind === 'recipe'
@@ -75,6 +85,35 @@ function AddToShoppingSheet({
   }, [request, recipe, recipesById, ingredientsById, servings]);
 
   const isReady = isLoaded && loadError === null;
+  const stocked = useMemo(() => {
+    if (request.kind === 'recipe') {
+      const summary = stockByRecipe.get(request.recipeId);
+      return summary && recipe ? [{ name: recipe.title, summary }] : [];
+    }
+    const mealStock =
+      request.mealId != null ? stockByMeal.get(request.mealId) : undefined;
+    const mealName =
+      request.mealId != null ? mealsById.get(request.mealId)?.name : undefined;
+    const recipeIds = Array.from(
+      new Set(
+        request.items
+          .filter((item) => item.kind === 'RECIPE')
+          .map((item) => item.refId),
+      ),
+    );
+    const entries: StockedItem[] = [
+      ...(mealStock && mealName
+        ? [{ name: mealName, summary: mealStock }]
+        : []),
+      ...recipeIds.flatMap((id) => {
+        const summary = stockByRecipe.get(id);
+        const name = recipesById.get(id)?.title;
+        return summary && name ? [{ name, summary }] : [];
+      }),
+    ];
+    return entries;
+  }, [request, recipe, recipesById, mealsById, stockByRecipe, stockByMeal]);
+  const stockLine = getShoppingStockLine(stocked, request.kind === 'items');
   const isOnList = (id: string) => onList.get(id)?.isChecked === false;
   const isTicked = (id: string) => choices[id] ?? !isOnList(id);
   const selected = rows.filter((row) => isTicked(row.id));
@@ -155,6 +194,9 @@ function AddToShoppingSheet({
                 {servings === 1 ? 'serving' : 'servings'}
               </span>
             </div>
+          )}
+          {stockLine && (
+            <p className='text-muted-foreground text-sm'>{stockLine}</p>
           )}
           {rows.length > 0 && (
             <div className='flex items-center justify-between gap-3'>

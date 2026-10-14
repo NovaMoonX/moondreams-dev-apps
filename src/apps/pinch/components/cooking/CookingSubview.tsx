@@ -14,6 +14,7 @@ import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNotes from '@apps/pinch/components/cooking/CookNotes';
+import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookStepView from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
 import {
@@ -26,6 +27,7 @@ import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { useCookNote } from '@apps/pinch/hooks/useCookNote';
 import { useCookTimers } from '@apps/pinch/hooks/useCookTimers';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePutAway } from '@apps/pinch/hooks/usePutAway';
 import {
   selectCooksById,
   selectCookSummaries,
@@ -110,6 +112,15 @@ function CookingSession({
     onSaved: closeIfStillOpen,
   });
 
+  const isAlreadyMarked = hasPlannedCook && cookedId === null && !isMarking;
+  const putAway = usePutAway({
+    uid,
+    recipe,
+    servings,
+    eatenTonight: plannedMealId === null ? null : (initialServings ?? null),
+    cookId: isCooked ? cookedId : isAlreadyMarked ? plannedCookId : null,
+  });
+
   const lastIndex = recipe.steps.length - 1;
   const index = Math.min(stepIndex, lastIndex);
   const isLast = index >= lastIndex;
@@ -118,7 +129,6 @@ function CookingSession({
   const isFinishShown = isFinished && isStepsView && hasSteps;
   const canMark = isCooksReady && !isRemoved;
   const leftoversLine = getLeftoversLine(getRecipeCare(recipe));
-  const isAlreadyMarked = hasPlannedCook && cookedId === null && !isMarking;
 
   const scrollToTop = () =>
     rootRef.current
@@ -152,20 +162,33 @@ function CookingSession({
     return isConfirmed;
   };
 
-  const confirmDiscard = async () => {
-    if (!note.hasDraft) return true;
-
-    const isDiscarded = await confirm({
-      title: 'Discard this note?',
-      message: "It isn't saved yet. Discarding it loses what you typed.",
+  const confirmDiscardOf = (title: string, message: string) =>
+    confirm({
+      title,
+      message,
       confirmText: 'Discard',
       cancelText: 'Keep editing',
       destructive: true,
     });
-    return isDiscarded;
+
+  const confirmDiscard = async () => {
+    if (note.hasDraft) {
+      return confirmDiscardOf(
+        'Discard this note?',
+        "It isn't saved yet. Discarding it loses what you typed.",
+      );
+    }
+    if (putAway.hasDraft) {
+      return confirmDiscardOf(
+        'Discard this container?',
+        "It isn't saved yet. Discarding it loses what you chose.",
+      );
+    }
+    return true;
   };
 
   const leave = async () => {
+    if (putAway.isSaving) return;
     if (!(await confirmDiscard())) return;
     if (await confirmLeave()) closeIfStillOpen();
   };
@@ -323,6 +346,7 @@ function CookingSession({
                   {leftoversLine}
                 </p>
               )}
+              {!note.isOpen && <CookPutAway putAway={putAway} />}
               {note.isOpen ? (
                 <div className='w-full max-w-md space-y-2 text-left'>
                   <NoteTextField
@@ -340,7 +364,8 @@ function CookingSession({
                   )}
                 </div>
               ) : (
-                note.isAvailable && (
+                note.isAvailable &&
+                !putAway.isOpen && (
                   <Button
                     type='button'
                     variant='link'
@@ -374,6 +399,7 @@ function CookingSession({
                   {leftoversLine}
                 </p>
               )}
+              {isAlreadyMarked && <CookPutAway putAway={putAway} />}
               {isHistoryFull && !isAlreadyMarked && (
                 <p className='text-muted-foreground text-sm'>
                   This recipe's history is full. Delete an older cook to add
@@ -450,7 +476,36 @@ function CookingSession({
             onDismiss={handleDismissTimer}
           />
           <div className='flex gap-3'>
-            {isFinishShown && isCooked && note.isOpen ? (
+            {isFinishShown &&
+            (isCooked || isAlreadyMarked) &&
+            putAway.isOpen ? (
+              <>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  className={join(
+                    'h-14 shrink-0 px-6 text-base',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  disabled={putAway.isSaving}
+                  onClick={putAway.skip}
+                >
+                  Skip
+                </Button>
+                <Button
+                  type='button'
+                  className={join(
+                    'h-14 min-w-0 flex-1 text-lg',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  loading={putAway.isSaving}
+                  disabled={putAway.isSaving || !putAway.canSave}
+                  onClick={() => void putAway.save()}
+                >
+                  Save
+                </Button>
+              </>
+            ) : isFinishShown && isCooked && note.isOpen ? (
               <>
                 <Button
                   type='button'

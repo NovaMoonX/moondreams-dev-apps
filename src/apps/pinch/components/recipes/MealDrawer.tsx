@@ -1,11 +1,13 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import ActionGroup from '@/components/ActionGroup';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
+import StockRows from '@apps/pinch/components/containers/StockRows';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
@@ -39,6 +41,8 @@ interface MealDrawerProps {
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
+  onOpenStock: (id: string) => void;
+  onPutAway: (id: string) => void;
 }
 
 function MealDrawer({
@@ -49,6 +53,8 @@ function MealDrawer({
   onModify,
   onFillIn,
   onAddToShopping,
+  onOpenStock,
+  onPutAway,
 }: MealDrawerProps) {
   const meal = useAppSelector(selectMealsById).get(mealId);
   const costContext = useAppSelector(selectCostContext);
@@ -160,16 +166,26 @@ function MealDrawer({
             })}
           </ul>
         </FormSection>
-        <AddToShoppingRow
-          subtitle='Choose what you need for this meal'
-          onClick={() =>
-            onAddToShopping({
-              kind: 'items',
-              items: meal.items,
-              label: meal.name,
-            })
-          }
-        />
+        <ActionGroup>
+          <StockRows
+            uid={uid}
+            target={{ kind: 'meal', id: meal.id }}
+            onOpenStock={() => onOpenStock(meal.id)}
+            onPutAway={() => onPutAway(meal.id)}
+          />
+          <AddToShoppingRow
+            isGrouped
+            subtitle='Choose what you need for this meal'
+            onClick={() =>
+              onAddToShopping({
+                kind: 'items',
+                items: meal.items,
+                label: meal.name,
+                mealId: meal.id,
+              })
+            }
+          />
+        </ActionGroup>
       </div>
     </DetailSheet>
   );

@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
+import ContainersSubview from '@apps/pinch/components/containers/ContainersSubview';
 import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
@@ -161,6 +162,14 @@ function Pinch() {
       {subview?.kind === 'stores' && <StoresSubview uid={user.uid} />}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
+      {subview?.kind === 'containers' && (
+        <ContainersSubview
+          key={`${subview.recipeId ?? ''}-${subview.mealId ?? ''}`}
+          uid={user.uid}
+          recipeId={subview.recipeId ?? null}
+          mealId={subview.mealId ?? null}
+        />
+      )}
       {subview?.kind === 'recipe' && (
         <RecipeSubview uid={user.uid} recipeId={subview.id} />
       )}

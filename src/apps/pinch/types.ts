@@ -186,6 +186,8 @@ export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
   | { kind: 'sources' }
+  /** The prepared meals in the fridge and freezer, optionally only those of one recipe or saved meal. */
+  | { kind: 'containers'; recipeId?: string; mealId?: string }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
   | {
       kind: 'recipe';
@@ -321,6 +323,49 @@ export interface Cook {
 
 export type NoteKind = 'NOTE' | 'TWEAK';
 
+export type ContainerPlace = 'FRIDGE' | 'FREEZER';
+export type ContainerStatus = 'IN_STOCK' | 'DONE';
+export type ContainerEventKind =
+  'MADE' | 'FRIDGE' | 'FREEZE' | 'THAW' | 'EAT' | 'TOSS' | 'EDIT';
+
+/** One thing that happened to a container, kept in the order it happened. */
+export interface ContainerEvent {
+  kind: ContainerEventKind;
+  /** An instant, shown in local time. */
+  at: number;
+  /** The portions it affected; null for a change that moved or counted none. */
+  servings: number | null;
+  /** Where it went; set for FRIDGE, FREEZE and THAW, else null. */
+  place: ContainerPlace | null;
+  /** A short plain line, set for an EDIT; else null. */
+  note: string | null;
+}
+
+/** Food made ahead and kept in the fridge or freezer: one document per physical container, never split. */
+export interface Container {
+  /** Immutable. */
+  id: string;
+  /** As it reads on the list; from the recipe's or saved meal's name unless the person typed one. */
+  title: string;
+  /** Immutable. A recipe that no longer exists reads as none: the container keeps its title. */
+  recipeId: string | null;
+  /** Immutable. A saved meal that no longer exists reads as none. Never set together with `recipeId`. */
+  mealId: string | null;
+  /** Immutable. The cook it came from; a cook that no longer exists reads as none. */
+  cookId: string | null;
+  /** Whole portions, 1 to 100. A finished container keeps the amount it had when it finished. */
+  servings: number;
+  status: ContainerStatus;
+  place: ContainerPlace;
+  /** A date-only value: UTC midnight of the last day the person means to eat it. */
+  eatBy: number;
+  /** Oldest first, at most `MAX_CONTAINER_HISTORY` events; the oldest after the first fall off past that. */
+  history: ContainerEvent[];
+  /** Immutable. */
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** One entry in a recipe's journal: something to remember after cooking, or the record of an edit to the recipe. */
 export interface RecipeNote {
   /** Immutable. */
@@ -342,7 +387,8 @@ export interface RecipeNote {
 
 export type ShoppingRequest =
   | { kind: 'recipe'; recipeId: string }
-  | { kind: 'items'; items: MealItem[]; label: string };
+  /** `mealId` is the saved meal the items came from, when they did, so the sheet can say what is already prepared of it. */
+  | { kind: 'items'; items: MealItem[]; label: string; mealId?: string | null };
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {

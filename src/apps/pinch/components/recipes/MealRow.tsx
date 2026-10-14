@@ -1,13 +1,17 @@
+import { shallowEqual } from 'react-redux';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
+import StockLine from '@apps/pinch/components/containers/StockLine';
 import {
   selectCostContext,
   selectIngredientsById,
   selectRecipesById,
   selectShowNutrition,
+  selectStockByMeal,
 } from '@apps/pinch/store/selectors';
 import type { Meal } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
@@ -31,6 +35,10 @@ function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const costContext = useAppSelector(selectCostContext);
   const show = useAppSelector(selectShowNutrition);
+  const stock = useAppSelector(
+    (state) => selectStockByMeal(state).get(meal.id),
+    shallowEqual,
+  );
   const nutrition = showMacros
     ? getMealNutrition(
         meal.items,
@@ -80,6 +88,7 @@ function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
             className='text-muted-foreground mt-0.5 text-xs font-normal'
           />
         )}
+        <StockLine summary={stock} />
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {itemNames}
         </span>

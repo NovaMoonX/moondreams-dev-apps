@@ -1,4 +1,6 @@
 import type {
+  ContainerEventKind,
+  ContainerPlace,
   Dimension,
   IdeaKind,
   IdeaStartMethod,
@@ -383,3 +385,50 @@ export const RECIPE_NOTES_PAGE_SIZE = 50;
 export const NOTE_COOK_CHOICES = 4;
 /** The most meals one day can have priced again in the one transaction that does it, under Firestore's 500 writes: the action's limit, not the rules'. */
 export const MAX_REPRICE_MEALS = 400;
+
+export const CONTAINER_PLACES: ContainerPlace[] = ['FRIDGE', 'FREEZER'];
+export const CONTAINER_PLACE_LABELS: Record<ContainerPlace, string> = {
+  FRIDGE: 'Fridge',
+  FREEZER: 'Freezer',
+};
+/** The care section's fridge and freezer emoji, so one place has one emoji everywhere. */
+export const CONTAINER_PLACE_EMOJIS: Record<ContainerPlace, string> = {
+  FRIDGE: '🧊',
+  FREEZER: '❄️',
+};
+export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({
+  value: place,
+  label: CONTAINER_PLACE_LABELS[place],
+  emoji: CONTAINER_PLACE_EMOJIS[place],
+}));
+export const CONTAINER_EMOJI = '🍱';
+export const CONTAINER_EVENT_KINDS: ContainerEventKind[] = [
+  'MADE',
+  'FRIDGE',
+  'FREEZE',
+  'THAW',
+  'EAT',
+  'TOSS',
+  'EDIT',
+];
+export const MAX_CONTAINER_SERVINGS = 100;
+/** The cap the rules enforce; past it the oldest events after the first fall off. */
+export const MAX_CONTAINER_HISTORY = 10;
+export const MAX_CONTAINER_NOTE_LENGTH = 80;
+/** The earliest and latest eat-by the rules take: 2000-01-01 and 2100-01-01, both UTC midnight. */
+export const MIN_EAT_BY_DATE = 946_684_800_000;
+export const MAX_EAT_BY_DATE = 4_102_444_800_000;
+/** The person's own call, offered as a starting point: a few days in the fridge, a few months in the freezer, a short window once thawed. */
+export const CONTAINER_FRIDGE_DAYS = 4;
+export const CONTAINER_FREEZER_DAYS = 90;
+export const CONTAINER_THAWED_DAYS = 2;
+/** Today and this many days after it read as "eat soon". */
+export const CONTAINER_EAT_SOON_DAYS = 2;
+/** A cooking session at or above this many servings is more than one sitting, so it asks about putting some away. */
+export const BULK_MEAL_SERVINGS = 5;
+/** What one sitting is taken to use when nothing says otherwise, for the put-away default. */
+export const CONTAINER_SITTING_SERVINGS = 2;
+/** In-stock containers before adding asks to finish or delete one: the action and the screens, not the rules. */
+export const SOFT_MAX_CONTAINERS = 500;
+export const CONTAINER_LIST_PAGE_SIZE = 40;
+export const CONTAINER_FINISHED_PAGE_SIZE = 25;

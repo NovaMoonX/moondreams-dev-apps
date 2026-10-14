@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
+  startContainersListener,
   startCooksListener,
   startFamiliesListener,
   startMealsListener,
@@ -17,6 +18,11 @@ import {
   startSourcesListener,
   startStoresListener,
 } from '@apps/pinch/store/listeners/kitchenListeners';
+import {
+  clearContainers,
+  setContainers,
+  setContainersLoadError,
+} from '@apps/pinch/store/slices/containersSlice';
 import {
   clearCooks,
   setCooks,
@@ -101,6 +107,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearIdeas());
       dispatch(clearCooks());
       dispatch(clearNotes());
+      dispatch(clearContainers());
       dispatch(clearSettings());
       dispatch(clearPlannedMeals());
       dispatch(clearMeals());
@@ -226,6 +233,19 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       },
     );
 
+    const unsubscribeContainers = startContainersListener(
+      uid,
+      (containers) => dispatch(setContainers(containers)),
+      (error) => {
+        console.error('Pinch containers listener failed', error);
+        dispatch(
+          setContainersLoadError(
+            getErrorMessage(error, 'Unable to load your prepared meals.'),
+          ),
+        );
+      },
+    );
+
     const unsubscribeSettings = startSettingsListener(
       uid,
       (settings) => dispatch(setSettings(settings)),
@@ -251,6 +271,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
     return () => {
       unsubscribeMeals();
       unsubscribeSettings();
+      unsubscribeContainers();
       unsubscribeNotes();
       unsubscribeCooks();
       unsubscribeIdeas();
