@@ -156,12 +156,14 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
     const unsubscribeShopping = startShoppingListener(
       uid,
       (items) => dispatch(setShopping(items)),
-      (error) =>
+      (error) => {
+        console.error('Pinch shopping listener failed', error);
         dispatch(
           setShoppingLoadError(
             getErrorMessage(error, 'Unable to load your shopping list.'),
           ),
-        ),
+        );
+      },
     );
 
     const unsubscribeSettings = startSettingsListener(

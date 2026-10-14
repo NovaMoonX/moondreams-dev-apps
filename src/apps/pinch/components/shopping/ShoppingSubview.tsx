@@ -51,7 +51,7 @@ interface ShoppingRowsProps {
 
 function ShoppingRows({ rows, onToggle, onOpen }: ShoppingRowsProps) {
   const [limit, setLimit] = useState(SHOPPING_GROUP_PAGE_SIZE);
-  const visible = rows.slice(0, limit);
+  const visible = rows.length <= limit + 3 ? rows : rows.slice(0, limit);
   const hiddenCount = rows.length - visible.length;
 
   return (

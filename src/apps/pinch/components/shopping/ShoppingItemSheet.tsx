@@ -62,6 +62,7 @@ function ShoppingItemSheet({ uid, item, onClose }: ShoppingItemSheetProps) {
     unit === item.unit
       ? undefined
       : itemsById.get(getShoppingItemId(item.ingredientId, unit));
+  const addsToExisting = inNewUnit?.isChecked === false;
 
   const fields = useMemo(
     () => [
@@ -149,8 +150,9 @@ function ShoppingItemSheet({ uid, item, onClose }: ShoppingItemSheetProps) {
         submitButton={
           <ModalFooterActions
             note={
-              inNewUnit &&
-              `You already have ${formatSize(inNewUnit.amount, inNewUnit.unit)} on your list. This adds to it.`
+              addsToExisting && inNewUnit
+                ? `You already have ${formatSize(inNewUnit.amount, inNewUnit.unit)} on your list. This adds to it.`
+                : null
             }
             leftActions={
               <DeleteIconButton
