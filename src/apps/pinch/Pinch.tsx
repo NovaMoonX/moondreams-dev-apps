@@ -16,6 +16,7 @@ import MealSubview from '@apps/pinch/components/recipes/MealSubview';
 import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
 import RecipeSubview from '@apps/pinch/components/recipes/RecipeSubview';
 import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
+import SourcesSubview from '@apps/pinch/components/recipes/SourcesSubview';
 import PinchNav from '@apps/pinch/components/shell/PinchNav';
 import LoadingSkeleton from '@apps/pinch/components/shell/LoadingSkeleton';
 import { DEFAULT_PINCH_TAB, PINCH_TABS } from '@apps/pinch/constants';
@@ -133,6 +134,7 @@ function Pinch() {
       )}
       {subview?.kind === 'stores' && <StoresSubview uid={user.uid} />}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
+      {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
       {subview?.kind === 'recipe' && (
         <RecipeSubview uid={user.uid} recipeId={subview.id} />
       )}

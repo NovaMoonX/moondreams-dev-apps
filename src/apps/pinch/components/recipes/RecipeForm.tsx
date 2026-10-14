@@ -12,11 +12,13 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
 import PhotoPicker from '@/components/forms/PhotoPicker';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
@@ -30,6 +32,7 @@ import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients'
 import {
   getDataFromExtracted,
   getInitialData,
+  getReadSourceChoice,
   isValidMinutes,
   isValidNutrition,
   parseMinutes,
@@ -43,7 +46,9 @@ import {
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
+  MAX_SOURCE_LABEL_LENGTH,
 } from '@apps/pinch/constants';
+import { findSourceByLabel } from '@apps/pinch/utils/sources';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
@@ -56,6 +61,9 @@ import {
   selectIngredients,
   selectIngredientsById,
   selectRecipesById,
+  selectSources,
+  selectSourcesById,
+  selectSourcesLoadError,
 } from '@apps/pinch/store/selectors';
 import type { NutritionMetric, Recipe, RecipeSource } from '@apps/pinch/types';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
@@ -109,6 +117,9 @@ function RecipeForm({
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const sources = useAppSelector(selectSources);
+  const sourcesById = useAppSelector(selectSourcesById);
+  const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
   const existingCoverUrl = useStorageImageUrl(
     recipe?.coverPath ?? null,
     recipe?.updatedAt ?? 0,
@@ -118,8 +129,15 @@ function RecipeForm({
   const [isCoverRemoved, setIsCoverRemoved] = useState(false);
   const [initialData] = useState(() =>
     initialRead
-      ? getDataFromExtracted(initialRead.recipe, ingredients)
-      : getInitialData(recipe),
+      ? {
+          ...getDataFromExtracted(initialRead.recipe, ingredients),
+          sourceChoice: getReadSourceChoice(
+            initialRead.source,
+            initialRead.label,
+            sources,
+          ),
+        }
+      : getInitialData(recipe, sourcesById),
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
@@ -164,6 +182,7 @@ function RecipeForm({
         steps: [],
         nutritionOverride: null,
         source: 'MANUAL',
+        sourceId: null,
         isArchived: false,
         createdAt: 0,
         updatedAt: 0,
@@ -218,6 +237,11 @@ function RecipeForm({
     return null;
   };
   const blocker = getBlocker();
+
+  const sourceOptions = useMemo(
+    () => sources.map((source) => ({ value: source.id, label: source.label })),
+    [sources],
+  );
 
   const fields = useMemo(
     () => [
@@ -308,6 +332,41 @@ function RecipeForm({
           />
         ),
       }),
+      ...(hasSourcesFailed
+        ? []
+        : [
+            custom({
+              name: 'sourceChoice',
+              label: '',
+              renderComponent: (props) => {
+                const value = props.value as RecipeFormData['sourceChoice'];
+                return (
+                  <FormSection title="Where it's from">
+                    <div className='space-y-2' onKeyDown={blockEnterSubmit}>
+                      <PickOrCreate
+                        label='Sources'
+                        options={sourceOptions}
+                        choice={value.choice}
+                        newText={value.newText}
+                        newPillLabel='New source'
+                        newPlaceholder='Serious Eats'
+                        maxLength={MAX_SOURCE_LABEL_LENGTH}
+                        isFocusedOnOpen={false}
+                        clearLabel='Remove source'
+                        onChange={(choice, newText) =>
+                          props.onValueChange({ choice, newText })
+                        }
+                      />
+                      <p className='text-muted-foreground text-xs'>
+                        Optional. It shows on the recipe, and you can filter by
+                        it.
+                      </p>
+                    </div>
+                  </FormSection>
+                );
+              },
+            }),
+          ]),
       custom({
         name: 'ingredients',
         label: '',
@@ -361,6 +420,8 @@ function RecipeForm({
       clearCover,
       calculation,
       isDirtyRef,
+      hasSourcesFailed,
+      sourceOptions,
       isBlankByHand,
       showUndo,
     ],
@@ -405,10 +466,32 @@ function RecipeForm({
     }
   };
 
+  const getSourceDraft = ({
+    choice,
+    newText,
+  }: RecipeFormData['sourceChoice']) => {
+    if (hasSourcesFailed) {
+      return { sourceId: recipe?.sourceId ?? null, newSource: null };
+    }
+    if (choice !== NEW_CHOICE) {
+      return {
+        sourceId: sourcesById.has(choice) ? choice : null,
+        newSource: null,
+      };
+    }
+    const label = newText.trim();
+    if (label === '') return { sourceId: null, newSource: null };
+    const existing = findSourceByLabel([...sourcesById.values()], label);
+    if (existing) return { sourceId: existing.id, newSource: null };
+    const newSource = { id: generateUuid(), label };
+    return { sourceId: newSource.id, newSource };
+  };
+
   const handleSubmit = async (data: RecipeFormData) => {
     setError(null);
     setIsSubmitting(true);
     try {
+      const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
       await dispatch(
         saveRecipe({
           uid,
@@ -427,6 +510,8 @@ function RecipeForm({
               note: row.note,
             })),
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
+            sourceId,
+            newSource,
             newIngredients: [
               ...new Map(
                 data.ingredients

@@ -9,6 +9,7 @@ import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getPeriodStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
+import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const selectRecords = (state: RootState) => state.pinch.ingredients.records;
 const selectFamilyItems = (state: RootState) => state.pinch.families.items;
@@ -21,8 +22,10 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.families.isLoaded &&
   state.pinch.stores.isLoaded &&
   state.pinch.products.isLoaded &&
-  state.pinch.recipes.isLoaded;
+  state.pinch.recipes.isLoaded &&
+  state.pinch.sources.isLoaded;
 
+/** Sources are an optional extra: their failure is left out so it only takes their own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
@@ -165,6 +168,36 @@ export const selectRecipes = createSelector([selectAllRecipes], (recipes) =>
 export const selectRecipesById = createSelector(
   [selectAllRecipes],
   (recipes) => new Map(recipes.map((recipe) => [recipe.id, recipe])),
+);
+
+const selectSourceItems = (state: RootState) => state.pinch.sources.items;
+
+export const selectSources = createSelector([selectSourceItems], (sources) =>
+  [...sources].sort((a, b) => a.label.localeCompare(b.label)),
+);
+
+export const selectSourcesById = createSelector(
+  [selectSources],
+  (sources) => new Map(sources.map((source) => [source.id, source])),
+);
+
+export const selectSourcesLoadError = (state: RootState) =>
+  state.pinch.sources.loadError;
+
+export const selectSourceCounts = createSelector(
+  [selectRecipes, selectSourcesById],
+  (recipes, sourcesById) => {
+    const bySource = recipes.reduce((acc, recipe) => {
+      const source = getRecipeSource(recipe, sourcesById);
+      return source ? acc.set(source.id, (acc.get(source.id) ?? 0) + 1) : acc;
+    }, new Map<string, number>());
+    const sourced = [...bySource.values()].reduce(
+      (sum, count) => sum + count,
+      0,
+    );
+
+    return { bySource, withoutSource: recipes.length - sourced };
+  },
 );
 
 /** Every recipe's cost, computed once per change of recipes, ingredients or products. */

@@ -22,11 +22,12 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 10. **Fill in the details as you go.** A missing price, package size, or nutrition value shows up as a quiet line right where it matters ("2 ingredients need a price · Add prices"), so nothing is demanded up front and a tap fills it in.
 11. **Turn on nutrition if you want it.** Calories, protein, carbs, and fat each stay hidden until you switch them on.
 12. **Lists stay short, and you choose what they show.** Rows start with prices and leave out calories and macros; an eye button on Kitchen and Recipes turns either one on or off, whenever you like.
+13. **Remember where a recipe came from.** Tag a recipe with a source, like a favorite site or a stack of cookbooks, then find your recipes by it.
 
 ### Finding Your Way, In Detail
 
 - **Calendar** (left): what you plan to eat, by month, week or day, with the period's stats above it.
-- **Recipes** (center): your recipes and saved meals.
+- **Recipes** (center): your recipes and saved meals, and the sources your recipes came from.
 - **Kitchen** (right): everything you buy. Ingredients, their products, and your stores live here and, as it grows, how much you have on hand, servings you've prepared, and your shopping list with a section for what's running low.
 
 ### Filling In As You Go, In Detail
@@ -44,6 +45,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **A meal is what you eat in a sitting.** It's a list of items with a serving count on each: adobo chicken, cilantro lime rice, black beans, salsa, sour cream, peppers.
 - **An item is a recipe or an ingredient.** Anything in your catalog can sit in a meal next to your recipes. Doritos is an ingredient: its nutrition and price live on it once, and follow it into every meal.
 - **A meal can be a single item.** A one-pot chicken pan is just a recipe on the calendar by itself.
+- **A recipe can say where it came from.** "Serious Eats", "Mom's recipe cards", "NYT Cooking": a source is just a name you type or pick in the recipe form, under the description, and it's optional. The recipe's details say "From Serious Eats", and once any recipe has one, the Recipes tab gets a filter by source (with how many recipes each has) and a Sources list where you can rename a source or delete it. Deleting a source never deletes recipes; they just lose that label. A recipe read from a link starts on its website's name, which you can change.
 - **Save a meal to reuse it.** Saved meals sit with your recipes in the Recipes tab.
 - **Every day has its own copy of a meal.** Putting a meal on the calendar copies its items onto that day. Changing one day's items leaves the saved meal and every other day as they were, and editing the saved meal later leaves days already planned as they were. "Save as a new meal" turns a tweaked day into a meal of its own.
 - **Recipes are shared by everything that uses them.** Edit a recipe and every meal still ahead of today that includes it shows the change.
@@ -111,6 +113,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
 - [x] See a recipe's nutrition added up from its ingredients, or type your own over it
 - [x] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
+- [x] Say where a recipe came from by picking or typing a source in the recipe form; see it on the recipe, filter recipes by source, and rename or delete sources from a Sources list
 - [x] Create a recipe from pasted text, a photo, screenshot or PDF, or a web link, each on its own screen, with the AI filling in the form for you to review before saving
 - [x] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
 - [x] Meal calendar with month, week and day views: meal chips per day (titles on wide screens) and a Today button
@@ -157,7 +160,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 
 - **Frontend:** React 19, TypeScript, Vite, TailwindCSS 4, DreamerUI (including its `Calendar` for the month view)
 - **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
-- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, meals, calendar entries, and per-user settings; Firebase Storage for recipe and store images
+- **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, meals, calendar entries, and per-user settings; Firebase Storage for recipe and store images
 - **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review; for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them
 - **On the device:** a list's view options are kept in the browser's local storage, per person; nothing else of yours is kept there beyond Firestore's own cache
 - **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (licence not yet confirmed from here: to be checked before launch), stored per 100 g alongside common unit conversions; money is stored as whole cents

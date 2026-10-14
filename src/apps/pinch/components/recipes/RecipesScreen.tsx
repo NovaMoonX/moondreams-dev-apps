@@ -2,14 +2,16 @@ import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Plus } from 'lucide-react';
+import { BookOpen, Plus } from 'lucide-react';
 
+import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import LazyMount from '@/components/LazyMount';
 import SectionHeader from '@/components/SectionHeader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
+import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import MealDrawer from '@apps/pinch/components/recipes/MealDrawer';
@@ -20,6 +22,8 @@ import {
   LIST_SEARCH_THRESHOLD,
   RECIPES_VIEW_LABELS,
   RECIPES_VIEWS,
+  SOURCE_FILTER_ANY,
+  SOURCE_FILTER_NONE,
 } from '@apps/pinch/constants';
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
@@ -29,12 +33,16 @@ import {
   selectRecipeCosts,
   selectRecipes,
   selectShowNutrition,
+  selectSourceCounts,
+  selectSources,
+  selectSourcesById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, RecipesView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
+import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
   value,
@@ -63,23 +71,85 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const costs = useAppSelector(selectRecipeCosts);
   const meals = useAppSelector(selectMeals);
   const costContext = useAppSelector(selectCostContext);
+  const sources = useAppSelector(selectSources);
+  const sourcesById = useAppSelector(selectSourcesById);
+  const sourceCounts = useAppSelector(selectSourceCounts);
   const [view, setView] = useState<RecipesView>('recipes');
   const [query, setQuery] = useState('');
+  const [pickedSource, setPickedSource] = useState(SOURCE_FILTER_ANY);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
 
   const total = view === 'meals' ? meals.length : recipes.length;
-  const hasSearch = total >= LIST_SEARCH_THRESHOLD;
+  const hasFilterBar = view === 'recipes' && sourceCounts.bySource.size > 0;
+  const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
-  const shown = useMemo(
-    () =>
-      searchByName(
-        recipes.map((recipe) => ({ name: recipe.title, recipe })),
-        trimmed,
-      ).map(({ recipe }) => recipe),
-    [recipes, trimmed],
+
+  const getSourceFilter = () => {
+    if (!hasFilterBar) return SOURCE_FILTER_ANY;
+    if (pickedSource === SOURCE_FILTER_NONE || sourcesById.has(pickedSource)) {
+      return pickedSource;
+    }
+    return SOURCE_FILTER_ANY;
+  };
+  const sourceFilter = getSourceFilter();
+  const sourceLabel =
+    sourceFilter === SOURCE_FILTER_NONE
+      ? 'No source'
+      : (sourcesById.get(sourceFilter)?.label ?? '');
+
+  const shown = useMemo(() => {
+    const inSource =
+      sourceFilter === SOURCE_FILTER_ANY
+        ? recipes
+        : recipes.filter(
+            (recipe) =>
+              (getRecipeSource(recipe, sourcesById)?.id ??
+                SOURCE_FILTER_NONE) === sourceFilter,
+          );
+    return searchByName(
+      inSource.map((recipe) => ({ name: recipe.title, recipe })),
+      trimmed,
+    ).map(({ recipe }) => recipe);
+  }, [recipes, sourcesById, sourceFilter, trimmed]);
+
+  const sourceOptions = useMemo(
+    () => [
+      { value: SOURCE_FILTER_ANY, label: 'Any' },
+      ...sources
+        .filter(
+          (source) =>
+            sourceCounts.bySource.has(source.id) || source.id === sourceFilter,
+        )
+        .map((source) => ({
+          value: source.id,
+          label: `${source.label} · ${sourceCounts.bySource.get(source.id) ?? 0}`,
+        })),
+      ...(sourceCounts.withoutSource > 0 || sourceFilter === SOURCE_FILTER_NONE
+        ? [
+            {
+              value: SOURCE_FILTER_NONE,
+              label: `No source · ${sourceCounts.withoutSource}`,
+            },
+          ]
+        : []),
+    ],
+    [sources, sourceCounts, sourceFilter],
   );
+  const activeFilters =
+    sourceFilter === SOURCE_FILTER_ANY
+      ? []
+      : [
+          {
+            key: 'source',
+            label:
+              sourceFilter === SOURCE_FILTER_NONE
+                ? sourceLabel
+                : `From ${sourceLabel}`,
+          },
+        ];
+  const clearSourceFilter = () => setPickedSource(SOURCE_FILTER_ANY);
 
   const shownMeals = useMemo(
     () =>
@@ -131,6 +201,31 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         </p>
       );
     }
+    if (shown.length === 0 && sourceFilter !== SOURCE_FILTER_ANY) {
+      const scope =
+        sourceFilter === SOURCE_FILTER_NONE
+          ? 'without a source'
+          : `from ${sourceLabel}`;
+      return (
+        <div className='space-y-3 py-6 text-center'>
+          <p className='text-muted-foreground text-sm wrap-break-word'>
+            {trimmed !== ''
+              ? `Nothing ${scope} matches “${trimmed}” yet.`
+              : sourceFilter === SOURCE_FILTER_NONE
+                ? 'Every recipe has a source.'
+                : `No recipes ${scope} yet.`}
+          </p>
+          <Button
+            type='button'
+            variant='secondary'
+            className='h-10'
+            onClick={clearSourceFilter}
+          >
+            Clear filter
+          </Button>
+        </div>
+      );
+    }
     if (shown.length === 0) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
@@ -155,7 +250,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               );
             return (
               <div
-                key={`${trimmed}-${chunk}`}
+                key={`${sourceFilter}-${trimmed}-${chunk}`}
                 className={join(
                   'defer-offscreen',
                   chunk > 0 && 'border-border border-t',
@@ -235,7 +330,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             isThin
           />
         </div>
-        {total > 0 && (
+        {total > 0 && !hasFilterBar && (
           <ListViewControls
             options={viewOptions.options}
             customizedCount={viewOptions.customizedCount}
@@ -245,12 +340,53 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           />
         )}
       </div>
-      {hasSearch && (
-        <SearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder={view === 'meals' ? 'Search meals' : 'Search recipes'}
-        />
+      {view === 'recipes' && sources.length > 0 && (
+        <div className='grid grid-cols-2 gap-2'>
+          <EntryRow
+            icon={<BookOpen className='h-4 w-4' />}
+            label='Sources'
+            count={sources.length}
+            onClick={() => openSubview({ kind: 'sources' })}
+          />
+        </div>
+      )}
+      {hasFilterBar ? (
+        <FilterBar
+          query={query}
+          onQueryChange={setQuery}
+          searchPlaceholder={isPhone ? 'Search' : 'Search recipes'}
+          filterLabel='Filter recipes'
+          activeFilters={activeFilters}
+          onRemoveFilter={clearSourceFilter}
+          onClearFilters={clearSourceFilter}
+          doneLabel={`Show ${shown.length} ${shown.length === 1 ? 'recipe' : 'recipes'}`}
+          compactDoneLabel={`Show ${shown.length}`}
+          trailing={
+            <ListViewControls
+              options={viewOptions.options}
+              customizedCount={viewOptions.customizedCount}
+              onChange={viewOptions.update}
+              onReset={viewOptions.reset}
+            />
+          }
+        >
+          <FilterSection title='Source'>
+            <PillGroup
+              label='Sources'
+              options={sourceOptions}
+              value={sourceFilter}
+              onChange={setPickedSource}
+            />
+          </FilterSection>
+        </FilterBar>
+      ) : (
+        hasSearch && (
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={view === 'meals' ? 'Search meals' : 'Search recipes'}
+          />
+        )
       )}
       {getBody()}
       {openId && (

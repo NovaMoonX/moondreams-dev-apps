@@ -1,3 +1,4 @@
+import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { generateUuid } from '@/utils';
 import {
   MAX_MINUTES,
@@ -6,13 +7,24 @@ import {
 } from '@apps/pinch/constants';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
 import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
+import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
   NutritionMetric,
   NutritionValues,
   Recipe,
+  RecipeSource,
   ResolvedIngredient,
+  Source,
   Unit,
 } from '@apps/pinch/types';
+
+/** Where a recipe is from, as the form's picker reports it: a source id, `NEW_CHOICE` with the label typed, or `''` for none. */
+export interface SourceChoice {
+  choice: string;
+  newText: string;
+}
+
+const NO_SOURCE_CHOICE: SourceChoice = { choice: '', newText: '' };
 
 export interface IngredientRow {
   id: string;
@@ -33,11 +45,15 @@ export interface RecipeFormData {
   description: string;
   ingredients: IngredientRow[];
   steps: string[];
+  sourceChoice: SourceChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
   nutrition: Record<NutritionMetric, string>;
 }
 
-export const getInitialData = (recipe: Recipe | null): RecipeFormData => ({
+export const getInitialData = (
+  recipe: Recipe | null,
+  sourcesById: Map<string, Source> = new Map(),
+): RecipeFormData => ({
   title: recipe?.title ?? '',
   basics: {
     servings: recipe?.servings ?? 4,
@@ -55,6 +71,10 @@ export const getInitialData = (recipe: Recipe | null): RecipeFormData => ({
     newName: null,
   })),
   steps: recipe?.steps ?? [],
+  sourceChoice: {
+    choice: recipe ? (getRecipeSource(recipe, sourcesById)?.id ?? '') : '',
+    newText: '',
+  },
   nutrition: Object.fromEntries(
     NUTRITION_METRICS.map((metric) => [
       metric,
@@ -118,6 +138,18 @@ export const getDataFromExtracted = (
     ingredients: rows.slice(0, MAX_RECIPE_INGREDIENTS),
     steps: extracted.steps,
   };
+};
+
+/** What a reading starts the source on: for a link, the site's own source (made on save if there isn't one yet); a pasted text or a file names no place. */
+export const getReadSourceChoice = (
+  source: RecipeSource,
+  label: string,
+  sources: Source[],
+): SourceChoice => {
+  if (source !== 'AI_LINK') return NO_SOURCE_CHOICE;
+  const { existing, label: host } = getHostSource(label, sources);
+  if (existing) return { choice: existing.id, newText: '' };
+  return host === '' ? NO_SOURCE_CHOICE : { choice: NEW_CHOICE, newText: host };
 };
 
 const parseTyped = (text: string) => (text.trim() === '' ? null : Number(text));
