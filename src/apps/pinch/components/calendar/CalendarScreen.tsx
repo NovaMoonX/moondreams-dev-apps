@@ -29,6 +29,7 @@ import {
   selectPeriodStats,
   selectPlannedByDay,
   selectPlannedMeals,
+  selectRecipes,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
@@ -67,6 +68,7 @@ function CalendarScreen({
   const [searchParams, setSearchParams] = useSearchParams();
   const plannedByDay = useAppSelector(selectPlannedByDay);
   const hasPlannedMeals = useAppSelector(selectPlannedMeals).length > 0;
+  const hasRecipes = useAppSelector(selectRecipes).length > 0;
   const isPlannedLoadFailed = useAppSelector(
     (state) => state.pinch.plannedMeals.loadError !== null,
   );
@@ -208,8 +210,9 @@ function CalendarScreen({
       {!hasPlannedMeals && !isPlannedLoadFailed && (
         <div className='bg-secondary/50 space-y-3 rounded-2xl p-4 text-center'>
           <p className='text-sm'>
-            Nothing planned yet. Plan your first meal, or add a recipe to plan
-            from.
+            {hasRecipes
+              ? 'Nothing planned yet. Plan your first meal.'
+              : 'Nothing planned yet. Plan your first meal, or add a recipe to plan from.'}
           </p>
           <div className='flex flex-wrap justify-center gap-2'>
             <Button
@@ -221,19 +224,25 @@ function CalendarScreen({
             >
               Plan your first meal
             </Button>
-            <Button
-              type='button'
-              size='sm'
-              variant='secondary'
-              rounded='full'
-              onClick={() =>
-                isPhone
-                  ? setIsStartOpen(true)
-                  : openSubview({ kind: 'recipe', id: null })
-              }
-            >
-              Add a recipe
-            </Button>
+            {!hasRecipes && (
+              <Button
+                type='button'
+                size='sm'
+                variant='secondary'
+                rounded='full'
+                onClick={() =>
+                  isPhone
+                    ? setIsStartOpen(true, true)
+                    : openSubview({
+                        kind: 'recipe',
+                        id: null,
+                        fromCalendar: true,
+                      })
+                }
+              >
+                Add a recipe
+              </Button>
+            )}
           </div>
         </div>
       )}
