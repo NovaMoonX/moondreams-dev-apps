@@ -29,11 +29,12 @@ function ShoppingRow({
 }: ShoppingRowProps) {
   return (
     <li className='flex items-start gap-3'>
-      <span className="relative mt-2.5 inline-flex shrink-0 after:absolute after:-inset-2.5 after:content-['']">
+      <span className='mt-2.5 inline-flex shrink-0'>
         <Checkbox
           aria-label={`Got ${name}`}
           checked={isChecked}
           onCheckedChange={(checked) => onToggle(id, checked === true)}
+          className="relative after:absolute after:-inset-2.5 after:content-['']"
         />
       </span>
       <Button

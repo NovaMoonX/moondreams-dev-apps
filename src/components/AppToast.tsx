@@ -110,6 +110,22 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
             {description}
           </div>}
       </div>
+      {action && !isReminder && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className='h-10 shrink-0 self-center px-2 font-semibold underline'
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            action.onClick();
+            onRemove?.(id);
+          }}
+        >
+          {action.label}
+        </Button>
+      )}
       {!isSmallScreen && (
         <Button
           type='button'

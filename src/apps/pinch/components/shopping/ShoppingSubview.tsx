@@ -209,29 +209,29 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
           </p>
         )}
         {checked.length > 0 && (
-          <div className='flex items-start gap-2'>
-            <div className='min-w-0 flex-1'>
-              <Disclosure
-                label={`Got it · ${checked.length}`}
-                isOpen={isGotOpen}
-                onToggle={setIsGotOpen}
-                buttonClassName='min-h-10 px-0! py-2'
-              >
-                {isGotOpen && (
-                  <ShoppingRows
-                    rows={checked}
-                    onToggle={handleToggle}
-                    onOpen={handleOpen}
-                  />
-                )}
-              </Disclosure>
-            </div>
+          <div className='relative'>
+            <Disclosure
+              label={`Got it · ${checked.length}`}
+              isOpen={isGotOpen}
+              onToggle={setIsGotOpen}
+              buttonClassName='min-h-10 px-0! py-2 pr-20! hover:bg-transparent!'
+            >
+              {isGotOpen && (
+                <ShoppingRows
+                  rows={checked}
+                  onToggle={handleToggle}
+                  onOpen={handleOpen}
+                />
+              )}
+            </Disclosure>
             <Button
               type='button'
-              variant='tertiary'
+              variant='secondary'
+              size='sm'
+              rounded='full'
               loading={isClearing}
               disabled={isClearing}
-              className='h-10 shrink-0'
+              className='absolute top-0 right-0 h-10'
               onClick={() => void handleClear()}
             >
               Clear
