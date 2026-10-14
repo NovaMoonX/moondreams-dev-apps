@@ -18,6 +18,28 @@ const SEED_SOURCES = [
   { id: 'seed-pinch-source-nyt', label: 'NYT Cooking' },
 ];
 
+const shoppingItem = (
+  ingredientId: string,
+  unit: string,
+  amount: number,
+  isChecked: boolean,
+) => ({
+  id: `${ingredientId}__${unit}`,
+  ingredientId,
+  amount,
+  unit,
+  isChecked,
+});
+
+const SEED_SHOPPING = [
+  shoppingItem('cat-chicken-thigh', 'LB', 2, false),
+  shoppingItem('cat-chicken-breast', 'LB', 1, false),
+  shoppingItem('cat-soy-sauce', 'CUP', 0.25, false),
+  shoppingItem('cat-garlic', 'EACH', 6, false),
+  shoppingItem('cat-lime-juice', 'TBSP', 2, true),
+  shoppingItem('cat-cilantro', 'CUP', 0.25, true),
+];
+
 const nutrition = (
   calories: number,
   protein: number,
@@ -475,6 +497,16 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(source.id)
         .set({ ...source, createdAt, updatedAt: createdAt }),
     ),
+    ...SEED_SHOPPING.map((entry, index) =>
+      kitchenRef
+        .collection('shoppingItems')
+        .doc(entry.id)
+        .set({
+          ...entry,
+          createdAt: createdAt + index,
+          updatedAt: createdAt + index,
+        }),
+    ),
     ...PLANNED_BLUEPRINTS.map((blueprint, index) => {
       const id = `seed-pinch-planned-${index + 1}`;
       return kitchenRef
@@ -532,6 +564,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     firestoreDocuments:
       SEED_FAMILIES.length +
       SEED_SOURCES.length +
+      SEED_SHOPPING.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +
       SEED_RECIPES.length +

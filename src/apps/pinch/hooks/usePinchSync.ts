@@ -10,6 +10,7 @@ import {
   startProductsListener,
   startRecipesListener,
   startSettingsListener,
+  startShoppingListener,
   startSourcesListener,
   startStoresListener,
 } from '@apps/pinch/store/listeners/kitchenListeners';
@@ -49,6 +50,11 @@ import {
   setSettingsLoadError,
 } from '@apps/pinch/store/slices/settingsSlice';
 import {
+  clearShopping,
+  setShopping,
+  setShoppingLoadError,
+} from '@apps/pinch/store/slices/shoppingSlice';
+import {
   clearSources,
   setSources,
   setSourcesLoadError,
@@ -73,6 +79,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearProducts());
       dispatch(clearRecipes());
       dispatch(clearSources());
+      dispatch(clearShopping());
       dispatch(clearSettings());
       dispatch(clearPlannedMeals());
       dispatch(clearMeals());
@@ -146,6 +153,19 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       },
     );
 
+    const unsubscribeShopping = startShoppingListener(
+      uid,
+      (items) => dispatch(setShopping(items)),
+      (error) => {
+        console.error('Pinch shopping listener failed', error);
+        dispatch(
+          setShoppingLoadError(
+            getErrorMessage(error, 'Unable to load your shopping list.'),
+          ),
+        );
+      },
+    );
+
     const unsubscribeSettings = startSettingsListener(
       uid,
       (settings) => dispatch(setSettings(settings)),
@@ -171,6 +191,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
     return () => {
       unsubscribeMeals();
       unsubscribeSettings();
+      unsubscribeShopping();
       unsubscribeSources();
       unsubscribeRecipes();
       unsubscribeProducts();

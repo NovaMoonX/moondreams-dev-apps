@@ -9,6 +9,10 @@ import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getPeriodStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
+import {
+  getShoppingCost,
+  groupShoppingItems,
+} from '@apps/pinch/utils/shopping';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const selectRecords = (state: RootState) => state.pinch.ingredients.records;
@@ -25,7 +29,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded &&
   state.pinch.sources.isLoaded;
 
-/** Sources are an optional extra: their failure is left out so it only takes their own UI away. */
+/** Sources and the shopping list are optional extras: their failures are left out so each only takes its own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
@@ -198,6 +202,46 @@ export const selectSourceCounts = createSelector(
 
     return { bySource, withoutSource: recipes.length - sourced };
   },
+);
+
+export const selectShoppingItems = (state: RootState) =>
+  state.pinch.shopping.items;
+
+export const selectShoppingLoadError = (state: RootState) =>
+  state.pinch.shopping.loadError;
+
+export const selectShoppingOpenCount = (state: RootState) =>
+  state.pinch.shopping.items.filter((item) => !item.isChecked).length;
+
+export const selectShoppingById = createSelector(
+  [selectShoppingItems],
+  (items) => new Map(items.map((item) => [item.id, item])),
+);
+
+const selectHeldShoppingRows = (
+  _state: RootState,
+  held: ReadonlyMap<string, boolean>,
+) => held;
+
+export const selectShoppingRows = createSelector(
+  [
+    selectShoppingItems,
+    selectIngredientsById,
+    selectIngredientFamilies,
+    selectHeldShoppingRows,
+  ],
+  (items, ingredientsById, families, held) =>
+    groupShoppingItems(items, ingredientsById, families, held),
+);
+
+export const selectShoppingCost = createSelector(
+  [selectShoppingItems, selectIngredientsById, selectDefaultProducts],
+  (items, ingredientsById, defaultProducts) =>
+    getShoppingCost(
+      items.filter((item) => !item.isChecked),
+      ingredientsById,
+      defaultProducts,
+    ),
 );
 
 /** Every recipe's cost, computed once per change of recipes, ingredients or products. */

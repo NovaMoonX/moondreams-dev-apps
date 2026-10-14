@@ -7,6 +7,7 @@ import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
+import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
@@ -19,7 +20,7 @@ import {
   selectShowNutrition,
   selectSourcesById,
 } from '@apps/pinch/store/selectors';
-import type { Gap, GapKind } from '@apps/pinch/types';
+import type { Gap, GapKind, ShoppingRequest } from '@apps/pinch/types';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
@@ -48,6 +49,7 @@ interface RecipeDrawerProps {
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
+  onAddToShopping: (request: ShoppingRequest) => void;
 }
 
 function RecipeDrawer({
@@ -57,6 +59,7 @@ function RecipeDrawer({
   onPlan,
   onModify,
   onFillIn,
+  onAddToShopping,
 }: RecipeDrawerProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -219,6 +222,13 @@ function RecipeDrawer({
             })}
           </ul>
         </FormSection>
+
+        <AddToShoppingRow
+          subtitle='Choose what you need for this recipe'
+          onClick={() =>
+            onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
+          }
+        />
 
         {recipe.steps.length > 0 && (
           <FormSection title='Steps'>
