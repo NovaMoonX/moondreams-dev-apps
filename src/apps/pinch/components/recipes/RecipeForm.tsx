@@ -9,6 +9,7 @@ import {
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
+import ClampedText from '@/components/ClampedText';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
@@ -24,7 +25,6 @@ import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
-import ClampedText from '@apps/pinch/components/notes/ClampedText';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
 import {
   RecipeDescriptionField,

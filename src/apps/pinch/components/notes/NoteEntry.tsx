@@ -2,9 +2,9 @@ import { memo } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import ClampedText from '@/components/ClampedText';
 import { formatDateShort } from '@/utils/formatUtils';
 import ChangeList from '@apps/pinch/components/notes/ChangeList';
-import ClampedText from '@apps/pinch/components/notes/ClampedText';
 import type { Cook, RecipeNote } from '@apps/pinch/types';
 
 interface NoteEntryProps {

@@ -11,12 +11,13 @@ import { PenLine } from 'lucide-react';
 import ActionRow from '@/components/ActionRow';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort, formatDateTime } from '@/utils/formatUtils';
 import ChangeList from '@apps/pinch/components/notes/ChangeList';
-import NoteTextField from '@apps/pinch/components/notes/NoteTextField';
+import { MAX_RECIPE_NOTE_LENGTH } from '@apps/pinch/constants';
 import {
   addNote,
   removeNote,
@@ -167,6 +168,7 @@ function NoteForm({
                 ? 'Optional'
                 : 'Less vinegar next time, the sauce was ready early'
             }
+            maxLength={MAX_RECIPE_NOTE_LENGTH}
             value={String(props.value)}
             onChange={props.onValueChange}
             shouldFocus
