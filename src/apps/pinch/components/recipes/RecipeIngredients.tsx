@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -181,10 +181,21 @@ interface RecipeIngredientsProps {
   uid: string;
   rows: IngredientRow[];
   onChange: (rows: IngredientRow[]) => void;
+  /** Called with what a removal says and how to take it back. */
+  onRemoved: (message: string, restore: () => void) => void;
 }
 
 /** The recipe's ingredient lines as one-line summaries. On a phone adding and editing happen in a drawer that never leaves the form; from `sm` up a row opens its fields in place. */
-function RecipeIngredients({ uid, rows, onChange }: RecipeIngredientsProps) {
+function RecipeIngredients({
+  uid,
+  rows,
+  onChange,
+  onRemoved,
+}: RecipeIngredientsProps) {
+  const latest = useRef({ rows, onChange });
+  useEffect(() => {
+    latest.current = { rows, onChange };
+  });
   const ingredientsById = useAppSelector(selectIngredientsById);
   const isPhone = useMediaQuery().isBelow('sm');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -202,8 +213,21 @@ function RecipeIngredients({ uid, rows, onChange }: RecipeIngredientsProps) {
         candidate.id === id ? { ...candidate, ...patch } : candidate,
       ),
     );
-  const remove = (id: string) =>
+  const remove = (id: string) => {
+    const index = rows.findIndex((candidate) => candidate.id === id);
+    if (index < 0) {
+      return;
+    }
+    const removed = rows[index];
     onChange(rows.filter((candidate) => candidate.id !== id));
+    onRemoved(`Removed ${getName(removed)}`, () =>
+      latest.current.onChange([
+        ...latest.current.rows.slice(0, index),
+        removed,
+        ...latest.current.rows.slice(index),
+      ]),
+    );
+  };
 
   const addRow = (ingredientId: string) => {
     const serving =

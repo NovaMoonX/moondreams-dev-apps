@@ -11,7 +11,7 @@ export interface ListViewOptions {
 
 export const DEFAULT_LIST_VIEW_OPTIONS: ListViewOptions = {
   showPrices: true,
-  showMacros: true,
+  showMacros: false,
   basis: 'PER_100G',
 };
 

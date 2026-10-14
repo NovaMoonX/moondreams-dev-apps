@@ -90,7 +90,7 @@ function IngredientRow({
       type='button'
       variant='tertiary'
       onClick={() => onOpen(ingredient.id)}
-      className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+      className='h-auto w-full items-start justify-start gap-3 px-0! py-2.5 text-left'
     >
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block truncate font-medium'>

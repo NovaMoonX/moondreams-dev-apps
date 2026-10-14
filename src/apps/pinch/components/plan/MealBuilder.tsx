@@ -11,6 +11,8 @@ import Subview from '@/components/Subview';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
+import UndoSnackbar from '@/components/UndoSnackbar';
+import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
@@ -91,6 +93,7 @@ function MealBuilder({
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
+  const { pending, showUndo, undo } = useUndoRemoval();
   const costContext = useAppSelector(selectCostContext);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -207,6 +210,21 @@ function MealBuilder({
         ? current
         : [...current, { id: generateUuid(), kind, refId, servings: 1 }],
     );
+
+  const removeItem = (item: MealItem, itemTitle: string) => {
+    const index = items.findIndex((row) => row.id === item.id);
+    const previousSource = source;
+    if (items.length === 1) setSource(null);
+    setItems((current) => current.filter((row) => row.id !== item.id));
+    showUndo(`Removed ${itemTitle}`, () => {
+      setItems((current) => [
+        ...current.slice(0, index),
+        item,
+        ...current.slice(index),
+      ]);
+      if (items.length === 1) setSource(previousSource);
+    });
+  };
 
   const pickSavedMeal = (id: string) => {
     const meal = savedMealsById.get(id);
@@ -343,6 +361,7 @@ function MealBuilder({
   return (
     <Subview overlay title={title} onClose={closeSubview}>
       <div className='flex flex-1 flex-col gap-5'>
+        <UndoSnackbar pending={pending} onUndo={undo} />
         {mode === 'plan' ? (
           <div className='space-y-3'>
             <div className='flex items-center justify-between gap-3'>
@@ -453,12 +472,7 @@ function MealBuilder({
                         size='icon'
                         aria-label={`Remove ${itemTitle}`}
                         className='size-10 shrink-0'
-                        onClick={() => {
-                          if (items.length === 1) setSource(null);
-                          setItems((current) =>
-                            current.filter((row) => row.id !== item.id),
-                          );
-                        }}
+                        onClick={() => removeItem(item, itemTitle)}
                       >
                         <X className='h-4 w-4' aria-hidden='true' />
                       </Button>
