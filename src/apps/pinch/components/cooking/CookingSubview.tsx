@@ -327,15 +327,16 @@ function CookingSession({
           )}
           {showLockNote && (
             <p className='text-muted-foreground text-xs'>
-              Your screen may turn off while you cook.
+              This phone may turn the screen off; timers keep running only while
+              this screen is open.
             </p>
           )}
         </div>
         <div className='form-footer space-y-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
           <div role='status' className='empty:hidden'>
-            {timers.isNoticeShown && (
+            {timers.isNoticeShown && !showLockNote && (
               <p className='text-muted-foreground text-xs'>
-                Timers only run while this screen is open.
+                Keep this screen open: timers stop if you leave it.
               </p>
             )}
           </div>
