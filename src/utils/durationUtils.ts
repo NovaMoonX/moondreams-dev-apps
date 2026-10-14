@@ -12,7 +12,7 @@ const UNICODE_FRACTIONS: Record<string, number> = {
 const NUMBER = String.raw`\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?\s?[½¼¾]?|[½¼¾]`;
 const UNIT = String.raw`(?<h>hours?|hrs?)|(?<min>minutes?|mins?)|(?<sec>seconds?|secs?)`;
 const QUANTITY = new RegExp(
-  String.raw`(?<![\d.\/])(?<low>${NUMBER})(?:\s?(?:-|–|—|to|or)\s?(?<high>${NUMBER}))?[\s-]?(?:${UNIT})\b`,
+  String.raw`(?<![\d.\/]|\d,)(?<low>${NUMBER})(?:\s?(?:-|–|—|to|or)\s?(?<high>${NUMBER}))?[\s-]?(?:${UNIT})\b`,
   'gi',
 );
 const SPOKEN = /\b(?<spoken>half an hour|an hour)\b/gi;
@@ -87,23 +87,26 @@ const joinPieces = (text: string, pieces: Piece[]): Piece[] =>
       previous.unit !== null &&
       getUnitRank(piece) > getUnitRank(previous) &&
       JOINER.test(text.slice(previous.end, piece.index));
-    return canJoin
-      ? [
-          ...joined.slice(0, -1),
-          {
-            ...previous,
-            end: piece.end,
-            text: text.slice(previous.index, piece.end),
-            unit: piece.unit,
-            seconds: previous.seconds + piece.seconds,
-          },
-        ]
-      : [...joined, piece];
+    if (canJoin) {
+      joined[joined.length - 1] = {
+        ...previous,
+        end: piece.end,
+        text: text.slice(previous.index, piece.end),
+        unit: piece.unit,
+        seconds: previous.seconds + piece.seconds,
+      };
+      return joined;
+    }
+    joined.push(piece);
+    return joined;
   }, []);
 
-/** The lengths of time a text mentions ("25 minutes", "1 hr 30 min", "10-15 min"), in order and without repeats. A range gives its longer end; over a day, or past the first 5,000 characters, is ignored. */
-export function findDurations(fullText: string): FoundDuration[] {
-  const text = fullText.slice(0, MAX_TEXT_CHARS);
+/** The lengths of time a text mentions ("25 minutes", "1 hr 30 min", "10-15 min"), in order and without repeats. A range gives its longer end; over a day, a number written with a decimal comma or thousands commas ("1,5 hours"), or text past `maxChars` (5,000 unless raised), is ignored. */
+export function findDurations(
+  fullText: string,
+  maxChars = MAX_TEXT_CHARS,
+): FoundDuration[] {
+  const text = fullText.slice(0, maxChars);
   const pieces = [...getQuantityPieces(text), ...getSpokenPieces(text)].sort(
     (a, b) => a.index - b.index,
   );
