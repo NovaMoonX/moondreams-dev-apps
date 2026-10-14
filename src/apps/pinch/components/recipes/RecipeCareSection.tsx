@@ -41,7 +41,7 @@ function RecipeCareSection({ care }: RecipeCareSectionProps) {
           </CareLine>
         )}
         {care.reheat !== null && (
-          <CareLine emoji='🔥'>
+          <CareLine emoji='♨️'>
             <span className='text-muted-foreground'>Reheat:</span> {care.reheat}
           </CareLine>
         )}
