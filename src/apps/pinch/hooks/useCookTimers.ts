@@ -232,6 +232,11 @@ export function useCookTimers() {
     }
   };
 
+  const clear = () => {
+    commit([]);
+    setNotice((current) => (current === 'showing' ? 'seen' : current));
+  };
+
   const liveCount = timers.filter(isLive).length;
 
   return {
@@ -244,5 +249,6 @@ export function useCookTimers() {
     pause,
     resume,
     dismiss,
+    clear,
   };
 }

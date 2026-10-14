@@ -572,7 +572,7 @@ Once a day has passed, its cost and nutrition are fixed. Changing a price or edi
 ### Possible Approach
 1. `freezePastMeals`: one `writeBatch` of field-scoped `snapshot` writes for loaded unfrozen past meals, run once after the window first loads and as the first step of any action that changes a price, size, recipe or ingredient nutrition. A meal planned on a past day is frozen in the same write.
 2. `mealMath` and `stats` read `snapshot` when present. The day drawer shows "Prices as they were that day" on a frozen day.
-3. Rules: `snapshot` is writable only while the stored value is `null` and is then immutable; `frozenAt ≤ request.time`. (Later, the owner can have a day priced again with today's prices, the one write that replaces a snapshot: it must carry an instant `repricedAt`; see `TECHNICAL.md` decision 20.)
+3. Rules: `snapshot` is writable only while the stored value is `null` and is then immutable; `frozenAt ≤ request.time`. (Later, the owner can have a day priced again with today's prices, the one write that replaces a snapshot: it must carry an instant `repricedAt`; see `TECHNICAL.md` decision 22.)
 4. Verify the sequence on the emulator: plan yesterday's meal, change a price, confirm the day didn't move; try overwriting a snapshot as the owner and expect a denial.
 
 ### CRUD & Entry-Point Requirements
@@ -998,6 +998,38 @@ A big-type, one-step-at-a-time view that keeps the screen awake. As built, the p
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
+
+### Issue 40: Recipe care: how to keep what a recipe makes
+
+**Prerequisites:** Issue 6, Issue 14, Issue 33
+**Target PR Size:** ~600 lines (the row and its editor, the drawer section, one line in cooking mode, the readers' schema, the rules and the checks)
+**Files:**
+- `Recipe.care` and `RecipeCare` in `types.ts`, the caps in `constants.ts`, `utils/recipeCare.ts` (the helpers the form, drawer, cooking mode and readers share), `isRecipeCare` in `firestore.rules`
+- `RecipeCareField` (the form row and its editor), `RecipeCareSection` (the drawer), the leftovers line in `CookingSubview`, care lines in `getRecipeChanges`
+- `lib/extractRecipe.ts` (schema and prompt) and `utils/normalizeRecipe.ts` for the three readings
+- The seed: care on two of Alex's recipes (one full, one fridge only) and on half the scale kitchen's, the rest left in the older shape
+
+**Context:** Read `TECHNICAL.md` §5f and open question 20; `UX.md`'s Recipe, Recipe details and Cooking mode; CLAUDE.md's "A phone form shows a few inputs at a time" and "Text that leaves the app is safe to paste" (Pinch has no copy-out, so it only matters if one returns).
+
+### Description
+A recipe can say how many days what it makes keeps in the fridge and the freezer, how to reheat it, and carry a tip. It is a "Keeping it" row in the recipe form, a quiet section on the recipe, one line on cooking mode's last screen ("Leftovers keep 3 days in the fridge, 3 months in the freezer") and something the three readings fill in for review when the source says so.
+
+### Possible Approach
+1. `Recipe.care: RecipeCare | null`, a required key written by every save of the recipe (so an older recipe, which has no key, gains it), read through `getRecipeCare`; days are whole numbers from 1 to 365, reheat and tip at most 300 characters.
+2. The row is a `SummaryEditor` between Steps and Nutrition: two "days" fields, a reheating line and a tip, with the summary "Fridge 3 days, freezer 3 months, reheating, tip".
+3. Extend the readers' shared schema and prompt with the four fields and the rule never to estimate; normalise in `normalizeExtractedRecipe`.
+4. `isRecipeCare` in the rules, with `data.get('care', null)` so a document without the key stays valid; verify the owner, another user and a signed-out visitor against the emulator, with the base rules as the control.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read / Update:** write, see and change a recipe's care from its form; clearing every part saves it as none.
+- [ ] **Entry points:** the recipe form's "Keeping it" row, the recipe drawer's section, cooking mode's last screen, and the three readings.
+
+### Success Criteria
+- [ ] A recipe written before this (no `care` key) opens, shows no section, edits and saves, and its save writes `care` explicitly; checked in the browser over a legacy-shaped document.
+- [ ] The rules accept a valid care, null and a missing key for the owner and refuse bad days, an extra key and a wrong type, for everyone else too; the cases are listed in the PR as owner, another user and signed out.
+- [ ] A reading with no storage lines leaves the row quiet and lists nothing under "We couldn't read"; one with them fills the row for review and saves nothing until the recipe is saved.
+- [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and the editor was measured against the container rules.
+- [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
 ## Beyond
 

@@ -13,6 +13,8 @@ import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
+import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
@@ -23,6 +25,7 @@ import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectCookSummaries,
   selectIngredientsById,
+  selectNoteSummaries,
   selectRecipeCosts,
   selectRecipeNutrition,
   selectRecipesById,
@@ -42,6 +45,7 @@ import {
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { formatMinutes, formatServings } from '@apps/pinch/utils/recipeFormat';
+import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -65,6 +69,8 @@ interface RecipeDrawerProps {
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
   onOpenHistory: (id: string) => void;
+  /** A null `noteId` starts a new note. */
+  onOpenNote: (recipeId: string, noteId: string | null) => void;
 }
 
 function RecipeDrawer({
@@ -76,6 +82,7 @@ function RecipeDrawer({
   onFillIn,
   onAddToShopping,
   onOpenHistory,
+  onOpenNote,
 }: RecipeDrawerProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -84,6 +91,8 @@ function RecipeDrawer({
   const show = useAppSelector(selectShowNutrition);
   const sourcesById = useAppSelector(selectSourcesById);
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
+  const lastTweakAt =
+    useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
   const { openSubview } = usePinchOverlay();
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
   const [markError, setMarkError] = useState<string | null>(null);
@@ -115,6 +124,7 @@ function RecipeDrawer({
   };
 
   const source = getRecipeSource(recipe, sourcesById);
+  const care = getRecipeCare(recipe);
 
   const facts: Fact[] = [
     { emoji: '🍽️', text: formatServings(recipe.servings) },
@@ -127,6 +137,10 @@ function RecipeDrawer({
       text: `Cook ${formatMinutes(recipe.cookMinutes)}`,
     },
     source && { emoji: '📖', text: `From ${source.label}`, canWrap: true },
+    lastTweakAt !== null && {
+      emoji: '✏️',
+      text: `Last tweaked ${formatDateShort(lastTweakAt)}`,
+    },
   ].filter((fact) => fact !== false && fact !== null);
   const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
 
@@ -323,6 +337,14 @@ function RecipeDrawer({
             </ol>
           </FormSection>
         )}
+
+        {care && <RecipeCareSection care={care} />}
+
+        <RecipeNotes
+          recipeId={recipe.id}
+          onAdd={() => onOpenNote(recipe.id, null)}
+          onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
+        />
       </div>
     </DetailSheet>
   );

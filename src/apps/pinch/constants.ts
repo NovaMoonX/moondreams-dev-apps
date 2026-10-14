@@ -225,6 +225,10 @@ export const MAX_RECIPE_DESCRIPTION_LENGTH = 2000;
 export const MAX_STEP_LENGTH = 2000;
 export const MAX_NOTE_LENGTH = 200;
 export const MAX_MINUTES = 100_000;
+/** How long a recipe's leftovers can be said to keep, in days: the cap the rules enforce. */
+export const MAX_CARE_DAYS = 365;
+export const MAX_CARE_REHEAT_LENGTH = 300;
+export const MAX_CARE_TIP_LENGTH = 300;
 /** The longest edge of a recipe cover: it shows in a list row and a drawer header. */
 export const RECIPE_COVER_MAX_DIMENSION = 1280;
 
@@ -362,5 +366,17 @@ export const COOK_BATCH_SIZE = 400;
 export const COOK_HISTORY_FIRST_PAGE = 8;
 export const COOK_HISTORY_PAGE_SIZE = 50;
 
+export const MAX_RECIPE_NOTE_LENGTH = 2000;
+/** A tweak's lines, the "and N more" one included: the cap the rules enforce. */
+export const MAX_TWEAK_CHANGES = 8;
+export const MAX_TWEAK_CHANGE_LENGTH = 200;
+/** The most notes one recipe's journal takes before asking to delete one: the action and the screens, not the rules. */
+export const SOFT_MAX_RECIPE_NOTES = 300;
+/** Under Firestore's 500 writes per batch. */
+export const RECIPE_NOTE_BATCH_SIZE = 400;
+export const RECIPE_NOTES_FIRST_PAGE = 5;
+export const RECIPE_NOTES_PAGE_SIZE = 50;
+/** How many of a recipe's latest cooks the note sheet offers as answers. */
+export const NOTE_COOK_CHOICES = 4;
 /** The most meals one day can have priced again in the one transaction that does it, under Firestore's 500 writes: the action's limit, not the rules'. */
 export const MAX_REPRICE_MEALS = 400;

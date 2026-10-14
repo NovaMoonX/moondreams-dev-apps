@@ -8,6 +8,12 @@ import {
 } from '@apps/pinch/constants';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
 import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
+import {
+  EMPTY_CARE_TEXT,
+  getCareText,
+  getRecipeCare,
+  type CareText,
+} from '@apps/pinch/utils/recipeCare';
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
   Idea,
@@ -47,9 +53,13 @@ export interface RecipeFormData {
   description: string;
   ingredients: IngredientRow[];
   steps: string[];
+  /** How to keep the leftovers, each part as typed; blank parts are null when saved. */
+  care: CareText;
   sourceChoice: SourceChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
   nutrition: Record<NutritionMetric, string>;
+  /** Why the recipe is being changed; becomes the tweak's note when saving records one. */
+  why: string;
 }
 
 export const getInitialData = (
@@ -73,6 +83,7 @@ export const getInitialData = (
     newName: null,
   })),
   steps: recipe?.steps ?? [],
+  care: recipe ? getCareText(getRecipeCare(recipe)) : { ...EMPTY_CARE_TEXT },
   sourceChoice: {
     choice: recipe ? (getRecipeSource(recipe, sourcesById)?.id ?? '') : '',
     newText: '',
@@ -85,6 +96,7 @@ export const getInitialData = (
         : '',
     ]),
   ) as Record<NutritionMetric, string>,
+  why: '',
 });
 
 /** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. A second line for an ingredient already listed adds to it when the units agree and stays its own line when they don't, so no amount is lost. */
@@ -139,6 +151,7 @@ export const getDataFromExtracted = (
     description: extracted.description ?? '',
     ingredients: rows.slice(0, MAX_RECIPE_INGREDIENTS),
     steps: extracted.steps,
+    care: getCareText(extracted.care),
   };
 };
 

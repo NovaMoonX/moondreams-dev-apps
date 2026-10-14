@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
@@ -102,4 +104,4 @@ function RecipeRow({
   );
 }
 
-export default RecipeRow;
+export default memo(RecipeRow);

@@ -143,6 +143,54 @@ const SEED_COOKS = [
   },
 ];
 
+// Adobo's journal: a plain note from before the tweak, the tweak itself (two changes and a why, so the older note reads "Written before your tweak"),
+// and a note after the planned dinner that came later (no label). Rice has one note after its own cook. Nachos and the chili have none.
+const SEED_NOTES = [
+  {
+    id: 'seed-pinch-note-adobo-plain',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'NOTE',
+    text: 'Mom says a splash of pineapple juice rounds it out. Try it once before changing anything else.',
+    changes: [],
+    cookId: null,
+    daysAgo: 14,
+    hour: 20,
+  },
+  {
+    id: 'seed-pinch-note-adobo-tweak',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'TWEAK',
+    text: 'The sauce was sharp last time, so less vinegar and a longer reduction.',
+    changes: [
+      'White vinegar 0.5 → 0.25 cup',
+      'Step 3 now reads: “Uncover and reduce the sauce until it clings to the chicken.”',
+    ],
+    cookId: null,
+    daysAgo: 8,
+    hour: 21,
+  },
+  {
+    id: 'seed-pinch-note-adobo-cook',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'NOTE',
+    text: 'Much better with less vinegar. The kids had seconds. Next time double the garlic and serve it with the cilantro lime rice.',
+    changes: [],
+    cookId: 'seed-pinch-planned-1__seed-pinch-recipe-adobo',
+    daysAgo: 3,
+    hour: 19,
+  },
+  {
+    id: 'seed-pinch-note-rice',
+    recipeId: 'seed-pinch-recipe-rice',
+    kind: 'NOTE',
+    text: "Rinse the rice twice so it doesn't clump, and stir the lime in after the heat is off.",
+    changes: [],
+    cookId: 'seed-pinch-cook-4',
+    daysAgo: 6,
+    hour: 19,
+  },
+];
+
 const nutrition = (
   calories: number,
   protein: number,
@@ -365,6 +413,14 @@ const SEED_RECIPES = [
       'Simmer everything with the bay leaves and pepper, covered, for 25 minutes.',
       'Uncover and reduce the sauce until it clings to the chicken.',
     ],
+    // The full shape: both times, reheating and a tip. Nachos and the chili keep the older shape with no `care` key, so the legacy path stays exercised.
+    care: {
+      fridgeDays: 3,
+      freezerDays: 90,
+      reheat:
+        'Warm it in a covered pan over low heat with a splash of water, about 10 minutes.',
+      tip: 'Keep the sauce with the chicken. It thickens in the fridge, so loosen it with a little water.',
+    },
     nutritionOverride: null,
     source: 'MANUAL',
     sourceId: 'seed-pinch-source-recipe-cards',
@@ -388,6 +444,7 @@ const SEED_RECIPES = [
       'Cook the rice.',
       'Fold in the cilantro, lime juice, salt and olive oil.',
     ],
+    care: { fridgeDays: 3, freezerDays: null, reheat: null, tip: null },
     nutritionOverride: null,
     source: 'MANUAL',
     sourceId: 'seed-pinch-source-serious-eats',
@@ -651,6 +708,13 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(cook.id)
         .set({ ...cook, cookedAt, createdAt: cookedAt, updatedAt: cookedAt });
     }),
+    ...SEED_NOTES.map(({ daysAgo, hour, ...entry }) => {
+      const at = today - daysAgo * DAY_MS + hour * 3_600_000;
+      return kitchenRef
+        .collection('notes')
+        .doc(entry.id)
+        .set({ ...entry, createdAt: at, updatedAt: at });
+    }),
     ...SEED_SHOPPING.map((entry, index) =>
       kitchenRef
         .collection('shoppingItems')
@@ -726,6 +790,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_SOURCES.length +
       SEED_SHOPPING.length +
       SEED_COOKS.length +
+      SEED_NOTES.length +
       SEED_IDEAS.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +

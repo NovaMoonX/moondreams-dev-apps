@@ -1,14 +1,23 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import { FirebaseError } from 'firebase/app';
 import { deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
-import { getErrorMessage } from '@/utils/errorUtils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
+import { deleteNotes } from '@apps/pinch/store/actions/noteActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
+import {
+  selectIngredientsById,
+  selectSourcesById,
+  selectTweakTracking,
+} from '@apps/pinch/store/selectors';
+import { getRecipeChanges } from '@apps/pinch/utils/recipeChanges';
+import { getTweakReason } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
@@ -17,7 +26,9 @@ import type {
   IngredientRecord,
   NutritionValues,
   Recipe,
+  RecipeCare,
   RecipeIngredient,
+  RecipeNote,
   RecipeSource,
   Source,
 } from '@apps/pinch/types';
@@ -30,6 +41,22 @@ const sourceDoc = (uid: string, id: string) =>
 
 const ideaDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'ideas', id);
+
+const noteDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'notes', id);
+
+const OFFLINE_MESSAGE = 'Check your connection and try again.';
+
+const getWriteMessage = (error: unknown, fallback: string) => {
+  if (!(error instanceof FirebaseError)) {
+    return getErrorMessage(error, fallback);
+  }
+  console.error('Pinch recipe write failed', error);
+  if (error.code === 'unavailable' || !navigator.onLine) return OFFLINE_MESSAGE;
+  return error.code.startsWith('storage/')
+    ? getStorageErrorMessage(error, fallback)
+    : fallback;
+};
 
 export const getRecipeCoverPath = (uid: string, recipeId: string) =>
   `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
@@ -44,6 +71,8 @@ export interface RecipeDraft {
   cookMinutes: number | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** How to keep the leftovers, or null; written on every save, so older recipes gain the key. */
+  care: RecipeCare | null;
   /** Per serving, typed over the added-up value; null keeps every metric derived. */
   nutritionOverride: NutritionValues | null;
   /** How a new recipe came to be; an edit keeps the recipe's own. */
@@ -59,6 +88,8 @@ export interface RecipeDraft {
   removeCover: boolean;
   /** Set on its own after the recipe has committed, and only if the idea is still there. */
   fromIdeaId: string | null;
+  /** Why the person changed the recipe, for the tweak a save of a cooked recipe records; ignored when none is recorded. */
+  tweakReason: string;
 }
 
 interface SaveRecipeInput {
@@ -71,7 +102,64 @@ interface SaveRecipeResult {
   linkedIdea: boolean;
 }
 
-/** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). The cover goes to Storage first and is cleaned up if the write fails. */
+/** Compared with the recipe as this device last saw it, so an edit made elsewhere in between can show up in the lines. */
+const getTweak = (
+  state: RootState,
+  existing: Recipe | null,
+  draft: RecipeDraft,
+  now: number,
+): RecipeNote | null => {
+  if (existing === null || selectTweakTracking(state, existing.id) !== 'on') {
+    return null;
+  }
+
+  const ingredientNames = new Map([
+    ...selectIngredientsById(state),
+    ...draft.newIngredients.map(
+      (ingredient) =>
+        [ingredient.id, { name: ingredient.name.trim() }] as const,
+    ),
+  ]);
+  const sourceLabels = new Map([
+    ...selectSourcesById(state),
+    ...(draft.newSource
+      ? [[draft.newSource.id, draft.newSource] as const]
+      : []),
+  ]);
+  const changes = getRecipeChanges(
+    existing,
+    {
+      title: draft.title,
+      description: draft.description,
+      servings: draft.servings,
+      prepMinutes: draft.prepMinutes,
+      cookMinutes: draft.cookMinutes,
+      ingredients: draft.ingredients,
+      steps: draft.steps,
+      care: draft.care,
+      nutritionOverride: draft.nutritionOverride,
+      sourceId: draft.sourceId,
+    },
+    ingredientNames,
+    sourceLabels,
+  );
+  if (changes.length === 0) return null;
+
+  const tweak: RecipeNote = {
+    id: generateUuid(),
+    recipeId: existing.id,
+    kind: 'TWEAK',
+    text: getTweakReason(draft.tweakReason),
+    changes,
+    cookId: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  return tweak;
+};
+
+/** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). A cooked recipe's edit also records a tweak note in the same batch, so the note exists exactly when the recipe changed. The cover goes to Storage first and is cleaned up if the write fails. */
 export const saveRecipe = createAsyncThunk<
   SaveRecipeResult,
   SaveRecipeInput,
@@ -98,6 +186,7 @@ export const saveRecipe = createAsyncThunk<
           ) ?? null)
         : null;
     const path = getRecipeCoverPath(uid, recipeId);
+    const tweak = getTweak(getState(), existing, draft, now);
 
     try {
       await freezeBeforeEdit(uid, getState());
@@ -122,6 +211,7 @@ export const saveRecipe = createAsyncThunk<
         coverPath,
         ingredients: draft.ingredients,
         steps: draft.steps,
+        care: draft.care,
         nutritionOverride: draft.nutritionOverride,
         sourceId: draft.sourceId,
         updatedAt: now,
@@ -172,6 +262,7 @@ export const saveRecipe = createAsyncThunk<
           ...fields,
           ...('isArchived' in existing ? {} : { isArchived: false }),
         });
+        if (tweak) batch.set(noteDoc(uid, tweak.id), tweak);
       } else {
         const recipe: Recipe = {
           id: recipeId,
@@ -188,7 +279,7 @@ export const saveRecipe = createAsyncThunk<
         await deleteFile(path).catch(() => undefined);
       }
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to save this recipe.'),
+        getWriteMessage(error, 'Unable to save this recipe.'),
       );
     }
 
@@ -219,7 +310,7 @@ interface RemoveRecipeInput {
   id: string;
 }
 
-/** Deletes the recipe, its cover and its cooks, or archives it (cover and cooks kept) when a planned day or saved meal still uses it. */
+/** Deletes the recipe, its cover, its cooks and its notes, or archives it (cover, cooks and notes kept) when a planned day or saved meal still uses it. */
 export const removeRecipe = createAsyncThunk<
   string,
   RemoveRecipeInput,
@@ -244,7 +335,7 @@ export const removeRecipe = createAsyncThunk<
       await deleteDoc(recipeDoc(uid, id));
     } catch (error) {
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to delete this recipe.'),
+        getWriteMessage(error, 'Unable to delete this recipe.'),
       );
     }
 
@@ -253,6 +344,10 @@ export const removeRecipe = createAsyncThunk<
       getState().pinch.cooks.items.filter((cook) => cook.recipeId === id),
     ).catch((error) =>
       console.error("Pinch could not clear a deleted recipe's cooks", error),
+    );
+
+    await deleteNotes(uid, id).catch((error) =>
+      console.error("Pinch could not clear a deleted recipe's notes", error),
     );
 
     if (existing?.coverPath) {

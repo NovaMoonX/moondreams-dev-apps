@@ -6,6 +6,7 @@ import {
   startCooksListener,
   startFamiliesListener,
   startMealsListener,
+  startNotesListener,
   startPlannedMealsListener,
   startIdeasListener,
   startIngredientsListener,
@@ -41,6 +42,11 @@ import {
   setMeals,
   setMealsLoadError,
 } from '@apps/pinch/store/slices/mealsSlice';
+import {
+  clearNotes,
+  setNotes,
+  setNotesLoadError,
+} from '@apps/pinch/store/slices/notesSlice';
 import {
   clearPlannedMeals,
   setPlannedMeals,
@@ -94,6 +100,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearShopping());
       dispatch(clearIdeas());
       dispatch(clearCooks());
+      dispatch(clearNotes());
       dispatch(clearSettings());
       dispatch(clearPlannedMeals());
       dispatch(clearMeals());
@@ -206,6 +213,19 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       },
     );
 
+    const unsubscribeNotes = startNotesListener(
+      uid,
+      (notes) => dispatch(setNotes(notes)),
+      (error) => {
+        console.error('Pinch notes listener failed', error);
+        dispatch(
+          setNotesLoadError(
+            getErrorMessage(error, 'Unable to load your recipe notes.'),
+          ),
+        );
+      },
+    );
+
     const unsubscribeSettings = startSettingsListener(
       uid,
       (settings) => dispatch(setSettings(settings)),
@@ -231,6 +251,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
     return () => {
       unsubscribeMeals();
       unsubscribeSettings();
+      unsubscribeNotes();
       unsubscribeCooks();
       unsubscribeIdeas();
       unsubscribeShopping();

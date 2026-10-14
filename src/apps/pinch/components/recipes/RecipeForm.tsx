@@ -4,13 +4,16 @@ import {
   Button,
   Form,
   FormFactories,
+  Input,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
+import ClampedText from '@/components/ClampedText';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
+import Field from '@/components/forms/Field';
 import PhotoPicker from '@/components/forms/PhotoPicker';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -23,6 +26,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
+import RecipeCareField from '@apps/pinch/components/recipes/RecipeCareField';
 import {
   RecipeDescriptionField,
   RecipeTimesField,
@@ -45,6 +49,7 @@ import RecipeSteps from '@apps/pinch/components/recipes/RecipeSteps';
 import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
+  MAX_RECIPE_NOTE_LENGTH,
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
   MAX_SOURCE_LABEL_LENGTH,
@@ -65,14 +70,17 @@ import {
   selectSources,
   selectSourcesById,
   selectSourcesLoadError,
+  selectTweakTracking,
 } from '@apps/pinch/store/selectors';
 import type {
   Idea,
   NutritionMetric,
   Recipe,
+  RecipeNote,
   RecipeSource,
 } from '@apps/pinch/types';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
+import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
@@ -102,6 +110,8 @@ interface RecipeFormProps {
   initialRead: RecipeRead | null;
   /** The idea a new recipe is made from: the form opens with what it knows, and saving marks it made. */
   initialIdea: Idea | null;
+  /** The note the person is updating this recipe from: shown as a quote, and the tweak's reason starts as its words. The note itself is never changed. */
+  initialNote: RecipeNote | null;
   /** Keeps the screen's header on the recipe's name as it is typed. */
   onTitleChange: (title: string) => void;
   /** Tells the screen whether leaving now would throw work away. */
@@ -115,13 +125,14 @@ function RecipeForm({
   recipeId,
   initialRead,
   initialIdea,
+  initialNote,
   onTitleChange,
   isDirtyRef,
   onLeave,
 }: RecipeFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { closeSubview } = usePinchOverlay();
+  const { subview, closeSubviewIf } = usePinchOverlay();
   const { addToast } = useToast();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
@@ -129,6 +140,9 @@ function RecipeForm({
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
+  const tracking = useAppSelector((state) =>
+    selectTweakTracking(state, recipeId),
+  );
   const existingCoverUrl = useStorageImageUrl(
     recipe?.coverPath ?? null,
     recipe?.updatedAt ?? 0,
@@ -148,7 +162,10 @@ function RecipeForm({
         }
       : initialIdea
         ? getDataFromIdea(initialIdea, sources)
-        : getInitialData(recipe, sourcesById),
+        : {
+            ...getInitialData(recipe, sourcesById),
+            why: initialNote?.text ?? '',
+          },
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
@@ -170,6 +187,7 @@ function RecipeForm({
     formData.basics.servings > 0 &&
     isValidMinutes(prep) &&
     isValidMinutes(cook) &&
+    getCareProblem(formData.care) === null &&
     isValidNutrition(formData.nutrition);
 
   const calculation = useMemo(() => {
@@ -191,6 +209,7 @@ function RecipeForm({
           note: null,
         })),
         steps: [],
+        care: null,
         nutritionOverride: null,
         source: 'MANUAL',
         sourceId: null,
@@ -245,6 +264,9 @@ function RecipeForm({
     }
     if (!isValidMinutes(prep) || !isValidMinutes(cook)) {
       return 'Check the prep and cook time to save.';
+    }
+    if (getCareProblem(formData.care) !== null) {
+      return 'Check the fridge and freezer days to save.';
     }
     return null;
   };
@@ -410,6 +432,16 @@ function RecipeForm({
         ),
       }),
       custom({
+        name: 'care',
+        label: '',
+        renderComponent: (props) => (
+          <RecipeCareField
+            value={props.value as RecipeFormData['care']}
+            onChange={props.onValueChange}
+          />
+        ),
+      }),
+      custom({
         name: 'nutrition',
         label: '',
         renderComponent: (props) => (
@@ -423,6 +455,49 @@ function RecipeForm({
           </FormSection>
         ),
       }),
+      ...(tracking === 'on'
+        ? [
+            custom({
+              name: 'why',
+              label: '',
+              renderComponent: (props) => (
+                <div className='space-y-1.5' onKeyDown={blockEnterSubmit}>
+                  <Field label='What changed and why?' isCompact>
+                    {() => (
+                      <Input
+                        variant='outline'
+                        maxLength={MAX_RECIPE_NOTE_LENGTH}
+                        placeholder='Less vinegar, it was too sharp'
+                        value={String(props.value)}
+                        onChange={(event) =>
+                          props.onValueChange(event.target.value)
+                        }
+                      />
+                    )}
+                  </Field>
+                  <p className='text-muted-foreground text-xs'>
+                    Optional. Saving adds a note to this recipe with today's
+                    date and what you changed.
+                  </p>
+                </div>
+              ),
+            }),
+          ]
+        : []),
+      ...(tracking === 'full'
+        ? [
+            custom({
+              name: 'whyFull',
+              label: '',
+              renderComponent: () => (
+                <p className='text-muted-foreground text-xs'>
+                  This recipe's notes are full, so this change won't be noted.
+                  Delete an older note to make room.
+                </p>
+              ),
+            }),
+          ]
+        : []),
     ],
     [
       uid,
@@ -436,6 +511,7 @@ function RecipeForm({
       sourceOptions,
       isBlankByHand,
       showUndo,
+      tracking,
     ],
   );
 
@@ -471,7 +547,7 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       await dispatch(removeRecipe({ uid, id: recipe.id })).unwrap();
-      closeSubview();
+      closeSubviewIf((current) => current === subview);
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, 'Unable to delete this recipe.'));
       setIsSubmitting(false);
@@ -535,10 +611,12 @@ function RecipeForm({
               ).values(),
             ],
             nutritionOverride: parseNutrition(data.nutrition),
+            care: parseCareText(data.care),
             steps: data.steps.map((step) => step.trim()).filter(Boolean),
             coverFile: upload.file,
             removeCover: isCoverRemoved,
             fromIdeaId: initialIdea?.id ?? null,
+            tweakReason: data.why,
           },
         }),
       ).unwrap();
@@ -551,7 +629,7 @@ function RecipeForm({
           type: 'success',
         });
       }
-      closeSubview();
+      closeSubviewIf((current) => current === subview);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this recipe.'));
       setIsSubmitting(false);
@@ -576,6 +654,14 @@ function RecipeForm({
             {initialIdea.title}
           </span>
         </p>
+      )}
+      {initialNote && (
+        <div className='bg-accent border-border mb-4 space-y-0.5 rounded-2xl border p-3 text-sm'>
+          <p className='text-muted-foreground text-xs'>
+            Updating from your note
+          </p>
+          <ClampedText text={initialNote.text ?? ''} />
+        </div>
       )}
       {initialRead && !isNoteClosed && (
         <div

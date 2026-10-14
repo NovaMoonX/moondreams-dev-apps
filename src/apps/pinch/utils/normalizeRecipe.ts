@@ -10,7 +10,8 @@ import {
   MAX_STEP_LENGTH,
   UNITS,
 } from '@apps/pinch/constants';
-import type { Unit } from '@apps/pinch/types';
+import type { RecipeCare, Unit } from '@apps/pinch/types';
+import { toCare } from '@apps/pinch/utils/recipeCare';
 
 export interface ExtractedIngredient {
   name: string;
@@ -28,6 +29,8 @@ export interface ExtractedRecipe {
   description: string | null;
   ingredients: ExtractedIngredient[];
   steps: string[];
+  /** Only what the source says about keeping and reheating the leftovers; null when it says nothing. */
+  care: RecipeCare | null;
   /** Parts of the recipe the reader could not make out. */
   unread: string[];
 }
@@ -48,6 +51,9 @@ const asMinutes = (value: unknown) =>
   value <= MAX_MINUTES
     ? Math.round(value)
     : null;
+
+const asWholeDays = (value: unknown) =>
+  typeof value === 'number' ? Math.round(value) : null;
 
 /** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real. */
 export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
@@ -88,6 +94,12 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
         asString(step) ? [asString(step)!.slice(0, MAX_STEP_LENGTH)] : [],
       )
       .slice(0, MAX_RECIPE_STEPS),
+    care: toCare({
+      fridgeDays: asWholeDays(parsed.fridgeDays),
+      freezerDays: asWholeDays(parsed.freezerDays),
+      reheat: parsed.reheat,
+      tip: parsed.tip,
+    }),
     unread: list(parsed.unread)
       .flatMap((entry) =>
         asString(entry) ? [asString(entry)!.slice(0, 200)] : [],

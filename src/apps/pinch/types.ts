@@ -194,6 +194,8 @@ export type PinchSubview =
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
       fromIdeaId?: string;
+      /** The note the form was opened from: shown as a quote, never changed by the save. */
+      fromNoteId?: string;
     }
   /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. */
   | { kind: 'cook'; recipeId: string; servings?: number }
@@ -310,6 +312,27 @@ export interface Cook {
   updatedAt: number;
 }
 
+export type NoteKind = 'NOTE' | 'TWEAK';
+
+/** One entry in a recipe's journal: something to remember after cooking, or the record of an edit to the recipe. */
+export interface RecipeNote {
+  /** Immutable. */
+  id: string;
+  /** Immutable. A recipe that no longer exists reads as none: its notes are ignored. */
+  recipeId: string;
+  /** Immutable. */
+  kind: NoteKind;
+  /** A NOTE always has it; a TWEAK's is the optional reason for the change. 1 to 2,000 characters when set. */
+  text: string | null;
+  /** A TWEAK's short summaries of what the edit changed, fixed when it was saved; empty for a NOTE. Immutable. */
+  changes: string[];
+  /** Immutable. The cook this follows up; a cook that no longer exists reads as none. */
+  cookId: string | null;
+  /** An instant, shown in local time. Immutable. */
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type ShoppingRequest =
   | { kind: 'recipe'; recipeId: string }
   | { kind: 'items'; items: MealItem[]; label: string };
@@ -322,6 +345,15 @@ export interface RecipeIngredient {
   amount: number;
   unit: Unit;
   note: string | null;
+}
+
+/** How to keep what a recipe makes. Every key is always present; a part the person left out is null. */
+export interface RecipeCare {
+  /** Whole days, 1 to `MAX_CARE_DAYS`. */
+  fridgeDays: number | null;
+  freezerDays: number | null;
+  reheat: string | null;
+  tip: string | null;
 }
 
 export interface Recipe {
@@ -340,6 +372,8 @@ export interface Recipe {
   source: RecipeSource;
   /** The `Source` it came from. A missing key (recipes written before sources) or an id no source has reads as no source. */
   sourceId: string | null;
+  /** How to keep the leftovers; null when none of its four parts is filled in. A recipe written before care lacks the key, which reads as null. */
+  care: RecipeCare | null;
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
   createdAt: number;

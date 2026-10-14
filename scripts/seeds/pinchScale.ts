@@ -161,6 +161,38 @@ const IDEA_COUNT = 80;
 // Cooks per recipe by recipe index (about 330 in all); recipe 1 gets twelve, enough for the history's "Show N more".
 const COOKS_PER_RECIPE = [0, 1, 2, 3, 1, 1, 5, 0, 1, 2];
 const COOK_DAYS_BACK = 60;
+// Notes per recipe by recipe index (about 310 in all); recipe 1 gets twelve, enough for the journal's "Show N more".
+const NOTES_PER_RECIPE = [0, 2, 2, 1, 3, 1, 2, 1, 0, 3];
+const NOTE_TEXTS = [
+  'Needed more salt than I thought.',
+  'Cut the cooking time by five minutes, it was done early.',
+  'Kids asked for this again. Doubling it next time.',
+  'Too sweet. Half the sugar.',
+  'Great with a squeeze of lemon at the end.',
+  'Left it in the oven a bit long, the edges caught. Check at 20 minutes.',
+  "A friend who doesn't eat dairy liked it with oat milk.",
+  "Doubled the garlic and it still wasn't enough.",
+];
+const TWEAKS = [
+  ['Salt 1 → 1.5 tsp'],
+  [
+    'Cook time 30 → 25 min',
+    'Step 2 now reads: “Cook until done, about 20 minutes.”',
+  ],
+  ['Serves 4 → 6', 'Added Lemon juice, 1 tbsp'],
+  ['Removed Sugar'],
+];
+// Seven lines and "and 3 more": the longest a tweak can be.
+const BIG_TWEAK = [
+  'Salt 1 → 1.5 tsp',
+  'Serves 4 → 6',
+  'Cook time 30 → 25 min',
+  'Added Lemon juice, 1 tbsp',
+  'Removed Sugar',
+  'Step 2 now reads: “Cook until done, about 20 minutes.”',
+  'Ingredients reordered',
+  'and 3 more',
+];
 const SHOPPING_FAMILY_COUNT = 25;
 // The last label is long on purpose, to see a name wrap on a phone.
 const SOURCE_LABELS = [
@@ -205,7 +237,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list, 80 recipe ideas and about 330 cooks. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list, 80 recipe ideas, about 330 cooks and about 310 notes. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -340,6 +372,26 @@ export async function seedPinchScale(
     return slot >= 15 ? null : sources[Math.max(0, slot - 3)].id;
   };
 
+  // Two recipes in four carry care and the rest keep the older shape with no key. It draws no random number, so nothing else in the fixture moves.
+  const getCare = (index: number) => {
+    if (index % 4 === 0) {
+      return {
+        care: {
+          fridgeDays: 4,
+          freezerDays: 90,
+          reheat: 'Warm it in a covered pan over low heat, about 10 minutes.',
+          tip: 'Keep any sauce in its own container.',
+        },
+      };
+    }
+    if (index % 4 === 1) {
+      return {
+        care: { fridgeDays: 3, freezerDays: null, reheat: null, tip: null },
+      };
+    }
+    return {};
+  };
+
   const recipes = Array.from({ length: RECIPE_COUNT }, (_, index) => {
     const lineCount = 3 + Math.floor(random() * 6);
     return {
@@ -359,6 +411,7 @@ export async function seedPinchScale(
         note: null,
       })),
       steps: ['Prep everything.', 'Cook until done.', 'Season and serve.'],
+      ...getCare(index),
       nutritionOverride: null,
       source: 'MANUAL',
       sourceId: getSourceId(index),
@@ -464,6 +517,52 @@ export async function seedPinchScale(
       updatedAt: cook.cookedAt,
     }),
   );
+
+  // Its own generator again. A recipe with cooks gets a tweak among its notes now and then, and some notes follow one of its cooks.
+  const noteRandom = makeRandom(20260303);
+  const pickNote = <T>(items: readonly T[]) =>
+    items[Math.floor(noteRandom() * items.length)];
+  const notes = recipes.flatMap((recipe, recipeIndex) => {
+    const count =
+      recipeIndex === 1
+        ? 12
+        : NOTES_PER_RECIPE[recipeIndex % NOTES_PER_RECIPE.length];
+    const recipeCooks = cooks.filter((cook) => cook.recipeId === recipe.id);
+    return Array.from({ length: count }, (_, noteIndex) => {
+      const isBigTweak = recipeIndex === 1 && noteIndex === 6;
+      const isTweak =
+        recipeCooks.length > 0 && (noteRandom() < 0.2 || isBigTweak);
+      const text = pickNote(NOTE_TEXTS);
+      const isForcedFollowUp =
+        recipeIndex === 1 && [0, 3, 9].includes(noteIndex);
+      const cook =
+        !isTweak &&
+        recipeCooks.length > 0 &&
+        (isForcedFollowUp || noteRandom() < 0.4)
+          ? pickNote(recipeCooks)
+          : null;
+      const createdAt = cook
+        ? cook.cookedAt + 2 * 3_600_000
+        : today -
+          Math.floor(noteRandom() * COOK_DAYS_BACK) * DAY_MS +
+          (9 + Math.floor(noteRandom() * 12)) * 3_600_000;
+      const getText = () => {
+        if (recipeIndex === 1 && noteIndex === 2) return NOTE_TEXTS.join(' ');
+        return isTweak && noteRandom() < 0.5 ? null : text;
+      };
+      return {
+        id: `scale-note-${recipeIndex}-${noteIndex}`,
+        recipeId: recipe.id,
+        kind: isTweak ? 'TWEAK' : 'NOTE',
+        text: getText(),
+        changes: isBigTweak ? BIG_TWEAK : isTweak ? pickNote(TWEAKS) : [],
+        cookId: cook?.id ?? null,
+        createdAt,
+        updatedAt: createdAt,
+      };
+    });
+  });
+  notes.forEach((note) => add(`notes/${note.id}`, note));
 
   const mealItems = (count: number, salt: number) =>
     Array.from({ length: count }, (_, itemIndex) => {

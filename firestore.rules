@@ -1426,9 +1426,23 @@ service cloud.firestore {
         return value == null || (value is int && value >= 0 && value <= 100000);
       }
 
+      function isNullOrCareDays(value) {
+        return value == null || (value is int && value >= 1 && value <= 365);
+      }
+
+      // A recipe written before care existed has no key. A map of four nulls passes here, though the client writes null instead.
+      function isRecipeCare(value) {
+        return value == null || (value is map
+          && value.keys().hasOnly(['fridgeDays', 'freezerDays', 'reheat', 'tip'])
+          && value.keys().hasAll(['fridgeDays', 'freezerDays', 'reheat', 'tip'])
+          && isNullOrCareDays(value.fridgeDays) && isNullOrCareDays(value.freezerDays)
+          && (value.reheat == null || isShortText(value.reheat, 300))
+          && (value.tip == null || isShortText(value.tip, 300)));
+      }
+
       // Rules can't walk a list, so each ingredient line and step is shaped by the client; the rules cap the counts and the fields around them.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'nutritionOverride', 'source', 'sourceId', 'isArchived', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'care', 'nutritionOverride', 'source', 'sourceId', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1437,6 +1451,7 @@ service cloud.firestore {
           && isNullOrMinutes(data.get('prepMinutes', null))
           && isNullOrMinutes(data.get('cookMinutes', null))
           && isNutrition(data.get('nutritionOverride', null))
+          && isRecipeCare(data.get('care', null))
           && data.get('isArchived', false) is bool
           && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
           && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
@@ -1489,6 +1504,34 @@ service cloud.firestore {
           && (data.plannedMealId == null || (isShortText(data.plannedMealId, 80) && id == data.plannedMealId + '__' + data.recipeId))
           && data.servings is number && data.servings > 0 && data.servings <= 1000
           && data.cookedAt is int && data.cookedAt <= request.time.toMillis() + 86400000
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isNoteChangeAt(changes, i) {
+        return changes.size() <= i || isShortText(changes[i], 200);
+      }
+
+      // Rules can't loop, so each of the (at most 8) lines a tweak records is checked by index.
+      function isNoteChanges(changes) {
+        return changes is list && changes.size() <= 8
+          && isNoteChangeAt(changes, 0) && isNoteChangeAt(changes, 1)
+          && isNoteChangeAt(changes, 2) && isNoteChangeAt(changes, 3)
+          && isNoteChangeAt(changes, 4) && isNoteChangeAt(changes, 5)
+          && isNoteChangeAt(changes, 6) && isNoteChangeAt(changes, 7);
+      }
+
+      // A NOTE is the person's own words; a TWEAK records what an edit to the recipe changed, with an optional reason in `text`.
+      function isRecipeNote(data, id) {
+        return data.keys().hasOnly(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.recipeId, 80)
+          && data.kind in ['NOTE', 'TWEAK']
+          && (data.text == null || isShortText(data.text, 2000))
+          && (data.kind == 'NOTE' ? data.text is string : true)
+          && isNoteChanges(data.changes)
+          && (data.kind == 'TWEAK' || data.changes.size() == 0)
+          && (data.cookId == null || isShortText(data.cookId, 80))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1679,6 +1722,17 @@ service cloud.firestore {
         allow update: if isKitchenOwner() && isCook(request.resource.data, id)
           && request.resource.data.recipeId == resource.data.recipeId
           && request.resource.data.plannedMealId == resource.data.get('plannedMealId', null)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /notes/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isRecipeNote(request.resource.data, id);
+        allow update: if isKitchenOwner() && isRecipeNote(request.resource.data, id)
+          && request.resource.data.recipeId == resource.data.recipeId
+          && request.resource.data.kind == resource.data.kind
+          && request.resource.data.cookId == resource.data.get('cookId', null)
+          && request.resource.data.changes == resource.data.get('changes', [])
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

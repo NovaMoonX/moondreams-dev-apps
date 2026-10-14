@@ -59,6 +59,22 @@ const responseSchema = {
       },
     },
     steps: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+    fridgeDays: nullable(
+      SchemaType.NUMBER,
+      'Days the recipe says leftovers keep in the fridge, as a whole number (a week is 7, a month is 30, a range takes its shorter end). Null when the recipe does not say.',
+    ),
+    freezerDays: nullable(
+      SchemaType.NUMBER,
+      'Days the recipe says leftovers keep in the freezer, as a whole number (a week is 7, a month is 30, a range takes its shorter end). Null when the recipe does not say.',
+    ),
+    reheat: nullable(
+      SchemaType.STRING,
+      'How the recipe says to reheat leftovers, in one short sentence. Null when the recipe does not say.',
+    ),
+    tip: nullable(
+      SchemaType.STRING,
+      'A tip the recipe gives for storing leftovers, such as keeping the sauce separate. Null when the recipe gives none.',
+    ),
     unread: {
       type: SchemaType.ARRAY,
       description:
@@ -75,6 +91,7 @@ Rules:
 - Return the title, servings, times, ingredients and steps exactly as the recipe gives them. Never invent an amount, a time or a step.
 - Split each ingredient line into a name, an amount, a unit and a note. "Unit" must be one of ${UNITS.join(', ')}; use EACH for a count of whole items (6 cloves of garlic is 6 EACH) and null when no unit fits.
 - Times are whole minutes (1 h 15 min is 75). Use null for anything the recipe does not say.
+- Storage: fill in fridgeDays, freezerDays, reheat and tip only when the recipe itself says how long leftovers keep, how to reheat them or how to store them. Never estimate how long food keeps, and use null when the recipe is silent.
 - Put anything you could not read or are unsure of in "unread", in plain words ("the last two ingredients are cut off").
 - If there is no recipe, return empty lists.`;
 
