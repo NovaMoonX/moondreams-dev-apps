@@ -51,6 +51,20 @@ const pluralize = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 /** What the shown period costs, as a few tiles: spend, average per meal, cost per gram of protein, and the daily calories and macros the person switched on. */
+/** A tile's number, a size smaller on a phone as it grows so it never runs under the tile's help icon. */
+function FittedValue({ text }: { text: string }) {
+  return (
+    <span
+      className={join(
+        text.length > 6 && 'max-sm:text-sm',
+        text.length >= 6 && 'max-[360px]:text-xs',
+      )}
+    >
+      {text}
+    </span>
+  );
+}
+
 function StatsRow({
   uid,
   stats,
@@ -93,17 +107,7 @@ function StatsRow({
       >
         <StatTile
           label={isPhone ? 'Spent' : `Spent ${phrase}`}
-          value={
-            <span
-              className={join(
-                formatTileCost(stats.spendCents).length > 6 && 'max-sm:text-sm',
-                formatTileCost(stats.spendCents).length >= 6 &&
-                  'max-[360px]:text-xs',
-              )}
-            >
-              {formatTileCost(stats.spendCents)}
-            </span>
-          }
+          value={<FittedValue text={formatTileCost(stats.spendCents)} />}
           help={
             leftOutCount > 0 ? (
               <HelpTip
@@ -123,9 +127,13 @@ function StatsRow({
         <StatTile
           label='Avg per meal'
           value={
-            stats.avgPerMealCents === null
-              ? '—'
-              : formatCost(stats.avgPerMealCents)
+            <FittedValue
+              text={
+                stats.avgPerMealCents === null
+                  ? '—'
+                  : formatCost(stats.avgPerMealCents)
+              }
+            />
           }
           help={
             <HelpTip title='Average per meal' placement='bottom'>
@@ -137,9 +145,13 @@ function StatsRow({
           <StatTile
             label='Per g protein'
             value={
-              stats.proteinCentsPerGram === null
-                ? '—'
-                : formatCost(stats.proteinCentsPerGram)
+              <FittedValue
+                text={
+                  stats.proteinCentsPerGram === null
+                    ? '—'
+                    : formatCost(stats.proteinCentsPerGram)
+                }
+              />
             }
           />
         )}
