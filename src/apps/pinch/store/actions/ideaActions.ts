@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
-import { getErrorMessage } from '@/utils/errorUtils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { getComparableUrl, getWebLinkHost } from '@/utils/urlUtils';
 import {
@@ -35,18 +35,29 @@ const BAD_TITLE = `Give it a title of up to ${MAX_IDEA_TITLE_LENGTH} characters.
 const BAD_NOTE = `Keep the note to ${MAX_IDEA_NOTE_LENGTH} characters.`;
 const BAD_LINK = 'Paste a web link that starts with http or https.';
 const DUPLICATE_LINK = "That one's already in your ideas.";
-const PHOTO_FAILED =
-  "We couldn't save that picture. Check your connection and try again.";
+const BAD_PHOTO =
+  "That picture couldn't be read. Try a JPG, PNG or WebP photo.";
+const PHOTO_FAILED = "We couldn't save that picture.";
 
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
     console.error('Pinch idea write failed', error);
-    return fallback;
+    return error.code.startsWith('storage/')
+      ? getStorageErrorMessage(error, PHOTO_FAILED)
+      : fallback;
   }
   return getErrorMessage(error, fallback);
 };
 
 const getNote = (note: string | null) => note?.trim() || null;
+
+const resizeIdeaPhoto = async (file: File) => {
+  const resized = await resizeImageToWebp(file, IDEA_PHOTO_MAX_DIMENSION);
+  if (resized.type !== 'image/webp') {
+    throw new Error(BAD_PHOTO);
+  }
+  return resized;
+};
 
 export interface IdeaDraft {
   kind: IdeaKind;
@@ -71,7 +82,17 @@ export const createIdea = createAsyncThunk<
   'pinch/ideas/create',
   async ({ uid, draft }, { getState, rejectWithValue }) => {
     const note = getNote(draft.note);
-    const { items } = getState().pinch.ideas;
+    const { items, isLoaded, loadError } = getState().pinch.ideas;
+    if (loadError !== null) {
+      return rejectWithValue(
+        "Your ideas couldn't be loaded, so adding is off for now.",
+      );
+    }
+    if (!isLoaded) {
+      return rejectWithValue(
+        'Your ideas are still loading. Give it a moment and try again.',
+      );
+    }
     const url = draft.kind === 'LINK' ? toIdeaUrl(draft.url ?? '') : null;
     const host = url === null ? null : getWebLinkHost(url);
     const title = clipIdeaTitle(draft.title) || clipIdeaTitle(host ?? '');
@@ -113,12 +134,22 @@ export const createIdea = createAsyncThunk<
       updatedAt: now,
     };
 
+    const resized =
+      photoPath && draft.photoFile
+        ? await resizeIdeaPhoto(draft.photoFile).then(
+            (photo) => ({ photo }),
+            (error: unknown) => ({ error }),
+          )
+        : null;
+    if (resized && 'error' in resized) {
+      return rejectWithValue(
+        getWriteMessage(resized.error, 'Unable to save this idea.'),
+      );
+    }
+
     try {
-      if (photoPath && draft.photoFile) {
-        await uploadFile(
-          photoPath,
-          await resizeImageToWebp(draft.photoFile, IDEA_PHOTO_MAX_DIMENSION),
-        );
+      if (photoPath && resized) {
+        await uploadFile(photoPath, resized.photo);
       }
       await setDoc(ideaDoc(uid, id), idea);
     } catch (error) {
@@ -126,10 +157,7 @@ export const createIdea = createAsyncThunk<
         await deleteFile(photoPath).catch(() => undefined);
       }
       return rejectWithValue(
-        getWriteMessage(
-          error,
-          draft.kind === 'PHOTO' ? PHOTO_FAILED : 'Unable to save this idea.',
-        ),
+        getWriteMessage(error, 'Unable to save this idea.'),
       );
     }
 
@@ -197,10 +225,7 @@ export const updateIdea = createAsyncThunk<
 
     try {
       if (photoPath && photoFile) {
-        await uploadFile(
-          photoPath,
-          await resizeImageToWebp(photoFile, IDEA_PHOTO_MAX_DIMENSION),
-        );
+        await uploadFile(photoPath, await resizeIdeaPhoto(photoFile));
       }
       await updateDoc(ideaDoc(uid, id), {
         ...getMissingIdeaFields(existing),
@@ -212,10 +237,7 @@ export const updateIdea = createAsyncThunk<
       });
     } catch (error) {
       return rejectWithValue(
-        getWriteMessage(
-          error,
-          photoFile ? PHOTO_FAILED : 'Unable to save this idea.',
-        ),
+        getWriteMessage(error, 'Unable to save this idea.'),
       );
     }
 

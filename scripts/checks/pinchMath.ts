@@ -10,6 +10,7 @@ import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
   getComparableUrl,
   getWebLinkHost,
+  hasSeveralWebLinks,
   toWebLink,
 } from '../../src/utils/urlUtils.ts';
 import {
@@ -553,9 +554,54 @@ assert.deepEqual(
   'a meal item over a recipe with no servings gives no lines',
 );
 assert.equal(
-  toWebLink('  https://www.Example.com/a b/ \n'),
-  'https://www.example.com/ab/',
-  'a pasted link loses stray spaces and breaks, and its host is lower-cased',
+  toWebLink('  https://www.Example.com/a/  '),
+  'https://www.example.com/a/',
+  'stray spaces around a link are dropped and its host is lower-cased',
+);
+assert.equal(
+  toWebLink('Lemon bars\nhttps://site.example.com/lemon-bars'),
+  'https://site.example.com/lemon-bars',
+  'a title and a link that share the pasted text give the link',
+);
+assert.equal(
+  toWebLink('Lemon bars\thttps://site.example.com/x\tlook at this'),
+  'https://site.example.com/x',
+  'tabs separate words as spaces do',
+);
+assert.equal(
+  toWebLink('HTTPS://Site.example.com/x \r\n my notes'),
+  'https://site.example.com/x',
+  'a link with a capital scheme is found among words and line breaks',
+);
+assert.equal(
+  toWebLink('https://one.example.com/a https://two.example.com/b'),
+  null,
+  'two links in one paste are not one link',
+);
+assert.equal(
+  toWebLink('https://one.example.com/a\nhttp://two.example.com/b'),
+  null,
+  'two links on two lines are not one link',
+);
+assert.equal(
+  hasSeveralWebLinks('one https://a.example.com/x and http://b.example.com/y'),
+  true,
+  'two links are counted',
+);
+assert.equal(
+  hasSeveralWebLinks('Lemon bars\nhttps://a.example.com/x'),
+  false,
+  'one link among words is one link',
+);
+assert.equal(
+  toWebLink('example.com/recipes/very\nlong/path-that-wrapped'),
+  'https://example.com/recipes/verylong/path-that-wrapped',
+  'a link with no scheme that wrapped over lines is joined',
+);
+assert.equal(
+  toWebLink('https://example.com/a?next=https://other.example.com/b'),
+  'https://example.com/a?next=https://other.example.com/b',
+  'a link that holds another address in its query is still one link',
 );
 assert.equal(
   toWebLink('seriouseats.com/recipes/x'),
@@ -597,6 +643,7 @@ const samePage = [
   'EXAMPLE.com/recipes/lemon-bars?utm_source=news&utm_medium=email#comments',
   'https://example.com/recipes/lemon-bars?fbclid=abc&gclid=def',
   ' https://example.com/recipes/lemon-bars/?igshid=1 ',
+  'https://example.com/recipes/lemon-bars?igsh=abc&si=def&mibextid=ghi',
 ];
 samePage.forEach((text) =>
   assert.equal(

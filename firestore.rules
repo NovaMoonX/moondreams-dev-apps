@@ -1468,16 +1468,16 @@ service cloud.firestore {
 
       function isIdea(data, id) {
         return data.keys().hasOnly(['id', 'kind', 'title', 'note', 'url', 'siteName', 'imageUrl', 'photoPath', 'recipeId', 'createdAt', 'updatedAt'])
-          && data.keys().hasAll(['id', 'kind', 'title', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'kind', 'title', 'note', 'url', 'siteName', 'imageUrl', 'photoPath', 'recipeId', 'createdAt', 'updatedAt'])
           && data.id == id
           && data.kind in ['LINK', 'PHOTO', 'TEXT']
           && isShortText(data.title, 120)
-          && (data.get('note', null) == null || isShortText(data.note, 1000))
-          && (data.get('url', null) == null || (data.url is string && data.url.size() <= 2000 && data.url.matches('https?://.+')))
-          && (data.get('siteName', null) == null || isShortText(data.siteName, 120))
-          && (data.get('imageUrl', null) == null || (data.imageUrl is string && data.imageUrl.size() <= 2000 && data.imageUrl.matches('https://.+')))
-          && (data.get('photoPath', null) == null || data.photoPath == 'apps/pinch/kitchens/' + uid + '/ideas/' + id + '/photo.webp')
-          && (data.get('recipeId', null) == null || isShortText(data.recipeId, 80))
+          && (data.note == null || isShortText(data.note, 1000))
+          && (data.url == null || (data.url is string && data.url.size() <= 2000 && data.url.matches('https?://.+') && !data.url.matches('https?://[^/?#]*@.*')))
+          && (data.siteName == null || isShortText(data.siteName, 120))
+          && (data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 2000 && data.imageUrl.matches('https://.+') && !data.imageUrl.matches('https://[^/?#]*@.*')))
+          && (data.photoPath == null || data.photoPath == 'apps/pinch/kitchens/' + uid + '/ideas/' + id + '/photo.webp')
+          && (data.recipeId == null || isShortText(data.recipeId, 80))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1641,6 +1641,7 @@ service cloud.firestore {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isIdea(request.resource.data, id);
         allow update: if isKitchenOwner() && isIdea(request.resource.data, id)
+          && request.resource.data.kind == resource.data.kind
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

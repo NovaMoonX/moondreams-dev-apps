@@ -80,6 +80,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const sourceCounts = useAppSelector(selectSourceCounts);
   const ideaCount = useAppSelector((state) => state.pinch.ideas.items.length);
   const ideasLoadError = useAppSelector(selectIdeasLoadError);
+  const isIdeasLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
   const [view, setView] = useState<RecipesView>('recipes');
   const [query, setQuery] = useState('');
   const [pickedSource, setPickedSource] = useState(SOURCE_FILTER_ANY);
@@ -90,7 +91,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
 
   const isIdeas = view === 'ideas';
-  const canAddIdea = ideasLoadError === null && ideaCount < SOFT_MAX_IDEAS;
+  const canAddIdea = isIdeasLoaded && ideasLoadError === null;
   const total = isIdeas ? 0 : view === 'meals' ? meals.length : recipes.length;
   const hasFilterBar = view === 'recipes' && sourceCounts.bySource.size > 0;
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
@@ -310,7 +311,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
 
   const handleNew = () => {
     if (isIdeas) {
-      setIsIdeaAddOpen(true);
+      if (canAddIdea) setIsIdeaAddOpen(true);
       return;
     }
     if (view === 'meals') {
@@ -329,12 +330,13 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       <SectionHeader
         title={isIdeas ? 'Ideas' : 'Recipes'}
         action={
-          (!isIdeas || canAddIdea) && (
+          (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
             <Button
               type='button'
               size='sm'
               rounded='full'
               className='gap-1'
+              disabled={isIdeas && !canAddIdea}
               onClick={handleNew}
             >
               <Plus className='h-4 w-4' aria-hidden='true' />
