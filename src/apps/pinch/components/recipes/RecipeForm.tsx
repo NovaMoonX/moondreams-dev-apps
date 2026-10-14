@@ -130,7 +130,7 @@ function RecipeForm({
 }: RecipeFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { closeSubview } = usePinchOverlay();
+  const { subview, closeSubviewIf } = usePinchOverlay();
   const { addToast } = useToast();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
@@ -530,7 +530,7 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       await dispatch(removeRecipe({ uid, id: recipe.id })).unwrap();
-      closeSubview();
+      closeSubviewIf((current) => current === subview);
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, 'Unable to delete this recipe.'));
       setIsSubmitting(false);
@@ -611,7 +611,7 @@ function RecipeForm({
           type: 'success',
         });
       }
-      closeSubview();
+      closeSubviewIf((current) => current === subview);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this recipe.'));
       setIsSubmitting(false);
