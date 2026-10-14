@@ -1,10 +1,14 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
 import {
+  collection,
   deleteDoc,
   doc,
+  getDocs,
+  query,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -177,12 +181,18 @@ export const removeNote = createAsyncThunk<
   return id;
 });
 
-/** A failure is the caller's to ignore: a note whose recipe is gone is never read. */
-export async function deleteNotes(uid: string, notes: RecipeNote[]) {
+/** Reads the recipe's notes from Firestore, since the store is empty while they load or after they fail to. A failure is the caller's to ignore: a note whose recipe is gone is never read. */
+export async function deleteNotes(uid: string, recipeId: string) {
+  const { docs } = await getDocs(
+    query(
+      collection(db, 'apps', 'pinch', 'kitchens', uid, 'notes'),
+      where('recipeId', '==', recipeId),
+    ),
+  );
   const groups = Array.from(
-    { length: Math.ceil(notes.length / RECIPE_NOTE_BATCH_SIZE) },
+    { length: Math.ceil(docs.length / RECIPE_NOTE_BATCH_SIZE) },
     (_, index) =>
-      notes.slice(
+      docs.slice(
         index * RECIPE_NOTE_BATCH_SIZE,
         (index + 1) * RECIPE_NOTE_BATCH_SIZE,
       ),
@@ -191,7 +201,7 @@ export async function deleteNotes(uid: string, notes: RecipeNote[]) {
   await Promise.all(
     groups.map((group) => {
       const batch = writeBatch(db);
-      group.forEach((note) => batch.delete(noteDoc(uid, note.id)));
+      group.forEach((note) => batch.delete(note.ref));
       return batch.commit();
     }),
   );
