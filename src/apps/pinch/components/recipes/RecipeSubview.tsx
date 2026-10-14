@@ -38,6 +38,8 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const fromDrawer = subview?.kind === 'recipe' && subview.fromDrawer === true;
   const fromIdeaId =
     subview?.kind === 'recipe' ? (subview.fromIdeaId ?? null) : null;
+  const fromCalendar =
+    subview?.kind === 'recipe' && subview.fromCalendar === true;
   const isDirtyRef = useRef(false);
   const existing =
     useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
@@ -75,7 +77,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     }
     if (isReaderStage && fromDrawer) {
       closeSubview();
-      setIsStartOpen(true);
+      setIsStartOpen(true, fromCalendar);
       return;
     }
     if (isReaderStage) {

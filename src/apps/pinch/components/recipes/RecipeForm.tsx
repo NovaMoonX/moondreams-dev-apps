@@ -121,8 +121,8 @@ function RecipeForm({
 }: RecipeFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { closeSubview } = usePinchOverlay();
   const { addToast } = useToast();
+  const { subview, closeSubview } = usePinchOverlay();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -548,6 +548,15 @@ function RecipeForm({
           description: linkedIdea
             ? `“${initialIdea.title}” moved to Made into recipes.`
             : undefined,
+          type: 'success',
+        });
+      } else if (
+        !recipe &&
+        subview?.kind === 'recipe' &&
+        subview.fromCalendar
+      ) {
+        addToast({
+          title: `Added ${data.title.trim()} to your recipes`,
           type: 'success',
         });
       }

@@ -29,6 +29,20 @@ const subscribeToHover = (onChange: () => void) => {
 
 const getCanHover = () => window.matchMedia(CAN_HOVER_QUERY).matches;
 
+// A dialog moves focus to its first control on its own, which is also `:focus-visible` after Enter, so
+// focus only counts as the person's when the key before it was Tab.
+const lastKey = { isTab: false };
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      lastKey.isTab = event.key === 'Tab';
+    },
+    true,
+  );
+  window.addEventListener('pointerdown', () => (lastKey.isTab = false), true);
+}
+
 interface HelpTipProps {
   title: string;
   children: ReactNode;
@@ -95,19 +109,19 @@ function HelpTip({
   const tipId = useId();
   const isTipShown = isOpen && !usesModal;
 
-  // A modal can sit over a drawer, and both close on one Escape: capture it so only the modal does.
+  // A modal or tooltip can sit over a drawer, and both close on one Escape: capture it so only it does.
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (usesModal) event.stopImmediatePropagation();
+        event.stopImmediatePropagation();
         setIsOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen, usesModal]);
+  }, [isOpen]);
 
   useLayoutEffect(() => {
     if (!isTipShown) return;
@@ -204,7 +218,9 @@ function HelpTip({
         usesModal
           ? undefined
           : (event) =>
-              event.currentTarget.matches(':focus-visible') && setIsOpen(true)
+              lastKey.isTab &&
+              event.currentTarget.matches(':focus-visible') &&
+              setIsOpen(true)
       }
       onBlur={usesModal ? undefined : () => setIsOpen(false)}
     >

@@ -192,6 +192,8 @@ export type PinchSubview =
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
       fromIdeaId?: string;
+      /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
+      fromCalendar?: boolean;
     }
   | {
       kind: 'plan';

@@ -1,7 +1,10 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useMemo,
+  useReducer,
+  useRef,
   useState,
   type CSSProperties,
 } from 'react';
@@ -23,6 +26,7 @@ import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
   LIST_SEARCH_THRESHOLD,
   SHOPPING_GROUP_PAGE_SIZE,
+  SHOPPING_MOVE_DELAY_MS,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
 import {
@@ -145,6 +149,42 @@ const ShoppingGroupSection = memo(
     isSameGroup(prev.group, next.group),
 );
 
+const NO_HELD: ReadonlyMap<string, boolean> = new Map();
+
+/** Holding renders nothing: the store update that follows the write does, and only letting go renders. */
+function useHeldRows() {
+  const held = useRef(NO_HELD);
+  const timers = useRef(new Map<string, number>());
+  const [, release] = useReducer((count: number) => count + 1, 0);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach((timer) => window.clearTimeout(timer));
+      pending.clear();
+    };
+  }, []);
+
+  const hold = useCallback((id: string, wasGot: boolean) => {
+    window.clearTimeout(timers.current.get(id));
+    timers.current.set(
+      id,
+      window.setTimeout(() => {
+        timers.current.delete(id);
+        const next = new Map(held.current);
+        next.delete(id);
+        held.current = next.size === 0 ? NO_HELD : next;
+        release();
+      }, SHOPPING_MOVE_DELAY_MS),
+    );
+    held.current = held.current.has(id)
+      ? held.current
+      : new Map(held.current).set(id, wasGot);
+  }, []);
+
+  return { held, hold };
+}
+
 type Overlay = { kind: 'add' } | { kind: 'item'; id: string };
 
 interface ShoppingScreenProps {
@@ -155,10 +195,14 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const { groups, checked } = useAppSelector(selectShoppingRows);
+  const { held, hold } = useHeldRows();
+  const { groups, checked } = useAppSelector((state) =>
+    selectShoppingRows(state, held.current),
+  );
   const itemCount = useAppSelector(selectShoppingItems).length;
   const itemsById = useAppSelector(selectShoppingById);
   const openCount = useAppSelector(selectShoppingOpenCount);
+  const gotCount = itemCount - openCount;
   const loadError = useAppSelector(selectShoppingLoadError);
   const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const cost = useAppSelector(selectShoppingCost);
@@ -192,6 +236,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
 
   const handleToggle = useCallback(
     (id: string, isChecked: boolean) => {
+      hold(id, !isChecked);
       dispatch(setShoppingItemChecked({ uid, id, isChecked }))
         .unwrap()
         .catch((error) =>
@@ -202,7 +247,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           }),
         );
     },
-    [dispatch, uid, addToast],
+    [dispatch, uid, addToast, hold],
   );
   const handleOpen = useCallback(
     (id: string) => setOverlay({ kind: 'item', id }),
@@ -212,7 +257,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const handleClear = async () => {
     const confirmed = await confirm({
       title: 'Clear what you got',
-      message: `Take ${checked.length === 1 ? 'the 1 item' : `the ${checked.length} items`} you've got off your list? This action cannot be undone.`,
+      message: `Take ${gotCount === 1 ? 'the 1 item' : `the ${gotCount} items`} you've got off your list? This action cannot be undone.`,
       confirmText: 'Clear',
       destructive: true,
     });
@@ -231,9 +276,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             ? 'Nothing was left to clear'
             : `Cleared ${deleted === 1 ? '1 item' : `${deleted} items`}`,
         description:
-          deleted < checked.length
-            ? 'The rest changed in the meantime.'
-            : undefined,
+          deleted < gotCount ? 'The rest changed in the meantime.' : undefined,
         type: deleted === 0 ? 'info' : 'success',
       });
     } catch (error) {
@@ -249,7 +292,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
 
   const getSubtitle = () => {
     if (openCount > 0) return `${openCount} to buy`;
-    return checked.length > 0 ? 'Got everything' : undefined;
+    return gotCount > 0 ? 'Got everything' : undefined;
   };
 
   const getLeftOutNames = (kind: Gap['kind']) =>
@@ -281,8 +324,8 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     if (itemCount === 0) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Nothing on your list. Add a recipe's ingredients from its page, or add
-          one here.
+          Nothing on your list. Add what you need from a recipe, a meal or a
+          day, or add one here.
         </p>
       );
     }
@@ -321,7 +364,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
               }
               isOpen={isGotOpen}
               onToggle={setIsGotOpen}
-              buttonClassName='min-h-10 px-0! py-2 pr-20! hover:bg-transparent!'
+              buttonClassName='min-h-10 px-0! py-2 pr-20! hover:bg-transparent! [&>div>span]:flex-none'
             >
               {isGotOpen && (
                 <ShoppingRows
