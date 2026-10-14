@@ -6,6 +6,7 @@ import {
   scaleNutrition,
   toPer100g,
 } from '../../src/apps/pinch/utils/nutritionBasis.ts';
+import { formatRowCost } from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import type {
   Product,
@@ -199,5 +200,15 @@ const scaled = scaleNutrition(
   1.5,
 );
 assert.deepEqual(scaled, { calories: 300, protein: 15, carbs: null, fat: 7.5 });
+
+assert.equal(formatRowCost(null, false), 'No price yet');
+assert.equal(formatRowCost(undefined, false), 'No price yet');
+assert.equal(
+  formatRowCost(null, true),
+  "Wasn't priced",
+  'a frozen day says it was not priced, not that it has no price yet',
+);
+assert.equal(formatRowCost(15.4, true), '$0.15');
+assert.equal(formatRowCost(0, false), '$0.00', 'a known free item is priced');
 
 console.log('pinchMath: all checks passed');

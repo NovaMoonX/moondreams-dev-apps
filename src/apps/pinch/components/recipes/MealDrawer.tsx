@@ -16,7 +16,11 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Gap } from '@apps/pinch/types';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  formatCost,
+  formatRowCost,
+  getItemTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
@@ -140,9 +144,7 @@ function MealDrawer({
                     </span>
                   </span>
                   <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                    {itemCost?.cents == null
-                      ? 'No price yet'
-                      : formatCost(itemCost.cents)}
+                    {formatRowCost(itemCost?.cents, false)}
                   </span>
                 </li>
               );

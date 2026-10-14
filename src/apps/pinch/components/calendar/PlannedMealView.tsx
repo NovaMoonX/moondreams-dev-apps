@@ -28,7 +28,11 @@ import {
 import type { Gap, MealType } from '@apps/pinch/types';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  formatCost,
+  formatRowCost,
+  getItemTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
@@ -278,11 +282,7 @@ function PlannedMealView({
                 </span>
               </span>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                {itemCost?.cents == null
-                  ? meal.snapshot
-                    ? "Wasn't priced"
-                    : 'No price yet'
-                  : formatCost(itemCost.cents)}
+                {formatRowCost(itemCost?.cents, meal.snapshot !== null)}
               </span>
             </li>
           );

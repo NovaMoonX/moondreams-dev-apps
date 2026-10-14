@@ -25,7 +25,11 @@ import {
 import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
 import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  formatCost,
+  formatRowCost,
+  getItemTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
@@ -206,9 +210,10 @@ function DayDrawer({
                                       </span>
                                     </span>
                                     <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                                      {itemCost?.cents == null
-                                        ? ''
-                                        : formatCost(itemCost.cents)}
+                                      {formatRowCost(
+                                        itemCost?.cents,
+                                        meal.snapshot !== null,
+                                      )}
                                     </span>
                                   </span>
                                 );
