@@ -195,6 +195,8 @@ export type PinchSubview =
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
+  /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. */
+  | { kind: 'cook'; recipeId: string; servings?: number }
   | {
       kind: 'plan';
       dayKey: string;
@@ -347,3 +349,5 @@ export interface RecipeCost {
   leftOut: Gap[];
   lines: Map<string, LineCost>;
 }
+
+export type CookView = 'steps' | 'ingredients';

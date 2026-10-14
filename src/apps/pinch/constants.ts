@@ -342,3 +342,15 @@ export const NUTRITION_BASIS_OPTIONS = [
   { value: 'SERVING', label: 'Per serving' },
   { value: 'PER_100G', label: 'Per 100 g' },
 ] as const;
+
+export const MAX_COOK_TIMERS = 4;
+
+export const MIN_COOK_SERVINGS = 0.5;
+export const MAX_COOK_SERVINGS = 1000;
+
+export const COOK_VIEW_OPTIONS = [
+  { value: 'steps', label: 'Steps' },
+  { value: 'ingredients', label: 'Ingredients' },
+] as const;
+
+export const MAX_STEP_DOTS = 12;

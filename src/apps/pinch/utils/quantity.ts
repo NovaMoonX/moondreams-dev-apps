@@ -50,3 +50,10 @@ export function bridge(
     ? null
     : { dimension: 'COUNT', value: grams / conversions.gramsEach };
 }
+
+/** An amount written for `ofServings`, scaled to `servings`; left as it is when `ofServings` isn't above zero. */
+export const scaleAmount = (
+  amount: number,
+  servings: number,
+  ofServings: number,
+) => (ofServings > 0 ? (amount * servings) / ofServings : amount);
