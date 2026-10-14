@@ -2048,22 +2048,26 @@ assert.deepEqual(
   'a recipe with care reads as it was written',
 );
 
-const summaryOf = (parts: Parameters<typeof toCare>[0]) =>
+const careSummaryOf = (parts: Parameters<typeof toCare>[0]) =>
   getCareSummary(getCareText(toCare(parts)));
 assert.equal(getCareSummary(EMPTY_CARE_TEXT), '', 'no care has no summary');
 assert.equal(
-  summaryOf({ fridgeDays: 3, freezerDays: 90 }),
+  careSummaryOf({ fridgeDays: 3, freezerDays: 90 }),
   'Fridge 3 days, freezer 3 months',
   'the summary names each time',
 );
 assert.equal(
-  summaryOf({ fridgeDays: 1, reheat: 'Oven.', tip: 'Apart.' }),
+  careSummaryOf({ fridgeDays: 1, reheat: 'Oven.', tip: 'Apart.' }),
   'Fridge 1 day, reheating, tip',
   'reheating and a tip are named, not copied',
 );
-assert.equal(summaryOf({ tip: 'Apart.' }), 'Tip', 'a tip alone is just Tip');
 assert.equal(
-  summaryOf({ freezerDays: 60, tip: 'Apart.' }),
+  careSummaryOf({ tip: 'Apart.' }),
+  'Tip',
+  'a tip alone is just Tip',
+);
+assert.equal(
+  careSummaryOf({ freezerDays: 60, tip: 'Apart.' }),
   'Freezer 2 months, tip',
   'the first word is capitalised whichever part comes first',
 );
