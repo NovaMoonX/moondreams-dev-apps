@@ -29,7 +29,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 17. **Keep a record of what you cooked.** One tap on a recipe, or on a meal you planned, notes that you made it, when, and for how many. It's a quiet history you can correct later, and a recipe shows how many times you've cooked it.
 18. **Keep notes on a recipe, and see when you changed it.** Write down what you'd do differently, after a cook or any time. When you edit a recipe you've cooked, Pinch adds a note with the date and what changed, so you can always tell which version a note was about.
 19. **Say how to keep it.** A recipe can say how many days it keeps in the fridge and the freezer, how to reheat it, and a tip such as "keep the sauce separate". It shows on the recipe, and cooking mode's last screen says how long the leftovers keep.
-20. **Keep track of what you prepared.** Put what you made ahead in the fridge or freezer as a container: how many servings, when to eat it by, and what happened to it. Kitchen lists what is in each, soonest first, and a recipe or meal says when some is put away.
+20. **Keep track of what you prepared.** Put what you made ahead in the fridge or freezer as a container: how many servings, when to eat it by, and what happened to it. Put portions in separate boxes and thaw one at a time, correct a count that went wrong, and see a meal's own recipes' stock on its row. Kitchen lists what is in each, soonest first, and a recipe or meal says when some is put away.
 
 ### Finding Your Way, In Detail
 
@@ -213,7 +213,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Mark a recipe cooked from its drawer or from a meal on a planned day, see "Cooked 3 times" on the recipe and "Cooked 3×" in the list, and keep a cooking history you can correct, add to and delete from
 - [x] Notes on a recipe: write one any time or after a cook, and every edit to a recipe you've cooked is recorded as a dated tweak with what changed, so you can see when you improved it and which version a note was about
 - [x] Say how long a recipe keeps in the fridge and the freezer, how to reheat it and a tip, in the recipe form's "Keeping it" row; see it on the recipe and as one line on cooking mode's last screen, and have a text, photo or link reading fill it in when the source says so
-- [x] Prepared meals: put a batch in the fridge or freezer from cooking mode, a recipe or meal, or Kitchen; see what is in each with its eat-by date, eat or move it with a history of what happened, and see what is in stock on the Recipes and Meals lists, in the plan and in the shopping sheet
+- [x] Prepared meals: put a batch in one container or several in the fridge or freezer from cooking mode, a recipe or meal, or Kitchen; see what is in each with its eat-by date, eat, move or recount it with a history of what happened, and see what is in stock on the Recipes and Meals lists, in the plan and in the shopping sheet
 - [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals, a shopping list of a few hundred things and dozens of ideas
 
 

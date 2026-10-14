@@ -1046,23 +1046,24 @@ A recipe can say how many days what it makes keeps in the fridge and the freezer
 **Context:** Read `TECHNICAL.md` decision 23, §5g, criterion 13 and open question 22; `UX.md`'s Prepared meals; CLAUDE.md's "Pick the atomic write that fits", "Know which of the two kinds of time value a field is" and the Firestore rules section on indexes and the evaluator.
 
 ### Description
-Meal prep kept in the fridge or freezer is a list of containers: what each is, how many servings are in it, where it is, when to eat it by, and what has happened to it. Kitchen has a "Prepared meals" row and list; a recipe's and saved meal's rows and drawers say what is in stock; cooking mode asks "Putting any away?" after a bulk meal; a plan can eat from a container; the shopping sheet says what is already put away.
+Meal prep kept in the fridge or freezer is a list of containers: what each is, how many servings are in it, where it is, when to eat it by, and what has happened to it. Kitchen has a "Prepared meals" row and list; a recipe's and saved meal's rows and drawers say what is in stock; cooking mode asks "Putting any away?" after a bulk meal; a plan can eat from a container; the shopping sheet says what is already put away. A put-away can be several containers (portions in separate boxes thaw one at a time), a saved meal's stock includes its recipes', and a thaw or move never hides that a container is past its date.
 
 ### Possible Approach
-1. One document per container (`servings`, `status`, `place`, `eatBy` as a date-only value, `history` of at most ten events), never split; finishing keeps the document, deleting erases it.
+1. One document per container (`servings`, `status`, `place`, `eatBy` as a date-only value, `history` of at most ten events), never split; finishing keeps the document, deleting erases it. A put-away writes one to twenty containers in one batch, each with its own history.
 2. Every change that depends on the stored state is a `runTransaction` over a pure plan, so another device's change is never written over.
 3. Keep the rules' history check lean: the evaluator's 1,000-expression limit allows about ten events checked by index.
 4. One listener for what is in stock; Finished is read on demand through TanStack Query with its composite index.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read / Update / Delete:** put some away, see what is in stock and finished, eat some or all, move between fridge and freezer, change the eat-by date, throw it out, delete it.
+- [ ] **Create / Read / Update / Delete:** put some away (as one container or several), see what is in stock and finished, eat some or all, correct the count, move between fridge and freezer, change the eat-by date, throw it out, delete it.
 - [ ] **Entry points:** Kitchen's row, a recipe's and a saved meal's drawer, cooking mode's last screen, the Prepared meals list's "Add", a planned meal's "Eat from your fridge or freezer".
 
 ### Success Criteria
 - [ ] Eat soon and past its date read right in the viewer's own time zone, west and east of UTC (`npm run check:pinch-math` under `America/Los_Angeles` and `Pacific/Auckland`), and an eat-by is never shown in local time.
 - [ ] The rules accept a valid container for the owner and refuse a bad shape, eleven events, servings 0, a non-midnight eat-by and a changed immutable field, for everyone else too; the cases are listed in the PR as owner, another user and signed out, against the previous rules as the control.
 - [ ] A failed or denied containers listener degrades only its own UI; checked by loading the previous rules into the emulator.
-- [ ] Two quick taps eat one portion and save one container; Escape and the back gesture close one thing at a time; leaving the put-away details after a change asks first.
+- [ ] Two quick taps eat one portion and save one container, and Enter then Enter on a list row eats nothing; Escape and the back gesture close one thing at a time; leaving the put-away details after a change asks first, and a save that isn't confirmed yet never holds the screen.
+- [ ] A thaw or move of a container already past its date keeps that date and says so; a recipe whose only use is food in the fridge or freezer is archived, not erased.
 - [ ] Driven on the scale kitchen at 4× CPU: tab switches, the stock list with about 300 containers, a recipe drawer and the Recipes list with stock lines, against the base build.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and every sheet was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
