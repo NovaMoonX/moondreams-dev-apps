@@ -42,8 +42,8 @@ function AddToShoppingSheet({
   onClose,
 }: AddToShoppingSheetProps) {
   const dispatch = useAppDispatch();
-  const { addToast, removeToast } = useToast();
-  const { openSubviewIfNone } = usePinchOverlay();
+  const { addToast } = useToast();
+  const { showShoppingTab } = usePinchOverlay();
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const onList = useAppSelector(selectShoppingById);
@@ -99,10 +99,10 @@ function AddToShoppingSheet({
       return `Pick up to ${MAX_SHOPPING_LINES_PER_ADD} at a time.`;
     }
     if (listCount >= SOFT_MAX_SHOPPING_ITEMS && newCount > 0) {
-      return "Your list is full: take something off or clear what you've got.";
+      return "Your list is full. Take something off or clear what you've got in the Shopping tab.";
     }
     if (listCount + newCount > SOFT_MAX_SHOPPING_ITEMS) {
-      return `Your list holds up to ${SOFT_MAX_SHOPPING_ITEMS}: untick a few, or clear what you've got.`;
+      return `Your list holds up to ${SOFT_MAX_SHOPPING_ITEMS}. Untick a few here, or clear what you've got in the Shopping tab.`;
     }
     return null;
   };
@@ -119,7 +119,7 @@ function AddToShoppingSheet({
         addToShoppingList({ uid, lines: selected.map((row) => row.line) }),
       ).unwrap();
       onClose();
-      const toastId = addToast({
+      addToast({
         title:
           count === 1
             ? `Added ${selected[0].name} to your shopping list`
@@ -127,10 +127,7 @@ function AddToShoppingSheet({
         type: 'success',
         action: {
           label: 'View',
-          onClick: () => {
-            removeToast(toastId);
-            openSubviewIfNone({ kind: 'shopping' });
-          },
+          onClick: showShoppingTab,
         },
       });
     } catch (addError) {

@@ -8,13 +8,19 @@ import type {
   Unit,
 } from '@apps/pinch/types';
 
-export const PINCH_TABS: PinchTab[] = ['calendar', 'recipes', 'kitchen'];
+export const PINCH_TABS: PinchTab[] = [
+  'calendar',
+  'recipes',
+  'kitchen',
+  'shopping',
+];
 export const DEFAULT_PINCH_TAB: PinchTab = 'calendar';
 
 export const PINCH_TAB_LABELS: Record<PinchTab, string> = {
   calendar: 'Calendar',
   recipes: 'Recipes',
   kitchen: 'Kitchen',
+  shopping: 'Shopping',
 };
 
 export const UNIT_LABELS: Record<Unit, string> = {

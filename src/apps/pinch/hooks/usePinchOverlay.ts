@@ -5,8 +5,8 @@ import type { PinchSubview } from '@apps/pinch/types';
 export interface PinchOverlayContextValue {
   subview: PinchSubview | null;
   openSubview: (subview: PinchSubview) => void;
-  /** Opens it only if no subview is up when it runs, so a late tap never replaces a form holding typed work. */
-  openSubviewIfNone: (subview: PinchSubview) => void;
+  /** Switches to the Shopping tab unless a subview is up when it runs, so a late tap never replaces a form holding typed work. */
+  showShoppingTab: () => void;
   closeSubview: () => void;
   /** The phone's list of ways to start a recipe, a drawer that lives above the tabs so any screen (and a way's own screen, on back) can raise it. */
   isStartOpen: boolean;

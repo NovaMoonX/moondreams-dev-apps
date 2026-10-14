@@ -21,7 +21,6 @@ import {
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
 import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
-import ShoppingEntry from '@apps/pinch/components/shopping/ShoppingEntry';
 import {
   INGREDIENT_FLAG_OPTIONS,
   INGREDIENT_PRICE_FILTER_OPTIONS,
@@ -223,7 +222,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     <div className='space-y-4'>
       <SectionHeader
         title='Kitchen'
-        subtitle='Your ingredients, products, stores and shopping list.'
+        subtitle='Your ingredients, products and stores.'
       />
       <div className='grid grid-cols-2 gap-2'>
         <EntryRow
@@ -238,7 +237,6 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           count={productCount}
           onClick={() => openSubview({ kind: 'products' })}
         />
-        <ShoppingEntry className='col-span-2' />
       </div>
       <div className='flex h-10 items-center justify-between gap-3'>
         <h3 className='text-muted-foreground flex min-w-0 items-baseline gap-2 text-xs font-semibold tracking-wide uppercase'>

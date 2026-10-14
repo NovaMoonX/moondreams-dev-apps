@@ -15,7 +15,6 @@ import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
-import Subview from '@/components/Subview';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
@@ -26,7 +25,6 @@ import {
   SHOPPING_GROUP_PAGE_SIZE,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
-import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   clearCheckedShoppingItems,
   setShoppingItemChecked,
@@ -130,7 +128,7 @@ const ShoppingGroupSection = memo(
     return (
       <section
         aria-label={group.name}
-        className='defer-offscreen space-y-1'
+        className='defer-offscreen space-y-1 lg:mb-4 lg:break-inside-avoid'
         style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
       >
         <LazyMount estimatedHeight={estimatedHeight} eager={isEager}>
@@ -149,12 +147,11 @@ const ShoppingGroupSection = memo(
 
 type Overlay = { kind: 'add' } | { kind: 'item'; id: string };
 
-interface ShoppingSubviewProps {
+interface ShoppingScreenProps {
   uid: string;
 }
 
-function ShoppingSubview({ uid }: ShoppingSubviewProps) {
-  const { closeSubview } = usePinchOverlay();
+function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -275,7 +272,11 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
       );
     }
     if (!isLoaded) {
-      return null;
+      return (
+        <p className='text-muted-foreground py-6 text-center text-sm'>
+          Loading your list…
+        </p>
+      );
     }
     if (itemCount === 0) {
       return (
@@ -287,15 +288,17 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
     }
     return (
       <>
-        {shownGroups.map((group, index) => (
-          <ShoppingGroupSection
-            key={group.id || 'other'}
-            group={group}
-            isEager={index < EAGER_GROUPS}
-            onToggle={handleToggle}
-            onOpen={handleOpen}
-          />
-        ))}
+        <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
+          {shownGroups.map((group, index) => (
+            <ShoppingGroupSection
+              key={group.id || 'other'}
+              group={group}
+              isEager={index < EAGER_GROUPS}
+              onToggle={handleToggle}
+              onOpen={handleOpen}
+            />
+          ))}
+        </div>
         {activeQuery === '' && groups.length === 0 && (
           <p className='text-muted-foreground py-4 text-center text-sm'>
             You've got everything. Clear it when you're ready for the next list.
@@ -347,81 +350,79 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
   };
 
   return (
-    <Subview title='Shopping list' onClose={closeSubview}>
-      <div className='space-y-4'>
-        <SectionHeader
-          title='Shopping list'
-          subtitle={getSubtitle()}
-          action={
-            canAdd ? (
-              <Button
-                type='button'
-                size='sm'
-                rounded='full'
-                className='gap-1'
-                onClick={() => setOverlay({ kind: 'add' })}
-              >
-                <Plus className='h-4 w-4' aria-hidden='true' />
-                Add
-              </Button>
-            ) : undefined
-          }
-        />
-        {isFull && loadError === null && (
-          <p className='text-muted-foreground text-sm'>
-            Your list is full: take something off or clear what you've got.
-          </p>
-        )}
-        {openCount > 0 && (
-          <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
-            {cost.totalCents === null ? (
-              'No prices yet'
-            ) : (
-              <span>
-                Amounts on your list: about{' '}
-                <span className='text-foreground font-semibold'>
-                  {formatCost(cost.totalCents)}
-                </span>
-              </span>
-            )}
-            <HelpTip
-              variant={cost.leftOut.length > 0 ? 'warning' : 'help'}
-              title='About this price'
-              placement='top'
+    <div className='space-y-4'>
+      <SectionHeader
+        title='Shopping list'
+        subtitle={getSubtitle()}
+        action={
+          canAdd ? (
+            <Button
+              type='button'
+              size='sm'
+              rounded='full'
+              className='gap-1'
+              onClick={() => setOverlay({ kind: 'add' })}
             >
-              <p>
-                This prices just the amounts on your list, from each
-                ingredient's default product. Stores sell whole packages, so
-                what you pay at the till is usually more.
+              <Plus className='h-4 w-4' aria-hidden='true' />
+              Add
+            </Button>
+          ) : undefined
+        }
+      />
+      {isFull && loadError === null && (
+        <p className='text-muted-foreground text-sm'>
+          Your list is full: take something off or clear what you've got.
+        </p>
+      )}
+      {openCount > 0 && (
+        <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
+          {cost.totalCents === null ? (
+            'No prices yet'
+          ) : (
+            <span>
+              Amounts on your list: about{' '}
+              <span className='text-foreground font-semibold'>
+                {formatCost(cost.totalCents)}
+              </span>
+            </span>
+          )}
+          <HelpTip
+            variant={cost.leftOut.length > 0 ? 'warning' : 'help'}
+            title='About this price'
+            placement='top'
+          >
+            <p>
+              This prices just the amounts on your list, from each ingredient's
+              default product. Stores sell whole packages, so what you pay at
+              the till is usually more.
+            </p>
+            {cost.leftOut.length > 0 && (
+              <p>This {formatLeftOut(cost.leftOut)}.</p>
+            )}
+            {noProductNames.length > 0 && (
+              <p className='text-muted-foreground'>
+                No price yet: {formatNames(noProductNames)}. Add a price from
+                the ingredient in Kitchen.
               </p>
-              {cost.leftOut.length > 0 && (
-                <p>This {formatLeftOut(cost.leftOut)}.</p>
-              )}
-              {noProductNames.length > 0 && (
-                <p className='text-muted-foreground'>
-                  No price yet: {formatNames(noProductNames)}. Add a price from
-                  the ingredient in Kitchen.
-                </p>
-              )}
-              {notComparableNames.length > 0 && (
-                <p className='text-muted-foreground'>
-                  Can't compare the amount with the package size:{' '}
-                  {formatNames(notComparableNames)}. Change the package size
-                  from the ingredient in Kitchen.
-                </p>
-              )}
-            </HelpTip>
-          </p>
-        )}
-        {hasSearch && loadError === null && (
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder='Search your list'
-          />
-        )}
-        {getBody()}
-      </div>
+            )}
+            {notComparableNames.length > 0 && (
+              <p className='text-muted-foreground'>
+                Can't compare the amount with the package size:{' '}
+                {formatNames(notComparableNames)}. Change the package size from
+                the ingredient in Kitchen.
+              </p>
+            )}
+          </HelpTip>
+        </p>
+      )}
+      {hasSearch && loadError === null && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder='Search your list'
+        />
+      )}
+      {getBody()}
       {overlay?.kind === 'add' && (
         <ShoppingAddSheet uid={uid} onClose={() => setOverlay(null)} />
       )}
@@ -433,8 +434,8 @@ function ShoppingSubview({ uid }: ShoppingSubviewProps) {
           onClose={() => setOverlay(null)}
         />
       )}
-    </Subview>
+    </div>
   );
 }
 
-export default ShoppingSubview;
+export default memo(ShoppingScreen);
