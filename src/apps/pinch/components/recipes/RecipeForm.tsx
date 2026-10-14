@@ -575,6 +575,12 @@ function RecipeForm({
           <span className='text-foreground font-medium'>
             {initialIdea.title}
           </span>
+          {initialIdea.kind === 'PHOTO' && (
+            <span className='mt-1 block text-xs'>
+              Its photo stays with the idea. To have an AI read a picture, start
+              a new recipe with “From a file”.
+            </span>
+          )}
         </p>
       )}
       {initialRead && !isNoteClosed && (

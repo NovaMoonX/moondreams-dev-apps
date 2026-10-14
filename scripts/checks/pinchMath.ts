@@ -16,8 +16,10 @@ import {
 import {
   findIdeaByUrl,
   getIdeaDetail,
+  getIdeaRecipeMethod,
   getIdeaSearchText,
   getMissingIdeaFields,
+  getReadingForIdea,
   toIdeaImageUrl,
   toIdeaUrl,
 } from '../../src/apps/pinch/utils/ideas.ts';
@@ -32,6 +34,7 @@ import {
   mergeLines,
   roundAmount,
 } from '../../src/apps/pinch/utils/shopping.ts';
+import type { ExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import type {
   Idea,
   MealItem,
@@ -776,6 +779,80 @@ assert.deepEqual(
   getMissingIdeaFields(idea({})),
   {},
   'a whole idea lacks nothing',
+);
+
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: 'https://example.com/a' })),
+  'link',
+  'a link idea starts from the link way',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: 'not a link' })),
+  'manual',
+  'a link idea whose address can not be opened starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: null })),
+  'manual',
+  'a link idea with no address starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'PHOTO', url: null })),
+  'manual',
+  'a photo idea starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'TEXT', url: 'https://example.com/a' })),
+  'manual',
+  'a typed note starts by hand',
+);
+
+const reading: ExtractedRecipe = {
+  title: 'Chicken adobo',
+  servings: 4,
+  prepMinutes: 10,
+  cookMinutes: 40,
+  description: 'Soy and vinegar, braised.',
+  ingredients: [{ name: 'chicken thigh', amount: 2, unit: 'LB', note: null }],
+  steps: ['Braise.'],
+  unread: [],
+};
+const linkIdea = idea({
+  kind: 'LINK',
+  url: 'https://www.seriouseats.com/adobo',
+  title: 'My adobo',
+  note: 'Mom likes it',
+});
+assert.deepEqual(
+  getReadingForIdea(reading, linkIdea),
+  { ...reading, title: 'My adobo', description: 'Mom likes it' },
+  "a reading keeps the idea's own title and note and fills the rest",
+);
+assert.equal(
+  getReadingForIdea(reading, { ...linkIdea, note: '  ' }).description,
+  'Soy and vinegar, braised.',
+  'a blank note leaves the page description',
+);
+assert.equal(
+  getReadingForIdea(reading, { ...linkIdea, title: 'SeriousEats.com' }).title,
+  'Chicken adobo',
+  "a title that is only the site's name gives way to the recipe's",
+);
+assert.equal(
+  getReadingForIdea(
+    { ...reading, title: null },
+    {
+      ...linkIdea,
+      title: 'seriouseats.com',
+    },
+  ).title,
+  'seriouseats.com',
+  'no recipe title leaves the idea title as it was',
+);
+assert.deepEqual(
+  getReadingForIdea(reading, linkIdea).ingredients,
+  reading.ingredients,
+  'the ingredients and steps are the reading’s own',
 );
 
 console.log('pinchMath: all checks passed');
