@@ -21,19 +21,24 @@ interface PickOrCreateProps {
   newPlaceholder: string;
   /** Keep every option visible in the order given, for a short fixed list. */
   showAll?: boolean;
+  maxLength?: number;
+  /** Whether the text field takes focus when it is on screen at the start (it always does after a tap on the "New" pill). Turn off where it can start filled in. */
+  isFocusedOnOpen?: boolean;
 }
 
 /** Pick an existing name or make a new one: nothing starts selected, and the dashed "New" pill comes first. With no names yet it is just the text field. */
-function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel, newPlaceholder, showAll }: PickOrCreateProps) {
+function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel, newPlaceholder, showAll, maxLength, isFocusedOnOpen = true }: PickOrCreateProps) {
   const [isCreating, setIsCreating] = useState(choice === NEW_CHOICE);
+  const [hasTappedNew, setHasTappedNew] = useState(false);
   const showCreate = isCreating || choice === NEW_CHOICE || options.length === 0;
 
   const newInput = (
     <Input
       value={newText}
-      autoFocus={options.length > 0}
+      autoFocus={options.length > 0 && (isFocusedOnOpen || hasTappedNew)}
       aria-label={newPlaceholder}
       placeholder={newPlaceholder}
+      maxLength={maxLength}
       variant='outline'
       onChange={(event) => onChange(NEW_CHOICE, event.target.value)}
     />
@@ -57,6 +62,7 @@ function PickOrCreate({ label, options, choice, newText, onChange, newPillLabel,
             className='border-primary/60 border border-dashed'
             onClick={() => {
               setIsCreating(true);
+              setHasTappedNew(true);
               onChange(NEW_CHOICE, newText);
             }}
           >

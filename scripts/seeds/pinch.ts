@@ -11,6 +11,13 @@ const DAY_MS = 86_400_000;
 
 const SEED_FAMILIES = [{ id: 'seed-pinch-family-chips', name: 'Chips' }];
 
+// The last one is only on a recipe Alex retired, so the list shows a source with nothing listed under it.
+const SEED_SOURCES = [
+  { id: 'seed-pinch-source-serious-eats', label: 'Serious Eats' },
+  { id: 'seed-pinch-source-recipe-cards', label: "Mom's recipe cards" },
+  { id: 'seed-pinch-source-nyt', label: 'NYT Cooking' },
+];
+
 const nutrition = (
   calories: number,
   protein: number,
@@ -223,6 +230,7 @@ const SEED_RECIPES = [
     ],
     nutritionOverride: null,
     source: 'MANUAL',
+    sourceId: 'seed-pinch-source-recipe-cards',
   },
   {
     id: 'seed-pinch-recipe-rice',
@@ -245,6 +253,7 @@ const SEED_RECIPES = [
     ],
     nutritionOverride: null,
     source: 'MANUAL',
+    sourceId: 'seed-pinch-source-serious-eats',
   },
   {
     id: 'seed-pinch-recipe-nachos',
@@ -264,6 +273,7 @@ const SEED_RECIPES = [
     // Typed over the added-up calories; the other metrics stay derived.
     nutritionOverride: { calories: 520, protein: null, carbs: null, fat: null },
     source: 'MANUAL',
+    sourceId: null,
   },
   // Deleted by Alex while a planned day still used it, so it is archived: hidden from lists and pickers, still named on that day.
   {
@@ -281,6 +291,7 @@ const SEED_RECIPES = [
     steps: ['Simmer until thick.'],
     nutritionOverride: null,
     source: 'MANUAL',
+    sourceId: 'seed-pinch-source-nyt',
     isArchived: true,
   },
 ];
@@ -458,6 +469,12 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(family.id)
         .set({ ...family, createdAt, updatedAt: createdAt }),
     ),
+    ...SEED_SOURCES.map((source) =>
+      kitchenRef
+        .collection('sources')
+        .doc(source.id)
+        .set({ ...source, createdAt, updatedAt: createdAt }),
+    ),
     ...PLANNED_BLUEPRINTS.map((blueprint, index) => {
       const id = `seed-pinch-planned-${index + 1}`;
       return kitchenRef
@@ -514,6 +531,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
       SEED_FAMILIES.length +
+      SEED_SOURCES.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +
       SEED_RECIPES.length +

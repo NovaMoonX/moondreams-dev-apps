@@ -39,6 +39,8 @@ export interface RecipeDraft {
   nutritionOverride: NutritionValues | null;
   /** How a new recipe came to be; an edit keeps the recipe's own. */
   source: RecipeSource;
+  /** The `Source` it came from, or null; written on every save, so older recipes gain the key. */
+  sourceId: string | null;
   /** Custom ingredients the reader proposed and the person kept: created with the recipe, in one batch. */
   newIngredients: { id: string; name: string }[];
   /** A new cover to upload, if one was picked. */
@@ -97,6 +99,7 @@ export const saveRecipe = createAsyncThunk<
         ingredients: draft.ingredients,
         steps: draft.steps,
         nutritionOverride: draft.nutritionOverride,
+        sourceId: draft.sourceId,
         updatedAt: now,
       };
 

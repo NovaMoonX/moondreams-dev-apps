@@ -148,6 +148,21 @@ const DISH_WORDS = [
   'dumplings',
 ];
 const MASS_UNITS = ['G', 'OZ', 'LB', 'KG'] as const;
+// The last label is long on purpose, to see a name wrap on a phone.
+const SOURCE_LABELS = [
+  'Serious Eats',
+  'NYT Cooking',
+  "Mom's recipe cards",
+  'Bon Appétit',
+  'Budget Bytes',
+  'Smitten Kitchen',
+  'Minimalist Baker',
+  "Grandma's binder",
+  'Half Baked Harvest',
+  'Food52',
+  'Love and Lemons',
+  'The big spiral-bound community cookbook from the Maple Street church fair',
+];
 
 /** Deterministic, so the same fixture comes out on every run. */
 const makeRandom = (seed: number) => {
@@ -176,7 +191,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes, 60 saved meals and about 1,100 planned meals over three months. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals and about 1,100 planned meals over three months. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -294,6 +309,24 @@ export async function seedPinchScale(
     }),
   );
 
+  const sources = SOURCE_LABELS.map((label, index) => ({
+    id: `scale-source-${index}`,
+    label,
+  }));
+  sources.forEach((source) =>
+    add(`sources/${source.id}`, {
+      ...source,
+      createdAt,
+      updatedAt: createdAt,
+    }),
+  );
+
+  // The first source holds the most, and two recipes in seventeen have none.
+  const getSourceId = (index: number) => {
+    const slot = index % 17;
+    return slot >= 15 ? null : sources[Math.max(0, slot - 3)].id;
+  };
+
   const recipes = Array.from({ length: RECIPE_COUNT }, (_, index) => {
     const lineCount = 3 + Math.floor(random() * 6);
     return {
@@ -315,6 +348,7 @@ export async function seedPinchScale(
       steps: ['Prep everything.', 'Cook until done.', 'Season and serve.'],
       nutritionOverride: null,
       source: 'MANUAL',
+      sourceId: getSourceId(index),
       isArchived: false,
     };
   });

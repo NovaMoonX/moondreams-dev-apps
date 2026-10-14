@@ -15,6 +15,7 @@ import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
 import Field from '@/components/forms/Field';
 import PhotoPicker from '@/components/forms/PhotoPicker';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -26,6 +27,7 @@ import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients'
 import {
   getDataFromExtracted,
   getInitialData,
+  getReadSourceChoice,
   isValidMinutes,
   isValidNutrition,
   parseMinutes,
@@ -39,6 +41,7 @@ import {
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
+  MAX_SOURCE_LABEL_LENGTH,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
@@ -47,11 +50,15 @@ import {
   removeRecipe,
   saveRecipe,
 } from '@apps/pinch/store/actions/recipeActions';
+import { createSource } from '@apps/pinch/store/actions/sourceActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
   selectIngredients,
   selectIngredientsById,
   selectRecipesById,
+  selectSources,
+  selectSourcesById,
+  selectSourcesLoadError,
 } from '@apps/pinch/store/selectors';
 import type { NutritionMetric, Recipe, RecipeSource } from '@apps/pinch/types';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
@@ -104,6 +111,9 @@ function RecipeForm({
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const sources = useAppSelector(selectSources);
+  const sourcesById = useAppSelector(selectSourcesById);
+  const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
   const existingCoverUrl = useStorageImageUrl(
     recipe?.coverPath ?? null,
     recipe?.updatedAt ?? 0,
@@ -113,8 +123,15 @@ function RecipeForm({
   const [isCoverRemoved, setIsCoverRemoved] = useState(false);
   const [initialData] = useState(() =>
     initialRead
-      ? getDataFromExtracted(initialRead.recipe, ingredients)
-      : getInitialData(recipe),
+      ? {
+          ...getDataFromExtracted(initialRead.recipe, ingredients),
+          source: getReadSourceChoice(
+            initialRead.source,
+            initialRead.label,
+            sources,
+          ),
+        }
+      : getInitialData(recipe, sourcesById),
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
@@ -157,6 +174,7 @@ function RecipeForm({
         steps: [],
         nutritionOverride: null,
         source: 'MANUAL',
+        sourceId: null,
         isArchived: false,
         createdAt: 0,
         updatedAt: 0,
@@ -201,6 +219,11 @@ function RecipeForm({
     return null;
   };
   const blocker = getBlocker();
+
+  const sourceOptions = useMemo(
+    () => sources.map((source) => ({ value: source.id, label: source.label })),
+    [sources],
+  );
 
   const fields = useMemo(
     () => [
@@ -321,6 +344,40 @@ function RecipeForm({
           </Field>
         ),
       }),
+      ...(hasSourcesFailed
+        ? []
+        : [
+            custom({
+              name: 'source',
+              label: '',
+              renderComponent: (props) => {
+                const value = props.value as RecipeFormData['source'];
+                return (
+                  <FormSection title="Where it's from">
+                    <div className='space-y-2' onKeyDown={blockEnterSubmit}>
+                      <PickOrCreate
+                        label='Sources'
+                        options={sourceOptions}
+                        choice={value.choice}
+                        newText={value.newText}
+                        newPillLabel='New source'
+                        newPlaceholder='Serious Eats'
+                        maxLength={MAX_SOURCE_LABEL_LENGTH}
+                        isFocusedOnOpen={false}
+                        onChange={(choice, newText) =>
+                          props.onValueChange({ choice, newText })
+                        }
+                      />
+                      <p className='text-muted-foreground text-xs'>
+                        Optional. It shows on the recipe, and you can filter by
+                        it.
+                      </p>
+                    </div>
+                  </FormSection>
+                );
+              },
+            }),
+          ]),
       custom({
         name: 'ingredients',
         label: '',
@@ -364,7 +421,17 @@ function RecipeForm({
         ),
       }),
     ],
-    [uid, coverUrl, coverError, pickCover, clearCover, calculation, isDirtyRef],
+    [
+      uid,
+      coverUrl,
+      coverError,
+      pickCover,
+      clearCover,
+      calculation,
+      isDirtyRef,
+      hasSourcesFailed,
+      sourceOptions,
+    ],
   );
 
   const handleDelete = async () => {
@@ -406,10 +473,21 @@ function RecipeForm({
     }
   };
 
+  const getSourceId = async ({ choice, newText }: RecipeFormData['source']) => {
+    if (hasSourcesFailed) return recipe?.sourceId ?? null;
+    if (choice === NEW_CHOICE) {
+      return newText.trim() === ''
+        ? null
+        : await dispatch(createSource({ uid, label: newText })).unwrap();
+    }
+    return sourcesById.has(choice) ? choice : null;
+  };
+
   const handleSubmit = async (data: RecipeFormData) => {
     setError(null);
     setIsSubmitting(true);
     try {
+      const sourceId = await getSourceId(data.source);
       await dispatch(
         saveRecipe({
           uid,
@@ -428,6 +506,7 @@ function RecipeForm({
               note: row.note,
             })),
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
+            sourceId,
             newIngredients: [
               ...new Map(
                 data.ingredients

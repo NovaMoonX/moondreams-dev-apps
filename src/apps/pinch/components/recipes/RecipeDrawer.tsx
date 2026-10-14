@@ -15,6 +15,7 @@ import {
   selectRecipeNutrition,
   selectRecipesById,
   selectShowNutrition,
+  selectSourcesById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, GapKind } from '@apps/pinch/types';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
@@ -24,12 +25,20 @@ import {
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { formatMinutes, formatServings } from '@apps/pinch/utils/recipeFormat';
+import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const gapLabel = (kind: GapKind | undefined) => {
   if (kind === 'NOT_COMPARABLE')
     return "Can't compare this unit to the product's";
   return null;
 };
+
+interface Fact {
+  emoji: string;
+  text: string;
+  /** A long, typed fact wraps inside the line instead of running past the sheet. */
+  canWrap?: boolean;
+}
 
 interface RecipeDrawerProps {
   uid: string;
@@ -53,12 +62,15 @@ function RecipeDrawer({
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
   const show = useAppSelector(selectShowNutrition);
+  const sourcesById = useAppSelector(selectSourcesById);
 
   if (!recipe) {
     return null;
   }
 
-  const facts = [
+  const source = getRecipeSource(recipe, sourcesById);
+
+  const facts: Fact[] = [
     { emoji: '🍽️', text: formatServings(recipe.servings) },
     recipe.prepMinutes != null && {
       emoji: '🔪',
@@ -68,7 +80,8 @@ function RecipeDrawer({
       emoji: '⏲️',
       text: `Cook ${formatMinutes(recipe.cookMinutes)}`,
     },
-  ].filter((fact) => fact !== false);
+    source && { emoji: '📖', text: `From ${source.label}`, canWrap: true },
+  ].filter((fact) => fact !== false && fact !== null);
   const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
 
   return (
@@ -106,7 +119,12 @@ function RecipeDrawer({
         )}
         <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
           {facts.map((fact) => (
-            <li key={fact.text} className='whitespace-nowrap'>
+            <li
+              key={fact.text}
+              className={
+                fact.canWrap ? 'min-w-0 wrap-break-word' : 'whitespace-nowrap'
+              }
+            >
               <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
             </li>
           ))}

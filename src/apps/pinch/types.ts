@@ -179,6 +179,7 @@ export type RecipeStartMethod = 'text' | 'file' | 'link' | 'manual';
 export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
+  | { kind: 'sources' }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
   | {
       kind: 'recipe';
@@ -239,7 +240,17 @@ export interface Product {
   updatedAt: number;
 }
 
+/** How a recipe draft was made. Not where it came from: that is a `Source`, named by `Recipe.sourceId`. */
 export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE' | 'AI_LINK';
+
+/** Where the person gets recipes from (a site, a cookbook, a relative), in their own words. */
+export interface Source {
+  id: string;
+  /** Trimmed, 1 to 80 characters, and different from every other source's label ignoring case. */
+  label: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {
@@ -265,6 +276,8 @@ export interface Recipe {
   /** Per serving; a null metric falls back to the value added up from the ingredients. */
   nutritionOverride: NutritionValues | null;
   source: RecipeSource;
+  /** The `Source` it came from. A missing key (recipes written before sources) or an id no source has reads as no source. */
+  sourceId: string | null;
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
   createdAt: number;
