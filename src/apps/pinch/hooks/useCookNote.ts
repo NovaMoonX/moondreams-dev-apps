@@ -63,7 +63,7 @@ export function useCookNote({
   return {
     isAvailable: isNotesReady && !isFull,
     isOpen,
-    hasDraft: isOpen && text.trim() !== '',
+    hasDraft: cookId !== null && isOpen && !isSaving && text.trim() !== '',
     canSave: isValidNoteText(text),
     text,
     setText,

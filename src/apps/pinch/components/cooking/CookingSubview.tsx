@@ -133,19 +133,28 @@ function CookingSession({
     return isConfirmed;
   };
 
+  const confirmDiscard = async () => {
+    if (!note.hasDraft) return true;
+
+    const isDiscarded = await confirm({
+      title: 'Discard this note?',
+      message: "It isn't saved yet. Discarding it loses what you typed.",
+      confirmText: 'Discard',
+      cancelText: 'Keep editing',
+      destructive: true,
+    });
+    return isDiscarded;
+  };
+
   const leave = async () => {
-    if (note.hasDraft) {
-      const isDiscarded = await confirm({
-        title: 'Discard this note?',
-        message:
-          "It isn't saved yet. If you leave now, what you typed is lost.",
-        confirmText: 'Discard',
-        cancelText: 'Keep editing',
-        destructive: true,
-      });
-      if (!isDiscarded) return;
-    }
+    if (!(await confirmDiscard())) return;
     if (await confirmLeave()) closeIfStillOpen();
+  };
+
+  const cancelNote = async () => {
+    if (!(await confirmDiscard())) return;
+    note.cancel();
+    focusPrimary();
   };
 
   const focusPrimary = () =>
@@ -404,10 +413,7 @@ function CookingSession({
                     '[@media(max-height:500px)]:h-11',
                   )}
                   disabled={note.isSaving}
-                  onClick={() => {
-                    note.cancel();
-                    focusPrimary();
-                  }}
+                  onClick={() => void cancelNote()}
                 >
                   Cancel
                 </Button>
