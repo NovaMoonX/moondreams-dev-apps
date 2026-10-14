@@ -196,3 +196,42 @@ export function buildRepricedSnapshot(
     repricedAt,
   };
 }
+
+export interface RepricePreview {
+  /** What the day's fixed meals add up to; null when none was priced. */
+  beforeCents: number | null;
+  /** The same meals worked out from today's data, as the re-price would write them. */
+  afterCents: number | null;
+  /** Ingredients today's prices still can't price. */
+  leftOutCount: number;
+}
+
+const addKnown = (values: (number | null)[]) => {
+  const known = values.flatMap((value) => (value === null ? [] : [value]));
+  return known.length === 0
+    ? null
+    : known.reduce((sum, value) => sum + value, 0);
+};
+
+/** What a day reads before and after being priced again, from the same function the re-price writes with. */
+export function getRepricePreview(
+  meals: PlannedMeal[],
+  context: CostContext,
+): RepricePreview {
+  const fixed = meals.flatMap((meal) =>
+    meal.snapshot ? [{ meal, snapshot: meal.snapshot }] : [],
+  );
+  const after = fixed.map(({ meal, snapshot }) =>
+    buildRepricedSnapshot(snapshot, meal.items, context, snapshot.frozenAt),
+  );
+
+  return {
+    beforeCents: addKnown(fixed.map(({ snapshot }) => snapshot.costCents)),
+    afterCents: addKnown(after.map((snapshot) => snapshot.costCents)),
+    leftOutCount: new Set(
+      after.flatMap((snapshot) =>
+        snapshot.leftOut.map((gap) => gap.ingredientId),
+      ),
+    ).size,
+  };
+}

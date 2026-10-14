@@ -6,7 +6,7 @@ import type {
   Recipe,
   ResolvedIngredient,
 } from '@apps/pinch/types';
-import { getRepricedAt } from '@apps/pinch/utils/mealMath';
+import { getRepricedAt, type RepricePreview } from '@apps/pinch/utils/mealMath';
 
 /** A meal item's name; a recipe or ingredient that is gone reads as removed. */
 export function getItemTitle(
@@ -47,3 +47,22 @@ export const formatRowCost = (
   if (!isFrozen) return 'No price yet';
   return isRepriced ? 'Still no price' : "Wasn't priced";
 };
+
+/** The lines a re-price confirm shows: the day before and after in the cost tile's own words, and what stays unpriced. The "after" is "about" because the write re-reads the meals. */
+export function getRepriceLines(preview: RepricePreview, isRepriced: boolean) {
+  const { beforeCents, afterCents, leftOutCount } = preview;
+  const before =
+    beforeCents === null
+      ? isRepriced
+        ? 'Still no price'
+        : "Wasn't priced"
+      : formatCost(beforeCents);
+  const after =
+    afterCents === null ? 'Still no price' : `about ${formatCost(afterCents)}`;
+  const leftOut =
+    leftOutCount === 0
+      ? null
+      : `${leftOutCount} ${leftOutCount === 1 ? 'ingredient still has' : 'ingredients still have'} no price`;
+
+  return { before, after, leftOut };
+}
