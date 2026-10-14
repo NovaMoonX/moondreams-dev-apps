@@ -346,10 +346,7 @@ export const removeRecipe = createAsyncThunk<
       console.error("Pinch could not clear a deleted recipe's cooks", error),
     );
 
-    await deleteNotes(
-      uid,
-      getState().pinch.notes.items.filter((note) => note.recipeId === id),
-    ).catch((error) =>
+    await deleteNotes(uid, id).catch((error) =>
       console.error("Pinch could not clear a deleted recipe's notes", error),
     );
 

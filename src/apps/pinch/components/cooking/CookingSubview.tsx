@@ -5,6 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import { useWakeLock } from '@/hooks/useWakeLock';
@@ -14,10 +15,10 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookStepView from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
-import NoteTextField from '@apps/pinch/components/notes/NoteTextField';
 import {
   COOK_VIEW_OPTIONS,
   MAX_COOK_SERVINGS,
+  MAX_RECIPE_NOTE_LENGTH,
   MIN_COOK_SERVINGS,
 } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
@@ -135,19 +136,28 @@ function CookingSession({
     return isConfirmed;
   };
 
+  const confirmDiscard = async () => {
+    if (!note.hasDraft) return true;
+
+    const isDiscarded = await confirm({
+      title: 'Discard this note?',
+      message: "It isn't saved yet. Discarding it loses what you typed.",
+      confirmText: 'Discard',
+      cancelText: 'Keep editing',
+      destructive: true,
+    });
+    return isDiscarded;
+  };
+
   const leave = async () => {
-    if (note.hasDraft) {
-      const isDiscarded = await confirm({
-        title: 'Discard this note?',
-        message:
-          "It isn't saved yet. If you leave now, what you typed is lost.",
-        confirmText: 'Discard',
-        cancelText: 'Keep editing',
-        destructive: true,
-      });
-      if (!isDiscarded) return;
-    }
+    if (!(await confirmDiscard())) return;
     if (await confirmLeave()) closeIfStillOpen();
+  };
+
+  const cancelNote = async () => {
+    if (!(await confirmDiscard())) return;
+    note.cancel();
+    focusPrimary();
   };
 
   const focusPrimary = () =>
@@ -292,6 +302,7 @@ function CookingSession({
                   <NoteTextField
                     label='Your note'
                     placeholder='Less vinegar next time, the sauce was ready early'
+                    maxLength={MAX_RECIPE_NOTE_LENGTH}
                     value={note.text}
                     onChange={note.setText}
                     shouldFocus
@@ -416,10 +427,7 @@ function CookingSession({
                     '[@media(max-height:500px)]:h-11',
                   )}
                   disabled={note.isSaving}
-                  onClick={() => {
-                    note.cancel();
-                    focusPrimary();
-                  }}
+                  onClick={() => void cancelNote()}
                 >
                   Cancel
                 </Button>

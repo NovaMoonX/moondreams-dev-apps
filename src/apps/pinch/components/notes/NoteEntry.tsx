@@ -2,9 +2,9 @@ import { memo } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import ClampedText from '@/components/ClampedText';
 import { formatDateShort } from '@/utils/formatUtils';
 import ChangeList from '@apps/pinch/components/notes/ChangeList';
-import ClampedText from '@apps/pinch/components/notes/ClampedText';
 import type { Cook, RecipeNote } from '@apps/pinch/types';
 
 interface NoteEntryProps {
@@ -25,7 +25,9 @@ function NoteEntry({ note, cook, writtenBefore, onEdit }: NoteEntryProps) {
     <li className='py-1'>
       <div className='flex min-h-10 items-center justify-between gap-3'>
         <p className='flex min-w-0 flex-wrap items-center gap-x-2 text-sm font-medium'>
-          <span className='whitespace-nowrap'>{date}</span>
+          <span className='whitespace-nowrap'>
+            {isTweak ? `Changed on ${date}` : date}
+          </span>
           {isTweak && (
             <span className='bg-accent text-accent-foreground border-border rounded-full border px-2 py-0.5 text-xs font-normal whitespace-nowrap'>
               Tweak
@@ -36,7 +38,7 @@ function NoteEntry({ note, cook, writtenBefore, onEdit }: NoteEntryProps) {
           type='button'
           variant='tertiary'
           size='sm'
-          aria-label={`Change the ${isTweak ? 'tweak' : 'note'} from ${date}`}
+          aria-label={`Edit the ${isTweak ? 'tweak' : 'note'} from ${date}`}
           className='-mr-2 h-10 shrink-0 px-2!'
           onClick={() => onEdit(note.id)}
         >

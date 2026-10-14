@@ -9,6 +9,7 @@ import {
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
+import ClampedText from '@/components/ClampedText';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
@@ -24,7 +25,6 @@ import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
-import ClampedText from '@apps/pinch/components/notes/ClampedText';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
 import RecipeCareField from '@apps/pinch/components/recipes/RecipeCareField';
 import {
@@ -132,7 +132,7 @@ function RecipeForm({
 }: RecipeFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { closeSubview } = usePinchOverlay();
+  const { subview, closeSubviewIf } = usePinchOverlay();
   const { addToast } = useToast();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
@@ -547,7 +547,7 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       await dispatch(removeRecipe({ uid, id: recipe.id })).unwrap();
-      closeSubview();
+      closeSubviewIf((current) => current === subview);
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, 'Unable to delete this recipe.'));
       setIsSubmitting(false);
@@ -629,7 +629,7 @@ function RecipeForm({
           type: 'success',
         });
       }
-      closeSubview();
+      closeSubviewIf((current) => current === subview);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this recipe.'));
       setIsSubmitting(false);

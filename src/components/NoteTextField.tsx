@@ -4,7 +4,6 @@ import { Textarea } from '@moondreamsdev/dreamer-ui/components';
 
 import Field from '@/components/forms/Field';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { MAX_RECIPE_NOTE_LENGTH } from '@apps/pinch/constants';
 
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
@@ -15,6 +14,7 @@ interface NoteTextFieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  maxLength: number;
   /** Focused once the sheet around it has settled. */
   shouldFocus?: boolean;
   rows?: number;
@@ -25,6 +25,7 @@ function NoteTextField({
   value,
   onChange,
   placeholder,
+  maxLength,
   shouldFocus = false,
   rows = 5,
 }: NoteTextFieldProps) {
@@ -55,7 +56,7 @@ function NoteTextField({
             ref={textRef}
             variant='outline'
             rows={rows}
-            maxLength={MAX_RECIPE_NOTE_LENGTH}
+            maxLength={maxLength}
             placeholder={placeholder}
             value={value}
             onChange={(event) => onChange(event.target.value)}
@@ -65,7 +66,7 @@ function NoteTextField({
       {value.length >= COUNTER_FROM && (
         <p className='text-muted-foreground text-right text-xs tabular-nums'>
           {value.length.toLocaleString('en-US')} /{' '}
-          {MAX_RECIPE_NOTE_LENGTH.toLocaleString('en-US')}
+          {maxLength.toLocaleString('en-US')}
         </p>
       )}
     </div>
