@@ -1,11 +1,12 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import { FirebaseError } from 'firebase/app';
 import { deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
-import { getErrorMessage } from '@/utils/errorUtils';
+import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { deleteNotes } from '@apps/pinch/store/actions/noteActions';
@@ -42,6 +43,19 @@ const ideaDoc = (uid: string, id: string) =>
 
 const noteDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'notes', id);
+
+const OFFLINE_MESSAGE = 'Check your connection and try again.';
+
+const getWriteMessage = (error: unknown, fallback: string) => {
+  if (!(error instanceof FirebaseError)) {
+    return getErrorMessage(error, fallback);
+  }
+  console.error('Pinch recipe write failed', error);
+  if (error.code === 'unavailable' || !navigator.onLine) return OFFLINE_MESSAGE;
+  return error.code.startsWith('storage/')
+    ? getStorageErrorMessage(error, fallback)
+    : fallback;
+};
 
 export const getRecipeCoverPath = (uid: string, recipeId: string) =>
   `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
@@ -260,7 +274,7 @@ export const saveRecipe = createAsyncThunk<
         await deleteFile(path).catch(() => undefined);
       }
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to save this recipe.'),
+        getWriteMessage(error, 'Unable to save this recipe.'),
       );
     }
 
@@ -316,7 +330,7 @@ export const removeRecipe = createAsyncThunk<
       await deleteDoc(recipeDoc(uid, id));
     } catch (error) {
       return rejectWithValue(
-        getErrorMessage(error, 'Unable to delete this recipe.'),
+        getWriteMessage(error, 'Unable to delete this recipe.'),
       );
     }
 

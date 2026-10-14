@@ -33,12 +33,15 @@ const cookDoc = (uid: string, id: string) =>
 const BAD_SERVINGS = `Pick a number of servings above zero, up to ${MAX_COOKED_SERVINGS.toLocaleString('en-US')}.`;
 const BAD_TIME = 'Pick a time that has already passed.';
 const FULL = `A recipe's history holds up to ${SOFT_MAX_COOKS_PER_RECIPE} cooks. Delete an older one to make room.`;
+const OFFLINE_MESSAGE = 'Check your connection and try again.';
 const MINUTE_MS = 60_000;
 
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
     console.error('Pinch cook write failed', error);
-    return fallback;
+    return error.code === 'unavailable' || !navigator.onLine
+      ? OFFLINE_MESSAGE
+      : fallback;
   }
   return getErrorMessage(error, fallback);
 };

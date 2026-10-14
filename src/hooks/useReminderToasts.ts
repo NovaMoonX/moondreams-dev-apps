@@ -6,6 +6,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { APP_REGISTRY_ID_MAP } from '@lib/app';
 import { TOAST_APP_LABELS } from '@components/toastTypeStyles';
 import { isUsingFirebaseEmulators } from '@/lib/firebase/config';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
 import type { Reminder, ReminderStatus } from '@/lib/notifications/types';
 import { useAppSelector } from '@/store';
 
@@ -22,7 +23,9 @@ export function useReminderToasts() {
   const { addToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const previousStatusByIdRef = useRef<Map<string, ReminderStatus> | null>(null);
+  const previousStatusByIdRef = useRef<Map<string, ReminderStatus> | null>(
+    null,
+  );
   const shownIdsRef = useRef(new Set<string>());
 
   const showReminderToast = useCallback(
@@ -46,7 +49,14 @@ export function useReminderToasts() {
         action: {
           label: 'View',
           onClick: () => {
-            const target = reminder.link ?? APP_REGISTRY_ID_MAP[reminder.appId]?.path;
+            if (
+              hasDialogOnTop() ||
+              document.querySelector('[data-subview-overlay]')
+            ) {
+              return;
+            }
+            const target =
+              reminder.link ?? APP_REGISTRY_ID_MAP[reminder.appId]?.path;
             if (target && target !== `${location.pathname}${location.search}`) {
               navigate(target);
             }
@@ -91,7 +101,10 @@ export function useReminderToasts() {
     const timers = reminders
       .filter((reminder) => reminder.status === 'pending')
       .map((reminder) =>
-        setTimeout(() => showReminderToast(reminder), Math.max(0, reminder.scheduledFor - Date.now())),
+        setTimeout(
+          () => showReminderToast(reminder),
+          Math.max(0, reminder.scheduledFor - Date.now()),
+        ),
       );
 
     return () => timers.forEach(clearTimeout);
@@ -110,7 +123,11 @@ export function useReminderToasts() {
     reminders
       .filter((reminder) => {
         const previousStatus = previousStatusById.get(reminder.id);
-        return reminder.status === 'sent' && previousStatus !== undefined && previousStatus !== 'sent';
+        return (
+          reminder.status === 'sent' &&
+          previousStatus !== undefined &&
+          previousStatus !== 'sent'
+        );
       })
       .forEach((reminder) => showReminderToast(reminder));
   }, [reminders, showReminderToast]);

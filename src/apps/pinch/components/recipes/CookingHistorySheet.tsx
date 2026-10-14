@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft, ChevronRight, NotebookPen } from 'lucide-react';
@@ -28,8 +28,8 @@ const HIDDEN_WORTH_A_BUTTON = 3;
 
 type HistoryView =
   | { kind: 'list' }
-  | { kind: 'edit'; cookId: string | null }
-  | { kind: 'note'; cookId: string };
+  | { kind: 'edit'; cookId: string | null; token: number }
+  | { kind: 'note'; cookId: string; token: number };
 
 interface CookingHistorySheetProps {
   uid: string;
@@ -53,6 +53,7 @@ function CookingHistorySheet({
   );
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
+  const lastToken = useRef(0);
 
   const plannedById = useMemo(
     () => new Map(plannedMeals.map((planned) => [planned.id, planned])),
@@ -66,14 +67,28 @@ function CookingHistorySheet({
       : 'From your plan';
   };
 
+  const editing = view.kind === 'edit' ? view : null;
   const editedCook =
-    view.kind === 'edit' && view.cookId !== null
-      ? cooks.find((cook) => cook.id === view.cookId)
+    editing !== null && editing.cookId !== null
+      ? cooks.find((cook) => cook.id === editing.cookId)
       : undefined;
   const isEditing =
-    view.kind === 'edit' && (view.cookId === null || editedCook !== undefined);
+    editing !== null && (editing.cookId === null || editedCook !== undefined);
   const isFull = isCookHistoryFull(cooks.length);
-  const backToList = () => setView({ kind: 'list' });
+  const openView = (next: (token: number) => HistoryView) => {
+    lastToken.current += 1;
+    setView(next(lastToken.current));
+  };
+  const openEdit = (cookId: string | null) =>
+    openView((token) => ({ kind: 'edit', cookId, token }));
+  const openNote = (cookId: string) =>
+    openView((token) => ({ kind: 'note', cookId, token }));
+  const closeView = (token: number) =>
+    setView((current) =>
+      current.kind !== 'list' && current.token === token
+        ? { kind: 'list' }
+        : current,
+    );
 
   const hidden = cooks.length - limit;
   const visibleCount = hidden > HIDDEN_WORTH_A_BUTTON ? limit : cooks.length;
@@ -83,14 +98,16 @@ function CookingHistorySheet({
 
   const getBody = () => {
     if (view.kind === 'note') {
-      const noteCook = cooks.find((cook) => cook.id === view.cookId);
+      const noteView = view;
+      const noteCook = cooks.find((cook) => cook.id === noteView.cookId);
+      const closeNote = () => closeView(noteView.token);
       return (
         <div className='space-y-4'>
           <Button
             type='button'
             variant='tertiary'
             className='h-10 gap-1 px-0!'
-            onClick={backToList}
+            onClick={closeNote}
           >
             <ChevronLeft className='h-4 w-4' aria-hidden='true' />
             Back
@@ -106,32 +123,30 @@ function CookingHistorySheet({
             </p>
           </div>
           <NoteForm
-            key={view.cookId}
+            key={noteView.token}
             uid={uid}
             recipeId={recipeId}
             noteId={null}
-            initialCookId={view.cookId}
-            onCancel={backToList}
-            onDone={backToList}
+            initialCookId={noteView.cookId}
+            onCancel={closeNote}
+            onDone={closeNote}
           />
         </div>
       );
     }
-    if (isEditing) {
+    if (editing !== null && isEditing) {
       return (
         <CookEditView
-          key={editedCook?.id ?? 'new'}
+          key={editing.token}
           uid={uid}
           recipeId={recipeId}
           recipeTitle={recipe?.title ?? 'This recipe'}
           cook={editedCook ?? null}
           defaultServings={getCookServings(recipe?.servings ?? 1)}
           planNote={editedCook ? getPlanNote(editedCook) : null}
-          onBack={backToList}
+          onBack={() => closeView(editing.token)}
           onAddNote={
-            editedCook && isNotesReady
-              ? () => setView({ kind: 'note', cookId: editedCook.id })
-              : null
+            editedCook && isNotesReady ? () => openNote(editedCook.id) : null
           }
         />
       );
@@ -167,7 +182,7 @@ function CookingHistorySheet({
               type='button'
               variant='tertiary'
               className='h-10 justify-start px-0!'
-              onClick={() => setView({ kind: 'edit', cookId: null })}
+              onClick={() => openEdit(null)}
             >
               + Add an earlier cook
             </Button>
@@ -181,20 +196,19 @@ function CookingHistorySheet({
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
             {cooks.slice(0, visibleCount).map((cook) => {
               const planNote = getPlanNote(cook);
+              const day = formatDateShort(cook.cookedAt);
               return (
                 <li key={cook.id} className='pb-1'>
                   <Button
                     type='button'
                     variant='tertiary'
-                    aria-label={`Change the cook from ${formatDateShort(cook.cookedAt)}`}
+                    aria-label={`Change the cook from ${day}`}
                     className='h-auto min-h-12 w-full items-start justify-start gap-3 px-0! py-2.5 text-left'
-                    onClick={() => setView({ kind: 'edit', cookId: cook.id })}
+                    onClick={() => openEdit(cook.id)}
                   >
                     <span className='min-w-0 flex-1'>
                       <span className='text-foreground block font-medium'>
-                        <span className='whitespace-nowrap'>
-                          {formatDateShort(cook.cookedAt)}
-                        </span>
+                        <span className='whitespace-nowrap'>{day}</span>
                         {' · '}
                         <span className='whitespace-nowrap'>
                           {formatServings(cook.servings)}
@@ -216,9 +230,9 @@ function CookingHistorySheet({
                       type='button'
                       variant='tertiary'
                       size='sm'
-                      aria-label={`Add a note about the cook from ${formatDateShort(cook.cookedAt)}`}
+                      aria-label={`Add a note about the cook from ${day}`}
                       className='-mt-1 h-10 gap-1.5 px-0! text-sm font-normal'
-                      onClick={() => setView({ kind: 'note', cookId: cook.id })}
+                      onClick={() => openNote(cook.id)}
                     >
                       <NotebookPen className='h-4 w-4' aria-hidden='true' />
                       Add a note

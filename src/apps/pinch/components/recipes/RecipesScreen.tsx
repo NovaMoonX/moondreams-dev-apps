@@ -470,7 +470,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           recipeId={noteTarget.recipeId}
           noteId={noteTarget.noteId}
           initialCookId={null}
-          onClose={() => setNoteTarget(null)}
+          onClose={() =>
+            setNoteTarget((current) =>
+              current === noteTarget ? null : current,
+            )
+          }
           onUpdateRecipe={(noteId) => {
             const { recipeId } = noteTarget;
             setNoteTarget(null);

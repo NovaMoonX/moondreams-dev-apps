@@ -55,7 +55,7 @@ function CookingSession({
   isRemoved,
   initialServings,
 }: CookingSessionProps) {
-  const { closeSubview } = usePinchOverlay();
+  const { closeSubview, closeSubviewIf } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
   const [stepIndex, setStepIndex] = useState(0);
@@ -81,12 +81,16 @@ function CookingSession({
   const isCooked = useAppSelector(
     (state) => cookedId !== null && selectCooksById(state).has(cookedId),
   );
+  const closeIfStillOpen = () =>
+    closeSubviewIf(
+      (current) => current?.kind === 'cook' && current.recipeId === recipe.id,
+    );
   const note = useCookNote({
     uid,
     recipeId: recipe.id,
     recipeTitle: recipe.title,
     cookId: isCooked ? cookedId : null,
-    onSaved: closeSubview,
+    onSaved: closeIfStillOpen,
   });
 
   const lastIndex = recipe.steps.length - 1;
@@ -141,7 +145,7 @@ function CookingSession({
       });
       if (!isDiscarded) return;
     }
-    if (await confirmLeave()) closeSubview();
+    if (await confirmLeave()) closeIfStillOpen();
   };
 
   const focusPrimary = () =>
@@ -453,7 +457,7 @@ function CookingSession({
                     '[@media(max-height:500px)]:h-11',
                   )}
                   loading={isMarking}
-                  disabled={isMarking || isHistoryFull}
+                  disabled={isMarking || isHistoryFull || !canMark}
                   onClick={() => void handleMarkCooked()}
                 >
                   I cooked this

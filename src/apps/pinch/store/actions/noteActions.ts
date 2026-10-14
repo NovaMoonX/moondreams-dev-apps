@@ -31,10 +31,14 @@ const noteDoc = (uid: string, id: string) =>
 const BAD_TEXT = `Write something to save, up to ${MAX_RECIPE_NOTE_LENGTH.toLocaleString('en-US')} characters.`;
 const FULL = `A recipe's notes hold up to ${SOFT_MAX_RECIPE_NOTES} entries. Delete an older one to make room.`;
 
+const OFFLINE_MESSAGE = 'Check your connection and try again.';
+
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
     console.error('Pinch note write failed', error);
-    return fallback;
+    return error.code === 'unavailable' || !navigator.onLine
+      ? OFFLINE_MESSAGE
+      : fallback;
   }
   return getErrorMessage(error, fallback);
 };

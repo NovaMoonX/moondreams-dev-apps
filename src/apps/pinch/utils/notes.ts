@@ -36,7 +36,7 @@ export const getNoteSummaries = (notes: RecipeNote[]) => {
       count: (known?.count ?? 0) + 1,
       lastTweakAt:
         note.kind === 'TWEAK'
-          ? Math.max(known?.lastTweakAt ?? 0, note.createdAt)
+          ? Math.max(known?.lastTweakAt ?? -Infinity, note.createdAt)
           : (known?.lastTweakAt ?? null),
     });
     return summaries;

@@ -62,6 +62,8 @@ function Pinch() {
       openSubview: setSubview,
       showShoppingTab,
       closeSubview: () => setSubview(null),
+      closeSubviewIf: (isCurrent: (current: PinchSubview | null) => boolean) =>
+        setSubview((current) => (isCurrent(current) ? null : current)),
       isStartOpen,
       setIsStartOpen,
     }),
