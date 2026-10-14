@@ -985,7 +985,7 @@ Paste a link and a recipe form fills in for review.
 **Context:** UX Recipe details.
 
 ### Description
-A big-type, one-step-at-a-time view that keeps the screen awake. As built, the planned "ingredient peek" is an Ingredients view beside Steps (scaled to the servings being made and tickable), a step's times become timers, and leaving while a timer is going asks first.
+A big-type, one-step-at-a-time view that keeps the screen awake. As built, the planned "ingredient peek" is an Ingredients view beside Steps (scaled to the servings being made and tickable), a step's times become timers, leaving while a timer is going asks first, and the recipe's latest note or tweak shows above the steps and ingredients when there is one.
 
 ### Possible Approach
 1. Wake Lock API with a graceful fallback; step navigation by buttons, swipe and arrow keys; an Ingredients view that scales amounts with the shopping list's own `scaleAmount`; timers that run to a clock deadline.

@@ -31,6 +31,7 @@ import {
 import {
   getCookChoiceLabels,
   getMissingNoteFields,
+  getNoteSummary,
   getNoteCookChoices,
   getNoteSummaries,
   getTweakReason,
@@ -1704,6 +1705,61 @@ assert.equal(
   getWrittenBefore(noteOf('p', 'adobo', 'NOTE', 100), null),
   null,
   'no tweak, no label',
+);
+const summaryDay = (at: number) => (at === 100 ? 'Oct 12' : 'Oct 6');
+const summaryOf = (patch: Partial<RecipeNote>) =>
+  getNoteSummary(
+    { ...noteOf('s', 'adobo', 'NOTE', 100), ...patch },
+    summaryDay,
+  );
+assert.deepEqual(
+  summaryOf({ text: 'Use 6 cloves, it was bland' }),
+  { label: 'Your latest note (Oct 12):', body: 'Use 6 cloves, it was bland' },
+  'a note says its day and its words',
+);
+assert.deepEqual(
+  summaryOf({ text: '  Use 6 cloves,\n\n  less\tvinegar  ' }).body,
+  'Use 6 cloves, less vinegar',
+  'line breaks and runs of spaces read as one space in the summary',
+);
+assert.deepEqual(
+  summaryOf({
+    kind: 'TWEAK',
+    text: null,
+    changes: ['White vinegar 0.5 → 0.25 cup'],
+    createdAt: 200,
+  }),
+  { label: 'Changed on Oct 6:', body: 'White vinegar 0.5 → 0.25 cup' },
+  'a tweak says what changed, so the recipe reads as having moved on',
+);
+assert.deepEqual(
+  summaryOf({
+    kind: 'TWEAK',
+    text: 'Too sour',
+    changes: ['White vinegar 0.5 → 0.25 cup', 'Serves 4 → 6'],
+    createdAt: 200,
+  }).body,
+  'White vinegar 0.5 → 0.25 cup; Serves 4 → 6. Too sour',
+  "a tweak lists its lines, then the reason in the person's words",
+);
+assert.deepEqual(
+  summaryOf({ kind: 'TWEAK', text: null, changes: [], createdAt: 200 }),
+  { label: 'Changed on Oct 6', body: '' },
+  'a tweak with nothing to say keeps its heading without a colon',
+);
+assert.deepEqual(
+  getNoteSummary(
+    {
+      id: 'x',
+      recipeId: 'adobo',
+      kind: 'NOTE',
+      text: 'Old',
+      createdAt: 100,
+    } as RecipeNote,
+    summaryDay,
+  ).body,
+  'Old',
+  'an older note without the changes key still reads',
 );
 assert.deepEqual(
   getMissingNoteFields({ id: 'x', kind: 'NOTE', text: 't' }),

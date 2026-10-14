@@ -13,6 +13,7 @@ import { useAppSelector, type RootState } from '@/store';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
+import CookNotes from '@apps/pinch/components/cooking/CookNotes';
 import CookStepView from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
 import {
@@ -302,6 +303,7 @@ function CookingSession({
             isThin
           />
         )}
+        {!isFinishShown && <CookNotes recipeId={recipe.id} />}
         {isFinishShown ? (
           isCooked ? (
             <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
