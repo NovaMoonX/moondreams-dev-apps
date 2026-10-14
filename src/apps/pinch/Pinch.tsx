@@ -45,6 +45,11 @@ function Pinch() {
   const [, startTransition] = useTransition();
   const [subview, setSubview] = useState<PinchSubview | null>(null);
   const [isStartOpen, setIsStartOpen] = useState(false);
+  const isStartFromCalendarRef = useRef(false);
+  const openStart = useCallback((isOpen: boolean, fromCalendar = false) => {
+    if (isOpen) isStartFromCalendarRef.current = fromCalendar;
+    setIsStartOpen(isOpen);
+  }, []);
   const [shownMonth, setShownMonth] = useState(getLocalMonthKey);
   const subviewRef = useRef<PinchSubview | null>(null);
   const showShoppingTab = useCallback(() => {
@@ -62,9 +67,9 @@ function Pinch() {
       showShoppingTab,
       closeSubview: () => setSubview(null),
       isStartOpen,
-      setIsStartOpen,
+      setIsStartOpen: openStart,
     }),
-    [subview, isStartOpen, showShoppingTab],
+    [subview, isStartOpen, showShoppingTab, openStart],
   );
 
   const isLoaded = useAppSelector(selectIsPinchLoaded);
@@ -140,7 +145,13 @@ function Pinch() {
           onClose={() => setIsStartOpen(false)}
           onPick={(method) => {
             setIsStartOpen(false);
-            setSubview({ kind: 'recipe', id: null, method, fromDrawer: true });
+            setSubview({
+              kind: 'recipe',
+              id: null,
+              method,
+              fromDrawer: true,
+              fromCalendar: isStartFromCalendarRef.current,
+            });
           }}
         />
       )}

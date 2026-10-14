@@ -6,6 +6,11 @@ import {
   scaleNutrition,
   toPer100g,
 } from '../../src/apps/pinch/utils/nutritionBasis.ts';
+import {
+  countLeftOutIngredients,
+  countUnaskedIngredients,
+} from '../../src/apps/pinch/utils/gaps.ts';
+import { formatRowCost } from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
   getItemsLines,
@@ -20,6 +25,7 @@ import {
 } from '../../src/apps/pinch/utils/shopping.ts';
 import type {
   MealItem,
+  Gap,
   Product,
   Recipe,
   ResolvedFamily,
@@ -573,6 +579,49 @@ assert.deepEqual(
   ),
   [],
   'a meal item over a recipe with no servings gives no lines',
+);
+
+assert.equal(formatRowCost(null, false), 'No price yet');
+assert.equal(formatRowCost(undefined, false), 'No price yet');
+assert.equal(
+  formatRowCost(null, true),
+  "Wasn't priced",
+  'a frozen day says it was not priced, not that it has no price yet',
+);
+assert.equal(formatRowCost(15.4, true), '$0.15');
+assert.equal(formatRowCost(0, false), '$0.00', 'a known free item is priced');
+
+const gap = (kind: Gap['kind'], ingredientId: string) =>
+  ({ kind, ingredientId }) as Gap;
+const leftOutOnDay = [
+  gap('NO_PRODUCT', 'garlic'),
+  gap('NO_PRODUCT', 'garlic'),
+  gap('NO_PRODUCT', 'vinegar'),
+  gap('NOT_COMPARABLE', 'soy'),
+  gap('NO_PRODUCT', 'rice'),
+];
+const stillOpen = leftOutOnDay.filter((entry) => entry.ingredientId !== 'rice');
+assert.equal(
+  countLeftOutIngredients(leftOutOnDay),
+  4,
+  'an ingredient in several meals counts once',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, {}),
+  1,
+  'an ingredient only in a day that has passed is left out but not asked about',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, {
+    'NO_PRODUCT:vinegar': 1,
+  }),
+  2,
+  'a hidden note takes its ingredient off the note but not off the total',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, { 'NO_PRODUCT:soy': 1 }),
+  1,
+  'an ingredient whose package size is still open stays in the note when only its price note was hidden',
 );
 
 console.log('pinchMath: all checks passed');
