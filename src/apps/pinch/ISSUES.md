@@ -1005,7 +1005,7 @@ A big-type, one-step-at-a-time view that keeps the screen awake. As built, the p
 **Target PR Size:** ~600 lines (the row and its editor, the drawer section, one line in cooking mode, the readers' schema, the rules and the checks)
 **Files:**
 - `Recipe.care` and `RecipeCare` in `types.ts`, the caps in `constants.ts`, `utils/recipeCare.ts` (the helpers the form, drawer, cooking mode and readers share), `isRecipeCare` in `firestore.rules`
-- `RecipeCareField` (the form row and its editor), `RecipeCareSection` (the drawer), the leftovers line in `CookingSubview`, care lines in `getRecipeChanges`
+- `RecipeCareField` (the form row and its editor), `RecipeCareSection` (the drawer), the leftovers line in `CookingSubview`
 - `lib/extractRecipe.ts` (schema and prompt) and `utils/normalizeRecipe.ts` for the three readings
 - The seed: care on two of Alex's recipes (one full, one fridge only) and on half the scale kitchen's, the rest left in the older shape
 
@@ -1026,6 +1026,7 @@ A recipe can say how many days what it makes keeps in the fridge and the freezer
 
 ### Success Criteria
 - [ ] A recipe written before this (no `care` key) opens, shows no section, edits and saves, and its save writes `care` explicitly; checked in the browser over a legacy-shaped document.
+- [ ] A save that changes only a cooked recipe's care writes no tweak and leaves "Last tweaked" alone.
 - [ ] The rules accept a valid care, null and a missing key for the owner and refuse bad days, an extra key and a wrong type, for everyone else too; the cases are listed in the PR as owner, another user and signed out.
 - [ ] A reading with no storage lines leaves the row quiet and lists nothing under "We couldn't read"; one with them fills the row for review and saves nothing until the recipe is saved.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and the editor was measured against the container rules.

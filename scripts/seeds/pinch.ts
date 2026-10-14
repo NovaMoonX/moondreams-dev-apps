@@ -401,7 +401,7 @@ const SEED_RECIPES = [
       'Simmer everything with the bay leaves and pepper, covered, for 25 minutes.',
       'Uncover and reduce the sauce until it clings to the chicken.',
     ],
-    // The full shape: both times, reheating and a tip. Nachos and the chili keep the older shape with no `care` key, so the legacy path stays exercised.
+    // Nachos and the chili keep the older shape (no `care` key) so the legacy path stays exercised.
     care: {
       fridgeDays: 3,
       freezerDays: 90,

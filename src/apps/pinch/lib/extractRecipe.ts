@@ -4,7 +4,11 @@ import { generativeModel } from '@/lib/firebase/ai';
 import type { PageContent } from '@/lib/pageContent/fetchPageContent';
 import { compressIngestionImage } from '@/utils/imageCompression';
 import { getUploadMimeType } from '@/utils/uploadMimeType';
-import { UNITS } from '@apps/pinch/constants';
+import {
+  CARE_DAYS_PER_MONTH,
+  CARE_DAYS_PER_WEEK,
+  UNITS,
+} from '@apps/pinch/constants';
 import {
   normalizeExtractedRecipe,
   type ExtractedRecipe,
@@ -17,6 +21,8 @@ const nullable = (type: SchemaType, description: string) => ({
   nullable: true,
   description,
 });
+
+const CARE_DAYS_NOTE = `as a whole number rounded down (a week is ${CARE_DAYS_PER_WEEK}, a month is ${CARE_DAYS_PER_MONTH}, a range takes its shorter end)`;
 
 const responseSchema = {
   type: SchemaType.OBJECT,
@@ -61,11 +67,11 @@ const responseSchema = {
     steps: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
     fridgeDays: nullable(
       SchemaType.NUMBER,
-      'Days the recipe says leftovers keep in the fridge, as a whole number (a week is 7, a month is 30, a range takes its shorter end). Null when the recipe does not say.',
+      `Days the recipe says leftovers keep in the fridge, ${CARE_DAYS_NOTE}. Null when the recipe does not say.`,
     ),
     freezerDays: nullable(
       SchemaType.NUMBER,
-      'Days the recipe says leftovers keep in the freezer, as a whole number (a week is 7, a month is 30, a range takes its shorter end). Null when the recipe does not say.',
+      `Days the recipe says leftovers keep in the freezer, ${CARE_DAYS_NOTE}. Null when the recipe does not say.`,
     ),
     reheat: nullable(
       SchemaType.STRING,

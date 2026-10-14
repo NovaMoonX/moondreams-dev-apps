@@ -136,7 +136,6 @@ const getTweak = (
       cookMinutes: draft.cookMinutes,
       ingredients: draft.ingredients,
       steps: draft.steps,
-      care: draft.care,
       nutritionOverride: draft.nutritionOverride,
       sourceId: draft.sourceId,
     },

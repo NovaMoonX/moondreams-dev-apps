@@ -1060,7 +1060,6 @@ const baseRecipe: RecipeContent = {
     recipeLine('l3', 'butter', 2, 'TBSP', 'cold'),
   ],
   steps: ['Marinate.', 'Simmer for 25 minutes.', 'Reduce the sauce.'],
-  care: null,
   nutritionOverride: null,
   sourceId: null,
 };
@@ -1528,86 +1527,34 @@ assert.deepEqual(
   'a line whose ingredient is gone still reads, as the drawer does',
 );
 
-const careOf = (parts: Partial<Parameters<typeof toCare>[0] & object>) =>
-  toCare({
-    fridgeDays: null,
-    freezerDays: null,
-    reheat: null,
-    tip: null,
-    ...parts,
-  });
-assert.deepEqual(
-  changesFor({ care: careOf({ fridgeDays: 3 }) }),
-  ['Fridge storage set to 3 days'],
-  'a fridge time added reads as set',
-);
+const withCare = (care: unknown) => ({ ...baseRecipe, care }) as RecipeContent;
+const fullCare = { fridgeDays: 3, freezerDays: 90, reheat: 'Oven.', tip: 'A.' };
 assert.deepEqual(
   getRecipeChanges(
-    { ...baseRecipe, care: careOf({ fridgeDays: 3, freezerDays: 90 }) },
-    {
-      ...baseRecipe,
-      care: careOf({
-        fridgeDays: 5,
-        freezerDays: 90,
-        reheat: 'Warm it gently.',
-      }),
-    },
+    withCare(fullCare),
+    withCare({ fridgeDays: 5, freezerDays: null, reheat: null, tip: 'B.' }),
     names,
   ),
-  ['Fridge storage 3 days → 5 days', 'Added reheating directions'],
-  'a changed fridge time shows both values and an added reheating line is named, an unchanged freezer is not',
+  [],
+  'a change to the storage notes alone records nothing: the dish is the same',
 );
 assert.deepEqual(
-  getRecipeChanges(
-    {
-      ...baseRecipe,
-      care: careOf({ freezerDays: 90, tip: 'Keep the sauce apart.' }),
-    },
-    baseRecipe,
-    names,
-  ),
-  ['Freezer storage removed', 'Removed the storage tip'],
-  'taking care away is named part by part',
-);
-assert.deepEqual(
-  getRecipeChanges(
-    {
-      ...baseRecipe,
-      care: careOf({ freezerDays: 30, reheat: 'Oven.', tip: 'A.' }),
-    },
-    {
-      ...baseRecipe,
-      care: careOf({ freezerDays: 60, reheat: 'Microwave.', tip: 'B.' }),
-    },
-    names,
-  ),
   [
-    'Freezer storage 1 month → 2 months',
-    'Reheating directions changed',
-    'Storage tip changed',
+    getRecipeChanges(baseRecipe, withCare(fullCare), names),
+    getRecipeChanges(withCare(fullCare), withCare(null), names),
+    getRecipeChanges(withCare(null), withCare(undefined), names),
   ],
-  'months read as months and a changed reheating line or tip says only that it changed',
+  [[], [], []],
+  'adding, removing and a missing key are all nothing to record',
 );
 assert.deepEqual(
   getRecipeChanges(
-    { ...baseRecipe, care: undefined } as unknown as RecipeContent,
-    baseRecipe,
+    withCare(null),
+    { ...withCare(fullCare), servings: 6 } as RecipeContent,
     names,
   ),
-  [],
-  'a recipe from before care existed (no key) and one with care null are the same',
-);
-assert.deepEqual(
-  getRecipeChanges(
-    baseRecipe,
-    {
-      ...baseRecipe,
-      care: { fridgeDays: null, freezerDays: null, reheat: '  ', tip: null },
-    },
-    names,
-  ),
-  [],
-  'a care record with nothing in it is no care',
+  ['Serves 4 → 6'],
+  'storage notes changed beside a real change leave only the real line',
 );
 
 const fuzzRandom = ((seed) => () => {
@@ -1656,18 +1603,6 @@ const mutations: ((r: RecipeContent) => RecipeContent)[] = [
     nutritionOverride: { calories: 400, protein: null, carbs: null, fat: null },
   }),
   (r) => ({ ...r, sourceId: r.sourceId === null ? 's1' : null }),
-  (r) => ({
-    ...r,
-    care: toCare({ ...r.care, fridgeDays: (r.care?.fridgeDays ?? 2) + 1 }),
-  }),
-  (r) => ({
-    ...r,
-    care: toCare({
-      ...r.care,
-      tip: r.care?.tip ? null : 'Keep the sauce apart.',
-    }),
-  }),
-  (r) => ({ ...r, care: toCare({ ...r.care, reheat: 'Warm it gently.' }) }),
 ];
 const fuzzMismatches = Array.from({ length: 600 }, () => {
   const before = mutations.reduce<RecipeContent>(
@@ -1862,7 +1797,6 @@ assert.deepEqual(
   'two cooks on one day show their times, and a day to itself stays short',
 );
 
-// Recipe care: the pure parts the form, the drawer, the Finish panel and the readers share.
 assert.deepEqual(
   [1, 2, 6, 7, 10, 14, 21, 29, 30, 31, 60, 90, 180, 360, 365].map(
     formatCareDays,
@@ -2074,6 +2008,20 @@ assert.deepEqual(
   }).care,
   { fridgeDays: 4, freezerDays: 90, reheat: 'Warm it in the oven.', tip: null },
   'a reading keeps what it found, rounded to whole days',
+);
+assert.deepEqual(
+  [
+    normalizeExtractedRecipe({ fridgeDays: 1.5 }).care?.fridgeDays,
+    normalizeExtractedRecipe({ fridgeDays: 4.9 }).care?.fridgeDays,
+    normalizeExtractedRecipe({ freezerDays: 90.2 }).care?.freezerDays,
+  ],
+  [1, 4, 90],
+  'a reading rounds days down: a storage time is a safety figure, so 36 hours is 1 day',
+);
+assert.equal(
+  normalizeExtractedRecipe({ fridgeDays: 0.5, freezerDays: -0.5 }).care,
+  null,
+  'half a day rounds to nothing and is dropped',
 );
 assert.equal(
   normalizeExtractedRecipe({ fridgeDays: 800, freezerDays: -2 }).care,
