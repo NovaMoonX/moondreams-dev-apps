@@ -211,7 +211,6 @@ export const selectSourceCounts = createSelector(
 
 const selectIdeaItems = (state: RootState) => state.pinch.ideas.items;
 
-/** Newest first. */
 export const selectIdeas = createSelector([selectIdeaItems], (ideas) =>
   [...ideas].sort((a, b) => b.createdAt - a.createdAt),
 );

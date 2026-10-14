@@ -9,11 +9,9 @@ import { MAX_IDEA_NOTE_LENGTH } from '@apps/pinch/constants';
 interface IdeaNoteFieldProps {
   value: string;
   onChange: (value: string) => void;
-  /** Show the box at once instead of behind "+ Add a note". */
   isOpen?: boolean;
 }
 
-/** The optional note: a quiet "+ Add a note" link until it is wanted, then the box with a visible way to take it away. */
 function IdeaNoteField({
   value,
   onChange,

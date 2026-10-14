@@ -81,11 +81,9 @@ interface IdeasViewProps {
   uid: string;
   isAddOpen: boolean;
   onAddClose: () => void;
-  /** Opens a recipe's own drawer, which the screen owns. */
   onOpenRecipe: (recipeId: string) => void;
 }
 
-/** The Ideas list on the Recipes screen: what is still to try, then what became a recipe, with the add, detail and edit sheets that go with it. */
 function IdeasView({
   uid,
   isAddOpen,

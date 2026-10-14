@@ -18,11 +18,9 @@ type Stage = 'pick' | IdeaStartMethod;
 interface IdeaAddSheetProps {
   uid: string;
   onClose: () => void;
-  /** An idea that already holds the pasted link: the list opens it in place of saving a copy. */
   onOpenExisting: (id: string) => void;
 }
 
-/** One sheet for a new idea: the list of ways first, then the way's own screen in its place, with a way back to the list. */
 function IdeaAddSheet({ uid, onClose, onOpenExisting }: IdeaAddSheetProps) {
   const [stage, setStage] = useState<Stage>('pick');
 

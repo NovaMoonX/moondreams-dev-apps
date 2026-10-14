@@ -134,7 +134,6 @@ interface LinkWayProps extends WayProps {
   onOpenExisting: (id: string) => void;
 }
 
-/** Paste a link: the page is looked up for its title and picture while the person reads, and saving never waits for it. */
 export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
   const ideas = useAppSelector(selectIdeas);
   const { submit, isSubmitting, error } = useCreateIdea(uid, onClose);
@@ -338,7 +337,6 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
   );
 }
 
-/** Pick a picture and name it: the photo is resized and kept in the person's own Storage folder. */
 export function IdeaPhotoWay({ uid, onClose }: WayProps) {
   const { submit, isSubmitting, error } = useCreateIdea(uid, onClose);
   const upload = useImageUpload(null);
@@ -446,7 +444,6 @@ export function IdeaPhotoWay({ uid, onClose }: WayProps) {
   );
 }
 
-/** A few words: a title, and a note when there is more to say. */
 export function IdeaTextWay({ uid, onClose }: WayProps) {
   const { submit, isSubmitting, error } = useCreateIdea(uid, onClose);
   const bodyRef = useRef<HTMLDivElement>(null);

@@ -58,7 +58,7 @@ export interface RecipeDraft {
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
   removeCover: boolean;
-  /** The idea a new recipe is made from: its `recipeId` is set in the same batch, unless the idea is gone by then. */
+  /** Its `recipeId` is set in the same batch, unless the idea is gone by then. */
   fromIdeaId: string | null;
 }
 

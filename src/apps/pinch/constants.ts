@@ -117,9 +117,7 @@ export const MAX_IDEA_URL_LENGTH = 2000;
 export const MAX_IDEA_SITE_NAME_LENGTH = 120;
 /** The most ideas the list takes before asking to delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_IDEAS = 200;
-/** How long a link's page may take to look up; saving never waits for it. */
 export const IDEA_LOOKUP_TIMEOUT_MS = 6000;
-/** The longest edge of an idea's photo: it only shows in a list row and a drawer. */
 export const IDEA_PHOTO_MAX_DIMENSION = 1280;
 export const IDEA_KIND_EMOJIS: Record<IdeaKind, string> = {
   LINK: '🔗',

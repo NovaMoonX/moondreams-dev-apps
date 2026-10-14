@@ -8,7 +8,6 @@ interface IdeaThumbnailProps {
   size?: number;
 }
 
-/** An idea's picture in a small rounded square, or a soft tile with its kind's emoji when there is none or it can't load. */
 function IdeaThumbnail({ idea, size = 56 }: IdeaThumbnailProps) {
   const url = useIdeaImageUrl(idea);
   const tile = (

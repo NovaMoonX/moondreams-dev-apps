@@ -38,7 +38,6 @@ const DUPLICATE_LINK = "That one's already in your ideas.";
 const PHOTO_FAILED =
   "We couldn't save that picture. Check your connection and try again.";
 
-/** A Firebase error is logged and replaced by the fallback; our own sentences are shown as written. */
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
     console.error('Pinch idea write failed', error);
@@ -53,11 +52,9 @@ export interface IdeaDraft {
   kind: IdeaKind;
   title: string;
   note: string | null;
-  /** LINK ideas only. */
   url: string | null;
   siteName: string | null;
   imageUrl: string | null;
-  /** PHOTO ideas only; resized and uploaded with the idea. */
   photoFile: File | null;
 }
 
@@ -66,7 +63,6 @@ interface CreateIdeaInput {
   draft: IdeaDraft;
 }
 
-/** A photo goes to Storage first and is removed again if the write fails. */
 export const createIdea = createAsyncThunk<
   string,
   CreateIdeaInput,
@@ -146,13 +142,11 @@ interface UpdateIdeaInput {
   id: string;
   title: string;
   note: string | null;
-  /** The link of a LINK idea; ignored for the others. */
   url: string | null;
-  /** A replacement picture for a PHOTO idea. */
   photoFile: File | null;
 }
 
-/** Writes only what the idea's form owns, so a recipe made from it in the meantime keeps its link. */
+/** Field-scoped on purpose: a recipe made from the idea in the meantime keeps its link. */
 export const updateIdea = createAsyncThunk<
   string,
   UpdateIdeaInput,
@@ -234,7 +228,6 @@ interface RemoveIdeaInput {
   id: string;
 }
 
-/** A recipe made from the idea is left alone; it reads the idea as gone. */
 export const removeIdea = createAsyncThunk<
   string,
   RemoveIdeaInput,

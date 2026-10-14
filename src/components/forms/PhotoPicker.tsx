@@ -16,7 +16,6 @@ interface PhotoPickerProps {
   variant?: PhotoPickerVariant;
   /** Minimal variant only: set false when the caller already renders its own preview bound to the same `photoUrl`. */
   showPreview?: boolean;
-  /** Button text before a photo is picked and once there is one. */
   uploadLabel?: string;
   changeLabel?: string;
   onSelect: (file: File | null) => void;

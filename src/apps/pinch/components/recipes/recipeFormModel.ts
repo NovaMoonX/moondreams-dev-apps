@@ -159,7 +159,6 @@ export const getReadSourceChoice = (
 ): SourceChoice =>
   source === 'AI_LINK' ? getSiteSourceChoice(label, sources) : NO_SOURCE_CHOICE;
 
-/** A blank recipe with what an idea knows: its title, its note as the description, and for a link the site it came from. */
 export const getDataFromIdea = (
   idea: Idea,
   sources: Source[],
