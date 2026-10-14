@@ -1,4 +1,11 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -11,6 +18,16 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 const TIP_GAP_PX = 10;
 const TIP_MARGIN_PX = 8;
 const ARROW_INSET_PX = 14;
+const SETTLE_FRAMES = 24;
+const CAN_HOVER_QUERY = '(hover: hover) and (pointer: fine)';
+
+const subscribeToHover = (onChange: () => void) => {
+  const query = window.matchMedia(CAN_HOVER_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+};
+
+const getCanHover = () => window.matchMedia(CAN_HOVER_QUERY).matches;
 
 interface HelpTipProps {
   title: string;
@@ -55,7 +72,7 @@ function placeTooltip(
   arrow.dataset.side = isBelow ? 'below' : 'above';
 }
 
-/** A "what does this mean?" explainer: a help icon that opens a modal on a phone and a hover/focus tooltip on a computer, or an inline link that opens the modal at every size. */
+/** A "what does this mean?" explainer: a help icon that opens a modal on a phone or any touch screen and a hover/focus tooltip with a mouse, or an inline link that opens the modal at every size. */
 function HelpTip({
   title,
   children,
@@ -66,26 +83,31 @@ function HelpTip({
 }: HelpTipProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
-  const usesModal = Boolean(linkLabel) || isPhone;
+  const canHover = useSyncExternalStore(
+    subscribeToHover,
+    getCanHover,
+    () => true,
+  );
+  const usesModal = Boolean(linkLabel) || isPhone || !canHover;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLSpanElement>(null);
   const tipId = useId();
   const isTipShown = isOpen && !usesModal;
 
-  // The modal can sit over a drawer, and both close on one Escape: capture it here so only the modal does.
+  // A modal can sit over a drawer, and both close on one Escape: capture it so only the modal does.
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        event.stopImmediatePropagation();
+        if (usesModal) event.stopImmediatePropagation();
         setIsOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen]);
+  }, [isOpen, usesModal]);
 
   useLayoutEffect(() => {
     if (!isTipShown) return;
@@ -97,9 +119,18 @@ function HelpTip({
       if (trigger && tip && arrow) placeTooltip(trigger, tip, arrow, placement);
     };
     place();
+    let frame = 0;
+    let settleId = 0;
+    const settle = () => {
+      place();
+      frame += 1;
+      if (frame < SETTLE_FRAMES) settleId = requestAnimationFrame(settle);
+    };
+    settleId = requestAnimationFrame(settle);
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     return () => {
+      cancelAnimationFrame(settleId);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
     };
@@ -108,7 +139,12 @@ function HelpTip({
   const body = <div className='space-y-2 text-left text-sm'>{children}</div>;
 
   const modal = (
-    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={title}>
+    <Modal
+      isOpen={isOpen}
+      onClose={() => setIsOpen(false)}
+      title={title}
+      className='border-border border'
+    >
       <div className='space-y-4'>
         {body}
         <div className='flex justify-end'>
@@ -153,10 +189,23 @@ function HelpTip({
         "relative -my-1 h-5 w-5 after:absolute after:-inset-2.5 after:content-['']",
         className,
       )}
-      onClick={() => setIsOpen(usesModal ? true : (current) => !current)}
-      onMouseEnter={usesModal ? undefined : () => setIsOpen(true)}
-      onMouseLeave={usesModal ? undefined : () => setIsOpen(false)}
-      onFocus={usesModal ? undefined : () => setIsOpen(true)}
+      onClick={() => setIsOpen(true)}
+      onPointerEnter={
+        usesModal
+          ? undefined
+          : (event) => event.pointerType === 'mouse' && setIsOpen(true)
+      }
+      onPointerLeave={
+        usesModal
+          ? undefined
+          : (event) => event.pointerType === 'mouse' && setIsOpen(false)
+      }
+      onFocus={
+        usesModal
+          ? undefined
+          : (event) =>
+              event.currentTarget.matches(':focus-visible') && setIsOpen(true)
+      }
       onBlur={usesModal ? undefined : () => setIsOpen(false)}
     >
       {variant === 'warning' ? (

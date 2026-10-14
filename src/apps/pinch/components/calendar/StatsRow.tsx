@@ -97,6 +97,8 @@ function StatsRow({
             <span
               className={join(
                 formatTileCost(stats.spendCents).length > 6 && 'max-sm:text-sm',
+                formatTileCost(stats.spendCents).length >= 6 &&
+                  'max-[360px]:text-xs',
               )}
             >
               {formatTileCost(stats.spendCents)}
@@ -111,9 +113,8 @@ function StatsRow({
               >
                 <p>Leaves out {reasons.join(' and ')}.</p>
                 <p className='text-muted-foreground'>
-                  The total goes up once they're priced. This counts days that
-                  are already behind you, so it can be more than the line below,
-                  which counts only what you can still change.
+                  A price you add now counts from today on: days that have
+                  passed keep the prices they had.
                 </p>
               </HelpTip>
             ) : undefined
@@ -128,9 +129,7 @@ function StatsRow({
           }
           help={
             <HelpTip title='Average per meal' placement='bottom'>
-              The spend divided by the planned meals that have at least one
-              price, so a meal with nothing priced doesn't pull the average
-              toward zero.
+              Spend divided by the meals that have a price.
             </HelpTip>
           }
         />

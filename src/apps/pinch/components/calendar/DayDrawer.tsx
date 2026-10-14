@@ -117,10 +117,12 @@ function DayDrawer({
                   label='Cost'
                   value={
                     stats.mealsPriced === 0
-                      ? 'No prices yet'
+                      ? isFrozen
+                        ? "Wasn't priced"
+                        : 'No prices yet'
                       : formatCost(stats.spendCents)
                   }
-                  detail={isFrozen ? 'Prices as they were that day' : undefined}
+                  detail={isFrozen ? 'Fixed when the day passed' : undefined}
                   help={
                     leftOutCount > 0 && stats.mealsPriced > 0 ? (
                       <HelpTip
@@ -134,7 +136,9 @@ function DayDrawer({
                           with no price yet.
                         </p>
                         <p className='text-muted-foreground'>
-                          The cost goes up once they're priced.
+                          {isFrozen
+                            ? 'This day has passed, so a price you add now counts from today on.'
+                            : "The cost goes up once they're priced."}
                         </p>
                       </HelpTip>
                     ) : undefined

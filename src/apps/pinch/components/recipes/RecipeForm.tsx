@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type RefObject } from 'react';
 
 import {
   Button,
@@ -84,6 +84,10 @@ interface RecipeFormProps {
   initialRead: RecipeRead | null;
   /** Keeps the screen's header on the recipe's name as it is typed. */
   onTitleChange: (title: string) => void;
+  /** Tells the screen whether leaving now would throw work away. */
+  isDirtyRef: RefObject<boolean>;
+  /** Cancel and the screen's own back go through the screen, which asks before discarding. */
+  onLeave: () => void;
 }
 
 function RecipeForm({
@@ -91,6 +95,8 @@ function RecipeForm({
   recipeId,
   initialRead,
   onTitleChange,
+  isDirtyRef,
+  onLeave,
 }: RecipeFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -284,10 +290,12 @@ function RecipeForm({
                 onSelect={(file) => {
                   pickCover(file);
                   setIsCoverRemoved(false);
+                  isDirtyRef.current = true;
                 }}
                 onRemove={() => {
                   clearCover();
                   setIsCoverRemoved(true);
+                  isDirtyRef.current = true;
                 }}
               />
             </div>
@@ -356,7 +364,7 @@ function RecipeForm({
         ),
       }),
     ],
-    [uid, coverUrl, coverError, pickCover, clearCover, calculation],
+    [uid, coverUrl, coverError, pickCover, clearCover, calculation, isDirtyRef],
   );
 
   const handleDelete = async () => {
@@ -379,7 +387,7 @@ function RecipeForm({
     const confirmed = await confirm({
       title: isUsed ? 'Remove recipe' : 'Delete recipe',
       message: isUsed
-        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers, but you can't bring it back to your lists.`
+        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.`
         : `Delete "${recipe.title}"? This action cannot be undone.`,
       confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,
@@ -490,6 +498,10 @@ function RecipeForm({
           const next = data as RecipeFormData;
           setFormData(next);
           onTitleChange(next.title);
+          isDirtyRef.current =
+            initialRead !== null ||
+            isDirtyRef.current === true ||
+            JSON.stringify(next) !== JSON.stringify(initialData);
         }}
         onSubmit={(data) => {
           void handleSubmit(data as RecipeFormData);
@@ -509,7 +521,7 @@ function RecipeForm({
               <Button
                 type='button'
                 variant='secondary'
-                onClick={closeSubview}
+                onClick={onLeave}
                 disabled={isSubmitting}
               >
                 Cancel

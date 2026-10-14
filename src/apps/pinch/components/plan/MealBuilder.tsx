@@ -498,7 +498,7 @@ function MealBuilder({
               {leftOutCount > 0 && cost.totalCents !== null && (
                 <HelpTip
                   variant='warning'
-                  title='Not everything is counted'
+                  title="What's left out"
                   placement='top'
                 >
                   This {formatLeftOut(cost.leftOut)} because there’s no price

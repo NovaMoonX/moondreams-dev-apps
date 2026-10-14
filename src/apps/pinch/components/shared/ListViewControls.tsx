@@ -47,9 +47,9 @@ function ListViewControls({
           description={
             isAnyMetricOn
               ? undefined
-              : 'Switch some on in Settings first, and they show here.'
+              : "Calories and macros are off. Turn them on from the Calendar's gear and they'll show here."
           }
-          checked={options.showMacros}
+          checked={options.showMacros && isAnyMetricOn}
           isDisabled={!isAnyMetricOn}
           onCheckedChange={(showMacros) => onChange({ showMacros })}
         />

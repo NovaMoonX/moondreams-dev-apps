@@ -6,6 +6,7 @@ import { ChevronRight, Plus, ShoppingCart, Store } from 'lucide-react';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SectionHeader from '@/components/SectionHeader';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import FamilyGroup from '@apps/pinch/components/kitchen/FamilyGroup';
 import IngredientDrawer from '@apps/pinch/components/kitchen/IngredientDrawer';
@@ -117,6 +118,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const usedIds = useAppSelector(selectUsedIngredientIds);
   const { openSubview } = usePinchOverlay();
+  const isPhone = useMediaQuery().isBelow('sm');
   const viewOptions = useListViewOptions(uid, 'ingredients');
   const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
 
@@ -200,7 +202,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         <div className='space-y-3 py-6 text-center'>
           <p className='text-muted-foreground text-sm wrap-break-word'>
             {isNothingNeeded
-              ? 'Nothing needs a price: everything your recipes, meals and plans use has a product.'
+              ? 'Nothing is waiting on a price.'
               : `Nothing${scopeText} matches${trimmed !== '' ? ` “${trimmed}” with` : ''} these filters.`}
           </p>
           <div className='flex flex-wrap justify-center gap-2'>
@@ -291,7 +293,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
       <FilterBar
         query={query}
         onQueryChange={setQuery}
-        searchPlaceholder='Search ingredients'
+        searchPlaceholder={isPhone ? 'Search' : 'Search ingredients'}
         filterLabel='Filter ingredients'
         activeFilters={activeFilters}
         onRemoveFilter={(key) =>
@@ -299,6 +301,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         }
         onClearFilters={clearFilters}
         doneLabel={`Show ${shown.length} ${shown.length === 1 ? 'ingredient' : 'ingredients'}`}
+        compactDoneLabel={`Show ${shown.length}`}
         leading={
           <PillGroup
             label='Which ingredients'
@@ -331,10 +334,10 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
             <strong className='text-foreground font-medium'>
               Needs a price
             </strong>{' '}
-            is what your recipes, meals and plans use that has no product yet.{' '}
+            looks at what your recipes, meals and plans use.{' '}
             <strong className='text-foreground font-medium'>Has a price</strong>{' '}
-            is anything you have a product for. Both only look through Yours,
-            even when All is picked.
+            looks at what you've priced. Both only search Yours, even with All
+            picked.
           </p>
         </FilterSection>
         <FilterSection title='Show only'>

@@ -6,6 +6,9 @@ export interface PinchOverlayContextValue {
   subview: PinchSubview | null;
   openSubview: (subview: PinchSubview) => void;
   closeSubview: () => void;
+  /** The phone's list of ways to start a recipe, a drawer that lives above the tabs so any screen (and a way's own screen, on back) can raise it. */
+  isStartOpen: boolean;
+  setIsStartOpen: (isOpen: boolean) => void;
 }
 
 /** One subview value for the whole app, so a full-page screen can never open on top of another. */

@@ -180,7 +180,13 @@ export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
-  | { kind: 'recipe'; id: string | null; method?: RecipeStartMethod }
+  | {
+      kind: 'recipe';
+      id: string | null;
+      method?: RecipeStartMethod;
+      /** Opened from the phone's start drawer, which a way's back button raises again. */
+      fromDrawer?: boolean;
+    }
   | {
       kind: 'plan';
       dayKey: string;

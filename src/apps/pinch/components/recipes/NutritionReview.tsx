@@ -106,11 +106,7 @@ function NutritionReview({
         : 'Added up from your ingredients, per serving.'}
       {!isEdited && leftOut.count > 0 && (
         <span className='ml-1 inline-flex align-middle'>
-          <HelpTip
-            variant='warning'
-            title='Not everything is counted'
-            placement='top'
-          >
+          <HelpTip variant='warning' title="What's left out" placement='top'>
             {leftOut.count} of {leftOut.total} ingredients have no nutrition
             info yet, so they aren’t in these numbers. Add their nutrition in
             your Kitchen, or change a number here.

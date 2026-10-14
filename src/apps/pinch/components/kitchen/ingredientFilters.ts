@@ -43,7 +43,7 @@ export function getActiveIngredientFilters(
   const result = [
     ...(filters.price === 'any' || !priceLabel
       ? []
-      : [{ key: PRICE_KEY, label: priceLabel }]),
+      : [{ key: PRICE_KEY, label: `${priceLabel} · in Yours` }]),
     ...filters.flags.map((flag) => ({
       key: `${FLAG_PREFIX}${flag}`,
       label: FLAG_LABELS.get(flag) ?? flag,

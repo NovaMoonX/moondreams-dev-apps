@@ -16,7 +16,6 @@ import MealDrawer from '@apps/pinch/components/recipes/MealDrawer';
 import MealRow from '@apps/pinch/components/recipes/MealRow';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import RecipeRow from '@apps/pinch/components/recipes/RecipeRow';
-import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
 import {
   LIST_SEARCH_THRESHOLD,
   RECIPES_VIEW_LABELS,
@@ -56,7 +55,7 @@ interface RecipesScreenProps {
 }
 
 function RecipesScreen({ uid }: RecipesScreenProps) {
-  const { openSubview } = usePinchOverlay();
+  const { openSubview, setIsStartOpen } = usePinchOverlay();
   const isPhone = useMediaQuery().isBelow('sm');
   const viewOptions = useListViewOptions(uid, 'recipes');
   const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
@@ -69,7 +68,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
-  const [isStartOpen, setIsStartOpen] = useState(false);
 
   const total = view === 'meals' ? meals.length : recipes.length;
   const hasSearch = total >= LIST_SEARCH_THRESHOLD;
@@ -237,13 +235,15 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             isThin
           />
         </div>
-        <ListViewControls
-          options={viewOptions.options}
-          customizedCount={viewOptions.customizedCount}
-          onChange={viewOptions.update}
-          onReset={viewOptions.reset}
-          className='h-10 w-10'
-        />
+        {total > 0 && (
+          <ListViewControls
+            options={viewOptions.options}
+            customizedCount={viewOptions.customizedCount}
+            onChange={viewOptions.update}
+            onReset={viewOptions.reset}
+            className='h-10 w-10'
+          />
+        )}
       </div>
       {hasSearch && (
         <SearchInput
@@ -304,15 +304,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           onFillIn={(gaps) => {
             setOpenMealId(null);
             setFillIn(gaps);
-          }}
-        />
-      )}
-      {isStartOpen && (
-        <RecipeStartDrawer
-          onClose={() => setIsStartOpen(false)}
-          onPick={(method) => {
-            setIsStartOpen(false);
-            openSubview({ kind: 'recipe', id: null, method });
           }}
         />
       )}

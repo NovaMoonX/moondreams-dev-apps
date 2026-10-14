@@ -221,10 +221,12 @@ function PlannedMealView({
           label='Cost'
           value={
             cost.totalCents === null
-              ? 'No prices yet'
+              ? meal.snapshot
+                ? "Wasn't priced"
+                : 'No prices yet'
               : formatCost(cost.totalCents)
           }
-          detail={meal.snapshot ? 'Prices as they were that day' : undefined}
+          detail={meal.snapshot ? 'Fixed when the day passed' : undefined}
           help={
             leftOutCount > 0 && cost.totalCents !== null ? (
               <HelpTip
@@ -238,7 +240,9 @@ function PlannedMealView({
                   price yet.
                 </p>
                 <p className='text-muted-foreground'>
-                  The cost goes up once they're priced.
+                  {meal.snapshot
+                    ? 'This day has passed, so a price you add now counts from today on.'
+                    : "The cost goes up once they're priced."}
                 </p>
               </HelpTip>
             ) : undefined
@@ -275,7 +279,9 @@ function PlannedMealView({
               </span>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
                 {itemCost?.cents == null
-                  ? 'No price yet'
+                  ? meal.snapshot
+                    ? "Wasn't priced"
+                    : 'No price yet'
                   : formatCost(itemCost.cents)}
               </span>
             </li>
@@ -285,8 +291,8 @@ function PlannedMealView({
       {error && <p className='text-destructive text-sm'>{error}</p>}
       {meal.snapshot && (
         <p className='text-muted-foreground text-sm'>
-          This day has passed, so its meals stay as they were. Remove one and
-          add it again to change it.
+          This day has passed, so its meals keep the prices and numbers they
+          had. Remove one and add it again to use today's.
         </p>
       )}
       <Button

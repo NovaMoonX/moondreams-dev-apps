@@ -90,7 +90,7 @@ function IngredientRow({
       type='button'
       variant='tertiary'
       onClick={() => onOpen(ingredient.id)}
-      className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-2 text-left'
+      className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
     >
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block truncate font-medium'>
@@ -109,7 +109,7 @@ function IngredientRow({
         )}
       </span>
       <ChevronRight
-        className='text-muted-foreground h-5 w-5 shrink-0'
+        className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
         aria-hidden='true'
       />
     </Button>

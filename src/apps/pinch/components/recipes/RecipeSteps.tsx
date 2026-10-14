@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -23,8 +23,15 @@ interface StepDrawerProps {
 /** Writes one step without leaving the recipe; a step left blank is dropped when the drawer closes. */
 function StepDrawer({ steps, mode, onChange, onClose }: StepDrawerProps) {
   const [index, setIndex] = useState(mode.index);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const step = steps[index] ?? '';
   const isBlank = step.trim() === '';
+
+  // The drawer takes focus itself while it slides in, so the text box is focused once that settles.
+  useEffect(() => {
+    const timer = window.setTimeout(() => textRef.current?.focus(), 350);
+    return () => window.clearTimeout(timer);
+  }, [index]);
 
   const removeStep = () => onChange(steps.filter((_, at) => at !== index));
   const close = () => {
@@ -62,9 +69,9 @@ function StepDrawer({ steps, mode, onChange, onClose }: StepDrawerProps) {
       <div className='space-y-3'>
         <Textarea
           key={index}
+          ref={textRef}
           rows={6}
           variant='outline'
-          autoFocus
           aria-label={`Step ${index + 1} text`}
           placeholder='Write this step'
           maxLength={MAX_STEP_LENGTH}

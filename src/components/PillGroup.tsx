@@ -286,7 +286,6 @@ export function PillGroup<T extends string>({
       leading={leading}
       isThin={isThin}
       isSingle
-      selectedCount={value === null ? 0 : 1}
       isSelected={(optionValue) => value === optionValue}
       onToggle={onChange}
     />

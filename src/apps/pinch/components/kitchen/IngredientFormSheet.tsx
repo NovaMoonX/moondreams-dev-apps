@@ -70,6 +70,8 @@ interface NutritionEntry {
   /** What the typed numbers are for: "28 g", "1 oz", "1 serving". */
   basis: { amount: string; unit: NutritionEntryUnit };
   values: NutritionText;
+  /** Once the person types a number, switching the basis relabels it; before that it converts the saved numbers. */
+  isTyped: boolean;
 }
 
 interface Extras {
@@ -98,6 +100,7 @@ const BASIS_DEFAULT_AMOUNTS: Record<NutritionEntryUnit, string> = {
 const EMPTY_NUTRITION: NutritionEntry = {
   basis: { amount: BASIS_DEFAULT_AMOUNTS.G, unit: 'G' },
   values: { calories: '', protein: '', carbs: '', fat: '' },
+  isTyped: false,
 };
 
 const { custom, input } = FormFactories;
@@ -183,6 +186,7 @@ const getInitialData = (
             carbs: toText(ingredient?.per100g.carbs ?? null),
             fat: toText(ingredient?.per100g.fat ?? null),
           },
+          isTyped: false,
         },
       },
       serving: {
@@ -232,7 +236,7 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
       },
     });
 
-  const { basis, values } = extras.nutrition.value;
+  const { basis, values, isTyped } = extras.nutrition.value;
   const servingGrams = getFormServingGrams(extras, conversions);
   const per100g = getPer100g(extras, conversions);
   const isPer100g = basis.unit === 'G' && parseAmount(basis.amount) === 100;
@@ -247,10 +251,36 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
     if (!isPositive(parseAmount(basis.amount), MAX_SERVING_AMOUNT))
       return 'Add the amount these numbers are for.';
     return per100g && !Object.values(per100g).every(isMetric)
-      ? 'Check the numbers: each one is 0 to 100,000 per 100 g.'
+      ? 'Those numbers look too big. Check them against the label.'
       : null;
   };
   const problem = getProblem();
+
+  const switchBasis = (unit: NutritionEntryUnit) => {
+    const amount =
+      basis.amount === BASIS_DEFAULT_AMOUNTS[basis.unit]
+        ? BASIS_DEFAULT_AMOUNTS[unit]
+        : basis.amount;
+    const typedAmount = parseAmount(amount);
+    const grams = isPositive(typedAmount, MAX_SERVING_AMOUNT)
+      ? getEntryGrams(typedAmount, unit, servingGrams)
+      : null;
+    const converted =
+      !isTyped && per100g !== null && grams !== null
+        ? (Object.fromEntries(
+            NUTRITION_FIELDS.map(({ key }) => [
+              key,
+              per100g[key] === null
+                ? ''
+                : String(Math.round(per100g[key] * grams) / 100),
+            ]),
+          ) as unknown as NutritionText)
+        : null;
+    setEntry({
+      basis: { unit, amount },
+      ...(converted && { values: converted }),
+    });
+  };
 
   return (
     <div className='space-y-4'>
@@ -338,17 +368,7 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
                     isDisabled={
                       option.value === 'SERVING' && servingGrams === null
                     }
-                    onClick={() =>
-                      setEntry({
-                        basis: {
-                          unit: option.value,
-                          amount:
-                            basis.amount === BASIS_DEFAULT_AMOUNTS[basis.unit]
-                              ? BASIS_DEFAULT_AMOUNTS[option.value]
-                              : basis.amount,
-                        },
-                      })
-                    }
+                    onClick={() => switchBasis(option.value)}
                   >
                     {option.label}
                   </Pill>
@@ -392,6 +412,7 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
                             ...values,
                             [field.key]: event.target.value,
                           },
+                          isTyped: true,
                         })
                       }
                     />
@@ -543,7 +564,7 @@ function IngredientFormSheet({
       message: isCatalog
         ? `Put ${ingredient.name} back to its built-in nutrition and serving size? Your changes to it are removed.`
         : usage !== null && isUsed
-          ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers, but you can't bring it back to your lists.`
+          ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.`
           : `Delete "${ingredient.name}"? This action cannot be undone.`,
       confirmText: isCatalog ? 'Reset' : isUsed ? 'Remove' : 'Delete',
       destructive: true,

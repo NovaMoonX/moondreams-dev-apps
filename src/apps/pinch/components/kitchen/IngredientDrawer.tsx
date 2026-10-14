@@ -12,6 +12,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
+import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { setDefaultProduct } from '@apps/pinch/store/actions/productActions';
 import { NUTRITION_BASIS_OPTIONS, UNIT_LABELS } from '@apps/pinch/constants';
 import {
@@ -57,7 +58,7 @@ function IngredientDrawer({
     useAppSelector(selectDefaultProducts).get(ingredientId)?.id ?? null;
   const storesById = useAppSelector(selectStoresById);
   const [error, setError] = useState<string | null>(null);
-  const [pickedBasis, setPickedBasis] = useState<NutritionBasis | null>(null);
+  const { options, update } = useListViewOptions(uid, 'ingredients');
 
   const ingredient = useAppSelector(selectIngredientsById).get(ingredientId);
   const family = useAppSelector(selectIngredientFamiliesById).get(
@@ -72,9 +73,7 @@ function IngredientDrawer({
   const servingGrams = getServingGrams(ingredient.serving, ingredient);
   const hasServingChoice =
     servingGrams !== null && Math.abs(servingGrams - 100) > 0.005;
-  const basis: NutritionBasis = hasServingChoice
-    ? (pickedBasis ?? 'SERVING')
-    : 'PER_100G';
+  const basis: NutritionBasis = hasServingChoice ? options.basis : 'PER_100G';
   const isPerServing = basis === 'SERVING' && servingGrams !== null;
   const nutritionCaption = isPerServing
     ? `Per 1 serving (${servingText})`
@@ -109,15 +108,34 @@ function IngredientDrawer({
       <div className='space-y-5'>
         <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
           {[
-            family?.name,
-            ingredient.isCustom && 'One you added',
-            ingredient.isAdjusted && 'Adjusted by you',
-            `1 serving = ${servingText}`,
+            family && { key: 'family', text: family.name, emoji: null },
+            ingredient.isCustom && {
+              key: 'custom',
+              text: 'One you added',
+              emoji: '✏️',
+            },
+            ingredient.isAdjusted && {
+              key: 'adjusted',
+              text: 'Adjusted by you',
+              emoji: '✏️',
+            },
+            {
+              key: 'serving',
+              text: `1 serving = ${servingText}`,
+              emoji: '🍽️',
+            },
           ]
-            .filter((fact): fact is string => typeof fact === 'string')
+            .filter((fact) => fact !== false && fact !== undefined)
             .map((fact) => (
-              <li key={fact} className='whitespace-nowrap'>
-                {fact}
+              <li
+                key={fact.key}
+                className={join(
+                  'whitespace-nowrap',
+                  fact.emoji === null && 'font-medium',
+                )}
+              >
+                {fact.emoji && <span aria-hidden='true'>{fact.emoji} </span>}
+                {fact.text}
               </li>
             ))}
         </ul>
@@ -138,7 +156,7 @@ function IngredientDrawer({
                   label='Nutrition per'
                   options={BASIS_CHOICES}
                   value={basis}
-                  onChange={setPickedBasis}
+                  onChange={(next) => update({ basis: next })}
                   isThin
                 />
               )}

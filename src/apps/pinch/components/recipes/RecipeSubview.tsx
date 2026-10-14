@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
@@ -26,8 +28,11 @@ interface RecipeSubviewProps {
 
 /** The recipe as a full-screen layer: a new one begins with how to start it, each way finishes on its own screen, then the form, whose header carries the recipe's name. */
 function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
-  const { subview, closeSubview } = usePinchOverlay();
+  const { subview, closeSubview, setIsStartOpen } = usePinchOverlay();
+  const { confirm } = useActionModal();
   const startMethod = subview?.kind === 'recipe' ? subview.method : undefined;
+  const fromDrawer = subview?.kind === 'recipe' && subview.fromDrawer === true;
+  const isDirtyRef = useRef(false);
   const existing =
     useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const [stage, setStage] = useState<Stage>(
@@ -37,6 +42,34 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const [title, setTitle] = useState(existing?.title ?? '');
 
   const isReaderStage = stage !== 'start' && stage !== 'form';
+
+  const leave = async () => {
+    if (isDirtyRef.current) {
+      const confirmed = await confirm({
+        title: 'Discard this recipe?',
+        message:
+          "It isn't saved yet. If you leave now, what you typed or read in is lost.",
+        confirmText: 'Discard',
+        cancelText: 'Keep editing',
+        destructive: true,
+      });
+      if (!confirmed) return;
+    }
+    closeSubview();
+  };
+
+  const goBack = () => {
+    if (isReaderStage && fromDrawer) {
+      closeSubview();
+      setIsStartOpen(true);
+      return;
+    }
+    if (isReaderStage) {
+      setStage('start');
+      return;
+    }
+    void leave();
+  };
 
   const getTitle = () => {
     if (stage === 'start') return 'New recipe';
@@ -59,6 +92,8 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           uid={uid}
           recipeId={recipeId}
           initialRead={read}
+          isDirtyRef={isDirtyRef}
+          onLeave={() => void leave()}
           onTitleChange={setTitle}
         />
       );
@@ -68,6 +103,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
         key={stage}
         method={stage}
         onRead={(recipe, source, label) => {
+          isDirtyRef.current = true;
           setRead({ recipe, source, label });
           setTitle(recipe.title ?? '');
           setStage('form');
@@ -78,16 +114,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   };
 
   return (
-    <Subview
-      overlay
-      title={getTitle()}
-      onClose={closeSubview}
-      onBack={
-        isReaderStage && startMethod === undefined
-          ? () => setStage('start')
-          : closeSubview
-      }
-    >
+    <Subview overlay title={getTitle()} onClose={closeSubview} onBack={goBack}>
       {getBody()}
     </Subview>
   );

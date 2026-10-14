@@ -44,6 +44,8 @@ interface FilterBarProps {
   trailing?: ReactNode;
   /** The primary button that closes the sheet on a phone ("Show 12 ingredients"). */
   doneLabel?: string;
+  /** A shorter button label for the narrowest phones, where the full one would be cut off ("Show 150"). */
+  compactDoneLabel?: string;
   /** The filter controls: a `FilterSection` per question. */
   children: ReactNode;
 }
@@ -64,6 +66,7 @@ function FilterBar({
   leading,
   trailing,
   doneLabel = 'Done',
+  compactDoneLabel,
   children,
 }: FilterBarProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -114,7 +117,16 @@ function FilterBar({
         className='h-11 min-w-0 flex-1'
         onClick={() => setIsOpen(false)}
       >
-        <span className='truncate'>{doneLabel}</span>
+        {compactDoneLabel ? (
+          <>
+            <span className='truncate max-[360px]:hidden'>{doneLabel}</span>
+            <span className='truncate min-[361px]:hidden'>
+              {compactDoneLabel}
+            </span>
+          </>
+        ) : (
+          <span className='truncate'>{doneLabel}</span>
+        )}
       </Button>
     </div>
   );

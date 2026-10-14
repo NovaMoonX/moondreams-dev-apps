@@ -13,6 +13,7 @@ import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
 import MealSubview from '@apps/pinch/components/recipes/MealSubview';
+import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
 import RecipeSubview from '@apps/pinch/components/recipes/RecipeSubview';
 import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
 import PinchNav from '@apps/pinch/components/shell/PinchNav';
@@ -34,14 +35,17 @@ function Pinch() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [, startTransition] = useTransition();
   const [subview, setSubview] = useState<PinchSubview | null>(null);
+  const [isStartOpen, setIsStartOpen] = useState(false);
   const [shownMonth, setShownMonth] = useState(getLocalMonthKey);
   const overlayContext = useMemo(
     () => ({
       subview,
       openSubview: setSubview,
       closeSubview: () => setSubview(null),
+      isStartOpen,
+      setIsStartOpen,
     }),
-    [subview],
+    [subview, isStartOpen],
   );
 
   const isLoaded = useAppSelector(selectIsPinchLoaded);
@@ -107,6 +111,15 @@ function Pinch() {
 
   return (
     <PinchOverlayContext.Provider value={overlayContext}>
+      {isStartOpen && (
+        <RecipeStartDrawer
+          onClose={() => setIsStartOpen(false)}
+          onPick={(method) => {
+            setIsStartOpen(false);
+            setSubview({ kind: 'recipe', id: null, method, fromDrawer: true });
+          }}
+        />
+      )}
       {subview?.kind === 'stores' && <StoresSubview uid={user.uid} />}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'recipe' && (

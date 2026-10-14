@@ -15,7 +15,6 @@ import DayView from '@apps/pinch/components/calendar/DayView';
 import MonthView from '@apps/pinch/components/calendar/MonthView';
 import StatsRow from '@apps/pinch/components/calendar/StatsRow';
 import WeekView from '@apps/pinch/components/calendar/WeekView';
-import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
 import SettingsSheet from '@apps/pinch/components/settings/SettingsSheet';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import {
@@ -64,7 +63,7 @@ function CalendarScreen({
   shownMonth,
   onShownMonthChange,
 }: CalendarScreenProps) {
-  const { openSubview } = usePinchOverlay();
+  const { openSubview, setIsStartOpen } = usePinchOverlay();
   const [searchParams, setSearchParams] = useSearchParams();
   const plannedByDay = useAppSelector(selectPlannedByDay);
   const hasPlannedMeals = useAppSelector(selectPlannedMeals).length > 0;
@@ -96,7 +95,6 @@ function CalendarScreen({
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
-  const [isStartOpen, setIsStartOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
 
   const requestedView = searchParams.get('view');
@@ -282,15 +280,6 @@ function CalendarScreen({
       )}
       {fillIn && (
         <FillInSheet uid={uid} gaps={fillIn} onClose={() => setFillIn(null)} />
-      )}
-      {isStartOpen && (
-        <RecipeStartDrawer
-          onClose={() => setIsStartOpen(false)}
-          onPick={(method) => {
-            setIsStartOpen(false);
-            openSubview({ kind: 'recipe', id: null, method });
-          }}
-        />
       )}
       {openDay && (
         <DayDrawer

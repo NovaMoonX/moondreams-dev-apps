@@ -172,6 +172,9 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
     if (method === 'text') {
       return (
         <>
+          <p className='text-muted-foreground text-sm'>
+            An AI reads it and fills in the form. It isn’t saved.
+          </p>
           <Textarea
             rows={10}
             variant='outline'
@@ -181,12 +184,9 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
-          <p className='text-muted-foreground text-sm'>
-            An AI reads it and fills in the form. It isn’t saved.
-          </p>
           <Button
             type='button'
-            className='w-full sm:w-auto'
+            className='w-full sm:w-auto sm:self-start'
             loading={isReading}
             disabled={isReading || text.trim() === ''}
             onClick={() =>
@@ -195,7 +195,7 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
               )
             }
           >
-            Read it
+            Fill in the recipe
           </Button>
         </>
       );
@@ -204,6 +204,9 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
     if (method === 'link') {
       return (
         <>
+          <p className='text-muted-foreground text-sm'>
+            We open the page and an AI reads the recipe from it.
+          </p>
           <Input
             type='url'
             inputMode='url'
@@ -219,17 +222,14 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
               }
             }}
           />
-          <p className='text-muted-foreground text-sm'>
-            We open the page and an AI reads the recipe from it.
-          </p>
           <Button
             type='button'
-            className='w-full sm:w-auto'
+            className='w-full sm:w-auto sm:self-start'
             loading={isReading}
             disabled={isReading || link.trim() === ''}
             onClick={handleLink}
           >
-            Read it
+            Fill in the recipe
           </Button>
         </>
       );

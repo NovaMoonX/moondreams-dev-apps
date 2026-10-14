@@ -62,7 +62,7 @@ function StatTile({
       <div
         className={join(
           'w-full min-w-0',
-          Boolean(help) && !isStacked && 'pr-5 sm:pr-0',
+          Boolean(help) && !isStacked && 'pr-6 sm:pr-0',
         )}
       >
         <p
