@@ -189,6 +189,7 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
   const siteName = clipSiteName(page?.meta?.siteName) ?? host;
   const imageUrl = toIdeaImageUrl(page?.meta?.image);
   const title = typed && typed.link === link ? typed.title : pageTitle;
+  const needsTitle = hasFailed || (page !== null && pageTitle === '');
   const isInvalid =
     data.url.trim() !== '' && link === null && settledText === data.url;
 
@@ -287,7 +288,7 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
               </span>
               <div className='min-w-0 flex-1 space-y-1'>
                 <TitleField
-                  label={page ? 'Looks like' : 'Title'}
+                  label={needsTitle ? 'Title' : 'Looks like'}
                   isCompact
                   value={title}
                   placeholder={host ?? ''}
@@ -302,9 +303,11 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
                 )}
               </div>
             </div>
-            {hasFailed && (
+            {needsTitle && (
               <p className='text-muted-foreground text-sm' role='status'>
-                Couldn't read that page. You can type your own title.
+                {hasFailed
+                  ? "Couldn't read that page. You can type your own title."
+                  : "That page didn't give a title. You can type your own."}
               </p>
             )}
           </div>
@@ -323,7 +326,7 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
     }),
   ];
 
-  const canSave = link !== null && duplicate === null;
+  const canSave = link !== null && duplicate === null && !isLooking;
 
   return (
     <div ref={bodyRef} className='space-y-4'>
@@ -356,6 +359,11 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
           <WayFooter
             canSave={canSave}
             isSubmitting={isSubmitting}
+            note={
+              isLooking
+                ? 'Looking up the page. You can save in a moment.'
+                : undefined
+            }
             error={error}
             onCancel={onClose}
           />
