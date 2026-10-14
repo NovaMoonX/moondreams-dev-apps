@@ -117,27 +117,6 @@ export function getPlannedMealCost(
   };
 }
 
-/** Several meals' costs added up, with what any of them left out. */
-export function combineMealCosts(costs: MealCost[]): Omit<MealCost, 'items'> {
-  const priced = costs.flatMap((cost) =>
-    cost.totalCents === null ? [] : [cost.totalCents],
-  );
-
-  return {
-    totalCents:
-      priced.length === 0
-        ? null
-        : priced.reduce((sum, cents) => sum + cents, 0),
-    leftOut: [
-      ...new Map(
-        costs
-          .flatMap((cost) => cost.leftOut)
-          .map((gap) => [`${gap.kind}:${gap.ingredientId}`, gap]),
-      ).values(),
-    ],
-  };
-}
-
 /** A meal's cost and nutrition, taken from the data as it is now. */
 export function buildSnapshot(
   items: MealItem[],

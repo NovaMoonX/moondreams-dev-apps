@@ -28,6 +28,7 @@ import {
   selectCooksByRecipe,
   selectNotesById,
   selectNotesByRecipe,
+  selectNotesLoadError,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { Cook } from '@apps/pinch/types';
@@ -85,7 +86,7 @@ function NoteForm({
       state.pinch.cooks.isLoaded && state.pinch.cooks.loadError === null,
   );
   const isNotesLoaded = useAppSelector((state) => state.pinch.notes.isLoaded);
-  const notesError = useAppSelector((state) => state.pinch.notes.loadError);
+  const notesError = useAppSelector(selectNotesLoadError);
   const [initialData] = useState<NoteFormData>(() => ({
     text: note?.text ?? '',
     cook: initialCookId ?? NO_COOK,

@@ -48,8 +48,6 @@ export const selectPinchLoadError = (state: RootState) =>
   state.pinch.products.loadError ??
   state.pinch.recipes.loadError;
 
-export const selectIngredientRecords = selectRecords;
-
 export const selectIngredientRecordsById = createSelector(
   [selectRecords],
   (records) => new Map(records.map((record) => [record.id, record])),
@@ -295,7 +293,7 @@ export const selectTweakTracking = (
         isCooksReady:
           state.pinch.cooks.isLoaded && state.pinch.cooks.loadError === null,
         isNotesReady:
-          state.pinch.notes.isLoaded && state.pinch.notes.loadError === null,
+          state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
         cookCount: selectCookSummaries(state).get(recipeId)?.count ?? 0,
         noteCount: selectNoteSummaries(state).get(recipeId)?.count ?? 0,
       });
