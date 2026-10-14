@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -12,6 +12,7 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import StartCookingRow from '@apps/pinch/components/shared/StartCookingRow';
 import {
   MAX_NAME_LENGTH,
   MEAL_TYPE_EMOJIS,
@@ -49,6 +50,7 @@ interface PlannedMealViewProps {
   onEdit: (plannedMealId: string, mealType: MealType) => void;
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
+  onStartCooking: (recipeId: string, servings: number) => void;
   /** Where the drawer's pinned footer is: this view puts its actions there, a quiet Modify on the left and the one primary on the right. */
   footerEl: HTMLElement | null;
 }
@@ -61,6 +63,7 @@ function PlannedMealView({
   onEdit,
   onFillIn,
   onAddToShopping,
+  onStartCooking,
   footerEl,
 }: PlannedMealViewProps) {
   const dispatch = useAppDispatch();
@@ -77,10 +80,17 @@ function PlannedMealView({
   const [isNaming, setIsNaming] = useState(false);
   const [mealName, setMealName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isChoosing, setIsChoosing] = useState(false);
 
   if (!meal) {
     return null;
   }
+
+  const cookable = meal.items.flatMap((item) => {
+    const recipe =
+      item.kind === 'RECIPE' ? recipesById.get(item.refId) : undefined;
+    return recipe && recipe.steps.length > 0 ? [{ item, recipe }] : [];
+  });
 
   const cost = getPlannedMealCost(meal, costContext);
   const nutrition = getPlannedMealNutrition(
@@ -173,6 +183,53 @@ function PlannedMealView({
         footerEl,
       )
     : null;
+
+  if (isChoosing && cookable.length > 1) {
+    return (
+      <div className='space-y-5'>
+        <Button
+          type='button'
+          variant='tertiary'
+          className='h-10 gap-1 px-0!'
+          onClick={() => setIsChoosing(false)}
+        >
+          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
+          Back
+        </Button>
+        <div className='space-y-1'>
+          <p className='font-medium'>Which one are you cooking?</p>
+          <p className='text-muted-foreground text-sm'>
+            It opens with the servings you planned.
+          </p>
+        </div>
+        <ul className='divide-border divide-y'>
+          {cookable.map(({ item, recipe }) => (
+            <li key={item.id}>
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-auto min-h-12 w-full items-start justify-start gap-3 px-0! py-2.5 text-left'
+                onClick={() => onStartCooking(recipe.id, item.servings)}
+              >
+                <span className='min-w-0 flex-1'>
+                  <span className='block font-medium wrap-break-word'>
+                    {recipe.title}
+                  </span>
+                  <span className='text-muted-foreground block text-xs font-normal'>
+                    {formatServings(item.servings)}
+                  </span>
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
 
   if (isNaming) {
     return (
@@ -303,16 +360,30 @@ function PlannedMealView({
         </p>
       )}
       {meal.date >= getLocalTodayDate() && (
-        <AddToShoppingRow
-          subtitle='Choose what you need for this meal'
-          onClick={() =>
-            onAddToShopping({
-              kind: 'items',
-              items: meal.items,
-              label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
-            })
-          }
-        />
+        <div className='space-y-2'>
+          {cookable.length > 0 && (
+            <StartCookingRow
+              onClick={() =>
+                cookable.length === 1
+                  ? onStartCooking(
+                      cookable[0].recipe.id,
+                      cookable[0].item.servings,
+                    )
+                  : setIsChoosing(true)
+              }
+            />
+          )}
+          <AddToShoppingRow
+            subtitle='Choose what you need for this meal'
+            onClick={() =>
+              onAddToShopping({
+                kind: 'items',
+                items: meal.items,
+                label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
+              })
+            }
+          />
+        </div>
       )}
       <Button
         type='button'

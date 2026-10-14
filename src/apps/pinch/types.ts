@@ -189,6 +189,8 @@ export type PinchSubview =
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
     }
+  /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. */
+  | { kind: 'cook'; recipeId: string; servings?: number }
   | {
       kind: 'plan';
       dayKey: string;
@@ -324,3 +326,5 @@ export interface RecipeCost {
   leftOut: Gap[];
   lines: Map<string, LineCost>;
 }
+
+export type CookView = 'steps' | 'ingredients';

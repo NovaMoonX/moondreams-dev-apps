@@ -10,7 +10,9 @@ import { useAppSelector } from '@/store';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import StartCookingRow from '@apps/pinch/components/shared/StartCookingRow';
 import { UNIT_LABELS } from '@apps/pinch/constants';
+import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectIngredientsById,
   selectRecipeCosts,
@@ -66,6 +68,7 @@ function RecipeDrawer({
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
   const show = useAppSelector(selectShowNutrition);
   const sourcesById = useAppSelector(selectSourcesById);
+  const { openSubview } = usePinchOverlay();
 
   if (!recipe) {
     return null;
@@ -214,12 +217,22 @@ function RecipeDrawer({
           </ul>
         </FormSection>
 
-        <AddToShoppingRow
-          subtitle='Choose what you need for this recipe'
-          onClick={() =>
-            onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
-          }
-        />
+        <div className='space-y-2'>
+          {recipe.steps.length > 0 && (
+            <StartCookingRow
+              onClick={() => {
+                onClose();
+                openSubview({ kind: 'cook', recipeId: recipe.id });
+              }}
+            />
+          )}
+          <AddToShoppingRow
+            subtitle='Choose what you need for this recipe'
+            onClick={() =>
+              onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
+            }
+          />
+        </div>
 
         {recipe.steps.length > 0 && (
           <FormSection title='Steps'>

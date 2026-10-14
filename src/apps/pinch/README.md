@@ -24,6 +24,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 12. **Lists stay short, and you choose what they show.** Rows start with prices and leave out calories and macros; an eye button on Kitchen and Recipes turns either one on or off, whenever you like.
 13. **Remember where a recipe came from.** Tag a recipe with a source, like a favorite site or a stack of cookbooks, then find your recipes by it.
 14. **Make a shopping list.** From a recipe, a saved meal, a planned meal or a whole day, pick what you need and it goes on one list in Kitchen, grouped by ingredient family. Tick things off at the store.
+15. **Cook it step by step.** Start cooking from a recipe, or from a meal you planned: one step at a time in big type, the ingredients for the servings you're making, a timer for any time a step mentions, and the screen kept on where your browser allows it.
 
 ### Finding Your Way, In Detail
 
@@ -95,6 +96,16 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **It's just a list.** It doesn't follow the calendar: changing a meal later leaves the list as it was. Nothing on it is shared, copied out or sent anywhere.
 - **Limits.** One add takes up to 200 lines, and the list holds about 300 things before it asks you to clear what you've got. Both are limits in the app, not in the database.
 
+### Cooking Mode, In Detail
+
+- **Start from a recipe or a planned meal.** "Start cooking" is a row in a recipe's drawer (when it has steps) and in a planned meal's drawer (not on a day that has passed). A meal with several recipes asks which one first, and opens it at the servings you planned.
+- **One step at a time.** The step in big type, "Step 2 of 6" with a dot per step (just the count past twelve), and big Back and Next buttons at the bottom; Next becomes Finish on the last step. Swipe left or right, or use the arrow keys. A long step scrolls while the buttons stay where they are.
+- **Ingredients for the servings you're making.** The Ingredients view starts at the recipe's own servings, or the ones you planned. Change them and every amount scales, the same way the shopping list scales it, with units left as they are. Tick what you've got out; Reset clears the ticks. Amounts written inside the steps stay as the recipe wrote them, and the screen says so.
+- **Timers for the times in a step.** A step that says "25 minutes", "1 hr 30 min" or "10-15 min" gets a "Start 25 min timer" chip (a range uses its longer end). Up to four timers run at once above the buttons, each with Pause and a close button. When one ends the strip lights up with Dismiss, and you get a note on screen, a buzz and a short beep where your device allows them.
+- **Timers only run while the screen is open.** A browser can't ring in the background, so leaving cooking mode ends them. The screen says so the first time you start one.
+- **The screen stays on where it can.** Pinch asks your browser to keep it awake. If the browser can't or won't (an older one, or a page that isn't secure), a line says "Your screen may turn off while you cook."
+- **Nothing is saved.** Not the step you're on, the ticks or the timers. Back, the back gesture and Escape all leave at once.
+
 ### Bringing Recipes In, In Detail
 
 - **Four ways to start:** a new recipe begins with a short list: From text, From a file, From a link, or Write it yourself. On a phone it's a drawer; on a wider screen it's the first page. Picking one opens that way's own screen, which says what the AI will do, and each has "Write it yourself instead"; back from it returns to the list. The form is never the first thing you face, and leaving it with something typed or read in asks before the work is thrown away.
@@ -136,6 +147,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
 - [x] View options on Kitchen and Recipes: prices show and calories and macros stay hidden until you turn them on, and pick per serving or per 100 g for ingredients, remembered per person on the device
 - [x] Shopping list in Kitchen: add a recipe's (at the servings you pick), a saved meal's, a planned meal's or a day's ingredients, or a single ingredient; lines merge by ingredient and unit, group by family, tick off to "Got it", and show an approximate cost with what it leaves out
+- [x] Cooking mode from a recipe or a planned meal: one step at a time in big type, the ingredients scaled to the servings you're making, timers for the times a step mentions, and the screen kept awake where the browser allows it
 - [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals and a shopping list of a few hundred things
 
 ### Next Steps
@@ -151,10 +163,9 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [ ] AI suggestions for a custom ingredient's nutrition
 - [ ] Swap a recipe's ingredient for another in its family and see the cost change
 - [ ] Compare products for an ingredient and see the cheapest per gram of protein
-- [ ] Cook mode: one step at a time with a keep-awake screen
 
 ### Stretch Goals
-- [ ] Hands-free voice navigation in cook mode
+- [ ] Hands-free voice navigation in cooking mode
 - [ ] Look up a product by barcode
 - [ ] Price history for a product over time
 - [ ] Daily calorie and protein goals shown against your plan
@@ -175,6 +186,6 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **State:** Redux Toolkit, following the repo's standard per-app store pattern; one-off lookups through TanStack Query
 - **Backend:** Firebase Auth, Firestore for ingredients, products, recipes, recipe sources, meals, calendar entries, the shopping list and per-user settings (adding to the list merges into existing lines in one transaction, so two devices adding at once never lose an amount); Firebase Storage for recipe and store images
 - **AI:** the repo's shared Firebase AI (Gemini) setup to read pasted text, photos, and PDFs (JPG, PNG, WebP, HEIC, and PDF up to 10 MB) and return drafts for review; for links, the shared `fetchPageContent` Cloud Function fetches the page's text and any recipe data first, and the AI model writes the draft from them
-- **On the device:** a list's view options are kept in the browser's local storage, per person; nothing else of yours is kept there beyond Firestore's own cache
+- **On the device:** a list's view options are kept in the browser's local storage, per person; nothing else of yours is kept there beyond Firestore's own cache. Cooking mode keeps nothing at all: it asks the browser to keep the screen awake and plays a short beep when a timer ends, and nothing about either is stored or sent
 - **Catalog data:** built-in nutrition values drawn from USDA FoodData Central, which publishes its data for free reuse (licence not yet confirmed from here: to be checked before launch), stored per 100 g alongside common unit conversions; money is stored as whole cents
 - **Store logos:** a curated list of well-known stores (names and web domains) whose logos load from a logo service in the person's browser, with a letter tile whenever one isn't available; stores you add keep their own uploaded image in Firebase Storage. The logo service (Logo.dev) and its terms are to be confirmed before launch.

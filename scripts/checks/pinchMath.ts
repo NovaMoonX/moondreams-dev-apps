@@ -6,6 +6,7 @@ import {
   scaleNutrition,
   toPer100g,
 } from '../../src/apps/pinch/utils/nutritionBasis.ts';
+import { scaleAmount } from '../../src/apps/pinch/utils/quantity.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
   getItemsLines,
@@ -262,6 +263,22 @@ const ricePot = shopRecipe('ricePot', 2, [
 const shopRecipes = new Map([adobo, ricePot].map((entry) => [entry.id, entry]));
 
 assert.equal(getShoppingItemId('cat-salt', 'FL_OZ'), 'cat-salt__FL_OZ');
+
+// Scaling a recipe's amounts to the servings being made (cooking mode and the shopping sheet share it)
+assert.equal(scaleAmount(2, 6, 4), 3);
+assert.equal(scaleAmount(1, 6, 4), 1.5);
+assert.equal(scaleAmount(0.25, 1, 4), 0.0625);
+assert.equal(scaleAmount(3, 4, 4), 3);
+assert.equal(scaleAmount(2, 6, 0), 2);
+assert.equal(scaleAmount(2, 6, -1), 2);
+assert.deepEqual(
+  getRecipeLines(
+    shopRecipe('noServings', 0, [['rice', 1, 'CUP']]),
+    shopIngredients,
+    6,
+  ),
+  [{ ingredientId: 'rice', amount: 1, unit: 'CUP' }],
+);
 
 assert.deepEqual(
   getRecipeLines(adobo, shopIngredients),

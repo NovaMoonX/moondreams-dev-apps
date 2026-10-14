@@ -15,6 +15,7 @@ import {
   MEAL_TYPE_LABELS,
   MEAL_TYPES,
 } from '@apps/pinch/constants';
+import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectCostContext,
   selectIngredientsById,
@@ -66,6 +67,7 @@ function DayDrawer({
   onFillIn,
   onAddToShopping,
 }: DayDrawerProps) {
+  const { openSubview } = usePinchOverlay();
   const mealsByDay = useAppSelector(selectPlannedByDay);
   const meals = mealsByDay.get(dayKey) ?? NO_MEALS;
   const costContext = useAppSelector(selectCostContext);
@@ -115,6 +117,10 @@ function DayDrawer({
           onEdit={onEdit}
           onFillIn={onFillIn}
           onAddToShopping={onAddToShopping}
+          onStartCooking={(recipeId, servings) => {
+            onClose();
+            openSubview({ kind: 'cook', recipeId, servings });
+          }}
           footerEl={footerEl}
         />
       ) : (

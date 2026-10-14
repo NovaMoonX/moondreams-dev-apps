@@ -73,6 +73,10 @@ flowchart TD
     RD -->|Modify| RF
     RD -->|Add to calendar| PM
     RD -->|Add to shopping list| AS["Add to shopping list sheet · servings, tick what you need"]
+    RD -->|Start cooking, with steps| CK["Cooking mode subview · Steps and Ingredients, timers"]
+    PMD -->|Start cooking, one recipe| CK
+    PMD -->|Start cooking, several recipes| CKP["Which one? swaps in place · ‹ Back"]
+    CKP --> CK
     AS -.->|toast View| SL
     RL -->|Meals pill| ML["Saved meals list"]
     ML -->|+ New or tap Modify| MF["Meal subview · same builder, no day"]
@@ -306,7 +310,7 @@ block-beta
   style P11 fill:transparent,stroke:#888888,stroke-width:1px;
   style P12 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A Cost tile (its warning icon says what the total leaves out) and, when nutrition is on, the plate's calories and macros as emoji tiles sit above the items. The footer holds Modify (secondary, left) beside the one primary, "Save as a meal"; Modify closes the drawer and opens the Plan a meal subview, and is absent on a past day. "Remove from this day" is the red row at the end of the body, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button. In the body, above Modify's footer, a tinted "Add to shopping list" row ("Choose what you need for this meal") closes the drawer and opens the Add to shopping list sheet; it isn't there once the day has passed.*
+*A Cost tile (its warning icon says what the total leaves out) and, when nutrition is on, the plate's calories and macros as emoji tiles sit above the items. The footer holds Modify (secondary, left) beside the one primary, "Save as a meal"; Modify closes the drawer and opens the Plan a meal subview, and is absent on a past day. "Remove from this day" is the red row at the end of the body, with a confirm. Saving as a meal swaps the drawer in place to a single name field and a Save button. In the body, above Modify's footer, a tinted "Start cooking" row (only when a recipe in the meal has steps) and a tinted "Add to shopping list" row ("Choose what you need for this meal") sit together; neither is there once the day has passed. Add to shopping list closes the drawer and opens its sheet. Start cooking closes the drawer and opens Cooking mode at the servings planned for that recipe, or, when more than one recipe has steps, swaps the drawer in place to a short "Which one are you cooking?" list with a "‹ Back" link.*
 
 **Plan a meal** (subview; also the editor for an already planned meal)
 
@@ -542,7 +546,7 @@ block-beta
   style T12 fill:transparent,stroke:#888888,stroke-width:1px;
   style T13 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The front matter is one plain line of emoji and text for servings, times and, when the recipe has a source that still exists, "📖 From {source}" (a long name wraps inside the line; never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone or touch screen, a tooltip with a mouse), calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm. A tinted "Add to shopping list" row ("Choose what you need for this recipe") sits under the ingredients; it closes the drawer and opens the Add to shopping list sheet, which starts at the recipe's own servings.*
+*The front matter is one plain line of emoji and text for servings, times and, when the recipe has a source that still exists, "📖 From {source}" (a long name wraps inside the line; never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone or touch screen, a tooltip with a mouse), calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm. A tinted "Start cooking" row ("Steps one at a time, with a timer", only when the recipe has a step) and a tinted "Add to shopping list" row ("Choose what you need for this recipe") sit together under the ingredients; Start cooking closes the drawer and opens Cooking mode at the recipe's own servings, and Add to shopping list closes it and opens the sheet, which starts at the recipe's own servings.*
 
 **Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with a Cost tile (warning icon when it leaves something out), the plate's calories and macros as emoji tiles when on, the items with servings and cost, and in the footer Modify beside the one primary "Plan it", which closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. The builder's header carries the meal's name (or the plate's first item while planning), its rows are a title with a compact servings stepper beneath (40px hit areas from a pseudo-element), and a tinted summary shows the cost, its warning icon and the plate's emoji macros. Adding stays the search field in the form. Removing an item from the plate shows "Removed Taco shells · Undo · 6" above the footer, and Undo puts it back in its place with its servings. The meal drawer has the same "Add to shopping list" row ("Choose what you need for this meal") under its items.
 
@@ -795,6 +799,60 @@ block-beta
 *The Add to shopping list sheet is a `FormSheet` (a tall drawer on a phone, a modal from `sm`). It opens from the recipe, meal, planned meal and day drawers, which close first. It names what it is for (the recipe's title, the meal's name, "Dinner on Wed, Oct 14", or the day), a recipe gets a "For [stepper] servings" row that starts at the recipe's own servings and scales every line, and a count with "Tick all" / "Untick all" sits above the lines (one scrolling list, header and footer fixed). Each line is a checkbox, the name and its amount; a line already on the list starts unticked and says "On your list · 2 lb", since ticking it adds more, and one already got is treated as new (adding starts it again). "Add 3" is the one primary; a note beside it says why it can't be pressed (nothing ticked, more than 200 things, the list would pass 300). Afterwards a toast says "Added 5 to your shopping list" with a "View" button that opens the list.*
 
 
+**Cooking mode** (subview from a recipe or a planned meal; Steps and Ingredients are one thin `PillGroup` apart)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  K1["‹ Adobo chicken"]:2
+  K2["Steps"]:1
+  K3["Ingredients"]:1
+  K4["Step 2 of 3  ▬ ● ○"]:2
+  K5["Simmer everything with the bay leaves and pepper, covered, for 25 minutes."]:2
+  K6["⏲️ Start 25 min timer"]:2
+  K7["12:41 · Step 1      ⏸  ✕"]:2
+  K8["Back"]:1
+  K9["Next"]:1
+  style K1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K9 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  I1["‹ Adobo chicken"]:2
+  I2["Steps"]:1
+  I3["Ingredients"]:1
+  I4["Making 6 servings"]:1
+  I5["− 6 +"]:1
+  I6["Tick what you've got out"]:1
+  I7["Reset"]:1
+  I8["☑ Chicken thigh  3 lb"]:2
+  I9["☐ Soy sauce  0.38 cup"]:2
+  I10["Back to the steps"]:2
+  style I1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I9 fill:transparent,stroke:#888888,stroke-width:1px;
+  style I10 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*Cooking mode is an overlay `Subview` titled with the recipe's name, so its header holds only the back button and the title; Escape, the header's back and the phone's back gesture all close it at once, with nothing to confirm because nothing is stored. It opens on Steps. The step is the one big thing on the screen (`text-2xl`, `text-xl` for a long step or a short landscape screen), under "Step 2 of 3" and a dot per step (the count alone past twelve steps). Back and Next are 56px tall and pinned at the bottom with the timer strip above them (Next is the wide one and reads Finish on the last step, which closes the screen); swipe left or right, or the arrow keys, change step, and a long step scrolls between the fixed header and the buttons. Under the step, a dashed chip starts a timer for each length of time the text mentions ("⏲️ Start 25 min timer"; a range like 10-15 minutes uses its longer end); the chip is gone once that timer is running, and at four timers the chips are disabled with a line that says why. Each running timer is a pill in the strip with its countdown, "Step 1", Pause (Resume once paused) and a close button, each 40×40; when one ends its pill turns peach with "Step 3 · 30 sec is done" and Dismiss, and a toast, a buzz and a beep go with it where the device allows. The first time a timer starts, a muted line says "Timers only run while this screen is open." Ingredients says "Making 6 servings" once, beside the servings stepper (it starts at the recipe's own servings, or the planned ones), with a muted line when the servings differ ("Scaled from 4 servings. Amounts written in the steps stay as they are."), then one checkbox row per ingredient (name and note on the left, the scaled amount on the right) with "Reset" once something is ticked; the footer is one "Back to the steps" button. When the screen can't keep the display on, one muted line above the footer says "Your screen may turn off while you cook." On a phone held sideways the header, the step and the one-row footer all stay on screen.*
+
+*Entry: a tinted "Start cooking" row ("Steps one at a time, with a timer") above "Add to shopping list" in the recipe drawer, shown only when the recipe has a step, and the same row in a planned meal's view when a recipe in it has steps (never on a day that has passed). With one such recipe it opens that recipe at the planned servings; with several the drawer swaps in place to "Which one are you cooking?" with each recipe and its servings as a row and a "‹ Back" link.*
+
 **Nudge and fill-in** (the quiet line, and the sheet it opens)
 
 ```mermaid
@@ -909,6 +967,8 @@ block-beta
 | SourcesSubview, SourceFormSheet | Recipes tab's Sources entry | the list of sources with their recipe counts and the one-field Source sheet (rename, add, delete); a `Subview` and a `FormSheet`, mirroring Stores |
 | EntryRow | Kitchen (Stores, Products, and the full-width Shopping list), Recipes (Sources) | the tinted-icon entry tile with its count and chevron (the icon hides at 360px and under, the chevron at 400px and under); a `className` lets one span both columns |
 | ShoppingSubview, ShoppingRow, ShoppingItemSheet, ShoppingAddSheet | Kitchen's Shopping list entry | the list by family with a checkbox on each row's first line, "Got it" and "Clear", the cost line with its warning icon, the row sheet (amount, unit, remove) and the add sheet (an `ItemSearch`); groups after the first three mount near the viewport |
+| CookingSubview, CookStepView, CookIngredientsView, CookTimerStrip | recipe drawer and planned meal view's Start cooking | the overlay `Subview` with its Steps / Ingredients `PillGroup`, the big step with dots and swipe, the scaled and tickable ingredients, and the pinned timer strip; all state is local and nothing is stored |
+| StartCookingRow | recipe drawer, planned meal view | the tinted entry row ("Start cooking", "Steps one at a time, with a timer"), shown only when there is a step to cook and not on a day that has passed |
 | AddToShoppingSheet, AddToShoppingRow | recipe, meal, planned meal and day drawers | the tinted row that closes the drawer and opens the `FormSheet` where a recipe's, meal's or day's lines are ticked (a servings `Stepper` for a recipe) and added in one write |
 | RecipeRow, MealRow | Recipes tab | cover or emoji tile, title, muted details, then the cost and macro lines when shown; the tile and text share a top edge and the chevron sits on the first line |
 | IngredientRow, FamilyGroup | Kitchen | name, a price line and a macro line (each can be hidden), the chevron on the name's line; `SectionDivider` groups |
@@ -988,6 +1048,19 @@ flowchart LR
     A2[Open a recipe] --> B2["Add to shopping list · for 6 servings"] --> C
 ```
 
+
+**Cook a recipe, with a timer**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
+flowchart LR
+    A["Open a recipe, or tonight's meal on the calendar"] --> B[Start cooking]
+    B --> C["Several recipes in the meal? Pick one"] --> D["Ingredients: servings, tick what is out"]
+    B --> D
+    D --> E["Back to the steps"] --> F["Next, Next"]
+    F --> G["A step says 25 minutes: Start 25 min timer"] --> H["Timer runs above the buttons; keep cooking"]
+    H --> I["Done: the strip lights up, a toast and a beep"] --> J[Dismiss] --> K[Finish]
+```
 
 **Add a product with a store**
 

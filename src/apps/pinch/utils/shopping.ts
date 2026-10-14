@@ -9,6 +9,7 @@ import type {
   ShoppingItem,
   Unit,
 } from '@apps/pinch/types';
+import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
 export interface ShoppingLine {
@@ -67,7 +68,7 @@ const getRecipeRawLines = (
     .filter((line) => ingredientsById.has(line.ingredientId))
     .map((line) => ({
       ingredientId: line.ingredientId,
-      amount: (line.amount * servings) / recipe.servings,
+      amount: scaleAmount(line.amount, servings, recipe.servings),
       unit: line.unit,
     }));
 
