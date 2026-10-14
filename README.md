@@ -157,6 +157,13 @@ Problems we've hit before, so we don't hit them again.
 - **Fix:** the index is in `firestore.indexes.json` and deploys with `npm run fb:deploy:smart` on merge. It builds for a few minutes after deploy (Firebase console → Firestore → Indexes shows Building, then Enabled); the next 5-minute run after that succeeds. `npm run check:indexes` now fails any PR with a query that needs an index the file doesn't have.
 - **Tell it apart:** an index error names `requires an index` with a console link; a missing-secret or permission error does not.
 
+### Old reminders arrive all at once, and their in-app toasts come back after every reload
+
+- **Symptom:** right after the missing-index fix, phones got push reminders for events from a week earlier, and in-app reminder toasts reappeared on every page reload even after being swiped away.
+- **Cause:** two things. While the index was missing nothing was sent, so every reminder since stayed `pending` and the first working run sent them all. And the toast hook only skipped reminders that were already `sent` when it mounted, but the first Firestore snapshot arrives after mount, so every `sent` reminder looked newly sent on each reload. Swiping a toast away only removes it from the page; it never changes the reminder.
+- **Fix:** `sendScheduledReminders` marks a reminder more than 30 minutes overdue `expired` instead of sending it (a yearly one rolls forward), and `useReminderToasts` only toasts a reminder it saw as not yet sent.
+- **Tell it apart:** a late push for something old is the function; a toast that returns after reload is the hook. Neither touches a reminder that is still ahead.
+
 ### An app shows empty or first-run screens for an existing account on one device
 
 - **Symptom:** one phone (Chrome, Android) showed A-List's setup modal for an account whose membership doc exists, with the same account fine on desktop and fine in Waypoint and Nine Lives on that phone. Reloading, signing out and in, and clearing Chrome's site data did not help. No error, no denied read.
