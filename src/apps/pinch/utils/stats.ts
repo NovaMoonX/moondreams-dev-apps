@@ -5,7 +5,11 @@ import type {
   NutritionValues,
   PlannedMeal,
 } from '@apps/pinch/types';
-import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
+import {
+  getPlannedDayKey,
+  isDayInRange,
+  type DayRange,
+} from '@apps/pinch/utils/dayKeys';
 import {
   getPlannedMealCost,
   type CostContext,
@@ -24,7 +28,7 @@ export interface Totals {
   nutrition: NutritionValues;
 }
 
-export interface MonthStats {
+export interface PeriodStats {
   spendCents: number;
   plannedCount: number;
   /** Planned meals with at least one priced item: the average's divisor. */
@@ -33,7 +37,7 @@ export interface MonthStats {
   leftOut: Gap[];
   /** What only the meals that aren't frozen yet leave out: the part a new price can still change, and so the part worth a nudge. */
   openLeftOut: Gap[];
-  /** Per metric, the average over the days that know it, so a day with nothing known never pulls it toward zero; null when no day does. */
+  /** Per metric, the average over the days that know it (for a single day, that day's own total), so a day with nothing known never pulls it toward zero; null when no day does. */
   dailyNutrition: NutritionValues;
   /** Spend over protein grams, for the meals where both are known. */
   proteinCentsPerGram: number | null;
@@ -81,16 +85,16 @@ const dedupe = (gaps: Gap[]) => [
   ).values(),
 ];
 
-/** One walk over the planned meals of a month: the spend, the average per meal, the nutrition averages and the totals by day and by meal type. */
-export function getMonthStats(
+/** One walk over the planned meals of a span of days, a month, a week or a day: the spend, the average per meal, the nutrition averages and the totals by day and by meal type. */
+export function getPeriodStats(
   plannedMeals: PlannedMeal[],
-  monthKey: string,
+  range: DayRange,
   context: CostContext,
-): MonthStats {
+): PeriodStats {
   const walked = plannedMeals.reduce(
     (acc, meal) => {
       const dayKey = getPlannedDayKey(meal.date);
-      if (dayKey.slice(0, 7) !== monthKey) {
+      if (!isDayInRange(dayKey, range)) {
         return acc;
       }
 
@@ -190,3 +194,11 @@ export function getMonthStats(
     }),
   };
 }
+
+/** Calories as a whole number, the way every screen shows them; the other metrics keep their decimal. */
+export const withWholeCalories = (
+  values: NutritionValues,
+): NutritionValues => ({
+  ...values,
+  calories: values.calories === null ? null : Math.round(values.calories),
+});

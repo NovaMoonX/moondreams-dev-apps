@@ -41,7 +41,9 @@ function DetailSheet({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      {children}
+      <div className='max-h-[calc(100dvh-16rem)] overflow-y-auto'>
+        {children}
+      </div>
       {footer && <div className='mt-4 [&>div]:p-0'>{footer}</div>}
     </Modal>
   );

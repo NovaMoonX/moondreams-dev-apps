@@ -1,6 +1,7 @@
 import { SchemaType } from 'firebase/ai';
 
 import { generativeModel } from '@/lib/firebase/ai';
+import type { PageContent } from '@/lib/pageContent/fetchPageContent';
 import { compressIngestionImage } from '@/utils/imageCompression';
 import { getUploadMimeType } from '@/utils/uploadMimeType';
 import { UNITS } from '@apps/pinch/constants';
@@ -125,5 +126,23 @@ export async function extractRecipeFromFile(
   return generate([
     { text: PROMPT },
     { inlineData: { data, mimeType: getUploadMimeType(inputFile) } },
+  ]);
+}
+
+/** Reads a recipe from a web page's text and any Recipe data it publishes: the model writes the draft, so a page with partial or no data still reads. Not cached: every reading is a fresh call. */
+export async function extractRecipeFromPage(
+  page: PageContent,
+): Promise<ExtractedRecipe> {
+  const data = page.structuredData?.length
+    ? `Recipe data the page publishes (may be incomplete):\n${JSON.stringify(page.structuredData)}\n\n`
+    : '';
+  const heading = [page.title, page.meta?.description]
+    .filter(Boolean)
+    .join('\n');
+
+  return generate([
+    {
+      text: `${PROMPT}\n\nThis came from a web page, so ignore ads, comments and related links.\n\n--- BEGIN RECIPE ---\n${heading}\n\n${data}Page text:\n${page.text ?? ''}\n--- END RECIPE ---`,
+    },
   ]);
 }

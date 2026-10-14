@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict';
 
+import {
+  getEntryGrams,
+  getServingGrams,
+  scaleNutrition,
+  toPer100g,
+} from '../../src/apps/pinch/utils/nutritionBasis.ts';
+import {
+  countLeftOutIngredients,
+  countUnaskedIngredients,
+} from '../../src/apps/pinch/utils/gaps.ts';
+import { formatRowCost } from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import type {
+  Gap,
   Product,
   Recipe,
   ResolvedIngredient,
@@ -131,5 +143,110 @@ assert.equal(
 const empty = cost(recipe(2, []), [], []);
 assert.equal(empty.totalCents, null);
 assert.equal(empty.leftOut.length, 0);
+
+const noConversions = { gramsPerMl: null, gramsEach: null };
+const per28g = getEntryGrams(28, 'G', null) ?? 0;
+assert.equal(
+  toPer100g(130, per28g),
+  464.29,
+  '130 cal per 28 g is 464.29 per 100 g',
+);
+assert.equal(toPer100g(3.3, 100), 3.3, 'per 100 g is stored exactly as typed');
+assert.equal(
+  toPer100g(100, getEntryGrams(1, 'OZ', null) ?? 0),
+  352.74,
+  '100 cal per ounce is 352.74 per 100 g',
+);
+
+const fiveOunces = getServingGrams({ amount: 5, unit: 'OZ' }, noConversions);
+assert.equal(Math.round((fiveOunces ?? 0) * 100) / 100, 141.75);
+assert.equal(
+  toPer100g(200, getEntryGrams(1, 'SERVING', fiveOunces) ?? 0),
+  141.1,
+  '200 cal per 5 oz serving is 141.1 per 100 g',
+);
+assert.equal(
+  toPer100g(200, getEntryGrams(2, 'SERVING', 100) ?? 0),
+  100,
+  'two 100 g servings halve the label',
+);
+
+assert.equal(
+  getServingGrams({ amount: 1, unit: 'CUP' }, noConversions),
+  null,
+  'a cup of an ingredient with no density has no weight',
+);
+assert.equal(
+  getEntryGrams(1, 'SERVING', null),
+  null,
+  'a serving that cannot be weighed has no grams',
+);
+assert.equal(
+  Math.round(
+    (getServingGrams(
+      { amount: 1, unit: 'CUP' },
+      { gramsPerMl: 1.03, gramsEach: null },
+    ) ?? 0) * 10,
+  ) / 10,
+  243.7,
+  'a cup of 1.03 g/ml milk weighs 243.7 g',
+);
+assert.equal(
+  getServingGrams(
+    { amount: 2, unit: 'EACH' },
+    { gramsPerMl: null, gramsEach: 50 },
+  ),
+  100,
+  'two eggs of 50 g are 100 g',
+);
+
+const scaled = scaleNutrition(
+  { calories: 200, protein: 10, carbs: null, fat: 5 },
+  1.5,
+);
+assert.deepEqual(scaled, { calories: 300, protein: 15, carbs: null, fat: 7.5 });
+
+assert.equal(formatRowCost(null, false), 'No price yet');
+assert.equal(formatRowCost(undefined, false), 'No price yet');
+assert.equal(
+  formatRowCost(null, true),
+  "Wasn't priced",
+  'a frozen day says it was not priced, not that it has no price yet',
+);
+assert.equal(formatRowCost(15.4, true), '$0.15');
+assert.equal(formatRowCost(0, false), '$0.00', 'a known free item is priced');
+
+const gap = (kind: Gap['kind'], ingredientId: string) =>
+  ({ kind, ingredientId }) as Gap;
+const leftOutOnDay = [
+  gap('NO_PRODUCT', 'garlic'),
+  gap('NO_PRODUCT', 'garlic'),
+  gap('NO_PRODUCT', 'vinegar'),
+  gap('NOT_COMPARABLE', 'soy'),
+  gap('NO_PRODUCT', 'rice'),
+];
+const stillOpen = leftOutOnDay.filter((entry) => entry.ingredientId !== 'rice');
+assert.equal(
+  countLeftOutIngredients(leftOutOnDay),
+  4,
+  'an ingredient in several meals counts once',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, {}),
+  1,
+  'an ingredient only in a day that has passed is left out but not asked about',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, {
+    'NO_PRODUCT:vinegar': 1,
+  }),
+  2,
+  'a hidden note takes its ingredient off the note but not off the total',
+);
+assert.equal(
+  countUnaskedIngredients(leftOutOnDay, stillOpen, { 'NO_PRODUCT:soy': 1 }),
+  1,
+  'an ingredient whose package size is still open stays in the note when only its price note was hidden',
+);
 
 console.log('pinchMath: all checks passed');

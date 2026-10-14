@@ -7,6 +7,7 @@ import FormSheet from '@/components/FormSheet';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { NUTRITION_CELLS } from '@apps/pinch/constants';
+import { MACRO_EMOJIS } from '@/utils/macroUtils';
 import { saveSettings } from '@apps/pinch/store/actions/settingsActions';
 import { selectShowNutrition } from '@apps/pinch/store/selectors';
 import type { NutritionMetric } from '@apps/pinch/types';
@@ -15,13 +16,6 @@ interface SettingsSheetProps {
   uid: string;
   onClose: () => void;
 }
-
-const METRIC_ICONS: Record<NutritionMetric, string> = {
-  calories: '🔥',
-  protein: '🍗',
-  carbs: '🍞',
-  fat: '🥑',
-};
 
 function SettingsSheet({ uid, onClose }: SettingsSheetProps) {
   const dispatch = useAppDispatch();
@@ -50,7 +44,7 @@ function SettingsSheet({ uid, onClose }: SettingsSheetProps) {
             {NUTRITION_CELLS.map((cell) => (
               <li key={cell.key} className='flex items-center gap-3 py-3'>
                 <span className='w-5 shrink-0 text-center' aria-hidden='true'>
-                  {METRIC_ICONS[cell.key]}
+                  {MACRO_EMOJIS[cell.key]}
                 </span>
                 <span className='min-w-0 flex-1 font-medium'>{cell.label}</span>
                 <AppToggle
@@ -73,10 +67,6 @@ function SettingsSheet({ uid, onClose }: SettingsSheetProps) {
             About
           </h3>
           <ul className='text-muted-foreground space-y-2 text-sm'>
-            <li>
-              Ingredient icons are Twemoji, © Twitter, Inc. and other
-              contributors, used under CC-BY 4.0.
-            </li>
             <li>
               The built-in nutrition values are approximate, based on USDA
               FoodData Central.

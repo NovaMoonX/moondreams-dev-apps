@@ -1,10 +1,10 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import {
   selectRecipeNutrition,
   selectShowNutrition,
@@ -21,10 +21,18 @@ import {
 interface RecipeRowProps {
   recipe: Recipe;
   cost: RecipeCost | undefined;
+  showPrices: boolean;
+  showMacros: boolean;
   onOpen: (id: string) => void;
 }
 
-function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
+function RecipeRow({
+  recipe,
+  cost,
+  showPrices,
+  showMacros,
+  onOpen,
+}: RecipeRowProps) {
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipe.id);
   const show = useAppSelector(selectShowNutrition);
   const total = getTotalMinutes(recipe);
@@ -42,7 +50,7 @@ function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
       type='button'
       variant='tertiary'
       onClick={() => onOpen(recipe.id)}
-      className='h-auto min-h-16 w-full justify-start gap-3 px-0! py-2 text-left'
+      className='h-auto w-full items-start justify-start gap-3 px-0! py-2 text-left'
     >
       <CoverImage
         coverPath={recipe.coverPath ?? null}
@@ -56,7 +64,7 @@ function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {detail}
         </span>
-        {cost?.perServingCents != null && (
+        {showPrices && cost?.perServingCents != null && (
           <span className='text-muted-foreground block text-xs font-normal'>
             <span className='whitespace-nowrap'>
               {formatCents(Math.round(cost.perServingCents))} / serving
@@ -64,19 +72,21 @@ function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
             {leftOutCount > 0 && ` · leaves out ${leftOutCount}`}
           </span>
         )}
-        {cost && cost.perServingCents == null && (
+        {showPrices && cost && cost.perServingCents == null && (
           <span className='text-muted-foreground block text-xs font-normal'>
             No price yet
           </span>
         )}
-        {nutrition && hasShownValue(nutrition.values, show) && (
-          <span className='text-muted-foreground block truncate text-xs font-normal'>
-            <NutritionLine values={nutrition.values} show={show} /> per serving
-          </span>
+        {showMacros && nutrition && hasShownValue(nutrition.values, show) && (
+          <MacroStats
+            values={nutrition.values}
+            show={show}
+            className='text-muted-foreground mt-0.5 text-xs font-normal'
+          />
         )}
       </span>
       <ChevronRight
-        className='text-muted-foreground h-5 w-5 shrink-0'
+        className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
         aria-hidden='true'
       />
     </Button>

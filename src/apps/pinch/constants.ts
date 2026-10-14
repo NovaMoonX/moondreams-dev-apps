@@ -4,6 +4,7 @@ import type {
   MealType,
   PinchTab,
   RecipesView,
+  RecipeStartMethod,
   Unit,
 } from '@apps/pinch/types';
 
@@ -89,13 +90,44 @@ export const STORE_IMAGE_MAX_DIMENSION = 512;
 
 export const MAX_DISMISSED_NUDGES = 500;
 /** The most ingredient names one copy carries. */
-export const MAX_COPIED_INGREDIENTS = 200;
 /** The longest recipe text the reader takes, and the biggest photo, screenshot or PDF. */
 export const MAX_PASTE_CHARS = 20_000;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
-/** Months loaded on each side of the one shown. */
-export const MONTH_WINDOW_PADDING = 1;
+
+export const RECIPE_START_METHODS: {
+  id: RecipeStartMethod;
+  emoji: string;
+  title: string;
+  description: string;
+}[] = [
+  {
+    id: 'text',
+    emoji: '📝',
+    title: 'From text',
+    description: 'Paste a recipe, say from a chat',
+  },
+  {
+    id: 'file',
+    emoji: '📎',
+    title: 'From a file',
+    description: 'A photo, screenshot or PDF',
+  },
+  {
+    id: 'link',
+    emoji: '🔗',
+    title: 'From a link',
+    description: 'A recipe page on the web',
+  },
+  {
+    id: 'manual',
+    emoji: '✍️',
+    title: 'Write it yourself',
+    description: 'Start with a blank recipe',
+  },
+];
+/** Months loaded on each side of the window's centre: enough that paging a month or a few weeks seldom restarts the listener. */
+export const MONTH_WINDOW_PADDING = 2;
 
 export const MEAL_TYPES: MealType[] = [
   'BREAKFAST',
@@ -155,3 +187,94 @@ export const UNIT_TO_BASE: Record<Unit, number> = {
   PINCH: 0.308,
   EACH: 1,
 };
+
+export const CALENDAR_VIEWS = ['month', 'week', 'day'] as const;
+export type CalendarView = (typeof CALENDAR_VIEWS)[number];
+export const DEFAULT_CALENDAR_VIEW: CalendarView = 'month';
+export const CALENDAR_VIEW_LABELS: Record<CalendarView, string> = {
+  month: 'Month',
+  week: 'Week',
+  day: 'Day',
+};
+
+/** The meal type's colour tokens from `pinch.css`: the solid for an edge or a dot, the soft tint for a chip or a pill. */
+export const MEAL_TYPE_COLORS: Record<
+  MealType,
+  { solid: string; soft: string }
+> = {
+  BREAKFAST: {
+    solid: 'var(--pinch-meal-breakfast)',
+    soft: 'var(--pinch-meal-breakfast-soft)',
+  },
+  LUNCH: {
+    solid: 'var(--pinch-meal-lunch)',
+    soft: 'var(--pinch-meal-lunch-soft)',
+  },
+  DINNER: {
+    solid: 'var(--pinch-meal-dinner)',
+    soft: 'var(--pinch-meal-dinner-soft)',
+  },
+  SNACK: {
+    solid: 'var(--pinch-meal-snack)',
+    soft: 'var(--pinch-meal-snack-soft)',
+  },
+  DESSERT: {
+    solid: 'var(--pinch-meal-dessert)',
+    soft: 'var(--pinch-meal-dessert-soft)',
+  },
+  DRINK: {
+    solid: 'var(--pinch-meal-drink)',
+    soft: 'var(--pinch-meal-drink-soft)',
+  },
+};
+
+export const INGREDIENT_PRICE_FILTER_OPTIONS = [
+  { value: 'any', label: 'Any' },
+  { value: 'needs', label: 'Needs a price', emoji: '🏷️' },
+  { value: 'has', label: 'Has a price', emoji: '💰' },
+] as const;
+
+export const INGREDIENT_FLAG_OPTIONS = [
+  { value: 'noNutrition', label: 'Missing nutrition', emoji: '📊' },
+  { value: 'custom', label: 'Custom only', emoji: '🧑‍🍳' },
+] as const;
+
+export const PRODUCT_SORT_OPTIONS = [
+  { value: 'store', label: 'By store', emoji: '🏪' },
+  { value: 'ingredient', label: 'By ingredient', emoji: '🔤' },
+  { value: 'price', label: 'By price', emoji: '💰' },
+  { value: 'newest', label: 'By date added', emoji: '🆕' },
+] as const;
+
+/** Each product sort's two directions, the first being the one it starts in. */
+export const PRODUCT_SORT_ORDER_LABELS = {
+  store: ['A to Z', 'Z to A'],
+  ingredient: ['A to Z', 'Z to A'],
+  price: ['Lowest first', 'Highest first'],
+  newest: ['Newest first', 'Oldest first'],
+} as const;
+
+export const PRODUCT_DEFAULT_FILTER_OPTIONS = [
+  { value: 'any', label: 'Any' },
+  { value: 'default', label: 'Default only', emoji: '⭐' },
+  { value: 'other', label: 'Not the default' },
+] as const;
+
+/** Rows a long list draws before "Show more". */
+export const LIST_PAGE_SIZE = 60;
+
+/** The most one nutrition value can be, per 100 g: the same cap the rules enforce. */
+export const MAX_NUTRITION_VALUE = 100_000;
+
+/** What a typed nutrition label is "per" in the ingredient form. */
+export const NUTRITION_ENTRY_UNITS = [
+  { value: 'G', label: 'g' },
+  { value: 'OZ', label: 'oz' },
+  { value: 'SERVING', label: 'serving' },
+] as const;
+
+/** What an ingredient's calories and macros are shown per: its serving, or 100 g. */
+export const NUTRITION_BASIS_OPTIONS = [
+  { value: 'SERVING', label: 'Per serving' },
+  { value: 'PER_100G', label: 'Per 100 g' },
+] as const;

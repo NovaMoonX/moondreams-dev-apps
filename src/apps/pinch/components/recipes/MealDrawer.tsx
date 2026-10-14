@@ -1,14 +1,13 @@
-import { useState } from 'react';
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ClipboardCopy } from 'lucide-react';
 
-import CopyPanel from '@/components/CopyPanel';
 import DetailSheet from '@/components/DetailSheet';
+import FormSection from '@/components/FormSection';
+import HelpTip from '@/components/HelpTip';
+import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
-import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   selectCostContext,
   selectIngredientsById,
@@ -18,8 +17,11 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Gap } from '@apps/pinch/types';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
-import { mealMarkdown } from '@apps/pinch/utils/markdown/dayMarkdown';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  formatCost,
+  formatRowCost,
+  getItemTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
@@ -50,7 +52,6 @@ function MealDrawer({
   const show = useAppSelector(selectShowNutrition);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const [isCopying, setIsCopying] = useState(false);
 
   if (!meal) {
     return null;
@@ -70,43 +71,76 @@ function MealDrawer({
       onClose={onClose}
       title={meal.name}
       footer={
-        !isCopying && (
-          <div className='px-4 pb-4'>
-            <Button
-              type='button'
-              className='w-full'
-              onClick={() => onPlan(meal.id)}
-            >
-              Plan it
-            </Button>
-          </div>
-        )
+        <div className='flex gap-2 px-4 pb-4'>
+          <Button
+            type='button'
+            variant='secondary'
+            className='shrink-0'
+            onClick={() => onModify(meal.id)}
+          >
+            Modify
+          </Button>
+          <Button
+            type='button'
+            className='min-w-0 flex-1'
+            onClick={() => onPlan(meal.id)}
+          >
+            Plan it
+          </Button>
+        </div>
       }
     >
-      {isCopying ? (
-        <CopyPanel
-          text={mealMarkdown(meal.name, meal.items, {
-            recipesById,
-            ingredientsById,
-          })}
-          note='The plate, with each recipe’s ingredients. No prices or stores.'
-          onBack={() => setIsCopying(false)}
-        />
-      ) : (
-        <div className='space-y-5'>
+      <div className='space-y-5'>
+        <div className='space-y-3'>
+          <StatTile
+            label='Cost'
+            value={
+              cost.totalCents === null
+                ? 'No prices yet'
+                : formatCost(cost.totalCents)
+            }
+            detail={cost.totalCents === null ? undefined : 'For the plate'}
+            help={
+              leftOutCount > 0 && cost.totalCents !== null ? (
+                <HelpTip
+                  variant='warning'
+                  title="What's left out"
+                  placement='top'
+                >
+                  <p>
+                    This {formatLeftOut(cost.leftOut)} because there’s no price
+                    for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                  </p>
+                  <NudgeCountNote leftOut={cost.leftOut} open={cost.leftOut} />
+                </HelpTip>
+              ) : undefined
+            }
+          />
+          {hasShownValue(nutrition.values, show) && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>For the plate</p>
+              <MacroStats
+                values={nutrition.values}
+                show={show}
+                variant='tiles'
+              />
+            </div>
+          )}
+          <GapNudge
+            uid={uid}
+            gaps={[
+              ...cost.leftOut,
+              ...getNutritionGaps(nutrition.missing, show),
+            ]}
+            onFillIn={onFillIn}
+          />
+        </div>
+        <FormSection title='On the plate' detail={meal.items.length}>
           <ul className='divide-border divide-y'>
             {meal.items.map((item) => {
               const itemCost = cost.items.get(item.id);
               return (
                 <li key={item.id} className='flex items-start gap-3 py-2.5'>
-                  <ItemIcon
-                    kind={item.kind}
-                    iconKey={
-                      item.kind === 'INGREDIENT'
-                        ? (ingredientsById.get(item.refId)?.iconKey ?? null)
-                        : null
-                    }
-                  />
                   <span className='min-w-0 flex-1'>
                     <span className='block'>
                       {getItemTitle(item, recipesById, ingredientsById)}
@@ -116,64 +150,14 @@ function MealDrawer({
                     </span>
                   </span>
                   <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                    {itemCost?.cents == null
-                      ? 'No price yet'
-                      : formatCost(itemCost.cents)}
+                    {formatRowCost(itemCost?.cents, false)}
                   </span>
                 </li>
               );
             })}
           </ul>
-          <div>
-            <p className='text-sm'>
-              <span className='font-medium'>
-                {cost.totalCents === null
-                  ? 'No prices yet'
-                  : formatCost(cost.totalCents)}
-              </span>
-              {leftOutCount > 0 && cost.totalCents !== null && (
-                <span className='text-muted-foreground'>
-                  {' '}
-                  · {formatLeftOut(cost.leftOut)}
-                </span>
-              )}
-            </p>
-            {hasShownValue(nutrition.values, show) && (
-              <p className='text-muted-foreground text-sm'>
-                <NutritionLine values={nutrition.values} show={show} /> for the
-                plate
-              </p>
-            )}
-            <GapNudge
-              uid={uid}
-              gaps={[
-                ...cost.leftOut,
-                ...getNutritionGaps(nutrition.missing, show),
-              ]}
-              onFillIn={onFillIn}
-            />
-          </div>
-          <div className='bg-muted/50 rounded-2xl p-1'>
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-11 w-full'
-              onClick={() => onModify(meal.id)}
-            >
-              Modify
-            </Button>
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-11 w-full gap-2'
-              onClick={() => setIsCopying(true)}
-            >
-              <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
-              Copy for a chat
-            </Button>
-          </div>
-        </div>
-      )}
+        </FormSection>
+      </div>
     </DetailSheet>
   );
 }

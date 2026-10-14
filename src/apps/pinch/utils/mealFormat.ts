@@ -16,3 +16,12 @@ export function getItemTitle(
 
 /** Unrounded cents as dollars, rounded once here. */
 export const formatCost = (cents: number) => formatCents(Math.round(cents));
+
+/** A row's price, or in a few words why it has none ("Wasn't priced" once its day has passed). */
+export const formatRowCost = (
+  cents: number | null | undefined,
+  isFrozen: boolean,
+) => {
+  if (cents == null) return isFrozen ? "Wasn't priced" : 'No price yet';
+  return formatCost(cents);
+};

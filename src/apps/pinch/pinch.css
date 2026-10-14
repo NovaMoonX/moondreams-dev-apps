@@ -1,21 +1,21 @@
 /*
- * Pinch's theme: a chef's apron. Clean surfaces, white on white by day and black on black by night, set
- * apart by hairlines and a soft shadow only where something floats. Buttons are ink-filled or see-through,
- * and the warm orange is only ever a drizzle: a today dot, a selected outline, an active icon. The class sits
- * on <html> (see usePinchTheme) so modals and drawers, which render outside the app's container, pick it up too.
+ * Pinch's theme: a warm kitchen. Paper-warm surfaces with hairlines, an espresso-ink primary for the one action
+ * on a screen, peach tints for groups and selections, and orange as the accent: a today dot, a selected outline,
+ * an active icon. The warmth is quiet, never a block of orange. The class sits on <html> (see usePinchTheme) so
+ * modals and drawers, which render outside the app's container, pick it up too.
  */
 html.pinch-theme {
-  --color-background: var(--color-white);
-  --color-primary: oklch(0.21 0.008 60);
-  --color-primary-foreground: var(--color-white);
-  --color-secondary: oklch(0.968 0.004 80);
-  --color-secondary-foreground: oklch(0.21 0.008 60);
-  --color-muted: oklch(0.978 0.003 80);
+  --color-background: oklch(0.992 0.007 85);
+  --color-primary: oklch(0.27 0.03 50);
+  --color-primary-foreground: oklch(0.99 0.008 85);
+  --color-secondary: oklch(0.955 0.02 75);
+  --color-secondary-foreground: oklch(0.27 0.03 50);
+  --color-muted: oklch(0.968 0.014 80);
   --color-muted-foreground: var(--color-stone-500);
-  --color-accent: oklch(0.955 0.01 70);
-  --color-accent-foreground: oklch(0.21 0.008 60);
-  --color-border: oklch(0.925 0.005 80);
-  --color-card: var(--color-white);
+  --color-accent: oklch(0.94 0.035 65);
+  --color-accent-foreground: oklch(0.27 0.03 50);
+  --color-border: oklch(0.9 0.018 75);
+  --color-card: oklch(0.998 0.004 85);
 
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
@@ -25,6 +25,7 @@ html.pinch-theme {
   --pinch-drizzle: var(--color-orange-600);
   --pinch-drizzle-fill: var(--color-orange-700);
   --pinch-drizzle-fill-foreground: var(--color-white);
+  --pinch-drizzle-soft: color-mix(in oklab, var(--pinch-drizzle) 11%, var(--color-background));
 
   --pinch-meal-breakfast: var(--color-amber-400);
   --pinch-meal-lunch: var(--color-lime-500);
@@ -35,21 +36,22 @@ html.pinch-theme {
 }
 
 html.pinch-theme.dark {
-  --color-background: oklch(0.155 0.004 60);
-  --color-primary: oklch(0.965 0.004 80);
-  --color-primary-foreground: oklch(0.18 0.006 60);
-  --color-secondary: oklch(0.255 0.005 60);
-  --color-secondary-foreground: oklch(0.965 0.004 80);
-  --color-muted: oklch(0.21 0.005 60);
+  --color-background: oklch(0.17 0.008 55);
+  --color-primary: oklch(0.95 0.018 80);
+  --color-primary-foreground: oklch(0.2 0.012 55);
+  --color-secondary: oklch(0.27 0.012 55);
+  --color-secondary-foreground: oklch(0.95 0.018 80);
+  --color-muted: oklch(0.225 0.01 55);
   --color-muted-foreground: var(--color-stone-400);
-  --color-accent: oklch(0.29 0.008 60);
-  --color-accent-foreground: oklch(0.965 0.004 80);
-  --color-border: oklch(0.3 0.006 60);
-  --color-card: oklch(0.2 0.005 60);
+  --color-accent: oklch(0.32 0.025 55);
+  --color-accent-foreground: oklch(0.95 0.018 80);
+  --color-border: oklch(0.32 0.012 55);
+  --color-card: oklch(0.21 0.01 55);
 
   --pinch-drizzle: var(--color-orange-400);
   --pinch-drizzle-fill: var(--color-orange-400);
-  --pinch-drizzle-fill-foreground: oklch(0.18 0.006 60);
+  --pinch-drizzle-fill-foreground: oklch(0.2 0.012 55);
+  --pinch-drizzle-soft: color-mix(in oklab, var(--pinch-drizzle) 16%, var(--color-background));
 
   --pinch-meal-breakfast: var(--color-amber-300);
   --pinch-meal-lunch: var(--color-lime-400);
@@ -74,6 +76,12 @@ html.pinch-theme button[class*='justify-between'][class*='w-full'][class*='borde
   padding-inline: 1rem;
 }
 
+/* A text field beside a select (amount and unit) must be as tall as the select. */
+html.pinch-theme
+  :is(input[type='text'], input[type='number'], input[type='search'], input[type='url'], input:not([type])):not([class*='min-h-']) {
+  min-height: 2.625rem;
+}
+
 html.pinch-theme button[class*='justify-between'][class*='w-full'][class*='border'][class*='py-1']:not([class*='pl-']) {
   padding-inline: 0.75rem;
 }
@@ -88,7 +96,7 @@ html.pinch-theme button.bg-secondary:not([data-pill]):not(:disabled):hover {
   background-color: var(--color-secondary);
 }
 
-/* An option is a hairline pill; the chosen one keeps its own colours and says "selected" with a drizzle outline, so an emoji or a dark label stays as readable as on an unchosen one. */
+/* An option is a hairline pill; the chosen one gets a peach tint and a drizzle outline, so an emoji or a dark label stays as readable as on an unchosen one. */
 html.pinch-theme [data-pill] {
   min-height: 2.5rem;
   background-color: transparent;
@@ -101,7 +109,7 @@ html.pinch-theme [data-pill]:not(:disabled):hover {
 }
 
 html.pinch-theme [data-pill][aria-pressed='true'] {
-  background-color: var(--color-background);
+  background-color: var(--pinch-drizzle-soft);
   box-shadow: inset 0 0 0 1.5px var(--pinch-drizzle);
 }
 
@@ -124,4 +132,23 @@ html.pinch-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
 /* The search field's native clear icon is drawn in the browser's blue; it is a control, not a link. */
 html.pinch-theme input[type='search']::-webkit-search-cancel-button {
   filter: grayscale(1);
+}
+
+/* A meal's soft tint: its colour thinned into the page, for an emoji chip or a calendar pill. */
+html.pinch-theme {
+  --pinch-meal-breakfast-soft: color-mix(in oklab, var(--pinch-meal-breakfast) 30%, var(--color-background));
+  --pinch-meal-lunch-soft: color-mix(in oklab, var(--pinch-meal-lunch) 30%, var(--color-background));
+  --pinch-meal-dinner-soft: color-mix(in oklab, var(--pinch-meal-dinner) 30%, var(--color-background));
+  --pinch-meal-snack-soft: color-mix(in oklab, var(--pinch-meal-snack) 30%, var(--color-background));
+  --pinch-meal-dessert-soft: color-mix(in oklab, var(--pinch-meal-dessert) 30%, var(--color-background));
+  --pinch-meal-drink-soft: color-mix(in oklab, var(--pinch-meal-drink) 30%, var(--color-background));
+}
+
+html.pinch-theme.dark {
+  --pinch-meal-breakfast-soft: color-mix(in oklab, var(--pinch-meal-breakfast) 36%, var(--color-background));
+  --pinch-meal-lunch-soft: color-mix(in oklab, var(--pinch-meal-lunch) 36%, var(--color-background));
+  --pinch-meal-dinner-soft: color-mix(in oklab, var(--pinch-meal-dinner) 36%, var(--color-background));
+  --pinch-meal-snack-soft: color-mix(in oklab, var(--pinch-meal-snack) 36%, var(--color-background));
+  --pinch-meal-dessert-soft: color-mix(in oklab, var(--pinch-meal-dessert) 36%, var(--color-background));
+  --pinch-meal-drink-soft: color-mix(in oklab, var(--pinch-meal-drink) 36%, var(--color-background));
 }

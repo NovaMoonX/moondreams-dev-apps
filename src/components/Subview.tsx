@@ -7,6 +7,10 @@ import { ChevronLeft } from 'lucide-react';
 
 import { SubviewTitleContext } from '@/contexts/SubviewTitleContext';
 import { useSubviewHistory } from '@/hooks/useSubviewHistory';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
+
+const OPEN_POPUP_SELECTOR =
+  '[aria-haspopup][aria-expanded="true"], [role="listbox"], [role="menu"]';
 
 interface SubviewHeaderProps {
   title: string;
@@ -15,7 +19,11 @@ interface SubviewHeaderProps {
 }
 
 /** The round back button and large title that open every subview; the larger type sets it apart from section subheaders. */
-export function SubviewHeader({ title, onBack, className = 'mb-3' }: SubviewHeaderProps) {
+export function SubviewHeader({
+  title,
+  onBack,
+  className = 'mb-3',
+}: SubviewHeaderProps) {
   return (
     <div className={join('flex items-center gap-2', className)}>
       <Button
@@ -23,7 +31,7 @@ export function SubviewHeader({ title, onBack, className = 'mb-3' }: SubviewHead
         variant='secondary'
         size='icon'
         rounded='full'
-        aria-label={title}
+        aria-label='Back'
         onClick={onBack}
       >
         <ChevronLeft className='h-5 w-5' />
@@ -37,10 +45,12 @@ export function SubviewHeader({ title, onBack, className = 'mb-3' }: SubviewHead
 
 interface SubviewProps {
   children: ReactNode;
-  /** Leaves the subview; also what the browser's back gesture calls. */
+  /** Leaves the subview; what the back gesture and Escape call when there is no `onBack`. */
   onClose: () => void;
   /** Omit when the content draws its own `SubviewHeader` because its back step changes. */
   title?: string;
+  /** What the header's back button, the browser's back gesture and Escape do when they step back inside the subview (or confirm leaving it) instead of leaving at once. */
+  onBack?: () => void;
   className?: string;
   /**
    * Render as a full-screen layer on top of the page instead of in its place, for a subview opened
@@ -58,10 +68,12 @@ function Subview({
   children,
   onClose,
   title,
+  onBack,
   className,
   overlay = false,
 }: SubviewProps) {
-  useSubviewHistory(onClose);
+  const goBack = onBack ?? onClose;
+  useSubviewHistory(onClose, onBack);
 
   useEffect(() => {
     if (overlay) {
@@ -76,26 +88,30 @@ function Subview({
     }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Capture, so a dialog on top is still there to be seen before it closes itself on this keydown; an open
+    // dropdown is found by where focus is and a tooltip by being on screen, as neither has handled it yet.
     const handleKeyDown = (event: KeyboardEvent) => {
-      const hasDialogOnTop = Array.from(
-        document.querySelectorAll(
-          '[role="dialog"]:not([inert]):not([aria-hidden="true"]), [role="alertdialog"]:not([inert]):not([aria-hidden="true"])',
-        ),
-      ).some((dialog) => !dialog.hasAttribute('data-subview-overlay'));
       if (
-        event.key === 'Escape' &&
-        !event.defaultPrevented &&
-        !hasDialogOnTop
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        hasDialogOnTop()
       ) {
-        onClose();
+        return;
+      }
+      const isPopupOpen =
+        (event.target instanceof Element &&
+          event.target.closest(OPEN_POPUP_SELECTOR) !== null) ||
+        document.querySelector('[role="tooltip"]') !== null;
+      if (!isPopupOpen) {
+        goBack();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [overlay, onClose]);
+  }, [overlay, goBack]);
 
   if (overlay) {
     return createPortal(
@@ -115,7 +131,7 @@ function Subview({
           {title !== undefined && (
             <SubviewHeader
               title={title}
-              onBack={onClose}
+              onBack={goBack}
               className='bg-background sticky top-0 z-20 -mx-4 -mt-6 px-4 pt-6 pb-3'
             />
           )}
@@ -134,8 +150,8 @@ function Subview({
         {title !== undefined && (
           <SubviewHeader
             title={title}
-            onBack={onClose}
-            className='sticky-app-bar bg-background/80 -mx-4 backdrop-blur mb-3 min-h-14 px-4 py-2.5'
+            onBack={goBack}
+            className='sticky-app-bar bg-background/80 -mx-4 mb-3 min-h-14 px-4 py-2.5 backdrop-blur'
           />
         )}
         <SubviewTitleContext.Provider value={title ?? null}>
