@@ -118,7 +118,8 @@ function StatsRow({
                 <p>Leaves out {reasons.join(' and ')}.</p>
                 <p className='text-muted-foreground'>
                   A price you add now counts from today on: days that have
-                  passed keep the prices they had. To count it on one, open that day.
+                  passed keep the prices they had. To count it on one, open that
+                  day.
                 </p>
               </HelpTip>
             ) : undefined
