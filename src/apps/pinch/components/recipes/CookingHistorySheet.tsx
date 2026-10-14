@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, NotebookPen } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
+import NoteForm from '@apps/pinch/components/notes/NoteForm';
 import CookEditView from '@apps/pinch/components/recipes/CookEditView';
 import {
   COOK_HISTORY_FIRST_PAGE,
@@ -26,7 +27,9 @@ const NO_COOKS: Cook[] = [];
 const HIDDEN_WORTH_A_BUTTON = 3;
 
 type HistoryView =
-  { kind: 'list' } | { kind: 'edit'; cookId: string | null; token: number };
+  | { kind: 'list' }
+  | { kind: 'edit'; cookId: string | null; token: number }
+  | { kind: 'note'; cookId: string; token: number };
 
 interface CookingHistorySheetProps {
   uid: string;
@@ -44,6 +47,10 @@ function CookingHistorySheet({
   const isLoaded = useAppSelector((state) => state.pinch.cooks.isLoaded);
   const loadError = useAppSelector((state) => state.pinch.cooks.loadError);
   const plannedMeals = useAppSelector(selectPlannedMeals);
+  const isNotesReady = useAppSelector(
+    (state) =>
+      state.pinch.notes.isLoaded && state.pinch.notes.loadError === null,
+  );
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
   const lastToken = useRef(0);
@@ -68,13 +75,17 @@ function CookingHistorySheet({
   const isEditing =
     editing !== null && (editing.cookId === null || editedCook !== undefined);
   const isFull = isCookHistoryFull(cooks.length);
-  const openEdit = (cookId: string | null) => {
+  const openView = (next: (token: number) => HistoryView) => {
     lastToken.current += 1;
-    setView({ kind: 'edit', cookId, token: lastToken.current });
+    setView(next(lastToken.current));
   };
-  const closeEdit = (token: number) =>
+  const openEdit = (cookId: string | null) =>
+    openView((token) => ({ kind: 'edit', cookId, token }));
+  const openNote = (cookId: string) =>
+    openView((token) => ({ kind: 'note', cookId, token }));
+  const closeView = (token: number) =>
     setView((current) =>
-      current.kind === 'edit' && current.token === token
+      current.kind !== 'list' && current.token === token
         ? { kind: 'list' }
         : current,
     );
@@ -86,6 +97,43 @@ function CookingHistorySheet({
     cooks.length > COOK_HISTORY_FIRST_PAGE + HIDDEN_WORTH_A_BUTTON;
 
   const getBody = () => {
+    if (view.kind === 'note') {
+      const noteView = view;
+      const noteCook = cooks.find((cook) => cook.id === noteView.cookId);
+      const closeNote = () => closeView(noteView.token);
+      return (
+        <div className='space-y-4'>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='h-10 gap-1 px-0!'
+            onClick={closeNote}
+          >
+            <ChevronLeft className='h-4 w-4' aria-hidden='true' />
+            Back
+          </Button>
+          <div className='space-y-0.5'>
+            <p className='font-medium wrap-break-word'>
+              {recipe?.title ?? 'This recipe'}
+            </p>
+            <p className='text-muted-foreground text-sm'>
+              {noteCook
+                ? `A note about the cook from ${formatDateShort(noteCook.cookedAt)}`
+                : 'A note about a cook'}
+            </p>
+          </div>
+          <NoteForm
+            key={noteView.token}
+            uid={uid}
+            recipeId={recipeId}
+            noteId={null}
+            initialCookId={noteView.cookId}
+            onCancel={closeNote}
+            onDone={closeNote}
+          />
+        </div>
+      );
+    }
     if (editing !== null && isEditing) {
       return (
         <CookEditView
@@ -96,7 +144,10 @@ function CookingHistorySheet({
           cook={editedCook ?? null}
           defaultServings={getCookServings(recipe?.servings ?? 1)}
           planNote={editedCook ? getPlanNote(editedCook) : null}
-          onBack={() => closeEdit(editing.token)}
+          onBack={() => closeView(editing.token)}
+          onAddNote={
+            editedCook && isNotesReady ? () => openNote(editedCook.id) : null
+          }
         />
       );
     }
@@ -147,7 +198,7 @@ function CookingHistorySheet({
               const planNote = getPlanNote(cook);
               const day = formatDateShort(cook.cookedAt);
               return (
-                <li key={cook.id}>
+                <li key={cook.id} className='pb-1'>
                   <Button
                     type='button'
                     variant='tertiary'
@@ -174,6 +225,19 @@ function CookingHistorySheet({
                       aria-hidden='true'
                     />
                   </Button>
+                  {isNotesReady && (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='sm'
+                      aria-label={`Add a note about the cook from ${day}`}
+                      className='-mt-1 h-10 gap-1.5 px-0! text-sm font-normal'
+                      onClick={() => openNote(cook.id)}
+                    >
+                      <NotebookPen className='h-4 w-4' aria-hidden='true' />
+                      Add a note
+                    </Button>
+                  )}
                 </li>
               );
             })}

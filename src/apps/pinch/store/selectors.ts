@@ -11,6 +11,11 @@ import type {
 } from '@apps/pinch/types';
 import { getCookSummaries, groupCooksByRecipe } from '@apps/pinch/utils/cooks';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
+import {
+  getNoteSummaries,
+  getTweakTracking,
+  groupNotesByRecipe,
+} from '@apps/pinch/utils/notes';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getPeriodStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
@@ -35,7 +40,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded &&
   state.pinch.sources.isLoaded;
 
-/** Sources, the shopping list, ideas and cooking history are optional extras: their failures are left out so each only takes its own UI away. */
+/** Sources, the shopping list, ideas, cooking history and recipe notes are optional extras: their failures are left out so each only takes its own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
@@ -258,6 +263,42 @@ export const selectCooksById = createSelector(
 
 export const selectCooksLoadError = (state: RootState) =>
   state.pinch.cooks.loadError;
+
+const selectNoteItems = (state: RootState) => state.pinch.notes.items;
+
+export const selectNotesByRecipe = createSelector(
+  [selectNoteItems],
+  groupNotesByRecipe,
+);
+
+export const selectNoteSummaries = createSelector(
+  [selectNoteItems],
+  getNoteSummaries,
+);
+
+export const selectNotesById = createSelector(
+  [selectNoteItems],
+  (notes) => new Map(notes.map((note) => [note.id, note])),
+);
+
+export const selectNotesLoadError = (state: RootState) =>
+  state.pinch.notes.loadError;
+
+/** Whether saving an edit to this recipe is recorded as a tweak; a string, so a component reading it re-renders only when the answer changes. */
+export const selectTweakTracking = (
+  state: RootState,
+  recipeId: string | null,
+) =>
+  recipeId === null
+    ? 'off'
+    : getTweakTracking({
+        isCooksReady:
+          state.pinch.cooks.isLoaded && state.pinch.cooks.loadError === null,
+        isNotesReady:
+          state.pinch.notes.isLoaded && state.pinch.notes.loadError === null,
+        cookCount: selectCookSummaries(state).get(recipeId)?.count ?? 0,
+        noteCount: selectNoteSummaries(state).get(recipeId)?.count ?? 0,
+      });
 
 export const selectShoppingItems = (state: RootState) =>
   state.pinch.shopping.items;

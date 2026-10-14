@@ -17,6 +17,7 @@ import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
+import NoteSheet from '@apps/pinch/components/notes/NoteSheet';
 import MealDrawer from '@apps/pinch/components/recipes/MealDrawer';
 import MealRow from '@apps/pinch/components/recipes/MealRow';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
@@ -88,6 +89,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
+  const [noteTarget, setNoteTarget] = useState<{
+    recipeId: string;
+    noteId: string | null;
+  } | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
@@ -451,6 +456,29 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           onOpenHistory={(id) => {
             setOpenId(null);
             setHistoryId(id);
+          }}
+          onOpenNote={(recipeId, noteId) => {
+            setOpenId(null);
+            setNoteTarget({ recipeId, noteId });
+          }}
+        />
+      )}
+      {noteTarget && (
+        <NoteSheet
+          key={`${noteTarget.recipeId}-${noteTarget.noteId ?? 'new'}`}
+          uid={uid}
+          recipeId={noteTarget.recipeId}
+          noteId={noteTarget.noteId}
+          initialCookId={null}
+          onClose={() =>
+            setNoteTarget((current) =>
+              current === noteTarget ? null : current,
+            )
+          }
+          onUpdateRecipe={(noteId) => {
+            const { recipeId } = noteTarget;
+            setNoteTarget(null);
+            openSubview({ kind: 'recipe', id: recipeId, fromNoteId: noteId });
           }}
         />
       )}

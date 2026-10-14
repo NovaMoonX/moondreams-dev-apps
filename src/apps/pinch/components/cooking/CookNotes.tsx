@@ -1,0 +1,117 @@
+import { useState } from 'react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronDown } from 'lucide-react';
+
+import { useAppSelector } from '@/store';
+import { formatDateShort } from '@/utils/formatUtils';
+import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
+import {
+  RECIPE_NOTES_FIRST_PAGE,
+  RECIPE_NOTES_PAGE_SIZE,
+} from '@apps/pinch/constants';
+import {
+  selectCooksById,
+  selectNoteSummaries,
+  selectNotesByRecipe,
+} from '@apps/pinch/store/selectors';
+import type { RecipeNote } from '@apps/pinch/types';
+import { getNoteSummary, getWrittenBefore } from '@apps/pinch/utils/notes';
+
+const NO_NOTES: RecipeNote[] = [];
+const HIDDEN_WORTH_A_BUTTON = 3;
+
+interface CookNotesProps {
+  recipeId: string;
+}
+
+function CookNotes({ recipeId }: CookNotesProps) {
+  const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
+  const lastTweakAt =
+    useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
+  const cooksById = useAppSelector(selectCooksById);
+  const isReady = useAppSelector(
+    (state) =>
+      state.pinch.notes.isLoaded && state.pinch.notes.loadError === null,
+  );
+  const [isOpen, setIsOpen] = useState(false);
+  const [limit, setLimit] = useState(RECIPE_NOTES_FIRST_PAGE);
+
+  if (!isReady || notes.length === 0) {
+    return null;
+  }
+
+  const summary = getNoteSummary(notes[0], formatDateShort);
+  const hidden = notes.length - limit;
+  const visibleCount = hidden > HIDDEN_WORTH_A_BUTTON ? limit : notes.length;
+
+  return (
+    <section
+      aria-label='Notes for this recipe'
+      className='bg-muted/50 border-border overflow-hidden rounded-2xl border'
+    >
+      <Button
+        type='button'
+        variant='tertiary'
+        aria-expanded={isOpen}
+        className='text-foreground! h-auto min-h-12 w-full items-start justify-between gap-3 rounded-none px-3 py-2.5 text-left font-normal'
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        {isOpen ? (
+          <span className='min-w-0 flex-1 text-sm font-medium'>
+            Your notes ({notes.length})
+          </span>
+        ) : (
+          <span
+            className={join(
+              'line-clamp-2 min-w-0 flex-1 text-sm wrap-break-word',
+              '[@media(max-height:500px)]:line-clamp-1',
+            )}
+          >
+            <span className='font-medium'>{summary.label}</span> {summary.body}
+          </span>
+        )}
+        <ChevronDown
+          className={join(
+            'text-muted-foreground mt-0.5 h-4 w-4 shrink-0',
+            isOpen && 'rotate-180',
+          )}
+          aria-hidden='true'
+        />
+      </Button>
+      {isOpen && (
+        <div className='border-border border-t px-3'>
+          <ul className='divide-border divide-y'>
+            {notes.slice(0, visibleCount).map((note) => {
+              const cookId = note.cookId ?? null;
+              return (
+                <NoteEntry
+                  key={note.id}
+                  note={note}
+                  cook={
+                    cookId === null ? null : (cooksById.get(cookId) ?? null)
+                  }
+                  writtenBefore={getWrittenBefore(note, lastTweakAt)}
+                  onEdit={null}
+                />
+              );
+            })}
+          </ul>
+          {hidden > HIDDEN_WORTH_A_BUTTON && (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='h-10 justify-start px-0!'
+              onClick={() => setLimit(limit + RECIPE_NOTES_PAGE_SIZE)}
+            >
+              Show {Math.min(RECIPE_NOTES_PAGE_SIZE, hidden)} more
+            </Button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default CookNotes;
