@@ -2880,11 +2880,11 @@ assert.deepEqual(
   [12, 13, 14, 15, 16, 17, 18].map((day) =>
     getEatByState(dayOf(day), lateOnThe14th),
   ),
-  ['PAST', 'PAST', 'SOON', 'SOON', 'SOON', 'LATER', 'LATER'],
-  'eat soon is today and the next two days, past its date is any day before today',
+  ['PAST', 'PAST', 'SOON', 'SOON', 'LATER', 'LATER', 'LATER'],
+  'eat soon is today and tomorrow, past its date is any day before today',
 );
 assert.deepEqual(
-  [13, 14, 15, 17, 18].map((day) => getEatByState(dayOf(day), earlyOnThe15th)),
+  [13, 14, 15, 16, 17].map((day) => getEatByState(dayOf(day), earlyOnThe15th)),
   ['PAST', 'PAST', 'SOON', 'SOON', 'LATER'],
   'the same classification just after local midnight',
 );
@@ -3861,10 +3861,10 @@ assert.deepEqual(
     fridgeServings: 2 + 2 + 4,
     freezerServings: 3 + 1,
     containerCount: 5,
-    soonCount: 2,
+    soonCount: 1,
     pastCount: 1,
   },
-  'the Kitchen row counts servings by place, containers, those to eat soon and those past their date; finished ones are left out',
+  'the Kitchen row counts servings by place, containers, those due by tomorrow (not the one due in two days) and those past their date; finished ones are left out',
 );
 assert.equal(
   getPlacesText(summary),
@@ -3877,7 +3877,12 @@ assert.equal(
 );
 assert.deepEqual(
   [getDueText(2, 1), getDueText(1, 0), getDueText(0, 2), getDueText(0, 0)],
-  ['2 to eat soon, 1 past its date', '1 to eat soon', '2 past their date', ''],
+  [
+    '2 to eat by tomorrow, 1 past its date',
+    '1 to eat by tomorrow',
+    '2 past their date',
+    '',
+  ],
 );
 
 assert.deepEqual(

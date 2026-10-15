@@ -543,7 +543,8 @@ export const MAX_EAT_BY_DATE = 4_102_444_800_000;
 export const CONTAINER_FRIDGE_DAYS = 4;
 export const CONTAINER_FREEZER_DAYS = 90;
 export const CONTAINER_THAWED_DAYS = 2;
-export const CONTAINER_EAT_SOON_DAYS = 2;
+/** Due today or tomorrow: a wider window tints most of a box's life and stops meaning "eat it now". */
+export const CONTAINER_EAT_SOON_DAYS = 1;
 export const BULK_MEAL_SERVINGS = 5;
 export const CONTAINER_SITTING_SERVINGS = 2;
 /** Counted by the client only; the rules do not count documents. */
