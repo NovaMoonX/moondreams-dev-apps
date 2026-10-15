@@ -75,6 +75,8 @@ interface Fact {
   text: string;
   canWrap?: boolean;
   help?: ReactNode;
+  onClick?: () => void;
+  label?: string;
 }
 
 interface LatestNoteLineProps {
@@ -120,6 +122,8 @@ interface RecipeDrawerProps {
   uid: string;
   recipeId: string;
   onClose: () => void;
+  /** Shows the recipes that share this source. */
+  onOpenSource: (sourceId: string) => void;
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
@@ -135,6 +139,7 @@ function RecipeDrawer({
   uid,
   recipeId,
   onClose,
+  onOpenSource,
   onPlan,
   onModify,
   onFillIn,
@@ -308,7 +313,13 @@ function RecipeDrawer({
         text: `${formatCost(cost.perServingCents)}${leftOutCount > 0 ? '+' : ''} per serving`,
         help: costHelp,
       },
-    source && { emoji: '📖', text: `From ${source.label}`, canWrap: true },
+    source && {
+      emoji: '📖',
+      text: `From ${source.label}`,
+      canWrap: true,
+      onClick: () => onOpenSource(source.id),
+      label: `From ${source.label}: show its recipes`,
+    },
   ].filter((fact) => fact !== false && fact !== null);
 
   const getStatusText = () => {
@@ -369,7 +380,26 @@ function RecipeDrawer({
                       : 'whitespace-nowrap',
                   )}
                 >
-                  <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
+                  {fact.onClick ? (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      aria-label={fact.label}
+                      className="text-foreground! relative h-auto max-w-full justify-start rounded-none p-0 px-0! py-0! text-left text-sm font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-['']"
+                      onClick={fact.onClick}
+                    >
+                      <span>
+                        <span aria-hidden='true'>{fact.emoji}</span>{' '}
+                        <span className='decoration-muted-foreground/50 underline underline-offset-4'>
+                          {fact.text}
+                        </span>
+                      </span>
+                    </Button>
+                  ) : (
+                    <>
+                      <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
+                    </>
+                  )}
                   {fact.help && (
                     <span className='ml-1 inline-flex align-middle'>
                       {fact.help}

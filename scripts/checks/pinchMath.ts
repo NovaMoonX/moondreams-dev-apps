@@ -5622,4 +5622,124 @@ assert.deepEqual(
   'the price form reads a price back in the unit the recipes measure it in, with the cost math’s own bridge, and says nothing when the units can’t be compared',
 );
 
+// R2 workstream: recipes list search, sources and the recipe form
+// ============================================================
+
+import {
+  buildRecipeSearchIndex as r2BuildIndex,
+  searchRecipes as r2Search,
+} from '../../src/apps/pinch/utils/catalogSearch.ts';
+
+const r2Ingredient = (id: string, name: string, aliases: string[] = []) =>
+  ({
+    id,
+    name,
+    familyId: null,
+    aliases,
+    per100g: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    serving: { amount: 100, unit: 'G' },
+    gramsPerMl: null,
+    gramsEach: null,
+    isCustom: false,
+    isAdjusted: false,
+    isArchived: false,
+  }) as ResolvedIngredient;
+const r2Ingredients = new Map(
+  [
+    r2Ingredient('garlic', 'Garlic'),
+    r2Ingredient('thigh', 'Chicken thigh'),
+    r2Ingredient('scallion', 'Green onion', ['Scallion']),
+    r2Ingredient('rice', 'Jasmine rice'),
+  ].map((entry) => [entry.id, entry]),
+);
+const r2Sources = new Map([
+  ['se', { id: 'se', label: 'Serious Eats', createdAt: 0, updatedAt: 0 }],
+]);
+const r2Recipe = (
+  id: string,
+  title: string,
+  ingredientIds: string[],
+  extra: Partial<Recipe> = {},
+) =>
+  ({
+    id,
+    title,
+    description: null,
+    servings: 2,
+    prepMinutes: null,
+    cookMinutes: null,
+    coverPath: null,
+    ingredients: ingredientIds.map((ingredientId, index) => ({
+      id: `${id}-${index}`,
+      ingredientId,
+      amount: 1,
+      unit: 'G',
+      note: null,
+    })),
+    steps: [],
+    nutritionOverride: null,
+    source: 'MANUAL',
+    sourceId: null,
+    care: null,
+    isArchived: false,
+    createdAt: 0,
+    updatedAt: 0,
+    ...extra,
+  }) as Recipe;
+const r2Recipes = [
+  r2Recipe('adobo', 'Adobo chicken', ['thigh', 'garlic']),
+  r2Recipe('garlic-noodles', 'Garlic noodles', ['scallion']),
+  r2Recipe('rice', 'Cilantro lime rice', ['rice'], { sourceId: 'se' }),
+  r2Recipe('toast', 'Toast', [], {
+    description: 'A weeknight snack, ready in minutes',
+  }),
+  r2Recipe('gone', 'Mystery stew', ['removed-ingredient'], {
+    sourceId: 'deleted-source',
+  }),
+];
+const r2Index = r2BuildIndex(r2Recipes, r2Ingredients, r2Sources);
+const r2Find = (query: string) => r2Search(r2Index, query).map((r) => r.id);
+assert.deepEqual(
+  r2Find('garlic'),
+  ['garlic-noodles', 'adobo'],
+  'an ingredient finds the recipes that use it, a title that says it first',
+);
+assert.deepEqual(
+  r2Find('chicken thigh'),
+  ['adobo'],
+  'every word must be found, in the title or the ingredients',
+);
+assert.deepEqual(
+  r2Find('scallion'),
+  ['garlic-noodles'],
+  "an ingredient's alias finds it too",
+);
+assert.deepEqual(
+  r2Find('serious'),
+  ['rice'],
+  'the source label finds its recipes',
+);
+assert.deepEqual(r2Find('weeknight'), ['toast'], 'the description is searched');
+assert.deepEqual(r2Find('Cilántro'), ['rice'], 'accents are ignored');
+assert.deepEqual(
+  r2Find('ice'),
+  ['rice'],
+  'a word inside a title still finds it, as before',
+);
+assert.deepEqual(
+  r2Find('arlic'),
+  ['garlic-noodles'],
+  'outside the title a word has to start a word, so a fragment finds only titles',
+);
+assert.deepEqual(
+  r2Find(''),
+  r2Recipes.map((recipe) => recipe.id),
+  'an empty search keeps every recipe, in order',
+);
+assert.deepEqual(
+  r2Find('deleted'),
+  [],
+  'a missing source or ingredient adds nothing to search',
+);
+
 console.log('pinchMath: all checks passed');

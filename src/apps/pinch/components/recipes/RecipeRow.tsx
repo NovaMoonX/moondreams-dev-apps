@@ -6,17 +6,16 @@ import { ChevronRight } from 'lucide-react';
 
 import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
-import { formatCents } from '@/utils/moneyUtils';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import {
-  selectCookSummaries,
   selectRecipeNutrition,
   selectShowNutrition,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type { Recipe, RecipeCost } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import { formatRowPrice } from '@apps/pinch/utils/mealFormat';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import {
   formatMinutes,
@@ -43,9 +42,6 @@ function RecipeRow({
 }: RecipeRowProps) {
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipe.id);
   const show = useAppSelector(selectShowNutrition);
-  const cookCount = useAppSelector(
-    (state) => selectCookSummaries(state).get(recipe.id)?.count ?? 0,
-  );
   const stock = useAppSelector(
     (state) =>
       showStock ? selectStockByRecipe(state).get(recipe.id) : undefined,
@@ -77,20 +73,12 @@ function RecipeRow({
         <span className='text-foreground block truncate font-medium'>
           {recipe.title}
         </span>
-        <span className='text-muted-foreground flex text-xs font-normal'>
-          <span className='min-w-0 truncate'>{detail}</span>
-          {cookCount > 0 && (
-            <span className='shrink-0 whitespace-nowrap'>
-              {'\u00A0·\u00A0'}Cooked {cookCount}×
-            </span>
-          )}
+        <span className='text-muted-foreground block truncate text-xs font-normal'>
+          {detail}
         </span>
         {showPrices && cost?.perServingCents != null && (
-          <span className='text-muted-foreground block text-xs font-normal'>
-            <span className='whitespace-nowrap'>
-              {formatCents(Math.round(cost.perServingCents))} / serving
-            </span>
-            {leftOutCount > 0 && ` · leaves out ${leftOutCount}`}
+          <span className='text-muted-foreground block text-xs font-normal whitespace-nowrap'>
+            {formatRowPrice(cost.perServingCents, leftOutCount > 0)} / serving
           </span>
         )}
         {showPrices && cost && cost.perServingCents == null && (

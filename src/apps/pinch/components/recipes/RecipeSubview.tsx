@@ -1,15 +1,23 @@
 import { useRef, useState } from 'react';
 
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import Subview from '@/components/Subview';
+import { toWebLink } from '@/utils/urlUtils';
+import {
+  IdeaLinkWay,
+  IdeaTextWay,
+} from '@apps/pinch/components/ideas/IdeaWays';
 import { useAppSelector } from '@/store';
 import RecipeForm, {
   type RecipeRead,
 } from '@apps/pinch/components/recipes/RecipeForm';
 import RecipeReader from '@apps/pinch/components/recipes/RecipeReader';
 import RecipeStart from '@apps/pinch/components/recipes/RecipeStart';
-import { RECIPE_START_METHODS } from '@apps/pinch/constants';
+import {
+  MAX_IDEA_NOTE_LENGTH,
+  RECIPE_START_METHODS,
+} from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectIdeasById,
@@ -17,9 +25,23 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeStartMethod } from '@apps/pinch/types';
-import { getReadingForIdea } from '@apps/pinch/utils/ideas';
+import { clipIdeaTitle, getReadingForIdea } from '@apps/pinch/utils/ideas';
 
-type Stage = 'start' | 'form' | Exclude<RecipeStartMethod, 'manual'>;
+type Stage = 'start' | 'form' | 'idea' | Exclude<RecipeStartMethod, 'manual'>;
+
+type Kept = { text: string } | { link: string };
+
+const getTextIdea = (text: string) => {
+  const trimmed = text.trim();
+  const title = clipIdeaTitle(
+    trimmed.split('\n').find((line) => line.trim() !== '') ?? '',
+  );
+  return {
+    title,
+    note: trimmed.slice(0, MAX_IDEA_NOTE_LENGTH),
+    isClipped: trimmed.length > MAX_IDEA_NOTE_LENGTH,
+  };
+};
 
 const getStage = (method: RecipeStartMethod | undefined): Stage => {
   if (method === undefined) return 'start';
@@ -33,8 +55,10 @@ interface RecipeSubviewProps {
 
 /** The recipe as a full-screen layer: a new one begins with how to start it, each way finishes on its own screen, then the form, whose header carries the recipe's name. */
 function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
-  const { subview, closeSubview, setIsStartOpen } = usePinchOverlay();
+  const { subview, closeSubview, setIsStartOpen, openIdeaSheet } =
+    usePinchOverlay();
   const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const startMethod = subview?.kind === 'recipe' ? subview.method : undefined;
   const fromDrawer = subview?.kind === 'recipe' && subview.fromDrawer === true;
   const fromIdeaId =
@@ -59,9 +83,22 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     recipeId === null ? getStage(startMethod) : 'form',
   );
   const [read, setRead] = useState<RecipeRead | null>(null);
+  const [kept, setKept] = useState<Kept | null>(null);
   const [title, setTitle] = useState(existing?.title ?? fromIdea?.title ?? '');
 
-  const isReaderStage = stage !== 'start' && stage !== 'form';
+  const isReaderStage =
+    stage !== 'start' && stage !== 'form' && stage !== 'idea';
+  const backToReader = () => setStage(kept && 'link' in kept ? 'link' : 'text');
+  const handleIdeaSaved = (ideaTitle: string) => {
+    closeSubview();
+    addToast({
+      title: `Saved ${ideaTitle} to your ideas`,
+      description: navigator.onLine
+        ? undefined
+        : "It's on this phone and saves when you're back online.",
+      type: 'success',
+    });
+  };
 
   const leave = async () => {
     if (isDirtyRef.current) {
@@ -79,6 +116,10 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   };
 
   const goBack = () => {
+    if (stage === 'idea') {
+      backToReader();
+      return;
+    }
     if (isReaderStage && fromIdea) {
       closeSubview();
       return;
@@ -97,6 +138,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
 
   const getTitle = () => {
     if (stage === 'start') return 'New recipe';
+    if (stage === 'idea') return 'Idea';
     if (stage === 'form')
       return title.trim() || existing?.title || 'New recipe';
     return (
@@ -107,7 +149,45 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
 
   const getBody = () => {
     if (stage === 'start') {
-      return <RecipeStart onPick={(method) => setStage(getStage(method))} />;
+      return (
+        <RecipeStart
+          onPick={(method) => setStage(getStage(method))}
+          onKeepAsIdea={() => {
+            closeSubview();
+            openIdeaSheet();
+          }}
+        />
+      );
+    }
+    if (stage === 'idea') {
+      if (kept === null) return null;
+      if ('link' in kept) {
+        return (
+          <IdeaLinkWay
+            uid={uid}
+            initialUrl={toWebLink(kept.link) ?? kept.link.trim()}
+            onClose={backToReader}
+            onSaved={handleIdeaSaved}
+          />
+        );
+      }
+      const idea = getTextIdea(kept.text);
+      return (
+        <div className='space-y-4'>
+          <p className='text-muted-foreground text-sm'>
+            {idea.isClipped
+              ? `Kept as an idea, with the first ${MAX_IDEA_NOTE_LENGTH.toLocaleString()} characters of your text as its note. Nothing is read or sent to an AI.`
+              : 'Kept as an idea, with your text as its note. Nothing is read or sent to an AI.'}
+          </p>
+          <IdeaTextWay
+            uid={uid}
+            initialTitle={idea.title}
+            initialNote={idea.note}
+            onClose={backToReader}
+            onSaved={handleIdeaSaved}
+          />
+        </div>
+      );
     }
     if (stage === 'form') {
       return (
@@ -142,6 +222,8 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
               ? (fromIdea.url ?? undefined)
               : undefined
           }
+          initialText={kept && 'text' in kept ? kept.text : undefined}
+          initialLink={kept && 'link' in kept ? kept.link : undefined}
           onRead={(recipe, source, label) => {
             const reading = fromIdea
               ? getReadingForIdea(recipe, fromIdea)
@@ -152,6 +234,14 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
             setStage('form');
           }}
           onManual={() => setStage('form')}
+          onSaveAsIdea={
+            fromIdea
+              ? undefined
+              : (next) => {
+                  setKept(next);
+                  setStage('idea');
+                }
+          }
         />
       </>
     );

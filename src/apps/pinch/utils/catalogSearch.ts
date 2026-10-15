@@ -1,5 +1,11 @@
 import { CATALOG_FAMILIES_BY_ID } from '@apps/pinch/catalog';
-import type { ResolvedFamily, ResolvedIngredient } from '@apps/pinch/types';
+import type {
+  Recipe,
+  ResolvedFamily,
+  ResolvedIngredient,
+  Source,
+} from '@apps/pinch/types';
+import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const normalize = (text: string) =>
   text
@@ -156,6 +162,61 @@ export function searchByName<T extends { name: string }>(
       : items.filter((item) =>
           words.every((word) => normalize(item.name).includes(word)),
         );
+
+  return result;
+}
+
+export interface RecipeSearchEntry {
+  recipe: Recipe;
+  title: string;
+  rest: string;
+}
+
+/** Each recipe's title and the rest of what a person might type to find it (its ingredients' names and aliases, its source and its description), normalized once. */
+export function buildRecipeSearchIndex(
+  recipes: Recipe[],
+  ingredientsById: Map<string, ResolvedIngredient>,
+  sourcesById: Map<string, Source>,
+): RecipeSearchEntry[] {
+  const result = recipes.map((recipe) => ({
+    recipe,
+    title: normalize(recipe.title),
+    rest: normalize(
+      [
+        ...recipe.ingredients.flatMap((line) => {
+          const ingredient = ingredientsById.get(line.ingredientId);
+          return ingredient ? [ingredient.name, ...ingredient.aliases] : [];
+        }),
+        getRecipeSource(recipe, sourcesById)?.label ?? '',
+        recipe.description ?? '',
+      ].join(' '),
+    ),
+  }));
+
+  return result;
+}
+
+/** Recipes where every word typed is in the title or starts a word of the rest, those with every word in the title first, each group in the index's order; an empty query keeps them all. */
+export function searchRecipes(
+  index: RecipeSearchEntry[],
+  query: string,
+): Recipe[] {
+  const words = normalize(query).split(' ').filter(Boolean);
+  if (words.length === 0) {
+    return index.map((entry) => entry.recipe);
+  }
+
+  const isInTitle = (entry: RecipeSearchEntry) =>
+    words.every((word) => entry.title.includes(word));
+  const matches = index.filter((entry) =>
+    words.every(
+      (word) => entry.title.includes(word) || startsAWord(entry.rest, word),
+    ),
+  );
+  const result = [
+    ...matches.filter(isInTitle),
+    ...matches.filter((entry) => !isInTitle(entry)),
+  ].map((entry) => entry.recipe);
 
   return result;
 }
