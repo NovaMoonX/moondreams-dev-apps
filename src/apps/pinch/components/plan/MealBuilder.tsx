@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
@@ -52,7 +53,11 @@ import {
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  formatCost,
+  getItemTitle,
+  getPlannedMealTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getDefaultMealType,
@@ -211,20 +216,24 @@ function MealBuilder({
       }),
     [mode, recipes, savedMeals, plannedMeals, cookSummaries],
   );
+  const plateTitle = getPlannedMealTitle(
+    { name: source?.name ?? existingPlanned?.name ?? null, items },
+    recipesById,
+    ingredientsById,
+  );
   const getTitle = () => {
     if (mode === 'meal') {
-      return name.trim() || existingMeal?.name || 'New meal';
+      return name.trim() || existingMeal?.name || 'Saved meal';
     }
-    if (source) {
-      return source.name;
+    if (plateTitle) {
+      return plateTitle;
     }
-    if (items.length === 0) {
-      return existingPlanned?.name ?? 'New meal';
-    }
-    const first = getItemTitle(items[0], recipesById, ingredientsById);
-    return items.length > 1 ? `${first} +${items.length - 1}` : first;
+    return date === null
+      ? MEAL_TYPE_LABELS[mealType]
+      : `${MEAL_TYPE_LABELS[mealType]} · ${formatDayTitle(dayKey)}`;
   };
   const title = getTitle();
+  const isSlotTitle = mode === 'plan' && plateTitle === '';
   const isFull = items.length >= MAX_MEAL_ITEMS;
   const isMissing =
     (mode === 'plan' && plannedMealId !== null && existingPlanned === null) ||
@@ -443,6 +452,11 @@ function MealBuilder({
   const getDayWord = (key: string) =>
     key === getCellDayKey(new Date()) ? 'today' : formatDayTitle(key);
 
+  const getChangeLabel = () => {
+    if (isChanging) return 'Done';
+    return isSlotTitle ? 'Change day or meal' : 'Change';
+  };
+
   const getSubmitLabel = () => {
     if (mode === 'meal' || existingPlanned || date === null) return 'Save';
     return `Add to ${getDayWord(dayKey)}`;
@@ -454,20 +468,28 @@ function MealBuilder({
         <UndoSnackbar pending={pending} onUndo={undo} />
         {mode === 'plan' ? (
           <div className='space-y-3'>
-            <div className='flex items-center justify-between gap-3'>
-              <p className='min-w-0 font-medium'>
-                {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
-                <span className='whitespace-nowrap'>
-                  {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
-                </span>
-              </p>
+            <div
+              className={join(
+                'flex items-center gap-3',
+                isSlotTitle ? 'justify-start' : 'justify-between',
+              )}
+            >
+              {!isSlotTitle && (
+                <p className='min-w-0 font-medium'>
+                  {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
+                  <span className='whitespace-nowrap'>
+                    {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
+                  </span>
+                </p>
+              )}
               <Button
                 type='button'
                 variant='link'
-                className='h-10 shrink-0'
+                className={join('h-10 shrink-0', isSlotTitle && 'px-0!')}
+                aria-expanded={isChanging}
                 onClick={() => setIsChanging((current) => !current)}
               >
-                {isChanging ? 'Done' : 'Change'}
+                {getChangeLabel()}
               </Button>
             </div>
             {isChanging && (
