@@ -12,6 +12,7 @@ import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
+import AppSwitcher from '@ui/AppSwitcher';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
 import ThemeToggle from '@ui/ThemeToggle';
@@ -101,20 +102,21 @@ function Layout() {
       {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
       <div
         className={join(
-          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 max-md:h-16 max-md:py-2 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
+          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 max-[380px]:gap-2 py-4 max-md:h-16 max-md:py-2 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
           isBannerVisible ? 'top-9' : 'top-0',
           isHeaderHidden && (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
         )}
       >
-        <div className='pointer-events-auto flex flex-1 items-center justify-start'>
+        <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
           <ThemeToggle className='flex items-center' />
         </div>
 
-        <div className='pointer-events-auto flex flex-1 items-center justify-center'>
+        <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>
+          <AppSwitcher />
           <DevAccountSwitcher />
         </div>
 
-        <div className='pointer-events-auto flex flex-1 items-center justify-end'>
+        <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-end'>
           <AuthAvatar />
         </div>
       </div>
