@@ -15,6 +15,7 @@ import {
   MAX_IDEA_TITLE_LENGTH,
   SOFT_MAX_IDEAS,
 } from '@apps/pinch/constants';
+import type { IdeasState } from '@apps/pinch/store/slices/ideasSlice';
 import type { Idea, IdeaKind } from '@apps/pinch/types';
 import {
   clipIdeaTitle,
@@ -72,7 +73,37 @@ export interface IdeaDraft {
 interface CreateIdeaInput {
   uid: string;
   draft: IdeaDraft;
+  /** Chosen by the caller when it tracks the save itself; a new one otherwise. */
+  id?: string;
 }
+
+/** Why a new idea can't be saved, or null: the checks the save itself makes, so a sheet can answer before it closes. */
+export const getNewIdeaProblem = (draft: IdeaDraft, ideas: IdeasState) => {
+  const note = getNote(draft.note);
+  if (ideas.loadError !== null) {
+    return "Your ideas couldn't be loaded, so adding is off for now.";
+  }
+  if (!ideas.isLoaded) {
+    return 'Your ideas are still loading. Give it a moment and try again.';
+  }
+  const url = draft.kind === 'LINK' ? toIdeaUrl(draft.url ?? '') : null;
+  const host = url === null ? null : getWebLinkHost(url);
+  const title = clipIdeaTitle(draft.title) || clipIdeaTitle(host ?? '');
+
+  if (title === '') return BAD_TITLE;
+  if (note !== null && note.length > MAX_IDEA_NOTE_LENGTH) return BAD_NOTE;
+  if (ideas.items.length >= SOFT_MAX_IDEAS) {
+    return `Your list holds up to ${SOFT_MAX_IDEAS} ideas. Delete one to make room.`;
+  }
+  if (draft.kind === 'LINK' && url === null) return BAD_LINK;
+  if (url !== null && findIdeaByUrl(ideas.items, url) !== null) {
+    return DUPLICATE_LINK;
+  }
+  if (draft.kind === 'PHOTO' && draft.photoFile === null) {
+    return 'Pick a picture first.';
+  }
+  return null;
+};
 
 export const createIdea = createAsyncThunk<
   string,
@@ -80,42 +111,17 @@ export const createIdea = createAsyncThunk<
   { state: RootState; rejectValue: string }
 >(
   'pinch/ideas/create',
-  async ({ uid, draft }, { getState, rejectWithValue }) => {
+  async ({ uid, draft, id: chosenId }, { getState, rejectWithValue }) => {
+    const problem = getNewIdeaProblem(draft, getState().pinch.ideas);
+    if (problem !== null) return rejectWithValue(problem);
+
     const note = getNote(draft.note);
-    const { items, isLoaded, loadError } = getState().pinch.ideas;
-    if (loadError !== null) {
-      return rejectWithValue(
-        "Your ideas couldn't be loaded, so adding is off for now.",
-      );
-    }
-    if (!isLoaded) {
-      return rejectWithValue(
-        'Your ideas are still loading. Give it a moment and try again.',
-      );
-    }
     const url = draft.kind === 'LINK' ? toIdeaUrl(draft.url ?? '') : null;
     const host = url === null ? null : getWebLinkHost(url);
     const title = clipIdeaTitle(draft.title) || clipIdeaTitle(host ?? '');
 
-    if (title === '') return rejectWithValue(BAD_TITLE);
-    if (note !== null && note.length > MAX_IDEA_NOTE_LENGTH) {
-      return rejectWithValue(BAD_NOTE);
-    }
-    if (items.length >= SOFT_MAX_IDEAS) {
-      return rejectWithValue(
-        `Your list holds up to ${SOFT_MAX_IDEAS} ideas. Delete one to make room.`,
-      );
-    }
-    if (draft.kind === 'LINK' && url === null) return rejectWithValue(BAD_LINK);
-    if (url !== null && findIdeaByUrl(items, url) !== null) {
-      return rejectWithValue(DUPLICATE_LINK);
-    }
-    if (draft.kind === 'PHOTO' && draft.photoFile === null) {
-      return rejectWithValue('Pick a picture first.');
-    }
-
     const now = Date.now();
-    const id = generateUuid();
+    const id = chosenId ?? generateUuid();
     const photoPath = draft.kind === 'PHOTO' ? getIdeaPhotoPath(uid, id) : null;
     const idea: Idea = {
       id,

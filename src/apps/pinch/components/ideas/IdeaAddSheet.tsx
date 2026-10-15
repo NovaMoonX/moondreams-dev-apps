@@ -35,7 +35,13 @@ function IdeaAddSheet({
   const [stage, setStage] = useState<Stage>('pick');
   const handleSaved = (title: string) => {
     if (confirmsWithToast) {
-      addToast({ title: `Saved ${title} to your ideas`, type: 'success' });
+      addToast({
+        title: `Saved ${title} to your ideas`,
+        description: navigator.onLine
+          ? undefined
+          : "It's on this phone and saves when you're back online.",
+        type: 'success',
+      });
     }
     onClose();
   };

@@ -6,6 +6,7 @@ import {
   FormFactories,
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQuery } from '@tanstack/react-query';
 
 import FallbackImage from '@/components/FallbackImage';
@@ -15,6 +16,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import {
@@ -25,8 +27,10 @@ import {
 import IdeaNoteField from '@apps/pinch/components/ideas/IdeaNoteField';
 import { IDEA_KIND_EMOJIS, MAX_IDEA_TITLE_LENGTH } from '@apps/pinch/constants';
 import { ideaPageQueryOptions } from '@apps/pinch/queries/ideaPageQueries';
+import { trackIdeaSave } from '@apps/pinch/hooks/useIdeaSaving';
 import {
   createIdea,
+  getNewIdeaProblem,
   type IdeaDraft,
 } from '@apps/pinch/store/actions/ideaActions';
 import { selectIdeas } from '@apps/pinch/store/selectors';
@@ -53,16 +57,53 @@ const getShownTitle = (draft: IdeaDraft) =>
 
 function useCreateIdea(uid: string, onDone: (title: string) => void) {
   const dispatch = useAppDispatch();
+  const { addToast } = useToast();
+  const ideas = useAppSelector((state) => state.pinch.ideas);
+  const isMountedRef = useRef(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const showSaveFailed = (saveError: unknown) =>
+    addToast({
+      title: "That idea didn't save",
+      description: getErrorMessage(saveError, 'Unable to save this idea.'),
+      type: 'error',
+    });
+
   const submit = async (draft: IdeaDraft) => {
     setError(null);
+    const problem = getNewIdeaProblem(draft, ideas);
+    if (problem !== null) {
+      setError(problem);
+      return;
+    }
+    const title = getShownTitle(draft);
+
+    if (draft.kind !== 'PHOTO') {
+      const id = generateUuid();
+      const saved = dispatch(createIdea({ uid, draft, id })).unwrap();
+      trackIdeaSave(id, saved);
+      saved.catch(showSaveFailed);
+      onDone(title);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await dispatch(createIdea({ uid, draft })).unwrap();
-      onDone(getShownTitle(draft));
+      onDone(title);
     } catch (submitError) {
+      if (!isMountedRef.current) {
+        showSaveFailed(submitError);
+        return;
+      }
       setError(getErrorMessage(submitError, 'Unable to save this idea.'));
       setIsSubmitting(false);
     }
@@ -92,13 +133,8 @@ function WayFooter({
         note ?? (error && <span className='text-destructive'>{error}</span>)
       }
       cancelAction={
-        <Button
-          type='button'
-          variant='secondary'
-          onClick={onCancel}
-          disabled={isSubmitting}
-        >
-          Cancel
+        <Button type='button' variant='secondary' onClick={onCancel}>
+          {isSubmitting ? 'Close' : 'Cancel'}
         </Button>
       }
       rightActions={
@@ -490,9 +526,11 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
             isSubmitting={isSubmitting}
             error={error}
             note={
-              upload.file !== null && title === ''
-                ? 'Give it a title to save.'
-                : null
+              isSubmitting
+                ? 'Uploading the picture. You can close this; it finishes on its own.'
+                : upload.file !== null && title === ''
+                  ? 'Give it a title to save.'
+                  : null
             }
             onCancel={onClose}
           />
