@@ -129,6 +129,31 @@ html.pinch-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
+/* A tick is a circle, like the app's other round shapes: a quiet ring until ticked, then filled with the ink. The
+   component sets its fill inline, so the ticked fill needs `!important`; the after-element keeps a 40px target. */
+html.pinch-theme button[role='checkbox'] {
+  position: relative;
+  border-radius: 9999px;
+  border-width: 1.5px;
+  border-color: var(--color-muted-foreground);
+}
+
+html.pinch-theme button[role='checkbox']::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+html.pinch-theme button[role='checkbox']:is([aria-checked='true'], [aria-checked='mixed']) {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary) !important;
+  color: var(--color-primary-foreground);
+}
+
+html.pinch-theme button[role='checkbox']:focus-visible {
+  outline-color: var(--color-primary);
+}
+
 /* The search field's native clear icon is drawn in the browser's blue; it is a control, not a link. */
 html.pinch-theme input[type='search']::-webkit-search-cancel-button {
   filter: grayscale(1);
