@@ -8,7 +8,7 @@ export interface StepIngredientLine {
 }
 
 export interface StepIngredients {
-  /** The lines a step names, in the order it names them. */
+  /** The lines a step is the first to name, in the order it names them. */
   lineIds: string[];
   /** The step writes an amount of its own ("2 cups of the broth"), which scaling doesn't touch. */
   hasWrittenAmount: boolean;
