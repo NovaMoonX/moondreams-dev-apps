@@ -22,10 +22,12 @@ interface GapNudgeProps {
   uid: string;
   /** Every gap behind the number on screen; the ones the person closed are filtered out here. */
   gaps: Gap[];
+  /** Words before the line, for a place where nothing is priced yet ("See what it costs:"). */
+  lead?: string;
   onFillIn: (gaps: Gap[]) => void;
 }
 
-function GapNudge({ uid, gaps, onFillIn }: GapNudgeProps) {
+function GapNudge({ uid, gaps, lead, onFillIn }: GapNudgeProps) {
   const dispatch = useAppDispatch();
   const dismissed = useAppSelector(selectDismissedNudges);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -106,6 +108,7 @@ function GapNudge({ uid, gaps, onFillIn }: GapNudgeProps) {
     <div className='flex items-start gap-1'>
       <p className='text-muted-foreground min-w-0 flex-1 py-2.5 text-sm'>
         {hasFailed ? "Couldn't hide this just now. " : null}
+        {lead ? `${lead} ` : null}
         {text}{' '}
         <span className='whitespace-nowrap'>
           <span className='max-[360px]:hidden'>· </span>

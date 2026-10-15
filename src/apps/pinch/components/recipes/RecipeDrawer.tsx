@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
+import ClampedText from '@/components/ClampedText';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
 import HelpTip from '@/components/HelpTip';
@@ -31,9 +32,12 @@ import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectContainersLoadError,
   selectCookSummaries,
+  selectCooksById,
   selectIngredientsById,
   selectIsContainersReady,
   selectNoteSummaries,
+  selectNotesByRecipe,
+  selectNotesLoadError,
   selectRecipeCosts,
   selectRecipeNutrition,
   selectRecipesById,
@@ -42,11 +46,7 @@ import {
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type { Gap, GapKind, ShoppingRequest } from '@apps/pinch/types';
-import {
-  getCookFactText,
-  getCookServings,
-  isCookHistoryFull,
-} from '@apps/pinch/utils/cooks';
+import { getCookServings, isCookHistoryFull } from '@apps/pinch/utils/cooks';
 import { isBulkMeal } from '@apps/pinch/utils/containers';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
@@ -68,6 +68,46 @@ interface Fact {
   emoji: string;
   text: string;
   canWrap?: boolean;
+  help?: ReactNode;
+}
+
+interface LatestNoteLineProps {
+  recipeId: string;
+  onOpen: () => void;
+}
+
+function LatestNoteLine({ recipeId, onOpen }: LatestNoteLineProps) {
+  const notes = useAppSelector(selectNotesByRecipe).get(recipeId);
+  const cooksById = useAppSelector(selectCooksById);
+  const isReady = useAppSelector(
+    (state) =>
+      state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
+  );
+  const note = notes?.find((entry) => entry.kind === 'NOTE');
+  const text = note?.text?.replace(/\s+/g, ' ').trim() ?? '';
+
+  if (!isReady || !note || text === '') {
+    return null;
+  }
+
+  const cook = note.cookId === null ? undefined : cooksById.get(note.cookId);
+  const label = cook
+    ? `Last time (${formatDateShort(cook.cookedAt)}):`
+    : `Your note (${formatDateShort(note.createdAt)}):`;
+
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      onClick={onOpen}
+      className='text-muted-foreground! h-auto w-full justify-start rounded-none p-0 px-0! py-0! text-left text-sm font-normal whitespace-normal'
+    >
+      <span className='line-clamp-2 min-w-0 wrap-break-word'>
+        <span aria-hidden='true'>📝</span>{' '}
+        <span className='text-foreground font-medium'>{label}</span> {text}
+      </span>
+    </Button>
+  );
 }
 
 interface RecipeDrawerProps {
@@ -116,6 +156,7 @@ function RecipeDrawer({
   );
   const [markError, setMarkError] = useState<string | null>(null);
   const [isMarking, setIsMarking] = useState(false);
+  const notesRef = useRef<HTMLDivElement>(null);
 
   if (!recipe) {
     return null;
@@ -197,6 +238,18 @@ function RecipeDrawer({
   ].filter((action) => action !== false);
 
   const source = getRecipeSource(recipe, sourcesById);
+  const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
+  const isPriced = cost !== undefined && cost.totalCents !== null;
+  const costHelp =
+    isPriced && leftOutCount > 0 ? (
+      <HelpTip variant='warning' title="What's left out" placement='bottom'>
+        <p>
+          This {formatLeftOut(cost.leftOut)} because there’s no price for{' '}
+          {leftOutCount === 1 ? 'it' : 'them'} yet.
+        </p>
+        <NudgeCountNote leftOut={cost.leftOut} open={cost.leftOut} />
+      </HelpTip>
+    ) : undefined;
 
   const facts: Fact[] = [
     { emoji: '🍽️', text: formatServings(recipe.servings) },
@@ -208,13 +261,26 @@ function RecipeDrawer({
       emoji: '⏲️',
       text: `Cook ${formatMinutes(recipe.cookMinutes)}`,
     },
+    isPriced &&
+      cost.perServingCents !== null && {
+        emoji: '💰',
+        text: `${formatCost(cost.perServingCents)}${leftOutCount > 0 ? '+' : ''} per serving`,
+        help: costHelp,
+      },
     source && { emoji: '📖', text: `From ${source.label}`, canWrap: true },
-    lastTweakAt !== null && {
-      emoji: '✏️',
-      text: `Last tweaked ${formatDateShort(lastTweakAt)}`,
-    },
   ].filter((fact) => fact !== false && fact !== null);
-  const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
+
+  const getStatusText = () => {
+    if (!cookSummary) return null;
+    const made = `Last made ${formatDateShort(cookSummary.lastCookedAt)}`;
+    if (lastTweakAt === null || lastTweakAt <= cookSummary.lastCookedAt) {
+      return made;
+    }
+    return `${made} · changed ${formatDateShort(lastTweakAt)}`;
+  };
+  const statusText = getStatusText();
+  const hasMacros =
+    nutrition !== undefined && hasShownValue(nutrition.values, show);
 
   return (
     <DetailSheet
@@ -250,6 +316,7 @@ function RecipeDrawer({
           />
         )}
         <div className='space-y-3'>
+          {recipe.description && <ClampedText text={recipe.description} />}
           <div className='space-y-1.5'>
             <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
               {facts.map((fact) => (
@@ -262,21 +329,31 @@ function RecipeDrawer({
                   )}
                 >
                   <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
+                  {fact.help && (
+                    <span className='ml-1 inline-flex align-middle'>
+                      {fact.help}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
-            {cookSummary && (
+            {statusText && (
               <p className='text-muted-foreground text-sm'>
-                <span aria-hidden='true'>✅</span>{' '}
-                {getCookFactText(
-                  cookSummary.count,
-                  formatDateShort(cookSummary.lastCookedAt),
-                )}
+                <span aria-hidden='true'>✅</span> {statusText}
               </p>
             )}
             <StockRows
               target={{ kind: 'recipe', id: recipe.id }}
               onOpenStock={() => onOpenStock(recipe.id)}
+            />
+            <LatestNoteLine
+              recipeId={recipe.id}
+              onOpen={() =>
+                notesRef.current?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                })
+              }
             />
           </div>
           <div className='space-y-1.5'>
@@ -293,62 +370,6 @@ function RecipeDrawer({
             )}
           </div>
         </div>
-        {cost && (
-          <div className='space-y-3'>
-            <StatTile
-              label='Cost'
-              value={
-                cost.totalCents === null
-                  ? 'No prices yet'
-                  : formatCost(cost.totalCents)
-              }
-              detail={
-                cost.totalCents === null
-                  ? undefined
-                  : `${formatCost(cost.perServingCents ?? 0)} per serving`
-              }
-              help={
-                leftOutCount > 0 && cost.totalCents !== null ? (
-                  <HelpTip
-                    variant='warning'
-                    title="What's left out"
-                    placement='top'
-                  >
-                    <p>
-                      This {formatLeftOut(cost.leftOut)} because there’s no
-                      price for {leftOutCount === 1 ? 'it' : 'them'} yet.
-                    </p>
-                    <NudgeCountNote
-                      leftOut={cost.leftOut}
-                      open={cost.leftOut}
-                    />
-                  </HelpTip>
-                ) : undefined
-              }
-            />
-            {nutrition && hasShownValue(nutrition.values, show) && (
-              <div className='space-y-1.5'>
-                <p className='text-muted-foreground text-xs'>Per serving</p>
-                <MacroStats
-                  values={nutrition.values}
-                  show={show}
-                  variant='tiles'
-                />
-              </div>
-            )}
-            <GapNudge
-              uid={uid}
-              gaps={[
-                ...cost.leftOut,
-                ...getNutritionGaps(nutrition?.missing ?? [], show),
-              ]}
-              onFillIn={onFillIn}
-            />
-          </div>
-        )}
-        {recipe.description && (
-          <p className='text-sm whitespace-pre-wrap'>{recipe.description}</p>
-        )}
 
         <FormSection title='Ingredients' detail={recipe.ingredients.length}>
           <ul className='divide-border divide-y'>
@@ -383,6 +404,38 @@ function RecipeDrawer({
           </ul>
         </FormSection>
 
+        {cost && (
+          <div className='space-y-3 empty:hidden'>
+            {isPriced && (
+              <StatTile
+                label='Cost'
+                value={formatCost(cost.totalCents ?? 0)}
+                detail={`For ${formatServings(recipe.servings)}`}
+                help={costHelp}
+              />
+            )}
+            {hasMacros && (
+              <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>Per serving</p>
+                <MacroStats
+                  values={nutrition.values}
+                  show={show}
+                  variant='tiles'
+                />
+              </div>
+            )}
+            <GapNudge
+              uid={uid}
+              gaps={[
+                ...cost.leftOut,
+                ...getNutritionGaps(nutrition?.missing ?? [], show),
+              ]}
+              lead={isPriced ? undefined : 'See what it costs:'}
+              onFillIn={onFillIn}
+            />
+          </div>
+        )}
+
         {recipe.steps.length > 0 && (
           <FormSection title='Steps'>
             <ol className='space-y-3'>
@@ -400,11 +453,13 @@ function RecipeDrawer({
 
         {care && <RecipeCareSection care={care} />}
 
-        <RecipeNotes
-          recipeId={recipe.id}
-          onAdd={() => onOpenNote(recipe.id, null)}
-          onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
-        />
+        <div ref={notesRef} className='scroll-mt-4'>
+          <RecipeNotes
+            recipeId={recipe.id}
+            onAdd={() => onOpenNote(recipe.id, null)}
+            onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
+          />
+        </div>
       </div>
     </DetailSheet>
   );
