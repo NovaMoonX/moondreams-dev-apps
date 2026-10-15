@@ -25,7 +25,9 @@ import {
   getPlannedMealOffer,
 } from '../../src/apps/pinch/components/calendar/plannedMealOffer.ts';
 import {
+  formatCostTile,
   formatRowCost,
+  formatRowPrice,
   getFixedNote,
   getRepriceLines,
 } from '../../src/apps/pinch/utils/mealFormat.ts';
@@ -4379,5 +4381,29 @@ assert.equal(getPutAwayText([]), null);
     "only this meal's own cooks count",
   );
 }
+
+// ---- PLANB: the shared words for a row's price and a cost tile ----
+assert.deepEqual(
+  [
+    formatRowPrice(8.4, true),
+    formatRowPrice(8.4, false),
+    formatRowPrice(null, false),
+    formatRowPrice(undefined, true),
+    formatRowPrice(0, false),
+  ],
+  ['$0.08+', '$0.08', '—', '—', '$0.00'],
+  'a row says + when it leaves something out and a dash when nothing is priced',
+);
+assert.deepEqual(
+  [
+    formatCostTile(15.4, 9, false),
+    formatCostTile(15.4, 0, false),
+    formatCostTile(null, 3, false),
+    formatCostTile(null, 3, true),
+    formatCostTile(15.4, 2, true),
+  ],
+  ['$0.15 so far', '$0.15', 'No price yet', 'Not priced', '$0.15'],
+  'a tile says so far only while its gaps can still be priced, and a fixed day never does',
+);
 
 console.log('pinchMath: all checks passed');

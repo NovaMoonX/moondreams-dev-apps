@@ -4,7 +4,6 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { RefreshCw } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
-import HelpTip from '@/components/HelpTip';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -130,18 +129,6 @@ function RepriceDayRow({ uid, dayKey }: RepriceDayRowProps) {
           subtitle="Redoes this day's cost and nutrition from today"
           isDisabled={isBusy}
           onClick={() => void handleReprice()}
-          trailing={
-            <HelpTip title="Today's prices" placement='top'>
-              <p>
-                A day is fixed when it passes, so adding a price later doesn't
-                change it.
-              </p>
-              <p>
-                This redoes the day with the prices and recipes you have now, so
-                calories can change too.
-              </p>
-            </HelpTip>
-          }
         />
       )}
       {error && (

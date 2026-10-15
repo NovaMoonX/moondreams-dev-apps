@@ -22,8 +22,6 @@ import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
 import { getPlannedMealOffer } from '@apps/pinch/components/calendar/plannedMealOffer';
 import { EatFromStockView } from '@apps/pinch/components/containers/EatFromStock';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
@@ -47,7 +45,6 @@ import {
 } from '@apps/pinch/store/selectors';
 import type {
   ContainerPlace,
-  Gap,
   MealType,
   ShoppingRequest,
 } from '@apps/pinch/types';
@@ -59,14 +56,14 @@ import {
 import { getMarkableRecipes } from '@apps/pinch/utils/cooks';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
-  formatCost,
-  formatRowCost,
+  formatCostTile,
+  formatRowPrice,
   getFixedNote,
   getItemTitle,
   getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
-import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
+import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import {
   getPlannedMealNutrition,
@@ -78,7 +75,6 @@ interface PlannedMealViewProps {
   plannedMealId: string;
   onBack: () => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
-  onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
   onStartCooking: (recipeId: string, servings: number) => void;
   /** Where the drawer's pinned footer is: this view puts its actions there, a quiet Modify on the left and the one primary on the right. */
@@ -91,7 +87,6 @@ function PlannedMealView({
   plannedMealId,
   onBack,
   onEdit,
-  onFillIn,
   onAddToShopping,
   onStartCooking,
   footerEl,
@@ -183,8 +178,6 @@ function PlannedMealView({
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
   const title = getPlannedMealTitle(meal, recipesById, ingredientsById);
-  const repricedAt = meal.snapshot ? getRepricedAt(meal.snapshot) : null;
-  const noPriceText = repricedAt === null ? "Wasn't priced" : 'Still no price';
 
   const handleSaveAsMeal = async () => {
     setError(null);
@@ -448,13 +441,11 @@ function PlannedMealView({
       <div className='space-y-3'>
         <StatTile
           label='Cost'
-          value={
-            cost.totalCents === null
-              ? meal.snapshot
-                ? noPriceText
-                : 'No prices yet'
-              : formatCost(cost.totalCents)
-          }
+          value={formatCostTile(
+            cost.totalCents,
+            leftOutCount,
+            meal.snapshot !== null,
+          )}
           detail={meal.snapshot ? getFixedNote([meal.snapshot]) : undefined}
           help={
             leftOutCount > 0 && cost.totalCents !== null ? (
@@ -465,17 +456,10 @@ function PlannedMealView({
               >
                 <p>
                   Leaves out {leftOutCount}{' '}
-                  {leftOutCount === 1 ? 'ingredient' : 'ingredients'} with no
-                  price yet.
-                </p>
-                <NudgeCountNote
-                  leftOut={cost.leftOut}
-                  open={meal.snapshot ? [] : cost.leftOut}
-                />
-                <p className='text-muted-foreground'>
+                  {leftOutCount === 1 ? 'ingredient' : 'ingredients'}{' '}
                   {meal.snapshot
-                    ? 'This day has passed, so a price you add now counts from today on.'
-                    : "The cost goes up once they're priced."}
+                    ? 'that had no price when the day passed. A price you add now counts from today on.'
+                    : "with no price yet. The cost goes up once they're priced."}
                 </p>
               </HelpTip>
             ) : undefined
@@ -492,9 +476,6 @@ function PlannedMealView({
               show={show}
             />
           </div>
-        )}
-        {!meal.snapshot && (
-          <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={onFillIn} />
         )}
       </div>
       <ul className='divide-border divide-y'>
@@ -520,10 +501,14 @@ function PlannedMealView({
                 )}
               </div>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                {formatRowCost(
-                  itemCost?.cents,
-                  meal.snapshot !== null,
-                  repricedAt !== null,
+                <span aria-hidden={itemCost?.cents == null}>
+                  {formatRowPrice(
+                    itemCost?.cents,
+                    (itemCost?.gaps.length ?? 0) > 0,
+                  )}
+                </span>
+                {itemCost?.cents == null && (
+                  <span className='sr-only'>No price</span>
                 )}
               </span>
             </li>

@@ -10,8 +10,6 @@ import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
@@ -27,7 +25,6 @@ import {
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type {
-  Gap,
   MealType,
   PlannedMeal,
   Recipe,
@@ -41,13 +38,13 @@ import {
 } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
-  formatCost,
-  formatRowCost,
+  formatCostTile,
+  formatRowPrice,
   getFixedNote,
   getItemTitle,
   getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
-import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
+import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -75,7 +72,6 @@ interface DayDrawerProps {
   onClose: () => void;
   onAdd: (mealType: MealType | null) => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
-  onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
 }
 
@@ -87,7 +83,6 @@ function DayDrawer({
   onClose,
   onAdd,
   onEdit,
-  onFillIn,
   onAddToShopping,
 }: DayDrawerProps) {
   const { openSubview } = usePinchOverlay();
@@ -110,9 +105,6 @@ function DayDrawer({
   const [footerEl, setFooterEl] = useState<HTMLElement | null>(null);
   const isFrozen = meals.length > 0 && meals.every((meal) => meal.snapshot);
   const fixedSnapshots = meals.flatMap((meal) => meal.snapshot ?? []);
-  const isRepriced = fixedSnapshots.some(
-    (snapshot) => getRepricedAt(snapshot) !== null,
-  );
   const leftOutCount = countLeftOutIngredients(stats.leftOut);
 
   return (
@@ -142,7 +134,6 @@ function DayDrawer({
           plannedMealId={plannedMealId}
           onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
-          onFillIn={onFillIn}
           onAddToShopping={onAddToShopping}
           onStartCooking={(recipeId, servings) => {
             onClose();
@@ -166,15 +157,11 @@ function DayDrawer({
               <div className='space-y-3'>
                 <StatTile
                   label='Cost'
-                  value={
-                    stats.mealsPriced === 0
-                      ? isFrozen
-                        ? isRepriced
-                          ? 'Still no price'
-                          : "Wasn't priced"
-                        : 'No prices yet'
-                      : formatCost(stats.spendCents)
-                  }
+                  value={formatCostTile(
+                    stats.mealsPriced === 0 ? null : stats.spendCents,
+                    leftOutCount,
+                    isFrozen,
+                  )}
                   detail={isFrozen ? getFixedNote(fixedSnapshots) : undefined}
                   help={
                     leftOutCount > 0 && stats.mealsPriced > 0 ? (
@@ -186,16 +173,9 @@ function DayDrawer({
                         <p>
                           Leaves out {leftOutCount}{' '}
                           {leftOutCount === 1 ? 'ingredient' : 'ingredients'}{' '}
-                          with no price yet.
-                        </p>
-                        <NudgeCountNote
-                          leftOut={stats.leftOut}
-                          open={stats.openLeftOut}
-                        />
-                        <p className='text-muted-foreground'>
                           {isFrozen
-                            ? 'This day has passed, so a price you add now counts from today on.'
-                            : "The cost goes up once they're priced."}
+                            ? 'that had no price when the day passed. A price you add now counts from today on.'
+                            : "with no price yet. The cost goes up once they're priced."}
                         </p>
                       </HelpTip>
                     ) : undefined
@@ -213,11 +193,6 @@ function DayDrawer({
                     />
                   </div>
                 )}
-                <GapNudge
-                  uid={uid}
-                  gaps={stats.openLeftOut}
-                  onFillIn={onFillIn}
-                />
               </div>
               {MEAL_TYPES.map((type) => {
                 const ofType = meals.filter((meal) => meal.mealType === type);
@@ -264,10 +239,9 @@ function DayDrawer({
                                 )}
                               </span>
                               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                                {formatRowCost(
+                                {formatRowPrice(
                                   mealCost.totalCents,
-                                  meal.snapshot !== null,
-                                  getRepricedAt(meal.snapshot) !== null,
+                                  mealCost.leftOut.length > 0,
                                 )}
                               </span>
                             </Button>
