@@ -38,6 +38,7 @@ import {
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { useOnRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
+import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
 import {
   selectIdeas,
   selectIdeasLoadError,
@@ -152,10 +153,19 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const ideaCount = ideas.length;
   const ideasLoadError = useAppSelector(selectIdeasLoadError);
   const isIdeasLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
-  const [view, setView] = useState<RecipesView>('recipes');
-  const [query, setQuery] = useState('');
-  const [pickedSource, setPickedSource] = useState(SOURCE_FILTER_ANY);
-  const [stockPlaces, setStockPlaces] = useState<ContainerPlace[]>([]);
+  const [view, setView] = usePinchSessionState<RecipesView>(
+    'recipes:view',
+    'recipes',
+  );
+  const [query, setQuery] = usePinchSessionState('recipes:query', '');
+  const [pickedSource, setPickedSource] = usePinchSessionState(
+    'recipes:source',
+    SOURCE_FILTER_ANY,
+  );
+  const [stockPlaces, setStockPlaces] = usePinchSessionState<ContainerPlace[]>(
+    'recipes:stock',
+    [],
+  );
   const [putAway, setPutAway] = useState<ContainerSubject | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
@@ -583,7 +593,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title={RECIPES_VIEW_LABELS[shownView]}
+        title='Recipes'
         action={
           (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
             <Button
@@ -595,7 +605,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               onClick={handleNew}
             >
               <Plus className='h-4 w-4' aria-hidden='true' />
-              {isIdeas ? 'New idea' : 'New'}
+              {isIdeas ? 'New idea' : view === 'meals' ? 'New meal' : 'New'}
             </Button>
           )
         }

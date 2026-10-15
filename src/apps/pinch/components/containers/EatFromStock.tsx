@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft } from 'lucide-react';
 
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort } from '@/utils/formatUtils';
@@ -50,6 +51,7 @@ export function EatFromStockView({
     }));
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useBackStep(true, onBack);
 
   const handleEat = async (container: Container, count: number) => {
     if (busyId !== null) return;

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Drawer, Modal, Panel } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface FormSheetProps {
@@ -26,12 +27,14 @@ const STICKY_FOOTER =
  */
 function FormSheet({ isOpen, onClose, title, children, wide = 'modal' }: FormSheetProps) {
   const isPhone = useMediaQuery().isBelow('sm');
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
 
   if (isPhone) {
     return (
       <Drawer
+        id={dialogId}
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={onDialogClose}
         title={title}
         showCloseButton
         disableCloseOnOverlayClick
@@ -44,14 +47,19 @@ function FormSheet({ isOpen, onClose, title, children, wide = 'modal' }: FormShe
 
   if (wide === 'panel') {
     return (
-      <Panel isOpen={isOpen} onClose={onClose} title={title}>
+      <Panel
+        id={dialogId}
+        isOpen={isOpen}
+        onClose={onDialogClose}
+        title={title}
+      >
         <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3')}>{children}</div>
       </Panel>
     );
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal id={dialogId} isOpen={isOpen} onClose={onDialogClose} title={title}>
       <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3')}>{children}</div>
     </Modal>
   );

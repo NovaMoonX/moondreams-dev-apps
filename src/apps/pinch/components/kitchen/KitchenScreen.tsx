@@ -32,6 +32,7 @@ import {
 } from '@apps/pinch/constants';
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
 import {
   selectDefaultProducts,
   selectIngredientFamilies,
@@ -73,9 +74,13 @@ interface KitchenScreenProps {
 }
 
 function KitchenScreen({ uid }: KitchenScreenProps) {
-  const [query, setQuery] = useState('');
-  const [view, setView] = useState<KitchenView>('yours');
-  const [filters, setFilters] = useState<IngredientFilters>(
+  const [query, setQuery] = usePinchSessionState('kitchen:query', '');
+  const [view, setView] = usePinchSessionState<KitchenView>(
+    'kitchen:view',
+    'yours',
+  );
+  const [filters, setFilters] = usePinchSessionState<IngredientFilters>(
+    'kitchen:filters',
     NO_INGREDIENT_FILTERS,
   );
   const [overlay, setOverlay] = useState<Overlay | null>(null);

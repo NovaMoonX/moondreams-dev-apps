@@ -6,6 +6,7 @@ import { ChevronLeft } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import MethodPicker from '@/components/MethodPicker';
+import { useBackStep } from '@/hooks/useBackHistory';
 import {
   IdeaLinkWay,
   IdeaPhotoWay,
@@ -45,6 +46,7 @@ function IdeaAddSheet({
     }
     onClose();
   };
+  useBackStep(stage !== 'pick', () => setStage('pick'));
 
   return (
     <FormSheet

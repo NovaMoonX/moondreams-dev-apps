@@ -19,6 +19,7 @@ import FormSection from '@/components/FormSection';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -72,6 +73,8 @@ interface BackLinkProps {
 }
 
 function BackLink({ onClick }: BackLinkProps) {
+  useBackStep(true, onClick);
+
   return (
     <Button
       type='button'

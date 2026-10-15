@@ -6,6 +6,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft, ChevronRight, NotebookPen } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
@@ -70,6 +71,11 @@ function CookingHistorySheet({
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
   const lastToken = useRef(0);
+  useBackStep(view.kind === 'note', () =>
+    setView((current) =>
+      current.kind === 'note' ? { kind: 'list' } : current,
+    ),
+  );
 
   const stockByCook = useAppSelector(selectContainersByCookId);
   const recipeContainers = useQuery(
