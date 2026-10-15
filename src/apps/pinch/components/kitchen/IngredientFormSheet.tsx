@@ -570,7 +570,7 @@ function IngredientFormSheet({
       message: isCatalog
         ? `Put ${ingredient.name} back to its built-in nutrition and serving size? Your changes to it are removed.`
         : usage !== null && isUsed
-          ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.`
+          ? `"${ingredient.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.${usage.products > 0 ? ' Its prices stay in Stores & prices, where you can delete them.' : ''}`
           : `Delete "${ingredient.name}"? This action cannot be undone.`,
       confirmText: isCatalog ? 'Reset' : isUsed ? 'Remove' : 'Delete',
       destructive: true,
