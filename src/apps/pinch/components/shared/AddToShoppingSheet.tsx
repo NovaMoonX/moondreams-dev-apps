@@ -1,12 +1,22 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Calendar,
+  Checkbox,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { CalendarDays } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
 import { useAppDispatch, useAppSelector } from '@/store';
+import {
+  toDateInputValue,
+  toLocalDateInputValue,
+} from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   MAX_SHOPPING_LINES_PER_ADD,
@@ -17,6 +27,7 @@ import { addToShoppingList } from '@apps/pinch/store/actions/shoppingActions';
 import {
   selectIngredientsById,
   selectMealsById,
+  selectPlannedByDay,
   selectRecipesById,
   selectShoppingById,
   selectShoppingItems,
@@ -24,30 +35,83 @@ import {
   selectStockByMeal,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
-import type { ShoppingRequest } from '@apps/pinch/types';
+import type { MealItem, ShoppingRequest } from '@apps/pinch/types';
 import {
   getShoppingStockLine,
   type StockedItem,
 } from '@apps/pinch/utils/containers';
+import {
+  addDaysToKey,
+  formatDayTitle,
+  getCellDayKey,
+  getMonthWindow,
+  type DayRange,
+} from '@apps/pinch/utils/dayKeys';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import {
   getItemsLines,
+  getPlanInRange,
   getRecipeLines,
   getShoppingItemId,
 } from '@apps/pinch/utils/shopping';
 
-interface AddToShoppingSheetProps {
+const NEXT_DAYS = 7;
+
+// The calendar's own selection is cleared: the cells draw the range this sheet holds, which can start preset.
+const RANGE_STYLES = {
+  containerClassName: 'h-auto!',
+  cellClassName: 'p-0 hover:bg-transparent focus:bg-transparent',
+  selectedCellClassName: 'bg-transparent! text-foreground!',
+  rangeCellClassName: 'bg-transparent!',
+  rangeStartCellClassName: 'bg-transparent! text-foreground!',
+  rangeEndCellClassName: 'bg-transparent! text-foreground!',
+  todayCellClassName: 'border-0',
+};
+
+const toCellDate = (dayKey: string) => {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+function SpanText({ startKey, endKey }: DayRange) {
+  return startKey === endKey ? (
+    <span className='whitespace-nowrap'>{formatDayTitle(startKey)}</span>
+  ) : (
+    <>
+      <span className='whitespace-nowrap'>{formatDayTitle(startKey)} –</span>{' '}
+      <span className='whitespace-nowrap'>{formatDayTitle(endKey)}</span>
+    </>
+  );
+}
+
+const formatMealCount = (count: number) => {
+  if (count === 0) return 'Nothing planned';
+  return count === 1 ? '1 meal' : `${count} meals`;
+};
+
+interface DraftRange {
+  startKey: string;
+  endKey: string;
+}
+
+interface ShoppingPickProps {
   uid: string;
   request: ShoppingRequest;
   onClose: () => void;
+  /** The cap on the header and list together, so the sheet's own body never scrolls. */
+  columnClassName?: string;
+  /** False on the Shopping tab itself, where the toast has nowhere to take the person. */
+  hasViewAction?: boolean;
 }
 
-/** What is already on the list starts unticked, since ticking it adds more. */
-function AddToShoppingSheet({
+/** What goes on the list from a recipe, a meal, a day or a range of planned days. What is already on the list starts unticked, since ticking it adds more. */
+export function ShoppingPick({
   uid,
   request,
   onClose,
-}: AddToShoppingSheetProps) {
+  columnClassName = 'max-h-[max(12rem,calc(92dvh-22rem))]',
+  hasViewAction = true,
+}: ShoppingPickProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const { showShoppingTab } = usePinchOverlay();
@@ -59,30 +123,70 @@ function AddToShoppingSheet({
   const stockByRecipe = useAppSelector(selectStockByRecipe);
   const stockByMeal = useAppSelector(selectStockByMeal);
   const mealsById = useAppSelector(selectMealsById);
+  const plannedByDay = useAppSelector(selectPlannedByDay);
+  const planWindowKey = useAppSelector(
+    (state) => state.pinch.plannedMeals.windowKey,
+  );
   const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
+  const [todayKey] = useState(() => toLocalDateInputValue(Date.now()));
   const recipe =
     request.kind === 'recipe'
       ? (recipesById.get(request.recipeId) ?? null)
       : null;
   const [servings, setServings] = useState(recipe?.servings ?? 1);
+  const [days, setDays] = useState<DayRange>(() =>
+    request.kind === 'range'
+      ? { startKey: request.startKey, endKey: request.endKey }
+      : { startKey: todayKey, endKey: addDaysToKey(todayKey, NEXT_DAYS - 1) },
+  );
+  const [draft, setDraft] = useState<DraftRange | null>(null);
   const [choices, setChoices] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isRange = request.kind === 'range';
+  const planWindow = planWindowKey ? getMonthWindow(planWindowKey) : null;
+  const lastLoadedKey = planWindow
+    ? addDaysToKey(toDateInputValue(planWindow.end), -1)
+    : todayKey;
+  const isPlanLoaded =
+    planWindow !== null &&
+    toDateInputValue(planWindow.start) <= todayKey &&
+    todayKey <= lastLoadedKey;
+  const span = useMemo(
+    () =>
+      getPlanInRange(
+        plannedByDay,
+        {
+          startKey: days.startKey,
+          endKey: days.endKey > lastLoadedKey ? lastLoadedKey : days.endKey,
+        },
+        todayKey,
+      ),
+    [plannedByDay, days, lastLoadedKey, todayKey],
+  );
+
+  const items = useMemo((): MealItem[] | null => {
+    if (request.kind === 'items') return request.items;
+    if (request.kind === 'range') {
+      return isPlanLoaded ? span.meals.flatMap((meal) => meal.items) : [];
+    }
+    return null;
+  }, [request, span, isPlanLoaded]);
+
   const rows = useMemo(() => {
-    const lines =
-      request.kind === 'recipe'
-        ? recipe
-          ? getRecipeLines(recipe, ingredientsById, servings)
-          : []
-        : getItemsLines(request.items, recipesById, ingredientsById);
+    const lines = items
+      ? getItemsLines(items, recipesById, ingredientsById)
+      : recipe
+        ? getRecipeLines(recipe, ingredientsById, servings)
+        : [];
     return lines.map((line) => ({
       line,
       id: getShoppingItemId(line.ingredientId, line.unit),
       name:
         ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
     }));
-  }, [request, recipe, recipesById, ingredientsById, servings]);
+  }, [items, recipe, recipesById, ingredientsById, servings]);
 
   const isReady = isLoaded && loadError === null;
   const stocked = useMemo(() => {
@@ -90,13 +194,12 @@ function AddToShoppingSheet({
       const summary = stockByRecipe.get(request.recipeId);
       return summary && recipe ? [{ name: recipe.title, summary }] : [];
     }
-    const mealStock =
-      request.mealId != null ? stockByMeal.get(request.mealId) : undefined;
-    const mealName =
-      request.mealId != null ? mealsById.get(request.mealId)?.name : undefined;
+    const mealId = request.kind === 'items' ? request.mealId : null;
+    const mealStock = mealId != null ? stockByMeal.get(mealId) : undefined;
+    const mealName = mealId != null ? mealsById.get(mealId)?.name : undefined;
     const recipeIds = Array.from(
       new Set(
-        request.items
+        (items ?? [])
           .filter((item) => item.kind === 'RECIPE')
           .map((item) => item.refId),
       ),
@@ -112,15 +215,26 @@ function AddToShoppingSheet({
       }),
     ];
     return entries;
-  }, [request, recipe, recipesById, mealsById, stockByRecipe, stockByMeal]);
-  const stockLine = getShoppingStockLine(stocked, request.kind === 'items');
+  }, [
+    request,
+    items,
+    recipe,
+    recipesById,
+    mealsById,
+    stockByRecipe,
+    stockByMeal,
+  ]);
+  const stockLine = getShoppingStockLine(stocked, request.kind !== 'recipe');
   const isOnList = (id: string) => onList.get(id)?.isChecked === false;
   const isTicked = (id: string) => choices[id] ?? !isOnList(id);
   const selected = rows.filter((row) => isTicked(row.id));
   const newCount = selected.filter((row) => !onList.has(row.id)).length;
   const isAllTicked = selected.length === rows.length;
-  const label =
-    request.kind === 'recipe' ? (recipe?.title ?? '') : request.label;
+  const getLabel = () => {
+    if (request.kind === 'recipe') return recipe?.title ?? '';
+    return request.kind === 'items' ? request.label : '';
+  };
+  const label = getLabel();
 
   const getBlock = () => {
     if (loadError !== null) {
@@ -147,6 +261,30 @@ function AddToShoppingSheet({
   };
   const block = getBlock();
 
+  const getEmptyText = () => {
+    if (isRange && !isPlanLoaded) {
+      return "Your plan for these days isn't loaded right now. Open them on the Calendar, then come back.";
+    }
+    if (isRange && span.meals.length === 0) {
+      return 'Nothing is planned on these days yet.';
+    }
+    return "There's nothing to buy here yet.";
+  };
+
+  const getDraftText = (range: DraftRange) => {
+    if (range.startKey === '') return 'Tap the first and last day.';
+    if (range.endKey === '') {
+      return 'Now tap the last day, or this day again for just one.';
+    }
+    const count = getPlanInRange(plannedByDay, range, todayKey).meals.length;
+    return (
+      <>
+        <SpanText {...range} />{' '}
+        <span className='whitespace-nowrap'>· {formatMealCount(count)}</span>
+      </>
+    );
+  };
+
   const handleAdd = async () => {
     if (block !== null) {
       return;
@@ -164,10 +302,9 @@ function AddToShoppingSheet({
             ? `Added ${selected[0].name} to your shopping list`
             : `Added ${count} to your shopping list`,
         type: 'success',
-        action: {
-          label: 'View',
-          onClick: showShoppingTab,
-        },
+        action: hasViewAction
+          ? { label: 'View', onClick: showShoppingTab }
+          : undefined,
       });
     } catch (addError) {
       setError(
@@ -177,11 +314,142 @@ function AddToShoppingSheet({
     }
   };
 
-  return (
-    <FormSheet isOpen onClose={onClose} title='Shopping list'>
+  if (draft) {
+    const isDraftDone = draft.startKey !== '' && draft.endKey !== '';
+    return (
       <div className='grid gap-4'>
         <div className='space-y-3'>
-          <p className='text-lg font-medium wrap-break-word'>{label}</p>
+          <Calendar
+            mode='range'
+            size='auto'
+            className='mx-auto w-full max-w-sm'
+            initialDate={toCellDate(draft.startKey || days.startKey)}
+            minDate={toCellDate(todayKey)}
+            maxDate={toCellDate(lastLoadedKey)}
+            customStyles={RANGE_STYLES}
+            onRangeSelect={({ start, end }) =>
+              // The calendar reports a range from inside its own state update, so it is applied just after.
+              queueMicrotask(() =>
+                setDraft({
+                  startKey: start ? getCellDayKey(start) : '',
+                  endKey: end ? getCellDayKey(end) : '',
+                }),
+              )
+            }
+            renderCell={(date, _isSelected, isDisabled, isToday) => {
+              const dayKey = getCellDayKey(date);
+              const isEnd =
+                dayKey === draft.startKey || dayKey === draft.endKey;
+              const isInRange =
+                draft.endKey !== '' &&
+                dayKey >= draft.startKey &&
+                dayKey <= draft.endKey;
+              const hasMeals = !isDisabled && plannedByDay.has(dayKey);
+              return (
+                <span
+                  className={join(
+                    'relative flex h-9 w-full items-center justify-center rounded-md',
+                    (isInRange || isEnd) && 'bg-[var(--pinch-drizzle-soft)]',
+                    isEnd &&
+                      'font-semibold shadow-[inset_0_0_0_1.5px_var(--pinch-drizzle)]',
+                    isToday && !isEnd && 'font-semibold',
+                  )}
+                >
+                  {date.getDate()}
+                  {hasMeals && (
+                    <span
+                      className='bg-muted-foreground absolute bottom-1 h-1 w-1 rounded-full'
+                      aria-hidden='true'
+                    />
+                  )}
+                </span>
+              );
+            }}
+          />
+          <p
+            className={join(
+              'text-sm',
+              isDraftDone ? 'font-medium' : 'text-muted-foreground',
+            )}
+            aria-live='polite'
+          >
+            {getDraftText(draft)}
+          </p>
+        </div>
+        <ModalFooterActions
+          cancelAction={
+            <Button
+              type='button'
+              variant='secondary'
+              onClick={() => setDraft(null)}
+            >
+              Back
+            </Button>
+          }
+          rightActions={
+            <Button
+              type='button'
+              disabled={!isDraftDone}
+              onClick={() => {
+                setDays(draft);
+                setChoices({});
+                setDraft(null);
+              }}
+            >
+              Done
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className='grid gap-4'>
+      <div className={join('flex flex-col gap-3', columnClassName)}>
+        <div className='shrink-0 space-y-3'>
+          {isRange ? (
+            <div className='flex items-start gap-3'>
+              <CalendarDays
+                className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
+                aria-hidden='true'
+              />
+              <div className='min-w-0 flex-1'>
+                <p className='font-medium wrap-break-word'>
+                  {span.startKey > span.endKey ? (
+                    'These days have passed'
+                  ) : (
+                    <SpanText {...span} />
+                  )}
+                </p>
+                {isPlanLoaded && span.startKey <= span.endKey && (
+                  <p className='text-muted-foreground text-sm'>
+                    {formatMealCount(span.meals.length)}
+                    {span.isClamped && ' from today on'}
+                  </p>
+                )}
+              </div>
+              {isPlanLoaded && (
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  aria-label='Change the days'
+                  className="relative h-6! min-h-0! shrink-0 px-0! py-0! before:absolute before:-inset-x-2 before:-inset-y-2 before:content-['']"
+                  onClick={() =>
+                    setDraft({
+                      startKey: span.startKey,
+                      endKey: span.startKey > span.endKey ? '' : span.endKey,
+                    })
+                  }
+                >
+                  Change
+                </Button>
+              )}
+            </div>
+          ) : (
+            <p className='text-lg font-medium wrap-break-word'>{label}</p>
+          )}
           {recipe && (
             <div className='flex flex-wrap items-center gap-3'>
               <span className='text-sm'>For</span>
@@ -224,10 +492,10 @@ function AddToShoppingSheet({
         </div>
         {rows.length === 0 ? (
           <p className='text-muted-foreground py-2 text-center text-sm'>
-            There's nothing to buy here yet.
+            {getEmptyText()}
           </p>
         ) : (
-          <ul className='divide-border max-h-[max(12rem,calc(92dvh-22rem))] divide-y overflow-y-auto'>
+          <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
             {rows.map((row) => {
               const existing = onList.get(row.id);
               return (
@@ -264,31 +532,49 @@ function AddToShoppingSheet({
             })}
           </ul>
         )}
-        {error && <p className='text-destructive text-sm'>{error}</p>}
-        <ModalFooterActions
-          note={block}
-          cancelAction={
-            <Button
-              type='button'
-              variant='secondary'
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-          }
-          rightActions={
-            <Button
-              type='button'
-              loading={isSubmitting}
-              disabled={isSubmitting || block !== null}
-              onClick={() => void handleAdd()}
-            >
-              {selected.length > 0 ? `Add ${selected.length}` : 'Add'}
-            </Button>
-          }
-        />
       </div>
+      {error && <p className='text-destructive text-sm'>{error}</p>}
+      <ModalFooterActions
+        note={block}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSubmitting}
+            disabled={isSubmitting || block !== null}
+            onClick={() => void handleAdd()}
+          >
+            {selected.length > 0 ? `Add ${selected.length}` : 'Add'}
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+interface AddToShoppingSheetProps {
+  uid: string;
+  request: ShoppingRequest;
+  onClose: () => void;
+}
+
+function AddToShoppingSheet({
+  uid,
+  request,
+  onClose,
+}: AddToShoppingSheetProps) {
+  return (
+    <FormSheet isOpen onClose={onClose} title='Shopping list'>
+      <ShoppingPick uid={uid} request={request} onClose={onClose} />
     </FormSheet>
   );
 }

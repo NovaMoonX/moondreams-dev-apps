@@ -381,7 +381,9 @@ export interface RecipeNote {
 
 export type ShoppingRequest =
   | { kind: 'recipe'; recipeId: string }
-  | { kind: 'items'; items: MealItem[]; label: string; mealId?: string | null };
+  | { kind: 'items'; items: MealItem[]; label: string; mealId?: string | null }
+  /** Planned days, both ends included (one day has the same start and end); the days before today are left out. */
+  | { kind: 'range'; startKey: string; endKey: string };
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {

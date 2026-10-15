@@ -4208,4 +4208,76 @@ assert.deepEqual(
 );
 assert.equal(getPutAwayText([]), null);
 
+// ============================================================
+// SHOP workstream: the shopping list's weekly add, shop order and shop amounts
+// ============================================================
+import { getPlanInRange as shopGetPlanInRange } from '../../src/apps/pinch/utils/shopping.ts';
+import type { PlannedMeal as ShopPlannedMeal } from '../../src/apps/pinch/types.ts';
+
+const shopPlanned = (id: string, dayKey: string): ShopPlannedMeal =>
+  ({
+    id,
+    date: Date.parse(`${dayKey}T00:00:00Z`),
+    mealType: 'DINNER',
+    name: null,
+    sourceMealId: null,
+    items: [{ id: `${id}-1`, kind: 'INGREDIENT', refId: 'rice', servings: 1 }],
+    refIds: ['rice'],
+    snapshot: null,
+    createdAt: 1,
+    updatedAt: 1,
+  }) as ShopPlannedMeal;
+const shopPlanByDay = new Map<string, ShopPlannedMeal[]>([
+  ['2026-10-13', [shopPlanned('past', '2026-10-13')]],
+  ['2026-10-15', [shopPlanned('today', '2026-10-15')]],
+  ['2026-10-31', [shopPlanned('halloween', '2026-10-31')]],
+  [
+    '2026-11-01',
+    [shopPlanned('nov1', '2026-11-01'), shopPlanned('nov1b', '2026-11-01')],
+  ],
+  ['2026-11-08', [shopPlanned('later', '2026-11-08')]],
+]);
+const shopSpanIds = (
+  startKey: string,
+  endKey: string,
+  todayKey = '2026-10-15',
+) => {
+  const span = shopGetPlanInRange(
+    shopPlanByDay,
+    { startKey, endKey },
+    todayKey,
+  );
+  return [span.startKey, span.meals.map((meal) => meal.id), span.isClamped];
+};
+assert.deepEqual(
+  shopSpanIds('2026-10-15', '2026-10-21'),
+  ['2026-10-15', ['today'], false],
+  'the next seven days hold the meals planned on them, today included',
+);
+assert.deepEqual(
+  shopSpanIds('2026-10-11', '2026-10-17'),
+  ['2026-10-15', ['today'], true],
+  'a range that began before today counts from today, and says it left the past out',
+);
+assert.deepEqual(
+  shopSpanIds('2026-10-31', '2026-11-01'),
+  ['2026-10-31', ['halloween', 'nov1', 'nov1b'], false],
+  'a range across a month boundary (and the end of daylight time) keeps both days, in day order',
+);
+assert.deepEqual(
+  shopSpanIds('2026-11-08', '2026-11-08'),
+  ['2026-11-08', ['later'], false],
+  'one day is a range whose start and end are the same',
+);
+assert.deepEqual(
+  shopSpanIds('2026-10-16', '2026-10-30'),
+  ['2026-10-16', [], false],
+  'days with nothing planned give no meals',
+);
+assert.deepEqual(
+  shopSpanIds('2026-10-10', '2026-10-13'),
+  ['2026-10-15', [], true],
+  'a range wholly in the past gives nothing, starting after it ends',
+);
+
 console.log('pinchMath: all checks passed');

@@ -2,6 +2,7 @@ import { MAX_SHOPPING_AMOUNT } from '@apps/pinch/constants';
 import type {
   Gap,
   MealItem,
+  PlannedMeal,
   Product,
   Recipe,
   ResolvedFamily,
@@ -10,6 +11,7 @@ import type {
   ShoppingView,
   Unit,
 } from '@apps/pinch/types';
+import type { DayRange } from '@apps/pinch/utils/dayKeys';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
@@ -138,6 +140,35 @@ export function getItemsLines(
         : [];
     }),
   );
+}
+
+export interface PlanSpan {
+  /** The first day counted: the range's own, or today when the range began earlier. */
+  startKey: string;
+  endKey: string;
+  meals: PlannedMeal[];
+  /** The range began before today, so the days that have passed were left out. */
+  isClamped: boolean;
+}
+
+/** The planned meals of a range of days, from today on, in day order. */
+export function getPlanInRange(
+  plannedByDay: Map<string, PlannedMeal[]>,
+  { startKey, endKey }: DayRange,
+  todayKey: string,
+): PlanSpan {
+  const fromKey = startKey < todayKey ? todayKey : startKey;
+  const meals = [...plannedByDay.entries()]
+    .filter(([dayKey]) => dayKey >= fromKey && dayKey <= endKey)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .flatMap(([, dayMeals]) => dayMeals);
+
+  return {
+    startKey: fromKey,
+    endKey,
+    meals,
+    isClamped: startKey < todayKey,
+  };
 }
 
 const byName = (a: ShoppingRowData, b: ShoppingRowData) =>

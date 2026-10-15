@@ -122,6 +122,12 @@ export const SHOPPING_VIEW_LABELS: Record<ShoppingView, string> = {
   toBuy: 'To buy',
   got: 'Got it',
 };
+export const SHOPPING_ADD_MODES = ['one', 'plan'] as const;
+export type ShoppingAddMode = (typeof SHOPPING_ADD_MODES)[number];
+export const SHOPPING_ADD_MODE_LABELS: Record<ShoppingAddMode, string> = {
+  one: 'One thing',
+  plan: 'From your plan',
+};
 /** A chunk reads then deletes each item, two operations apiece, under Firestore's 500 per transaction. */
 export const SHOPPING_BATCH_SIZE = 250;
 export const MAX_SHOPPING_AMOUNT = 1_000_000;
