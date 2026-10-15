@@ -38,6 +38,7 @@ import {
 } from '@apps/pinch/constants';
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
 import {
   selectIdeasLoadError,
   selectMeals,
@@ -119,10 +120,19 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const ideaCount = useAppSelector((state) => state.pinch.ideas.items.length);
   const ideasLoadError = useAppSelector(selectIdeasLoadError);
   const isIdeasLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
-  const [view, setView] = useState<RecipesView>('recipes');
-  const [query, setQuery] = useState('');
-  const [pickedSource, setPickedSource] = useState(SOURCE_FILTER_ANY);
-  const [stockPlaces, setStockPlaces] = useState<ContainerPlace[]>([]);
+  const [view, setView] = usePinchSessionState<RecipesView>(
+    'recipes:view',
+    'recipes',
+  );
+  const [query, setQuery] = usePinchSessionState('recipes:query', '');
+  const [pickedSource, setPickedSource] = usePinchSessionState(
+    'recipes:source',
+    SOURCE_FILTER_ANY,
+  );
+  const [stockPlaces, setStockPlaces] = usePinchSessionState<ContainerPlace[]>(
+    'recipes:stock',
+    [],
+  );
   const [putAway, setPutAway] = useState<ContainerSubject | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);

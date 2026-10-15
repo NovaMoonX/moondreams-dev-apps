@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +33,7 @@ import PinchNav from '@apps/pinch/components/shell/PinchNav';
 import LoadingSkeleton from '@apps/pinch/components/shell/LoadingSkeleton';
 import { DEFAULT_PINCH_TAB, PINCH_TABS } from '@apps/pinch/constants';
 import { PinchOverlayContext } from '@apps/pinch/hooks/usePinchOverlay';
+import { PinchSessionContext } from '@apps/pinch/hooks/usePinchSession';
 import { useFreezePastDays } from '@apps/pinch/hooks/useFreezePastDays';
 import { usePinchSync } from '@apps/pinch/hooks/usePinchSync';
 import { usePinchTheme } from '@apps/pinch/hooks/usePinchTheme';
@@ -45,6 +47,13 @@ import {
   getLocalMonthKey,
   isRangeInWindow,
 } from '@apps/pinch/utils/dayKeys';
+
+const OVERLAY_SUBVIEWS: PinchSubview['kind'][] = [
+  'recipe',
+  'plan',
+  'meal',
+  'cook',
+];
 
 const getHistoryIndex = () => {
   const index: unknown = window.history.state?.idx;
@@ -65,6 +74,12 @@ function Pinch() {
   const [shownMonth, setShownMonth] = useState(getLocalMonthKey);
   const subviewRef = useRef<PinchSubview | null>(null);
   const calendarIndexRef = useRef<number | null>(null);
+  const [session] = useState(() => new Map<string, unknown>());
+  const scrollByTabRef = useRef<Partial<Record<PinchTab, number>>>({});
+  const shownTabRef = useRef<PinchTab | null>(null);
+  const [resetCounts, setResetCounts] = useState<
+    Partial<Record<PinchTab, number>>
+  >({});
   const showShoppingTab = useCallback(() => {
     if (subviewRef.current !== null) {
       return;
@@ -132,10 +147,56 @@ function Pinch() {
   const requestedTab = searchParams.get('tab');
   const activeTab: PinchTab =
     PINCH_TABS.find((tab) => tab === requestedTab) ?? DEFAULT_PINCH_TAB;
+  const isTabHidden =
+    subview !== null && !OVERLAY_SUBVIEWS.includes(subview.kind);
+  const isTabShown = Boolean(user) && isLoaded && !loadError && !isTabHidden;
+
+  useEffect(() => () => session.clear(), [session, user?.uid]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const shown = shownTabRef.current;
+      if (shown !== null) scrollByTabRef.current[shown] = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Each tab opens where it was left (the top on a first visit), never at the scroll of the one before.
+  useLayoutEffect(() => {
+    if (!isTabShown) {
+      shownTabRef.current = null;
+      return;
+    }
+    shownTabRef.current = activeTab;
+    window.scrollTo({ top: scrollByTabRef.current[activeTab] ?? 0 });
+  }, [activeTab, isTabShown]);
+
+  const resetTab = (tab: PinchTab) => {
+    Array.from(session.keys())
+      .filter((key) => key.startsWith(`${tab}:`))
+      .forEach((key) => session.delete(key));
+    if (tab === DEFAULT_PINCH_TAB) setCalendarFocus(null);
+    setResetCounts((current) => ({
+      ...current,
+      [tab]: (current[tab] ?? 0) + 1,
+    }));
+  };
 
   // Back from any tab returns to the Calendar and back from the Calendar leaves: only leaving the
   // Calendar adds an entry, and going back to it steps back onto that entry when it is the one below.
   const setActiveTab = (tab: PinchTab) => {
+    if (tab === activeTab) {
+      if (window.scrollY > 0) {
+        const isReduced = window.matchMedia(
+          '(prefers-reduced-motion: reduce)',
+        ).matches;
+        window.scrollTo({ top: 0, behavior: isReduced ? 'auto' : 'smooth' });
+        return;
+      }
+      resetTab(tab);
+      return;
+    }
     setCalendarFocus(null);
     const historyIndex = getHistoryIndex();
     const isFromCalendar = activeTab === DEFAULT_PINCH_TAB;
@@ -188,12 +249,19 @@ function Pinch() {
   }
 
   const getScreen = () => {
-    if (activeTab === 'recipes') return <RecipesScreen uid={user.uid} />;
-    if (activeTab === 'kitchen') return <KitchenScreen uid={user.uid} />;
-    if (activeTab === 'shopping') return <ShoppingScreen uid={user.uid} />;
+    const resetCount = resetCounts[activeTab] ?? 0;
+    if (activeTab === 'recipes') {
+      return <RecipesScreen key={resetCount} uid={user.uid} />;
+    }
+    if (activeTab === 'kitchen') {
+      return <KitchenScreen key={resetCount} uid={user.uid} />;
+    }
+    if (activeTab === 'shopping') {
+      return <ShoppingScreen key={resetCount} uid={user.uid} />;
+    }
     return (
       <CalendarScreen
-        key={calendarFocus?.nonce}
+        key={`${calendarFocus?.nonce ?? 0}-${resetCount}`}
         focusDayKey={calendarFocus?.dayKey}
         uid={user.uid}
         shownMonth={shownMonth}
@@ -257,18 +325,13 @@ function Pinch() {
         />
       )}
       {/* A subview takes over the app; the tabs stay mounted underneath so search and scroll survive. */}
-      <div
-        className={join(
-          subview !== null &&
-            subview.kind !== 'recipe' &&
-            subview.kind !== 'plan' &&
-            subview.kind !== 'meal' &&
-            subview.kind !== 'cook' &&
-            'hidden',
-        )}
-      >
+      <div className={join(isTabHidden && 'hidden')}>
         <div className='page pb-28 lg:pb-8 lg:pl-28'>
-          <div className='mx-auto max-w-4xl space-y-4 py-6'>{getScreen()}</div>
+          <div className='mx-auto max-w-4xl space-y-4 py-6'>
+            <PinchSessionContext.Provider value={session}>
+              {getScreen()}
+            </PinchSessionContext.Provider>
+          </div>
           <PinchNav value={activeTab} onChange={setActiveTab} />
         </div>
       </div>

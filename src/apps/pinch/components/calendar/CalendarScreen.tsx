@@ -25,6 +25,7 @@ import {
   type CalendarView,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
 import {
   selectIngredientsById,
   selectPeriodStats,
@@ -91,12 +92,13 @@ function CalendarScreen({
       getPlannedMealTitle(meal, recipesById, ingredientsById),
     [recipesById, ingredientsById],
   );
-  const [anchorKey, setAnchorKey] = useState(
+  const [anchorKey, setAnchorKey] = usePinchSessionState(
+    'calendar:anchor',
     () =>
-      focusDayKey ??
-      (shownMonth === getLocalMonthKey(new Date(now))
+      shownMonth === getLocalMonthKey(new Date(now))
         ? todayKey
-        : `${shownMonth}-01`),
+        : `${shownMonth}-01`,
+    focusDayKey,
   );
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<{
