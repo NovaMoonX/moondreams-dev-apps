@@ -20,7 +20,6 @@ import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
 import { EatFromStockView } from '@apps/pinch/components/containers/EatFromStock';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
@@ -400,10 +399,6 @@ function PlannedMealView({
                   {leftOutCount === 1 ? 'ingredient' : 'ingredients'} with no
                   price yet.
                 </p>
-                <NudgeCountNote
-                  leftOut={cost.leftOut}
-                  open={meal.snapshot ? [] : cost.leftOut}
-                />
                 <p className='text-muted-foreground'>
                   {meal.snapshot
                     ? 'This day has passed, so a price you add now counts from today on.'

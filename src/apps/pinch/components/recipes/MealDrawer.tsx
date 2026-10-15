@@ -8,7 +8,6 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import {
   selectContainersLoadError,
@@ -29,30 +28,29 @@ import {
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
-  getNutritionGaps,
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface MealDrawerProps {
-  uid: string;
+  /** Not read: a saved meal's prices are added from its recipes. */
+  uid?: string;
   mealId: string;
   onClose: () => void;
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
-  onFillIn: (gaps: Gap[]) => void;
+  /** Not read: a saved meal's prices are added from its recipes. */
+  onFillIn?: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
   onOpenStock: (id: string) => void;
   onPutAway: (id: string) => void;
 }
 
 function MealDrawer({
-  uid,
   mealId,
   onClose,
   onPlan,
   onModify,
-  onFillIn,
   onAddToShopping,
   onOpenStock,
   onPutAway,
@@ -177,14 +175,6 @@ function MealDrawer({
               />
             </div>
           )}
-          <GapNudge
-            uid={uid}
-            gaps={[
-              ...cost.leftOut,
-              ...getNutritionGaps(nutrition.missing, show),
-            ]}
-            onFillIn={onFillIn}
-          />
         </div>
         <FormSection title='On the plate' detail={meal.items.length}>
           <ul className='divide-border divide-y'>
