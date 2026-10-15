@@ -56,6 +56,7 @@ import {
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { announceRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
 import {
@@ -80,6 +81,7 @@ import type {
   RecipeNote,
   RecipeSource,
 } from '@apps/pinch/types';
+import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
@@ -134,7 +136,7 @@ function RecipeForm({
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const { subview, closeSubviewIf } = usePinchOverlay();
+  const { subview, closeSubviewIf, openSubviewFromToast } = usePinchOverlay();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -589,7 +591,7 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
-      const { linkedIdea } = await dispatch(
+      const { recipeId: savedId } = await dispatch(
         saveRecipe({
           uid,
           draft: {
@@ -629,23 +631,24 @@ function RecipeForm({
           },
         }),
       ).unwrap();
-      if (initialIdea) {
-        addToast({
-          title: 'Recipe added',
-          description: linkedIdea
-            ? `“${initialIdea.title}” moved to Made into recipes.`
-            : undefined,
-          type: 'success',
-        });
-      } else if (
-        !recipe &&
-        subview?.kind === 'recipe' &&
-        subview.fromCalendar
-      ) {
+      if (!recipe) {
         addToast({
           title: `Added ${data.title.trim()} to your recipes`,
           type: 'success',
+          action: {
+            label: 'Plan it',
+            onClick: () =>
+              openSubviewFromToast({
+                kind: 'plan',
+                dayKey: getCellDayKey(new Date()),
+                mealType: null,
+                plannedMealId: null,
+                fromMealId: null,
+                fromRecipeId: savedId,
+              }),
+          },
         });
+        announceRecipeAdded(savedId);
       }
       closeSubviewIf((current) => current === subview);
     } catch (submitError) {

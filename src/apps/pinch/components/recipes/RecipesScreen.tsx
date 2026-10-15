@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -37,6 +37,7 @@ import {
 } from '@apps/pinch/constants';
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { useOnRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
 import {
   selectIdeas,
   selectIdeasLoadError,
@@ -166,6 +167,24 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
+  const [revealId, setRevealId] = useState<string | null>(null);
+
+  useOnRecipeAdded((recipeId) => {
+    setView('recipes');
+    setQuery('');
+    setPickedSource(SOURCE_FILTER_ANY);
+    setStockPlaces([]);
+    setRevealId(recipeId);
+  });
+
+  useEffect(() => {
+    if (revealId === null) {
+      return;
+    }
+    document
+      .querySelector(`[data-recipe-id="${CSS.escape(revealId)}"]`)
+      ?.scrollIntoView({ block: 'center' });
+  }, [revealId]);
 
   const visibleViews = RECIPES_VIEWS.filter(
     (candidate) =>
@@ -498,12 +517,16 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               >
                 <LazyMount
                   estimatedHeight={estimatedHeight}
-                  eager={chunk < EAGER_RECIPE_CHUNKS}
+                  eager={
+                    chunk < EAGER_RECIPE_CHUNKS ||
+                    rows.some((recipe) => recipe.id === revealId)
+                  }
                 >
                   <ul className='divide-border divide-y lg:grid lg:grid-cols-2 lg:gap-x-8 lg:divide-y-0'>
                     {rows.map((recipe) => (
                       <li
                         key={recipe.id}
+                        data-recipe-id={recipe.id}
                         className='lg:border-border lg:border-b'
                       >
                         <RecipeRow

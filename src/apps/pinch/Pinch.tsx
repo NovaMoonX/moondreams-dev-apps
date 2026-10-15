@@ -69,6 +69,12 @@ function Pinch() {
     next.set('tab', 'shopping');
     startTransition(() => setSearchParams(next));
   }, [setSearchParams]);
+  const openSubviewFromToast = useCallback((next: PinchSubview) => {
+    if (subviewRef.current !== null || hasDialogOnTop()) {
+      return;
+    }
+    setSubview(next);
+  }, []);
   const [calendarFocus, setCalendarFocus] = useState<{
     dayKey: string;
     nonce: number;
@@ -110,8 +116,16 @@ function Pinch() {
       isStartOpen,
       setIsStartOpen: openStart,
       openIdeaSheet: () => setIsIdeaSheetOpen(true),
+      openSubviewFromToast,
     }),
-    [subview, isStartOpen, showShoppingTab, showCalendarDay, openStart],
+    [
+      subview,
+      isStartOpen,
+      showShoppingTab,
+      showCalendarDay,
+      openStart,
+      openSubviewFromToast,
+    ],
   );
 
   const isLoaded = useAppSelector(selectIsPinchLoaded);

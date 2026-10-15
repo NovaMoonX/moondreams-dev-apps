@@ -18,6 +18,8 @@ export interface PinchOverlayContextValue {
   isStartOpen: boolean;
   /** `fromCalendar` marks the new recipe as started from the calendar's empty state; it defaults to false on every open. */
   setIsStartOpen: (isOpen: boolean, fromCalendar?: boolean) => void;
+  /** Opens a subview for a toast's action, unless a subview is already up or a dialog is open, so a late tap never replaces typed work. */
+  openSubviewFromToast: (subview: PinchSubview) => void;
   /** The new-idea sheet over whatever screen shows, for a way in other than the Ideas list (the new recipe's "Keep it as an idea"). */
   openIdeaSheet: () => void;
 }
