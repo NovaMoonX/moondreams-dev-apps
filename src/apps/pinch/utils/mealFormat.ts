@@ -71,14 +71,9 @@ export const formatRowCost = (
 };
 
 /** The lines a re-price confirm shows: the day before and after in the cost tile's own words, and what stays unpriced. The "after" is "about" because the write re-reads the meals. */
-export function getRepriceLines(preview: RepricePreview, isRepriced: boolean) {
+export function getRepriceLines(preview: RepricePreview) {
   const { beforeCents, afterCents, leftOutCount } = preview;
-  const before =
-    beforeCents === null
-      ? isRepriced
-        ? 'Still no price'
-        : "Wasn't priced"
-      : formatCost(beforeCents);
+  const before = beforeCents === null ? 'Not priced' : formatCost(beforeCents);
   const after =
     afterCents === null ? 'Still no price' : `about ${formatCost(afterCents)}`;
   const leftOut =
@@ -88,3 +83,24 @@ export function getRepriceLines(preview: RepricePreview, isRepriced: boolean) {
 
   return { before, after, leftOut };
 }
+
+/** A row's price in the shared words: "$0.08+" when it leaves something out, "—" when nothing is priced. */
+export const formatRowPrice = (
+  cents: number | null | undefined,
+  isPartial: boolean,
+) => {
+  if (cents == null) return '—';
+  return isPartial ? `${formatCost(cents)}+` : formatCost(cents);
+};
+
+/** A cost tile's figure: "so far" while its gaps can still be priced, "Not priced" for a fixed day that had no price. */
+export const formatCostTile = (
+  cents: number | null,
+  leftOutCount: number,
+  isFrozen: boolean,
+) => {
+  if (cents === null) return isFrozen ? 'Not priced' : 'No price yet';
+  return leftOutCount > 0 && !isFrozen
+    ? `${formatCost(cents)} so far`
+    : formatCost(cents);
+};

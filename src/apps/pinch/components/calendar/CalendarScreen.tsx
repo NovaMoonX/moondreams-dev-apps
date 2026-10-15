@@ -336,10 +336,6 @@ function CalendarScreen({
             setOpenDay(null);
             openPlan(dayKey, mealType, plannedMealId);
           }}
-          onFillIn={(gaps) => {
-            setOpenDay(null);
-            setFillIn(gaps);
-          }}
           onAddToShopping={(request) => {
             setOpenDay(null);
             setShopping(request);
