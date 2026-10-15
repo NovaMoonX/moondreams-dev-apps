@@ -58,8 +58,8 @@ import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const gapLabel = (kind: GapKind | undefined) => {
-  if (kind === 'NOT_COMPARABLE')
-    return "Can't compare this unit to the product's";
+  if (kind === 'NO_PRODUCT') return 'No price yet';
+  if (kind === 'NOT_COMPARABLE') return "Can't compare with the package size";
   return null;
 };
 
@@ -245,8 +245,8 @@ function RecipeDrawer({
         leftOut={cost.leftOut}
         fix={
           leftOutCount === 1
-            ? 'Add its price under the ingredient list.'
-            : 'Add their prices under the ingredient list.'
+            ? "It's marked in the ingredient list."
+            : "They're marked in the ingredient list."
         }
       />
     ) : undefined;
@@ -374,7 +374,9 @@ function RecipeDrawer({
         <FormSection title='Ingredients' detail={recipe.ingredients.length}>
           <ul className='divide-border divide-y'>
             {recipe.ingredients.map((line) => {
-              const gap = gapLabel(cost?.lines.get(line.id)?.gap?.kind);
+              const gap = isPriced
+                ? gapLabel(cost.lines.get(line.id)?.gap?.kind)
+                : null;
               return (
                 <li
                   key={line.id}
