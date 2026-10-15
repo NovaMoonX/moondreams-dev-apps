@@ -53,25 +53,18 @@ function CookTimerStrip({
     return null;
   }
 
-  const renderTarget = (
-    timer: CookTimer,
-    className: string,
-    children: ReactNode,
-  ) =>
+  const renderTarget = (timer: CookTimer, children: ReactNode) =>
     onJump ? (
       <Button
         type='button'
         variant='tertiary'
-        className={join(
-          'text-foreground! h-auto min-h-10 min-w-0 flex-1 justify-start rounded-full px-0! py-1 text-left font-normal hover:bg-transparent',
-          className,
-        )}
+        className='text-foreground! h-auto min-h-10 min-w-0 flex-1 justify-start rounded-full px-0! py-1 text-left font-normal hover:bg-transparent'
         onClick={() => onJump(timer)}
       >
         {children}
       </Button>
     ) : (
-      <span className={join('min-w-0 flex-1', className)}>{children}</span>
+      <span className='flex min-w-0 flex-1'>{children}</span>
     );
 
   return (
@@ -79,7 +72,12 @@ function CookTimerStrip({
       ref={listRef}
       tabIndex={-1}
       aria-label='Timers'
-      className='grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 outline-none'
+      className={join(
+        'grid gap-2 outline-none',
+        timers.some((timer) => timer.recipeTitle !== null)
+          ? 'grid-cols-[repeat(auto-fill,minmax(18rem,1fr))]'
+          : 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]',
+      )}
     >
       {timers.map((timer) => {
         const name = getTimerCaption(timer);
@@ -91,8 +89,9 @@ function CookTimerStrip({
           >
             {renderTarget(
               timer,
-              'text-sm font-semibold',
-              <span className='min-w-0'>{caption} is done</span>,
+              <span className='min-w-0 text-sm font-semibold'>
+                {caption} is done
+              </span>,
             )}
             <Button
               type='button'
@@ -111,10 +110,14 @@ function CookTimerStrip({
           >
             {renderTarget(
               timer,
-              timer.recipeTitle === null
-                ? 'flex items-baseline gap-2'
-                : 'flex items-center gap-2',
-              <>
+              <span
+                className={join(
+                  'flex min-w-0 flex-1 gap-2',
+                  timer.recipeTitle === null
+                    ? 'items-baseline'
+                    : 'items-center',
+                )}
+              >
                 <span
                   className={join(
                     'text-lg font-semibold tabular-nums',
@@ -132,7 +135,7 @@ function CookTimerStrip({
                     {timer.status === 'paused' && ' · paused'}
                   </span>
                 </span>
-              </>,
+              </span>,
             )}
             <Button
               type='button'
