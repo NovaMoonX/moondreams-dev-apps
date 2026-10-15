@@ -6,19 +6,30 @@ import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { generateUuid } from '@/utils';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
+import {
+  canStartTimer,
+  countLiveTimers,
+  getTimerCaption,
+} from '@apps/pinch/utils/cooks';
 
-export type CookTimer = {
+interface TimerBase {
   id: string;
+  recipeId: string;
+  /** Named on screen only when the session cooks several recipes. */
+  recipeTitle: string | null;
   /** As the person reads it, starting at 1. */
   stepNumber: number;
   /** The step's first words, what the timer is called on screen. */
   stepName: string;
   label: string;
-} & (
-  | { status: 'running'; endsAt: number; startedAt: number }
-  | { status: 'paused'; remainingMs: number }
-  | { status: 'done' }
-);
+}
+
+export type CookTimer = TimerBase &
+  (
+    | { status: 'running'; endsAt: number; startedAt: number }
+    | { status: 'paused'; remainingMs: number }
+    | { status: 'done' }
+  );
 
 type Notice = 'unseen' | 'showing' | 'seen';
 
@@ -26,6 +37,15 @@ const BEEP_OFFSETS_SECONDS = [0, 0.4, 0.8];
 const SETTLE_SLACK_MS = 20;
 
 const isLive = (timer: CookTimer) => timer.status !== 'done';
+
+const baseOf = (timer: CookTimer): TimerBase => ({
+  id: timer.id,
+  recipeId: timer.recipeId,
+  recipeTitle: timer.recipeTitle,
+  stepNumber: timer.stepNumber,
+  stepName: timer.stepName,
+  label: timer.label,
+});
 
 const dropOldFinished = (timers: CookTimer[]) => {
   const finishedIds = timers
@@ -101,7 +121,7 @@ export function useCookTimers() {
       finished.forEach((timer) =>
         addToastRef.current({
           title: 'Timer done',
-          description: `${timer.stepName} · ${timer.label}`,
+          description: `${getTimerCaption(timer)} · ${timer.label}`,
           type: 'success',
           duration: 10_000,
         }),
@@ -135,13 +155,7 @@ export function useCookTimers() {
     commit(
       timersRef.current.map((timer): CookTimer =>
         finishedIds.has(timer.id)
-          ? {
-              id: timer.id,
-              stepNumber: timer.stepNumber,
-              stepName: timer.stepName,
-              label: timer.label,
-              status: 'done',
-            }
+          ? { ...baseOf(timer), status: 'done' }
           : timer,
       ),
     );
@@ -173,12 +187,11 @@ export function useCookTimers() {
   useOnTabReturn(settle);
 
   const start = (
-    stepNumber: number,
-    stepName: string,
+    base: Omit<TimerBase, 'id' | 'label'>,
     seconds: number,
     label: string,
   ) => {
-    if (timersRef.current.filter(isLive).length >= MAX_COOK_TIMERS) {
+    if (!canStartTimer(timersRef.current)) {
       return;
     }
 
@@ -188,9 +201,8 @@ export function useCookTimers() {
       dropOldFinished([
         ...timersRef.current,
         {
+          ...base,
           id: generateUuid(),
-          stepNumber,
-          stepName,
           label,
           status: 'running',
           startedAt: now,
@@ -207,10 +219,7 @@ export function useCookTimers() {
       timersRef.current.map((timer): CookTimer =>
         timer.id === id && timer.status === 'running'
           ? {
-              id: timer.id,
-              stepNumber: timer.stepNumber,
-              stepName: timer.stepName,
-              label: timer.label,
+              ...baseOf(timer),
               status: 'paused',
               remainingMs: getRemainingMs(timer, now),
             }
@@ -225,10 +234,7 @@ export function useCookTimers() {
       timersRef.current.map((timer): CookTimer =>
         timer.id === id && timer.status === 'paused'
           ? {
-              id: timer.id,
-              stepNumber: timer.stepNumber,
-              stepName: timer.stepName,
-              label: timer.label,
+              ...baseOf(timer),
               status: 'running',
               startedAt: now,
               endsAt: now + timer.remainingMs,
@@ -251,12 +257,12 @@ export function useCookTimers() {
     setNotice((current) => (current === 'showing' ? 'seen' : current));
   };
 
-  const liveCount = timers.filter(isLive).length;
+  const liveCount = countLiveTimers(timers);
 
   return {
     timers,
     liveCount,
-    isFull: liveCount >= MAX_COOK_TIMERS,
+    isFull: !canStartTimer(timers),
     isNoticeShown: notice === 'showing',
     settle,
     start,

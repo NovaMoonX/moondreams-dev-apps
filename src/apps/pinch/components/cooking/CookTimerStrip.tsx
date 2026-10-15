@@ -9,6 +9,7 @@ import {
   getRemainingMs,
   type CookTimer,
 } from '@apps/pinch/hooks/useCookTimers';
+import { getTimerCaption } from '@apps/pinch/utils/cooks';
 
 const TICK_MS = 250;
 
@@ -57,7 +58,8 @@ function CookTimerStrip({
       className='grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 outline-none'
     >
       {timers.map((timer) => {
-        const caption = `${timer.stepName} · ${timer.label}`;
+        const name = getTimerCaption(timer);
+        const caption = `${name} · ${timer.label}`;
         return timer.status === 'done' ? (
           <li
             key={timer.id}
@@ -91,7 +93,7 @@ function CookTimerStrip({
                 {formatClock(getRemainingMs(timer, now))}
               </span>
               <span className='text-muted-foreground min-w-0 truncate text-xs'>
-                {timer.stepName}
+                {name}
                 {timer.status === 'paused' && ' · paused'}
               </span>
             </span>
@@ -101,7 +103,7 @@ function CookTimerStrip({
               size='icon'
               rounded='full'
               className='size-10 shrink-0'
-              aria-label={`${timer.status === 'running' ? 'Pause' : 'Resume'} the ${timer.label} timer: ${timer.stepName}`}
+              aria-label={`${timer.status === 'running' ? 'Pause' : 'Resume'} the ${timer.label} timer: ${name}`}
               onClick={() =>
                 timer.status === 'running'
                   ? onPause(timer.id)
@@ -120,7 +122,7 @@ function CookTimerStrip({
               size='icon'
               rounded='full'
               className='size-10 shrink-0'
-              aria-label={`Dismiss the ${timer.label} timer: ${timer.stepName}`}
+              aria-label={`Dismiss the ${timer.label} timer: ${name}`}
               onClick={() => onDismiss(timer.id)}
             >
               <X className='h-4 w-4' aria-hidden='true' />

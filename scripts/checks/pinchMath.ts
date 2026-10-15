@@ -5622,4 +5622,118 @@ assert.deepEqual(
   'the price form reads a price back in the unit the recipes measure it in, with the cost math’s own bridge, and says nothing when the units can’t be compared',
 );
 
+// ============================================================
+// PLATE workstream: a planned plate of several recipes cooks as one session
+// ============================================================
+
+const plateCooks = await import('../../src/apps/pinch/utils/cooks.ts');
+const plateRecipes = new Map([
+  ['adobo', { steps: ['Marinate', 'Simmer', 'Reduce'] }],
+  ['rice', { steps: ['Rinse', 'Cook'] }],
+  ['nachos', { steps: [] }],
+  ['beans', { steps: ['Blanch'] }],
+]);
+const plateItem = (
+  kind: 'RECIPE' | 'INGREDIENT',
+  refId: string,
+  servings: number,
+) => ({
+  kind,
+  refId,
+  servings,
+});
+assert.deepEqual(
+  plateCooks.getPlateCookRecipes(
+    [
+      plateItem('RECIPE', 'adobo', 2),
+      plateItem('INGREDIENT', 'avocado', 1),
+      plateItem('RECIPE', 'nachos', 3),
+      plateItem('RECIPE', 'rice', 2),
+      plateItem('RECIPE', 'gone', 1),
+      plateItem('RECIPE', 'rice', 1.5),
+      plateItem('RECIPE', 'beans', 1),
+    ],
+    plateRecipes,
+    ['adobo', 'rice', 'nachos', 'gone'],
+  ),
+  [
+    { recipeId: 'adobo', servings: 2 },
+    { recipeId: 'rice', servings: 3.5 },
+  ],
+  'a plate cooks each recipe with steps that is still to cook, once, in plate order, with the servings its items plan; ingredients, recipes without steps, gone ones and ones already cooked stay out',
+);
+assert.deepEqual(
+  plateCooks.getPlateCookRecipes(
+    [plateItem('RECIPE', 'adobo', 999), plateItem('RECIPE', 'adobo', 999)],
+    plateRecipes,
+    ['adobo'],
+  ),
+  [{ recipeId: 'adobo', servings: 1000 }],
+  'a recipe planned twice on one plate is one entry, capped at the most a cook can record',
+);
+assert.deepEqual(
+  plateCooks.getPlateCookRecipes([], plateRecipes, ['adobo']),
+  [],
+  'an empty plate cooks nothing',
+);
+assert.deepEqual(
+  plateCooks.getPlateStart([
+    { recipeId: 'adobo', recipeServings: 4, plannedServings: 2 },
+    { recipeId: 'rice', recipeServings: 4, plannedServings: 6 },
+    { recipeId: 'one', recipeServings: 6, plannedServings: null },
+    { recipeId: 'none', recipeServings: 0, plannedServings: null },
+  ]),
+  {
+    adobo: { stepIndex: 0, servings: 4, gotOut: {} },
+    rice: { stepIndex: 0, servings: 6, gotOut: {} },
+    one: { stepIndex: 0, servings: 6, gotOut: {} },
+    none: { stepIndex: 0, servings: 1, gotOut: {} },
+  },
+  'each recipe of a session starts on its first step, nothing ticked, at its own servings or the plan’s when that is more',
+);
+assert.deepEqual(
+  [
+    plateCooks.getTimerCaption({
+      stepName: 'Simmer everything',
+      recipeTitle: null,
+    }),
+    plateCooks.getTimerCaption({
+      stepName: 'Simmer everything',
+      recipeTitle: 'Adobo chicken',
+    }),
+  ],
+  ['Simmer everything', 'Adobo chicken · Simmer everything'],
+  'a timer is named by its step, and by its recipe first when the session cooks several',
+);
+const plateTimer = (status: string) => ({ status });
+assert.deepEqual(
+  [
+    plateCooks.countLiveTimers([
+      plateTimer('running'),
+      plateTimer('paused'),
+      plateTimer('done'),
+    ]),
+    plateCooks.canStartTimer([
+      plateTimer('running'),
+      plateTimer('paused'),
+      plateTimer('running'),
+    ]),
+    plateCooks.canStartTimer([
+      plateTimer('running'),
+      plateTimer('paused'),
+      plateTimer('running'),
+      plateTimer('running'),
+    ]),
+    plateCooks.canStartTimer([
+      plateTimer('running'),
+      plateTimer('done'),
+      plateTimer('running'),
+      plateTimer('done'),
+      plateTimer('running'),
+    ]),
+  ],
+  [2, true, false, true],
+  'a session runs up to four timers across all its recipes; a finished one waiting for Dismiss doesn’t count',
+);
+
 console.log('pinchMath: all checks passed');

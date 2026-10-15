@@ -201,12 +201,14 @@ export type PinchSubview =
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
-  /** Cooking one recipe step by step, at the recipe's own servings; `servings` is what a plan has for tonight (it starts there only when that is more), and a `plannedMealId` makes Finish mark that planned meal's cook. */
+  /** Cooking step by step, at each recipe's own servings; `servings` is what a plan has for tonight (it starts there only when that is more), and a `plannedMealId` makes Finish mark that planned meal's cooks. */
   | {
       kind: 'cook';
       recipeId: string;
       servings?: number;
       plannedMealId?: string;
+      /** A planned plate's recipes cooked in one session, in plate order, `recipeId` first; absent for one recipe. */
+      plate?: PlateCookRecipe[];
     }
   | {
       kind: 'plan';
@@ -448,3 +450,9 @@ export interface RecipeCost {
 }
 
 export type CookView = 'steps' | 'ingredients';
+
+/** A recipe of a planned plate that cooking holds, with what the plan has for it tonight. */
+export interface PlateCookRecipe {
+  recipeId: string;
+  servings: number;
+}

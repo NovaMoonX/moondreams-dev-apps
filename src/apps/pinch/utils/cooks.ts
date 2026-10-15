@@ -1,10 +1,16 @@
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
+  MAX_COOK_TIMERS,
   MAX_COOKED_SERVINGS,
   MIN_COOK_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
-import type { Cook, MealItem, Recipe } from '@apps/pinch/types';
+import type {
+  Cook,
+  MealItem,
+  PlateCookRecipe,
+  Recipe,
+} from '@apps/pinch/types';
 import { getLocalTodayDate } from '@apps/pinch/utils/dayKeys';
 
 export interface CookSummary {
@@ -120,6 +126,80 @@ export const getCookStartServings = (
     MAX_COOKED_SERVINGS,
     Math.max(recipeServings > 0 ? recipeServings : 1, plannedServings ?? 0),
   );
+
+/** Where one recipe of a cooking session is: the step on screen, its servings and what has been ticked as got out. */
+export interface PlateCookState {
+  stepIndex: number;
+  servings: number;
+  gotOut: Record<string, boolean>;
+}
+
+/** The recipes a planned plate cooks together: each one with steps among `cookRecipeIds`, once, in plate order, with the servings its items plan for tonight. */
+export const getPlateCookRecipes = (
+  items: Pick<MealItem, 'kind' | 'refId' | 'servings'>[],
+  recipesById: Map<string, Pick<Recipe, 'steps'>>,
+  cookRecipeIds: string[],
+) => {
+  const allowed = new Set(cookRecipeIds);
+  const byRecipe = items.reduce((acc, item) => {
+    const recipe =
+      item.kind === 'RECIPE' && allowed.has(item.refId)
+        ? recipesById.get(item.refId)
+        : undefined;
+    if (recipe && recipe.steps.length > 0) {
+      acc.set(
+        item.refId,
+        Math.min(
+          MAX_COOKED_SERVINGS,
+          (acc.get(item.refId) ?? 0) + item.servings,
+        ),
+      );
+    }
+    return acc;
+  }, new Map<string, number>());
+
+  const result: PlateCookRecipe[] = [...byRecipe].map(
+    ([recipeId, servings]) => ({ recipeId, servings }),
+  );
+  return result;
+};
+
+/** Every recipe of a session starts on its first step with nothing ticked, at its own servings (or the plan's when that is more). */
+export const getPlateStart = (
+  entries: {
+    recipeId: string;
+    recipeServings: number;
+    plannedServings: number | null;
+  }[],
+) => {
+  const result: Record<string, PlateCookState> = Object.fromEntries(
+    entries.map(({ recipeId, recipeServings, plannedServings }) => [
+      recipeId,
+      {
+        stepIndex: 0,
+        servings: getCookStartServings(recipeServings, plannedServings),
+        gotOut: {},
+      },
+    ]),
+  );
+  return result;
+};
+
+/** A timer's name: its step's first words, after its recipe's name when the session cooks several. */
+export const getTimerCaption = (timer: {
+  stepName: string;
+  recipeTitle: string | null;
+}) =>
+  timer.recipeTitle === null
+    ? timer.stepName
+    : `${timer.recipeTitle} · ${timer.stepName}`;
+
+/** Running and paused timers count against the session's cap; a finished one waits for Dismiss and doesn't. */
+export const countLiveTimers = (timers: { status: string }[]) =>
+  timers.filter((timer) => timer.status !== 'done').length;
+
+export const canStartTimer = (timers: { status: string }[]) =>
+  countLiveTimers(timers) < MAX_COOK_TIMERS;
 
 /** A whole serving a tap, and a half only below one. */
 export const stepCookServings = (current: number, direction: 1 | -1) => {

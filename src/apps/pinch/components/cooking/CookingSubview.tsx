@@ -40,12 +40,14 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import { updateCook } from '@apps/pinch/store/actions/cookActions';
-import type { CookView, Recipe } from '@apps/pinch/types';
+import type { CookView, PlateCookRecipe, Recipe } from '@apps/pinch/types';
 import {
   getCookStartServings,
   getPlannedCookId,
+  getPlateStart,
   getStepName,
   isCookHistoryFull,
+  type PlateCookState,
 } from '@apps/pinch/utils/cooks';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
@@ -59,20 +61,26 @@ const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
-interface CookingSessionProps {
-  uid: string;
+interface CookEntry {
   recipe: Recipe;
   isRemoved: boolean;
   /** What the plan has for tonight; null when cooking didn't start from a plan. */
   plannedServings: number | null;
+}
+
+interface CookingSessionProps {
+  uid: string;
+  /** The recipes this session cooks, in plate order; one for a single recipe. */
+  entries: CookEntry[];
+  /** The recipe the screen was opened with, which a late close checks it is still showing. */
+  openedRecipeId: string;
   plannedMealId: string | null;
 }
 
 function CookingSession({
   uid,
-  recipe,
-  isRemoved,
-  plannedServings,
+  entries,
+  openedRecipeId,
   plannedMealId,
 }: CookingSessionProps) {
   const dispatch = useAppDispatch();
@@ -80,18 +88,38 @@ function CookingSession({
   const { closeSubview, closeSubviewIf, openSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
-  const [stepIndex, setStepIndex] = useState(0);
-  const [servings, setServings] = useState(() =>
-    getCookStartServings(recipe.servings, plannedServings),
+  const [currentId] = useState(entries[0].recipe.id);
+  const [plate, setPlate] = useState(() =>
+    getPlateStart(
+      entries.map((entry) => ({
+        recipeId: entry.recipe.id,
+        recipeServings: entry.recipe.servings,
+        plannedServings: entry.plannedServings,
+      })),
+    ),
   );
-  const [gotOut, setGotOut] = useState<Record<string, boolean>>({});
+  const [openedUpdatedAt] = useState(
+    () =>
+      new Map(
+        entries.map((entry) => [entry.recipe.id, entry.recipe.updatedAt]),
+      ),
+  );
+  const entry =
+    entries.find((candidate) => candidate.recipe.id === currentId) ??
+    entries[0];
+  const { recipe, isRemoved, plannedServings } = entry;
+  const { stepIndex, servings, gotOut } = plate[recipe.id] ?? {
+    stepIndex: 0,
+    servings: getCookStartServings(recipe.servings, plannedServings),
+    gotOut: {},
+  };
+  const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   const [cookedId, setCookedId] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<'PENDING' | 'FAILED' | null>(null);
   const finishedAt = useRef(0);
-  const [openedUpdatedAt] = useState(recipe.updatedAt);
   const rootRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLUListElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -155,7 +183,7 @@ function CookingSession({
     closeSubviewIf(
       (current) =>
         current?.kind === 'cook' &&
-        current.recipeId === recipe.id &&
+        current.recipeId === openedRecipeId &&
         (current.plannedMealId ?? null) === plannedMealId,
     );
   const isAlreadyMarked = hasPlannedCook && cookedId === null && !isMarking;
@@ -195,6 +223,18 @@ function CookingSession({
       : stepMatch.lineIds
           .map((id) => rows.find((row) => row.id === id))
           .filter((row) => row !== undefined);
+
+  const updateRecipe = (recipeId: string, patch: Partial<PlateCookState>) =>
+    setPlate((current) => {
+      const known = current[recipeId];
+      return known
+        ? { ...current, [recipeId]: { ...known, ...patch } }
+        : current;
+    });
+  const setStepIndex = (next: number) =>
+    updateRecipe(recipe.id, { stepIndex: next });
+  const setServings = (next: number) =>
+    updateRecipe(recipe.id, { servings: next });
 
   const scrollToTop = () =>
     rootRef.current
@@ -360,10 +400,30 @@ function CookingSession({
 
   const toggleGotOut = useCallback(
     (id: string, isOut: boolean) =>
-      setGotOut((current) => ({ ...current, [id]: isOut })),
-    [],
+      setPlate((current) => {
+        const known = current[recipe.id];
+        return known
+          ? {
+              ...current,
+              [recipe.id]: {
+                ...known,
+                gotOut: { ...known.gotOut, [id]: isOut },
+              },
+            }
+          : current;
+      }),
+    [recipe.id],
   );
-  const resetGotOut = useCallback(() => setGotOut({}), []);
+  const resetGotOut = useCallback(
+    () =>
+      setPlate((current) => {
+        const known = current[recipe.id];
+        return known
+          ? { ...current, [recipe.id]: { ...known, gotOut: {} } }
+          : current;
+      }),
+    [recipe.id],
+  );
 
   const keepFocus = () =>
     window.requestAnimationFrame(() => {
@@ -379,8 +439,14 @@ function CookingSession({
     label: string,
   ) => {
     timers.start(
-      stepNumber,
-      getStepName(recipe.steps[stepNumber - 1] ?? '') || `Step ${stepNumber}`,
+      {
+        recipeId: recipe.id,
+        recipeTitle: isPlate ? recipe.title : null,
+        stepNumber,
+        stepName:
+          getStepName(recipe.steps[stepNumber - 1] ?? '') ||
+          `Step ${stepNumber}`,
+      },
       seconds,
       label,
     );
@@ -443,10 +509,11 @@ function CookingSession({
   const isChanged =
     isRemoved ||
     recipe.isArchived === true ||
-    recipe.updatedAt !== openedUpdatedAt;
+    recipe.updatedAt !== openedUpdatedAt.get(recipe.id);
 
   const notesBlock = (
     <CookNotes
+      key={recipe.id}
       recipeId={recipe.id}
       onApply={(noteId) => void applyNote(noteId)}
     />
@@ -459,7 +526,7 @@ function CookingSession({
       isAmountNoteShown={
         isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
       }
-      timers={timers.timers}
+      timers={timers.timers.filter((timer) => timer.recipeId === recipe.id)}
       isTimersFull={timers.isFull}
       onStartTimer={handleStartTimer}
       onSwipe={goBy}
@@ -742,35 +809,85 @@ interface CookingSubviewProps {
   recipeId: string;
   servings?: number;
   plannedMealId: string | null;
+  plate?: PlateCookRecipe[];
 }
+
+const pickRecipes = (
+  live: Map<string, Recipe>,
+  ids: string[],
+  fallback: Map<string, Recipe>,
+) =>
+  new Map(
+    ids.flatMap((id) => {
+      const recipe = live.get(id) ?? fallback.get(id);
+      return recipe ? [[id, recipe] as const] : [];
+    }),
+  );
 
 function CookingSubview({
   uid,
   recipeId,
   servings,
   plannedMealId,
+  plate,
 }: CookingSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const store = useStore<RootState>();
-  const live = useAppSelector(selectRecipesById).get(recipeId);
-  const [lastSeen, setLastSeen] = useState(live);
+  const recipesById = useAppSelector(selectRecipesById);
+  const [planned] = useState(() =>
+    plate
+      ? plate.map((entry) => ({
+          recipeId: entry.recipeId,
+          plannedServings: entry.servings,
+        }))
+      : [
+          {
+            recipeId,
+            plannedServings: plannedMealId === null ? null : (servings ?? null),
+          },
+        ],
+  );
+  const ids = useMemo(() => planned.map((entry) => entry.recipeId), [planned]);
+  const [lastSeen, setLastSeen] = useState(() =>
+    pickRecipes(recipesById, ids, new Map()),
+  );
 
   useEffect(
     () =>
       store.subscribe(() => {
-        const next = selectRecipesById(store.getState()).get(recipeId);
-        if (next) setLastSeen(next);
+        const live = selectRecipesById(store.getState());
+        setLastSeen((current) =>
+          ids.every(
+            (id) => (live.get(id) ?? current.get(id)) === current.get(id),
+          )
+            ? current
+            : pickRecipes(live, ids, current),
+        );
       }),
-    [store, recipeId],
+    [store, ids],
   );
 
-  const recipe = live ?? lastSeen;
+  const entries = planned.flatMap((entry) => {
+    const live = recipesById.get(entry.recipeId);
+    const recipe = live ?? lastSeen.get(entry.recipeId);
+    return recipe
+      ? [
+          {
+            recipe,
+            isRemoved: live === undefined,
+            plannedServings: entry.plannedServings,
+          },
+        ]
+      : [];
+  });
 
-  if (!recipe) {
+  if (entries.length === 0) {
     return (
       <Subview overlay title='Cooking' onClose={closeSubview}>
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          This recipe isn't in your kitchen anymore.
+          {planned.length > 1
+            ? "These recipes aren't in your kitchen anymore."
+            : "This recipe isn't in your kitchen anymore."}
         </p>
       </Subview>
     );
@@ -779,9 +896,8 @@ function CookingSubview({
   return (
     <CookingSession
       uid={uid}
-      recipe={recipe}
-      isRemoved={live === undefined}
-      plannedServings={plannedMealId === null ? null : (servings ?? null)}
+      entries={entries}
+      openedRecipeId={recipeId}
       plannedMealId={plannedMealId}
     />
   );
