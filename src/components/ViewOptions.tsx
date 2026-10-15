@@ -58,6 +58,8 @@ interface ViewOptionsProps {
   customizedCount?: number;
   onReset?: () => void;
   className?: string;
+  /** A plain 40px icon for a header row, instead of the round button that sits beside a search field. */
+  isQuiet?: boolean;
   /** The options: `ViewOptionSwitch` rows and the like. */
   children: ReactNode;
 }
@@ -68,6 +70,7 @@ function ViewOptions({
   customizedCount = 0,
   onReset,
   className,
+  isQuiet = false,
   children,
 }: ViewOptionsProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -80,12 +83,14 @@ function ViewOptions({
   const trigger = (
     <Button
       type='button'
-      variant='secondary'
+      variant={isQuiet ? 'tertiary' : 'secondary'}
+      size={isQuiet ? 'icon' : undefined}
       rounded='full'
       aria-label={label}
       aria-expanded={isOpen}
       className={join(
-        'h-12 w-12 shrink-0 p-0',
+        'shrink-0 p-0',
+        isQuiet ? 'size-10' : 'h-12 w-12',
         isCustomized && 'bg-accent!',
         className,
       )}

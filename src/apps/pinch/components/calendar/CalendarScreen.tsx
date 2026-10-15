@@ -2,7 +2,7 @@ import { memo, useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Plus, Settings } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 import PeriodSwitcher from '@/components/PeriodSwitcher';
 import SectionHeader from '@/components/SectionHeader';
@@ -15,9 +15,9 @@ import MonthView from '@apps/pinch/components/calendar/MonthView';
 import SummaryLine from '@apps/pinch/components/calendar/SummaryLine';
 import WeekSummarySheet from '@apps/pinch/components/calendar/WeekSummarySheet';
 import WeekView from '@apps/pinch/components/calendar/WeekView';
-import SettingsSheet from '@apps/pinch/components/settings/SettingsSheet';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
+import { NutritionViewOptions } from '@apps/pinch/components/shared/ListViewControls';
 import {
   CALENDAR_VIEW_LABELS,
   CALENDAR_VIEWS,
@@ -106,7 +106,6 @@ function CalendarScreen({
     mealId: string | null;
   } | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const { isBelow } = useMediaQuery();
@@ -196,16 +195,7 @@ function CalendarScreen({
         title='Calendar'
         action={
           <div className='flex items-center gap-1'>
-            <Button
-              type='button'
-              variant='tertiary'
-              size='icon'
-              aria-label='Settings'
-              className='size-10'
-              onClick={() => setIsSettingsOpen(true)}
-            >
-              <Settings className='h-5 w-5' aria-hidden='true' />
-            </Button>
+            <NutritionViewOptions />
             <Button
               type='button'
               size='sm'
@@ -296,9 +286,6 @@ function CalendarScreen({
           onOpenMeal={(dayKey, mealId) => setOpenDay({ dayKey, mealId })}
           onAdd={(dayKey) => openPlan(dayKey, null)}
         />
-      )}
-      {isSettingsOpen && (
-        <SettingsSheet uid={uid} onClose={() => setIsSettingsOpen(false)} />
       )}
       {isSummaryOpen && (
         <WeekSummarySheet
