@@ -71,7 +71,6 @@ export interface ShopAmount {
   unit: Unit;
 }
 
-/** A line, an item or a part of a row: a name-only one has no amount. */
 type MaybeAmount = Pick<ShoppingLine, 'amount' | 'unit'>;
 
 const PANTRY_SIZED_ML = UNIT_TO_BASE.TBSP - 0.01;
