@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CookingPot,
-  ShoppingBasket,
 } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -21,7 +20,6 @@ import StatTile from '@/components/StatTile';
 import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
 import { getPlannedMealOffer } from '@apps/pinch/components/calendar/plannedMealOffer';
 import { EatFromStockView } from '@apps/pinch/components/containers/EatFromStock';
-import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import {
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
@@ -43,16 +41,8 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type {
-  ContainerPlace,
-  MealType,
-  ShoppingRequest,
-} from '@apps/pinch/types';
-import {
-  formatDayTitle,
-  getLocalTodayDate,
-  getPlannedDayKey,
-} from '@apps/pinch/utils/dayKeys';
+import type { ContainerPlace, MealType } from '@apps/pinch/types';
+import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { getMarkableRecipes } from '@apps/pinch/utils/cooks';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
@@ -75,7 +65,6 @@ interface PlannedMealViewProps {
   plannedMealId: string;
   onBack: () => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
-  onAddToShopping: (request: ShoppingRequest) => void;
   onStartCooking: (recipeId: string, servings: number) => void;
   /** Where the drawer's pinned footer is: this view puts its actions there, a quiet Modify on the left and the one primary on the right. */
   footerEl: HTMLElement | null;
@@ -87,7 +76,6 @@ function PlannedMealView({
   plannedMealId,
   onBack,
   onEdit,
-  onAddToShopping,
   onStartCooking,
   footerEl,
 }: PlannedMealViewProps) {
@@ -122,8 +110,6 @@ function PlannedMealView({
     return recipe && recipe.steps.length > 0 ? [{ item, recipe }] : [];
   });
 
-  const today = getLocalTodayDate();
-  const canPlanAhead = meal.date >= today;
   const recipeIds = Array.from(
     new Set(
       meal.items.flatMap((item) =>
@@ -242,19 +228,6 @@ function PlannedMealView({
         description: `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}: ${count} ${count === 1 ? 'container matches' : 'containers match'} this meal`,
         onClick: () => setEatingPlace(place),
       })),
-    canPlanAhead && {
-      key: 'shopping',
-      icon: <ShoppingBasket className='h-4 w-4' />,
-      label: 'Shopping list',
-      description: 'Add to shopping list: choose what you need for this meal',
-      onClick: () =>
-        onAddToShopping({
-          kind: 'items',
-          items: meal.items,
-          label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
-          mealId: meal.sourceMealId,
-        }),
-    },
     offer.canSaveAsMeal && {
       key: 'save',
       icon: <BookmarkPlus className='h-4 w-4' />,
@@ -516,7 +489,6 @@ function PlannedMealView({
         })}
       </ul>
       {error && <p className='text-destructive text-sm'>{error}</p>}
-      <RepriceDayRow uid={uid} dayKey={getPlannedDayKey(meal.date)} />
       <Button
         type='button'
         variant='tertiary'

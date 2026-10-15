@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -22,6 +22,7 @@ import {
   selectPeriodStats,
   selectPlannedByDay,
   selectRecipesById,
+  selectShoppingById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type {
@@ -48,8 +49,16 @@ import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import { getItemsLines, getShoppingItemId } from '@apps/pinch/utils/shopping';
 
 const NO_MEALS: PlannedMeal[] = [];
+
+const getShoppingNote = (onListCount: number, lineCount: number) => {
+  if (onListCount === 0) return '';
+  return onListCount === lineCount
+    ? 'Already on your list'
+    : `${onListCount} of ${lineCount} already on your list`;
+};
 
 const getMealDetail = (
   meal: PlannedMeal,
@@ -106,6 +115,21 @@ function DayDrawer({
   const isFrozen = meals.length > 0 && meals.every((meal) => meal.snapshot);
   const fixedSnapshots = meals.flatMap((meal) => meal.snapshot ?? []);
   const leftOutCount = countLeftOutIngredients(stats.leftOut);
+  const onList = useAppSelector(selectShoppingById);
+  const dayLines = useMemo(
+    () =>
+      getItemsLines(
+        meals.flatMap((meal) => meal.items),
+        recipesById,
+        ingredientsById,
+      ),
+    [meals, recipesById, ingredientsById],
+  );
+  const onListCount = dayLines.filter(
+    (line) =>
+      onList.get(getShoppingItemId(line.ingredientId, line.unit))?.isChecked ===
+      false,
+  ).length;
 
   return (
     <DetailSheet
@@ -134,7 +158,6 @@ function DayDrawer({
           plannedMealId={plannedMealId}
           onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
-          onAddToShopping={onAddToShopping}
           onStartCooking={(recipeId, servings) => {
             onClose();
             openSubview({
@@ -255,7 +278,7 @@ function DayDrawer({
               <RepriceDayRow uid={uid} dayKey={dayKey} />
               {getDateOfDayKey(dayKey) >= getLocalTodayDate() && (
                 <AddToShoppingRow
-                  subtitle='Choose what you need for the day'
+                  subtitle={getShoppingNote(onListCount, dayLines.length)}
                   onClick={() =>
                     onAddToShopping({
                       kind: 'items',
