@@ -35,11 +35,7 @@ import {
   selectStockByMeal,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
-import type {
-  MealItem,
-  ShoppingItem,
-  ShoppingRequest,
-} from '@apps/pinch/types';
+import type { MealItem, ShoppingRequest } from '@apps/pinch/types';
 import {
   getShoppingStockLine,
   type StockedItem,
@@ -56,9 +52,9 @@ import {
   getItemsLines,
   getPlanInRange,
   getRecipeLines,
+  getOpenItemsByRow,
   getShopAmount,
   getShoppingItemId,
-  getShopRowId,
   groupShopLines,
   isUsuallyAtHome,
   type ShopLineRow,
@@ -192,14 +188,8 @@ export function ShoppingPick({
     return groupShopLines(lines, ingredientsById);
   }, [items, recipe, recipesById, ingredientsById, servings]);
   const openByRow = useMemo(
-    () =>
-      [...onList.values()]
-        .filter((item) => !item.isChecked)
-        .reduce((acc, item) => {
-          const id = getShopRowId(item.ingredientId, item.unit);
-          return acc.set(id, [...(acc.get(id) ?? []), item]);
-        }, new Map<string, ShoppingItem[]>()),
-    [onList],
+    () => getOpenItemsByRow(rows, [...onList.values()]),
+    [rows, onList],
   );
 
   const isReady = isLoaded && loadError === null;
