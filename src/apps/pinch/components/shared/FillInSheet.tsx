@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 
@@ -60,10 +60,11 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const recipes = useAppSelector(selectRecipes);
   const recipesById = useAppSelector(selectRecipesById);
   const plannedMeals = useAppSelector(selectPlannedMeals);
-  const uses = useMemo(
-    () =>
-      getIngredientUses(recipes, plannedMeals, recipesById, ingredientsById),
-    [recipes, plannedMeals, recipesById, ingredientsById],
+  const uses = getIngredientUses(
+    recipes,
+    plannedMeals,
+    recipesById,
+    ingredientsById,
   );
   const [rows] = useState(() => rankGaps(gaps, uses));
   const [lastStoreId, setLastStoreId] = useState<string | null>(null);

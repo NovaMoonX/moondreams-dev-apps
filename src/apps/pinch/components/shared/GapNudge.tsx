@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -45,10 +45,11 @@ function GapNudge({ uid, gaps, lead, onFillIn }: GapNudgeProps) {
   const plannedMeals = useAppSelector(selectPlannedMeals);
   const show = useAppSelector(selectShowNutrition);
   const [, setQuietCount] = useState(0);
-  const uses = useMemo(
-    () =>
-      getIngredientUses(recipes, plannedMeals, recipesById, ingredientsById),
-    [recipes, plannedMeals, recipesById, ingredientsById],
+  const uses = getIngredientUses(
+    recipes,
+    plannedMeals,
+    recipesById,
+    ingredientsById,
   );
   const open = rankGaps(withoutDismissed(gaps, dismissed), uses);
   const quietKey = [uid, ...open.map(getGapKey).sort()].join('|');

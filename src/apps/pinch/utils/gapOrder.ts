@@ -1,3 +1,5 @@
+import { weakMapMemoize } from '@reduxjs/toolkit';
+
 import {
   UNIT_DIMENSION,
   UNIT_LABELS,
@@ -49,35 +51,36 @@ const estimateGrams = (
 const byGrams = (a: { grams: number }, b: { grams: number }) =>
   b.grams - a.grams;
 
-/** Every ingredient's uses in the listed recipes and in the meals planned on days that haven't passed. */
-export function getIngredientUses(
+function buildIngredientUses(
   recipes: Recipe[],
   plannedMeals: PlannedMeal[],
   recipesById: Map<string, Recipe>,
   ingredientsById: Map<string, ResolvedIngredient>,
 ): Map<string, IngredientUse> {
-  const empty = (): IngredientUse => ({ recipes: [], planned: [], grams: 0 });
+  const useOf = (uses: Map<string, IngredientUse>, id: string) => {
+    const known = uses.get(id);
+    if (known) return known;
+    const created: IngredientUse = { recipes: [], planned: [], grams: 0 };
+    uses.set(id, created);
+    return created;
+  };
   const fromRecipes = recipes
     .filter((recipe) => recipe.isArchived !== true)
-    .flatMap((recipe) =>
-      recipe.ingredients.map((line) => ({
-        ingredientId: line.ingredientId,
-        title: recipe.title,
-        amount: line.amount,
-        unit: line.unit,
-      })),
-    )
-    .reduce((uses, line) => {
-      const use = uses.get(line.ingredientId) ?? empty();
-      const grams = estimateGrams(
-        line.amount,
-        line.unit,
-        ingredientsById.get(line.ingredientId),
-      );
-      uses.set(line.ingredientId, {
-        ...use,
-        recipes: [...use.recipes, { ...line, grams }],
-        grams: use.grams + grams,
+    .reduce((uses, recipe) => {
+      recipe.ingredients.forEach((line) => {
+        const use = useOf(uses, line.ingredientId);
+        const grams = estimateGrams(
+          line.amount,
+          line.unit,
+          ingredientsById.get(line.ingredientId),
+        );
+        use.recipes.push({
+          title: recipe.title,
+          amount: line.amount,
+          unit: line.unit,
+          grams,
+        });
+        use.grams += grams;
       });
       return uses;
     }, new Map<string, IngredientUse>());
@@ -86,44 +89,32 @@ export function getIngredientUses(
     .filter((meal) => meal.snapshot === null)
     .flatMap((meal) => getItemsLines(meal.items, recipesById, ingredientsById))
     .reduce((uses, line) => {
-      const use = uses.get(line.ingredientId) ?? empty();
+      const use = useOf(uses, line.ingredientId);
       const grams = estimateGrams(
         line.amount,
         line.unit,
         ingredientsById.get(line.ingredientId),
       );
       const known = use.planned.find((entry) => entry.unit === line.unit);
-      const planned = known
-        ? use.planned.map((entry) =>
-            entry === known
-              ? {
-                  ...entry,
-                  amount: entry.amount + line.amount,
-                  grams: entry.grams + grams,
-                }
-              : entry,
-          )
-        : [...use.planned, { amount: line.amount, unit: line.unit, grams }];
-      uses.set(line.ingredientId, {
-        ...use,
-        planned,
-        grams: use.grams + grams,
-      });
+      if (known) {
+        known.amount += line.amount;
+        known.grams += grams;
+      } else {
+        use.planned.push({ amount: line.amount, unit: line.unit, grams });
+      }
+      use.grams += grams;
       return uses;
     }, fromRecipes);
 
-  const sorted = new Map(
-    [...withPlans].map(([id, use]) => [
-      id,
-      {
-        ...use,
-        recipes: [...use.recipes].sort(byGrams),
-        planned: [...use.planned].sort(byGrams),
-      },
-    ]),
-  );
-  return sorted;
+  withPlans.forEach((use) => {
+    use.recipes.sort(byGrams);
+    use.planned.sort(byGrams);
+  });
+  return withPlans;
 }
+
+/** Every ingredient's uses in the listed recipes and in the meals planned on days that haven't passed, built once per change of its inputs. */
+export const getIngredientUses = weakMapMemoize(buildIngredientUses);
 
 /** The gaps once each, the ingredient that weighs most in the recipes and the plan first. */
 export function rankGaps(gaps: Gap[], uses: Map<string, IngredientUse>) {
