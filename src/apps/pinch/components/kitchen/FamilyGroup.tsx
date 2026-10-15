@@ -8,7 +8,6 @@ import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
 import {
   selectDefaultProducts,
   selectShowNutrition,
-  selectUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
 import type { NutritionSwitches, ResolvedIngredient } from '@apps/pinch/types';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
@@ -24,7 +23,6 @@ interface RowHeightInputs {
   showPrices: boolean;
   showMacros: boolean;
   defaultProducts: ReadonlyMap<string, unknown>;
-  usedIds: ReadonlySet<string>;
   show: NutritionSwitches;
 }
 
@@ -33,12 +31,9 @@ const estimateRowHeight = ({
   showPrices,
   showMacros,
   defaultProducts,
-  usedIds,
   show,
 }: RowHeightInputs) => {
-  const hasPriceLine =
-    showPrices &&
-    (defaultProducts.has(ingredient.id) || usedIds.has(ingredient.id));
+  const hasPriceLine = showPrices && defaultProducts.has(ingredient.id);
   const hasNutritionLine =
     showMacros && hasShownValue(ingredient.per100g, show);
   return (
@@ -64,7 +59,6 @@ function FamilyGroup({
   onOpen,
 }: FamilyGroupProps) {
   const defaultProducts = useAppSelector(selectDefaultProducts);
-  const usedIds = useAppSelector(selectUsedIngredientIds);
   const show = useAppSelector(selectShowNutrition);
   const estimatedHeight = group.ingredients.reduce(
     (sum, ingredient) =>
@@ -74,7 +68,6 @@ function FamilyGroup({
         showPrices,
         showMacros,
         defaultProducts,
-        usedIds,
         show,
       }),
     DIVIDER_HEIGHT,

@@ -151,10 +151,15 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const isFirstRun = view === 'yours' && yours.length === 0 && !hasFilters;
   const isPriceFiltered = filters.price !== 'any';
   const totalCount = isPriceFiltered ? yours.length : scoped.length;
-  const countText =
-    hasFilters || trimmed !== ''
-      ? `${shown.length} of ${totalCount} ingredients`
-      : `${shown.length} ${shown.length === 1 ? 'ingredient' : 'ingredients'}`;
+  const noun = (count: number) => (count === 1 ? 'ingredient' : 'ingredients');
+  const getCountText = () => {
+    if (trimmed !== '' && view === 'yours' && !isPriceFiltered)
+      return `${shown.length} found in all ingredients`;
+    if (hasFilters || trimmed !== '')
+      return `${shown.length} of ${totalCount} ${noun(totalCount)}`;
+    return `${shown.length} ${noun(shown.length)}`;
+  };
+  const countText = getCountText();
   const clearFilters = () => setFilters(NO_INGREDIENT_FILTERS);
 
   const getEmptyState = () => {
