@@ -255,7 +255,7 @@ function RecipeDrawer({
         isBulkMeal({ servings: recipe.servings, care, hasStock })) && {
         key: 'put-away',
         icon: <PackagePlus className='h-4 w-4' />,
-        label: 'Put some away',
+        label: 'Put away',
         description:
           'Put some away in the fridge or freezer, with an eat-by date',
         isDisabled: !isStockReady,
@@ -347,7 +347,7 @@ function RecipeDrawer({
                 onClick={() => onOpenSource(source.id)}
                 className="text-muted-foreground! relative flex! max-w-full text-left text-sm font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] max-sm:-mt-3"
               >
-                <span className='decoration-muted-foreground/50 underline underline-offset-4'>
+                <span className='decoration-muted-foreground/50 min-w-0 truncate underline underline-offset-4'>
                   From {source.label}
                 </span>
               </Button>

@@ -654,6 +654,13 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           isThin
         />
       )}
+      {hasSearch && loadError === null && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder='Search your list'
+        />
+      )}
       {openCount > 0 &&
         shownView !== 'got' &&
         (coverage === 'some' || coverage === 'all') && (
@@ -691,13 +698,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             </HelpTip>
           </p>
         )}
-      {hasSearch && loadError === null && (
-        <SearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder='Search your list'
-        />
-      )}
       {getBody()}
       {overlay?.kind === 'add' && (
         <ShoppingAddSheet uid={uid} onClose={() => setOverlay(null)} />

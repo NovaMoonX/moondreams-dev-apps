@@ -75,7 +75,7 @@ function StockRows({ target, onOpenStock }: StockRowsProps) {
           content: (
             <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
               <span>
-                {part.servings} in the{' '}
+                {formatServings(part.servings)} in the{' '}
                 {CONTAINER_PLACE_LABELS[part.place].toLowerCase()}
               </span>
               {part.due && (

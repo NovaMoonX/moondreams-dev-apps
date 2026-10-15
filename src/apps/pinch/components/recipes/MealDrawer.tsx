@@ -114,7 +114,7 @@ function MealDrawer({
     stockError === null && {
       key: 'put-away',
       icon: <PackagePlus className='h-4 w-4' />,
-      label: 'Put some away',
+      label: 'Put away',
       description:
         'Put some away in the fridge or freezer, with an eat-by date',
       isDisabled: !isStockReady,

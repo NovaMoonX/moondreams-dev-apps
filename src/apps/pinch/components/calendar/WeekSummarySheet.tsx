@@ -176,7 +176,7 @@ function WeekSummarySheet({
           <GapNudge uid={uid} gaps={gaps} onFillIn={onFillIn} />
           {addToShoppingSlot}
         </div>
-        <div className='min-h-0 flex-1 overflow-y-auto'>
+        <div className='flex-1 overflow-y-auto [@media(max-height:800px)]:min-h-36'>
           <ul aria-label='Days' className='divide-border divide-y'>
             {stats.byDay.map((day) => {
               const label = getDayLabel(day.dayKey);

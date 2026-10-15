@@ -164,7 +164,7 @@ html.pinch-theme button[role='checkbox'] {
 html.pinch-theme button[role='checkbox']::after {
   content: '';
   position: absolute;
-  inset: -10px;
+  inset: -11.5px;
 }
 
 html.pinch-theme

@@ -593,7 +593,7 @@ export function ShoppingPick({
             {getEmptyText()}
           </p>
         ) : (
-          <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
+          <ul className='divide-border flex-1 divide-y overflow-y-auto [@media(max-height:800px)]:min-h-36'>
             {shownRows.map((row) => {
               const state = getState(row);
               const hint = getOnListHint(

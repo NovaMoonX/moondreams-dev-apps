@@ -41,6 +41,7 @@ import {
   getBatchKey,
   getClearOutMessage,
   getContainerTitle,
+  getEatByState,
   groupBatches,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -207,9 +208,26 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     [byPlace],
   );
 
-  // Until the person picks, and while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
+  const dueFirstPlace = useMemo<ContainerPlace>(() => {
+    const first = inScope
+      .filter(
+        (container) =>
+          container.status === 'IN_STOCK' &&
+          getEatByState(container.eatBy) !== 'LATER',
+      )
+      .reduce<Container | null>(
+        (soonest, container) =>
+          soonest === null || container.eatBy < soonest.eatBy
+            ? container
+            : soonest,
+        null,
+      );
+    return first?.place ?? 'FRIDGE';
+  }, [inScope]);
+
+  // Until the person picks, the place holding what is due first; while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
   const getShownPlace = (): ContainerPlace => {
-    const preferred = pick ?? 'FRIDGE';
+    const preferred = pick ?? dueFirstPlace;
     const other = preferred === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
     const isAuto = pick === null || trimmed !== '';
     if (byPlace[preferred].length > 0 || !isAuto) return preferred;
