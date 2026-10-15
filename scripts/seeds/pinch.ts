@@ -23,21 +23,26 @@ const shoppingItem = (
   unit: string,
   amount: number,
   isChecked: boolean,
+  sources: string[],
 ) => ({
   id: `${ingredientId}__${unit}`,
   ingredientId,
   amount,
   unit,
   isChecked,
+  sources,
 });
 
+// The adobo lines are the recipe at its own four servings, added from its drawer; the rice lines are today's and tomorrow's dinners (two servings each), already got; the chicken breast was typed on the list.
+const ADOBO_ADDED = ['recipe:seed-pinch-recipe-adobo'];
+const DINNERS_ADDED = ['seed-pinch-planned-4', 'seed-pinch-planned-7'];
 const SEED_SHOPPING = [
-  shoppingItem('cat-chicken-thigh', 'LB', 2, false),
-  shoppingItem('cat-chicken-breast', 'LB', 1, false),
-  shoppingItem('cat-soy-sauce', 'CUP', 0.25, false),
-  shoppingItem('cat-garlic', 'EACH', 6, false),
-  shoppingItem('cat-lime-juice', 'TBSP', 2, true),
-  shoppingItem('cat-cilantro', 'CUP', 0.25, true),
+  shoppingItem('cat-chicken-thigh', 'LB', 2, false, ADOBO_ADDED),
+  shoppingItem('cat-chicken-breast', 'LB', 1, false, []),
+  shoppingItem('cat-soy-sauce', 'CUP', 0.25, false, ADOBO_ADDED),
+  shoppingItem('cat-garlic', 'EACH', 6, false, ADOBO_ADDED),
+  shoppingItem('cat-lime-juice', 'TBSP', 2, true, DINNERS_ADDED),
+  shoppingItem('cat-cilantro', 'CUP', 0.25, true, DINNERS_ADDED),
 ];
 
 const idea = (
