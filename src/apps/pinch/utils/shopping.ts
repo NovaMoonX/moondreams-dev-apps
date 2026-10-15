@@ -52,6 +52,9 @@ export interface ListLine extends ShoppingLine {
   sources: string[];
 }
 
+/** Past this many characters two sources are counted, so the line under a row never cuts a name. */
+const MAX_SOURCE_NAMES_LENGTH = 40;
+
 const RECIPE_SOURCE = 'recipe:';
 const MEAL_SOURCE = 'meal:';
 
@@ -348,15 +351,17 @@ export function getShoppingSourcesText(
 ): string | null {
   const found = sources.flatMap((source) => labels.get(source) ?? []);
   if (found.length === 0) return null;
-  if (found.length > 2) {
-    return `${found.length} ${found.every((label) => label.isRecipe) ? 'recipes' : 'meals'}`;
-  }
-  const names = found.map((label) =>
-    label.dayKey
-      ? `${label.name} (${formatSourceDay(label.dayKey, todayKey)})`
-      : label.name,
-  );
-  return names.join(' and ');
+  const getCount = () =>
+    `${found.length} ${found.every((label) => label.isRecipe) ? 'recipes' : 'meals'}`;
+  if (found.length > 2) return getCount();
+  const names = found
+    .map((label) =>
+      label.dayKey
+        ? `${label.name} (${formatSourceDay(label.dayKey, todayKey)})`
+        : label.name,
+    )
+    .join(' and ');
+  return names.length > MAX_SOURCE_NAMES_LENGTH ? getCount() : names;
 }
 
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */

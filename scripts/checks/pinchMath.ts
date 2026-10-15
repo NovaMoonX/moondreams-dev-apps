@@ -7260,4 +7260,32 @@ assert.equal(
   );
 }
 
+// Two long sources are counted so the line under a row never cuts a name
+assert.equal(
+  srcText(
+    ['a', 'b'],
+    new Map([
+      [
+        'a',
+        {
+          name: 'Adobo chicken & 1 more',
+          dayKey: '2026-10-15',
+          isRecipe: false,
+        },
+      ],
+      [
+        'b',
+        {
+          name: 'Adobo chicken & 1 more',
+          dayKey: '2026-10-16',
+          isRecipe: false,
+        },
+      ],
+    ]),
+    '2026-10-15',
+  ),
+  '2 meals',
+  'two sources whose names would run past a phone line are counted',
+);
+
 console.log('pinchMath: all checks passed');
