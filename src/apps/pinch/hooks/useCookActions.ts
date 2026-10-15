@@ -4,7 +4,9 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import {
   addCook,
   markPlannedCooked,
+  markPlannedPlateCooked,
   removeCook,
+  removeCooks,
 } from '@apps/pinch/store/actions/cookActions';
 import { selectCooksLoadError } from '@apps/pinch/store/selectors';
 import type { Recipe } from '@apps/pinch/types';
@@ -29,6 +31,11 @@ export function useCookActions(uid: string) {
 
   const undoCook = async (id: string) => {
     await dispatch(removeCook({ uid, id })).unwrap();
+  };
+
+  /** Takes back every cook a screen wrote, all or none, with no toast: the screen holds its own Undo. */
+  const undoCooks = async (ids: string[]) => {
+    await dispatch(removeCooks({ uid, ids })).unwrap();
   };
 
   const undoFromToast = async (id: string) => {
@@ -101,12 +108,26 @@ export function useCookActions(uid: string) {
     return id;
   };
 
+  /** Marks a planned plate's recipes in one write, with no toast: the screen that asks shows what was marked and what already was. */
+  const markPlannedPlate = async (input: {
+    plannedMealId: string;
+    entries: { recipeId: string; servings: number }[];
+    cookedAt: number;
+  }) => {
+    const results = await dispatch(
+      markPlannedPlateCooked({ uid, ...input }),
+    ).unwrap();
+    return results;
+  };
+
   return {
     isReady: isLoaded && loadError === null,
     isLoaded,
     loadError,
     markRecipeCooked,
     markPlannedRecipeCooked,
+    markPlannedPlate,
     undoCook,
+    undoCooks,
   };
 }
