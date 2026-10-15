@@ -133,8 +133,27 @@ function CookEditView({
           </div>
         ),
       }),
+      ...(cook && onAddNote
+        ? [
+            custom({
+              name: 'note',
+              label: '',
+              renderComponent: () => (
+                <ActionRow
+                  icon={<NotebookPen className='h-4 w-4' />}
+                  label='Add a note'
+                  subtitle={
+                    isChanged ? 'Save your changes first' : 'About this cook'
+                  }
+                  isDisabled={isChanged || isSubmitting}
+                  onClick={onAddNote}
+                />
+              ),
+            }),
+          ]
+        : []),
     ],
-    [date, time, servings, now],
+    [date, time, servings, now, cook, onAddNote, isChanged, isSubmitting],
   );
 
   const handleSubmit = async () => {
@@ -200,19 +219,10 @@ function CookEditView({
           {cook ? (planNote ?? 'Change when or how much.') : 'An earlier cook'}
         </p>
       </div>
-      {cook && onAddNote && (
-        <ActionRow
-          icon={<NotebookPen className='h-4 w-4' />}
-          label='Add a note'
-          subtitle={isChanged ? 'Save your changes first' : 'About this cook'}
-          isDisabled={isChanged || isSubmitting}
-          onClick={onAddNote}
-        />
-      )}
       <Form
         id='pinch-cook'
         form={fields}
-        initialData={{ when: '', servings: '' }}
+        initialData={{ when: '', servings: '', note: '' }}
         columns={1}
         onSubmit={() => {
           void handleSubmit();

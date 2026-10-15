@@ -20,6 +20,7 @@ import { scopedContainersQueryOptions } from '@apps/pinch/queries/containerQueri
 import {
   selectContainersByCookId,
   selectCooksByRecipe,
+  selectNotesByRecipe,
   selectNotesLoadError,
   selectPlannedMeals,
   selectRecipesById,
@@ -60,6 +61,11 @@ function CookingHistorySheet({
   const isNotesReady = useAppSelector(
     (state) =>
       state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
+  );
+  const notes = useAppSelector(selectNotesByRecipe).get(recipeId);
+  const notedCookIds = useMemo(
+    () => new Set((notes ?? []).map((entry) => entry.cookId ?? null)),
+    [notes],
   );
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
@@ -175,7 +181,9 @@ function CookingHistorySheet({
           planNote={editedCook ? getPlanNote(editedCook) : null}
           onBack={() => closeView(editing.token)}
           onAddNote={
-            editedCook && isNotesReady ? () => openNote(editedCook.id) : null
+            editedCook && isNotesReady && !notedCookIds.has(editedCook.id)
+              ? () => openNote(editedCook.id)
+              : null
           }
         />
       );
@@ -261,7 +269,7 @@ function CookingHistorySheet({
                       aria-hidden='true'
                     />
                   </Button>
-                  {isNotesReady && (
+                  {isNotesReady && !notedCookIds.has(cook.id) && (
                     <Button
                       type='button'
                       variant='tertiary'
