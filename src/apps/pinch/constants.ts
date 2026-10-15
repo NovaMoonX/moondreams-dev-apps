@@ -211,6 +211,8 @@ export const SHOP_SECTION_BY_INGREDIENT: Partial<Record<string, ShopSection>> =
     'cat-evaporated-milk': 'pantry',
     'cat-vanilla-ice-cream': 'frozen',
   };
+/** Staples outside Spices & oils that an add sheet also leaves unticked. */
+export const USUALLY_AT_HOME_IDS: readonly string[] = ['cat-water'];
 /** Below this many rows the list is one run in shop order, with no section dividers. */
 export const SHOP_SECTION_DIVIDER_MIN_ROWS = 8;
 

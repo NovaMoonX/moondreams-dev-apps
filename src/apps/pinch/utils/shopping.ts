@@ -6,6 +6,7 @@ import {
   SHOP_SECTIONS,
   UNIT_DIMENSION,
   UNIT_TO_BASE,
+  USUALLY_AT_HOME_IDS,
   type ShopSection,
 } from '@apps/pinch/constants';
 import type {
@@ -112,6 +113,11 @@ export function getShopAmount(
 
 export const formatShopAmount = (amount: ShopAmount | null) =>
   amount ? formatSize(amount.amount, amount.unit) : null;
+
+/** Spices, oils, vinegar, salt and water: what an add sheet leaves unticked, since most kitchens have them. */
+export const isUsuallyAtHome = (
+  row: Pick<ShopLineRow, 'ingredientId' | 'section'>,
+) => row.section === 'spices' || USUALLY_AT_HOME_IDS.includes(row.ingredientId);
 
 export interface ShopLineRow {
   id: string;

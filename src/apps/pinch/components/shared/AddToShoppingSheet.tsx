@@ -60,6 +60,8 @@ import {
   getShoppingItemId,
   getShopRowId,
   groupShopLines,
+  isUsuallyAtHome,
+  type ShopLineRow,
 } from '@apps/pinch/utils/shopping';
 
 const NEXT_DAYS = 7;
@@ -238,8 +240,14 @@ export function ShoppingPick({
   ]);
   const stockLine = getShoppingStockLine(stocked, request.kind !== 'recipe');
   const isOnList = (id: string) => openByRow.has(id);
-  const isTicked = (id: string) => choices[id] ?? !isOnList(id);
-  const selected = rows.filter((row) => isTicked(row.id));
+  const isTicked = (row: ShopLineRow) =>
+    choices[row.id] ?? (!isOnList(row.id) && !isUsuallyAtHome(row));
+  const selected = rows.filter(isTicked);
+  const atHomeRows = rows.filter(isUsuallyAtHome);
+  const shownRows = [
+    ...rows.filter((row) => !isUsuallyAtHome(row)),
+    ...atHomeRows,
+  ];
   const selectedLines = selected.flatMap((row) => row.lines);
   const newCount = selectedLines.filter(
     (line) => !onList.has(getShoppingItemId(line.ingredientId, line.unit)),
@@ -509,18 +517,23 @@ export function ShoppingPick({
           </p>
         ) : (
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
-            {rows.map((row) => {
+            {shownRows.map((row) => {
               const existing = openByRow.get(row.id);
               const existingText = existing
                 ? formatShopAmount(getShopAmount(existing, row.section))
                 : null;
               return (
                 <li key={row.id}>
+                  {row.id === atHomeRows[0]?.id && (
+                    <p className='text-muted-foreground pt-3 pb-0.5 text-xs'>
+                      Usually at home: tick what you're out of
+                    </p>
+                  )}
                   <label className='flex min-h-12 cursor-pointer items-start gap-3 py-2.5'>
                     <span className='mt-0.5 inline-flex shrink-0'>
                       <Checkbox
                         aria-label={`Add ${row.name}`}
-                        checked={isTicked(row.id)}
+                        checked={isTicked(row)}
                         disabled={!isReady}
                         onCheckedChange={(checked) =>
                           setChoices((current) => ({

@@ -4498,4 +4498,18 @@ assert.deepEqual(
   'an ingredient with an open and a got item is a row in each half, and the two rows never share an id',
 );
 
+import { isUsuallyAtHome as shopIsAtHome } from '../../src/apps/pinch/utils/shopping.ts';
+
+assert.deepEqual(
+  [
+    shopIsAtHome({ ingredientId: 'cat-salt', section: 'spices' }),
+    shopIsAtHome({ ingredientId: 'cat-olive-oil', section: 'spices' }),
+    shopIsAtHome({ ingredientId: 'cat-water', section: 'snacks' }),
+    shopIsAtHome({ ingredientId: 'cat-soy-sauce', section: 'pantry' }),
+    shopIsAtHome({ ingredientId: 'cat-fresh-ginger', section: 'produce' }),
+  ],
+  [true, true, true, false, false],
+  'spices, oils, vinegar and water start unticked in an add sheet; sauces and fresh ginger stay ticked',
+);
+
 console.log('pinchMath: all checks passed');
