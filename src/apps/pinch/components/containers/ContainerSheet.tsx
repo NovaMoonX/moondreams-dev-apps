@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -510,9 +510,16 @@ interface FactsProps {
   container: Container;
   servingsText: string;
   onChangeDate: () => void;
+  /** A quiet link that shares the date's line, so the sheet stays one screen on a small phone. */
+  trailing: ReactNode;
 }
 
-function Facts({ container, servingsText, onChangeDate }: FactsProps) {
+function Facts({
+  container,
+  servingsText,
+  onChangeDate,
+  trailing,
+}: FactsProps) {
   const state = getEatByState(container.eatBy);
   const dateLabel =
     state === 'PAST'
@@ -538,23 +545,26 @@ function Facts({ container, servingsText, onChangeDate }: FactsProps) {
           </span>
         )}
       </p>
-      <Button
-        type='button'
-        variant='tertiary'
-        aria-label={`${dateLabel}. Change the date`}
-        className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
-        onClick={onChangeDate}
-      >
-        {state === 'LATER' ? (
-          <span className='whitespace-nowrap'>{dateLabel}</span>
-        ) : (
-          <EatByBadge state={state} label={dateLabel} />
-        )}
-        <PencilLine
-          className='text-muted-foreground h-3.5 w-3.5 shrink-0'
-          aria-hidden='true'
-        />
-      </Button>
+      <div className='flex flex-wrap items-center justify-between gap-x-4 gap-y-2'>
+        <Button
+          type='button'
+          variant='tertiary'
+          aria-label={`${dateLabel}. Change the date`}
+          className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
+          onClick={onChangeDate}
+        >
+          {state === 'LATER' ? (
+            <span className='whitespace-nowrap'>{dateLabel}</span>
+          ) : (
+            <EatByBadge state={state} label={dateLabel} />
+          )}
+          <PencilLine
+            className='text-muted-foreground h-3.5 w-3.5 shrink-0'
+            aria-hidden='true'
+          />
+        </Button>
+        {trailing}
+      </div>
       {(freezeLine || thawedAt !== null) && (
         <p className='text-muted-foreground text-sm'>
           {[
@@ -854,6 +864,16 @@ function ContainerSheet({
                 : `${formatServings(container.servings)} left`
             }
             onChangeDate={() => setView({ kind: 'eatBy' })}
+            trailing={
+              <Button
+                type='button'
+                variant='tertiary'
+                className="decoration-muted-foreground/50 relative h-auto min-h-0 px-0! py-0! text-sm font-normal underline underline-offset-4 before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
+                onClick={() => setView({ kind: isBatch ? 'boxes' : 'history' })}
+              >
+                {isBatch ? 'See each box' : 'See its history'}
+              </Button>
+            }
           />
         ) : (
           <p className='text-muted-foreground text-sm'>
@@ -928,18 +948,7 @@ function ContainerSheet({
           />
         )}
         <ErrorLine error={error} />
-        {isInStock ? (
-          <Button
-            type='button'
-            variant='tertiary'
-            className='decoration-muted-foreground/50 -my-2 h-10 justify-self-start px-0! text-sm font-normal underline underline-offset-4'
-            onClick={() => setView({ kind: isBatch ? 'boxes' : 'history' })}
-          >
-            {isBatch ? 'See each box' : 'See its history'}
-          </Button>
-        ) : (
-          <HistoryList container={container} />
-        )}
+        {!isInStock && <HistoryList container={container} />}
         <ModalFooterActions
           leftActions={
             <DeleteIconButton
