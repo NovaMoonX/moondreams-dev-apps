@@ -1041,7 +1041,7 @@ A recipe can say how many days what it makes keeps in the fridge and the freezer
 - `store/slices/containersSlice.ts`, `startContainersListener`, `store/actions/containerActions.ts`, `queries/containerQueries.ts`, the container selectors, `hooks/useContainerActions.ts`, `useContainerDraft.ts`, `usePutAway.ts`
 - `components/containers/` (`PreparedEntry`, `ContainersSubview`, `ContainerRow`, `ContainerSheet`, `ContainerFormSheet`, `ContainerFields`, `EatByField`, `EatByBadge`, `StockLine`, `StockRows`, `EatFromStock`), `components/cooking/CookPutAway.tsx`
 - Changed: Kitchen (the row), `EntryRow` (a detail line), Recipes and Meals (rows, filter, drawers), the plate builder's search, the planned meal view, the shopping sheet, the cooking history sheet, `CookingSubview`
-- The seeds: nine containers in every state for Alex, about 300 in stock and 260 finished for the scale kitchen
+- The seeds: ten containers in every state for Alex, about 300 in stock and 260 finished for the scale kitchen
 
 **Context:** Read `TECHNICAL.md` decision 23, §5g, criterion 13 and open question 22; `UX.md`'s Prepared meals; CLAUDE.md's "Pick the atomic write that fits", "Know which of the two kinds of time value a field is" and the Firestore rules section on indexes and the evaluator.
 

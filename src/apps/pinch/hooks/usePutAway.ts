@@ -9,7 +9,7 @@ import {
   selectIsContainersReady,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
-import type { ContainerPlace, Recipe } from '@apps/pinch/types';
+import type { Container, ContainerPlace, Recipe } from '@apps/pinch/types';
 import { CONTAINER_SITTING_SERVINGS } from '@apps/pinch/constants';
 import {
   getContainerCountMax,
@@ -45,6 +45,13 @@ interface Details {
   typedEatBy: string | null;
 }
 
+interface Save {
+  ids: string[];
+  isOffline: boolean;
+}
+
+type UndoState = 'PENDING' | 'FAILED';
+
 const NO_CONTAINERS: never[] = [];
 
 export function usePutAway({
@@ -54,7 +61,7 @@ export function usePutAway({
   eatenTonight,
   cookId,
 }: UsePutAwayInput) {
-  const { putAway } = useContainerActions(uid);
+  const { putAway, undoSaved } = useContainerActions(uid);
   const isReady = useAppSelector(selectIsContainersReady);
   const hasStock = useAppSelector((state) =>
     selectStockByRecipe(state).has(recipe.id),
@@ -67,6 +74,9 @@ export function usePutAway({
   const [dismissedCookId, setDismissedCookId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saves, setSaves] = useState<Save[]>([]);
+  const [undoStates, setUndoStates] = useState<Record<string, UndoState>>({});
+  const [notice, setNotice] = useState<string | null>(null);
 
   const isDismissed = cookId !== null && dismissedCookId === cookId;
   const care = getRecipeCare(recipe);
@@ -100,9 +110,10 @@ export function usePutAway({
       return;
     }
     setError(null);
+    setNotice(null);
     setIsSaving(true);
     try {
-      await putAway(
+      const created = await putAway(
         splitServings(details.servings, containers).map((each) => ({
           title: recipe.title,
           recipeId: recipe.id,
@@ -113,12 +124,37 @@ export function usePutAway({
           place: details.place,
           eatBy,
         })),
+        { withToast: false, onWriteFailed: setNotice },
       );
+      setSaves((current) => [
+        ...current,
+        { ids: created.map(({ id }) => id), isOffline: !navigator.onLine },
+      ]);
       setDetails(null);
       setIsSaving(false);
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this container.'));
       setIsSaving(false);
+    }
+  };
+
+  const getSave = (batch: Container[]) =>
+    saves.find((save) => save.ids.includes(batch[0].id)) ?? null;
+
+  const undo = async (batch: Container[]) => {
+    const save = getSave(batch);
+    if (save === null || undoStates[save.ids[0]] !== undefined) return;
+
+    const key = save.ids[0];
+    setNotice(null);
+    setUndoStates((current) => ({ ...current, [key]: 'PENDING' }));
+    try {
+      await undoSaved(save.ids);
+    } catch (undoError) {
+      setUndoStates((current) => ({ ...current, [key]: 'FAILED' }));
+      setNotice(
+        `Couldn't undo that. ${getErrorMessage(undoError, 'You can change it from Prepared meals.')}`,
+      );
     }
   };
 
@@ -130,6 +166,17 @@ export function usePutAway({
       !isDismissed &&
       saved.length === 0,
     saved,
+    getUndo: (batch: Container[]) => {
+      const save = getSave(batch);
+      return save === null
+        ? null
+        : {
+            state: undoStates[save.ids[0]] ?? null,
+            isOffline: save.isOffline,
+          };
+    },
+    undo,
+    notice,
     isOpen: details !== null,
     isSaving,
     error,
@@ -169,6 +216,7 @@ export function usePutAway({
     isPlaceFixed: details?.isPlaceFixed ?? false,
     open: (place: ContainerPlace, isPlaceFixed = true) => {
       setError(null);
+      setNotice(null);
       setDetails({
         place,
         openedPlace: place,

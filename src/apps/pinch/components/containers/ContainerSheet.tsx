@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   CircleCheck,
   PencilLine,
+  Undo2,
   Utensils,
 } from 'lucide-react';
 
@@ -405,7 +406,7 @@ function ContainerSheet({
   onClose,
 }: ContainerSheetProps) {
   const { confirm } = useActionModal();
-  const { eat, toss, remove } = useContainerActions(uid);
+  const { eat, toss, remove, putBack } = useContainerActions(uid);
   const live = useAppSelector(selectContainersById).get(containerId);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
@@ -673,6 +674,23 @@ function ContainerSheet({
               </p>
             )}
           </div>
+        )}
+        {!isInStock && container.history.at(-1)?.kind === 'CLEAR' && (
+          <ActionRow
+            icon={<Undo2 className='h-4 w-4' />}
+            label={`Put it back in the ${CONTAINER_PLACE_LABELS[container.place].toLowerCase()}`}
+            subtitle={`Back on your list with ${formatServings(container.servings)}`}
+            isDisabled={busy === 'put-back'}
+            onClick={() =>
+              void run(
+                'put-back',
+                async () => {
+                  if ((await putBack(container)) !== undefined) onClose();
+                },
+                'Unable to save this.',
+              )
+            }
+          />
         )}
         {error && (
           <p className='text-destructive text-sm' role='alert'>

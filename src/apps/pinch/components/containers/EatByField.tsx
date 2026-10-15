@@ -9,22 +9,40 @@ interface EatByFieldProps {
   value: string;
   onChange: (value: string) => void;
   hint: string;
+  /** A settings row: the caption on the left, the date on the right and the hint under both. */
+  isRow?: boolean;
 }
 
-function EatByField({ value, onChange, hint }: EatByFieldProps) {
+function EatByField({ value, onChange, hint, isRow = false }: EatByFieldProps) {
+  const input = (
+    <Input
+      type='date'
+      variant='outline'
+      aria-label='Eat by'
+      className={join(COMPACT_INPUT_CLASS, 'min-w-0', isRow && 'w-44')}
+      min={toDateInputValue(MIN_EAT_BY_DATE)}
+      max={toDateInputValue(MAX_EAT_BY_DATE)}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+
+  if (isRow) {
+    return (
+      <div className='space-y-1 px-4 py-3'>
+        <div className='flex items-center justify-between gap-3'>
+          <Label className='min-w-0 text-sm'>Eat by</Label>
+          <div className='shrink-0'>{input}</div>
+        </div>
+        <p className='text-muted-foreground text-xs'>{hint}</p>
+      </div>
+    );
+  }
+
   return (
     <div className='min-w-0 space-y-1'>
       <Label className='text-muted-foreground text-xs'>Eat by</Label>
-      <Input
-        type='date'
-        variant='outline'
-        aria-label='Eat by'
-        className={join(COMPACT_INPUT_CLASS, 'min-w-0')}
-        min={toDateInputValue(MIN_EAT_BY_DATE)}
-        max={toDateInputValue(MAX_EAT_BY_DATE)}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      {input}
       <p className='text-muted-foreground text-xs'>{hint}</p>
     </div>
   );

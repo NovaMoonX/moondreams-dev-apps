@@ -192,7 +192,7 @@ const SEED_NOTES = [
 ];
 
 type SeedEventKind =
-  'MADE' | 'FRIDGE' | 'FREEZE' | 'THAW' | 'EAT' | 'TOSS' | 'EDIT';
+  'MADE' | 'FRIDGE' | 'FREEZE' | 'THAW' | 'EAT' | 'TOSS' | 'CLEAR' | 'EDIT';
 
 const seedEvent = (
   kind: SeedEventKind,
@@ -341,6 +341,22 @@ const SEED_CONTAINERS = [
       seedEvent('FRIDGE', 14, 20, { servings: 2, place: 'FRIDGE' }),
       seedEvent('EDIT', 12, 8, { note: 'EAT_BY_MOVED' }),
       seedEvent('TOSS', 8, 18, { servings: 2 }),
+    ],
+  },
+  {
+    id: 'seed-pinch-container-chili-cleared',
+    title: 'Turkey chili',
+    recipeId: null,
+    mealId: null,
+    cookId: null,
+    servings: 3,
+    status: 'DONE',
+    place: 'FREEZER',
+    eatByDays: 30,
+    events: [
+      seedEvent('FREEZE', 60, 19, { servings: 4, place: 'FREEZER' }),
+      seedEvent('EAT', 40, 19, { servings: 1 }),
+      seedEvent('CLEAR', 5, 10, { servings: 3 }),
     ],
   },
 ];

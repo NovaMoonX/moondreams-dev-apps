@@ -1,15 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus, X } from 'lucide-react';
 
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
-import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
+import { getErrorMessage } from '@/utils/errorUtils';
 import ContainerFormSheet from '@apps/pinch/components/containers/ContainerFormSheet';
 import ContainerRow from '@apps/pinch/components/containers/ContainerRow';
 import ContainerSheet from '@apps/pinch/components/containers/ContainerSheet';
@@ -35,14 +37,27 @@ import {
 import type { Container, ContainerPlace, Meal } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import {
+  getClearOutMessage,
   getContainerTitle,
   getPreparedSummary,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
-type ListView = 'stock' | 'finished';
+type ListView = ContainerPlace | 'FINISHED';
 
 const HIDDEN_WORTH_A_BUTTON = 3;
+
+const countContainers = (count: number) =>
+  `${count} ${count === 1 ? 'container' : 'containers'}`;
+
+const sumServings = (containers: Container[]) =>
+  containers.reduce((sum, container) => sum + container.servings, 0);
+
+interface ClearNote {
+  place: ContainerPlace;
+  text: string;
+  isError: boolean;
+}
 
 interface ContainersSubviewProps {
   uid: string;
@@ -90,11 +105,12 @@ const combineScoped = (
 
 function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const { closeSubview } = usePinchOverlay();
-  const { isReady, loadError } = useContainerActions(uid);
+  const { confirm } = useActionModal();
+  const { isReady, loadError, clearOut } = useContainerActions(uid);
   const containers = useAppSelector(selectContainers);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
-  const [view, setView] = useState<ListView>('stock');
+  const [pick, setPick] = useState<ListView | null>(null);
   const [scope, setScope] = useState({ recipeId, mealId });
   const [query, setQuery] = useState('');
   const [limits, setLimits] = useState<Record<ContainerPlace, number>>({
@@ -107,20 +123,23 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const [scopedLimit, setScopedLimit] = useState(CONTAINER_FINISHED_PAGE_SIZE);
   const [open, setOpen] = useState<Container | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [clearing, setClearing] = useState<ContainerPlace | null>(null);
+  const [clearNote, setClearNote] = useState<ClearNote | null>(null);
 
+  const isFinishedView = pick === 'FINISHED';
   const isScoped = scope.recipeId !== null || scope.mealId !== null;
   const scopeMeal =
     scope.mealId === null ? undefined : mealsById.get(scope.mealId);
   const lookups = getScopeLookups(scope, scopeMeal);
   const latestFinished = useQuery({
     ...finishedContainersQueryOptions(uid, finishedCount),
-    enabled: view === 'finished' && !isScoped,
+    enabled: isFinishedView && !isScoped,
     placeholderData: keepPreviousData,
   });
   const scopedFinished = useQueries({
     queries: lookups.map(({ field, id }) => ({
       ...scopedContainersQueryOptions(uid, field, id),
-      enabled: view === 'finished',
+      enabled: isFinishedView,
     })),
     combine: combineScoped,
   });
@@ -156,6 +175,39 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       ).map(({ container }) => container),
     [inScope, recipesById, mealsById, trimmed],
   );
+  const byPlace = useMemo<Record<ContainerPlace, Container[]>>(
+    () => ({
+      FRIDGE: shown.filter((container) => container.place === 'FRIDGE'),
+      FREEZER: shown.filter((container) => container.place === 'FREEZER'),
+    }),
+    [shown],
+  );
+
+  // Until the person picks, and while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
+  const getShownPlace = (): ContainerPlace => {
+    const preferred = pick === null || pick === 'FINISHED' ? 'FRIDGE' : pick;
+    const other = preferred === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
+    const isAuto = pick === null || trimmed !== '';
+    if (byPlace[preferred].length > 0 || !isAuto) return preferred;
+    return byPlace[other].length > 0 ? other : preferred;
+  };
+  const shownPlace = getShownPlace();
+  const viewOptions = [
+    ...CONTAINER_PLACES.map((place) => ({
+      value: place,
+      emoji: CONTAINER_PLACE_EMOJIS[place],
+      label:
+        byPlace[place].length > 0
+          ? `${CONTAINER_PLACE_LABELS[place]} · ${byPlace[place].length}`
+          : CONTAINER_PLACE_LABELS[place],
+    })),
+    { value: 'FINISHED' as const, label: 'Finished' },
+  ];
+
+  const handleOpen = useCallback((container: Container) => {
+    setOpen(container);
+    setPick((current) => current ?? container.place);
+  }, []);
 
   const finished = useMemo(
     () =>
@@ -190,10 +242,50 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   }, [inScope, recipesById, mealsById]);
 
   const getSubtitle = () => {
-    if (view === 'finished') return "What you've eaten or thrown out.";
+    if (isFinishedView) return "What you've eaten or thrown out.";
     if (summary.containerCount === 0) return undefined;
-    const containerText = `${summary.containerCount} ${summary.containerCount === 1 ? 'container' : 'containers'}`;
-    return `${formatServings(summary.fridgeServings + summary.freezerServings)} in ${containerText}`;
+    return `${formatServings(summary.fridgeServings + summary.freezerServings)} in ${countContainers(summary.containerCount)}`;
+  };
+
+  const handleClear = async (place: ContainerPlace) => {
+    const inPlace = containers.filter((container) => container.place === place);
+    const placeWord = CONTAINER_PLACE_LABELS[place].toLowerCase();
+    setPick(place);
+    setClearNote(null);
+    const isConfirmed = await confirm({
+      title: `Clear out the ${placeWord}?`,
+      message: getClearOutMessage(inPlace.length, sumServings(inPlace)),
+      confirmText: `Clear out the ${placeWord}`,
+      cancelText: inPlace.length === 1 ? 'Keep it' : 'Keep them',
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+
+    setClearing(place);
+    try {
+      const result = await clearOut(
+        place,
+        inPlace.map(({ id }) => id),
+      );
+      if (result === undefined) return;
+      if (result.error !== null) {
+        setClearNote({ place, text: result.error, isError: true });
+      } else if (result.count === 0) {
+        setClearNote({
+          place,
+          text: 'Nothing was left there to clear out.',
+          isError: false,
+        });
+      }
+    } catch (error) {
+      setClearNote({
+        place,
+        text: getErrorMessage(error, "Couldn't clear it out."),
+        isError: true,
+      });
+    } finally {
+      setClearing((current) => (current === place ? null : current));
+    }
   };
 
   const renderRow = (container: Container) => {
@@ -207,7 +299,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
             container.status === 'IN_STOCK' &&
             twins.has(`${container.place}|${title}`)
           }
-          onOpen={setOpen}
+          onOpen={handleOpen}
         />
       </li>
     );
@@ -257,49 +349,78 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       );
     }
 
-    return (
-      <div className='space-y-4'>
-        {CONTAINER_PLACES.map((place) => {
-          const rows = shown.filter((container) => container.place === place);
-          if (rows.length === 0) return null;
+    const place = shownPlace;
+    const rows = byPlace[place];
+    const placeWord = CONTAINER_PLACE_LABELS[place].toLowerCase();
+    const note = clearNote?.place === place ? clearNote : null;
+    const noteLine = note && (
+      <p
+        role={note.isError ? 'alert' : 'status'}
+        className={join(
+          'text-sm wrap-break-word',
+          note.isError ? 'text-destructive' : 'text-muted-foreground',
+        )}
+      >
+        {note.text}
+      </p>
+    );
+    if (rows.length === 0) {
+      return (
+        <div className='space-y-1'>
+          {noteLine}
+          <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
+            {scopeName
+              ? `Nothing from ${scopeName} is in the ${placeWord}.`
+              : `Nothing in the ${placeWord} right now.`}
+          </p>
+        </div>
+      );
+    }
 
-          const limit = limits[place];
-          const visible =
-            rows.length - limit > HIDDEN_WORTH_A_BUTTON ? limit : rows.length;
-          return (
-            <section key={place} aria-label={CONTAINER_PLACE_LABELS[place]}>
-              <SectionDivider
-                label={`${CONTAINER_PLACE_EMOJIS[place]} ${CONTAINER_PLACE_LABELS[place]}`}
-                trailing={
-                  <span className='text-muted-foreground text-sm tabular-nums'>
-                    {rows.length}
-                  </span>
-                }
-              />
-              <ul className='divide-border divide-y'>
-                {rows.slice(0, visible).map(renderRow)}
-              </ul>
-              {visible < rows.length && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='h-10 justify-start px-0!'
-                  onClick={() =>
-                    setLimits((current) => ({
-                      ...current,
-                      [place]: current[place] + CONTAINER_LIST_PAGE_SIZE,
-                    }))
-                  }
-                >
-                  Show{' '}
-                  {Math.min(CONTAINER_LIST_PAGE_SIZE, rows.length - visible)}{' '}
-                  more
-                </Button>
-              )}
-            </section>
-          );
-        })}
-      </div>
+    const canClear = !isScoped && trimmed === '';
+    const limit = limits[place];
+    const visible =
+      rows.length - limit > HIDDEN_WORTH_A_BUTTON ? limit : rows.length;
+    return (
+      <section aria-label={CONTAINER_PLACE_LABELS[place]}>
+        <div className='flex min-h-10 flex-wrap items-center justify-between gap-x-3'>
+          <p className='text-muted-foreground text-sm whitespace-nowrap'>
+            {countContainers(rows.length)} · {formatServings(sumServings(rows))}
+          </p>
+          {canClear && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              disabled={clearing === place}
+              className="text-destructive! relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+              onClick={() => void handleClear(place)}
+            >
+              Clear out the {placeWord}
+            </Button>
+          )}
+        </div>
+        {noteLine}
+        <ul className='divide-border divide-y'>
+          {rows.slice(0, visible).map(renderRow)}
+        </ul>
+        {visible < rows.length && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='h-10 justify-start px-0!'
+            onClick={() =>
+              setLimits((current) => ({
+                ...current,
+                [place]: current[place] + CONTAINER_LIST_PAGE_SIZE,
+              }))
+            }
+          >
+            Show {Math.min(CONTAINER_LIST_PAGE_SIZE, rows.length - visible)}{' '}
+            more
+          </Button>
+        )}
+      </section>
     );
   };
 
@@ -323,7 +444,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
         <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
           {scopeName
             ? `Nothing from ${scopeName} is finished yet.`
-            : 'Nothing is finished yet. What you eat or throw out is kept here.'}
+            : 'Nothing is finished yet. What you eat, throw out or clear out is kept here.'}
         </p>
       );
     }
@@ -389,12 +510,12 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
         <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
           <PillGroup
             label='Which containers'
-            options={[
-              { value: 'stock', label: 'In stock' },
-              { value: 'finished', label: 'Finished' },
-            ]}
-            value={view}
-            onChange={setView}
+            options={viewOptions}
+            value={isFinishedView ? 'FINISHED' : shownPlace}
+            onChange={(next) => {
+              setPick(next);
+              setClearNote(null);
+            }}
             isThin
           />
           {scopeName && (
@@ -412,14 +533,14 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
             </Button>
           )}
         </div>
-        {view === 'stock' && inScope.length >= LIST_SEARCH_THRESHOLD && (
+        {!isFinishedView && inScope.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
             onChange={setQuery}
             placeholder='Search prepared meals'
           />
         )}
-        {view === 'stock' ? getStockBody() : getFinishedBody()}
+        {isFinishedView ? getFinishedBody() : getStockBody()}
       </div>
       {open && (
         <ContainerSheet
