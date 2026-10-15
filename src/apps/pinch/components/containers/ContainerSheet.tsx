@@ -37,6 +37,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
+  canPutBack,
   getBatchKey,
   getBatchServingsText,
   getBoxCountCopy,
@@ -832,8 +833,6 @@ function ContainerSheet({
       );
 
     const lastEnd = container.history.at(-1);
-    const canPutBack =
-      !isInStock && lastEnd?.kind === 'CLEAR' && lastEnd.servings !== null;
 
     return (
       <div className='grid gap-4'>
@@ -905,11 +904,11 @@ function ContainerSheet({
             )}
           </div>
         )}
-        {canPutBack && (
+        {canPutBack(container) && (
           <ActionRow
             icon={<Undo2 className='h-4 w-4' />}
             label={`Put it back in the ${placeWord}`}
-            subtitle={`With ${formatServings(lastEnd.servings ?? 0)}`}
+            subtitle={`With ${formatServings(lastEnd?.servings ?? 0)}`}
             isDisabled={busy === 'put-back'}
             onClick={() =>
               void run(

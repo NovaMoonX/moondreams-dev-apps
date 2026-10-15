@@ -397,7 +397,7 @@ export const undoClearOut = createAsyncThunk<
 
     return {
       restored: done.length,
-      error: getWriteMessage(error, 'The rest are still in Finished.'),
+      error: getWriteMessage(error, 'The rest are still in What you finished.'),
     };
   },
 );

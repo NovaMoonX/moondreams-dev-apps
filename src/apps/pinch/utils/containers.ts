@@ -464,7 +464,7 @@ export const getClearOutMessage = (
   servings: number,
   place: ContainerPlace,
 ) =>
-  `This takes ${countContainers(count)} (${formatServings(servings)}) out of the ${CONTAINER_PLACE_LABELS[place].toLowerCase()} and keeps ${count === 1 ? 'it' : 'them'} in Finished as cleared out. You can undo it right after.`;
+  `This takes ${countContainers(count)} (${formatServings(servings)}) out of the ${CONTAINER_PLACE_LABELS[place].toLowerCase()} and keeps ${count === 1 ? 'it' : 'them'} in What you finished as cleared out. You can undo it right after.`;
 
 export const getPutBackText = (restored: number, total: number) =>
   restored === total
@@ -630,6 +630,19 @@ export const getBoxCountCopy = (current: number, next: number) => {
 };
 
 const END_KINDS: ContainerEventKind[] = ['EAT', 'TOSS', 'CLEAR'];
+
+/** A finished box can go back in as it was while the eat, toss or clear-out that ended it is still its last event, long after the toast's Undo is gone. */
+export const canPutBack = (
+  container: Pick<Container, 'status' | 'history'>,
+) => {
+  const last = container.history.at(-1);
+  const result =
+    container.status === 'DONE' &&
+    last !== undefined &&
+    END_KINDS.includes(last.kind) &&
+    last.servings !== null;
+  return result;
+};
 
 /** Only while the EAT, TOSS or CLEAR is still the last event, so a later change is never rewound. */
 export const planUndoEnd = (

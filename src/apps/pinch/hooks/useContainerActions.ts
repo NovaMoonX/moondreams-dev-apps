@@ -31,6 +31,7 @@ import {
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
   buildContainer,
+  canPutBack,
   getNewContainersProblem,
   getEatByPhrase,
   getPutBackText,
@@ -297,11 +298,11 @@ export function useContainerActions(uid: string) {
       return { count: cleared.length, error };
     });
 
-  /** A cleared-out container back in stock as it was, for a clear-out that took one by mistake. */
+  /** A finished box back in stock as it was before what ended it, for a mis-tap the toast's Undo no longer covers. */
   const putBack = (container: Container) =>
     once(container.id, async () => {
       const last = container.history.at(-1);
-      if (last?.kind !== 'CLEAR') {
+      if (!canPutBack(container) || last === undefined) {
         throw new Error('That has changed since, so it could not be undone.');
       }
       if (isReady && isContainerListFull(inStockCount)) {

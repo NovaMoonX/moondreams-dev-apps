@@ -44,8 +44,6 @@ import {
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
-type ListView = ContainerPlace | 'FINISHED';
-
 const HIDDEN_WORTH_A_BUTTON = 3;
 
 const sumServings = (containers: Container[]) =>
@@ -114,7 +112,8 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const containers = useAppSelector(selectContainers);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
-  const [pick, setPick] = useState<ListView | null>(null);
+  const [pick, setPick] = useState<ContainerPlace | null>(null);
+  const [isFinishedView, setIsFinishedView] = useState(false);
   const [scope, setScope] = useState({ recipeId, mealId });
   const [query, setQuery] = useState('');
   const [limits, setLimits] = useState<Record<ContainerPlace, number>>({
@@ -130,24 +129,10 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const [clearing, setClearing] = useState<ContainerPlace | null>(null);
   const [clearNote, setClearNote] = useState<ClearNote | null>(null);
 
-  const isFinishedView = pick === 'FINISHED';
   const isScoped = scope.recipeId !== null || scope.mealId !== null;
   const scopeMeal =
     scope.mealId === null ? undefined : mealsById.get(scope.mealId);
   const lookups = getScopeLookups(scope, scopeMeal);
-  const latestFinished = useQuery({
-    ...finishedContainersQueryOptions(uid, finishedCount),
-    enabled: isFinishedView && !isScoped,
-    placeholderData: keepPreviousData,
-  });
-  const scopedFinished = useQueries({
-    queries: lookups.map(({ field, id }) => ({
-      ...scopedContainersQueryOptions(uid, field, id),
-      enabled: isFinishedView,
-    })),
-    combine: combineScoped,
-  });
-  const finishedQuery = isScoped ? scopedFinished : latestFinished;
 
   const isOfScope = useMemo(() => {
     const recipeIds = new Set(getRecipeIdsOf(scopeMeal));
@@ -166,6 +151,22 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     [containers, isOfScope],
   );
   const trimmed = inScope.length >= LIST_SEARCH_THRESHOLD ? query.trim() : '';
+  const isStockEmpty = isReady && loadError === null && inScope.length === 0;
+  // With nothing in stock, the finished read decides whether the link to it leads anywhere.
+  const needsFinished = isFinishedView || isStockEmpty;
+  const latestFinished = useQuery({
+    ...finishedContainersQueryOptions(uid, finishedCount),
+    enabled: needsFinished && !isScoped,
+    placeholderData: keepPreviousData,
+  });
+  const scopedFinished = useQueries({
+    queries: lookups.map(({ field, id }) => ({
+      ...scopedContainersQueryOptions(uid, field, id),
+      enabled: needsFinished,
+    })),
+    combine: combineScoped,
+  });
+  const finishedQuery = isScoped ? scopedFinished : latestFinished;
 
   const shown = useMemo(
     () =>
@@ -195,7 +196,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
 
   // Until the person picks, and while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
   const getShownPlace = (): ContainerPlace => {
-    const preferred = pick === null || pick === 'FINISHED' ? 'FRIDGE' : pick;
+    const preferred = pick ?? 'FRIDGE';
     const other = preferred === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
     const isAuto = pick === null || trimmed !== '';
     if (byPlace[preferred].length > 0 || !isAuto) return preferred;
@@ -211,7 +212,6 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
           ? `${CONTAINER_PLACE_LABELS[place]} · ${formatServings(sumServings(byPlace[place]))}`
           : CONTAINER_PLACE_LABELS[place],
     })),
-    { value: 'FINISHED' as const, label: 'Finished' },
   ];
 
   const handleOpen = useCallback((boxes: Container[]) => {
@@ -222,7 +222,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       batchKey: isFinished ? null : getBatchKey(first),
       finished: isFinished ? first : null,
     });
-    setPick((current) => current ?? first.place);
+    if (!isFinished) setPick((current) => current ?? first.place);
   }, []);
 
   const finished = useMemo(
@@ -256,9 +256,6 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       [...counts].filter(([, count]) => count > 1).map(([key]) => key),
     );
   }, [inScope, recipesById, mealsById]);
-
-  const getSubtitle = () =>
-    isFinishedView ? "What you've eaten or thrown out." : undefined;
 
   const handleClear = async (place: ContainerPlace) => {
     const inPlace = containers.filter((container) => container.place === place);
@@ -499,53 +496,75 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     );
   };
 
+  const isListShown = isReady && loadError === null;
+  const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
+  const hasFinishedLink =
+    !isFinishedView &&
+    isListShown &&
+    (inScope.length > 0 || finished.length > 0);
+  const title = isFinishedView ? 'What you finished' : 'Fridge & freezer';
+  const switchView = (toFinished: boolean) => {
+    setIsFinishedView(toFinished);
+    setClearNote(null);
+    window.scrollTo({ top: 0 });
+  };
+
   return (
-    <Subview title='Fridge & freezer' onClose={closeSubview}>
+    <Subview
+      title={title}
+      onClose={closeSubview}
+      onBack={isFinishedView ? () => switchView(false) : undefined}
+    >
       <div className='space-y-4'>
         <SectionHeader
-          title='Fridge & freezer'
-          subtitle={getSubtitle()}
+          title={title}
           action={
-            <Button
-              type='button'
-              size='sm'
-              rounded='full'
-              className='gap-1'
-              aria-label='Put something away'
-              disabled={!isReady}
-              onClick={() => setIsAdding(true)}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              Add
-            </Button>
+            !isFinishedView && (
+              <Button
+                type='button'
+                size='sm'
+                rounded='full'
+                className='gap-1'
+                aria-label='Put something away'
+                disabled={!isReady}
+                onClick={() => setIsAdding(true)}
+              >
+                <Plus className='h-4 w-4' aria-hidden='true' />
+                Add
+              </Button>
+            )
           }
         />
-        <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
-          <PillGroup
-            label='Fridge or freezer'
-            options={viewOptions}
-            value={isFinishedView ? 'FINISHED' : shownPlace}
-            onChange={(next) => {
-              setPick(next);
-              setClearNote(null);
-            }}
-            isThin
-          />
-          {scopeName && (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              rounded='full'
-              aria-label={`Show everything, not only ${scopeName}`}
-              className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-              onClick={clearScope}
-            >
-              <span className='truncate'>Only {scopeName}</span>
-              <X className='h-3 w-3 shrink-0' aria-hidden='true' />
-            </Button>
-          )}
-        </div>
+        {(hasSwitch || scopeName) && (
+          <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
+            {hasSwitch && (
+              <PillGroup
+                label='Fridge or freezer'
+                options={viewOptions}
+                value={shownPlace}
+                onChange={(next) => {
+                  setPick(next);
+                  setClearNote(null);
+                }}
+                isThin
+              />
+            )}
+            {scopeName && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                rounded='full'
+                aria-label={`Show everything, not only ${scopeName}`}
+                className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+                onClick={clearScope}
+              >
+                <span className='truncate'>Only {scopeName}</span>
+                <X className='h-3 w-3 shrink-0' aria-hidden='true' />
+              </Button>
+            )}
+          </div>
+        )}
         {!isFinishedView && inScope.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
@@ -554,6 +573,16 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
           />
         )}
         {isFinishedView ? getFinishedBody() : getStockBody()}
+        {hasFinishedLink && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='decoration-muted-foreground/50 h-10 px-0! text-sm font-normal underline underline-offset-4'
+            onClick={() => switchView(true)}
+          >
+            What you finished
+          </Button>
+        )}
       </div>
       {open && (
         <ContainerSheet

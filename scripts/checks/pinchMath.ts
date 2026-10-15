@@ -3163,8 +3163,8 @@ assert.deepEqual(
   [
     'Cleared out · 3 servings',
     'Cleared out',
-    'This takes 9 boxes (24 servings) out of the fridge and keeps them in Finished as cleared out. You can undo it right after.',
-    'This takes 1 box (1 serving) out of the freezer and keeps it in Finished as cleared out. You can undo it right after.',
+    'This takes 9 boxes (24 servings) out of the fridge and keeps them in What you finished as cleared out. You can undo it right after.',
+    'This takes 1 box (1 serving) out of the freezer and keeps it in What you finished as cleared out. You can undo it right after.',
     'Put 9 boxes back',
     'Put 1 box back',
     'Put back 7 of 9; the rest changed since',
@@ -5739,6 +5739,38 @@ assert.equal(
   kitbEatByLabel(dayOf(18), lateOnThe14th),
   `Eat by ${getEatByPhrase(dayOf(18), lateOnThe14th)}`,
   'a later date is plain words with the date',
+);
+
+import { canPutBack as kitbCanPutBack } from '../../src/apps/pinch/utils/containers.ts';
+
+const kitbEnded = (kind: 'EAT' | 'TOSS' | 'CLEAR' | 'EDIT') =>
+  container({
+    status: kind === 'EDIT' ? 'IN_STOCK' : 'DONE',
+    history: [
+      ...container().history,
+      makeEvent(kind, 2000, kind === 'EDIT' ? {} : { servings: 4 }),
+    ],
+  });
+assert.deepEqual(
+  [
+    kitbCanPutBack(kitbEnded('EAT')),
+    kitbCanPutBack(kitbEnded('TOSS')),
+    kitbCanPutBack(kitbEnded('CLEAR')),
+    kitbCanPutBack(kitbEnded('EDIT')),
+    kitbCanPutBack(container()),
+  ],
+  [true, true, true, false, false],
+  'any finished box can be put back while what ended it is its last event; one in stock cannot',
+);
+assert.deepEqual(
+  planOf(planUndoEnd(kitbEnded('EAT'), 2000, 3000)),
+  {
+    servings: 4,
+    status: 'IN_STOCK',
+    history: container().history,
+    updatedAt: 3000,
+  },
+  'putting back an eaten box restores the count it had before the last eat',
 );
 
 console.log('pinchMath: all checks passed');
