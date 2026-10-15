@@ -10,7 +10,6 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import DayDrawer from '@apps/pinch/components/calendar/DayDrawer';
-import DayView from '@apps/pinch/components/calendar/DayView';
 import MonthView from '@apps/pinch/components/calendar/MonthView';
 import SummaryLine from '@apps/pinch/components/calendar/SummaryLine';
 import WeekSummarySheet from '@apps/pinch/components/calendar/WeekSummarySheet';
@@ -50,8 +49,6 @@ import {
   shiftAnchor,
 } from '@apps/pinch/utils/dayKeys';
 import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
-
-const NO_MEALS: PlannedMeal[] = [];
 
 const VIEW_OPTIONS = CALENDAR_VIEWS.map((value) => ({
   value,
@@ -105,8 +102,10 @@ function CalendarScreen({
 
   const requestedView = searchParams.get('view');
   const view: CalendarView =
-    CALENDAR_VIEWS.find((candidate) => candidate === requestedView) ??
-    DEFAULT_CALENDAR_VIEW;
+    requestedView === 'day'
+      ? 'week'
+      : (CALENDAR_VIEWS.find((candidate) => candidate === requestedView) ??
+        DEFAULT_CALENDAR_VIEW);
   const range = getPeriodRange(view, anchorKey);
   const periodTitle = formatPeriodTitle(view, anchorKey, todayKey);
   const isTodayShown = isDayInRange(todayKey, range);
@@ -117,13 +116,10 @@ function CalendarScreen({
 
   const getSummaryLabel = () => {
     if (!isTodayShown) return null;
-    if (view === 'month') return 'This month';
-    if (view === 'week') return 'This week';
-    return 'Today';
+    return view === 'month' ? 'This month' : 'This week';
   };
 
   const getAddDayKey = () => {
-    if (view === 'day') return anchorKey;
     if (selectedKey) return selectedKey;
     return isTodayShown ? todayKey : range.startKey;
   };
@@ -268,13 +264,6 @@ function CalendarScreen({
           onOpenDay={(dayKey) => setOpenDay({ dayKey, mealId: null })}
           onOpenMeal={(dayKey, mealId) => setOpenDay({ dayKey, mealId })}
           onAdd={(dayKey) => openPlan(dayKey, null)}
-        />
-      )}
-      {view === 'day' && !isFirstRun && (
-        <DayView
-          meals={plannedByDay.get(anchorKey) ?? NO_MEALS}
-          onOpenMeal={(mealId) => setOpenDay({ dayKey: anchorKey, mealId })}
-          onAdd={() => openPlan(anchorKey, null)}
         />
       )}
       {isSettingsOpen && (

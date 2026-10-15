@@ -101,7 +101,6 @@ export function getPeriodRange(
   view: CalendarView,
   anchorKey: string,
 ): DayRange {
-  if (view === 'day') return { startKey: anchorKey, endKey: anchorKey };
   if (view === 'week') {
     const startKey = getWeekStartKey(anchorKey);
     return { startKey, endKey: addDaysToKey(startKey, 6) };
@@ -124,13 +123,12 @@ export function getVisibleRange(
   return { startKey: gridStart, endKey: addDaysToKey(gridStart, 41) };
 }
 
-/** The anchor day one step away: a month, a week or a day. */
+/** The anchor day one step away: a month or a week. */
 export function shiftAnchor(
   view: CalendarView,
   anchorKey: string,
   delta: number,
 ) {
-  if (view === 'day') return addDaysToKey(anchorKey, delta);
   if (view === 'week') return addDaysToKey(anchorKey, delta * 7);
   return `${shiftMonthKey(anchorKey.slice(0, 7), delta)}-01`;
 }
@@ -159,14 +157,13 @@ const weekRangeYearFormatter = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC',
 });
 
-/** "October 2026", "Oct 11 – 17" or "Mon, Oct 12"; a week outside the current year says its year. */
+/** "October 2026" or "Oct 11 – 17"; a week outside the current year says its year. */
 export function formatPeriodTitle(
   view: CalendarView,
   anchorKey: string,
   todayKey: string,
 ) {
   if (view === 'month') return formatMonthTitle(anchorKey.slice(0, 7));
-  if (view === 'day') return formatDayTitle(anchorKey);
   const { startKey, endKey } = getPeriodRange('week', anchorKey);
   const isThisYear =
     startKey.slice(0, 4) === todayKey.slice(0, 4) &&

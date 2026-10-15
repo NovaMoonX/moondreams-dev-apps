@@ -266,13 +266,12 @@ export const UNIT_TO_BASE: Record<Unit, number> = {
   EACH: 1,
 };
 
-export const CALENDAR_VIEWS = ['month', 'week', 'day'] as const;
+export const CALENDAR_VIEWS = ['month', 'week'] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
 export const DEFAULT_CALENDAR_VIEW: CalendarView = 'month';
 export const CALENDAR_VIEW_LABELS: Record<CalendarView, string> = {
   month: 'Month',
   week: 'Week',
-  day: 'Day',
 };
 
 /** The meal type's colour tokens from `pinch.css`: the solid for an edge or a dot, the soft tint for a chip or a pill. */
