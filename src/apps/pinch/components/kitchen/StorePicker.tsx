@@ -162,7 +162,7 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
         <Input
           variant='outline'
           aria-label='A store of your own'
-          placeholder='Or name a store of your own'
+          placeholder='Or add your own'
           maxLength={MAX_NAME_LENGTH}
           value={ownName}
           onChange={(event) => setOwnName(event.target.value)}

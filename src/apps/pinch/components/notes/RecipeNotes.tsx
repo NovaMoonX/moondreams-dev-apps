@@ -10,6 +10,7 @@ import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
 import {
   RECIPE_NOTES_FIRST_PAGE,
   RECIPE_NOTES_PAGE_SIZE,
+  SECTION_COUNT_THRESHOLD,
   SOFT_MAX_RECIPE_NOTES,
 } from '@apps/pinch/constants';
 import {
@@ -79,7 +80,14 @@ function RecipeNotes({ recipeId, onAdd, onEdit }: RecipeNotesProps) {
   }
 
   return (
-    <FormSection title='Notes' detail={notes.length}>
+    <FormSection
+      title='Notes'
+      detail={
+        visibleCount < notes.length || notes.length > SECTION_COUNT_THRESHOLD
+          ? notes.length
+          : undefined
+      }
+    >
       {addRow}
       <ul className='divide-border divide-y'>
         {notes.slice(0, visibleCount).map((note) => {

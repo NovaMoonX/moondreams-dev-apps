@@ -4,13 +4,12 @@ import { PackagePlus, ShoppingBasket } from 'lucide-react';
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
-import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
+import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
+import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import {
   selectContainersLoadError,
   selectCostContext,
@@ -21,7 +20,7 @@ import {
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { Gap, ShoppingRequest } from '@apps/pinch/types';
-import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
+import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCost,
   formatRowCost,
@@ -30,30 +29,29 @@ import {
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
-  getNutritionGaps,
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface MealDrawerProps {
-  uid: string;
+  /** Not read: a saved meal's prices are added from its recipes. */
+  uid?: string;
   mealId: string;
   onClose: () => void;
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
-  onFillIn: (gaps: Gap[]) => void;
+  /** Not read: a saved meal's prices are added from its recipes. */
+  onFillIn?: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
   onOpenStock: (id: string) => void;
   onPutAway: (id: string) => void;
 }
 
 function MealDrawer({
-  uid,
   mealId,
   onClose,
   onPlan,
   onModify,
-  onFillIn,
   onAddToShopping,
   onOpenStock,
   onPutAway,
@@ -77,6 +75,25 @@ function MealDrawer({
     costContext.ingredientsById,
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
+  const getCostValue = () => {
+    if (cost.totalCents === null) return 'No price yet';
+    const total = formatCost(cost.totalCents);
+    return leftOutCount > 0 ? `${total} so far` : total;
+  };
+  const isOnPlate = (gap: Gap) =>
+    meal.items.some(
+      (item) => item.kind === 'INGREDIENT' && item.refId === gap.ingredientId,
+    );
+  const getFix = () => {
+    const onPlate = cost.leftOut.filter(isOnPlate).length;
+    if (onPlate === 0) return 'Add prices from the recipes on this plate.';
+    if (onPlate === cost.leftOut.length) {
+      return onPlate === 1
+        ? 'Add its price in Kitchen.'
+        : 'Add their prices in Kitchen.';
+    }
+    return 'Add prices from the recipes on this plate, or in Kitchen.';
+  };
   const actions: ActionChip[] = [
     {
       key: 'shopping',
@@ -145,25 +162,11 @@ function MealDrawer({
         <div className='space-y-3'>
           <StatTile
             label='Cost'
-            value={
-              cost.totalCents === null
-                ? 'No prices yet'
-                : formatCost(cost.totalCents)
-            }
+            value={getCostValue()}
             detail={cost.totalCents === null ? undefined : 'For the plate'}
             help={
-              leftOutCount > 0 && cost.totalCents !== null ? (
-                <HelpTip
-                  variant='warning'
-                  title="What's left out"
-                  placement='top'
-                >
-                  <p>
-                    This {formatLeftOut(cost.leftOut)} because there’s no price
-                    for {leftOutCount === 1 ? 'it' : 'them'} yet.
-                  </p>
-                  <NudgeCountNote leftOut={cost.leftOut} open={cost.leftOut} />
-                </HelpTip>
+              leftOutCount > 0 ? (
+                <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
               ) : undefined
             }
           />
@@ -177,16 +180,15 @@ function MealDrawer({
               />
             </div>
           )}
-          <GapNudge
-            uid={uid}
-            gaps={[
-              ...cost.leftOut,
-              ...getNutritionGaps(nutrition.missing, show),
-            ]}
-            onFillIn={onFillIn}
-          />
         </div>
-        <FormSection title='On the plate' detail={meal.items.length}>
+        <FormSection
+          title='On the plate'
+          detail={
+            meal.items.length > SECTION_COUNT_THRESHOLD
+              ? meal.items.length
+              : undefined
+          }
+        >
           <ul className='divide-border divide-y'>
             {meal.items.map((item) => {
               const itemCost = cost.items.get(item.id);

@@ -4776,4 +4776,149 @@ assert.deepEqual(
   );
 }
 
+// ---- R1 (recipe drawer, quiet cost): the biggest gap first, where it's used, and the package unit ----
+
+import {
+  getIngredientUses,
+  getPackageUnit,
+  getUseText,
+  rankGaps,
+} from '../../src/apps/pinch/utils/gapOrder.ts';
+
+const r1Ingredient = (
+  id: string,
+  name: string,
+  gramsPerMl: number | null,
+  gramsEach: number | null,
+) =>
+  ({
+    ...repriceIngredient(id),
+    name,
+    gramsPerMl,
+    gramsEach,
+  }) as ResolvedIngredient;
+const r1Ingredients = new Map(
+  [
+    r1Ingredient('thigh', 'Chicken thigh', null, null),
+    r1Ingredient('soy', 'Soy sauce', 1.2, null),
+    r1Ingredient('garlic', 'Garlic', null, 3),
+    r1Ingredient('salt', 'Salt', 1.2, null),
+    r1Ingredient('lime', 'Lime', null, null),
+  ].map((entry) => [entry.id, entry]),
+);
+const r1Adobo = {
+  ...recipe(4, [
+    ['thigh', 2, 'LB'],
+    ['soy', 0.25, 'CUP'],
+    ['garlic', 6, 'EACH'],
+    ['salt', 1, 'TSP'],
+  ]),
+  id: 'r1-adobo',
+  title: 'Adobo chicken',
+  isArchived: false,
+} as Recipe;
+const r1Rice = {
+  ...recipe(4, [
+    ['salt', 0.5, 'TSP'],
+    ['lime', 2, 'EACH'],
+  ]),
+  id: 'r1-rice',
+  title: 'Cilantro lime rice',
+  isArchived: false,
+} as Recipe;
+const r1Retired = {
+  ...recipe(4, [['salt', 1, 'TSP']]),
+  id: 'r1-retired',
+  title: 'Retired chili',
+  isArchived: true,
+} as Recipe;
+const r1RecipesById = new Map(
+  [r1Adobo, r1Rice, r1Retired].map((entry) => [entry.id, entry]),
+);
+const r1Tonight = {
+  ...plannedOf(
+    [{ id: 'a', kind: 'RECIPE', refId: 'r1-adobo', servings: 2 }],
+    null,
+  ),
+  id: 'r1-tonight',
+};
+const r1Frozen = {
+  ...plannedOf(
+    [{ id: 'a', kind: 'RECIPE', refId: 'r1-adobo', servings: 40 }],
+    fixedThen,
+  ),
+  id: 'r1-frozen',
+};
+const r1Uses = getIngredientUses(
+  [r1Adobo, r1Rice, r1Retired],
+  [r1Tonight, r1Frozen],
+  r1RecipesById,
+  r1Ingredients,
+);
+const r1Gaps: Gap[] = [
+  { kind: 'NO_PRODUCT', ingredientId: 'salt' },
+  { kind: 'NO_PRODUCT', ingredientId: 'garlic' },
+  { kind: 'NO_PRODUCT', ingredientId: 'thigh' },
+  { kind: 'NO_PRODUCT', ingredientId: 'salt' },
+  { kind: 'NOT_COMPARABLE', ingredientId: 'soy' },
+];
+assert.deepEqual(
+  rankGaps(r1Gaps, r1Uses).map((gap) => gap.ingredientId),
+  ['thigh', 'soy', 'garlic', 'salt'],
+  'gaps rank by weight once each: chicken before soy sauce, garlic and salt',
+);
+assert.deepEqual(
+  rankGaps(
+    [
+      { kind: 'NO_PRODUCT', ingredientId: 'nowhere' },
+      { kind: 'NO_PRODUCT', ingredientId: 'elsewhere' },
+    ],
+    r1Uses,
+  ).map((gap) => gap.ingredientId),
+  ['nowhere', 'elsewhere'],
+  'gaps nothing uses keep the order they came in',
+);
+assert.equal(
+  getUseText(r1Uses.get('thigh'), r1Ingredients.get('thigh')),
+  'Used in Adobo chicken · 1 lb planned',
+  'a planned ingredient says the recipe and what the days ahead need, never a frozen day',
+);
+assert.equal(
+  getUseText(r1Uses.get('salt'), r1Ingredients.get('salt')),
+  'Used in Adobo chicken and 1 more · 0.5 tsp planned',
+  'an ingredient in several listed recipes counts the others, not the archived one',
+);
+assert.equal(
+  getUseText(r1Uses.get('lime'), r1Ingredients.get('lime')),
+  'Used in Cilantro lime rice · 2 each',
+  'an unplanned ingredient in one recipe says the recipe amount',
+);
+assert.equal(getUseText(undefined, undefined), null);
+assert.deepEqual(
+  [10.25, 1.284, 0.318].map((amount) =>
+    getUseText(
+      {
+        recipes: [{ title: 'X', amount, unit: 'TBSP', grams: 1 }],
+        planned: [],
+        grams: 1,
+      },
+      undefined,
+    ),
+  ),
+  ['Used in X · 10 tbsp', 'Used in X · 1.3 tbsp', 'Used in X · 0.32 tbsp'],
+  'amounts read rounded: whole from 10, one decimal from 1, two below',
+);
+assert.deepEqual(
+  ['thigh', 'soy', 'garlic', 'lime'].map((id) =>
+    getPackageUnit(r1Uses.get(id), r1Ingredients.get(id)),
+  ),
+  ['LB', 'FL_OZ', 'EACH', 'EACH'],
+  'a package starts in the unit the recipes measure it by: lb, fl oz for cups, each',
+);
+assert.equal(
+  getPackageUnit(undefined, r1Ingredients.get('thigh')),
+  'G',
+  "an ingredient nothing uses starts from its serving's unit",
+);
+
 console.log('pinchMath: all checks passed');
