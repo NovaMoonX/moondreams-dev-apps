@@ -433,7 +433,7 @@ function RecipeDrawer({
                   <span className='min-w-0'>
                     {ingredientsById.get(line.ingredientId)?.name ??
                       'Removed ingredient'}
-                    {line.note && (
+                    {line.note && line.amount !== null && (
                       <span className='text-muted-foreground block text-xs'>
                         {line.note}
                       </span>
@@ -444,10 +444,18 @@ function RecipeDrawer({
                       </span>
                     )}
                   </span>
-                  <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                    {Math.round(line.amount * 100) / 100}{' '}
-                    {UNIT_LABELS[line.unit]}
-                  </span>
+                  {line.amount === null ? (
+                    line.note && (
+                      <span className='text-muted-foreground max-w-[50%] text-right text-sm wrap-break-word'>
+                        {line.note}
+                      </span>
+                    )
+                  ) : (
+                    <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                      {Math.round(line.amount * 100) / 100}{' '}
+                      {UNIT_LABELS[line.unit]}
+                    </span>
+                  )}
                 </li>
               );
             })}

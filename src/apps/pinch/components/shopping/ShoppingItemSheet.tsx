@@ -52,7 +52,9 @@ function ShoppingItemSheet({
   const [shown] = useState(
     () => sumShopAmounts(items) ?? { amount: item.amount, unit: item.unit },
   );
-  const [amountText, setAmountText] = useState(String(shown.amount));
+  const [amountText, setAmountText] = useState(
+    shown.amount === null ? '' : String(shown.amount),
+  );
   const [unit, setUnit] = useState<Unit>(shown.unit);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,11 +71,19 @@ function ShoppingItemSheet({
 
   const getNote = () => {
     if (!inNewUnit) {
-      return items.length > 1
-        ? `On your list as ${items.map((rowItem) => formatSize(rowItem.amount, rowItem.unit)).join(' and ')}. Saving keeps one amount.`
+      const amounts = items.flatMap((rowItem) =>
+        rowItem.amount === null
+          ? []
+          : [formatSize(rowItem.amount, rowItem.unit)],
+      );
+      return amounts.length > 1
+        ? `On your list as ${amounts.join(' and ')}. Saving keeps one amount.`
         : null;
     }
-    const there = formatSize(inNewUnit.amount, inNewUnit.unit);
+    const there =
+      inNewUnit.amount === null
+        ? name
+        : formatSize(inNewUnit.amount, inNewUnit.unit);
     if (!inNewUnit.isChecked) {
       return `You already have ${there} on your list. This adds to it.`;
     }

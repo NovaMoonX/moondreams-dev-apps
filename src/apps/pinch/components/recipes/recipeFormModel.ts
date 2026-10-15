@@ -75,7 +75,7 @@ export const getInitialData = (
   ingredients: (recipe?.ingredients ?? []).map((line) => ({
     id: line.id,
     ingredientId: line.ingredientId,
-    amount: String(line.amount),
+    amount: line.amount === null ? '' : String(line.amount),
     unit: line.unit,
     note: line.note ?? null,
     proposedName: null,

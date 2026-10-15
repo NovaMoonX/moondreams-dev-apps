@@ -128,7 +128,13 @@ function CookStepView({
                   className='flex items-baseline justify-between gap-3 py-1.5 text-base'
                 >
                   <span className='min-w-0 wrap-break-word'>{row.name}</span>
-                  <span className='shrink-0 font-semibold whitespace-nowrap'>
+                  <span
+                    className={
+                      row.isMeasured
+                        ? 'shrink-0 font-semibold whitespace-nowrap'
+                        : 'text-muted-foreground max-w-[50%] text-right wrap-break-word'
+                    }
+                  >
                     {row.amountText}
                   </span>
                 </li>

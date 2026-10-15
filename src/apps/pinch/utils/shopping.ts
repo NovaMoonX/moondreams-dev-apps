@@ -27,7 +27,8 @@ import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
 export interface ShoppingLine {
   ingredientId: string;
-  amount: number;
+  /** Null for a line that is just the name ("Parsley"), always in `EACH`. */
+  amount: number | null;
   unit: Unit;
 }
 
@@ -37,7 +38,7 @@ export interface ShoppingRowData {
   /** Every stored item the row stands for, largest first. */
   itemIds: string[];
   name: string;
-  /** What to pick up, or null for a pinch of a spice or oil, which needs only its name. */
+  /** What to pick up, or null for a pinch of a spice or oil or a line that is just the name, which needs only its name. */
   amountText: string | null;
   isChecked: boolean;
 }
@@ -70,15 +71,21 @@ export interface ShopAmount {
   unit: Unit;
 }
 
+/** A line, an item or a part of a row: a name-only one has no amount. */
+type MaybeAmount = Pick<ShoppingLine, 'amount' | 'unit'>;
+
 const PANTRY_SIZED_ML = UNIT_TO_BASE.TBSP - 0.01;
 const PANTRY_SIZED_G = 15;
 
-/** One ingredient's amounts of the same kind summed in the unit of the largest, a count rounded up to whole ones. */
-export function sumShopAmounts(parts: ShopAmount[]): ShopAmount | null {
-  if (parts.length === 0) {
+/** One ingredient's amounts of the same kind summed in the unit of the largest, a count rounded up to whole ones; null when none has an amount. */
+export function sumShopAmounts(parts: MaybeAmount[]): ShopAmount | null {
+  const known = parts.flatMap((part) =>
+    part.amount === null ? [] : [{ amount: part.amount, unit: part.unit }],
+  );
+  if (known.length === 0) {
     return null;
   }
-  const based = parts.map((part) => ({
+  const based = known.map((part) => ({
     unit: part.unit,
     base: part.amount * UNIT_TO_BASE[part.unit],
   }));
@@ -96,7 +103,7 @@ export function sumShopAmounts(parts: ShopAmount[]): ShopAmount | null {
 
 /** What to pick up in a shop; null for less than a tablespoon (or 15 g) of a spice or oil, which is on the shelf at home or bought by the jar. */
 export function getShopAmount(
-  parts: ShopAmount[],
+  parts: MaybeAmount[],
   section: ShopSection,
 ): ShopAmount | null {
   const sum = sumShopAmounts(parts);
@@ -161,41 +168,55 @@ export const isValidAmount = (amount: number) =>
 export const getShoppingItemId = (ingredientId: string, unit: Unit) =>
   `${ingredientId}__${unit}`;
 
-/** Adds up lines with the same ingredient and unit, rounding once at the end; units are never converted. */
+/** Two amounts of one item added together: a name-only one adds nothing, and two of them stay just the name. */
+const addAmounts = (a: number | null, b: number | null) =>
+  a === null && b === null ? null : (a ?? 0) + (b ?? 0);
+
+/** Adds up lines with the same ingredient and unit, rounding once at the end; units are never converted. A name-only line is dropped when another line names the same ingredient with an amount. */
 export function mergeLines(lines: ShoppingLine[]): ShoppingLine[] {
   const sums = lines.reduce((acc, line) => {
     const id = getShoppingItemId(line.ingredientId, line.unit);
+    const known = acc.get(id);
     return acc.set(id, {
       ...line,
-      amount: (acc.get(id)?.amount ?? 0) + line.amount,
+      amount: known ? addAmounts(known.amount, line.amount) : line.amount,
     });
   }, new Map<string, ShoppingLine>());
 
-  return [...sums.values()]
-    .filter((line) => Number.isFinite(line.amount))
-    .map((line) => ({
-      ...line,
-      amount: Math.min(roundAmount(line.amount), MAX_SHOPPING_AMOUNT),
-    }))
-    .filter((line) => line.amount > 0);
+  const merged = [...sums.values()].flatMap((line): ShoppingLine[] => {
+    if (line.amount === null) return [line];
+    if (!Number.isFinite(line.amount)) return [];
+    const amount = Math.min(roundAmount(line.amount), MAX_SHOPPING_AMOUNT);
+    return amount > 0 ? [{ ...line, amount }] : [];
+  });
+  const withAmount = new Set(
+    merged
+      .filter((line) => line.amount !== null)
+      .map((line) => line.ingredientId),
+  );
+  return merged.filter(
+    (line) => line.amount !== null || !withAmount.has(line.ingredientId),
+  );
 }
 
 export interface ShoppingFields {
-  amount: number;
+  amount: number | null;
   isChecked: boolean;
   updatedAt: number;
 }
 
-/** What a line writes onto its item. One already checked off starts again with just this amount, an open one gains it, and a missing one is created with `isChecked`. */
+/** What a line writes onto its item. One already checked off starts again with just this amount, an open one gains it, and a missing one is created with `isChecked`. A name-only line adds nothing to an amount. */
 export function getMergedFields(
   existing: Pick<ShoppingItem, 'amount' | 'isChecked'> | null,
   line: ShoppingLine,
   now: number,
   isChecked = false,
 ): ShoppingFields {
-  const gained = existing && !existing.isChecked ? existing.amount : 0;
+  const kept = existing && !existing.isChecked ? existing.amount : null;
+  const sum = addAmounts(kept, line.amount);
   const fields: ShoppingFields = {
-    amount: Math.min(roundAmount(gained + line.amount), MAX_SHOPPING_AMOUNT),
+    amount:
+      sum === null ? null : Math.min(roundAmount(sum), MAX_SHOPPING_AMOUNT),
     isChecked: existing ? false : isChecked,
     updatedAt: now,
   };
@@ -211,14 +232,18 @@ const getRecipeRawLines = (
   recipe.servings > 0
     ? recipe.ingredients
         .filter((line) => ingredientsById.has(line.ingredientId))
-        .map((line) => ({
-          ingredientId: line.ingredientId,
-          amount: scaleAmount(line.amount, servings, recipe.servings),
-          unit: line.unit,
-        }))
+        .map((line): ShoppingLine =>
+          line.amount === null
+            ? { ingredientId: line.ingredientId, amount: null, unit: 'EACH' }
+            : {
+                ingredientId: line.ingredientId,
+                amount: scaleAmount(line.amount, servings, recipe.servings),
+                unit: line.unit,
+              },
+        )
     : [];
 
-/** A recipe's lines scaled from its own servings to `servings`; a line whose ingredient is gone is left out. */
+/** A recipe's lines scaled from its own servings to `servings`; a line whose ingredient is gone is left out, and one with no amount stays just the name. */
 export function getRecipeLines(
   recipe: Recipe,
   ingredientsById: Map<string, ResolvedIngredient>,
@@ -287,6 +312,70 @@ export function getPlanInRange(
 const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 
+type RowItem = Pick<ShoppingItem, 'id' | 'ingredientId' | 'amount' | 'unit'>;
+
+/** Per ingredient that has an amount among the items, the row a name-only item of it joins. */
+const getAmountRows = (items: RowItem[]) =>
+  items
+    .filter((item) => item.amount !== null)
+    .reduce((acc, item) => {
+      const id = getShopRowId(item.ingredientId, item.unit);
+      const known = acc.get(item.ingredientId);
+      return known !== undefined && known <= id
+        ? acc
+        : acc.set(item.ingredientId, id);
+    }, new Map<string, string>());
+
+const groupByRow = <T extends RowItem>(
+  items: T[],
+  getId: (item: T) => string,
+) =>
+  items.reduce((acc, item) => {
+    const id = getId(item);
+    return acc.set(id, [...(acc.get(id) ?? []), item]);
+  }, new Map<string, T[]>());
+
+/** Each item's row: its ingredient and kind of unit, except that a name-only item joins a row of the same ingredient that has an amount, so "Parsley" never sits beside "Parsley · 30 g". Pass the items of one side of the list. */
+export function getItemRowIds(items: RowItem[]): Map<string, string> {
+  const amountRows = getAmountRows(items);
+  const result = new Map(
+    items.map((item) => [
+      item.id,
+      (item.amount === null ? amountRows.get(item.ingredientId) : undefined) ??
+        getShopRowId(item.ingredientId, item.unit),
+    ]),
+  );
+  return result;
+}
+
+/** How many rows the open part of the list draws: the Shopping tab's badge. */
+export const countOpenShopRows = (items: ShoppingItem[]) =>
+  new Set(getItemRowIds(items.filter((item) => !item.isChecked)).values()).size;
+
+/** The open items an add sheet's row would join: its own row's, or for a row that is just the name, the row the list draws for that ingredient. */
+export function getOpenItemsByRow(
+  rows: Pick<ShopLineRow, 'id' | 'ingredientId' | 'lines'>[],
+  items: ShoppingItem[],
+): Map<string, ShoppingItem[]> {
+  const open = items.filter((item) => !item.isChecked);
+  const rowIds = getItemRowIds(open);
+  const amountRows = getAmountRows(open);
+  const byDrawnRow = groupByRow(open, (item) => rowIds.get(item.id) ?? '');
+  const byRow = groupByRow(open, (item) =>
+    getShopRowId(item.ingredientId, item.unit),
+  );
+  const result = new Map(
+    rows.flatMap((row) => {
+      const isNameOnly = row.lines.every((line) => line.amount === null);
+      const joined = isNameOnly
+        ? byDrawnRow.get(amountRows.get(row.ingredientId) ?? row.id)
+        : byRow.get(row.id);
+      return joined ? [[row.id, joined] as const] : [];
+    }),
+  );
+  return result;
+}
+
 /** Groups what is left and what is checked off, each by the section of the shop it is found in, in walking order with Other last, one row per ingredient and kind of unit. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
 export function groupShoppingItems(
   items: ShoppingItem[],
@@ -294,17 +383,18 @@ export function groupShoppingItems(
   held: ReadonlyMap<string, boolean> = new Map(),
 ): Record<ShoppingView, ShoppingGroup[]> {
   const toRows = (side: ShoppingItem[], suffix: string) => {
-    const byRow = side.reduce((acc, item) => {
-      const id = `${getShopRowId(item.ingredientId, item.unit)}${suffix}`;
-      return acc.set(id, [...(acc.get(id) ?? []), item]);
-    }, new Map<string, ShoppingItem[]>());
+    const rowIds = getItemRowIds(side);
+    const byRow = groupByRow(
+      side,
+      (item) => `${rowIds.get(item.id) ?? ''}${suffix}`,
+    );
     return [...byRow.entries()].map(([id, rowItems]) => {
       const ingredient = ingredientsById.get(rowItems[0].ingredientId);
       const section = getShopSection(ingredient);
       const byBase = [...rowItems].sort(
         (a, b) =>
-          b.amount * UNIT_TO_BASE[b.unit] - a.amount * UNIT_TO_BASE[a.unit] ||
-          a.id.localeCompare(b.id),
+          (b.amount ?? 0) * UNIT_TO_BASE[b.unit] -
+            (a.amount ?? 0) * UNIT_TO_BASE[a.unit] || a.id.localeCompare(b.id),
       );
       const row: ShoppingRowData = {
         id,
@@ -372,26 +462,28 @@ export interface ShoppingCost {
   pricedRowCount: number;
 }
 
-/** Prices the amounts on the list, not whole packages, and says what it could not price. */
+/** Prices the amounts on the list, not whole packages, and says what it could not price. A line that is just the name has nothing to price, so it is neither counted nor left out. */
 export function getShoppingCost(
   lines: ShoppingLine[],
   ingredientsById: Map<string, ResolvedIngredient>,
   defaultProducts: Map<string, Product>,
 ): ShoppingCost {
-  const costs = lines.map((line) => ({
-    rowId: getShopRowId(line.ingredientId, line.unit),
-    ...getLineCost(
-      {
-        id: getShoppingItemId(line.ingredientId, line.unit),
-        ingredientId: line.ingredientId,
-        amount: line.amount,
-        unit: line.unit,
-        note: null,
-      },
-      ingredientsById.get(line.ingredientId),
-      defaultProducts.get(line.ingredientId),
-    ),
-  }));
+  const costs = lines
+    .flatMap((line) => (line.amount === null ? [] : [line]))
+    .map((line) => ({
+      rowId: getShopRowId(line.ingredientId, line.unit),
+      ...getLineCost(
+        {
+          id: getShoppingItemId(line.ingredientId, line.unit),
+          ingredientId: line.ingredientId,
+          amount: line.amount,
+          unit: line.unit,
+          note: null,
+        },
+        ingredientsById.get(line.ingredientId),
+        defaultProducts.get(line.ingredientId),
+      ),
+    }));
   const priced = costs.flatMap((cost) =>
     cost.cents === null ? [] : [cost.cents],
   );

@@ -119,11 +119,15 @@ function CookingSession({
         id: line.id,
         name:
           ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
-        note: line.note,
-        amountText: formatKitchenAmount(
-          scaleAmount(line.amount, servings, recipe.servings),
-          line.unit,
-        ),
+        note: line.amount === null ? null : line.note,
+        amountText:
+          line.amount === null
+            ? (line.note ?? '')
+            : formatKitchenAmount(
+                scaleAmount(line.amount, servings, recipe.servings),
+                line.unit,
+              ),
+        isMeasured: line.amount !== null,
       })),
     [recipe.ingredients, recipe.servings, ingredientsById, servings],
   );

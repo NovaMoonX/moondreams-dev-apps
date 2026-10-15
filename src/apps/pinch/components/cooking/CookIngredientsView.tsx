@@ -13,7 +13,9 @@ export interface CookRow {
   id: string;
   name: string;
   note: string | null;
+  /** The scaled amount, or for a line with no amount its note ("to taste"), which never scales. */
   amountText: string;
+  isMeasured: boolean;
 }
 
 interface CookIngredientRowProps extends CookRow {
@@ -28,6 +30,7 @@ const CookIngredientRow = memo(function CookIngredientRow({
   name,
   note,
   amountText,
+  isMeasured,
   isInStep,
   isOut,
   onToggle,
@@ -65,7 +68,10 @@ const CookIngredientRow = memo(function CookIngredientRow({
         </span>
         <span
           className={join(
-            'shrink-0 text-base font-medium whitespace-nowrap',
+            'text-base',
+            isMeasured
+              ? 'shrink-0 font-medium whitespace-nowrap'
+              : 'text-muted-foreground max-w-[50%] text-right wrap-break-word',
             isOut && 'text-muted-foreground line-through',
           )}
         >

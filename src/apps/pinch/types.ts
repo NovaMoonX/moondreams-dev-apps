@@ -278,8 +278,8 @@ export interface ShoppingItem {
   id: string;
   /** Immutable. */
   ingredientId: string;
-  /** Above zero, at most 1,000,000, two decimals. */
-  amount: number;
+  /** Above zero, at most 1,000,000, two decimals; null for a line that is just the name ("Parsley"), which is always in `EACH`. */
+  amount: number | null;
   /** Immutable: a different unit is a different item. */
   unit: Unit;
   isChecked: boolean;
@@ -390,7 +390,8 @@ export interface RecipeIngredient {
   /** A row id, so edits and reordering keep stable keys. */
   id: string;
   ingredientId: string;
-  amount: number;
+  /** Null for a line with no amount ("salt to taste"), whose note says how much: it never scales and is left out of cost and nutrition without being a gap. Written with `EACH` as its unit. */
+  amount: number | null;
   unit: Unit;
   note: string | null;
 }
