@@ -1629,26 +1629,18 @@ assert.equal(
 );
 
 assert.deepEqual(
-  getRepriceLines(
-    { beforeCents: null, afterCents: 66.0285, leftOutCount: 0 },
-    false,
-  ),
-  { before: "Wasn't priced", after: 'about $0.66', leftOut: null },
-  "an unpriced day says Wasn't priced, the result says about, nothing unpriced adds no line",
+  getRepriceLines({ beforeCents: null, afterCents: 66.0285, leftOutCount: 0 }),
+  { before: 'Not priced', after: 'about $0.66', leftOut: null },
+  'an unpriced day says Not priced as its tile does, the result says about, nothing unpriced adds no line',
 );
 assert.equal(
-  getRepriceLines(
-    { beforeCents: null, afterCents: null, leftOutCount: 1 },
-    true,
-  ).before,
-  'Still no price',
-  'a day already priced again says Still no price',
+  getRepriceLines({ beforeCents: null, afterCents: null, leftOutCount: 1 })
+    .before,
+  'Not priced',
+  'a day already priced again reads Not priced too, like its tile',
 );
 assert.deepEqual(
-  getRepriceLines(
-    { beforeCents: 1066.4, afterCents: null, leftOutCount: 2 },
-    false,
-  ),
+  getRepriceLines({ beforeCents: 1066.4, afterCents: null, leftOutCount: 2 }),
   {
     before: '$10.66',
     after: 'Still no price',
@@ -1657,14 +1649,13 @@ assert.deepEqual(
   'a priced day shows its total as the tile does, a result with no price says so, and the count is plural',
 );
 assert.equal(
-  getRepriceLines({ beforeCents: 0, afterCents: 99.6, leftOutCount: 1 }, false)
+  getRepriceLines({ beforeCents: 0, afterCents: 99.6, leftOutCount: 1 })
     .leftOut,
   '1 ingredient still has no price',
   'one ingredient is singular',
 );
 assert.equal(
-  getRepriceLines({ beforeCents: 0, afterCents: 99.6, leftOutCount: 1 }, false)
-    .before,
+  getRepriceLines({ beforeCents: 0, afterCents: 99.6, leftOutCount: 1 }).before,
   '$0.00',
 );
 

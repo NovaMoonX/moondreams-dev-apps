@@ -23,7 +23,6 @@ import {
 } from '@apps/pinch/utils/dayKeys';
 import { getRepriceLines } from '@apps/pinch/utils/mealFormat';
 import {
-  getRepricedAt,
   getRepricePreview,
   wouldRepriceChange,
 } from '@apps/pinch/utils/mealMath';
@@ -65,12 +64,7 @@ function RepriceDayRow({ uid, dayKey }: RepriceDayRowProps) {
     setIsBusy(true);
     try {
       const dayName = formatDayShort(dayKey);
-      const lines = getRepriceLines(
-        getRepricePreview(meals, costContext),
-        meals.some(
-          (meal) => meal.snapshot && getRepricedAt(meal.snapshot) !== null,
-        ),
-      );
+      const lines = getRepriceLines(getRepricePreview(meals, costContext));
       const confirmed = await confirm({
         title: `Use today's prices for ${dayName}?`,
         message: (

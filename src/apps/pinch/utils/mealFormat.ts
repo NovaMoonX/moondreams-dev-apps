@@ -71,14 +71,9 @@ export const formatRowCost = (
 };
 
 /** The lines a re-price confirm shows: the day before and after in the cost tile's own words, and what stays unpriced. The "after" is "about" because the write re-reads the meals. */
-export function getRepriceLines(preview: RepricePreview, isRepriced: boolean) {
+export function getRepriceLines(preview: RepricePreview) {
   const { beforeCents, afterCents, leftOutCount } = preview;
-  const before =
-    beforeCents === null
-      ? isRepriced
-        ? 'Still no price'
-        : "Wasn't priced"
-      : formatCost(beforeCents);
+  const before = beforeCents === null ? 'Not priced' : formatCost(beforeCents);
   const after =
     afterCents === null ? 'Still no price' : `about ${formatCost(afterCents)}`;
   const leftOut =
