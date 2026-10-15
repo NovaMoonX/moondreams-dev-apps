@@ -21,7 +21,12 @@ import type {
   ShoppingView,
   Unit,
 } from '@apps/pinch/types';
-import type { DayRange } from '@apps/pinch/utils/dayKeys';
+import {
+  addDaysToKey,
+  formatDayShort,
+  getDateOfDayKey,
+  type DayRange,
+} from '@apps/pinch/utils/dayKeys';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
@@ -42,8 +47,26 @@ export interface ListLine extends ShoppingLine {
   sources: string[];
 }
 
-export const getRecipeSource = (recipeId: string) => `recipe:${recipeId}`;
-export const getMealSource = (mealId: string) => `meal:${mealId}`;
+const RECIPE_SOURCE = 'recipe:';
+const MEAL_SOURCE = 'meal:';
+
+export const getRecipeSource = (recipeId: string) =>
+  `${RECIPE_SOURCE}${recipeId}`;
+export const getMealSource = (mealId: string) => `${MEAL_SOURCE}${mealId}`;
+
+/** What a source names: a recipe, a saved meal, or (anything else) a planned meal. */
+export function parseSource(source: string): {
+  kind: 'recipe' | 'meal' | 'planned';
+  id: string;
+} {
+  if (source.startsWith(RECIPE_SOURCE)) {
+    return { kind: 'recipe', id: source.slice(RECIPE_SOURCE.length) };
+  }
+  if (source.startsWith(MEAL_SOURCE)) {
+    return { kind: 'meal', id: source.slice(MEAL_SOURCE.length) };
+  }
+  return { kind: 'planned', id: source };
+}
 
 export interface ShoppingRowData {
   /** One ingredient's amounts of the same kind (weights, volumes or counts) share a row. */
@@ -166,6 +189,79 @@ export function groupShopLines(
   });
   return result;
 }
+
+export interface RowOnList {
+  /** What ticking the row adds: the lines whose source hasn't put it on the list yet, or all of them once every source has (more, on purpose). */
+  addLines: SourcedLine[];
+  /** The row's sources that already put it on the list, still to buy or got. */
+  matched: string[];
+  /** Whether a matched source sits on something still to buy, rather than only on what was got. */
+  isMatchedOpen: boolean;
+  /** Every source behind the row already put it on the list, so it starts unticked. */
+  isCovered: boolean;
+}
+
+/** How an add sheet's row stands against the list's items of the same row; a line put there by something else, or typed on the list, never counts as this row's. An open line written before sources were kept could be anyone's, so it still starts the row unticked. */
+export function getRowOnList(
+  lines: SourcedLine[],
+  rowItems: ShoppingItem[],
+): RowOnList {
+  const sourcesOf = (items: ShoppingItem[]) =>
+    new Set(items.flatMap((item) => item.sources ?? []));
+  const openItems = rowItems.filter((item) => !item.isChecked);
+  const open = sourcesOf(openItems);
+  const got = sourcesOf(rowItems.filter((item) => item.isChecked));
+  const isListed = (source: string | null) =>
+    !!source && (open.has(source) || got.has(source));
+  const rowSources = [
+    ...new Set(lines.flatMap((line) => (line.source ? [line.source] : []))),
+  ];
+  const matched = rowSources.filter(isListed);
+  const newLines = lines.filter((line) => !isListed(line.source));
+  const isCovered =
+    (rowSources.length > 0 && newLines.length === 0) ||
+    openItems.some((item) => item.sources === undefined);
+
+  return {
+    addLines: isCovered ? lines : newLines,
+    matched,
+    isMatchedOpen: matched.some((source) => open.has(source)),
+    isCovered,
+  };
+}
+
+/** "Thu dinner and Fri lunch", or "3 of these meals". */
+export const formatSourceNames = (names: string[]) => {
+  if (names.length <= 1) return names[0] ?? '';
+  return names.length === 2
+    ? `${names[0]} and ${names[1]}`
+    : `${names.length} of these meals`;
+};
+
+/** The line under an add sheet's row. `openText` is undefined when nothing of the row is still to buy, null when what is has no amount (a pinch of a spice). */
+export function getOnListHint(
+  state: RowOnList,
+  matchedText: string,
+  openText: string | null | undefined,
+): string | null {
+  if (state.matched.length > 0) {
+    const hint = `Already ${state.isMatchedOpen ? 'on your list' : 'got it'} for ${matchedText}`;
+    return state.isCovered ? hint : `${hint}; this adds the rest`;
+  }
+  if (openText === undefined) return null;
+  return openText ? `On your list · ${openText}` : 'On your list';
+}
+
+const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  timeZone: 'UTC',
+});
+
+/** "Thu" for a day in the coming week, else "Oct 23", so a weekday never points at the wrong week. */
+export const formatSourceDay = (dayKey: string, todayKey: string) =>
+  dayKey >= todayKey && dayKey <= addDaysToKey(todayKey, 6)
+    ? weekdayFormatter.format(getDateOfDayKey(dayKey))
+    : formatDayShort(dayKey);
 
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
 export const isValidAmount = (amount: number) =>

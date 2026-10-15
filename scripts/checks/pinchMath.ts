@@ -5715,4 +5715,140 @@ assert.deepEqual(
   'thirds from two planned meals round once when they meet on one item',
 );
 
+import {
+  formatSourceDay as srcDay,
+  formatSourceNames as srcNames,
+  getOnListHint as srcHint,
+  getRowOnList as srcRowOnList,
+  parseSource as srcParse,
+} from '../../src/apps/pinch/utils/shopping.ts';
+
+const srcItem = (
+  amount: number,
+  isChecked: boolean,
+  sources?: string[],
+): ShoppingItem =>
+  ({
+    id: 'chicken__LB',
+    ingredientId: 'chicken',
+    amount,
+    unit: 'LB',
+    isChecked,
+    ...(sources ? { sources } : {}),
+    createdAt: 1,
+    updatedAt: 1,
+  }) as ShoppingItem;
+const srcChicken = (source: string | null, amount: number) => ({
+  ingredientId: 'chicken',
+  amount,
+  unit: 'LB' as Unit,
+  source,
+});
+const srcWeek = [srcChicken('thu', 1), srcChicken('fri', 1.5)];
+const srcState = (
+  lines: ReturnType<typeof srcChicken>[],
+  items: ShoppingItem[],
+) => {
+  const state = srcRowOnList(lines, items);
+  return [
+    state.isCovered,
+    state.matched,
+    state.isMatchedOpen,
+    state.addLines.map((line) => line.source),
+  ];
+};
+assert.deepEqual(
+  [
+    srcState(srcWeek, []),
+    srcState(srcWeek, [srcItem(1, false, ['thu'])]),
+    srcState(srcWeek, [srcItem(2.5, false, ['thu', 'fri'])]),
+    srcState(srcWeek, [srcItem(2, false, ['recipe:adobo'])]),
+    srcState(srcWeek, [srcItem(2, false, [])]),
+    srcState(srcWeek, [srcItem(2, false)]),
+    srcState([srcChicken('thu', 1)], [srcItem(1, true, ['thu'])]),
+  ],
+  [
+    [false, [], false, ['thu', 'fri']],
+    [false, ['thu'], true, ['fri']],
+    [true, ['thu', 'fri'], true, ['thu', 'fri']],
+    [false, [], false, ['thu', 'fri']],
+    [false, [], false, ['thu', 'fri']],
+    [true, [], false, ['thu', 'fri']],
+    [true, ['thu'], false, ['thu']],
+  ],
+  'a row starts unticked only when its own sources put it on the list (still to buy or got); another meal, a recipe or a typed line leaves it ticked, Thursday’s share is never added twice, and an open line written before sources keeps the old guard',
+);
+assert.deepEqual(
+  srcHint(srcRowOnList(srcWeek, [srcItem(2, false)]), '', '2 lb'),
+  'On your list · 2 lb',
+  'a line written before sources says only that it is on the list',
+);
+assert.deepEqual(
+  [
+    srcHint(srcRowOnList(srcWeek, []), '', undefined),
+    srcHint(srcRowOnList(srcWeek, [srcItem(2, false)]), '', '2 lb'),
+    srcHint(
+      srcRowOnList([srcChicken('thu', 1)], [srcItem(2, false)]),
+      '',
+      null,
+    ),
+    srcHint(
+      srcRowOnList(srcWeek, [srcItem(2.5, false, ['thu', 'fri'])]),
+      'Thu dinner and Fri dinner',
+      '2.5 lb',
+    ),
+    srcHint(
+      srcRowOnList(srcWeek, [srcItem(1, false, ['thu'])]),
+      'Thu dinner',
+      '1 lb',
+    ),
+    srcHint(
+      srcRowOnList([srcChicken('thu', 1)], [srcItem(1, true, ['thu'])]),
+      'Thu dinner',
+      undefined,
+    ),
+  ],
+  [
+    null,
+    'On your list · 2 lb',
+    'On your list',
+    'Already on your list for Thu dinner and Fri dinner',
+    'Already on your list for Thu dinner; this adds the rest',
+    'Already got it for Thu dinner',
+  ],
+  'the row’s hint names this sheet’s sources that already put it on the list, and keeps “On your list · 2 lb” for what something else put there',
+);
+assert.deepEqual(
+  [
+    srcNames(['Thu dinner']),
+    srcNames(['Thu dinner', 'Fri lunch']),
+    srcNames(['Thu dinner', 'Fri lunch', 'Sat dinner']),
+  ],
+  ['Thu dinner', 'Thu dinner and Fri lunch', '3 of these meals'],
+  'one or two sources are named, more are counted',
+);
+assert.deepEqual(
+  [
+    srcDay('2026-10-15', '2026-10-15'),
+    srcDay('2026-10-21', '2026-10-15'),
+    srcDay('2026-10-22', '2026-10-15'),
+    srcDay('2026-10-14', '2026-10-15'),
+  ],
+  ['Thu', 'Wed', 'Oct 22', 'Oct 14'],
+  'a weekday names a day of the coming week only; one further out or already past says its date',
+);
+assert.deepEqual(
+  [
+    srcParse('recipe:abc'),
+    srcParse('meal:xyz'),
+    srcParse('seed-pinch-planned-4'),
+  ],
+  [
+    { kind: 'recipe', id: 'abc' },
+    { kind: 'meal', id: 'xyz' },
+    { kind: 'planned', id: 'seed-pinch-planned-4' },
+  ],
+  'a source names a recipe, a saved meal, or a planned meal by its own id',
+);
+
 console.log('pinchMath: all checks passed');

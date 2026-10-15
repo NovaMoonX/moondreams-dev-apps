@@ -20,6 +20,7 @@ import {
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   MAX_SHOPPING_LINES_PER_ADD,
+  MEAL_TYPE_LABELS,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
@@ -50,24 +51,32 @@ import {
   formatDayTitle,
   getCellDayKey,
   getMonthWindow,
+  getPlannedDayKey,
   type DayRange,
 } from '@apps/pinch/utils/dayKeys';
 import {
   formatShopAmount,
+  formatSourceDay,
+  formatSourceNames,
   getMealSource,
+  getOnListHint,
   getPlanInRange,
   getRecipeLines,
   getRecipeSource,
+  getRowOnList,
   getShopAmount,
   getShoppingItemId,
   getShopRowId,
   getSourcedLines,
   groupShopLines,
   isUsuallyAtHome,
+  parseSource,
   type ShopLineRow,
   type SourcedItems,
   type SourcedLine,
 } from '@apps/pinch/utils/shopping';
+
+const NO_MEALS: PlannedMeal[] = [];
 
 const NEXT_DAYS = 7;
 
@@ -118,7 +127,7 @@ interface ShoppingPickProps {
   hasViewAction?: boolean;
 }
 
-/** What goes on the list from a recipe, a meal, a day or a range of planned days, each line remembering what put it there. What is already on the list starts unticked, since ticking it adds more. */
+/** What goes on the list from a recipe, a meal, a day or a range of planned days, each line remembering what put it there. A row starts unticked only once these same sources put it on the list, and ticked when something else did, adding only the share not yet there. */
 export function ShoppingPick({
   uid,
   request,
@@ -180,9 +189,16 @@ export function ShoppingPick({
     [plannedByDay, days, lastLoadedKey, todayKey],
   );
 
+  const plannedMeals = useMemo((): PlannedMeal[] | null => {
+    if (request.kind === 'day') {
+      return plannedByDay.get(request.dayKey) ?? NO_MEALS;
+    }
+    if (request.kind === 'range') {
+      return isPlanLoaded ? span.meals : NO_MEALS;
+    }
+    return null;
+  }, [request, plannedByDay, span, isPlanLoaded]);
   const groups = useMemo((): SourcedItems[] | null => {
-    const ofMeals = (meals: PlannedMeal[]) =>
-      meals.map((meal) => ({ items: meal.items, source: meal.id }));
     if (request.kind === 'items') {
       return [
         {
@@ -191,14 +207,11 @@ export function ShoppingPick({
         },
       ];
     }
-    if (request.kind === 'day') {
-      return ofMeals(plannedByDay.get(request.dayKey) ?? []);
-    }
-    if (request.kind === 'range') {
-      return isPlanLoaded ? ofMeals(span.meals) : [];
-    }
-    return null;
-  }, [request, plannedByDay, span, isPlanLoaded]);
+    return (
+      plannedMeals?.map((meal) => ({ items: meal.items, source: meal.id })) ??
+      null
+    );
+  }, [request, plannedMeals]);
   const items = useMemo(
     (): MealItem[] | null => groups?.flatMap((group) => group.items) ?? null,
     [groups],
@@ -215,16 +228,44 @@ export function ShoppingPick({
         : [];
     return groupShopLines(lines, ingredientsById);
   }, [groups, recipe, recipesById, ingredientsById, servings]);
-  const openByRow = useMemo(
-    () =>
-      [...onList.values()]
-        .filter((item) => !item.isChecked)
-        .reduce((acc, item) => {
-          const id = getShopRowId(item.ingredientId, item.unit);
-          return acc.set(id, [...(acc.get(id) ?? []), item]);
-        }, new Map<string, ShoppingItem[]>()),
-    [onList],
-  );
+  const states = useMemo(() => {
+    const itemsByRow = [...onList.values()].reduce((acc, item) => {
+      const id = getShopRowId(item.ingredientId, item.unit);
+      return acc.set(id, [...(acc.get(id) ?? []), item]);
+    }, new Map<string, ShoppingItem[]>());
+    return new Map(
+      rows.map((row) => {
+        const rowItems = itemsByRow.get(row.id) ?? [];
+        const open = rowItems.filter((item) => !item.isChecked);
+        return [
+          row.id,
+          {
+            ...getRowOnList(row.lines, rowItems),
+            openText:
+              open.length > 0
+                ? formatShopAmount(getShopAmount(open, row.section))
+                : undefined,
+          },
+        ];
+      }),
+    );
+  }, [onList, rows]);
+  const getState = (row: ShopLineRow) =>
+    states.get(row.id) ?? {
+      ...getRowOnList(row.lines, []),
+      openText: undefined,
+    };
+  const nameSource = (source: string) => {
+    const { kind, id } = parseSource(source);
+    if (kind === 'recipe') return 'this recipe';
+    const meal =
+      kind === 'planned'
+        ? plannedMeals?.find((planned) => planned.id === id)
+        : undefined;
+    return meal
+      ? `${formatSourceDay(getPlannedDayKey(meal.date), todayKey)} ${MEAL_TYPE_LABELS[meal.mealType].toLowerCase()}`
+      : 'this meal';
+  };
 
   const isReady = isLoaded && loadError === null;
   const stocked = useMemo(() => {
@@ -263,16 +304,15 @@ export function ShoppingPick({
     stockByMeal,
   ]);
   const stockLine = getShoppingStockLine(stocked, request.kind !== 'recipe');
-  const isOnList = (id: string) => openByRow.has(id);
   const isTicked = (row: ShopLineRow) =>
-    choices[row.id] ?? (!isOnList(row.id) && !isUsuallyAtHome(row));
+    choices[row.id] ?? (!getState(row).isCovered && !isUsuallyAtHome(row));
   const selected = rows.filter(isTicked);
   const atHomeRows = rows.filter(isUsuallyAtHome);
   const shownRows = [
     ...rows.filter((row) => !isUsuallyAtHome(row)),
     ...atHomeRows,
   ];
-  const selectedLines = selected.flatMap((row) => row.lines);
+  const selectedLines = selected.flatMap((row) => getState(row).addLines);
   const selectedIds = [
     ...new Set(
       selectedLines.map((line) =>
@@ -553,10 +593,15 @@ export function ShoppingPick({
         ) : (
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
             {shownRows.map((row) => {
-              const existing = openByRow.get(row.id);
-              const existingText = existing
-                ? formatShopAmount(getShopAmount(existing, row.section))
-                : null;
+              const state = getState(row);
+              const hint = getOnListHint(
+                state,
+                formatSourceNames(state.matched.map(nameSource)),
+                state.openText,
+              );
+              const amountText = formatShopAmount(
+                getShopAmount(state.addLines, row.section),
+              );
               return (
                 <li key={row.id}>
                   {row.id === atHomeRows[0]?.id && (
@@ -580,17 +625,15 @@ export function ShoppingPick({
                     </span>
                     <span className='min-w-0 flex-1'>
                       <span className='block wrap-break-word'>{row.name}</span>
-                      {existing && (
+                      {hint && (
                         <span className='text-muted-foreground block text-xs'>
-                          {existingText
-                            ? `On your list · ${existingText}`
-                            : 'On your list'}
+                          {hint}
                         </span>
                       )}
                     </span>
-                    {row.amountText && (
+                    {amountText && (
                       <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                        {row.amountText}
+                        {amountText}
                       </span>
                     )}
                   </label>
