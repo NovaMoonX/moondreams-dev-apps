@@ -160,6 +160,8 @@ export function usePutAway({
 
   return {
     isAvailable: isReady && cookId !== null,
+    /** A first put-away is always offered; another only while something is left. */
+    canOffer: saved.length === 0 || left > 0,
     isAsking:
       isBulkMeal({ servings, care, hasStock }) &&
       left > 0 &&

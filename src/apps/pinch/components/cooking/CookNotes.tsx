@@ -22,12 +22,19 @@ import { getNoteSummary, getWrittenBefore } from '@apps/pinch/utils/notes';
 
 const NO_NOTES: RecipeNote[] = [];
 const HIDDEN_WORTH_A_BUTTON = 3;
+const NEXT_TIME = /[.!?]\s+(?=next time\b)/i;
+
+const leadWithAdvice = (text: string) => {
+  const match = NEXT_TIME.exec(text);
+  return match ? `…${text.slice(match.index + match[0].length)}` : text;
+};
 
 interface CookNotesProps {
   recipeId: string;
+  onApply: (noteId: string) => void;
 }
 
-function CookNotes({ recipeId }: CookNotesProps) {
+function CookNotes({ recipeId, onApply }: CookNotesProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
@@ -39,11 +46,13 @@ function CookNotes({ recipeId }: CookNotesProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [limit, setLimit] = useState(RECIPE_NOTES_FIRST_PAGE);
 
-  if (!isReady || notes.length === 0) {
+  const latest = notes.find((entry) => entry.kind === 'NOTE') ?? null;
+  if (!isReady || latest === null) {
     return null;
   }
 
-  const summary = getNoteSummary(notes[0], formatDateShort);
+  const summary = getNoteSummary(latest, formatDateShort);
+  const isChangedSince = lastTweakAt !== null && lastTweakAt > latest.createdAt;
   const hidden = notes.length - limit;
   const visibleCount = hidden > HIDDEN_WORTH_A_BUTTON ? limit : notes.length;
 
@@ -64,13 +73,21 @@ function CookNotes({ recipeId }: CookNotesProps) {
             Your notes ({notes.length})
           </span>
         ) : (
-          <span
-            className={join(
-              'line-clamp-2 min-w-0 flex-1 text-sm wrap-break-word',
-              '[@media(max-height:500px)]:line-clamp-1',
+          <span className='min-w-0 flex-1'>
+            <span
+              className={join(
+                'line-clamp-2 text-sm wrap-break-word',
+                '[@media(max-height:500px)]:line-clamp-1',
+              )}
+            >
+              <span className='font-medium'>{summary.label}</span>{' '}
+              {leadWithAdvice(summary.body)}
+            </span>
+            {isChangedSince && (
+              <span className='text-muted-foreground block text-xs'>
+                You've changed the recipe since.
+              </span>
             )}
-          >
-            <span className='font-medium'>{summary.label}</span> {summary.body}
           </span>
         )}
         <ChevronDown
@@ -95,6 +112,7 @@ function CookNotes({ recipeId }: CookNotesProps) {
                   }
                   writtenBefore={getWrittenBefore(note, lastTweakAt)}
                   onEdit={null}
+                  onApply={onApply}
                 />
               );
             })}

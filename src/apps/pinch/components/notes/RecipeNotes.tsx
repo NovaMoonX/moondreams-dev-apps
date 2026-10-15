@@ -29,9 +29,10 @@ interface RecipeNotesProps {
   recipeId: string;
   onAdd: () => void;
   onEdit: (noteId: string) => void;
+  onApply: (noteId: string) => void;
 }
 
-function RecipeNotes({ recipeId, onAdd, onEdit }: RecipeNotesProps) {
+function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
@@ -99,6 +100,7 @@ function RecipeNotes({ recipeId, onAdd, onEdit }: RecipeNotesProps) {
               cook={cookId === null ? null : (cooksById.get(cookId) ?? null)}
               writtenBefore={getWrittenBefore(note, lastTweakAt)}
               onEdit={onEdit}
+              onApply={onApply}
             />
           );
         })}

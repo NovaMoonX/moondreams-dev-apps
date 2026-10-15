@@ -4921,4 +4921,262 @@ assert.equal(
   "an ingredient nothing uses starts from its serving's unit",
 );
 
+// ---- COOK workstream: cooking mode ----
+const cookUtils = await import('../../src/apps/pinch/utils/cooks.ts');
+assert.deepEqual(
+  [
+    cookUtils.getCookStartServings(6, 1),
+    cookUtils.getCookStartServings(6, null),
+    cookUtils.getCookStartServings(4, 8),
+    cookUtils.getCookStartServings(0, null),
+    cookUtils.getCookStartServings(0.5, 0.5),
+    cookUtils.getCookStartServings(5000, null),
+  ],
+  [6, 6, 8, 1, 0.5, 1000],
+  'cooking starts at the recipe as written, or at the plan when it asks for more',
+);
+assert.deepEqual(
+  [
+    cookUtils.stepCookServings(6, 1),
+    cookUtils.stepCookServings(6, -1),
+    cookUtils.stepCookServings(1, -1),
+    cookUtils.stepCookServings(0.5, 1),
+    cookUtils.stepCookServings(0.5, -1),
+    cookUtils.stepCookServings(2.5, 1),
+    cookUtils.stepCookServings(2.5, -1),
+    cookUtils.stepCookServings(1.5, -1),
+    cookUtils.stepCookServings(1000, 1),
+  ],
+  [7, 5, 0.5, 1, 0.5, 3, 2, 1, 1000],
+  'the servings stepper moves a whole serving a tap, with a half only below one',
+);
+
+const { formatKitchenAmount } =
+  await import('../../src/apps/pinch/utils/kitchenMeasure.ts');
+assert.deepEqual(
+  [
+    formatKitchenAmount(0.25, 'CUP'),
+    formatKitchenAmount(1 / 3, 'CUP'),
+    formatKitchenAmount(2 / 3, 'CUP'),
+    formatKitchenAmount(0.75, 'CUP'),
+    formatKitchenAmount(1, 'CUP'),
+    formatKitchenAmount(1.5, 'CUP'),
+    formatKitchenAmount(2.33, 'CUP'),
+    formatKitchenAmount(0.5, 'TSP'),
+    formatKitchenAmount(1.25, 'TSP'),
+    formatKitchenAmount(0.125, 'TSP'),
+  ],
+  [
+    '¼ cup',
+    '⅓ cup',
+    '⅔ cup',
+    '¾ cup',
+    '1 cup',
+    '1½ cups',
+    '2⅓ cups',
+    '½ tsp',
+    '1¼ tsp',
+    '⅛ tsp',
+  ],
+  'scaled amounts read as kitchen fractions, never decimals of a cup',
+);
+assert.deepEqual(
+  [
+    formatKitchenAmount(scaleAmount(0.25, 5, 4), 'CUP'),
+    formatKitchenAmount(0.31, 'CUP'),
+    formatKitchenAmount(0.125, 'CUP'),
+    formatKitchenAmount(scaleAmount(1, 1, 3), 'TBSP'),
+    formatKitchenAmount(0.5, 'TBSP'),
+    formatKitchenAmount(1.25, 'TBSP'),
+    formatKitchenAmount(0.4, 'CUP'),
+    formatKitchenAmount(0.17, 'LB'),
+    formatKitchenAmount(0.05, 'KG'),
+    formatKitchenAmount(0.05, 'L'),
+  ],
+  [
+    '5 tbsp',
+    '5 tbsp',
+    '2 tbsp',
+    '1 tsp',
+    '1½ tsp',
+    '3¾ tsp',
+    '6½ tbsp',
+    'about 2½ oz',
+    '50 g',
+    '50 ml',
+  ],
+  'a sliver of a cup reads in tablespoons, of a tablespoon in teaspoons, of a pound in ounces',
+);
+assert.deepEqual(
+  [
+    formatKitchenAmount(scaleAmount(6, 5, 4), 'EACH'),
+    formatKitchenAmount(2.5, 'EACH'),
+    formatKitchenAmount(scaleAmount(1, 1, 6), 'EACH'),
+    formatKitchenAmount(6, 'EACH'),
+    formatKitchenAmount(3.4, 'EACH'),
+    formatKitchenAmount(0.6, 'CUP'),
+    formatKitchenAmount(0.9, 'CUP'),
+    formatKitchenAmount(2.75, 'TBSP'),
+    formatKitchenAmount(scaleAmount(1, 1, 6), 'TSP'),
+    formatKitchenAmount(0.01, 'TSP'),
+  ],
+  [
+    'about 8',
+    '2½',
+    'about ½',
+    '6',
+    'about 3',
+    'about ⅔ cup',
+    'about 1 cup',
+    'about 2½ tbsp',
+    'about ⅛ tsp',
+    'a pinch',
+  ],
+  'whole items round to a whole or a half and say "about" when they had to round',
+);
+assert.deepEqual(
+  [
+    formatKitchenAmount(12.4, 'G'),
+    formatKitchenAmount(2.25, 'G'),
+    formatKitchenAmount(250, 'ML'),
+    formatKitchenAmount(1.25, 'KG'),
+    formatKitchenAmount(2.72, 'OZ'),
+    formatKitchenAmount(8, 'FL_OZ'),
+    formatKitchenAmount(2, 'LB'),
+    formatKitchenAmount(0.5, 'LB'),
+    formatKitchenAmount(1, 'PINCH'),
+    formatKitchenAmount(3, 'PINCH'),
+    formatKitchenAmount(0, 'CUP'),
+  ],
+  [
+    '12 g',
+    '2.3 g',
+    '250 ml',
+    '1.25 kg',
+    'about 2½ oz',
+    '8 fl oz',
+    '2 lb',
+    '½ lb',
+    'a pinch',
+    '3 pinches',
+    '0 cup',
+  ],
+  'units without a step-down round sensibly and keep their own unit',
+);
+
+const { matchStepIngredients } =
+  await import('../../src/apps/pinch/utils/stepIngredients.ts');
+const stepLine = (id: string, ...names: string[]) => ({
+  id,
+  ingredientId: `ing-${names[0]}`,
+  names,
+});
+const adoboLines = [
+  stepLine('thigh', 'Chicken thigh', 'chicken thighs'),
+  stepLine('soy', 'Soy sauce'),
+  stepLine('vinegar', 'White vinegar'),
+  stepLine('garlic', 'Garlic'),
+  stepLine('bay', 'Bay leaves'),
+  stepLine('pepper', 'Black pepper'),
+];
+assert.deepEqual(
+  matchStepIngredients(
+    [
+      'Marinate the chicken in the soy sauce, vinegar and garlic for 30 minutes.',
+      'Simmer 25 minutes with the bay leaves and plenty of pepper. Leave to rest.',
+      'Reduce the sauce until it clings to the chicken. Serve hot.',
+    ],
+    adoboLines,
+  ).map((step) => step.lineIds),
+  [['thigh', 'soy', 'vinegar', 'garlic'], ['bay', 'pepper'], []],
+  'a step lists the lines it is first to name, in the order it names them, by a whole name or a word only one ingredient could mean',
+);
+assert.deepEqual(
+  [
+    matchStepIngredients(
+      ['Add the garlic powder.', 'Add the garlic.', 'Brown the beef.'],
+      [
+        stepLine('powder', 'Garlic powder'),
+        stepLine('garlic', 'Garlic'),
+        stepLine('beef', 'Ground beef'),
+        stepLine('sugar', 'Brown sugar'),
+      ],
+    ).map((step) => step.lineIds),
+    matchStepIngredients(
+      ['Heat the oil.'],
+      [stepLine('olive', 'Olive oil'), stepLine('sesame', 'Sesame oil')],
+    ).map((step) => step.lineIds),
+    matchStepIngredients(
+      ['Heat the oil.'],
+      [stepLine('olive', 'Olive oil')],
+    ).map((step) => step.lineIds),
+    matchStepIngredients(
+      ['Fold in the eggs.'],
+      [
+        { id: 'egg-a', ingredientId: 'egg', names: ['Egg'] },
+        stepLine('flour', 'Flour'),
+        { id: 'egg-b', ingredientId: 'egg', names: ['Egg'] },
+      ],
+    ).map((step) => step.lineIds),
+    matchStepIngredients(['Stir well and serve.'], adoboLines).map(
+      (step) => step.lineIds,
+    ),
+  ],
+  [
+    [['powder'], ['garlic'], ['beef']],
+    [[]],
+    [['olive']],
+    [['egg-a', 'egg-b']],
+    [[]],
+  ],
+  'a longer name wins over a shorter one inside it, a word two ingredients share or a colour names nothing, and both lines of one ingredient are listed',
+);
+assert.deepEqual(
+  matchStepIngredients(
+    ['Cut the lemon in half and add some water.', 'Flake the tuna.'],
+    [
+      stepLine('tuna', 'Canned tuna', 'tuna in water'),
+      stepLine('cream', 'Half and half', 'half & half'),
+      stepLine('lemon', 'Lemon'),
+    ],
+  ).map((step) => step.lineIds),
+  [['lemon'], ['tuna']],
+  'a word in the middle of an alias, or a little word like "and" or "half", never names an ingredient on its own',
+);
+assert.deepEqual(
+  matchStepIngredients(
+    [
+      'Add 2 cups of the broth.',
+      'Stir in 350g flour.',
+      'Bake at 400°F for 20 minutes.',
+      'Cut into 4 wedges.',
+    ],
+    [],
+  ).map((step) => step.hasWrittenAmount),
+  [true, true, false, false],
+  'a step that writes its own amount is told apart from one that only has a time or a temperature',
+);
+
+assert.deepEqual(
+  [
+    cookUtils.getStepName('Brown the beef in a large pot, about 8 minutes.'),
+    cookUtils.getStepName(
+      'Simmer everything with the bay leaves for 25 minutes.',
+    ),
+    cookUtils.getStepName('Uncover and reduce the sauce.'),
+    cookUtils.getStepName('Bake.'),
+    cookUtils.getStepName('2. Rinse the rice twice'),
+    cookUtils.getStepName(''),
+  ],
+  [
+    'Brown the beef',
+    'Simmer everything',
+    'Uncover and reduce',
+    'Bake',
+    '2 Rinse',
+    '',
+  ],
+  "a timer is named by its step's first words, without a little word left dangling at the end",
+);
+
 console.log('pinchMath: all checks passed');
