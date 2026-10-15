@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -32,6 +32,7 @@ import { usePutAway } from '@apps/pinch/hooks/usePutAway';
 import {
   selectCooksById,
   selectCookSummaries,
+  selectIngredientsById,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import { updateCook } from '@apps/pinch/store/actions/cookActions';
@@ -41,8 +42,11 @@ import {
   getPlannedCookId,
   isCookHistoryFull,
 } from '@apps/pinch/utils/cooks';
+import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLeftoversLine, getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -82,6 +86,36 @@ function CookingSession({
   const stripRef = useRef<HTMLUListElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const timers = useCookTimers();
+  const ingredientsById = useAppSelector(selectIngredientsById);
+  const stepMatches = useMemo(
+    () =>
+      matchStepIngredients(
+        recipe.steps,
+        recipe.ingredients.map((line) => {
+          const ingredient = ingredientsById.get(line.ingredientId);
+          return {
+            id: line.id,
+            ingredientId: line.ingredientId,
+            names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
+          };
+        }),
+      ),
+    [recipe.steps, recipe.ingredients, ingredientsById],
+  );
+  const rows = useMemo(
+    () =>
+      recipe.ingredients.map((line) => ({
+        id: line.id,
+        name:
+          ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
+        note: line.note,
+        amountText: formatKitchenAmount(
+          scaleAmount(line.amount, servings, recipe.servings),
+          line.unit,
+        ),
+      })),
+    [recipe.ingredients, recipe.servings, ingredientsById, servings],
+  );
   const wakeLock = useWakeLock(true);
   const {
     isReady: isCooksReady,
@@ -142,6 +176,14 @@ function CookingSession({
   const isFinishShown = isFinished && isStepsView && hasSteps;
   const canMark = isCooksReady && !isRemoved;
   const leftoversLine = getLeftoversLine(getRecipeCare(recipe));
+  const isScaled = recipe.servings > 0 && servings !== recipe.servings;
+  const stepMatch = stepMatches[index] ?? null;
+  const stepRows =
+    stepMatch === null
+      ? []
+      : stepMatch.lineIds
+          .map((id) => rows.find((row) => row.id === id))
+          .filter((row) => row !== undefined);
 
   const scrollToTop = () =>
     rootRef.current
@@ -482,6 +524,10 @@ function CookingSession({
             <CookStepView
               steps={recipe.steps}
               index={index}
+              ingredients={stepRows}
+              isAmountNoteShown={
+                isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
+              }
               timers={timers.timers}
               isTimersFull={timers.isFull}
               onStartTimer={handleStartTimer}
@@ -495,6 +541,10 @@ function CookingSession({
         ) : (
           <CookIngredientsView
             recipe={recipe}
+            rows={rows}
+            hasWrittenAmounts={stepMatches.some(
+              (match) => match.hasWrittenAmount,
+            )}
             servings={servings}
             plannedServings={plannedServings}
             gotOut={gotOut}

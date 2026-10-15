@@ -1,23 +1,22 @@
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Stepper from '@/components/Stepper';
-import { useAppSelector } from '@/store';
 import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
-import { selectIngredientsById } from '@apps/pinch/store/selectors';
 import type { Recipe } from '@apps/pinch/types';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
-import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
-import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
-interface CookIngredientRowProps {
+export interface CookRow {
   id: string;
   name: string;
   note: string | null;
   amountText: string;
+}
+
+interface CookIngredientRowProps extends CookRow {
   isOut: boolean;
   onToggle: (id: string, isOut: boolean) => void;
 }
@@ -72,6 +71,9 @@ const CookIngredientRow = memo(function CookIngredientRow({
 
 interface CookIngredientsViewProps {
   recipe: Recipe;
+  rows: CookRow[];
+  /** Some step writes an amount of its own, which scaling leaves as it is. */
+  hasWrittenAmounts: boolean;
   servings: number;
   plannedServings: number | null;
   gotOut: Record<string, boolean>;
@@ -82,6 +84,8 @@ interface CookIngredientsViewProps {
 
 function CookIngredientsView({
   recipe,
+  rows,
+  hasWrittenAmounts,
   servings,
   plannedServings,
   gotOut,
@@ -89,22 +93,6 @@ function CookIngredientsView({
   onToggle,
   onReset,
 }: CookIngredientsViewProps) {
-  const ingredientsById = useAppSelector(selectIngredientsById);
-
-  const rows = useMemo(
-    () =>
-      recipe.ingredients.map((line) => ({
-        id: line.id,
-        name:
-          ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
-        note: line.note,
-        amountText: formatKitchenAmount(
-          scaleAmount(line.amount, servings, recipe.servings),
-          line.unit,
-        ),
-      })),
-    [recipe.ingredients, recipe.servings, ingredientsById, servings],
-  );
   const outCount = rows.filter((row) => gotOut[row.id]).length;
   const isScaled = recipe.servings > 0 && servings !== recipe.servings;
 
@@ -135,8 +123,9 @@ function CookIngredientsView({
         )}
         {isScaled && (
           <p className='text-muted-foreground text-xs'>
-            Scaled from {formatServings(recipe.servings)}. Amounts written in
-            the steps stay as they are.
+            Scaled from {formatServings(recipe.servings)}.
+            {hasWrittenAmounts &&
+              ' Amounts written in the steps stay as they are.'}
           </p>
         )}
       </div>

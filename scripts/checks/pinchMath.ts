@@ -4351,4 +4351,97 @@ assert.deepEqual(
   'units without a step-down round sensibly and keep their own unit',
 );
 
+const { matchStepIngredients } =
+  await import('../../src/apps/pinch/utils/stepIngredients.ts');
+const stepLine = (id: string, ...names: string[]) => ({
+  id,
+  ingredientId: `ing-${names[0]}`,
+  names,
+});
+const adoboLines = [
+  stepLine('thigh', 'Chicken thigh', 'chicken thighs'),
+  stepLine('soy', 'Soy sauce'),
+  stepLine('vinegar', 'White vinegar'),
+  stepLine('garlic', 'Garlic'),
+  stepLine('bay', 'Bay leaves'),
+  stepLine('pepper', 'Black pepper'),
+];
+assert.deepEqual(
+  matchStepIngredients(
+    [
+      'Marinate the chicken in the soy sauce, vinegar and garlic for 30 minutes.',
+      'Simmer 25 minutes with the bay leaves and plenty of pepper. Leave to rest.',
+      'Reduce the sauce until it clings to the chicken. Serve hot.',
+    ],
+    adoboLines,
+  ).map((step) => step.lineIds),
+  [['thigh', 'soy', 'vinegar', 'garlic'], ['bay', 'pepper'], []],
+  'a step lists the lines it is first to name, in the order it names them, by a whole name or a word only one ingredient could mean',
+);
+assert.deepEqual(
+  [
+    matchStepIngredients(
+      ['Add the garlic powder.', 'Add the garlic.', 'Brown the beef.'],
+      [
+        stepLine('powder', 'Garlic powder'),
+        stepLine('garlic', 'Garlic'),
+        stepLine('beef', 'Ground beef'),
+        stepLine('sugar', 'Brown sugar'),
+      ],
+    ).map((step) => step.lineIds),
+    matchStepIngredients(
+      ['Heat the oil.'],
+      [stepLine('olive', 'Olive oil'), stepLine('sesame', 'Sesame oil')],
+    ).map((step) => step.lineIds),
+    matchStepIngredients(
+      ['Heat the oil.'],
+      [stepLine('olive', 'Olive oil')],
+    ).map((step) => step.lineIds),
+    matchStepIngredients(
+      ['Fold in the eggs.'],
+      [
+        { id: 'egg-a', ingredientId: 'egg', names: ['Egg'] },
+        stepLine('flour', 'Flour'),
+        { id: 'egg-b', ingredientId: 'egg', names: ['Egg'] },
+      ],
+    ).map((step) => step.lineIds),
+    matchStepIngredients(['Stir well and serve.'], adoboLines).map(
+      (step) => step.lineIds,
+    ),
+  ],
+  [
+    [['powder'], ['garlic'], ['beef']],
+    [[]],
+    [['olive']],
+    [['egg-a', 'egg-b']],
+    [[]],
+  ],
+  'a longer name wins over a shorter one inside it, a word two ingredients share or a colour names nothing, and both lines of one ingredient are listed',
+);
+assert.deepEqual(
+  matchStepIngredients(
+    ['Cut the lemon in half and add some water.', 'Flake the tuna.'],
+    [
+      stepLine('tuna', 'Canned tuna', 'tuna in water'),
+      stepLine('cream', 'Half and half', 'half & half'),
+      stepLine('lemon', 'Lemon'),
+    ],
+  ).map((step) => step.lineIds),
+  [['lemon'], ['tuna']],
+  'a word in the middle of an alias, or a little word like "and" or "half", never names an ingredient on its own',
+);
+assert.deepEqual(
+  matchStepIngredients(
+    [
+      'Add 2 cups of the broth.',
+      'Stir in 350g flour.',
+      'Bake at 400°F for 20 minutes.',
+      'Cut into 4 wedges.',
+    ],
+    [],
+  ).map((step) => step.hasWrittenAmount),
+  [true, true, false, false],
+  'a step that writes its own amount is told apart from one that only has a time or a temperature',
+);
+
 console.log('pinchMath: all checks passed');
