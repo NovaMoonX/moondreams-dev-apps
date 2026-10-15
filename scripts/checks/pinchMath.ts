@@ -5728,4 +5728,17 @@ assert.deepEqual(
   '"How many boxes are left?" only counts down, each box eaten whole',
 );
 
+import { getEatByLabel as kitbEatByLabel } from '../../src/apps/pinch/utils/containers.ts';
+
+assert.deepEqual(
+  [13, 14, 15].map((day) => kitbEatByLabel(dayOf(day), lateOnThe14th)),
+  ['Past its date', 'Eat today', 'Eat by tomorrow'],
+  'a row says its eat-by once: past, today or tomorrow in the tinted pill',
+);
+assert.equal(
+  kitbEatByLabel(dayOf(18), lateOnThe14th),
+  `Eat by ${getEatByPhrase(dayOf(18), lateOnThe14th)}`,
+  'a later date is plain words with the date',
+);
+
 console.log('pinchMath: all checks passed');

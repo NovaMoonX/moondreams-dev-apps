@@ -40,7 +40,6 @@ import {
   getBatchKey,
   getClearOutMessage,
   getContainerTitle,
-  getPreparedSummary,
   groupBatches,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -48,9 +47,6 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 type ListView = ContainerPlace | 'FINISHED';
 
 const HIDDEN_WORTH_A_BUTTON = 3;
-
-const countContainers = (count: number) =>
-  `${count} ${count === 1 ? 'box' : 'boxes'}`;
 
 const sumServings = (containers: Container[]) =>
   containers.reduce((sum, container) => sum + container.servings, 0);
@@ -169,7 +165,6 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     () => containers.filter(isOfScope),
     [containers, isOfScope],
   );
-  const summary = useMemo(() => getPreparedSummary(inScope), [inScope]);
   const trimmed = inScope.length >= LIST_SEARCH_THRESHOLD ? query.trim() : '';
 
   const shown = useMemo(
@@ -213,7 +208,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       emoji: CONTAINER_PLACE_EMOJIS[place],
       label:
         byPlace[place].length > 0
-          ? `${CONTAINER_PLACE_LABELS[place]} · ${byPlace[place].length}`
+          ? `${CONTAINER_PLACE_LABELS[place]} · ${formatServings(sumServings(byPlace[place]))}`
           : CONTAINER_PLACE_LABELS[place],
     })),
     { value: 'FINISHED' as const, label: 'Finished' },
@@ -262,11 +257,8 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     );
   }, [inScope, recipesById, mealsById]);
 
-  const getSubtitle = () => {
-    if (isFinishedView) return "What you've eaten or thrown out.";
-    if (summary.containerCount === 0) return undefined;
-    return `${formatServings(summary.fridgeServings + summary.freezerServings)} in ${countContainers(summary.containerCount)}`;
-  };
+  const getSubtitle = () =>
+    isFinishedView ? "What you've eaten or thrown out." : undefined;
 
   const handleClear = async (place: ContainerPlace) => {
     const inPlace = containers.filter((container) => container.place === place);
@@ -405,12 +397,8 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       rows.length - limit > HIDDEN_WORTH_A_BUTTON ? limit : rows.length;
     return (
       <section aria-label={CONTAINER_PLACE_LABELS[place]}>
-        <div className='flex min-h-10 flex-wrap items-center justify-between gap-x-3'>
-          <p className='text-muted-foreground text-sm whitespace-nowrap'>
-            {countContainers(byPlace[place].length)} ·{' '}
-            {formatServings(sumServings(byPlace[place]))}
-          </p>
-          {canClear && (
+        {canClear && (
+          <div className='flex min-h-10 items-center justify-end'>
             <Button
               type='button'
               variant='link'
@@ -421,8 +409,8 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
             >
               Clear out the {placeWord}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
         {noteLine}
         <ul className='divide-border divide-y'>
           {rows.slice(0, visible).map(({ boxes }) => renderRow(boxes))}

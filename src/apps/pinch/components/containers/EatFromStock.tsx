@@ -16,7 +16,7 @@ import {
 import type { Container, ContainerPlace, PlannedMeal } from '@apps/pinch/types';
 import {
   getContainerTitle,
-  getEatByPhrase,
+  getEatByLabel,
   getEatByState,
   getLastPlaceEvent,
   getServingsToEat,
@@ -93,6 +93,7 @@ export function EatFromStockView({
         <ul className='divide-border divide-y'>
           {rows.map(({ container, title }) => {
             const count = getServingsToEat(container, meal);
+            const state = getEatByState(container.eatBy);
             const tag = [
               getLastPlaceEvent(container.history)?.kind === 'THAW' && 'Thawed',
               rows.some(
@@ -113,10 +114,16 @@ export function EatFromStockView({
                     <span className='whitespace-nowrap'>
                       {formatServings(container.servings)} left
                     </span>
-                    <span className='whitespace-nowrap'>
-                      Eat by {getEatByPhrase(container.eatBy)}
-                    </span>
-                    <EatByBadge state={getEatByState(container.eatBy)} />
+                    {state === 'LATER' ? (
+                      <span className='whitespace-nowrap'>
+                        {getEatByLabel(container.eatBy)}
+                      </span>
+                    ) : (
+                      <EatByBadge
+                        state={state}
+                        label={getEatByLabel(container.eatBy)}
+                      />
+                    )}
                     {tag && <span className='whitespace-nowrap'>{tag}</span>}
                   </span>
                 </span>

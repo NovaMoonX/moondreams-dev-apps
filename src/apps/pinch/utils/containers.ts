@@ -103,6 +103,15 @@ export const getEatByPhrase = (eatBy: number, now = Date.now()) => {
   return formatDayShort(getPlannedDayKey(eatBy), now);
 };
 
+/** The one eat-by item a row shows: tinted when it is due, plain otherwise. */
+export const getEatByLabel = (eatBy: number, now = Date.now()) => {
+  const days = getDaysLeft(eatBy, now);
+  if (days < 0) return 'Past its date';
+  if (days === 0) return 'Eat today';
+  const label = `Eat by ${getEatByPhrase(eatBy, now)}`;
+  return label;
+};
+
 export const getEatByDefault = (
   move: EatByMove,
   care: RecipeCare | null,
@@ -824,13 +833,7 @@ export const getStockParts = (summary: StockSummary, now = Date.now()) =>
     const due =
       eatBy === null || state === 'LATER'
         ? null
-        : {
-            state,
-            label:
-              state === 'PAST'
-                ? 'Past its date'
-                : `Eat by ${getEatByPhrase(eatBy, now)}`,
-          };
+        : { state, label: getEatByLabel(eatBy, now) };
     return [{ place, servings, due }];
   });
 

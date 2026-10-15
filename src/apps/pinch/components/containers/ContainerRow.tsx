@@ -9,7 +9,7 @@ import { CONTAINER_EMOJI, CONTAINER_PLACE_EMOJIS } from '@apps/pinch/constants';
 import type { Container } from '@apps/pinch/types';
 import {
   getBatchServingsText,
-  getEatByPhrase,
+  getEatByLabel,
   getEatByState,
   getFinishedText,
   getLastPlaceEvent,
@@ -28,6 +28,7 @@ function ContainerRow({ boxes, title, isTwin, onOpen }: ContainerRowProps) {
   const [container] = boxes;
   const isFinished = container.status === 'DONE';
   const isThawed = getLastPlaceEvent(container.history)?.kind === 'THAW';
+  const state = getEatByState(container.eatBy);
 
   return (
     <Button
@@ -57,10 +58,16 @@ function ContainerRow({ boxes, title, isTwin, onOpen }: ContainerRowProps) {
               <span className='whitespace-nowrap'>
                 {getBatchServingsText(boxes)}
               </span>
-              <span className='whitespace-nowrap'>
-                Eat by {getEatByPhrase(container.eatBy)}
-              </span>
-              <EatByBadge state={getEatByState(container.eatBy)} />
+              {state === 'LATER' ? (
+                <span className='whitespace-nowrap'>
+                  {getEatByLabel(container.eatBy)}
+                </span>
+              ) : (
+                <EatByBadge
+                  state={state}
+                  label={getEatByLabel(container.eatBy)}
+                />
+              )}
               {(isThawed || isTwin) && (
                 <span className='whitespace-nowrap'>
                   {[

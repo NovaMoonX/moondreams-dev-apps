@@ -44,6 +44,7 @@ import {
   getCountChangeCopy,
   getEatByDefault,
   getEatByHint,
+  getEatByLabel,
   getEatByPhrase,
   getEatByState,
   getEventText,
@@ -510,6 +511,11 @@ interface FactsProps {
 }
 
 function Facts({ container, servingsText, onChangeDate }: FactsProps) {
+  const state = getEatByState(container.eatBy);
+  const dateLabel =
+    state === 'PAST'
+      ? `Past its date · ${getEatByPhrase(container.eatBy)}`
+      : getEatByLabel(container.eatBy);
   const freezeLine = getFreezeLine(container.history);
   const lastPlace = getLastPlaceEvent(container.history);
   const thawedAt = lastPlace?.kind === 'THAW' ? lastPlace.at : null;
@@ -528,14 +534,15 @@ function Facts({ container, servingsText, onChangeDate }: FactsProps) {
       <Button
         type='button'
         variant='tertiary'
-        aria-label={`Eat by ${getEatByPhrase(container.eatBy)}. Change the date`}
+        aria-label={`${dateLabel}. Change the date`}
         className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
         onClick={onChangeDate}
       >
-        <span className='whitespace-nowrap'>
-          Eat by {getEatByPhrase(container.eatBy)}
-        </span>
-        <EatByBadge state={getEatByState(container.eatBy)} />
+        {state === 'LATER' ? (
+          <span className='whitespace-nowrap'>{dateLabel}</span>
+        ) : (
+          <EatByBadge state={state} label={dateLabel} />
+        )}
         <PencilLine
           className='text-muted-foreground h-3.5 w-3.5 shrink-0'
           aria-hidden='true'
