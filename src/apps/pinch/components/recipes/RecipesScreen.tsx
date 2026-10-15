@@ -39,7 +39,9 @@ import {
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectIdeas,
   selectIdeasLoadError,
+  selectIngredientsById,
   selectMeals,
   selectRecipeCosts,
   selectRecipes,
@@ -56,7 +58,11 @@ import type {
   RecipesView,
   ShoppingRequest,
 } from '@apps/pinch/types';
-import { searchByName } from '@apps/pinch/utils/catalogSearch';
+import {
+  buildRecipeSearchIndex,
+  searchByName,
+  searchRecipes,
+} from '@apps/pinch/utils/catalogSearch';
 import {
   getStockParts,
   getStockPlaceCounts,
@@ -65,6 +71,7 @@ import {
 } from '@apps/pinch/utils/containers';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
+import { getIdeaSearchText } from '@apps/pinch/utils/ideas';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
@@ -99,6 +106,30 @@ const getStockHeight = (
     : Math.max(...lines);
 };
 
+interface NoMatchProps {
+  text: string;
+  actionLabel: string | null;
+  onAction: () => void;
+}
+
+function NoMatch({ text, actionLabel, onAction }: NoMatchProps) {
+  return (
+    <div className='space-y-3 py-6 text-center'>
+      <p className='text-muted-foreground text-sm wrap-break-word'>{text}</p>
+      {actionLabel && (
+        <Button
+          type='button'
+          variant='secondary'
+          className='h-10'
+          onClick={onAction}
+        >
+          {actionLabel}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 interface RecipesScreenProps {
   uid: string;
 }
@@ -116,7 +147,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const sourceCounts = useAppSelector(selectSourceCounts);
   const stockByRecipe = useAppSelector(selectStockByRecipe);
   const stockByMeal = useAppSelector(selectStockByMealWithRecipes);
-  const ideaCount = useAppSelector((state) => state.pinch.ideas.items.length);
+  const ingredientsById = useAppSelector(selectIngredientsById);
+  const ideas = useAppSelector(selectIdeas);
+  const ideaCount = ideas.length;
   const ideasLoadError = useAppSelector(selectIdeasLoadError);
   const isIdeasLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
   const [view, setView] = useState<RecipesView>('recipes');
@@ -175,11 +208,23 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       ? 'No source'
       : (sourcesById.get(sourceFilter)?.label ?? '');
 
+  const isSearching = trimmed !== '';
+  const searchIndex = useMemo(
+    () =>
+      isSearching
+        ? buildRecipeSearchIndex(recipes, ingredientsById, sourcesById)
+        : null,
+    [isSearching, recipes, ingredientsById, sourcesById],
+  );
+  const searched = useMemo(
+    () => (searchIndex ? searchRecipes(searchIndex, trimmed) : recipes),
+    [searchIndex, trimmed, recipes],
+  );
   const shown = useMemo(() => {
     const inSource =
       sourceFilter === SOURCE_FILTER_ANY
-        ? recipes
-        : recipes.filter(
+        ? searched
+        : searched.filter(
             (recipe) =>
               (getRecipeSource(recipe, sourcesById)?.id ??
                 SOURCE_FILTER_NONE) === sourceFilter,
@@ -192,11 +237,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               hasStockIn(stockByRecipe.get(recipe.id), place),
             ),
           );
-    return searchByName(
-      inStock.map((recipe) => ({ name: recipe.title, recipe })),
-      trimmed,
-    ).map(({ recipe }) => recipe);
-  }, [recipes, sourcesById, sourceFilter, stockPlaces, stockByRecipe, trimmed]);
+    return inStock;
+  }, [searched, sourcesById, sourceFilter, stockPlaces, stockByRecipe]);
 
   const sourceOptions = useMemo(
     () => [
@@ -271,6 +313,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       return (
         <IdeasView
           uid={uid}
+          initialQuery={query}
           isAddOpen={isIdeaAddOpen}
           onAddClose={() => setIsIdeaAddOpen(false)}
           onOpenRecipe={setOpenId}
@@ -306,10 +349,23 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         );
       }
       if (shownMeals.length === 0) {
+        const recipeMatches = searchRecipes(
+          buildRecipeSearchIndex(recipes, ingredientsById, sourcesById),
+          trimmed,
+        ).length;
         return (
-          <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
-            Nothing matches “{trimmed}” yet.
-          </p>
+          <NoMatch
+            text={
+              recipeMatches === 0
+                ? `Nothing matches “${trimmed}” yet.`
+                : `No saved meal matches “${trimmed}”, but ${recipeMatches === 1 ? '1 recipe does' : `${recipeMatches} recipes do`}.`
+            }
+            actionLabel={recipeMatches > 0 ? 'Show recipes' : null}
+            onAction={() => {
+              setStockPlaces([]);
+              setView('recipes');
+            }}
+          />
         );
       }
       return (
@@ -349,32 +405,52 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       ]
         .filter(Boolean)
         .join(' ');
+      const outside = searched.length;
+      const getText = () => {
+        if (trimmed === '') {
+          return sourceFilter === SOURCE_FILTER_NONE && stockPlaces.length === 0
+            ? 'Every recipe has a source.'
+            : `No recipes ${scope} yet.`;
+        }
+        if (outside === 0) return `Nothing matches “${trimmed}” yet.`;
+        return `Nothing ${scope} matches “${trimmed}”, but ${outside === 1 ? '1 other recipe does' : `${outside} other recipes do`}.`;
+      };
       return (
-        <div className='space-y-3 py-6 text-center'>
-          <p className='text-muted-foreground text-sm wrap-break-word'>
-            {trimmed !== ''
-              ? `Nothing ${scope} matches “${trimmed}” yet.`
-              : sourceFilter === SOURCE_FILTER_NONE && stockPlaces.length === 0
-                ? 'Every recipe has a source.'
-                : `No recipes ${scope} yet.`}
-          </p>
-          <Button
-            type='button'
-            variant='secondary'
-            className='h-10'
-            onClick={clearFilters}
-          >
-            Clear {activeFilters.length === 1 ? 'filter' : 'filters'}
-          </Button>
-        </div>
+        <NoMatch
+          text={getText()}
+          actionLabel={`Clear ${activeFilters.length === 1 ? 'filter' : 'filters'}`}
+          onAction={clearFilters}
+        />
       );
     }
     if (shown.length === 0) {
-      return (
-        <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
-          Nothing matches “{trimmed}” yet.
-        </p>
-      );
+      const ideaMatches = searchByName(
+        ideas.map((idea) => ({ name: getIdeaSearchText(idea) })),
+        trimmed,
+      ).length;
+      const mealMatches = searchByName(meals, trimmed).length;
+      const getWider = () => {
+        if (mealMatches > 0) {
+          return {
+            text: `No recipe matches “${trimmed}”, but ${mealMatches === 1 ? '1 saved meal does' : `${mealMatches} saved meals do`}.`,
+            actionLabel: 'Show saved meals',
+            onAction: () => setView('meals'),
+          };
+        }
+        if (ideaMatches > 0) {
+          return {
+            text: `No recipe matches “${trimmed}”, but ${ideaMatches === 1 ? '1 idea does' : `${ideaMatches} ideas do`}.`,
+            actionLabel: 'Show ideas',
+            onAction: () => setView('ideas'),
+          };
+        }
+        return {
+          text: `Nothing matches “${trimmed}” yet.`,
+          actionLabel: null,
+          onAction: () => undefined,
+        };
+      };
+      return <NoMatch {...getWider()} />;
     }
     return (
       <div>
@@ -399,7 +475,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             );
             return (
               <div
-                key={`${sourceFilter}-${stockPlaces.join(',')}-${trimmed}-${chunk}`}
+                key={`${sourceFilter}-${stockPlaces.join(',')}-${chunk}`}
                 className={join(
                   'defer-offscreen',
                   chunk > 0 && 'border-border border-t',
@@ -508,7 +584,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               ? 'Search'
               : view === 'meals'
                 ? 'Search meals'
-                : 'Search recipes'
+                : 'Search by name or ingredient'
           }
           filterLabel={view === 'meals' ? 'Filter meals' : 'Filter recipes'}
           activeFilters={activeFilters}
@@ -556,7 +632,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           <SearchInput
             value={query}
             onChange={setQuery}
-            placeholder={view === 'meals' ? 'Search meals' : 'Search recipes'}
+            placeholder={
+              view === 'meals' ? 'Search meals' : 'Search by name or ingredient'
+            }
           />
         )
       )}

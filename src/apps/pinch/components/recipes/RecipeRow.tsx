@@ -10,7 +10,6 @@ import { formatCents } from '@/utils/moneyUtils';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import {
-  selectCookSummaries,
   selectRecipeNutrition,
   selectShowNutrition,
   selectStockByRecipe,
@@ -43,9 +42,6 @@ function RecipeRow({
 }: RecipeRowProps) {
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipe.id);
   const show = useAppSelector(selectShowNutrition);
-  const cookCount = useAppSelector(
-    (state) => selectCookSummaries(state).get(recipe.id)?.count ?? 0,
-  );
   const stock = useAppSelector(
     (state) =>
       showStock ? selectStockByRecipe(state).get(recipe.id) : undefined,
@@ -77,13 +73,8 @@ function RecipeRow({
         <span className='text-foreground block truncate font-medium'>
           {recipe.title}
         </span>
-        <span className='text-muted-foreground flex text-xs font-normal'>
-          <span className='min-w-0 truncate'>{detail}</span>
-          {cookCount > 0 && (
-            <span className='shrink-0 whitespace-nowrap'>
-              {'\u00A0·\u00A0'}Cooked {cookCount}×
-            </span>
-          )}
+        <span className='text-muted-foreground block truncate text-xs font-normal'>
+          {detail}
         </span>
         {showPrices && cost?.perServingCents != null && (
           <span className='text-muted-foreground block text-xs font-normal'>

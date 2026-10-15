@@ -82,6 +82,8 @@ type Overlay = { kind: 'drawer'; id: string } | { kind: 'edit'; id: string };
 
 interface IdeasViewProps {
   uid: string;
+  /** What the search starts with, when the person came here from a search that found an idea. */
+  initialQuery: string;
   isAddOpen: boolean;
   onAddClose: () => void;
   onOpenRecipe: (recipeId: string) => void;
@@ -89,6 +91,7 @@ interface IdeasViewProps {
 
 function IdeasView({
   uid,
+  initialQuery,
   isAddOpen,
   onAddClose,
   onOpenRecipe,
@@ -99,7 +102,7 @@ function IdeasView({
   const { toTry, made } = useAppSelector(selectIdeaGroups);
   const loadError = useAppSelector(selectIdeasLoadError);
   const isLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
 
   const hasSearch = ideas.length >= LIST_SEARCH_THRESHOLD;
