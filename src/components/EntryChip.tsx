@@ -5,7 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 interface EntryChipProps {
   icon: ReactNode;
   label: string;
-  /** A few words for something there that wants a look ("2 to eat soon"), in a soft tint after the label; only while it applies. */
+  /** A few words for something there that wants a look ("2 waiting"), in a soft tint after the label; only while it applies. */
   note?: string;
   /** The full phrase when the chip shows less than it means; it starts with the visible label. */
   ariaLabel?: string;
