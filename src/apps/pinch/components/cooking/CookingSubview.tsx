@@ -30,7 +30,7 @@ import {
 } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { useCookNote } from '@apps/pinch/hooks/useCookNote';
-import { useCookTimers } from '@apps/pinch/hooks/useCookTimers';
+import { useCookTimers, type CookTimer } from '@apps/pinch/hooks/useCookTimers';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { usePutAway } from '@apps/pinch/hooks/usePutAway';
 import {
@@ -481,6 +481,23 @@ function CookingSession({
     keepFocus();
   };
 
+  const jumpTo = (timer: CookTimer) => {
+    const target = entries.find(
+      (candidate) => candidate.recipe.id === timer.recipeId,
+    );
+    if (!target) return;
+    updateRecipe(timer.recipeId, {
+      stepIndex: Math.max(
+        0,
+        Math.min(timer.stepNumber, target.recipe.steps.length) - 1,
+      ),
+    });
+    setCurrentId(timer.recipeId);
+    setView('steps');
+    setIsFinished(false);
+    scrollToTop();
+  };
+
   const handleDismissTimer = (id: string) => {
     timers.dismiss(id);
     keepFocus();
@@ -728,6 +745,9 @@ function CookingSession({
             onPause={timers.pause}
             onResume={timers.resume}
             onDismiss={handleDismissTimer}
+            onJump={
+              isFinishShown && (note.isOpen || putAway.isOpen) ? null : jumpTo
+            }
           />
           <div className='flex gap-3'>
             {isFinishShown && isRecorded && putAway.isOpen ? (

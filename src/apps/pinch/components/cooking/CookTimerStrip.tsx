@@ -1,4 +1,4 @@
-import { useEffect, useState, type Ref } from 'react';
+import { useEffect, useState, type ReactNode, type Ref } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -20,6 +20,8 @@ interface CookTimerStripProps {
   onPause: (id: string) => void;
   onResume: (id: string) => void;
   onDismiss: (id: string) => void;
+  /** Shows the timer's recipe and step; null while the screen holds a draft it shouldn't leave. */
+  onJump: ((timer: CookTimer) => void) | null;
 }
 
 /** The tick lives here, so only the pills re-render as the seconds pass. */
@@ -30,6 +32,7 @@ function CookTimerStrip({
   onPause,
   onResume,
   onDismiss,
+  onJump,
 }: CookTimerStripProps) {
   const hasRunning = timers.some((timer) => timer.status === 'running');
   const [now, setNow] = useState(() => Date.now());
@@ -50,6 +53,27 @@ function CookTimerStrip({
     return null;
   }
 
+  const renderTarget = (
+    timer: CookTimer,
+    className: string,
+    children: ReactNode,
+  ) =>
+    onJump ? (
+      <Button
+        type='button'
+        variant='tertiary'
+        className={join(
+          'text-foreground! h-auto min-h-10 min-w-0 flex-1 justify-start rounded-full px-0! py-1 text-left font-normal hover:bg-transparent',
+          className,
+        )}
+        onClick={() => onJump(timer)}
+      >
+        {children}
+      </Button>
+    ) : (
+      <span className={join('min-w-0 flex-1', className)}>{children}</span>
+    );
+
   return (
     <ul
       ref={listRef}
@@ -65,9 +89,11 @@ function CookTimerStrip({
             key={timer.id}
             className='bg-accent border-primary flex min-h-11 items-center gap-2 rounded-full border py-0.5 pr-1 pl-4'
           >
-            <span className='min-w-0 flex-1 text-sm font-semibold'>
-              {caption} is done
-            </span>
+            {renderTarget(
+              timer,
+              'text-sm font-semibold',
+              <span className='min-w-0'>{caption} is done</span>,
+            )}
             <Button
               type='button'
               variant='secondary'
@@ -83,20 +109,31 @@ function CookTimerStrip({
             key={timer.id}
             className='border-border bg-background flex min-h-11 items-center gap-1 rounded-full border py-0.5 pr-0.5 pl-4'
           >
-            <span className='flex min-w-0 flex-1 items-baseline gap-2'>
-              <span
-                className={join(
-                  'text-lg font-semibold tabular-nums',
-                  timer.status === 'paused' && 'text-muted-foreground',
-                )}
-              >
-                {formatClock(getRemainingMs(timer, now))}
-              </span>
-              <span className='text-muted-foreground min-w-0 truncate text-xs'>
-                {name}
-                {timer.status === 'paused' && ' · paused'}
-              </span>
-            </span>
+            {renderTarget(
+              timer,
+              timer.recipeTitle === null
+                ? 'flex items-baseline gap-2'
+                : 'flex items-center gap-2',
+              <>
+                <span
+                  className={join(
+                    'text-lg font-semibold tabular-nums',
+                    timer.status === 'paused' && 'text-muted-foreground',
+                  )}
+                >
+                  {formatClock(getRemainingMs(timer, now))}
+                </span>
+                <span className='text-muted-foreground min-w-0 text-xs'>
+                  {timer.recipeTitle !== null && (
+                    <span className='block truncate'>{timer.recipeTitle}</span>
+                  )}
+                  <span className='block truncate'>
+                    {timer.stepName}
+                    {timer.status === 'paused' && ' · paused'}
+                  </span>
+                </span>
+              </>,
+            )}
             <Button
               type='button'
               variant='tertiary'
