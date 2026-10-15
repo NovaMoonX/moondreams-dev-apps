@@ -208,6 +208,15 @@ export const MEAL_TYPES: MealType[] = [
   'DESSERT',
   'DRINK',
 ];
+/** The order a month cell shows its meals in, so dinner, the meal most people plan, is never the one behind "+N"; drawers and Week keep meal-time order. */
+export const MONTH_CELL_MEAL_ORDER: MealType[] = [
+  'DINNER',
+  'LUNCH',
+  'BREAKFAST',
+  'SNACK',
+  'DESSERT',
+  'DRINK',
+];
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   BREAKFAST: 'Breakfast',
   LUNCH: 'Lunch',
