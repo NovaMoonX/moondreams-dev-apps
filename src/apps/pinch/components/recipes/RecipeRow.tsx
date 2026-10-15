@@ -6,7 +6,6 @@ import { ChevronRight } from 'lucide-react';
 
 import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
-import { formatCents } from '@/utils/moneyUtils';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import {
@@ -16,6 +15,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Recipe, RecipeCost } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import { formatRowPrice } from '@apps/pinch/utils/mealFormat';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import {
   formatMinutes,
@@ -77,11 +77,8 @@ function RecipeRow({
           {detail}
         </span>
         {showPrices && cost?.perServingCents != null && (
-          <span className='text-muted-foreground block text-xs font-normal'>
-            <span className='whitespace-nowrap'>
-              {formatCents(Math.round(cost.perServingCents))} / serving
-            </span>
-            {leftOutCount > 0 && ` · leaves out ${leftOutCount}`}
+          <span className='text-muted-foreground block text-xs font-normal whitespace-nowrap'>
+            {formatRowPrice(cost.perServingCents, leftOutCount > 0)} / serving
           </span>
         )}
         {showPrices && cost && cost.perServingCents == null && (
