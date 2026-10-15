@@ -92,7 +92,7 @@ function PlannedCookRow({
           <Button
             type='button'
             variant='tertiary'
-            aria-label={`${recipe.title} wasn't cooked: remove the cook`}
+            aria-label={`Mark ${recipe.title} as not cooked`}
             className="relative h-auto p-0 underline underline-offset-4 after:absolute after:-inset-x-2 after:-inset-y-2.5 after:content-['']"
             disabled={isWorking}
             onClick={() => void handleNotCooked(cook.cookedAt)}
