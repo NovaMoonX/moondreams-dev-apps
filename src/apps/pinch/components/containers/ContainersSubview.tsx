@@ -96,6 +96,19 @@ const getScopeLookups = (scope: Scope, meal: Meal | undefined) => {
       ];
 };
 
+const isContainerOfScope = (
+  container: Container,
+  scope: Scope,
+  mealRecipeIds: Set<string>,
+) => {
+  if (scope.recipeId !== null) return container.recipeId === scope.recipeId;
+  if (scope.mealId === null) return true;
+  return (
+    container.mealId === scope.mealId ||
+    (container.recipeId !== null && mealRecipeIds.has(container.recipeId))
+  );
+};
+
 const combineScoped = (
   results: { data?: Container[]; isError: boolean }[],
 ) => ({
@@ -133,27 +146,13 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const scopeMeal =
     scope.mealId === null ? undefined : mealsById.get(scope.mealId);
   const lookups = getScopeLookups(scope, scopeMeal);
-
-  const isOfScope = useMemo(() => {
-    const recipeIds = new Set(getRecipeIdsOf(scopeMeal));
-    return (container: Container) => {
-      if (scope.recipeId !== null) return container.recipeId === scope.recipeId;
-      if (scope.mealId === null) return true;
-      return (
-        container.mealId === scope.mealId ||
-        (container.recipeId !== null && recipeIds.has(container.recipeId))
-      );
-    };
-  }, [scope, scopeMeal]);
-
-  const inScope = useMemo(
-    () => containers.filter(isOfScope),
-    [containers, isOfScope],
+  const mealRecipeIds = new Set(getRecipeIdsOf(scopeMeal));
+  const hasStockInScope = containers.some((container) =>
+    isContainerOfScope(container, scope, mealRecipeIds),
   );
-  const trimmed = inScope.length >= LIST_SEARCH_THRESHOLD ? query.trim() : '';
-  const isStockEmpty = isReady && loadError === null && inScope.length === 0;
   // With nothing in stock, the finished read decides whether the link to it leads anywhere.
-  const needsFinished = isFinishedView || isStockEmpty;
+  const needsFinished =
+    isFinishedView || (isReady && loadError === null && !hasStockInScope);
   const latestFinished = useQuery({
     ...finishedContainersQueryOptions(uid, finishedCount),
     enabled: needsFinished && !isScoped,
@@ -167,6 +166,18 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     combine: combineScoped,
   });
   const finishedQuery = isScoped ? scopedFinished : latestFinished;
+
+  const isOfScope = useMemo(() => {
+    const recipeIds = new Set(getRecipeIdsOf(scopeMeal));
+    return (container: Container) =>
+      isContainerOfScope(container, scope, recipeIds);
+  }, [scope, scopeMeal]);
+
+  const inScope = useMemo(
+    () => containers.filter(isOfScope),
+    [containers, isOfScope],
+  );
+  const trimmed = inScope.length >= LIST_SEARCH_THRESHOLD ? query.trim() : '';
 
   const shown = useMemo(
     () =>
