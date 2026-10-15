@@ -6038,4 +6038,118 @@ assert.deepEqual(
   );
 }
 
+// AMOUNT: the recipe form keeps "no amount" as a choice, not a gap to fix
+{
+  const {
+    getDataFromExtracted,
+    getInitialData,
+    isRowAmountValid,
+    toRecipeLine,
+  } =
+    await import('../../src/apps/pinch/components/recipes/recipeFormModel.ts');
+  const { resolveIngredients } =
+    await import('../../src/apps/pinch/utils/resolveIngredient.ts');
+
+  const amtRead = getDataFromExtracted(
+    {
+      title: 'Shakshuka',
+      servings: 3,
+      prepMinutes: null,
+      cookMinutes: null,
+      description: null,
+      ingredients: [
+        { name: 'eggs', amount: 6, unit: 'EACH', note: null },
+        { name: 'salt', amount: null, unit: null, note: 'to taste' },
+        { name: 'parsley', amount: null, unit: null, note: 'a handful' },
+        { name: 'salt', amount: null, unit: null, note: 'to taste' },
+      ],
+      steps: [],
+      care: null,
+      unread: [],
+    },
+    resolveIngredients([]),
+  );
+  assert.deepEqual(
+    amtRead.ingredients.map((row) => [
+      row.amount,
+      row.isAmountless,
+      row.note,
+      isRowAmountValid(row),
+    ]),
+    [
+      ['6', false, null, true],
+      ['', true, 'to taste', true],
+      ['', true, 'a handful', true],
+      ['', true, 'to taste', true],
+    ],
+    'a reading keeps "to taste" and "a handful" as rows with no amount, ready to save',
+  );
+  assert.deepEqual(
+    toRecipeLine({ ...amtRead.ingredients[1], unit: 'TSP' }),
+    {
+      id: amtRead.ingredients[1].id,
+      ingredientId: amtRead.ingredients[1].ingredientId,
+      amount: null,
+      unit: 'EACH',
+      note: 'to taste',
+    },
+    'a row with no amount saves none, in EACH, whatever unit the drawer last had',
+  );
+  const amtTyped = (amount: string) => ({
+    ...amtRead.ingredients[0],
+    amount,
+  });
+  assert.deepEqual(
+    ['', '0', '2', 'abc'].map((amount) => isRowAmountValid(amtTyped(amount))),
+    [false, false, true, false],
+    'a blank amount the person did not choose is still something to fix',
+  );
+  const amtStored = {
+    id: 'adobo',
+    title: 'Adobo',
+    description: null,
+    servings: 4,
+    prepMinutes: null,
+    cookMinutes: null,
+    coverPath: null,
+    ingredients: [
+      {
+        id: 'a',
+        ingredientId: 'cat-chicken-thigh',
+        amount: 2,
+        unit: 'LB' as const,
+        note: null,
+      },
+      {
+        id: 'b',
+        ingredientId: 'cat-salt',
+        amount: null,
+        unit: 'EACH' as const,
+        note: 'to taste',
+      },
+    ],
+    steps: [],
+    nutritionOverride: null,
+    source: 'MANUAL' as const,
+    sourceId: null,
+    care: null,
+    isArchived: false,
+    createdAt: 1,
+    updatedAt: 1,
+  } satisfies Recipe;
+  const amtRows = getInitialData(amtStored).ingredients;
+  assert.deepEqual(
+    amtRows.map((row) => [row.amount, row.isAmountless]),
+    [
+      ['2', false],
+      ['', true],
+    ],
+  );
+  assert.deepEqual(
+    amtRows.map(toRecipeLine),
+    amtStored.ingredients,
+    'a saved recipe opens and saves back unchanged, with or without amounts',
+  );
+}
+
 console.log('pinchMath: all checks passed');

@@ -38,10 +38,12 @@ import {
   getDataFromIdea,
   getInitialData,
   getReadSourceChoice,
+  isRowAmountValid,
   isValidMinutes,
   isValidNutrition,
   parseMinutes,
   parseNutrition,
+  toRecipeLine,
   type IngredientRow,
   type RecipeFormData,
 } from '@apps/pinch/components/recipes/recipeFormModel';
@@ -51,7 +53,6 @@ import {
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_NOTE_LENGTH,
   MAX_RECIPE_TITLE_LENGTH,
-  MAX_SERVING_AMOUNT,
   MAX_SOURCE_LABEL_LENGTH,
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
@@ -91,16 +92,8 @@ export interface RecipeRead {
   label: string;
 }
 
-const isRowValid = (row: IngredientRow) => {
-  const amount = Number(row.amount);
-  return (
-    row.ingredientId !== '' &&
-    row.amount.trim() !== '' &&
-    Number.isFinite(amount) &&
-    amount > 0 &&
-    amount <= MAX_SERVING_AMOUNT
-  );
-};
+const isRowValid = (row: IngredientRow) =>
+  row.ingredientId !== '' && isRowAmountValid(row);
 
 interface RecipeFormProps {
   uid: string;
@@ -201,13 +194,7 @@ function RecipeForm({
         prepMinutes: null,
         cookMinutes: null,
         coverPath: null,
-        ingredients: lines.map((row) => ({
-          id: row.id,
-          ingredientId: row.ingredientId,
-          amount: Number(row.amount),
-          unit: row.unit,
-          note: null,
-        })),
+        ingredients: lines.map(toRecipeLine),
         steps: [],
         care: null,
         nutritionOverride: null,
@@ -230,7 +217,7 @@ function RecipeForm({
         count:
           new Set(result.missing.map((entry) => entry.ingredientId)).size +
           unresolved,
-        total: lines.length + unresolved,
+        total: lines.filter((row) => !row.isAmountless).length + unresolved,
       },
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
@@ -260,7 +247,11 @@ function RecipeForm({
       return `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`;
     }
     if (!formData.ingredients.every(isRowValid)) {
-      return 'Check the ingredient amounts to save.';
+      return formData.ingredients.some(
+        (row) => !row.isAmountless && row.amount.trim() === '',
+      )
+        ? 'Add the missing amounts, or choose “No amount”, to save.'
+        : 'Check the ingredient amounts to save.';
     }
     if (!isValidMinutes(prep) || !isValidMinutes(cook)) {
       return 'Check the prep and cook time to save.';
@@ -590,13 +581,7 @@ function RecipeForm({
             servings: data.basics.servings,
             prepMinutes: parseMinutes(data.basics.prep),
             cookMinutes: parseMinutes(data.basics.cook),
-            ingredients: data.ingredients.map((row) => ({
-              id: row.id,
-              ingredientId: row.ingredientId,
-              amount: Number(row.amount),
-              unit: row.unit,
-              note: row.note,
-            })),
+            ingredients: data.ingredients.map(toRecipeLine),
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
             sourceId,
             newSource,

@@ -4,6 +4,7 @@ import { getWebLinkHost } from '@/utils/urlUtils';
 import {
   MAX_MINUTES,
   MAX_RECIPE_INGREDIENTS,
+  MAX_SERVING_AMOUNT,
   NUTRITION_METRICS,
 } from '@apps/pinch/constants';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
@@ -20,6 +21,7 @@ import type {
   NutritionMetric,
   NutritionValues,
   Recipe,
+  RecipeIngredient,
   RecipeSource,
   ResolvedIngredient,
   Source,
@@ -40,6 +42,8 @@ export interface IngredientRow {
   ingredientId: string;
   amount: string;
   unit: Unit;
+  /** No amount by choice ("to taste", "a handful"): the note says how much, if anything, and the line saves without one. */
+  isAmountless: boolean;
   note: string | null;
   /** A name from the reader that no ingredient matches: shown until the person adds it as new or picks another. */
   proposedName: string | null;
@@ -77,6 +81,7 @@ export const getInitialData = (
     ingredientId: line.ingredientId,
     amount: line.amount === null ? '' : String(line.amount),
     unit: line.unit,
+    isAmountless: line.amount === null,
     note: line.note ?? null,
     proposedName: null,
     newName: null,
@@ -98,7 +103,7 @@ export const getInitialData = (
   why: '',
 });
 
-/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. A second line for an ingredient already listed adds to it when the units agree and stays its own line when they don't, so no amount is lost. */
+/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. A second line for an ingredient already listed adds to it when the units agree and stays its own line when they don't, so no amount is lost, and a line the recipe gives no amount ("salt to taste") keeps none. */
 export const getDataFromExtracted = (
   extracted: ExtractedRecipe,
   ingredients: ResolvedIngredient[],
@@ -132,6 +137,7 @@ export const getDataFromExtracted = (
         ingredientId: match?.id ?? '',
         amount: amount === null ? '' : String(amount),
         unit,
+        isAmountless: amount === null,
         note: line.note,
         proposedName: match ? null : line.name,
         newName: null,
@@ -182,6 +188,27 @@ export const getDataFromIdea = (
     idea.kind === 'LINK' && idea.url
       ? getSiteSourceChoice(getWebLinkHost(idea.url) ?? '', sources)
       : NO_SOURCE_CHOICE,
+});
+
+/** Whether a row's amount can be saved: a number above zero and within the cap, or no amount by choice. */
+export const isRowAmountValid = (row: IngredientRow) => {
+  if (row.isAmountless) return true;
+  const amount = Number(row.amount);
+  return (
+    row.amount.trim() !== '' &&
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    amount <= MAX_SERVING_AMOUNT
+  );
+};
+
+/** The line a row saves as; one with no amount by choice saves none, in `EACH`. */
+export const toRecipeLine = (row: IngredientRow): RecipeIngredient => ({
+  id: row.id,
+  ingredientId: row.ingredientId,
+  amount: row.isAmountless ? null : Number(row.amount),
+  unit: row.isAmountless ? 'EACH' : row.unit,
+  note: row.note,
 });
 
 const parseTyped = (text: string) => (text.trim() === '' ? null : Number(text));
