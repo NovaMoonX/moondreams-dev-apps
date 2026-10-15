@@ -34,7 +34,7 @@ interface ItemSearchProps {
   onPickRecipe?: (recipeId: string) => void;
   /** When given, the person's saved meals are searched too and picking one calls this instead. */
   onPickMeal?: (mealId: string) => void;
-  /** Shown under the field while nothing is typed, in place of the hint. */
+  /** Shown under the field while nothing is typed. */
   idle?: ReactNode;
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
@@ -167,11 +167,7 @@ function ItemSearch({
         />
       </div>
       {trimmed === '' ? (
-        (idle ?? (
-          <p className='text-muted-foreground px-1 text-sm'>
-            Type a name to find it, or add one that isn't in the list.
-          </p>
-        ))
+        idle
       ) : (
         <ul className={join('divide-border divide-y', resultsClassName)}>
           {mealMatches.map((meal) => (

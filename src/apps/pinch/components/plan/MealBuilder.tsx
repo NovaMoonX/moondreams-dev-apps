@@ -62,6 +62,7 @@ import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getDefaultMealType,
   getNearDayOptions,
+  getPlanDayWord,
   rankRecentPicks,
 } from '@apps/pinch/utils/planPicks';
 import {
@@ -452,8 +453,7 @@ function MealBuilder({
       : '';
   };
 
-  const getDayWord = (key: string) =>
-    key === getCellDayKey(new Date()) ? 'today' : formatDayTitle(key);
+  const getDayWord = (key: string) => getPlanDayWord(key, todayKey);
 
   const getChangeLabel = () => {
     if (isChanging) return 'Done';
@@ -461,8 +461,9 @@ function MealBuilder({
   };
 
   const getSubmitLabel = () => {
-    if (mode === 'meal' || existingPlanned || date === null) return 'Save';
-    return `Add to ${getDayWord(dayKey)}`;
+    if (mode === 'meal' || existingPlanned) return 'Save';
+    if (date === null) return 'Plan';
+    return `Plan for ${getDayWord(dayKey)}`;
   };
 
   return (
