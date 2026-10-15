@@ -1,5 +1,6 @@
 import {
   MAX_SHOPPING_AMOUNT,
+  MAX_SHOPPING_SOURCES,
   SHOP_SECTION_BY_FAMILY,
   SHOP_SECTION_BY_INGREDIENT,
   SHOP_SECTION_LABELS,
@@ -30,6 +31,19 @@ export interface ShoppingLine {
   amount: number;
   unit: Unit;
 }
+
+/** A line and what puts it on the list: a planned meal's id, a recipe's or a saved meal's source, or null for something added on the list itself. */
+export interface SourcedLine extends ShoppingLine {
+  source: string | null;
+}
+
+/** What one item gains from an add: the amount, and every source behind it. */
+export interface ListLine extends ShoppingLine {
+  sources: string[];
+}
+
+export const getRecipeSource = (recipeId: string) => `recipe:${recipeId}`;
+export const getMealSource = (mealId: string) => `meal:${mealId}`;
 
 export interface ShoppingRowData {
   /** One ingredient's amounts of the same kind (weights, volumes or counts) share a row. */
@@ -124,19 +138,19 @@ export interface ShopLineRow {
   ingredientId: string;
   name: string;
   section: ShopSection;
-  lines: ShoppingLine[];
+  lines: SourcedLine[];
   amountText: string | null;
 }
 
 /** An add sheet's rows: one per ingredient and kind of unit, in the order the lines came, each with what to pick up. */
 export function groupShopLines(
-  lines: ShoppingLine[],
+  lines: SourcedLine[],
   ingredientsById: Map<string, ResolvedIngredient>,
 ): ShopLineRow[] {
   const byRow = lines.reduce((acc, line) => {
     const id = getShopRowId(line.ingredientId, line.unit);
     return acc.set(id, [...(acc.get(id) ?? []), line]);
-  }, new Map<string, ShoppingLine[]>());
+  }, new Map<string, SourcedLine[]>());
 
   const result = [...byRow.entries()].map(([id, rowLines]) => {
     const ingredient = ingredientsById.get(rowLines[0].ingredientId);
@@ -178,6 +192,44 @@ export function mergeLines(lines: ShoppingLine[]): ShoppingLine[] {
       amount: Math.min(roundAmount(line.amount), MAX_SHOPPING_AMOUNT),
     }))
     .filter((line) => line.amount > 0);
+}
+
+/** Like `mergeLines`, and each item keeps every source behind its lines, in the order they came. */
+export function mergeSourcedLines(lines: SourcedLine[]): ListLine[] {
+  const sums = lines.reduce((acc, line) => {
+    const id = getShoppingItemId(line.ingredientId, line.unit);
+    const sources = acc.get(id)?.sources ?? [];
+    return acc.set(id, {
+      ingredientId: line.ingredientId,
+      unit: line.unit,
+      amount: (acc.get(id)?.amount ?? 0) + line.amount,
+      sources:
+        !line.source || sources.includes(line.source)
+          ? sources
+          : [...sources, line.source],
+    });
+  }, new Map<string, ListLine>());
+
+  return [...sums.values()]
+    .filter((line) => Number.isFinite(line.amount))
+    .map((line) => ({
+      ...line,
+      amount: Math.min(roundAmount(line.amount), MAX_SHOPPING_AMOUNT),
+    }))
+    .filter((line) => line.amount > 0);
+}
+
+/** An item's sources after an add: the added ones move to the end, and past the cap the oldest are let go. */
+export function mergeSources(
+  existing: readonly string[],
+  added: readonly string[],
+): string[] {
+  const fresh = [...new Set(added)];
+  const kept = [...new Set(existing)].filter(
+    (source) => !fresh.includes(source),
+  );
+  const result = [...kept, ...fresh].slice(-MAX_SHOPPING_SOURCES);
+  return result;
 }
 
 export interface ShoppingFields {
@@ -227,6 +279,29 @@ export function getRecipeLines(
   return mergeLines(getRecipeRawLines(recipe, servings, ingredientsById));
 }
 
+const getItemRawLines = (
+  item: MealItem,
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): ShoppingLine[] => {
+  if (item.kind === 'RECIPE') {
+    const recipe = recipesById.get(item.refId);
+    return recipe
+      ? getRecipeRawLines(recipe, item.servings, ingredientsById)
+      : [];
+  }
+  const ingredient = ingredientsById.get(item.refId);
+  return ingredient
+    ? [
+        {
+          ingredientId: ingredient.id,
+          amount: item.servings * ingredient.serving.amount,
+          unit: ingredient.serving.unit,
+        },
+      ]
+    : [];
+};
+
 /** The lines of a meal or a day: a recipe item scales its recipe by its servings, an ingredient item is its servings of one serving size. */
 export function getItemsLines(
   items: MealItem[],
@@ -234,25 +309,41 @@ export function getItemsLines(
   ingredientsById: Map<string, ResolvedIngredient>,
 ): ShoppingLine[] {
   return mergeLines(
-    items.flatMap((item): ShoppingLine[] => {
-      if (item.kind === 'RECIPE') {
-        const recipe = recipesById.get(item.refId);
-        return recipe
-          ? getRecipeRawLines(recipe, item.servings, ingredientsById)
-          : [];
-      }
-      const ingredient = ingredientsById.get(item.refId);
-      return ingredient
-        ? [
-            {
-              ingredientId: ingredient.id,
-              amount: item.servings * ingredient.serving.amount,
-              unit: ingredient.serving.unit,
-            },
-          ]
-        : [];
-    }),
+    items.flatMap((item) =>
+      getItemRawLines(item, recipesById, ingredientsById),
+    ),
   );
+}
+
+export interface SourcedItems {
+  items: MealItem[];
+  source: string | null;
+}
+
+/** Each group's lines tagged with its source, summed per ingredient, unit and source but left unrounded, so amounts that meet on one item round once. */
+export function getSourcedLines(
+  groups: SourcedItems[],
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): SourcedLine[] {
+  const sums = groups
+    .flatMap(({ items, source }) =>
+      items
+        .flatMap((item) => getItemRawLines(item, recipesById, ingredientsById))
+        .map((line) => ({ ...line, source })),
+    )
+    .reduce((acc, line) => {
+      const key = `${getShoppingItemId(line.ingredientId, line.unit)}|${line.source ?? ''}`;
+      return acc.set(key, {
+        ...line,
+        amount: (acc.get(key)?.amount ?? 0) + line.amount,
+      });
+    }, new Map<string, SourcedLine>());
+
+  const result = [...sums.values()].filter(
+    (line) => Number.isFinite(line.amount) && roundAmount(line.amount) > 0,
+  );
+  return result;
 }
 
 export interface PlanSpan {

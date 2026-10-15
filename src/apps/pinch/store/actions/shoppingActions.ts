@@ -22,9 +22,12 @@ import {
   getMergedFields,
   getShoppingItemId,
   isValidAmount,
-  mergeLines,
+  mergeSourcedLines,
+  mergeSources,
   roundAmount,
+  type ListLine,
   type ShoppingLine,
+  type SourcedLine,
 } from '@apps/pinch/utils/shopping';
 
 const shoppingDoc = (uid: string, id: string) =>
@@ -53,17 +56,19 @@ const getWriteMessage = (error: unknown, fallback: string) => {
   return getErrorMessage(error, fallback);
 };
 
+// Sources are merged from the transaction's own read, since an array union can't keep them under the rules' cap.
 function writeLine(
   transaction: Transaction,
-  line: ShoppingLine,
+  line: ListLine,
   snapshot: DocumentSnapshot,
   now: number,
   isChecked = false,
 ) {
   const existing = snapshot.exists() ? (snapshot.data() as ShoppingItem) : null;
   const fields = getMergedFields(existing, line, now, isChecked);
+  const sources = mergeSources(existing?.sources ?? [], line.sources);
   if (existing) {
-    transaction.update(snapshot.ref, { ...fields });
+    transaction.update(snapshot.ref, { ...fields, sources });
     return;
   }
 
@@ -73,16 +78,17 @@ function writeLine(
     unit: line.unit,
     createdAt: now,
     ...fields,
+    sources,
   };
   transaction.set(snapshot.ref, item);
 }
 
 interface AddToShoppingListInput {
   uid: string;
-  lines: ShoppingLine[];
+  lines: SourcedLine[];
 }
 
-/** One transaction reads every target first, so two devices adding at once never lose an amount. */
+/** One transaction reads every target first, so two devices adding at once never lose an amount or a source. */
 export const addToShoppingList = createAsyncThunk<
   number,
   AddToShoppingListInput,
@@ -90,7 +96,7 @@ export const addToShoppingList = createAsyncThunk<
 >(
   'pinch/shopping/add',
   async ({ uid, lines: requested }, { rejectWithValue }) => {
-    const lines = mergeLines(requested);
+    const lines = mergeSourcedLines(requested);
     if (lines.length === 0) {
       return rejectWithValue('Pick something to add.');
     }
@@ -206,15 +212,28 @@ export const updateShoppingItem = createAsyncThunk<
           throw new Error('This is already off your list.');
         }
         const isChecked = (current.data() as ShoppingItem).isChecked;
+        const sources = mergeSources(
+          [],
+          [current, ...merged].flatMap((snapshot) =>
+            snapshot.exists()
+              ? ((snapshot.data() as ShoppingItem).sources ?? [])
+              : [],
+          ),
+        );
         const now = Date.now();
         [current, ...merged]
           .filter((snapshot) => snapshot.exists() && snapshot.id !== targetId)
           .forEach((snapshot) => transaction.delete(snapshot.ref));
         if (rowIds.includes(targetId) && target.exists()) {
-          transaction.update(target.ref, { amount, isChecked, updatedAt: now });
+          transaction.update(target.ref, {
+            amount,
+            isChecked,
+            sources,
+            updatedAt: now,
+          });
           return;
         }
-        writeLine(transaction, line, target, now, isChecked);
+        writeLine(transaction, { ...line, sources }, target, now, isChecked);
       });
     } catch (error) {
       return rejectWithValue(
@@ -331,6 +350,7 @@ export const restoreShoppingItems = createAsyncThunk<
               amount: item.amount,
               unit: item.unit,
               isChecked: item.isChecked,
+              sources: item.sources ?? [],
               createdAt: item.createdAt,
               updatedAt: now,
             } satisfies ShoppingItem),

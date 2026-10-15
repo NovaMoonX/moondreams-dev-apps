@@ -117,6 +117,8 @@ export const MAX_MEAL_ITEMS = 10;
 /** The caps on lines per add and on items are not enforced by the rules. */
 export const MAX_SHOPPING_LINES_PER_ADD = 200;
 export const SOFT_MAX_SHOPPING_ITEMS = 300;
+/** The rules' cap on what one item remembers put it on the list. */
+export const MAX_SHOPPING_SOURCES = 60;
 export const SHOPPING_GROUP_PAGE_SIZE = 100;
 export const SHOPPING_MOVE_DELAY_MS = 1200;
 export const SHOPPING_VIEWS: ShoppingView[] = ['toBuy', 'got'];

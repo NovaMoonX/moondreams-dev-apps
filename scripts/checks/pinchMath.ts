@@ -5622,4 +5622,97 @@ assert.deepEqual(
   'the price form reads a price back in the unit the recipes measure it in, with the cost math’s own bridge, and says nothing when the units can’t be compared',
 );
 
+// ============================================================
+// SOURCES workstream: the shopping list remembers what filled it
+// ============================================================
+
+import {
+  getSourcedLines as srcSourcedLines,
+  mergeSourcedLines as srcMergeLines,
+  mergeSources as srcMergeSources,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import { MAX_SHOPPING_SOURCES as SRC_MAX } from '../../src/apps/pinch/constants.ts';
+
+assert.deepEqual(
+  srcMergeLines([
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP', source: 'thu' },
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP', source: 'fri' },
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP', source: 'thu' },
+    { ingredientId: 'salt', amount: 0.001, unit: 'TSP', source: 'thu' },
+    { ingredientId: 'milk', amount: 1, unit: 'CUP', source: null },
+  ]),
+  [
+    { ingredientId: 'rice', unit: 'CUP', amount: 1, sources: ['thu', 'fri'] },
+    { ingredientId: 'milk', unit: 'CUP', amount: 1, sources: [] },
+  ],
+  'an add sums one ingredient and unit across sources, rounding once, keeps each source once in the order they came, and a line typed on the list has none',
+);
+assert.deepEqual(
+  [
+    srcMergeSources([], ['thu']),
+    srcMergeSources(['thu'], ['thu']),
+    srcMergeSources(['thu', 'recipe:adobo'], ['fri', 'thu']),
+    srcMergeSources(['thu', 'thu'], []),
+  ],
+  [['thu'], ['thu'], ['recipe:adobo', 'fri', 'thu'], ['thu']],
+  'sources are a set: a second add from the same source adds nothing new and moves it to the end',
+);
+const srcMany = Array.from({ length: SRC_MAX }, (_, index) => `old-${index}`);
+const srcCapped = srcMergeSources(srcMany, ['new-1', 'new-2']);
+assert.deepEqual(
+  [srcCapped.length, srcCapped[0], srcCapped.slice(-2)],
+  [SRC_MAX, 'old-2', ['new-1', 'new-2']],
+  'past the rules’ cap the oldest sources are let go, so an add never fails on it',
+);
+
+const srcRiceRecipe = {
+  id: 'rice-pot',
+  title: 'Rice pot',
+  servings: 3,
+  ingredients: [
+    { id: 'r1', ingredientId: 'rice', amount: 1, unit: 'CUP', note: null },
+    { id: 'r2', ingredientId: 'salt', amount: 0.003, unit: 'TSP', note: null },
+  ],
+} as unknown as Recipe;
+const srcIngredients = new Map([
+  ['rice', { id: 'rice', serving: { amount: 0.25, unit: 'CUP' } }],
+  ['salt', { id: 'salt', serving: { amount: 1, unit: 'TSP' } }],
+]) as unknown as Map<string, ResolvedIngredient>;
+const srcRecipeItem = (id: string, servings: number): MealItem => ({
+  id,
+  kind: 'RECIPE',
+  refId: 'rice-pot',
+  servings,
+});
+const srcLines = srcSourcedLines(
+  [
+    { items: [srcRecipeItem('a', 1), srcRecipeItem('b', 1)], source: 'thu' },
+    { items: [srcRecipeItem('c', 1)], source: 'fri' },
+    {
+      items: [{ id: 'd', kind: 'INGREDIENT', refId: 'rice', servings: 2 }],
+      source: null,
+    },
+  ],
+  new Map([['rice-pot', srcRiceRecipe]]),
+  srcIngredients,
+);
+assert.deepEqual(
+  srcLines.map((line) => [
+    line.ingredientId,
+    line.source,
+    Math.round(line.amount * 1000) / 1000,
+  ]),
+  [
+    ['rice', 'thu', 0.667],
+    ['rice', 'fri', 0.333],
+    ['rice', null, 0.5],
+  ],
+  'each planned meal’s lines carry its id, summed per source and left unrounded; a line too small to show is left out',
+);
+assert.deepEqual(
+  srcMergeLines(srcLines).map((line) => [line.amount, line.sources]),
+  [[1.5, ['thu', 'fri']]],
+  'thirds from two planned meals round once when they meet on one item',
+);
+
 console.log('pinchMath: all checks passed');

@@ -37,6 +37,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type {
   MealItem,
+  PlannedMeal,
   ShoppingItem,
   ShoppingRequest,
 } from '@apps/pinch/types';
@@ -53,15 +54,19 @@ import {
 } from '@apps/pinch/utils/dayKeys';
 import {
   formatShopAmount,
-  getItemsLines,
+  getMealSource,
   getPlanInRange,
   getRecipeLines,
+  getRecipeSource,
   getShopAmount,
   getShoppingItemId,
   getShopRowId,
+  getSourcedLines,
   groupShopLines,
   isUsuallyAtHome,
   type ShopLineRow,
+  type SourcedItems,
+  type SourcedLine,
 } from '@apps/pinch/utils/shopping';
 
 const NEXT_DAYS = 7;
@@ -113,7 +118,7 @@ interface ShoppingPickProps {
   hasViewAction?: boolean;
 }
 
-/** What goes on the list from a recipe, a meal, a day or a range of planned days. What is already on the list starts unticked, since ticking it adds more. */
+/** What goes on the list from a recipe, a meal, a day or a range of planned days, each line remembering what put it there. What is already on the list starts unticked, since ticking it adds more. */
 export function ShoppingPick({
   uid,
   request,
@@ -175,22 +180,41 @@ export function ShoppingPick({
     [plannedByDay, days, lastLoadedKey, todayKey],
   );
 
-  const items = useMemo((): MealItem[] | null => {
-    if (request.kind === 'items') return request.items;
+  const groups = useMemo((): SourcedItems[] | null => {
+    const ofMeals = (meals: PlannedMeal[]) =>
+      meals.map((meal) => ({ items: meal.items, source: meal.id }));
+    if (request.kind === 'items') {
+      return [
+        {
+          items: request.items,
+          source: request.mealId ? getMealSource(request.mealId) : null,
+        },
+      ];
+    }
+    if (request.kind === 'day') {
+      return ofMeals(plannedByDay.get(request.dayKey) ?? []);
+    }
     if (request.kind === 'range') {
-      return isPlanLoaded ? span.meals.flatMap((meal) => meal.items) : [];
+      return isPlanLoaded ? ofMeals(span.meals) : [];
     }
     return null;
-  }, [request, span, isPlanLoaded]);
+  }, [request, plannedByDay, span, isPlanLoaded]);
+  const items = useMemo(
+    (): MealItem[] | null => groups?.flatMap((group) => group.items) ?? null,
+    [groups],
+  );
 
   const rows = useMemo(() => {
-    const lines = items
-      ? getItemsLines(items, recipesById, ingredientsById)
+    const lines: SourcedLine[] = groups
+      ? getSourcedLines(groups, recipesById, ingredientsById)
       : recipe
-        ? getRecipeLines(recipe, ingredientsById, servings)
+        ? getRecipeLines(recipe, ingredientsById, servings).map((line) => ({
+            ...line,
+            source: getRecipeSource(recipe.id),
+          }))
         : [];
     return groupShopLines(lines, ingredientsById);
-  }, [items, recipe, recipesById, ingredientsById, servings]);
+  }, [groups, recipe, recipesById, ingredientsById, servings]);
   const openByRow = useMemo(
     () =>
       [...onList.values()]
@@ -249,12 +273,18 @@ export function ShoppingPick({
     ...atHomeRows,
   ];
   const selectedLines = selected.flatMap((row) => row.lines);
-  const newCount = selectedLines.filter(
-    (line) => !onList.has(getShoppingItemId(line.ingredientId, line.unit)),
-  ).length;
+  const selectedIds = [
+    ...new Set(
+      selectedLines.map((line) =>
+        getShoppingItemId(line.ingredientId, line.unit),
+      ),
+    ),
+  ];
+  const newCount = selectedIds.filter((id) => !onList.has(id)).length;
   const isAllTicked = selected.length === rows.length;
   const getLabel = () => {
     if (request.kind === 'recipe') return recipe?.title ?? '';
+    if (request.kind === 'day') return formatDayTitle(request.dayKey);
     return request.kind === 'items' ? request.label : '';
   };
   const label = getLabel();
@@ -271,7 +301,7 @@ export function ShoppingPick({
         ? 'There is nothing here to add.'
         : 'Tick at least one to add it.';
     }
-    if (selectedLines.length > MAX_SHOPPING_LINES_PER_ADD) {
+    if (selectedIds.length > MAX_SHOPPING_LINES_PER_ADD) {
       return `Pick up to ${MAX_SHOPPING_LINES_PER_ADD} at a time.`;
     }
     if (listCount >= SOFT_MAX_SHOPPING_ITEMS && newCount > 0) {

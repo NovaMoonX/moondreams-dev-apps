@@ -300,13 +300,7 @@ function DayDrawer({
               {getDateOfDayKey(dayKey) >= getLocalTodayDate() && (
                 <AddToShoppingRow
                   subtitle={getShoppingNote(onListCount, dayLines.length)}
-                  onClick={() =>
-                    onAddToShopping({
-                      kind: 'items',
-                      items: meals.flatMap((meal) => meal.items),
-                      label: formatDayTitle(dayKey),
-                    })
-                  }
+                  onClick={() => onAddToShopping({ kind: 'day', dayKey })}
                 />
               )}
             </>
