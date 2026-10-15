@@ -82,7 +82,7 @@ type Overlay = { kind: 'drawer'; id: string } | { kind: 'edit'; id: string };
 
 interface IdeasViewProps {
   uid: string;
-  /** What the search starts with, when the person came here from a search that found an idea. */
+  /** The text the search starts with. */
   initialQuery: string;
   isAddOpen: boolean;
   onAddClose: () => void;
