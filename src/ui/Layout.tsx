@@ -12,6 +12,7 @@ import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
+import AppSwitcher from '@ui/AppSwitcher';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
 import ThemeToggle from '@ui/ThemeToggle';
@@ -106,15 +107,16 @@ function Layout() {
           isHeaderHidden && (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
         )}
       >
-        <div className='pointer-events-auto flex flex-1 items-center justify-start'>
+        <div className='pointer-events-auto flex flex-1 basis-0 items-center justify-start'>
           <ThemeToggle className='flex items-center' />
         </div>
 
-        <div className='pointer-events-auto flex flex-1 items-center justify-center'>
+        <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>
+          <AppSwitcher />
           <DevAccountSwitcher />
         </div>
 
-        <div className='pointer-events-auto flex flex-1 items-center justify-end'>
+        <div className='pointer-events-auto flex flex-1 basis-0 items-center justify-end'>
           <AuthAvatar />
         </div>
       </div>
