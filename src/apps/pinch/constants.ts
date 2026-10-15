@@ -545,6 +545,8 @@ export const CONTAINER_FREEZER_DAYS = 90;
 export const CONTAINER_THAWED_DAYS = 2;
 /** Due today or tomorrow: a wider window tints most of a box's life and stops meaning "eat it now". */
 export const CONTAINER_EAT_SOON_DAYS = 1;
+/** A freezer row names its eat-by only once it is this close, or past; before that it says when it was frozen. */
+export const CONTAINER_FREEZER_DATE_DAYS = 7;
 export const BULK_MEAL_SERVINGS = 5;
 export const CONTAINER_SITTING_SERVINGS = 2;
 /** Counted by the client only; the rules do not count documents. */

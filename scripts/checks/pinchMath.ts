@@ -5773,4 +5773,38 @@ assert.deepEqual(
   'putting back an eaten box restores the count it had before the last eat',
 );
 
+import {
+  getFrozenAt as kitbFrozenAt,
+  isEatByShown as kitbIsEatByShown,
+} from '../../src/apps/pinch/utils/containers.ts';
+
+assert.deepEqual(
+  [
+    kitbFrozenAt(kitbSoup('a', { history: [makeEvent('FREEZE', 4000)] })),
+    kitbFrozenAt(
+      kitbSoup('b', {
+        history: [
+          makeEvent('FREEZE', 4000),
+          makeEvent('THAW', 6000),
+          makeEvent('FREEZE', 8000),
+        ],
+      }),
+    ),
+    kitbFrozenAt(kitbSoup('c', { history: [], createdAt: 3000 })),
+  ],
+  [4000, 8000, 3000],
+  'a freezer row leads with when it last went in the freezer',
+);
+assert.deepEqual(
+  [
+    kitbIsEatByShown({ place: 'FREEZER', eatBy: dayOf(30) }, lateOnThe14th),
+    kitbIsEatByShown({ place: 'FREEZER', eatBy: dayOf(21) }, lateOnThe14th),
+    kitbIsEatByShown({ place: 'FREEZER', eatBy: dayOf(22) }, lateOnThe14th),
+    kitbIsEatByShown({ place: 'FREEZER', eatBy: dayOf(10) }, lateOnThe14th),
+    kitbIsEatByShown({ place: 'FRIDGE', eatBy: dayOf(30) }, lateOnThe14th),
+  ],
+  [false, true, false, true, true],
+  'a freezer row names its eat-by only within a week or once past; a fridge row always does',
+);
+
 console.log('pinchMath: all checks passed');

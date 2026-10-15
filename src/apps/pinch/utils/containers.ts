@@ -2,6 +2,7 @@ import { formatList } from '@/utils/formatUtils';
 import {
   BULK_MEAL_SERVINGS,
   CONTAINER_EAT_SOON_DAYS,
+  CONTAINER_FREEZER_DATE_DAYS,
   CONTAINER_FREEZER_DAYS,
   CONTAINER_FRIDGE_DAYS,
   CONTAINER_PLACE_LABELS,
@@ -111,6 +112,21 @@ export const getEatByLabel = (eatBy: number, now = Date.now()) => {
   const label = `Eat by ${getEatByPhrase(eatBy, now)}`;
   return label;
 };
+
+/** When it last went into the freezer, which is what a freezer row leads with. */
+export const getFrozenAt = (
+  container: Pick<Container, 'history' | 'createdAt'>,
+) =>
+  container.history.filter((event) => event.kind === 'FREEZE').at(-1)?.at ??
+  container.createdAt;
+
+/** A fridge row always names its eat-by; a freezer row only once it is past or within a week. */
+export const isEatByShown = (
+  container: Pick<Container, 'place' | 'eatBy'>,
+  now = Date.now(),
+) =>
+  container.place === 'FRIDGE' ||
+  getDaysLeft(container.eatBy, now) <= CONTAINER_FREEZER_DATE_DAYS;
 
 export const getEatByDefault = (
   move: EatByMove,

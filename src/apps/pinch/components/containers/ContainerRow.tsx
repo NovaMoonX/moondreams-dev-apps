@@ -12,7 +12,9 @@ import {
   getEatByLabel,
   getEatByState,
   getFinishedText,
+  getFrozenAt,
   getLastPlaceEvent,
+  isEatByShown,
 } from '@apps/pinch/utils/containers';
 
 interface ContainerRowProps {
@@ -29,6 +31,8 @@ function ContainerRow({ boxes, title, isTwin, onOpen }: ContainerRowProps) {
   const isFinished = container.status === 'DONE';
   const isThawed = getLastPlaceEvent(container.history)?.kind === 'THAW';
   const state = getEatByState(container.eatBy);
+  const isFrozen = container.place === 'FREEZER';
+  const hasMadeTag = isTwin && !isFrozen;
 
   return (
     <Button
@@ -58,21 +62,28 @@ function ContainerRow({ boxes, title, isTwin, onOpen }: ContainerRowProps) {
               <span className='whitespace-nowrap'>
                 {getBatchServingsText(boxes)}
               </span>
-              {state === 'LATER' ? (
+              {isFrozen && (
                 <span className='whitespace-nowrap'>
-                  {getEatByLabel(container.eatBy)}
+                  Frozen {formatDateShort(getFrozenAt(container))}
                 </span>
-              ) : (
-                <EatByBadge
-                  state={state}
-                  label={getEatByLabel(container.eatBy)}
-                />
               )}
-              {(isThawed || isTwin) && (
+              {isEatByShown(container) &&
+                (state === 'LATER' ? (
+                  <span className='whitespace-nowrap'>
+                    {getEatByLabel(container.eatBy)}
+                  </span>
+                ) : (
+                  <EatByBadge
+                    state={state}
+                    label={getEatByLabel(container.eatBy)}
+                  />
+                ))}
+              {(isThawed || hasMadeTag) && (
                 <span className='whitespace-nowrap'>
                   {[
                     isThawed && 'Thawed',
-                    isTwin && `Made ${formatDateShort(container.createdAt)}`,
+                    hasMadeTag &&
+                      `Made ${formatDateShort(container.createdAt)}`,
                   ]
                     .filter(Boolean)
                     .join(' · ')}

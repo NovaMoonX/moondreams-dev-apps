@@ -51,6 +51,7 @@ import {
   getEventText,
   getFinishedText,
   getFreezeLine,
+  getFrozenAt,
   getLastPlaceEvent,
   getMoveForPlace,
   getMoveNotes,
@@ -531,6 +532,11 @@ function Facts({ container, servingsText, onChangeDate }: FactsProps) {
           {CONTAINER_PLACE_LABELS[container.place]}
         </span>
         <span className='whitespace-nowrap'>{servingsText}</span>
+        {container.place === 'FREEZER' && (
+          <span className='whitespace-nowrap'>
+            Frozen {formatDateShort(getFrozenAt(container))}
+          </span>
+        )}
       </p>
       <Button
         type='button'
