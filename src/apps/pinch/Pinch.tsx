@@ -326,7 +326,7 @@ function Pinch() {
       )}
       {/* A subview takes over the app; the tabs stay mounted underneath so search and scroll survive. */}
       <div className={join(isTabHidden && 'hidden')}>
-        <div className='page pb-28 lg:pb-8 lg:pl-28'>
+        <div className='page pb-28 lg:pb-8 lg:pl-34'>
           <div className='mx-auto max-w-4xl space-y-4 py-6'>
             <PinchSessionContext.Provider value={session}>
               {getScreen()}
