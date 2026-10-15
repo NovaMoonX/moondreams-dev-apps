@@ -25,7 +25,13 @@ const STICKY_FOOTER =
  * `ModalFooterActions` stay pinned to the bottom edge while the fields scroll under them. A search or a
  * sequence is a `Subview` instead, and a handful of simple fields is a plain `Modal`.
  */
-function FormSheet({ isOpen, onClose, title, children, wide = 'modal' }: FormSheetProps) {
+function FormSheet({
+  isOpen,
+  onClose,
+  title,
+  children,
+  wide = 'modal',
+}: FormSheetProps) {
   const isPhone = useMediaQuery().isBelow('sm');
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
 
@@ -40,7 +46,14 @@ function FormSheet({ isOpen, onClose, title, children, wide = 'modal' }: FormShe
         disableCloseOnOverlayClick
         className='max-h-[92dvh] [&>div]:max-h-[92dvh]'
       >
-        <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]')}>{children}</div>
+        <div
+          className={join(
+            STICKY_FOOTER,
+            '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
+          )}
+        >
+          {children}
+        </div>
       </Drawer>
     );
   }
@@ -53,14 +66,28 @@ function FormSheet({ isOpen, onClose, title, children, wide = 'modal' }: FormShe
         onClose={onDialogClose}
         title={title}
       >
-        <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3')}>{children}</div>
+        <div
+          className={join(
+            STICKY_FOOTER,
+            '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3',
+          )}
+        >
+          {children}
+        </div>
       </Panel>
     );
   }
 
   return (
     <Modal id={dialogId} isOpen={isOpen} onClose={onDialogClose} title={title}>
-      <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3')}>{children}</div>
+      <div
+        className={join(
+          STICKY_FOOTER,
+          '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3',
+        )}
+      >
+        {children}
+      </div>
     </Modal>
   );
 }

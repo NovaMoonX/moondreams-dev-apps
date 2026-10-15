@@ -70,7 +70,9 @@ function LinkAttachField({
     setError(null);
     setIsFetching(true);
     try {
-      const result = await queryClient.fetchQuery(linkMetadataQueryOptions(trimmed));
+      const result = await queryClient.fetchQuery(
+        linkMetadataQueryOptions(trimmed),
+      );
       if (latestDraftRef.current !== trimmed) {
         return;
       }
@@ -87,9 +89,16 @@ function LinkAttachField({
       }
       if (commit) {
         onChange(trimmed, null);
-        setError(getErrorMessage(fetchError, "Couldn't load a preview — link saved anyway."));
+        setError(
+          getErrorMessage(
+            fetchError,
+            "Couldn't load a preview — link saved anyway.",
+          ),
+        );
       } else {
-        setError("Couldn't load a preview yet — keep typing, or leave the field to save the link.");
+        setError(
+          "Couldn't load a preview yet — keep typing, or leave the field to save the link.",
+        );
       }
     } finally {
       setIsFetching(false);
@@ -161,7 +170,9 @@ function LinkAttachField({
             />
           )}
           <div className='min-w-0 flex-1'>
-            {preview?.title && <p className='truncate text-sm font-medium'>{preview.title}</p>}
+            {preview?.title && (
+              <p className='truncate text-sm font-medium'>{preview.title}</p>
+            )}
             <ExternalLinkText href={attachedUrl} className='text-xs' />
           </div>
           {onUseTitle && preview?.title && (
@@ -204,7 +215,9 @@ function LinkAttachField({
           }}
         />
       )}
-      {isFetching && <p className='text-muted-foreground text-xs'>Fetching preview…</p>}
+      {isFetching && (
+        <p className='text-muted-foreground text-xs'>Fetching preview…</p>
+      )}
       {error && <p className='text-muted-foreground text-xs'>{error}</p>}
     </div>
   );

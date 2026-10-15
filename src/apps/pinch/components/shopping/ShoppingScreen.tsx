@@ -52,7 +52,12 @@ import {
   selectShoppingRows,
   selectShoppingSourceLabels,
 } from '@apps/pinch/store/selectors';
-import type { Gap, ShoppingItem, ShoppingView } from '@apps/pinch/types';
+import type {
+  Gap,
+  ShoppingHalf,
+  ShoppingItem,
+  ShoppingView,
+} from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
@@ -323,11 +328,14 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     toBuy: countRows(found.toBuy),
     got: countRows(found.got),
   };
+  const counts: Record<ShoppingView, number> = {
+    ...matches,
+    all: matches.toBuy + matches.got,
+  };
   const shownView = getShownShoppingView(pick, activeQuery, matches);
-  const shownGroups = found[shownView];
   const switchOptions = SHOPPING_VIEWS.map((value) => ({
     value,
-    label: `${SHOPPING_VIEW_LABELS[value]} · ${matches[value]}`,
+    label: `${SHOPPING_VIEW_LABELS[value]} · ${counts[value]}`,
   }));
 
   const handleToggle = useCallback(
@@ -530,49 +538,83 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         </div>
       );
     };
-    return (
-      <>
-        {shownView === 'got' && !isSearching && gotCount > 0 && (
-          <div className='flex min-h-10 items-center justify-end'>
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              loading={isClearing}
-              disabled={isClearing}
-              className="relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-              onClick={() => void handleClear()}
-            >
-              Clear what you got
-            </Button>
-          </div>
-        )}
-        {shownGroups.length === 0 && getEmpty()}
-        {shownGroups.length > 0 &&
-          matches[shownView] < SHOP_SECTION_DIVIDER_MIN_ROWS && (
-            <ShoppingRows
-              key={shownView}
-              rows={shownGroups.flatMap((group) => group.rows)}
+    const clearButton = !isSearching && gotCount > 0 && (
+      <Button
+        type='button'
+        variant='link'
+        size='sm'
+        loading={isClearing}
+        disabled={isClearing}
+        className="relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+        onClick={() => void handleClear()}
+      >
+        Clear what you got
+      </Button>
+    );
+    const renderHalf = (half: ShoppingHalf) =>
+      matches[half] < SHOP_SECTION_DIVIDER_MIN_ROWS ? (
+        <ShoppingRows
+          key={`${shownView}-${half}`}
+          rows={found[half].flatMap((group) => group.rows)}
+          getForText={getForText}
+          onToggle={handleToggle}
+          onOpen={handleOpen}
+          className='lg:w-[calc(50%-1rem)]'
+        />
+      ) : (
+        <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
+          {found[half].map((group, index) => (
+            <ShoppingGroupSection
+              key={`${shownView}-${group.id}`}
+              group={group}
+              isEager={index < EAGER_GROUPS}
               getForText={getForText}
               onToggle={handleToggle}
               onOpen={handleOpen}
-              className='lg:w-[calc(50%-1rem)]'
             />
-          )}
-        {matches[shownView] >= SHOP_SECTION_DIVIDER_MIN_ROWS && (
-          <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
-            {shownGroups.map((group, index) => (
-              <ShoppingGroupSection
-                key={`${shownView}-${group.id}`}
-                group={group}
-                isEager={index < EAGER_GROUPS}
+          ))}
+        </div>
+      );
+
+    if (shownView === 'all') {
+      if (counts.all === 0) {
+        return getEmpty();
+      }
+      return (
+        <>
+          {matches.toBuy > 0
+            ? renderHalf('toBuy')
+            : !isSearching && (
+                <p className='text-muted-foreground text-sm'>
+                  Nothing left to buy.
+                </p>
+              )}
+          {matches.got > 0 && (
+            <section aria-label='Got it' className='space-y-1'>
+              <SectionDivider label='Got it' trailing={clearButton} />
+              <ShoppingRows
+                key='all-got'
+                rows={found.got.flatMap((group) => group.rows)}
+                isEager={matches.toBuy < SHOP_SECTION_DIVIDER_MIN_ROWS}
                 getForText={getForText}
                 onToggle={handleToggle}
                 onOpen={handleOpen}
+                className='lg:w-[calc(50%-1rem)]'
               />
-            ))}
+            </section>
+          )}
+        </>
+      );
+    }
+
+    return (
+      <>
+        {shownView === 'got' && clearButton && (
+          <div className='flex min-h-10 items-center justify-end'>
+            {clearButton}
           </div>
         )}
+        {matches[shownView] === 0 ? getEmpty() : renderHalf(shownView)}
       </>
     );
   };
@@ -610,7 +652,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           isThin
         />
       )}
-      {openCount > 0 && shownView === 'toBuy' && (
+      {openCount > 0 && shownView !== 'got' && (
         <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
           {coverage === 'none' && 'No price yet'}
           {coverage === 'tooFew' && 'Not enough prices yet'}

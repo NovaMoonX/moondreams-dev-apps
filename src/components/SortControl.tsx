@@ -25,7 +25,9 @@ interface SortControlProps<T extends string> {
   defaultValue: T;
   onChange: (value: T) => void;
   /** Labels for flipping the chosen option's direction ("Newest first" / "Oldest first"); null when it has none. */
-  getOrderOptions?: (value: T) => readonly [PillOption<SortOrder>, PillOption<SortOrder>] | null;
+  getOrderOptions?: (
+    value: T,
+  ) => readonly [PillOption<SortOrder>, PillOption<SortOrder>] | null;
   order?: SortOrder;
   onOrderChange?: (order: SortOrder) => void;
 }

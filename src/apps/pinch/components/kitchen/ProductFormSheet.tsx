@@ -324,7 +324,7 @@ function ProductFormSheet({
               name: 'makeDefault',
               label: '',
               renderComponent: (props) => (
-                <div className='flex items-center gap-3'>
+                <label className='flex min-h-10 cursor-pointer items-center gap-3 select-none'>
                   <Checkbox
                     aria-label='Make this the default'
                     checked={props.value === true}
@@ -335,7 +335,7 @@ function ProductFormSheet({
                   <span className='text-sm font-medium'>
                     Make this the default
                   </span>
-                </div>
+                </label>
               ),
             }),
           ]

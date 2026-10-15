@@ -121,10 +121,11 @@ export const SOFT_MAX_SHOPPING_ITEMS = 300;
 export const MAX_SHOPPING_SOURCES = 60;
 export const SHOPPING_GROUP_PAGE_SIZE = 100;
 export const SHOPPING_MOVE_DELAY_MS = 1200;
-export const SHOPPING_VIEWS: ShoppingView[] = ['toBuy', 'got'];
+export const SHOPPING_VIEWS: ShoppingView[] = ['toBuy', 'got', 'all'];
 export const SHOPPING_VIEW_LABELS: Record<ShoppingView, string> = {
   toBuy: 'To buy',
   got: 'Got it',
+  all: 'All',
 };
 /** The shopping list's sections, in the order a shop is walked. */
 export const SHOP_SECTIONS = [

@@ -1,12 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
-import { createSessionToken, isPlacesSearchAvailable } from '@/lib/places/placesApi';
-import { placeAutocompleteQueryOptions, placeDetailsQueryOptions } from '@/lib/places/placesQueries';
-import type { PlaceSelectionBias, PlaceSelectionResult, PlaceSuggestion } from '@/lib/places/types';
+import {
+  createSessionToken,
+  isPlacesSearchAvailable,
+} from '@/lib/places/placesApi';
+import {
+  placeAutocompleteQueryOptions,
+  placeDetailsQueryOptions,
+} from '@/lib/places/placesQueries';
+import type {
+  PlaceSelectionBias,
+  PlaceSelectionResult,
+  PlaceSuggestion,
+} from '@/lib/places/types';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 const MIN_QUERY_LENGTH = 3;
@@ -49,7 +63,10 @@ function PlaceAutocompleteInput({
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const trimmedValue = value.trim();
-  const debouncedValue = useDebouncedValue(trimmedValue, DEBOUNCE_MS.autocomplete);
+  const debouncedValue = useDebouncedValue(
+    trimmedValue,
+    DEBOUNCE_MS.autocomplete,
+  );
   const isSearchEnabled = isPlacesSearchAvailable();
 
   const suggestionsQuery = useQuery({
@@ -62,13 +79,18 @@ function PlaceAutocompleteInput({
     placeholderData: keepPreviousData,
   });
   const suggestions =
-    isTyping && trimmedValue.length >= MIN_QUERY_LENGTH ? (suggestionsQuery.data ?? []) : [];
+    isTyping && trimmedValue.length >= MIN_QUERY_LENGTH
+      ? (suggestionsQuery.data ?? [])
+      : [];
   const isSearching = suggestionsQuery.isFetching && suggestions.length === 0;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!inputRef.current?.contains(target) && !suggestionsRef.current?.contains(target)) {
+      if (
+        !inputRef.current?.contains(target) &&
+        !suggestionsRef.current?.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -84,7 +106,8 @@ function PlaceAutocompleteInput({
   };
 
   const quickSearchValue = quickSearch?.value.trim() ?? '';
-  const showQuickSearch = Boolean(quickSearchValue) && quickSearchValue !== trimmedValue;
+  const showQuickSearch =
+    Boolean(quickSearchValue) && quickSearchValue !== trimmedValue;
 
   const handleSelect = async (suggestion: PlaceSuggestion) => {
     setIsOpen(false);
@@ -93,7 +116,11 @@ function PlaceAutocompleteInput({
     setSelectError(null);
     try {
       const result = await queryClient.fetchQuery(
-        placeDetailsQueryOptions(suggestion.placeId, suggestion.primaryText, sessionToken),
+        placeDetailsQueryOptions(
+          suggestion.placeId,
+          suggestion.primaryText,
+          sessionToken,
+        ),
       );
       if (result) {
         onSelect(result);
@@ -109,7 +136,8 @@ function PlaceAutocompleteInput({
     }
   };
 
-  const error = selectError ?? (suggestionsQuery.isError ? 'Place search failed.' : null);
+  const error =
+    selectError ?? (suggestionsQuery.isError ? 'Place search failed.' : null);
 
   return (
     <div className={join('relative space-y-1.5', className)}>
@@ -129,7 +157,9 @@ function PlaceAutocompleteInput({
           className='border-border bg-popover absolute z-10 mt-1 w-full rounded-md border shadow-md'
         >
           {isSearching ? (
-            <p className='text-muted-foreground px-3 py-2 text-sm'>Searching…</p>
+            <p className='text-muted-foreground px-3 py-2 text-sm'>
+              Searching…
+            </p>
           ) : (
             <ul>
               {suggestions.map((suggestion) => (
@@ -140,7 +170,9 @@ function PlaceAutocompleteInput({
                     className='h-auto w-full flex-col items-start gap-0 rounded-none px-3 py-2 text-left font-normal'
                     onClick={() => void handleSelect(suggestion)}
                   >
-                    <span className='text-sm font-medium'>{suggestion.primaryText}</span>
+                    <span className='text-sm font-medium'>
+                      {suggestion.primaryText}
+                    </span>
                     {suggestion.secondaryText && (
                       <span className='text-muted-foreground text-xs'>
                         {suggestion.secondaryText}

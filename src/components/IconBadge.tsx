@@ -18,7 +18,9 @@ function IconBadge({ icon, count, urgent = false, className }: IconBadgeProps) {
         <span
           className={join(
             'absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold',
-            urgent ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground',
+            urgent
+              ? 'bg-destructive text-destructive-foreground'
+              : 'bg-muted text-muted-foreground',
           )}
         >
           {count}

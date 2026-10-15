@@ -6561,4 +6561,50 @@ assert.deepEqual(
   'the wide button steps on, then moves to the next recipe still short of its last step (wrapping to the start), and finishes the plate only once every recipe is on its last',
 );
 
+// ============================================================
+// DESIGN workstream: the shopping list's All view
+// ============================================================
+import {
+  SHOPPING_VIEW_LABELS as designShopLabels,
+  SHOPPING_VIEWS as designShopViews,
+} from '../../src/apps/pinch/constants.ts';
+
+assert.deepEqual(
+  designShopViews.map((view) => designShopLabels[view]),
+  ['To buy', 'Got it', 'All'],
+  'the switch offers To buy, Got it and All, in that order',
+);
+assert.equal(
+  getShownShoppingView(shopPick('all'), '', { toBuy: 0, got: 4 }),
+  'all',
+  'All is kept with nothing left to buy',
+);
+assert.equal(
+  getShownShoppingView(shopPick('all'), 'milk', { toBuy: 0, got: 1 }),
+  'all',
+  'a search never moves the list away from All, which already shows both halves',
+);
+assert.equal(
+  getShownShoppingView(shopPick('all'), 'zz', { toBuy: 0, got: 0 }),
+  'all',
+  'a search that matches nothing keeps All',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy'), 'milk', { toBuy: 0, got: 2 }),
+  'got',
+  'a half picked by the person falls to the other half, never to All',
+);
+const designHeld = groupShoppingItems(
+  heldItems,
+  shopSectionIngredients,
+  new Map([['rice__CUP', false]]),
+);
+const designRowIds = (groups: { rows: { id: string }[] }[]) =>
+  groups.flatMap((group) => group.rows.map((row) => row.id));
+assert.equal(
+  designRowIds(designHeld.toBuy).length + designRowIds(designHeld.got).length,
+  heldItems.length,
+  'All counts every row once: a held row sits in one half only',
+);
+
 console.log('pinchMath: all checks passed');

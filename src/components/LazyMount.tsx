@@ -11,7 +11,12 @@ interface LazyMountProps {
 }
 
 /** Mounts a long section's children only when it nears the viewport, then keeps them: a list of 100+ cards never builds them all at once. */
-function LazyMount({ children, estimatedHeight, eager = false, rootMargin = '800px 0px' }: LazyMountProps) {
+function LazyMount({
+  children,
+  estimatedHeight,
+  eager = false,
+  rootMargin = '800px 0px',
+}: LazyMountProps) {
   const placeholderRef = useRef<HTMLDivElement>(null);
   const [hasMounted, setHasMounted] = useState(eager);
   const isMounted = eager || hasMounted;
@@ -44,7 +49,13 @@ function LazyMount({ children, estimatedHeight, eager = false, rootMargin = '800
     return <>{children}</>;
   }
 
-  return <div ref={placeholderRef} aria-hidden='true' style={{ minHeight: estimatedHeight }} />;
+  return (
+    <div
+      ref={placeholderRef}
+      aria-hidden='true'
+      style={{ minHeight: estimatedHeight }}
+    />
+  );
 }
 
 export default LazyMount;

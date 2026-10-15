@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import { Refrigerator } from 'lucide-react';
 
-import EntryChip from '@/components/EntryChip';
+import EntryTile from '@/components/EntryTile';
 import { useAppSelector } from '@/store';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
@@ -34,10 +34,10 @@ function PreparedEntry() {
   };
 
   return (
-    <EntryChip
+    <EntryTile
       icon={<Refrigerator className='h-4 w-4' />}
       label={LABEL}
-      note={due === '' ? undefined : due}
+      status={due === '' ? undefined : due}
       ariaLabel={getAriaLabel()}
       onClick={() => openSubview({ kind: 'containers' })}
     />

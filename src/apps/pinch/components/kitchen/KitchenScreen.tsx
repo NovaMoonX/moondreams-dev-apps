@@ -3,7 +3,7 @@ import { memo, useMemo, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Plus, Store, Tag } from 'lucide-react';
 
-import EntryChip from '@/components/EntryChip';
+import EntryTile from '@/components/EntryTile';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -344,20 +344,18 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
       {(hasPrepared || storeCount > 0 || productCount > 0) &&
         !hasFilters &&
         trimmed === '' && (
-          <nav aria-labelledby='kitchen-doors' className='space-y-1.5'>
-            <p id='kitchen-doors' className='text-muted-foreground text-xs'>
-              Also in Kitchen
-            </p>
-            <div className='flex flex-wrap gap-2'>
-              {hasPrepared && <PreparedEntry />}
-              {(storeCount > 0 || productCount > 0) && (
-                <EntryChip
-                  icon={<Store className='h-4 w-4' />}
-                  label='Stores & prices'
-                  onClick={() => openSubview({ kind: 'products' })}
-                />
-              )}
-            </div>
+          <nav
+            aria-label='Also in Kitchen'
+            className='grid grid-cols-2 gap-2 lg:gap-x-8'
+          >
+            {hasPrepared && <PreparedEntry />}
+            {(storeCount > 0 || productCount > 0) && (
+              <EntryTile
+                icon={<Store className='h-4 w-4' />}
+                label='Stores & prices'
+                onClick={() => openSubview({ kind: 'products' })}
+              />
+            )}
           </nav>
         )}
       {filters.price === 'needs' && shown.length > 0 && (
