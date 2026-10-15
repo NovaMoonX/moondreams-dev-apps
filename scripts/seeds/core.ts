@@ -46,7 +46,11 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
 
   await Promise.all(
     fixtures.map((fixture) =>
-      upsertFixtureUser(context, fixture, fixture.uid === FIXTURE_USERS.admin.uid),
+      upsertFixtureUser(
+        context,
+        fixture,
+        fixture.uid === FIXTURE_USERS.admin.uid,
+      ),
     ),
   );
 

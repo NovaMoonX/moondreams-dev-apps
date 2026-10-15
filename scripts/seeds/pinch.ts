@@ -582,6 +582,13 @@ const SEED_RECIPES = [
       line('adobo-4', 'cat-garlic', 6, 'EACH'),
       line('adobo-5', 'cat-bay-leaves', 2, 'EACH'),
       line('adobo-6', 'cat-black-pepper', 1, 'TSP'),
+      {
+        id: 'adobo-7',
+        ingredientId: 'cat-salt',
+        amount: null,
+        unit: 'EACH',
+        note: 'to taste',
+      },
     ],
     steps: [
       'Marinate the chicken in the soy sauce, vinegar and garlic for 30 minutes.',

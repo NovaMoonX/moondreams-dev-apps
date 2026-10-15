@@ -6607,4 +6607,596 @@ assert.equal(
   'All counts every row once: a held row sits in one half only',
 );
 
+// ============================================================
+// AMOUNT workstream: a recipe line may have no amount ("salt to taste")
+// ============================================================
+{
+  const { getPricedCoverage, getPeriodStats } =
+    await import('../../src/apps/pinch/utils/stats.ts');
+  const { getDateOfDayKey } =
+    await import('../../src/apps/pinch/utils/dayKeys.ts');
+  const {
+    countOpenShopRows,
+    getItemRowIds,
+    getOpenItemsByRow,
+    sumShopAmounts,
+    groupShopLines,
+  } = await import('../../src/apps/pinch/utils/shopping.ts');
+  const { getLineCost } =
+    await import('../../src/apps/pinch/utils/recipeMath.ts');
+
+  const amtLine = (
+    id: string,
+    ingredientId: string,
+    amount: number | null,
+    unit: Unit,
+    note: string | null = null,
+  ) => ({ id, ingredientId, amount, unit, note });
+  const amtRecipe = (
+    id: string,
+    servings: number,
+    lines: ReturnType<typeof amtLine>[],
+  ) =>
+    ({
+      id,
+      title: id,
+      servings,
+      ingredients: lines,
+      steps: [],
+      nutritionOverride: null,
+      isArchived: false,
+    }) as unknown as Recipe;
+  const amtThigh = { ...repriceIngredient('thigh'), name: 'Chicken thigh' };
+  const amtSalt = {
+    ...repriceIngredient('salt'),
+    name: 'Salt',
+    per100g: { calories: null, protein: null, carbs: null, fat: null },
+    gramsPerMl: 1.2,
+  } as ResolvedIngredient;
+  const amtParsley = {
+    ...repriceIngredient('parsley'),
+    name: 'Parsley',
+    familyId: 'cat-fam-herbs',
+  };
+  const amtById = new Map(
+    [amtThigh, amtSalt, amtParsley].map((entry) => [entry.id, entry]),
+  );
+  const amtThighProduct = product('thigh', 948, 3, 'LB');
+  const amtSaltProduct = product('salt', 199, 26, 'OZ');
+  const amtAdobo = amtRecipe('adobo', 4, [
+    amtLine('l1', 'thigh', 2, 'LB'),
+    amtLine('l2', 'salt', null, 'EACH', 'to taste'),
+    amtLine('l3', 'parsley', null, 'EACH', 'a handful'),
+  ]);
+
+  // cost: a line with no amount is neither priced nor a gap, priced or not
+  const amtCost = getRecipeCost(
+    amtAdobo,
+    amtById,
+    new Map([['thigh', amtThighProduct]]),
+  );
+  assert.equal(Math.round(amtCost.totalCents ?? 0), 632);
+  assert.deepEqual(
+    amtCost.leftOut,
+    [],
+    'salt to taste with no price is not something left out',
+  );
+  assert.deepEqual(amtCost.lines.get('l2'), { cents: null, gap: null });
+  assert.deepEqual(
+    getLineCost(amtAdobo.ingredients[1], amtSalt, amtSaltProduct),
+    { cents: null, gap: null },
+    'a priced ingredient still adds nothing for a line with no amount',
+  );
+  const amtOnlyTaste = getRecipeCost(
+    amtRecipe('seasoning', 2, [amtLine('a', 'salt', null, 'EACH')]),
+    amtById,
+    new Map([['salt', amtSaltProduct]]),
+  );
+  assert.deepEqual(
+    [amtOnlyTaste.totalCents, amtOnlyTaste.leftOut],
+    [null, []],
+    'a recipe of only lines with no amount has no total and nothing left out',
+  );
+
+  // nutrition: a line with no amount adds nothing and is never missing
+  const amtNutrition = getRecipeNutrition(amtAdobo, amtById);
+  assert.deepEqual(
+    amtNutrition.missing,
+    [],
+    'salt to taste, which has no nutrition, is not missing from any metric',
+  );
+  assert.equal(
+    Math.round(amtNutrition.values.calories ?? 0),
+    Math.round((2 * 453.59237 * 2) / 4),
+    'the per-serving calories come from the measured lines alone',
+  );
+
+  // coverage and the period's gaps: lines with no amount don't count
+  const amtMeal = {
+    ...plannedOf(
+      [{ id: 'i1', kind: 'RECIPE', refId: 'adobo', servings: 4 }],
+      null,
+    ),
+    id: 'amt-m1',
+    date: getDateOfDayKey('2026-10-15'),
+  } as PlannedMeal;
+  const amtRange = { startKey: '2026-10-15', endKey: '2026-10-21' };
+  assert.deepEqual(
+    getPricedCoverage([amtMeal], amtRange, new Map([['adobo', amtAdobo]]), []),
+    { usedCount: 1, pricedCount: 1 },
+    'priced coverage counts only the measured line: chicken, not salt or parsley',
+  );
+  const amtStats = getPeriodStats([amtMeal], amtRange, {
+    recipeCosts: new Map([['adobo', amtCost]]),
+    ingredientsById: amtById,
+    defaultProducts: new Map([['thigh', amtThighProduct]]),
+    recipeNutrition: new Map([['adobo', amtNutrition]]),
+  });
+  assert.deepEqual(
+    [amtStats.leftOut, amtStats.openNutritionMissing],
+    [[], []],
+    'a planned recipe with salt to taste leaves nothing out of the period',
+  );
+
+  // gap ranking and "Used in": lines with no amount aside
+  const amtUses = getIngredientUses(
+    [amtAdobo],
+    [amtMeal],
+    new Map([['adobo', amtAdobo]]),
+    amtById,
+  );
+  assert.equal(amtUses.has('salt'), false, 'salt to taste is no use to rank');
+  assert.equal(
+    getUseText(amtUses.get('thigh'), amtById.get('thigh')),
+    'Used in adobo · 2 lb planned',
+  );
+
+  // shopping lines: a line with no amount is just the name, in EACH, and never scales
+  assert.deepEqual(
+    getRecipeLines(amtAdobo, amtById, 1),
+    [
+      { ingredientId: 'thigh', amount: 0.5, unit: 'LB' },
+      { ingredientId: 'salt', amount: null, unit: 'EACH' },
+      { ingredientId: 'parsley', amount: null, unit: 'EACH' },
+    ],
+    'scaling down halves the chicken and leaves salt and parsley as names',
+  );
+  assert.deepEqual(
+    getRecipeLines(amtAdobo, amtById, 6).map((line) => line.amount),
+    [3, null, null],
+    'scaling 4 to 6 servings never makes "1.5 salt"',
+  );
+
+  // merging, both orders: null + null = null, null + x = x, x + null = x
+  assert.deepEqual(
+    mergeLines([
+      { ingredientId: 'salt', amount: null, unit: 'EACH' },
+      { ingredientId: 'salt', amount: null, unit: 'EACH' },
+    ]),
+    [{ ingredientId: 'salt', amount: null, unit: 'EACH' }],
+    'two name-only lines stay one name-only line',
+  );
+  assert.deepEqual(
+    [
+      mergeLines([
+        { ingredientId: 'lemon', amount: null, unit: 'EACH' },
+        { ingredientId: 'lemon', amount: 2, unit: 'EACH' },
+      ]),
+      mergeLines([
+        { ingredientId: 'lemon', amount: 2, unit: 'EACH' },
+        { ingredientId: 'lemon', amount: null, unit: 'EACH' },
+      ]),
+    ],
+    [
+      [{ ingredientId: 'lemon', amount: 2, unit: 'EACH' }],
+      [{ ingredientId: 'lemon', amount: 2, unit: 'EACH' }],
+    ],
+    'a name-only line adds nothing to a line with an amount, in either order',
+  );
+  assert.deepEqual(
+    [
+      mergeLines([
+        { ingredientId: 'salt', amount: null, unit: 'EACH' },
+        { ingredientId: 'salt', amount: 1, unit: 'TSP' },
+      ]),
+      mergeLines([
+        { ingredientId: 'salt', amount: 1, unit: 'TSP' },
+        { ingredientId: 'salt', amount: null, unit: 'EACH' },
+      ]),
+    ],
+    [
+      [{ ingredientId: 'salt', amount: 1, unit: 'TSP' }],
+      [{ ingredientId: 'salt', amount: 1, unit: 'TSP' }],
+    ],
+    'a line with an amount in any unit takes in the name-only line of the same ingredient',
+  );
+  assert.deepEqual(
+    mergeLines([
+      { ingredientId: 'salt', amount: 0.001, unit: 'TSP' },
+      { ingredientId: 'salt', amount: null, unit: 'EACH' },
+    ]),
+    [{ ingredientId: 'salt', amount: null, unit: 'EACH' }],
+    'an amount that rounds to nothing leaves the name-only line, so the ingredient is never lost',
+  );
+  assert.deepEqual(
+    getItemsLines(
+      [
+        { id: 'a', kind: 'RECIPE', refId: 'adobo', servings: 4 },
+        { id: 'b', kind: 'RECIPE', refId: 'rub', servings: 1 },
+      ],
+      new Map([
+        ['adobo', amtAdobo],
+        ['rub', amtRecipe('rub', 1, [amtLine('r1', 'salt', 2, 'TSP')])],
+      ]),
+      amtById,
+    ),
+    [
+      { ingredientId: 'thigh', amount: 2, unit: 'LB' },
+      { ingredientId: 'parsley', amount: null, unit: 'EACH' },
+      { ingredientId: 'salt', amount: 2, unit: 'TSP' },
+    ],
+    'from a plan, salt to taste and 2 tsp of salt is 2 tsp, and parsley stays a name',
+  );
+
+  // what a line writes on its item
+  const amtOpen = (amount: number | null) => ({ amount, isChecked: false });
+  const amtGot = (amount: number | null) => ({ amount, isChecked: true });
+  const amtName = { ingredientId: 'salt', amount: null, unit: 'EACH' as Unit };
+  const amtThree = { ingredientId: 'salt', amount: 3, unit: 'EACH' as Unit };
+  assert.deepEqual(
+    [
+      getMergedFields(amtOpen(3), amtName, 9).amount,
+      getMergedFields(amtOpen(null), amtThree, 9).amount,
+      getMergedFields(amtOpen(null), amtName, 9).amount,
+      getMergedFields(amtGot(3), amtName, 9),
+      getMergedFields(null, amtName, 9, true),
+    ],
+    [
+      3,
+      3,
+      null,
+      { amount: null, isChecked: false, updatedAt: 9 },
+      { amount: null, isChecked: true, updatedAt: 9 },
+    ],
+    'an open item keeps its amount, a name-only one takes an amount, and a got one starts again as just the name',
+  );
+
+  // sums and rows: a name-only part has no amount to add
+  assert.deepEqual(
+    [
+      sumShopAmounts([{ amount: null, unit: 'EACH' }]),
+      sumShopAmounts([
+        { amount: null, unit: 'EACH' },
+        { amount: 1.4, unit: 'EACH' },
+      ]),
+    ],
+    [null, { amount: 2, unit: 'EACH' }],
+    'only amounts add up, and a count still rounds up',
+  );
+  assert.deepEqual(
+    groupShopLines(
+      [{ ingredientId: 'parsley', amount: null, unit: 'EACH' }],
+      amtById,
+    ).map((row) => [row.name, row.amountText]),
+    [['Parsley', null]],
+    'an add sheet lists a name-only line as the name alone',
+  );
+  const amtItem = (
+    id: string,
+    ingredientId: string,
+    amount: number | null,
+    unit: Unit,
+    isChecked = false,
+  ) =>
+    ({
+      id,
+      ingredientId,
+      amount,
+      unit,
+      isChecked,
+      createdAt: 1,
+      updatedAt: 1,
+    }) as ShoppingItem;
+  const amtList = [
+    amtItem('parsley__EACH', 'parsley', null, 'EACH'),
+    amtItem('parsley__G', 'parsley', 30, 'G'),
+    amtItem('salt__EACH', 'salt', null, 'EACH'),
+    amtItem('thigh__EACH', 'thigh', null, 'EACH', true),
+    amtItem('thigh__LB', 'thigh', 2, 'LB'),
+  ];
+  const amtGrouped = groupShoppingItems(amtList, amtById);
+  assert.deepEqual(
+    amtGrouped.toBuy
+      .flatMap((group) => group.rows)
+      .map((row) => [row.name, row.amountText, row.itemIds])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    [
+      ['Chicken thigh', '2 lb', ['thigh__LB']],
+      ['Parsley', '30 g', ['parsley__G', 'parsley__EACH']],
+      ['Salt', null, ['salt__EACH']],
+    ],
+    'a name-only item rides with the same ingredient’s amount on its side of the list, and alone it is the name',
+  );
+  assert.deepEqual(
+    amtGrouped.got
+      .flatMap((group) => group.rows)
+      .map((row) => [row.name, row.amountText]),
+    [['Chicken thigh', null]],
+    'a got name-only item never joins an open row',
+  );
+  assert.equal(
+    countOpenShopRows(amtList),
+    3,
+    'the badge counts the rows drawn, not the items',
+  );
+  assert.deepEqual(
+    [...getItemRowIds([amtList[0], amtList[1]]).values()],
+    ['parsley::MASS', 'parsley::MASS'],
+  );
+  const amtSheetRows = groupShopLines(
+    [
+      { ingredientId: 'parsley', amount: null, unit: 'EACH' },
+      { ingredientId: 'thigh', amount: 1, unit: 'EACH' },
+    ],
+    amtById,
+  );
+  const amtJoined = getOpenItemsByRow(amtSheetRows, amtList);
+  assert.deepEqual(
+    [
+      amtJoined.get('parsley::COUNT')?.map((item) => item.id),
+      amtJoined.has('thigh::COUNT'),
+    ],
+    [['parsley__EACH', 'parsley__G'], false],
+    'a name-only row is on your list when any open line of it is; a counted one only in its own kind of unit',
+  );
+
+  // the list's cost: a name-only line is neither counted nor left out
+  const amtListCost = getShoppingCost(
+    amtList.filter((item) => !item.isChecked),
+    amtById,
+    new Map([['thigh', amtThighProduct]]),
+  );
+  assert.deepEqual(
+    [
+      Math.round(amtListCost.totalCents ?? 0),
+      amtListCost.rowCount,
+      amtListCost.pricedRowCount,
+      amtListCost.leftOut.map((gap) => gap.ingredientId),
+    ],
+    [632, 2, 1, ['parsley']],
+    'the list prices 2 lb of chicken, counts 30 g of parsley as unpriced, and leaves salt by name out of both',
+  );
+
+  // a tweak says plainly when a line gains or loses its amount
+  const amtContent = (lines: ReturnType<typeof amtLine>[]): RecipeContent => ({
+    title: 'Adobo',
+    description: null,
+    servings: 4,
+    prepMinutes: null,
+    cookMinutes: null,
+    ingredients: lines,
+    steps: [],
+    nutritionOverride: null,
+    sourceId: null,
+  });
+  const amtNames = new Map([
+    ['salt', { name: 'Salt' }],
+    ['parsley', { name: 'Parsley' }],
+    ['seasalt', { name: 'Sea salt' }],
+  ]);
+  assert.deepEqual(
+    [
+      getRecipeChanges(
+        amtContent([amtLine('l', 'salt', 1, 'TSP')]),
+        amtContent([amtLine('l', 'salt', null, 'EACH', 'to taste')]),
+        amtNames,
+      ),
+      getRecipeChanges(
+        amtContent([amtLine('l', 'salt', null, 'EACH')]),
+        amtContent([amtLine('l', 'salt', 2, 'TSP')]),
+        amtNames,
+      ),
+      getRecipeChanges(
+        amtContent([amtLine('l', 'salt', null, 'TSP')]),
+        amtContent([amtLine('l', 'salt', null, 'EACH')]),
+        amtNames,
+      ),
+      getRecipeChanges(
+        amtContent([]),
+        amtContent([amtLine('p', 'parsley', null, 'EACH', 'a handful')]),
+        amtNames,
+      ),
+      getRecipeChanges(
+        amtContent([amtLine('l', 'salt', null, 'EACH')]),
+        amtContent([amtLine('l', 'seasalt', null, 'EACH')]),
+        amtNames,
+      ),
+    ],
+    [
+      ['Salt 1 tsp → no amount', 'Added a note to Salt'],
+      ['Salt no amount → 2 tsp'],
+      [],
+      ['Added Parsley'],
+      ['Swapped Salt for Sea salt'],
+    ],
+    'a tweak names a line losing or gaining its amount, and a line with no amount has no unit to change',
+  );
+}
+
+// AMOUNT: the recipe form keeps "no amount" as a choice, not a gap to fix
+{
+  const {
+    getDataFromExtracted,
+    getInitialData,
+    isRowAmountValid,
+    toRecipeLine,
+  } =
+    await import('../../src/apps/pinch/components/recipes/recipeFormModel.ts');
+  const { resolveIngredients } =
+    await import('../../src/apps/pinch/utils/resolveIngredient.ts');
+
+  const amtRead = getDataFromExtracted(
+    {
+      title: 'Shakshuka',
+      servings: 3,
+      prepMinutes: null,
+      cookMinutes: null,
+      description: null,
+      ingredients: [
+        { name: 'eggs', amount: 6, unit: 'EACH', note: null },
+        { name: 'salt', amount: null, unit: null, note: 'to taste' },
+        { name: 'parsley', amount: null, unit: null, note: 'a handful' },
+        { name: 'salt', amount: null, unit: null, note: 'to taste' },
+      ],
+      steps: [],
+      care: null,
+      unread: [],
+    },
+    resolveIngredients([]),
+  );
+  assert.deepEqual(
+    amtRead.ingredients.map((row) => [
+      row.amount,
+      row.isAmountless,
+      row.note,
+      isRowAmountValid(row),
+    ]),
+    [
+      ['6', false, null, true],
+      ['', true, 'to taste', true],
+      ['', true, 'a handful', true],
+      ['', true, 'to taste', true],
+    ],
+    'a reading keeps "to taste" and "a handful" as rows with no amount, ready to save',
+  );
+  assert.deepEqual(
+    toRecipeLine({ ...amtRead.ingredients[1], unit: 'TSP' }),
+    {
+      id: amtRead.ingredients[1].id,
+      ingredientId: amtRead.ingredients[1].ingredientId,
+      amount: null,
+      unit: 'EACH',
+      note: 'to taste',
+    },
+    'a row with no amount saves none, in EACH, whatever unit the drawer last had',
+  );
+  const amtTyped = (amount: string) => ({
+    ...amtRead.ingredients[0],
+    amount,
+  });
+  assert.deepEqual(
+    ['', '0', '2', 'abc'].map((amount) => isRowAmountValid(amtTyped(amount))),
+    [false, false, true, false],
+    'a blank amount the person did not choose is still something to fix',
+  );
+  const amtStored = {
+    id: 'adobo',
+    title: 'Adobo',
+    description: null,
+    servings: 4,
+    prepMinutes: null,
+    cookMinutes: null,
+    coverPath: null,
+    ingredients: [
+      {
+        id: 'a',
+        ingredientId: 'cat-chicken-thigh',
+        amount: 2,
+        unit: 'LB' as const,
+        note: null,
+      },
+      {
+        id: 'b',
+        ingredientId: 'cat-salt',
+        amount: null,
+        unit: 'EACH' as const,
+        note: 'to taste',
+      },
+    ],
+    steps: [],
+    nutritionOverride: null,
+    source: 'MANUAL' as const,
+    sourceId: null,
+    care: null,
+    isArchived: false,
+    createdAt: 1,
+    updatedAt: 1,
+  } satisfies Recipe;
+  const amtRows = getInitialData(amtStored).ingredients;
+  assert.deepEqual(
+    amtRows.map((row) => [row.amount, row.isAmountless]),
+    [
+      ['2', false],
+      ['', true],
+    ],
+  );
+  assert.deepEqual(
+    amtRows.map(toRecipeLine),
+    amtStored.ingredients,
+    'a saved recipe opens and saves back unchanged, with or without amounts',
+  );
+}
+
+// AMOUNT (J1-P3b): an unmatched reading offers the closest names
+{
+  const { findNearMatches } =
+    await import('../../src/apps/pinch/utils/catalogSearch.ts');
+  const { resolveIngredients } =
+    await import('../../src/apps/pinch/utils/resolveIngredient.ts');
+  const amtCatalog = resolveIngredients([]);
+  const amtNear = (name: string) =>
+    findNearMatches(amtCatalog, name).map((ingredient) => ingredient.name);
+  assert.deepEqual(
+    amtNear('shredded lettuce'),
+    ['Iceberg lettuce', 'Romaine lettuce'],
+    'shredded lettuce offers the lettuces, not shredded coconut',
+  );
+  assert.deepEqual(
+    amtNear('salt and pepper'),
+    ['Black pepper', 'Salt', 'Cayenne pepper'],
+    'an unsplit pair offers each half, the last word first',
+  );
+  assert.deepEqual(
+    [amtNear('parmisan'), amtNear('and'), amtNear('')],
+    [[], [], []],
+    'a misspelling or a word that names nothing offers nothing',
+  );
+  assert.equal(
+    findNearMatches(
+      amtCatalog.filter(
+        (ingredient) => ingredient.id !== 'cat-iceberg-lettuce',
+      ),
+      'shredded lettuce',
+    ).some((ingredient) => ingredient.id === 'cat-iceberg-lettuce'),
+    false,
+    'an ingredient already in the recipe is not offered again',
+  );
+}
+
+// ============================================================
+// Merge of SOURCES and AMOUNT: a name-only line carries its source
+// ============================================================
+{
+  const sourced = (
+    ingredientId: string,
+    amount: number | null,
+    unit: 'EACH' | 'TBSP',
+    source: string | null,
+  ) => ({ ingredientId, amount, unit, source }) as SourcedLine;
+  const merged = srcMergeLines([
+    sourced('cat-salt', null, 'EACH', 'meal:a'),
+    sourced('cat-salt', null, 'EACH', 'meal:b'),
+    sourced('cat-oil', 2, 'TBSP', 'meal:a'),
+    sourced('cat-oil', null, 'EACH', 'meal:b'),
+  ]);
+  assert.deepEqual(
+    merged.map((line) => [line.ingredientId, line.amount, line.sources]),
+    [
+      ['cat-salt', null, ['meal:a', 'meal:b']],
+      ['cat-oil', 2, ['meal:a']],
+    ],
+    'name-only lines from two meals stay one name-only item with both sources, and drop when the same ingredient has an amount',
+  );
+}
+
 console.log('pinchMath: all checks passed');

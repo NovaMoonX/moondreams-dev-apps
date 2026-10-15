@@ -179,7 +179,7 @@ export function getPeriodStats(
   };
 }
 
-/** How many distinct ingredients the planned meals of a span use, and how many of them have a price: "5 of 18 ingredients priced". */
+/** How many distinct ingredients the planned meals of a span use, and how many of them have a price: "5 of 18 ingredients priced". A line with no amount can't be priced, so it isn't counted. */
 export function getPricedCoverage(
   plannedMeals: PlannedMeal[],
   range: DayRange,
@@ -193,7 +193,9 @@ export function getPricedCoverage(
       item.kind === 'RECIPE'
         ? (recipesById
             .get(item.refId)
-            ?.ingredients.map((line) => line.ingredientId) ?? [])
+            ?.ingredients.flatMap((line) =>
+              line.amount === null ? [] : [line.ingredientId],
+            ) ?? [])
         : [item.refId],
     );
   const leftOutIds = new Set(leftOut.map((gap) => gap.ingredientId));

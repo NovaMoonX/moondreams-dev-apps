@@ -62,6 +62,7 @@ import {
   getOnListHint,
   getPlanInRange,
   getRecipeLines,
+  getOpenItemsByRow,
   getRecipeShoppingSource,
   getRowOnList,
   getShopAmount,
@@ -228,6 +229,10 @@ export function ShoppingPick({
         : [];
     return groupShopLines(lines, ingredientsById);
   }, [groups, recipe, recipesById, ingredientsById, servings]);
+  const openByRow = useMemo(
+    () => getOpenItemsByRow(rows, [...onList.values()]),
+    [rows, onList],
+  );
   const states = useMemo(() => {
     const itemsByRow = [...onList.values()].reduce((acc, item) => {
       const id = getShopRowId(item.ingredientId, item.unit);
@@ -236,7 +241,7 @@ export function ShoppingPick({
     return new Map(
       rows.map((row) => {
         const rowItems = itemsByRow.get(row.id) ?? [];
-        const open = rowItems.filter((item) => !item.isChecked);
+        const open = openByRow.get(row.id) ?? [];
         return [
           row.id,
           {
@@ -249,7 +254,7 @@ export function ShoppingPick({
         ];
       }),
     );
-  }, [onList, rows]);
+  }, [onList, rows, openByRow]);
   const getState = (row: ShopLineRow) =>
     states.get(row.id) ?? {
       ...getRowOnList(row.lines, []),

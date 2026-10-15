@@ -13,7 +13,8 @@ if (!version) {
 initializeApp({
   credential: applicationDefault(),
   databaseURL:
-    process.env.FIREBASE_DATABASE_URL ?? `https://${PROJECT_ID}-default-rtdb.firebaseio.com`,
+    process.env.FIREBASE_DATABASE_URL ??
+    `https://${PROJECT_ID}-default-rtdb.firebaseio.com`,
 });
 
 await getDatabase().ref('appVersion').set(version);

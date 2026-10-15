@@ -40,7 +40,7 @@ const isValidLine = (line: ShoppingLine) =>
   line.ingredientId !== '' &&
   line.ingredientId.length <= 80 &&
   UNITS.includes(line.unit) &&
-  isValidAmount(line.amount);
+  (line.amount === null ? line.unit === 'EACH' : isValidAmount(line.amount));
 
 const BAD_AMOUNT = 'Enter an amount above zero.';
 const OFFLINE_MESSAGE = 'Check your connection and try again.';

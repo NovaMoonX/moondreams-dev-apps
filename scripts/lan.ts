@@ -16,17 +16,26 @@ function getGatewayMac() {
     throw new Error('The LAN guard only supports macOS.');
   }
 
-  const route = execFileSync('route', ['-n', 'get', 'default'], { encoding: 'utf8' });
+  const route = execFileSync('route', ['-n', 'get', 'default'], {
+    encoding: 'utf8',
+  });
   const gateway = /gateway:\s*(\S+)/.exec(route)?.[1];
-  const arp = gateway ? execFileSync('arp', ['-n', gateway], { encoding: 'utf8' }) : '';
+  const arp = gateway
+    ? execFileSync('arp', ['-n', gateway], { encoding: 'utf8' })
+    : '';
   const mac = /at ([0-9a-f:]+) on/i.exec(arp)?.[1];
 
   if (!mac) {
-    throw new Error('Could not identify the current network. Are you connected?');
+    throw new Error(
+      'Could not identify the current network. Are you connected?',
+    );
   }
 
   // arp drops leading zeros from each byte.
-  const result = mac.split(':').map((byte) => byte.padStart(2, '0')).join(':');
+  const result = mac
+    .split(':')
+    .map((byte) => byte.padStart(2, '0'))
+    .join(':');
   return result;
 }
 
@@ -46,7 +55,9 @@ function readTrusted(): TrustedNetwork[] {
   const result = fs
     .readFileSync(TRUSTED_FILE, 'utf8')
     .split('\n')
-    .map((line) => /^(.*\S)\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})$/i.exec(line.trim()))
+    .map((line) =>
+      /^(.*\S)\s+((?:[0-9a-f]{2}:){5}[0-9a-f]{2})$/i.exec(line.trim()),
+    )
     .filter((match) => match !== null)
     .map((match) => ({ name: match[1], mac: match[2].toLowerCase() }));
   return result;
@@ -56,7 +67,13 @@ function writeTrusted(networks: TrustedNetwork[]) {
   const lines = networks.map((network) => `${network.name}  ${network.mac}`);
   fs.writeFileSync(
     TRUSTED_FILE,
-    ['# Networks trusted for the :lan commands (name, then gateway MAC).', '# Managed by `npm run lan:trust` / `lan:untrust` / `lan:list`.', '', ...lines, ''].join('\n'),
+    [
+      '# Networks trusted for the :lan commands (name, then gateway MAC).',
+      '# Managed by `npm run lan:trust` / `lan:untrust` / `lan:list`.',
+      '',
+      ...lines,
+      '',
+    ].join('\n'),
   );
 }
 
@@ -73,8 +90,13 @@ async function askName() {
     throw new Error('Pass a name: npm run lan:trust -- Home');
   }
 
-  const prompt = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const name = (await prompt.question('Name this network (e.g. Home): ')).trim();
+  const prompt = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const name = (
+    await prompt.question('Name this network (e.g. Home): ')
+  ).trim();
   prompt.close();
   return name;
 }
@@ -95,12 +117,20 @@ function writeLanEmulatorConfig() {
       { ...(settings as object), host: '0.0.0.0' },
     ]),
   );
-  fs.writeFileSync(LAN_CONFIG, JSON.stringify({ ...config, emulators }, null, 2));
-  const only = Object.keys(emulators).filter((name) => name !== 'ui').join(',');
+  fs.writeFileSync(
+    LAN_CONFIG,
+    JSON.stringify({ ...config, emulators }, null, 2),
+  );
+  const only = Object.keys(emulators)
+    .filter((name) => name !== 'ui')
+    .join(',');
   return only;
 }
 
-const TAILSCALE_CLIS = ['tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'];
+const TAILSCALE_CLIS = [
+  'tailscale',
+  '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
+];
 const VITE_PORT = 5173;
 const EMULATOR_READY_URLS = [
   'http://127.0.0.1:8080',
@@ -115,16 +145,37 @@ const EXTRA_EMULATOR_PORTS = [4400, 4500, 9150];
 
 const PROCESS_LABELS = [
   { pattern: /vite/i, label: 'Vite dev server', isEmulator: false },
-  { pattern: /emulators:start/, label: 'Firebase emulator suite', isEmulator: true },
-  { pattern: /firebase-auth-emulator/, label: 'Auth emulator', isEmulator: true },
-  { pattern: /cloud-firestore-emulator/, label: 'Firestore emulator', isEmulator: true },
-  { pattern: /firebase-database-emulator/, label: 'Realtime Database emulator', isEmulator: true },
+  {
+    pattern: /emulators:start/,
+    label: 'Firebase emulator suite',
+    isEmulator: true,
+  },
+  {
+    pattern: /firebase-auth-emulator/,
+    label: 'Auth emulator',
+    isEmulator: true,
+  },
+  {
+    pattern: /cloud-firestore-emulator/,
+    label: 'Firestore emulator',
+    isEmulator: true,
+  },
+  {
+    pattern: /firebase-database-emulator/,
+    label: 'Realtime Database emulator',
+    isEmulator: true,
+  },
   { pattern: /pubsub-emulator/, label: 'Pub/Sub emulator', isEmulator: true },
-  { pattern: /cloud-storage-rules/, label: 'Storage emulator', isEmulator: true },
+  {
+    pattern: /cloud-storage-rules/,
+    label: 'Storage emulator',
+    isEmulator: true,
+  },
 ];
 
 const describeProcess = (command: string) =>
-  PROCESS_LABELS.find(({ pattern }) => pattern.test(command))?.label ?? 'leftover Firebase or Vite process';
+  PROCESS_LABELS.find(({ pattern }) => pattern.test(command))?.label ??
+  'leftover Firebase or Vite process';
 
 interface Listener {
   pid: number;
@@ -135,10 +186,14 @@ interface Listener {
 function getListeners(ports: number[]): Listener[] {
   const found = ports.flatMap((port) => {
     try {
-      const out = execFileSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fp'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
+      const out = execFileSync(
+        'lsof',
+        ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fp'],
+        {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        },
+      );
       return out
         .split('\n')
         .filter((line) => line.startsWith('p'))
@@ -148,7 +203,10 @@ function getListeners(ports: number[]): Listener[] {
     }
   });
   const byPid = found.reduce<Record<number, number[]>>(
-    (groups, { pid, port }) => ({ ...groups, [pid]: [...(groups[pid] ?? []), port] }),
+    (groups, { pid, port }) => ({
+      ...groups,
+      [pid]: [...(groups[pid] ?? []), port],
+    }),
     {},
   );
 
@@ -156,7 +214,9 @@ function getListeners(ports: number[]): Listener[] {
     .map(([pid, pidPorts]) => ({
       pid: Number(pid),
       ports: pidPorts,
-      command: execFileSync('ps', ['-p', pid, '-o', 'args='], { encoding: 'utf8' }).trim(),
+      command: execFileSync('ps', ['-p', pid, '-o', 'args='], {
+        encoding: 'utf8',
+      }).trim(),
     }))
     .filter(({ pid }) => pid !== process.pid);
 }
@@ -189,7 +249,9 @@ async function freePorts() {
     : [
         VITE_PORT,
         ...EXTRA_EMULATOR_PORTS,
-        ...Object.values<{ port?: number }>(config.emulators).flatMap(({ port }) => (port ? [port] : [])),
+        ...Object.values<{ port?: number }>(config.emulators).flatMap(
+          ({ port }) => (port ? [port] : []),
+        ),
       ];
   const listeners = getListeners(ports);
   const ours = listeners.filter(({ command }) => OUR_PROCESS.test(command));
@@ -202,20 +264,28 @@ async function freePorts() {
 
   await Promise.all(ours.map(({ pid }) => stopProcess(pid)));
   ours.forEach(({ ports: pidPorts, command }) =>
-    console.log(`🛑 Stopped the ${describeProcess(command)} (port ${pidPorts.join(', ')})`),
+    console.log(
+      `🛑 Stopped the ${describeProcess(command)} (port ${pidPorts.join(', ')})`,
+    ),
   );
 
   if (others.length > 0) {
     others.forEach(({ ports: pidPorts, command }) =>
-      console.error(`⚠️  Left alone a program on port ${pidPorts.join(', ')} that isn't ours: ${command.slice(0, 90)}`),
+      console.error(
+        `⚠️  Left alone a program on port ${pidPorts.join(', ')} that isn't ours: ${command.slice(0, 90)}`,
+      ),
     );
-    throw new Error('Something else is using a port we need. Stop it, then run this again.');
+    throw new Error(
+      'Something else is using a port we need. Stop it, then run this again.',
+    );
   }
 }
 
 /** Stops every Firebase emulator process (not the dev server), saying which ones it stopped. */
 async function stopEmulators() {
-  const processes = execFileSync('ps', ['-axo', 'pid=,args='], { encoding: 'utf8' })
+  const processes = execFileSync('ps', ['-axo', 'pid=,args='], {
+    encoding: 'utf8',
+  })
     .split('\n')
     .flatMap((line) => {
       const match = /^\s*(\d+)\s+(.*)$/.exec(line);
@@ -224,7 +294,9 @@ async function stopEmulators() {
     .filter(
       ({ pid, command }) =>
         pid !== process.pid &&
-        PROCESS_LABELS.some(({ pattern, isEmulator }) => isEmulator && pattern.test(command)),
+        PROCESS_LABELS.some(
+          ({ pattern, isEmulator }) => isEmulator && pattern.test(command),
+        ),
     );
 
   if (processes.length === 0) {
@@ -233,8 +305,8 @@ async function stopEmulators() {
   }
 
   await Promise.all(processes.map(({ pid }) => stopProcess(pid)));
-  new Set(processes.map(({ command }) => describeProcess(command))).forEach((label) =>
-    console.log(`🛑 Stopped the ${label}`),
+  new Set(processes.map(({ command }) => describeProcess(command))).forEach(
+    (label) => console.log(`🛑 Stopped the ${label}`),
   );
   console.log('✅ All emulators are stopped.');
 }
@@ -248,7 +320,14 @@ function getTailscaleHost() {
 
   const ips = TAILSCALE_CLIS.flatMap((cli) => {
     try {
-      return [execFileSync(cli, ['ip', '-4'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0]];
+      return [
+        execFileSync(cli, ['ip', '-4'], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+        })
+          .trim()
+          .split('\n')[0],
+      ];
     } catch {
       return [];
     }
@@ -256,7 +335,7 @@ function getTailscaleHost() {
 
   if (ips.length === 0) {
     throw new Error(
-      "Couldn't find a Tailscale address. Install Tailscale (https://tailscale.com/download), sign in, and try again. See SEEDING.md, \"Sharing with a friend\".",
+      'Couldn\'t find a Tailscale address. Install Tailscale (https://tailscale.com/download), sign in, and try again. See SEEDING.md, "Sharing with a friend".',
     );
   }
   return ips[0];
@@ -264,7 +343,10 @@ function getTailscaleHost() {
 
 async function waitUntilUp(url: string, attempts = 120) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const isUp = await fetch(url).then(() => true, () => false);
+    const isUp = await fetch(url).then(
+      () => true,
+      () => false,
+    );
     if (isUp) {
       return;
     }
@@ -274,11 +356,14 @@ async function waitUntilUp(url: string, attempts = 120) {
 }
 
 function waitForExit(child: ChildProcess) {
-  return new Promise<number>((resolve) => child.on('exit', (code) => resolve(code ?? 1)));
+  return new Promise<number>((resolve) =>
+    child.on('exit', (code) => resolve(code ?? 1)),
+  );
 }
 
 const isTty = Boolean(process.stdout.isTTY);
-const style = (code: string, text: string) => (isTty ? `\x1b[${code}m${text}\x1b[0m` : text);
+const style = (code: string, text: string) =>
+  isTty ? `\x1b[${code}m${text}\x1b[0m` : text;
 
 /** The one thing to act on, so it is boxed in rules and printed after everything else has settled. */
 function banner(url: string, isCopied: boolean) {
@@ -304,13 +389,17 @@ async function share(isDry: boolean) {
   const url = `http://${getTailscaleHost()}:${VITE_PORT}`;
 
   if (isDry) {
-    console.log(`Would start the LAN emulators, run seed:reset, start Vite, and share ${url}`);
+    console.log(
+      `Would start the LAN emulators, run seed:reset, start Vite, and share ${url}`,
+    );
     return;
   }
 
   const only = writeLanEmulatorConfig();
   console.log('Building functions…');
-  execFileSync('npm', ['--prefix', 'functions', 'run', 'build'], { stdio: 'inherit' });
+  execFileSync('npm', ['--prefix', 'functions', 'run', 'build'], {
+    stdio: 'inherit',
+  });
 
   const children: ChildProcess[] = [];
   const stopAll = () => children.forEach((child) => child.kill('SIGINT'));
@@ -330,16 +419,28 @@ async function share(isDry: boolean) {
     });
   };
   const start = (command: string, args: string[]) => {
-    const child = spawn('npx', ['--no-install', command, ...args], { stdio: ['inherit', 'pipe', 'pipe'] });
+    const child = spawn('npx', ['--no-install', command, ...args], {
+      stdio: ['inherit', 'pipe', 'pipe'],
+    });
     children.push(child);
     forward(child);
     return child;
   };
 
-  start('firebase', ['emulators:start', '--only', only, '--config', LAN_CONFIG]);
-  await Promise.all(EMULATOR_READY_URLS.map((readyUrl) => waitUntilUp(readyUrl)));
+  start('firebase', [
+    'emulators:start',
+    '--only',
+    only,
+    '--config',
+    LAN_CONFIG,
+  ]);
+  await Promise.all(
+    EMULATOR_READY_URLS.map((readyUrl) => waitUntilUp(readyUrl)),
+  );
 
-  const seedCode = await waitForExit(spawn('npm', ['run', 'seed:reset'], { stdio: 'inherit' }));
+  const seedCode = await waitForExit(
+    spawn('npm', ['run', 'seed:reset'], { stdio: 'inherit' }),
+  );
   if (seedCode !== 0) {
     stopAll();
     throw new Error('Seeding failed, so nothing is being shared.');
@@ -358,7 +459,14 @@ async function share(isDry: boolean) {
   let isViteReady = false;
   const vite = spawn(
     'npx',
-    ['--no-install', 'vite', '--host', '--port', String(VITE_PORT), '--strictPort'],
+    [
+      '--no-install',
+      'vite',
+      '--host',
+      '--port',
+      String(VITE_PORT),
+      '--strictPort',
+    ],
     { stdio: ['inherit', 'pipe', 'pipe'] },
   );
   children.push(vite);
@@ -374,7 +482,11 @@ async function share(isDry: boolean) {
     for (let waited = 0; waited < 120_000 && !isViteReady; waited += 250) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
-    for (let waited = 0; waited < 15_000 && Date.now() - lastOutputAt < 2_000; waited += 250) {
+    for (
+      let waited = 0;
+      waited < 15_000 && Date.now() - lastOutputAt < 2_000;
+      waited += 250
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     console.log(banner(url, isCopied));
@@ -429,7 +541,10 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
     console.log(
       networks.length
         ? networks
-            .map((network) => `${network.name}  ${network.mac}${network.mac === current ? '  (current)' : ''}`)
+            .map(
+              (network) =>
+                `${network.name}  ${network.mac}${network.mac === current ? '  (current)' : ''}`,
+            )
             .join('\n')
         : 'No trusted networks yet. Run `npm run lan:trust` at home.',
     );
@@ -441,7 +556,13 @@ const commands: Record<string, (args: string[]) => void | Promise<void>> = {
   emulators: () => {
     assertTrustedNetwork();
     const only = writeLanEmulatorConfig();
-    run('firebase', ['emulators:start', '--only', only, '--config', LAN_CONFIG]);
+    run('firebase', [
+      'emulators:start',
+      '--only',
+      only,
+      '--config',
+      LAN_CONFIG,
+    ]);
   },
   cleanup: () => freePorts(),
   'stop-emulators': () => stopEmulators(),

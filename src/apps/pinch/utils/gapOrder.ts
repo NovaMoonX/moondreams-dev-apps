@@ -67,19 +67,15 @@ function buildIngredientUses(
   const fromRecipes = recipes
     .filter((recipe) => recipe.isArchived !== true)
     .reduce((uses, recipe) => {
-      recipe.ingredients.forEach((line) => {
-        const use = useOf(uses, line.ingredientId);
+      recipe.ingredients.forEach(({ ingredientId, amount, unit }) => {
+        if (amount === null) return;
+        const use = useOf(uses, ingredientId);
         const grams = estimateGrams(
-          line.amount,
-          line.unit,
-          ingredientsById.get(line.ingredientId),
+          amount,
+          unit,
+          ingredientsById.get(ingredientId),
         );
-        use.recipes.push({
-          title: recipe.title,
-          amount: line.amount,
-          unit: line.unit,
-          grams,
-        });
+        use.recipes.push({ title: recipe.title, amount, unit, grams });
         use.grams += grams;
       });
       return uses;
@@ -88,19 +84,20 @@ function buildIngredientUses(
   const withPlans = plannedMeals
     .filter((meal) => meal.snapshot === null)
     .flatMap((meal) => getItemsLines(meal.items, recipesById, ingredientsById))
-    .reduce((uses, line) => {
-      const use = useOf(uses, line.ingredientId);
+    .reduce((uses, { ingredientId, amount, unit }) => {
+      if (amount === null) return uses;
+      const use = useOf(uses, ingredientId);
       const grams = estimateGrams(
-        line.amount,
-        line.unit,
-        ingredientsById.get(line.ingredientId),
+        amount,
+        unit,
+        ingredientsById.get(ingredientId),
       );
-      const known = use.planned.find((entry) => entry.unit === line.unit);
+      const known = use.planned.find((entry) => entry.unit === unit);
       if (known) {
-        known.amount += line.amount;
+        known.amount += amount;
         known.grams += grams;
       } else {
-        use.planned.push({ amount: line.amount, unit: line.unit, grams });
+        use.planned.push({ amount, unit, grams });
       }
       use.grams += grams;
       return uses;
@@ -113,7 +110,7 @@ function buildIngredientUses(
   return withPlans;
 }
 
-/** Every ingredient's uses in the listed recipes and in the meals planned on days that haven't passed, built once per change of its inputs. */
+/** Every ingredient's uses in the listed recipes and in the meals planned on days that haven't passed, lines with no amount aside, built once per change of its inputs. */
 export const getIngredientUses = weakMapMemoize(buildIngredientUses);
 
 /** The gaps once each, the ingredient that weighs most in the recipes and the plan first. */

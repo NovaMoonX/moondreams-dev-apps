@@ -65,7 +65,11 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     .doc('nine-lives')
     .collection('inviteCodes')
     .doc('NOVA9P');
-  batch.set(secondInviteCodeRef, { householdId: SECOND_HOUSEHOLD_ID }, { merge: true });
+  batch.set(
+    secondInviteCodeRef,
+    { householdId: SECOND_HOUSEHOLD_ID },
+    { merge: true },
+  );
 
   const cats = [
     {
@@ -90,7 +94,13 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       },
       adoptedAt: context.now - 47_520_000_000,
       adoptionProfileURL: 'https://www.moonlightcatrescue.example/pets/mochi',
-      otherLinks: [{ id: 'seed-cat-mochi-link-insurance', label: 'Pet insurance portal', url: 'https://www.trupanion.com' }],
+      otherLinks: [
+        {
+          id: 'seed-cat-mochi-link-insurance',
+          label: 'Pet insurance portal',
+          url: 'https://www.trupanion.com',
+        },
+      ],
       customKeyDates: [
         {
           id: 'seed-cat-mochi-keydate-rabies',
@@ -246,7 +256,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-feline-herpesvirus',
       name: 'Feline herpesvirus (FHV-1)',
       category: 'illness',
-      description: 'A common viral cause of eye and upper respiratory flare-ups, often recurring under stress.',
+      description:
+        'A common viral cause of eye and upper respiratory flare-ups, often recurring under stress.',
       source: 'seed',
       sourceRef: null,
     },
@@ -254,7 +265,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-calicivirus',
       name: 'Calicivirus',
       category: 'illness',
-      description: 'A viral infection causing oral ulcers, sneezing, and mild fever.',
+      description:
+        'A viral infection causing oral ulcers, sneezing, and mild fever.',
       source: 'seed',
       sourceRef: null,
     },
@@ -262,7 +274,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-panleukopenia',
       name: 'Panleukopenia (feline distemper)',
       category: 'illness',
-      description: 'A serious, highly contagious viral illness causing vomiting, diarrhea, and low white blood cell counts.',
+      description:
+        'A serious, highly contagious viral illness causing vomiting, diarrhea, and low white blood cell counts.',
       source: 'seed',
       sourceRef: null,
     },
@@ -270,7 +283,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-fiv',
       name: 'Feline immunodeficiency virus (FIV)',
       category: 'illness',
-      description: 'A lifelong viral infection that weakens the immune system, often with long symptom-free periods.',
+      description:
+        'A lifelong viral infection that weakens the immune system, often with long symptom-free periods.',
       source: 'seed',
       sourceRef: null,
     },
@@ -278,7 +292,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-felv',
       name: 'Feline leukemia virus (FeLV)',
       category: 'illness',
-      description: 'A viral infection that suppresses immunity and increases risk of other illnesses.',
+      description:
+        'A viral infection that suppresses immunity and increases risk of other illnesses.',
       source: 'seed',
       sourceRef: null,
     },
@@ -286,7 +301,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-uti',
       name: 'Urinary tract infection',
       category: 'illness',
-      description: 'Straining to urinate, frequent litter box trips, or blood in the urine from a urinary tract infection.',
+      description:
+        'Straining to urinate, frequent litter box trips, or blood in the urine from a urinary tract infection.',
       source: 'seed',
       sourceRef: null,
     },
@@ -294,7 +310,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-conjunctivitis',
       name: 'Conjunctivitis',
       category: 'illness',
-      description: 'Redness, swelling, or discharge from the eye membranes, often paired with a respiratory infection.',
+      description:
+        'Redness, swelling, or discharge from the eye membranes, often paired with a respiratory infection.',
       source: 'seed',
       sourceRef: null,
     },
@@ -302,7 +319,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-gastroenteritis',
       name: 'Gastroenteritis',
       category: 'illness',
-      description: 'Vomiting and diarrhea from an inflamed stomach and intestines, often short-lived.',
+      description:
+        'Vomiting and diarrhea from an inflamed stomach and intestines, often short-lived.',
       source: 'seed',
       sourceRef: null,
     },
@@ -310,7 +328,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-ringworm',
       name: 'Ringworm',
       category: 'illness',
-      description: 'A contagious fungal skin infection causing circular patches of hair loss and flaking.',
+      description:
+        'A contagious fungal skin infection causing circular patches of hair loss and flaking.',
       source: 'seed',
       sourceRef: null,
     },
@@ -318,7 +337,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-ear-infection',
       name: 'Ear infection',
       category: 'illness',
-      description: 'Head shaking, scratching at the ears, or odor and discharge from an inflamed ear canal.',
+      description:
+        'Head shaking, scratching at the ears, or odor and discharge from an inflamed ear canal.',
       source: 'seed',
       sourceRef: null,
     },
@@ -326,7 +346,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-toxoplasmosis',
       name: 'Toxoplasmosis',
       category: 'illness',
-      description: 'A parasitic infection that can cause mild GI upset or, rarely, more serious illness.',
+      description:
+        'A parasitic infection that can cause mild GI upset or, rarely, more serious illness.',
       source: 'seed',
       sourceRef: null,
     },
@@ -334,7 +355,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-uri-secondary-pneumonia',
       name: 'Pneumonia',
       category: 'illness',
-      description: 'Lung infection causing coughing, labored breathing, or lethargy, sometimes following an untreated respiratory infection.',
+      description:
+        'Lung infection causing coughing, labored breathing, or lethargy, sometimes following an untreated respiratory infection.',
       source: 'seed',
       sourceRef: null,
     },
@@ -343,7 +365,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-laceration',
       name: 'Laceration',
       category: 'injury',
-      description: 'A skin wound or cut that may need cleaning, monitoring, or follow-up care.',
+      description:
+        'A skin wound or cut that may need cleaning, monitoring, or follow-up care.',
       source: 'seed',
       sourceRef: null,
     },
@@ -351,7 +374,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-fracture',
       name: 'Fracture',
       category: 'injury',
-      description: 'A broken bone, often from a fall or accident, needing imaging and immobilization.',
+      description:
+        'A broken bone, often from a fall or accident, needing imaging and immobilization.',
       source: 'seed',
       sourceRef: null,
     },
@@ -359,7 +383,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-bite-wound',
       name: 'Bite wound',
       category: 'injury',
-      description: 'A puncture or tear from another animal, at risk of infection or abscess if untreated.',
+      description:
+        'A puncture or tear from another animal, at risk of infection or abscess if untreated.',
       source: 'seed',
       sourceRef: null,
     },
@@ -367,7 +392,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-sprain-strain',
       name: 'Sprain or strain',
       category: 'injury',
-      description: 'Soft-tissue injury causing limping or reluctance to bear weight on a limb.',
+      description:
+        'Soft-tissue injury causing limping or reluctance to bear weight on a limb.',
       source: 'seed',
       sourceRef: null,
     },
@@ -375,7 +401,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-foreign-body',
       name: 'Foreign body ingestion',
       category: 'injury',
-      description: 'Swallowing a non-food object, which can cause choking, vomiting, or intestinal blockage.',
+      description:
+        'Swallowing a non-food object, which can cause choking, vomiting, or intestinal blockage.',
       source: 'seed',
       sourceRef: null,
     },
@@ -383,7 +410,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-burn',
       name: 'Burn',
       category: 'injury',
-      description: 'Skin damage from heat, chemicals, or friction, ranging from mild to severe.',
+      description:
+        'Skin damage from heat, chemicals, or friction, ranging from mild to severe.',
       source: 'seed',
       sourceRef: null,
     },
@@ -391,7 +419,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-dental-trauma',
       name: 'Dental trauma',
       category: 'injury',
-      description: 'A chipped, cracked, or knocked-loose tooth from a fall or impact.',
+      description:
+        'A chipped, cracked, or knocked-loose tooth from a fall or impact.',
       source: 'seed',
       sourceRef: null,
     },
@@ -399,7 +428,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-eye-injury',
       name: 'Eye injury',
       category: 'injury',
-      description: 'A scratch, ulcer, or trauma to the eye surface, requiring prompt care to protect vision.',
+      description:
+        'A scratch, ulcer, or trauma to the eye surface, requiring prompt care to protect vision.',
       source: 'seed',
       sourceRef: null,
     },
@@ -407,7 +437,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-tail-injury',
       name: 'Tail injury',
       category: 'injury',
-      description: 'Trauma to the tail from being caught, stepped on, or pulled.',
+      description:
+        'Trauma to the tail from being caught, stepped on, or pulled.',
       source: 'seed',
       sourceRef: null,
     },
@@ -415,7 +446,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-broken-claw',
       name: 'Broken or torn claw',
       category: 'injury',
-      description: 'A cracked or partially torn claw, often bleeding and tender.',
+      description:
+        'A cracked or partially torn claw, often bleeding and tender.',
       source: 'seed',
       sourceRef: null,
     },
@@ -424,7 +456,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-arthritis',
       name: 'Arthritis',
       category: 'chronic',
-      description: 'Chronic joint pain or stiffness that often needs ongoing monitoring and treatment.',
+      description:
+        'Chronic joint pain or stiffness that often needs ongoing monitoring and treatment.',
       source: 'seed',
       sourceRef: null,
     },
@@ -432,7 +465,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-ckd',
       name: 'Chronic kidney disease',
       category: 'chronic',
-      description: 'Progressive loss of kidney function, common in older cats, managed with diet and monitoring.',
+      description:
+        'Progressive loss of kidney function, common in older cats, managed with diet and monitoring.',
       source: 'seed',
       sourceRef: null,
     },
@@ -440,7 +474,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-hyperthyroidism',
       name: 'Hyperthyroidism',
       category: 'chronic',
-      description: 'An overactive thyroid causing weight loss, increased appetite, and hyperactivity.',
+      description:
+        'An overactive thyroid causing weight loss, increased appetite, and hyperactivity.',
       source: 'seed',
       sourceRef: null,
     },
@@ -448,7 +483,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-diabetes',
       name: 'Diabetes mellitus',
       category: 'chronic',
-      description: 'A metabolic condition requiring insulin management, increased thirst, and urination.',
+      description:
+        'A metabolic condition requiring insulin management, increased thirst, and urination.',
       source: 'seed',
       sourceRef: null,
     },
@@ -456,7 +492,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-ibd',
       name: 'Inflammatory bowel disease',
       category: 'chronic',
-      description: 'Chronic irritation of the digestive tract causing vomiting, diarrhea, or weight loss.',
+      description:
+        'Chronic irritation of the digestive tract causing vomiting, diarrhea, or weight loss.',
       source: 'seed',
       sourceRef: null,
     },
@@ -464,7 +501,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-asthma',
       name: 'Feline asthma',
       category: 'chronic',
-      description: 'A chronic airway condition causing coughing, wheezing, or breathing difficulty.',
+      description:
+        'A chronic airway condition causing coughing, wheezing, or breathing difficulty.',
       source: 'seed',
       sourceRef: null,
     },
@@ -472,7 +510,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-cardiomyopathy',
       name: 'Hypertrophic cardiomyopathy',
       category: 'chronic',
-      description: 'Thickening of the heart muscle, often silent until advanced, sometimes causing lethargy or collapse.',
+      description:
+        'Thickening of the heart muscle, often silent until advanced, sometimes causing lethargy or collapse.',
       source: 'seed',
       sourceRef: null,
     },
@@ -480,7 +519,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-dental-disease',
       name: 'Periodontal disease',
       category: 'chronic',
-      description: 'Ongoing gum inflammation, tartar buildup, or tooth loss requiring dental care.',
+      description:
+        'Ongoing gum inflammation, tartar buildup, or tooth loss requiring dental care.',
       source: 'seed',
       sourceRef: null,
     },
@@ -488,7 +528,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-obesity',
       name: 'Obesity',
       category: 'chronic',
-      description: 'Excess body weight that raises the risk of diabetes, joint strain, and other conditions.',
+      description:
+        'Excess body weight that raises the risk of diabetes, joint strain, and other conditions.',
       source: 'seed',
       sourceRef: null,
     },
@@ -496,7 +537,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-hypertension',
       name: 'Hypertension',
       category: 'chronic',
-      description: 'Chronically elevated blood pressure, often secondary to kidney or thyroid disease.',
+      description:
+        'Chronically elevated blood pressure, often secondary to kidney or thyroid disease.',
       source: 'seed',
       sourceRef: null,
     },
@@ -504,7 +546,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-fic',
       name: 'Feline idiopathic cystitis',
       category: 'chronic',
-      description: 'Recurring bladder inflammation with no clear cause, often flaring during stress.',
+      description:
+        'Recurring bladder inflammation with no clear cause, often flaring during stress.',
       source: 'seed',
       sourceRef: null,
     },
@@ -512,7 +555,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-epilepsy',
       name: 'Epilepsy',
       category: 'chronic',
-      description: 'A chronic seizure disorder requiring ongoing monitoring and sometimes medication.',
+      description:
+        'A chronic seizure disorder requiring ongoing monitoring and sometimes medication.',
       source: 'seed',
       sourceRef: null,
     },
@@ -521,7 +565,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-flea-burden',
       name: 'Flea burden',
       category: 'parasite',
-      description: 'Visible flea presence or itchy skin irritation from external parasites.',
+      description:
+        'Visible flea presence or itchy skin irritation from external parasites.',
       source: 'seed',
       sourceRef: null,
     },
@@ -529,7 +574,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-ticks',
       name: 'Ticks',
       category: 'parasite',
-      description: 'Attached ticks found on the skin, which can also transmit other diseases.',
+      description:
+        'Attached ticks found on the skin, which can also transmit other diseases.',
       source: 'seed',
       sourceRef: null,
     },
@@ -537,7 +583,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-ear-mites',
       name: 'Ear mites',
       category: 'parasite',
-      description: 'Intense ear itching and dark, crumbly discharge from a mite infestation.',
+      description:
+        'Intense ear itching and dark, crumbly discharge from a mite infestation.',
       source: 'seed',
       sourceRef: null,
     },
@@ -545,7 +592,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-roundworms',
       name: 'Roundworms',
       category: 'parasite',
-      description: 'A common intestinal parasite that can cause a pot-bellied appearance or vomiting in kittens.',
+      description:
+        'A common intestinal parasite that can cause a pot-bellied appearance or vomiting in kittens.',
       source: 'seed',
       sourceRef: null,
     },
@@ -553,7 +601,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-hookworms',
       name: 'Hookworms',
       category: 'parasite',
-      description: 'An intestinal parasite that feeds on blood and can cause anemia, especially in kittens.',
+      description:
+        'An intestinal parasite that feeds on blood and can cause anemia, especially in kittens.',
       source: 'seed',
       sourceRef: null,
     },
@@ -561,7 +610,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-tapeworms',
       name: 'Tapeworms',
       category: 'parasite',
-      description: 'A segmented intestinal parasite often picked up from swallowing fleas.',
+      description:
+        'A segmented intestinal parasite often picked up from swallowing fleas.',
       source: 'seed',
       sourceRef: null,
     },
@@ -569,7 +619,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-giardia',
       name: 'Giardia',
       category: 'parasite',
-      description: 'A single-celled intestinal parasite causing diarrhea and poor nutrient absorption.',
+      description:
+        'A single-celled intestinal parasite causing diarrhea and poor nutrient absorption.',
       source: 'seed',
       sourceRef: null,
     },
@@ -577,7 +628,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-coccidia',
       name: 'Coccidia',
       category: 'parasite',
-      description: 'A single-celled intestinal parasite common in kittens, causing watery diarrhea.',
+      description:
+        'A single-celled intestinal parasite common in kittens, causing watery diarrhea.',
       source: 'seed',
       sourceRef: null,
     },
@@ -585,7 +637,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-heartworm',
       name: 'Heartworm',
       category: 'parasite',
-      description: 'A parasite spread by mosquitoes that can damage the heart and lungs.',
+      description:
+        'A parasite spread by mosquitoes that can damage the heart and lungs.',
       source: 'seed',
       sourceRef: null,
     },
@@ -593,7 +646,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-mange',
       name: 'Mange',
       category: 'parasite',
-      description: 'Skin irritation, hair loss, and itching caused by mange mites.',
+      description:
+        'Skin irritation, hair loss, and itching caused by mange mites.',
       source: 'seed',
       sourceRef: null,
     },
@@ -602,7 +656,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-food-allergy',
       name: 'Food allergy',
       category: 'allergy',
-      description: 'Gentle rash, itchy skin, or digestive upset linked to a food or ingredient exposure.',
+      description:
+        'Gentle rash, itchy skin, or digestive upset linked to a food or ingredient exposure.',
       source: 'seed',
       sourceRef: null,
     },
@@ -610,7 +665,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-flea-allergy-dermatitis',
       name: 'Flea allergy dermatitis',
       category: 'allergy',
-      description: 'An exaggerated skin reaction to flea saliva causing intense itching and scabbing.',
+      description:
+        'An exaggerated skin reaction to flea saliva causing intense itching and scabbing.',
       source: 'seed',
       sourceRef: null,
     },
@@ -618,7 +674,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-environmental-allergy',
       name: 'Environmental (atopic) allergy',
       category: 'allergy',
-      description: 'Itchy skin, sneezing, or watery eyes triggered by pollen, dust, or mold exposure.',
+      description:
+        'Itchy skin, sneezing, or watery eyes triggered by pollen, dust, or mold exposure.',
       source: 'seed',
       sourceRef: null,
     },
@@ -626,7 +683,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-contact-allergy',
       name: 'Contact allergy',
       category: 'allergy',
-      description: 'Localized skin irritation from direct contact with an allergen, such as bedding or cleaning products.',
+      description:
+        'Localized skin irritation from direct contact with an allergen, such as bedding or cleaning products.',
       source: 'seed',
       sourceRef: null,
     },
@@ -634,7 +692,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-egc',
       name: 'Eosinophilic granuloma complex',
       category: 'allergy',
-      description: 'A group of allergy-related skin reactions, often appearing as lip ulcers or skin plaques.',
+      description:
+        'A group of allergy-related skin reactions, often appearing as lip ulcers or skin plaques.',
       source: 'seed',
       sourceRef: null,
     },
@@ -642,7 +701,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-condition-miliary-dermatitis',
       name: 'Miliary dermatitis',
       category: 'allergy',
-      description: 'Small, itchy skin crusts most often caused by an allergic reaction, frequently to fleas.',
+      description:
+        'Small, itchy skin crusts most often caused by an allergic reaction, frequently to fleas.',
       source: 'seed',
       sourceRef: null,
     },
@@ -783,7 +843,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: string;
       name: string;
       customProductId: string | null;
-      type: 'flea-tick' | 'heartworm' | 'mite' | 'dewormer' | 'medication' | 'other' | 'custom';
+      type:
+        | 'flea-tick'
+        | 'heartworm'
+        | 'mite'
+        | 'dewormer'
+        | 'medication'
+        | 'other'
+        | 'custom';
       customTypeId: string | null;
       doses: SeedPreventiveDose[];
     }>
@@ -967,7 +1034,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-expense-mochi-adoption',
       catIds: ['seed-cat-mochi'],
-      items: [{ id: 'seed-expense-item-mochi-adoption', category: 'adoption_fee', label: null, amount: 125 }],
+      items: [
+        {
+          id: 'seed-expense-item-mochi-adoption',
+          category: 'adoption_fee',
+          label: null,
+          amount: 125,
+        },
+      ],
       amount: 125,
       label: null,
       isRecurring: false,
@@ -980,7 +1054,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-expense-mochi-insurance',
       catIds: ['seed-cat-mochi'],
-      items: [{ id: 'seed-expense-item-mochi-insurance', category: 'insurance', label: null, amount: 34.75 }],
+      items: [
+        {
+          id: 'seed-expense-item-mochi-insurance',
+          category: 'insurance',
+          label: null,
+          amount: 34.75,
+        },
+      ],
       amount: 34.75,
       label: null,
       isRecurring: true,
@@ -993,7 +1074,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-expense-mochi-checkup',
       catIds: ['seed-cat-mochi'],
-      items: [{ id: 'seed-expense-item-mochi-checkup', category: 'vet', label: null, amount: 82 }],
+      items: [
+        {
+          id: 'seed-expense-item-mochi-checkup',
+          category: 'vet',
+          label: null,
+          amount: 82,
+        },
+      ],
       amount: 82,
       label: null,
       isRecurring: false,
@@ -1006,7 +1094,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-expense-juniper-food',
       catIds: ['seed-cat-juniper'],
-      items: [{ id: 'seed-expense-item-juniper-food', category: 'food', label: null, amount: 48.5 }],
+      items: [
+        {
+          id: 'seed-expense-item-juniper-food',
+          category: 'food',
+          label: null,
+          amount: 48.5,
+        },
+      ],
       amount: 48.5,
       label: null,
       isRecurring: true,
@@ -1019,7 +1114,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-expense-juniper-dental',
       catIds: ['seed-cat-juniper'],
-      items: [{ id: 'seed-expense-item-juniper-dental', category: 'vet', label: null, amount: 310 }],
+      items: [
+        {
+          id: 'seed-expense-item-juniper-dental',
+          category: 'vet',
+          label: null,
+          amount: 310,
+        },
+      ],
       amount: 310,
       label: 'Dental cleaning',
       isRecurring: false,
@@ -1033,8 +1135,18 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-expense-household-annual-checkup',
       catIds: ['seed-cat-mochi', 'seed-cat-juniper'],
       items: [
-        { id: 'seed-expense-item-household-exam', category: 'vet', label: 'Exam fee', amount: 90 },
-        { id: 'seed-expense-item-household-bloodwork', category: 'vet', label: 'Bloodwork panel', amount: 78 },
+        {
+          id: 'seed-expense-item-household-exam',
+          category: 'vet',
+          label: 'Exam fee',
+          amount: 90,
+        },
+        {
+          id: 'seed-expense-item-household-bloodwork',
+          category: 'vet',
+          label: 'Bloodwork panel',
+          amount: 78,
+        },
       ],
       amount: 168,
       label: 'Annual wellness visit',
@@ -1049,7 +1161,12 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       id: 'seed-expense-mochi-old-insurance',
       catIds: ['seed-cat-mochi'],
       items: [
-        { id: 'seed-expense-item-mochi-old-insurance', category: 'insurance', label: null, amount: 28 },
+        {
+          id: 'seed-expense-item-mochi-old-insurance',
+          category: 'insurance',
+          label: null,
+          amount: 28,
+        },
       ],
       amount: 28,
       label: 'Previous provider',
@@ -1065,8 +1182,18 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       catIds: ['seed-cat-biscuit'],
       // Demonstrates itemized line items with both a preset and a custom (non-enum) category.
       items: [
-        { id: 'seed-expense-item-biscuit-cake', category: 'other', label: 'Cat-safe birthday cake', amount: 18 },
-        { id: 'seed-expense-item-biscuit-photos', category: 'Photoshoot', label: 'Professional photos', amount: 65 },
+        {
+          id: 'seed-expense-item-biscuit-cake',
+          category: 'other',
+          label: 'Cat-safe birthday cake',
+          amount: 18,
+        },
+        {
+          id: 'seed-expense-item-biscuit-photos',
+          category: 'Photoshoot',
+          label: 'Professional photos',
+          amount: 65,
+        },
       ],
       amount: 83,
       label: "Biscuit's birthday",
@@ -1080,7 +1207,14 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-expense-juniper-membership',
       catIds: ['seed-cat-juniper'],
-      items: [{ id: 'seed-expense-item-juniper-membership', category: 'other', label: null, amount: 60 }],
+      items: [
+        {
+          id: 'seed-expense-item-juniper-membership',
+          category: 'other',
+          label: null,
+          amount: 60,
+        },
+      ],
       amount: 60,
       label: 'Pet club membership',
       isRecurring: true,
@@ -1310,7 +1444,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: 'seed-health-record-juniper-microchip',
       catIds: ['seed-cat-juniper'],
-      fileURL: 'https://example.com/seed-files/juniper-microchip-registration.pdf',
+      fileURL:
+        'https://example.com/seed-files/juniper-microchip-registration.pdf',
       fileType: 'pdf' as const,
       fileName: 'juniper-microchip-registration.pdf',
       label: null,
@@ -1418,7 +1553,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       // Also scheduled for today, so "needs attention" has two same-day visits (one per cat).
       scheduledAt: context.now + 5 * 3_600_000,
       completedAt: null,
-      summary: "Favoring her left front paw since yesterday morning — nothing swollen, but worth a look.",
+      summary:
+        'Favoring her left front paw since yesterday morning — nothing swollen, but worth a look.',
       linkedSymptomIds: [],
       linkedConditionIds: [],
       linkedHealthRecordIds: [],
@@ -1620,7 +1756,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       status: 'ongoing' as const,
       occurredAt: context.now - 8_640_000_000,
       resolvedAt: null,
-      description: 'Managing seasonal itching with flea prevention and monitoring.',
+      description:
+        'Managing seasonal itching with flea prevention and monitoring.',
       linkedVisitIds: ['seed-visit-mochi-checkup'],
     },
   ] as const;
@@ -1686,7 +1823,10 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       const history = vaccination.doses.map((dose, index) => ({
         ...dose,
         // Only the latest dose can be tied back to a seeded visit.
-        linkedVisitId: index === 0 ? (linkedVaccinationVisits[vaccination.id] ?? null) : null,
+        linkedVisitId:
+          index === 0
+            ? (linkedVaccinationVisits[vaccination.id] ?? null)
+            : null,
         createdBy: caretaker.uid,
         createdAt,
       }));
@@ -1788,7 +1928,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
 
   // Given to both cats together, so the "needs attention" section has an example of the cat
   // avatars stacking for an item with more than one cat.
-  const householdFleaTickRef = householdRef.collection('preventives').doc('seed-preventive-household-flea-tick');
+  const householdFleaTickRef = householdRef
+    .collection('preventives')
+    .doc('seed-preventive-household-flea-tick');
   const householdFleaTickDose = {
     id: 'seed-preventive-household-flea-tick-dose-1',
     administeredAt: context.now - 5_184_000_000,
@@ -1822,7 +1964,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   );
   preventiveCount += 1;
 
-  const secondCatRef = secondHouseholdRef.collection('cats').doc('seed-cat-other-household');
+  const secondCatRef = secondHouseholdRef
+    .collection('cats')
+    .doc('seed-cat-other-household');
   batch.set(
     secondCatRef,
     {
@@ -1842,7 +1986,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       currentClinicId: null,
       insurance: null,
       personalityTraits: null,
-      notes: 'Separate-household fixture cat for household-isolation scoping checks.',
+      notes:
+        'Separate-household fixture cat for household-isolation scoping checks.',
       createdBy: coCaretaker.uid,
       createdAt,
       lastEditedAt: context.now,
@@ -1918,7 +2063,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   });
 
   catConditions.forEach((condition) => {
-    const conditionRef = householdRef.collection('catConditions').doc(condition.id);
+    const conditionRef = householdRef
+      .collection('catConditions')
+      .doc(condition.id);
 
     batch.set(
       conditionRef,
@@ -1952,7 +2099,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   });
 
   litterBoxes.forEach((litterBox) => {
-    const litterBoxRef = householdRef.collection('litterBoxes').doc(litterBox.id);
+    const litterBoxRef = householdRef
+      .collection('litterBoxes')
+      .doc(litterBox.id);
 
     batch.set(
       litterBoxRef,
@@ -1969,7 +2118,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   });
 
   customLitterTypes.forEach((customType) => {
-    const customTypeRef = householdRef.collection('customLitterTypes').doc(customType.id);
+    const customTypeRef = householdRef
+      .collection('customLitterTypes')
+      .doc(customType.id);
 
     batch.set(
       customTypeRef,
@@ -2135,7 +2286,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       proposedExpenses: [
         {
           catNames: ['Mochi'],
-          items: [{ category: 'vet', label: 'Annual wellness exam', amount: 82 }],
+          items: [
+            { category: 'vet', label: 'Annual wellness exam', amount: 82 },
+          ],
           incurredAt: context.now - 86_400_000,
           notes: null,
         },
@@ -2149,7 +2302,9 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     { merge: true },
   );
   batch.set(
-    householdRef.collection('ingestionDrafts').doc('seed-ingestion-matching-draft'),
+    householdRef
+      .collection('ingestionDrafts')
+      .doc('seed-ingestion-matching-draft'),
     {
       id: 'seed-ingestion-matching-draft',
       householdId: HOUSEHOLD_ID,
@@ -2256,7 +2411,8 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       proposedSymptoms: [
         {
           catName: 'Mochi',
-          description: 'Skipped breakfast two days in a row but drinking water normally.',
+          description:
+            'Skipped breakfast two days in a row but drinking water normally.',
           quickTags: ['appetite_change'],
           firstNoticedAt: context.now - 1_641_600_000,
           severity: 'mild',
@@ -2321,7 +2477,11 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
         'seed-condition-dental-disease',
         null,
       ],
-      matchedCatConditionIds: ['seed-cat-condition-mochi-flea-allergy', null, null],
+      matchedCatConditionIds: [
+        'seed-cat-condition-mochi-flea-allergy',
+        null,
+        null,
+      ],
       createdBy: caretaker.uid,
       createdAt: context.now,
     },
@@ -2355,7 +2515,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       symptomCount +
       visitCount +
       2, // seeded ingestion drafts
-      catConditionCount,
+    catConditionCount,
   };
 
   return result;

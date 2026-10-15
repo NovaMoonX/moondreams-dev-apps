@@ -13,7 +13,8 @@ const REQUIRED_EMULATORS = [
 
 function isLocalEmulatorHost(host: string) {
   const hostname = host.split(':')[0];
-  const result = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  const result =
+    hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 
   return result;
 }
@@ -68,7 +69,9 @@ export async function resetEmulatorData(context: SeedContext) {
   );
 
   if (!response.ok) {
-    throw new Error(`Could not clear Firestore emulator data: ${response.statusText}`);
+    throw new Error(
+      `Could not clear Firestore emulator data: ${response.statusText}`,
+    );
   }
 
   let nextPageToken: string | undefined;

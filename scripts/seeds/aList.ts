@@ -386,7 +386,9 @@ const SEED_SHARE_OPEN_ID = `seedshare${'2'.repeat(17)}`;
 const SEED_SHARE_PIN_ID = `seedsharepass${'3'.repeat(13)}`;
 const SEED_SHARE_PIN = 'K7M2';
 
-function toSharedViewing(viewing: ReturnType<typeof getViewingFixtures>[number]) {
+function toSharedViewing(
+  viewing: ReturnType<typeof getViewingFixtures>[number],
+) {
   return {
     title: viewing.movie.title,
     posterUrl: viewing.movie.posterUrl,

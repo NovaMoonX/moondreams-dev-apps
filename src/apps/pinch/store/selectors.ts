@@ -27,7 +27,7 @@ import { getPeriodStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 import {
-  getShopRowId,
+  countOpenShopRows,
   getShoppingCost,
   getShoppingSourceLabels,
   groupShoppingItems,
@@ -350,12 +350,7 @@ export const selectShoppingLoadError = (state: RootState) =>
 
 export const selectShoppingOpenCount = createSelector(
   [selectShoppingItems],
-  (items) =>
-    new Set(
-      items
-        .filter((item) => !item.isChecked)
-        .map((item) => getShopRowId(item.ingredientId, item.unit)),
-    ).size,
+  countOpenShopRows,
 );
 
 export const selectShoppingById = createSelector(
@@ -401,7 +396,7 @@ const NO_DISMISSALS: Record<string, number> = {};
 export const selectDismissedNudges = (state: RootState) =>
   state.pinch.settings.settings?.dismissedNudges ?? NO_DISMISSALS;
 
-/** The ingredients a recipe, a saved meal or a day not yet frozen uses: the ones whose missing price changes a number. */
+/** The ingredients a recipe, a saved meal or a day not yet frozen uses: the ones whose missing price changes a number, so a recipe line with no amount doesn't count. */
 export const selectUsedIngredientIds = createSelector(
   [
     selectAllRecipes,
@@ -411,7 +406,9 @@ export const selectUsedIngredientIds = createSelector(
   (recipes, meals, plannedMeals) =>
     new Set([
       ...recipes.flatMap((recipe) =>
-        recipe.ingredients.map((line) => line.ingredientId),
+        recipe.ingredients.flatMap((line) =>
+          line.amount === null ? [] : [line.ingredientId],
+        ),
       ),
       ...[
         ...meals.flatMap((meal) => meal.items),
