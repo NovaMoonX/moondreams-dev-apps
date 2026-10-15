@@ -17,23 +17,23 @@ This document answers, for the person using the app:
 
 A set of independent audits, each walked in a real browser at 390×844 first and 1280×900 second, against the seeded returning user, the empty first-time user and the oversized scale kitchen:
 
-| Audit | Question |
-| --- | --- |
-| Inventory | Every surface, every way to reach each feature, every volunteered insight, every noun in the copy, and the taps for the 25 most common tasks, as facts |
-| First run and setup | What the first ten minutes teach, and which features should stay invisible until there is data for them |
-| Capture, curate and find recipes | Whether Recipes, Meals, Ideas, Sources and the recipe drawer are one coherent thing |
-| Plan and review the week | What the calendar is for, and how few taps it takes to go from "what's for dinner?" to planned |
-| Shop | Whether the list, stores, products and prices fit the moment of standing in a shop |
-| Cook | Whether cooking mode, cooks, notes, tweaks, history and care add up to something a cook uses |
-| Prepared meals and leftovers | Whether the fridge and freezer stay honest at a realistic effort, and where the feature belongs |
-| Costs, prices, nutrition and the catalog | The cheapest path to a number the person can trust |
-| Navigation and information architecture | Where things live, how many ways lead to each, and whether four tabs is right |
-| Insight budget | Everything the app volunteers, classified by whether the person would act on it |
+| Audit                                    | Question                                                                                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Inventory                                | Every surface, every way to reach each feature, every volunteered insight, every noun in the copy, and the taps for the 25 most common tasks, as facts |
+| First run and setup                      | What the first ten minutes teach, and which features should stay invisible until there is data for them                                                |
+| Capture, curate and find recipes         | Whether Recipes, Meals, Ideas, Sources and the recipe drawer are one coherent thing                                                                    |
+| Plan and review the week                 | What the calendar is for, and how few taps it takes to go from "what's for dinner?" to planned                                                         |
+| Shop                                     | Whether the list, stores, products and prices fit the moment of standing in a shop                                                                     |
+| Cook                                     | Whether cooking mode, cooks, notes, tweaks, history and care add up to something a cook uses                                                           |
+| Prepared meals and leftovers             | Whether the fridge and freezer stay honest at a realistic effort, and where the feature belongs                                                        |
+| Costs, prices, nutrition and the catalog | The cheapest path to a number the person can trust                                                                                                     |
+| Navigation and information architecture  | Where things live, how many ways lead to each, and whether four tabs is right                                                                          |
+| Insight budget                           | Everything the app volunteers, classified by whether the person would act on it                                                                        |
 
 The lens each audit applies:
 
 - **Intentional.** A feature has one home where a person would look. An extra entry point exists only where a journey needs the feature in context, and the journey is named.
-- **Insight budget.** The app volunteers information only when it changes what the person is about to do, where they can act on it, once. Each one is a *decision*, a *status*, a *reference* (they opened it to see it) or *noise*.
+- **Insight budget.** The app volunteers information only when it changes what the person is about to do, where they can act on it, once. Each one is a _decision_, a _status_, a _reference_ (they opened it to see it) or _noise_.
 - **Concepts.** Every noun the person must learn earns its place, is named the same everywhere and appears when it becomes relevant, not on day one.
 - **Journeys, not features.** The path from "I want X" to "done" across screens, without retyping what the app knows or choosing between two ways when one would do.
 - **Calm by default, depth on demand.** First screens show what is needed now.
