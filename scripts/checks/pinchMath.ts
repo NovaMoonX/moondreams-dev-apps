@@ -4512,4 +4512,63 @@ assert.deepEqual(
   'spices, oils, vinegar and water start unticked in an add sheet; sauces and fresh ginger stay ticked',
 );
 
+import { CATALOG_INGREDIENTS as SHOP_CATALOG } from '../../src/apps/pinch/catalog/index.ts';
+import { searchIngredients as shopSearch } from '../../src/apps/pinch/utils/catalogSearch.ts';
+
+const shopCatalog = SHOP_CATALOG.map(
+  (entry) => ({ ...entry }) as unknown as ResolvedIngredient,
+);
+const shopTop = (query: string, count = 8) =>
+  shopSearch(shopCatalog, query)
+    .slice(0, count)
+    .map((entry) => entry.name);
+assert.equal(
+  shopTop('milk')[0],
+  'Whole milk',
+  'an alias said exactly ("milk") puts its ingredient first',
+);
+assert.deepEqual(
+  shopTop('milk')
+    .slice(1)
+    .every((name) => /milk/i.test(name)),
+  true,
+  'after it come the names with the word in them, before family members without it',
+);
+assert.deepEqual(
+  shopTop('pasta'),
+  [
+    'Egg noodles',
+    'Fettuccine',
+    'Lasagna noodles',
+    'Macaroni',
+    'Penne',
+    'Ramen noodles',
+    'Rice noodles',
+    'Spaghetti',
+  ],
+  'a family name finds its members ("pasta" lists Pasta & noodles) within the eight shown',
+);
+assert.equal(
+  shopSearch(shopCatalog, 'pasta').at(-1)?.name,
+  'Marinara sauce',
+  'an alias that only starts with the word comes after the family',
+);
+assert.deepEqual(
+  shopTop('salt', 2),
+  ['Salt', 'Kosher salt'],
+  'an exact name first, then the names it starts a word of',
+);
+assert.equal(shopTop('jalapeno')[0], 'Jalapeño', 'accents are ignored');
+assert.deepEqual(
+  shopTop('chicken', 3),
+  ['Chicken breast', 'Chicken broth', 'Chicken drumstick'],
+  'names that start with the word come before those that only contain it',
+);
+assert.equal(
+  shopSearch(shopCatalog, '').length,
+  shopCatalog.length,
+  'an empty search keeps everything',
+);
+assert.deepEqual(shopTop('zzzz'), [], 'a word nothing has finds nothing');
+
 console.log('pinchMath: all checks passed');

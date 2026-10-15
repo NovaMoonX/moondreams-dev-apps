@@ -1,3 +1,4 @@
+import { CATALOG_FAMILIES_BY_ID } from '@apps/pinch/catalog';
 import type { ResolvedFamily, ResolvedIngredient } from '@apps/pinch/types';
 
 const normalize = (text: string) =>
@@ -9,11 +10,15 @@ const normalize = (text: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+interface SearchText {
+  name: string;
+  aliases: string[];
+  family: string;
+  haystack: string;
+}
+
 // An ingredient object is replaced when it changes, so its normalized text is built once per object.
-const SEARCH_TEXT = new WeakMap<
-  ResolvedIngredient,
-  { name: string; haystack: string }
->();
+const SEARCH_TEXT = new WeakMap<ResolvedIngredient, SearchText>();
 
 const getSearchText = (ingredient: ResolvedIngredient) => {
   const cached = SEARCH_TEXT.get(ingredient);
@@ -22,13 +27,39 @@ const getSearchText = (ingredient: ResolvedIngredient) => {
   }
   const entry = {
     name: normalize(ingredient.name),
+    aliases: ingredient.aliases.map(normalize),
+    family: normalize(
+      (ingredient.familyId &&
+        CATALOG_FAMILIES_BY_ID.get(ingredient.familyId)?.name) ||
+        '',
+    ),
     haystack: normalize([ingredient.name, ...ingredient.aliases].join(' ')),
   };
   SEARCH_TEXT.set(ingredient, entry);
   return entry;
 };
 
-/** Ingredients whose name or an alias contains every word typed, names that start with the text first. */
+const startsAWord = (text: string, word: string) =>
+  text.startsWith(word) || text.includes(` ${word}`);
+
+/** Lower is closer: the name, then an alias, said exactly; the name starting with it; every word starting a word of the name; a member of a family with that name; an alias starting with it; anything else that contains every word. */
+const getRank = (text: SearchText, typed: string, words: string[]) => {
+  if (text.name === typed) return 0;
+  if (text.aliases.includes(typed)) return 1;
+  if (text.name.startsWith(typed)) return 2;
+  if (words.every((word) => startsAWord(text.name, word))) return 3;
+  if (words.every((word) => text.family.includes(word))) return 4;
+  if (
+    text.aliases.some((alias) =>
+      words.every((word) => startsAWord(alias, word)),
+    )
+  ) {
+    return 5;
+  }
+  return 6;
+};
+
+/** Ingredients whose name, an alias or their catalog family's name holds every word typed, closest first (an exact name or alias, then a name that starts with it, then a family's members), accents ignored. */
 export function searchIngredients(
   ingredients: ResolvedIngredient[],
   query: string,
@@ -40,15 +71,18 @@ export function searchIngredients(
 
   const typed = words.join(' ');
   const result = ingredients
-    .filter((ingredient) =>
-      words.every((word) => getSearchText(ingredient).haystack.includes(word)),
-    )
+    .flatMap((ingredient) => {
+      const text = getSearchText(ingredient);
+      const isMatch = words.every(
+        (word) => text.haystack.includes(word) || text.family.includes(word),
+      );
+      return isMatch ? [{ ingredient, rank: getRank(text, typed, words) }] : [];
+    })
     .sort(
       (a, b) =>
-        Number(getSearchText(b).name.startsWith(typed)) -
-          Number(getSearchText(a).name.startsWith(typed)) ||
-        a.name.localeCompare(b.name),
-    );
+        a.rank - b.rank || a.ingredient.name.localeCompare(b.ingredient.name),
+    )
+    .map(({ ingredient }) => ingredient);
 
   return result;
 }
