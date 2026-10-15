@@ -144,7 +144,7 @@ function DayDrawer({
               className='w-full'
               onClick={() => onAdd(null)}
             >
-              + Add to this day
+              Plan on this day
             </Button>
           </div>
         ) : (
