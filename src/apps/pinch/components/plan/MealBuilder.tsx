@@ -4,7 +4,6 @@ import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
-import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import Subview from '@/components/Subview';
@@ -166,9 +165,6 @@ function MealBuilder({
     starter ? { id: starter.id, name: starter.name } : null,
   );
   const [name, setName] = useState(existingMeal?.name ?? '');
-  const [saveAsMeal, setSaveAsMeal] = useState(false);
-  const [newMealName, setNewMealName] = useState('');
-  const [createdMealId, setCreatedMealId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -233,12 +229,8 @@ function MealBuilder({
   const isMissing =
     (mode === 'plan' && plannedMealId !== null && existingPlanned === null) ||
     (mode === 'meal' && mealId !== null && existingMeal === null);
-  const wantsSaveAsMeal = mode === 'plan' && saveAsMeal && items.length >= 2;
   const isValid =
-    items.length > 0 &&
-    (mode === 'meal'
-      ? name.trim() !== ''
-      : date !== null && (!wantsSaveAsMeal || newMealName.trim() !== ''));
+    items.length > 0 && (mode === 'meal' ? name.trim() !== '' : date !== null);
 
   if (isMissing) {
     return (
@@ -369,17 +361,6 @@ function MealBuilder({
 
       if (date === null) {
         return;
-      }
-      if (wantsSaveAsMeal) {
-        const savedId = await dispatch(
-          saveMeal({
-            uid,
-            id: createdMealId,
-            name: newMealName,
-            items: rows(),
-          }),
-        ).unwrap();
-        setCreatedMealId(savedId);
       }
       if (existingPlanned) {
         await dispatch(
@@ -637,28 +618,6 @@ function MealBuilder({
           </div>
         )}
 
-        {mode === 'plan' && items.length >= 2 && (
-          <div className='space-y-3'>
-            <div className='flex items-center justify-between gap-3'>
-              <span className='text-sm font-medium'>Save as a meal</span>
-              <AppToggle
-                aria-label='Save as a meal'
-                checked={saveAsMeal}
-                onCheckedChange={setSaveAsMeal}
-              />
-            </div>
-            {saveAsMeal && (
-              <Input
-                variant='outline'
-                aria-label='Name for the saved meal'
-                placeholder='Taco night'
-                maxLength={MAX_NAME_LENGTH}
-                value={newMealName}
-                onChange={(event) => setNewMealName(event.target.value)}
-              />
-            )}
-          </div>
-        )}
         {error && <p className='text-destructive text-sm'>{error}</p>}
 
         <ModalFooterActions
