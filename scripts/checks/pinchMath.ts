@@ -5736,4 +5736,56 @@ assert.deepEqual(
   'a session runs up to four timers across all its recipes; a finished one waiting for Dismiss doesn’t count',
 );
 
+const plateAt = (recipeId: string, stepIndex: number, stepCount: number) => ({
+  recipeId,
+  stepIndex,
+  stepCount,
+});
+assert.deepEqual(
+  [
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 1, 3), plateAt('rice', 0, 2)],
+      'adobo',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 2, 3), plateAt('rice', 0, 2)],
+      'adobo',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 2, 3), plateAt('rice', 1, 2), plateAt('beans', 0, 4)],
+      'rice',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 0, 3), plateAt('rice', 1, 2), plateAt('beans', 3, 4)],
+      'beans',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 2, 3), plateAt('rice', 1, 2)],
+      'rice',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 9, 3), plateAt('rice', 1, 2)],
+      'rice',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 2, 3), plateAt('gone', 0, 0)],
+      'adobo',
+    ),
+    plateCooks.getPlateNext([plateAt('one', 0, 1)], 'one'),
+    plateCooks.getPlateNext([plateAt('one', 0, 0)], 'one'),
+  ],
+  [
+    { kind: 'STEP' },
+    { kind: 'RECIPE', recipeId: 'rice' },
+    { kind: 'RECIPE', recipeId: 'beans' },
+    { kind: 'RECIPE', recipeId: 'adobo' },
+    { kind: 'FINISH' },
+    { kind: 'FINISH' },
+    { kind: 'FINISH' },
+    { kind: 'FINISH' },
+    { kind: 'FINISH' },
+  ],
+  'the wide button steps on, then moves to the next recipe still short of its last step (wrapping to the start), and finishes the plate only once every recipe is on its last',
+);
+
 console.log('pinchMath: all checks passed');

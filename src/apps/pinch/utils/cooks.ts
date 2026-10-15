@@ -185,6 +185,31 @@ export const getPlateStart = (
   return result;
 };
 
+export type PlateNext =
+  { kind: 'STEP' } | { kind: 'RECIPE'; recipeId: string } | { kind: 'FINISH' };
+
+/** What the wide button does: the next step, then the next recipe still short of its last step, and Finish only once every recipe is on its last. */
+export const getPlateNext = (
+  recipes: { recipeId: string; stepIndex: number; stepCount: number }[],
+  currentId: string,
+): PlateNext => {
+  const isWaiting = (recipe: { stepIndex: number; stepCount: number }) =>
+    recipe.stepCount > 0 &&
+    Math.min(recipe.stepIndex, recipe.stepCount - 1) < recipe.stepCount - 1;
+  const at = recipes.findIndex((recipe) => recipe.recipeId === currentId);
+  if (at >= 0 && isWaiting(recipes[at])) {
+    return { kind: 'STEP' };
+  }
+
+  const waiting = [...recipes.slice(at + 1), ...recipes.slice(0, at)].find(
+    isWaiting,
+  );
+  const result: PlateNext = waiting
+    ? { kind: 'RECIPE', recipeId: waiting.recipeId }
+    : { kind: 'FINISH' };
+  return result;
+};
+
 /** A timer's name: its step's first words, after its recipe's name when the session cooks several. */
 export const getTimerCaption = (timer: {
   stepName: string;

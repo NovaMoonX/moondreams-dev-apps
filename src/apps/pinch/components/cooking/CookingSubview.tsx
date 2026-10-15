@@ -37,6 +37,7 @@ import {
   selectCooksById,
   selectCookSummaries,
   selectIngredientsById,
+  selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import { updateCook } from '@apps/pinch/store/actions/cookActions';
@@ -44,12 +45,14 @@ import type { CookView, PlateCookRecipe, Recipe } from '@apps/pinch/types';
 import {
   getCookStartServings,
   getPlannedCookId,
+  getPlateNext,
   getPlateStart,
   getStepName,
   isCookHistoryFull,
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
+import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
@@ -75,6 +78,8 @@ interface CookingSessionProps {
   /** The recipe the screen was opened with, which a late close checks it is still showing. */
   openedRecipeId: string;
   plannedMealId: string | null;
+  /** The header: the recipe's name, or the plate's when there are several. */
+  title: string;
 }
 
 function CookingSession({
@@ -82,13 +87,14 @@ function CookingSession({
   entries,
   openedRecipeId,
   plannedMealId,
+  title,
 }: CookingSessionProps) {
   const dispatch = useAppDispatch();
   const store = useStore<RootState>();
   const { closeSubview, closeSubviewIf, openSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
-  const [currentId] = useState(entries[0].recipe.id);
+  const [currentId, setCurrentId] = useState(entries[0].recipe.id);
   const [plate, setPlate] = useState(() =>
     getPlateStart(
       entries.map((entry) => ({
@@ -209,8 +215,20 @@ function CookingSession({
 
   const lastIndex = recipe.steps.length - 1;
   const index = Math.min(stepIndex, lastIndex);
-  const isLast = index >= lastIndex;
   const hasSteps = recipe.steps.length > 0;
+  const next = getPlateNext(
+    entries.map((candidate) => ({
+      recipeId: candidate.recipe.id,
+      stepIndex: plate[candidate.recipe.id]?.stepIndex ?? 0,
+      stepCount: candidate.recipe.steps.length,
+    })),
+    recipe.id,
+  );
+  const nextRecipe =
+    next.kind === 'RECIPE'
+      ? (entries.find((candidate) => candidate.recipe.id === next.recipeId)
+          ?.recipe ?? null)
+      : null;
   const isStepsView = view === 'steps' || isWide;
   const isFinishShown = isFinished && isStepsView && hasSteps;
   const canMark = isCooksReady && !isRemoved;
@@ -373,9 +391,19 @@ function CookingSession({
     }
   };
 
+  const showRecipe = (recipeId: string) => {
+    setCurrentId(recipeId);
+    scrollToTop();
+  };
+
   const handleNext = () => {
-    if (!isLast) {
+    if (next.kind === 'STEP') {
       goBy(1);
+      return;
+    }
+    if (next.kind === 'RECIPE') {
+      showRecipe(next.recipeId);
+      focusPrimary();
       return;
     }
     if (!canMark) {
@@ -555,11 +583,23 @@ function CookingSession({
     <Subview
       overlay
       className='lg:max-w-5xl'
-      title={recipe.title}
+      title={title}
       onClose={closeSubview}
       onBack={() => void leave()}
     >
       <div ref={rootRef} className='flex flex-1 flex-col gap-4'>
+        {isPlate && !isFinishShown && (
+          <PillGroup
+            label='Recipe'
+            options={entries.map((candidate) => ({
+              value: candidate.recipe.id,
+              label: candidate.recipe.title,
+            }))}
+            value={recipe.id}
+            onChange={showRecipe}
+            isThin
+          />
+        )}
         {!isFinishShown && !isWide && (
           <PillGroup
             label='Show'
@@ -778,10 +818,21 @@ function CookingSession({
                     'h-14 min-w-0 flex-1 text-lg',
                     '[@media(max-height:500px)]:h-11',
                   )}
-                  disabled={!hasSteps}
+                  aria-label={
+                    nextRecipe ? `Next: ${nextRecipe.title}` : undefined
+                  }
+                  disabled={!hasSteps && nextRecipe === null}
                   onClick={handleNext}
                 >
-                  {isLast && hasSteps ? 'Finish' : 'Next'}
+                  {nextRecipe ? (
+                    <span className='min-w-0 truncate'>
+                      Next: {nextRecipe.title}
+                    </span>
+                  ) : next.kind === 'FINISH' && hasSteps ? (
+                    'Finish'
+                  ) : (
+                    'Next'
+                  )}
                 </Button>
               </>
             ) : (
@@ -834,6 +885,13 @@ function CookingSubview({
   const { closeSubview } = usePinchOverlay();
   const store = useStore<RootState>();
   const recipesById = useAppSelector(selectRecipesById);
+  const ingredientsById = useAppSelector(selectIngredientsById);
+  const plannedMeal = useAppSelector((state) =>
+    plannedMealId === null
+      ? null
+      : (selectPlannedMeals(state).find((meal) => meal.id === plannedMealId) ??
+        null),
+  );
   const [planned] = useState(() =>
     plate
       ? plate.map((entry) => ({
@@ -893,12 +951,22 @@ function CookingSubview({
     );
   }
 
+  const getTitle = () => {
+    if (entries.length === 1) return entries[0].recipe.title;
+    const plateTitle =
+      plannedMeal === null
+        ? ''
+        : getPlannedMealTitle(plannedMeal, recipesById, ingredientsById);
+    return plateTitle || `${entries[0].recipe.title} +${entries.length - 1}`;
+  };
+
   return (
     <CookingSession
       uid={uid}
       entries={entries}
       openedRecipeId={recipeId}
       plannedMealId={plannedMealId}
+      title={getTitle()}
     />
   );
 }
