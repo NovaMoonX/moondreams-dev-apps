@@ -53,6 +53,7 @@ import {
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
   MAX_SOURCE_LABEL_LENGTH,
+  SECTION_COUNT_THRESHOLD,
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
@@ -406,7 +407,11 @@ function RecipeForm({
         renderComponent: (props) => (
           <FormSection
             title='Ingredients'
-            detail={(props.value as IngredientRow[]).length}
+            detail={
+              (props.value as IngredientRow[]).length > SECTION_COUNT_THRESHOLD
+                ? (props.value as IngredientRow[]).length
+                : undefined
+            }
           >
             <RecipeIngredients
               uid={uid}
@@ -721,18 +726,10 @@ function RecipeForm({
   return (
     <>
       <UndoSnackbar pending={pending} onUndo={undo} />
-      {initialIdea && (
-        <p className='text-muted-foreground mb-4 text-sm wrap-break-word'>
-          From your idea:{' '}
-          <span className='text-foreground font-medium'>
-            {initialIdea.title}
-          </span>
-          {initialIdea.kind === 'PHOTO' && (
-            <span className='mt-1 block text-xs'>
-              Its photo stays with the idea. To have an AI read a picture, start
-              a new recipe with “From a file”.
-            </span>
-          )}
+      {initialIdea?.kind === 'PHOTO' && (
+        <p className='text-muted-foreground mb-4 text-sm'>
+          Its photo stays with the idea. To have an AI read a picture, start a
+          new recipe with “From a file”.
         </p>
       )}
       {initialNote && (

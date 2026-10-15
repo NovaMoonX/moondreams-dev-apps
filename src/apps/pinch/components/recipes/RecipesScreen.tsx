@@ -216,12 +216,26 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   );
   const stockOptions = CONTAINER_PLACES.filter(
     (place) => stockCounts[place] > 0 || stockPlaces.includes(place),
-  ).map((place) => ({
-    value: place,
-    label: `${CONTAINER_PLACE_LABELS[place]} · ${stockCounts[place]}`,
-    emoji: CONTAINER_PLACE_EMOJIS[place],
-  }));
-  const hasStockFilter = !isIdeas && stockOptions.length > 0;
+  ).map((place) => {
+    const count = stockCounts[place];
+    const noun =
+      shownView === 'meals'
+        ? count === 1
+          ? 'saved meal'
+          : 'saved meals'
+        : count === 1
+          ? 'recipe'
+          : 'recipes';
+    return {
+      value: place,
+      label: `${CONTAINER_PLACE_LABELS[place]} · ${count} ${noun}`,
+      emoji: CONTAINER_PLACE_EMOJIS[place],
+    };
+  });
+  const hasStockFilter =
+    !isIdeas &&
+    stockOptions.length > 0 &&
+    (shownView === 'recipes' || meals.length >= LIST_SEARCH_THRESHOLD);
   const hasFilterBar = !isIdeas && (hasSourceSection || hasStockFilter);
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
