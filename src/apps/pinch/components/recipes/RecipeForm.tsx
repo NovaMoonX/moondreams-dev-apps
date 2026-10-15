@@ -244,7 +244,7 @@ function RecipeForm({
   const unresolvedCount = formData.ingredients.filter(
     (row) => row.ingredientId === '',
   ).length;
-  const getBlocker = () => {
+  const getBlocker = (): { text: string; target: string | null } | null => {
     if (
       !recipe &&
       formData.title.trim() === '' &&
@@ -252,29 +252,46 @@ function RecipeForm({
     ) {
       return null;
     }
-    if (formData.title.trim() === '') return 'Give it a title to save.';
+    const plain = (text: string) => ({ text, target: null });
+    if (formData.title.trim() === '') return plain('Give it a title to save.');
     if (formData.title.length > MAX_RECIPE_TITLE_LENGTH) {
-      return 'Shorten the title to save.';
+      return plain('Shorten the title to save.');
     }
     if (formData.description.length > MAX_RECIPE_DESCRIPTION_LENGTH) {
-      return 'Shorten the description to save.';
+      return plain('Shorten the description to save.');
     }
-    if (formData.ingredients.length === 0) return 'Add an ingredient to save.';
+    if (formData.ingredients.length === 0) {
+      return {
+        text: 'Add an ingredient to save.',
+        target: '[data-recipe-ingredients]',
+      };
+    }
     if (unresolvedCount > 0) {
-      return `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`;
+      return {
+        text: `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`,
+        target: '[data-ingredient-unresolved]',
+      };
     }
     if (!formData.ingredients.every(isRowValid)) {
-      return 'Check the ingredient amounts to save.';
+      return {
+        text: 'Check the ingredient amounts to save.',
+        target: '[data-ingredient-amount-wrong]',
+      };
     }
     if (!isValidMinutes(prep) || !isValidMinutes(cook)) {
-      return 'Check the prep and cook time to save.';
+      return plain('Check the prep and cook time to save.');
     }
     if (getCareProblem(formData.care) !== null) {
-      return 'Check the fridge and freezer days to save.';
+      return plain('Check the fridge and freezer days to save.');
     }
     return null;
   };
   const blocker = getBlocker();
+  const showBlocker = (target: string) => {
+    const element = document.querySelector<HTMLElement>(target);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element?.querySelector('button')?.focus({ preventScroll: true });
+  };
 
   const sourceOptions = useMemo(
     () =>
@@ -328,6 +345,16 @@ function RecipeForm({
         },
       }),
       custom({
+        name: 'description',
+        label: '',
+        renderComponent: (props) => (
+          <RecipeDescriptionField
+            value={String(props.value)}
+            onChange={props.onValueChange}
+          />
+        ),
+      }),
+      custom({
         name: 'cover',
         label: '',
         renderComponent: () => (
@@ -368,13 +395,33 @@ function RecipeForm({
         ),
       }),
       custom({
-        name: 'description',
+        name: 'ingredients',
         label: '',
         renderComponent: (props) => (
-          <RecipeDescriptionField
-            value={String(props.value)}
-            onChange={props.onValueChange}
-          />
+          <FormSection
+            title='Ingredients'
+            detail={(props.value as IngredientRow[]).length}
+          >
+            <RecipeIngredients
+              uid={uid}
+              rows={props.value as IngredientRow[]}
+              onChange={props.onValueChange}
+              onRemoved={showUndo}
+            />
+          </FormSection>
+        ),
+      }),
+      custom({
+        name: 'steps',
+        label: '',
+        renderComponent: (props) => (
+          <FormSection title='Steps'>
+            <RecipeSteps
+              steps={props.value as string[]}
+              onChange={props.onValueChange}
+              onRemoved={showUndo}
+            />
+          </FormSection>
         ),
       }),
       ...(hasSourcesFailed
@@ -412,36 +459,6 @@ function RecipeForm({
               },
             }),
           ]),
-      custom({
-        name: 'ingredients',
-        label: '',
-        renderComponent: (props) => (
-          <FormSection
-            title='Ingredients'
-            detail={(props.value as IngredientRow[]).length}
-          >
-            <RecipeIngredients
-              uid={uid}
-              rows={props.value as IngredientRow[]}
-              onChange={props.onValueChange}
-              onRemoved={showUndo}
-            />
-          </FormSection>
-        ),
-      }),
-      custom({
-        name: 'steps',
-        label: '',
-        renderComponent: (props) => (
-          <FormSection title='Steps'>
-            <RecipeSteps
-              steps={props.value as string[]}
-              onChange={props.onValueChange}
-              onRemoved={showUndo}
-            />
-          </FormSection>
-        ),
-      }),
       custom({
         name: 'care',
         label: '',
@@ -736,7 +753,22 @@ function RecipeForm({
         }}
         submitButton={
           <ModalFooterActions
-            note={blocker}
+            note={
+              blocker?.target ? (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  className="text-muted-foreground! relative h-auto min-h-0 justify-start rounded-none p-0 px-0! py-0! text-left text-xs font-normal whitespace-normal before:absolute before:inset-x-0 before:-top-4 before:-bottom-2 before:content-['']"
+                  onClick={() => showBlocker(blocker.target ?? '')}
+                >
+                  <span className='decoration-muted-foreground/50 underline underline-offset-4'>
+                    {blocker.text}
+                  </span>
+                </Button>
+              ) : (
+                blocker?.text
+              )
+            }
             leftActions={
               recipe && (
                 <DeleteIconButton

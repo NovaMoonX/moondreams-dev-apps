@@ -249,7 +249,7 @@ function RecipeIngredients({
   };
 
   return (
-    <div className='space-y-3'>
+    <div className='space-y-3' data-recipe-ingredients>
       {rows.length > 0 && (
         <ul className='divide-border divide-y'>
           {rows.map((row) => {
@@ -257,7 +257,14 @@ function RecipeIngredients({
             const label = getAmountLabel(row);
             const isUnresolved = row.ingredientId === '';
             return (
-              <li key={row.id} className='py-1'>
+              <li
+                key={row.id}
+                className='py-1'
+                data-ingredient-unresolved={isUnresolved || undefined}
+                data-ingredient-amount-wrong={
+                  (!isUnresolved && !isAmountValid(row)) || undefined
+                }
+              >
                 <div className='flex items-center gap-1'>
                   <Button
                     type='button'
