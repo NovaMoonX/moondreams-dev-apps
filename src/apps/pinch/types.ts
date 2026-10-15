@@ -174,7 +174,8 @@ export type KitchenView = 'yours' | 'all';
 export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
 export type NutritionMetric = keyof NutritionValues;
 export type RecipesView = 'recipes' | 'meals' | 'ideas';
-export type ShoppingView = 'toBuy' | 'got';
+export type ShoppingHalf = 'toBuy' | 'got';
+export type ShoppingView = ShoppingHalf | 'all';
 
 export type RecipeStartMethod = 'text' | 'file' | 'link' | 'manual';
 

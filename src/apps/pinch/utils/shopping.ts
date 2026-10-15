@@ -16,6 +16,7 @@ import type {
   Product,
   Recipe,
   ResolvedIngredient,
+  ShoppingHalf,
   ShoppingItem,
   ShoppingView,
   Unit,
@@ -292,7 +293,7 @@ export function groupShoppingItems(
   items: ShoppingItem[],
   ingredientsById: Map<string, ResolvedIngredient>,
   held: ReadonlyMap<string, boolean> = new Map(),
-): Record<ShoppingView, ShoppingGroup[]> {
+): Record<ShoppingHalf, ShoppingGroup[]> {
   const toRows = (side: ShoppingItem[], suffix: string) => {
     const byRow = side.reduce((acc, item) => {
       const id = `${getShopRowId(item.ingredientId, item.unit)}${suffix}`;
@@ -348,13 +349,15 @@ export function groupShoppingItems(
   return grouped;
 }
 
-/** The view the list shows: the person's pick, unless what was typed since then matches nothing there and something in the other view. */
+/** The view the list shows: the person's pick, unless they picked one half and what was typed since then matches nothing there and something in the other half. All shows both halves, so it is always kept. */
 export function getShownShoppingView(
   pick: { view: ShoppingView; query: string },
   query: string,
-  matches: Record<ShoppingView, number>,
+  matches: Record<ShoppingHalf, number>,
 ): ShoppingView {
-  const other: ShoppingView = pick.view === 'toBuy' ? 'got' : 'toBuy';
+  if (pick.view === 'all') return 'all';
+
+  const other: ShoppingHalf = pick.view === 'toBuy' ? 'got' : 'toBuy';
   const isNewSearch = query !== '' && query !== pick.query;
   const view =
     isNewSearch && matches[pick.view] === 0 && matches[other] > 0
