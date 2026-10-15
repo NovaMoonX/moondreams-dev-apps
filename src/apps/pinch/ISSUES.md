@@ -226,7 +226,7 @@ A person attaches products to any ingredient: store, price and package size, wit
 **Context:** Read `TECHNICAL.md`'s `Recipe`, `saveRecipe` and the recipe rules; `UX.md`'s Recipes tab, Recipe subview (create and edit) and Recipe details; `FormScreen`/`Subview`, `DetailSheet`, `AddFieldChips`, `PhotoPicker`.
 
 ### Description
-A person writes a recipe by hand — a title, servings and ingredients with amounts and units — then adds steps, a description, times and a cover photo from "+ Add X" chips. Recipes list in the Recipes tab, open in a drawer, and can be edited or deleted.
+A person writes a recipe by hand — a title, servings and ingredients with amounts and units — then adds steps, a description, times and a cover photo from "+ Add X" chips. Recipes list in the Recipes tab, open in a drawer, and can be edited or deleted. A line may have no amount ("salt to taste"): it saves as its words and is left out of cost and nutrition.
 
 ### Possible Approach
 1. `Recipe` and `RecipeIngredient` types, slice, user-tier listener and `saveRecipe` (full-shape `setDoc` on create, field-scoped `updateDoc` on edit; a cover uploads to Storage first).
@@ -700,7 +700,7 @@ Marking a meal made takes its ingredients out of stock. Prepared servings are al
 
 ### Issue 21: The shopping list with stock, low stock and stores
 
-**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal, planned meal or day (or one ingredient), merged by ingredient and unit, grouped by family, with "Got it" and an approximate cost (TECHNICAL.md §5b).
+**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal or a day or range of planned days (or one ingredient), merged by ingredient and unit, each line remembering what put it there, in shop sections, with To buy / Got it / All and an approximate cost (TECHNICAL.md §5b).
 **Target PR Size:** ~350 lines
 **Files:**
 - Shopping tab: `ShoppingScreen` (`components/shopping/`), `utils/shopping.ts`, a low-stock section and a group-by-store option
@@ -985,7 +985,7 @@ Paste a link and a recipe form fills in for review.
 **Context:** UX Recipe details.
 
 ### Description
-A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step lists the ingredients it names with their amounts in kitchen measures, an Ingredients view (beside the steps from `lg`) scales and ticks them, cooking opens at the recipe's own servings, a step's times become timers named for their step, leaving while a timer is going asks first, the recipe's latest note shows above the steps, and Finish records the cook in one panel with Undo, put-away and a note.
+A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step lists the ingredients it names with their amounts in kitchen measures, an Ingredients view (beside the steps from `lg`) scales and ticks them, cooking opens at the recipe's own servings, a step's times become timers named for their step, leaving while a timer is going asks first, the recipe's latest note shows above the steps, a planned dinner of several recipes opens as one session (recipe pills, one timer strip, up to four timers for all of them), and Finish records the cook, one per recipe, in one panel with one Undo, put-away and a note.
 
 ### Possible Approach
 1. Wake Lock API with a graceful fallback; step navigation by buttons, swipe and arrow keys; an Ingredients view that scales amounts with the shopping list's own `scaleAmount`; timers that run to a clock deadline.
