@@ -113,6 +113,7 @@ function CalendarScreen({
   const stats = useAppSelector((state) =>
     selectPeriodStats(state, range.startKey, range.endKey),
   );
+  const isFirstRun = !hasPlannedMeals && !isPlannedLoadFailed;
 
   const getAddDayKey = () => {
     if (view === 'day') return anchorKey;
@@ -180,7 +181,7 @@ function CalendarScreen({
               onClick={() => openPlan(getAddDayKey(), null)}
             >
               <Plus className='h-4 w-4' aria-hidden='true' />
-              Add
+              Plan
             </Button>
           </div>
         }
@@ -197,57 +198,48 @@ function CalendarScreen({
         canJumpToToday={!isTodayShown}
         onToday={() => goTo(todayKey)}
       />
-      <StatsRow
-        uid={uid}
-        stats={stats}
-        view={view}
-        onOpenBreakdown={() => setIsBreakdownOpen(true)}
-        onFillIn={setFillIn}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-      />
+      {stats.plannedCount > 0 && (
+        <StatsRow
+          uid={uid}
+          stats={stats}
+          view={view}
+          onOpenBreakdown={() => setIsBreakdownOpen(true)}
+          onFillIn={setFillIn}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+      )}
       {isPlannedLoadFailed && (
         <p className='text-muted-foreground text-center text-sm'>
           We couldn't load your planned meals just now. Check your connection
           and try again.
         </p>
       )}
-      {!hasPlannedMeals && !isPlannedLoadFailed && (
+      {isFirstRun && (
         <div className='bg-secondary/50 space-y-3 rounded-2xl p-4 text-center'>
           <p className='text-sm'>
             {hasRecipes
-              ? 'Nothing planned yet. Plan your first meal.'
-              : 'Nothing planned yet. Plan your first meal, or add a recipe to plan from.'}
+              ? 'Nothing planned yet. Tap Plan to put a recipe on a day.'
+              : 'Bring in a recipe from a chat, a photo or a link, plan your week, and get the shopping list.'}
           </p>
-          <div className='flex flex-wrap justify-center gap-2'>
+          {!hasRecipes && (
             <Button
               type='button'
               size='sm'
               variant='secondary'
               rounded='full'
-              onClick={() => openPlan(todayKey, null)}
+              onClick={() =>
+                isPhone
+                  ? setIsStartOpen(true, true)
+                  : openSubview({
+                      kind: 'recipe',
+                      id: null,
+                      fromCalendar: true,
+                    })
+              }
             >
-              Plan your first meal
+              Add your first recipe
             </Button>
-            {!hasRecipes && (
-              <Button
-                type='button'
-                size='sm'
-                variant='secondary'
-                rounded='full'
-                onClick={() =>
-                  isPhone
-                    ? setIsStartOpen(true, true)
-                    : openSubview({
-                        kind: 'recipe',
-                        id: null,
-                        fromCalendar: true,
-                      })
-                }
-              >
-                Add a recipe
-              </Button>
-            )}
-          </div>
+          )}
         </div>
       )}
       {view === 'month' && (
@@ -262,7 +254,7 @@ function CalendarScreen({
           }}
         />
       )}
-      {view === 'week' && (
+      {view === 'week' && !isFirstRun && (
         <WeekView
           startKey={range.startKey}
           todayKey={todayKey}
@@ -273,7 +265,7 @@ function CalendarScreen({
           onAdd={(dayKey) => openPlan(dayKey, null)}
         />
       )}
-      {view === 'day' && (
+      {view === 'day' && !isFirstRun && (
         <DayView
           meals={plannedByDay.get(anchorKey) ?? NO_MEALS}
           onOpenMeal={(mealId) => setOpenDay({ dayKey: anchorKey, mealId })}
