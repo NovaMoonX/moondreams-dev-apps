@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
@@ -25,7 +25,7 @@ import {
   selectPeriodStats,
   selectPlannedByDay,
   selectRecipesById,
-  selectShoppingById,
+  selectShoppingItems,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type {
@@ -52,15 +52,23 @@ import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
-import { getItemsLines, getShoppingItemId } from '@apps/pinch/utils/shopping';
+import { getDayOnList, type DayOnList } from '@apps/pinch/utils/shopping';
 
 const NO_MEALS: PlannedMeal[] = [];
 
-const getShoppingNote = (onListCount: number, lineCount: number) => {
-  if (onListCount === 0) return '';
-  return onListCount === lineCount
-    ? 'Already on your list'
-    : `${onListCount} of ${lineCount} already on your list`;
+const getShoppingRow = ({ isListed, coveredCount, rowCount }: DayOnList) => {
+  if (isListed) {
+    return { label: 'On your list ✓', subtitle: "Add anything that's missing" };
+  }
+  const label = 'Add to shopping list';
+  if (coveredCount === 0) return { label, subtitle: '' };
+  return {
+    label,
+    subtitle:
+      coveredCount === rowCount
+        ? 'Already on your list'
+        : `${coveredCount} of ${rowCount} already on your list`,
+  };
 };
 
 const getMealDetail = (
@@ -119,17 +127,14 @@ function DayDrawer({
   const isFrozen = meals.length > 0 && meals.every((meal) => meal.snapshot);
   const fixedSnapshots = meals.flatMap((meal) => meal.snapshot ?? []);
   const leftOutCount = countLeftOutIngredients(stats.leftOut);
-  const onList = useAppSelector(selectShoppingById);
-  const dayLines = getItemsLines(
-    meals.flatMap((meal) => meal.items),
-    recipesById,
-    ingredientsById,
+  const shoppingItems = useAppSelector(selectShoppingItems);
+  const shoppingRow = useMemo(
+    () =>
+      getShoppingRow(
+        getDayOnList(meals, shoppingItems, recipesById, ingredientsById),
+      ),
+    [meals, shoppingItems, recipesById, ingredientsById],
   );
-  const onListCount = dayLines.filter(
-    (line) =>
-      onList.get(getShoppingItemId(line.ingredientId, line.unit))?.isChecked ===
-      false,
-  ).length;
 
   return (
     <DetailSheet
@@ -299,7 +304,8 @@ function DayDrawer({
               <RepriceDayRow uid={uid} dayKey={dayKey} />
               {getDateOfDayKey(dayKey) >= getLocalTodayDate() && (
                 <AddToShoppingRow
-                  subtitle={getShoppingNote(onListCount, dayLines.length)}
+                  label={shoppingRow.label}
+                  subtitle={shoppingRow.subtitle}
                   onClick={() => onAddToShopping({ kind: 'day', dayKey })}
                 />
               )}

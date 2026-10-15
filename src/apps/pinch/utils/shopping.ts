@@ -442,6 +442,43 @@ export function getSourcedLines(
   return result;
 }
 
+export interface DayOnList {
+  /** Every planned meal with something to buy has already put a line on the list. */
+  isListed: boolean;
+  /** The rows the day's add sheet would start unticked, of all its rows. */
+  coveredCount: number;
+  rowCount: number;
+}
+
+/** Whether a day's planned meals are on the list, counted the way its add sheet ticks them. */
+export function getDayOnList(
+  meals: PlannedMeal[],
+  items: ShoppingItem[],
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): DayOnList {
+  const lines = getSourcedLines(
+    meals.map((meal) => ({ items: meal.items, source: meal.id })),
+    recipesById,
+    ingredientsById,
+  );
+  const rows = groupShopLines(lines, ingredientsById);
+  const itemsByRow = items.reduce((acc, item) => {
+    const id = getShopRowId(item.ingredientId, item.unit);
+    return acc.set(id, [...(acc.get(id) ?? []), item]);
+  }, new Map<string, ShoppingItem[]>());
+  const listed = new Set(items.flatMap((item) => item.sources ?? []));
+  const mealIds = [...new Set(lines.flatMap((line) => line.source ?? []))];
+
+  return {
+    isListed: mealIds.length > 0 && mealIds.every((id) => listed.has(id)),
+    coveredCount: rows.filter(
+      (row) => getRowOnList(row.lines, itemsByRow.get(row.id) ?? []).isCovered,
+    ).length,
+    rowCount: rows.length,
+  };
+}
+
 export interface PlanSpan {
   /** The first day counted: the range's own, or today when the range began earlier. */
   startKey: string;

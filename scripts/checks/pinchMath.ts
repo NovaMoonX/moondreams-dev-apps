@@ -5851,4 +5851,64 @@ assert.deepEqual(
   'a source names a recipe, a saved meal, or a planned meal by its own id',
 );
 
+import { getDayOnList as srcDayOnList } from '../../src/apps/pinch/utils/shopping.ts';
+
+const srcPlanned = (id: string, items: MealItem[]) =>
+  ({ id, items }) as unknown as ShopPlannedMeal;
+const srcDayMeals = [
+  srcPlanned('lunch', [srcRecipeItem('a', 3)]),
+  srcPlanned('dinner', [
+    { id: 'b', kind: 'INGREDIENT', refId: 'rice', servings: 2 },
+    { id: 'c', kind: 'INGREDIENT', refId: 'salt', servings: 1 },
+  ]),
+  srcPlanned('gone', [
+    { id: 'd', kind: 'RECIPE', refId: 'deleted-recipe', servings: 1 },
+  ]),
+];
+const srcRice = (sources?: string[], isChecked = false) =>
+  ({
+    id: 'rice__CUP',
+    ingredientId: 'rice',
+    amount: 1.5,
+    unit: 'CUP',
+    isChecked,
+    ...(sources ? { sources } : {}),
+  }) as ShoppingItem;
+const srcDayState = (items: ShoppingItem[]) => {
+  const day = srcDayOnList(
+    srcDayMeals,
+    items,
+    new Map([['rice-pot', srcRiceRecipe]]),
+    srcIngredients,
+  );
+  return [day.isListed, day.coveredCount, day.rowCount];
+};
+assert.deepEqual(
+  [
+    srcDayState([]),
+    srcDayState([srcRice(['dinner'])]),
+    srcDayState([srcRice(['dinner', 'lunch'])]),
+    srcDayState([
+      srcRice(['lunch']),
+      {
+        ...srcRice(['dinner']),
+        id: 'salt__TSP',
+        ingredientId: 'salt',
+        unit: 'TSP',
+      },
+    ]),
+    srcDayState([srcRice(['lunch', 'dinner'], true)]),
+    srcDayState([srcRice()]),
+  ],
+  [
+    [false, 0, 2],
+    [false, 0, 2],
+    [true, 1, 2],
+    [true, 1, 2],
+    [true, 1, 2],
+    [false, 1, 2],
+  ],
+  'a day is on the list once every planned meal with something to buy put a line there, got or not (a meal whose recipe is gone has nothing to buy); otherwise it counts the rows its sheet starts unticked, a line from before sources included',
+);
+
 console.log('pinchMath: all checks passed');
