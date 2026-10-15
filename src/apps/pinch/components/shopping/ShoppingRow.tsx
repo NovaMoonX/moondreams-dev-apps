@@ -51,7 +51,7 @@ function ShoppingRow({
               )}
               {forText && (
                 <span className='min-w-0 truncate'>
-                  {amountText ? ` · for ${forText}` : `For ${forText}`}
+                  {amountText ? `\u00a0· for ${forText}` : `For ${forText}`}
                 </span>
               )}
             </span>
