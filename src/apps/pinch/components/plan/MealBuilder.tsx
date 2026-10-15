@@ -150,6 +150,9 @@ function MealBuilder({
     startRecipeId !== null || starter !== null,
   );
   const [isOtherDay, setIsOtherDay] = useState(false);
+  const [isSearchFirst] = useState(
+    mode === 'plan' && !existingPlanned && !starter && !startRecipeId,
+  );
   const [items, setItems] = useState<MealItem[]>(
     existingPlanned?.items ??
       existingMeal?.items ??
@@ -557,6 +560,7 @@ function MealBuilder({
               onPick={(id) => addItem('INGREDIENT', id)}
               onPickRecipe={(id) => addItem('RECIPE', id)}
               onPickMeal={mode === 'plan' ? pickSavedMeal : undefined}
+              autoFocus={isSearchFirst}
               idle={getRecentRow()}
             />
           )}

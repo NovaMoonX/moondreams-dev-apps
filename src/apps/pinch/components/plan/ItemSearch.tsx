@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -23,6 +23,8 @@ import {
 } from '@apps/pinch/utils/catalogSearch';
 
 const MAX_RESULTS = 8;
+const PHONE_FOCUS_DELAY_MS = 350;
+const DESKTOP_FOCUS_DELAY_MS = 30;
 
 interface ItemSearchProps {
   uid: string;
@@ -63,6 +65,19 @@ function ItemSearch({
   const [query, setQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
+
+  // A drawer or overlay takes focus itself while it opens, so the field is focused once that settles.
+  useEffect(() => {
+    if (!autoFocus) {
+      return;
+    }
+    const timer = window.setTimeout(
+      () => fieldRef.current?.querySelector('input')?.focus(),
+      isPhone ? PHONE_FOCUS_DELAY_MS : DESKTOP_FOCUS_DELAY_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [autoFocus, isPhone]);
 
   const trimmed = query.trim();
   const matches = useMemo(
@@ -144,12 +159,13 @@ function ItemSearch({
         event.preventDefault()
       }
     >
-      <SearchInput
-        value={query}
-        onChange={setQuery}
-        placeholder={getPlaceholder()}
-        autoFocus={autoFocus}
-      />
+      <div ref={fieldRef}>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={getPlaceholder()}
+        />
+      </div>
       {trimmed === '' ? (
         (idle ?? (
           <p className='text-muted-foreground px-1 text-sm'>
