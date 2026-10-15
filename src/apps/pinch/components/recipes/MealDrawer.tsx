@@ -87,7 +87,11 @@ function MealDrawer({
   const getFix = () => {
     const onPlate = cost.leftOut.filter(isOnPlate).length;
     if (onPlate === 0) return 'Add prices from the recipes on this plate.';
-    if (onPlate === cost.leftOut.length) return 'Add their prices in Kitchen.';
+    if (onPlate === cost.leftOut.length) {
+      return onPlate === 1
+        ? 'Add its price in Kitchen.'
+        : 'Add their prices in Kitchen.';
+    }
     return 'Add prices from the recipes on this plate, or in Kitchen.';
   };
   const actions: ActionChip[] = [
