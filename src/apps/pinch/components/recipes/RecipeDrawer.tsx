@@ -3,6 +3,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
+  CalendarPlus,
   ChefHat,
   CookingPot,
   History,
@@ -37,6 +38,7 @@ import {
   selectNoteSummaries,
   selectNotesByRecipe,
   selectNotesLoadError,
+  selectPlannedByDay,
   selectRecipeCosts,
   selectRecipeNutrition,
   selectRecipesById,
@@ -45,7 +47,12 @@ import {
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type { Gap, GapKind, ShoppingRequest } from '@apps/pinch/types';
-import { getCookServings, isCookHistoryFull } from '@apps/pinch/utils/cooks';
+import {
+  getCookId,
+  getCookServings,
+  isCookHistoryFull,
+} from '@apps/pinch/utils/cooks';
+import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { isBulkMeal } from '@apps/pinch/utils/containers';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
@@ -156,6 +163,21 @@ function RecipeDrawer({
   const [markError, setMarkError] = useState<string | null>(null);
   const [isMarking, setIsMarking] = useState(false);
   const notesRef = useRef<HTMLDivElement>(null);
+  const [todayKey] = useState(() => getCellDayKey(new Date()));
+  const tonight = useAppSelector((state) => {
+    const cooksById = selectCooksById(state);
+    const meal = (selectPlannedByDay(state).get(todayKey) ?? []).find(
+      (planned) =>
+        !cooksById.has(getCookId(planned.id, recipeId)) &&
+        planned.items.some(
+          (item) => item.kind === 'RECIPE' && item.refId === recipeId,
+        ),
+    );
+    const item = meal?.items.find(
+      (entry) => entry.kind === 'RECIPE' && entry.refId === recipeId,
+    );
+    return meal && item ? `${meal.id}|${item.servings}` : null;
+  });
 
   if (!recipe) {
     return null;
@@ -190,17 +212,36 @@ function RecipeDrawer({
   };
 
   const care = getRecipeCare(recipe);
+  const getCookPlan = () => {
+    if (tonight === null || recipe.steps.length === 0) return null;
+    const [plannedMealId, servings] = tonight.split('|');
+    return { plannedMealId, servings: Number(servings) };
+  };
+  const cookPlan = getCookPlan();
+  const startCooking = () => {
+    onClose();
+    openSubview(
+      cookPlan
+        ? { kind: 'cook', recipeId: recipe.id, ...cookPlan }
+        : { kind: 'cook', recipeId: recipe.id },
+    );
+  };
   const actions: ActionChip[] = [
-    recipe.steps.length > 0 && {
-      key: 'cook',
-      icon: <CookingPot className='h-4 w-4' />,
-      label: 'Start cooking',
-      description: 'Start cooking: steps one at a time, with a timer',
-      onClick: () => {
-        onClose();
-        openSubview({ kind: 'cook', recipeId: recipe.id });
-      },
+    cookPlan !== null && {
+      key: 'plan',
+      icon: <CalendarPlus className='h-4 w-4' />,
+      label: 'Plan it',
+      description: 'Plan it on another day',
+      onClick: () => onPlan(recipe.id),
     },
+    cookPlan === null &&
+      recipe.steps.length > 0 && {
+        key: 'cook',
+        icon: <CookingPot className='h-4 w-4' />,
+        label: 'Start cooking',
+        description: 'Start cooking: steps one at a time, with a timer',
+        onClick: startCooking,
+      },
     loadError === null && {
       key: 'cooked',
       icon: <ChefHat className='h-4 w-4' />,
@@ -300,9 +341,9 @@ function RecipeDrawer({
           <Button
             type='button'
             className='min-w-0 flex-1'
-            onClick={() => onPlan(recipe.id)}
+            onClick={cookPlan ? startCooking : () => onPlan(recipe.id)}
           >
-            Add to calendar
+            {cookPlan ? 'Start cooking' : 'Plan it'}
           </Button>
         </div>
       }
