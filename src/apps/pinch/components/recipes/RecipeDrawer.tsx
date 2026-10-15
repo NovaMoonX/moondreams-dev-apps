@@ -465,7 +465,6 @@ function RecipeDrawer({
                     : formatCost(cost.totalCents ?? 0)
                 }
                 detail={`For ${formatServings(recipe.servings)}`}
-                help={costHelp}
               />
             )}
             {hasMacros && (
