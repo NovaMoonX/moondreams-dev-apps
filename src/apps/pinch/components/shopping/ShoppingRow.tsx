@@ -13,7 +13,7 @@ interface ShoppingRowProps {
   onOpen: (id: string) => void;
 }
 
-/** Props are plain values so a tick re-renders only its own row. */
+/** A tap anywhere on the name ticks it; the chevron opens the amount. Props are plain values so a tick re-renders only its own row. */
 function ShoppingRow({
   id,
   name,
@@ -23,21 +23,15 @@ function ShoppingRow({
   onOpen,
 }: ShoppingRowProps) {
   return (
-    <li className='flex items-start gap-3'>
-      <span className='mt-2.5 inline-flex shrink-0'>
-        <Checkbox
-          aria-label={`Got ${name}`}
-          checked={isChecked}
-          onCheckedChange={(checked) => onToggle(id, checked === true)}
-          className="relative after:absolute after:-inset-2.5 after:content-['']"
-        />
-      </span>
-      <Button
-        type='button'
-        variant='tertiary'
-        onClick={() => onOpen(id)}
-        className='h-auto min-h-12 min-w-0 flex-1 items-start justify-start gap-3 px-0! py-2 text-left'
-      >
+    <li className='flex items-start gap-1'>
+      <label className='flex min-h-12 min-w-0 flex-1 cursor-pointer items-start gap-3 py-2 select-none'>
+        <span className='mt-0.5 inline-flex shrink-0'>
+          <Checkbox
+            aria-label={`Got ${name}`}
+            checked={isChecked}
+            onCheckedChange={(checked) => onToggle(id, checked === true)}
+          />
+        </span>
         <span className='min-w-0 flex-1'>
           <span
             className={join(
@@ -48,13 +42,21 @@ function ShoppingRow({
             {name}
           </span>
           {amountText && (
-            <span className='text-muted-foreground block text-xs font-normal'>
+            <span className='text-muted-foreground block text-xs'>
               {amountText}
             </span>
           )}
         </span>
+      </label>
+      <Button
+        type='button'
+        variant='tertiary'
+        aria-label={`Change ${name}`}
+        onClick={() => onOpen(id)}
+        className='h-10! w-10! shrink-0 justify-end p-0!'
+      >
         <ChevronRight
-          className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
+          className='text-muted-foreground h-5 w-5'
           aria-hidden='true'
         />
       </Button>
