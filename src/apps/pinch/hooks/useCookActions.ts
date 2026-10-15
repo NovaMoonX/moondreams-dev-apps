@@ -43,9 +43,11 @@ export function useCookActions(uid: string) {
     }
   };
 
+  /** A screen that confirms the cook itself (and holds its own Undo) passes `isToasted: false`. */
   const markRecipeCooked = async (
     recipe: Pick<Recipe, 'id' | 'title'>,
     servings: number,
+    { isToasted = true }: { isToasted?: boolean } = {},
   ) => {
     const id = await dispatch(
       addCook({
@@ -55,12 +57,14 @@ export function useCookActions(uid: string) {
         cookedAt: Date.now(),
       }),
     ).unwrap();
-    addToast({
-      title: `Marked ${recipe.title} as cooked`,
-      type: 'success',
-      duration: UNDO_TOAST_MS,
-      action: { label: 'Undo', onClick: () => void undoFromToast(id) },
-    });
+    if (isToasted) {
+      addToast({
+        title: `Marked ${recipe.title} as cooked`,
+        type: 'success',
+        duration: UNDO_TOAST_MS,
+        action: { label: 'Undo', onClick: () => void undoFromToast(id) },
+      });
+    }
     return id;
   };
 

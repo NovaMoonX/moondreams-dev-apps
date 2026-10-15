@@ -1,7 +1,5 @@
 import { useState } from 'react';
 
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { addNote } from '@apps/pinch/store/actions/noteActions';
@@ -14,21 +12,13 @@ import { isNoteHistoryFull, isValidNoteText } from '@apps/pinch/utils/notes';
 interface UseCookNoteInput {
   uid: string;
   recipeId: string;
-  recipeTitle: string;
   /** The cook the note follows up; null until the cook has been written. */
   cookId: string | null;
-  onSaved: () => void;
 }
 
-export function useCookNote({
-  uid,
-  recipeId,
-  recipeTitle,
-  cookId,
-  onSaved,
-}: UseCookNoteInput) {
+/** The note typed on the cooking screen's last panel, which confirms it in place rather than with a toast. */
+export function useCookNote({ uid, recipeId, cookId }: UseCookNoteInput) {
   const dispatch = useAppDispatch();
-  const { addToast } = useToast();
   const isNotesReady = useAppSelector(
     (state) =>
       state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
@@ -61,11 +51,9 @@ export function useCookNote({
     setIsSaving(true);
     try {
       await dispatch(addNote({ uid, recipeId, text, cookId })).unwrap();
-      addToast({ title: `Added a note to ${recipeTitle}`, type: 'success' });
       setIsSaved(true);
       setIsSaving(false);
       close();
-      onSaved();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this note.'));
       setIsSaving(false);

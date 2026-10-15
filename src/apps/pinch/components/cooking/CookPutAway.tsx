@@ -9,19 +9,24 @@ import {
   CONTAINER_PLACE_LABELS,
 } from '@apps/pinch/constants';
 import type { usePutAway } from '@apps/pinch/hooks/usePutAway';
+import type { ContainerPlace, RecipeCare } from '@apps/pinch/types';
 import {
   getEatByPhrase,
   getSavedHeadline,
   groupSavedBatches,
 } from '@apps/pinch/utils/containers';
+import { formatCareDays } from '@apps/pinch/utils/recipeCare';
 
 const CARD_CLASS = 'bg-muted/50 border-border w-full rounded-2xl border';
 
+const PLACES: ContainerPlace[] = ['FRIDGE', 'FREEZER'];
+
 interface CookPutAwayProps {
   putAway: ReturnType<typeof usePutAway>;
+  care: RecipeCare | null;
 }
 
-function CookPutAway({ putAway }: CookPutAwayProps) {
+function CookPutAway({ putAway, care }: CookPutAwayProps) {
   if (!putAway.isAvailable) {
     return null;
   }
@@ -56,6 +61,11 @@ function CookPutAway({ putAway }: CookPutAwayProps) {
   }
 
   const batches = groupSavedBatches(putAway.saved);
+  const getHeading = () => {
+    if (putAway.isAsking) return 'Putting any away?';
+    return batches.length > 0 ? 'Put another away' : 'Put some away';
+  };
+  const heading = getHeading();
   const renderNotice = (className: string) =>
     putAway.notice && (
       <p className={join('text-destructive text-sm', className)} role='alert'>
@@ -117,33 +127,36 @@ function CookPutAway({ putAway }: CookPutAwayProps) {
           {renderNotice('px-4 pb-3')}
         </section>
       )}
-      {putAway.isAsking && (
-        <section
-          aria-label='Putting any away?'
-          className={join(CARD_CLASS, 'space-y-3 px-4 py-4 text-center')}
-        >
-          <p className='font-medium'>Putting any away?</p>
-          <div className='flex flex-wrap justify-center gap-2'>
-            {(['FRIDGE', 'FREEZER'] as const).map((place) => (
+      <section
+        aria-label={heading}
+        className={join(CARD_CLASS, 'space-y-3 px-4 py-4 text-center')}
+      >
+        <p className='font-medium'>{heading}</p>
+        <div className='flex flex-wrap justify-center gap-2'>
+          {PLACES.map((place) => {
+            const days =
+              place === 'FRIDGE' ? care?.fridgeDays : care?.freezerDays;
+            return (
               <Pill
                 key={place}
                 isSelected={false}
                 emoji={CONTAINER_PLACE_EMOJIS[place]}
                 onClick={() => putAway.open(place)}
               >
-                {`In the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`}
+                {days == null
+                  ? CONTAINER_PLACE_LABELS[place]
+                  : `${CONTAINER_PLACE_LABELS[place]} · keeps ${formatCareDays(days)}`}
               </Pill>
-            ))}
+            );
+          })}
+          {putAway.isAsking && (
             <Pill isSelected={false} onClick={putAway.dismiss}>
               Not this time
             </Pill>
-          </div>
-          {renderNotice('')}
-        </section>
-      )}
-      {batches.length === 0 &&
-        !putAway.isAsking &&
-        renderNotice('w-full text-center')}
+          )}
+        </div>
+        {batches.length === 0 && renderNotice('')}
+      </section>
     </>
   );
 }
