@@ -407,6 +407,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             }
             actionLabel={recipeMatches > 0 ? 'Show recipes' : null}
             onAction={() => {
+              setPickedSource(SOURCE_FILTER_ANY);
               setStockPlaces([]);
               setView('recipes');
             }}
