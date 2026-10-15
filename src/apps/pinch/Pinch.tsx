@@ -46,6 +46,11 @@ import {
   isRangeInWindow,
 } from '@apps/pinch/utils/dayKeys';
 
+const getHistoryIndex = () => {
+  const index: unknown = window.history.state?.idx;
+  return typeof index === 'number' ? index : null;
+};
+
 function Pinch() {
   const { user, loading } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -59,11 +64,13 @@ function Pinch() {
   }, []);
   const [shownMonth, setShownMonth] = useState(getLocalMonthKey);
   const subviewRef = useRef<PinchSubview | null>(null);
+  const calendarIndexRef = useRef<number | null>(null);
   const showShoppingTab = useCallback(() => {
     if (subviewRef.current !== null) {
       return;
     }
     const next = new URLSearchParams(window.location.search);
+    if (!next.has('tab')) calendarIndexRef.current = getHistoryIndex();
     next.set('tab', 'shopping');
     startTransition(() => setSearchParams(next));
   }, [setSearchParams]);
@@ -126,15 +133,30 @@ function Pinch() {
   const activeTab: PinchTab =
     PINCH_TABS.find((tab) => tab === requestedTab) ?? DEFAULT_PINCH_TAB;
 
+  // Back from any tab returns to the Calendar and back from the Calendar leaves: only leaving the
+  // Calendar adds an entry, and going back to it steps back onto that entry when it is the one below.
   const setActiveTab = (tab: PinchTab) => {
     setCalendarFocus(null);
+    const historyIndex = getHistoryIndex();
+    const isFromCalendar = activeTab === DEFAULT_PINCH_TAB;
+    if (
+      tab === DEFAULT_PINCH_TAB &&
+      historyIndex !== null &&
+      calendarIndexRef.current === historyIndex - 1
+    ) {
+      window.history.back();
+      return;
+    }
+    if (isFromCalendar) calendarIndexRef.current = historyIndex;
     const nextSearchParams = new URLSearchParams(searchParams);
     if (tab === DEFAULT_PINCH_TAB) {
       nextSearchParams.delete('tab');
     } else {
       nextSearchParams.set('tab', tab);
     }
-    startTransition(() => setSearchParams(nextSearchParams));
+    startTransition(() =>
+      setSearchParams(nextSearchParams, { replace: !isFromCalendar }),
+    );
   };
 
   if (loading) {
