@@ -7193,9 +7193,9 @@ assert.equal(
     merged.map((line) => [line.ingredientId, line.amount, line.sources]),
     [
       ['cat-salt', null, ['meal:a', 'meal:b']],
-      ['cat-oil', 2, ['meal:a']],
+      ['cat-oil', 2, ['meal:a', 'meal:b']],
     ],
-    'name-only lines from two meals stay one name-only item with both sources, and drop when the same ingredient has an amount',
+    'name-only lines from two meals stay one name-only item with both sources, and one that an amount of the same ingredient absorbs hands its source to that amount',
   );
 }
 

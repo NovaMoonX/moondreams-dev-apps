@@ -411,9 +411,21 @@ export function mergeSourcedLines(lines: SourcedLine[]): ListLine[] {
       .filter((line) => line.amount !== null)
       .map((line) => line.ingredientId),
   );
-  return merged.filter(
-    (line) => line.amount !== null || !withAmount.has(line.ingredientId),
+  const isAbsorbed = (line: ListLine) =>
+    line.amount === null && withAmount.has(line.ingredientId);
+  const absorbedSources = new Map(
+    merged
+      .filter(isAbsorbed)
+      .map((line) => [line.ingredientId, line.sources] as const),
   );
+  return merged
+    .filter((line) => !isAbsorbed(line))
+    .map((line) => {
+      const extra = absorbedSources.get(line.ingredientId);
+      return extra
+        ? { ...line, sources: [...new Set([...line.sources, ...extra])] }
+        : line;
+    });
 }
 
 /** An item's sources after an add: the added ones move to the end, and past the cap the oldest are let go. */
@@ -573,10 +585,7 @@ export function getDayOnList(
     ingredientsById,
   );
   const rows = groupShopLines(lines, ingredientsById);
-  const itemsByRow = items.reduce((acc, item) => {
-    const id = getShopRowId(item.ingredientId, item.unit);
-    return acc.set(id, [...(acc.get(id) ?? []), item]);
-  }, new Map<string, ShoppingItem[]>());
+  const itemsByRow = getItemsByRow(rows, items);
   const listed = new Set(items.flatMap((item) => item.sources ?? []));
   const mealIds = [...new Set(lines.flatMap((line) => line.source ?? []))];
 
@@ -661,16 +670,15 @@ export function getItemRowIds(items: RowItem[]): Map<string, string> {
 export const countOpenShopRows = (items: ShoppingItem[]) =>
   new Set(getItemRowIds(items.filter((item) => !item.isChecked)).values()).size;
 
-/** The open items an add sheet's row would join: its own row's, or for a row that is just the name, the row the list draws for that ingredient. */
-export function getOpenItemsByRow(
+/** The items an add sheet's row stands for: its own row's, or for a row that is just the name, the row the list draws for that ingredient. Pass the items of one side of the list, or all of them. */
+export function getItemsByRow(
   rows: Pick<ShopLineRow, 'id' | 'ingredientId' | 'lines'>[],
   items: ShoppingItem[],
 ): Map<string, ShoppingItem[]> {
-  const open = items.filter((item) => !item.isChecked);
-  const rowIds = getItemRowIds(open);
-  const amountRows = getAmountRows(open);
-  const byDrawnRow = groupByRow(open, (item) => rowIds.get(item.id) ?? '');
-  const byRow = groupByRow(open, (item) =>
+  const rowIds = getItemRowIds(items);
+  const amountRows = getAmountRows(items);
+  const byDrawnRow = groupByRow(items, (item) => rowIds.get(item.id) ?? '');
+  const byRow = groupByRow(items, (item) =>
     getShopRowId(item.ingredientId, item.unit),
   );
   const result = new Map(
@@ -684,6 +692,16 @@ export function getOpenItemsByRow(
   );
   return result;
 }
+
+/** What is still to buy of each add sheet row. */
+export const getOpenItemsByRow = (
+  rows: Pick<ShopLineRow, 'id' | 'ingredientId' | 'lines'>[],
+  items: ShoppingItem[],
+) =>
+  getItemsByRow(
+    rows,
+    items.filter((item) => !item.isChecked),
+  );
 
 /** Groups what is left and what is checked off, each by the section of the shop it is found in, in walking order with Other last, one row per ingredient and kind of unit. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
 export function groupShoppingItems(

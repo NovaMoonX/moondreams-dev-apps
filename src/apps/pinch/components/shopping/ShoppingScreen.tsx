@@ -272,10 +272,12 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const rows = useAppSelector((state) =>
     selectShoppingRows(state, held.current),
   );
-  const itemCount = useAppSelector(selectShoppingItems).length;
+  const items = useAppSelector(selectShoppingItems);
+  const itemCount = items.length;
   const itemsById = useAppSelector(selectShoppingById);
   const openCount = useAppSelector(selectShoppingOpenCount);
-  const gotCount = itemCount - openCount;
+  const gotCount = countRows(rows.got);
+  const gotItemCount = items.filter((item) => item.isChecked).length;
   const loadError = useAppSelector(selectShoppingLoadError);
   const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const cost = useAppSelector(selectShoppingCost);
@@ -446,7 +448,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       }
       addUndoToast(
         `Cleared ${clearedRows === 1 ? '1 item' : `${clearedRows} items`}`,
-        cleared.length < gotCount
+        cleared.length < gotItemCount
           ? 'The rest changed in the meantime.'
           : undefined,
         () => restore(cleared),
