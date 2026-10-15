@@ -7179,4 +7179,48 @@ assert.equal(
   );
 }
 
+// A name-only line carries its source
+{
+  const herb = (id: string, amount: number | null, unit: string) =>
+    ({
+      id,
+      title: id,
+      servings: 1,
+      ingredients: [
+        { id: 'l1', ingredientId: 'parsley', amount, unit, note: null },
+      ],
+    }) as unknown as Recipe;
+  const parsley = new Map([
+    ['parsley', { id: 'parsley', serving: { amount: 1, unit: 'G' } }],
+  ]) as unknown as Map<string, ResolvedIngredient>;
+  const recipes = new Map([
+    ['plain', herb('plain', null, 'EACH')],
+    ['measured', herb('measured', 30, 'G')],
+  ]);
+  const recipeMeal = (id: string, refId: string) =>
+    srcPlanned(id, [{ id: `${id}-i`, kind: 'RECIPE', refId, servings: 1 }]);
+  const day = srcDayOnList(
+    [recipeMeal('m1', 'plain'), recipeMeal('m2', 'measured')],
+    [
+      {
+        id: 'parsley__G',
+        ingredientId: 'parsley',
+        amount: 30,
+        unit: 'G',
+        isChecked: false,
+        sources: ['m1', 'm2'],
+        createdAt: 1,
+        updatedAt: 1,
+      } as ShoppingItem,
+    ],
+    recipes,
+    parsley,
+  );
+  assert.deepEqual(
+    [day.isListed, day.coveredCount, day.rowCount],
+    [true, 2, 2],
+    'a day whose name-only parsley sits beside a measured one reads as on the list once the measured item carries both meals',
+  );
+}
+
 console.log('pinchMath: all checks passed');
