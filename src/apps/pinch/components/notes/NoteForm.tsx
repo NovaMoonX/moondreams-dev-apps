@@ -6,9 +6,7 @@ import {
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { PenLine } from 'lucide-react';
 
-import ActionRow from '@/components/ActionRow';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
@@ -58,8 +56,6 @@ interface NoteFormProps {
   initialCookId: string | null;
   onCancel: () => void;
   onDone: () => void;
-  /** Closes this and opens the recipe's form with the note quoted; offered for a saved NOTE. */
-  onUpdateRecipe?: (noteId: string) => void;
 }
 
 /** Editing saves only the words: a note's cook and date stay as they were. */
@@ -70,7 +66,6 @@ function NoteForm({
   initialCookId,
   onCancel,
   onDone,
-  onUpdateRecipe,
 }: NoteFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -197,38 +192,8 @@ function NoteForm({
             }),
           ]
         : []),
-      ...(note && note.kind === 'NOTE' && onUpdateRecipe
-        ? [
-            custom({
-              name: 'update',
-              label: '',
-              renderComponent: () => (
-                <ActionRow
-                  icon={<PenLine className='h-4 w-4' />}
-                  label='Update the recipe from this note'
-                  subtitle={
-                    isDirty
-                      ? 'Save your changes first'
-                      : 'Opens the recipe with this note above it'
-                  }
-                  isDisabled={isDirty || isSubmitting}
-                  onClick={() => onUpdateRecipe(note.id)}
-                />
-              ),
-            }),
-          ]
-        : []),
     ],
-    [
-      note,
-      noteCook,
-      isTweak,
-      hasCookQuestion,
-      cookOptions,
-      isDirty,
-      isSubmitting,
-      onUpdateRecipe,
-    ],
+    [note, noteCook, isTweak, hasCookQuestion, cookOptions],
   );
 
   const handleSubmit = async () => {

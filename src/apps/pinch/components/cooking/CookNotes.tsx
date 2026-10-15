@@ -31,9 +31,10 @@ const leadWithAdvice = (text: string) => {
 
 interface CookNotesProps {
   recipeId: string;
+  onApply: (noteId: string) => void;
 }
 
-function CookNotes({ recipeId }: CookNotesProps) {
+function CookNotes({ recipeId, onApply }: CookNotesProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
@@ -111,6 +112,7 @@ function CookNotes({ recipeId }: CookNotesProps) {
                   }
                   writtenBefore={getWrittenBefore(note, lastTweakAt)}
                   onEdit={null}
+                  onApply={onApply}
                 />
               );
             })}

@@ -7,7 +7,6 @@ interface NoteSheetProps {
   noteId: string | null;
   initialCookId: string | null;
   onClose: () => void;
-  onUpdateRecipe: (noteId: string) => void;
 }
 
 function NoteSheet({
@@ -16,7 +15,6 @@ function NoteSheet({
   noteId,
   initialCookId,
   onClose,
-  onUpdateRecipe,
 }: NoteSheetProps) {
   return (
     <FormSheet isOpen onClose={onClose} title='Note'>
@@ -28,7 +26,6 @@ function NoteSheet({
         initialCookId={initialCookId}
         onCancel={onClose}
         onDone={onClose}
-        onUpdateRecipe={onUpdateRecipe}
       />
     </FormSheet>
   );

@@ -630,11 +630,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               current === noteTarget ? null : current,
             )
           }
-          onUpdateRecipe={(noteId) => {
-            const { recipeId } = noteTarget;
-            setNoteTarget(null);
-            openSubview({ kind: 'recipe', id: recipeId, fromNoteId: noteId });
-          }}
         />
       )}
       {historyId && (

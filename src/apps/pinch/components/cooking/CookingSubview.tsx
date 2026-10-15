@@ -76,7 +76,7 @@ function CookingSession({
 }: CookingSessionProps) {
   const dispatch = useAppDispatch();
   const store = useStore<RootState>();
-  const { closeSubview, closeSubviewIf } = usePinchOverlay();
+  const { closeSubview, closeSubviewIf, openSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
   const [stepIndex, setStepIndex] = useState(0);
@@ -254,6 +254,11 @@ function CookingSession({
   const leave = async () => {
     if (!(await confirmDiscard())) return;
     if (await confirmLeave()) closeIfStillOpen();
+  };
+
+  const applyNote = async (noteId: string) => {
+    if (!(await confirmDiscard()) || !(await confirmLeave())) return;
+    openSubview({ kind: 'recipe', id: recipe.id, fromNoteId: noteId });
   };
 
   const cancelNote = async () => {
@@ -455,7 +460,12 @@ function CookingSession({
             isThin
           />
         )}
-        {!isFinishShown && <CookNotes recipeId={recipe.id} />}
+        {!isFinishShown && (
+          <CookNotes
+            recipeId={recipe.id}
+            onApply={(noteId) => void applyNote(noteId)}
+          />
+        )}
         {isFinishShown ? (
           <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6'>
             <p className='text-center text-2xl leading-snug font-medium'>
