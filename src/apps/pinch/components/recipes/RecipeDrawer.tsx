@@ -1,20 +1,21 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   CalendarPlus,
   ChefHat,
   CookingPot,
-  History,
   PackagePlus,
   ShoppingBasket,
 } from 'lucide-react';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
+import ActionGroup from '@/components/ActionGroup';
 import ClampedText from '@/components/ClampedText';
 import DetailSheet from '@/components/DetailSheet';
+import FactsLine, { type Fact } from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
+import GroupRow from '@/components/GroupRow';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
@@ -35,7 +36,6 @@ import {
   selectCooksById,
   selectIngredientsById,
   selectIsContainersReady,
-  selectNoteSummaries,
   selectNotesByRecipe,
   selectNotesLoadError,
   selectPlannedByDay,
@@ -60,7 +60,11 @@ import {
   getNutritionGaps,
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
-import { formatMinutes, formatServings } from '@apps/pinch/utils/recipeFormat';
+import {
+  formatMinutes,
+  formatServings,
+  getTotalMinutes,
+} from '@apps/pinch/utils/recipeFormat';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
@@ -70,19 +74,12 @@ const gapLabel = (kind: GapKind | undefined) => {
   return null;
 };
 
-interface Fact {
-  emoji: string;
-  text: string;
-  canWrap?: boolean;
-  help?: ReactNode;
-}
-
-interface LatestNoteLineProps {
+interface LatestNoteRowProps {
   recipeId: string;
   onOpen: () => void;
 }
 
-function LatestNoteLine({ recipeId, onOpen }: LatestNoteLineProps) {
+function LatestNoteRow({ recipeId, onOpen }: LatestNoteRowProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId);
   const cooksById = useAppSelector(selectCooksById);
   const isReady = useAppSelector(
@@ -96,23 +93,18 @@ function LatestNoteLine({ recipeId, onOpen }: LatestNoteLineProps) {
     return null;
   }
 
-  const cook = note.cookId === null ? undefined : cooksById.get(note.cookId);
-  const label = cook
-    ? `Last time (${formatDateShort(cook.cookedAt)}):`
-    : `Your note (${formatDateShort(note.createdAt)}):`;
+  const label =
+    note.cookId !== null && cooksById.has(note.cookId)
+      ? 'Last time:'
+      : 'Your note:';
 
   return (
-    <Button
-      type='button'
-      variant='tertiary'
-      onClick={onOpen}
-      className='text-muted-foreground! h-auto w-full justify-start rounded-none p-0 px-0! py-0! text-left text-sm font-normal whitespace-normal'
-    >
-      <span className='line-clamp-2 min-w-0 wrap-break-word'>
-        <span aria-hidden='true'>📝</span>{' '}
-        <span className='text-foreground font-medium'>{label}</span> {text}
+    <GroupRow icon='📝' onClick={onOpen}>
+      <span className='line-clamp-2 wrap-break-word'>
+        <span className='font-medium'>{label}</span>{' '}
+        <span className='text-muted-foreground'>{text}</span>
       </span>
-    </Button>
+    </GroupRow>
   );
 }
 
@@ -120,6 +112,8 @@ interface RecipeDrawerProps {
   uid: string;
   recipeId: string;
   onClose: () => void;
+  /** Shows the recipes that share this source. */
+  onOpenSource: (sourceId: string) => void;
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
@@ -135,6 +129,7 @@ function RecipeDrawer({
   uid,
   recipeId,
   onClose,
+  onOpenSource,
   onPlan,
   onModify,
   onFillIn,
@@ -151,8 +146,6 @@ function RecipeDrawer({
   const show = useAppSelector(selectShowNutrition);
   const sourcesById = useAppSelector(selectSourcesById);
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
-  const lastTweakAt =
-    useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
   const { openSubview } = usePinchOverlay();
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
   const isStockReady = useAppSelector(selectIsContainersReady);
@@ -268,13 +261,6 @@ function RecipeDrawer({
         isDisabled: !isStockReady,
         onClick: () => onPutAway(recipe.id),
       },
-    cookSummary !== undefined && {
-      key: 'history',
-      icon: <History className='h-4 w-4' />,
-      label: 'History',
-      description: 'Cooking history: fix a date or add one you missed',
-      onClick: () => onOpenHistory(recipe.id),
-    },
   ].filter((action) => action !== false);
 
   const source = getRecipeSource(recipe, sourcesById);
@@ -292,34 +278,35 @@ function RecipeDrawer({
       />
     ) : undefined;
 
+  const totalMinutes = getTotalMinutes(recipe);
   const facts: Fact[] = [
-    { emoji: '🍽️', text: formatServings(recipe.servings) },
-    recipe.prepMinutes != null && {
-      emoji: '🔪',
-      text: `Prep ${formatMinutes(recipe.prepMinutes)}`,
-    },
-    recipe.cookMinutes != null && {
-      emoji: '⏲️',
-      text: `Cook ${formatMinutes(recipe.cookMinutes)}`,
+    { key: 'servings', content: formatServings(recipe.servings) },
+    totalMinutes !== null && {
+      key: 'time',
+      content: formatMinutes(totalMinutes),
     },
     isPriced &&
       cost.perServingCents !== null && {
-        emoji: '💰',
-        text: `${formatCost(cost.perServingCents)}${leftOutCount > 0 ? '+' : ''} per serving`,
-        help: costHelp,
+        key: 'cost',
+        content: (
+          <>
+            {`${formatCost(cost.perServingCents)}${leftOutCount > 0 ? '+' : ''} per serving`}
+            {costHelp && (
+              <span className='ml-1 inline-flex align-middle'>{costHelp}</span>
+            )}
+          </>
+        ),
       },
-    source && { emoji: '📖', text: `From ${source.label}`, canWrap: true },
-  ].filter((fact) => fact !== false && fact !== null);
+  ].filter((fact) => fact !== false);
 
-  const getStatusText = () => {
+  const getCookedText = () => {
     if (!cookSummary) return null;
-    const made = `Last made ${formatDateShort(cookSummary.lastCookedAt)}`;
-    if (lastTweakAt === null || lastTweakAt <= cookSummary.lastCookedAt) {
-      return made;
-    }
-    return `${made} · changed ${formatDateShort(lastTweakAt)}`;
+    const day = formatDateShort(cookSummary.lastCookedAt);
+    return cookSummary.count === 1
+      ? `Cooked once, on ${day}`
+      : `Cooked ${cookSummary.count} times, last ${day}`;
   };
-  const statusText = getStatusText();
+  const cookedText = getCookedText();
   const hasMacros =
     nutrition !== undefined && hasShownValue(nutrition.values, show);
 
@@ -349,45 +336,49 @@ function RecipeDrawer({
       }
     >
       <div className='space-y-5'>
-        {recipe.coverPath && (
-          <CoverImage
-            coverPath={recipe.coverPath}
-            version={recipe.updatedAt}
-            className='h-40 w-full'
-          />
-        )}
-        <div className='space-y-3'>
-          {recipe.description && <ClampedText text={recipe.description} />}
-          <div className='space-y-1.5'>
-            <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
-              {facts.map((fact) => (
-                <li
-                  key={fact.text}
-                  className={join(
-                    fact.canWrap
-                      ? 'min-w-0 wrap-break-word'
-                      : 'whitespace-nowrap',
-                  )}
-                >
-                  <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
-                  {fact.help && (
-                    <span className='ml-1 inline-flex align-middle'>
-                      {fact.help}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {statusText && (
-              <p className='text-muted-foreground text-sm'>
-                <span aria-hidden='true'>✅</span> {statusText}
-              </p>
+        <div className='space-y-2.5'>
+          <div className='space-y-1.5 empty:hidden'>
+            {source && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='stripped'
+                aria-label={`From ${source.label}: show its recipes`}
+                onClick={() => onOpenSource(source.id)}
+                className="text-muted-foreground! relative flex! max-w-full text-left text-sm font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] max-sm:-mt-3"
+              >
+                <span className='decoration-muted-foreground/50 underline underline-offset-4'>
+                  From {source.label}
+                </span>
+              </Button>
+            )}
+            {recipe.coverPath && (
+              <CoverImage
+                coverPath={recipe.coverPath}
+                version={recipe.updatedAt}
+                className='h-40 w-full'
+              />
+            )}
+            {recipe.description && (
+              <ClampedText text={recipe.description} maxLines={2} />
+            )}
+          </div>
+          <FactsLine facts={facts} className='text-muted-foreground text-sm' />
+          <ActionGroup>
+            {cookedText && (
+              <GroupRow
+                icon='✅'
+                ariaLabel={`${cookedText}. Cooking history`}
+                onClick={() => onOpenHistory(recipe.id)}
+              >
+                {cookedText}
+              </GroupRow>
             )}
             <StockRows
               target={{ kind: 'recipe', id: recipe.id }}
               onOpenStock={() => onOpenStock(recipe.id)}
             />
-            <LatestNoteLine
+            <LatestNoteRow
               recipeId={recipe.id}
               onOpen={() =>
                 notesRef.current?.scrollIntoView({
@@ -396,7 +387,7 @@ function RecipeDrawer({
                 })
               }
             />
-          </div>
+          </ActionGroup>
           <div className='space-y-1.5'>
             <ActionChips label='Recipe actions' actions={actions} />
             {reasons.map((reason) => (

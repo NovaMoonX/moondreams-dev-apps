@@ -2,10 +2,11 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { PackagePlus, ShoppingBasket } from 'lucide-react';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
+import ActionGroup from '@/components/ActionGroup';
 import DetailSheet from '@/components/DetailSheet';
+import FactsLine from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
 import MacroStats from '@/components/MacroStats';
-import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
@@ -78,7 +79,9 @@ function MealDrawer({
   const getCostValue = () => {
     if (cost.totalCents === null) return 'No price yet';
     const total = formatCost(cost.totalCents);
-    return leftOutCount > 0 ? `${total} so far` : total;
+    return leftOutCount > 0
+      ? `${total} so far for the plate`
+      : `${total} for the plate`;
   };
   const isOnPlate = (gap: Gap) =>
     meal.items.some(
@@ -145,11 +148,31 @@ function MealDrawer({
       }
     >
       <div className='space-y-5'>
-        <div className='space-y-3'>
-          <StockRows
-            target={{ kind: 'meal', id: meal.id }}
-            onOpenStock={() => onOpenStock(meal.id)}
+        <div className='space-y-2.5'>
+          <FactsLine
+            className='text-muted-foreground text-sm'
+            facts={[
+              {
+                key: 'cost',
+                content: (
+                  <>
+                    {getCostValue()}
+                    {leftOutCount > 0 && (
+                      <span className='ml-1 inline-flex align-middle'>
+                        <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
+                      </span>
+                    )}
+                  </>
+                ),
+              },
+            ]}
           />
+          <ActionGroup>
+            <StockRows
+              target={{ kind: 'meal', id: meal.id }}
+              onOpenStock={() => onOpenStock(meal.id)}
+            />
+          </ActionGroup>
           <div className='space-y-1.5'>
             <ActionChips label='Meal actions' actions={actions} />
             {stockError === null && !isStockReady && (
@@ -158,28 +181,6 @@ function MealDrawer({
               </p>
             )}
           </div>
-        </div>
-        <div className='space-y-3'>
-          <StatTile
-            label='Cost'
-            value={getCostValue()}
-            detail={cost.totalCents === null ? undefined : 'For the plate'}
-            help={
-              leftOutCount > 0 ? (
-                <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
-              ) : undefined
-            }
-          />
-          {hasShownValue(nutrition.values, show) && (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>For the plate</p>
-              <MacroStats
-                values={nutrition.values}
-                show={show}
-                variant='tiles'
-              />
-            </div>
-          )}
         </div>
         <FormSection
           title='On the plate'
@@ -213,6 +214,12 @@ function MealDrawer({
             })}
           </ul>
         </FormSection>
+        {hasShownValue(nutrition.values, show) && (
+          <div className='space-y-1.5'>
+            <p className='text-muted-foreground text-xs'>For the plate</p>
+            <MacroStats values={nutrition.values} show={show} variant='tiles' />
+          </div>
+        )}
       </div>
     </DetailSheet>
   );
