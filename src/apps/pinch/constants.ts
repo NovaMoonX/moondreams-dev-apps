@@ -9,6 +9,7 @@ import type {
   PinchTab,
   RecipesView,
   RecipeStartMethod,
+  ShoppingView,
   Unit,
 } from '@apps/pinch/types';
 
@@ -116,6 +117,11 @@ export const MAX_SHOPPING_LINES_PER_ADD = 200;
 export const SOFT_MAX_SHOPPING_ITEMS = 300;
 export const SHOPPING_GROUP_PAGE_SIZE = 100;
 export const SHOPPING_MOVE_DELAY_MS = 1200;
+export const SHOPPING_VIEWS: ShoppingView[] = ['toBuy', 'got'];
+export const SHOPPING_VIEW_LABELS: Record<ShoppingView, string> = {
+  toBuy: 'To buy',
+  got: 'Got it',
+};
 /** A chunk reads then deletes each item, two operations apiece, under Firestore's 500 per transaction. */
 export const SHOPPING_BATCH_SIZE = 250;
 export const MAX_SHOPPING_AMOUNT = 1_000_000;
@@ -431,3 +437,5 @@ export const SOFT_MAX_CONTAINERS = 500;
 export const CONTAINER_LIST_PAGE_SIZE = 20;
 export const CONTAINER_FINISHED_PAGE_SIZE = 25;
 export const CONTAINER_QUERY_LIMIT = 200;
+/** Containers one transaction of a clear-out or its Undo re-reads and writes, under Firestore's 500: the action's limit, not the rules'. */
+export const CONTAINER_CLEAR_CHUNK_SIZE = 200;

@@ -3,31 +3,34 @@ import { createPortal } from 'react-dom';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  CookingPot,
+  ShoppingBasket,
+} from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import ActionGroup from '@/components/ActionGroup';
+import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
-import {
-  EatFromStockRows,
-  EatFromStockView,
-} from '@apps/pinch/components/containers/EatFromStock';
+import { EatFromStockView } from '@apps/pinch/components/containers/EatFromStock';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
-import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
-import StartCookingRow from '@apps/pinch/components/shared/StartCookingRow';
 import {
+  CONTAINER_PLACE_EMOJIS,
+  CONTAINER_PLACE_LABELS,
   MAX_NAME_LENGTH,
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
 } from '@apps/pinch/constants';
 import { savePlannedAsMeal } from '@apps/pinch/store/actions/mealActions';
 import { removePlannedMeal } from '@apps/pinch/store/actions/plannedMealActions';
+import { useEatFromStockPlaces } from '@apps/pinch/hooks/useEatFromStockPlaces';
 import {
   selectCooksLoadError,
   selectCostContext,
@@ -104,6 +107,7 @@ function PlannedMealView({
   const [isSaving, setIsSaving] = useState(false);
   const [isChoosing, setIsChoosing] = useState(false);
   const [eatingPlace, setEatingPlace] = useState<ContainerPlace | null>(null);
+  const stockPlaces = useEatFromStockPlaces(meal ?? null);
 
   if (!meal) {
     return null;
@@ -122,6 +126,14 @@ function PlannedMealView({
     meal.date <= today && cooksLoadError === null
       ? getMarkableRecipes(meal.items, recipesById)
       : [];
+  const markableByItemId = new Map(
+    markable.flatMap((entry) => {
+      const first = meal.items.find(
+        (item) => item.kind === 'RECIPE' && item.refId === entry.recipe.id,
+      );
+      return first ? [[first.id, entry] as const] : [];
+    }),
+  );
 
   const cost = getPlannedMealCost(meal, costContext);
   const nutrition = getPlannedMealNutrition(
@@ -171,6 +183,44 @@ function PlannedMealView({
       setError(getErrorMessage(removeError, 'Unable to remove this meal.'));
     }
   };
+
+  const actions: ActionChip[] = [
+    canPlanAhead &&
+      cookable.length > 0 && {
+        key: 'cook',
+        icon: <CookingPot className='h-4 w-4' />,
+        label: 'Start cooking',
+        description: 'Start cooking: steps one at a time, with a timer',
+        onClick: () =>
+          cookable.length === 1
+            ? onStartCooking(cookable[0].recipe.id, cookable[0].item.servings)
+            : setIsChoosing(true),
+      },
+    ...(canEatFromStock ? stockPlaces : []).map(({ place, count }) => ({
+      key: `eat-${place}`,
+      icon: (
+        <span className='text-base leading-none'>
+          {CONTAINER_PLACE_EMOJIS[place]}
+        </span>
+      ),
+      label: `Eat from ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
+      description: `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}: ${count} ${count === 1 ? 'container matches' : 'containers match'} this meal`,
+      onClick: () => setEatingPlace(place),
+    })),
+    canPlanAhead && {
+      key: 'shopping',
+      icon: <ShoppingBasket className='h-4 w-4' />,
+      label: 'Shopping list',
+      description: 'Add to shopping list: choose what you need for this meal',
+      onClick: () =>
+        onAddToShopping({
+          kind: 'items',
+          items: meal.items,
+          label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
+          mealId: meal.sourceMealId,
+        }),
+    },
+  ].filter((action) => action !== false);
 
   const footer = footerEl
     ? createPortal(
@@ -320,10 +370,13 @@ function PlannedMealView({
         <ChevronLeft className='h-4 w-4' aria-hidden='true' />
         Back
       </Button>
-      <p className='font-medium'>
-        <span aria-hidden='true'>{MEAL_TYPE_EMOJIS[meal.mealType]}</span>{' '}
-        {MEAL_TYPE_LABELS[meal.mealType]}
-      </p>
+      <div className='space-y-3'>
+        <p className='font-medium'>
+          <span aria-hidden='true'>{MEAL_TYPE_EMOJIS[meal.mealType]}</span>{' '}
+          {MEAL_TYPE_LABELS[meal.mealType]}
+        </p>
+        <ActionChips label='Meal actions' actions={actions} />
+      </div>
       <div className='space-y-3'>
         <StatTile
           label='Cost'
@@ -379,16 +432,25 @@ function PlannedMealView({
       <ul className='divide-border divide-y'>
         {meal.items.map((item) => {
           const itemCost = cost.items.get(item.id);
+          const markEntry = markableByItemId.get(item.id);
           return (
             <li key={item.id} className='flex items-start gap-3 py-2.5'>
-              <span className='min-w-0 flex-1'>
+              <div className='min-w-0 flex-1'>
                 <span className='block'>
                   {getItemTitle(item, recipesById, ingredientsById)}
                 </span>
                 <span className='text-muted-foreground block text-xs'>
                   {formatServings(item.servings)}
                 </span>
-              </span>
+                {markEntry && (
+                  <PlannedCookRow
+                    uid={uid}
+                    plannedMealId={meal.id}
+                    plannedDate={meal.date}
+                    markable={markEntry}
+                  />
+                )}
+              </div>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
                 {formatRowCost(
                   itemCost?.cents,
@@ -408,58 +470,7 @@ function PlannedMealView({
             : `This day was priced on ${formatDateShort(repricedAt)}, so its meals keep those prices and numbers.`}
         </p>
       )}
-      {(canPlanAhead ||
-        canEatFromStock ||
-        markable.length > 0 ||
-        meal.snapshot) && (
-        <ActionGroup>
-          {canPlanAhead && cookable.length > 0 && (
-            <StartCookingRow
-              isGrouped
-              onClick={() =>
-                cookable.length === 1
-                  ? onStartCooking(
-                      cookable[0].recipe.id,
-                      cookable[0].item.servings,
-                    )
-                  : setIsChoosing(true)
-              }
-            />
-          )}
-          {markable.map((entry) => (
-            <PlannedCookRow
-              key={entry.recipe.id}
-              isGrouped
-              uid={uid}
-              plannedMealId={meal.id}
-              plannedDate={meal.date}
-              markable={entry}
-            />
-          ))}
-          <RepriceDayRow
-            uid={uid}
-            dayKey={getPlannedDayKey(meal.date)}
-            isGrouped
-          />
-          {canEatFromStock && (
-            <EatFromStockRows meal={meal} onOpen={setEatingPlace} />
-          )}
-          {canPlanAhead && (
-            <AddToShoppingRow
-              isGrouped
-              subtitle='Choose what you need for this meal'
-              onClick={() =>
-                onAddToShopping({
-                  kind: 'items',
-                  items: meal.items,
-                  label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
-                  mealId: meal.sourceMealId,
-                })
-              }
-            />
-          )}
-        </ActionGroup>
-      )}
+      <RepriceDayRow uid={uid} dayKey={getPlannedDayKey(meal.date)} />
       <Button
         type='button'
         variant='tertiary'

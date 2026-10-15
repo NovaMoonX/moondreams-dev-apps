@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { BookOpen, Plus } from 'lucide-react';
 
+import EntryChip from '@/components/EntryChip';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -16,7 +17,6 @@ import ContainerFormSheet, {
 } from '@apps/pinch/components/containers/ContainerFormSheet';
 import IdeasView from '@apps/pinch/components/ideas/IdeasView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
-import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
@@ -320,6 +320,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 meal={meal}
                 showPrices={viewOptions.options.showPrices}
                 showMacros={viewOptions.options.showMacros}
+                showStock={viewOptions.options.showStock}
                 onOpen={setOpenMealId}
               />
             </li>
@@ -390,7 +391,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 getRecipeRowHeight(
                   viewOptions.options.showPrices,
                   viewOptions.options.showMacros && isAnyMetricOn,
-                  getStockHeight(stockByRecipe.get(recipe.id), isPhone),
+                  viewOptions.options.showStock
+                    ? getStockHeight(stockByRecipe.get(recipe.id), isPhone)
+                    : 0,
                 ),
               0,
             );
@@ -420,6 +423,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                           cost={costs.get(recipe.id)}
                           showPrices={viewOptions.options.showPrices}
                           showMacros={viewOptions.options.showMacros}
+                          showStock={viewOptions.options.showStock}
                           onOpen={setOpenId}
                         />
                       </li>
@@ -490,20 +494,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             customizedCount={viewOptions.customizedCount}
             onChange={viewOptions.update}
             onReset={viewOptions.reset}
+            hasStockLines
             className='-my-3'
           />
         )}
       </div>
-      {view === 'recipes' && sources.length > 0 && (
-        <div className='grid grid-cols-2 gap-2'>
-          <EntryRow
-            icon={<BookOpen className='h-4 w-4' />}
-            label='Sources'
-            count={sources.length}
-            onClick={() => openSubview({ kind: 'sources' })}
-          />
-        </div>
-      )}
       {hasFilterBar ? (
         <FilterBar
           query={query}
@@ -531,6 +526,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               customizedCount={viewOptions.customizedCount}
               onChange={viewOptions.update}
               onReset={viewOptions.reset}
+              hasStockLines
             />
           }
         >
@@ -563,6 +559,16 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             placeholder={view === 'meals' ? 'Search meals' : 'Search recipes'}
           />
         )
+      )}
+      {view === 'recipes' && sources.length > 0 && (
+        <div className='flex flex-wrap gap-2'>
+          <EntryChip
+            icon={<BookOpen className='h-4 w-4' />}
+            label='Sources'
+            count={sources.length}
+            onClick={() => openSubview({ kind: 'sources' })}
+          />
+        </div>
       )}
       {getBody()}
       {openId && (

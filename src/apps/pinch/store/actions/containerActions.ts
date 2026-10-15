@@ -5,9 +5,11 @@ import { deleteDoc, doc, runTransaction, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { queryClient } from '@/lib/query/queryClient';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { CONTAINER_CLEAR_CHUNK_SIZE } from '@apps/pinch/constants';
 import { containerKeys } from '@apps/pinch/queries/containerQueries';
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
+  planClearOut,
   planCount,
   planEat,
   planEatBy,
@@ -231,6 +233,149 @@ export const changeContainerEatBy = createAsyncThunk<
 
   return id;
 });
+
+interface ChunksResult<R> {
+  done: R[];
+  error: unknown;
+}
+
+/** One chunk after another, each its own transaction: a chunk that committed stays committed when a later one fails. */
+const runInChunks = <T, R>(
+  items: T[],
+  runChunk: (chunk: T[]) => Promise<R[]>,
+): Promise<ChunksResult<R>> =>
+  Array.from(
+    { length: Math.ceil(items.length / CONTAINER_CLEAR_CHUNK_SIZE) },
+    (_, index) =>
+      items.slice(
+        index * CONTAINER_CLEAR_CHUNK_SIZE,
+        (index + 1) * CONTAINER_CLEAR_CHUNK_SIZE,
+      ),
+  ).reduce<Promise<ChunksResult<R>>>(
+    async (previous, chunk) => {
+      const progress = await previous;
+      if (progress.error !== null) return progress;
+
+      try {
+        const done = await runChunk(chunk);
+        return { done: [...progress.done, ...done], error: null };
+      } catch (error) {
+        return { ...progress, error };
+      }
+    },
+    Promise.resolve({ done: [], error: null }),
+  );
+
+export interface ClearedContainer {
+  id: string;
+  at: number;
+}
+
+interface ClearOutInput {
+  uid: string;
+  place: ContainerPlace;
+  ids: string[];
+}
+
+interface ClearOutResult {
+  cleared: ClearedContainer[];
+  /** Set when a later chunk failed after earlier ones were cleared. */
+  error: string | null;
+}
+
+/** Ends every container still in stock in that place among `ids`, re-read inside each chunk's transaction; resolves to the ones it really cleared. */
+export const clearOutPlace = createAsyncThunk<
+  ClearOutResult,
+  ClearOutInput,
+  { rejectValue: string }
+>(
+  'pinch/containers/clearOut',
+  async ({ uid, place, ids }, { rejectWithValue }) => {
+    const { done, error } = await runInChunks(
+      ids,
+      (chunk): Promise<ClearedContainer[]> =>
+        runTransaction(db, async (transaction) => {
+          const snapshots = await Promise.all(
+            chunk.map((id) => transaction.get(containerDoc(uid, id))),
+          );
+          const writes = planClearOut(
+            snapshots.map((snapshot) =>
+              snapshot.exists() ? (snapshot.data() as Container) : null,
+            ),
+            place,
+            Date.now(),
+          );
+          writes.forEach(({ id, fields }) =>
+            transaction.update(containerDoc(uid, id), fields),
+          );
+          return writes.map(({ id, fields }) => ({
+            id,
+            at: fields.updatedAt,
+          }));
+        }),
+    );
+    if (done.length > 0) void refreshFinished(uid);
+    if (error === null) return { cleared: done, error: null };
+    if (done.length === 0) {
+      return rejectWithValue(getWriteMessage(error, "Couldn't clear it out."));
+    }
+
+    return {
+      cleared: done,
+      error: `Cleared out ${done.length} before it stopped. ${getWriteMessage(error, 'The rest are still on your list.')}`,
+    };
+  },
+);
+
+interface UndoClearOutInput {
+  uid: string;
+  cleared: ClearedContainer[];
+}
+
+interface UndoClearOutResult {
+  restored: number;
+  error: string | null;
+}
+
+/** Puts back each cleared container whose last event is still that clear-out; one changed since is left as it is. */
+export const undoClearOut = createAsyncThunk<
+  UndoClearOutResult,
+  UndoClearOutInput,
+  { rejectValue: string }
+>(
+  'pinch/containers/undoClearOut',
+  async ({ uid, cleared }, { rejectWithValue }) => {
+    const { done, error } = await runInChunks(cleared, (chunk) =>
+      runTransaction(db, async (transaction) => {
+        const snapshots = await Promise.all(
+          chunk.map(({ id }) => transaction.get(containerDoc(uid, id))),
+        );
+        const now = Date.now();
+        const writes = chunk.flatMap((entry, index) => {
+          const snapshot = snapshots[index];
+          if (!snapshot.exists()) return [];
+
+          const plan = planUndoEnd(snapshot.data() as Container, entry.at, now);
+          return 'fields' in plan
+            ? [{ ref: snapshot.ref, fields: plan.fields }]
+            : [];
+        });
+        writes.forEach(({ ref, fields }) => transaction.update(ref, fields));
+        return writes.map(({ ref }) => ref.id);
+      }),
+    );
+    if (done.length > 0) void refreshFinished(uid);
+    if (error === null) return { restored: done.length, error: null };
+    if (done.length === 0) {
+      return rejectWithValue(getWriteMessage(error, "Couldn't undo that."));
+    }
+
+    return {
+      restored: done.length,
+      error: getWriteMessage(error, 'The rest are still in Finished.'),
+    };
+  },
+);
 
 export const removeContainer = createAsyncThunk<
   string,

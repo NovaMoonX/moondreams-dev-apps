@@ -78,6 +78,7 @@ import {
   planCount,
   splitServings,
   getPutAwayText,
+  getSavedHeadline,
   getSavedText,
   getServingsToEat,
   getShoppingStockLine,
@@ -96,6 +97,11 @@ import {
   planMove,
   planToss,
   planUndoEnd,
+  planClear,
+  planClearOut,
+  getClearOutMessage,
+  getPutBackText,
+  getEventText,
 } from '../../src/apps/pinch/utils/containers.ts';
 import {
   getCookFactText,
@@ -142,6 +148,11 @@ import {
 } from '../../src/apps/pinch/utils/recipeCare.ts';
 import { toLocalDateInputValue } from '../../src/utils/dateInputUtils.ts';
 import {
+  DEFAULT_LIST_VIEW_OPTIONS,
+  countCustomizedViewOptions,
+  parseListViewOptions,
+} from '../../src/apps/pinch/hooks/useListViewOptions.ts';
+import {
   findIdeaByUrl,
   getIdeaDetail,
   getIdeaRecipeMethod,
@@ -157,6 +168,7 @@ import {
   getRecipeLines,
   getShoppingCost,
   getShoppingItemId,
+  getShownShoppingView,
   groupShoppingItems,
   isValidAmount,
   mergeLines,
@@ -178,6 +190,7 @@ import type {
   ResolvedFamily,
   ResolvedIngredient,
   ShoppingItem,
+  ShoppingView,
   Unit,
 } from '../../src/apps/pinch/types.ts';
 
@@ -536,10 +549,7 @@ const grouped = groupShoppingItems(
   shopFamilies,
 );
 assert.deepEqual(
-  grouped.groups.map((group) => [
-    group.name,
-    group.rows.map((row) => row.name),
-  ]),
+  grouped.toBuy.map((group) => [group.name, group.rows.map((row) => row.name)]),
   [
     ['Chicken', ['Chicken', 'Chicken']],
     ['Rice', ['Rice']],
@@ -548,14 +558,14 @@ assert.deepEqual(
   'groups follow the family order, and an ingredient with no family or an unknown one, or one that is gone, lands in Other',
 );
 assert.deepEqual(
-  grouped.groups[0].rows.map((row) => row.unit),
+  grouped.toBuy[0].rows.map((row) => row.unit),
   ['LB', 'OZ'],
   'one ingredient in two units is two rows',
 );
 assert.deepEqual(
-  grouped.checked.map((row) => row.id),
-  ['rice__LB'],
-  'a checked item is in "Got it", not in its group',
+  grouped.got.map((group) => [group.name, group.rows.map((row) => row.id)]),
+  [['Rice', ['rice__LB']]],
+  'a checked item is in "Got it", grouped by its family, and not in "To buy"',
 );
 
 const heldItems = [
@@ -573,7 +583,7 @@ const heldGrouped = groupShoppingItems(
   ]),
 );
 assert.deepEqual(
-  heldGrouped.groups.map((group) => [
+  heldGrouped.toBuy.map((group) => [
     group.name,
     group.rows.map((row) => [row.id, row.isChecked]),
   ]),
@@ -581,10 +591,18 @@ assert.deepEqual(
   'a row just ticked stays in its group, still carrying its stored checked flag',
 );
 assert.deepEqual(
-  heldGrouped.checked.map((row) => [row.id, row.isChecked]),
+  heldGrouped.got.map((group) => [
+    group.name,
+    group.rows.map((row) => [row.id, row.isChecked]),
+  ]),
   [
-    ['chips__G', true],
-    ['salt__TSP', false],
+    [
+      'Other',
+      [
+        ['chips__G', true],
+        ['salt__TSP', false],
+      ],
+    ],
   ],
   'a row just unticked stays in "Got it" until it is let go, and the unheld rows follow the stored flag',
 );
@@ -592,6 +610,49 @@ assert.deepEqual(
   groupShoppingItems(heldItems, shopIngredients, shopFamilies, new Map()),
   groupShoppingItems(heldItems, shopIngredients, shopFamilies),
   'an empty hold changes nothing',
+);
+
+const shopPick = (view: ShoppingView, query = '') => ({ view, query });
+assert.equal(
+  getShownShoppingView(shopPick('toBuy'), '', { toBuy: 0, got: 4 }),
+  'toBuy',
+  'with no search the pick is kept, even when its view is empty',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy'), 'milk', { toBuy: 0, got: 1 }),
+  'got',
+  'a search that matches nothing to buy but something got shows "Got it"',
+);
+assert.equal(
+  getShownShoppingView(shopPick('got'), 'milk', { toBuy: 2, got: 0 }),
+  'toBuy',
+  'and the other way round',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy'), 'milk', { toBuy: 1, got: 3 }),
+  'toBuy',
+  'a search with a match in the picked view stays there',
+);
+assert.equal(
+  getShownShoppingView(shopPick('got'), 'zz', { toBuy: 0, got: 0 }),
+  'got',
+  'a search that matches nothing anywhere keeps the pick',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy', 'milk'), 'milk', {
+    toBuy: 0,
+    got: 1,
+  }),
+  'toBuy',
+  'a view picked while that text was typed is kept, so tapping its pill always takes',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy', 'milk'), 'milk powder', {
+    toBuy: 0,
+    got: 1,
+  }),
+  'got',
+  'typing on after picking lets the search switch again',
 );
 
 const shopCost = getShoppingCost(
@@ -2970,6 +3031,134 @@ assert.match(
   /already finished/,
 );
 
+const clearedOne = planOf(planClear(container({ servings: 3 }), 5000));
+assert.deepEqual(
+  [
+    clearedOne.status,
+    clearedOne.servings,
+    clearedOne.place,
+    clearedOne.history?.at(-1),
+    clearedOne.updatedAt,
+  ],
+  [
+    'DONE',
+    undefined,
+    undefined,
+    { kind: 'CLEAR', at: 5000, servings: 3, place: null, note: null },
+    5000,
+  ],
+  'clearing one out finishes it with one CLEAR that records what was left, and keeps its place and servings',
+);
+assert.match(
+  errorOf(planClear(container({ status: 'DONE' }), 5000)),
+  /already finished/,
+  'a finished container is not cleared again',
+);
+assert.deepEqual(
+  planClearOut(
+    [
+      container({ id: 'a' }),
+      null,
+      container({ id: 'b', status: 'DONE' }),
+      container({ id: 'c', place: 'FREEZER' }),
+      container({ id: 'd', servings: 2 }),
+    ],
+    'FRIDGE',
+    5000,
+  ).map(({ id, fields }) => [id, fields.history?.at(-1)?.servings]),
+  [
+    ['a', 4],
+    ['d', 2],
+  ],
+  'a clear-out skips a container that is gone, finished or moved to the other place since the tap',
+);
+const afterClear = container({
+  servings: 3,
+  status: 'DONE',
+  history: [
+    ...container().history,
+    makeEvent('EAT', 4000, { servings: 1 }),
+    makeEvent('CLEAR', 5000, { servings: 3 }),
+  ],
+});
+assert.deepEqual(
+  [
+    planOf(planUndoEnd(afterClear, 5000, 9000)).status,
+    planOf(planUndoEnd(afterClear, 5000, 9000)).servings,
+    planOf(planUndoEnd(afterClear, 5000, 9000)).history?.at(-1)?.kind,
+  ],
+  ['IN_STOCK', 3, 'EAT'],
+  'undoing a clear-out puts it back in stock with what it had and drops the CLEAR',
+);
+assert.match(
+  errorOf(
+    planUndoEnd(
+      {
+        ...afterClear,
+        status: 'IN_STOCK',
+        history: [
+          ...afterClear.history,
+          makeEvent('FREEZE', 6000, { servings: 3, place: 'FREEZER' }),
+        ],
+      },
+      5000,
+      9000,
+    ),
+  ),
+  /could not be undone/,
+  'a clear-out that something else followed is not undone',
+);
+assert.match(
+  errorOf(planUndoEnd(afterClear, 4999, 9000)),
+  /could not be undone/,
+  'an undo for another clear-out does nothing',
+);
+const clearedFull = planOf(
+  planClear(
+    container({
+      servings: 2,
+      history: [
+        makeEvent('MADE', 0, { servings: 12 }),
+        makeEvent('FREEZE', 1, { servings: 8, place: 'FREEZER' }),
+        ...Array.from({ length: MAX_CONTAINER_HISTORY - 2 }, (_, i) =>
+          makeEvent('EAT', i + 2, { servings: 1 }),
+        ),
+      ],
+    }),
+    99,
+  ),
+).history;
+assert.deepEqual(
+  [
+    clearedFull?.length,
+    clearedFull?.at(-1)?.kind,
+    clearedFull?.slice(0, 2).map((entry) => entry.kind),
+  ],
+  [MAX_CONTAINER_HISTORY, 'CLEAR', ['MADE', 'FREEZE']],
+  'past the cap a clear-out drops the oldest EAT, never the CLEAR it adds or what went in',
+);
+assert.deepEqual(
+  [
+    getEventText(makeEvent('CLEAR', 1, { servings: 3 })),
+    getEventText(makeEvent('CLEAR', 1)),
+    getClearOutMessage(9, 24),
+    getClearOutMessage(1, 1),
+    getPutBackText(9, 9),
+    getPutBackText(1, 1),
+    getPutBackText(7, 9),
+  ],
+  [
+    'Cleared out · 3 servings',
+    'Cleared out',
+    'This takes 9 containers (24 servings) off your list and keeps them in Finished as cleared out. You can undo it right after.',
+    'This takes 1 container (1 serving) off your list and keeps it in Finished as cleared out. You can undo it right after.',
+    'Put 9 containers back',
+    'Put 1 container back',
+    'Put back 7 of 9; the rest changed since',
+  ],
+  'a clear-out says what it takes off the list and what it keeps, and the Undo says how many came back',
+);
+
 const toFreezer = planOf(planMove(container(), 'FREEZER', dayOf(20), 6000));
 assert.deepEqual(
   [
@@ -3487,8 +3676,24 @@ assert.deepEqual(
       makeEvent('TOSS', 2, { servings: 4 }),
     ]),
     finishedOf([makeEvent('EAT', 2, { servings: 1 })]),
+    finishedOf([
+      makeEvent('FRIDGE', 1, { servings: 6, place: 'FRIDGE' }),
+      makeEvent('EAT', 2, { servings: 3 }),
+      makeEvent('CLEAR', 3, { servings: 3 }),
+    ]),
+    finishedOf([
+      makeEvent('FREEZE', 1, { servings: 3, place: 'FREEZER' }),
+      makeEvent('CLEAR', 2, { servings: 3 }),
+    ]),
   ],
-  ['Threw out 1 of 4', 'Ate 4 servings', 'Threw out 4 servings', 'Ate it all'],
+  [
+    'Threw out 1 of 4',
+    'Ate 4 servings',
+    'Threw out 4 servings',
+    'Ate it all',
+    'Cleared out 3 of 6',
+    'Cleared out 3 servings',
+  ],
   'a finished container says how much it ended with and how much went in, not the other way round',
 );
 
@@ -3818,6 +4023,58 @@ assert.equal(
   ),
   'Saved 4 containers (4 servings) in the freezer, eat by tomorrow',
   'a put-away of several containers says how many and how many servings in all',
+);
+assert.deepEqual(
+  [
+    getSavedHeadline([{ servings: 1, place: 'FRIDGE' }]),
+    getSavedHeadline(
+      splitServings(6, 3).map((servings) => ({
+        servings,
+        place: 'FRIDGE' as const,
+      })),
+    ),
+  ],
+  [
+    'Saved 1 serving in the fridge',
+    'Saved 3 containers (6 servings) in the fridge',
+  ],
+  'the Finish panel says what was saved and where, with the eat-by date on its own line',
+);
+assert.deepEqual(
+  [
+    DEFAULT_LIST_VIEW_OPTIONS.showStock,
+    parseListViewOptions({
+      showPrices: false,
+      showMacros: true,
+      basis: 'PER_100G',
+    }),
+    parseListViewOptions({ showStock: false })?.showStock,
+    parseListViewOptions({ showStock: 'no' })?.showStock,
+    parseListViewOptions(null),
+  ],
+  [
+    true,
+    { showPrices: false, showMacros: true, basis: 'PER_100G', showStock: true },
+    false,
+    true,
+    null,
+  ],
+  'stock lines start shown, and a choice stored before the option existed reads as shown',
+);
+assert.deepEqual(
+  [
+    countCustomizedViewOptions(DEFAULT_LIST_VIEW_OPTIONS, 'recipes'),
+    countCustomizedViewOptions(
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showStock: false },
+      'recipes',
+    ),
+    countCustomizedViewOptions(
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showStock: false },
+      'ingredients',
+    ),
+  ],
+  [0, 1, 0],
+  'hiding stock lines counts as a change on Recipes and Meals only',
 );
 assert.deepEqual(
   groupSavedBatches([

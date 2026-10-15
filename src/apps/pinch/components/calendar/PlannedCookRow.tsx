@@ -2,10 +2,9 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChefHat } from 'lucide-react';
 
-import ActionRow from '@/components/ActionRow';
+import ActionChips from '@/components/ActionChips';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateTime } from '@/utils/formatUtils';
@@ -27,8 +26,6 @@ interface PlannedCookRowProps {
   plannedMealId: string;
   plannedDate: number;
   markable: MarkableRecipe;
-  /** Inside an `ActionGroup`, which draws the one frame. */
-  isGrouped?: boolean;
 }
 
 function PlannedCookRow({
@@ -36,7 +33,6 @@ function PlannedCookRow({
   plannedMealId,
   plannedDate,
   markable: { recipe, servings },
-  isGrouped = false,
 }: PlannedCookRowProps) {
   const cookId = getCookId(plannedMealId, recipe.id);
   const cook = useAppSelector(selectCooksById).get(cookId);
@@ -84,57 +80,47 @@ function PlannedCookRow({
       });
     }, 'Unable to mark this as cooked.');
 
-  const getSubtitle = () => {
-    if (!isReady) return `${recipe.title} · Loading your history…`;
-    if (isHistoryFull) {
-      return `${recipe.title} · History is full. Delete an older cook first.`;
-    }
-    return `${recipe.title} · ${formatServings(servings)}`;
-  };
-
   return (
-    <div className={join(!isGrouped && 'space-y-1.5')}>
+    <div className='mt-2 space-y-1.5'>
       {cook ? (
-        <div
-          className={join(
-            'flex min-h-12 items-center gap-3 py-1 pr-2 pl-4',
-            !isGrouped && 'bg-muted/50 border-border rounded-2xl border',
-          )}
-        >
-          <span className='w-5 shrink-0' aria-hidden='true'>
-            <ChefHat className='h-4 w-4' />
-          </span>
-          <span className='min-w-0 flex-1'>
-            <span className='block'>Cooked ✓</span>
-            <span className='text-muted-foreground block text-xs wrap-break-word'>
-              {recipe.title} · {formatServings(cook.servings)}
-            </span>
+        <p className='flex flex-wrap items-center gap-x-3 text-sm'>
+          <span>
+            <span aria-hidden='true'>✅</span> Cooked
+            {cook.servings !== servings &&
+              ` · ${formatServings(cook.servings)}`}
           </span>
           <Button
             type='button'
             variant='tertiary'
-            className='h-10 shrink-0 px-3 underline'
+            aria-label={`Undo marking ${recipe.title} as cooked`}
+            className="relative h-auto p-0 underline underline-offset-4 after:absolute after:-inset-x-2 after:-inset-y-2.5 after:content-['']"
             disabled={isWorking}
             onClick={() => void handleUndo(cook.cookedAt)}
           >
             Undo
           </Button>
-        </div>
+        </p>
       ) : (
-        <ActionRow
-          icon={<ChefHat className='h-4 w-4' />}
-          label='Mark as cooked'
-          subtitle={getSubtitle()}
-          isDisabled={!isReady || isWorking || isHistoryFull}
-          onClick={() => void handleMark()}
-          isGrouped={isGrouped}
+        <ActionChips
+          actions={[
+            {
+              key: 'mark',
+              icon: <ChefHat className='h-4 w-4' />,
+              label: 'Mark as cooked',
+              description: `Mark ${recipe.title} as cooked, ${formatServings(servings)}`,
+              isDisabled: !isReady || isWorking || isHistoryFull,
+              onClick: () => void handleMark(),
+            },
+          ]}
         />
       )}
+      {!cook && isReady && isHistoryFull && (
+        <p className='text-muted-foreground text-xs'>
+          This recipe's history is full. Delete an older cook first.
+        </p>
+      )}
       {error && (
-        <p
-          className={join('text-destructive text-sm', isGrouped && 'px-4 py-2')}
-          role='alert'
-        >
+        <p className='text-destructive text-sm' role='alert'>
           {error}
         </p>
       )}

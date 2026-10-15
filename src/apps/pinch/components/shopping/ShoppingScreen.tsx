@@ -9,12 +9,13 @@ import {
   type CSSProperties,
 } from 'react';
 
-import { Button, Disclosure } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Plus } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
+import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
@@ -27,6 +28,8 @@ import {
   LIST_SEARCH_THRESHOLD,
   SHOPPING_GROUP_PAGE_SIZE,
   SHOPPING_MOVE_DELAY_MS,
+  SHOPPING_VIEW_LABELS,
+  SHOPPING_VIEWS,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
 import {
@@ -42,13 +45,14 @@ import {
   selectShoppingOpenCount,
   selectShoppingRows,
 } from '@apps/pinch/store/selectors';
-import type { Gap } from '@apps/pinch/types';
+import type { Gap, ShoppingView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
-import type {
-  ShoppingGroup,
-  ShoppingRowData,
+import {
+  getShownShoppingView,
+  type ShoppingGroup,
+  type ShoppingRowData,
 } from '@apps/pinch/utils/shopping';
 
 const EAGER_GROUPS = 3;
@@ -56,6 +60,19 @@ const ROW_HEIGHT = 57;
 const DIVIDER_HEIGHT = 36;
 
 const MAX_NAMES_SHOWN = 4;
+
+const countRows = (groups: ShoppingGroup[]) =>
+  groups.reduce((sum, group) => sum + group.rows.length, 0);
+
+const filterGroups = (groups: ShoppingGroup[], query: string) =>
+  query === ''
+    ? groups
+    : groups
+        .map((group) => ({
+          ...group,
+          rows: searchByName(group.rows, query),
+        }))
+        .filter((group) => group.rows.length > 0);
 
 const formatNames = (names: string[]) =>
   names.length <= MAX_NAMES_SHOWN
@@ -196,7 +213,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const { held, hold } = useHeldRows();
-  const { groups, checked } = useAppSelector((state) =>
+  const rows = useAppSelector((state) =>
     selectShoppingRows(state, held.current),
   );
   const itemCount = useAppSelector(selectShoppingItems).length;
@@ -208,31 +225,35 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const cost = useAppSelector(selectShoppingCost);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
-  const [isGotOpen, setIsGotOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [query, setQuery] = useState('');
+  const [pick, setPick] = useState<{ view: ShoppingView; query: string }>({
+    view: 'toBuy',
+    query: '',
+  });
 
   const isFull = itemCount >= SOFT_MAX_SHOPPING_ITEMS;
   const canAdd = loadError === null && !isFull;
   const openItem = overlay?.kind === 'item' ? itemsById.get(overlay.id) : null;
   const hasSearch = itemCount >= LIST_SEARCH_THRESHOLD;
   const activeQuery = hasSearch ? query.trim() : '';
-  const shownGroups = useMemo(
-    () =>
-      activeQuery === ''
-        ? groups
-        : groups
-            .map((group) => ({
-              ...group,
-              rows: searchByName(group.rows, activeQuery),
-            }))
-            .filter((group) => group.rows.length > 0),
-    [groups, activeQuery],
+  const found = useMemo(
+    () => ({
+      toBuy: filterGroups(rows.toBuy, activeQuery),
+      got: filterGroups(rows.got, activeQuery),
+    }),
+    [rows, activeQuery],
   );
-  const shownChecked = useMemo(
-    () => searchByName(checked, activeQuery),
-    [checked, activeQuery],
-  );
+  const matches = {
+    toBuy: countRows(found.toBuy),
+    got: countRows(found.got),
+  };
+  const shownView = getShownShoppingView(pick, activeQuery, matches);
+  const shownGroups = found[shownView];
+  const switchOptions = SHOPPING_VIEWS.map((value) => ({
+    value,
+    label: `${SHOPPING_VIEW_LABELS[value]} · ${matches[value]}`,
+  }));
 
   const handleToggle = useCallback(
     (id: string, isChecked: boolean) => {
@@ -329,63 +350,69 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         </p>
       );
     }
+    const isSearching = activeQuery !== '';
+    const getEmpty = () => {
+      if (isSearching) {
+        return (
+          <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
+            Nothing on your list matches “{activeQuery}”.
+          </p>
+        );
+      }
+      if (shownView === 'got') {
+        return (
+          <p className='text-muted-foreground py-6 text-center text-sm'>
+            Nothing ticked off yet. What you tick as you shop lands here.
+          </p>
+        );
+      }
+      return (
+        <div className='space-y-3 py-6 text-center'>
+          <p className='text-muted-foreground text-sm'>
+            Nothing left to buy. {gotCount === 1 ? '1 is' : `${gotCount} are`}{' '}
+            ticked off under Got it.
+          </p>
+          <Button
+            type='button'
+            variant='secondary'
+            className='h-10'
+            onClick={() => setPick({ view: 'got', query: activeQuery })}
+          >
+            See what you got
+          </Button>
+        </div>
+      );
+    };
     return (
       <>
-        <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
-          {shownGroups.map((group, index) => (
-            <ShoppingGroupSection
-              key={group.id || 'other'}
-              group={group}
-              isEager={index < EAGER_GROUPS}
-              onToggle={handleToggle}
-              onOpen={handleOpen}
-            />
-          ))}
-        </div>
-        {activeQuery === '' && groups.length === 0 && (
-          <p className='text-muted-foreground py-4 text-center text-sm'>
-            You've got everything. Clear it when you're ready for the next list.
-          </p>
-        )}
-        {activeQuery !== '' &&
-          shownGroups.length === 0 &&
-          shownChecked.length === 0 && (
-            <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
-              Nothing on your list matches “{activeQuery}”.
-            </p>
-          )}
-        {shownChecked.length > 0 && (
-          <div className='relative'>
-            <Disclosure
-              label={
-                shownChecked.length === checked.length
-                  ? `Got it · ${checked.length}`
-                  : `Got it · ${shownChecked.length} of ${checked.length}`
-              }
-              isOpen={isGotOpen}
-              onToggle={setIsGotOpen}
-              buttonClassName='min-h-10 px-0! py-2 pr-20! hover:bg-transparent! [&>div>span]:flex-none'
-            >
-              {isGotOpen && (
-                <ShoppingRows
-                  rows={shownChecked}
-                  onToggle={handleToggle}
-                  onOpen={handleOpen}
-                />
-              )}
-            </Disclosure>
+        {shownView === 'got' && !isSearching && gotCount > 0 && (
+          <div className='flex min-h-10 items-center justify-end'>
             <Button
               type='button'
-              variant='secondary'
+              variant='link'
               size='sm'
-              rounded='full'
               loading={isClearing}
               disabled={isClearing}
-              className='absolute top-0 right-0 h-10'
+              className="text-destructive! relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
               onClick={() => void handleClear()}
             >
-              Clear
+              Clear what you got
             </Button>
+          </div>
+        )}
+        {shownGroups.length === 0 ? (
+          getEmpty()
+        ) : (
+          <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
+            {shownGroups.map((group, index) => (
+              <ShoppingGroupSection
+                key={`${shownView}-${group.id || 'other'}`}
+                group={group}
+                isEager={index < EAGER_GROUPS}
+                onToggle={handleToggle}
+                onOpen={handleOpen}
+              />
+            ))}
           </div>
         )}
       </>
@@ -417,7 +444,16 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           Your list is full: take something off or clear what you've got.
         </p>
       )}
-      {openCount > 0 && (
+      {loadError === null && isLoaded && itemCount > 0 && (
+        <PillGroup
+          label='Which part of the list'
+          options={switchOptions}
+          value={shownView}
+          onChange={(next) => setPick({ view: next, query: activeQuery })}
+          isThin
+        />
+      )}
+      {openCount > 0 && shownView === 'toBuy' && (
         <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
           {cost.totalCents === null ? (
             'No prices yet'
