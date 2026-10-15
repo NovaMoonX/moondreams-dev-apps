@@ -25,7 +25,7 @@ import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection'
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
-import { UNIT_LABELS } from '@apps/pinch/constants';
+import { SECTION_COUNT_THRESHOLD, UNIT_LABELS } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
@@ -371,7 +371,14 @@ function RecipeDrawer({
           </div>
         </div>
 
-        <FormSection title='Ingredients' detail={recipe.ingredients.length}>
+        <FormSection
+          title='Ingredients'
+          detail={
+            recipe.ingredients.length > SECTION_COUNT_THRESHOLD
+              ? recipe.ingredients.length
+              : undefined
+          }
+        >
           <ul className='divide-border divide-y'>
             {recipe.ingredients.map((line) => {
               const gap = isPriced

@@ -54,6 +54,8 @@ export const NUTRITION_METRICS = NUTRITION_CELLS.map((cell) => cell.key);
 
 /** A list gets a search from this many rows. */
 export const LIST_SEARCH_THRESHOLD = 8;
+/** A section's heading counts its rows only past this many; fewer are counted at a glance. */
+export const SECTION_COUNT_THRESHOLD = 10;
 
 export const UNITS: Unit[] = [
   'G',

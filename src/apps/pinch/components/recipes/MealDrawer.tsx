@@ -8,6 +8,7 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
+import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import {
   selectContainersLoadError,
@@ -176,7 +177,14 @@ function MealDrawer({
             </div>
           )}
         </div>
-        <FormSection title='On the plate' detail={meal.items.length}>
+        <FormSection
+          title='On the plate'
+          detail={
+            meal.items.length > SECTION_COUNT_THRESHOLD
+              ? meal.items.length
+              : undefined
+          }
+        >
           <ul className='divide-border divide-y'>
             {meal.items.map((item) => {
               const itemCost = cost.items.get(item.id);
