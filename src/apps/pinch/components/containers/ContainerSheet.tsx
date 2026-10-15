@@ -2,15 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import {
-  Ban,
-  CalendarClock,
-  ChevronLeft,
-  CircleCheck,
-  PencilLine,
-  Undo2,
-  Utensils,
-} from 'lucide-react';
+import { Ban, ChevronLeft, Hash, PencilLine, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -39,12 +31,13 @@ import {
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
   getContainerTitle,
+  getCountChangeCopy,
   getEatByDefault,
   getEatByHint,
   getEatByPhrase,
   getEatByState,
-  getFinishedText,
   getEventText,
+  getFinishedText,
   getFreezeLine,
   getLastPlaceEvent,
   getMoveForPlace,
@@ -56,10 +49,11 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 type SheetView =
   | { kind: 'details' }
-  | { kind: 'eat' }
+  | { kind: 'gone' }
   | { kind: 'move'; to: ContainerPlace }
   | { kind: 'eatBy' }
-  | { kind: 'count' };
+  | { kind: 'count' }
+  | { kind: 'history' };
 
 interface SubviewProps {
   uid: string;
@@ -85,82 +79,63 @@ function BackLink({ onClick }: BackLinkProps) {
   );
 }
 
-function EatView({
+function GoneView({
   uid,
   container,
   onBack,
-  onFinished,
-}: SubviewProps & { onFinished: () => void }) {
-  const { eat } = useContainerActions(uid);
-  const [count, setCount] = useState(1);
-  const [isSaving, setIsSaving] = useState(false);
+  onDone,
+}: SubviewProps & { onDone: () => void }) {
+  const { eat, toss } = useContainerActions(uid);
+  const [busy, setBusy] = useState<'ate' | 'tossed' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const amount = Math.min(count, container.servings);
 
-  const handleEat = async () => {
-    if (isSaving) return;
+  const handle = async (answer: 'ate' | 'tossed') => {
+    if (busy !== null) return;
 
     setError(null);
-    setIsSaving(true);
+    setBusy(answer);
     try {
-      const isFinished = await eat(container, amount);
-      if (isFinished === undefined) return;
-      if (isFinished) {
-        onFinished();
-        return;
-      }
-      onBack();
-    } catch (eatError) {
-      setError(getErrorMessage(eatError, 'Unable to save this.'));
+      const result =
+        answer === 'ate' ? await eat(container, 'ALL') : await toss(container);
+      if (result !== undefined) onDone();
+    } catch (endError) {
+      setError(getErrorMessage(endError, 'Unable to save this.'));
     } finally {
-      setIsSaving(false);
+      setBusy(null);
     }
   };
 
   return (
     <div className='grid gap-4'>
       <BackLink onClick={onBack} />
-      <div className='space-y-1'>
-        <p className='font-medium'>How many did you eat?</p>
-        <p className='text-muted-foreground text-sm'>
-          {formatServings(container.servings)} in this container.
-        </p>
+      <p className='font-medium'>What happened to it?</p>
+      <div className='grid grid-cols-2 gap-3'>
+        <Button
+          type='button'
+          variant='secondary'
+          className='h-12'
+          loading={busy === 'ate'}
+          disabled={busy !== null}
+          onClick={() => void handle('ate')}
+        >
+          Ate it
+        </Button>
+        <Button
+          type='button'
+          variant='secondary'
+          className='h-12'
+          loading={busy === 'tossed'}
+          disabled={busy !== null}
+          onClick={() => void handle('tossed')}
+        >
+          Tossed
+        </Button>
       </div>
-      <Stepper
-        value={amount}
-        onChange={setCount}
-        label='Servings eaten'
-        min={1}
-        max={container.servings}
-        step={1}
-      />
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}
         </p>
       )}
-      <ModalFooterActions
-        cancelAction={
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={onBack}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-        }
-        rightActions={
-          <Button
-            type='button'
-            loading={isSaving}
-            disabled={isSaving}
-            onClick={() => void handleEat()}
-          >
-            {`Ate ${amount}`}
-          </Button>
-        }
-      />
     </div>
   );
 }
@@ -170,7 +145,8 @@ function MoveView({
   container,
   to,
   onBack,
-}: SubviewProps & { to: ContainerPlace }) {
+  onDone,
+}: SubviewProps & { to: ContainerPlace; onDone: () => void }) {
   const { move: moveContainer } = useContainerActions(uid);
   const recipe = useAppSelector(selectRecipesById).get(
     container.recipeId ?? '',
@@ -198,8 +174,8 @@ function MoveView({
     setError(null);
     setIsSaving(true);
     try {
-      await moveContainer(container, to, eatBy);
-      onBack();
+      if ((await moveContainer(container, to, eatBy)) !== undefined) onDone();
+      else setIsSaving(false);
     } catch (moveError) {
       setError(getErrorMessage(moveError, 'Unable to save this.'));
       setIsSaving(false);
@@ -212,8 +188,7 @@ function MoveView({
       <div className='space-y-1'>
         <p className='font-medium'>{label}</p>
         <p className='text-muted-foreground text-sm'>
-          The whole container goes in the{' '}
-          {to === 'FREEZER' ? 'freezer' : 'fridge'}.
+          The whole box goes in the {to === 'FREEZER' ? 'freezer' : 'fridge'}.
         </p>
       </div>
       {notes.length > 0 && (
@@ -321,23 +296,45 @@ function EatByView({ uid, container, onBack }: SubviewProps) {
   );
 }
 
-function CountView({ uid, container, onBack }: SubviewProps) {
-  const { correctCount } = useContainerActions(uid);
+function CountView({
+  uid,
+  container,
+  onBack,
+  onDone,
+}: SubviewProps & { onDone: () => void }) {
+  const { eat, correctCount } = useContainerActions(uid);
   const [count, setCount] = useState(container.servings);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canSave = count !== container.servings;
+  const { change, line, action } = getCountChangeCopy(
+    container.servings,
+    count,
+  );
+
+  const save = async () => {
+    if (change.kind === 'SAME') return;
+    if (change.kind === 'COUNT') {
+      await correctCount(container, change.count);
+      onBack();
+      return;
+    }
+    const eaten = await eat(
+      container,
+      change.kind === 'ALL' ? 'ALL' : change.eaten,
+    );
+    if (eaten !== undefined) onDone();
+  };
 
   const handleSave = async () => {
-    if (!canSave || isSaving) return;
+    if (change.kind === 'SAME' || isSaving) return;
 
     setError(null);
     setIsSaving(true);
     try {
-      await correctCount(container, count);
-      onBack();
+      await save();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this.'));
+    } finally {
       setIsSaving(false);
     }
   };
@@ -345,21 +342,18 @@ function CountView({ uid, container, onBack }: SubviewProps) {
   return (
     <div className='grid gap-4'>
       <BackLink onClick={onBack} />
-      <div className='space-y-1'>
-        <p className='font-medium'>How many are really left?</p>
-        <p className='text-muted-foreground text-sm'>
-          The count says {formatServings(container.servings)} now. The history
-          notes the change.
-        </p>
-      </div>
+      <p className='font-medium'>How many are left?</p>
       <Stepper
         value={count}
         onChange={setCount}
         label='Servings left'
-        min={1}
+        min={0}
         max={MAX_CONTAINER_SERVINGS}
         step={1}
       />
+      <p className='text-muted-foreground text-sm' role='status'>
+        {line}
+      </p>
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}
@@ -380,14 +374,35 @@ function CountView({ uid, container, onBack }: SubviewProps) {
           <Button
             type='button'
             loading={isSaving}
-            disabled={isSaving || !canSave}
+            disabled={isSaving || change.kind === 'SAME'}
             onClick={() => void handleSave()}
           >
-            Save
+            {action}
           </Button>
         }
       />
     </div>
+  );
+}
+
+interface HistoryListProps {
+  container: Container;
+}
+
+function HistoryList({ container }: HistoryListProps) {
+  return (
+    <FormSection title='History'>
+      <ul className='divide-border divide-y'>
+        {[...container.history].reverse().map((event, index) => (
+          <li key={`${event.at}-${index}`} className='py-2'>
+            <p className='text-sm wrap-break-word'>{getEventText(event)}</p>
+            <p className='text-muted-foreground text-xs'>
+              {formatDateShort(event.at)} · {formatTime(event.at)}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </FormSection>
   );
 }
 
@@ -406,7 +421,7 @@ function ContainerSheet({
   onClose,
 }: ContainerSheetProps) {
   const { confirm } = useActionModal();
-  const { eat, toss, remove, putBack } = useContainerActions(uid);
+  const { eat, remove, putBack } = useContainerActions(uid);
   const live = useAppSelector(selectContainersById).get(containerId);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
@@ -459,13 +474,13 @@ function ContainerSheet({
         ? undefined
         : recipesById.get(container.recipeId);
 
-    if (view.kind === 'eat' && isInStock) {
+    if (view.kind === 'gone' && isInStock) {
       return (
-        <EatView
+        <GoneView
           uid={uid}
           container={container}
           onBack={backToDetails}
-          onFinished={onClose}
+          onDone={onClose}
         />
       );
     }
@@ -476,6 +491,7 @@ function ContainerSheet({
           container={container}
           to={view.to}
           onBack={backToDetails}
+          onDone={onClose}
         />
       );
     }
@@ -486,7 +502,20 @@ function ContainerSheet({
     }
     if (view.kind === 'count' && isInStock) {
       return (
-        <CountView uid={uid} container={container} onBack={backToDetails} />
+        <CountView
+          uid={uid}
+          container={container}
+          onBack={backToDetails}
+          onDone={onClose}
+        />
+      );
+    }
+    if (view.kind === 'history') {
+      return (
+        <div className='grid gap-4'>
+          <BackLink onClick={backToDetails} />
+          <HistoryList container={container} />
+        </div>
       );
     }
 
@@ -494,8 +523,8 @@ function ContainerSheet({
       const isConfirmed = await confirm({
         title: `Delete ${title}?`,
         message: isInStock
-          ? `${title} and its history are erased, and this can't be undone. If you ate it, “Ate it all” keeps it in Finished instead.`
-          : `${title} comes off Finished and its history is erased. This can't be undone.`,
+          ? `${title} and its history are erased, and this can't be undone. If you ate it, “It's gone” keeps it in What you finished instead.`
+          : `${title} comes off What you finished and its history is erased. This can't be undone.`,
         confirmText: 'Delete',
         destructive: true,
       });
@@ -506,26 +535,7 @@ function ContainerSheet({
         async () => {
           if ((await remove(container)) !== undefined) onClose();
         },
-        'Unable to delete this container.',
-      );
-    };
-
-    const handleToss = async () => {
-      const isConfirmed = await confirm({
-        title: 'Threw it out?',
-        message: `${formatServings(container.servings)} of ${title} ${container.servings === 1 ? 'is' : 'are'} marked as thrown out and it moves to Finished. You can undo it for a few seconds.`,
-        confirmText: 'Threw it out',
-        cancelText: 'Keep it',
-        destructive: true,
-      });
-      if (!isConfirmed) return;
-
-      await run(
-        'toss',
-        async () => {
-          if ((await toss(container)) !== undefined) onClose();
-        },
-        'Unable to save this.',
+        'Unable to delete this.',
       );
     };
 
@@ -535,7 +545,10 @@ function ContainerSheet({
     const state = getEatByState(container.eatBy);
     const otherPlace: ContainerPlace =
       container.place === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
-    const eatenOne = busy === 'eat-one';
+    const placeWord = CONTAINER_PLACE_LABELS[container.place].toLowerCase();
+    const lastEnd = container.history.at(-1);
+    const canPutBack =
+      !isInStock && lastEnd?.kind === 'CLEAR' && lastEnd.servings !== null;
 
     return (
       <div className='grid gap-4'>
@@ -553,12 +566,22 @@ function ContainerSheet({
                   {formatServings(container.servings)} left
                 </span>
               </p>
-              <p className='flex flex-wrap items-center gap-x-2 gap-y-1 text-sm'>
+              <Button
+                type='button'
+                variant='tertiary'
+                aria-label={`Eat by ${getEatByPhrase(container.eatBy)}. Change the date`}
+                className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
+                onClick={() => setView({ kind: 'eatBy' })}
+              >
                 <span className='whitespace-nowrap'>
                   Eat by {getEatByPhrase(container.eatBy)}
                 </span>
                 <EatByBadge state={state} />
-              </p>
+                <PencilLine
+                  className='text-muted-foreground h-3.5 w-3.5 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
               {(freezeLine || thawedAt !== null) && (
                 <p className='text-muted-foreground text-sm'>
                   {[
@@ -580,54 +603,30 @@ function ContainerSheet({
           )}
         </div>
         {isInStock && (
-          <div className='space-y-2'>
+          <div className='space-y-3'>
+            <Button
+              type='button'
+              className='h-12 w-full'
+              disabled={busy === 'eat-one'}
+              onClick={() =>
+                void run(
+                  'eat-one',
+                  async () => {
+                    if ((await eat(container, 1)) !== undefined) onClose();
+                  },
+                  'Unable to save this.',
+                )
+              }
+            >
+              Ate one
+            </Button>
             <ActionGroup>
               <ActionRow
                 isGrouped
-                icon={<Utensils className='h-4 w-4' />}
-                label='Ate 1'
-                subtitle={
-                  container.servings === 1
-                    ? 'That is the last one'
-                    : `Leaves ${formatServings(container.servings - 1)}`
-                }
-                isDisabled={eatenOne}
-                onClick={() =>
-                  void run(
-                    'eat-one',
-                    async () => {
-                      if ((await eat(container, 1)) === true) onClose();
-                    },
-                    'Unable to save this.',
-                  )
-                }
-              />
-              {container.servings > 2 && (
-                <ActionRow
-                  isGrouped
-                  icon={<Utensils className='h-4 w-4' />}
-                  label='Ate some…'
-                  subtitle='Choose how many'
-                  onClick={() => setView({ kind: 'eat' })}
-                />
-              )}
-              <ActionRow
-                isGrouped
-                icon={<CircleCheck className='h-4 w-4' />}
-                label='Ate it all'
-                subtitle='Moves it to Finished'
-                isDisabled={busy === 'eat-all'}
-                onClick={() =>
-                  void run(
-                    'eat-all',
-                    async () => {
-                      if ((await eat(container, 'ALL')) !== undefined) {
-                        onClose();
-                      }
-                    },
-                    'Unable to save this.',
-                  )
-                }
+                icon={<Ban className='h-4 w-4' />}
+                label="It's gone"
+                subtitle='Keeps it in What you finished'
+                onClick={() => setView({ kind: 'gone' })}
               />
               <ActionRow
                 isGrouped
@@ -646,39 +645,23 @@ function ContainerSheet({
               />
               <ActionRow
                 isGrouped
-                icon={<CalendarClock className='h-4 w-4' />}
-                label='Change eat-by date'
-                subtitle={`Now ${getEatByPhrase(container.eatBy)}`}
-                onClick={() => setView({ kind: 'eatBy' })}
-              />
-              <ActionRow
-                isGrouped
-                icon={<PencilLine className='h-4 w-4' />}
-                label='Correct the count'
-                subtitle='Fix how many are left'
+                icon={<Hash className='h-4 w-4' />}
+                label='How many are left?'
                 onClick={() => setView({ kind: 'count' })}
-              />
-              <ActionRow
-                isGrouped
-                icon={<Ban className='h-4 w-4' />}
-                label='Threw it out'
-                subtitle='Keeps it in Finished'
-                isDisabled={busy === 'toss'}
-                onClick={() => void handleToss()}
               />
             </ActionGroup>
             {recipe === undefined && container.recipeId !== null && (
               <p className='text-muted-foreground text-xs'>
-                The recipe this came from is gone. The container keeps its name.
+                The recipe this came from is gone. The box keeps its name.
               </p>
             )}
           </div>
         )}
-        {!isInStock && container.history.at(-1)?.kind === 'CLEAR' && (
+        {canPutBack && (
           <ActionRow
             icon={<Undo2 className='h-4 w-4' />}
-            label={`Put it back in the ${CONTAINER_PLACE_LABELS[container.place].toLowerCase()}`}
-            subtitle={`With ${formatServings(container.servings)}`}
+            label={`Put it back in the ${placeWord}`}
+            subtitle={`With ${formatServings(lastEnd?.servings ?? 0)}`}
             isDisabled={busy === 'put-back'}
             onClick={() =>
               void run(
@@ -696,18 +679,18 @@ function ContainerSheet({
             {error}
           </p>
         )}
-        <FormSection title='History'>
-          <ul className='divide-border divide-y'>
-            {[...container.history].reverse().map((event, index) => (
-              <li key={`${event.at}-${index}`} className='py-2'>
-                <p className='text-sm wrap-break-word'>{getEventText(event)}</p>
-                <p className='text-muted-foreground text-xs'>
-                  {formatDateShort(event.at)} · {formatTime(event.at)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </FormSection>
+        {isInStock ? (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='decoration-muted-foreground/50 -my-2 h-10 justify-self-start px-0! text-sm font-normal underline underline-offset-4'
+            onClick={() => setView({ kind: 'history' })}
+          >
+            See its history
+          </Button>
+        ) : (
+          <HistoryList container={container} />
+        )}
         <ModalFooterActions
           leftActions={
             <DeleteIconButton
@@ -717,7 +700,12 @@ function ContainerSheet({
             />
           }
           rightActions={
-            <Button type='button' data-modal-action='true' onClick={onClose}>
+            <Button
+              type='button'
+              variant='secondary'
+              data-modal-action='true'
+              onClick={onClose}
+            >
               Done
             </Button>
           }

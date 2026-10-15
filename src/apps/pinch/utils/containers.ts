@@ -548,6 +548,53 @@ export const planCount = (
   };
 };
 
+export type CountChange =
+  | { kind: 'SAME' }
+  | { kind: 'EAT'; eaten: number }
+  | { kind: 'ALL' }
+  | { kind: 'COUNT'; count: number };
+
+/** What answering "How many are left?" records: fewer is eaten, none eats the rest, more corrects the count. */
+export const getCountChange = (current: number, next: number): CountChange => {
+  if (next === current) return { kind: 'SAME' };
+  if (next <= 0) return { kind: 'ALL' };
+  const change: CountChange =
+    next < current
+      ? { kind: 'EAT', eaten: current - next }
+      : { kind: 'COUNT', count: next };
+  return change;
+};
+
+export const getCountChangeCopy = (current: number, next: number) => {
+  const change = getCountChange(current, next);
+  switch (change.kind) {
+    case 'SAME':
+      return {
+        change,
+        line: `It says ${formatServings(current)} now.`,
+        action: 'Save',
+      };
+    case 'EAT':
+      return {
+        change,
+        line: `Records that you ate ${change.eaten}.`,
+        action: `Ate ${change.eaten}`,
+      };
+    case 'ALL':
+      return {
+        change,
+        line: 'Records that you ate the rest. It moves to What you finished.',
+        action: 'Ate the rest',
+      };
+    default:
+      return {
+        change,
+        line: `Corrects the count from ${current} to ${change.count}.`,
+        action: 'Save',
+      };
+  }
+};
+
 const END_KINDS: ContainerEventKind[] = ['EAT', 'TOSS', 'CLEAR'];
 
 /** Only while the EAT, TOSS or CLEAR is still the last event, so a later change is never rewound. */

@@ -126,11 +126,13 @@ interface ChangeInput {
 interface ChangeResult {
   at: number;
   isFinished: boolean;
+  servingsLeft: number;
 }
 
 const toResult = (fields: Awaited<ReturnType<typeof applyPlan>>) => ({
   at: fields.updatedAt,
   isFinished: fields.status === 'DONE',
+  servingsLeft: fields.status === 'DONE' ? 0 : (fields.servings ?? 0),
 });
 
 /** `ALL` eats what is left when the transaction reads it. */

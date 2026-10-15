@@ -29,12 +29,12 @@ import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
   buildContainer,
   getNewContainersProblem,
+  getEatByPhrase,
   getPutBackText,
   getSavedText,
   isContainerListFull,
   type NewContainerInput,
 } from '@apps/pinch/utils/containers';
-import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const UNDO_TOAST_MS = 6000;
 
@@ -167,14 +167,14 @@ export function useContainerActions(uid: string) {
 
   const eat = (container: Container, count: number | 'ALL') =>
     once(container.id, async () => {
-      const { at, isFinished } = await dispatch(
+      const { at, isFinished, servingsLeft } = await dispatch(
         eatContainer({ uid, id: container.id, count }),
       ).unwrap();
       const eaten = count === 'ALL' ? container.servings : count;
       addUndoToast(
         isFinished
           ? `Finished ${container.title}`
-          : `Ate ${formatServings(eaten)}`,
+          : `Ate ${eaten} · ${servingsLeft} left`,
         isFinished ? undefined : container.title,
         () => undoEnd(container.id, at),
       );
@@ -186,16 +186,27 @@ export function useContainerActions(uid: string) {
       const { at } = await dispatch(
         tossContainer({ uid, id: container.id }),
       ).unwrap();
-      addUndoToast(`Threw out ${container.title}`, undefined, () =>
+      addUndoToast(`Tossed ${container.title}`, undefined, () =>
         undoEnd(container.id, at),
       );
       return true;
     });
 
   const move = (container: Container, to: ContainerPlace, eatBy: number) =>
-    once(container.id, () =>
-      dispatch(moveContainer({ uid, id: container.id, to, eatBy })).unwrap(),
-    );
+    once(container.id, async () => {
+      await dispatch(
+        moveContainer({ uid, id: container.id, to, eatBy }),
+      ).unwrap();
+      addToast({
+        title:
+          to === 'FREEZER'
+            ? `Put ${container.title} in the freezer`
+            : `Thawed ${container.title} in the fridge`,
+        description: `Eat by ${getEatByPhrase(eatBy)}`,
+        type: 'success',
+      });
+      return true;
+    });
 
   const changeEatBy = (container: Container, eatBy: number) =>
     once(container.id, () =>

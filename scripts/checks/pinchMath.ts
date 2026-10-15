@@ -5585,4 +5585,38 @@ assert.deepEqual(
   'the cost line counts rows as the list shows them (two weights of chicken are one) and says nothing in a number below half priced',
 );
 
+// ============================================================
+// KITB workstream: the Fridge & freezer list and its sheet
+// ============================================================
+import { getCountChangeCopy as kitbCountCopy } from '../../src/apps/pinch/utils/containers.ts';
+
+assert.deepEqual(
+  [
+    kitbCountCopy(3, 3),
+    kitbCountCopy(3, 1),
+    kitbCountCopy(3, 0),
+    kitbCountCopy(1, 3),
+  ].map(({ change, action }) => [change, action]),
+  [
+    [{ kind: 'SAME' }, 'Save'],
+    [{ kind: 'EAT', eaten: 2 }, 'Ate 2'],
+    [{ kind: 'ALL' }, 'Ate the rest'],
+    [{ kind: 'COUNT', count: 3 }, 'Save'],
+  ],
+  '"How many are left?": fewer records an eat, none eats the rest, more corrects the count, the same changes nothing',
+);
+assert.deepEqual(
+  [
+    kitbCountCopy(3, 1).line,
+    kitbCountCopy(1, 3).line,
+    kitbCountCopy(2, 2).line,
+  ],
+  [
+    'Records that you ate 2.',
+    'Corrects the count from 1 to 3.',
+    'It says 2 servings now.',
+  ],
+  'the line under the stepper says what the answer records',
+);
+
 console.log('pinchMath: all checks passed');
