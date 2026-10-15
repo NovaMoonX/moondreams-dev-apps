@@ -52,6 +52,17 @@ export const getCookedRecipeIds = (
   cookIds: { has: (id: string) => boolean },
 ) => recipeIds.filter((recipeId) => cookIds.has(getCookId(mealId, recipeId)));
 
+/** Cooked means every recipe on the plate has its cook, and never on a day still ahead. */
+export const isPlannedMealCooked = (
+  meal: { id: string; date: number },
+  recipeIds: string[],
+  cookIds: { has: (id: string) => boolean },
+  now = Date.now(),
+) =>
+  meal.date <= getLocalTodayDate(now) &&
+  recipeIds.length > 0 &&
+  getCookedRecipeIds(meal.id, recipeIds, cookIds).length === recipeIds.length;
+
 /** What a planned meal offers in its phase: one primary, the chips that still make sense, and whether its plate is worth saving. */
 export function getPlannedMealOffer({
   meal,

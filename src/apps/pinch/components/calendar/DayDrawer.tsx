@@ -9,6 +9,7 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
+import { isPlannedMealCooked } from '@apps/pinch/components/calendar/plannedMealOffer';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectCooksById,
   selectCostContext,
   selectIngredientsById,
   selectPeriodStats,
@@ -101,6 +103,7 @@ function DayDrawer({
   const costContext = useAppSelector(selectCostContext);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const cooksById = useAppSelector(selectCooksById);
   const [pickedMealId, setPickedMealId] = useState<string | null>(
     initialMealId,
   );
@@ -243,18 +246,35 @@ function DayDrawer({
                           recipesById,
                           ingredientsById,
                         );
+                        const isCooked = isPlannedMealCooked(
+                          meal,
+                          Array.from(
+                            new Set(
+                              meal.items.flatMap((item) =>
+                                item.kind === 'RECIPE' &&
+                                recipesById.has(item.refId)
+                                  ? [item.refId]
+                                  : [],
+                              ),
+                            ),
+                          ),
+                          cooksById,
+                        );
                         return (
                           <li key={meal.id}>
                             <Button
                               type='button'
                               variant='tertiary'
-                              aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}: ${title}`}
+                              aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}: ${title}${isCooked ? ', cooked' : ''}`}
                               onClick={() => setPickedMealId(meal.id)}
                               className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
                             >
                               <span className='min-w-0 flex-1'>
                                 <span className='text-foreground block wrap-break-word whitespace-normal'>
                                   {title}
+                                  {isCooked && (
+                                    <span aria-hidden='true'>{'\u00a0✅'}</span>
+                                  )}
                                 </span>
                                 {detail && (
                                   <span className='text-muted-foreground block text-xs whitespace-normal'>

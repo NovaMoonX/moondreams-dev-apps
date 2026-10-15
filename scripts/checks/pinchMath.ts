@@ -23,6 +23,7 @@ import {
 import {
   getCookedRecipeIds,
   getPlannedMealOffer,
+  isPlannedMealCooked,
 } from '../../src/apps/pinch/components/calendar/plannedMealOffer.ts';
 import {
   formatCostTile,
@@ -4405,5 +4406,42 @@ assert.deepEqual(
   ['$0.15 so far', '$0.15', 'No price yet', 'Not priced', '$0.15'],
   'a tile says so far only while its gaps can still be priced, and a fixed day never does',
 );
+
+// ---- PLANB: a cooked meal on the day drawer ----
+{
+  const cookedNow = localNoon(2026, 9, 15);
+  const cooks = new Set(['m1__adobo', 'm1__rice', 'm2__adobo']);
+  assert.deepEqual(
+    [
+      isPlannedMealCooked(
+        { id: 'm1', date: dayOf(12) },
+        ['adobo', 'rice'],
+        cooks,
+        cookedNow,
+      ),
+      isPlannedMealCooked(
+        { id: 'm1', date: dayOf(15) },
+        ['adobo', 'rice'],
+        cooks,
+        cookedNow,
+      ),
+      isPlannedMealCooked(
+        { id: 'm2', date: dayOf(12) },
+        ['adobo', 'rice'],
+        cooks,
+        cookedNow,
+      ),
+      isPlannedMealCooked(
+        { id: 'm1', date: dayOf(16) },
+        ['adobo', 'rice'],
+        cooks,
+        cookedNow,
+      ),
+      isPlannedMealCooked({ id: 'm3', date: dayOf(12) }, [], cooks, cookedNow),
+    ],
+    [true, true, false, false, false],
+    'cooked means every recipe has its own cook, today or before, never ahead or for a plate with no recipe',
+  );
+}
 
 console.log('pinchMath: all checks passed');
