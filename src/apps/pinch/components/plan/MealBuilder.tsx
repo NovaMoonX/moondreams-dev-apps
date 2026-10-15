@@ -12,6 +12,7 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import UndoSnackbar from '@/components/UndoSnackbar';
+import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -39,6 +40,7 @@ import {
   selectIngredientsById,
   selectMeals,
   selectMealsById,
+  selectPlannedByDay,
   selectPlannedMeals,
   selectRecipes,
   selectRecipesById,
@@ -53,7 +55,11 @@ import {
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
-import { rankRecentPicks } from '@apps/pinch/utils/planPicks';
+import {
+  getDefaultMealType,
+  getNearDayOptions,
+  rankRecentPicks,
+} from '@apps/pinch/utils/planPicks';
 import {
   getMealNutrition,
   hasShownValue,
@@ -64,6 +70,8 @@ const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((value) => ({
   label: MEAL_TYPE_LABELS[value],
   emoji: MEAL_TYPE_EMOJIS[value],
 }));
+
+const OTHER_DAY = 'other';
 
 // Past 12 options a pill row adds its own search, and the item search is the one place to look.
 const MAX_RECENT_PICKS = 12;
@@ -114,6 +122,8 @@ function MealBuilder({
   const recipes = useAppSelector(selectRecipes);
   const plannedMeals = useAppSelector(selectPlannedMeals);
   const cookSummaries = useAppSelector(selectCookSummaries);
+  const plannedByDay = useAppSelector(selectPlannedByDay);
+  const now = useNow(60_000);
   const existingPlanned =
     plannedMeals.find((meal) => meal.id === plannedMealId) ?? null;
   const existingMeal =
@@ -129,10 +139,13 @@ function MealBuilder({
   const [dayKey, setDayKey] = useState(
     existingPlanned ? getPlannedDayKey(existingPlanned.date) : initialDayKey,
   );
-  const [mealType, setMealType] = useState<MealType>(
-    existingPlanned?.mealType ?? initialType ?? 'DINNER',
+  const [chosenType, setChosenType] = useState<MealType | null>(
+    existingPlanned?.mealType ?? initialType,
   );
-  const [isChanging, setIsChanging] = useState(false);
+  const [isChanging, setIsChanging] = useState(
+    startRecipeId !== null || starter !== null,
+  );
+  const [isOtherDay, setIsOtherDay] = useState(false);
   const [items, setItems] = useState<MealItem[]>(
     existingPlanned?.items ??
       existingMeal?.items ??
@@ -160,6 +173,23 @@ function MealBuilder({
   const [error, setError] = useState<string | null>(null);
 
   const date = fromDateInputValue(dayKey) ?? null;
+  const todayKey = getCellDayKey(new Date(now));
+  const nearDayOptions = getNearDayOptions(todayKey);
+  const dayOptions = [
+    ...nearDayOptions,
+    { value: OTHER_DAY, label: 'Other day…' },
+  ];
+  const dayPillValue =
+    isOtherDay || !nearDayOptions.some((option) => option.value === dayKey)
+      ? OTHER_DAY
+      : dayKey;
+  const mealType =
+    chosenType ??
+    getDefaultMealType(
+      (plannedByDay.get(dayKey) ?? []).map((meal) => meal.mealType),
+      dayKey === todayKey,
+      new Date(now).getHours(),
+    );
   const cost = useMemo(
     () => getMealCost(items, costContext),
     [items, costContext],
@@ -461,20 +491,34 @@ function MealBuilder({
             </div>
             {isChanging && (
               <div className='space-y-3'>
-                <PillGroup
-                  label='Meal'
-                  options={MEAL_TYPE_OPTIONS}
-                  value={mealType}
-                  onChange={setMealType}
-                />
-                <div className='space-y-1.5'>
-                  <Label>Day</Label>
-                  <Input
-                    type='date'
-                    variant='outline'
-                    aria-label='Day'
-                    value={dayKey}
-                    onChange={(event) => setDayKey(event.target.value)}
+                <div className='space-y-2'>
+                  <p className='text-muted-foreground text-xs'>Day</p>
+                  <PillGroup
+                    label='Day'
+                    options={dayOptions}
+                    value={dayPillValue}
+                    onChange={(value) => {
+                      setIsOtherDay(value === OTHER_DAY);
+                      if (value !== OTHER_DAY) setDayKey(value);
+                    }}
+                  />
+                  {dayPillValue === OTHER_DAY && (
+                    <Input
+                      type='date'
+                      variant='outline'
+                      aria-label='Other day'
+                      value={dayKey}
+                      onChange={(event) => setDayKey(event.target.value)}
+                    />
+                  )}
+                </div>
+                <div className='space-y-2'>
+                  <p className='text-muted-foreground text-xs'>Meal</p>
+                  <PillGroup
+                    label='Meal'
+                    options={MEAL_TYPE_OPTIONS}
+                    value={mealType}
+                    onChange={setChosenType}
                   />
                 </div>
               </div>
