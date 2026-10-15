@@ -11,6 +11,7 @@ import ActionRow from '@/components/ActionRow';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useAppDispatch, useAppSelector, type RootState } from '@/store';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
@@ -95,6 +96,7 @@ function CookingSession({
   const stripRef = useRef<HTMLUListElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const timers = useCookTimers();
+  const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
   const stepMatches = useMemo(
     () =>
@@ -181,7 +183,7 @@ function CookingSession({
   const index = Math.min(stepIndex, lastIndex);
   const isLast = index >= lastIndex;
   const hasSteps = recipe.steps.length > 0;
-  const isStepsView = view === 'steps';
+  const isStepsView = view === 'steps' || isWide;
   const isFinishShown = isFinished && isStepsView && hasSteps;
   const canMark = isCooksReady && !isRemoved;
   const care = getRecipeCare(recipe);
@@ -443,15 +445,55 @@ function CookingSession({
     recipe.isArchived === true ||
     recipe.updatedAt !== openedUpdatedAt;
 
+  const notesBlock = (
+    <CookNotes
+      recipeId={recipe.id}
+      onApply={(noteId) => void applyNote(noteId)}
+    />
+  );
+  const stepContent = hasSteps ? (
+    <CookStepView
+      steps={recipe.steps}
+      index={index}
+      ingredients={isWide ? [] : stepRows}
+      isAmountNoteShown={
+        isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
+      }
+      timers={timers.timers}
+      isTimersFull={timers.isFull}
+      onStartTimer={handleStartTimer}
+      onSwipe={goBy}
+    />
+  ) : (
+    <p className='text-muted-foreground flex-1 py-2 text-center text-sm'>
+      This recipe has no steps yet.
+    </p>
+  );
+  const ingredientsContent = (
+    <CookIngredientsView
+      recipe={recipe}
+      rows={rows}
+      stepLineIds={isWide ? (stepMatch?.lineIds ?? null) : null}
+      hasWrittenAmounts={stepMatches.some((match) => match.hasWrittenAmount)}
+      servings={servings}
+      plannedServings={plannedServings}
+      gotOut={gotOut}
+      onServingsChange={setServings}
+      onToggle={toggleGotOut}
+      onReset={resetGotOut}
+    />
+  );
+
   return (
     <Subview
       overlay
+      className='lg:max-w-5xl'
       title={recipe.title}
       onClose={closeSubview}
       onBack={() => void leave()}
     >
       <div ref={rootRef} className='flex flex-1 flex-col gap-4'>
-        {!isFinishShown && (
+        {!isFinishShown && !isWide && (
           <PillGroup
             label='Show'
             options={COOK_VIEW_OPTIONS}
@@ -460,12 +502,7 @@ function CookingSession({
             isThin
           />
         )}
-        {!isFinishShown && (
-          <CookNotes
-            recipeId={recipe.id}
-            onApply={(noteId) => void applyNote(noteId)}
-          />
-        )}
+        {!isFinishShown && !isWide && notesBlock}
         {isFinishShown ? (
           <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6'>
             <p className='text-center text-2xl leading-snug font-medium'>
@@ -541,39 +578,20 @@ function CookingSession({
               </Button>
             )}
           </div>
+        ) : isWide ? (
+          <div className='grid flex-1 grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-10'>
+            <div className='flex flex-col gap-4'>
+              {notesBlock}
+              {stepContent}
+            </div>
+            <div className='border-border border-l pl-8'>
+              {ingredientsContent}
+            </div>
+          </div>
         ) : isStepsView ? (
-          hasSteps ? (
-            <CookStepView
-              steps={recipe.steps}
-              index={index}
-              ingredients={stepRows}
-              isAmountNoteShown={
-                isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
-              }
-              timers={timers.timers}
-              isTimersFull={timers.isFull}
-              onStartTimer={handleStartTimer}
-              onSwipe={goBy}
-            />
-          ) : (
-            <p className='text-muted-foreground flex-1 py-2 text-center text-sm'>
-              This recipe has no steps yet.
-            </p>
-          )
+          stepContent
         ) : (
-          <CookIngredientsView
-            recipe={recipe}
-            rows={rows}
-            hasWrittenAmounts={stepMatches.some(
-              (match) => match.hasWrittenAmount,
-            )}
-            servings={servings}
-            plannedServings={plannedServings}
-            gotOut={gotOut}
-            onServingsChange={setServings}
-            onToggle={toggleGotOut}
-            onReset={resetGotOut}
-          />
+          ingredientsContent
         )}
         <div role='status' className='space-y-1 empty:hidden'>
           {isChanged && (

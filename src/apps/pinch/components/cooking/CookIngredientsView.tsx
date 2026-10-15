@@ -17,6 +17,7 @@ export interface CookRow {
 }
 
 interface CookIngredientRowProps extends CookRow {
+  isInStep: boolean;
   isOut: boolean;
   onToggle: (id: string, isOut: boolean) => void;
 }
@@ -27,12 +28,18 @@ const CookIngredientRow = memo(function CookIngredientRow({
   name,
   note,
   amountText,
+  isInStep,
   isOut,
   onToggle,
 }: CookIngredientRowProps) {
   return (
     <li>
-      <label className='flex cursor-pointer items-start gap-3 py-2.5'>
+      <label
+        className={join(
+          'flex cursor-pointer items-start gap-3 py-2.5',
+          isInStep && 'bg-accent/60 -mx-2 rounded-lg px-2',
+        )}
+      >
         <span className='mt-0.5 inline-flex shrink-0'>
           <Checkbox
             aria-label={`Got out ${name}`}
@@ -72,6 +79,8 @@ const CookIngredientRow = memo(function CookIngredientRow({
 interface CookIngredientsViewProps {
   recipe: Recipe;
   rows: CookRow[];
+  /** The lines the step on screen names, marked in the list when it sits beside the steps. */
+  stepLineIds: string[] | null;
   /** Some step writes an amount of its own, which scaling leaves as it is. */
   hasWrittenAmounts: boolean;
   servings: number;
@@ -85,6 +94,7 @@ interface CookIngredientsViewProps {
 function CookIngredientsView({
   recipe,
   rows,
+  stepLineIds,
   hasWrittenAmounts,
   servings,
   plannedServings,
@@ -158,6 +168,7 @@ function CookIngredientsView({
               <CookIngredientRow
                 key={row.id}
                 {...row}
+                isInStep={stepLineIds?.includes(row.id) ?? false}
                 isOut={gotOut[row.id] === true}
                 onToggle={onToggle}
               />
