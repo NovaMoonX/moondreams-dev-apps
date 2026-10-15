@@ -9,11 +9,14 @@ import {
 } from '@apps/pinch/constants';
 import {
   changeContainerEatBy,
+  changeContainersEatBy,
   clearOutPlace,
   correctContainerCount,
   eatContainer,
+  endContainers,
   moveContainer,
   removeContainer,
+  removeContainers,
   tossContainer,
   undoClearOut,
   undoContainerBatch,
@@ -165,17 +168,23 @@ export function useContainerActions(uid: string) {
       dispatch(undoContainerBatch({ uid, ids })).unwrap(),
     );
 
-  const eat = (container: Container, count: number | 'ALL') =>
+  /** `toastTitle` replaces the toast's own words, for a box eaten whole out of a batch. */
+  const eat = (
+    container: Container,
+    count: number | 'ALL',
+    toastTitle?: string,
+  ) =>
     once(container.id, async () => {
       const { at, isFinished, servingsLeft } = await dispatch(
         eatContainer({ uid, id: container.id, count }),
       ).unwrap();
       const eaten = count === 'ALL' ? container.servings : count;
+      const ownTitle = isFinished
+        ? `Finished ${container.title}`
+        : `Ate ${eaten} · ${servingsLeft} left`;
       addUndoToast(
-        isFinished
-          ? `Finished ${container.title}`
-          : `Ate ${eaten} · ${servingsLeft} left`,
-        isFinished ? undefined : container.title,
+        toastTitle ?? ownTitle,
+        isFinished && toastTitle === undefined ? undefined : container.title,
         () => undoEnd(container.id, at),
       );
       return isFinished;
@@ -244,6 +253,34 @@ export function useContainerActions(uid: string) {
     }
   };
 
+  /** Eats or tosses every box of a batch at once, with one Undo for all of them. */
+  const endBatch = (
+    boxes: Container[],
+    kind: 'EAT' | 'TOSS',
+    toastTitle: string,
+  ) =>
+    once(`batch:${boxes.map(({ id }) => id).join(',')}`, async () => {
+      const ended = await dispatch(
+        endContainers({ uid, ids: boxes.map(({ id }) => id), kind }),
+      ).unwrap();
+      addUndoToast(toastTitle, boxes[0].title, () => undoClear(ended));
+      return true;
+    });
+
+  const changeBatchEatBy = (boxes: Container[], eatBy: number) =>
+    once(`batch:${boxes.map(({ id }) => id).join(',')}`, () =>
+      dispatch(
+        changeContainersEatBy({ uid, ids: boxes.map(({ id }) => id), eatBy }),
+      ).unwrap(),
+    );
+
+  const removeBatch = (boxes: Container[]) =>
+    once(`batch:${boxes.map(({ id }) => id).join(',')}`, () =>
+      dispatch(
+        removeContainers({ uid, ids: boxes.map(({ id }) => id) }),
+      ).unwrap(),
+    );
+
   /** Resolves to how many it really cleared, and a sentence when it stopped partway. */
   const clearOut = (place: ContainerPlace, ids: string[]) =>
     once(`clear:${place}`, async () => {
@@ -293,6 +330,9 @@ export function useContainerActions(uid: string) {
     changeEatBy,
     correctCount,
     remove,
+    endBatch,
+    changeBatchEatBy,
+    removeBatch,
     clearOut,
     putBack,
   };

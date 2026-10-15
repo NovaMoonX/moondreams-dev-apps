@@ -5624,4 +5624,108 @@ assert.deepEqual(
   'the line under the stepper says what the answer records',
 );
 
+import {
+  getBatchKey as kitbBatchKey,
+  getBatchServingsText as kitbServingsText,
+  getBoxCountCopy as kitbBoxCopy,
+  groupBatches as kitbGroup,
+} from '../../src/apps/pinch/utils/containers.ts';
+
+const kitbSoup = (id: string, over: Partial<Container> = {}) =>
+  container({
+    id,
+    title: 'Soup',
+    recipeId: 'soup',
+    servings: 2,
+    place: 'FREEZER',
+    eatBy: dayOf(30),
+    createdAt: 5000,
+    updatedAt: 5000,
+    ...over,
+  });
+const kitbFive = [
+  kitbSoup('s1'),
+  kitbSoup('s2', { servings: 1 }),
+  kitbSoup('s3'),
+  kitbSoup('t1', { place: 'FRIDGE', eatBy: dayOf(17) }),
+  kitbSoup('u1', { createdAt: 9000, updatedAt: 9000 }),
+];
+assert.deepEqual(
+  kitbGroup(kitbFive).map(({ boxes }) => boxes.map(({ id }) => id)),
+  [['s2', 's1', 's3'], ['t1'], ['u1']],
+  'boxes put away together are one row (an opened box first); one thawed or put away later is its own row',
+);
+assert.notEqual(
+  kitbBatchKey(kitbSoup('s1')),
+  kitbBatchKey(kitbSoup('s1', { eatBy: dayOf(31) })),
+  'a box re-dated alone leaves its batch',
+);
+assert.deepEqual(
+  [
+    kitbServingsText([{ servings: 2 }, { servings: 2 }, { servings: 2 }]),
+    kitbServingsText([{ servings: 3 }, { servings: 2 }, { servings: 2 }]),
+    kitbServingsText([{ servings: 1 }, { servings: 1 }]),
+    kitbServingsText([{ servings: 4 }]),
+  ],
+  [
+    '3 boxes of 2 servings',
+    '3 boxes · 7 servings',
+    '2 boxes of 1 serving',
+    '4 servings',
+  ],
+  'a batch says how many boxes and what one holds, or the total when they differ',
+);
+const kitbFifty = Array.from({ length: 50 }, (_, index) =>
+  kitbSoup(`f${String(index).padStart(2, '0')}`, {
+    createdAt: 1000 * Math.floor(index / 5),
+    eatBy: dayOf(20 + Math.floor(index / 5)),
+  }),
+);
+assert.deepEqual(
+  kitbGroup(kitbFifty).map(({ boxes }) => boxes.length),
+  Array.from({ length: 10 }, () => 5),
+  'fifty boxes in ten put-aways are ten rows of five',
+);
+const kitbScale = Array.from({ length: 300 }, (_, index) =>
+  kitbSoup(`k${String(index).padStart(3, '0')}`, {
+    title: `Dish ${index % 40}`,
+    recipeId: `dish-${index % 40}`,
+    createdAt: index < 60 ? 100 * Math.floor(index / 3) : 100_000 + index,
+    eatBy: dayOf(16 + (index % 60)),
+  }),
+);
+const kitbScaleRows = kitbGroup(kitbScale);
+assert.equal(
+  kitbScaleRows.reduce((sum, { boxes }) => sum + boxes.length, 0),
+  300,
+  'grouping never loses or repeats a box',
+);
+assert.ok(
+  kitbScaleRows.every(({ key, boxes }) =>
+    boxes.every((box) => kitbBatchKey(box) === key),
+  ),
+  'every box of a row shares its batch',
+);
+const kitbStarted = performance.now();
+Array.from({ length: 20 }, () => kitbGroup(kitbScale));
+assert.ok(
+  (performance.now() - kitbStarted) / 20 < 20,
+  "grouping Taylor's 300 boxes stays well under a frame",
+);
+assert.deepEqual(
+  [
+    kitbBoxCopy(3, 3),
+    kitbBoxCopy(3, 2),
+    kitbBoxCopy(3, 1),
+    kitbBoxCopy(3, 0),
+  ].map(({ eaten, action }) => [eaten, action]),
+  [
+    [0, 'Save'],
+    [1, 'Ate 1 box'],
+    [2, 'Ate 2 boxes'],
+    [3, 'Ate them all'],
+  ],
+  '"How many boxes are left?" only counts down, each box eaten whole',
+);
+
 console.log('pinchMath: all checks passed');

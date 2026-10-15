@@ -8,22 +8,24 @@ import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
 import { CONTAINER_EMOJI, CONTAINER_PLACE_EMOJIS } from '@apps/pinch/constants';
 import type { Container } from '@apps/pinch/types';
 import {
+  getBatchServingsText,
   getEatByPhrase,
   getEatByState,
   getFinishedText,
   getLastPlaceEvent,
 } from '@apps/pinch/utils/containers';
-import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface ContainerRowProps {
-  container: Container;
+  /** One box, or a batch put away together; a finished row is always one box. */
+  boxes: Container[];
   title: string;
   /** Another row in the same place has this title, so the tags tell them apart. */
   isTwin: boolean;
-  onOpen: (container: Container) => void;
+  onOpen: (boxes: Container[]) => void;
 }
 
-function ContainerRow({ container, title, isTwin, onOpen }: ContainerRowProps) {
+function ContainerRow({ boxes, title, isTwin, onOpen }: ContainerRowProps) {
+  const [container] = boxes;
   const isFinished = container.status === 'DONE';
   const isThawed = getLastPlaceEvent(container.history)?.kind === 'THAW';
 
@@ -31,7 +33,7 @@ function ContainerRow({ container, title, isTwin, onOpen }: ContainerRowProps) {
     <Button
       type='button'
       variant='tertiary'
-      onClick={() => onOpen(container)}
+      onClick={() => onOpen(boxes)}
       className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
     >
       <span
@@ -53,7 +55,7 @@ function ContainerRow({ container, title, isTwin, onOpen }: ContainerRowProps) {
           ) : (
             <>
               <span className='whitespace-nowrap'>
-                {formatServings(container.servings)}
+                {getBatchServingsText(boxes)}
               </span>
               <span className='whitespace-nowrap'>
                 Eat by {getEatByPhrase(container.eatBy)}

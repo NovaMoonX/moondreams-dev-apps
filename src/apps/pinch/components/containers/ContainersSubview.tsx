@@ -37,9 +37,11 @@ import {
 import type { Container, ContainerPlace, Meal } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import {
+  getBatchKey,
   getClearOutMessage,
   getContainerTitle,
   getPreparedSummary,
+  groupBatches,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
@@ -68,6 +70,12 @@ interface ContainersSubviewProps {
 interface Scope {
   recipeId: string | null;
   mealId: string | null;
+}
+
+interface OpenSheet {
+  ids: string[];
+  batchKey: string | null;
+  finished: Container | null;
 }
 
 const getRecipeIdsOf = (meal: Meal | undefined) =>
@@ -121,7 +129,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     CONTAINER_FINISHED_PAGE_SIZE,
   );
   const [scopedLimit, setScopedLimit] = useState(CONTAINER_FINISHED_PAGE_SIZE);
-  const [open, setOpen] = useState<Container | null>(null);
+  const [open, setOpen] = useState<OpenSheet | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [clearing, setClearing] = useState<ContainerPlace | null>(null);
   const [clearNote, setClearNote] = useState<ClearNote | null>(null);
@@ -182,6 +190,13 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     }),
     [shown],
   );
+  const batchesByPlace = useMemo(
+    () => ({
+      FRIDGE: groupBatches(byPlace.FRIDGE),
+      FREEZER: groupBatches(byPlace.FREEZER),
+    }),
+    [byPlace],
+  );
 
   // Until the person picks, and while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
   const getShownPlace = (): ContainerPlace => {
@@ -204,9 +219,15 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     { value: 'FINISHED' as const, label: 'Finished' },
   ];
 
-  const handleOpen = useCallback((container: Container) => {
-    setOpen(container);
-    setPick((current) => current ?? container.place);
+  const handleOpen = useCallback((boxes: Container[]) => {
+    const [first] = boxes;
+    const isFinished = first.status === 'DONE';
+    setOpen({
+      ids: boxes.map(({ id }) => id),
+      batchKey: isFinished ? null : getBatchKey(first),
+      finished: isFinished ? first : null,
+    });
+    setPick((current) => current ?? first.place);
   }, []);
 
   const finished = useMemo(
@@ -232,8 +253,8 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const clearScope = () => setScope({ recipeId: null, mealId: null });
 
   const twins = useMemo(() => {
-    const counts = inScope.reduce((map, container) => {
-      const key = `${container.place}|${getContainerTitle(container, recipesById, mealsById)}`;
+    const counts = groupBatches(inScope).reduce((map, { boxes: [first] }) => {
+      const key = `${first.place}|${getContainerTitle(first, recipesById, mealsById)}`;
       return map.set(key, (map.get(key) ?? 0) + 1);
     }, new Map<string, number>());
     return new Set(
@@ -288,12 +309,13 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     }
   };
 
-  const renderRow = (container: Container) => {
+  const renderRow = (boxes: Container[]) => {
+    const [container] = boxes;
     const title = getContainerTitle(container, recipesById, mealsById);
     return (
       <li key={container.id}>
         <ContainerRow
-          container={container}
+          boxes={boxes}
           title={title}
           isTwin={
             container.status === 'IN_STOCK' &&
@@ -350,7 +372,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     }
 
     const place = shownPlace;
-    const rows = byPlace[place];
+    const rows = batchesByPlace[place];
     const placeWord = CONTAINER_PLACE_LABELS[place].toLowerCase();
     const note = clearNote?.place === place ? clearNote : null;
     const noteLine = note && (
@@ -385,7 +407,8 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       <section aria-label={CONTAINER_PLACE_LABELS[place]}>
         <div className='flex min-h-10 flex-wrap items-center justify-between gap-x-3'>
           <p className='text-muted-foreground text-sm whitespace-nowrap'>
-            {countContainers(rows.length)} · {formatServings(sumServings(rows))}
+            {countContainers(byPlace[place].length)} ·{' '}
+            {formatServings(sumServings(byPlace[place]))}
           </p>
           {canClear && (
             <Button
@@ -402,7 +425,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
         </div>
         {noteLine}
         <ul className='divide-border divide-y'>
-          {rows.slice(0, visible).map(renderRow)}
+          {rows.slice(0, visible).map(({ boxes }) => renderRow(boxes))}
         </ul>
         {visible < rows.length && (
           <Button
@@ -462,7 +485,9 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       : CONTAINER_FINISHED_PAGE_SIZE;
     return (
       <div className='space-y-1'>
-        <ul className='divide-border divide-y'>{rows.map(renderRow)}</ul>
+        <ul className='divide-border divide-y'>
+          {rows.map((container) => renderRow([container]))}
+        </ul>
         {hasMore && (
           <Button
             type='button'
@@ -544,10 +569,11 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       </div>
       {open && (
         <ContainerSheet
-          key={open.id}
+          key={open.ids[0]}
           uid={uid}
-          containerId={open.id}
-          finished={open.status === 'DONE' ? open : null}
+          containerIds={open.ids}
+          batchKey={open.batchKey}
+          finished={open.finished}
           onClose={() =>
             setOpen((current) => (current === open ? null : current))
           }

@@ -595,6 +595,31 @@ export const getCountChangeCopy = (current: number, next: number) => {
   }
 };
 
+/** "How many boxes are left?" for a batch: only fewer, each box gone eaten whole. */
+export const getBoxCountCopy = (current: number, next: number) => {
+  const eaten = Math.max(0, current - next);
+  if (eaten === 0) {
+    return {
+      eaten,
+      line: `It says ${countContainers(current)} now.`,
+      action: 'Save',
+    };
+  }
+  if (next <= 0) {
+    return {
+      eaten,
+      line: 'Records that you ate them all. They move to What you finished.',
+      action: 'Ate them all',
+    };
+  }
+  const copy = {
+    eaten,
+    line: `Records that you ate ${countContainers(eaten)}.`,
+    action: `Ate ${countContainers(eaten)}`,
+  };
+  return copy;
+};
+
 const END_KINDS: ContainerEventKind[] = ['EAT', 'TOSS', 'CLEAR'];
 
 /** Only while the EAT, TOSS or CLEAR is still the last event, so a later change is never rewound. */
@@ -690,6 +715,57 @@ export const getFinishedText = (container: Container) => {
 
 export const byEatBy = (a: Container, b: Container) =>
   a.eatBy - b.eatBy || a.createdAt - b.createdAt || a.id.localeCompare(b.id);
+
+/** Boxes put away together share a moment, a place, an eat-by date and a dish; a box moved or re-dated alone leaves its batch. */
+export const getBatchKey = (
+  container: Pick<
+    Container,
+    'createdAt' | 'place' | 'eatBy' | 'recipeId' | 'mealId' | 'title'
+  >,
+) =>
+  [
+    container.createdAt,
+    container.place,
+    container.eatBy,
+    container.recipeId,
+    container.mealId,
+    container.title,
+  ].join('|');
+
+/** The box an action on a batch takes first: an opened one (fewer servings) before a full one. */
+const byTakeOrder = (a: Container, b: Container) =>
+  a.servings - b.servings || a.id.localeCompare(b.id);
+
+export interface ContainerBatch {
+  key: string;
+  boxes: Container[];
+}
+
+/** One row per batch, in the order of each batch's first box, each batch's boxes in the order actions take them. */
+export const groupBatches = (containers: Container[]): ContainerBatch[] => {
+  const byKey = containers.reduce((groups, container) => {
+    const key = getBatchKey(container);
+    return groups.set(key, [...(groups.get(key) ?? []), container]);
+  }, new Map<string, Container[]>());
+  const batches = Array.from(byKey, ([key, boxes]) => ({
+    key,
+    boxes: boxes.length > 1 ? [...boxes].sort(byTakeOrder) : boxes,
+  }));
+  return batches;
+};
+
+/** "2 servings" for one box, "3 boxes of 2 servings" for a batch, "3 boxes · 7 servings" when they differ. */
+export const getBatchServingsText = (boxes: Pick<Container, 'servings'>[]) => {
+  const [first] = boxes;
+  if (boxes.length === 1) return formatServings(first.servings);
+
+  const total = boxes.reduce((sum, box) => sum + box.servings, 0);
+  const isEven = boxes.every((box) => box.servings === first.servings);
+  const text = isEven
+    ? `${boxes.length} boxes of ${formatServings(first.servings)}`
+    : `${boxes.length} boxes · ${formatServings(total)}`;
+  return text;
+};
 
 export const getStockMaps = (containers: Container[]) =>
   containers.reduce(
