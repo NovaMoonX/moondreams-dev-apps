@@ -4,6 +4,7 @@ import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import { useAppSelector } from '@/store';
 import IngredientRow from '@apps/pinch/components/kitchen/IngredientRow';
+import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
 import {
   selectDefaultProducts,
   selectShowNutrition,
@@ -89,9 +90,11 @@ function FamilyGroup({
         <SectionDivider
           label={group.family.name}
           trailing={
-            <span className='text-muted-foreground text-xs'>
-              {group.ingredients.length}
-            </span>
+            group.ingredients.length > SECTION_COUNT_THRESHOLD && (
+              <span className='text-muted-foreground text-xs'>
+                {group.ingredients.length}
+              </span>
+            )
           }
         />
         <ul className='divide-border divide-y'>

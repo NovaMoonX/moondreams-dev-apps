@@ -229,22 +229,26 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Kitchen'
-        subtitle='Your ingredients.'
-        action={
-          <Button
-            type='button'
-            size='sm'
-            rounded='full'
-            className='gap-1'
-            onClick={() => setOverlay({ kind: 'form', id: null })}
-          >
-            <Plus className='h-4 w-4' aria-hidden='true' />
-            New ingredient
-          </Button>
-        }
-      />
+      <div>
+        <SectionHeader
+          title='Kitchen'
+          action={
+            <Button
+              type='button'
+              size='sm'
+              rounded='full'
+              className='gap-1'
+              onClick={() => setOverlay({ kind: 'form', id: null })}
+            >
+              <Plus className='h-4 w-4' aria-hidden='true' />
+              New ingredient
+            </Button>
+          }
+        />
+        <p className='text-muted-foreground -mt-1 text-sm'>
+          Your ingredients, fridge and freezer, and prices.
+        </p>
+      </div>
       {isFirstRun ? (
         <SearchInput
           value={query}
@@ -334,25 +338,28 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         </FilterBar>
       )}
       {(hasPrepared || storeCount > 0 || productCount > 0) && (
-        <div className='flex flex-wrap gap-2'>
-          {hasPrepared && <PreparedEntry />}
-          {storeCount > 0 && (
-            <EntryChip
-              icon={<Store className='h-4 w-4' />}
-              label='Stores'
-              count={storeCount}
-              onClick={() => openSubview({ kind: 'stores' })}
-            />
-          )}
-          {productCount > 0 && (
-            <EntryChip
-              icon={<ShoppingCart className='h-4 w-4' />}
-              label='Products'
-              count={productCount}
-              onClick={() => openSubview({ kind: 'products' })}
-            />
-          )}
-        </div>
+        <nav aria-labelledby='kitchen-doors' className='space-y-1.5'>
+          <p id='kitchen-doors' className='text-muted-foreground text-xs'>
+            Also in Kitchen
+          </p>
+          <div className='flex flex-wrap gap-2'>
+            {hasPrepared && <PreparedEntry />}
+            {storeCount > 0 && (
+              <EntryChip
+                icon={<Store className='h-4 w-4' />}
+                label='Stores'
+                onClick={() => openSubview({ kind: 'stores' })}
+              />
+            )}
+            {productCount > 0 && (
+              <EntryChip
+                icon={<ShoppingCart className='h-4 w-4' />}
+                label='Products'
+                onClick={() => openSubview({ kind: 'products' })}
+              />
+            )}
+          </div>
+        </nav>
       )}
       {groups.length === 0 ? (
         getEmptyState()
