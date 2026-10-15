@@ -32,6 +32,8 @@ const { custom } = FormFactories;
 interface ShoppingItemSheetProps {
   uid: string;
   name: string;
+  /** What put it on the list ("Adobo chicken (Thu)"), or null when nothing behind it still resolves. */
+  forText: string | null;
   /** The stored items one row of the list stands for, largest first. */
   items: ShoppingItem[];
   onClose: () => void;
@@ -42,6 +44,7 @@ interface ShoppingItemSheetProps {
 function ShoppingItemSheet({
   uid,
   name,
+  forText,
   items,
   onClose,
   onRemove,
@@ -141,6 +144,11 @@ function ShoppingItemSheet({
 
   return (
     <FormSheet isOpen onClose={onClose} title={name}>
+      {forText && (
+        <p className='text-muted-foreground mb-3 text-sm wrap-break-word'>
+          For {forText}
+        </p>
+      )}
       <Form
         id='pinch-shopping-item'
         form={fields}

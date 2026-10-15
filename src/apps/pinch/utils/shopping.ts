@@ -1,5 +1,6 @@
 import {
   MAX_SHOPPING_AMOUNT,
+  MAX_SHOPPING_SOURCES,
   SHOP_SECTION_BY_FAMILY,
   SHOP_SECTION_BY_INGREDIENT,
   SHOP_SECTION_LABELS,
@@ -11,6 +12,7 @@ import {
 } from '@apps/pinch/constants';
 import type {
   Gap,
+  Meal,
   MealItem,
   PlannedMeal,
   Product,
@@ -20,7 +22,14 @@ import type {
   ShoppingView,
   Unit,
 } from '@apps/pinch/types';
-import type { DayRange } from '@apps/pinch/utils/dayKeys';
+import {
+  addDaysToKey,
+  formatDayShort,
+  getDateOfDayKey,
+  getPlannedDayKey,
+  type DayRange,
+} from '@apps/pinch/utils/dayKeys';
+import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
@@ -29,6 +38,38 @@ export interface ShoppingLine {
   ingredientId: string;
   amount: number;
   unit: Unit;
+}
+
+/** A line and what puts it on the list: a planned meal's id, a recipe's or a saved meal's source, or null for something added on the list itself. */
+export interface SourcedLine extends ShoppingLine {
+  source: string | null;
+}
+
+/** What one item gains from an add: the amount, and every source behind it. */
+export interface ListLine extends ShoppingLine {
+  sources: string[];
+}
+
+const RECIPE_SOURCE = 'recipe:';
+const MEAL_SOURCE = 'meal:';
+
+export const getRecipeShoppingSource = (recipeId: string) =>
+  `${RECIPE_SOURCE}${recipeId}`;
+export const getMealShoppingSource = (mealId: string) =>
+  `${MEAL_SOURCE}${mealId}`;
+
+/** What a source names: a recipe, a saved meal, or (anything else) a planned meal. */
+export function parseShoppingSource(source: string): {
+  kind: 'recipe' | 'meal' | 'planned';
+  id: string;
+} {
+  if (source.startsWith(RECIPE_SOURCE)) {
+    return { kind: 'recipe', id: source.slice(RECIPE_SOURCE.length) };
+  }
+  if (source.startsWith(MEAL_SOURCE)) {
+    return { kind: 'meal', id: source.slice(MEAL_SOURCE.length) };
+  }
+  return { kind: 'planned', id: source };
 }
 
 export interface ShoppingRowData {
@@ -40,6 +81,8 @@ export interface ShoppingRowData {
   /** What to pick up, or null for a pinch of a spice or oil, which needs only its name. */
   amountText: string | null;
   isChecked: boolean;
+  /** What put the row's items on the list, each once. */
+  sources: string[];
 }
 
 export interface ShoppingGroup {
@@ -124,19 +167,19 @@ export interface ShopLineRow {
   ingredientId: string;
   name: string;
   section: ShopSection;
-  lines: ShoppingLine[];
+  lines: SourcedLine[];
   amountText: string | null;
 }
 
 /** An add sheet's rows: one per ingredient and kind of unit, in the order the lines came, each with what to pick up. */
 export function groupShopLines(
-  lines: ShoppingLine[],
+  lines: SourcedLine[],
   ingredientsById: Map<string, ResolvedIngredient>,
 ): ShopLineRow[] {
   const byRow = lines.reduce((acc, line) => {
     const id = getShopRowId(line.ingredientId, line.unit);
     return acc.set(id, [...(acc.get(id) ?? []), line]);
-  }, new Map<string, ShoppingLine[]>());
+  }, new Map<string, SourcedLine[]>());
 
   const result = [...byRow.entries()].map(([id, rowLines]) => {
     const ingredient = ingredientsById.get(rowLines[0].ingredientId);
@@ -151,6 +194,147 @@ export function groupShopLines(
     };
   });
   return result;
+}
+
+export interface RowOnList {
+  /** What ticking the row adds: the lines whose source hasn't put it on the list yet, or all of them once every source has (more, on purpose). */
+  addLines: SourcedLine[];
+  /** The row's sources that already put it on the list, still to buy or got. */
+  matched: string[];
+  /** Whether a matched source sits on something still to buy, rather than only on what was got. */
+  isMatchedOpen: boolean;
+  /** Every source behind the row already put it on the list, so it starts unticked. */
+  isCovered: boolean;
+}
+
+/** How an add sheet's row stands against the list's items of the same row; a line put there by something else, or typed on the list, never counts as this row's. An open line written before sources were kept could be anyone's, so it still starts the row unticked. */
+export function getRowOnList(
+  lines: SourcedLine[],
+  rowItems: ShoppingItem[],
+): RowOnList {
+  const sourcesOf = (items: ShoppingItem[]) =>
+    new Set(items.flatMap((item) => item.sources ?? []));
+  const openItems = rowItems.filter((item) => !item.isChecked);
+  const open = sourcesOf(openItems);
+  const got = sourcesOf(rowItems.filter((item) => item.isChecked));
+  const isListed = (source: string | null) =>
+    !!source && (open.has(source) || got.has(source));
+  const rowSources = [
+    ...new Set(lines.flatMap((line) => (line.source ? [line.source] : []))),
+  ];
+  const matched = rowSources.filter(isListed);
+  const newLines = lines.filter((line) => !isListed(line.source));
+  const isCovered =
+    (rowSources.length > 0 && newLines.length === 0) ||
+    openItems.some((item) => item.sources === undefined);
+
+  return {
+    addLines: isCovered ? lines : newLines,
+    matched,
+    isMatchedOpen: matched.some((source) => open.has(source)),
+    isCovered,
+  };
+}
+
+/** "Thu dinner and Fri lunch", or "3 of these meals". */
+export const formatSourceNames = (names: string[]) => {
+  if (names.length <= 1) return names[0] ?? '';
+  return names.length === 2
+    ? `${names[0]} and ${names[1]}`
+    : `${names.length} of these meals`;
+};
+
+/** The line under an add sheet's row. `openText` is undefined when nothing of the row is still to buy, null when what is has no amount (a pinch of a spice). */
+export function getOnListHint(
+  state: RowOnList,
+  matchedText: string,
+  openText: string | null | undefined,
+): string | null {
+  if (state.matched.length > 0) {
+    const hint = `Already ${state.isMatchedOpen ? 'on your list' : 'got it'} for ${matchedText}`;
+    return state.isCovered ? hint : `${hint}; this adds the rest`;
+  }
+  if (openText === undefined) return null;
+  return openText ? `On your list · ${openText}` : 'On your list';
+}
+
+const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  timeZone: 'UTC',
+});
+
+/** "Thu" for a day in the coming week, else "Oct 23", so a weekday never points at the wrong week. */
+export const formatSourceDay = (dayKey: string, todayKey: string) =>
+  dayKey >= todayKey && dayKey <= addDaysToKey(todayKey, 6)
+    ? weekdayFormatter.format(getDateOfDayKey(dayKey))
+    : formatDayShort(dayKey);
+
+export interface ShoppingSourceLabel {
+  name: string;
+  /** A planned meal's day; null for a recipe or a saved meal. */
+  dayKey: string | null;
+  isRecipe: boolean;
+}
+
+/** The name of every source on the list that still resolves; a planned meal, recipe or saved meal that is gone (or not loaded) is left out. */
+export function getShoppingSourceLabels(
+  items: ShoppingItem[],
+  plannedMeals: PlannedMeal[],
+  recipesById: Map<string, Recipe>,
+  mealsById: Map<string, Meal>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): Map<string, ShoppingSourceLabel> {
+  const sources = new Set(items.flatMap((item) => item.sources ?? []));
+  const planned = new Map(
+    plannedMeals
+      .filter((meal) => sources.has(meal.id))
+      .map((meal) => [meal.id, meal]),
+  );
+  const getLabel = (source: string): ShoppingSourceLabel | null => {
+    const { kind, id } = parseShoppingSource(source);
+    if (kind === 'recipe') {
+      const title = recipesById.get(id)?.title;
+      return title ? { name: title, dayKey: null, isRecipe: true } : null;
+    }
+    if (kind === 'meal') {
+      const name = mealsById.get(id)?.name;
+      return name ? { name, dayKey: null, isRecipe: false } : null;
+    }
+    const meal = planned.get(id);
+    const name = meal
+      ? getPlannedMealTitle(meal, recipesById, ingredientsById)
+      : '';
+    return meal && name
+      ? { name, dayKey: getPlannedDayKey(meal.date), isRecipe: false }
+      : null;
+  };
+
+  const result = new Map(
+    [...sources].flatMap((source) => {
+      const label = getLabel(source);
+      return label ? [[source, label] as const] : [];
+    }),
+  );
+  return result;
+}
+
+/** What a line is for: "Adobo chicken (Thu) and Cilantro lime rice (Fri)", "3 meals", or null when nothing behind it still resolves. */
+export function getShoppingSourcesText(
+  sources: string[],
+  labels: Map<string, ShoppingSourceLabel>,
+  todayKey: string,
+): string | null {
+  const found = sources.flatMap((source) => labels.get(source) ?? []);
+  if (found.length === 0) return null;
+  if (found.length > 2) {
+    return `${found.length} ${found.every((label) => label.isRecipe) ? 'recipes' : 'meals'}`;
+  }
+  const names = found.map((label) =>
+    label.dayKey
+      ? `${label.name} (${formatSourceDay(label.dayKey, todayKey)})`
+      : label.name,
+  );
+  return names.join(' and ');
 }
 
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
@@ -178,6 +362,44 @@ export function mergeLines(lines: ShoppingLine[]): ShoppingLine[] {
       amount: Math.min(roundAmount(line.amount), MAX_SHOPPING_AMOUNT),
     }))
     .filter((line) => line.amount > 0);
+}
+
+/** Like `mergeLines`, and each item keeps every source behind its lines, in the order they came. */
+export function mergeSourcedLines(lines: SourcedLine[]): ListLine[] {
+  const sums = lines.reduce((acc, line) => {
+    const id = getShoppingItemId(line.ingredientId, line.unit);
+    const sources = acc.get(id)?.sources ?? [];
+    return acc.set(id, {
+      ingredientId: line.ingredientId,
+      unit: line.unit,
+      amount: (acc.get(id)?.amount ?? 0) + line.amount,
+      sources:
+        !line.source || sources.includes(line.source)
+          ? sources
+          : [...sources, line.source],
+    });
+  }, new Map<string, ListLine>());
+
+  return [...sums.values()]
+    .filter((line) => Number.isFinite(line.amount))
+    .map((line) => ({
+      ...line,
+      amount: Math.min(roundAmount(line.amount), MAX_SHOPPING_AMOUNT),
+    }))
+    .filter((line) => line.amount > 0);
+}
+
+/** An item's sources after an add: the added ones move to the end, and past the cap the oldest are let go. */
+export function mergeSources(
+  existing: readonly string[],
+  added: readonly string[],
+): string[] {
+  const fresh = [...new Set(added)];
+  const kept = [...new Set(existing)].filter(
+    (source) => !fresh.includes(source),
+  );
+  const result = [...kept, ...fresh].slice(-MAX_SHOPPING_SOURCES);
+  return result;
 }
 
 export interface ShoppingFields {
@@ -227,6 +449,29 @@ export function getRecipeLines(
   return mergeLines(getRecipeRawLines(recipe, servings, ingredientsById));
 }
 
+const getItemRawLines = (
+  item: MealItem,
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): ShoppingLine[] => {
+  if (item.kind === 'RECIPE') {
+    const recipe = recipesById.get(item.refId);
+    return recipe
+      ? getRecipeRawLines(recipe, item.servings, ingredientsById)
+      : [];
+  }
+  const ingredient = ingredientsById.get(item.refId);
+  return ingredient
+    ? [
+        {
+          ingredientId: ingredient.id,
+          amount: item.servings * ingredient.serving.amount,
+          unit: ingredient.serving.unit,
+        },
+      ]
+    : [];
+};
+
 /** The lines of a meal or a day: a recipe item scales its recipe by its servings, an ingredient item is its servings of one serving size. */
 export function getItemsLines(
   items: MealItem[],
@@ -234,25 +479,78 @@ export function getItemsLines(
   ingredientsById: Map<string, ResolvedIngredient>,
 ): ShoppingLine[] {
   return mergeLines(
-    items.flatMap((item): ShoppingLine[] => {
-      if (item.kind === 'RECIPE') {
-        const recipe = recipesById.get(item.refId);
-        return recipe
-          ? getRecipeRawLines(recipe, item.servings, ingredientsById)
-          : [];
-      }
-      const ingredient = ingredientsById.get(item.refId);
-      return ingredient
-        ? [
-            {
-              ingredientId: ingredient.id,
-              amount: item.servings * ingredient.serving.amount,
-              unit: ingredient.serving.unit,
-            },
-          ]
-        : [];
-    }),
+    items.flatMap((item) =>
+      getItemRawLines(item, recipesById, ingredientsById),
+    ),
   );
+}
+
+export interface SourcedItems {
+  items: MealItem[];
+  source: string | null;
+}
+
+/** Each group's lines tagged with its source, summed per ingredient, unit and source but left unrounded, so amounts that meet on one item round once. */
+export function getSourcedLines(
+  groups: SourcedItems[],
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): SourcedLine[] {
+  const sums = groups
+    .flatMap(({ items, source }) =>
+      items
+        .flatMap((item) => getItemRawLines(item, recipesById, ingredientsById))
+        .map((line) => ({ ...line, source })),
+    )
+    .reduce((acc, line) => {
+      const key = `${getShoppingItemId(line.ingredientId, line.unit)}|${line.source ?? ''}`;
+      return acc.set(key, {
+        ...line,
+        amount: (acc.get(key)?.amount ?? 0) + line.amount,
+      });
+    }, new Map<string, SourcedLine>());
+
+  const result = [...sums.values()].filter(
+    (line) => Number.isFinite(line.amount) && roundAmount(line.amount) > 0,
+  );
+  return result;
+}
+
+export interface DayOnList {
+  /** Every planned meal with something to buy has already put a line on the list. */
+  isListed: boolean;
+  /** The rows the day's add sheet would start unticked, of all its rows. */
+  coveredCount: number;
+  rowCount: number;
+}
+
+/** Whether a day's planned meals are on the list, counted the way its add sheet ticks them. */
+export function getDayOnList(
+  meals: PlannedMeal[],
+  items: ShoppingItem[],
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): DayOnList {
+  const lines = getSourcedLines(
+    meals.map((meal) => ({ items: meal.items, source: meal.id })),
+    recipesById,
+    ingredientsById,
+  );
+  const rows = groupShopLines(lines, ingredientsById);
+  const itemsByRow = items.reduce((acc, item) => {
+    const id = getShopRowId(item.ingredientId, item.unit);
+    return acc.set(id, [...(acc.get(id) ?? []), item]);
+  }, new Map<string, ShoppingItem[]>());
+  const listed = new Set(items.flatMap((item) => item.sources ?? []));
+  const mealIds = [...new Set(lines.flatMap((line) => line.source ?? []))];
+
+  return {
+    isListed: mealIds.length > 0 && mealIds.every((id) => listed.has(id)),
+    coveredCount: rows.filter(
+      (row) => getRowOnList(row.lines, itemsByRow.get(row.id) ?? []).isCovered,
+    ).length,
+    rowCount: rows.length,
+  };
 }
 
 export interface PlanSpan {
@@ -312,6 +610,7 @@ export function groupShoppingItems(
         name: ingredient?.name ?? 'Removed ingredient',
         amountText: formatShopAmount(getShopAmount(rowItems, section)),
         isChecked: byBase[0].isChecked,
+        sources: [...new Set(byBase.flatMap((item) => item.sources ?? []))],
       };
       return { row, section };
     });

@@ -107,6 +107,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
               ingredientId,
               amount: serving.amount,
               unit: serving.unit,
+              source: null,
             },
           ],
         }),

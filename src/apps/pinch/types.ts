@@ -283,6 +283,8 @@ export interface ShoppingItem {
   /** Immutable: a different unit is a different item. */
   unit: Unit;
   isChecked: boolean;
+  /** What put it on the list: planned meal ids, `recipe:<id>` and `meal:<id>`, oldest first, at most 60; empty for something added on the list itself. Documents written before sources lack the key, which reads as empty. */
+  sources: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -382,6 +384,8 @@ export interface RecipeNote {
 export type ShoppingRequest =
   | { kind: 'recipe'; recipeId: string }
   | { kind: 'items'; items: MealItem[]; label: string; mealId?: string | null }
+  /** One day's planned meals, each remembered as what put its lines on the list. */
+  | { kind: 'day'; dayKey: string }
   /** Planned days, both ends included (one day has the same start and end); the days before today are left out. */
   | { kind: 'range'; startKey: string; endKey: string };
 

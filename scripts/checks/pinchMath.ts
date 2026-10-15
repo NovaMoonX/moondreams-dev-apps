@@ -2807,7 +2807,6 @@ const leftOutOnDay = [
   gap('NOT_COMPARABLE', 'soy'),
   gap('NO_PRODUCT', 'rice'),
 ];
-const stillOpen = leftOutOnDay.filter((entry) => entry.ingredientId !== 'rice');
 assert.equal(
   countLeftOutIngredients(leftOutOnDay),
   4,
@@ -5995,6 +5994,405 @@ assert.equal(
   ),
   `Frozen ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(2026, 9, 5))}`,
   'a box frozen late on the 5th, local time, reads as frozen on the 5th in any zone',
+);
+
+// ============================================================
+// SOURCES workstream: the shopping list remembers what filled it
+// ============================================================
+
+import {
+  getSourcedLines as srcSourcedLines,
+  mergeSourcedLines as srcMergeLines,
+  mergeSources as srcMergeSources,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import { MAX_SHOPPING_SOURCES as SRC_MAX } from '../../src/apps/pinch/constants.ts';
+
+assert.deepEqual(
+  srcMergeLines([
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP', source: 'thu' },
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP', source: 'fri' },
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP', source: 'thu' },
+    { ingredientId: 'salt', amount: 0.001, unit: 'TSP', source: 'thu' },
+    { ingredientId: 'milk', amount: 1, unit: 'CUP', source: null },
+  ]),
+  [
+    { ingredientId: 'rice', unit: 'CUP', amount: 1, sources: ['thu', 'fri'] },
+    { ingredientId: 'milk', unit: 'CUP', amount: 1, sources: [] },
+  ],
+  'an add sums one ingredient and unit across sources, rounding once, keeps each source once in the order they came, and a line typed on the list has none',
+);
+assert.deepEqual(
+  [
+    srcMergeSources([], ['thu']),
+    srcMergeSources(['thu'], ['thu']),
+    srcMergeSources(['thu', 'recipe:adobo'], ['fri', 'thu']),
+    srcMergeSources(['thu', 'thu'], []),
+  ],
+  [['thu'], ['thu'], ['recipe:adobo', 'fri', 'thu'], ['thu']],
+  'sources are a set: a second add from the same source adds nothing new and moves it to the end',
+);
+const srcMany = Array.from({ length: SRC_MAX }, (_, index) => `old-${index}`);
+const srcCapped = srcMergeSources(srcMany, ['new-1', 'new-2']);
+assert.deepEqual(
+  [srcCapped.length, srcCapped[0], srcCapped.slice(-2)],
+  [SRC_MAX, 'old-2', ['new-1', 'new-2']],
+  'past the rules’ cap the oldest sources are let go, so an add never fails on it',
+);
+
+const srcRiceRecipe = {
+  id: 'rice-pot',
+  title: 'Rice pot',
+  servings: 3,
+  ingredients: [
+    { id: 'r1', ingredientId: 'rice', amount: 1, unit: 'CUP', note: null },
+    { id: 'r2', ingredientId: 'salt', amount: 0.003, unit: 'TSP', note: null },
+  ],
+} as unknown as Recipe;
+const srcIngredients = new Map([
+  ['rice', { id: 'rice', serving: { amount: 0.25, unit: 'CUP' } }],
+  ['salt', { id: 'salt', serving: { amount: 1, unit: 'TSP' } }],
+]) as unknown as Map<string, ResolvedIngredient>;
+const srcRecipeItem = (id: string, servings: number): MealItem => ({
+  id,
+  kind: 'RECIPE',
+  refId: 'rice-pot',
+  servings,
+});
+const srcLines = srcSourcedLines(
+  [
+    { items: [srcRecipeItem('a', 1), srcRecipeItem('b', 1)], source: 'thu' },
+    { items: [srcRecipeItem('c', 1)], source: 'fri' },
+    {
+      items: [{ id: 'd', kind: 'INGREDIENT', refId: 'rice', servings: 2 }],
+      source: null,
+    },
+  ],
+  new Map([['rice-pot', srcRiceRecipe]]),
+  srcIngredients,
+);
+assert.deepEqual(
+  srcLines.map((line) => [
+    line.ingredientId,
+    line.source,
+    Math.round(line.amount * 1000) / 1000,
+  ]),
+  [
+    ['rice', 'thu', 0.667],
+    ['rice', 'fri', 0.333],
+    ['rice', null, 0.5],
+  ],
+  'each planned meal’s lines carry its id, summed per source and left unrounded; a line too small to show is left out',
+);
+assert.deepEqual(
+  srcMergeLines(srcLines).map((line) => [line.amount, line.sources]),
+  [[1.5, ['thu', 'fri']]],
+  'thirds from two planned meals round once when they meet on one item',
+);
+
+import {
+  formatSourceDay as srcDay,
+  formatSourceNames as srcNames,
+  getOnListHint as srcHint,
+  getRowOnList as srcRowOnList,
+  parseShoppingSource as srcParse,
+} from '../../src/apps/pinch/utils/shopping.ts';
+
+const srcItem = (
+  amount: number,
+  isChecked: boolean,
+  sources?: string[],
+): ShoppingItem =>
+  ({
+    id: 'chicken__LB',
+    ingredientId: 'chicken',
+    amount,
+    unit: 'LB',
+    isChecked,
+    ...(sources ? { sources } : {}),
+    createdAt: 1,
+    updatedAt: 1,
+  }) as ShoppingItem;
+const srcChicken = (source: string | null, amount: number) => ({
+  ingredientId: 'chicken',
+  amount,
+  unit: 'LB' as Unit,
+  source,
+});
+const srcWeek = [srcChicken('thu', 1), srcChicken('fri', 1.5)];
+const srcState = (
+  lines: ReturnType<typeof srcChicken>[],
+  items: ShoppingItem[],
+) => {
+  const state = srcRowOnList(lines, items);
+  return [
+    state.isCovered,
+    state.matched,
+    state.isMatchedOpen,
+    state.addLines.map((line) => line.source),
+  ];
+};
+assert.deepEqual(
+  [
+    srcState(srcWeek, []),
+    srcState(srcWeek, [srcItem(1, false, ['thu'])]),
+    srcState(srcWeek, [srcItem(2.5, false, ['thu', 'fri'])]),
+    srcState(srcWeek, [srcItem(2, false, ['recipe:adobo'])]),
+    srcState(srcWeek, [srcItem(2, false, [])]),
+    srcState(srcWeek, [srcItem(2, false)]),
+    srcState([srcChicken('thu', 1)], [srcItem(1, true, ['thu'])]),
+  ],
+  [
+    [false, [], false, ['thu', 'fri']],
+    [false, ['thu'], true, ['fri']],
+    [true, ['thu', 'fri'], true, ['thu', 'fri']],
+    [false, [], false, ['thu', 'fri']],
+    [false, [], false, ['thu', 'fri']],
+    [true, [], false, ['thu', 'fri']],
+    [true, ['thu'], false, ['thu']],
+  ],
+  'a row starts unticked only when its own sources put it on the list (still to buy or got); another meal, a recipe or a typed line leaves it ticked, Thursday’s share is never added twice, and an open line written before sources keeps the old guard',
+);
+assert.deepEqual(
+  srcHint(srcRowOnList(srcWeek, [srcItem(2, false)]), '', '2 lb'),
+  'On your list · 2 lb',
+  'a line written before sources says only that it is on the list',
+);
+assert.deepEqual(
+  [
+    srcHint(srcRowOnList(srcWeek, []), '', undefined),
+    srcHint(srcRowOnList(srcWeek, [srcItem(2, false)]), '', '2 lb'),
+    srcHint(
+      srcRowOnList([srcChicken('thu', 1)], [srcItem(2, false)]),
+      '',
+      null,
+    ),
+    srcHint(
+      srcRowOnList(srcWeek, [srcItem(2.5, false, ['thu', 'fri'])]),
+      'Thu dinner and Fri dinner',
+      '2.5 lb',
+    ),
+    srcHint(
+      srcRowOnList(srcWeek, [srcItem(1, false, ['thu'])]),
+      'Thu dinner',
+      '1 lb',
+    ),
+    srcHint(
+      srcRowOnList([srcChicken('thu', 1)], [srcItem(1, true, ['thu'])]),
+      'Thu dinner',
+      undefined,
+    ),
+  ],
+  [
+    null,
+    'On your list · 2 lb',
+    'On your list',
+    'Already on your list for Thu dinner and Fri dinner',
+    'Already on your list for Thu dinner; this adds the rest',
+    'Already got it for Thu dinner',
+  ],
+  'the row’s hint names this sheet’s sources that already put it on the list, and keeps “On your list · 2 lb” for what something else put there',
+);
+assert.deepEqual(
+  [
+    srcNames(['Thu dinner']),
+    srcNames(['Thu dinner', 'Fri lunch']),
+    srcNames(['Thu dinner', 'Fri lunch', 'Sat dinner']),
+  ],
+  ['Thu dinner', 'Thu dinner and Fri lunch', '3 of these meals'],
+  'one or two sources are named, more are counted',
+);
+assert.deepEqual(
+  [
+    srcDay('2026-10-15', '2026-10-15'),
+    srcDay('2026-10-21', '2026-10-15'),
+    srcDay('2026-10-22', '2026-10-15'),
+    srcDay('2026-10-14', '2026-10-15'),
+  ],
+  ['Thu', 'Wed', 'Oct 22', 'Oct 14'],
+  'a weekday names a day of the coming week only; one further out or already past says its date',
+);
+assert.deepEqual(
+  [
+    srcParse('recipe:abc'),
+    srcParse('meal:xyz'),
+    srcParse('seed-pinch-planned-4'),
+  ],
+  [
+    { kind: 'recipe', id: 'abc' },
+    { kind: 'meal', id: 'xyz' },
+    { kind: 'planned', id: 'seed-pinch-planned-4' },
+  ],
+  'a source names a recipe, a saved meal, or a planned meal by its own id',
+);
+
+import { getDayOnList as srcDayOnList } from '../../src/apps/pinch/utils/shopping.ts';
+
+const srcPlanned = (id: string, items: MealItem[]) =>
+  ({ id, items }) as unknown as ShopPlannedMeal;
+const srcDayMeals = [
+  srcPlanned('lunch', [srcRecipeItem('a', 3)]),
+  srcPlanned('dinner', [
+    { id: 'b', kind: 'INGREDIENT', refId: 'rice', servings: 2 },
+    { id: 'c', kind: 'INGREDIENT', refId: 'salt', servings: 1 },
+  ]),
+  srcPlanned('gone', [
+    { id: 'd', kind: 'RECIPE', refId: 'deleted-recipe', servings: 1 },
+  ]),
+];
+const srcRice = (sources?: string[], isChecked = false) =>
+  ({
+    id: 'rice__CUP',
+    ingredientId: 'rice',
+    amount: 1.5,
+    unit: 'CUP',
+    isChecked,
+    ...(sources ? { sources } : {}),
+  }) as ShoppingItem;
+const srcDayState = (items: ShoppingItem[]) => {
+  const day = srcDayOnList(
+    srcDayMeals,
+    items,
+    new Map([['rice-pot', srcRiceRecipe]]),
+    srcIngredients,
+  );
+  return [day.isListed, day.coveredCount, day.rowCount];
+};
+assert.deepEqual(
+  [
+    srcDayState([]),
+    srcDayState([srcRice(['dinner'])]),
+    srcDayState([srcRice(['dinner', 'lunch'])]),
+    srcDayState([
+      srcRice(['lunch']),
+      {
+        ...srcRice(['dinner']),
+        id: 'salt__TSP',
+        ingredientId: 'salt',
+        unit: 'TSP',
+      },
+    ]),
+    srcDayState([srcRice(['lunch', 'dinner'], true)]),
+    srcDayState([srcRice()]),
+  ],
+  [
+    [false, 0, 2],
+    [false, 0, 2],
+    [true, 1, 2],
+    [true, 1, 2],
+    [true, 1, 2],
+    [false, 1, 2],
+  ],
+  'a day is on the list once every planned meal with something to buy put a line there, got or not (a meal whose recipe is gone has nothing to buy); otherwise it counts the rows its sheet starts unticked, a line from before sources included',
+);
+
+import {
+  getShoppingSourceLabels as srcLabels,
+  getShoppingSourcesText as srcText,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import type { Meal as SrcMeal } from '../../src/apps/pinch/types.ts';
+
+const srcPlannedOn = (
+  id: string,
+  dayKey: string,
+  name: string | null,
+  items: MealItem[],
+) =>
+  ({
+    id,
+    date: Date.parse(`${dayKey}T00:00:00Z`),
+    mealType: 'DINNER',
+    name,
+    items,
+  }) as unknown as ShopPlannedMeal;
+const srcLabelMap = srcLabels(
+  [
+    { sources: ['p-thu', 'p-gone'] },
+    {
+      sources: [
+        'p-fri',
+        'p-far',
+        'recipe:rice-pot',
+        'recipe:beans',
+        'recipe:soup',
+        'meal:m1',
+        'recipe:gone',
+      ],
+    },
+    {},
+  ] as unknown as ShoppingItem[],
+  [
+    srcPlannedOn('p-thu', '2026-10-15', null, [srcRecipeItem('a', 1)]),
+    srcPlannedOn('p-fri', '2026-10-16', 'Taco night', []),
+    srcPlannedOn('p-far', '2026-10-30', null, [
+      srcRecipeItem('b', 1),
+      { id: 'c', kind: 'INGREDIENT', refId: 'rice', servings: 1 },
+    ]),
+    srcPlannedOn('p-empty', '2026-10-15', null, []),
+  ],
+  new Map([
+    ['rice-pot', srcRiceRecipe],
+    ['beans', { ...srcRiceRecipe, id: 'beans', title: 'Beans' }],
+    ['soup', { ...srcRiceRecipe, id: 'soup', title: 'Soup' }],
+  ]),
+  new Map([['m1', { id: 'm1', name: 'Adobo and rice' }]]) as unknown as Map<
+    string,
+    SrcMeal
+  >,
+  new Map([['rice', { id: 'rice', name: 'Rice' }]]) as unknown as Map<
+    string,
+    ResolvedIngredient
+  >,
+);
+const srcFor = (sources: string[]) =>
+  srcText(sources, srcLabelMap, '2026-10-15');
+assert.deepEqual(
+  [
+    srcFor(['p-thu', 'p-gone']),
+    srcFor(['p-thu', 'p-fri']),
+    srcFor(['p-far']),
+    srcFor(['recipe:rice-pot']),
+    srcFor(['meal:m1', 'recipe:beans']),
+    srcFor(['recipe:rice-pot', 'meal:m1', 'p-fri']),
+    srcFor(['recipe:rice-pot', 'recipe:beans', 'recipe:soup']),
+    srcFor(['p-gone', 'recipe:gone']),
+    srcFor([]),
+  ],
+  [
+    'Rice pot (Thu)',
+    'Rice pot (Thu) and Taco night (Fri)',
+    'Rice pot +1 (Oct 30)',
+    'Rice pot',
+    'Adobo and rice and Beans',
+    '3 meals',
+    '3 recipes',
+    null,
+    null,
+  ],
+  'a line says what it is for by the planned meal’s name and day, the recipe or the saved meal; past two it counts them, and a source that is gone is dropped quietly',
+);
+assert.equal(
+  srcLabelMap.has('p-empty'),
+  false,
+  'only sources on the list are named',
+);
+
+const srcRows = groupShoppingItems(
+  [
+    { ...shopItem('chicken', 'LB', 2, false), sources: ['a', 'b'] },
+    { ...shopItem('chicken', 'OZ', 4, false), sources: ['b', 'c'] },
+    shopItem('rice', 'CUP', 1, false),
+  ],
+  shopSectionIngredients,
+);
+assert.deepEqual(
+  srcRows.toBuy.flatMap((group) =>
+    group.rows.map((row) => [row.name, row.sources]),
+  ),
+  [
+    ['Chicken', ['a', 'b', 'c']],
+    ['Rice', []],
+  ],
+  'a row carries every source of the items it stands for, each once, and a line from before sources has none',
 );
 
 console.log('pinchMath: all checks passed');

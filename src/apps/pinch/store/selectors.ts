@@ -29,6 +29,7 @@ import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 import {
   getShopRowId,
   getShoppingCost,
+  getShoppingSourceLabels,
   groupShoppingItems,
 } from '@apps/pinch/utils/shopping';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
@@ -488,6 +489,18 @@ export const selectStockByMealWithRecipes = createSelector(
 export const selectMealsById = createSelector(
   [selectMeals],
   (meals) => new Map(meals.map((meal) => [meal.id, meal])),
+);
+
+/** The names behind what put each line on the shopping list, computed once per change of the list, the plan, recipes or saved meals. */
+export const selectShoppingSourceLabels = createSelector(
+  [
+    selectShoppingItems,
+    selectPlannedMeals,
+    selectRecipesById,
+    selectMealsById,
+    selectIngredientsById,
+  ],
+  getShoppingSourceLabels,
 );
 
 /** The shown period's spend, average per meal and breakdowns, computed once per change of meals, prices or days shown. */
