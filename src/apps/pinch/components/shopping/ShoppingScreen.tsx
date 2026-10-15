@@ -605,6 +605,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             variant={cost.leftOut.length > 0 ? 'warning' : 'help'}
             title='About this price'
             placement='top'
+            dismissLabel='OK'
           >
             {(coverage === 'some' || coverage === 'all') && (
               <p>

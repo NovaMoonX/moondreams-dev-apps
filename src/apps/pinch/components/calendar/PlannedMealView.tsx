@@ -328,7 +328,7 @@ function PlannedMealView({
         <div className='space-y-1'>
           <p className='font-medium'>Which one are you cooking?</p>
           <p className='text-muted-foreground text-sm'>
-            It opens with the servings you planned.
+            It opens at the recipe's own servings.
           </p>
         </div>
         <ul className='divide-border divide-y'>

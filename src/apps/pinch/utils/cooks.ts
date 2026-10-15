@@ -58,11 +58,6 @@ export const getCookSummaries = (cooks: Cook[]) => {
   return result;
 };
 
-export const getCookFactText = (count: number, lastText: string) =>
-  count === 1
-    ? `Cooked once · ${lastText}`
-    : `Cooked ${count} times · last ${lastText}`;
-
 export const isCookHistoryFull = (count: number) =>
   count >= SOFT_MAX_COOKS_PER_RECIPE;
 

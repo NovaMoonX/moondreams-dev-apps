@@ -17,6 +17,7 @@ import WeekSummarySheet from '@apps/pinch/components/calendar/WeekSummarySheet';
 import WeekView from '@apps/pinch/components/calendar/WeekView';
 import SettingsSheet from '@apps/pinch/components/settings/SettingsSheet';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
+import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import {
   CALENDAR_VIEW_LABELS,
@@ -136,6 +137,10 @@ function CalendarScreen({
   const isFromToday = isRollingWeek && range.startKey === todayKey;
   const stats = useAppSelector((state) =>
     selectPeriodStats(state, range.startKey, range.endKey),
+  );
+  const upcomingMealCount = stats.byDay.reduce(
+    (total, day) => (day.dayKey >= todayKey ? total + day.count : total),
+    0,
   );
   const isFirstRun = !hasPlannedMeals && !isPlannedLoadFailed;
 
@@ -305,6 +310,22 @@ function CalendarScreen({
           range={range}
           stats={stats}
           todayKey={todayKey}
+          addToShoppingSlot={
+            upcomingMealCount > 0 ? (
+              <AddToShoppingRow
+                subtitle={`${upcomingMealCount} ${upcomingMealCount === 1 ? 'meal' : 'meals'} from today on`}
+                onClick={() => {
+                  setIsSummaryOpen(false);
+                  setShopping({
+                    kind: 'range',
+                    startKey:
+                      range.startKey > todayKey ? range.startKey : todayKey,
+                    endKey: range.endKey,
+                  });
+                }}
+              />
+            ) : undefined
+          }
           onClose={() => setIsSummaryOpen(false)}
           onOpenDay={(dayKey) => {
             setIsSummaryOpen(false);

@@ -23,7 +23,7 @@ import type { Gap, ShoppingRequest } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCost,
-  formatRowCost,
+  formatRowPrice,
   getItemTitle,
 } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
@@ -203,7 +203,10 @@ function MealDrawer({
                     </span>
                   </span>
                   <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                    {formatRowCost(itemCost?.cents, false)}
+                    {formatRowPrice(
+                      itemCost?.cents,
+                      (itemCost?.gaps.length ?? 0) > 0,
+                    )}
                   </span>
                 </li>
               );

@@ -16,10 +16,7 @@ import {
   wouldRepriceChange,
   type CostContext,
 } from '../../src/apps/pinch/utils/mealMath.ts';
-import {
-  countLeftOutIngredients,
-  countUnaskedIngredients,
-} from '../../src/apps/pinch/utils/gaps.ts';
+import { countLeftOutIngredients } from '../../src/apps/pinch/utils/gaps.ts';
 import {
   getCookedRecipeIds,
   getPlannedMealOffer,
@@ -27,7 +24,6 @@ import {
 } from '../../src/apps/pinch/components/calendar/plannedMealOffer.ts';
 import {
   formatCostTile,
-  formatRowCost,
   formatRowPrice,
   getFixedNote,
   getRepriceLines,
@@ -117,7 +113,6 @@ import {
   getEventText,
 } from '../../src/apps/pinch/utils/containers.ts';
 import {
-  getCookFactText,
   getCookId,
   getCookServings,
   getCookSummaries,
@@ -1186,16 +1181,6 @@ assert.equal(
   )?.lastCookedAt,
   700,
   'the last cook is the latest time, whatever the order they arrive in',
-);
-assert.equal(
-  getCookFactText(3, 'Oct 12'),
-  'Cooked 3 times · last Oct 12',
-  'the fact line for several cooks',
-);
-assert.equal(
-  getCookFactText(1, 'Oct 12'),
-  'Cooked once · Oct 12',
-  'the fact line for one cook',
 );
 assert.equal(isCookHistoryFull(499), false, '499 cooks still fits');
 assert.equal(isCookHistoryFull(500), true, '500 cooks is full');
@@ -2811,20 +2796,7 @@ assert.deepEqual(
   'the ingredients and steps are the reading’s own',
 );
 
-assert.equal(formatRowCost(null, false), 'No price yet');
-assert.equal(formatRowCost(undefined, false), 'No price yet');
-assert.equal(
-  formatRowCost(null, true),
-  "Wasn't priced",
-  'a frozen day says it was not priced, not that it has no price yet',
-);
-assert.equal(
-  formatRowCost(null, true, true),
-  'Still no price',
-  'an unpriced item on a day that was priced again says so',
-);
-assert.equal(formatRowCost(15.4, true), '$0.15');
-assert.equal(formatRowCost(0, false), '$0.00', 'a known free item is priced');
+assert.equal(formatRowPrice(0, false), '$0.00', 'a known free item is priced');
 
 const gap = (kind: Gap['kind'], ingredientId: string) =>
   ({ kind, ingredientId }) as Gap;
@@ -2841,24 +2813,6 @@ assert.equal(
   4,
   'an ingredient in several meals counts once',
 );
-assert.equal(
-  countUnaskedIngredients(leftOutOnDay, stillOpen, {}),
-  1,
-  'an ingredient only in a day that has passed is left out but not asked about',
-);
-assert.equal(
-  countUnaskedIngredients(leftOutOnDay, stillOpen, {
-    'NO_PRODUCT:vinegar': 1,
-  }),
-  2,
-  'a hidden note takes its ingredient off the note but not off the total',
-);
-assert.equal(
-  countUnaskedIngredients(leftOutOnDay, stillOpen, { 'NO_PRODUCT:soy': 1 }),
-  1,
-  'an ingredient whose package size is still open stays in the note when only its price note was hidden',
-);
-
 const DAY = 86_400_000;
 const localAt = (day: number, hour: number, minute = 0) =>
   new Date(2026, 9, day, hour, minute).getTime();

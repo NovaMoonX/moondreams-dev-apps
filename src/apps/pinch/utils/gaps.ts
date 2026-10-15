@@ -24,12 +24,3 @@ export const withoutDismissed = (
   gaps: Gap[],
   dismissed: Record<string, number>,
 ) => gaps.filter((gap) => !(getGapKey(gap) in dismissed));
-
-/** How many left-out ingredients the note beside a total no longer asks about: the ones the person hid it for and the ones only in days that have passed. */
-export const countUnaskedIngredients = (
-  leftOut: Gap[],
-  open: Gap[],
-  dismissed: Record<string, number>,
-) =>
-  countLeftOutIngredients(leftOut) -
-  countLeftOutIngredients(withoutDismissed(open, dismissed));

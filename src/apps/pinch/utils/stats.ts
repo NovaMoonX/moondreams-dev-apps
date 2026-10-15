@@ -1,7 +1,6 @@
-import { MEAL_TYPES, NUTRITION_METRICS } from '@apps/pinch/constants';
+import { NUTRITION_METRICS } from '@apps/pinch/constants';
 import type {
   Gap,
-  MealType,
   NutritionValues,
   PlannedMeal,
   Recipe,
@@ -46,7 +45,6 @@ export interface PeriodStats {
   nutritionMissing: IngredientMissing[];
   openNutritionMissing: IngredientMissing[];
   byDay: (Totals & { dayKey: string })[];
-  byType: (Totals & { mealType: MealType })[];
 }
 
 const addNutrition = (
@@ -115,15 +113,6 @@ export function getPeriodStats(
           nutrition.values,
         ),
       );
-      acc.byType.set(
-        meal.mealType,
-        addTotals(
-          acc.byType.get(meal.mealType),
-          cost.totalCents,
-          cost.leftOut,
-          nutrition.values,
-        ),
-      );
       acc.nutrition = addNutrition(acc.nutrition, nutrition.values);
       acc.nutritionMissing.push(...nutrition.missing);
       if (!meal.snapshot) {
@@ -144,7 +133,6 @@ export function getPeriodStats(
     },
     {
       byDay: new Map<string, Totals>(),
-      byType: new Map<MealType, Totals>(),
       plannedCount: 0,
       spendCents: 0,
       mealsPriced: 0,
@@ -188,12 +176,6 @@ export function getPeriodStats(
         ...totals,
         leftOut: dedupe(totals.leftOut),
       })),
-    byType: MEAL_TYPES.flatMap((mealType) => {
-      const totals = walked.byType.get(mealType);
-      return totals
-        ? [{ mealType, ...totals, leftOut: dedupe(totals.leftOut) }]
-        : [];
-    }),
   };
 }
 

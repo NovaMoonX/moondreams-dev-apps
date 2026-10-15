@@ -27,6 +27,7 @@ import { getPeriodStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 import {
+  getShopRowId,
   getShoppingCost,
   groupShoppingItems,
 } from '@apps/pinch/utils/shopping';
@@ -346,8 +347,15 @@ export const selectShoppingItems = (state: RootState) =>
 export const selectShoppingLoadError = (state: RootState) =>
   state.pinch.shopping.loadError;
 
-export const selectShoppingOpenCount = (state: RootState) =>
-  state.pinch.shopping.items.filter((item) => !item.isChecked).length;
+export const selectShoppingOpenCount = createSelector(
+  [selectShoppingItems],
+  (items) =>
+    new Set(
+      items
+        .filter((item) => !item.isChecked)
+        .map((item) => getShopRowId(item.ingredientId, item.unit)),
+    ).size,
+);
 
 export const selectShoppingById = createSelector(
   [selectShoppingItems],

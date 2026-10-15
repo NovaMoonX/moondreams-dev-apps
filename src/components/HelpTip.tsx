@@ -52,6 +52,8 @@ interface HelpTipProps {
   placement?: 'top' | 'bottom';
   /** A caution ("this number leaves something out") instead of a question mark; opens the same way. */
   variant?: 'help' | 'warning';
+  /** The modal's dismiss button, for a screen where "Got it" already names something else. */
+  dismissLabel?: string;
   className?: string;
 }
 
@@ -93,6 +95,7 @@ function HelpTip({
   linkLabel,
   placement = 'bottom',
   variant = 'help',
+  dismissLabel = 'Got it',
   className,
 }: HelpTipProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -163,7 +166,7 @@ function HelpTip({
         {body}
         <div className='flex justify-end'>
           <Button type='button' rounded='full' onClick={() => setIsOpen(false)}>
-            Got it
+            {dismissLabel}
           </Button>
         </div>
       </div>
