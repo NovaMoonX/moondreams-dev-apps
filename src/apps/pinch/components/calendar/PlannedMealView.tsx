@@ -11,6 +11,7 @@ import {
   CookingPot,
 } from 'lucide-react';
 
+import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
@@ -99,6 +100,7 @@ function PlannedMealView({
   const [isChoosing, setIsChoosing] = useState(false);
   const [eatingPlace, setEatingPlace] = useState<ContainerPlace | null>(null);
   const mealContainers = useMealContainers(meal ?? null);
+  const now = useNow();
 
   if (!meal) {
     return null;
@@ -128,7 +130,7 @@ function PlannedMealView({
     cookIds: cooksById,
     containers: mealContainers,
     savedPlates: savedMeals.map((saved) => saved.items),
-    now: Date.now(),
+    now,
   });
   const { primary } = offer;
   const cookNow = cookable.filter(({ recipe }) =>
