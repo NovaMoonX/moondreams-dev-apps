@@ -2,9 +2,8 @@ import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { BookOpen, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
-import EntryChip from '@/components/EntryChip';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -559,15 +558,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             placeholder={view === 'meals' ? 'Search meals' : 'Search recipes'}
           />
         )
-      )}
-      {view === 'recipes' && sources.length > 0 && (
-        <div className='flex flex-wrap gap-2'>
-          <EntryChip
-            icon={<BookOpen className='h-4 w-4' />}
-            label='Sources'
-            onClick={() => openSubview({ kind: 'sources' })}
-          />
-        </div>
       )}
       {getBody()}
       {openId && (
