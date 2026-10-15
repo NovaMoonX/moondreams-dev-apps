@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChefHat } from 'lucide-react';
+import { CircleCheck } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
 import { useAppSelector } from '@/store';
@@ -105,7 +105,7 @@ function PlannedCookRow({
           actions={[
             {
               key: 'mark',
-              icon: <ChefHat className='h-4 w-4' />,
+              icon: <CircleCheck className='h-4 w-4' />,
               label: 'Mark as cooked',
               description: `Mark ${recipe.title} as cooked, ${formatServings(servings)}`,
               isDisabled: !isReady || isWorking || isHistoryFull,

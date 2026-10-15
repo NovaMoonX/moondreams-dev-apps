@@ -4,7 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   CalendarPlus,
-  ChefHat,
+  CircleCheck,
   CookingPot,
   History,
   PackagePlus,
@@ -244,7 +244,7 @@ function RecipeDrawer({
       },
     loadError === null && {
       key: 'cooked',
-      icon: <ChefHat className='h-4 w-4' />,
+      icon: <CircleCheck className='h-4 w-4' />,
       label: 'I cooked this',
       description: 'I cooked this: keeps a record you can change later',
       isDisabled: !isLoaded || isHistoryFull || isMarking,

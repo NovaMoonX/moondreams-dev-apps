@@ -57,7 +57,7 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
               onClick={() => setForm({ sourceId: null })}
             >
               <Plus className='h-4 w-4' aria-hidden='true' />
-              New source
+              New
             </Button>
           }
         />

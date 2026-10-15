@@ -5,7 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   CalendarDays,
   ChefHat,
-  ListChecks,
+  Refrigerator,
   ShoppingBasket,
 } from 'lucide-react';
 
@@ -21,8 +21,8 @@ interface PinchNavProps {
 const TAB_ICONS: Record<PinchTab, ReactNode> = {
   calendar: <CalendarDays className='h-5 w-5' />,
   recipes: <ChefHat className='h-5 w-5' />,
-  kitchen: <ShoppingBasket className='h-5 w-5' />,
-  shopping: <ListChecks className='h-5 w-5' />,
+  kitchen: <Refrigerator className='h-5 w-5' />,
+  shopping: <ShoppingBasket className='h-5 w-5' />,
 };
 
 /** A floating pill at the bottom of a phone, as wide as its four tabs; from `lg` up the same tabs stand in a rail on the left edge. */
@@ -41,7 +41,7 @@ function PinchNav({ value, onChange }: PinchNavProps) {
               <Button
                 type='button'
                 variant='tertiary'
-                aria-label={PINCH_TAB_LABELS[tab]}
+                aria-label={`${PINCH_TAB_LABELS[tab]} tab`}
                 aria-current={isSelected ? 'page' : undefined}
                 onClick={() => onChange(tab)}
                 className={join(

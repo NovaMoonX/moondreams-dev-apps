@@ -467,7 +467,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title={RECIPES_VIEW_LABELS[view]}
+        title='Recipes'
         action={
           (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
             <Button
@@ -479,7 +479,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               onClick={handleNew}
             >
               <Plus className='h-4 w-4' aria-hidden='true' />
-              {isIdeas ? 'New idea' : 'New'}
+              {isIdeas ? 'New idea' : view === 'meals' ? 'New meal' : 'New'}
             </Button>
           )
         }

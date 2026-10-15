@@ -558,7 +558,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title='Shopping list'
+        title='Shopping'
         action={
           canAdd ? (
             <Button
