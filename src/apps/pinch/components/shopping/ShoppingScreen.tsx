@@ -10,7 +10,8 @@ import {
 } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
@@ -20,12 +21,14 @@ import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
 import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
   LIST_SEARCH_THRESHOLD,
+  SHOP_SECTION_DIVIDER_MIN_ROWS,
   SHOPPING_GROUP_PAGE_SIZE,
   SHOPPING_MOVE_DELAY_MS,
   SHOPPING_VIEW_LABELS,
@@ -34,6 +37,8 @@ import {
 } from '@apps/pinch/constants';
 import {
   clearCheckedShoppingItems,
+  removeShoppingItem,
+  restoreShoppingItems,
   setShoppingItemChecked,
 } from '@apps/pinch/store/actions/shoppingActions';
 import {
@@ -45,21 +50,25 @@ import {
   selectShoppingOpenCount,
   selectShoppingRows,
 } from '@apps/pinch/store/selectors';
-import type { Gap, ShoppingView } from '@apps/pinch/types';
+import type { Gap, ShoppingItem, ShoppingView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
-import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
+  getShoppingCostCoverage,
+  getShopRowId,
   getShownShoppingView,
   type ShoppingGroup,
   type ShoppingRowData,
 } from '@apps/pinch/utils/shopping';
 
 const EAGER_GROUPS = 3;
+const ROW_CHUNK = 12;
 const ROW_HEIGHT = 57;
-const DIVIDER_HEIGHT = 36;
 
 const MAX_NAMES_SHOWN = 4;
+const UNDO_TOAST_MS = 6000;
+
+const undone = new Set<string>();
 
 const countRows = (groups: ShoppingGroup[]) =>
   groups.reduce((sum, group) => sum + group.rows.length, 0);
@@ -83,25 +92,58 @@ interface ShoppingRowsProps {
   rows: ShoppingRowData[];
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
+  /** Whether the first chunk of rows mounts at once, for the first screenful. */
+  isEager?: boolean;
+  className?: string;
 }
 
-function ShoppingRows({ rows, onToggle, onOpen }: ShoppingRowsProps) {
+function ShoppingRows({
+  rows,
+  onToggle,
+  onOpen,
+  isEager = true,
+  className,
+}: ShoppingRowsProps) {
   const [limit, setLimit] = useState(SHOPPING_GROUP_PAGE_SIZE);
   const visible = rows.length <= limit + 3 ? rows : rows.slice(0, limit);
   const hiddenCount = rows.length - visible.length;
+  const chunks = Array.from(
+    { length: Math.ceil(visible.length / ROW_CHUNK) },
+    (_, index) => visible.slice(index * ROW_CHUNK, (index + 1) * ROW_CHUNK),
+  );
 
   return (
     <>
-      <ul className='divide-border divide-y'>
-        {visible.map((row) => (
-          <ShoppingRow
-            key={row.id}
-            {...row}
-            onToggle={onToggle}
-            onOpen={onOpen}
-          />
+      <div className={join('divide-border divide-y', className)}>
+        {chunks.map((chunk, index) => (
+          <LazyMount
+            key={index}
+            estimatedHeight={chunk.length * ROW_HEIGHT}
+            eager={isEager && index === 0}
+          >
+            <ul
+              className='divide-border defer-offscreen divide-y lg:break-inside-avoid'
+              style={
+                {
+                  '--defer-size': `${chunk.length * ROW_HEIGHT}px`,
+                } as CSSProperties
+              }
+            >
+              {chunk.map((row) => (
+                <ShoppingRow
+                  key={row.id}
+                  id={row.id}
+                  name={row.name}
+                  amountText={row.amountText}
+                  isChecked={row.isChecked}
+                  onToggle={onToggle}
+                  onOpen={onOpen}
+                />
+              ))}
+            </ul>
+          </LazyMount>
         ))}
-      </ul>
+      </div>
       {hiddenCount > 0 && (
         <Button
           type='button'
@@ -127,9 +169,9 @@ interface ShoppingGroupSectionProps {
 const isSameRow = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.id === b.id &&
   a.name === b.name &&
-  a.amount === b.amount &&
-  a.unit === b.unit &&
-  a.isChecked === b.isChecked;
+  a.amountText === b.amountText &&
+  a.isChecked === b.isChecked &&
+  a.itemIds.join() === b.itemIds.join();
 
 const isSameGroup = (a: ShoppingGroup, b: ShoppingGroup) =>
   a.id === b.id &&
@@ -144,18 +186,15 @@ const ShoppingGroupSection = memo(
     onToggle,
     onOpen,
   }: ShoppingGroupSectionProps) {
-    const estimatedHeight = DIVIDER_HEIGHT + group.rows.length * ROW_HEIGHT;
-
     return (
-      <section
-        aria-label={group.name}
-        className='defer-offscreen space-y-1 lg:mb-4 lg:break-inside-avoid'
-        style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
-      >
-        <LazyMount estimatedHeight={estimatedHeight} eager={isEager}>
-          <SectionDivider label={group.name} />
-          <ShoppingRows rows={group.rows} onToggle={onToggle} onOpen={onOpen} />
-        </LazyMount>
+      <section aria-label={group.name} className='space-y-1 lg:mb-4'>
+        <SectionDivider label={group.name} className='lg:break-after-avoid' />
+        <ShoppingRows
+          rows={group.rows}
+          isEager={isEager}
+          onToggle={onToggle}
+          onOpen={onOpen}
+        />
       </section>
     );
   },
@@ -210,8 +249,7 @@ interface ShoppingScreenProps {
 
 function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const dispatch = useAppDispatch();
-  const { confirm } = useActionModal();
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
   const { held, hold } = useHeldRows();
   const rows = useAppSelector((state) =>
     selectShoppingRows(state, held.current),
@@ -234,7 +272,24 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
 
   const isFull = itemCount >= SOFT_MAX_SHOPPING_ITEMS;
   const canAdd = loadError === null && !isFull;
-  const openItem = overlay?.kind === 'item' ? itemsById.get(overlay.id) : null;
+  const rowsById = useMemo(
+    () =>
+      new Map(
+        [...rows.toBuy, ...rows.got]
+          .flatMap((group) => group.rows)
+          .map((row) => [row.id, row]),
+      ),
+    [rows],
+  );
+  const rowsByIdRef = useRef(rowsById);
+  useEffect(() => {
+    rowsByIdRef.current = rowsById;
+  }, [rowsById]);
+  const openRow = overlay?.kind === 'item' ? rowsById.get(overlay.id) : null;
+  const openItems = (openRow?.itemIds ?? []).flatMap((id) => {
+    const item = itemsById.get(id);
+    return item ? [item] : [];
+  });
   const hasSearch = itemCount >= LIST_SEARCH_THRESHOLD;
   const activeQuery = hasSearch ? query.trim() : '';
   const found = useMemo(
@@ -257,8 +312,9 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
 
   const handleToggle = useCallback(
     (id: string, isChecked: boolean) => {
-      hold(id, !isChecked);
-      dispatch(setShoppingItemChecked({ uid, id, isChecked }))
+      const ids = rowsByIdRef.current.get(id)?.itemIds ?? [];
+      ids.forEach((itemId) => hold(itemId, !isChecked));
+      dispatch(setShoppingItemChecked({ uid, ids, isChecked }))
         .unwrap()
         .catch((error) =>
           addToast({
@@ -275,31 +331,98 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     [],
   );
 
-  const handleClear = async () => {
-    const confirmed = await confirm({
-      title: 'Clear what you got',
-      message: `Take ${gotCount === 1 ? 'the 1 item' : `the ${gotCount} items`} you've got off your list? This action cannot be undone.`,
-      confirmText: 'Clear',
-      destructive: true,
+  const addUndoToast = (
+    title: string,
+    description: string | undefined,
+    undo: () => Promise<void>,
+  ) => {
+    const id = generateUuid();
+    addToast({
+      id,
+      title,
+      description,
+      type: 'success',
+      duration: UNDO_TOAST_MS,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          removeToast(id);
+          if (undone.has(id)) return;
+
+          undone.add(id);
+          void undo();
+        },
+      },
     });
-    if (!confirmed) {
+  };
+
+  const restore = async (items: ShoppingItem[]) => {
+    try {
+      const restored = await dispatch(
+        restoreShoppingItems({ uid, items }),
+      ).unwrap();
+      if (restored < items.length) {
+        addToast({
+          title:
+            restored === 0
+              ? 'Already back on your list'
+              : `Put back ${restored} of ${items.length}`,
+          description: 'What is on your list again keeps what it has.',
+          type: 'info',
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: "Couldn't undo that",
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      });
+    }
+  };
+
+  const handleRemove = (name: string, items: ShoppingItem[]) => {
+    setOverlay(null);
+    const removal = dispatch(
+      removeShoppingItem({ uid, ids: items.map((item) => item.id) }),
+    ).unwrap();
+    removal.catch((error) =>
+      addToast({
+        title: `Couldn't take ${name} off your list`,
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      }),
+    );
+    addUndoToast(`Removed ${name}`, undefined, () =>
+      removal.then(
+        () => restore(items),
+        () => undefined,
+      ),
+    );
+  };
+
+  const handleClear = async () => {
+    if (isClearing) {
       return;
     }
-
     setIsClearing(true);
     try {
-      const deleted = await dispatch(
+      const cleared = await dispatch(
         clearCheckedShoppingItems({ uid }),
       ).unwrap();
-      addToast({
-        title:
-          deleted === 0
-            ? 'Nothing was left to clear'
-            : `Cleared ${deleted === 1 ? '1 item' : `${deleted} items`}`,
-        description:
-          deleted < gotCount ? 'The rest changed in the meantime.' : undefined,
-        type: deleted === 0 ? 'info' : 'success',
-      });
+      const clearedRows = new Set(
+        cleared.map((item) => getShopRowId(item.ingredientId, item.unit)),
+      ).size;
+      if (clearedRows === 0) {
+        addToast({ title: 'Nothing was left to clear', type: 'info' });
+        return;
+      }
+      addUndoToast(
+        `Cleared ${clearedRows === 1 ? '1 item' : `${clearedRows} items`}`,
+        cleared.length < gotCount
+          ? 'The rest changed in the meantime.'
+          : undefined,
+        () => restore(cleared),
+      );
     } catch (error) {
       addToast({
         title: "Couldn't clear your list",
@@ -311,11 +434,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     }
   };
 
-  const getSubtitle = () => {
-    if (openCount > 0) return `${openCount} to buy`;
-    return gotCount > 0 ? 'Got everything' : undefined;
-  };
-
   const getLeftOutNames = (kind: Gap['kind']) =>
     cost.leftOut
       .filter((gap) => gap.kind === kind)
@@ -324,6 +442,15 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           ingredientsById.get(gap.ingredientId)?.name ?? 'Removed ingredient',
       );
   const noProductNames = getLeftOutNames('NO_PRODUCT');
+  const coverage = getShoppingCostCoverage(cost);
+  const getCoveredText = () => {
+    if (coverage === 'some') {
+      return `for ${cost.pricedRowCount} of ${cost.rowCount} things`;
+    }
+    return cost.rowCount === 1
+      ? 'for the 1 thing'
+      : `for all ${cost.rowCount} things`;
+  };
   const notComparableNames = getLeftOutNames('NOT_COMPARABLE');
 
   const getBody = () => {
@@ -393,20 +520,29 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
               size='sm'
               loading={isClearing}
               disabled={isClearing}
-              className="text-destructive! relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+              className="relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
               onClick={() => void handleClear()}
             >
               Clear what you got
             </Button>
           </div>
         )}
-        {shownGroups.length === 0 ? (
-          getEmpty()
-        ) : (
+        {shownGroups.length === 0 && getEmpty()}
+        {shownGroups.length > 0 &&
+          matches[shownView] < SHOP_SECTION_DIVIDER_MIN_ROWS && (
+            <ShoppingRows
+              key={shownView}
+              rows={shownGroups.flatMap((group) => group.rows)}
+              onToggle={handleToggle}
+              onOpen={handleOpen}
+              className='lg:w-[calc(50%-1rem)]'
+            />
+          )}
+        {matches[shownView] >= SHOP_SECTION_DIVIDER_MIN_ROWS && (
           <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
             {shownGroups.map((group, index) => (
               <ShoppingGroupSection
-                key={`${shownView}-${group.id || 'other'}`}
+                key={`${shownView}-${group.id}`}
                 group={group}
                 isEager={index < EAGER_GROUPS}
                 onToggle={handleToggle}
@@ -423,7 +559,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     <div className='space-y-4'>
       <SectionHeader
         title='Shopping list'
-        subtitle={getSubtitle()}
         action={
           canAdd ? (
             <Button
@@ -455,14 +590,15 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       )}
       {openCount > 0 && shownView === 'toBuy' && (
         <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
-          {cost.totalCents === null ? (
-            'No prices yet'
-          ) : (
+          {coverage === 'none' && 'No price yet'}
+          {coverage === 'tooFew' && 'Not enough prices yet'}
+          {(coverage === 'some' || coverage === 'all') && (
             <span>
-              Amounts on your list: about{' '}
+              About{' '}
               <span className='text-foreground font-semibold'>
-                {formatCost(cost.totalCents)}
-              </span>
+                {formatCost(cost.totalCents ?? 0)}
+              </span>{' '}
+              {getCoveredText()}
             </span>
           )}
           <HelpTip
@@ -470,18 +606,16 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             title='About this price'
             placement='top'
           >
-            <p>
-              This prices just the amounts on your list, from each ingredient's
-              default product. Stores sell whole packages, so what you pay at
-              the till is usually more.
-            </p>
-            {cost.leftOut.length > 0 && (
-              <p>This {formatLeftOut(cost.leftOut)}.</p>
+            {(coverage === 'some' || coverage === 'all') && (
+              <p>
+                It prices the amounts on your list, not whole packages, so the
+                till total is usually more.
+              </p>
             )}
             {noProductNames.length > 0 && (
-              <p className='text-muted-foreground'>
-                No price yet: {formatNames(noProductNames)}. Add a price from
-                the ingredient in Kitchen.
+              <p>
+                Not priced yet: {formatNames(noProductNames)}. Prices come from
+                what you've told Pinch about where you buy things.
               </p>
             )}
             {notComparableNames.length > 0 && (
@@ -505,12 +639,14 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       {overlay?.kind === 'add' && (
         <ShoppingAddSheet uid={uid} onClose={() => setOverlay(null)} />
       )}
-      {openItem && (
+      {openRow && openItems.length > 0 && (
         <ShoppingItemSheet
-          key={openItem.id}
+          key={openRow.id}
           uid={uid}
-          item={openItem}
+          name={openRow.name}
+          items={openItems}
           onClose={() => setOverlay(null)}
+          onRemove={() => handleRemove(openRow.name, openItems)}
         />
       )}
     </div>

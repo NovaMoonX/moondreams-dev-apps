@@ -200,7 +200,6 @@ import type {
   Product,
   Recipe,
   RecipeNote,
-  ResolvedFamily,
   ResolvedIngredient,
   ShoppingItem,
   ShoppingView,
@@ -544,10 +543,19 @@ const shopItem = (
   createdAt: 1,
   updatedAt: 1,
 });
-const shopFamilies = [
-  { id: 'fam-chicken', name: 'Chicken', isCustom: false },
-  { id: 'fam-rice', name: 'Rice', isCustom: false },
-] as ResolvedFamily[];
+const shopSectionIngredients = new Map([
+  ...shopIngredients,
+  ...[
+    shopIngredient('rice', 'Rice', 'cat-fam-rice', {
+      amount: 0.25,
+      unit: 'CUP',
+    }),
+    shopIngredient('chicken', 'Chicken', 'cat-fam-chicken', {
+      amount: 4,
+      unit: 'OZ',
+    }),
+  ].map((entry) => [entry.id, entry] as const),
+]);
 const grouped = groupShoppingItems(
   [
     shopItem('chips', 'G', 28, false),
@@ -558,27 +566,29 @@ const grouped = groupShoppingItems(
     shopItem('missing', 'EACH', 2, false),
     shopItem('rice', 'LB', 5, true),
   ],
-  shopIngredients,
-  shopFamilies,
+  shopSectionIngredients,
 );
 assert.deepEqual(
   grouped.toBuy.map((group) => [group.name, group.rows.map((row) => row.name)]),
   [
-    ['Chicken', ['Chicken', 'Chicken']],
-    ['Rice', ['Rice']],
+    ['Meat & fish', ['Chicken']],
+    ['Pantry', ['Rice']],
     ['Other', ['Chips', 'Removed ingredient', 'Salt']],
   ],
-  'groups follow the family order, and an ingredient with no family or an unknown one, or one that is gone, lands in Other',
+  'groups follow the shop sections in walking order, and an ingredient with no family or an unknown one, or one that is gone, lands in Other',
 );
 assert.deepEqual(
-  grouped.toBuy[0].rows.map((row) => row.unit),
-  ['LB', 'OZ'],
-  'one ingredient in two units is two rows',
+  grouped.toBuy[0].rows.map((row) => [row.itemIds, row.amountText]),
+  [[['chicken__LB', 'chicken__OZ'], '2.25 lb']],
+  'one ingredient in two weights is one row that stands for both items, largest first, summed in its unit',
 );
 assert.deepEqual(
-  grouped.got.map((group) => [group.name, group.rows.map((row) => row.id)]),
-  [['Rice', ['rice__LB']]],
-  'a checked item is in "Got it", grouped by its family, and not in "To buy"',
+  grouped.got.map((group) => [
+    group.name,
+    group.rows.map((row) => row.itemIds),
+  ]),
+  [['Pantry', [['rice__LB']]]],
+  'a checked item is in "Got it", grouped by its section, and not in "To buy"',
 );
 
 const heldItems = [
@@ -588,8 +598,7 @@ const heldItems = [
 ];
 const heldGrouped = groupShoppingItems(
   heldItems,
-  shopIngredients,
-  shopFamilies,
+  shopSectionIngredients,
   new Map([
     ['rice__CUP', false],
     ['salt__TSP', true],
@@ -598,15 +607,15 @@ const heldGrouped = groupShoppingItems(
 assert.deepEqual(
   heldGrouped.toBuy.map((group) => [
     group.name,
-    group.rows.map((row) => [row.id, row.isChecked]),
+    group.rows.map((row) => [row.itemIds[0], row.isChecked]),
   ]),
-  [['Rice', [['rice__CUP', true]]]],
+  [['Pantry', [['rice__CUP', true]]]],
   'a row just ticked stays in its group, still carrying its stored checked flag',
 );
 assert.deepEqual(
   heldGrouped.got.map((group) => [
     group.name,
-    group.rows.map((row) => [row.id, row.isChecked]),
+    group.rows.map((row) => [row.itemIds[0], row.isChecked]),
   ]),
   [
     [
@@ -620,8 +629,8 @@ assert.deepEqual(
   'a row just unticked stays in "Got it" until it is let go, and the unheld rows follow the stored flag',
 );
 assert.deepEqual(
-  groupShoppingItems(heldItems, shopIngredients, shopFamilies, new Map()),
-  groupShoppingItems(heldItems, shopIngredients, shopFamilies),
+  groupShoppingItems(heldItems, shopSectionIngredients, new Map()),
+  groupShoppingItems(heldItems, shopSectionIngredients),
   'an empty hold changes nothing',
 );
 
@@ -5177,6 +5186,406 @@ assert.deepEqual(
     '',
   ],
   "a timer is named by its step's first words, without a little word left dangling at the end",
+);
+
+// ============================================================
+// SHOP workstream: the shopping list's weekly add, shop order and shop amounts
+// ============================================================
+import { getPlanInRange as shopGetPlanInRange } from '../../src/apps/pinch/utils/shopping.ts';
+import type { PlannedMeal as ShopPlannedMeal } from '../../src/apps/pinch/types.ts';
+
+const shopPlanned = (id: string, dayKey: string): ShopPlannedMeal =>
+  ({
+    id,
+    date: Date.parse(`${dayKey}T00:00:00Z`),
+    mealType: 'DINNER',
+    name: null,
+    sourceMealId: null,
+    items: [{ id: `${id}-1`, kind: 'INGREDIENT', refId: 'rice', servings: 1 }],
+    refIds: ['rice'],
+    snapshot: null,
+    createdAt: 1,
+    updatedAt: 1,
+  }) as ShopPlannedMeal;
+const shopPlanByDay = new Map<string, ShopPlannedMeal[]>([
+  ['2026-10-13', [shopPlanned('past', '2026-10-13')]],
+  ['2026-10-15', [shopPlanned('today', '2026-10-15')]],
+  ['2026-10-31', [shopPlanned('halloween', '2026-10-31')]],
+  [
+    '2026-11-01',
+    [shopPlanned('nov1', '2026-11-01'), shopPlanned('nov1b', '2026-11-01')],
+  ],
+  ['2026-11-08', [shopPlanned('later', '2026-11-08')]],
+]);
+const shopSpanIds = (
+  startKey: string,
+  endKey: string,
+  todayKey = '2026-10-15',
+) => {
+  const span = shopGetPlanInRange(
+    shopPlanByDay,
+    { startKey, endKey },
+    todayKey,
+  );
+  return [span.startKey, span.meals.map((meal) => meal.id), span.isClamped];
+};
+assert.deepEqual(
+  shopSpanIds('2026-10-15', '2026-10-21'),
+  ['2026-10-15', ['today'], false],
+  'the next seven days hold the meals planned on them, today included',
+);
+assert.deepEqual(
+  shopSpanIds('2026-10-11', '2026-10-17'),
+  ['2026-10-15', ['today'], true],
+  'a range that began before today counts from today, and says it left the past out',
+);
+assert.deepEqual(
+  shopSpanIds('2026-10-31', '2026-11-01'),
+  ['2026-10-31', ['halloween', 'nov1', 'nov1b'], false],
+  'a range across a month boundary (and the end of daylight time) keeps both days, in day order',
+);
+assert.deepEqual(
+  shopSpanIds('2026-11-08', '2026-11-08'),
+  ['2026-11-08', ['later'], false],
+  'one day is a range whose start and end are the same',
+);
+assert.deepEqual(
+  shopSpanIds('2026-10-16', '2026-10-30'),
+  ['2026-10-16', [], false],
+  'days with nothing planned give no meals',
+);
+assert.deepEqual(
+  shopSpanIds('2026-10-10', '2026-10-13'),
+  ['2026-10-15', [], true],
+  'a range wholly in the past gives nothing, starting after it ends',
+);
+
+import {
+  CATALOG_FAMILIES as SHOP_CATALOG_FAMILIES,
+  CATALOG_INGREDIENTS_BY_ID as SHOP_CATALOG_BY_ID,
+} from '../../src/apps/pinch/catalog/index.ts';
+import {
+  SHOP_SECTION_BY_FAMILY as SHOP_BY_FAMILY,
+  SHOP_SECTION_BY_INGREDIENT as SHOP_BY_INGREDIENT,
+  SHOP_SECTIONS as SHOP_SECTION_IDS,
+} from '../../src/apps/pinch/constants.ts';
+import { getShopSection as shopGetSection } from '../../src/apps/pinch/utils/shopping.ts';
+
+assert.deepEqual(
+  SHOP_CATALOG_FAMILIES.filter(
+    (family) => SHOP_BY_FAMILY[family.id] === undefined,
+  ).map((family) => family.id),
+  [],
+  'every catalog family has a shop section',
+);
+assert.deepEqual(
+  Object.keys(SHOP_BY_FAMILY).filter(
+    (id) => !SHOP_CATALOG_FAMILIES.some((family) => family.id === id),
+  ),
+  [],
+  'the section map names only catalog families',
+);
+assert.deepEqual(
+  Object.keys(SHOP_BY_INGREDIENT).filter((id) => !SHOP_CATALOG_BY_ID.has(id)),
+  [],
+  'every ingredient shelved away from its family is a catalog ingredient',
+);
+assert.deepEqual(
+  SHOP_SECTION_IDS.filter(
+    (section) =>
+      section !== 'other' &&
+      ![
+        ...Object.values(SHOP_BY_FAMILY),
+        ...Object.values(SHOP_BY_INGREDIENT),
+      ].includes(section),
+  ),
+  [],
+  'every section but Other can hold something from the catalog',
+);
+assert.deepEqual(
+  [
+    shopGetSection({ id: 'cat-garlic', familyId: 'cat-fam-onion' }),
+    shopGetSection({
+      id: 'cat-canned-diced-tomatoes',
+      familyId: 'cat-fam-tomato',
+    }),
+    shopGetSection({ id: 'cat-vanilla-ice-cream', familyId: 'cat-fam-snacks' }),
+    shopGetSection({ id: 'mine-1', familyId: 'cat-fam-cheese' }),
+    shopGetSection({ id: 'mine-2', familyId: 'custom-family-uuid' }),
+    shopGetSection({ id: 'mine-3', familyId: null }),
+    shopGetSection(undefined),
+  ],
+  ['produce', 'pantry', 'frozen', 'dairy', 'other', 'other', 'other'],
+  'a section comes from the ingredient when the catalog moves it, else its family, else Other (the person own families included)',
+);
+
+import {
+  getShopAmount as shopAmountOf,
+  groupShopLines as shopGroupLines,
+  groupShoppingItems as shopGroupItems,
+} from '../../src/apps/pinch/utils/shopping.ts';
+
+const shopAmountText = (
+  parts: [number, Unit][],
+  section: Parameters<typeof shopAmountOf>[1],
+) => {
+  const amount = shopAmountOf(
+    parts.map(([value, unit]) => ({ amount: value, unit })),
+    section,
+  );
+  return amount ? `${amount.amount} ${amount.unit}` : null;
+};
+assert.deepEqual(
+  [
+    shopAmountText([[2.5, 'EACH']], 'produce'),
+    shopAmountText([[2, 'EACH']], 'produce'),
+    shopAmountText([[scaleAmount(1, 3, 4), 'EACH']], 'produce'),
+    shopAmountText([[2.0000001, 'EACH']], 'produce'),
+  ],
+  ['3 EACH', '2 EACH', '1 EACH', '2 EACH'],
+  'a count rounds up to whole ones (2.5 lemons are 3), and float noise is not rounded up',
+);
+assert.deepEqual(
+  [
+    shopAmountText([[0.13, 'TSP']], 'spices'),
+    shopAmountText([[0.5, 'TBSP']], 'spices'),
+    shopAmountText([[1, 'PINCH']], 'spices'),
+    shopAmountText([[0.06, 'CUP']], 'spices'),
+    shopAmountText([[2, 'G']], 'spices'),
+    shopAmountText([[3, 'TSP']], 'spices'),
+    shopAmountText([[1, 'TBSP']], 'spices'),
+    shopAmountText([[0.13, 'CUP']], 'spices'),
+    shopAmountText([[20, 'G']], 'spices'),
+  ],
+  [null, null, null, null, null, '3 TSP', '1 TBSP', '0.13 CUP', '20 G'],
+  'a spice or oil under a tablespoon (or 15 g) needs only its name; a tablespoon or more keeps its amount',
+);
+assert.deepEqual(
+  [
+    shopAmountText([[0.06, 'CUP']], 'produce'),
+    shopAmountText([[1.88, 'CUP']], 'pantry'),
+    shopAmountText([[0.13, 'CUP']], 'pantry'),
+  ],
+  ['0.06 CUP', '1.88 CUP', '0.13 CUP'],
+  'outside spices and oils a small amount keeps its number, and cups stay as scaled (0.13, 1.88)',
+);
+assert.deepEqual(
+  [
+    shopAmountText(
+      [
+        [4.5, 'OZ'],
+        [28, 'G'],
+      ],
+      'snacks',
+    ),
+    shopAmountText(
+      [
+        [28, 'G'],
+        [4.5, 'OZ'],
+      ],
+      'snacks',
+    ),
+    shopAmountText(
+      [
+        [1, 'TBSP'],
+        [2, 'TSP'],
+      ],
+      'spices',
+    ),
+    shopAmountText(
+      [
+        [1, 'TSP'],
+        [1, 'TSP'],
+      ],
+      'spices',
+    ),
+    shopAmountText([], 'other'),
+  ],
+  ['5.49 OZ', '5.49 OZ', '1.67 TBSP', null, null],
+  'same-kind amounts add up in the unit of the largest, whatever order they came in',
+);
+
+const shopLineRows = shopGroupLines(
+  [
+    { ingredientId: 'cat-doritos', amount: 4.5, unit: 'OZ' },
+    { ingredientId: 'cat-garlic', amount: 6, unit: 'EACH' },
+    { ingredientId: 'cat-doritos', amount: 28, unit: 'G' },
+    { ingredientId: 'cat-garlic', amount: 2, unit: 'TSP' },
+    { ingredientId: 'cat-salt', amount: 0.25, unit: 'TSP' },
+  ],
+  new Map([
+    [
+      'cat-doritos',
+      {
+        id: 'cat-doritos',
+        name: 'Doritos',
+        familyId: 'cat-fam-snacks',
+      } as ResolvedIngredient,
+    ],
+    [
+      'cat-garlic',
+      {
+        id: 'cat-garlic',
+        name: 'Garlic',
+        familyId: 'cat-fam-onion',
+      } as ResolvedIngredient,
+    ],
+    [
+      'cat-salt',
+      {
+        id: 'cat-salt',
+        name: 'Salt',
+        familyId: 'cat-fam-spices',
+      } as ResolvedIngredient,
+    ],
+  ]),
+);
+assert.deepEqual(
+  shopLineRows.map((row) => [
+    row.name,
+    row.lines.length,
+    row.amountText,
+    row.section,
+  ]),
+  [
+    ['Doritos', 2, '5.49 oz', 'snacks'],
+    ['Garlic', 1, '6 each', 'produce'],
+    ['Garlic', 1, '2 tsp', 'produce'],
+    ['Salt', 1, null, 'spices'],
+  ],
+  'an add sheet shows one row per ingredient and kind of unit (a tick takes both lines), in the order they came',
+);
+
+const shopSplitRows = shopGroupItems(
+  [shopItem('chicken', 'LB', 2, false), shopItem('chicken', 'OZ', 4, true)],
+  shopSectionIngredients,
+);
+assert.deepEqual(
+  [
+    shopSplitRows.toBuy.flatMap((group) => group.rows.map((row) => row.id)),
+    shopSplitRows.got.flatMap((group) => group.rows.map((row) => row.id)),
+  ],
+  [['chicken::MASS'], ['chicken::MASS/got']],
+  'an ingredient with an open and a got item is a row in each half, and the two rows never share an id',
+);
+
+import { isUsuallyAtHome as shopIsAtHome } from '../../src/apps/pinch/utils/shopping.ts';
+
+assert.deepEqual(
+  [
+    shopIsAtHome({ ingredientId: 'cat-salt', section: 'spices' }),
+    shopIsAtHome({ ingredientId: 'cat-olive-oil', section: 'spices' }),
+    shopIsAtHome({ ingredientId: 'cat-water', section: 'snacks' }),
+    shopIsAtHome({ ingredientId: 'cat-soy-sauce', section: 'pantry' }),
+    shopIsAtHome({ ingredientId: 'cat-fresh-ginger', section: 'produce' }),
+  ],
+  [true, true, true, false, false],
+  'spices, oils, vinegar and water start unticked in an add sheet; sauces and fresh ginger stay ticked',
+);
+
+import { CATALOG_INGREDIENTS as SHOP_CATALOG } from '../../src/apps/pinch/catalog/index.ts';
+import { searchIngredients as shopSearch } from '../../src/apps/pinch/utils/catalogSearch.ts';
+
+const shopCatalog = SHOP_CATALOG.map(
+  (entry) => ({ ...entry }) as unknown as ResolvedIngredient,
+);
+const shopTop = (query: string, count = 8) =>
+  shopSearch(shopCatalog, query)
+    .slice(0, count)
+    .map((entry) => entry.name);
+assert.equal(
+  shopTop('milk')[0],
+  'Whole milk',
+  'an alias said exactly ("milk") puts its ingredient first',
+);
+assert.deepEqual(
+  shopTop('milk')
+    .slice(1)
+    .every((name) => /milk/i.test(name)),
+  true,
+  'after it come the names with the word in them, before family members without it',
+);
+assert.deepEqual(
+  shopTop('pasta'),
+  [
+    'Egg noodles',
+    'Fettuccine',
+    'Lasagna noodles',
+    'Macaroni',
+    'Penne',
+    'Ramen noodles',
+    'Rice noodles',
+    'Spaghetti',
+  ],
+  'a family name finds its members ("pasta" lists Pasta & noodles) within the eight shown',
+);
+assert.equal(
+  shopSearch(shopCatalog, 'pasta').at(-1)?.name,
+  'Marinara sauce',
+  'an alias that only starts with the word comes after the family',
+);
+assert.deepEqual(
+  shopTop('salt', 2),
+  ['Salt', 'Kosher salt'],
+  'an exact name first, then the names it starts a word of',
+);
+assert.equal(shopTop('jalapeno')[0], 'Jalapeño', 'accents are ignored');
+assert.deepEqual(
+  shopTop('chicken', 3),
+  ['Chicken breast', 'Chicken broth', 'Chicken drumstick'],
+  'names that start with the word come before those that only contain it',
+);
+assert.equal(
+  shopSearch(shopCatalog, '').length,
+  shopCatalog.length,
+  'an empty search keeps everything',
+);
+assert.deepEqual(shopTop('zzzz'), [], 'a word nothing has finds nothing');
+
+import {
+  getShoppingCost as shopCostOf,
+  getShoppingCostCoverage as shopCoverage,
+} from '../../src/apps/pinch/utils/shopping.ts';
+
+const shopCoverageOf = (lines: [string, number, Unit][]) => {
+  const result = shopCostOf(
+    lines.map(([ingredientId, amount, unit]) => ({
+      ingredientId,
+      amount,
+      unit,
+    })),
+    shopIngredients,
+    new Map([['chicken', chickenProduct]]),
+  );
+  return [shopCoverage(result), result.pricedRowCount, result.rowCount];
+};
+assert.deepEqual(
+  [
+    shopCoverageOf([['chicken', 2, 'LB']]),
+    shopCoverageOf([
+      ['chicken', 2, 'LB'],
+      ['chicken', 4, 'OZ'],
+      ['rice', 1, 'CUP'],
+    ]),
+    shopCoverageOf([
+      ['chicken', 2, 'LB'],
+      ['rice', 1, 'CUP'],
+      ['salt', 1, 'TSP'],
+    ]),
+    shopCoverageOf([
+      ['rice', 1, 'CUP'],
+      ['salt', 1, 'TSP'],
+    ]),
+    shopCoverageOf([]),
+  ],
+  [
+    ['all', 1, 1],
+    ['some', 1, 2],
+    ['tooFew', 1, 3],
+    ['none', 0, 2],
+    ['none', 0, 0],
+  ],
+  'the cost line counts rows as the list shows them (two weights of chicken are one) and says nothing in a number below half priced',
 );
 
 console.log('pinchMath: all checks passed');

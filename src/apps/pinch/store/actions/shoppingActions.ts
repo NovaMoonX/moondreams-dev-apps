@@ -1,10 +1,10 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
 import {
-  deleteDoc,
   doc,
   runTransaction,
   updateDoc,
+  writeBatch,
   type DocumentSnapshot,
   type Transaction,
 } from 'firebase/firestore';
@@ -127,22 +127,26 @@ export const addToShoppingList = createAsyncThunk<
 
 interface SetShoppingItemCheckedInput {
   uid: string;
-  id: string;
+  /** Every stored item behind one row of the list. */
+  ids: string[];
   isChecked: boolean;
 }
 
+/** A field-scoped batch, so a tick queues offline like a single update would. */
 export const setShoppingItemChecked = createAsyncThunk<
   void,
   SetShoppingItemCheckedInput,
   { rejectValue: string }
 >(
   'pinch/shopping/setChecked',
-  async ({ uid, id, isChecked }, { rejectWithValue }) => {
+  async ({ uid, ids, isChecked }, { rejectWithValue }) => {
     try {
-      await updateDoc(shoppingDoc(uid, id), {
-        isChecked,
-        updatedAt: Date.now(),
-      });
+      const batch = writeBatch(db);
+      const now = Date.now();
+      ids.forEach((id) =>
+        batch.update(shoppingDoc(uid, id), { isChecked, updatedAt: now }),
+      );
+      await batch.commit();
     } catch (error) {
       return rejectWithValue(
         getWriteMessage(error, 'Unable to update your shopping list.'),
@@ -154,25 +158,30 @@ export const setShoppingItemChecked = createAsyncThunk<
 interface UpdateShoppingItemInput {
   uid: string;
   item: Pick<ShoppingItem, 'id' | 'ingredientId' | 'unit'>;
+  /** The other items the row showed as one amount with this one; saving keeps only the amount typed. */
+  mergedIds?: string[];
   amount: number;
   unit: Unit;
 }
 
-/** A different unit is a different item, so changing it moves the amount in one transaction. */
+/** A different unit is a different item, so changing it, or folding a row's items into one, moves the amount in one transaction. */
 export const updateShoppingItem = createAsyncThunk<
   void,
   UpdateShoppingItemInput,
   { rejectValue: string }
 >(
   'pinch/shopping/update',
-  async ({ uid, item, amount: typed, unit }, { rejectWithValue }) => {
+  async (
+    { uid, item, mergedIds = [], amount: typed, unit },
+    { rejectWithValue },
+  ) => {
     const amount = roundAmount(typed);
     if (!isValidAmount(amount) || !UNITS.includes(unit)) {
       return rejectWithValue(BAD_AMOUNT);
     }
 
     try {
-      if (unit === item.unit) {
+      if (unit === item.unit && mergedIds.length === 0) {
         await updateDoc(shoppingDoc(uid, item.id), {
           amount,
           updatedAt: Date.now(),
@@ -185,22 +194,27 @@ export const updateShoppingItem = createAsyncThunk<
         amount,
         unit,
       };
+      const targetId = getShoppingItemId(item.ingredientId, unit);
+      const rowIds = [item.id, ...mergedIds];
       await runTransaction(db, async (transaction) => {
-        const [current, target] = await Promise.all([
+        const [current, target, ...merged] = await Promise.all([
           transaction.get(shoppingDoc(uid, item.id)),
           transaction.get(lineDoc(uid, line)),
+          ...mergedIds.map((id) => transaction.get(shoppingDoc(uid, id))),
         ]);
         if (!current.exists()) {
           throw new Error('This is already off your list.');
         }
-        transaction.delete(current.ref);
-        writeLine(
-          transaction,
-          line,
-          target,
-          Date.now(),
-          (current.data() as ShoppingItem).isChecked,
-        );
+        const isChecked = (current.data() as ShoppingItem).isChecked;
+        const now = Date.now();
+        [current, ...merged]
+          .filter((snapshot) => snapshot.exists() && snapshot.id !== targetId)
+          .forEach((snapshot) => transaction.delete(snapshot.ref));
+        if (rowIds.includes(targetId) && target.exists()) {
+          transaction.update(target.ref, { amount, isChecked, updatedAt: now });
+          return;
+        }
+        writeLine(transaction, line, target, now, isChecked);
       });
     } catch (error) {
       return rejectWithValue(
@@ -212,16 +226,19 @@ export const updateShoppingItem = createAsyncThunk<
 
 interface RemoveShoppingItemInput {
   uid: string;
-  id: string;
+  /** Every stored item behind one row of the list. */
+  ids: string[];
 }
 
 export const removeShoppingItem = createAsyncThunk<
   void,
   RemoveShoppingItemInput,
   { rejectValue: string }
->('pinch/shopping/remove', async ({ uid, id }, { rejectWithValue }) => {
+>('pinch/shopping/remove', async ({ uid, ids }, { rejectWithValue }) => {
   try {
-    await deleteDoc(shoppingDoc(uid, id));
+    const batch = writeBatch(db);
+    ids.forEach((id) => batch.delete(shoppingDoc(uid, id)));
+    await batch.commit();
   } catch (error) {
     return rejectWithValue(
       getWriteMessage(error, 'Unable to take this off your list.'),
@@ -233,9 +250,19 @@ interface ClearCheckedInput {
   uid: string;
 }
 
-/** Resolves to how many items it deleted, which is fewer than were ticked at the tap when another device un-ticked or removed one. */
+const toChunks = <T>(list: T[]) =>
+  Array.from(
+    { length: Math.ceil(list.length / SHOPPING_BATCH_SIZE) },
+    (_, index) =>
+      list.slice(
+        index * SHOPPING_BATCH_SIZE,
+        (index + 1) * SHOPPING_BATCH_SIZE,
+      ),
+  );
+
+/** Resolves to the items it deleted, as they were, for an Undo; fewer than were ticked at the tap when another device un-ticked or removed one. */
 export const clearCheckedShoppingItems = createAsyncThunk<
-  number,
+  ShoppingItem[],
   ClearCheckedInput,
   { state: RootState; rejectValue: string }
 >(
@@ -244,19 +271,11 @@ export const clearCheckedShoppingItems = createAsyncThunk<
     const ids = getState()
       .pinch.shopping.items.filter((item) => item.isChecked)
       .map((item) => item.id);
-    const chunks = Array.from(
-      { length: Math.ceil(ids.length / SHOPPING_BATCH_SIZE) },
-      (_, index) =>
-        ids.slice(
-          index * SHOPPING_BATCH_SIZE,
-          (index + 1) * SHOPPING_BATCH_SIZE,
-        ),
-    );
 
     try {
       // Each chunk is its own transaction, so one that fails leaves the others cleared.
-      const counts = await Promise.all(
-        chunks.map((chunk) =>
+      const cleared = await Promise.all(
+        toChunks(ids).map((chunk) =>
           runTransaction(db, async (transaction) => {
             const snapshots = await Promise.all(
               chunk.map((id) => transaction.get(shoppingDoc(uid, id))),
@@ -267,13 +286,14 @@ export const clearCheckedShoppingItems = createAsyncThunk<
             stillChecked.forEach((snapshot) =>
               transaction.delete(snapshot.ref),
             );
-            return stillChecked.length;
+            return stillChecked.map(
+              (snapshot) => snapshot.data() as ShoppingItem,
+            );
           }),
         ),
       );
-      const deleted = counts.reduce((sum, count) => sum + count, 0);
 
-      return deleted;
+      return cleared.flat();
     } catch (error) {
       return rejectWithValue(
         getWriteMessage(error, 'Unable to clear what you got.'),
@@ -281,3 +301,49 @@ export const clearCheckedShoppingItems = createAsyncThunk<
     }
   },
 );
+
+interface RestoreShoppingItemsInput {
+  uid: string;
+  items: ShoppingItem[];
+}
+
+/** Undoes a removal or a clear: puts each item back as it was, ticked or not, unless it is on the list again by then, which keeps what it has. Resolves to how many it put back. */
+export const restoreShoppingItems = createAsyncThunk<
+  number,
+  RestoreShoppingItemsInput,
+  { rejectValue: string }
+>('pinch/shopping/restore', async ({ uid, items }, { rejectWithValue }) => {
+  try {
+    const counts = await Promise.all(
+      toChunks(items).map((chunk) =>
+        runTransaction(db, async (transaction) => {
+          const snapshots = await Promise.all(
+            chunk.map((item) => transaction.get(shoppingDoc(uid, item.id))),
+          );
+          const now = Date.now();
+          const missing = chunk.filter(
+            (_, index) => !snapshots[index].exists(),
+          );
+          missing.forEach((item) =>
+            transaction.set(shoppingDoc(uid, item.id), {
+              id: item.id,
+              ingredientId: item.ingredientId,
+              amount: item.amount,
+              unit: item.unit,
+              isChecked: item.isChecked,
+              createdAt: item.createdAt,
+              updatedAt: now,
+            } satisfies ShoppingItem),
+          );
+          return missing.length;
+        }),
+      ),
+    );
+
+    return counts.reduce((sum, count) => sum + count, 0);
+  } catch (error) {
+    return rejectWithValue(
+      getWriteMessage(error, "Couldn't put that back on your list."),
+    );
+  }
+});
