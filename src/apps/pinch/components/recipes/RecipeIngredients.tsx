@@ -62,6 +62,9 @@ function IngredientEditor({
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
   const noteRef = useRef<HTMLInputElement>(null);
   const ingredients = useAppSelector(selectIngredients);
+  const servingUnit = useAppSelector(selectIngredientsById).get(
+    row.ingredientId,
+  )?.serving.unit;
   const isUnresolved = row.ingredientId === '';
   const proposedName = row.proposedName ?? '';
   const usedIds = rows.map((candidate) => candidate.ingredientId).join(',');
@@ -181,7 +184,11 @@ function IngredientEditor({
               className='h-10 px-0!'
               onClick={() => {
                 setIsAmountJustAdded(true);
-                onUpdate({ isAmountless: false, amount: '' });
+                onUpdate({
+                  isAmountless: false,
+                  amount: '',
+                  unit: servingUnit ?? row.unit,
+                });
               }}
             >
               Add an amount
