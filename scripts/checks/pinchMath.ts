@@ -558,20 +558,23 @@ const grouped = groupShoppingItems(
 assert.deepEqual(
   grouped.toBuy.map((group) => [group.name, group.rows.map((row) => row.name)]),
   [
-    ['Meat & fish', ['Chicken', 'Chicken']],
+    ['Meat & fish', ['Chicken']],
     ['Pantry', ['Rice']],
     ['Other', ['Chips', 'Removed ingredient', 'Salt']],
   ],
   'groups follow the shop sections in walking order, and an ingredient with no family or an unknown one, or one that is gone, lands in Other',
 );
 assert.deepEqual(
-  grouped.toBuy[0].rows.map((row) => row.unit),
-  ['LB', 'OZ'],
-  'one ingredient in two units is two rows',
+  grouped.toBuy[0].rows.map((row) => [row.itemIds, row.amountText]),
+  [[['chicken__LB', 'chicken__OZ'], '2.25 lb']],
+  'one ingredient in two weights is one row that stands for both items, largest first, summed in its unit',
 );
 assert.deepEqual(
-  grouped.got.map((group) => [group.name, group.rows.map((row) => row.id)]),
-  [['Pantry', ['rice__LB']]],
+  grouped.got.map((group) => [
+    group.name,
+    group.rows.map((row) => row.itemIds),
+  ]),
+  [['Pantry', [['rice__LB']]]],
   'a checked item is in "Got it", grouped by its section, and not in "To buy"',
 );
 
@@ -591,7 +594,7 @@ const heldGrouped = groupShoppingItems(
 assert.deepEqual(
   heldGrouped.toBuy.map((group) => [
     group.name,
-    group.rows.map((row) => [row.id, row.isChecked]),
+    group.rows.map((row) => [row.itemIds[0], row.isChecked]),
   ]),
   [['Pantry', [['rice__CUP', true]]]],
   'a row just ticked stays in its group, still carrying its stored checked flag',
@@ -599,7 +602,7 @@ assert.deepEqual(
 assert.deepEqual(
   heldGrouped.got.map((group) => [
     group.name,
-    group.rows.map((row) => [row.id, row.isChecked]),
+    group.rows.map((row) => [row.itemIds[0], row.isChecked]),
   ]),
   [
     [
@@ -4343,6 +4346,156 @@ assert.deepEqual(
   ],
   ['produce', 'pantry', 'frozen', 'dairy', 'other', 'other', 'other'],
   'a section comes from the ingredient when the catalog moves it, else its family, else Other (the person own families included)',
+);
+
+import {
+  getShopAmount as shopAmountOf,
+  groupShopLines as shopGroupLines,
+  groupShoppingItems as shopGroupItems,
+} from '../../src/apps/pinch/utils/shopping.ts';
+
+const shopAmountText = (
+  parts: [number, Unit][],
+  section: Parameters<typeof shopAmountOf>[1],
+) => {
+  const amount = shopAmountOf(
+    parts.map(([value, unit]) => ({ amount: value, unit })),
+    section,
+  );
+  return amount ? `${amount.amount} ${amount.unit}` : null;
+};
+assert.deepEqual(
+  [
+    shopAmountText([[2.5, 'EACH']], 'produce'),
+    shopAmountText([[2, 'EACH']], 'produce'),
+    shopAmountText([[scaleAmount(1, 3, 4), 'EACH']], 'produce'),
+    shopAmountText([[2.0000001, 'EACH']], 'produce'),
+  ],
+  ['3 EACH', '2 EACH', '1 EACH', '2 EACH'],
+  'a count rounds up to whole ones (2.5 lemons are 3), and float noise is not rounded up',
+);
+assert.deepEqual(
+  [
+    shopAmountText([[0.13, 'TSP']], 'spices'),
+    shopAmountText([[0.5, 'TBSP']], 'spices'),
+    shopAmountText([[1, 'PINCH']], 'spices'),
+    shopAmountText([[0.06, 'CUP']], 'spices'),
+    shopAmountText([[2, 'G']], 'spices'),
+    shopAmountText([[3, 'TSP']], 'spices'),
+    shopAmountText([[1, 'TBSP']], 'spices'),
+    shopAmountText([[0.13, 'CUP']], 'spices'),
+    shopAmountText([[20, 'G']], 'spices'),
+  ],
+  [null, null, null, null, null, '3 TSP', '1 TBSP', '0.13 CUP', '20 G'],
+  'a spice or oil under a tablespoon (or 15 g) needs only its name; a tablespoon or more keeps its amount',
+);
+assert.deepEqual(
+  [
+    shopAmountText([[0.06, 'CUP']], 'produce'),
+    shopAmountText([[1.88, 'CUP']], 'pantry'),
+    shopAmountText([[0.13, 'CUP']], 'pantry'),
+  ],
+  ['0.06 CUP', '1.88 CUP', '0.13 CUP'],
+  'outside spices and oils a small amount keeps its number, and cups stay as scaled (0.13, 1.88)',
+);
+assert.deepEqual(
+  [
+    shopAmountText(
+      [
+        [4.5, 'OZ'],
+        [28, 'G'],
+      ],
+      'snacks',
+    ),
+    shopAmountText(
+      [
+        [28, 'G'],
+        [4.5, 'OZ'],
+      ],
+      'snacks',
+    ),
+    shopAmountText(
+      [
+        [1, 'TBSP'],
+        [2, 'TSP'],
+      ],
+      'spices',
+    ),
+    shopAmountText(
+      [
+        [1, 'TSP'],
+        [1, 'TSP'],
+      ],
+      'spices',
+    ),
+    shopAmountText([], 'other'),
+  ],
+  ['5.49 OZ', '5.49 OZ', '1.67 TBSP', null, null],
+  'same-kind amounts add up in the unit of the largest, whatever order they came in',
+);
+
+const shopLineRows = shopGroupLines(
+  [
+    { ingredientId: 'cat-doritos', amount: 4.5, unit: 'OZ' },
+    { ingredientId: 'cat-garlic', amount: 6, unit: 'EACH' },
+    { ingredientId: 'cat-doritos', amount: 28, unit: 'G' },
+    { ingredientId: 'cat-garlic', amount: 2, unit: 'TSP' },
+    { ingredientId: 'cat-salt', amount: 0.25, unit: 'TSP' },
+  ],
+  new Map([
+    [
+      'cat-doritos',
+      {
+        id: 'cat-doritos',
+        name: 'Doritos',
+        familyId: 'cat-fam-snacks',
+      } as ResolvedIngredient,
+    ],
+    [
+      'cat-garlic',
+      {
+        id: 'cat-garlic',
+        name: 'Garlic',
+        familyId: 'cat-fam-onion',
+      } as ResolvedIngredient,
+    ],
+    [
+      'cat-salt',
+      {
+        id: 'cat-salt',
+        name: 'Salt',
+        familyId: 'cat-fam-spices',
+      } as ResolvedIngredient,
+    ],
+  ]),
+);
+assert.deepEqual(
+  shopLineRows.map((row) => [
+    row.name,
+    row.lines.length,
+    row.amountText,
+    row.section,
+  ]),
+  [
+    ['Doritos', 2, '5.49 oz', 'snacks'],
+    ['Garlic', 1, '6 each', 'produce'],
+    ['Garlic', 1, '2 tsp', 'produce'],
+    ['Salt', 1, null, 'spices'],
+  ],
+  'an add sheet shows one row per ingredient and kind of unit (a tick takes both lines), in the order they came',
+);
+
+const shopSplitRows = shopGroupItems(
+  [shopItem('chicken', 'LB', 2, false), shopItem('chicken', 'OZ', 4, true)],
+  shopSectionIngredients,
+);
+assert.deepEqual(
+  [
+    shopSplitRows.toBuy.flatMap((group) => group.rows.map((row) => row.id)),
+    shopSplitRows.got.flatMap((group) => group.rows.map((row) => row.id)),
+  ],
+  [['chicken::MASS'], ['chicken::MASS/got']],
+  'an ingredient with an open and a got item is a row in each half, and the two rows never share an id',
 );
 
 console.log('pinchMath: all checks passed');

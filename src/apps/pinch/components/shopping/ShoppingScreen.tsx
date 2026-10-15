@@ -125,7 +125,10 @@ function ShoppingRows({
               {chunk.map((row) => (
                 <ShoppingRow
                   key={row.id}
-                  {...row}
+                  id={row.id}
+                  name={row.name}
+                  amountText={row.amountText}
+                  isChecked={row.isChecked}
                   onToggle={onToggle}
                   onOpen={onOpen}
                 />
@@ -159,9 +162,9 @@ interface ShoppingGroupSectionProps {
 const isSameRow = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.id === b.id &&
   a.name === b.name &&
-  a.amount === b.amount &&
-  a.unit === b.unit &&
-  a.isChecked === b.isChecked;
+  a.amountText === b.amountText &&
+  a.isChecked === b.isChecked &&
+  a.itemIds.join() === b.itemIds.join();
 
 const isSameGroup = (a: ShoppingGroup, b: ShoppingGroup) =>
   a.id === b.id &&
@@ -263,7 +266,24 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
 
   const isFull = itemCount >= SOFT_MAX_SHOPPING_ITEMS;
   const canAdd = loadError === null && !isFull;
-  const openItem = overlay?.kind === 'item' ? itemsById.get(overlay.id) : null;
+  const rowsById = useMemo(
+    () =>
+      new Map(
+        [...rows.toBuy, ...rows.got]
+          .flatMap((group) => group.rows)
+          .map((row) => [row.id, row]),
+      ),
+    [rows],
+  );
+  const rowsByIdRef = useRef(rowsById);
+  useEffect(() => {
+    rowsByIdRef.current = rowsById;
+  }, [rowsById]);
+  const openRow = overlay?.kind === 'item' ? rowsById.get(overlay.id) : null;
+  const openItems = (openRow?.itemIds ?? []).flatMap((id) => {
+    const item = itemsById.get(id);
+    return item ? [item] : [];
+  });
   const hasSearch = itemCount >= LIST_SEARCH_THRESHOLD;
   const activeQuery = hasSearch ? query.trim() : '';
   const found = useMemo(
@@ -286,8 +306,9 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
 
   const handleToggle = useCallback(
     (id: string, isChecked: boolean) => {
-      hold(id, !isChecked);
-      dispatch(setShoppingItemChecked({ uid, id, isChecked }))
+      const ids = rowsByIdRef.current.get(id)?.itemIds ?? [];
+      ids.forEach((itemId) => hold(itemId, !isChecked));
+      dispatch(setShoppingItemChecked({ uid, ids, isChecked }))
         .unwrap()
         .catch((error) =>
           addToast({
@@ -543,11 +564,12 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       {overlay?.kind === 'add' && (
         <ShoppingAddSheet uid={uid} onClose={() => setOverlay(null)} />
       )}
-      {openItem && (
+      {openRow && openItems.length > 0 && (
         <ShoppingItemSheet
-          key={openItem.id}
+          key={openRow.id}
           uid={uid}
-          item={openItem}
+          name={openRow.name}
+          items={openItems}
           onClose={() => setOverlay(null)}
         />
       )}

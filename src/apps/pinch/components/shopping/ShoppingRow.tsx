@@ -4,14 +4,10 @@ import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
-import type { Unit } from '@apps/pinch/types';
-import { formatSize } from '@apps/pinch/utils/productFormat';
-
 interface ShoppingRowProps {
   id: string;
   name: string;
-  amount: number;
-  unit: Unit;
+  amountText: string | null;
   isChecked: boolean;
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
@@ -21,8 +17,7 @@ interface ShoppingRowProps {
 function ShoppingRow({
   id,
   name,
-  amount,
-  unit,
+  amountText,
   isChecked,
   onToggle,
   onOpen,
@@ -52,9 +47,11 @@ function ShoppingRow({
           >
             {name}
           </span>
-          <span className='text-muted-foreground block text-xs font-normal'>
-            {formatSize(amount, unit)}
-          </span>
+          {amountText && (
+            <span className='text-muted-foreground block text-xs font-normal'>
+              {amountText}
+            </span>
+          )}
         </span>
         <ChevronRight
           className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'

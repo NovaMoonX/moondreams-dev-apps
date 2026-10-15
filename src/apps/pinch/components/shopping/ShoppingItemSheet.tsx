@@ -21,49 +21,60 @@ import {
   removeShoppingItem,
   updateShoppingItem,
 } from '@apps/pinch/store/actions/shoppingActions';
-import {
-  selectIngredientsById,
-  selectShoppingById,
-} from '@apps/pinch/store/selectors';
+import { selectShoppingById } from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import {
   getShoppingItemId,
   isValidAmount,
   roundAmount,
+  sumShopAmounts,
 } from '@apps/pinch/utils/shopping';
 
 const { custom } = FormFactories;
 
 interface ShoppingItemSheetProps {
   uid: string;
-  item: ShoppingItem;
+  name: string;
+  /** The stored items one row of the list stands for, largest first. */
+  items: ShoppingItem[];
   onClose: () => void;
 }
 
-function ShoppingItemSheet({ uid, item, onClose }: ShoppingItemSheetProps) {
+function ShoppingItemSheet({
+  uid,
+  name,
+  items,
+  onClose,
+}: ShoppingItemSheetProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const ingredientsById = useAppSelector(selectIngredientsById);
   const itemsById = useAppSelector(selectShoppingById);
-  const [amountText, setAmountText] = useState(String(item.amount));
-  const [unit, setUnit] = useState<Unit>(item.unit);
+  const [item] = items;
+  const [shown] = useState(
+    () => sumShopAmounts(items) ?? { amount: item.amount, unit: item.unit },
+  );
+  const [amountText, setAmountText] = useState(String(shown.amount));
+  const [unit, setUnit] = useState<Unit>(shown.unit);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const name =
-    ingredientsById.get(item.ingredientId)?.name ?? 'Removed ingredient';
+  const rowIds = items.map((rowItem) => rowItem.id);
   const amount =
     amountText.trim() === '' ? null : roundAmount(Number(amountText));
   const isValid = amount !== null && isValidAmount(amount);
-  const isChanged = amount !== item.amount || unit !== item.unit;
-  const inNewUnit =
-    unit === item.unit
-      ? undefined
-      : itemsById.get(getShoppingItemId(item.ingredientId, unit));
+  const isChanged = amount !== shown.amount || unit !== shown.unit;
+  const newUnitId = getShoppingItemId(item.ingredientId, unit);
+  const inNewUnit = rowIds.includes(newUnitId)
+    ? undefined
+    : itemsById.get(newUnitId);
 
   const getNote = () => {
-    if (!inNewUnit) return null;
+    if (!inNewUnit) {
+      return items.length > 1
+        ? `On your list as ${items.map((rowItem) => formatSize(rowItem.amount, rowItem.unit)).join(' and ')}. Saving keeps one amount.`
+        : null;
+    }
     const there = formatSize(inNewUnit.amount, inNewUnit.unit);
     if (!inNewUnit.isChecked) {
       return `You already have ${there} on your list. This adds to it.`;
@@ -114,7 +125,15 @@ function ShoppingItemSheet({ uid, item, onClose }: ShoppingItemSheetProps) {
     setError(null);
     setIsSubmitting(true);
     try {
-      await dispatch(updateShoppingItem({ uid, item, amount, unit })).unwrap();
+      await dispatch(
+        updateShoppingItem({
+          uid,
+          item,
+          mergedIds: rowIds.slice(1),
+          amount,
+          unit,
+        }),
+      ).unwrap();
       onClose();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this change.'));
@@ -136,7 +155,7 @@ function ShoppingItemSheet({ uid, item, onClose }: ShoppingItemSheetProps) {
     setError(null);
     setIsSubmitting(true);
     try {
-      await dispatch(removeShoppingItem({ uid, id: item.id })).unwrap();
+      await dispatch(removeShoppingItem({ uid, ids: rowIds })).unwrap();
       onClose();
     } catch (removeError) {
       setError(

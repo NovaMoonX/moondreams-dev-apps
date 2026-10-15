@@ -35,7 +35,11 @@ import {
   selectStockByMeal,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
-import type { MealItem, ShoppingRequest } from '@apps/pinch/types';
+import type {
+  MealItem,
+  ShoppingItem,
+  ShoppingRequest,
+} from '@apps/pinch/types';
 import {
   getShoppingStockLine,
   type StockedItem,
@@ -47,12 +51,15 @@ import {
   getMonthWindow,
   type DayRange,
 } from '@apps/pinch/utils/dayKeys';
-import { formatSize } from '@apps/pinch/utils/productFormat';
 import {
+  formatShopAmount,
   getItemsLines,
   getPlanInRange,
   getRecipeLines,
+  getShopAmount,
   getShoppingItemId,
+  getShopRowId,
+  groupShopLines,
 } from '@apps/pinch/utils/shopping';
 
 const NEXT_DAYS = 7;
@@ -180,13 +187,18 @@ export function ShoppingPick({
       : recipe
         ? getRecipeLines(recipe, ingredientsById, servings)
         : [];
-    return lines.map((line) => ({
-      line,
-      id: getShoppingItemId(line.ingredientId, line.unit),
-      name:
-        ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
-    }));
+    return groupShopLines(lines, ingredientsById);
   }, [items, recipe, recipesById, ingredientsById, servings]);
+  const openByRow = useMemo(
+    () =>
+      [...onList.values()]
+        .filter((item) => !item.isChecked)
+        .reduce((acc, item) => {
+          const id = getShopRowId(item.ingredientId, item.unit);
+          return acc.set(id, [...(acc.get(id) ?? []), item]);
+        }, new Map<string, ShoppingItem[]>()),
+    [onList],
+  );
 
   const isReady = isLoaded && loadError === null;
   const stocked = useMemo(() => {
@@ -225,10 +237,13 @@ export function ShoppingPick({
     stockByMeal,
   ]);
   const stockLine = getShoppingStockLine(stocked, request.kind !== 'recipe');
-  const isOnList = (id: string) => onList.get(id)?.isChecked === false;
+  const isOnList = (id: string) => openByRow.has(id);
   const isTicked = (id: string) => choices[id] ?? !isOnList(id);
   const selected = rows.filter((row) => isTicked(row.id));
-  const newCount = selected.filter((row) => !onList.has(row.id)).length;
+  const selectedLines = selected.flatMap((row) => row.lines);
+  const newCount = selectedLines.filter(
+    (line) => !onList.has(getShoppingItemId(line.ingredientId, line.unit)),
+  ).length;
   const isAllTicked = selected.length === rows.length;
   const getLabel = () => {
     if (request.kind === 'recipe') return recipe?.title ?? '';
@@ -248,7 +263,7 @@ export function ShoppingPick({
         ? 'There is nothing here to add.'
         : 'Tick at least one to add it.';
     }
-    if (selected.length > MAX_SHOPPING_LINES_PER_ADD) {
+    if (selectedLines.length > MAX_SHOPPING_LINES_PER_ADD) {
       return `Pick up to ${MAX_SHOPPING_LINES_PER_ADD} at a time.`;
     }
     if (listCount >= SOFT_MAX_SHOPPING_ITEMS && newCount > 0) {
@@ -292,15 +307,13 @@ export function ShoppingPick({
     setError(null);
     setIsSubmitting(true);
     try {
-      const count = await dispatch(
-        addToShoppingList({ uid, lines: selected.map((row) => row.line) }),
-      ).unwrap();
+      await dispatch(addToShoppingList({ uid, lines: selectedLines })).unwrap();
       onClose();
       addToast({
         title:
-          count === 1
+          selected.length === 1
             ? `Added ${selected[0].name} to your shopping list`
-            : `Added ${count} to your shopping list`,
+            : `Added ${selected.length} to your shopping list`,
         type: 'success',
         action: hasViewAction
           ? { label: 'View', onClick: showShoppingTab }
@@ -497,7 +510,10 @@ export function ShoppingPick({
         ) : (
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
             {rows.map((row) => {
-              const existing = onList.get(row.id);
+              const existing = openByRow.get(row.id);
+              const existingText = existing
+                ? formatShopAmount(getShopAmount(existing, row.section))
+                : null;
               return (
                 <li key={row.id}>
                   <label className='flex min-h-12 cursor-pointer items-start gap-3 py-2.5'>
@@ -516,16 +532,19 @@ export function ShoppingPick({
                     </span>
                     <span className='min-w-0 flex-1'>
                       <span className='block wrap-break-word'>{row.name}</span>
-                      {existing && isOnList(row.id) && (
+                      {existing && (
                         <span className='text-muted-foreground block text-xs'>
-                          On your list ·{' '}
-                          {formatSize(existing.amount, existing.unit)}
+                          {existingText
+                            ? `On your list · ${existingText}`
+                            : 'On your list'}
                         </span>
                       )}
                     </span>
-                    <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                      {formatSize(row.line.amount, row.line.unit)}
-                    </span>
+                    {row.amountText && (
+                      <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                        {row.amountText}
+                      </span>
+                    )}
                   </label>
                 </li>
               );

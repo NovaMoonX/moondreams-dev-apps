@@ -4,6 +4,8 @@ import {
   SHOP_SECTION_BY_INGREDIENT,
   SHOP_SECTION_LABELS,
   SHOP_SECTIONS,
+  UNIT_DIMENSION,
+  UNIT_TO_BASE,
   type ShopSection,
 } from '@apps/pinch/constants';
 import type {
@@ -18,6 +20,7 @@ import type {
   Unit,
 } from '@apps/pinch/types';
 import type { DayRange } from '@apps/pinch/utils/dayKeys';
+import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
@@ -28,10 +31,13 @@ export interface ShoppingLine {
 }
 
 export interface ShoppingRowData {
+  /** One ingredient's amounts of the same kind (weights, volumes or counts) share a row. */
   id: string;
+  /** Every stored item the row stands for, largest first. */
+  itemIds: string[];
   name: string;
-  amount: number;
-  unit: Unit;
+  /** What to pick up, or null for a pinch of a spice or oil, which needs only its name. */
+  amountText: string | null;
   isChecked: boolean;
 }
 
@@ -53,6 +59,93 @@ export const getShopSection = (
   'other';
 
 export const roundAmount = (value: number) => Math.round(value * 100) / 100;
+
+/** The row a stored item or a line belongs to: its ingredient and the kind of unit, since weights add up with weights. */
+export const getShopRowId = (ingredientId: string, unit: Unit) =>
+  `${ingredientId}::${UNIT_DIMENSION[unit]}`;
+
+export interface ShopAmount {
+  amount: number;
+  unit: Unit;
+}
+
+const PANTRY_SIZED_ML = UNIT_TO_BASE.TBSP - 0.01;
+const PANTRY_SIZED_G = 15;
+
+/** One ingredient's amounts of the same kind summed in the unit of the largest, a count rounded up to whole ones. */
+export function sumShopAmounts(parts: ShopAmount[]): ShopAmount | null {
+  if (parts.length === 0) {
+    return null;
+  }
+  const based = parts.map((part) => ({
+    unit: part.unit,
+    base: part.amount * UNIT_TO_BASE[part.unit],
+  }));
+  const lead = based.reduce((best, part) =>
+    part.base > best.base ? part : best,
+  );
+  const total = based.reduce((sum, part) => sum + part.base, 0);
+  const amount = roundAmount(total / UNIT_TO_BASE[lead.unit]);
+  const result = {
+    amount: UNIT_DIMENSION[lead.unit] === 'COUNT' ? Math.ceil(amount) : amount,
+    unit: lead.unit,
+  };
+  return result;
+}
+
+/** What to pick up in a shop; null for less than a tablespoon (or 15 g) of a spice or oil, which is on the shelf at home or bought by the jar. */
+export function getShopAmount(
+  parts: ShopAmount[],
+  section: ShopSection,
+): ShopAmount | null {
+  const sum = sumShopAmounts(parts);
+  if (!sum || section !== 'spices') {
+    return sum;
+  }
+  const base = sum.amount * UNIT_TO_BASE[sum.unit];
+  const dimension = UNIT_DIMENSION[sum.unit];
+  const isPinch =
+    (dimension === 'VOLUME' && base < PANTRY_SIZED_ML) ||
+    (dimension === 'MASS' && base < PANTRY_SIZED_G);
+  return isPinch ? null : sum;
+}
+
+export const formatShopAmount = (amount: ShopAmount | null) =>
+  amount ? formatSize(amount.amount, amount.unit) : null;
+
+export interface ShopLineRow {
+  id: string;
+  ingredientId: string;
+  name: string;
+  section: ShopSection;
+  lines: ShoppingLine[];
+  amountText: string | null;
+}
+
+/** An add sheet's rows: one per ingredient and kind of unit, in the order the lines came, each with what to pick up. */
+export function groupShopLines(
+  lines: ShoppingLine[],
+  ingredientsById: Map<string, ResolvedIngredient>,
+): ShopLineRow[] {
+  const byRow = lines.reduce((acc, line) => {
+    const id = getShopRowId(line.ingredientId, line.unit);
+    return acc.set(id, [...(acc.get(id) ?? []), line]);
+  }, new Map<string, ShoppingLine[]>());
+
+  const result = [...byRow.entries()].map(([id, rowLines]) => {
+    const ingredient = ingredientsById.get(rowLines[0].ingredientId);
+    const section = getShopSection(ingredient);
+    return {
+      id,
+      ingredientId: rowLines[0].ingredientId,
+      name: ingredient?.name ?? 'Removed ingredient',
+      section,
+      lines: rowLines,
+      amountText: formatShopAmount(getShopAmount(rowLines, section)),
+    };
+  });
+  return result;
+}
 
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
 export const isValidAmount = (amount: number) =>
@@ -186,32 +279,40 @@ export function getPlanInRange(
 }
 
 const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
-  a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit);
+  a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 
-/** Groups what is left and what is checked off, each by the section of the shop it is found in, in walking order with Other last. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
+/** Groups what is left and what is checked off, each by the section of the shop it is found in, in walking order with Other last, one row per ingredient and kind of unit. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
 export function groupShoppingItems(
   items: ShoppingItem[],
   ingredientsById: Map<string, ResolvedIngredient>,
   held: ReadonlyMap<string, boolean> = new Map(),
 ): Record<ShoppingView, ShoppingGroup[]> {
-  const entries = items.map((item) => {
-    const ingredient = ingredientsById.get(item.ingredientId);
-    const row: ShoppingRowData = {
-      id: item.id,
-      name: ingredient?.name ?? 'Removed ingredient',
-      amount: item.amount,
-      unit: item.unit,
-      isChecked: item.isChecked,
-    };
-    return {
-      row,
-      isGot: held.get(item.id) ?? item.isChecked,
-      section: getShopSection(ingredient),
-    };
-  });
+  const toRows = (side: ShoppingItem[], suffix: string) => {
+    const byRow = side.reduce((acc, item) => {
+      const id = `${getShopRowId(item.ingredientId, item.unit)}${suffix}`;
+      return acc.set(id, [...(acc.get(id) ?? []), item]);
+    }, new Map<string, ShoppingItem[]>());
+    return [...byRow.entries()].map(([id, rowItems]) => {
+      const ingredient = ingredientsById.get(rowItems[0].ingredientId);
+      const section = getShopSection(ingredient);
+      const byBase = [...rowItems].sort(
+        (a, b) =>
+          b.amount * UNIT_TO_BASE[b.unit] - a.amount * UNIT_TO_BASE[a.unit] ||
+          a.id.localeCompare(b.id),
+      );
+      const row: ShoppingRowData = {
+        id,
+        itemIds: byBase.map((item) => item.id),
+        name: ingredient?.name ?? 'Removed ingredient',
+        amountText: formatShopAmount(getShopAmount(rowItems, section)),
+        isChecked: byBase[0].isChecked,
+      };
+      return { row, section };
+    });
+  };
 
-  const toGroups = (side: typeof entries) => {
-    const buckets = side.reduce((acc, { row, section }) => {
+  const toGroups = (side: ShoppingItem[], suffix: string) => {
+    const buckets = toRows(side, suffix).reduce((acc, { row, section }) => {
       acc.set(section, [...(acc.get(section) ?? []), row]);
       return acc;
     }, new Map<ShopSection, ShoppingRowData[]>());
@@ -230,9 +331,13 @@ export function groupShoppingItems(
     return result;
   };
 
+  const isGot = (item: ShoppingItem) => held.get(item.id) ?? item.isChecked;
   const grouped = {
-    toBuy: toGroups(entries.filter(({ isGot }) => !isGot)),
-    got: toGroups(entries.filter(({ isGot }) => isGot)),
+    toBuy: toGroups(
+      items.filter((item) => !isGot(item)),
+      '',
+    ),
+    got: toGroups(items.filter(isGot), '/got'),
   };
   return grouped;
 }
