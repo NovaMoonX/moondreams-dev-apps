@@ -11,6 +11,7 @@ import {
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
@@ -26,6 +27,7 @@ import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet
 import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
   LIST_SEARCH_THRESHOLD,
+  SHOP_SECTION_DIVIDER_MIN_ROWS,
   SHOPPING_GROUP_PAGE_SIZE,
   SHOPPING_MOVE_DELAY_MS,
   SHOPPING_VIEW_LABELS,
@@ -56,8 +58,8 @@ import {
 } from '@apps/pinch/utils/shopping';
 
 const EAGER_GROUPS = 3;
+const ROW_CHUNK = 12;
 const ROW_HEIGHT = 57;
-const DIVIDER_HEIGHT = 36;
 
 const MAX_NAMES_SHOWN = 4;
 
@@ -83,25 +85,55 @@ interface ShoppingRowsProps {
   rows: ShoppingRowData[];
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
+  /** Whether the first chunk of rows mounts at once, for the first screenful. */
+  isEager?: boolean;
+  className?: string;
 }
 
-function ShoppingRows({ rows, onToggle, onOpen }: ShoppingRowsProps) {
+function ShoppingRows({
+  rows,
+  onToggle,
+  onOpen,
+  isEager = true,
+  className,
+}: ShoppingRowsProps) {
   const [limit, setLimit] = useState(SHOPPING_GROUP_PAGE_SIZE);
   const visible = rows.length <= limit + 3 ? rows : rows.slice(0, limit);
   const hiddenCount = rows.length - visible.length;
+  const chunks = Array.from(
+    { length: Math.ceil(visible.length / ROW_CHUNK) },
+    (_, index) => visible.slice(index * ROW_CHUNK, (index + 1) * ROW_CHUNK),
+  );
 
   return (
     <>
-      <ul className='divide-border divide-y'>
-        {visible.map((row) => (
-          <ShoppingRow
-            key={row.id}
-            {...row}
-            onToggle={onToggle}
-            onOpen={onOpen}
-          />
+      <div className={join('divide-border divide-y', className)}>
+        {chunks.map((chunk, index) => (
+          <LazyMount
+            key={index}
+            estimatedHeight={chunk.length * ROW_HEIGHT}
+            eager={isEager && index === 0}
+          >
+            <ul
+              className='divide-border defer-offscreen divide-y lg:break-inside-avoid'
+              style={
+                {
+                  '--defer-size': `${chunk.length * ROW_HEIGHT}px`,
+                } as CSSProperties
+              }
+            >
+              {chunk.map((row) => (
+                <ShoppingRow
+                  key={row.id}
+                  {...row}
+                  onToggle={onToggle}
+                  onOpen={onOpen}
+                />
+              ))}
+            </ul>
+          </LazyMount>
         ))}
-      </ul>
+      </div>
       {hiddenCount > 0 && (
         <Button
           type='button'
@@ -144,18 +176,15 @@ const ShoppingGroupSection = memo(
     onToggle,
     onOpen,
   }: ShoppingGroupSectionProps) {
-    const estimatedHeight = DIVIDER_HEIGHT + group.rows.length * ROW_HEIGHT;
-
     return (
-      <section
-        aria-label={group.name}
-        className='defer-offscreen space-y-1 lg:mb-4 lg:break-inside-avoid'
-        style={{ '--defer-size': `${estimatedHeight}px` } as CSSProperties}
-      >
-        <LazyMount estimatedHeight={estimatedHeight} eager={isEager}>
-          <SectionDivider label={group.name} />
-          <ShoppingRows rows={group.rows} onToggle={onToggle} onOpen={onOpen} />
-        </LazyMount>
+      <section aria-label={group.name} className='space-y-1 lg:mb-4'>
+        <SectionDivider label={group.name} className='lg:break-after-avoid' />
+        <ShoppingRows
+          rows={group.rows}
+          isEager={isEager}
+          onToggle={onToggle}
+          onOpen={onOpen}
+        />
       </section>
     );
   },
@@ -400,13 +429,22 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             </Button>
           </div>
         )}
-        {shownGroups.length === 0 ? (
-          getEmpty()
-        ) : (
+        {shownGroups.length === 0 && getEmpty()}
+        {shownGroups.length > 0 &&
+          matches[shownView] < SHOP_SECTION_DIVIDER_MIN_ROWS && (
+            <ShoppingRows
+              key={shownView}
+              rows={shownGroups.flatMap((group) => group.rows)}
+              onToggle={handleToggle}
+              onOpen={handleOpen}
+              className='lg:w-[calc(50%-1rem)]'
+            />
+          )}
+        {matches[shownView] >= SHOP_SECTION_DIVIDER_MIN_ROWS && (
           <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
             {shownGroups.map((group, index) => (
               <ShoppingGroupSection
-                key={`${shownView}-${group.id || 'other'}`}
+                key={`${shownView}-${group.id}`}
                 group={group}
                 isEager={index < EAGER_GROUPS}
                 onToggle={handleToggle}

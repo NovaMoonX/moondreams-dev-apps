@@ -187,7 +187,6 @@ import type {
   Product,
   Recipe,
   RecipeNote,
-  ResolvedFamily,
   ResolvedIngredient,
   ShoppingItem,
   ShoppingView,
@@ -531,10 +530,19 @@ const shopItem = (
   createdAt: 1,
   updatedAt: 1,
 });
-const shopFamilies = [
-  { id: 'fam-chicken', name: 'Chicken', isCustom: false },
-  { id: 'fam-rice', name: 'Rice', isCustom: false },
-] as ResolvedFamily[];
+const shopSectionIngredients = new Map([
+  ...shopIngredients,
+  ...[
+    shopIngredient('rice', 'Rice', 'cat-fam-rice', {
+      amount: 0.25,
+      unit: 'CUP',
+    }),
+    shopIngredient('chicken', 'Chicken', 'cat-fam-chicken', {
+      amount: 4,
+      unit: 'OZ',
+    }),
+  ].map((entry) => [entry.id, entry] as const),
+]);
 const grouped = groupShoppingItems(
   [
     shopItem('chips', 'G', 28, false),
@@ -545,17 +553,16 @@ const grouped = groupShoppingItems(
     shopItem('missing', 'EACH', 2, false),
     shopItem('rice', 'LB', 5, true),
   ],
-  shopIngredients,
-  shopFamilies,
+  shopSectionIngredients,
 );
 assert.deepEqual(
   grouped.toBuy.map((group) => [group.name, group.rows.map((row) => row.name)]),
   [
-    ['Chicken', ['Chicken', 'Chicken']],
-    ['Rice', ['Rice']],
+    ['Meat & fish', ['Chicken', 'Chicken']],
+    ['Pantry', ['Rice']],
     ['Other', ['Chips', 'Removed ingredient', 'Salt']],
   ],
-  'groups follow the family order, and an ingredient with no family or an unknown one, or one that is gone, lands in Other',
+  'groups follow the shop sections in walking order, and an ingredient with no family or an unknown one, or one that is gone, lands in Other',
 );
 assert.deepEqual(
   grouped.toBuy[0].rows.map((row) => row.unit),
@@ -564,8 +571,8 @@ assert.deepEqual(
 );
 assert.deepEqual(
   grouped.got.map((group) => [group.name, group.rows.map((row) => row.id)]),
-  [['Rice', ['rice__LB']]],
-  'a checked item is in "Got it", grouped by its family, and not in "To buy"',
+  [['Pantry', ['rice__LB']]],
+  'a checked item is in "Got it", grouped by its section, and not in "To buy"',
 );
 
 const heldItems = [
@@ -575,8 +582,7 @@ const heldItems = [
 ];
 const heldGrouped = groupShoppingItems(
   heldItems,
-  shopIngredients,
-  shopFamilies,
+  shopSectionIngredients,
   new Map([
     ['rice__CUP', false],
     ['salt__TSP', true],
@@ -587,7 +593,7 @@ assert.deepEqual(
     group.name,
     group.rows.map((row) => [row.id, row.isChecked]),
   ]),
-  [['Rice', [['rice__CUP', true]]]],
+  [['Pantry', [['rice__CUP', true]]]],
   'a row just ticked stays in its group, still carrying its stored checked flag',
 );
 assert.deepEqual(
@@ -607,8 +613,8 @@ assert.deepEqual(
   'a row just unticked stays in "Got it" until it is let go, and the unheld rows follow the stored flag',
 );
 assert.deepEqual(
-  groupShoppingItems(heldItems, shopIngredients, shopFamilies, new Map()),
-  groupShoppingItems(heldItems, shopIngredients, shopFamilies),
+  groupShoppingItems(heldItems, shopSectionIngredients, new Map()),
+  groupShoppingItems(heldItems, shopSectionIngredients),
   'an empty hold changes nothing',
 );
 
@@ -4278,6 +4284,65 @@ assert.deepEqual(
   shopSpanIds('2026-10-10', '2026-10-13'),
   ['2026-10-15', [], true],
   'a range wholly in the past gives nothing, starting after it ends',
+);
+
+import {
+  CATALOG_FAMILIES as SHOP_CATALOG_FAMILIES,
+  CATALOG_INGREDIENTS_BY_ID as SHOP_CATALOG_BY_ID,
+} from '../../src/apps/pinch/catalog/index.ts';
+import {
+  SHOP_SECTION_BY_FAMILY as SHOP_BY_FAMILY,
+  SHOP_SECTION_BY_INGREDIENT as SHOP_BY_INGREDIENT,
+  SHOP_SECTIONS as SHOP_SECTION_IDS,
+} from '../../src/apps/pinch/constants.ts';
+import { getShopSection as shopGetSection } from '../../src/apps/pinch/utils/shopping.ts';
+
+assert.deepEqual(
+  SHOP_CATALOG_FAMILIES.filter(
+    (family) => SHOP_BY_FAMILY[family.id] === undefined,
+  ).map((family) => family.id),
+  [],
+  'every catalog family has a shop section',
+);
+assert.deepEqual(
+  Object.keys(SHOP_BY_FAMILY).filter(
+    (id) => !SHOP_CATALOG_FAMILIES.some((family) => family.id === id),
+  ),
+  [],
+  'the section map names only catalog families',
+);
+assert.deepEqual(
+  Object.keys(SHOP_BY_INGREDIENT).filter((id) => !SHOP_CATALOG_BY_ID.has(id)),
+  [],
+  'every ingredient shelved away from its family is a catalog ingredient',
+);
+assert.deepEqual(
+  SHOP_SECTION_IDS.filter(
+    (section) =>
+      section !== 'other' &&
+      ![
+        ...Object.values(SHOP_BY_FAMILY),
+        ...Object.values(SHOP_BY_INGREDIENT),
+      ].includes(section),
+  ),
+  [],
+  'every section but Other can hold something from the catalog',
+);
+assert.deepEqual(
+  [
+    shopGetSection({ id: 'cat-garlic', familyId: 'cat-fam-onion' }),
+    shopGetSection({
+      id: 'cat-canned-diced-tomatoes',
+      familyId: 'cat-fam-tomato',
+    }),
+    shopGetSection({ id: 'cat-vanilla-ice-cream', familyId: 'cat-fam-snacks' }),
+    shopGetSection({ id: 'mine-1', familyId: 'cat-fam-cheese' }),
+    shopGetSection({ id: 'mine-2', familyId: 'custom-family-uuid' }),
+    shopGetSection({ id: 'mine-3', familyId: null }),
+    shopGetSection(undefined),
+  ],
+  ['produce', 'pantry', 'frozen', 'dairy', 'other', 'other', 'other'],
+  'a section comes from the ingredient when the catalog moves it, else its family, else Other (the person own families included)',
 );
 
 console.log('pinchMath: all checks passed');

@@ -360,14 +360,9 @@ const selectHeldShoppingRows = (
 ) => held;
 
 export const selectShoppingRows = createSelector(
-  [
-    selectShoppingItems,
-    selectIngredientsById,
-    selectIngredientFamilies,
-    selectHeldShoppingRows,
-  ],
-  (items, ingredientsById, families, held) =>
-    groupShoppingItems(items, ingredientsById, families, held),
+  [selectShoppingItems, selectIngredientsById, selectHeldShoppingRows],
+  (items, ingredientsById, held) =>
+    groupShoppingItems(items, ingredientsById, held),
 );
 
 export const selectShoppingCost = createSelector(

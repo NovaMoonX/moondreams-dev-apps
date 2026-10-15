@@ -122,6 +122,98 @@ export const SHOPPING_VIEW_LABELS: Record<ShoppingView, string> = {
   toBuy: 'To buy',
   got: 'Got it',
 };
+/** The shopping list's sections, in the order a shop is walked. */
+export const SHOP_SECTIONS = [
+  'produce',
+  'meat',
+  'dairy',
+  'bakery',
+  'pantry',
+  'spices',
+  'snacks',
+  'frozen',
+  'other',
+] as const;
+export type ShopSection = (typeof SHOP_SECTIONS)[number];
+export const SHOP_SECTION_LABELS: Record<ShopSection, string> = {
+  produce: 'Produce',
+  meat: 'Meat & fish',
+  dairy: 'Dairy & eggs',
+  bakery: 'Bakery',
+  pantry: 'Pantry',
+  spices: 'Spices & oils',
+  snacks: 'Snacks & drinks',
+  frozen: 'Frozen',
+  other: 'Other',
+};
+/** Where each catalog family is found in a shop; a family not listed, the person's own included, is Other. */
+export const SHOP_SECTION_BY_FAMILY: Partial<Record<string, ShopSection>> = {
+  'cat-fam-onion': 'produce',
+  'cat-fam-pepper': 'produce',
+  'cat-fam-tomato': 'produce',
+  'cat-fam-potato': 'produce',
+  'cat-fam-vegetables': 'produce',
+  'cat-fam-greens': 'produce',
+  'cat-fam-fruit': 'produce',
+  'cat-fam-citrus': 'produce',
+  'cat-fam-berries': 'produce',
+  'cat-fam-herbs': 'produce',
+  'cat-fam-soy': 'produce',
+  'cat-fam-chicken': 'meat',
+  'cat-fam-beef': 'meat',
+  'cat-fam-pork': 'meat',
+  'cat-fam-turkey': 'meat',
+  'cat-fam-lamb': 'meat',
+  'cat-fam-fish': 'meat',
+  'cat-fam-shellfish': 'meat',
+  'cat-fam-eggs': 'dairy',
+  'cat-fam-milk': 'dairy',
+  'cat-fam-cheese': 'dairy',
+  'cat-fam-yogurt': 'dairy',
+  'cat-fam-butter': 'dairy',
+  'cat-fam-bread': 'bakery',
+  'cat-fam-rice': 'pantry',
+  'cat-fam-grains': 'pantry',
+  'cat-fam-pasta': 'pantry',
+  'cat-fam-flour': 'pantry',
+  'cat-fam-baking': 'pantry',
+  'cat-fam-sugar': 'pantry',
+  'cat-fam-beans': 'pantry',
+  'cat-fam-broth': 'pantry',
+  'cat-fam-pickles': 'pantry',
+  'cat-fam-sauces': 'pantry',
+  'cat-fam-nuts': 'pantry',
+  'cat-fam-seeds': 'pantry',
+  'cat-fam-spices': 'spices',
+  'cat-fam-oil': 'spices',
+  'cat-fam-vinegar': 'spices',
+  'cat-fam-snacks': 'snacks',
+  'cat-fam-drinks': 'snacks',
+};
+/** Catalog ingredients shelved away from their family: a can of tomatoes sits in the pantry, ice cream in the freezer. */
+export const SHOP_SECTION_BY_INGREDIENT: Partial<Record<string, ShopSection>> =
+  {
+    'cat-fresh-ginger': 'produce',
+    'cat-canned-diced-tomatoes': 'pantry',
+    'cat-crushed-tomatoes': 'pantry',
+    'cat-tomato-sauce': 'pantry',
+    'cat-tomato-paste': 'pantry',
+    'cat-marinara-sauce': 'pantry',
+    'cat-sun-dried-tomatoes': 'pantry',
+    'cat-pumpkin-puree': 'pantry',
+    'cat-raisins': 'pantry',
+    'cat-dates': 'pantry',
+    'cat-dried-cranberries': 'pantry',
+    'cat-shredded-coconut': 'pantry',
+    'cat-canned-tuna': 'pantry',
+    'cat-sardines': 'pantry',
+    'cat-coconut-milk': 'pantry',
+    'cat-evaporated-milk': 'pantry',
+    'cat-vanilla-ice-cream': 'frozen',
+  };
+/** Below this many rows the list is one run in shop order, with no section dividers. */
+export const SHOP_SECTION_DIVIDER_MIN_ROWS = 8;
+
 export const SHOPPING_ADD_MODES = ['one', 'plan'] as const;
 export type ShoppingAddMode = (typeof SHOPPING_ADD_MODES)[number];
 export const SHOPPING_ADD_MODE_LABELS: Record<ShoppingAddMode, string> = {

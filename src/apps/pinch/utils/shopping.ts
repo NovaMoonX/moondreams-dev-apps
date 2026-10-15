@@ -1,11 +1,17 @@
-import { MAX_SHOPPING_AMOUNT } from '@apps/pinch/constants';
+import {
+  MAX_SHOPPING_AMOUNT,
+  SHOP_SECTION_BY_FAMILY,
+  SHOP_SECTION_BY_INGREDIENT,
+  SHOP_SECTION_LABELS,
+  SHOP_SECTIONS,
+  type ShopSection,
+} from '@apps/pinch/constants';
 import type {
   Gap,
   MealItem,
   PlannedMeal,
   Product,
   Recipe,
-  ResolvedFamily,
   ResolvedIngredient,
   ShoppingItem,
   ShoppingView,
@@ -30,13 +36,21 @@ export interface ShoppingRowData {
 }
 
 export interface ShoppingGroup {
-  /** A family id; empty for the group of ingredients without one. */
-  id: string;
+  id: ShopSection;
   name: string;
   rows: ShoppingRowData[];
 }
 
-export const OTHER_GROUP_NAME = 'Other';
+/** Where an ingredient is found in a shop: its own shelf when the catalog moves it, else its family's, else Other. */
+export const getShopSection = (
+  ingredient: Pick<ResolvedIngredient, 'id' | 'familyId'> | undefined,
+): ShopSection =>
+  (ingredient &&
+    (SHOP_SECTION_BY_INGREDIENT[ingredient.id] ??
+      (ingredient.familyId === null
+        ? undefined
+        : SHOP_SECTION_BY_FAMILY[ingredient.familyId]))) ??
+  'other';
 
 export const roundAmount = (value: number) => Math.round(value * 100) / 100;
 
@@ -174,24 +188,14 @@ export function getPlanInRange(
 const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit);
 
-/** Groups what is left and what is checked off, each by ingredient family with "Other" last. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
+/** Groups what is left and what is checked off, each by the section of the shop it is found in, in walking order with Other last. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
 export function groupShoppingItems(
   items: ShoppingItem[],
   ingredientsById: Map<string, ResolvedIngredient>,
-  families: ResolvedFamily[],
   held: ReadonlyMap<string, boolean> = new Map(),
 ): Record<ShoppingView, ShoppingGroup[]> {
-  const familyOrder = new Map(
-    families.map((family, index) => [family.id, index]),
-  );
-  const familyNames = new Map(
-    families.map((family) => [family.id, family.name]),
-  );
-  const getRank = (familyId: string) =>
-    familyOrder.get(familyId) ?? Number.MAX_SAFE_INTEGER;
   const entries = items.map((item) => {
     const ingredient = ingredientsById.get(item.ingredientId);
-    const familyId = ingredient?.familyId ?? '';
     const row: ShoppingRowData = {
       id: item.id,
       name: ingredient?.name ?? 'Removed ingredient',
@@ -202,22 +206,27 @@ export function groupShoppingItems(
     return {
       row,
       isGot: held.get(item.id) ?? item.isChecked,
-      familyId: familyOrder.has(familyId) ? familyId : '',
+      section: getShopSection(ingredient),
     };
   });
 
   const toGroups = (side: typeof entries) => {
-    const buckets = side.reduce((acc, { row, familyId }) => {
-      acc.set(familyId, [...(acc.get(familyId) ?? []), row]);
+    const buckets = side.reduce((acc, { row, section }) => {
+      acc.set(section, [...(acc.get(section) ?? []), row]);
       return acc;
-    }, new Map<string, ShoppingRowData[]>());
-    const result = [...buckets.entries()]
-      .map(([id, rows]) => ({
-        id,
-        name: familyNames.get(id) ?? OTHER_GROUP_NAME,
-        rows: [...rows].sort(byName),
-      }))
-      .sort((a, b) => getRank(a.id) - getRank(b.id));
+    }, new Map<ShopSection, ShoppingRowData[]>());
+    const result = SHOP_SECTIONS.flatMap((section) => {
+      const rows = buckets.get(section);
+      return rows
+        ? [
+            {
+              id: section,
+              name: SHOP_SECTION_LABELS[section],
+              rows: [...rows].sort(byName),
+            },
+          ]
+        : [];
+    });
     return result;
   };
 
