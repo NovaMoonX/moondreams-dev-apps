@@ -81,7 +81,7 @@ export function EatFromStockView({
           Eat from your {CONTAINER_PLACE_LABELS[place].toLowerCase()}
         </p>
         <p className='text-muted-foreground text-sm'>
-          Takes the servings off a container. Your plan stays as it is.
+          Takes the servings off its box. Your plan stays as it is.
         </p>
       </div>
       {rows.length === 0 ? (

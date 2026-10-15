@@ -48,7 +48,7 @@ type ListView = ContainerPlace | 'FINISHED';
 const HIDDEN_WORTH_A_BUTTON = 3;
 
 const countContainers = (count: number) =>
-  `${count} ${count === 1 ? 'container' : 'containers'}`;
+  `${count} ${count === 1 ? 'box' : 'boxes'}`;
 
 const sumServings = (containers: Container[]) =>
   containers.reduce((sum, container) => sum + container.servings, 0);
@@ -254,7 +254,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     setClearNote(null);
     const isConfirmed = await confirm({
       title: `Clear out the ${placeWord}?`,
-      message: getClearOutMessage(inPlace.length, sumServings(inPlace)),
+      message: getClearOutMessage(inPlace.length, sumServings(inPlace), place),
       confirmText: `Clear out the ${placeWord}`,
       cancelText: inPlace.length === 1 ? 'Keep it' : 'Keep them',
       destructive: true,
@@ -309,14 +309,14 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     if (loadError !== null) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Your prepared meals couldn't load just now.
+          Your fridge and freezer couldn't load just now.
         </p>
       );
     }
     if (!isReady) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Loading your prepared meals…
+          Loading your fridge and freezer…
         </p>
       );
     }
@@ -428,7 +428,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     if (finishedQuery.isError) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Finished meals couldn't load just now.
+          What you finished couldn't load just now.
         </p>
       );
     }
@@ -487,10 +487,10 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   };
 
   return (
-    <Subview title='Prepared meals' onClose={closeSubview}>
+    <Subview title='Fridge & freezer' onClose={closeSubview}>
       <div className='space-y-4'>
         <SectionHeader
-          title='Prepared meals'
+          title='Fridge & freezer'
           subtitle={getSubtitle()}
           action={
             <Button
@@ -498,7 +498,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
               size='sm'
               rounded='full'
               className='gap-1'
-              aria-label='Add a container'
+              aria-label='Put something away'
               disabled={!isReady}
               onClick={() => setIsAdding(true)}
             >
@@ -509,7 +509,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
         />
         <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
           <PillGroup
-            label='Which containers'
+            label='Fridge or freezer'
             options={viewOptions}
             value={isFinishedView ? 'FINISHED' : shownPlace}
             onChange={(next) => {
@@ -537,7 +537,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
           <SearchInput
             value={query}
             onChange={setQuery}
-            placeholder='Search prepared meals'
+            placeholder='Search the fridge and freezer'
           />
         )}
         {isFinishedView ? getFinishedBody() : getStockBody()}

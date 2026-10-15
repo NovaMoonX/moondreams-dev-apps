@@ -102,7 +102,7 @@ export function useContainerActions(uid: string) {
       await dispatch(undoContainerBatch({ uid, ids })).unwrap();
     } catch (error) {
       showUndoFailed(
-        getErrorMessage(error, 'You can change it from Prepared meals.'),
+        getErrorMessage(error, 'You can change it from Fridge & freezer.'),
       );
     }
   };
@@ -111,16 +111,16 @@ export function useContainerActions(uid: string) {
     try {
       await dispatch(undoContainerEnd({ uid, id, at })).unwrap();
     } catch {
-      showUndoFailed('You can change it from Prepared meals.');
+      showUndoFailed('You can change it from Fridge & freezer.');
     }
   };
 
   const getProblem = (inputs: Omit<NewContainerInput, 'id'>[]) => {
     if (loadError !== null) {
-      return "Your prepared meals couldn't load, so adding is paused.";
+      return "Your fridge and freezer couldn't load, so adding is paused.";
     }
     if (!isReady) {
-      return 'Your prepared meals are still loading. Try again in a moment.';
+      return 'Your fridge and freezer are still loading. Try again in a moment.';
     }
     return getNewContainersProblem(inputs, inStockCount);
   };
@@ -242,7 +242,7 @@ export function useContainerActions(uid: string) {
       if (cleared.length > 0) {
         addUndoToast(
           `Cleared out the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
-          `${cleared.length} ${cleared.length === 1 ? 'container' : 'containers'}`,
+          `${cleared.length} ${cleared.length === 1 ? 'box' : 'boxes'}`,
           () => undoClear(cleared),
         );
       }
@@ -258,7 +258,7 @@ export function useContainerActions(uid: string) {
       }
       if (isReady && isContainerListFull(inStockCount)) {
         throw new Error(
-          `You have ${SOFT_MAX_CONTAINERS} containers in stock. Finish or delete one to put this back.`,
+          `You have ${SOFT_MAX_CONTAINERS} boxes in your fridge and freezer. Finish or delete one to put this back.`,
         );
       }
       await dispatch(

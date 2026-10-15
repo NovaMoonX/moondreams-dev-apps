@@ -3154,8 +3154,8 @@ assert.deepEqual(
   [
     getEventText(makeEvent('CLEAR', 1, { servings: 3 })),
     getEventText(makeEvent('CLEAR', 1)),
-    getClearOutMessage(9, 24),
-    getClearOutMessage(1, 1),
+    getClearOutMessage(9, 24, 'FRIDGE'),
+    getClearOutMessage(1, 1, 'FREEZER'),
     getPutBackText(9, 9),
     getPutBackText(1, 1),
     getPutBackText(7, 9),
@@ -3163,13 +3163,13 @@ assert.deepEqual(
   [
     'Cleared out · 3 servings',
     'Cleared out',
-    'This takes 9 containers (24 servings) off your list and keeps them in Finished as cleared out. You can undo it right after.',
-    'This takes 1 container (1 serving) off your list and keeps it in Finished as cleared out. You can undo it right after.',
-    'Put 9 containers back',
-    'Put 1 container back',
+    'This takes 9 boxes (24 servings) out of the fridge and keeps them in Finished as cleared out. You can undo it right after.',
+    'This takes 1 box (1 serving) out of the freezer and keeps it in Finished as cleared out. You can undo it right after.',
+    'Put 9 boxes back',
+    'Put 1 box back',
     'Put back 7 of 9; the rest changed since',
   ],
-  'a clear-out says what it takes off the list and what it keeps, and the Undo says how many came back',
+  'a clear-out says what it takes out of which place and what it keeps, and the Undo says how many came back',
 );
 
 const toFreezer = planOf(planMove(container(), 'FREEZER', dayOf(20), 6000));
@@ -4034,7 +4034,7 @@ assert.equal(
     })),
     lateOnThe14th,
   ),
-  'Saved 4 containers (4 servings) in the freezer, eat by tomorrow',
+  'Saved 4 boxes (4 servings) in the freezer, eat by tomorrow',
   'a put-away of several containers says how many and how many servings in all',
 );
 assert.deepEqual(
@@ -4047,10 +4047,7 @@ assert.deepEqual(
       })),
     ),
   ],
-  [
-    'Saved 1 serving in the fridge',
-    'Saved 3 containers (6 servings) in the fridge',
-  ],
+  ['Saved 1 serving in the fridge', 'Saved 3 boxes (6 servings) in the fridge'],
   'the Finish panel says what was saved and where, with the eat-by date on its own line',
 );
 assert.deepEqual(

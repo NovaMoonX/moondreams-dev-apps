@@ -438,8 +438,8 @@ function ContainerSheet({
       return (
         <div className='grid gap-4'>
           <p className='text-muted-foreground py-4 text-center text-sm'>
-            This container isn't in stock anymore. It may have been finished on
-            another device.
+            This isn't in your fridge or freezer anymore. It may have been
+            finished on another device.
           </p>
           <ModalFooterActions
             rightActions={
@@ -492,7 +492,7 @@ function ContainerSheet({
 
     const handleDelete = async () => {
       const isConfirmed = await confirm({
-        title: 'Delete this container?',
+        title: `Delete ${title}?`,
         message: isInStock
           ? `${title} and its history are erased, and this can't be undone. If you ate it, “Ate it all” keeps it in Finished instead.`
           : `${title} comes off Finished and its history is erased. This can't be undone.`,
@@ -540,7 +540,6 @@ function ContainerSheet({
     return (
       <div className='grid gap-4'>
         <div className='space-y-1.5'>
-          <p className='text-lg font-medium wrap-break-word'>{title}</p>
           {isInStock ? (
             <>
               <p className='text-muted-foreground flex flex-wrap gap-x-3 text-sm'>
@@ -679,7 +678,7 @@ function ContainerSheet({
           <ActionRow
             icon={<Undo2 className='h-4 w-4' />}
             label={`Put it back in the ${CONTAINER_PLACE_LABELS[container.place].toLowerCase()}`}
-            subtitle={`Back on your list with ${formatServings(container.servings)}`}
+            subtitle={`With ${formatServings(container.servings)}`}
             isDisabled={busy === 'put-back'}
             onClick={() =>
               void run(
@@ -712,7 +711,7 @@ function ContainerSheet({
         <ModalFooterActions
           leftActions={
             <DeleteIconButton
-              label='Delete this container'
+              label={`Delete ${title}`}
               disabled={busy === 'delete'}
               onClick={() => void handleDelete()}
             />
@@ -728,7 +727,15 @@ function ContainerSheet({
   };
 
   return (
-    <FormSheet isOpen onClose={onClose} title='Container'>
+    <FormSheet
+      isOpen
+      onClose={onClose}
+      title={
+        container
+          ? getContainerTitle(container, recipesById, mealsById)
+          : 'Fridge & freezer'
+      }
+    >
       {getBody()}
     </FormSheet>
   );

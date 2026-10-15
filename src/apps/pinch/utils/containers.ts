@@ -360,8 +360,8 @@ export const getNewContainerProblem = (
   if (!isValidEatBy(input.eatBy)) return 'Pick a day to eat it by.';
   if (isContainerListFull(inStockCount, adding)) {
     return inStockCount >= SOFT_MAX_CONTAINERS
-      ? `You have ${SOFT_MAX_CONTAINERS} containers in stock. Finish or delete one to add more.`
-      : `That would pass the ${SOFT_MAX_CONTAINERS} containers you can keep in stock. Finish or delete some first.`;
+      ? `You have ${SOFT_MAX_CONTAINERS} boxes in your fridge and freezer. Finish or delete one to add more.`
+      : `That would pass the ${SOFT_MAX_CONTAINERS} boxes you can keep in your fridge and freezer. Finish or delete some first.`;
   }
   return null;
 };
@@ -448,10 +448,14 @@ export const planClearOut = (
   });
 
 const countContainers = (count: number) =>
-  `${count} ${count === 1 ? 'container' : 'containers'}`;
+  `${count} ${count === 1 ? 'box' : 'boxes'}`;
 
-export const getClearOutMessage = (count: number, servings: number) =>
-  `This takes ${countContainers(count)} (${formatServings(servings)}) off your list and keeps ${count === 1 ? 'it' : 'them'} in Finished as cleared out. You can undo it right after.`;
+export const getClearOutMessage = (
+  count: number,
+  servings: number,
+  place: ContainerPlace,
+) =>
+  `This takes ${countContainers(count)} (${formatServings(servings)}) out of the ${CONTAINER_PLACE_LABELS[place].toLowerCase()} and keeps ${count === 1 ? 'it' : 'them'} in Finished as cleared out. You can undo it right after.`;
 
 export const getPutBackText = (restored: number, total: number) =>
   restored === total
@@ -794,7 +798,7 @@ export const getSavedHeadline = (
   const what =
     batch.length === 1
       ? formatServings(total)
-      : `${batch.length} containers (${formatServings(total)})`;
+      : `${batch.length} boxes (${formatServings(total)})`;
   return `Saved ${what} in the ${CONTAINER_PLACE_LABELS[batch[0].place].toLowerCase()}`;
 };
 

@@ -23,7 +23,7 @@ const containerDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'containers', id);
 
 const OFFLINE_MESSAGE = 'Check your connection and try again.';
-const GONE = 'This container is gone, so nothing was changed.';
+const GONE = 'This box is gone, so nothing was changed.';
 
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
@@ -76,9 +76,7 @@ export const writeContainers = createAsyncThunk<
       );
       await batch.commit();
     } catch (error) {
-      return rejectWithValue(
-        getWriteMessage(error, 'Unable to save this container.'),
-      );
+      return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
     }
 
     return containers.map((container) => container.id);
@@ -322,7 +320,7 @@ export const clearOutPlace = createAsyncThunk<
 
     return {
       cleared: done,
-      error: `Cleared out ${done.length} before it stopped. ${getWriteMessage(error, 'The rest are still on your list.')}`,
+      error: `Cleared out ${done.length} before it stopped. ${getWriteMessage(error, 'The rest are still there.')}`,
     };
   },
 );
@@ -386,9 +384,7 @@ export const removeContainer = createAsyncThunk<
     await deleteDoc(containerDoc(uid, id));
     void refreshFinished(uid);
   } catch (error) {
-    return rejectWithValue(
-      getWriteMessage(error, 'Unable to delete this container.'),
-    );
+    return rejectWithValue(getWriteMessage(error, 'Unable to delete this.'));
   }
 
   return id;
