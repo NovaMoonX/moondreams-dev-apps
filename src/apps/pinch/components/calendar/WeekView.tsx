@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -127,7 +127,7 @@ function WeekView({
               <Button
                 type='button'
                 variant='tertiary'
-                aria-label={`Add to ${formatDayTitle(dayKey)}`}
+                aria-label={`Plan on ${formatDayTitle(dayKey)}`}
                 onClick={() => onAdd(dayKey)}
                 className='text-muted-foreground! mt-auto h-8 min-h-0 w-full p-0'
               >
@@ -150,7 +150,6 @@ function WeekView({
   );
 
   const getDayLabel = (dayKey: string) => {
-    if (dayKey === todayKey) return 'Today';
     if (dayKey === tomorrowKey) return 'Tomorrow';
     return formatDayTitle(dayKey);
   };
@@ -160,27 +159,38 @@ function WeekView({
     return (
       <section key={dayKey} aria-label={formatDayTitle(dayKey)}>
         <SectionDivider
-          label={getDayLabel(dayKey)}
-          trailing={
-            <>
-              {dayKey === todayKey && (
-                <span
-                  className='size-2 rounded-full bg-[var(--pinch-drizzle-fill)]'
-                  role='img'
-                  aria-label='Today'
-                />
+          label={
+            <Button
+              type='button'
+              variant='tertiary'
+              aria-label={`Open ${formatDayTitle(dayKey)}`}
+              onClick={() => onOpenDay(dayKey)}
+              className='h-10 min-h-0 gap-1 px-2! py-0 text-sm font-medium'
+            >
+              {dayKey === todayKey ? (
+                <span className='rounded-full bg-[var(--pinch-drizzle-fill)] px-2.5 py-0.5 text-xs font-semibold text-[var(--pinch-drizzle-fill-foreground)]'>
+                  Today
+                </span>
+              ) : (
+                getDayLabel(dayKey)
               )}
-              <Button
-                type='button'
-                variant='tertiary'
-                size='icon'
-                aria-label={`Add to ${formatDayTitle(dayKey)}`}
-                onClick={() => onAdd(dayKey)}
-                className='-mx-1 size-10'
-              >
-                <Plus className='h-4 w-4' aria-hidden='true' />
-              </Button>
-            </>
+              <ChevronRight
+                className='text-muted-foreground h-3.5 w-3.5'
+                aria-hidden='true'
+              />
+            </Button>
+          }
+          trailing={
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              aria-label={`Plan on ${formatDayTitle(dayKey)}`}
+              onClick={() => onAdd(dayKey)}
+              className='-mx-1 size-10'
+            >
+              <Plus className='h-4 w-4' aria-hidden='true' />
+            </Button>
           }
         />
         {meals.length === 0 ? (
