@@ -34,11 +34,13 @@ import {
   updatePlannedMeal,
 } from '@apps/pinch/store/actions/plannedMealActions';
 import {
+  selectCookSummaries,
   selectCostContext,
   selectIngredientsById,
   selectMeals,
   selectMealsById,
   selectPlannedMeals,
+  selectRecipes,
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
@@ -51,6 +53,7 @@ import {
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
+import { rankRecentPicks } from '@apps/pinch/utils/planPicks';
 import {
   getMealNutrition,
   hasShownValue,
@@ -62,8 +65,17 @@ const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((value) => ({
   emoji: MEAL_TYPE_EMOJIS[value],
 }));
 
+// Past 12 options a pill row adds its own search, and the item search is the one place to look.
+const MAX_RECENT_PICKS = 12;
+
 const copyItems = (items: MealItem[]) =>
   items.map((item) => ({ ...item, id: generateUuid() }));
+
+const getRecentCaption = (kinds: Set<'RECIPE' | 'MEAL'>) => {
+  if (!kinds.has('MEAL')) return 'Your recent recipes';
+  if (!kinds.has('RECIPE')) return 'Your recent saved meals';
+  return 'Your recent recipes and saved meals';
+};
 
 interface MealBuilderProps {
   uid: string;
@@ -99,10 +111,11 @@ function MealBuilder({
   const ingredientsById = useAppSelector(selectIngredientsById);
   const savedMeals = useAppSelector(selectMeals);
   const savedMealsById = useAppSelector(selectMealsById);
+  const recipes = useAppSelector(selectRecipes);
+  const plannedMeals = useAppSelector(selectPlannedMeals);
+  const cookSummaries = useAppSelector(selectCookSummaries);
   const existingPlanned =
-    useAppSelector(selectPlannedMeals).find(
-      (meal) => meal.id === plannedMealId,
-    ) ?? null;
+    plannedMeals.find((meal) => meal.id === plannedMealId) ?? null;
   const existingMeal =
     mode === 'meal' && mealId ? (savedMealsById.get(mealId) ?? null) : null;
   const starter =
@@ -161,6 +174,16 @@ function MealBuilder({
         costContext.ingredientsById,
       ),
     [items, costContext],
+  );
+  const recentPicks = useMemo(
+    () =>
+      rankRecentPicks({
+        recipes,
+        meals: mode === 'plan' ? savedMeals : [],
+        plannedMeals,
+        cookSummaries,
+      }),
+    [mode, recipes, savedMeals, plannedMeals, cookSummaries],
   );
   const getTitle = () => {
     if (mode === 'meal') {
@@ -237,10 +260,56 @@ function MealBuilder({
 
   const pickSavedMeal = (id: string) => {
     const meal = savedMealsById.get(id);
-    if (meal) {
+    if (!meal) {
+      return;
+    }
+    if (items.length === 0 && !existingPlanned) {
       setItems(copyItems(meal.items));
       setSource({ id: meal.id, name: meal.name });
+      return;
     }
+    setItems((current) => {
+      const onPlate = new Set(current.map((item) => item.refId));
+      const added = copyItems(
+        meal.items.filter((item) => !onPlate.has(item.refId)),
+      );
+      return [...current, ...added].slice(0, MAX_MEAL_ITEMS);
+    });
+  };
+
+  const pickRecent = (value: string) => {
+    const [kind, id] = value.split(':');
+    if (kind === 'MEAL') {
+      pickSavedMeal(id);
+      return;
+    }
+    addItem('RECIPE', id);
+  };
+
+  const getRecentRow = () => {
+    if (mode !== 'plan' || existingPlanned || items.length > 0) {
+      return undefined;
+    }
+    const picks = recentPicks.slice(0, MAX_RECENT_PICKS);
+    if (picks.length === 0) {
+      return undefined;
+    }
+    const caption = getRecentCaption(new Set(picks.map((pick) => pick.kind)));
+    return (
+      <div className='space-y-2 pt-1'>
+        <p className='text-muted-foreground text-sm'>{caption}</p>
+        <PillGroup
+          label={caption}
+          options={picks.map((pick) => ({
+            value: `${pick.kind}:${pick.id}`,
+            label: pick.label,
+            emoji: pick.kind === 'MEAL' ? '🍽️' : '🍲',
+          }))}
+          value={null}
+          onChange={pickRecent}
+        />
+      </div>
+    );
   };
 
   const rows = () =>
@@ -425,26 +494,6 @@ function MealBuilder({
           </div>
         )}
 
-        {mode === 'plan' &&
-          !existingPlanned &&
-          savedMeals.length > 0 &&
-          items.length === 0 && (
-            <div className='space-y-2'>
-              <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-                Start from a saved meal
-              </h2>
-              <PillGroup
-                label='Start from a saved meal'
-                options={savedMeals.map((meal) => ({
-                  value: meal.id,
-                  label: meal.name,
-                }))}
-                value={source?.id ?? null}
-                onChange={pickSavedMeal}
-              />
-            </div>
-          )}
-
         <section aria-label="What's on the plate" className='space-y-3'>
           <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             What's on the plate?
@@ -460,6 +509,8 @@ function MealBuilder({
               excludeIds={items.map((item) => item.refId)}
               onPick={(id) => addItem('INGREDIENT', id)}
               onPickRecipe={(id) => addItem('RECIPE', id)}
+              onPickMeal={mode === 'plan' ? pickSavedMeal : undefined}
+              idle={getRecentRow()}
             />
           )}
           {items.length > 0 && (

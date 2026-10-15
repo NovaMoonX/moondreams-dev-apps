@@ -27,6 +27,7 @@ import {
 } from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
+import { rankRecentPicks } from '../../src/apps/pinch/utils/planPicks.ts';
 import {
   getComparableUrl,
   getWebLinkHost,
@@ -4207,5 +4208,64 @@ assert.deepEqual(
   'a cook says how many servings were put away across its containers, not how many it made',
 );
 assert.equal(getPutAwayText([]), null);
+
+// ---------------------------------------------------------------------------
+// PLANA (plan builder): recent picks, the day strip and the default meal.
+// ---------------------------------------------------------------------------
+{
+  const recentPicks = rankRecentPicks({
+    recipes: [
+      { id: 'old', title: 'Old soup', createdAt: 100 },
+      { id: 'cooked', title: 'Cooked stew', createdAt: 110 },
+      { id: 'planned', title: 'Planned tacos', createdAt: 120 },
+      { id: 'new', title: 'New salad', createdAt: 900 },
+    ],
+    meals: [
+      { id: 'm-used', name: 'Taco night', createdAt: 130 },
+      { id: 'm-idle', name: 'Snack plate', createdAt: 140 },
+    ],
+    plannedMeals: [
+      {
+        createdAt: 700,
+        sourceMealId: 'm-used',
+        items: [
+          { kind: 'RECIPE', refId: 'planned' },
+          { kind: 'INGREDIENT', refId: 'old' },
+        ],
+      },
+      {
+        createdAt: 500,
+        sourceMealId: null,
+        items: [{ kind: 'RECIPE', refId: 'planned' }],
+      },
+    ],
+    cookSummaries: new Map([['cooked', { lastCookedAt: 800 }]]),
+  });
+  assert.deepEqual(
+    recentPicks.map((pick) => `${pick.kind}:${pick.id}`),
+    [
+      'RECIPE:new',
+      'RECIPE:cooked',
+      'RECIPE:planned',
+      'MEAL:m-used',
+      'MEAL:m-idle',
+      'RECIPE:old',
+    ],
+    'recent picks rank by the latest of made, planned (the plan, not its day) and cooked; an ingredient with a recipe id never counts',
+  );
+  assert.deepEqual(
+    rankRecentPicks({
+      recipes: [
+        { id: 'b', title: 'Beta', createdAt: 5 },
+        { id: 'a', title: 'Alpha', createdAt: 5 },
+      ],
+      meals: [],
+      plannedMeals: [],
+      cookSummaries: new Map(),
+    }).map((pick) => pick.label),
+    ['Alpha', 'Beta'],
+    'ties read alphabetically',
+  );
+}
 
 console.log('pinchMath: all checks passed');
