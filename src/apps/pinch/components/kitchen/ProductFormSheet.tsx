@@ -37,17 +37,25 @@ import {
 } from '@apps/pinch/store/actions/productActions';
 import {
   selectDefaultProducts,
+  selectIngredientsById,
+  selectPlannedMeals,
   selectProductsByIngredient,
+  selectRecipes,
+  selectRecipesById,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
 import type { Product, ResolvedIngredient, Unit } from '@apps/pinch/types';
+import { getIngredientUses } from '@apps/pinch/utils/gapOrder';
 
 const { custom } = FormFactories;
 
 // The field draws a 1px border around its input, so the input is 2px shorter to make the whole field 40px.
 const MONEY_INPUT_CLASS = 'min-h-9.5 h-9.5 placeholder:text-sm';
 
-import { formatPriceAndSize } from '@apps/pinch/utils/productFormat';
+import {
+  formatPriceAndSize,
+  formatRecipeUnitEcho,
+} from '@apps/pinch/utils/productFormat';
 
 interface Reveal<T> {
   enabled: boolean;
@@ -175,6 +183,10 @@ function ProductFormSheet({
       selectDefaultProducts(state).get(ingredient.id)?.id === product.id,
   );
   const storesById = useAppSelector(selectStoresById);
+  const recipes = useAppSelector(selectRecipes);
+  const recipesById = useAppSelector(selectRecipesById);
+  const plannedMeals = useAppSelector(selectPlannedMeals);
+  const ingredientsById = useAppSelector(selectIngredientsById);
   const initialData = useMemo(() => getInitialData(product), [product]);
   const [formData, setFormData] = useState<FormData>(initialData);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -184,6 +196,33 @@ function ProductFormSheet({
   const sizeAmount =
     formData.sizeAmount.trim() === '' ? null : Number(formData.sizeAmount);
   const link = formData.extras.link;
+  const use = getIngredientUses(
+    recipes,
+    plannedMeals,
+    recipesById,
+    ingredientsById,
+  ).get(ingredient.id);
+  const recipeUnit =
+    [...(use?.recipes ?? []), ...(use?.planned ?? [])].sort(
+      (a, b) => b.grams - a.grams,
+    )[0]?.unit ?? null;
+  const hasPriceAndSize =
+    priceCents !== null &&
+    priceCents > 0 &&
+    sizeAmount !== null &&
+    Number.isFinite(sizeAmount) &&
+    sizeAmount > 0;
+  const echo =
+    recipeUnit !== null && hasPriceAndSize
+      ? formatRecipeUnitEcho(
+          { priceCents, sizeAmount, sizeUnit: formData.sizeUnit },
+          recipeUnit,
+          {
+            gramsPerMl: ingredient.gramsPerMl,
+            gramsEach: ingredient.gramsEach,
+          },
+        )
+      : null;
   const isFormComplete =
     formData.storeId !== null &&
     storesById.has(formData.storeId) &&
@@ -261,6 +300,11 @@ function ProductFormSheet({
                 />
               </div>
             </div>
+            {echo && (
+              <p className='text-muted-foreground text-xs min-[400px]:col-span-2'>
+                {echo}
+              </p>
+            )}
           </div>
         ),
       }),
@@ -304,6 +348,7 @@ function ProductFormSheet({
       formData.price,
       formData.sizeAmount,
       formData.sizeUnit,
+      echo,
     ],
   );
 

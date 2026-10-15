@@ -46,7 +46,7 @@ import {
   selectStoresById,
 } from '@apps/pinch/store/selectors';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatSize, formatUnitPrice } from '@apps/pinch/utils/productFormat';
 import type { Product, Store } from '@apps/pinch/types';
 
 const REMOVED_STORE = 'Removed store';
@@ -78,6 +78,8 @@ interface ProductRowData {
   familyId: string;
   isDefault: boolean;
   hasSiblings: boolean;
+  /** Said in the unit of the ingredient's default price, so its places compare. */
+  unitPrice: string | null;
 }
 
 interface StoreGroup {
@@ -157,8 +159,15 @@ function ProductRow({ row, showStore, onOpen }: ProductRowProps) {
           {detail}
         </span>
       </span>
-      <span className='font-semibold whitespace-nowrap'>
-        {formatCents(product.priceCents)}
+      <span className='shrink-0 text-right'>
+        <span className='block font-semibold whitespace-nowrap'>
+          {formatCents(product.priceCents)}
+        </span>
+        {row.unitPrice && (
+          <span className='text-muted-foreground block text-xs font-normal whitespace-nowrap'>
+            {row.unitPrice}
+          </span>
+        )}
       </span>
       <ChevronRight
         className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
@@ -265,6 +274,10 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
         isDefault: defaultProducts.get(product.ingredientId)?.id === product.id,
         hasSiblings:
           (productsByIngredient.get(product.ingredientId)?.length ?? 0) > 1,
+        unitPrice: formatUnitPrice(
+          product,
+          defaultProducts.get(product.ingredientId)?.sizeUnit,
+        ),
       })),
     [
       products,

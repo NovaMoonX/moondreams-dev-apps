@@ -29,7 +29,7 @@ import {
   type NutritionBasis,
 } from '@apps/pinch/utils/nutritionBasis';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatSize, formatUnitPrice } from '@apps/pinch/utils/productFormat';
 
 const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
 
@@ -54,8 +54,10 @@ function IngredientDrawer({
   const products =
     useAppSelector(selectProductsByIngredient).get(ingredientId) ?? [];
   const show = useAppSelector(selectShowNutrition);
-  const defaultProductId =
-    useAppSelector(selectDefaultProducts).get(ingredientId)?.id ?? null;
+  const defaultProduct = useAppSelector(selectDefaultProducts).get(
+    ingredientId,
+  );
+  const defaultProductId = defaultProduct?.id ?? null;
   const storesById = useAppSelector(selectStoresById);
   const [error, setError] = useState<string | null>(null);
   const { options, update } = useListViewOptions(uid, 'ingredients');
@@ -188,6 +190,10 @@ function IngredientDrawer({
                 const store = storesById.get(product.storeId);
                 const storeName = store?.name ?? 'Removed store';
                 const isDefault = product.id === defaultProductId;
+                const unitPrice = formatUnitPrice(
+                  product,
+                  defaultProduct?.sizeUnit,
+                );
                 const detail = [
                   product.label,
                   formatSize(product.sizeAmount, product.sizeUnit),
@@ -263,8 +269,15 @@ function IngredientDrawer({
                           {detail}
                         </span>
                       </span>
-                      <span className='font-semibold whitespace-nowrap'>
-                        {formatCents(product.priceCents)}
+                      <span className='shrink-0 text-right'>
+                        <span className='block font-semibold whitespace-nowrap'>
+                          {formatCents(product.priceCents)}
+                        </span>
+                        {unitPrice && (
+                          <span className='text-muted-foreground block text-xs font-normal whitespace-nowrap'>
+                            {unitPrice}
+                          </span>
+                        )}
                       </span>
                     </Button>
                   </li>
