@@ -22,6 +22,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
+import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
@@ -49,12 +50,14 @@ import {
   selectShoppingLoadError,
   selectShoppingOpenCount,
   selectShoppingRows,
+  selectShoppingSourceLabels,
 } from '@apps/pinch/store/selectors';
 import type { Gap, ShoppingItem, ShoppingView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getShoppingCostCoverage,
+  getShoppingSourcesText,
   getShopRowId,
   getShownShoppingView,
   type ShoppingGroup,
@@ -88,8 +91,11 @@ const formatNames = (names: string[]) =>
     ? names.join(', ')
     : `${names.slice(0, MAX_NAMES_SHOWN).join(', ')} and ${names.length - MAX_NAMES_SHOWN} more`;
 
+type GetForText = (sources: string[]) => string | null;
+
 interface ShoppingRowsProps {
   rows: ShoppingRowData[];
+  getForText: GetForText;
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
   /** Whether the first chunk of rows mounts at once, for the first screenful. */
@@ -99,6 +105,7 @@ interface ShoppingRowsProps {
 
 function ShoppingRows({
   rows,
+  getForText,
   onToggle,
   onOpen,
   isEager = true,
@@ -135,6 +142,7 @@ function ShoppingRows({
                   id={row.id}
                   name={row.name}
                   amountText={row.amountText}
+                  forText={getForText(row.sources)}
                   isChecked={row.isChecked}
                   onToggle={onToggle}
                   onOpen={onOpen}
@@ -162,6 +170,7 @@ function ShoppingRows({
 interface ShoppingGroupSectionProps {
   group: ShoppingGroup;
   isEager: boolean;
+  getForText: GetForText;
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
 }
@@ -171,7 +180,8 @@ const isSameRow = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.name === b.name &&
   a.amountText === b.amountText &&
   a.isChecked === b.isChecked &&
-  a.itemIds.join() === b.itemIds.join();
+  a.itemIds.join() === b.itemIds.join() &&
+  a.sources.join() === b.sources.join();
 
 const isSameGroup = (a: ShoppingGroup, b: ShoppingGroup) =>
   a.id === b.id &&
@@ -183,6 +193,7 @@ const ShoppingGroupSection = memo(
   function ShoppingGroupSection({
     group,
     isEager,
+    getForText,
     onToggle,
     onOpen,
   }: ShoppingGroupSectionProps) {
@@ -192,6 +203,7 @@ const ShoppingGroupSection = memo(
         <ShoppingRows
           rows={group.rows}
           isEager={isEager}
+          getForText={getForText}
           onToggle={onToggle}
           onOpen={onOpen}
         />
@@ -200,6 +212,7 @@ const ShoppingGroupSection = memo(
   },
   (prev, next) =>
     prev.isEager === next.isEager &&
+    prev.getForText === next.getForText &&
     prev.onToggle === next.onToggle &&
     prev.onOpen === next.onOpen &&
     isSameGroup(prev.group, next.group),
@@ -262,6 +275,13 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const cost = useAppSelector(selectShoppingCost);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const sourceLabels = useAppSelector(selectShoppingSourceLabels);
+  const [todayKey] = useState(() => toLocalDateInputValue(Date.now()));
+  const getForText = useCallback(
+    (sources: string[]) =>
+      getShoppingSourcesText(sources, sourceLabels, todayKey),
+    [sourceLabels, todayKey],
+  );
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [query, setQuery] = useState('');
@@ -533,6 +553,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             <ShoppingRows
               key={shownView}
               rows={shownGroups.flatMap((group) => group.rows)}
+              getForText={getForText}
               onToggle={handleToggle}
               onOpen={handleOpen}
               className='lg:w-[calc(50%-1rem)]'
@@ -545,6 +566,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
                 key={`${shownView}-${group.id}`}
                 group={group}
                 isEager={index < EAGER_GROUPS}
+                getForText={getForText}
                 onToggle={handleToggle}
                 onOpen={handleOpen}
               />
@@ -645,6 +667,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           key={openRow.id}
           uid={uid}
           name={openRow.name}
+          forText={getForText(openRow.sources)}
           items={openItems}
           onClose={() => setOverlay(null)}
           onRemove={() => handleRemove(openRow.name, openItems)}

@@ -8,6 +8,8 @@ interface ShoppingRowProps {
   id: string;
   name: string;
   amountText: string | null;
+  /** What the line is for ("Adobo chicken (Thu)"), cut short on its one line. */
+  forText: string | null;
   isChecked: boolean;
   onToggle: (id: string, isChecked: boolean) => void;
   onOpen: (id: string) => void;
@@ -18,6 +20,7 @@ function ShoppingRow({
   id,
   name,
   amountText,
+  forText,
   isChecked,
   onToggle,
   onOpen,
@@ -41,9 +44,16 @@ function ShoppingRow({
           >
             {name}
           </span>
-          {amountText && (
-            <span className='text-muted-foreground block text-xs'>
-              {amountText}
+          {(amountText || forText) && (
+            <span className='text-muted-foreground flex min-w-0 text-xs'>
+              {amountText && (
+                <span className='shrink-0 whitespace-nowrap'>{amountText}</span>
+              )}
+              {forText && (
+                <span className='min-w-0 truncate'>
+                  {amountText ? ` · for ${forText}` : `For ${forText}`}
+                </span>
+              )}
             </span>
           )}
         </span>

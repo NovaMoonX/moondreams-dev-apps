@@ -12,6 +12,7 @@ import {
 } from '@apps/pinch/constants';
 import type {
   Gap,
+  Meal,
   MealItem,
   PlannedMeal,
   Product,
@@ -25,8 +26,10 @@ import {
   addDaysToKey,
   formatDayShort,
   getDateOfDayKey,
+  getPlannedDayKey,
   type DayRange,
 } from '@apps/pinch/utils/dayKeys';
+import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
@@ -50,12 +53,13 @@ export interface ListLine extends ShoppingLine {
 const RECIPE_SOURCE = 'recipe:';
 const MEAL_SOURCE = 'meal:';
 
-export const getRecipeSource = (recipeId: string) =>
+export const getRecipeShoppingSource = (recipeId: string) =>
   `${RECIPE_SOURCE}${recipeId}`;
-export const getMealSource = (mealId: string) => `${MEAL_SOURCE}${mealId}`;
+export const getMealShoppingSource = (mealId: string) =>
+  `${MEAL_SOURCE}${mealId}`;
 
 /** What a source names: a recipe, a saved meal, or (anything else) a planned meal. */
-export function parseSource(source: string): {
+export function parseShoppingSource(source: string): {
   kind: 'recipe' | 'meal' | 'planned';
   id: string;
 } {
@@ -77,6 +81,8 @@ export interface ShoppingRowData {
   /** What to pick up, or null for a pinch of a spice or oil, which needs only its name. */
   amountText: string | null;
   isChecked: boolean;
+  /** What put the row's items on the list, each once. */
+  sources: string[];
 }
 
 export interface ShoppingGroup {
@@ -262,6 +268,74 @@ export const formatSourceDay = (dayKey: string, todayKey: string) =>
   dayKey >= todayKey && dayKey <= addDaysToKey(todayKey, 6)
     ? weekdayFormatter.format(getDateOfDayKey(dayKey))
     : formatDayShort(dayKey);
+
+export interface ShoppingSourceLabel {
+  name: string;
+  /** A planned meal's day; null for a recipe or a saved meal. */
+  dayKey: string | null;
+  isRecipe: boolean;
+}
+
+/** The name of every source on the list that still resolves; a planned meal, recipe or saved meal that is gone (or not loaded) is left out. */
+export function getShoppingSourceLabels(
+  items: ShoppingItem[],
+  plannedMeals: PlannedMeal[],
+  recipesById: Map<string, Recipe>,
+  mealsById: Map<string, Meal>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): Map<string, ShoppingSourceLabel> {
+  const sources = new Set(items.flatMap((item) => item.sources ?? []));
+  const planned = new Map(
+    plannedMeals
+      .filter((meal) => sources.has(meal.id))
+      .map((meal) => [meal.id, meal]),
+  );
+  const getLabel = (source: string): ShoppingSourceLabel | null => {
+    const { kind, id } = parseShoppingSource(source);
+    if (kind === 'recipe') {
+      const title = recipesById.get(id)?.title;
+      return title ? { name: title, dayKey: null, isRecipe: true } : null;
+    }
+    if (kind === 'meal') {
+      const name = mealsById.get(id)?.name;
+      return name ? { name, dayKey: null, isRecipe: false } : null;
+    }
+    const meal = planned.get(id);
+    const name = meal
+      ? getPlannedMealTitle(meal, recipesById, ingredientsById)
+      : '';
+    return meal && name
+      ? { name, dayKey: getPlannedDayKey(meal.date), isRecipe: false }
+      : null;
+  };
+
+  const result = new Map(
+    [...sources].flatMap((source) => {
+      const label = getLabel(source);
+      return label ? [[source, label] as const] : [];
+    }),
+  );
+  return result;
+}
+
+/** What a line is for: "Adobo chicken (Thu) and Cilantro lime rice (Fri)", "3 meals", or null when nothing behind it still resolves. */
+export function getShoppingSourcesText(
+  sources: string[],
+  labels: Map<string, ShoppingSourceLabel>,
+  todayKey: string,
+): string | null {
+  const found = sources.flatMap((source) => labels.get(source) ?? []);
+  if (found.length === 0) return null;
+  if (found.length > 2) {
+    return `${found.length} ${found.every((label) => label.isRecipe) ? 'recipes' : 'meals'}`;
+  }
+  const names = found.map((label) =>
+    label.dayKey
+      ? `${label.name} (${formatSourceDay(label.dayKey, todayKey)})`
+      : label.name,
+  );
+  return names.join(' and ');
+}
 
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
 export const isValidAmount = (amount: number) =>
@@ -536,6 +610,7 @@ export function groupShoppingItems(
         name: ingredient?.name ?? 'Removed ingredient',
         amountText: formatShopAmount(getShopAmount(rowItems, section)),
         isChecked: byBase[0].isChecked,
+        sources: [...new Set(byBase.flatMap((item) => item.sources ?? []))],
       };
       return { row, section };
     });

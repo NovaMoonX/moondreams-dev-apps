@@ -58,11 +58,11 @@ import {
   formatShopAmount,
   formatSourceDay,
   formatSourceNames,
-  getMealSource,
+  getMealShoppingSource,
   getOnListHint,
   getPlanInRange,
   getRecipeLines,
-  getRecipeSource,
+  getRecipeShoppingSource,
   getRowOnList,
   getShopAmount,
   getShoppingItemId,
@@ -70,7 +70,7 @@ import {
   getSourcedLines,
   groupShopLines,
   isUsuallyAtHome,
-  parseSource,
+  parseShoppingSource,
   type ShopLineRow,
   type SourcedItems,
   type SourcedLine,
@@ -203,7 +203,7 @@ export function ShoppingPick({
       return [
         {
           items: request.items,
-          source: request.mealId ? getMealSource(request.mealId) : null,
+          source: request.mealId ? getMealShoppingSource(request.mealId) : null,
         },
       ];
     }
@@ -223,7 +223,7 @@ export function ShoppingPick({
       : recipe
         ? getRecipeLines(recipe, ingredientsById, servings).map((line) => ({
             ...line,
-            source: getRecipeSource(recipe.id),
+            source: getRecipeShoppingSource(recipe.id),
           }))
         : [];
     return groupShopLines(lines, ingredientsById);
@@ -256,7 +256,7 @@ export function ShoppingPick({
       openText: undefined,
     };
   const nameSource = (source: string) => {
-    const { kind, id } = parseSource(source);
+    const { kind, id } = parseShoppingSource(source);
     if (kind === 'recipe') return 'this recipe';
     const meal =
       kind === 'planned'

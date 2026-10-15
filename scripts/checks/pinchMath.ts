@@ -5720,7 +5720,7 @@ import {
   formatSourceNames as srcNames,
   getOnListHint as srcHint,
   getRowOnList as srcRowOnList,
-  parseSource as srcParse,
+  parseShoppingSource as srcParse,
 } from '../../src/apps/pinch/utils/shopping.ts';
 
 const srcItem = (
@@ -5909,6 +5909,116 @@ assert.deepEqual(
     [false, 1, 2],
   ],
   'a day is on the list once every planned meal with something to buy put a line there, got or not (a meal whose recipe is gone has nothing to buy); otherwise it counts the rows its sheet starts unticked, a line from before sources included',
+);
+
+import {
+  getShoppingSourceLabels as srcLabels,
+  getShoppingSourcesText as srcText,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import type { Meal as SrcMeal } from '../../src/apps/pinch/types.ts';
+
+const srcPlannedOn = (
+  id: string,
+  dayKey: string,
+  name: string | null,
+  items: MealItem[],
+) =>
+  ({
+    id,
+    date: Date.parse(`${dayKey}T00:00:00Z`),
+    mealType: 'DINNER',
+    name,
+    items,
+  }) as unknown as ShopPlannedMeal;
+const srcLabelMap = srcLabels(
+  [
+    { sources: ['p-thu', 'p-gone'] },
+    {
+      sources: [
+        'p-fri',
+        'p-far',
+        'recipe:rice-pot',
+        'recipe:beans',
+        'recipe:soup',
+        'meal:m1',
+        'recipe:gone',
+      ],
+    },
+    {},
+  ] as unknown as ShoppingItem[],
+  [
+    srcPlannedOn('p-thu', '2026-10-15', null, [srcRecipeItem('a', 1)]),
+    srcPlannedOn('p-fri', '2026-10-16', 'Taco night', []),
+    srcPlannedOn('p-far', '2026-10-30', null, [
+      srcRecipeItem('b', 1),
+      { id: 'c', kind: 'INGREDIENT', refId: 'rice', servings: 1 },
+    ]),
+    srcPlannedOn('p-empty', '2026-10-15', null, []),
+  ],
+  new Map([
+    ['rice-pot', srcRiceRecipe],
+    ['beans', { ...srcRiceRecipe, id: 'beans', title: 'Beans' }],
+    ['soup', { ...srcRiceRecipe, id: 'soup', title: 'Soup' }],
+  ]),
+  new Map([['m1', { id: 'm1', name: 'Adobo and rice' }]]) as unknown as Map<
+    string,
+    SrcMeal
+  >,
+  new Map([['rice', { id: 'rice', name: 'Rice' }]]) as unknown as Map<
+    string,
+    ResolvedIngredient
+  >,
+);
+const srcFor = (sources: string[]) =>
+  srcText(sources, srcLabelMap, '2026-10-15');
+assert.deepEqual(
+  [
+    srcFor(['p-thu', 'p-gone']),
+    srcFor(['p-thu', 'p-fri']),
+    srcFor(['p-far']),
+    srcFor(['recipe:rice-pot']),
+    srcFor(['meal:m1', 'recipe:beans']),
+    srcFor(['recipe:rice-pot', 'meal:m1', 'p-fri']),
+    srcFor(['recipe:rice-pot', 'recipe:beans', 'recipe:soup']),
+    srcFor(['p-gone', 'recipe:gone']),
+    srcFor([]),
+  ],
+  [
+    'Rice pot (Thu)',
+    'Rice pot (Thu) and Taco night (Fri)',
+    'Rice pot +1 (Oct 30)',
+    'Rice pot',
+    'Adobo and rice and Beans',
+    '3 meals',
+    '3 recipes',
+    null,
+    null,
+  ],
+  'a line says what it is for by the planned meal’s name and day, the recipe or the saved meal; past two it counts them, and a source that is gone is dropped quietly',
+);
+assert.equal(
+  srcLabelMap.has('p-empty'),
+  false,
+  'only sources on the list are named',
+);
+
+const srcRows = groupShoppingItems(
+  [
+    { ...shopItem('chicken', 'LB', 2, false), sources: ['a', 'b'] },
+    { ...shopItem('chicken', 'OZ', 4, false), sources: ['b', 'c'] },
+    shopItem('rice', 'CUP', 1, false),
+  ],
+  shopSectionIngredients,
+);
+assert.deepEqual(
+  srcRows.toBuy.flatMap((group) =>
+    group.rows.map((row) => [row.name, row.sources]),
+  ),
+  [
+    ['Chicken', ['a', 'b', 'c']],
+    ['Rice', []],
+  ],
+  'a row carries every source of the items it stands for, each once, and a line from before sources has none',
 );
 
 console.log('pinchMath: all checks passed');
