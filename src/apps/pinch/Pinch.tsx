@@ -332,11 +332,12 @@ function Pinch() {
       )}
       {subview?.kind === 'cook' && (
         <CookingSubview
-          key={`${subview.recipeId}-${subview.plannedMealId ?? ''}`}
+          key={`${subview.recipeId}-${subview.plannedMealId ?? ''}-${(subview.plate ?? []).map((entry) => entry.recipeId).join(',')}`}
           uid={user.uid}
           recipeId={subview.recipeId}
           servings={subview.servings}
           plannedMealId={subview.plannedMealId ?? null}
+          plate={subview.plate}
         />
       )}
       {subview?.kind === 'plan' && (

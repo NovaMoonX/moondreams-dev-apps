@@ -15,22 +15,33 @@ const TITLES: Record<CookRecordStatus, string> = {
   NONE: 'Not marked as cooked',
 };
 
+export interface CookRecordRow {
+  id: string;
+  /** "Servings made" for one recipe, the recipe's name on a plate. */
+  label: string;
+  servings: number;
+  isRecorded: boolean;
+}
+
 interface CookRecordProps {
   status: CookRecordStatus;
-  servings: number;
-  onServingsChange: (servings: number) => void;
+  rows: CookRecordRow[];
+  /** A caption over the rows when each row is a recipe. */
+  caption: string | null;
+  onServingsChange: (id: string, servings: number) => void;
   /** Null hides it; only a cook this screen wrote can be taken back. */
   undoState: 'READY' | 'PENDING' | 'FAILED' | null;
   onUndo: () => void;
-  /** Null when marking can't happen here (the history is full). */
+  /** Null when nothing is left to mark here (each recipe is marked or its history is full). */
   onMark: (() => void) | null;
   problem: { text: string; isError: boolean } | null;
 }
 
-/** The finish panel's record of the cook: what was saved, the servings it was saved with, and its own Undo. */
+/** The finish panel's record of the cook: what was saved, the servings each recipe was saved with, and one Undo for all of it. */
 function CookRecord({
   status,
-  servings,
+  rows,
+  caption,
   onServingsChange,
   undoState,
   onUndo,
@@ -75,7 +86,7 @@ function CookRecord({
             Undoing…
           </span>
         )}
-        {status === 'NONE' && onMark && (
+        {(status === 'NONE' || status === 'EARLIER') && onMark && (
           <Button
             type='button'
             variant='secondary'
@@ -88,20 +99,54 @@ function CookRecord({
         )}
       </div>
       {isRecorded && (
-        <div className='border-border flex min-h-14 items-center justify-between gap-3 border-t px-4 py-2'>
-          <span className='text-sm'>Servings made</span>
-          <Stepper
-            label='Servings made'
-            value={servings}
-            min={0}
-            max={MAX_COOKED_SERVINGS}
-            step={1}
-            onChange={(next) =>
-              onServingsChange(
-                stepCookServings(servings, next > servings ? 1 : -1),
-              )
-            }
-          />
+        <div className='border-border border-t'>
+          {caption && (
+            <p className='text-muted-foreground px-4 pt-2.5 text-xs'>
+              {caption}
+            </p>
+          )}
+          <ul className='divide-border divide-y'>
+            {rows.map((row) => (
+              <li
+                key={row.id}
+                className={join(
+                  'flex min-h-14 items-center justify-between gap-3 px-4 py-2',
+                  caption !== null &&
+                    'max-sm:flex-col max-sm:items-start max-sm:gap-1',
+                )}
+              >
+                <span className='min-w-0 text-sm wrap-break-word'>
+                  {row.label}
+                </span>
+                {row.isRecorded ? (
+                  <Stepper
+                    label={
+                      caption === null
+                        ? row.label
+                        : `${caption} of ${row.label}`
+                    }
+                    value={row.servings}
+                    min={0}
+                    max={MAX_COOKED_SERVINGS}
+                    step={1}
+                    onChange={(next) =>
+                      onServingsChange(
+                        row.id,
+                        stepCookServings(
+                          row.servings,
+                          next > row.servings ? 1 : -1,
+                        ),
+                      )
+                    }
+                  />
+                ) : (
+                  <span className='text-muted-foreground shrink-0 text-sm'>
+                    Not marked
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {problem && (

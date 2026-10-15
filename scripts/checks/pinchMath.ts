@@ -6395,4 +6395,170 @@ assert.deepEqual(
   'a row carries every source of the items it stands for, each once, and a line from before sources has none',
 );
 
+// ============================================================
+// PLATE workstream: a planned plate of several recipes cooks as one session
+// ============================================================
+
+const plateCooks = await import('../../src/apps/pinch/utils/cooks.ts');
+const plateRecipes = new Map([
+  ['adobo', { steps: ['Marinate', 'Simmer', 'Reduce'] }],
+  ['rice', { steps: ['Rinse', 'Cook'] }],
+  ['nachos', { steps: [] }],
+  ['beans', { steps: ['Blanch'] }],
+]);
+const plateItem = (
+  kind: 'RECIPE' | 'INGREDIENT',
+  refId: string,
+  servings: number,
+) => ({
+  kind,
+  refId,
+  servings,
+});
+assert.deepEqual(
+  plateCooks.getPlateCookRecipes(
+    [
+      plateItem('RECIPE', 'adobo', 2),
+      plateItem('INGREDIENT', 'avocado', 1),
+      plateItem('RECIPE', 'nachos', 3),
+      plateItem('RECIPE', 'rice', 2),
+      plateItem('RECIPE', 'gone', 1),
+      plateItem('RECIPE', 'rice', 1.5),
+      plateItem('RECIPE', 'beans', 1),
+    ],
+    plateRecipes,
+    ['adobo', 'rice', 'nachos', 'gone'],
+  ),
+  [
+    { recipeId: 'adobo', servings: 2 },
+    { recipeId: 'rice', servings: 3.5 },
+  ],
+  'a plate cooks each recipe with steps that is still to cook, once, in plate order, with the servings its items plan; ingredients, recipes without steps, gone ones and ones already cooked stay out',
+);
+assert.deepEqual(
+  plateCooks.getPlateCookRecipes(
+    [plateItem('RECIPE', 'adobo', 999), plateItem('RECIPE', 'adobo', 999)],
+    plateRecipes,
+    ['adobo'],
+  ),
+  [{ recipeId: 'adobo', servings: 1000 }],
+  'a recipe planned twice on one plate is one entry, capped at the most a cook can record',
+);
+assert.deepEqual(
+  plateCooks.getPlateCookRecipes([], plateRecipes, ['adobo']),
+  [],
+  'an empty plate cooks nothing',
+);
+assert.deepEqual(
+  plateCooks.getPlateStart([
+    { recipeId: 'adobo', recipeServings: 4, plannedServings: 2 },
+    { recipeId: 'rice', recipeServings: 4, plannedServings: 6 },
+    { recipeId: 'one', recipeServings: 6, plannedServings: null },
+    { recipeId: 'none', recipeServings: 0, plannedServings: null },
+  ]),
+  {
+    adobo: { stepIndex: 0, servings: 4, gotOut: {} },
+    rice: { stepIndex: 0, servings: 6, gotOut: {} },
+    one: { stepIndex: 0, servings: 6, gotOut: {} },
+    none: { stepIndex: 0, servings: 1, gotOut: {} },
+  },
+  'each recipe of a session starts on its first step, nothing ticked, at its own servings or the plan’s when that is more',
+);
+assert.deepEqual(
+  [
+    plateCooks.getTimerCaption({
+      stepName: 'Simmer everything',
+      recipeTitle: null,
+    }),
+    plateCooks.getTimerCaption({
+      stepName: 'Simmer everything',
+      recipeTitle: 'Adobo chicken',
+    }),
+  ],
+  ['Simmer everything', 'Adobo chicken · Simmer everything'],
+  'a timer is named by its step, and by its recipe first when the session cooks several',
+);
+const plateTimer = (status: string) => ({ status });
+assert.deepEqual(
+  [
+    plateCooks.countLiveTimers([
+      plateTimer('running'),
+      plateTimer('paused'),
+      plateTimer('done'),
+    ]),
+    plateCooks.canStartTimer([
+      plateTimer('running'),
+      plateTimer('paused'),
+      plateTimer('running'),
+    ]),
+    plateCooks.canStartTimer([
+      plateTimer('running'),
+      plateTimer('paused'),
+      plateTimer('running'),
+      plateTimer('running'),
+    ]),
+    plateCooks.canStartTimer([
+      plateTimer('running'),
+      plateTimer('done'),
+      plateTimer('running'),
+      plateTimer('done'),
+      plateTimer('running'),
+    ]),
+  ],
+  [2, true, false, true],
+  'a session runs up to four timers across all its recipes; a finished one waiting for Dismiss doesn’t count',
+);
+
+const plateAt = (recipeId: string, stepIndex: number, stepCount: number) => ({
+  recipeId,
+  stepIndex,
+  stepCount,
+});
+assert.deepEqual(
+  [
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 1, 3), plateAt('rice', 0, 2)],
+      'adobo',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 2, 3), plateAt('rice', 0, 2)],
+      'adobo',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 2, 3), plateAt('rice', 1, 2), plateAt('beans', 0, 4)],
+      'rice',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 0, 3), plateAt('rice', 1, 2), plateAt('beans', 3, 4)],
+      'beans',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 2, 3), plateAt('rice', 1, 2)],
+      'rice',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 9, 3), plateAt('rice', 1, 2)],
+      'rice',
+    ),
+    plateCooks.getPlateNext(
+      [plateAt('adobo', 2, 3), plateAt('gone', 0, 0)],
+      'adobo',
+    ),
+    plateCooks.getPlateNext([plateAt('one', 0, 1)], 'one'),
+    plateCooks.getPlateNext([plateAt('one', 0, 0)], 'one'),
+  ],
+  [
+    { kind: 'STEP' },
+    { kind: 'RECIPE', recipeId: 'rice' },
+    { kind: 'RECIPE', recipeId: 'beans' },
+    { kind: 'RECIPE', recipeId: 'adobo' },
+    { kind: 'FINISH' },
+    { kind: 'FINISH' },
+    { kind: 'FINISH' },
+    { kind: 'FINISH' },
+    { kind: 'FINISH' },
+  ],
+  'the wide button steps on, then moves to the next recipe still short of its last step (wrapping to the start), and finishes the plate only once every recipe is on its last',
+);
+
 console.log('pinchMath: all checks passed');

@@ -23,22 +23,36 @@ const PLACES: ContainerPlace[] = ['FRIDGE', 'FREEZER'];
 
 interface CookPutAwayProps {
   putAway: ReturnType<typeof usePutAway>;
+  recipeId: string;
   care: RecipeCare | null;
+  /** The recipe's name over each card when the screen cooks several. */
+  caption: string | null;
 }
 
-function CookPutAway({ putAway, care }: CookPutAwayProps) {
-  if (!putAway.isAvailable) {
+function CookPutAway({ putAway, recipeId, care, caption }: CookPutAwayProps) {
+  const entry = putAway.getEntry(recipeId);
+  if (!entry || !entry.isAvailable) {
     return null;
   }
 
-  if (putAway.fields) {
+  const captionLine = caption && (
+    <p className='text-muted-foreground text-xs wrap-break-word'>{caption}</p>
+  );
+
+  if (putAway.fields && putAway.openRecipeId === recipeId) {
     const { place, overNote } = putAway.fields;
     const heading = putAway.isPlaceFixed
       ? `Put some in the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`
       : 'Put some away';
     return (
-      <section aria-label={heading} className={CARD_CLASS}>
-        <p className='px-4 pt-3.5 font-medium'>{heading}</p>
+      <section
+        aria-label={caption ? `${caption}: ${heading}` : heading}
+        className={CARD_CLASS}
+      >
+        <div className='px-4 pt-3.5'>
+          {captionLine}
+          <p className='font-medium'>{heading}</p>
+        </div>
         <ContainerFields
           draft={putAway.fields}
           isPlaceFixed={putAway.isPlaceFixed}
@@ -60,23 +74,31 @@ function CookPutAway({ putAway, care }: CookPutAwayProps) {
     );
   }
 
-  const batches = groupSavedBatches(putAway.saved);
+  if (putAway.isOpen) {
+    return null;
+  }
+
+  const batches = groupSavedBatches(entry.saved);
   const getHeading = () => {
-    if (putAway.isAsking) return 'Putting any away?';
+    if (entry.isAsking) return 'Putting any away?';
     return batches.length > 0 ? 'Put another away' : 'Put some away';
   };
   const heading = getHeading();
   const renderNotice = (className: string) =>
-    putAway.notice && (
+    entry.notice && (
       <p className={join('text-destructive text-sm', className)} role='alert'>
-        {putAway.notice}
+        {entry.notice}
       </p>
     );
 
   return (
     <>
       {batches.length > 0 && (
-        <section aria-label='Put away' className={CARD_CLASS}>
+        <section
+          aria-label={caption ? `${caption}: put away` : 'Put away'}
+          className={CARD_CLASS}
+        >
+          {caption && <div className='px-4 pt-3'>{captionLine}</div>}
           <ul className='divide-border divide-y'>
             {batches.map((batch) => {
               const undo = putAway.getUndo(batch);
@@ -127,12 +149,15 @@ function CookPutAway({ putAway, care }: CookPutAwayProps) {
           {renderNotice('px-4 pb-3')}
         </section>
       )}
-      {(putAway.isAsking || putAway.canOffer) && (
+      {(entry.isAsking || entry.canOffer) && (
         <section
-          aria-label={heading}
+          aria-label={caption ? `${caption}: ${heading}` : heading}
           className={join(CARD_CLASS, 'space-y-3 px-4 py-4 text-center')}
         >
-          <p className='font-medium'>{heading}</p>
+          <div>
+            {captionLine}
+            <p className='font-medium'>{heading}</p>
+          </div>
           <div className='flex flex-wrap justify-center gap-2'>
             {PLACES.map((place) => {
               const days =
@@ -142,7 +167,7 @@ function CookPutAway({ putAway, care }: CookPutAwayProps) {
                   key={place}
                   isSelected={false}
                   emoji={CONTAINER_PLACE_EMOJIS[place]}
-                  onClick={() => putAway.open(place)}
+                  onClick={() => entry.open(place)}
                 >
                   {days == null
                     ? CONTAINER_PLACE_LABELS[place]
@@ -150,8 +175,8 @@ function CookPutAway({ putAway, care }: CookPutAwayProps) {
                 </Pill>
               );
             })}
-            {putAway.isAsking && (
-              <Pill isSelected={false} onClick={putAway.dismiss}>
+            {entry.isAsking && (
+              <Pill isSelected={false} onClick={entry.dismiss}>
                 Not this time
               </Pill>
             )}

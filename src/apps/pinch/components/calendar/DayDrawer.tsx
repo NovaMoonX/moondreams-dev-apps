@@ -159,13 +159,15 @@ function DayDrawer({
           plannedMealId={plannedMealId}
           onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
-          onStartCooking={(recipeId, servings) => {
+          onStartCooking={(plate) => {
+            if (plate.length === 0) return;
             onClose();
             openSubview({
               kind: 'cook',
-              recipeId,
-              servings,
+              recipeId: plate[0].recipeId,
+              servings: plate[0].servings,
               plannedMealId,
+              plate: plate.length > 1 ? plate : undefined,
             });
           }}
           footerEl={footerEl}
