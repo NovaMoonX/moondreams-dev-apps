@@ -4208,4 +4208,115 @@ assert.deepEqual(
 );
 assert.equal(getPutAwayText([]), null);
 
+// ---------------------------------------------------------------------------
+// CAL workstream: the calendar's summary line and Week summary
+// ---------------------------------------------------------------------------
+{
+  const {
+    getDayCostText,
+    getPeriodCostText,
+    getPricedCoverage,
+    formatPeriodCost,
+  } = await import('../../src/apps/pinch/utils/stats.ts');
+  const { getDateOfDayKey } =
+    await import('../../src/apps/pinch/utils/dayKeys.ts');
+
+  assert.deepEqual(
+    [
+      getPeriodCostText(
+        { spendCents: 410, mealsPriced: 3, leftOut: [] },
+        false,
+      ),
+      getPeriodCostText(
+        {
+          spendCents: 410,
+          mealsPriced: 3,
+          leftOut: [{ kind: 'NO_PRODUCT', ingredientId: 'a' }],
+        },
+        false,
+      ),
+      getPeriodCostText({ spendCents: 0, mealsPriced: 0, leftOut: [] }, false),
+      getPeriodCostText({ spendCents: 0, mealsPriced: 0, leftOut: [] }, true),
+      getPeriodCostText(
+        { spendCents: 789_450, mealsPriced: 300, leftOut: [] },
+        false,
+      ),
+    ],
+    ['$4.10', '$4.10 so far', 'No price yet', 'Not priced', '$7,895'],
+    'a period reads its figure, "so far" while something is left out, and the shared words for nothing priced',
+  );
+  assert.equal(
+    formatPeriodCost(789_450),
+    '$7,895',
+    'the summary line and the sheet round a big total the same way',
+  );
+  assert.equal(formatPeriodCost(99_999), '$999.99');
+  assert.deepEqual(
+    [
+      getDayCostText({ totalCents: 8, leftOut: [] }, false),
+      getDayCostText(
+        { totalCents: 8, leftOut: [{ kind: 'NO_PRODUCT', ingredientId: 'a' }] },
+        false,
+      ),
+      getDayCostText({ totalCents: null, leftOut: [] }, false),
+      getDayCostText({ totalCents: null, leftOut: [] }, true),
+    ],
+    ['$0.08', '$0.08+', 'No price yet', 'Not priced'],
+    'a day row says "+" when it leaves something out and "Not priced" once it has passed',
+  );
+
+  const coverageRecipe = {
+    id: 'stew',
+    title: 'Stew',
+    servings: 4,
+    ingredients: [
+      { id: 'l1', ingredientId: 'beef', amount: 1, unit: 'LB', note: null },
+      { id: 'l2', ingredientId: 'carrot', amount: 2, unit: 'EACH', note: null },
+      { id: 'l3', ingredientId: 'salt', amount: 1, unit: 'TSP', note: null },
+    ],
+  } as unknown as Recipe;
+  const coverageMeal = (id: string, dayKey: string, items: MealItem[]) =>
+    ({
+      ...plannedOf(items, null),
+      id,
+      date: getDateOfDayKey(dayKey),
+    }) as PlannedMeal;
+  const coverageMeals = [
+    coverageMeal('m1', '2026-10-15', [
+      { id: 'i1', kind: 'RECIPE', refId: 'stew', servings: 2 },
+      { id: 'i2', kind: 'INGREDIENT', refId: 'bread', servings: 1 },
+    ]),
+    coverageMeal('m2', '2026-10-16', [
+      { id: 'i3', kind: 'RECIPE', refId: 'stew', servings: 2 },
+    ]),
+    coverageMeal('m3', '2026-10-30', [
+      { id: 'i4', kind: 'INGREDIENT', refId: 'cake', servings: 1 },
+    ]),
+  ];
+  assert.deepEqual(
+    getPricedCoverage(
+      coverageMeals,
+      { startKey: '2026-10-15', endKey: '2026-10-21' },
+      new Map([['stew', coverageRecipe]]),
+      [
+        { kind: 'NO_PRODUCT', ingredientId: 'salt' },
+        { kind: 'NOT_COMPARABLE', ingredientId: 'salt' },
+        { kind: 'NO_PRODUCT', ingredientId: 'bread' },
+      ],
+    ),
+    { usedCount: 4, pricedCount: 2 },
+    'coverage counts each ingredient of the period once, from recipes and loose items alike, and leaves out days outside it',
+  );
+  assert.deepEqual(
+    getPricedCoverage(
+      coverageMeals,
+      { startKey: '2026-10-15', endKey: '2026-10-21' },
+      new Map(),
+      [{ kind: 'NO_PRODUCT', ingredientId: 'beef' }],
+    ),
+    { usedCount: 2, pricedCount: 1 },
+    'a removed recipe adds nothing, and a gap it left behind still counts as used and unpriced',
+  );
+}
+
 console.log('pinchMath: all checks passed');

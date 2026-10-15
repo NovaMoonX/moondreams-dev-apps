@@ -9,11 +9,11 @@ import SectionHeader from '@/components/SectionHeader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import BreakdownDrawer from '@apps/pinch/components/calendar/BreakdownDrawer';
 import DayDrawer from '@apps/pinch/components/calendar/DayDrawer';
 import DayView from '@apps/pinch/components/calendar/DayView';
 import MonthView from '@apps/pinch/components/calendar/MonthView';
-import StatsRow from '@apps/pinch/components/calendar/StatsRow';
+import SummaryLine from '@apps/pinch/components/calendar/SummaryLine';
+import WeekSummarySheet from '@apps/pinch/components/calendar/WeekSummarySheet';
 import WeekView from '@apps/pinch/components/calendar/WeekView';
 import SettingsSheet from '@apps/pinch/components/settings/SettingsSheet';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
@@ -97,7 +97,7 @@ function CalendarScreen({
     dayKey: string;
     mealId: string | null;
   } | null>(null);
-  const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
@@ -114,6 +114,13 @@ function CalendarScreen({
     selectPeriodStats(state, range.startKey, range.endKey),
   );
   const isFirstRun = !hasPlannedMeals && !isPlannedLoadFailed;
+
+  const getSummaryLabel = () => {
+    if (!isTodayShown) return null;
+    if (view === 'month') return 'This month';
+    if (view === 'week') return 'This week';
+    return 'Today';
+  };
 
   const getAddDayKey = () => {
     if (view === 'day') return anchorKey;
@@ -199,13 +206,11 @@ function CalendarScreen({
         onToday={() => goTo(todayKey)}
       />
       {stats.plannedCount > 0 && (
-        <StatsRow
-          uid={uid}
+        <SummaryLine
+          label={getSummaryLabel()}
           stats={stats}
-          view={view}
-          onOpenBreakdown={() => setIsBreakdownOpen(true)}
-          onFillIn={setFillIn}
-          onOpenSettings={() => setIsSettingsOpen(true)}
+          isPast={range.endKey < todayKey}
+          onOpen={() => setIsSummaryOpen(true)}
         />
       )}
       {isPlannedLoadFailed && (
@@ -275,12 +280,22 @@ function CalendarScreen({
       {isSettingsOpen && (
         <SettingsSheet uid={uid} onClose={() => setIsSettingsOpen(false)} />
       )}
-      {isBreakdownOpen && (
-        <BreakdownDrawer
-          periodTitle={periodTitle}
+      {isSummaryOpen && (
+        <WeekSummarySheet
+          uid={uid}
+          title={periodTitle}
+          range={range}
           stats={stats}
-          isSingleDay={view === 'day'}
-          onClose={() => setIsBreakdownOpen(false)}
+          todayKey={todayKey}
+          onClose={() => setIsSummaryOpen(false)}
+          onOpenDay={(dayKey) => {
+            setIsSummaryOpen(false);
+            setOpenDay({ dayKey, mealId: null });
+          }}
+          onFillIn={(gaps) => {
+            setIsSummaryOpen(false);
+            setFillIn(gaps);
+          }}
         />
       )}
       {fillIn && (
