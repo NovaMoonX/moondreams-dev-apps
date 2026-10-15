@@ -511,8 +511,9 @@ export const CONTAINER_PLACE_LABELS: Record<ContainerPlace, string> = {
   FRIDGE: 'Fridge',
   FREEZER: 'Freezer',
 };
+/** Two that don't both read "frozen": an ice cube beside a snowflake said freezer twice. */
 export const CONTAINER_PLACE_EMOJIS: Record<ContainerPlace, string> = {
-  FRIDGE: '🧊',
+  FRIDGE: '🥛',
   FREEZER: '❄️',
 };
 export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({
@@ -543,7 +544,10 @@ export const MAX_EAT_BY_DATE = 4_102_444_800_000;
 export const CONTAINER_FRIDGE_DAYS = 4;
 export const CONTAINER_FREEZER_DAYS = 90;
 export const CONTAINER_THAWED_DAYS = 2;
-export const CONTAINER_EAT_SOON_DAYS = 2;
+/** Due today or tomorrow: a wider window tints most of a box's life and stops meaning "eat it now". */
+export const CONTAINER_EAT_SOON_DAYS = 1;
+/** A freezer row names its eat-by only once it is this close, or past; before that it says when it was frozen. */
+export const CONTAINER_FREEZER_DATE_DAYS = 7;
 export const BULK_MEAL_SERVINGS = 5;
 export const CONTAINER_SITTING_SERVINGS = 2;
 /** Counted by the client only; the rules do not count documents. */

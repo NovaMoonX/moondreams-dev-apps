@@ -2834,11 +2834,11 @@ assert.deepEqual(
   [12, 13, 14, 15, 16, 17, 18].map((day) =>
     getEatByState(dayOf(day), lateOnThe14th),
   ),
-  ['PAST', 'PAST', 'SOON', 'SOON', 'SOON', 'LATER', 'LATER'],
-  'eat soon is today and the next two days, past its date is any day before today',
+  ['PAST', 'PAST', 'SOON', 'SOON', 'LATER', 'LATER', 'LATER'],
+  'eat soon is today and tomorrow, past its date is any day before today',
 );
 assert.deepEqual(
-  [13, 14, 15, 17, 18].map((day) => getEatByState(dayOf(day), earlyOnThe15th)),
+  [13, 14, 15, 16, 17].map((day) => getEatByState(dayOf(day), earlyOnThe15th)),
   ['PAST', 'PAST', 'SOON', 'SOON', 'LATER'],
   'the same classification just after local midnight',
 );
@@ -3108,8 +3108,8 @@ assert.deepEqual(
   [
     getEventText(makeEvent('CLEAR', 1, { servings: 3 })),
     getEventText(makeEvent('CLEAR', 1)),
-    getClearOutMessage(9, 24),
-    getClearOutMessage(1, 1),
+    getClearOutMessage(9, 24, 'FRIDGE'),
+    getClearOutMessage(1, 1, 'FREEZER'),
     getPutBackText(9, 9),
     getPutBackText(1, 1),
     getPutBackText(7, 9),
@@ -3117,13 +3117,13 @@ assert.deepEqual(
   [
     'Cleared out · 3 servings',
     'Cleared out',
-    'This takes 9 containers (24 servings) off your list and keeps them in Finished as cleared out. You can undo it right after.',
-    'This takes 1 container (1 serving) off your list and keeps it in Finished as cleared out. You can undo it right after.',
-    'Put 9 containers back',
-    'Put 1 container back',
+    'This takes 9 boxes (24 servings) out of the fridge and keeps them in What you finished as cleared out. You can undo it right after.',
+    'This takes 1 box (1 serving) out of the freezer and keeps it in What you finished as cleared out. You can undo it right after.',
+    'Put 9 boxes back',
+    'Put 1 box back',
     'Put back 7 of 9; the rest changed since',
   ],
-  'a clear-out says what it takes off the list and what it keeps, and the Undo says how many came back',
+  'a clear-out says what it takes out of which place and what it keeps, and the Undo says how many came back',
 );
 
 const toFreezer = planOf(planMove(container(), 'FREEZER', dayOf(20), 6000));
@@ -3654,9 +3654,9 @@ assert.deepEqual(
     ]),
   ],
   [
-    'Threw out 1 of 4',
+    'Tossed 1 of 4',
     'Ate 4 servings',
-    'Threw out 4 servings',
+    'Tossed 4 servings',
     'Ate it all',
     'Cleared out 3 of 6',
     'Cleared out 3 servings',
@@ -3815,10 +3815,10 @@ assert.deepEqual(
     fridgeServings: 2 + 2 + 4,
     freezerServings: 3 + 1,
     containerCount: 5,
-    soonCount: 2,
+    soonCount: 1,
     pastCount: 1,
   },
-  'the Kitchen row counts servings by place, containers, those to eat soon and those past their date; finished ones are left out',
+  'the Kitchen row counts servings by place, containers, those due by tomorrow (not the one due in two days) and those past their date; finished ones are left out',
 );
 assert.equal(
   getPlacesText(summary),
@@ -3831,7 +3831,12 @@ assert.equal(
 );
 assert.deepEqual(
   [getDueText(2, 1), getDueText(1, 0), getDueText(0, 2), getDueText(0, 0)],
-  ['2 to eat soon, 1 past its date', '1 to eat soon', '2 past their date', ''],
+  [
+    '2 to eat by tomorrow, 1 past its date',
+    '1 to eat by tomorrow',
+    '2 past their date',
+    '',
+  ],
 );
 
 assert.deepEqual(
@@ -3988,7 +3993,7 @@ assert.equal(
     })),
     lateOnThe14th,
   ),
-  'Saved 4 containers (4 servings) in the freezer, eat by tomorrow',
+  'Saved 4 boxes (4 servings) in the freezer, eat by tomorrow',
   'a put-away of several containers says how many and how many servings in all',
 );
 assert.deepEqual(
@@ -4001,10 +4006,7 @@ assert.deepEqual(
       })),
     ),
   ],
-  [
-    'Saved 1 serving in the fridge',
-    'Saved 3 containers (6 servings) in the fridge',
-  ],
+  ['Saved 1 serving in the fridge', 'Saved 3 boxes (6 servings) in the fridge'],
   'the Finish panel says what was saved and where, with the eat-by date on its own line',
 );
 assert.deepEqual(
@@ -5740,6 +5742,259 @@ assert.deepEqual(
   r2Find('deleted'),
   [],
   'a missing source or ingredient adds nothing to search',
+);
+
+// KITB workstream: the Fridge & freezer list and its sheet
+// ============================================================
+import { getCountChangeCopy as kitbCountCopy } from '../../src/apps/pinch/utils/containers.ts';
+
+assert.deepEqual(
+  [
+    kitbCountCopy(3, 3),
+    kitbCountCopy(3, 1),
+    kitbCountCopy(3, 0),
+    kitbCountCopy(1, 3),
+  ].map(({ change, action }) => [change, action]),
+  [
+    [{ kind: 'SAME' }, 'Save'],
+    [{ kind: 'EAT', eaten: 2 }, 'Ate 2'],
+    [{ kind: 'ALL' }, 'Ate the rest'],
+    [{ kind: 'COUNT', count: 3 }, 'Save'],
+  ],
+  '"How many are left?": fewer records an eat, none eats the rest, more corrects the count, the same changes nothing',
+);
+assert.deepEqual(
+  [
+    kitbCountCopy(3, 1).line,
+    kitbCountCopy(1, 3).line,
+    kitbCountCopy(2, 2).line,
+  ],
+  [
+    'Records that you ate 2.',
+    'Corrects the count from 1 to 3.',
+    'It says 2 servings now.',
+  ],
+  'the line under the stepper says what the answer records',
+);
+
+import {
+  getBatchKey as kitbBatchKey,
+  getBatchServingsText as kitbServingsText,
+  getBoxCountCopy as kitbBoxCopy,
+  groupBatches as kitbGroup,
+} from '../../src/apps/pinch/utils/containers.ts';
+
+const kitbSoup = (id: string, over: Partial<Container> = {}) =>
+  container({
+    id,
+    title: 'Soup',
+    recipeId: 'soup',
+    servings: 2,
+    place: 'FREEZER',
+    eatBy: dayOf(30),
+    createdAt: 5000,
+    updatedAt: 5000,
+    ...over,
+  });
+const kitbFive = [
+  kitbSoup('s1'),
+  kitbSoup('s2', { servings: 1 }),
+  kitbSoup('s3'),
+  kitbSoup('t1', { place: 'FRIDGE', eatBy: dayOf(17) }),
+  kitbSoup('u1', { createdAt: 9000, updatedAt: 9000 }),
+];
+assert.deepEqual(
+  kitbGroup(kitbFive).map(({ boxes }) => boxes.map(({ id }) => id)),
+  [['s2', 's1', 's3'], ['t1'], ['u1']],
+  'boxes put away together are one row (an opened box first); one thawed or put away later is its own row',
+);
+assert.notEqual(
+  kitbBatchKey(kitbSoup('s1')),
+  kitbBatchKey(kitbSoup('s1', { eatBy: dayOf(31) })),
+  'a box re-dated alone leaves its batch',
+);
+assert.deepEqual(
+  [
+    kitbServingsText([{ servings: 2 }, { servings: 2 }, { servings: 2 }]),
+    kitbServingsText([{ servings: 3 }, { servings: 2 }, { servings: 2 }]),
+    kitbServingsText([{ servings: 1 }, { servings: 1 }]),
+    kitbServingsText([{ servings: 4 }]),
+  ],
+  [
+    '3 boxes of 2 servings',
+    '3 boxes · 7 servings',
+    '2 boxes of 1 serving',
+    '4 servings',
+  ],
+  'a batch says how many boxes and what one holds, or the total when they differ',
+);
+const kitbFifty = Array.from({ length: 50 }, (_, index) =>
+  kitbSoup(`f${String(index).padStart(2, '0')}`, {
+    createdAt: 1000 * Math.floor(index / 5),
+    eatBy: dayOf(20 + Math.floor(index / 5)),
+  }),
+);
+assert.deepEqual(
+  kitbGroup(kitbFifty).map(({ boxes }) => boxes.length),
+  Array.from({ length: 10 }, () => 5),
+  'fifty boxes in ten put-aways are ten rows of five',
+);
+const kitbScale = Array.from({ length: 300 }, (_, index) =>
+  kitbSoup(`k${String(index).padStart(3, '0')}`, {
+    title: `Dish ${index % 40}`,
+    recipeId: `dish-${index % 40}`,
+    createdAt: index < 60 ? 100 * Math.floor(index / 3) : 100_000 + index,
+    eatBy: dayOf(16 + (index % 60)),
+  }),
+);
+const kitbScaleRows = kitbGroup(kitbScale);
+assert.equal(
+  kitbScaleRows.reduce((sum, { boxes }) => sum + boxes.length, 0),
+  300,
+  'grouping never loses or repeats a box',
+);
+assert.ok(
+  kitbScaleRows.every(({ key, boxes }) =>
+    boxes.every((box) => kitbBatchKey(box) === key),
+  ),
+  'every box of a row shares its batch',
+);
+const kitbStarted = performance.now();
+Array.from({ length: 20 }, () => kitbGroup(kitbScale));
+assert.ok(
+  (performance.now() - kitbStarted) / 20 < 20,
+  "grouping Taylor's 300 boxes stays well under a frame",
+);
+assert.deepEqual(
+  [
+    kitbBoxCopy(3, 3),
+    kitbBoxCopy(3, 2),
+    kitbBoxCopy(3, 1),
+    kitbBoxCopy(3, 0),
+  ].map(({ eaten, action }) => [eaten, action]),
+  [
+    [0, 'Save'],
+    [1, 'Ate 1 box'],
+    [2, 'Ate 2 boxes'],
+    [3, 'Ate them all'],
+  ],
+  '"How many boxes are left?" only counts down, each box eaten whole',
+);
+
+import { getEatByLabel as kitbEatByLabel } from '../../src/apps/pinch/utils/containers.ts';
+
+assert.deepEqual(
+  [13, 14, 15].map((day) => kitbEatByLabel(dayOf(day), lateOnThe14th)),
+  ['Past its date', 'Eat today', 'Eat by tomorrow'],
+  'a row says its eat-by once: past, today or tomorrow in the tinted pill',
+);
+assert.equal(
+  kitbEatByLabel(dayOf(18), lateOnThe14th),
+  `Eat by ${getEatByPhrase(dayOf(18), lateOnThe14th)}`,
+  'a later date is plain words with the date',
+);
+
+import { canPutBack as kitbCanPutBack } from '../../src/apps/pinch/utils/containers.ts';
+
+const kitbEnded = (kind: 'EAT' | 'TOSS' | 'CLEAR' | 'EDIT') =>
+  container({
+    status: kind === 'EDIT' ? 'IN_STOCK' : 'DONE',
+    history: [
+      ...container().history,
+      makeEvent(kind, 2000, kind === 'EDIT' ? {} : { servings: 4 }),
+    ],
+  });
+assert.deepEqual(
+  [
+    kitbCanPutBack(kitbEnded('EAT')),
+    kitbCanPutBack(kitbEnded('TOSS')),
+    kitbCanPutBack(kitbEnded('CLEAR')),
+    kitbCanPutBack(kitbEnded('EDIT')),
+    kitbCanPutBack(container()),
+  ],
+  [true, true, true, false, false],
+  'any finished box can be put back while what ended it is its last event; one in stock cannot',
+);
+assert.deepEqual(
+  planOf(planUndoEnd(kitbEnded('EAT'), 2000, 3000)),
+  {
+    servings: 4,
+    status: 'IN_STOCK',
+    history: container().history,
+    updatedAt: 3000,
+  },
+  'putting back an eaten box restores the count it had before the last eat',
+);
+
+import {
+  getFrozenAt as kitbFrozenAt,
+  isEatByShown as kitbIsEatByShown,
+} from '../../src/apps/pinch/utils/containers.ts';
+
+assert.deepEqual(
+  [
+    kitbFrozenAt(kitbSoup('a', { history: [makeEvent('FREEZE', 4000)] })),
+    kitbFrozenAt(
+      kitbSoup('b', {
+        history: [
+          makeEvent('FREEZE', 4000),
+          makeEvent('THAW', 6000),
+          makeEvent('FREEZE', 8000),
+        ],
+      }),
+    ),
+    kitbFrozenAt(kitbSoup('c', { history: [], createdAt: 3000 })),
+  ],
+  [4000, 8000, 3000],
+  'a freezer row leads with when it last went in the freezer',
+);
+assert.deepEqual(
+  [
+    kitbIsEatByShown({ place: 'FREEZER', eatBy: dayOf(30) }, lateOnThe14th),
+    kitbIsEatByShown({ place: 'FREEZER', eatBy: dayOf(21) }, lateOnThe14th),
+    kitbIsEatByShown({ place: 'FREEZER', eatBy: dayOf(22) }, lateOnThe14th),
+    kitbIsEatByShown({ place: 'FREEZER', eatBy: dayOf(10) }, lateOnThe14th),
+    kitbIsEatByShown({ place: 'FRIDGE', eatBy: dayOf(30) }, lateOnThe14th),
+  ],
+  [false, true, false, true, true],
+  'a freezer row names its eat-by only within a week or once past; a fridge row always does',
+);
+
+assert.deepEqual(
+  [
+    finishedOf([
+      makeEvent('FRIDGE', 1, { servings: 2, place: 'FRIDGE' }),
+      makeEvent('EDIT', 2, { note: 'Count 2 → 3' }),
+      makeEvent('EAT', 3, { servings: 1 }),
+      makeEvent('EAT', 4, { servings: 3 }),
+    ]),
+    finishedOf([
+      makeEvent('FRIDGE', 1, { servings: 2, place: 'FRIDGE' }),
+      makeEvent('EDIT', 2, { note: 'Count 2 → 5' }),
+      makeEvent('EAT', 3, { servings: 1 }),
+      makeEvent('TOSS', 4, { servings: 4 }),
+    ]),
+    finishedOf(
+      Array.from({ length: MAX_CONTAINER_HISTORY }, (_, index) =>
+        index === 0
+          ? makeEvent('FRIDGE', 0, { servings: 9, place: 'FRIDGE' })
+          : makeEvent('EAT', index, { servings: 1 }),
+      ),
+    ),
+  ],
+  ['Ate 4 servings', 'Tossed 4 of 5', 'Ate it all'],
+  'what you finished counts what was eaten (a corrected count included), and names no number once the history may have lost an eat',
+);
+
+import { getFrozenText as kitbFrozenText } from '../../src/apps/pinch/utils/containers.ts';
+
+assert.equal(
+  kitbFrozenText(
+    kitbSoup('z', { history: [makeEvent('FREEZE', localAt(5, 23, 30))] }),
+    lateOnThe14th,
+  ),
+  `Frozen ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(2026, 9, 5))}`,
+  'a box frozen late on the 5th, local time, reads as frozen on the 5th in any zone',
 );
 
 console.log('pinchMath: all checks passed');
