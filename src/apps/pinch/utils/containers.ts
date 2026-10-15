@@ -1137,7 +1137,7 @@ export const getShoppingStockLine = (
 ) => {
   if (stocked.length === 0) return null;
   if (stocked.length > 1) {
-    return `You already have prepared servings of ${formatList(stocked.map((entry) => entry.name))}.`;
+    return `You already have servings of ${formatList(stocked.map((entry) => entry.name))} in your fridge or freezer.`;
   }
 
   const [{ name, summary }] = stocked;

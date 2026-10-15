@@ -177,7 +177,7 @@ function MealDrawer({
             <ActionChips label='Meal actions' actions={actions} />
             {stockError === null && !isStockReady && (
               <p className='text-muted-foreground text-xs'>
-                Loading your prepared meals…
+                Loading your fridge and freezer…
               </p>
             )}
           </div>

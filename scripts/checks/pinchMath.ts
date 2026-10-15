@@ -3964,7 +3964,7 @@ assert.deepEqual(
     'You already have Adobo: 2 servings in the fridge.',
     'You already have 2 servings in the fridge, 3 in the freezer.',
     'You already have Adobo: 1 serving in the fridge, 1 in the freezer.',
-    'You already have prepared servings of Adobo and Rice.',
+    'You already have servings of Adobo and Rice in your fridge or freezer.',
   ],
   'the shopping sheet says what is already put away, in one line, and never subtracts it',
 );

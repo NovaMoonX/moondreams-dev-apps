@@ -48,7 +48,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded &&
   state.pinch.sources.isLoaded;
 
-/** Sources, the shopping list, ideas, cooking history, recipe notes and prepared meals are optional extras: their failures are left out so each only takes its own UI away. */
+/** Sources, the shopping list, ideas, cooking history, recipe notes and fridge and freezer stock are optional extras: their failures are left out so each only takes its own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
