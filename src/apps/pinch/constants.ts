@@ -208,6 +208,15 @@ export const MEAL_TYPES: MealType[] = [
   'DESSERT',
   'DRINK',
 ];
+/** The order a month cell shows its meals in, so dinner, the meal most people plan, is never the one behind "+N"; drawers and Week keep meal-time order. */
+export const MONTH_CELL_MEAL_ORDER: MealType[] = [
+  'DINNER',
+  'LUNCH',
+  'BREAKFAST',
+  'SNACK',
+  'DESSERT',
+  'DRINK',
+];
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   BREAKFAST: 'Breakfast',
   LUNCH: 'Lunch',
@@ -266,13 +275,16 @@ export const UNIT_TO_BASE: Record<Unit, number> = {
   EACH: 1,
 };
 
-export const CALENDAR_VIEWS = ['month', 'week', 'day'] as const;
+export const CALENDAR_VIEWS = ['month', 'week'] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
-export const DEFAULT_CALENDAR_VIEW: CalendarView = 'month';
+/** Month from `lg` up, where the grid has room for meal names; Week, starting today, on anything narrower. */
+export const DEFAULT_CALENDAR_VIEW: Record<'wide' | 'narrow', CalendarView> = {
+  wide: 'month',
+  narrow: 'week',
+};
 export const CALENDAR_VIEW_LABELS: Record<CalendarView, string> = {
   month: 'Month',
   week: 'Week',
-  day: 'Day',
 };
 
 /** The meal type's colour tokens from `pinch.css`: the solid for an edge or a dot, the soft tint for a chip or a pill. */

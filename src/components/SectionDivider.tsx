@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 interface SectionDividerProps {
-  label: string;
+  /** Usually words; a tappable label (a day that opens) is a button. */
+  label: ReactNode;
   /** Sits beside the label, inside the lines (a count, a weather chip). */
   trailing?: ReactNode;
   className?: string;
