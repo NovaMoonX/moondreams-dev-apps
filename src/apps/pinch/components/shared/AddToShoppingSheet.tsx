@@ -471,6 +471,11 @@ export function ShoppingPick({
           ) : (
             <p className='text-lg font-medium wrap-break-word'>{label}</p>
           )}
+          {rows.length > 0 && (
+            <p className='text-muted-foreground text-sm'>
+              Untick what you already have.
+            </p>
+          )}
           {recipe && (
             <div className='flex flex-wrap items-center gap-3'>
               <span className='text-sm'>For</span>
@@ -490,7 +495,7 @@ export function ShoppingPick({
           {rows.length > 0 && (
             <div className='flex items-center justify-between gap-3'>
               <p className='text-muted-foreground text-sm'>
-                {selected.length} of {rows.length}
+                Adding {selected.length} of {rows.length}
               </p>
               <Button
                 type='button'
