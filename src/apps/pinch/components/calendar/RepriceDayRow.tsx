@@ -34,11 +34,10 @@ const NO_MEALS: PlannedMeal[] = [];
 interface RepriceDayRowProps {
   uid: string;
   dayKey: string;
-  isGrouped?: boolean;
 }
 
 /** Shown only for a passed day that today's prices would change, so it is never a button that does nothing. */
-function RepriceDayRow({ uid, dayKey, isGrouped }: RepriceDayRowProps) {
+function RepriceDayRow({ uid, dayKey }: RepriceDayRowProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -130,7 +129,6 @@ function RepriceDayRow({ uid, dayKey, isGrouped }: RepriceDayRowProps) {
           label="Price this day with today's prices"
           subtitle="Redoes this day's cost and nutrition from today"
           isDisabled={isBusy}
-          isGrouped={isGrouped}
           onClick={() => void handleReprice()}
           trailing={
             <HelpTip title="Today's prices" placement='top'>
