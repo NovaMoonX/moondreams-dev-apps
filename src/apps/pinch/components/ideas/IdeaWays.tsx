@@ -187,6 +187,7 @@ function TitleField({
 
 interface LinkWayProps extends WayProps {
   onOpenExisting?: (id: string) => void;
+  initialUrl?: string;
 }
 
 export function IdeaLinkWay({
@@ -194,6 +195,7 @@ export function IdeaLinkWay({
   onClose,
   onSaved,
   onOpenExisting,
+  initialUrl = '',
 }: LinkWayProps) {
   const ideas = useAppSelector(selectIdeas);
   const { submit, isSubmitting, error, clearError } = useCreateIdea(
@@ -201,7 +203,7 @@ export function IdeaLinkWay({
     onSaved,
   );
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState({ url: '', note: '' });
+  const [data, setData] = useState({ url: initialUrl, note: '' });
   const [typed, setTyped] = useState<{ link: string; title: string } | null>(
     null,
   );
@@ -386,7 +388,7 @@ export function IdeaLinkWay({
       <Form
         id='pinch-idea-link'
         form={fields}
-        initialData={{ url: '', note: '' }}
+        initialData={{ url: initialUrl, note: '' }}
         columns={1}
         onDataChange={(next) => {
           setData(next as typeof data);
@@ -540,13 +542,27 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
   );
 }
 
-export function IdeaTextWay({ uid, onClose, onSaved }: WayProps) {
+interface TextWayProps extends WayProps {
+  initialTitle?: string;
+  initialNote?: string;
+}
+
+export function IdeaTextWay({
+  uid,
+  onClose,
+  onSaved,
+  initialTitle = '',
+  initialNote = '',
+}: TextWayProps) {
   const { submit, isSubmitting, error, clearError } = useCreateIdea(
     uid,
     onSaved,
   );
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState({ title: '', note: '' });
+  const [data, setData] = useState({
+    title: initialTitle,
+    note: initialNote,
+  });
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -590,7 +606,7 @@ export function IdeaTextWay({ uid, onClose, onSaved }: WayProps) {
       <Form
         id='pinch-idea-text'
         form={fields}
-        initialData={{ title: '', note: '' }}
+        initialData={{ title: initialTitle, note: initialNote }}
         columns={1}
         onDataChange={(next) => {
           setData(next as typeof data);
