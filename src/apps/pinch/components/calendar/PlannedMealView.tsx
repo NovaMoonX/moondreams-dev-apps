@@ -4,12 +4,7 @@ import { createPortal } from 'react-dom';
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import {
-  BookmarkPlus,
-  ChevronLeft,
-  ChevronRight,
-  CookingPot,
-} from 'lucide-react';
+import { BookmarkPlus, ChevronLeft, CookingPot } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -42,9 +37,16 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { ContainerPlace, MealType } from '@apps/pinch/types';
+import type {
+  ContainerPlace,
+  MealType,
+  PlateCookRecipe,
+} from '@apps/pinch/types';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
-import { getMarkableRecipes } from '@apps/pinch/utils/cooks';
+import {
+  getMarkableRecipes,
+  getPlateCookRecipes,
+} from '@apps/pinch/utils/cooks';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCostTile,
@@ -66,7 +68,8 @@ interface PlannedMealViewProps {
   plannedMealId: string;
   onBack: () => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
-  onStartCooking: (recipeId: string, servings: number) => void;
+  /** Every recipe on the plate still to cook, cooked together in one session. */
+  onStartCooking: (plate: PlateCookRecipe[]) => void;
   /** Where the drawer's pinned footer is: this view puts its actions there, a quiet Modify on the left and the one primary on the right. */
   footerEl: HTMLElement | null;
 }
@@ -97,7 +100,6 @@ function PlannedMealView({
   const [isNaming, setIsNaming] = useState(false);
   const [mealName, setMealName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isChoosing, setIsChoosing] = useState(false);
   const [eatingPlace, setEatingPlace] = useState<ContainerPlace | null>(null);
   const mealContainers = useMealContainers(meal ?? null);
   const now = useNow();
@@ -105,12 +107,6 @@ function PlannedMealView({
   if (!meal) {
     return null;
   }
-
-  const cookable = meal.items.flatMap((item) => {
-    const recipe =
-      item.kind === 'RECIPE' ? recipesById.get(item.refId) : undefined;
-    return recipe && recipe.steps.length > 0 ? [{ item, recipe }] : [];
-  });
 
   const recipeIds = Array.from(
     new Set(
@@ -133,18 +129,17 @@ function PlannedMealView({
     now,
   });
   const { primary } = offer;
-  const cookNow = cookable.filter(({ recipe }) =>
-    offer.cookRecipeIds.includes(recipe.id),
+  const plate = getPlateCookRecipes(
+    meal.items,
+    recipesById,
+    offer.cookRecipeIds,
   );
   const eatPlaces = CONTAINER_PLACES.map((place) => ({
     place,
     count: offer.eatFrom.filter((container) => container.place === place)
       .length,
   })).filter((entry) => entry.count > 0);
-  const startCooking = () =>
-    cookNow.length === 1
-      ? onStartCooking(cookNow[0].recipe.id, cookNow[0].item.servings)
-      : setIsChoosing(true);
+  const startCooking = () => onStartCooking(plate);
   const markable =
     offer.canMarkCooked && cooksLoadError === null
       ? getMarkableRecipes(meal.items, recipesById)
@@ -207,7 +202,7 @@ function PlannedMealView({
   };
 
   const actions: ActionChip[] = [
-    cookNow.length > 0 &&
+    plate.length > 0 &&
       primary?.kind !== 'COOK' && {
         key: 'cook',
         icon: <CookingPot className='h-4 w-4' />,
@@ -310,53 +305,6 @@ function PlannedMealView({
         containers={offer.eatFrom}
         onBack={() => setEatingPlace(null)}
       />
-    );
-  }
-
-  if (isChoosing && cookNow.length > 1) {
-    return (
-      <div className='space-y-5'>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-10 gap-1 px-0!'
-          onClick={() => setIsChoosing(false)}
-        >
-          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-          Back
-        </Button>
-        <div className='space-y-1'>
-          <p className='font-medium'>Which one are you cooking?</p>
-          <p className='text-muted-foreground text-sm'>
-            It opens at the recipe's own servings.
-          </p>
-        </div>
-        <ul className='divide-border divide-y'>
-          {cookNow.map(({ item, recipe }) => (
-            <li key={item.id}>
-              <Button
-                type='button'
-                variant='tertiary'
-                className='h-auto min-h-12 w-full items-start justify-start gap-3 px-0! py-2.5 text-left'
-                onClick={() => onStartCooking(recipe.id, item.servings)}
-              >
-                <span className='min-w-0 flex-1'>
-                  <span className='block font-medium wrap-break-word'>
-                    {recipe.title}
-                  </span>
-                  <span className='text-muted-foreground block text-xs font-normal'>
-                    {formatServings(item.servings)}
-                  </span>
-                </span>
-                <ChevronRight
-                  className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
-                  aria-hidden='true'
-                />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </div>
     );
   }
 
