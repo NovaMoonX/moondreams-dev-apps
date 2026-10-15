@@ -511,8 +511,9 @@ export const CONTAINER_PLACE_LABELS: Record<ContainerPlace, string> = {
   FRIDGE: 'Fridge',
   FREEZER: 'Freezer',
 };
+/** Two that don't both read "frozen": an ice cube beside a snowflake said freezer twice. */
 export const CONTAINER_PLACE_EMOJIS: Record<ContainerPlace, string> = {
-  FRIDGE: '🧊',
+  FRIDGE: '🥛',
   FREEZER: '❄️',
 };
 export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({

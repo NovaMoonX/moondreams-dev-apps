@@ -3700,9 +3700,9 @@ assert.deepEqual(
     ]),
   ],
   [
-    'Threw out 1 of 4',
+    'Tossed 1 of 4',
     'Ate 4 servings',
-    'Threw out 4 servings',
+    'Tossed 4 servings',
     'Ate it all',
     'Cleared out 3 of 6',
     'Cleared out 3 servings',
@@ -5805,6 +5805,32 @@ assert.deepEqual(
   ],
   [false, true, false, true, true],
   'a freezer row names its eat-by only within a week or once past; a fridge row always does',
+);
+
+assert.deepEqual(
+  [
+    finishedOf([
+      makeEvent('FRIDGE', 1, { servings: 2, place: 'FRIDGE' }),
+      makeEvent('EDIT', 2, { note: 'Count 2 → 3' }),
+      makeEvent('EAT', 3, { servings: 1 }),
+      makeEvent('EAT', 4, { servings: 3 }),
+    ]),
+    finishedOf([
+      makeEvent('FRIDGE', 1, { servings: 2, place: 'FRIDGE' }),
+      makeEvent('EDIT', 2, { note: 'Count 2 → 5' }),
+      makeEvent('EAT', 3, { servings: 1 }),
+      makeEvent('TOSS', 4, { servings: 4 }),
+    ]),
+    finishedOf(
+      Array.from({ length: MAX_CONTAINER_HISTORY }, (_, index) =>
+        index === 0
+          ? makeEvent('FRIDGE', 0, { servings: 9, place: 'FRIDGE' })
+          : makeEvent('EAT', index, { servings: 1 }),
+      ),
+    ),
+  ],
+  ['Ate 4 servings', 'Tossed 4 of 5', 'Ate it all'],
+  'what you finished counts what was eaten (a corrected count included), and names no number once the history may have lost an eat',
 );
 
 console.log('pinchMath: all checks passed');

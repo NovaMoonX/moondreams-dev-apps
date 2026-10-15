@@ -726,7 +726,7 @@ export const getEventText = (event: ContainerEvent) => {
     case 'EAT':
       return amount === '' ? 'Ate some' : `Ate ${amount}`;
     case 'TOSS':
-      return amount === '' ? 'Threw it out' : `Threw out ${amount}`;
+      return amount === '' ? 'Tossed' : `Tossed ${amount}`;
     case 'CLEAR':
       return amount === '' ? 'Cleared out' : `Cleared out · ${amount}`;
     default:
@@ -738,17 +738,23 @@ export const getEventText = (event: ContainerEvent) => {
 export const getStartServings = (container: Container) =>
   container.history.find((event) => event.place !== null)?.servings ?? null;
 
+/** Counts what was eaten from the history, so a corrected count reads true; a history that may have been trimmed past the cap names no number it can't vouch for. */
 export const getFinishedText = (container: Container) => {
   const last = container.history.at(-1);
-  const started = getStartServings(container);
+  const isWhole =
+    getStartServings(container) !== null &&
+    container.history.length < MAX_CONTAINER_HISTORY;
+  const eaten = container.history
+    .filter((event) => event.kind === 'EAT')
+    .reduce((sum, event) => sum + (event.servings ?? 0), 0);
   if (last?.kind === 'TOSS' || last?.kind === 'CLEAR') {
-    const verb = last.kind === 'TOSS' ? 'Threw out' : 'Cleared out';
+    const verb = last.kind === 'TOSS' ? 'Tossed' : 'Cleared out';
     const ended = last.servings ?? container.servings;
-    return started !== null && started > ended
-      ? `${verb} ${ended} of ${started}`
+    return isWhole && eaten > 0
+      ? `${verb} ${ended} of ${ended + eaten}`
       : `${verb} ${formatServings(ended)}`;
   }
-  return started === null ? 'Ate it all' : `Ate ${formatServings(started)}`;
+  return isWhole && eaten > 0 ? `Ate ${formatServings(eaten)}` : 'Ate it all';
 };
 
 export const byEatBy = (a: Container, b: Container) =>

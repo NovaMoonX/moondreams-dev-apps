@@ -27,6 +27,7 @@ import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   finishedContainersQueryOptions,
+  OfflineEmptyReadError,
   scopedContainersQueryOptions,
 } from '@apps/pinch/queries/containerQueries';
 import {
@@ -110,12 +111,13 @@ const isContainerOfScope = (
 };
 
 const combineScoped = (
-  results: { data?: Container[]; isError: boolean }[],
+  results: { data?: Container[]; isError: boolean; error: unknown }[],
 ) => ({
   data: results.some((result) => result.data === undefined)
     ? undefined
     : results.flatMap((result) => result.data ?? []),
   isError: results.some((result) => result.isError),
+  error: results.find((result) => result.isError)?.error ?? null,
 });
 
 function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
@@ -447,7 +449,9 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     if (finishedQuery.isError) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          What you finished couldn't load just now.
+          {finishedQuery.error instanceof OfflineEmptyReadError
+            ? "Couldn't load what you finished while you're offline."
+            : "What you finished couldn't load just now."}
         </p>
       );
     }
