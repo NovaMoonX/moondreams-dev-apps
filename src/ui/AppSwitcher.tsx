@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import {
@@ -13,7 +13,7 @@ import { Check, ChevronDown, House, LayoutGrid } from 'lucide-react';
 import FallbackImage from '@components/FallbackImage';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useMediaQuery } from '@hooks/useMediaQuery';
-import { getRegistryAppForPath } from '@lib/app';
+import type { AppMetadata } from '@lib/types/appCatalog';
 
 interface AppLogoProps {
   id: string;
@@ -31,87 +31,28 @@ function AppLogo({ id, className }: AppLogoProps) {
   );
 }
 
-/** The header's app picker: shows the app you are in and jumps to another in two taps. A drawer on phones, a dropdown from `sm` up. */
-function AppSwitcher() {
+interface TriggerProps {
+  onClick?: () => void;
+  'aria-haspopup'?: 'dialog';
+  'aria-expanded'?: boolean;
+}
+
+interface PhoneSheetProps {
+  apps: AppMetadata[];
+  currentAppId: string | null;
+  isHome: boolean;
+  onSelect: (path: string) => void;
+  renderTrigger: (props: TriggerProps) => ReactNode;
+}
+
+/** Owns the open state, so rotating past `sm` and back never reopens a sheet nobody tapped. */
+function PhoneSheet({ apps, currentAppId, isHome, onSelect, renderTrigger }: PhoneSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const { apps } = useAppCatalog();
-  const isPhone = useMediaQuery().isBelow('sm');
-  const { option, separator } = DropdownMenuFactories;
 
-  const isHome = pathname === '/';
-  const currentApp =
-    apps.find((app) => pathname === app.path || pathname.startsWith(`${app.path}/`)) ??
-    getRegistryAppForPath(pathname);
-  const label = currentApp?.name ?? 'Apps';
-
-  const goTo = (path: string) => {
+  const choose = (path: string) => {
     setIsOpen(false);
-    if (path !== pathname && !pathname.startsWith(`${path}/`)) {
-      navigate(path);
-    }
+    onSelect(path);
   };
-
-  if (apps.length === 0) {
-    return null;
-  }
-
-  const trigger = (
-    <Button
-      type='button'
-      variant='base'
-      size='sm'
-      aria-label={`Switch app, now in ${label}`}
-      className='min-w-0 gap-2'
-      onClick={isPhone ? () => setIsOpen(true) : undefined}
-    >
-      {currentApp ? (
-        <AppLogo id={currentApp.id} className='size-5 rounded-md' />
-      ) : (
-        <LayoutGrid className='size-4 shrink-0' />
-      )}
-      <span className='min-w-0 truncate'>{label}</span>
-      <ChevronDown className='size-4 shrink-0' />
-    </Button>
-  );
-
-  if (!isPhone) {
-    return (
-      <DropdownMenu
-        items={[
-          ...apps.map((app) =>
-            option({
-              label: app.name,
-              value: app.path,
-              icon:
-                currentApp?.id === app.id ? (
-                  <Check className='text-primary size-4' />
-                ) : (
-                  <AppLogo id={app.id} className='size-4 rounded' />
-                ),
-            }),
-          ),
-          separator(),
-          option({
-            label: 'Home',
-            value: '/',
-            icon: isHome ? (
-              <Check className='text-primary size-4' />
-            ) : (
-              <House className='size-4' />
-            ),
-          }),
-        ]}
-        onItemSelect={goTo}
-        placement='bottom'
-        alignment='center'
-        offset={12}
-        trigger={trigger}
-        className='w-64'
-      />
-    );
-  }
 
   const rowClassName = (isCurrent: boolean) =>
     join(
@@ -121,16 +62,15 @@ function AppSwitcher() {
 
   return (
     <>
-      {trigger}
-      <Drawer
-        isOpen={isOpen && isPhone}
-        onClose={() => setIsOpen(false)}
-        title='Apps'
-        showCloseButton
-      >
+      {renderTrigger({
+        onClick: () => setIsOpen(true),
+        'aria-haspopup': 'dialog',
+        'aria-expanded': isOpen,
+      })}
+      <Drawer isOpen={isOpen} onClose={() => setIsOpen(false)} title='Apps' showCloseButton>
         <ul className='space-y-2 pb-4'>
           {apps.map((app) => {
-            const isCurrent = currentApp?.id === app.id;
+            const isCurrent = currentAppId === app.id;
 
             return (
               <li key={app.id}>
@@ -140,7 +80,7 @@ function AppSwitcher() {
                   size='stripped'
                   aria-current={isCurrent ? 'page' : undefined}
                   className={rowClassName(isCurrent)}
-                  onClick={() => goTo(app.path)}
+                  onClick={() => choose(app.path)}
                 >
                   <AppLogo id={app.id} className='size-8 rounded-lg' />
                   <span className='min-w-0 flex-1 truncate'>{app.name}</span>
@@ -156,7 +96,7 @@ function AppSwitcher() {
               size='stripped'
               aria-current={isHome ? 'page' : undefined}
               className={rowClassName(isHome)}
-              onClick={() => goTo('/')}
+              onClick={() => choose('/')}
             >
               <span className='bg-muted grid size-8 shrink-0 place-items-center rounded-lg'>
                 <House className='h-4 w-4' />
@@ -168,6 +108,91 @@ function AppSwitcher() {
         </ul>
       </Drawer>
     </>
+  );
+}
+
+/** The header's app picker: shows the app you are in and jumps to another in two taps. A drawer on phones, a dropdown from `sm` up. */
+function AppSwitcher() {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { apps } = useAppCatalog();
+  const isPhone = useMediaQuery().isBelow('sm');
+  const { option, separator } = DropdownMenuFactories;
+
+  if (apps.length === 0) {
+    return null;
+  }
+
+  const isHome = pathname === '/';
+  const currentApp =
+    apps.find((app) => pathname === app.path || pathname.startsWith(`${app.path}/`)) ?? null;
+  const label = currentApp?.name ?? (isHome ? 'Home' : 'Apps');
+
+  const goTo = (path: string) => {
+    if (path !== pathname) {
+      navigate(path);
+    }
+  };
+
+  const renderTrigger = (triggerProps: TriggerProps) => (
+    <Button
+      type='button'
+      variant='base'
+      size='sm'
+      aria-label={`Switch app, now in ${label}`}
+      className="relative min-w-0 gap-1.5 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] min-[380px]:gap-2"
+      {...triggerProps}
+    >
+      {currentApp ? (
+        <AppLogo id={currentApp.id} className='size-5 rounded-md' />
+      ) : isHome ? (
+        <House className='size-4 shrink-0' />
+      ) : (
+        <LayoutGrid className='size-4 shrink-0' />
+      )}
+      <span className='min-w-0 truncate'>{label}</span>
+      <ChevronDown className='size-4 shrink-0 max-[380px]:hidden' />
+    </Button>
+  );
+
+  if (isPhone) {
+    return (
+      <PhoneSheet
+        apps={apps}
+        currentAppId={currentApp?.id ?? null}
+        isHome={isHome}
+        onSelect={goTo}
+        renderTrigger={renderTrigger}
+      />
+    );
+  }
+
+  return (
+    <DropdownMenu
+      items={[
+        ...apps.map((app) =>
+          option({
+            label: app.name,
+            description: currentApp?.id === app.id ? 'You are here' : undefined,
+            value: app.path,
+            icon: <AppLogo id={app.id} className='size-5 rounded-md' />,
+          }),
+        ),
+        separator(),
+        option({
+          label: 'Home',
+          description: isHome ? 'You are here' : undefined,
+          value: '/',
+          icon: <House className='size-5' />,
+        }),
+      ]}
+      onItemSelect={goTo}
+      placement='bottom'
+      alignment='center'
+      offset={12}
+      trigger={renderTrigger({})}
+      className='w-64'
+    />
   );
 }
 

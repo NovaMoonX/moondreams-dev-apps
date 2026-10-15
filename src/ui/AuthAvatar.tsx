@@ -35,7 +35,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     isAdmin,
     isDisplayNameUpdating,
   } = useAuth();
-  const { appPathMap } = useAppCatalog();
+  const { apps } = useAppCatalog();
   const { option, separator, custom } = DropdownMenuFactories;
   const [nameInput, setNameInput] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -86,13 +86,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   }
 
   const displayName = user.displayName ?? user.email ?? 'User';
-  const currentApp = Object.values(appPathMap).find(
-    (app) => pathname === app.path || pathname.startsWith(`${app.path}/`),
-  );
-  const firstSegment = pathname.split('/').filter(Boolean)[0] ?? '';
-  const locationLabel =
-    currentApp?.name?.trim() ||
-    (firstSegment ? firstSegment.replace(/-/g, ' ') : 'Home');
 
   const handleNameSave = async () => {
     const nextName = nameInput.trim();
@@ -106,7 +99,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   };
 
   const navItems = [
-    ...(isAwayFromHome && isBelow('sm')
+    ...(isAwayFromHome && isBelow('sm') && apps.length === 0
       ? [option({ label: 'Home', value: 'home', icon: <House className='size-4' /> })]
       : []),
     ...(isAdmin ? [option({ label: 'Admin', value: 'admin', icon: <ShieldCheck className='size-4' /> })] : []),
@@ -125,11 +118,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
               {user.email}
             </div>
           </div>
-        </div>
-
-        <div className='border-border bg-muted/40 text-muted-foreground mt-2 rounded-md border px-2 py-1.5 text-xs'>
-          Current location:{' '}
-          <span className='text-foreground font-medium'>{locationLabel}</span>
         </div>
       </div>
     )),
