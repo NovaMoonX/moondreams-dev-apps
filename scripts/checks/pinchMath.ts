@@ -78,6 +78,7 @@ import {
   planCount,
   splitServings,
   getPutAwayText,
+  getSavedHeadline,
   getSavedText,
   getServingsToEat,
   getShoppingStockLine,
@@ -141,6 +142,11 @@ import {
   toCare,
 } from '../../src/apps/pinch/utils/recipeCare.ts';
 import { toLocalDateInputValue } from '../../src/utils/dateInputUtils.ts';
+import {
+  DEFAULT_LIST_VIEW_OPTIONS,
+  countCustomizedViewOptions,
+  parseListViewOptions,
+} from '../../src/apps/pinch/hooks/useListViewOptions.ts';
 import {
   findIdeaByUrl,
   getIdeaDetail,
@@ -3818,6 +3824,58 @@ assert.equal(
   ),
   'Saved 4 containers (4 servings) in the freezer, eat by tomorrow',
   'a put-away of several containers says how many and how many servings in all',
+);
+assert.deepEqual(
+  [
+    getSavedHeadline([{ servings: 1, place: 'FRIDGE' }]),
+    getSavedHeadline(
+      splitServings(6, 3).map((servings) => ({
+        servings,
+        place: 'FRIDGE' as const,
+      })),
+    ),
+  ],
+  [
+    'Saved 1 serving in the fridge',
+    'Saved 3 containers (6 servings) in the fridge',
+  ],
+  'the Finish panel says what was saved and where, with the eat-by date on its own line',
+);
+assert.deepEqual(
+  [
+    DEFAULT_LIST_VIEW_OPTIONS.showStock,
+    parseListViewOptions({
+      showPrices: false,
+      showMacros: true,
+      basis: 'PER_100G',
+    }),
+    parseListViewOptions({ showStock: false })?.showStock,
+    parseListViewOptions({ showStock: 'no' })?.showStock,
+    parseListViewOptions(null),
+  ],
+  [
+    true,
+    { showPrices: false, showMacros: true, basis: 'PER_100G', showStock: true },
+    false,
+    true,
+    null,
+  ],
+  'stock lines start shown, and a choice stored before the option existed reads as shown',
+);
+assert.deepEqual(
+  [
+    countCustomizedViewOptions(DEFAULT_LIST_VIEW_OPTIONS, 'recipes'),
+    countCustomizedViewOptions(
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showStock: false },
+      'recipes',
+    ),
+    countCustomizedViewOptions(
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showStock: false },
+      'ingredients',
+    ),
+  ],
+  [0, 1, 0],
+  'hiding stock lines counts as a change on Recipes and Meals only',
 );
 assert.deepEqual(
   groupSavedBatches([

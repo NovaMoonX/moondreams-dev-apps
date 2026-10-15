@@ -29,6 +29,13 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const UNDO_TOAST_MS = 6000;
 
+interface PutAwayOptions {
+  /** False when the caller's own screen confirms the save and offers its Undo (`undoSaved`). */
+  withToast?: boolean;
+  /** Takes a rejected write's message instead of an error toast. */
+  onWriteFailed?: (message: string) => void;
+}
+
 const inFlight = new Set<string>();
 const undone = new Set<string>();
 
@@ -109,7 +116,10 @@ export function useContainerActions(uid: string) {
     return getNewContainersProblem(inputs, inStockCount);
   };
 
-  const putAway = async (inputs: Omit<NewContainerInput, 'id'>[]) => {
+  const putAway = async (
+    inputs: Omit<NewContainerInput, 'id'>[],
+    { withToast = true, onWriteFailed }: PutAwayOptions = {},
+  ) => {
     const problem = getProblem(inputs);
     if (problem !== null) throw new Error(problem);
 
@@ -120,22 +130,31 @@ export function useContainerActions(uid: string) {
     dispatch(writeContainers({ uid, containers: created }))
       .unwrap()
       .catch((error: string) =>
-        addToast({
-          title: "That didn't save",
-          description: error,
-          type: 'error',
-        }),
+        onWriteFailed
+          ? onWriteFailed(error)
+          : addToast({
+              title: "That didn't save",
+              description: error,
+              type: 'error',
+            }),
       );
 
-    addUndoToast(
-      getSavedText(created),
-      navigator.onLine
-        ? created[0].title
-        : `${created[0].title} · Saved on this phone, it will sync when you're online`,
-      () => undoPutAway(created.map(({ id }) => id)),
-    );
+    if (withToast) {
+      addUndoToast(
+        getSavedText(created),
+        navigator.onLine
+          ? created[0].title
+          : `${created[0].title} · Saved on this phone, it will sync when you're online`,
+        () => undoPutAway(created.map(({ id }) => id)),
+      );
+    }
     return created;
   };
+
+  const undoSaved = (ids: string[]) =>
+    once(`batch:${ids[0]}`, () =>
+      dispatch(undoContainerBatch({ uid, ids })).unwrap(),
+    );
 
   const eat = (container: Container, count: number | 'ALL') =>
     once(container.id, async () => {
@@ -190,6 +209,7 @@ export function useContainerActions(uid: string) {
     isReady,
     loadError,
     putAway,
+    undoSaved,
     eat,
     toss,
     move,

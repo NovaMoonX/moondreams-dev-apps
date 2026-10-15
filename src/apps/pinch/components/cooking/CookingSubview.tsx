@@ -4,7 +4,10 @@ import { useStore } from 'react-redux';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { NotebookPen, PackagePlus } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
@@ -305,6 +308,26 @@ function CookingSession({
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
+  const getFinishCopy = () => {
+    if (isCooked) {
+      return {
+        title: 'Marked as cooked',
+        line: 'Saved to your cooking history.',
+      };
+    }
+    if (isAlreadyMarked) {
+      return {
+        title: 'Already marked as cooked',
+        line: "It's in your cooking history, so nothing more is saved.",
+      };
+    }
+    return {
+      title: 'Nice work. Mark it as cooked?',
+      line: 'Keeps a record. You can change the date later.',
+    };
+  };
+  const finishCopy = getFinishCopy();
+
   const showLockNote =
     !isCooked && (!wakeLock.isSupported || wakeLock.hasFailed);
   const isChanged =
@@ -331,77 +354,17 @@ function CookingSession({
         )}
         {!isFinishShown && <CookNotes recipeId={recipe.id} />}
         {isFinishShown ? (
-          isCooked ? (
-            <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
+          <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6'>
+            <div className='space-y-3 text-center'>
               <p className='text-2xl leading-snug font-medium'>
-                Marked as cooked
-              </p>
-              <div className='space-y-0.5'>
-                <p className='font-medium'>{formatServings(servings)}</p>
-                <p className='text-muted-foreground text-sm'>
-                  Saved to your cooking history.
-                </p>
-              </div>
-              {leftoversLine && (
-                <p
-                  className={join(
-                    'text-muted-foreground text-sm text-balance',
-                    putAway.isOpen && 'max-[360px]:hidden',
-                  )}
-                >
-                  {leftoversLine}
-                </p>
-              )}
-              {note.isSaved && (
-                <p className='text-muted-foreground text-sm'>Note saved.</p>
-              )}
-              {!note.isOpen && <CookPutAway putAway={putAway} />}
-              {note.isOpen ? (
-                <div className='w-full max-w-md space-y-2 text-left'>
-                  <NoteTextField
-                    label='Your note'
-                    placeholder='Less vinegar next time, the sauce was ready early'
-                    maxLength={MAX_RECIPE_NOTE_LENGTH}
-                    value={note.text}
-                    onChange={note.setText}
-                    shouldFocus
-                  />
-                  {note.error && (
-                    <p className='text-destructive text-sm' role='alert'>
-                      {note.error}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                note.isAvailable &&
-                !note.isSaved &&
-                !putAway.isOpen && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    className='h-10'
-                    onClick={note.open}
-                  >
-                    Add a note about it
-                  </Button>
-                )
-              )}
-            </div>
-          ) : (
-            <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
-              <p className='text-2xl leading-snug font-medium'>
-                {isAlreadyMarked
-                  ? 'Already marked as cooked'
-                  : 'Nice work. Mark it as cooked?'}
+                {finishCopy.title}
               </p>
               <div className='space-y-0.5'>
                 {!isAlreadyMarked && (
                   <p className='font-medium'>{formatServings(servings)}</p>
                 )}
                 <p className='text-muted-foreground text-sm'>
-                  {isAlreadyMarked
-                    ? "It's in your cooking history, so nothing more is saved."
-                    : 'Keeps a record. You can change the date later.'}
+                  {finishCopy.line}
                 </p>
               </div>
               {leftoversLine && (
@@ -414,28 +377,84 @@ function CookingSession({
                   {leftoversLine}
                 </p>
               )}
-              {isAlreadyMarked && <CookPutAway putAway={putAway} />}
-              {isHistoryFull && !isAlreadyMarked && (
+              {isCooked && note.isSaved && (
+                <p className='text-muted-foreground text-sm'>Note saved.</p>
+              )}
+              {isHistoryFull && !isCooked && !isAlreadyMarked && (
                 <p className='text-muted-foreground text-sm'>
                   This recipe's history is full. Delete an older cook to add
                   more.
                 </p>
               )}
-              {markError && !isAlreadyMarked && (
+              {markError && !isCooked && !isAlreadyMarked && (
                 <p className='text-destructive text-sm' role='alert'>
                   {markError}
                 </p>
               )}
+            </div>
+            {(isCooked || isAlreadyMarked) && !note.isOpen && (
+              <CookPutAway putAway={putAway} />
+            )}
+            {isCooked && note.isOpen && (
+              <div className='bg-muted/50 border-border space-y-2 rounded-2xl border p-4'>
+                <NoteTextField
+                  label='Your note'
+                  placeholder='Less vinegar next time, the sauce was ready early'
+                  maxLength={MAX_RECIPE_NOTE_LENGTH}
+                  value={note.text}
+                  onChange={note.setText}
+                  shouldFocus
+                />
+                {note.error && (
+                  <p className='text-destructive text-sm' role='alert'>
+                    {note.error}
+                  </p>
+                )}
+              </div>
+            )}
+            <ActionGroup>
+              {(isCooked || isAlreadyMarked) &&
+                putAway.isAvailable &&
+                !putAway.isOpen &&
+                !putAway.isAsking &&
+                !note.isOpen && (
+                  <ActionRow
+                    icon={<PackagePlus className='h-4 w-4' />}
+                    label={
+                      putAway.saved.length > 0
+                        ? 'Put another away'
+                        : 'Put some away'
+                    }
+                    subtitle='Fridge or freezer, with an eat-by date'
+                    onClick={() => putAway.open('FRIDGE', false)}
+                    isGrouped
+                  />
+                )}
+              {isCooked &&
+                note.isAvailable &&
+                !note.isSaved &&
+                !note.isOpen &&
+                !putAway.isOpen && (
+                  <ActionRow
+                    icon={<NotebookPen className='h-4 w-4' />}
+                    label='Add a note about it'
+                    subtitle='Something to remember next time'
+                    onClick={note.open}
+                    isGrouped
+                  />
+                )}
+            </ActionGroup>
+            {!isCooked && (
               <Button
                 type='button'
                 variant='tertiary'
-                className='h-10 underline'
+                className='h-10 self-center underline'
                 onClick={() => setIsFinished(false)}
               >
                 Back to the last step
               </Button>
-            </div>
-          )
+            )}
+          </div>
         ) : isStepsView ? (
           hasSteps ? (
             <CookStepView
