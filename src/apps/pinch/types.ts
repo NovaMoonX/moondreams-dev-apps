@@ -325,7 +325,7 @@ export type NoteKind = 'NOTE' | 'TWEAK';
 export type ContainerPlace = 'FRIDGE' | 'FREEZER';
 export type ContainerStatus = 'IN_STOCK' | 'DONE';
 export type ContainerEventKind =
-  'MADE' | 'FRIDGE' | 'FREEZE' | 'THAW' | 'EAT' | 'TOSS' | 'EDIT';
+  'MADE' | 'FRIDGE' | 'FREEZE' | 'THAW' | 'EAT' | 'TOSS' | 'CLEAR' | 'EDIT';
 
 export interface ContainerEvent {
   kind: ContainerEventKind;

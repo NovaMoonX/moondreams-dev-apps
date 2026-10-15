@@ -408,6 +408,7 @@ export const CONTAINER_EVENT_KINDS: ContainerEventKind[] = [
   'THAW',
   'EAT',
   'TOSS',
+  'CLEAR',
   'EDIT',
 ];
 export const MAX_CONTAINER_SERVINGS = 100;

@@ -1539,7 +1539,7 @@ service cloud.firestore {
       // `matches` is a whole-string match.
       function isContainerEvent(e) {
         return e.size() == 5
-          && e.kind.matches('MADE|FRIDGE|FREEZE|THAW|EAT|TOSS|EDIT')
+          && e.kind.matches('MADE|FRIDGE|FREEZE|THAW|EAT|TOSS|CLEAR|EDIT')
           && e.at is int
           && (e.servings == null || (e.servings is int && e.servings > 0 && e.servings < 101))
           && (e.place == null || e.place.matches('FRIDGE|FREEZER'))
