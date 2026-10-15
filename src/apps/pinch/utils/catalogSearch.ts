@@ -1,5 +1,6 @@
 import { CATALOG_FAMILIES_BY_ID } from '@apps/pinch/catalog';
 import type { ResolvedFamily, ResolvedIngredient } from '@apps/pinch/types';
+import { withoutFiller } from '@apps/pinch/utils/ingredientMatch';
 
 const normalize = (text: string) =>
   text
@@ -83,6 +84,80 @@ export function searchIngredients(
         a.rank - b.rank || a.ingredient.name.localeCompare(b.ingredient.name),
     )
     .map(({ ingredient }) => ingredient);
+
+  return result;
+}
+
+const NEAR_MATCH_LIMIT = 3;
+const MIN_NEAR_WORD_LENGTH = 3;
+const NOT_THE_THING = new Set([
+  'and',
+  'with',
+  'for',
+  'into',
+  'plus',
+  'shredded',
+  'grated',
+  'crushed',
+  'cooked',
+  'canned',
+  'dried',
+  'toasted',
+  'roasted',
+  'smoked',
+  'peeled',
+  'cubed',
+]);
+
+/** Up to three ingredients a name nothing matched might mean ("shredded lettuce": Iceberg lettuce, Romaine lettuce). Each word that names a thing finds the ingredients with a word of their name (then an alias) starting with it, the name that is or begins with it and the shorter name first; the words take turns from the last, usually the thing itself. */
+export function findNearMatches(
+  ingredients: ResolvedIngredient[],
+  name: string,
+): ResolvedIngredient[] {
+  const words = withoutFiller(name)
+    .split(' ')
+    .filter(
+      (word) => word.length >= MIN_NEAR_WORD_LENGTH && !NOT_THE_THING.has(word),
+    )
+    .reverse();
+  const rankFor = (word: string) =>
+    ingredients
+      .flatMap((ingredient) => {
+        const text = getSearchText(ingredient);
+        const isInName = startsAWord(text.name, word);
+        const isInAlias =
+          !isInName && text.aliases.some((alias) => startsAWord(alias, word));
+        if (!isInName && !isInAlias) return [];
+        return [
+          {
+            ingredient,
+            rank: [
+              isInName ? 0 : 1,
+              text.name.startsWith(word) ? 0 : 1,
+              ingredient.name.length,
+            ],
+          },
+        ];
+      })
+      .sort(
+        (a, b) =>
+          a.rank[0] - b.rank[0] ||
+          a.rank[1] - b.rank[1] ||
+          a.rank[2] - b.rank[2] ||
+          a.ingredient.name.localeCompare(b.ingredient.name),
+      )
+      .map((entry) => entry.ingredient);
+  const lists = words.map(rankFor);
+  const depth = Math.max(0, ...lists.map((list) => list.length));
+  const result = [
+    ...new Map(
+      Array.from({ length: depth }, (_, index) =>
+        lists.flatMap((list) => (list[index] ? [list[index]] : [])),
+      )
+        .flat()
+        .map((ingredient) => [ingredient.id, ingredient]),
+    ).values(),
+  ].slice(0, NEAR_MATCH_LIMIT);
 
   return result;
 }

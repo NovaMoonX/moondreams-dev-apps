@@ -6152,4 +6152,40 @@ assert.deepEqual(
   );
 }
 
+// AMOUNT (J1-P3b): an unmatched reading offers the closest names
+{
+  const { findNearMatches } =
+    await import('../../src/apps/pinch/utils/catalogSearch.ts');
+  const { resolveIngredients } =
+    await import('../../src/apps/pinch/utils/resolveIngredient.ts');
+  const amtCatalog = resolveIngredients([]);
+  const amtNear = (name: string) =>
+    findNearMatches(amtCatalog, name).map((ingredient) => ingredient.name);
+  assert.deepEqual(
+    amtNear('shredded lettuce'),
+    ['Iceberg lettuce', 'Romaine lettuce'],
+    'shredded lettuce offers the lettuces, not shredded coconut',
+  );
+  assert.deepEqual(
+    amtNear('salt and pepper'),
+    ['Black pepper', 'Salt', 'Cayenne pepper'],
+    'an unsplit pair offers each half, the last word first',
+  );
+  assert.deepEqual(
+    [amtNear('parmisan'), amtNear('and'), amtNear('')],
+    [[], [], []],
+    'a misspelling or a word that names nothing offers nothing',
+  );
+  assert.equal(
+    findNearMatches(
+      amtCatalog.filter(
+        (ingredient) => ingredient.id !== 'cat-iceberg-lettuce',
+      ),
+      'shredded lettuce',
+    ).some((ingredient) => ingredient.id === 'cat-iceberg-lettuce'),
+    false,
+    'an ingredient already in the recipe is not offered again',
+  );
+}
+
 console.log('pinchMath: all checks passed');

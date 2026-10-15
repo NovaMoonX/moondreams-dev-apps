@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -22,7 +22,11 @@ import {
   MAX_RECIPE_INGREDIENTS,
   UNIT_LABELS,
 } from '@apps/pinch/constants';
-import { selectIngredientsById } from '@apps/pinch/store/selectors';
+import {
+  selectIngredients,
+  selectIngredientsById,
+} from '@apps/pinch/store/selectors';
+import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
 import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 
 const getAmountLabel = (row: IngredientRow) => {
@@ -57,20 +61,62 @@ function IngredientEditor({
   const [isChoosing, setIsChoosing] = useState(false);
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
   const noteRef = useRef<HTMLInputElement>(null);
+  const ingredients = useAppSelector(selectIngredients);
+  const isUnresolved = row.ingredientId === '';
+  const proposedName = row.proposedName ?? '';
+  const usedIds = rows.map((candidate) => candidate.ingredientId).join(',');
+  const nearMatches = useMemo(() => {
+    if (!isUnresolved) return [];
+    const used = new Set(usedIds.split(','));
+    const result = findNearMatches(
+      ingredients.filter((ingredient) => !used.has(ingredient.id)),
+      proposedName,
+    );
+    return result;
+  }, [isUnresolved, ingredients, proposedName, usedIds]);
 
-  if (row.ingredientId === '') {
+  if (isUnresolved) {
     return (
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
           <span className='text-foreground font-medium'>{displayName}</span>{' '}
           isn’t in your ingredients yet.
         </p>
-        <div className='flex flex-wrap gap-2'>
+        {nearMatches.length > 0 && (
+          <div className='space-y-1.5'>
+            <p className='text-muted-foreground text-xs'>
+              Did you mean one of these?
+            </p>
+            <div className='flex flex-wrap gap-x-2 gap-y-3'>
+              {nearMatches.map((ingredient) => (
+                <Button
+                  key={ingredient.id}
+                  type='button'
+                  size='sm'
+                  rounded='full'
+                  variant='secondary'
+                  className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+                  onClick={() =>
+                    onUpdate({
+                      ingredientId: ingredient.id,
+                      proposedName: null,
+                      newName: null,
+                    })
+                  }
+                >
+                  {ingredient.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className='flex flex-wrap gap-x-2 gap-y-3'>
           <Button
             type='button'
             size='sm'
             rounded='full'
             variant='secondary'
+            className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
             onClick={() =>
               onUpdate({
                 ingredientId:
@@ -91,9 +137,10 @@ function IngredientEditor({
             size='sm'
             rounded='full'
             variant='secondary'
+            className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
             onClick={() => setIsChoosing((current) => !current)}
           >
-            {isChoosing ? 'Close' : 'Choose another'}
+            {isChoosing ? 'Close' : 'Pick from your ingredients'}
           </Button>
         </div>
         {isChoosing && (
