@@ -49,7 +49,7 @@ import {
   isRangeInWindow,
   shiftAnchor,
 } from '@apps/pinch/utils/dayKeys';
-import { getItemTitle } from '@apps/pinch/utils/mealFormat';
+import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
 
 const NO_MEALS: PlannedMeal[] = [];
 
@@ -84,10 +84,7 @@ function CalendarScreen({
   const ingredientsById = useAppSelector(selectIngredientsById);
   const getMealTitle = useCallback(
     (meal: PlannedMeal) =>
-      meal.items.length === 0
-        ? ''
-        : getItemTitle(meal.items[0], recipesById, ingredientsById) +
-          (meal.items.length > 1 ? ` +${meal.items.length - 1}` : ''),
+      getPlannedMealTitle(meal, recipesById, ingredientsById),
     [recipesById, ingredientsById],
   );
   const [anchorKey, setAnchorKey] = useState(() =>

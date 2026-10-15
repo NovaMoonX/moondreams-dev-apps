@@ -2,6 +2,7 @@ import { formatDateShort } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type {
   MealItem,
+  PlannedMeal,
   PlannedSnapshot,
   Recipe,
   ResolvedIngredient,
@@ -19,6 +20,27 @@ export function getItemTitle(
   }
 
   return ingredientsById.get(item.refId)?.name ?? 'Removed ingredient';
+}
+
+/** A planned meal's name when it came from a saved meal, else its first item and how many more follow. */
+export function getPlannedMealTitle(
+  meal: Pick<PlannedMeal, 'name' | 'items'>,
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): string {
+  const name = meal.name?.trim();
+  if (name) {
+    return name;
+  }
+
+  if (meal.items.length === 0) {
+    return '';
+  }
+
+  const first = getItemTitle(meal.items[0], recipesById, ingredientsById);
+  const title =
+    meal.items.length > 1 ? `${first} +${meal.items.length - 1}` : first;
+  return title;
 }
 
 /** Unrounded cents as dollars, rounded once here. */

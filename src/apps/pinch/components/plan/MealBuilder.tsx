@@ -131,7 +131,7 @@ function MealBuilder({
                 id: generateUuid(),
                 kind: 'RECIPE' as const,
                 refId: startRecipeId,
-                servings: 1,
+                servings: recipesById.get(startRecipeId)?.servings ?? 1,
               },
             ]
           : []),
@@ -208,7 +208,16 @@ function MealBuilder({
     setItems((current) =>
       current.length >= MAX_MEAL_ITEMS
         ? current
-        : [...current, { id: generateUuid(), kind, refId, servings: 1 }],
+        : [
+            ...current,
+            {
+              id: generateUuid(),
+              kind,
+              refId,
+              servings:
+                kind === 'RECIPE' ? (recipesById.get(refId)?.servings ?? 1) : 1,
+            },
+          ],
     );
 
   const removeItem = (item: MealItem, itemTitle: string) => {
@@ -340,9 +349,10 @@ function MealBuilder({
   const getServingCaption = (item: MealItem) => {
     if (item.kind === 'RECIPE') {
       const recipe = recipesById.get(item.refId);
-      return recipe
-        ? `Recipe serves ${Math.round(recipe.servings * 100) / 100}`
-        : '';
+      if (!recipe) return '';
+      return item.servings === recipe.servings
+        ? 'The whole recipe'
+        : `Recipe serves ${Math.round(recipe.servings * 100) / 100}`;
     }
     const serving = ingredientsById.get(item.refId)?.serving;
     return serving
