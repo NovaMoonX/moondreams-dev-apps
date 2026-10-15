@@ -31,7 +31,7 @@ function EntryChip({
       rounded='full'
       aria-label={ariaLabel}
       onClick={onClick}
-      className='h-10 max-w-full min-w-0 shrink-0 gap-1.5 px-3 text-sm font-medium whitespace-nowrap'
+      className='h-10 max-w-full min-w-0 shrink-0 gap-1.5 px-2.5 text-sm font-medium whitespace-nowrap'
     >
       <span className='inline-flex shrink-0 max-sm:hidden' aria-hidden='true'>
         {icon}

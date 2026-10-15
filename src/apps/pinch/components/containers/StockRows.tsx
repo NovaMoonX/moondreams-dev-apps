@@ -63,7 +63,7 @@ function StockRows({ target, onOpenStock }: StockRowsProps) {
         type='button'
         variant='tertiary'
         onClick={onOpenStock}
-        className="text-muted-foreground! relative h-auto max-w-full flex-col items-start gap-1.5 rounded-none p-0 text-left text-sm font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-['']"
+        className="text-muted-foreground! relative h-auto max-w-full flex-col items-start gap-1.5 rounded-none p-0 px-0! py-0! text-left text-sm font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-['']"
       >
         {parts.map((part) => {
           const eatBy =

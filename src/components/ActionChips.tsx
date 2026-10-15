@@ -45,7 +45,7 @@ function ActionChips({ actions, label, className }: ActionChipsProps) {
           disabled={action.isDisabled || action.isLoading}
           loading={action.isLoading}
           onClick={action.onClick}
-          className='bg-muted/50 border-border text-foreground! hover:bg-muted h-auto min-h-10 max-w-full gap-1.5 border px-3.5 py-1.5 text-left font-medium whitespace-normal'
+          className='bg-muted/50 border-border text-foreground! hover:bg-muted h-auto min-h-10 max-w-full gap-1.5 border px-3 py-1.5 text-left font-medium whitespace-normal'
         >
           <span className='shrink-0' aria-hidden='true'>
             {action.icon}
