@@ -14,6 +14,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
 import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
 import ContainersSubview from '@apps/pinch/components/containers/ContainersSubview';
 import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
@@ -39,7 +40,11 @@ import {
   selectPinchLoadError,
 } from '@apps/pinch/store/selectors';
 import type { PinchSubview, PinchTab } from '@apps/pinch/types';
-import { getLocalMonthKey } from '@apps/pinch/utils/dayKeys';
+import {
+  addDaysToKey,
+  getLocalMonthKey,
+  isRangeInWindow,
+} from '@apps/pinch/utils/dayKeys';
 
 function Pinch() {
   const { user, loading } = useAuth();
@@ -62,18 +67,48 @@ function Pinch() {
     next.set('tab', 'shopping');
     startTransition(() => setSearchParams(next));
   }, [setSearchParams]);
+  const [calendarFocus, setCalendarFocus] = useState<{
+    dayKey: string;
+    nonce: number;
+  } | null>(null);
+  const showCalendarDay = useCallback(
+    (dayKey: string) => {
+      if (subviewRef.current !== null || hasDialogOnTop()) {
+        return;
+      }
+      const next = new URLSearchParams(window.location.search);
+      next.delete('tab');
+      next.set('view', 'week');
+      const around = {
+        startKey: addDaysToKey(dayKey, -6),
+        endKey: addDaysToKey(dayKey, 6),
+      };
+      startTransition(() => {
+        setShownMonth((current) =>
+          isRangeInWindow(around, current) ? current : dayKey.slice(0, 7),
+        );
+        setCalendarFocus((current) => ({
+          dayKey,
+          nonce: (current?.nonce ?? 0) + 1,
+        }));
+        setSearchParams(next);
+      });
+    },
+    [setSearchParams],
+  );
   const overlayContext = useMemo(
     () => ({
       subview,
       openSubview: setSubview,
       showShoppingTab,
+      showCalendarDay,
       closeSubview: () => setSubview(null),
       closeSubviewIf: (isCurrent: (current: PinchSubview | null) => boolean) =>
         setSubview((current) => (isCurrent(current) ? null : current)),
       isStartOpen,
       setIsStartOpen: openStart,
     }),
-    [subview, isStartOpen, showShoppingTab, openStart],
+    [subview, isStartOpen, showShoppingTab, showCalendarDay, openStart],
   );
 
   const isLoaded = useAppSelector(selectIsPinchLoaded);
@@ -92,6 +127,7 @@ function Pinch() {
     PINCH_TABS.find((tab) => tab === requestedTab) ?? DEFAULT_PINCH_TAB;
 
   const setActiveTab = (tab: PinchTab) => {
+    setCalendarFocus(null);
     const nextSearchParams = new URLSearchParams(searchParams);
     if (tab === DEFAULT_PINCH_TAB) {
       nextSearchParams.delete('tab');
@@ -135,6 +171,8 @@ function Pinch() {
     if (activeTab === 'shopping') return <ShoppingScreen uid={user.uid} />;
     return (
       <CalendarScreen
+        key={calendarFocus?.nonce}
+        focusDayKey={calendarFocus?.dayKey}
         uid={user.uid}
         shownMonth={shownMonth}
         onShownMonthChange={setShownMonth}

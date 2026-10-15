@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
-import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import Subview from '@/components/Subview';
@@ -12,6 +12,7 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import UndoSnackbar from '@/components/UndoSnackbar';
+import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -34,11 +35,14 @@ import {
   updatePlannedMeal,
 } from '@apps/pinch/store/actions/plannedMealActions';
 import {
+  selectCookSummaries,
   selectCostContext,
   selectIngredientsById,
   selectMeals,
   selectMealsById,
+  selectPlannedByDay,
   selectPlannedMeals,
+  selectRecipes,
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
@@ -49,8 +53,18 @@ import {
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  formatCost,
+  getItemTitle,
+  getPlannedMealTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
+import {
+  getDefaultMealType,
+  getNearDayOptions,
+  getPlanDayWord,
+  rankRecentPicks,
+} from '@apps/pinch/utils/planPicks';
 import {
   getMealNutrition,
   hasShownValue,
@@ -62,8 +76,19 @@ const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((value) => ({
   emoji: MEAL_TYPE_EMOJIS[value],
 }));
 
+const OTHER_DAY = 'other';
+
+// Past 12 options a pill row adds its own search, and the item search is the one place to look.
+const MAX_RECENT_PICKS = 12;
+
 const copyItems = (items: MealItem[]) =>
   items.map((item) => ({ ...item, id: generateUuid() }));
+
+const getRecentCaption = (kinds: Set<'RECIPE' | 'MEAL'>) => {
+  if (!kinds.has('MEAL')) return 'Your recent recipes';
+  if (!kinds.has('RECIPE')) return 'Your recent saved meals';
+  return 'Your recent recipes and saved meals';
+};
 
 interface MealBuilderProps {
   uid: string;
@@ -89,7 +114,8 @@ function MealBuilder({
   mealId,
   recipeId = null,
 }: MealBuilderProps) {
-  const { closeSubview } = usePinchOverlay();
+  const { subview, closeSubview, closeSubviewIf, showCalendarDay } =
+    usePinchOverlay();
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -99,10 +125,13 @@ function MealBuilder({
   const ingredientsById = useAppSelector(selectIngredientsById);
   const savedMeals = useAppSelector(selectMeals);
   const savedMealsById = useAppSelector(selectMealsById);
+  const recipes = useAppSelector(selectRecipes);
+  const plannedMeals = useAppSelector(selectPlannedMeals);
+  const cookSummaries = useAppSelector(selectCookSummaries);
+  const plannedByDay = useAppSelector(selectPlannedByDay);
+  const now = useNow(60_000);
   const existingPlanned =
-    useAppSelector(selectPlannedMeals).find(
-      (meal) => meal.id === plannedMealId,
-    ) ?? null;
+    plannedMeals.find((meal) => meal.id === plannedMealId) ?? null;
   const existingMeal =
     mode === 'meal' && mealId ? (savedMealsById.get(mealId) ?? null) : null;
   const starter =
@@ -116,10 +145,16 @@ function MealBuilder({
   const [dayKey, setDayKey] = useState(
     existingPlanned ? getPlannedDayKey(existingPlanned.date) : initialDayKey,
   );
-  const [mealType, setMealType] = useState<MealType>(
-    existingPlanned?.mealType ?? initialType ?? 'DINNER',
+  const [chosenType, setChosenType] = useState<MealType | null>(
+    existingPlanned?.mealType ?? initialType,
   );
-  const [isChanging, setIsChanging] = useState(false);
+  const [isChanging, setIsChanging] = useState(
+    startRecipeId !== null || starter !== null,
+  );
+  const [isOtherDay, setIsOtherDay] = useState(false);
+  const [isSearchFirst] = useState(
+    mode === 'plan' && !existingPlanned && !starter && !startRecipeId,
+  );
   const [items, setItems] = useState<MealItem[]>(
     existingPlanned?.items ??
       existingMeal?.items ??
@@ -140,13 +175,27 @@ function MealBuilder({
     starter ? { id: starter.id, name: starter.name } : null,
   );
   const [name, setName] = useState(existingMeal?.name ?? '');
-  const [saveAsMeal, setSaveAsMeal] = useState(false);
-  const [newMealName, setNewMealName] = useState('');
-  const [createdMealId, setCreatedMealId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const date = fromDateInputValue(dayKey) ?? null;
+  const todayKey = getCellDayKey(new Date(now));
+  const nearDayOptions = getNearDayOptions(todayKey);
+  const dayOptions = [
+    ...nearDayOptions,
+    { value: OTHER_DAY, label: 'Other day…' },
+  ];
+  const dayPillValue =
+    isOtherDay || !nearDayOptions.some((option) => option.value === dayKey)
+      ? OTHER_DAY
+      : dayKey;
+  const mealType =
+    chosenType ??
+    getDefaultMealType(
+      (plannedByDay.get(dayKey) ?? []).map((meal) => meal.mealType),
+      dayKey === todayKey,
+      new Date(now).getHours(),
+    );
   const cost = useMemo(
     () => getMealCost(items, costContext),
     [items, costContext],
@@ -162,30 +211,40 @@ function MealBuilder({
       ),
     [items, costContext],
   );
+  const recentPicks = useMemo(
+    () =>
+      rankRecentPicks({
+        recipes,
+        meals: mode === 'plan' ? savedMeals : [],
+        plannedMeals,
+        cookSummaries,
+      }),
+    [mode, recipes, savedMeals, plannedMeals, cookSummaries],
+  );
+  const plateTitle = getPlannedMealTitle(
+    { name: source?.name ?? existingPlanned?.name ?? null, items },
+    recipesById,
+    ingredientsById,
+  );
   const getTitle = () => {
     if (mode === 'meal') {
-      return name.trim() || existingMeal?.name || 'New meal';
+      return name.trim() || existingMeal?.name || 'Saved meal';
     }
-    if (source) {
-      return source.name;
+    if (plateTitle) {
+      return plateTitle;
     }
-    if (items.length === 0) {
-      return existingPlanned?.name ?? 'New meal';
-    }
-    const first = getItemTitle(items[0], recipesById, ingredientsById);
-    return items.length > 1 ? `${first} +${items.length - 1}` : first;
+    return date === null
+      ? MEAL_TYPE_LABELS[mealType]
+      : `${MEAL_TYPE_LABELS[mealType]} · ${formatDayTitle(dayKey)}`;
   };
   const title = getTitle();
+  const isSlotTitle = mode === 'plan' && plateTitle === '';
   const isFull = items.length >= MAX_MEAL_ITEMS;
   const isMissing =
     (mode === 'plan' && plannedMealId !== null && existingPlanned === null) ||
     (mode === 'meal' && mealId !== null && existingMeal === null);
-  const wantsSaveAsMeal = mode === 'plan' && saveAsMeal && items.length >= 2;
   const isValid =
-    items.length > 0 &&
-    (mode === 'meal'
-      ? name.trim() !== ''
-      : date !== null && (!wantsSaveAsMeal || newMealName.trim() !== ''));
+    items.length > 0 && (mode === 'meal' ? name.trim() !== '' : date !== null);
 
   if (isMissing) {
     return (
@@ -237,10 +296,56 @@ function MealBuilder({
 
   const pickSavedMeal = (id: string) => {
     const meal = savedMealsById.get(id);
-    if (meal) {
+    if (!meal) {
+      return;
+    }
+    if (items.length === 0 && !existingPlanned) {
       setItems(copyItems(meal.items));
       setSource({ id: meal.id, name: meal.name });
+      return;
     }
+    setItems((current) => {
+      const onPlate = new Set(current.map((item) => item.refId));
+      const added = copyItems(
+        meal.items.filter((item) => !onPlate.has(item.refId)),
+      );
+      return [...current, ...added].slice(0, MAX_MEAL_ITEMS);
+    });
+  };
+
+  const pickRecent = (value: string) => {
+    const [kind, id] = value.split(':');
+    if (kind === 'MEAL') {
+      pickSavedMeal(id);
+      return;
+    }
+    addItem('RECIPE', id);
+  };
+
+  const getRecentRow = () => {
+    if (mode !== 'plan' || existingPlanned || items.length > 0) {
+      return undefined;
+    }
+    const picks = recentPicks.slice(0, MAX_RECENT_PICKS);
+    if (picks.length === 0) {
+      return undefined;
+    }
+    const caption = getRecentCaption(new Set(picks.map((pick) => pick.kind)));
+    return (
+      <div className='space-y-2 pt-1'>
+        <p className='text-muted-foreground text-sm'>{caption}</p>
+        <PillGroup
+          label={caption}
+          options={picks.map((pick) => ({
+            value: `${pick.kind}:${pick.id}`,
+            label: pick.label,
+            emoji: pick.kind === 'MEAL' ? '🍽️' : '🍲',
+          }))}
+          value={null}
+          onChange={pickRecent}
+        />
+      </div>
+    );
   };
 
   const rows = () =>
@@ -256,6 +361,7 @@ function MealBuilder({
       return;
     }
 
+    const openedAs = subview;
     setError(null);
     setIsSubmitting(true);
     try {
@@ -263,24 +369,13 @@ function MealBuilder({
         await dispatch(
           saveMeal({ uid, id: existingMeal?.id ?? null, name, items: rows() }),
         ).unwrap();
+        closeSubviewIf((current) => current === openedAs);
         addToast({ title: `Saved ${name.trim()}`, type: 'success' });
-        closeSubview();
         return;
       }
 
       if (date === null) {
         return;
-      }
-      if (wantsSaveAsMeal) {
-        const savedId = await dispatch(
-          saveMeal({
-            uid,
-            id: createdMealId,
-            name: newMealName,
-            items: rows(),
-          }),
-        ).unwrap();
-        setCreatedMealId(savedId);
       }
       if (existingPlanned) {
         await dispatch(
@@ -308,13 +403,18 @@ function MealBuilder({
           }),
         ).unwrap();
       }
+      const plannedName = source?.name ?? existingPlanned?.name ?? null;
+      const more = items.length > 1 ? ` and ${items.length - 1} more` : '';
+      const what =
+        plannedName ??
+        `${getItemTitle(items[0], recipesById, ingredientsById)}${more}`;
+      const landedOn = dayKey;
+      closeSubviewIf((current) => current === openedAs);
       addToast({
-        title: existingPlanned
-          ? `Saved ${MEAL_TYPE_LABELS[mealType].toLowerCase()} for ${getDayWord(dayKey)}`
-          : `Added ${source?.name ?? getItemTitle(items[0], recipesById, ingredientsById)}${!source && items.length > 1 ? ` and ${items.length - 1} more` : ''} to ${getDayWord(dayKey)}`,
+        title: `${existingPlanned ? 'Saved' : 'Planned'} ${what} for ${getDayWord(dayKey)}`,
         type: 'success',
+        action: { label: 'View', onClick: () => showCalendarDay(landedOn) },
       });
-      closeSubview();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this meal.'));
       setIsSubmitting(false);
@@ -360,12 +460,17 @@ function MealBuilder({
       : '';
   };
 
-  const getDayWord = (key: string) =>
-    key === getCellDayKey(new Date()) ? 'today' : formatDayTitle(key);
+  const getDayWord = (key: string) => getPlanDayWord(key, todayKey);
+
+  const getChangeLabel = () => {
+    if (isChanging) return 'Done';
+    return isSlotTitle ? 'Change day or meal' : 'Change';
+  };
 
   const getSubmitLabel = () => {
-    if (mode === 'meal' || existingPlanned || date === null) return 'Save';
-    return `Add to ${getDayWord(dayKey)}`;
+    if (mode === 'meal' || existingPlanned) return 'Save';
+    if (date === null) return 'Plan';
+    return `Plan for ${getDayWord(dayKey)}`;
   };
 
   return (
@@ -374,38 +479,60 @@ function MealBuilder({
         <UndoSnackbar pending={pending} onUndo={undo} />
         {mode === 'plan' ? (
           <div className='space-y-3'>
-            <div className='flex items-center justify-between gap-3'>
-              <p className='min-w-0 font-medium'>
-                {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
-                <span className='whitespace-nowrap'>
-                  {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
-                </span>
-              </p>
+            <div
+              className={join(
+                'flex items-center gap-3',
+                isSlotTitle ? 'justify-start' : 'justify-between',
+              )}
+            >
+              {!isSlotTitle && (
+                <p className='min-w-0 font-medium'>
+                  {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
+                  <span className='whitespace-nowrap'>
+                    {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
+                  </span>
+                </p>
+              )}
               <Button
                 type='button'
                 variant='link'
-                className='h-10 shrink-0'
+                className={join('h-10 shrink-0', isSlotTitle && 'px-0!')}
+                aria-expanded={isChanging}
                 onClick={() => setIsChanging((current) => !current)}
               >
-                {isChanging ? 'Done' : 'Change'}
+                {getChangeLabel()}
               </Button>
             </div>
             {isChanging && (
               <div className='space-y-3'>
-                <PillGroup
-                  label='Meal'
-                  options={MEAL_TYPE_OPTIONS}
-                  value={mealType}
-                  onChange={setMealType}
-                />
-                <div className='space-y-1.5'>
-                  <Label>Day</Label>
-                  <Input
-                    type='date'
-                    variant='outline'
-                    aria-label='Day'
-                    value={dayKey}
-                    onChange={(event) => setDayKey(event.target.value)}
+                <div className='space-y-2'>
+                  <p className='text-muted-foreground text-xs'>Day</p>
+                  <PillGroup
+                    label='Day'
+                    options={dayOptions}
+                    value={dayPillValue}
+                    onChange={(value) => {
+                      setIsOtherDay(value === OTHER_DAY);
+                      if (value !== OTHER_DAY) setDayKey(value);
+                    }}
+                  />
+                  {dayPillValue === OTHER_DAY && (
+                    <Input
+                      type='date'
+                      variant='outline'
+                      aria-label='Other day'
+                      value={dayKey}
+                      onChange={(event) => setDayKey(event.target.value)}
+                    />
+                  )}
+                </div>
+                <div className='space-y-2'>
+                  <p className='text-muted-foreground text-xs'>Meal</p>
+                  <PillGroup
+                    label='Meal'
+                    options={MEAL_TYPE_OPTIONS}
+                    value={mealType}
+                    onChange={setChosenType}
                   />
                 </div>
               </div>
@@ -425,26 +552,6 @@ function MealBuilder({
           </div>
         )}
 
-        {mode === 'plan' &&
-          !existingPlanned &&
-          savedMeals.length > 0 &&
-          items.length === 0 && (
-            <div className='space-y-2'>
-              <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-                Start from a saved meal
-              </h2>
-              <PillGroup
-                label='Start from a saved meal'
-                options={savedMeals.map((meal) => ({
-                  value: meal.id,
-                  label: meal.name,
-                }))}
-                value={source?.id ?? null}
-                onChange={pickSavedMeal}
-              />
-            </div>
-          )}
-
         <section aria-label="What's on the plate" className='space-y-3'>
           <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
             What's on the plate?
@@ -460,6 +567,9 @@ function MealBuilder({
               excludeIds={items.map((item) => item.refId)}
               onPick={(id) => addItem('INGREDIENT', id)}
               onPickRecipe={(id) => addItem('RECIPE', id)}
+              onPickMeal={mode === 'plan' ? pickSavedMeal : undefined}
+              autoFocus={isSearchFirst}
+              idle={getRecentRow()}
             />
           )}
           {items.length > 0 && (
@@ -542,28 +652,6 @@ function MealBuilder({
           </div>
         )}
 
-        {mode === 'plan' && items.length >= 2 && (
-          <div className='space-y-3'>
-            <div className='flex items-center justify-between gap-3'>
-              <span className='text-sm font-medium'>Save as a meal</span>
-              <AppToggle
-                aria-label='Save as a meal'
-                checked={saveAsMeal}
-                onCheckedChange={setSaveAsMeal}
-              />
-            </div>
-            {saveAsMeal && (
-              <Input
-                variant='outline'
-                aria-label='Name for the saved meal'
-                placeholder='Taco night'
-                maxLength={MAX_NAME_LENGTH}
-                value={newMealName}
-                onChange={(event) => setNewMealName(event.target.value)}
-              />
-            )}
-          </div>
-        )}
         {error && <p className='text-destructive text-sm'>{error}</p>}
 
         <ModalFooterActions

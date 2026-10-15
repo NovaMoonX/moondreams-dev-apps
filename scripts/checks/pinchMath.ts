@@ -28,6 +28,12 @@ import {
 import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
+  getDefaultMealType,
+  getNearDayOptions,
+  getPlanDayWord,
+  rankRecentPicks,
+} from '../../src/apps/pinch/utils/planPicks.ts';
+import {
   getComparableUrl,
   getWebLinkHost,
   hasSeveralWebLinks,
@@ -4413,6 +4419,133 @@ assert.equal(getPutAwayText([]), null);
       ['2026-11-01', '2026-11-02'],
     ],
     "the days folded above today are this week's Sunday up to yesterday, none on a Sunday, across a clock change",
+  );
+}
+
+// PLANA (plan builder): recent picks, the day strip and the default meal.
+// ---------------------------------------------------------------------------
+{
+  const recentPicks = rankRecentPicks({
+    recipes: [
+      { id: 'old', title: 'Old soup', createdAt: 100 },
+      { id: 'cooked', title: 'Cooked stew', createdAt: 110 },
+      { id: 'planned', title: 'Planned tacos', createdAt: 120 },
+      { id: 'new', title: 'New salad', createdAt: 900 },
+    ],
+    meals: [
+      { id: 'm-used', name: 'Taco night', createdAt: 130 },
+      { id: 'm-idle', name: 'Snack plate', createdAt: 140 },
+    ],
+    plannedMeals: [
+      {
+        createdAt: 700,
+        sourceMealId: 'm-used',
+        items: [
+          { kind: 'RECIPE', refId: 'planned' },
+          { kind: 'INGREDIENT', refId: 'old' },
+        ],
+      },
+      {
+        createdAt: 500,
+        sourceMealId: null,
+        items: [{ kind: 'RECIPE', refId: 'planned' }],
+      },
+    ],
+    cookSummaries: new Map([['cooked', { lastCookedAt: 800 }]]),
+  });
+  assert.deepEqual(
+    recentPicks.map((pick) => `${pick.kind}:${pick.id}`),
+    [
+      'RECIPE:new',
+      'RECIPE:cooked',
+      'RECIPE:planned',
+      'MEAL:m-used',
+      'MEAL:m-idle',
+      'RECIPE:old',
+    ],
+    'recent picks rank by the latest of made, planned (the plan, not its day) and cooked; an ingredient with a recipe id never counts',
+  );
+  assert.deepEqual(
+    rankRecentPicks({
+      recipes: [
+        { id: 'b', title: 'Beta', createdAt: 5 },
+        { id: 'a', title: 'Alpha', createdAt: 5 },
+      ],
+      meals: [],
+      plannedMeals: [],
+      cookSummaries: new Map(),
+    }).map((pick) => pick.label),
+    ['Alpha', 'Beta'],
+    'ties read alphabetically',
+  );
+}
+
+{
+  assert.deepEqual(
+    getNearDayOptions('2026-10-15').map((option) => option.label),
+    ['Today', 'Tomorrow', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed'],
+    'the day strip is today, tomorrow and the next five weekday names',
+  );
+  assert.deepEqual(
+    getNearDayOptions('2026-12-30').map((option) => option.value),
+    [
+      '2026-12-30',
+      '2026-12-31',
+      '2027-01-01',
+      '2027-01-02',
+      '2027-01-03',
+      '2027-01-04',
+      '2027-01-05',
+    ],
+    'the day strip crosses a year in whole UTC days',
+  );
+  assert.deepEqual(
+    getNearDayOptions('2026-11-01').map((option) => option.value),
+    [
+      '2026-11-01',
+      '2026-11-02',
+      '2026-11-03',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+      '2026-11-07',
+    ],
+    'the day strip keeps whole days across a clock change',
+  );
+  assert.deepEqual(
+    [
+      getPlanDayWord('2026-10-15', '2026-10-15'),
+      getPlanDayWord('2026-10-16', '2026-10-15'),
+      getPlanDayWord('2026-10-21', '2026-10-15'),
+      getPlanDayWord('2026-10-22', '2026-10-15'),
+      getPlanDayWord('2026-10-12', '2026-10-15'),
+    ],
+    ['today', 'tomorrow', 'Wed', 'Thu, Oct 22', 'Mon, Oct 12'],
+    'a plan names its day by the nearest word that cannot be mistaken',
+  );
+  assert.deepEqual(
+    [
+      getDefaultMealType([], true, 7),
+      getDefaultMealType([], true, 10),
+      getDefaultMealType([], true, 14),
+      getDefaultMealType([], true, 15),
+      getDefaultMealType([], false, 7),
+    ],
+    ['BREAKFAST', 'LUNCH', 'LUNCH', 'DINNER', 'DINNER'],
+    'today follows the clock (before 10 breakfast, before 3 pm lunch, else dinner); any other day starts at dinner',
+  );
+  assert.deepEqual(
+    [
+      getDefaultMealType(['BREAKFAST'], true, 8),
+      getDefaultMealType(['LUNCH'], true, 11),
+      getDefaultMealType(['LUNCH', 'DINNER'], true, 11),
+      getDefaultMealType(['DINNER'], false, 20),
+      getDefaultMealType(['DINNER', 'LUNCH'], false, 20),
+      getDefaultMealType(['DINNER', 'LUNCH', 'BREAKFAST'], false, 20),
+      getDefaultMealType(['SNACK'], false, 20),
+    ],
+    ['LUNCH', 'DINNER', 'BREAKFAST', 'LUNCH', 'BREAKFAST', 'DINNER', 'DINNER'],
+    'a meal the day already has moves the default to the nearest main meal it lacks, and a full day keeps the clock meal',
   );
 }
 
