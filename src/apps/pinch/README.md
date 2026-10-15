@@ -63,7 +63,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 ### Ingredients, Variants, and Products, In Detail
 
 - **An ingredient is anything you buy.** Chicken breast, paprika, a bag of Doritos.
-- **Three layers, kept separate.** A _family_ groups related ingredients (Chicken). An _ingredient_ is the specific thing recipes and meals use (Chicken breast). A _product_ is what you actually buy (Chicken breast, Walmart, $9.48 for 3 lb).
+- **Three layers, kept separate.** A *family* groups related ingredients (Chicken). An *ingredient* is the specific thing recipes and meals use (Chicken breast). A *product* is what you actually buy (Chicken breast, Walmart, $9.48 for 3 lb).
 - **Recipes only ever name the ingredient.** A recipe says "chicken breast", never "Walmart chicken breast", so the same recipe works wherever you shop and reads correctly if it's ever shared. Products feed your own numbers.
 - **Prices live on products.** A product's price and size give an ingredient its cost per unit, and that rolls up into recipe cost, meal cost, and the calendar totals.
 - **One level of grouping, on purpose.** Families don't nest, so the catalog can grow to hundreds of ingredients without becoming a tree to maintain.
@@ -108,7 +108,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 ### Recipe Ideas, In Detail
 
 - **A place for "I'd like to make something like this".** Ideas sit beside Recipes and Meals as a third pill. An idea is a link, a photo, or a few words, with a title and an optional note.
-- **Three ways to add one.** "New idea" lists them: _From a link_ (paste a recipe page), _From a photo_ (a picture or screenshot of a dish or recipe) and _Jot it down_ (just a few words). Each opens on its own screen, and back returns to the list.
+- **Three ways to add one.** "New idea" lists them: *From a link* (paste a recipe page), *From a photo* (a picture or screenshot of a dish or recipe) and *Jot it down* (just a few words). Each opens on its own screen, and back returns to the list.
 - **A link finds its own title and picture.** Pinch fetches the page to read its title, site name and picture address, and shows what it found, with the title ready to change. Nothing else from the page is kept. "Save idea" waits until the lookup has finished (six seconds at most), so the idea is named after its page. If the page can't be read, takes too long or has no title, you're asked for one; left blank, the site's address is used.
 - **No duplicates.** Pasting a page that is already on the list ("That one's already in your ideas") offers to open it instead, however the link was spelled (with or without `www.`, a trailing slash or tracking parameters).
 - **A note is optional.** "+ Add a note" on a link or a photo; the jotted-down way shows it from the start.
@@ -188,7 +188,6 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 ## The Build Plan
 
 ### Core MVP
-
 - [x] Browse and search a ready-made catalog of everyday ingredients and seasonings, grouped into families, each with built-in nutrition
 - [x] Add, edit, and delete your own ingredients, including ready-to-eat foods, as a new family or a variant of an existing one
 - [x] Pick a store from a list of well-known ones with their logos, or add your own with a name and image; browse, edit, and remove your stores
@@ -217,8 +216,8 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Prepared meals: put a batch in one container or several in the fridge or freezer from cooking mode, a recipe or meal, or Kitchen; see what is in each with its eat-by date, eat, move or recount it with a history of what happened, and see what is in stock on the Recipes and Meals lists, in the plan and in the shopping sheet
 - [x] Stays quick with a big kitchen: hundreds of ingredients and recipes, a thousand planned meals, a shopping list of a few hundred things and dozens of ideas
 
-### Next Steps
 
+### Next Steps
 - [ ] Track how much of each ingredient you have, with ingredients you haven't counted marked "not tracked" until you count them, which is different from "out"
 - [ ] Mark a meal as made: its ingredients come out of your stock
 - [ ] Shopping list: subtract what you have on hand, add a section for low-stock ingredients, and group by store with totals from your products
@@ -233,7 +232,6 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [ ] Compare products for an ingredient and see the cheapest per gram of protein
 
 ### Stretch Goals
-
 - [ ] Hands-free voice navigation in cooking mode
 - [ ] Look up a product by barcode
 - [ ] Price history for a product over time
