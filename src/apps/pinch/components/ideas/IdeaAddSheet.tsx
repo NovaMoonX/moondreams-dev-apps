@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import MethodPicker from '@/components/MethodPicker';
+import { useBackStep } from '@/hooks/useBackHistory';
 import {
   IdeaLinkWay,
   IdeaPhotoWay,
@@ -23,6 +24,7 @@ interface IdeaAddSheetProps {
 
 function IdeaAddSheet({ uid, onClose, onOpenExisting }: IdeaAddSheetProps) {
   const [stage, setStage] = useState<Stage>('pick');
+  useBackStep(stage !== 'pick', () => setStage('pick'));
 
   return (
     <FormSheet

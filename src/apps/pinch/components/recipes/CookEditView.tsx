@@ -16,6 +16,7 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch } from '@/store';
 import {
@@ -71,6 +72,7 @@ function CookEditView({
   const [servings, setServings] = useState(cook?.servings ?? defaultServings);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useBackStep(true, onBack);
 
   const isTimeUntouched =
     cook !== null && date === start.date && time === start.time;

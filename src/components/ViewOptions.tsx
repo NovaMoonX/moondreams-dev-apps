@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Eye } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface ViewOptionSwitchProps {
@@ -72,6 +73,9 @@ function ViewOptions({
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
   const isCustomized = customizedCount > 0;
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen && isPhone, () =>
+    setIsOpen(false),
+  );
 
   const trigger = (
     <Button
@@ -107,8 +111,9 @@ function ViewOptions({
       <>
         {trigger}
         <Drawer
+          id={dialogId}
           isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
+          onClose={onDialogClose}
           title={label}
           showCloseButton
           footer={

@@ -5,6 +5,7 @@ import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { SlidersHorizontal, X } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export interface ActiveFilter {
@@ -71,6 +72,9 @@ function FilterBar({
 }: FilterBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen && isPhone, () =>
+    setIsOpen(false),
+  );
   const activeCount = activeFilters.length;
   const hasActive = activeCount > 0;
 
@@ -133,8 +137,9 @@ function FilterBar({
 
   const panel = isPhone ? (
     <Drawer
+      id={dialogId}
       isOpen={isOpen}
-      onClose={() => setIsOpen(false)}
+      onClose={onDialogClose}
       title={filterLabel}
       showCloseButton
       footer={<div className='px-4 pb-4'>{footer}</div>}

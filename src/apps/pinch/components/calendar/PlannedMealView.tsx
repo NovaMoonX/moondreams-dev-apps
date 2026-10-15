@@ -11,6 +11,7 @@ import {
   CookingPot,
 } from 'lucide-react';
 
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -101,6 +102,9 @@ function PlannedMealView({
   const [eatingPlace, setEatingPlace] = useState<ContainerPlace | null>(null);
   const mealContainers = useMealContainers(meal ?? null);
   const now = useNow();
+  useBackStep(true, onBack);
+  useBackStep(isChoosing, () => setIsChoosing(false));
+  useBackStep(isNaming, () => setIsNaming(false));
 
   if (!meal) {
     return null;

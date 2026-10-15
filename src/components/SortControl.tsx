@@ -9,6 +9,7 @@ import {
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUpDown, Check } from 'lucide-react';
 
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { PillOption } from '@/components/PillGroup';
 
@@ -42,6 +43,9 @@ function SortControl<T extends string>({
 }: SortControlProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen && isPhone, () =>
+    setIsOpen(false),
+  );
   const { option, separator } = DropdownMenuFactories;
   const isActive = value !== defaultValue;
   const orderOptions = getOrderOptions?.(value) ?? null;
@@ -109,8 +113,9 @@ function SortControl<T extends string>({
     <>
       {trigger}
       <Drawer
+        id={dialogId}
         isOpen={isOpen && isPhone}
-        onClose={() => setIsOpen(false)}
+        onClose={onDialogClose}
         title='Sort by'
         showCloseButton
       >

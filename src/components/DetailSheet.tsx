@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Drawer, Modal } from '@moondreamsdev/dreamer-ui/components';
 
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface DetailSheetProps {
@@ -14,7 +15,8 @@ interface DetailSheetProps {
 
 /**
  * Read-only detail of unpredictable length (notes, a breakdown): a drawer on phones, which scrolls
- * and closes with a swipe, and a modal from `sm` up. Short, fixed-size content is a plain `Modal`.
+ * and closes with a swipe, and a modal from `sm` up; the back gesture closes either. Short,
+ * fixed-size content is a plain `Modal`.
  */
 function DetailSheet({
   isOpen,
@@ -24,12 +26,14 @@ function DetailSheet({
   footer,
 }: DetailSheetProps) {
   const isPhone = useMediaQuery().isBelow('sm');
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
 
   if (isPhone) {
     return (
       <Drawer
+        id={dialogId}
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={onDialogClose}
         title={title}
         showCloseButton
         footer={footer}
@@ -40,7 +44,7 @@ function DetailSheet({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal id={dialogId} isOpen={isOpen} onClose={onDialogClose} title={title}>
       <div className='max-h-[calc(100dvh-16rem)] overflow-y-auto'>
         {children}
       </div>
