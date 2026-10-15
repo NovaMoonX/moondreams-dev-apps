@@ -20,7 +20,6 @@ import ContainersSubview from '@apps/pinch/components/containers/ContainersSubvi
 import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
-import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
 import ShoppingScreen from '@apps/pinch/components/shopping/ShoppingScreen';
 import MealSubview from '@apps/pinch/components/recipes/MealSubview';
@@ -197,7 +196,6 @@ function Pinch() {
           }}
         />
       )}
-      {subview?.kind === 'stores' && <StoresSubview uid={user.uid} />}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
       {subview?.kind === 'containers' && (

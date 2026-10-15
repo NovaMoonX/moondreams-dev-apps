@@ -5542,4 +5542,84 @@ assert.deepEqual(
   'the cost line counts rows as the list shows them (two weights of chicken are one) and says nothing in a number below half priced',
 );
 
+// ============================================================
+// KITA workstream: Kitchen's prices, a unit price beside each place and the price read back in the recipes' unit
+// ============================================================
+
+import {
+  formatRecipeUnitEcho as kitaEcho,
+  formatUnitPrice as kitaUnitPrice,
+} from '../../src/apps/pinch/utils/productFormat.ts';
+
+const kitaPrice = (priceCents: number, sizeAmount: number, sizeUnit: Unit) => ({
+  priceCents,
+  sizeAmount,
+  sizeUnit,
+});
+assert.deepEqual(
+  [
+    kitaUnitPrice(kitaPrice(1999, 6.5, 'LB')),
+    kitaUnitPrice(kitaPrice(948, 3, 'LB')),
+    kitaUnitPrice(kitaPrice(498, 1, 'LB')),
+    kitaUnitPrice(kitaPrice(345, 500, 'G')),
+    kitaUnitPrice(kitaPrice(600, 32, 'OZ'), 'LB'),
+    kitaUnitPrice(kitaPrice(600, 32, 'OZ')),
+    kitaUnitPrice(kitaPrice(499, 12, 'EACH'), 'LB'),
+    kitaUnitPrice(kitaPrice(99, 1, 'EACH')),
+    kitaUnitPrice(kitaPrice(299, 15, 'FL_OZ')),
+    kitaUnitPrice(kitaPrice(300, 2, 'CUP')),
+    kitaUnitPrice(kitaPrice(450, 1.5, 'L')),
+    kitaUnitPrice(kitaPrice(450, 750, 'ML')),
+    kitaUnitPrice(kitaPrice(1000, 2, 'KG'), 'G'),
+  ],
+  [
+    '$3.08 / lb',
+    '$3.16 / lb',
+    null,
+    '$0.69 / 100 g',
+    '$3.00 / lb',
+    '$0.19 / oz',
+    '$0.42 each',
+    null,
+    '$0.20 / fl oz',
+    '$0.19 / fl oz',
+    '$3.00 / l',
+    '$0.60 / 100 ml',
+    '$0.50 / 100 g',
+  ],
+  'a unit price is said per lb, per 100 g, per fl oz or each, in the default price’s unit when it measures the same way, and not at all for a package of exactly one',
+);
+
+const kitaNoBridge = { gramsPerMl: null, gramsEach: null };
+assert.deepEqual(
+  [
+    kitaEcho(kitaPrice(198, 3, 'EACH'), 'EACH', {
+      gramsPerMl: null,
+      gramsEach: 3,
+    }),
+    kitaEcho(kitaPrice(948, 3, 'LB'), 'LB', kitaNoBridge),
+    kitaEcho(kitaPrice(948, 3, 'LB'), 'G', kitaNoBridge),
+    kitaEcho(kitaPrice(299, 15, 'FL_OZ'), 'TBSP', kitaNoBridge),
+    kitaEcho(kitaPrice(129, 26, 'OZ'), 'PINCH', {
+      gramsPerMl: 1.2,
+      gramsEach: null,
+    }),
+    kitaEcho(kitaPrice(99, 1, 'EACH'), 'CUP', kitaNoBridge),
+    kitaEcho(kitaPrice(598, 2, 'LB'), 'EACH', {
+      gramsPerMl: null,
+      gramsEach: 3,
+    }),
+  ],
+  [
+    "That's about $0.66 each in your recipes.",
+    "That's about $3.16 per lb in your recipes.",
+    "That's about $0.70 per 100 g in your recipes.",
+    "That's about $0.10 per tbsp in your recipes.",
+    "That's less than $0.01 per pinch in your recipes.",
+    null,
+    "That's about $0.02 each in your recipes.",
+  ],
+  'the price form reads a price back in the unit the recipes measure it in, with the cost math’s own bridge, and says nothing when the units can’t be compared',
+);
+
 console.log('pinchMath: all checks passed');

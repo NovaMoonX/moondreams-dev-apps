@@ -15,6 +15,8 @@ import {
   getPreparedSummary,
 } from '@apps/pinch/utils/containers';
 
+const LABEL = 'Fridge & freezer';
+
 function PreparedEntry() {
   const { openSubview } = usePinchOverlay();
   const containers = useAppSelector(selectContainers);
@@ -24,10 +26,9 @@ function PreparedEntry() {
     loadError === null ? getDueText(summary.soonCount, summary.pastCount) : '';
 
   const getAriaLabel = () => {
-    if (loadError !== null) return "Prepared meals, couldn't load just now";
-    if (summary.containerCount === 0) return 'Prepared meals, nothing put away';
-    const count = `${summary.containerCount} ${summary.containerCount === 1 ? 'container' : 'containers'}`;
-    return [`Prepared meals, ${count}: ${getPlacesText(summary)}`, due]
+    if (loadError !== null) return `${LABEL}, couldn't load just now`;
+    if (summary.containerCount === 0) return `${LABEL}, nothing put away`;
+    return [`${LABEL}: ${getPlacesText(summary)}`, due]
       .filter((part) => part !== '')
       .join('. ');
   };
@@ -35,17 +36,9 @@ function PreparedEntry() {
   return (
     <EntryChip
       icon={<Refrigerator className='h-4 w-4' />}
-      label='Prepared meals'
-      count={loadError === null ? summary.containerCount : 0}
+      label={LABEL}
+      note={due === '' ? undefined : due}
       ariaLabel={getAriaLabel()}
-      trailing={
-        due !== '' && (
-          <span
-            className='size-2 shrink-0 rounded-full bg-[var(--pinch-drizzle)]'
-            aria-hidden='true'
-          />
-        )
-      }
       onClick={() => openSubview({ kind: 'containers' })}
     />
   );

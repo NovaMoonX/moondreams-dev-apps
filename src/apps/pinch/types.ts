@@ -184,7 +184,7 @@ export type IdeaStartMethod = 'link' | 'photo' | 'text';
 
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
 export type PinchSubview =
-  | { kind: 'stores' }
+  /** Stores & prices: every price grouped under the store it is at, and the stores themselves. */
   | { kind: 'products' }
   | { kind: 'sources' }
   | { kind: 'containers'; recipeId?: string; mealId?: string }

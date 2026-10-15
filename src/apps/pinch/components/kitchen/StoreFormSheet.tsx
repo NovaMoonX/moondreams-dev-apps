@@ -80,7 +80,7 @@ function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
     const confirmed = await confirm({
       title: isUsed ? 'Remove store' : 'Delete store',
       message: isUsed
-        ? `"${store.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. They keep their price, size and where they were bought.`
+        ? `"${store.name}" has ${describeUsage(usage)}, so it will be taken off your lists, not erased. Those prices stay as they are.`
         : `Delete "${store.name}"? This action cannot be undone.`,
       confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,
@@ -227,7 +227,7 @@ function CatalogStoreView({ uid, store, onClose }: CatalogStoreViewProps) {
     const confirmed = await confirm({
       title: isUsed ? 'Remove store' : 'Delete store',
       message: isUsed
-        ? `"${store.name}" is used by ${describeUsage(usage)}, so it will be taken off your lists, not erased. They keep their price, size and where they were bought. You can add it again from the list.`
+        ? `"${store.name}" has ${describeUsage(usage)}, so it will be taken off your lists, not erased. Those prices stay as they are, and you can add the store again from the list.`
         : `Delete "${store.name}"? You can add it again from the list.`,
       confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,

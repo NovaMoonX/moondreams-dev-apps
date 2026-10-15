@@ -196,7 +196,6 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
         label='Store'
         options={options}
         isSingle
-        selectedCount={value === null ? 0 : 1}
         isSelected={(storeId) => value === storeId}
         onToggle={(storeId) => onChange(value === storeId ? null : storeId)}
         leading={

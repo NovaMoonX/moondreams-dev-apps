@@ -565,7 +565,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           <EntryChip
             icon={<BookOpen className='h-4 w-4' />}
             label='Sources'
-            count={sources.length}
             onClick={() => openSubview({ kind: 'sources' })}
           />
         </div>
