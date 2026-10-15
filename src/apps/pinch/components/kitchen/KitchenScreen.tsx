@@ -408,7 +408,11 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           ingredient={
             overlay.id ? (ingredientsById.get(overlay.id) ?? null) : null
           }
-          onClose={() => setOverlay(null)}
+          onClose={() =>
+            setOverlay(overlay.id ? { kind: 'details', id: overlay.id } : null)
+          }
+          onSaved={(id) => setOverlay({ kind: 'details', id })}
+          onRemoved={() => setOverlay(null)}
         />
       )}
       {overlay?.kind === 'product' &&
@@ -423,7 +427,9 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
                 ? (productsById.get(overlay.productId) ?? null)
                 : null
             }
-            onClose={() => setOverlay(null)}
+            onClose={() =>
+              setOverlay({ kind: 'details', id: overlay.ingredientId })
+            }
           />
         )}
       {overlay?.kind === 'fillIn' && (

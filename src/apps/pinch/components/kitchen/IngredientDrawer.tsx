@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -18,8 +18,11 @@ import { NUTRITION_BASIS_OPTIONS, UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectDefaultProducts,
   selectIngredientFamiliesById,
+  selectIngredientRecordsById,
   selectIngredientsById,
+  selectMeals,
   selectProductsByIngredient,
+  selectRecipes,
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
@@ -66,6 +69,35 @@ function IngredientDrawer({
   const family = useAppSelector(selectIngredientFamiliesById).get(
     ingredient?.familyId ?? '',
   );
+  const hasOwnServing = useAppSelector(
+    (state) =>
+      selectIngredientRecordsById(state).get(ingredientId)?.servingAmount !=
+      null,
+  );
+  const recipes = useAppSelector(selectRecipes);
+  const meals = useAppSelector(selectMeals);
+  const usedIn = useMemo(() => {
+    const usingRecipes = recipes.filter((recipe) =>
+      recipe.ingredients.some((line) => line.ingredientId === ingredientId),
+    );
+    const mealCount = meals.filter((meal) =>
+      meal.items.some(
+        (item) => item.kind === 'INGREDIENT' && item.refId === ingredientId,
+      ),
+    ).length;
+    const getRecipesText = () => {
+      if (usingRecipes.length === 0) return null;
+      return usingRecipes.length === 1
+        ? usingRecipes[0].title
+        : `${usingRecipes.length} recipes`;
+    };
+    const parts = [
+      getRecipesText(),
+      mealCount > 0 &&
+        `${mealCount} ${mealCount === 1 ? 'saved meal' : 'saved meals'}`,
+    ].filter((part) => typeof part === 'string');
+    return parts.length === 0 ? null : `Used in ${parts.join(' and ')}`;
+  }, [recipes, meals, ingredientId]);
 
   if (!ingredient) {
     return null;
@@ -121,10 +153,16 @@ function IngredientDrawer({
               text: 'Adjusted by you',
               emoji: '✏️',
             },
-            {
+            (!ingredient.isCustom || hasOwnServing) && {
               key: 'serving',
               text: `1 serving = ${servingText}`,
               emoji: '🍽️',
+            },
+            usedIn !== null && {
+              key: 'used',
+              text: usedIn,
+              emoji: '🍲',
+              canWrap: true,
             },
           ]
             .filter((fact) => fact !== false && fact !== undefined)
@@ -132,7 +170,9 @@ function IngredientDrawer({
               <li
                 key={fact.key}
                 className={join(
-                  'whitespace-nowrap',
+                  'canWrap' in fact
+                    ? 'min-w-0 wrap-break-word'
+                    : 'whitespace-nowrap',
                   fact.emoji === null && 'font-medium',
                 )}
               >

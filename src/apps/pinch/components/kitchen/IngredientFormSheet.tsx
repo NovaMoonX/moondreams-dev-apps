@@ -439,12 +439,18 @@ interface IngredientFormSheetProps {
   /** The ingredient being changed; null when adding a new custom one. */
   ingredient: ResolvedIngredient | null;
   onClose: () => void;
+  /** After a save or a reset to the built-in values, with the ingredient's id (a new one's too). */
+  onSaved: (id: string) => void;
+  /** After one of the person's own was removed. */
+  onRemoved: () => void;
 }
 
 function IngredientFormSheet({
   uid,
   ingredient,
   onClose,
+  onSaved,
+  onRemoved,
 }: IngredientFormSheetProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -576,7 +582,11 @@ function IngredientFormSheet({
     setIsSubmitting(true);
     try {
       await dispatch(removeIngredient({ uid, id: ingredient.id })).unwrap();
-      onClose();
+      if (isCatalog) {
+        onSaved(ingredient.id);
+      } else {
+        onRemoved();
+      }
     } catch (deleteError) {
       setError(
         getErrorMessage(deleteError, 'Unable to remove this ingredient.'),
@@ -608,12 +618,12 @@ function IngredientFormSheet({
           ingredient.serving.amount &&
           data.extras.serving.value.unit === ingredient.serving.unit));
     if (isUnchangedCatalog) {
-      onClose();
+      onSaved(ingredient.id);
       return;
     }
 
     try {
-      await dispatch(
+      const id = await dispatch(
         saveIngredient({
           uid,
           draft: {
@@ -634,7 +644,7 @@ function IngredientFormSheet({
           },
         }),
       ).unwrap();
-      onClose();
+      onSaved(id);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this ingredient.'));
       setIsSubmitting(false);
