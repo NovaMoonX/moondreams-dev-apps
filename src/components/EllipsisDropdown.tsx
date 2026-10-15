@@ -13,7 +13,10 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 interface EllipsisDropdownProps
   extends
-    Pick<DropdownMenuProps, 'placement' | 'alignment' | 'offset'>,
+    Pick<
+      DropdownMenuProps,
+      'placement' | 'alignment' | 'offset'
+    >,
     Pick<ButtonProps, 'variant' | 'size' | 'className'> {
   items?: DropdownMenuProps['items'];
   onItemSelect?: DropdownMenuProps['onItemSelect'];
@@ -58,11 +61,7 @@ function EllipsisDropdown({
 
   if (disabled) {
     return (
-      <Tooltip
-        message={disabledMessage}
-        disabled={!disabledMessage}
-        placement={disabledTooltipPlacement}
-      >
+      <Tooltip message={disabledMessage} disabled={!disabledMessage} placement={disabledTooltipPlacement}>
         <span>
           <Button
             type='button'

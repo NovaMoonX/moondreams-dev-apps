@@ -8,11 +8,7 @@ interface DeleteIconButtonProps {
 }
 
 /** The standard destructive action for modal footers: a ghost icon button, red icon/text, no red background. */
-function DeleteIconButton({
-  onClick,
-  disabled,
-  label = 'Delete',
-}: DeleteIconButtonProps) {
+function DeleteIconButton({ onClick, disabled, label = 'Delete' }: DeleteIconButtonProps) {
   return (
     <Button
       type='button'

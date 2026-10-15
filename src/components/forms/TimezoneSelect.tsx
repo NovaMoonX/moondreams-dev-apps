@@ -21,23 +21,14 @@ interface TimezoneSelectProps {
   pill?: boolean;
 }
 
-function TimezoneSelect({
-  value,
-  onChange,
-  disabled = false,
-  pill = false,
-  at,
-}: TimezoneSelectProps) {
+function TimezoneSelect({ value, onChange, disabled = false, pill = false, at }: TimezoneSelectProps) {
   const day = at === undefined ? undefined : Math.floor(at / 86_400_000);
   const isPhone = useMediaQuery().isBelow('sm');
   const [query, setQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const options = useMemo(() => {
     const dayStart = day === undefined ? undefined : day * 86_400_000;
-    return [
-      ...getTimezoneCityMatches(query, dayStart, isPhone),
-      ...getTimezoneChoicesWith(value, dayStart, isPhone),
-    ];
+    return [...getTimezoneCityMatches(query, dayStart, isPhone), ...getTimezoneChoicesWith(value, dayStart, isPhone)];
   }, [day, value, query, isPhone]);
 
   const select = (
@@ -54,12 +45,9 @@ function TimezoneSelect({
       }}
       className={join(pill && 'w-fit')}
       triggerClassName={join(
-        pill &&
-          'bg-secondary border-transparent gap-2 rounded-full! py-1.5 pr-3 pl-8 text-sm',
+        pill && 'bg-secondary border-transparent gap-2 rounded-full! py-1.5 pr-3 pl-8 text-sm',
       )}
-      dropdownClassName={join(
-        pill && 'max-w-[calc(100vw-3rem)] min-w-72 sm:min-w-80',
-      )}
+      dropdownClassName={join(pill && 'max-w-[calc(100vw-3rem)] min-w-72 sm:min-w-80')}
     />
   );
 
@@ -79,11 +67,7 @@ function TimezoneSelect({
   }
 
   return (
-    <div
-      ref={containerRef}
-      onClickCapture={clearOnTrigger}
-      className='relative w-fit'
-    >
+    <div ref={containerRef} onClickCapture={clearOnTrigger} className='relative w-fit'>
       <Globe className='pointer-events-none absolute top-1/2 left-3 z-10 h-3.5 w-3.5 -translate-y-1/2' />
       {select}
     </div>

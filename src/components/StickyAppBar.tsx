@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -21,13 +15,7 @@ interface StickyAppBarProps {
 }
 
 /** A mini-app header row on a phone that keeps back navigation on screen, and shows `title` beside it once stuck. */
-function StickyAppBar({
-  leading,
-  trailing,
-  title,
-  titleRef,
-  className,
-}: StickyAppBarProps) {
+function StickyAppBar({ leading, trailing, title, titleRef, className }: StickyAppBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
   const [isTitleShown, setIsTitleShown] = useState(false);
@@ -43,9 +31,7 @@ function StickyAppBar({
       const stuck = window.scrollY > 0 && barRect.top <= stuckTop + 1;
       const anchor = titleRef?.current?.getBoundingClientRect();
       setIsStuck(stuck);
-      setIsTitleShown(
-        anchor ? anchor.top + anchor.height / 2 < barRect.bottom : stuck,
-      );
+      setIsTitleShown(anchor ? anchor.top + anchor.height / 2 < barRect.bottom : stuck);
     };
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -71,9 +57,7 @@ function StickyAppBar({
           aria-hidden={!isTitleShown}
           className={join(
             'min-w-0 flex-1 truncate text-base font-semibold transition-all duration-200',
-            isTitleShown
-              ? 'translate-x-0 opacity-100'
-              : 'pointer-events-none -translate-x-2 opacity-0',
+            isTitleShown ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
           )}
         >
           {title}

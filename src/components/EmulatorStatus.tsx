@@ -23,10 +23,7 @@ const getIndicator = (isError: boolean, isSeeded: boolean | undefined) => {
 
 export function EmulatorStatus() {
   const { data, isError } = useQuery({
-    ...emulatorStatusQueryOptions(
-      emulatorAuthOrigin ?? '',
-      app.options.projectId ?? '',
-    ),
+    ...emulatorStatusQueryOptions(emulatorAuthOrigin ?? '', app.options.projectId ?? ''),
     enabled: emulatorAuthOrigin !== null,
   });
   const indicator = getIndicator(isError, data?.isSeeded);

@@ -5,10 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import {
-  TOAST_APP_LABELS,
-  TOAST_TYPE_STYLES,
-} from '@components/toastTypeStyles';
+import { TOAST_APP_LABELS, TOAST_TYPE_STYLES } from '@components/toastTypeStyles';
 
 const SWIPE_DISMISS_THRESHOLD_PX = 80;
 const CLICK_MOVEMENT_THRESHOLD_PX = 5;
@@ -23,14 +20,7 @@ interface AppToastProps extends Omit<ToastData, 'type'> {
 /** Renders every toast app-wide, not just reminders — passed as `ToastProvider`'s
  * `customComponent`. `onRemove` is already the real removal function, and auto-dismiss
  * via `duration` is already handled upstream before this ever renders. */
-function AppToast({
-  id,
-  title,
-  description,
-  type,
-  action,
-  onRemove,
-}: AppToastProps) {
+function AppToast({ id, title, description, type, action, onRemove }: AppToastProps) {
   const style = TOAST_TYPE_STYLES[type ?? 'info'] ?? TOAST_TYPE_STYLES.info;
   const isReminder = type === 'reminder';
   const appLabel = TOAST_APP_LABELS.get(id);
@@ -66,11 +56,7 @@ function AppToast({
         return;
       }
     }
-    setOffset(
-      axisRef.current === 'x'
-        ? { x: Math.max(0, dx), y: 0 }
-        : { x: 0, y: Math.min(0, dy) },
-    );
+    setOffset(axisRef.current === 'x' ? { x: Math.max(0, dx), y: 0 } : { x: 0, y: Math.min(0, dy) });
   };
 
   const handlePointerUp = () => {
@@ -112,25 +98,17 @@ function AppToast({
       )}
       style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
     >
-      {style.icon && (
-        <div className='mt-0.5 shrink-0 max-sm:mt-px max-sm:scale-90'>
-          {style.icon}
-        </div>
-      )}
+      {style.icon && <div className='mt-0.5 shrink-0 max-sm:mt-px max-sm:scale-90'>{style.icon}</div>}
       <div className='min-w-0 flex-1'>
         {appLabel && (
           <div className='text-xs leading-4 font-bold tracking-wide uppercase opacity-60 max-sm:text-[10px] max-sm:leading-3'>
             {appLabel}
           </div>
         )}
-        <div className='text-sm leading-5 font-medium max-sm:text-[13px] max-sm:leading-[18px]'>
-          {title}
-        </div>
-        {description && (
-          <div className='mt-1 text-sm leading-5 opacity-90 max-sm:mt-0.5 max-sm:text-xs max-sm:leading-4'>
+        <div className='text-sm leading-5 font-medium max-sm:text-[13px] max-sm:leading-[18px]'>{title}</div>
+        {description && <div className='mt-1 text-sm leading-5 opacity-90 max-sm:mt-0.5 max-sm:text-xs max-sm:leading-4'>
             {description}
-          </div>
-        )}
+          </div>}
       </div>
       {action && !isReminder && (
         <Button

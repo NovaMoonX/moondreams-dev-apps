@@ -16,12 +16,7 @@ interface ModalFooterActionsProps {
  * clear belongs in a wider layout, not a wrapped stack here. On a phone the right group takes
  * the row's remaining width and its last button (the primary) grows.
  */
-function ModalFooterActions({
-  leftActions,
-  cancelAction,
-  rightActions,
-  note,
-}: ModalFooterActionsProps) {
+function ModalFooterActions({ leftActions, cancelAction, rightActions, note }: ModalFooterActionsProps) {
   return (
     <div className='form-footer col-span-full'>
       {note && (
@@ -34,9 +29,7 @@ function ModalFooterActions({
           {leftActions}
           {cancelAction}
         </div>
-        <div className='flex items-center justify-end gap-2 max-sm:flex-1 max-sm:[&>:last-child]:flex-1'>
-          {rightActions}
-        </div>
+        <div className='flex items-center justify-end gap-2 max-sm:flex-1 max-sm:[&>:last-child]:flex-1'>{rightActions}</div>
       </div>
     </div>
   );
