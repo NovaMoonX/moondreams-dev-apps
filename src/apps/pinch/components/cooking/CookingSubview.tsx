@@ -43,6 +43,7 @@ import type { CookView, Recipe } from '@apps/pinch/types';
 import {
   getCookStartServings,
   getPlannedCookId,
+  getStepName,
   isCookHistoryFull,
 } from '@apps/pinch/utils/cooks';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
@@ -370,7 +371,12 @@ function CookingSession({
     seconds: number,
     label: string,
   ) => {
-    timers.start(stepNumber, seconds, label);
+    timers.start(
+      stepNumber,
+      getStepName(recipe.steps[stepNumber - 1] ?? '') || `Step ${stepNumber}`,
+      seconds,
+      label,
+    );
     keepFocus();
   };
 

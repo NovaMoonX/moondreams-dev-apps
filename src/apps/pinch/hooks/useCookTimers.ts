@@ -4,12 +4,15 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { generateUuid } from '@/utils';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 
 export type CookTimer = {
   id: string;
   /** As the person reads it, starting at 1. */
   stepNumber: number;
+  /** The step's first words, what the timer is called on screen. */
+  stepName: string;
   label: string;
 } & (
   | { status: 'running'; endsAt: number; startedAt: number }
@@ -56,7 +59,7 @@ const playBeeps = (context: AudioContext) =>
     oscillator.stop(startAt + 0.3);
   });
 
-/** Timers kept in memory only. Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it. */
+/** Timers kept in memory only. Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one lights its pill, buzzes and beeps, and toasts only while the screen is hidden or covered. */
 export function useCookTimers() {
   const { addToast } = useToast();
   const [timers, setTimers] = useState<CookTimer[]>([]);
@@ -94,14 +97,16 @@ export function useCookTimers() {
   };
 
   const alertDone = useCallback((finished: CookTimer[]) => {
-    finished.forEach((timer) =>
-      addToastRef.current({
-        title: 'Timer done',
-        description: `Step ${timer.stepNumber} · ${timer.label}`,
-        type: 'success',
-        duration: 10_000,
-      }),
-    );
+    if (document.visibilityState === 'hidden' || hasDialogOnTop()) {
+      finished.forEach((timer) =>
+        addToastRef.current({
+          title: 'Timer done',
+          description: `${timer.stepName} · ${timer.label}`,
+          type: 'success',
+          duration: 10_000,
+        }),
+      );
+    }
     try {
       if (typeof navigator.vibrate === 'function') {
         navigator.vibrate([200, 100, 200, 100, 200]);
@@ -133,6 +138,7 @@ export function useCookTimers() {
           ? {
               id: timer.id,
               stepNumber: timer.stepNumber,
+              stepName: timer.stepName,
               label: timer.label,
               status: 'done',
             }
@@ -166,7 +172,12 @@ export function useCookTimers() {
 
   useOnTabReturn(settle);
 
-  const start = (stepNumber: number, seconds: number, label: string) => {
+  const start = (
+    stepNumber: number,
+    stepName: string,
+    seconds: number,
+    label: string,
+  ) => {
     if (timersRef.current.filter(isLive).length >= MAX_COOK_TIMERS) {
       return;
     }
@@ -179,6 +190,7 @@ export function useCookTimers() {
         {
           id: generateUuid(),
           stepNumber,
+          stepName,
           label,
           status: 'running',
           startedAt: now,
@@ -197,6 +209,7 @@ export function useCookTimers() {
           ? {
               id: timer.id,
               stepNumber: timer.stepNumber,
+              stepName: timer.stepName,
               label: timer.label,
               status: 'paused',
               remainingMs: getRemainingMs(timer, now),
@@ -214,6 +227,7 @@ export function useCookTimers() {
           ? {
               id: timer.id,
               stepNumber: timer.stepNumber,
+              stepName: timer.stepName,
               label: timer.label,
               status: 'running',
               startedAt: now,

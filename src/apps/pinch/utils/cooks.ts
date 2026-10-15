@@ -137,3 +137,37 @@ export const stepCookServings = (current: number, direction: 1 | -1) => {
   const next = Math.ceil(current) - 1;
   return next >= 1 ? next : MIN_COOK_SERVINGS;
 };
+
+const TRAILING_LITTLE_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'at',
+  'for',
+  'in',
+  'into',
+  'of',
+  'on',
+  'or',
+  'the',
+  'to',
+  'with',
+]);
+
+/** A step's first few words ("Brown the beef"), so two timers are told apart by what is cooking. */
+export const getStepName = (step: string) => {
+  const words = step
+    .replace(/[^\p{L}\p{N}'\s-]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3);
+  const kept = words.reduceRight<string[]>(
+    (acc, word) =>
+      acc.length === 0 && TRAILING_LITTLE_WORDS.has(word.toLowerCase())
+        ? acc
+        : [word, ...acc],
+    [],
+  );
+
+  return kept.join(' ');
+};

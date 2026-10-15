@@ -4444,4 +4444,26 @@ assert.deepEqual(
   'a step that writes its own amount is told apart from one that only has a time or a temperature',
 );
 
+assert.deepEqual(
+  [
+    cookUtils.getStepName('Brown the beef in a large pot, about 8 minutes.'),
+    cookUtils.getStepName(
+      'Simmer everything with the bay leaves for 25 minutes.',
+    ),
+    cookUtils.getStepName('Uncover and reduce the sauce.'),
+    cookUtils.getStepName('Bake.'),
+    cookUtils.getStepName('2. Rinse the rice twice'),
+    cookUtils.getStepName(''),
+  ],
+  [
+    'Brown the beef',
+    'Simmer everything',
+    'Uncover and reduce',
+    'Bake',
+    '2 Rinse',
+    '',
+  ],
+  "a timer is named by its step's first words, without a little word left dangling at the end",
+);
+
 console.log('pinchMath: all checks passed');

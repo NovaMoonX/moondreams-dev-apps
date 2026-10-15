@@ -57,7 +57,7 @@ function CookTimerStrip({
       className='grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 outline-none'
     >
       {timers.map((timer) => {
-        const caption = `Step ${timer.stepNumber} · ${timer.label}`;
+        const caption = `${timer.stepName} · ${timer.label}`;
         return timer.status === 'done' ? (
           <li
             key={timer.id}
@@ -91,7 +91,7 @@ function CookTimerStrip({
                 {formatClock(getRemainingMs(timer, now))}
               </span>
               <span className='text-muted-foreground min-w-0 truncate text-xs'>
-                Step {timer.stepNumber}
+                {timer.stepName}
                 {timer.status === 'paused' && ' · paused'}
               </span>
             </span>
@@ -101,7 +101,7 @@ function CookTimerStrip({
               size='icon'
               rounded='full'
               className='size-10 shrink-0'
-              aria-label={`${timer.status === 'running' ? 'Pause' : 'Resume'} the ${timer.label} timer for step ${timer.stepNumber}`}
+              aria-label={`${timer.status === 'running' ? 'Pause' : 'Resume'} the ${timer.label} timer: ${timer.stepName}`}
               onClick={() =>
                 timer.status === 'running'
                   ? onPause(timer.id)
@@ -120,7 +120,7 @@ function CookTimerStrip({
               size='icon'
               rounded='full'
               className='size-10 shrink-0'
-              aria-label={`Dismiss the ${timer.label} timer for step ${timer.stepNumber}`}
+              aria-label={`Dismiss the ${timer.label} timer: ${timer.stepName}`}
               onClick={() => onDismiss(timer.id)}
             >
               <X className='h-4 w-4' aria-hidden='true' />
