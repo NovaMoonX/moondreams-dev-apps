@@ -10,7 +10,7 @@ import {
 } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
@@ -21,6 +21,7 @@ import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
@@ -36,6 +37,8 @@ import {
 } from '@apps/pinch/constants';
 import {
   clearCheckedShoppingItems,
+  removeShoppingItem,
+  restoreShoppingItems,
   setShoppingItemChecked,
 } from '@apps/pinch/store/actions/shoppingActions';
 import {
@@ -47,11 +50,12 @@ import {
   selectShoppingOpenCount,
   selectShoppingRows,
 } from '@apps/pinch/store/selectors';
-import type { Gap, ShoppingView } from '@apps/pinch/types';
+import type { Gap, ShoppingItem, ShoppingView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
+  getShopRowId,
   getShownShoppingView,
   type ShoppingGroup,
   type ShoppingRowData,
@@ -62,6 +66,9 @@ const ROW_CHUNK = 12;
 const ROW_HEIGHT = 57;
 
 const MAX_NAMES_SHOWN = 4;
+const UNDO_TOAST_MS = 6000;
+
+const undone = new Set<string>();
 
 const countRows = (groups: ShoppingGroup[]) =>
   groups.reduce((sum, group) => sum + group.rows.length, 0);
@@ -242,8 +249,7 @@ interface ShoppingScreenProps {
 
 function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const dispatch = useAppDispatch();
-  const { confirm } = useActionModal();
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
   const { held, hold } = useHeldRows();
   const rows = useAppSelector((state) =>
     selectShoppingRows(state, held.current),
@@ -325,31 +331,98 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     [],
   );
 
-  const handleClear = async () => {
-    const confirmed = await confirm({
-      title: 'Clear what you got',
-      message: `Take ${gotCount === 1 ? 'the 1 item' : `the ${gotCount} items`} you've got off your list? This action cannot be undone.`,
-      confirmText: 'Clear',
-      destructive: true,
+  const addUndoToast = (
+    title: string,
+    description: string | undefined,
+    undo: () => Promise<void>,
+  ) => {
+    const id = generateUuid();
+    addToast({
+      id,
+      title,
+      description,
+      type: 'success',
+      duration: UNDO_TOAST_MS,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          removeToast(id);
+          if (undone.has(id)) return;
+
+          undone.add(id);
+          void undo();
+        },
+      },
     });
-    if (!confirmed) {
+  };
+
+  const restore = async (items: ShoppingItem[]) => {
+    try {
+      const restored = await dispatch(
+        restoreShoppingItems({ uid, items }),
+      ).unwrap();
+      if (restored < items.length) {
+        addToast({
+          title:
+            restored === 0
+              ? 'Already back on your list'
+              : `Put back ${restored} of ${items.length}`,
+          description: 'What is on your list again keeps what it has.',
+          type: 'info',
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: "Couldn't undo that",
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      });
+    }
+  };
+
+  const handleRemove = (name: string, items: ShoppingItem[]) => {
+    setOverlay(null);
+    const removal = dispatch(
+      removeShoppingItem({ uid, ids: items.map((item) => item.id) }),
+    ).unwrap();
+    removal.catch((error) =>
+      addToast({
+        title: `Couldn't take ${name} off your list`,
+        description: getErrorMessage(error, 'Please try again.'),
+        type: 'error',
+      }),
+    );
+    addUndoToast(`Removed ${name}`, undefined, () =>
+      removal.then(
+        () => restore(items),
+        () => undefined,
+      ),
+    );
+  };
+
+  const handleClear = async () => {
+    if (isClearing) {
       return;
     }
-
     setIsClearing(true);
     try {
-      const deleted = await dispatch(
+      const cleared = await dispatch(
         clearCheckedShoppingItems({ uid }),
       ).unwrap();
-      addToast({
-        title:
-          deleted === 0
-            ? 'Nothing was left to clear'
-            : `Cleared ${deleted === 1 ? '1 item' : `${deleted} items`}`,
-        description:
-          deleted < gotCount ? 'The rest changed in the meantime.' : undefined,
-        type: deleted === 0 ? 'info' : 'success',
-      });
+      const clearedRows = new Set(
+        cleared.map((item) => getShopRowId(item.ingredientId, item.unit)),
+      ).size;
+      if (clearedRows === 0) {
+        addToast({ title: 'Nothing was left to clear', type: 'info' });
+        return;
+      }
+      addUndoToast(
+        `Cleared ${clearedRows === 1 ? '1 item' : `${clearedRows} items`}`,
+        cleared.length < gotCount
+          ? 'The rest changed in the meantime.'
+          : undefined,
+        () => restore(cleared),
+      );
     } catch (error) {
       addToast({
         title: "Couldn't clear your list",
@@ -359,11 +432,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     } finally {
       setIsClearing(false);
     }
-  };
-
-  const getSubtitle = () => {
-    if (openCount > 0) return `${openCount} to buy`;
-    return gotCount > 0 ? 'Got everything' : undefined;
   };
 
   const getLeftOutNames = (kind: Gap['kind']) =>
@@ -443,7 +511,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
               size='sm'
               loading={isClearing}
               disabled={isClearing}
-              className="text-destructive! relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+              className="relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
               onClick={() => void handleClear()}
             >
               Clear what you got
@@ -482,7 +550,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     <div className='space-y-4'>
       <SectionHeader
         title='Shopping list'
-        subtitle={getSubtitle()}
         action={
           canAdd ? (
             <Button
@@ -571,6 +638,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           name={openRow.name}
           items={openItems}
           onClose={() => setOverlay(null)}
+          onRemove={() => handleRemove(openRow.name, openItems)}
         />
       )}
     </div>

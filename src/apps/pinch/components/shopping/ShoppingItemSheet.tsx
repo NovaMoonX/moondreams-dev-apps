@@ -7,7 +7,6 @@ import {
   Input,
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -17,10 +16,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
-import {
-  removeShoppingItem,
-  updateShoppingItem,
-} from '@apps/pinch/store/actions/shoppingActions';
+import { updateShoppingItem } from '@apps/pinch/store/actions/shoppingActions';
 import { selectShoppingById } from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
@@ -39,6 +35,8 @@ interface ShoppingItemSheetProps {
   /** The stored items one row of the list stands for, largest first. */
   items: ShoppingItem[];
   onClose: () => void;
+  /** Takes the row off at once; the list offers an Undo. */
+  onRemove: () => void;
 }
 
 function ShoppingItemSheet({
@@ -46,9 +44,9 @@ function ShoppingItemSheet({
   name,
   items,
   onClose,
+  onRemove,
 }: ShoppingItemSheetProps) {
   const dispatch = useAppDispatch();
-  const { confirm } = useActionModal();
   const itemsById = useAppSelector(selectShoppingById);
   const [item] = items;
   const [shown] = useState(
@@ -141,30 +139,6 @@ function ShoppingItemSheet({
     }
   };
 
-  const handleRemove = async () => {
-    const confirmed = await confirm({
-      title: 'Remove from your list',
-      message: `Take ${name} off your shopping list?`,
-      confirmText: 'Remove',
-      destructive: true,
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await dispatch(removeShoppingItem({ uid, ids: rowIds })).unwrap();
-      onClose();
-    } catch (removeError) {
-      setError(
-        getErrorMessage(removeError, 'Unable to take this off your list.'),
-      );
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <FormSheet isOpen onClose={onClose} title={name}>
       <Form
@@ -181,7 +155,7 @@ function ShoppingItemSheet({
             leftActions={
               <DeleteIconButton
                 label='Remove'
-                onClick={() => void handleRemove()}
+                onClick={onRemove}
                 disabled={isSubmitting}
               />
             }

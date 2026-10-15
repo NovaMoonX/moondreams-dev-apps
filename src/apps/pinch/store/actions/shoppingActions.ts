@@ -250,9 +250,19 @@ interface ClearCheckedInput {
   uid: string;
 }
 
-/** Resolves to how many items it deleted, which is fewer than were ticked at the tap when another device un-ticked or removed one. */
+const toChunks = <T>(list: T[]) =>
+  Array.from(
+    { length: Math.ceil(list.length / SHOPPING_BATCH_SIZE) },
+    (_, index) =>
+      list.slice(
+        index * SHOPPING_BATCH_SIZE,
+        (index + 1) * SHOPPING_BATCH_SIZE,
+      ),
+  );
+
+/** Resolves to the items it deleted, as they were, for an Undo; fewer than were ticked at the tap when another device un-ticked or removed one. */
 export const clearCheckedShoppingItems = createAsyncThunk<
-  number,
+  ShoppingItem[],
   ClearCheckedInput,
   { state: RootState; rejectValue: string }
 >(
@@ -261,19 +271,11 @@ export const clearCheckedShoppingItems = createAsyncThunk<
     const ids = getState()
       .pinch.shopping.items.filter((item) => item.isChecked)
       .map((item) => item.id);
-    const chunks = Array.from(
-      { length: Math.ceil(ids.length / SHOPPING_BATCH_SIZE) },
-      (_, index) =>
-        ids.slice(
-          index * SHOPPING_BATCH_SIZE,
-          (index + 1) * SHOPPING_BATCH_SIZE,
-        ),
-    );
 
     try {
       // Each chunk is its own transaction, so one that fails leaves the others cleared.
-      const counts = await Promise.all(
-        chunks.map((chunk) =>
+      const cleared = await Promise.all(
+        toChunks(ids).map((chunk) =>
           runTransaction(db, async (transaction) => {
             const snapshots = await Promise.all(
               chunk.map((id) => transaction.get(shoppingDoc(uid, id))),
@@ -284,13 +286,14 @@ export const clearCheckedShoppingItems = createAsyncThunk<
             stillChecked.forEach((snapshot) =>
               transaction.delete(snapshot.ref),
             );
-            return stillChecked.length;
+            return stillChecked.map(
+              (snapshot) => snapshot.data() as ShoppingItem,
+            );
           }),
         ),
       );
-      const deleted = counts.reduce((sum, count) => sum + count, 0);
 
-      return deleted;
+      return cleared.flat();
     } catch (error) {
       return rejectWithValue(
         getWriteMessage(error, 'Unable to clear what you got.'),
@@ -298,3 +301,49 @@ export const clearCheckedShoppingItems = createAsyncThunk<
     }
   },
 );
+
+interface RestoreShoppingItemsInput {
+  uid: string;
+  items: ShoppingItem[];
+}
+
+/** Undoes a removal or a clear: puts each item back as it was, ticked or not, unless it is on the list again by then, which keeps what it has. Resolves to how many it put back. */
+export const restoreShoppingItems = createAsyncThunk<
+  number,
+  RestoreShoppingItemsInput,
+  { rejectValue: string }
+>('pinch/shopping/restore', async ({ uid, items }, { rejectWithValue }) => {
+  try {
+    const counts = await Promise.all(
+      toChunks(items).map((chunk) =>
+        runTransaction(db, async (transaction) => {
+          const snapshots = await Promise.all(
+            chunk.map((item) => transaction.get(shoppingDoc(uid, item.id))),
+          );
+          const now = Date.now();
+          const missing = chunk.filter(
+            (_, index) => !snapshots[index].exists(),
+          );
+          missing.forEach((item) =>
+            transaction.set(shoppingDoc(uid, item.id), {
+              id: item.id,
+              ingredientId: item.ingredientId,
+              amount: item.amount,
+              unit: item.unit,
+              isChecked: item.isChecked,
+              createdAt: item.createdAt,
+              updatedAt: now,
+            } satisfies ShoppingItem),
+          );
+          return missing.length;
+        }),
+      ),
+    );
+
+    return counts.reduce((sum, count) => sum + count, 0);
+  } catch (error) {
+    return rejectWithValue(
+      getWriteMessage(error, "Couldn't put that back on your list."),
+    );
+  }
+});
