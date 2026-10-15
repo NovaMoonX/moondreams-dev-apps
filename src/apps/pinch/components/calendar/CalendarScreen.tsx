@@ -63,12 +63,15 @@ interface CalendarScreenProps {
   /** The month the planned-meals listener is centred on; moved only when a view reaches past what is loaded. */
   shownMonth: string;
   onShownMonthChange: (monthKey: string) => void;
+  /** The day a toast's View asked to see; the screen opens on it. */
+  focusDayKey?: string;
 }
 
 function CalendarScreen({
   uid,
   shownMonth,
   onShownMonthChange,
+  focusDayKey,
 }: CalendarScreenProps) {
   const { openSubview, setIsStartOpen } = usePinchOverlay();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -87,10 +90,12 @@ function CalendarScreen({
       getPlannedMealTitle(meal, recipesById, ingredientsById),
     [recipesById, ingredientsById],
   );
-  const [anchorKey, setAnchorKey] = useState(() =>
-    shownMonth === getLocalMonthKey(new Date(now))
-      ? todayKey
-      : `${shownMonth}-01`,
+  const [anchorKey, setAnchorKey] = useState(
+    () =>
+      focusDayKey ??
+      (shownMonth === getLocalMonthKey(new Date(now))
+        ? todayKey
+        : `${shownMonth}-01`),
   );
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<{

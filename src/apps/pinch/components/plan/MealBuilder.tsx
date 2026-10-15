@@ -114,7 +114,8 @@ function MealBuilder({
   mealId,
   recipeId = null,
 }: MealBuilderProps) {
-  const { closeSubview } = usePinchOverlay();
+  const { subview, closeSubview, closeSubviewIf, showCalendarDay } =
+    usePinchOverlay();
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -360,6 +361,7 @@ function MealBuilder({
       return;
     }
 
+    const openedAs = subview;
     setError(null);
     setIsSubmitting(true);
     try {
@@ -367,8 +369,8 @@ function MealBuilder({
         await dispatch(
           saveMeal({ uid, id: existingMeal?.id ?? null, name, items: rows() }),
         ).unwrap();
+        closeSubviewIf((current) => current === openedAs);
         addToast({ title: `Saved ${name.trim()}`, type: 'success' });
-        closeSubview();
         return;
       }
 
@@ -401,13 +403,18 @@ function MealBuilder({
           }),
         ).unwrap();
       }
+      const plannedName = source?.name ?? existingPlanned?.name ?? null;
+      const more = items.length > 1 ? ` and ${items.length - 1} more` : '';
+      const what =
+        plannedName ??
+        `${getItemTitle(items[0], recipesById, ingredientsById)}${more}`;
+      const landedOn = dayKey;
+      closeSubviewIf((current) => current === openedAs);
       addToast({
-        title: existingPlanned
-          ? `Saved ${MEAL_TYPE_LABELS[mealType].toLowerCase()} for ${getDayWord(dayKey)}`
-          : `Added ${source?.name ?? getItemTitle(items[0], recipesById, ingredientsById)}${!source && items.length > 1 ? ` and ${items.length - 1} more` : ''} to ${getDayWord(dayKey)}`,
+        title: `${existingPlanned ? 'Saved' : 'Planned'} ${what} for ${getDayWord(dayKey)}`,
         type: 'success',
+        action: { label: 'View', onClick: () => showCalendarDay(landedOn) },
       });
-      closeSubview();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this meal.'));
       setIsSubmitting(false);
