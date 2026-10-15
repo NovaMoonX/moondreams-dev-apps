@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Check } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
@@ -35,7 +37,6 @@ interface ShoppingAddSheetProps {
 
 function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   const dispatch = useAppDispatch();
-  const { addToast } = useToast();
   const ingredientsById = useAppSelector(selectIngredientsById);
   const onList = useAppSelector(selectShoppingById);
   const loadError = useAppSelector(selectShoppingLoadError);
@@ -45,6 +46,8 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   const [mode, setMode] = useState<ShoppingAddMode>('one');
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [added, setAdded] = useState<string[]>([]);
+  const [searchKey, setSearchKey] = useState(0);
   const fieldRef = useRef<HTMLDivElement>(null);
 
   const hasPlan = [...plannedByDay.keys()].some((dayKey) => dayKey >= todayKey);
@@ -108,13 +111,16 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
           ],
         }),
       ).unwrap();
-      onClose();
-      addToast({
-        title: ingredient ? `Added ${ingredient.name}` : 'Added to your list',
-        type: 'success',
-      });
+      setAdded((current) => [...current, ingredient?.name ?? 'it']);
+      setSearchKey((current) => current + 1);
+      // The picked result unmounts with the old field, and the drawer takes focus back first.
+      window.setTimeout(
+        () => fieldRef.current?.querySelector('input')?.focus(),
+        120,
+      );
     } catch (addError) {
       setError(getErrorMessage(addError, 'Unable to add this to your list.'));
+    } finally {
       setIsAdding(false);
     }
   };
@@ -154,6 +160,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
             </p>
             <div ref={fieldRef}>
               <ItemSearch
+                key={searchKey}
                 uid={uid}
                 isDisabled={isAdding || !isReady}
                 resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto'
@@ -165,7 +172,33 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                 {note}
               </p>
             )}
+            {!note && added.length > 0 && (
+              <p className='flex items-start gap-1.5 text-sm' role='status'>
+                <Check
+                  className='mt-0.5 h-4 w-4 shrink-0 text-[var(--pinch-drizzle)]'
+                  aria-hidden='true'
+                />
+                <span className='min-w-0 wrap-break-word'>
+                  Added {added.at(-1)}
+                  {added.length > 1 && (
+                    <span className='text-muted-foreground whitespace-nowrap'>
+                      {' '}
+                      · {added.length} so far
+                    </span>
+                  )}
+                </span>
+              </p>
+            )}
             {error && <p className='text-destructive text-sm'>{error}</p>}
+            {added.length > 0 && (
+              <ModalFooterActions
+                rightActions={
+                  <Button type='button' onClick={onClose}>
+                    Done
+                  </Button>
+                }
+              />
+            )}
           </div>
         )}
       </div>
