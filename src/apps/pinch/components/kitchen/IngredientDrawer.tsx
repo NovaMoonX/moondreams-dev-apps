@@ -100,7 +100,7 @@ function IngredientDrawer({
             onClick={() => onAddProduct(ingredient.id)}
           >
             <Plus className='h-4 w-4' aria-hidden='true' />
-            Add a product
+            Add a price
           </Button>
         </div>
       }
@@ -173,16 +173,14 @@ function IngredientDrawer({
           </section>
         )}
 
-        <section aria-label='Products' className='space-y-2'>
-          <div className='flex items-center justify-between gap-3'>
-            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              Products
-            </h3>
-          </div>
+        <section aria-label='Where you buy it' className='space-y-2'>
+          <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+            Where you buy it
+          </h3>
           {products.length === 0 ? (
             <p className='text-muted-foreground text-sm'>
-              No product yet. Add where you buy it and recipes can show what
-              they cost.
+              No price yet. Add where you buy it and recipes can show what they
+              cost.
             </p>
           ) : (
             <ul className='divide-border divide-y'>
@@ -204,8 +202,8 @@ function IngredientDrawer({
                       size='icon'
                       aria-label={
                         isDefault
-                          ? 'Default product'
-                          : 'Make this the default product'
+                          ? 'Default price'
+                          : 'Make this the default price'
                       }
                       aria-pressed={isDefault}
                       disabled={isDefault}
@@ -224,7 +222,7 @@ function IngredientDrawer({
                             setError(
                               getErrorMessage(
                                 starError,
-                                'Unable to change the default product.',
+                                'Unable to change the default price.',
                               ),
                             ),
                           );

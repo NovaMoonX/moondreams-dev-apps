@@ -149,7 +149,7 @@ function ProductRow({ row, showStore, onOpen }: ProductRowProps) {
           {row.isDefault && row.hasSiblings && (
             <Star
               className='h-3.5 w-3.5 shrink-0 fill-current text-[var(--pinch-drizzle)]'
-              aria-label='Default product'
+              aria-label='Default price'
             />
           )}
         </span>
@@ -608,9 +608,9 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
                 />
               </FilterSection>
             )}
-            <FilterSection title='Which product'>
+            <FilterSection title='Which price'>
               <PillGroup
-                label='Which product'
+                label='Which price'
                 options={DEFAULT_CHOICES}
                 value={filters.defaults}
                 onChange={(defaults) =>

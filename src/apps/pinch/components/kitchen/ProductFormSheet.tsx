@@ -312,8 +312,8 @@ function ProductFormSheet({
       return;
     }
     const confirmed = await confirm({
-      title: 'Delete product',
-      message: `Delete ${ingredient.name} from ${storesById.get(product.storeId)?.name ?? 'a removed store'} (${formatPriceAndSize(product)})? Recipes keep working: they only name the ingredient. This action cannot be undone.`,
+      title: 'Delete price',
+      message: `Delete the price of ${ingredient.name} at ${storesById.get(product.storeId)?.name ?? 'a removed store'} (${formatPriceAndSize(product)})? Recipes keep working: they only name the ingredient. This action cannot be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });
@@ -326,7 +326,7 @@ function ProductFormSheet({
       await dispatch(removeProduct({ uid, id: product.id })).unwrap();
       onClose();
     } catch (deleteError) {
-      setError(getErrorMessage(deleteError, 'Unable to delete this product.'));
+      setError(getErrorMessage(deleteError, 'Unable to delete this price.'));
       setIsSubmitting(false);
     }
   };
@@ -360,16 +360,14 @@ function ProductFormSheet({
       ).unwrap();
       onClose();
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Unable to save this product.'));
+      setError(getErrorMessage(submitError, 'Unable to save this price.'));
       setIsSubmitting(false);
     }
   };
 
   const title = product
-    ? [ingredient.name, product.label ?? storesById.get(product.storeId)?.name]
-        .filter(Boolean)
-        .join(' · ')
-    : `${ingredient.name} · new product`;
+    ? `${ingredient.name} · price at ${storesById.get(product.storeId)?.name ?? 'a removed store'}`
+    : `${ingredient.name} · new price`;
 
   return (
     <FormSheet isOpen onClose={onClose} title={title}>
