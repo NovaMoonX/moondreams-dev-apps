@@ -1,3 +1,4 @@
+import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { formatList } from '@/utils/formatUtils';
 import {
   BULK_MEAL_SERVINGS,
@@ -119,6 +120,13 @@ export const getFrozenAt = (
 ) =>
   container.history.filter((event) => event.kind === 'FREEZE').at(-1)?.at ??
   container.createdAt;
+
+/** "Frozen Oct 5", the frozen instant's local day through the cached day formatters. */
+export const getFrozenText = (
+  container: Pick<Container, 'history' | 'createdAt'>,
+  now = Date.now(),
+) =>
+  `Frozen ${formatDayShort(toLocalDateInputValue(getFrozenAt(container)), now)}`;
 
 /** A fridge row always names its eat-by; a freezer row only once it is past or within a week. */
 export const isEatByShown = (

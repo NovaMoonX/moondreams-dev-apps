@@ -12,7 +12,7 @@ import {
   getEatByLabel,
   getEatByState,
   getFinishedText,
-  getFrozenAt,
+  getFrozenText,
   getLastPlaceEvent,
   isEatByShown,
 } from '@apps/pinch/utils/containers';
@@ -64,7 +64,7 @@ function ContainerRow({ boxes, title, isTwin, onOpen }: ContainerRowProps) {
               </span>
               {isFrozen && (
                 <span className='whitespace-nowrap'>
-                  Frozen {formatDateShort(getFrozenAt(container))}
+                  {getFrozenText(container)}
                 </span>
               )}
               {isEatByShown(container) &&

@@ -5833,4 +5833,15 @@ assert.deepEqual(
   'what you finished counts what was eaten (a corrected count included), and names no number once the history may have lost an eat',
 );
 
+import { getFrozenText as kitbFrozenText } from '../../src/apps/pinch/utils/containers.ts';
+
+assert.equal(
+  kitbFrozenText(
+    kitbSoup('z', { history: [makeEvent('FREEZE', localAt(5, 23, 30))] }),
+    lateOnThe14th,
+  ),
+  `Frozen ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(2026, 9, 5))}`,
+  'a box frozen late on the 5th, local time, reads as frozen on the 5th in any zone',
+);
+
 console.log('pinchMath: all checks passed');

@@ -51,7 +51,7 @@ import {
   getEventText,
   getFinishedText,
   getFreezeLine,
-  getFrozenAt,
+  getFrozenText,
   getLastPlaceEvent,
   getMoveForPlace,
   getMoveNotes,
@@ -540,9 +540,7 @@ function Facts({
         </span>
         <span className='whitespace-nowrap'>{servingsText}</span>
         {container.place === 'FREEZER' && (
-          <span className='whitespace-nowrap'>
-            Frozen {formatDateShort(getFrozenAt(container))}
-          </span>
+          <span className='whitespace-nowrap'>{getFrozenText(container)}</span>
         )}
       </p>
       <div className='flex flex-wrap items-center justify-between gap-x-4 gap-y-2'>
