@@ -205,6 +205,8 @@ function WeekView({
                   meal={meal}
                   title={getMealTitle(meal)}
                   subtitle={MEAL_TYPE_LABELS[meal.mealType]}
+                  canBeCooked={dayKey <= todayKey}
+                  isPast={dayKey < todayKey}
                   onOpen={() => onOpenMeal(dayKey, meal.id)}
                 />
               </li>
