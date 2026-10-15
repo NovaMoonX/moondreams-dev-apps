@@ -1,20 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft } from 'lucide-react';
 
-import ActionRow from '@/components/ActionRow';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
-import {
-  CONTAINER_PLACE_EMOJIS,
-  CONTAINER_PLACE_LABELS,
-  CONTAINER_PLACES,
-} from '@apps/pinch/constants';
+import { CONTAINER_PLACE_LABELS } from '@apps/pinch/constants';
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
+import { useMealContainers } from '@apps/pinch/hooks/useEatFromStockPlaces';
 import {
-  selectContainers,
   selectMealsById,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
@@ -26,59 +21,6 @@ import {
   getServingsToEat,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
-
-const useMealContainers = (meal: PlannedMeal) => {
-  const containers = useAppSelector(selectContainers);
-  return useMemo(
-    () =>
-      containers.filter(
-        (container) =>
-          (container.recipeId !== null &&
-            meal.items.some(
-              (item) =>
-                item.kind === 'RECIPE' && item.refId === container.recipeId,
-            )) ||
-          (container.mealId !== null && container.mealId === meal.sourceMealId),
-      ),
-    [containers, meal],
-  );
-};
-
-interface EatFromStockRowsProps {
-  meal: PlannedMeal;
-  onOpen: (place: ContainerPlace) => void;
-}
-
-export function EatFromStockRows({ meal, onOpen }: EatFromStockRowsProps) {
-  const candidates = useMealContainers(meal);
-
-  return (
-    <>
-      {CONTAINER_PLACES.map((place) => {
-        const here = candidates.filter(
-          (container) => container.place === place,
-        );
-        if (here.length === 0) return null;
-
-        const label = `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`;
-        return (
-          <ActionRow
-            key={place}
-            isGrouped
-            icon={
-              <span className='text-base leading-none'>
-                {CONTAINER_PLACE_EMOJIS[place]}
-              </span>
-            }
-            label={label}
-            subtitle={`${here.length} ${here.length === 1 ? 'container matches' : 'containers match'} this meal`}
-            onClick={() => onOpen(place)}
-          />
-        );
-      })}
-    </>
-  );
-}
 
 interface EatFromStockViewProps {
   uid: string;

@@ -168,6 +168,7 @@ import {
   getRecipeLines,
   getShoppingCost,
   getShoppingItemId,
+  getShownShoppingView,
   groupShoppingItems,
   isValidAmount,
   mergeLines,
@@ -189,6 +190,7 @@ import type {
   ResolvedFamily,
   ResolvedIngredient,
   ShoppingItem,
+  ShoppingView,
   Unit,
 } from '../../src/apps/pinch/types.ts';
 
@@ -547,10 +549,7 @@ const grouped = groupShoppingItems(
   shopFamilies,
 );
 assert.deepEqual(
-  grouped.groups.map((group) => [
-    group.name,
-    group.rows.map((row) => row.name),
-  ]),
+  grouped.toBuy.map((group) => [group.name, group.rows.map((row) => row.name)]),
   [
     ['Chicken', ['Chicken', 'Chicken']],
     ['Rice', ['Rice']],
@@ -559,14 +558,14 @@ assert.deepEqual(
   'groups follow the family order, and an ingredient with no family or an unknown one, or one that is gone, lands in Other',
 );
 assert.deepEqual(
-  grouped.groups[0].rows.map((row) => row.unit),
+  grouped.toBuy[0].rows.map((row) => row.unit),
   ['LB', 'OZ'],
   'one ingredient in two units is two rows',
 );
 assert.deepEqual(
-  grouped.checked.map((row) => row.id),
-  ['rice__LB'],
-  'a checked item is in "Got it", not in its group',
+  grouped.got.map((group) => [group.name, group.rows.map((row) => row.id)]),
+  [['Rice', ['rice__LB']]],
+  'a checked item is in "Got it", grouped by its family, and not in "To buy"',
 );
 
 const heldItems = [
@@ -584,7 +583,7 @@ const heldGrouped = groupShoppingItems(
   ]),
 );
 assert.deepEqual(
-  heldGrouped.groups.map((group) => [
+  heldGrouped.toBuy.map((group) => [
     group.name,
     group.rows.map((row) => [row.id, row.isChecked]),
   ]),
@@ -592,10 +591,18 @@ assert.deepEqual(
   'a row just ticked stays in its group, still carrying its stored checked flag',
 );
 assert.deepEqual(
-  heldGrouped.checked.map((row) => [row.id, row.isChecked]),
+  heldGrouped.got.map((group) => [
+    group.name,
+    group.rows.map((row) => [row.id, row.isChecked]),
+  ]),
   [
-    ['chips__G', true],
-    ['salt__TSP', false],
+    [
+      'Other',
+      [
+        ['chips__G', true],
+        ['salt__TSP', false],
+      ],
+    ],
   ],
   'a row just unticked stays in "Got it" until it is let go, and the unheld rows follow the stored flag',
 );
@@ -603,6 +610,49 @@ assert.deepEqual(
   groupShoppingItems(heldItems, shopIngredients, shopFamilies, new Map()),
   groupShoppingItems(heldItems, shopIngredients, shopFamilies),
   'an empty hold changes nothing',
+);
+
+const shopPick = (view: ShoppingView, query = '') => ({ view, query });
+assert.equal(
+  getShownShoppingView(shopPick('toBuy'), '', { toBuy: 0, got: 4 }),
+  'toBuy',
+  'with no search the pick is kept, even when its view is empty',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy'), 'milk', { toBuy: 0, got: 1 }),
+  'got',
+  'a search that matches nothing to buy but something got shows "Got it"',
+);
+assert.equal(
+  getShownShoppingView(shopPick('got'), 'milk', { toBuy: 2, got: 0 }),
+  'toBuy',
+  'and the other way round',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy'), 'milk', { toBuy: 1, got: 3 }),
+  'toBuy',
+  'a search with a match in the picked view stays there',
+);
+assert.equal(
+  getShownShoppingView(shopPick('got'), 'zz', { toBuy: 0, got: 0 }),
+  'got',
+  'a search that matches nothing anywhere keeps the pick',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy', 'milk'), 'milk', {
+    toBuy: 0,
+    got: 1,
+  }),
+  'toBuy',
+  'a view picked while that text was typed is kept, so tapping its pill always takes',
+);
+assert.equal(
+  getShownShoppingView(shopPick('toBuy', 'milk'), 'milk powder', {
+    toBuy: 0,
+    got: 1,
+  }),
+  'got',
+  'typing on after picking lets the search switch again',
 );
 
 const shopCost = getShoppingCost(

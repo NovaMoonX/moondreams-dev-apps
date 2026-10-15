@@ -1,52 +1,36 @@
-import { PackagePlus, Refrigerator } from 'lucide-react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import ActionRow from '@/components/ActionRow';
 import { useAppSelector } from '@/store';
-import { CONTAINER_PLACE_EMOJIS } from '@apps/pinch/constants';
-import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
+import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
 import {
+  CONTAINER_PLACE_EMOJIS,
+  CONTAINER_PLACE_LABELS,
+} from '@apps/pinch/constants';
+import {
+  selectContainersLoadError,
   selectMealsById,
   selectRecipesById,
   selectStockByMealWithRecipes,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import {
-  getStockDetail,
+  getEatByPhrase,
+  getStockParts,
   getStockSourcesText,
-  getStockTitle,
   type MealStock,
   type StockSummary,
 } from '@apps/pinch/utils/containers';
+import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface StockRowsProps {
-  uid: string;
   target: { kind: 'recipe' | 'meal'; id: string };
   onOpenStock: () => void;
-  onPutAway: () => void;
 }
 
 const isMealStock = (stock: StockSummary): stock is MealStock =>
   'sources' in stock;
 
-const getIcon = (stock: StockSummary) => {
-  if (stock.fridge > 0 && stock.freezer === 0) {
-    return (
-      <span className='text-base leading-none'>
-        {CONTAINER_PLACE_EMOJIS.FRIDGE}
-      </span>
-    );
-  }
-  if (stock.freezer > 0 && stock.fridge === 0) {
-    return (
-      <span className='text-base leading-none'>
-        {CONTAINER_PLACE_EMOJIS.FREEZER}
-      </span>
-    );
-  }
-  return <Refrigerator className='h-4 w-4' />;
-};
-
-function StockRows({ uid, target, onOpenStock, onPutAway }: StockRowsProps) {
+function StockRows({ target, onOpenStock }: StockRowsProps) {
   const stock = useAppSelector((state) =>
     target.kind === 'recipe'
       ? selectStockByRecipe(state).get(target.id)
@@ -54,41 +38,61 @@ function StockRows({ uid, target, onOpenStock, onPutAway }: StockRowsProps) {
   );
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
-  const { isReady, loadError } = useContainerActions(uid);
+  const loadError = useAppSelector(selectContainersLoadError);
 
-  if (loadError !== null) {
+  if (loadError !== null || !stock) {
     return null;
   }
 
-  const sourcesText =
-    stock && isMealStock(stock)
-      ? getStockSourcesText(stock.sources, (source) =>
-          source.kind === 'recipe'
-            ? (recipesById.get(source.id)?.title ?? 'A recipe')
-            : (mealsById.get(source.id)?.name ?? 'This meal'),
-        )
-      : null;
+  const parts = getStockParts(stock);
+  if (parts.length === 0) {
+    return null;
+  }
+
+  const sourcesText = isMealStock(stock)
+    ? getStockSourcesText(stock.sources, (source) =>
+        source.kind === 'recipe'
+          ? (recipesById.get(source.id)?.title ?? 'A recipe')
+          : (mealsById.get(source.id)?.name ?? 'This meal'),
+      )
+    : null;
 
   return (
-    <>
-      {stock && (
-        <ActionRow
-          isGrouped
-          icon={getIcon(stock)}
-          label={getStockTitle(stock)}
-          subtitle={sourcesText ?? getStockDetail(stock)}
-          onClick={onOpenStock}
-        />
-      )}
-      <ActionRow
-        isGrouped
-        icon={<PackagePlus className='h-4 w-4' />}
-        label='Put some away'
-        subtitle='Fridge or freezer, with an eat-by date'
-        isDisabled={!isReady}
-        onClick={onPutAway}
-      />
-    </>
+    <div className='flex'>
+      <Button
+        type='button'
+        variant='tertiary'
+        onClick={onOpenStock}
+        className="text-muted-foreground! relative h-auto max-w-full flex-col items-start gap-1.5 rounded-none p-0 px-0! py-0! text-left text-sm font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-['']"
+      >
+        {parts.map((part) => {
+          const eatBy =
+            part.place === 'FRIDGE' ? stock.fridgeEatBy : stock.freezerEatBy;
+          const text = `${formatServings(part.servings)} in your ${CONTAINER_PLACE_LABELS[part.place].toLowerCase()}`;
+          return (
+            <span
+              key={part.place}
+              className='flex flex-wrap items-center gap-x-2 gap-y-1'
+            >
+              <span>
+                <span aria-hidden='true'>
+                  {CONTAINER_PLACE_EMOJIS[part.place]}
+                </span>{' '}
+                <span className='decoration-muted-foreground/50 underline underline-offset-4'>
+                  {part.due === null && eatBy !== null
+                    ? `${text}, eat by ${getEatByPhrase(eatBy)}`
+                    : text}
+                </span>
+              </span>
+              {part.due && (
+                <EatByBadge state={part.due.state} label={part.due.label} />
+              )}
+            </span>
+          );
+        })}
+        {sourcesText && <span className='text-xs'>{sourcesText}</span>}
+      </Button>
+    </div>
   );
 }
 
