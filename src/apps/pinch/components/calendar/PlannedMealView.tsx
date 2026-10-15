@@ -57,6 +57,7 @@ import {
   formatRowCost,
   getFixedNote,
   getItemTitle,
+  getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
@@ -142,6 +143,7 @@ function PlannedMealView({
     costContext.ingredientsById,
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
+  const title = getPlannedMealTitle(meal, recipesById, ingredientsById);
   const repricedAt = meal.snapshot ? getRepricedAt(meal.snapshot) : null;
   const noPriceText = repricedAt === null ? "Wasn't priced" : 'Still no price';
 
@@ -371,9 +373,10 @@ function PlannedMealView({
         Back
       </Button>
       <div className='space-y-3'>
-        <p className='font-medium'>
+        <p className='font-medium wrap-break-word'>
           <span aria-hidden='true'>{MEAL_TYPE_EMOJIS[meal.mealType]}</span>{' '}
           {MEAL_TYPE_LABELS[meal.mealType]}
+          {title && ` · ${title}`}
         </p>
         <ActionChips label='Meal actions' actions={actions} />
       </div>

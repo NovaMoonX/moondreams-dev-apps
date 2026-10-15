@@ -30,6 +30,8 @@ import type {
   Gap,
   MealType,
   PlannedMeal,
+  Recipe,
+  ResolvedIngredient,
   ShoppingRequest,
 } from '@apps/pinch/types';
 import {
@@ -43,6 +45,7 @@ import {
   formatRowCost,
   getFixedNote,
   getItemTitle,
+  getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
 import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
@@ -50,6 +53,19 @@ import { withWholeCalories } from '@apps/pinch/utils/stats';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const NO_MEALS: PlannedMeal[] = [];
+
+const getMealDetail = (
+  meal: PlannedMeal,
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+) => {
+  const names = meal.items.map((item) =>
+    getItemTitle(item, recipesById, ingredientsById),
+  );
+  if (meal.name?.trim()) return names.join(', ');
+  if (names.length > 1) return `With ${names.slice(1).join(', ')}`;
+  return meal.items[0] ? formatServings(meal.items[0].servings) : null;
+};
 
 interface DayDrawerProps {
   uid: string;
@@ -218,44 +234,42 @@ function DayDrawer({
                     <ul className='divide-border divide-y'>
                       {ofType.map((meal) => {
                         const mealCost = getPlannedMealCost(meal, costContext);
+                        const title = getPlannedMealTitle(
+                          meal,
+                          recipesById,
+                          ingredientsById,
+                        );
+                        const detail = getMealDetail(
+                          meal,
+                          recipesById,
+                          ingredientsById,
+                        );
                         return (
                           <li key={meal.id}>
                             <Button
                               type='button'
                               variant='tertiary'
-                              aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}`}
+                              aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}: ${title}`}
                               onClick={() => setPickedMealId(meal.id)}
-                              className='h-auto w-full flex-col items-stretch gap-0 px-0! py-1 text-left font-normal'
+                              className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
                             >
-                              {meal.items.map((item) => {
-                                const itemCost = mealCost.items.get(item.id);
-                                return (
-                                  <span
-                                    key={item.id}
-                                    className='flex items-center gap-3 py-1.5'
-                                  >
-                                    <span className='min-w-0 flex-1'>
-                                      <span className='text-foreground block truncate'>
-                                        {getItemTitle(
-                                          item,
-                                          recipesById,
-                                          ingredientsById,
-                                        )}
-                                      </span>
-                                      <span className='text-muted-foreground block text-xs'>
-                                        {formatServings(item.servings)}
-                                      </span>
-                                    </span>
-                                    <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                                      {formatRowCost(
-                                        itemCost?.cents,
-                                        meal.snapshot !== null,
-                                        getRepricedAt(meal.snapshot) !== null,
-                                      )}
-                                    </span>
+                              <span className='min-w-0 flex-1'>
+                                <span className='text-foreground block wrap-break-word whitespace-normal'>
+                                  {title}
+                                </span>
+                                {detail && (
+                                  <span className='text-muted-foreground block text-xs whitespace-normal'>
+                                    {detail}
                                   </span>
-                                );
-                              })}
+                                )}
+                              </span>
+                              <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                                {formatRowCost(
+                                  mealCost.totalCents,
+                                  meal.snapshot !== null,
+                                  getRepricedAt(meal.snapshot) !== null,
+                                )}
+                              </span>
                             </Button>
                           </li>
                         );
