@@ -141,7 +141,7 @@ function ItemSearch({
   };
 
   const getPlaceholder = () => {
-    if (onPickMeal) {
+    if (onPickMeal && meals.length > 0) {
       return isPhone
         ? 'Recipes, meals, ingredients'
         : 'Search recipes, saved meals, ingredients';
