@@ -4,15 +4,22 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
+  CONTAINER_PLACE_LABELS,
+  SOFT_MAX_CONTAINERS,
+} from '@apps/pinch/constants';
+import {
   changeContainerEatBy,
+  clearOutPlace,
   correctContainerCount,
   eatContainer,
   moveContainer,
   removeContainer,
   tossContainer,
+  undoClearOut,
   undoContainerBatch,
   undoContainerEnd,
   writeContainers,
+  type ClearedContainer,
 } from '@apps/pinch/store/actions/containerActions';
 import {
   selectContainersLoadError,
@@ -22,7 +29,9 @@ import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
   buildContainer,
   getNewContainersProblem,
+  getPutBackText,
   getSavedText,
+  isContainerListFull,
   type NewContainerInput,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -186,6 +195,63 @@ export function useContainerActions(uid: string) {
       dispatch(removeContainer({ uid, id: container.id })).unwrap(),
     );
 
+  const undoClear = async (cleared: ClearedContainer[]) => {
+    try {
+      const { restored, error } = await dispatch(
+        undoClearOut({ uid, cleared }),
+      ).unwrap();
+      if (restored === 0) {
+        showUndoFailed('They changed since, so they were left as they are.');
+        return;
+      }
+      addToast({
+        title: getPutBackText(restored, cleared.length),
+        description: error ?? undefined,
+        type: restored === cleared.length ? 'success' : 'info',
+      });
+    } catch (error) {
+      showUndoFailed(getErrorMessage(error, "Couldn't undo that."));
+    }
+  };
+
+  /** Resolves to how many it really cleared, and a sentence when it stopped partway. */
+  const clearOut = (place: ContainerPlace, ids: string[]) =>
+    once(`clear:${place}`, async () => {
+      const { cleared, error } = await dispatch(
+        clearOutPlace({ uid, place, ids }),
+      ).unwrap();
+      if (cleared.length > 0) {
+        addUndoToast(
+          `Cleared out the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
+          `${cleared.length} ${cleared.length === 1 ? 'container' : 'containers'}`,
+          () => undoClear(cleared),
+        );
+      }
+      return { count: cleared.length, error };
+    });
+
+  /** A cleared-out container back in stock as it was, for a clear-out that took one by mistake. */
+  const putBack = (container: Container) =>
+    once(container.id, async () => {
+      const last = container.history.at(-1);
+      if (last?.kind !== 'CLEAR') {
+        throw new Error('That has changed since, so it could not be undone.');
+      }
+      if (isReady && isContainerListFull(inStockCount)) {
+        throw new Error(
+          `You have ${SOFT_MAX_CONTAINERS} containers in stock. Finish or delete one to put this back.`,
+        );
+      }
+      await dispatch(
+        undoContainerEnd({ uid, id: container.id, at: last.at }),
+      ).unwrap();
+      addToast({
+        title: `Put ${container.title} back in the ${CONTAINER_PLACE_LABELS[container.place].toLowerCase()}`,
+        type: 'success',
+      });
+      return true;
+    });
+
   return {
     isReady,
     loadError,
@@ -196,5 +262,7 @@ export function useContainerActions(uid: string) {
     changeEatBy,
     correctCount,
     remove,
+    clearOut,
+    putBack,
   };
 }

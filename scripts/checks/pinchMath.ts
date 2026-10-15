@@ -96,6 +96,11 @@ import {
   planMove,
   planToss,
   planUndoEnd,
+  planClear,
+  planClearOut,
+  getClearOutMessage,
+  getPutBackText,
+  getEventText,
 } from '../../src/apps/pinch/utils/containers.ts';
 import {
   getCookFactText,
@@ -2970,6 +2975,134 @@ assert.match(
   /already finished/,
 );
 
+const clearedOne = planOf(planClear(container({ servings: 3 }), 5000));
+assert.deepEqual(
+  [
+    clearedOne.status,
+    clearedOne.servings,
+    clearedOne.place,
+    clearedOne.history?.at(-1),
+    clearedOne.updatedAt,
+  ],
+  [
+    'DONE',
+    undefined,
+    undefined,
+    { kind: 'CLEAR', at: 5000, servings: 3, place: null, note: null },
+    5000,
+  ],
+  'clearing one out finishes it with one CLEAR that records what was left, and keeps its place and servings',
+);
+assert.match(
+  errorOf(planClear(container({ status: 'DONE' }), 5000)),
+  /already finished/,
+  'a finished container is not cleared again',
+);
+assert.deepEqual(
+  planClearOut(
+    [
+      container({ id: 'a' }),
+      null,
+      container({ id: 'b', status: 'DONE' }),
+      container({ id: 'c', place: 'FREEZER' }),
+      container({ id: 'd', servings: 2 }),
+    ],
+    'FRIDGE',
+    5000,
+  ).map(({ id, fields }) => [id, fields.history?.at(-1)?.servings]),
+  [
+    ['a', 4],
+    ['d', 2],
+  ],
+  'a clear-out skips a container that is gone, finished or moved to the other place since the tap',
+);
+const afterClear = container({
+  servings: 3,
+  status: 'DONE',
+  history: [
+    ...container().history,
+    makeEvent('EAT', 4000, { servings: 1 }),
+    makeEvent('CLEAR', 5000, { servings: 3 }),
+  ],
+});
+assert.deepEqual(
+  [
+    planOf(planUndoEnd(afterClear, 5000, 9000)).status,
+    planOf(planUndoEnd(afterClear, 5000, 9000)).servings,
+    planOf(planUndoEnd(afterClear, 5000, 9000)).history?.at(-1)?.kind,
+  ],
+  ['IN_STOCK', 3, 'EAT'],
+  'undoing a clear-out puts it back in stock with what it had and drops the CLEAR',
+);
+assert.match(
+  errorOf(
+    planUndoEnd(
+      {
+        ...afterClear,
+        status: 'IN_STOCK',
+        history: [
+          ...afterClear.history,
+          makeEvent('FREEZE', 6000, { servings: 3, place: 'FREEZER' }),
+        ],
+      },
+      5000,
+      9000,
+    ),
+  ),
+  /could not be undone/,
+  'a clear-out that something else followed is not undone',
+);
+assert.match(
+  errorOf(planUndoEnd(afterClear, 4999, 9000)),
+  /could not be undone/,
+  'an undo for another clear-out does nothing',
+);
+const clearedFull = planOf(
+  planClear(
+    container({
+      servings: 2,
+      history: [
+        makeEvent('MADE', 0, { servings: 12 }),
+        makeEvent('FREEZE', 1, { servings: 8, place: 'FREEZER' }),
+        ...Array.from({ length: MAX_CONTAINER_HISTORY - 2 }, (_, i) =>
+          makeEvent('EAT', i + 2, { servings: 1 }),
+        ),
+      ],
+    }),
+    99,
+  ),
+).history;
+assert.deepEqual(
+  [
+    clearedFull?.length,
+    clearedFull?.at(-1)?.kind,
+    clearedFull?.slice(0, 2).map((entry) => entry.kind),
+  ],
+  [MAX_CONTAINER_HISTORY, 'CLEAR', ['MADE', 'FREEZE']],
+  'past the cap a clear-out drops the oldest EAT, never the CLEAR it adds or what went in',
+);
+assert.deepEqual(
+  [
+    getEventText(makeEvent('CLEAR', 1, { servings: 3 })),
+    getEventText(makeEvent('CLEAR', 1)),
+    getClearOutMessage(9, 24),
+    getClearOutMessage(1, 1),
+    getPutBackText(9, 9),
+    getPutBackText(1, 1),
+    getPutBackText(7, 9),
+  ],
+  [
+    'Cleared out · 3 servings',
+    'Cleared out',
+    'This takes 9 containers (24 servings) off your list and keeps them in Finished as cleared out. You can undo it right after.',
+    'This takes 1 container (1 serving) off your list and keeps it in Finished as cleared out. You can undo it right after.',
+    'Put 9 containers back',
+    'Put 1 container back',
+    'Put back 7 of 9; the rest changed since',
+  ],
+  'a clear-out says what it takes off the list and what it keeps, and the Undo says how many came back',
+);
+
 const toFreezer = planOf(planMove(container(), 'FREEZER', dayOf(20), 6000));
 assert.deepEqual(
   [
@@ -3487,8 +3620,24 @@ assert.deepEqual(
       makeEvent('TOSS', 2, { servings: 4 }),
     ]),
     finishedOf([makeEvent('EAT', 2, { servings: 1 })]),
+    finishedOf([
+      makeEvent('FRIDGE', 1, { servings: 6, place: 'FRIDGE' }),
+      makeEvent('EAT', 2, { servings: 3 }),
+      makeEvent('CLEAR', 3, { servings: 3 }),
+    ]),
+    finishedOf([
+      makeEvent('FREEZE', 1, { servings: 3, place: 'FREEZER' }),
+      makeEvent('CLEAR', 2, { servings: 3 }),
+    ]),
   ],
-  ['Threw out 1 of 4', 'Ate 4 servings', 'Threw out 4 servings', 'Ate it all'],
+  [
+    'Threw out 1 of 4',
+    'Ate 4 servings',
+    'Threw out 4 servings',
+    'Ate it all',
+    'Cleared out 3 of 6',
+    'Cleared out 3 servings',
+  ],
   'a finished container says how much it ended with and how much went in, not the other way round',
 );
 

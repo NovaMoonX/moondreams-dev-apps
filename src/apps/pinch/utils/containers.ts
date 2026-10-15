@@ -420,6 +420,44 @@ export const planToss = (container: Container, now: number): ContainerPlan =>
         },
       };
 
+export const planClear = (container: Container, now: number): ContainerPlan =>
+  container.status !== 'IN_STOCK'
+    ? { error: FINISHED }
+    : {
+        fields: {
+          status: 'DONE',
+          history: appendEvent(
+            container.history,
+            makeEvent('CLEAR', now, { servings: container.servings }),
+          ),
+          updatedAt: now,
+        },
+      };
+
+/** What a clear-out of one place still writes: a container that is gone, finished or in the other place since the tap is left as it is. */
+export const planClearOut = (
+  containers: (Container | null)[],
+  place: ContainerPlace,
+  now: number,
+) =>
+  containers.flatMap((container) => {
+    if (container === null || container.place !== place) return [];
+
+    const plan = planClear(container, now);
+    return 'fields' in plan ? [{ id: container.id, fields: plan.fields }] : [];
+  });
+
+const countContainers = (count: number) =>
+  `${count} ${count === 1 ? 'container' : 'containers'}`;
+
+export const getClearOutMessage = (count: number, servings: number) =>
+  `This takes ${countContainers(count)} (${formatServings(servings)}) off your list and keeps ${count === 1 ? 'it' : 'them'} in Finished as cleared out. You can undo it right after.`;
+
+export const getPutBackText = (restored: number, total: number) =>
+  restored === total
+    ? `Put ${countContainers(restored)} back`
+    : `Put back ${restored} of ${total}; the rest changed since`;
+
 export const planMove = (
   container: Container,
   to: ContainerPlace,
@@ -506,7 +544,9 @@ export const planCount = (
   };
 };
 
-/** Only while the EAT or TOSS is still the last event, so a later change is never rewound. */
+const END_KINDS: ContainerEventKind[] = ['EAT', 'TOSS', 'CLEAR'];
+
+/** Only while the EAT, TOSS or CLEAR is still the last event, so a later change is never rewound. */
 export const planUndoEnd = (
   container: Container,
   at: number,
@@ -516,7 +556,7 @@ export const planUndoEnd = (
   if (
     !last ||
     last.at !== at ||
-    (last.kind !== 'EAT' && last.kind !== 'TOSS') ||
+    !END_KINDS.includes(last.kind) ||
     last.servings === null
   ) {
     return { error: 'That has changed since, so it could not be undone.' };
@@ -573,6 +613,8 @@ export const getEventText = (event: ContainerEvent) => {
       return amount === '' ? 'Ate some' : `Ate ${amount}`;
     case 'TOSS':
       return amount === '' ? 'Threw it out' : `Threw out ${amount}`;
+    case 'CLEAR':
+      return amount === '' ? 'Cleared out' : `Cleared out · ${amount}`;
     default:
       return event.note ?? 'Changed';
   }
@@ -585,11 +627,12 @@ export const getStartServings = (container: Container) =>
 export const getFinishedText = (container: Container) => {
   const last = container.history.at(-1);
   const started = getStartServings(container);
-  if (last?.kind === 'TOSS') {
-    const tossed = last.servings ?? container.servings;
-    return started !== null && started > tossed
-      ? `Threw out ${tossed} of ${started}`
-      : `Threw out ${formatServings(tossed)}`;
+  if (last?.kind === 'TOSS' || last?.kind === 'CLEAR') {
+    const verb = last.kind === 'TOSS' ? 'Threw out' : 'Cleared out';
+    const ended = last.servings ?? container.servings;
+    return started !== null && started > ended
+      ? `${verb} ${ended} of ${started}`
+      : `${verb} ${formatServings(ended)}`;
   }
   return started === null ? 'Ate it all' : `Ate ${formatServings(started)}`;
 };
