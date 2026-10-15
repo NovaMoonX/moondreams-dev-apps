@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Plus, ShoppingCart, Store } from 'lucide-react';
+import { Plus, Store } from 'lucide-react';
 
 import EntryChip from '@/components/EntryChip';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
@@ -344,17 +344,10 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           </p>
           <div className='flex flex-wrap gap-2'>
             {hasPrepared && <PreparedEntry />}
-            {storeCount > 0 && (
+            {(storeCount > 0 || productCount > 0) && (
               <EntryChip
                 icon={<Store className='h-4 w-4' />}
-                label='Stores'
-                onClick={() => openSubview({ kind: 'stores' })}
-              />
-            )}
-            {productCount > 0 && (
-              <EntryChip
-                icon={<ShoppingCart className='h-4 w-4' />}
-                label='Products'
+                label='Stores & prices'
                 onClick={() => openSubview({ kind: 'products' })}
               />
             )}
