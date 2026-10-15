@@ -1474,13 +1474,13 @@ service cloud.firestore {
         return value is list && value.size() <= 60;
       }
 
-      // A null amount is a line with just a name ("parsley", from a recipe line with no amount).
+      // A null amount is a line with just a name ("parsley", from a recipe line with no amount), always counted in EACH.
       function isShoppingItem(data, id) {
         return data.keys().hasOnly(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'sources', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.ingredientId, 80)
-          && (data.amount == null || isPositiveAmount(data.amount))
+          && ((data.amount == null && data.unit == 'EACH') || isPositiveAmount(data.amount))
           && isUnit(data.unit)
           && id == data.ingredientId + '__' + data.unit
           && data.isChecked is bool

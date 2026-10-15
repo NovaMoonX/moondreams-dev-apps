@@ -61,6 +61,8 @@ const UNMEASURED_HEAD =
   /^((?:an?\s+)?(?:(?:small|large|big|generous|good)\s+)?(?:few\s+)?(?:handful|splash|drizzle|sprinkle|knob|dash|bunch|sprig|pinch)(?:e?s)?)\s+of\s+(.+)$/i;
 const PAIR = /^([^\d,]+?)\s+(?:and|&)\s+([^\d,]+)$/i;
 const MAX_PAIR_WORDS = 4;
+const SEASONING =
+  /^(?:(?:kosher|sea|table|flaky)\s+)?salt$|^(?:(?:freshly|fresh|black|white|ground|cracked)\s+)*pepper$/i;
 
 const isPairPart = (part: string, other: string) =>
   part.length >= 3 &&
@@ -96,10 +98,13 @@ const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
     line.note,
   ]);
   const pair = PAIR.exec(name);
-  const names =
-    pair && isPairPart(pair[1], pair[2]) && isPairPart(pair[2], pair[1])
-      ? [pair[1], pair[2]]
-      : [name];
+  const isSplit =
+    pair &&
+    isPairPart(pair[1], pair[2]) &&
+    isPairPart(pair[2], pair[1]) &&
+    (tail !== null ||
+      (SEASONING.test(pair[1].trim()) && SEASONING.test(pair[2].trim())));
+  const names = isSplit ? [pair[1], pair[2]] : [name];
 
   return names.map((part) => ({
     ...line,

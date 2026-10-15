@@ -200,6 +200,81 @@ import type {
   ShoppingView,
   Unit,
 } from '../../src/apps/pinch/types.ts';
+import {
+  getIngredientUses,
+  getPackageUnit,
+  getUseText,
+  rankGaps,
+} from '../../src/apps/pinch/utils/gapOrder.ts';
+import { getPlanInRange as shopGetPlanInRange } from '../../src/apps/pinch/utils/shopping.ts';
+import type { PlannedMeal as ShopPlannedMeal } from '../../src/apps/pinch/types.ts';
+import {
+  CATALOG_FAMILIES as SHOP_CATALOG_FAMILIES,
+  CATALOG_INGREDIENTS_BY_ID as SHOP_CATALOG_BY_ID,
+} from '../../src/apps/pinch/catalog/index.ts';
+import {
+  SHOP_SECTION_BY_FAMILY as SHOP_BY_FAMILY,
+  SHOP_SECTION_BY_INGREDIENT as SHOP_BY_INGREDIENT,
+  SHOP_SECTIONS as SHOP_SECTION_IDS,
+} from '../../src/apps/pinch/constants.ts';
+import { getShopSection as shopGetSection } from '../../src/apps/pinch/utils/shopping.ts';
+import {
+  getShopAmount as shopAmountOf,
+  groupShopLines as shopGroupLines,
+  groupShoppingItems as shopGroupItems,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import { isUsuallyAtHome as shopIsAtHome } from '../../src/apps/pinch/utils/shopping.ts';
+import { CATALOG_INGREDIENTS as SHOP_CATALOG } from '../../src/apps/pinch/catalog/index.ts';
+import { searchIngredients as shopSearch } from '../../src/apps/pinch/utils/catalogSearch.ts';
+import {
+  getShoppingCost as shopCostOf,
+  getShoppingCostCoverage as shopCoverage,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import {
+  formatRecipeUnitEcho as kitaEcho,
+  formatUnitPrice as kitaUnitPrice,
+} from '../../src/apps/pinch/utils/productFormat.ts';
+import {
+  buildRecipeSearchIndex as r2BuildIndex,
+  searchRecipes as r2Search,
+} from '../../src/apps/pinch/utils/catalogSearch.ts';
+import { getCountChangeCopy as kitbCountCopy } from '../../src/apps/pinch/utils/containers.ts';
+import {
+  getBatchKey as kitbBatchKey,
+  getBatchServingsText as kitbServingsText,
+  getBoxCountCopy as kitbBoxCopy,
+  groupBatches as kitbGroup,
+} from '../../src/apps/pinch/utils/containers.ts';
+import { getEatByLabel as kitbEatByLabel } from '../../src/apps/pinch/utils/containers.ts';
+import { canPutBack as kitbCanPutBack } from '../../src/apps/pinch/utils/containers.ts';
+import {
+  getFrozenAt as kitbFrozenAt,
+  isEatByShown as kitbIsEatByShown,
+} from '../../src/apps/pinch/utils/containers.ts';
+import { getFrozenText as kitbFrozenText } from '../../src/apps/pinch/utils/containers.ts';
+import {
+  getSourcedLines as srcSourcedLines,
+  mergeSourcedLines as srcMergeLines,
+  mergeSources as srcMergeSources,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import { MAX_SHOPPING_SOURCES as SRC_MAX } from '../../src/apps/pinch/constants.ts';
+import {
+  formatSourceDay as srcDay,
+  formatSourceNames as srcNames,
+  getOnListHint as srcHint,
+  getRowOnList as srcRowOnList,
+  parseShoppingSource as srcParse,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import { getDayOnList as srcDayOnList } from '../../src/apps/pinch/utils/shopping.ts';
+import {
+  getShoppingSourceLabels as srcLabels,
+  getShoppingSourcesText as srcText,
+} from '../../src/apps/pinch/utils/shopping.ts';
+import type { Meal as SrcMeal } from '../../src/apps/pinch/types.ts';
+import {
+  SHOPPING_VIEW_LABELS as designShopLabels,
+  SHOPPING_VIEWS as designShopViews,
+} from '../../src/apps/pinch/constants.ts';
 
 const ingredient = (
   id: string,
@@ -4177,7 +4252,7 @@ assert.deepEqual(
 assert.equal(getPutAwayText([]), null);
 
 // ---------------------------------------------------------------------------
-// CAL workstream: the calendar's summary line and Week summary
+// The calendar's summary line and Week summary
 // ---------------------------------------------------------------------------
 {
   const {
@@ -4384,7 +4459,7 @@ assert.equal(getPutAwayText([]), null);
   );
 }
 
-// PLANA (plan builder): recent picks, the day strip and the default meal.
+// Plan builder: recent picks, the day strip and the default meal.
 // ---------------------------------------------------------------------------
 {
   const recentPicks = rankRecentPicks({
@@ -4511,7 +4586,7 @@ assert.equal(getPutAwayText([]), null);
   );
 }
 
-// ---- PLANB: the planned meal's offer by phase ----
+// ---- The planned meal's offer by phase ----
 {
   const offerNow = localNoon(2026, 9, 15);
   const plate = [
@@ -4679,7 +4754,7 @@ assert.equal(getPutAwayText([]), null);
   );
 }
 
-// ---- PLANB: the shared words for a row's price and a cost tile ----
+// ---- The shared words for a row's price and a cost tile ----
 assert.deepEqual(
   [
     formatRowPrice(8.4, true),
@@ -4703,7 +4778,7 @@ assert.deepEqual(
   'a tile says so far only while its gaps can still be priced, and a fixed day never does',
 );
 
-// ---- PLANB: a cooked meal on the day drawer ----
+// ---- A cooked meal on the day drawer ----
 {
   const cookedNow = localNoon(2026, 9, 15);
   const cooks = new Set(['m1__adobo', 'm1__rice', 'm2__adobo']);
@@ -4740,14 +4815,7 @@ assert.deepEqual(
   );
 }
 
-// ---- R1 (recipe drawer, quiet cost): the biggest gap first, where it's used, and the package unit ----
-
-import {
-  getIngredientUses,
-  getPackageUnit,
-  getUseText,
-  rankGaps,
-} from '../../src/apps/pinch/utils/gapOrder.ts';
+// ---- The biggest gap first, where it's used, and the package unit ----
 
 const r1Ingredient = (
   id: string,
@@ -4885,7 +4953,7 @@ assert.equal(
   "an ingredient nothing uses starts from its serving's unit",
 );
 
-// ---- COOK workstream: cooking mode ----
+// ---- Cooking mode
 const cookUtils = await import('../../src/apps/pinch/utils/cooks.ts');
 assert.deepEqual(
   [
@@ -5144,11 +5212,8 @@ assert.deepEqual(
 );
 
 // ============================================================
-// SHOP workstream: the shopping list's weekly add, shop order and shop amounts
+// The shopping list's weekly add, shop order and shop amounts
 // ============================================================
-import { getPlanInRange as shopGetPlanInRange } from '../../src/apps/pinch/utils/shopping.ts';
-import type { PlannedMeal as ShopPlannedMeal } from '../../src/apps/pinch/types.ts';
-
 const shopPlanned = (id: string, dayKey: string): ShopPlannedMeal =>
   ({
     id,
@@ -5215,17 +5280,6 @@ assert.deepEqual(
   'a range wholly in the past gives nothing, starting after it ends',
 );
 
-import {
-  CATALOG_FAMILIES as SHOP_CATALOG_FAMILIES,
-  CATALOG_INGREDIENTS_BY_ID as SHOP_CATALOG_BY_ID,
-} from '../../src/apps/pinch/catalog/index.ts';
-import {
-  SHOP_SECTION_BY_FAMILY as SHOP_BY_FAMILY,
-  SHOP_SECTION_BY_INGREDIENT as SHOP_BY_INGREDIENT,
-  SHOP_SECTIONS as SHOP_SECTION_IDS,
-} from '../../src/apps/pinch/constants.ts';
-import { getShopSection as shopGetSection } from '../../src/apps/pinch/utils/shopping.ts';
-
 assert.deepEqual(
   SHOP_CATALOG_FAMILIES.filter(
     (family) => SHOP_BY_FAMILY[family.id] === undefined,
@@ -5273,12 +5327,6 @@ assert.deepEqual(
   ['produce', 'pantry', 'frozen', 'dairy', 'other', 'other', 'other'],
   'a section comes from the ingredient when the catalog moves it, else its family, else Other (the person own families included)',
 );
-
-import {
-  getShopAmount as shopAmountOf,
-  groupShopLines as shopGroupLines,
-  groupShoppingItems as shopGroupItems,
-} from '../../src/apps/pinch/utils/shopping.ts';
 
 const shopAmountText = (
   parts: [number, Unit][],
@@ -5424,8 +5472,6 @@ assert.deepEqual(
   'an ingredient with an open and a got item is a row in each half, and the two rows never share an id',
 );
 
-import { isUsuallyAtHome as shopIsAtHome } from '../../src/apps/pinch/utils/shopping.ts';
-
 assert.deepEqual(
   [
     shopIsAtHome({ ingredientId: 'cat-salt', section: 'spices' }),
@@ -5437,9 +5483,6 @@ assert.deepEqual(
   [true, true, true, false, false],
   'spices, oils, vinegar and water start unticked in an add sheet; sauces and fresh ginger stay ticked',
 );
-
-import { CATALOG_INGREDIENTS as SHOP_CATALOG } from '../../src/apps/pinch/catalog/index.ts';
-import { searchIngredients as shopSearch } from '../../src/apps/pinch/utils/catalogSearch.ts';
 
 const shopCatalog = SHOP_CATALOG.map(
   (entry) => ({ ...entry }) as unknown as ResolvedIngredient,
@@ -5497,11 +5540,6 @@ assert.equal(
 );
 assert.deepEqual(shopTop('zzzz'), [], 'a word nothing has finds nothing');
 
-import {
-  getShoppingCost as shopCostOf,
-  getShoppingCostCoverage as shopCoverage,
-} from '../../src/apps/pinch/utils/shopping.ts';
-
 const shopCoverageOf = (lines: [string, number, Unit][]) => {
   const result = shopCostOf(
     lines.map(([ingredientId, amount, unit]) => ({
@@ -5544,13 +5582,8 @@ assert.deepEqual(
 );
 
 // ============================================================
-// KITA workstream: Kitchen's prices, a unit price beside each place and the price read back in the recipes' unit
+// Kitchen's prices, a unit price beside each place and the price read back in the recipes' unit
 // ============================================================
-
-import {
-  formatRecipeUnitEcho as kitaEcho,
-  formatUnitPrice as kitaUnitPrice,
-} from '../../src/apps/pinch/utils/productFormat.ts';
 
 const kitaPrice = (priceCents: number, sizeAmount: number, sizeUnit: Unit) => ({
   priceCents,
@@ -5623,13 +5656,8 @@ assert.deepEqual(
   'the price form reads a price back in the unit the recipes measure it in, with the cost math’s own bridge, and says nothing when the units can’t be compared',
 );
 
-// R2 workstream: recipes list search, sources and the recipe form
+// Recipes list search, sources and the recipe form
 // ============================================================
-
-import {
-  buildRecipeSearchIndex as r2BuildIndex,
-  searchRecipes as r2Search,
-} from '../../src/apps/pinch/utils/catalogSearch.ts';
 
 const r2Ingredient = (id: string, name: string, aliases: string[] = []) =>
   ({
@@ -5743,10 +5771,8 @@ assert.deepEqual(
   'a missing source or ingredient adds nothing to search',
 );
 
-// KITB workstream: the Fridge & freezer list and its sheet
+// The Fridge & freezer list and its sheet
 // ============================================================
-import { getCountChangeCopy as kitbCountCopy } from '../../src/apps/pinch/utils/containers.ts';
-
 assert.deepEqual(
   [
     kitbCountCopy(3, 3),
@@ -5775,13 +5801,6 @@ assert.deepEqual(
   ],
   'the line under the stepper says what the answer records',
 );
-
-import {
-  getBatchKey as kitbBatchKey,
-  getBatchServingsText as kitbServingsText,
-  getBoxCountCopy as kitbBoxCopy,
-  groupBatches as kitbGroup,
-} from '../../src/apps/pinch/utils/containers.ts';
 
 const kitbSoup = (id: string, over: Partial<Container> = {}) =>
   container({
@@ -5880,8 +5899,6 @@ assert.deepEqual(
   '"How many boxes are left?" only counts down, each box eaten whole',
 );
 
-import { getEatByLabel as kitbEatByLabel } from '../../src/apps/pinch/utils/containers.ts';
-
 assert.deepEqual(
   [13, 14, 15].map((day) => kitbEatByLabel(dayOf(day), lateOnThe14th)),
   ['Past its date', 'Eat today', 'Eat by tomorrow'],
@@ -5892,8 +5909,6 @@ assert.equal(
   `Eat by ${getEatByPhrase(dayOf(18), lateOnThe14th)}`,
   'a later date is plain words with the date',
 );
-
-import { canPutBack as kitbCanPutBack } from '../../src/apps/pinch/utils/containers.ts';
 
 const kitbEnded = (kind: 'EAT' | 'TOSS' | 'CLEAR' | 'EDIT') =>
   container({
@@ -5924,11 +5939,6 @@ assert.deepEqual(
   },
   'putting back an eaten box restores the count it had before the last eat',
 );
-
-import {
-  getFrozenAt as kitbFrozenAt,
-  isEatByShown as kitbIsEatByShown,
-} from '../../src/apps/pinch/utils/containers.ts';
 
 assert.deepEqual(
   [
@@ -5985,8 +5995,6 @@ assert.deepEqual(
   'what you finished counts what was eaten (a corrected count included), and names no number once the history may have lost an eat',
 );
 
-import { getFrozenText as kitbFrozenText } from '../../src/apps/pinch/utils/containers.ts';
-
 assert.equal(
   kitbFrozenText(
     kitbSoup('z', { history: [makeEvent('FREEZE', localAt(5, 23, 30))] }),
@@ -5997,15 +6005,8 @@ assert.equal(
 );
 
 // ============================================================
-// SOURCES workstream: the shopping list remembers what filled it
+// The shopping list remembers what filled it
 // ============================================================
-
-import {
-  getSourcedLines as srcSourcedLines,
-  mergeSourcedLines as srcMergeLines,
-  mergeSources as srcMergeSources,
-} from '../../src/apps/pinch/utils/shopping.ts';
-import { MAX_SHOPPING_SOURCES as SRC_MAX } from '../../src/apps/pinch/constants.ts';
 
 assert.deepEqual(
   srcMergeLines([
@@ -6088,14 +6089,6 @@ assert.deepEqual(
   [[1.5, ['thu', 'fri']]],
   'thirds from two planned meals round once when they meet on one item',
 );
-
-import {
-  formatSourceDay as srcDay,
-  formatSourceNames as srcNames,
-  getOnListHint as srcHint,
-  getRowOnList as srcRowOnList,
-  parseShoppingSource as srcParse,
-} from '../../src/apps/pinch/utils/shopping.ts';
 
 const srcItem = (
   amount: number,
@@ -6225,8 +6218,6 @@ assert.deepEqual(
   'a source names a recipe, a saved meal, or a planned meal by its own id',
 );
 
-import { getDayOnList as srcDayOnList } from '../../src/apps/pinch/utils/shopping.ts';
-
 const srcPlanned = (id: string, items: MealItem[]) =>
   ({ id, items }) as unknown as ShopPlannedMeal;
 const srcDayMeals = [
@@ -6284,12 +6275,6 @@ assert.deepEqual(
   ],
   'a day is on the list once every planned meal with something to buy put a line there, got or not (a meal whose recipe is gone has nothing to buy); otherwise it counts the rows its sheet starts unticked, a line from before sources included',
 );
-
-import {
-  getShoppingSourceLabels as srcLabels,
-  getShoppingSourcesText as srcText,
-} from '../../src/apps/pinch/utils/shopping.ts';
-import type { Meal as SrcMeal } from '../../src/apps/pinch/types.ts';
 
 const srcPlannedOn = (
   id: string,
@@ -6396,7 +6381,7 @@ assert.deepEqual(
 );
 
 // ============================================================
-// PLATE workstream: a planned plate of several recipes cooks as one session
+// A planned plate of several recipes cooks as one session
 // ============================================================
 
 const plateCooks = await import('../../src/apps/pinch/utils/cooks.ts');
@@ -6562,13 +6547,8 @@ assert.deepEqual(
 );
 
 // ============================================================
-// DESIGN workstream: the shopping list's All view
+// The shopping list's All view
 // ============================================================
-import {
-  SHOPPING_VIEW_LABELS as designShopLabels,
-  SHOPPING_VIEWS as designShopViews,
-} from '../../src/apps/pinch/constants.ts';
-
 assert.deepEqual(
   designShopViews.map((view) => designShopLabels[view]),
   ['To buy', 'Got it', 'All'],
@@ -6608,7 +6588,7 @@ assert.equal(
 );
 
 // ============================================================
-// AMOUNT workstream: a recipe line may have no amount ("salt to taste")
+// A recipe line may have no amount ("salt to taste")
 // ============================================================
 {
   const { getPricedCoverage, getPeriodStats } =
@@ -7023,7 +7003,7 @@ assert.equal(
   );
 }
 
-// AMOUNT: the recipe form keeps "no amount" as a choice, not a gap to fix
+// The recipe form keeps "no amount" as a choice, not a gap to fix
 {
   const {
     getDataFromExtracted,
@@ -7137,7 +7117,7 @@ assert.equal(
   );
 }
 
-// AMOUNT (J1-P3b): an unmatched reading offers the closest names
+// Near matches: an unmatched reading offers the closest names
 {
   const { findNearMatches } =
     await import('../../src/apps/pinch/utils/catalogSearch.ts');
@@ -7174,7 +7154,7 @@ assert.equal(
 }
 
 // ============================================================
-// Merge of SOURCES and AMOUNT: a name-only line carries its source
+// A name-only line carries its source
 // ============================================================
 {
   const sourced = (

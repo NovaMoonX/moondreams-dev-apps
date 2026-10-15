@@ -21,7 +21,6 @@ const waiting: BackLayer[] = [];
 let lastSeq = 0;
 let steppedAt = 0;
 let isFlushQueued = false;
-let isListening = false;
 
 const readEntry = () => {
   const state: unknown = window.history.state;
@@ -123,6 +122,11 @@ const handlePop = () => {
   leaveDeadEntry();
 };
 
+// Always listening, so landing on an entry kept from before a reload steps on instead of costing a press.
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', handlePop);
+}
+
 const queueFlush = () => {
   if (isFlushQueued) return;
   isFlushQueued = true;
@@ -133,10 +137,6 @@ const queueFlush = () => {
 };
 
 const open = (layer: BackLayer) => {
-  if (!isListening) {
-    isListening = true;
-    window.addEventListener('popstate', handlePop);
-  }
   layers.push(layer);
   if (isStepping()) {
     waiting.push(layer);

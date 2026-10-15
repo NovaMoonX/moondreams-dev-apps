@@ -640,6 +640,11 @@ function CookingSession({
       note.isAvailable(record.recipeId) &&
       !note.isSaved(record.recipeId),
   );
+  const hasFollowUps = records.some(
+    (record) =>
+      note.isSaved(record.recipeId) ||
+      (putAway.getEntry(record.recipeId)?.saved.length ?? 0) > 0,
+  );
   const savedNoteTitles = records
     .filter((record) => note.isSaved(record.recipeId))
     .map((record) => record.entry.recipe.title);
@@ -742,8 +747,9 @@ function CookingSession({
                 caption={isPlate ? 'Servings made' : null}
                 onServingsChange={changeServings}
                 undoState={
-                  records.some((record) => record.isCooked) ||
-                  undoState === 'PENDING'
+                  !hasFollowUps &&
+                  (records.some((record) => record.isCooked) ||
+                    undoState === 'PENDING')
                     ? (undoState ?? 'READY')
                     : null
                 }

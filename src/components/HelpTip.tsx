@@ -13,6 +13,7 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CircleHelp, TriangleAlert } from 'lucide-react';
 
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const TIP_GAP_PX = 10;
@@ -111,6 +112,9 @@ function HelpTip({
   const arrowRef = useRef<HTMLSpanElement>(null);
   const tipId = useId();
   const isTipShown = isOpen && !usesModal;
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen && usesModal, () =>
+    setIsOpen(false),
+  );
 
   // A modal or tooltip can sit over a drawer, and both close on one Escape: capture it so only it does.
   useEffect(() => {
@@ -157,8 +161,9 @@ function HelpTip({
 
   const modal = (
     <Modal
+      id={dialogId}
       isOpen={isOpen}
-      onClose={() => setIsOpen(false)}
+      onClose={onDialogClose}
       title={title}
       className='border-border border'
     >

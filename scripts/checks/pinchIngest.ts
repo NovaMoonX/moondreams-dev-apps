@@ -132,6 +132,8 @@ const shakshuka = normalizeExtractedRecipe({
     { name: 'salt to taste', amount: null, unit: 'TSP', note: null },
     { name: 'Half and half', amount: null, unit: null, note: null },
     { name: 'half and half', amount: 1, unit: 'CUP', note: null },
+    { name: 'macaroni and cheese', amount: null, unit: null, note: null },
+    { name: 'sweet and sour sauce', amount: null, unit: null, note: null },
   ],
   steps: ['Season with salt and pepper.'],
   unread: [],
@@ -151,8 +153,10 @@ assert.deepEqual(
     ['salt', null, null, 'to taste'],
     ['Half and half', null, null, null],
     ['half and half', 1, 'CUP', null],
+    ['macaroni and cheese', null, null, null],
+    ['sweet and sour sauce', null, null, null],
   ],
-  '"salt and pepper to taste" is two lines and "handful of parsley" is parsley noted "a handful"; half and half stays whole',
+  '"salt and pepper to taste" is two lines and "handful of parsley" is parsley noted "a handful"; half and half, macaroni and cheese and sweet and sour sauce stay whole',
 );
 assert.deepEqual(
   shakshuka.ingredients.slice(1, 4).map((line) => idOf(line.name)),
@@ -210,8 +214,8 @@ assert.equal(
 );
 assert.equal(
   normalizeExtractedRecipe({
-    ingredients: Array.from({ length: 40 }, (_, i) => ({
-      name: `herb ${String.fromCharCode(97 + (i % 26))} and spice`,
+    ingredients: Array.from({ length: 40 }, () => ({
+      name: 'salt and pepper',
     })),
   }).ingredients.length,
   60,

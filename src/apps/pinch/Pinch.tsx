@@ -86,9 +86,10 @@ function Pinch() {
       return;
     }
     const next = new URLSearchParams(window.location.search);
-    if (!next.has('tab')) calendarIndexRef.current = getHistoryIndex();
+    const isFromCalendar = !next.has('tab');
+    if (isFromCalendar) calendarIndexRef.current = getHistoryIndex();
     next.set('tab', 'shopping');
-    startTransition(() => setSearchParams(next));
+    startTransition(() => setSearchParams(next, { replace: !isFromCalendar }));
   }, [setSearchParams]);
   const openSubviewFromToast = useCallback((next: PinchSubview) => {
     if (subviewRef.current !== null || hasDialogOnTop()) {
@@ -106,6 +107,7 @@ function Pinch() {
         return;
       }
       const next = new URLSearchParams(window.location.search);
+      const isFromTab = next.has('tab');
       next.delete('tab');
       next.set('view', 'week');
       const around = {
@@ -120,7 +122,7 @@ function Pinch() {
           dayKey,
           nonce: (current?.nonce ?? 0) + 1,
         }));
-        setSearchParams(next);
+        setSearchParams(next, { replace: isFromTab });
       });
     },
     [setSearchParams],
