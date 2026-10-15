@@ -8,7 +8,6 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
 import { CONTAINER_PLACE_LABELS } from '@apps/pinch/constants';
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
-import { useMealContainers } from '@apps/pinch/hooks/useEatFromStockPlaces';
 import {
   selectMealsById,
   selectRecipesById,
@@ -26,6 +25,8 @@ interface EatFromStockViewProps {
   uid: string;
   meal: PlannedMeal;
   place: ContainerPlace;
+  /** The containers the meal may eat from, already narrowed to its day and what it hasn't cooked. */
+  containers: Container[];
   onBack: () => void;
 }
 
@@ -33,14 +34,13 @@ export function EatFromStockView({
   uid,
   meal,
   place,
+  containers,
   onBack,
 }: EatFromStockViewProps) {
   const { eat } = useContainerActions(uid);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
-  const rows = useMealContainers(meal).filter(
-    (container) => container.place === place,
-  );
+  const rows = containers.filter((container) => container.place === place);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 

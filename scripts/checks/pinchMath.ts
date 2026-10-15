@@ -21,6 +21,10 @@ import {
   countUnaskedIngredients,
 } from '../../src/apps/pinch/utils/gaps.ts';
 import {
+  getCookedRecipeIds,
+  getPlannedMealOffer,
+} from '../../src/apps/pinch/components/calendar/plannedMealOffer.ts';
+import {
   formatRowCost,
   getFixedNote,
   getRepriceLines,
@@ -4207,5 +4211,173 @@ assert.deepEqual(
   'a cook says how many servings were put away across its containers, not how many it made',
 );
 assert.equal(getPutAwayText([]), null);
+
+// ---- PLANB: the planned meal's offer by phase ----
+{
+  const offerNow = localNoon(2026, 9, 15);
+  const plate = [
+    { kind: 'RECIPE' as const, refId: 'adobo', servings: 2 },
+    { kind: 'RECIPE' as const, refId: 'rice', servings: 2 },
+  ];
+  const offerOf = (
+    over: Partial<Parameters<typeof getPlannedMealOffer>[0]> = {},
+    date = dayOf(15),
+  ) =>
+    getPlannedMealOffer({
+      meal: { id: 'm1', date, items: plate },
+      recipeIds: ['adobo', 'rice'],
+      cookableRecipeIds: ['adobo', 'rice'],
+      cookIds: new Set<string>(),
+      containers: [],
+      savedPlates: [],
+      now: offerNow,
+      ...over,
+    });
+
+  const tonight = offerOf();
+  assert.deepEqual(
+    [
+      tonight.phase,
+      tonight.primary,
+      tonight.cookRecipeIds,
+      tonight.canMarkCooked,
+    ],
+    ['TODAY', { kind: 'COOK' }, ['adobo', 'rice'], true],
+    "tonight's uncooked dinner starts cooking",
+  );
+
+  const dueBox = container({ id: 'due', eatBy: dayOf(16) });
+  assert.deepEqual(
+    offerOf({ containers: [dueBox] }).primary,
+    { kind: 'EAT', place: 'FRIDGE' },
+    'a box due tomorrow makes eating it the next step',
+  );
+  assert.deepEqual(
+    offerOf({ containers: [container({ eatBy: dayOf(20) })] }).primary,
+    { kind: 'COOK' },
+    'a box with days to spare is offered as a chip, not the primary',
+  );
+  assert.deepEqual(
+    offerOf({ containers: [container({ eatBy: dayOf(14) })] }).primary,
+    { kind: 'COOK' },
+    'a box past its date is never the next step',
+  );
+  assert.deepEqual(
+    offerOf({
+      containers: [container({ id: 'f', place: 'FREEZER', eatBy: dayOf(15) })],
+    }).primary,
+    { kind: 'EAT', place: 'FREEZER' },
+    'a freezer box due today is the next step when the fridge has none due',
+  );
+
+  const halfCooked = offerOf({
+    cookIds: new Set(['m1__rice']),
+    containers: [dueBox, container({ id: 'r', recipeId: 'rice' })],
+  });
+  assert.deepEqual(
+    [
+      halfCooked.primary,
+      halfCooked.cookRecipeIds,
+      halfCooked.eatFrom.map((box) => box.id),
+    ],
+    [{ kind: 'COOK' }, ['adobo'], ['due']],
+    'once rice is cooked, its boxes go and cooking adobo stays',
+  );
+
+  const allCooked = offerOf({
+    cookIds: new Set(['m1__adobo', 'm1__rice']),
+    containers: [dueBox],
+  });
+  assert.deepEqual(
+    [allCooked.primary, allCooked.cookRecipeIds, allCooked.eatFrom],
+    [null, [], []],
+    'a cooked dinner has no primary, no cooking and nothing to eat from',
+  );
+
+  assert.deepEqual(
+    offerOf({
+      containers: [
+        container({ id: 'own', cookId: 'm1__adobo', eatBy: dayOf(16) }),
+        container({ id: 'other', cookId: 'k9', eatBy: dayOf(20) }),
+      ],
+    }).eatFrom.map((box) => box.id),
+    ['other'],
+    "a box this meal's own cook made is never offered back to it",
+  );
+  assert.deepEqual(
+    offerOf({
+      cookIds: new Set(['m1__rice']),
+      containers: [container({ id: 'plate', recipeId: null, mealId: 's1' })],
+    }).eatFrom,
+    [],
+    'a saved-meal box goes once anything on the plate is cooked',
+  );
+
+  const yesterday = offerOf({ containers: [dueBox] }, dayOf(14));
+  assert.deepEqual(
+    [
+      yesterday.phase,
+      yesterday.primary,
+      yesterday.cookRecipeIds,
+      yesterday.eatFrom.length,
+      yesterday.canMarkCooked,
+    ],
+    ['PAST', null, [], 1, true],
+    'yesterday still offers its boxes and the mark, never a primary or cooking',
+  );
+  assert.deepEqual(
+    offerOf({ containers: [dueBox] }, dayOf(12)).eatFrom,
+    [],
+    'three days back offers no boxes',
+  );
+
+  const ahead = offerOf({ containers: [dueBox] }, dayOf(16));
+  assert.deepEqual(
+    [
+      ahead.phase,
+      ahead.primary,
+      ahead.cookRecipeIds,
+      ahead.eatFrom,
+      ahead.canMarkCooked,
+    ],
+    ['AHEAD', null, ['adobo', 'rice'], [], false],
+    'a day ahead has no primary or boxes, can still be cooked ahead, not marked',
+  );
+
+  assert.equal(
+    offerOf().canSaveAsMeal,
+    true,
+    'a new two-item plate can be saved',
+  );
+  assert.equal(
+    offerOf({
+      savedPlates: [[plate[1], { ...plate[0] }]],
+    }).canSaveAsMeal,
+    false,
+    'a plate that already is a saved meal, in any order, is not offered again',
+  );
+  assert.equal(
+    offerOf({
+      savedPlates: [[plate[0], { ...plate[1], servings: 1 }]],
+    }).canSaveAsMeal,
+    true,
+    'a tweaked plate differs from the saved meal it came from',
+  );
+  assert.equal(
+    offerOf({ meal: { id: 'm1', date: dayOf(15), items: [plate[0]] } })
+      .canSaveAsMeal,
+    false,
+    'one item is not worth saving as a meal',
+  );
+  assert.deepEqual(
+    getCookedRecipeIds(
+      'm1',
+      ['adobo', 'rice'],
+      new Set(['m1__rice', 'm2__adobo']),
+    ),
+    ['rice'],
+    "only this meal's own cooks count",
+  );
+}
 
 console.log('pinchMath: all checks passed');

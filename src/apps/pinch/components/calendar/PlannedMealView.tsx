@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
+  BookmarkPlus,
   ChevronLeft,
   ChevronRight,
   CookingPot,
@@ -17,6 +19,7 @@ import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
+import { getPlannedMealOffer } from '@apps/pinch/components/calendar/plannedMealOffer';
 import { EatFromStockView } from '@apps/pinch/components/containers/EatFromStock';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
@@ -24,17 +27,20 @@ import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
+  CONTAINER_PLACES,
   MAX_NAME_LENGTH,
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
 } from '@apps/pinch/constants';
 import { savePlannedAsMeal } from '@apps/pinch/store/actions/mealActions';
 import { removePlannedMeal } from '@apps/pinch/store/actions/plannedMealActions';
-import { useEatFromStockPlaces } from '@apps/pinch/hooks/useEatFromStockPlaces';
+import { useMealContainers } from '@apps/pinch/hooks/useEatFromStockPlaces';
 import {
+  selectCooksById,
   selectCooksLoadError,
   selectCostContext,
   selectIngredientsById,
+  selectMeals,
   selectPlannedMeals,
   selectRecipesById,
   selectShowNutrition,
@@ -61,7 +67,6 @@ import {
 } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
-import { formatDateShort } from '@/utils/formatUtils';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import {
   getPlannedMealNutrition,
@@ -102,13 +107,15 @@ function PlannedMealView({
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const cooksLoadError = useAppSelector(selectCooksLoadError);
+  const cooksById = useAppSelector(selectCooksById);
+  const savedMeals = useAppSelector(selectMeals);
   const [error, setError] = useState<string | null>(null);
   const [isNaming, setIsNaming] = useState(false);
   const [mealName, setMealName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isChoosing, setIsChoosing] = useState(false);
   const [eatingPlace, setEatingPlace] = useState<ContainerPlace | null>(null);
-  const stockPlaces = useEatFromStockPlaces(meal ?? null);
+  const mealContainers = useMealContainers(meal ?? null);
 
   if (!meal) {
     return null;
@@ -122,9 +129,41 @@ function PlannedMealView({
 
   const today = getLocalTodayDate();
   const canPlanAhead = meal.date >= today;
-  const canEatFromStock = meal.date <= today;
+  const recipeIds = Array.from(
+    new Set(
+      meal.items.flatMap((item) =>
+        item.kind === 'RECIPE' && recipesById.has(item.refId)
+          ? [item.refId]
+          : [],
+      ),
+    ),
+  );
+  const offer = getPlannedMealOffer({
+    meal,
+    recipeIds,
+    cookableRecipeIds: recipeIds.filter(
+      (recipeId) => (recipesById.get(recipeId)?.steps.length ?? 0) > 0,
+    ),
+    cookIds: cooksById,
+    containers: mealContainers,
+    savedPlates: savedMeals.map((saved) => saved.items),
+    now: Date.now(),
+  });
+  const { primary } = offer;
+  const cookNow = cookable.filter(({ recipe }) =>
+    offer.cookRecipeIds.includes(recipe.id),
+  );
+  const eatPlaces = CONTAINER_PLACES.map((place) => ({
+    place,
+    count: offer.eatFrom.filter((container) => container.place === place)
+      .length,
+  })).filter((entry) => entry.count > 0);
+  const startCooking = () =>
+    cookNow.length === 1
+      ? onStartCooking(cookNow[0].recipe.id, cookNow[0].item.servings)
+      : setIsChoosing(true);
   const markable =
-    meal.date <= today && cooksLoadError === null
+    offer.canMarkCooked && cooksLoadError === null
       ? getMarkableRecipes(meal.items, recipesById)
       : [];
   const markableByItemId = new Map(
@@ -187,28 +226,29 @@ function PlannedMealView({
   };
 
   const actions: ActionChip[] = [
-    canPlanAhead &&
-      cookable.length > 0 && {
+    cookNow.length > 0 &&
+      primary?.kind !== 'COOK' && {
         key: 'cook',
         icon: <CookingPot className='h-4 w-4' />,
         label: 'Start cooking',
         description: 'Start cooking: steps one at a time, with a timer',
-        onClick: () =>
-          cookable.length === 1
-            ? onStartCooking(cookable[0].recipe.id, cookable[0].item.servings)
-            : setIsChoosing(true),
+        onClick: startCooking,
       },
-    ...(canEatFromStock ? stockPlaces : []).map(({ place, count }) => ({
-      key: `eat-${place}`,
-      icon: (
-        <span className='text-base leading-none'>
-          {CONTAINER_PLACE_EMOJIS[place]}
-        </span>
-      ),
-      label: `Eat from ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
-      description: `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}: ${count} ${count === 1 ? 'container matches' : 'containers match'} this meal`,
-      onClick: () => setEatingPlace(place),
-    })),
+    ...eatPlaces
+      .filter(
+        ({ place }) => !(primary?.kind === 'EAT' && primary.place === place),
+      )
+      .map(({ place, count }) => ({
+        key: `eat-${place}`,
+        icon: (
+          <span className='text-base leading-none'>
+            {CONTAINER_PLACE_EMOJIS[place]}
+          </span>
+        ),
+        label: `Eat from ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
+        description: `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}: ${count} ${count === 1 ? 'container matches' : 'containers match'} this meal`,
+        onClick: () => setEatingPlace(place),
+      })),
     canPlanAhead && {
       key: 'shopping',
       icon: <ShoppingBasket className='h-4 w-4' />,
@@ -222,7 +262,28 @@ function PlannedMealView({
           mealId: meal.sourceMealId,
         }),
     },
+    offer.canSaveAsMeal && {
+      key: 'save',
+      icon: <BookmarkPlus className='h-4 w-4' />,
+      label: 'Save as a meal',
+      description: 'Save as a meal: keep this plate to plan again',
+      onClick: () => setIsNaming(true),
+    },
   ].filter((action) => action !== false);
+
+  const getPrimaryButton = () => {
+    if (primary === null) return null;
+    if (primary.kind === 'COOK') {
+      return { label: 'Start cooking', onClick: startCooking };
+    }
+    const placeLabel = CONTAINER_PLACE_LABELS[primary.place].toLowerCase();
+    return {
+      label: `Eat from your ${placeLabel}`,
+      onClick: () => setEatingPlace(primary.place),
+    };
+  };
+  const primaryButton = getPrimaryButton();
+  const canModify = !meal.snapshot;
 
   const footer = footerEl
     ? createPortal(
@@ -245,42 +306,46 @@ function PlannedMealView({
               Save
             </Button>
           </div>
-        ) : (
+        ) : primaryButton || canModify ? (
           <div className='flex gap-2'>
-            {!meal.snapshot && (
+            {canModify && (
               <Button
                 type='button'
-                variant='secondary'
+                variant={primaryButton ? 'secondary' : 'primary'}
+                className={join(!primaryButton && 'flex-1')}
                 onClick={() => onEdit(meal.id, meal.mealType)}
               >
                 Modify
               </Button>
             )}
-            <Button
-              type='button'
-              className='flex-1'
-              onClick={() => setIsNaming(true)}
-            >
-              Save as a meal
-            </Button>
+            {primaryButton && (
+              <Button
+                type='button'
+                className='flex-1'
+                onClick={primaryButton.onClick}
+              >
+                {primaryButton.label}
+              </Button>
+            )}
           </div>
-        ),
+        ) : null,
         footerEl,
       )
     : null;
 
-  if (eatingPlace !== null && canEatFromStock) {
+  if (eatingPlace !== null) {
     return (
       <EatFromStockView
         uid={uid}
         meal={meal}
         place={eatingPlace}
+        containers={offer.eatFrom}
         onBack={() => setEatingPlace(null)}
       />
     );
   }
 
-  if (isChoosing && cookable.length > 1) {
+  if (isChoosing && cookNow.length > 1) {
     return (
       <div className='space-y-5'>
         <Button
@@ -299,7 +364,7 @@ function PlannedMealView({
           </p>
         </div>
         <ul className='divide-border divide-y'>
-          {cookable.map(({ item, recipe }) => (
+          {cookNow.map(({ item, recipe }) => (
             <li key={item.id}>
               <Button
                 type='button'
@@ -466,13 +531,6 @@ function PlannedMealView({
         })}
       </ul>
       {error && <p className='text-destructive text-sm'>{error}</p>}
-      {meal.snapshot && (
-        <p className='text-muted-foreground text-sm'>
-          {repricedAt === null
-            ? 'This day has passed, so its meals keep the prices and numbers they had.'
-            : `This day was priced on ${formatDateShort(repricedAt)}, so its meals keep those prices and numbers.`}
-        </p>
-      )}
       <RepriceDayRow uid={uid} dayKey={getPlannedDayKey(meal.date)} />
       <Button
         type='button'
