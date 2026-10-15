@@ -246,7 +246,7 @@ function PlannedMealView({
     }
     const placeLabel = CONTAINER_PLACE_LABELS[primary.place].toLowerCase();
     return {
-      label: `Eat from your ${placeLabel}`,
+      label: `Eat from ${placeLabel}`,
       onClick: () => setEatingPlace(primary.place),
     };
   };
