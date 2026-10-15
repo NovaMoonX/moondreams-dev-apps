@@ -5,9 +5,10 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Stepper from '@/components/Stepper';
 import { useAppSelector } from '@/store';
-import { MAX_COOK_SERVINGS, MIN_COOK_SERVINGS } from '@apps/pinch/constants';
+import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
 import { selectIngredientsById } from '@apps/pinch/store/selectors';
 import type { Recipe } from '@apps/pinch/types';
+import { stepCookServings } from '@apps/pinch/utils/cooks';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -72,6 +73,7 @@ const CookIngredientRow = memo(function CookIngredientRow({
 interface CookIngredientsViewProps {
   recipe: Recipe;
   servings: number;
+  plannedServings: number | null;
   gotOut: Record<string, boolean>;
   onServingsChange: (servings: number) => void;
   onToggle: (id: string, isOut: boolean) => void;
@@ -81,6 +83,7 @@ interface CookIngredientsViewProps {
 function CookIngredientsView({
   recipe,
   servings,
+  plannedServings,
   gotOut,
   onServingsChange,
   onToggle,
@@ -115,11 +118,21 @@ function CookIngredientsView({
           <Stepper
             label='Servings'
             value={servings}
-            min={MIN_COOK_SERVINGS}
+            min={0}
             max={MAX_COOK_SERVINGS}
-            onChange={onServingsChange}
+            step={1}
+            onChange={(next) =>
+              onServingsChange(
+                stepCookServings(servings, next > servings ? 1 : -1),
+              )
+            }
           />
         </div>
+        {plannedServings !== null && plannedServings < servings && (
+          <p className='text-muted-foreground text-sm'>
+            You planned {plannedServings} for tonight. The rest can be put away.
+          </p>
+        )}
         {isScaled && (
           <p className='text-muted-foreground text-xs'>
             Scaled from {formatServings(recipe.servings)}. Amounts written in

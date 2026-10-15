@@ -201,7 +201,7 @@ export type PinchSubview =
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
-  /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. A `plannedMealId` makes Finish mark that planned meal's cook. */
+  /** Cooking one recipe step by step, at the recipe's own servings; `servings` is what a plan has for tonight (it starts there only when that is more), and a `plannedMealId` makes Finish mark that planned meal's cook. */
   | {
       kind: 'cook';
       recipeId: string;

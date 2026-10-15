@@ -4208,4 +4208,34 @@ assert.deepEqual(
 );
 assert.equal(getPutAwayText([]), null);
 
+// ---- COOK workstream: cooking mode ----
+const cookUtils = await import('../../src/apps/pinch/utils/cooks.ts');
+assert.deepEqual(
+  [
+    cookUtils.getCookStartServings(6, 1),
+    cookUtils.getCookStartServings(6, null),
+    cookUtils.getCookStartServings(4, 8),
+    cookUtils.getCookStartServings(0, null),
+    cookUtils.getCookStartServings(0.5, 0.5),
+    cookUtils.getCookStartServings(5000, null),
+  ],
+  [6, 6, 8, 1, 0.5, 1000],
+  'cooking starts at the recipe as written, or at the plan when it asks for more',
+);
+assert.deepEqual(
+  [
+    cookUtils.stepCookServings(6, 1),
+    cookUtils.stepCookServings(6, -1),
+    cookUtils.stepCookServings(1, -1),
+    cookUtils.stepCookServings(0.5, 1),
+    cookUtils.stepCookServings(0.5, -1),
+    cookUtils.stepCookServings(2.5, 1),
+    cookUtils.stepCookServings(2.5, -1),
+    cookUtils.stepCookServings(1.5, -1),
+    cookUtils.stepCookServings(1000, 1),
+  ],
+  [7, 5, 0.5, 1, 0.5, 3, 2, 1, 1000],
+  'the servings stepper moves a whole serving a tap, with a half only below one',
+);
+
 console.log('pinchMath: all checks passed');

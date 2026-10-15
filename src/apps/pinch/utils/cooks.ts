@@ -1,6 +1,7 @@
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
   MAX_COOKED_SERVINGS,
+  MIN_COOK_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
 import type { Cook, MealItem, Recipe } from '@apps/pinch/types';
@@ -114,3 +115,25 @@ export const getMissingCookFields = (existing: object) =>
 
 export const getCookServings = (servings: number) =>
   servings > 0 ? Math.min(servings, MAX_COOKED_SERVINGS) : 1;
+
+/** What cooking starts at: the recipe as written, or the plan's count when it asks for more than the recipe makes. */
+export const getCookStartServings = (
+  recipeServings: number,
+  plannedServings: number | null,
+) =>
+  Math.min(
+    MAX_COOKED_SERVINGS,
+    Math.max(recipeServings > 0 ? recipeServings : 1, plannedServings ?? 0),
+  );
+
+/** A whole serving a tap, and a half only below one. */
+export const stepCookServings = (current: number, direction: 1 | -1) => {
+  if (direction === 1) {
+    return Math.min(
+      MAX_COOKED_SERVINGS,
+      current < 1 ? 1 : Math.floor(current) + 1,
+    );
+  }
+  const next = Math.ceil(current) - 1;
+  return next >= 1 ? next : MIN_COOK_SERVINGS;
+};
