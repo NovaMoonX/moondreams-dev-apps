@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import HelpTip from '@/components/HelpTip';
@@ -261,12 +262,16 @@ function DayDrawer({
                                   </span>
                                 )}
                               </span>
-                              <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                              <span className='text-muted-foreground mt-0.5 shrink-0 text-sm whitespace-nowrap'>
                                 {formatRowPrice(
                                   mealCost.totalCents,
                                   mealCost.leftOut.length > 0,
                                 )}
                               </span>
+                              <ChevronRight
+                                className='text-muted-foreground mt-0.5 -ml-1 h-5 w-5 shrink-0'
+                                aria-hidden='true'
+                              />
                             </Button>
                           </li>
                         );
