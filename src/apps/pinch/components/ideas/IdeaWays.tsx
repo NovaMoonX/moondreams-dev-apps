@@ -43,9 +43,15 @@ const { custom } = FormFactories;
 interface WayProps {
   uid: string;
   onClose: () => void;
+  /** Called with the saved idea's title. */
+  onSaved: (title: string) => void;
 }
 
-function useCreateIdea(uid: string, onDone: () => void) {
+const getShownTitle = (draft: IdeaDraft) =>
+  clipIdeaTitle(draft.title) ||
+  clipIdeaTitle(getWebLinkHost(toIdeaUrl(draft.url ?? '') ?? '') ?? '');
+
+function useCreateIdea(uid: string, onDone: (title: string) => void) {
   const dispatch = useAppDispatch();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +61,7 @@ function useCreateIdea(uid: string, onDone: () => void) {
     setIsSubmitting(true);
     try {
       await dispatch(createIdea({ uid, draft })).unwrap();
-      onDone();
+      onDone(getShownTitle(draft));
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this idea.'));
       setIsSubmitting(false);
@@ -144,14 +150,19 @@ function TitleField({
 }
 
 interface LinkWayProps extends WayProps {
-  onOpenExisting: (id: string) => void;
+  onOpenExisting?: (id: string) => void;
 }
 
-export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
+export function IdeaLinkWay({
+  uid,
+  onClose,
+  onSaved,
+  onOpenExisting,
+}: LinkWayProps) {
   const ideas = useAppSelector(selectIdeas);
   const { submit, isSubmitting, error, clearError } = useCreateIdea(
     uid,
-    onClose,
+    onSaved,
   );
   const bodyRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState({ url: '', note: '' });
@@ -246,15 +257,17 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
               <p className='min-w-0 text-sm'>
                 That one's already in your ideas
               </p>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                className='h-10 shrink-0'
-                onClick={() => onOpenExisting(duplicate.id)}
-              >
-                Open it
-              </Button>
+              {onOpenExisting && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  className='h-10 shrink-0'
+                  onClick={() => onOpenExisting(duplicate.id)}
+                >
+                  Open it
+                </Button>
+              )}
             </div>
           );
         }
@@ -373,10 +386,10 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
   );
 }
 
-export function IdeaPhotoWay({ uid, onClose }: WayProps) {
+export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
   const { submit, isSubmitting, error, clearError } = useCreateIdea(
     uid,
-    onClose,
+    onSaved,
   );
   const upload = useImageUpload(null);
   const { pick, clear } = upload;
@@ -489,10 +502,10 @@ export function IdeaPhotoWay({ uid, onClose }: WayProps) {
   );
 }
 
-export function IdeaTextWay({ uid, onClose }: WayProps) {
+export function IdeaTextWay({ uid, onClose, onSaved }: WayProps) {
   const { submit, isSubmitting, error, clearError } = useCreateIdea(
     uid,
-    onClose,
+    onSaved,
   );
   const bodyRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState({ title: '', note: '' });

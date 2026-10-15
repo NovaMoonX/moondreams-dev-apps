@@ -167,21 +167,33 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
 
-  const isIdeas = view === 'ideas';
+  const visibleViews = RECIPES_VIEWS.filter(
+    (candidate) =>
+      candidate === 'recipes' ||
+      (candidate === 'meals' && (meals.length > 0 || recipes.length >= 2)) ||
+      (candidate === 'ideas' && (ideaCount > 0 || ideasLoadError !== null)),
+  );
+  const shownView = visibleViews.includes(view) ? view : 'recipes';
+  const isIdeas = shownView === 'ideas';
   const canAddIdea = isIdeasLoaded && ideasLoadError === null;
-  const total = isIdeas ? 0 : view === 'meals' ? meals.length : recipes.length;
-  const hasSourceFilter = view === 'recipes' && sourceCounts.bySource.size > 0;
-  const hasSourceSection = view === 'recipes' && sources.length > 0;
-  const stockMap = view === 'meals' ? stockByMeal : stockByRecipe;
+  const total = isIdeas
+    ? 0
+    : shownView === 'meals'
+      ? meals.length
+      : recipes.length;
+  const hasSourceFilter =
+    shownView === 'recipes' && sourceCounts.bySource.size > 0;
+  const hasSourceSection = shownView === 'recipes' && sources.length > 0;
+  const stockMap = shownView === 'meals' ? stockByMeal : stockByRecipe;
   const stockCounts = useMemo(
     () =>
       getStockPlaceCounts(
-        view === 'meals'
+        shownView === 'meals'
           ? meals.map((meal) => meal.id)
           : recipes.map((recipe) => recipe.id),
         stockMap,
       ),
-    [view, meals, recipes, stockMap],
+    [shownView, meals, recipes, stockMap],
   );
   const stockOptions = CONTAINER_PLACES.filter(
     (place) => stockCounts[place] > 0 || stockPlaces.includes(place),
@@ -320,7 +332,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         />
       );
     }
-    if (view === 'meals') {
+    if (shownView === 'meals') {
       if (meals.length === 0) {
         return (
           <p className='text-muted-foreground py-6 text-center text-sm'>
@@ -519,7 +531,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       if (canAddIdea) setIsIdeaAddOpen(true);
       return;
     }
-    if (view === 'meals') {
+    if (shownView === 'meals') {
       openSubview({ kind: 'meal', id: null });
       return;
     }
@@ -533,7 +545,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title={RECIPES_VIEW_LABELS[view]}
+        title={RECIPES_VIEW_LABELS[shownView]}
         action={
           (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
             <Button
@@ -550,31 +562,37 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           )
         }
       />
-      <div className='flex items-center justify-between gap-3'>
-        <div className='min-w-0'>
-          <PillGroup
-            label='Recipes, meals or ideas'
-            options={VIEW_OPTIONS}
-            value={view}
-            onChange={(next) => {
-              setQuery('');
-              setStockPlaces([]);
-              setView(next);
-            }}
-            isThin
-          />
+      {(visibleViews.length > 1 || (total > 0 && !hasFilterBar)) && (
+        <div className='flex items-center justify-between gap-3'>
+          <div className='min-w-0'>
+            {visibleViews.length > 1 && (
+              <PillGroup
+                label='Recipes, saved meals or ideas'
+                options={VIEW_OPTIONS.filter((option) =>
+                  visibleViews.includes(option.value),
+                )}
+                value={shownView}
+                onChange={(next) => {
+                  setQuery('');
+                  setStockPlaces([]);
+                  setView(next);
+                }}
+                isThin
+              />
+            )}
+          </div>
+          {total > 0 && !hasFilterBar && (
+            <ListViewControls
+              options={viewOptions.options}
+              customizedCount={viewOptions.customizedCount}
+              onChange={viewOptions.update}
+              onReset={viewOptions.reset}
+              hasStockLines
+              className='-my-3'
+            />
+          )}
         </div>
-        {total > 0 && !hasFilterBar && (
-          <ListViewControls
-            options={viewOptions.options}
-            customizedCount={viewOptions.customizedCount}
-            onChange={viewOptions.update}
-            onReset={viewOptions.reset}
-            hasStockLines
-            className='-my-3'
-          />
-        )}
-      </div>
+      )}
       {hasFilterBar ? (
         <FilterBar
           query={query}
@@ -582,20 +600,22 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           searchPlaceholder={
             isPhone
               ? 'Search'
-              : view === 'meals'
-                ? 'Search meals'
+              : shownView === 'meals'
+                ? 'Search saved meals'
                 : 'Search by name or ingredient'
           }
-          filterLabel={view === 'meals' ? 'Filter meals' : 'Filter recipes'}
+          filterLabel={
+            shownView === 'meals' ? 'Filter saved meals' : 'Filter recipes'
+          }
           activeFilters={activeFilters}
           onRemoveFilter={removeFilter}
           onClearFilters={clearFilters}
           doneLabel={
-            view === 'meals'
-              ? `Show ${shownMeals.length} ${shownMeals.length === 1 ? 'meal' : 'meals'}`
+            shownView === 'meals'
+              ? `Show ${shownMeals.length} ${shownMeals.length === 1 ? 'saved meal' : 'saved meals'}`
               : `Show ${shown.length} ${shown.length === 1 ? 'recipe' : 'recipes'}`
           }
-          compactDoneLabel={`Show ${view === 'meals' ? shownMeals.length : shown.length}`}
+          compactDoneLabel={`Show ${shownView === 'meals' ? shownMeals.length : shown.length}`}
           trailing={
             <ListViewControls
               options={viewOptions.options}
@@ -659,7 +679,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             value={query}
             onChange={setQuery}
             placeholder={
-              view === 'meals' ? 'Search meals' : 'Search by name or ingredient'
+              shownView === 'meals'
+                ? 'Search saved meals'
+                : 'Search by name or ingredient'
             }
           />
         )

@@ -357,7 +357,7 @@ export const RECIPE_COVER_MAX_DIMENSION = 1280;
 export const RECIPES_VIEWS: RecipesView[] = ['recipes', 'meals', 'ideas'];
 export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {
   recipes: 'Recipes',
-  meals: 'Meals',
+  meals: 'Saved meals',
   ideas: 'Ideas',
 };
 

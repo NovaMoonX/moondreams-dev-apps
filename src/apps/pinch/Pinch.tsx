@@ -17,6 +17,7 @@ import AuthRequiredState from '@/ui/AuthRequiredState';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
 import ContainersSubview from '@apps/pinch/components/containers/ContainersSubview';
+import IdeaAddSheet from '@apps/pinch/components/ideas/IdeaAddSheet';
 import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
@@ -52,6 +53,7 @@ function Pinch() {
   const [, startTransition] = useTransition();
   const [subview, setSubview] = useState<PinchSubview | null>(null);
   const [isStartOpen, setIsStartOpen] = useState(false);
+  const [isIdeaSheetOpen, setIsIdeaSheetOpen] = useState(false);
   const isStartFromCalendarRef = useRef(false);
   const openStart = useCallback((isOpen: boolean, fromCalendar = false) => {
     if (isOpen) isStartFromCalendarRef.current = fromCalendar;
@@ -107,6 +109,7 @@ function Pinch() {
         setSubview((current) => (isCurrent(current) ? null : current)),
       isStartOpen,
       setIsStartOpen: openStart,
+      openIdeaSheet: () => setIsIdeaSheetOpen(true),
     }),
     [subview, isStartOpen, showShoppingTab, showCalendarDay, openStart],
   );
@@ -182,9 +185,20 @@ function Pinch() {
 
   return (
     <PinchOverlayContext.Provider value={overlayContext}>
+      {isIdeaSheetOpen && (
+        <IdeaAddSheet
+          uid={user.uid}
+          confirmsWithToast
+          onClose={() => setIsIdeaSheetOpen(false)}
+        />
+      )}
       {isStartOpen && (
         <RecipeStartDrawer
           onClose={() => setIsStartOpen(false)}
+          onKeepAsIdea={() => {
+            setIsStartOpen(false);
+            setIsIdeaSheetOpen(true);
+          }}
           onPick={(method) => {
             setIsStartOpen(false);
             setSubview({

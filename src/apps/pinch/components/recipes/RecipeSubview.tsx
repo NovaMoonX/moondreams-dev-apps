@@ -33,7 +33,8 @@ interface RecipeSubviewProps {
 
 /** The recipe as a full-screen layer: a new one begins with how to start it, each way finishes on its own screen, then the form, whose header carries the recipe's name. */
 function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
-  const { subview, closeSubview, setIsStartOpen } = usePinchOverlay();
+  const { subview, closeSubview, setIsStartOpen, openIdeaSheet } =
+    usePinchOverlay();
   const { confirm } = useActionModal();
   const startMethod = subview?.kind === 'recipe' ? subview.method : undefined;
   const fromDrawer = subview?.kind === 'recipe' && subview.fromDrawer === true;
@@ -107,7 +108,15 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
 
   const getBody = () => {
     if (stage === 'start') {
-      return <RecipeStart onPick={(method) => setStage(getStage(method))} />;
+      return (
+        <RecipeStart
+          onPick={(method) => setStage(getStage(method))}
+          onKeepAsIdea={() => {
+            closeSubview();
+            openIdeaSheet();
+          }}
+        />
+      );
     }
     if (stage === 'form') {
       return (

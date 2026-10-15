@@ -18,6 +18,8 @@ export interface PinchOverlayContextValue {
   isStartOpen: boolean;
   /** `fromCalendar` marks the new recipe as started from the calendar's empty state; it defaults to false on every open. */
   setIsStartOpen: (isOpen: boolean, fromCalendar?: boolean) => void;
+  /** The new-idea sheet over whatever screen shows, for a way in other than the Ideas list (the new recipe's "Keep it as an idea"). */
+  openIdeaSheet: () => void;
 }
 
 /** One subview value for the whole app, so a full-page screen can never open on top of another. */
