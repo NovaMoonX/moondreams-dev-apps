@@ -4032,6 +4032,12 @@ assert.deepEqual(
     getShoppingStockLine([stockOf('Adobo', 2, 3)], false),
     getShoppingStockLine([stockOf('Adobo', 1, 1)], true),
     getShoppingStockLine([stockOf('Adobo', 1, 0), stockOf('Rice', 0, 2)], true),
+    getShoppingStockLine(
+      ['Adobo', 'Rice', 'Chili', 'Soup', 'Stew'].map((name) =>
+        stockOf(name, 1, 0),
+      ),
+      true,
+    ),
   ],
   [
     null,
@@ -4040,6 +4046,7 @@ assert.deepEqual(
     'You already have 2 servings in the fridge, 3 in the freezer.',
     'You already have Adobo: 1 serving in the fridge, 1 in the freezer.',
     'You already have servings of Adobo and Rice in your fridge or freezer.',
+    'You already have servings of Adobo, Rice, Chili and 2 more in your fridge or freezer.',
   ],
   'the shopping sheet says what is already put away, in one line, and never subtracts it',
 );
@@ -4774,8 +4781,8 @@ assert.deepEqual(
     formatCostTile(null, 3, true),
     formatCostTile(15.4, 2, true),
   ],
-  ['$0.15 so far', '$0.15', 'No price yet', 'Not priced', '$0.15'],
-  'a tile says so far only while its gaps can still be priced, and a fixed day never does',
+  ['$0.15 so far', '$0.15', 'No price yet', 'Not priced', '$0.15+'],
+  'a tile says so far only while its gaps can still be priced, and a fixed day with a gap says + like its rows',
 );
 
 // ---- A cooked meal on the day drawer ----
@@ -6345,7 +6352,7 @@ assert.deepEqual(
   [
     'Rice pot (Thu)',
     'Rice pot (Thu) and Taco night (Fri)',
-    'Rice pot +1 (Oct 30)',
+    'Rice pot & 1 more (Oct 30)',
     'Rice pot',
     'Adobo and rice and Beans',
     '3 meals',
@@ -7218,8 +7225,38 @@ assert.equal(
   );
   assert.deepEqual(
     [day.isListed, day.coveredCount, day.rowCount],
-    [true, 2, 2],
-    'a day whose name-only parsley sits beside a measured one reads as on the list once the measured item carries both meals',
+    [true, 1, 1],
+    'a day whose name-only parsley sits beside a measured one is one row, and reads as on the list once the measured item carries both meals',
+  );
+}
+
+// A name-only line joins the amount row of its ingredient in an add sheet
+{
+  const line = (
+    ingredientId: string,
+    amount: number | null,
+    unit: 'EACH' | 'TSP' | 'G',
+    source: string,
+  ) => ({ ingredientId, amount, unit, source }) as SourcedLine;
+  const ingredients = new Map([
+    ['salt', { id: 'salt', name: 'Salt', serving: { amount: 1, unit: 'TSP' } }],
+    ['oil', { id: 'oil', name: 'Oil', serving: { amount: 1, unit: 'TSP' } }],
+  ]) as unknown as Map<string, ResolvedIngredient>;
+  const rows = shopGroupLines(
+    [
+      line('salt', null, 'EACH', 'm1'),
+      line('oil', null, 'EACH', 'm1'),
+      line('salt', 0.5, 'TSP', 'm2'),
+    ],
+    ingredients,
+  );
+  assert.deepEqual(
+    rows.map((row) => [row.id, row.lines.length]),
+    [
+      ['salt::VOLUME', 2],
+      ['oil::COUNT', 1],
+    ],
+    'a name-only salt joins the salt row with an amount, and a name-only line alone keeps its own row',
   );
 }
 

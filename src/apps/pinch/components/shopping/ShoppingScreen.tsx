@@ -654,11 +654,10 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           isThin
         />
       )}
-      {openCount > 0 && shownView !== 'got' && (
-        <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
-          {coverage === 'none' && 'No price yet'}
-          {coverage === 'tooFew' && 'Not enough prices yet'}
-          {(coverage === 'some' || coverage === 'all') && (
+      {openCount > 0 &&
+        shownView !== 'got' &&
+        (coverage === 'some' || coverage === 'all') && (
+          <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
             <span>
               About{' '}
               <span className='text-foreground font-semibold'>
@@ -666,35 +665,32 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
               </span>{' '}
               {getCoveredText()}
             </span>
-          )}
-          <HelpTip
-            variant={cost.leftOut.length > 0 ? 'warning' : 'help'}
-            title='About this price'
-            placement='top'
-            dismissLabel='OK'
-          >
-            {(coverage === 'some' || coverage === 'all') && (
+            <HelpTip
+              variant={cost.leftOut.length > 0 ? 'warning' : 'help'}
+              title='About this price'
+              placement='top'
+              dismissLabel='OK'
+            >
               <p>
                 It prices the amounts on your list, not whole packages, so the
                 till total is usually more.
               </p>
-            )}
-            {noProductNames.length > 0 && (
-              <p>
-                Not priced yet: {formatNames(noProductNames)}. Prices come from
-                what you've told Pinch about where you buy things.
-              </p>
-            )}
-            {notComparableNames.length > 0 && (
-              <p className='text-muted-foreground'>
-                Can't compare the amount with the package size:{' '}
-                {formatNames(notComparableNames)}. Change the package size from
-                the ingredient in Kitchen.
-              </p>
-            )}
-          </HelpTip>
-        </p>
-      )}
+              {noProductNames.length > 0 && (
+                <p>
+                  Not priced yet: {formatNames(noProductNames)}. Prices come
+                  from what you've told Pinch about where you buy things.
+                </p>
+              )}
+              {notComparableNames.length > 0 && (
+                <p className='text-muted-foreground'>
+                  Can't compare the amount with the package size:{' '}
+                  {formatNames(notComparableNames)}. Change the package size
+                  from the ingredient in Kitchen.
+                </p>
+              )}
+            </HelpTip>
+          </p>
+        )}
       {hasSearch && loadError === null && (
         <SearchInput
           value={query}

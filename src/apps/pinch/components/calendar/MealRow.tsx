@@ -20,6 +20,8 @@ interface MealRowProps {
   canBeCooked: boolean;
   /** A passed day says "Not priced" once, on its own tile, so its rows don't repeat it. */
   isPast: boolean;
+  /** Whether the row says what the meal costs. */
+  showPrice: boolean;
   onOpen: () => void;
 }
 
@@ -30,6 +32,7 @@ function MealRow({
   subtitle,
   canBeCooked,
   isPast,
+  showPrice,
   onOpen,
 }: MealRowProps) {
   const costContext = useAppSelector(selectCostContext);
@@ -45,6 +48,7 @@ function MealRow({
   const typeLabel = MEAL_TYPE_LABELS[meal.mealType];
 
   const getCostText = () => {
+    if (!showPrice) return null;
     if (totalCents === null) return isPast ? null : 'No price yet';
     const figure = formatCost(totalCents);
     return leftOut.length > 0 ? `${figure}+` : figure;

@@ -1130,6 +1130,8 @@ export interface StockedItem {
   summary: StockSummary;
 }
 
+const MAX_STOCK_NAMES = 3;
+
 /** Informational only: the app never subtracts stock from the list. */
 export const getShoppingStockLine = (
   stocked: StockedItem[],
@@ -1137,7 +1139,12 @@ export const getShoppingStockLine = (
 ) => {
   if (stocked.length === 0) return null;
   if (stocked.length > 1) {
-    return `You already have servings of ${formatList(stocked.map((entry) => entry.name))} in your fridge or freezer.`;
+    const names = stocked.map((entry) => entry.name);
+    const shown =
+      names.length > MAX_STOCK_NAMES
+        ? `${names.slice(0, MAX_STOCK_NAMES).join(', ')} and ${names.length - MAX_STOCK_NAMES} more`
+        : formatList(names);
+    return `You already have servings of ${shown} in your fridge or freezer.`;
   }
 
   const [{ name, summary }] = stocked;

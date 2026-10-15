@@ -178,7 +178,7 @@ export interface ShopLineRow {
   amountText: string | null;
 }
 
-/** An add sheet's rows: one per ingredient and kind of unit, in the order the lines came, each with what to pick up. */
+/** An add sheet's rows: one per ingredient and kind of unit, in the order the lines came, each with what to pick up. A line with just the name joins a row of the same ingredient that has an amount, so "Salt" never shows twice. */
 export function groupShopLines(
   lines: SourcedLine[],
   ingredientsById: Map<string, ResolvedIngredient>,
@@ -187,8 +187,23 @@ export function groupShopLines(
     const id = getShopRowId(line.ingredientId, line.unit);
     return acc.set(id, [...(acc.get(id) ?? []), line]);
   }, new Map<string, SourcedLine[]>());
+  const amountRowIds = [...byRow.entries()]
+    .filter(([, rowLines]) => rowLines.some((line) => line.amount !== null))
+    .reduce((acc, [id, rowLines]) => {
+      const known = acc.get(rowLines[0].ingredientId);
+      return known !== undefined && known <= id
+        ? acc
+        : acc.set(rowLines[0].ingredientId, id);
+    }, new Map<string, string>());
+  const joined = [...byRow.entries()].reduce((acc, [id, rowLines]) => {
+    const isNameOnly = rowLines.every((line) => line.amount === null);
+    const target =
+      (isNameOnly ? amountRowIds.get(rowLines[0].ingredientId) : undefined) ??
+      id;
+    return acc.set(target, [...(acc.get(target) ?? []), ...rowLines]);
+  }, new Map<string, SourcedLine[]>());
 
-  const result = [...byRow.entries()].map(([id, rowLines]) => {
+  const result = [...joined.entries()].map(([id, rowLines]) => {
     const ingredient = ingredientsById.get(rowLines[0].ingredientId);
     const section = getShopSection(ingredient);
     return {
@@ -681,13 +696,31 @@ export function getItemsByRow(
   const byRow = groupByRow(items, (item) =>
     getShopRowId(item.ingredientId, item.unit),
   );
+  const nameOnlyByIngredient = groupByRow(
+    items.filter((item) => item.amount === null),
+    (item) => item.ingredientId,
+  );
+  const getJoined = (
+    row: Pick<ShopLineRow, 'id' | 'ingredientId' | 'lines'>,
+  ) => {
+    if (row.lines.every((line) => line.amount === null)) {
+      return byDrawnRow.get(amountRows.get(row.ingredientId) ?? row.id);
+    }
+    const hasNameOnlyLine = row.lines.some((line) => line.amount === null);
+    const own = byRow.get(row.id) ?? [];
+    return hasNameOnlyLine
+      ? [
+          ...new Set([
+            ...own,
+            ...(nameOnlyByIngredient.get(row.ingredientId) ?? []),
+          ]),
+        ]
+      : own;
+  };
   const result = new Map(
     rows.flatMap((row) => {
-      const isNameOnly = row.lines.every((line) => line.amount === null);
-      const joined = isNameOnly
-        ? byDrawnRow.get(amountRows.get(row.ingredientId) ?? row.id)
-        : byRow.get(row.id);
-      return joined ? [[row.id, joined] as const] : [];
+      const joined = getJoined(row);
+      return joined && joined.length > 0 ? [[row.id, joined] as const] : [];
     }),
   );
   return result;

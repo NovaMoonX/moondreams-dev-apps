@@ -99,7 +99,7 @@ function SubjectPicker({ onPick }: SubjectPickerProps) {
       <SearchInput
         value={query}
         onChange={setQuery}
-        placeholder='Find a recipe or meal'
+        placeholder='Find a recipe or saved meal'
       />
       {trimmed === '' ? (
         <p className='text-muted-foreground px-1 text-sm'>

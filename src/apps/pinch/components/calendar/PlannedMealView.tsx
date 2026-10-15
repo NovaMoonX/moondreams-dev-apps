@@ -173,7 +173,7 @@ function PlannedMealView({
         savePlannedAsMeal({ uid, plannedMealId: meal.id, name: mealName }),
       ).unwrap();
       addToast({
-        title: `Saved ${mealName.trim()} to your meals`,
+        title: `Saved ${mealName.trim()} to Saved meals`,
         type: 'success',
       });
       setIsNaming(false);
@@ -225,14 +225,14 @@ function PlannedMealView({
           </span>
         ),
         label: `Eat from ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
-        description: `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}: ${count} ${count === 1 ? 'container matches' : 'containers match'} this meal`,
+        description: `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}: ${count} ${count === 1 ? 'box matches' : 'boxes match'} this meal`,
         onClick: () => setEatingPlace(place),
       })),
     offer.canSaveAsMeal && {
       key: 'save',
       icon: <BookmarkPlus className='h-4 w-4' />,
-      label: 'Save as a meal',
-      description: 'Save as a meal: keep this plate to plan again',
+      label: 'Save to Saved meals',
+      description: 'Save to Saved meals: keep this plate to plan again',
       onClick: () => setIsNaming(true),
     },
   ].filter((action) => action !== false);

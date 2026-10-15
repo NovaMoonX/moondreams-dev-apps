@@ -102,14 +102,14 @@ function WeekSummarySheet({
     stats.mealsPriced >= 2 && stats.avgPerMealCents !== null
       ? {
           key: 'avg',
-          label: 'Avg per meal',
+          label: isPartial ? 'Avg per meal so far' : 'Avg per meal',
           value: formatCost(stats.avgPerMealCents),
         }
       : null,
     show.protein && stats.proteinCentsPerGram !== null
       ? {
           key: 'protein',
-          label: 'Per g protein',
+          label: isPartial ? 'Per g protein so far' : 'Per g protein',
           value: formatCost(stats.proteinCentsPerGram),
         }
       : null,

@@ -15,6 +15,7 @@ import {
 import type { PlannedMeal } from '@apps/pinch/types';
 import {
   addDaysToKey,
+  formatDayShort,
   formatDayTitle,
   getDateOfDayKey,
   getEarlierThisWeekKeys,
@@ -36,6 +37,8 @@ interface WeekViewProps {
   hasEarlierDays: boolean;
   plannedByDay: Map<string, PlannedMeal[]>;
   getMealTitle: (meal: PlannedMeal) => string;
+  /** Whether each meal row says what it costs. */
+  showPrices: boolean;
   onOpenDay: (dayKey: string) => void;
   onOpenMeal: (dayKey: string, mealId: string) => void;
   onAdd: (dayKey: string) => void;
@@ -48,6 +51,7 @@ function WeekView({
   hasEarlierDays,
   plannedByDay,
   getMealTitle,
+  showPrices,
   onOpenDay,
   onOpenMeal,
   onAdd,
@@ -144,6 +148,10 @@ function WeekView({
   const earlierKeys = hasEarlierDays
     ? getEarlierThisWeekKeys(todayKey)
     : NO_KEYS;
+  const earlierSpan =
+    earlierKeys.length === 0
+      ? ''
+      : `${formatDayShort(earlierKeys[0])}–${formatDayShort(earlierKeys[earlierKeys.length - 1])}`;
   const earlierCount = earlierKeys.reduce(
     (count, dayKey) => count + (plannedByDay.get(dayKey)?.length ?? 0),
     0,
@@ -207,6 +215,7 @@ function WeekView({
                   subtitle={MEAL_TYPE_LABELS[meal.mealType]}
                   canBeCooked={dayKey <= todayKey}
                   isPast={dayKey < todayKey}
+                  showPrice={showPrices}
                   onOpen={() => onOpenMeal(dayKey, meal.id)}
                 />
               </li>
@@ -238,7 +247,7 @@ function WeekView({
           className='h-auto min-h-10 w-full justify-between gap-3 px-0! py-1 text-left text-sm font-normal'
         >
           <span className='min-w-0 flex-1'>
-            <span className='font-medium'>Earlier this week</span>
+            <span className='font-medium'>Earlier, {earlierSpan}</span>
             <span className='text-muted-foreground whitespace-nowrap'>
               {' '}
               · {earlierCount} {earlierCount === 1 ? 'meal' : 'meals'}

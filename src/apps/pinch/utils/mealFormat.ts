@@ -39,7 +39,7 @@ export function getPlannedMealTitle(
 
   const first = getItemTitle(meal.items[0], recipesById, ingredientsById);
   const title =
-    meal.items.length > 1 ? `${first} +${meal.items.length - 1}` : first;
+    meal.items.length > 1 ? `${first} & ${meal.items.length - 1} more` : first;
   return title;
 }
 
@@ -82,14 +82,13 @@ export const formatRowPrice = (
   return isPartial ? `${formatCost(cents)}+` : formatCost(cents);
 };
 
-/** A cost tile's figure: "so far" while its gaps can still be priced, "Not priced" for a fixed day that had no price. */
+/** A cost tile's figure: "so far" while its gaps can still be priced, "$0.15+" once the day is fixed, "Not priced" for a fixed day that had no price. */
 export const formatCostTile = (
   cents: number | null,
   leftOutCount: number,
   isFrozen: boolean,
 ) => {
   if (cents === null) return isFrozen ? 'Not priced' : 'No price yet';
-  return leftOutCount > 0 && !isFrozen
-    ? `${formatCost(cents)} so far`
-    : formatCost(cents);
+  if (leftOutCount === 0) return formatCost(cents);
+  return isFrozen ? `${formatCost(cents)}+` : `${formatCost(cents)} so far`;
 };

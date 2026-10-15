@@ -158,7 +158,7 @@ export function usePutAway({ uid, entries }: UsePutAwayInput) {
       setDetails(null);
       setIsSaving(false);
     } catch (saveError) {
-      setError(getErrorMessage(saveError, 'Unable to save this container.'));
+      setError(getErrorMessage(saveError, 'Unable to save this box.'));
       setIsSaving(false);
     }
   };

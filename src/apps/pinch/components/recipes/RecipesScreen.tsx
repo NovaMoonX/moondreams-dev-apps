@@ -605,7 +605,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               onClick={handleNew}
             >
               <Plus className='h-4 w-4' aria-hidden='true' />
-              {isIdeas ? 'New idea' : view === 'meals' ? 'New meal' : 'New'}
+              {isIdeas ? 'New idea' : view === 'meals' ? 'New saved meal' : 'New'}
             </Button>
           )
         }

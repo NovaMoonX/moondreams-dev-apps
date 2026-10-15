@@ -19,6 +19,7 @@ import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import { NutritionViewOptions } from '@apps/pinch/components/shared/ListViewControls';
+import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import {
   CALENDAR_VIEW_LABELS,
   CALENDAR_VIEWS,
@@ -32,6 +33,7 @@ import {
   selectPeriodStats,
   selectPlannedByDay,
   selectPlannedMeals,
+  selectMeals,
   selectRecipes,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
@@ -81,6 +83,8 @@ function CalendarScreen({
   const plannedByDay = useAppSelector(selectPlannedByDay);
   const hasPlannedMeals = useAppSelector(selectPlannedMeals).length > 0;
   const hasRecipes = useAppSelector(selectRecipes).length > 0;
+  const hasSavedMeals = useAppSelector(selectMeals).length > 0;
+  const viewOptions = useListViewOptions(uid, 'calendar');
   const isPlannedLoadFailed = useAppSelector(
     (state) => state.pinch.plannedMeals.loadError !== null,
   );
@@ -199,19 +203,28 @@ function CalendarScreen({
       <SectionHeader
         title='Calendar'
         action={
-          <div className='flex items-center gap-1'>
-            <NutritionViewOptions />
-            <Button
-              type='button'
-              size='sm'
-              rounded='full'
-              className='gap-1'
-              onClick={() => openPlan(getAddDayKey(), null)}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              Plan
-            </Button>
-          </div>
+          hasRecipes || hasSavedMeals ? (
+            <div className='flex items-center gap-1'>
+              <NutritionViewOptions
+                prices={{
+                  checked: viewOptions.options.showPrices,
+                  customizedCount: viewOptions.customizedCount,
+                  onChange: (showPrices) => viewOptions.update({ showPrices }),
+                  onReset: viewOptions.reset,
+                }}
+              />
+              <Button
+                type='button'
+                size='sm'
+                rounded='full'
+                className='gap-1'
+                onClick={() => openPlan(getAddDayKey(), null)}
+              >
+                <Plus className='h-4 w-4' aria-hidden='true' />
+                Plan
+              </Button>
+            </div>
+          ) : undefined
         }
       />
       <PeriodSwitcher
@@ -287,6 +300,7 @@ function CalendarScreen({
           hasEarlierDays={isFromToday}
           plannedByDay={plannedByDay}
           getMealTitle={getMealTitle}
+          showPrices={viewOptions.options.showPrices}
           onOpenDay={(dayKey) => setOpenDay({ dayKey, mealId: null })}
           onOpenMeal={(dayKey, mealId) => setOpenDay({ dayKey, mealId })}
           onAdd={(dayKey) => openPlan(dayKey, null)}

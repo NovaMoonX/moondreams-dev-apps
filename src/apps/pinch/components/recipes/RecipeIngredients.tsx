@@ -235,7 +235,7 @@ function IngredientEditor({
           </Button>
         </div>
       )}
-      <Field label='Note'>
+      <Field label='Detail'>
         {(id) => (
           <Input
             id={id}
