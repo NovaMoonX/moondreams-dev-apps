@@ -367,6 +367,9 @@ export interface ShoppingCost {
   /** Unrounded; null when no line could be priced. */
   totalCents: number | null;
   leftOut: Gap[];
+  /** The rows the lines make on the list (one per ingredient and kind of unit), and how many of them are wholly priced. */
+  rowCount: number;
+  pricedRowCount: number;
 }
 
 /** Prices the amounts on the list, not whole packages, and says what it could not price. */
@@ -375,8 +378,9 @@ export function getShoppingCost(
   ingredientsById: Map<string, ResolvedIngredient>,
   defaultProducts: Map<string, Product>,
 ): ShoppingCost {
-  const costs = lines.map((line) =>
-    getLineCost(
+  const costs = lines.map((line) => ({
+    rowId: getShopRowId(line.ingredientId, line.unit),
+    ...getLineCost(
       {
         id: getShoppingItemId(line.ingredientId, line.unit),
         ingredientId: line.ingredientId,
@@ -387,7 +391,7 @@ export function getShoppingCost(
       ingredientsById.get(line.ingredientId),
       defaultProducts.get(line.ingredientId),
     ),
-  );
+  }));
   const priced = costs.flatMap((cost) =>
     cost.cents === null ? [] : [cost.cents],
   );
@@ -398,6 +402,10 @@ export function getShoppingCost(
         .map((gap) => [`${gap.kind}:${gap.ingredientId}`, gap]),
     ).values(),
   ];
+  const unpricedRows = new Set(
+    costs.filter((cost) => cost.cents === null).map((cost) => cost.rowId),
+  );
+  const rowCount = new Set(costs.map((cost) => cost.rowId)).size;
 
   return {
     totalCents:
@@ -405,5 +413,20 @@ export function getShoppingCost(
         ? null
         : priced.reduce((sum, cents) => sum + cents, 0),
     leftOut,
+    rowCount,
+    pricedRowCount: rowCount - unpricedRows.size,
   };
+}
+
+export type ShoppingCostCoverage = 'none' | 'tooFew' | 'some' | 'all';
+
+/** How much of the list a total can speak for: below half of the rows priced it is not worth a number. */
+export function getShoppingCostCoverage({
+  totalCents,
+  rowCount,
+  pricedRowCount,
+}: ShoppingCost): ShoppingCostCoverage {
+  if (totalCents === null || pricedRowCount === 0) return 'none';
+  if (pricedRowCount === rowCount) return 'all';
+  return pricedRowCount * 2 < rowCount ? 'tooFew' : 'some';
 }

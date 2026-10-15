@@ -52,9 +52,9 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Gap, ShoppingItem, ShoppingView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
-import { formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
+  getShoppingCostCoverage,
   getShopRowId,
   getShownShoppingView,
   type ShoppingGroup,
@@ -442,6 +442,15 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           ingredientsById.get(gap.ingredientId)?.name ?? 'Removed ingredient',
       );
   const noProductNames = getLeftOutNames('NO_PRODUCT');
+  const coverage = getShoppingCostCoverage(cost);
+  const getCoveredText = () => {
+    if (coverage === 'some') {
+      return `for ${cost.pricedRowCount} of ${cost.rowCount} things`;
+    }
+    return cost.rowCount === 1
+      ? 'for the 1 thing'
+      : `for all ${cost.rowCount} things`;
+  };
   const notComparableNames = getLeftOutNames('NOT_COMPARABLE');
 
   const getBody = () => {
@@ -581,14 +590,15 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       )}
       {openCount > 0 && shownView === 'toBuy' && (
         <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
-          {cost.totalCents === null ? (
-            'No prices yet'
-          ) : (
+          {coverage === 'none' && 'No price yet'}
+          {coverage === 'tooFew' && 'Not enough prices yet'}
+          {(coverage === 'some' || coverage === 'all') && (
             <span>
-              Amounts on your list: about{' '}
+              About{' '}
               <span className='text-foreground font-semibold'>
-                {formatCost(cost.totalCents)}
-              </span>
+                {formatCost(cost.totalCents ?? 0)}
+              </span>{' '}
+              {getCoveredText()}
             </span>
           )}
           <HelpTip
@@ -596,18 +606,16 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             title='About this price'
             placement='top'
           >
-            <p>
-              This prices just the amounts on your list, from each ingredient's
-              default product. Stores sell whole packages, so what you pay at
-              the till is usually more.
-            </p>
-            {cost.leftOut.length > 0 && (
-              <p>This {formatLeftOut(cost.leftOut)}.</p>
+            {(coverage === 'some' || coverage === 'all') && (
+              <p>
+                It prices the amounts on your list, not whole packages, so the
+                till total is usually more.
+              </p>
             )}
             {noProductNames.length > 0 && (
-              <p className='text-muted-foreground'>
-                No price yet: {formatNames(noProductNames)}. Add a price from
-                the ingredient in Kitchen.
+              <p>
+                Not priced yet: {formatNames(noProductNames)}. Prices come from
+                what you've told Pinch about where you buy things.
               </p>
             )}
             {notComparableNames.length > 0 && (

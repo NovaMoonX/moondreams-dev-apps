@@ -4571,4 +4571,50 @@ assert.equal(
 );
 assert.deepEqual(shopTop('zzzz'), [], 'a word nothing has finds nothing');
 
+import {
+  getShoppingCost as shopCostOf,
+  getShoppingCostCoverage as shopCoverage,
+} from '../../src/apps/pinch/utils/shopping.ts';
+
+const shopCoverageOf = (lines: [string, number, Unit][]) => {
+  const result = shopCostOf(
+    lines.map(([ingredientId, amount, unit]) => ({
+      ingredientId,
+      amount,
+      unit,
+    })),
+    shopIngredients,
+    new Map([['chicken', chickenProduct]]),
+  );
+  return [shopCoverage(result), result.pricedRowCount, result.rowCount];
+};
+assert.deepEqual(
+  [
+    shopCoverageOf([['chicken', 2, 'LB']]),
+    shopCoverageOf([
+      ['chicken', 2, 'LB'],
+      ['chicken', 4, 'OZ'],
+      ['rice', 1, 'CUP'],
+    ]),
+    shopCoverageOf([
+      ['chicken', 2, 'LB'],
+      ['rice', 1, 'CUP'],
+      ['salt', 1, 'TSP'],
+    ]),
+    shopCoverageOf([
+      ['rice', 1, 'CUP'],
+      ['salt', 1, 'TSP'],
+    ]),
+    shopCoverageOf([]),
+  ],
+  [
+    ['all', 1, 1],
+    ['some', 1, 2],
+    ['tooFew', 1, 3],
+    ['none', 0, 2],
+    ['none', 0, 0],
+  ],
+  'the cost line counts rows as the list shows them (two weights of chicken are one) and says nothing in a number below half priced',
+);
+
 console.log('pinchMath: all checks passed');
