@@ -398,7 +398,7 @@ A planned meal can hold any mix of recipes and ingredients, each with its own se
 **Files:**
 - `src/apps/pinch/components/recipes/MealRow.tsx`, `MealDrawer.tsx`, `MealSubview.tsx`, `RecipesScreen.tsx` (the Meals pill)
 - `src/apps/pinch/components/plan/MealBuilder.tsx` (recent recipes and saved meals; saved meals are also in the search)
-- `src/apps/pinch/components/calendar/PlannedMealView.tsx` (Save as a meal, swaps in place)
+- `src/apps/pinch/components/calendar/PlannedMealView.tsx` (Save to Saved meals, swaps in place)
 - `src/apps/pinch/store/slices/mealsSlice.ts`, `actions/mealActions.ts`, `listeners/kitchenListeners.ts`
 - `firestore.rules` (`meals`)
 - `scripts/seeds/pinch.ts`
@@ -411,11 +411,11 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 ### Possible Approach
 1. `Meal` slice and listener; `saveMeal` / `removeMeal`; `planMeal` accepts `sourceMealId` and `name` and copies items with new row ids.
 2. Meals pill in Recipes: `MealRow`s, `MealDrawer` (items, servings, total cost with nudge, "Plan it" primary that closes the drawer and opens Plan a meal on a chosen day, Modify / Copy / Delete in the muted block); `MealSubview` is the same builder without a day.
-3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected) and saved meals in the one search. "Save as a meal" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
+3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected) and saved meals in the one search. "Save to Saved meals" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
 4. Rules for `meals` (≤ 30 items, shape); seed a few meals and a planned meal copied from one.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** Save as a meal (from a planned meal) and + New in the Meals pill. **Read:** the Meals list and drawer. **Update:** Modify. **Delete:** the subview's trash icon with a destructive confirm (a meal is always deletable: nothing reads `sourceMealId` for display).
+- [ ] **Create:** Save to Saved meals (from a planned meal) and + New saved meal in the Saved meals pill. **Read:** the Saved meals list and drawer. **Update:** Modify. **Delete:** the subview's trash icon with a destructive confirm (a meal is always deletable: nothing reads `sourceMealId` for display).
 
 ### Success Criteria
 - [ ] Planning a saved meal, editing the saved meal, then opening the planned day shows the old items; editing the planned day leaves the saved meal as it was.
