@@ -20,7 +20,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { store, useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
@@ -65,8 +65,11 @@ import {
 } from '@apps/pinch/store/actions/recipeActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
+  selectCookSummaries,
+  selectIdeas,
   selectIngredients,
   selectIngredientsById,
+  selectNotesByRecipe,
   selectRecipesById,
   selectSourceCounts,
   selectSources,
@@ -87,6 +90,9 @@ import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
+
+const capitalize = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
 
 export interface RecipeRead {
   recipe: ExtractedRecipe;
@@ -560,11 +566,41 @@ function RecipeForm({
     }
 
     const isUsed = isInUse(usage);
+    const state = store.getState();
+    const idea = selectIdeas(state).find(
+      (entry) => entry.recipeId === recipe.id,
+    );
+    const ideaLine = idea
+      ? ` “${idea.title}”, the idea you made it from, goes back to your ideas.`
+      : '';
+    const getHistoryLine = () => {
+      const { cooks, notes } = state.pinch;
+      if (
+        !cooks.isLoaded ||
+        cooks.loadError !== null ||
+        !notes.isLoaded ||
+        notes.loadError !== null
+      ) {
+        return ' Its cooking history and notes go with it.';
+      }
+      const cookCount = selectCookSummaries(state).get(recipe.id)?.count ?? 0;
+      const noteCount = selectNotesByRecipe(state).get(recipe.id)?.length ?? 0;
+      const history = `its cooking history (${cookCount === 1 ? 'once' : `${cookCount} times`})`;
+      const noted = noteCount === 1 ? 'its note' : `its ${noteCount} notes`;
+      if (cookCount > 0 && noteCount > 0) {
+        return ` ${capitalize(history)} and ${noted} are deleted too.`;
+      }
+      if (cookCount > 0) return ` ${capitalize(history)} is deleted too.`;
+      if (noteCount > 0) {
+        return ` ${capitalize(noted)} ${noteCount === 1 ? 'is' : 'are'} deleted too.`;
+      }
+      return '';
+    };
     const confirmed = await confirm({
       title: isUsed ? 'Remove recipe' : 'Delete recipe',
       message: isUsed
-        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.`
-        : `Delete "${recipe.title}"? This action cannot be undone.`,
+        ? `“${recipe.title}” is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.${ideaLine}`
+        : `Delete “${recipe.title}”?${getHistoryLine()}${ideaLine} This can't be undone.`,
       confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,
     });
