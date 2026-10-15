@@ -246,7 +246,7 @@ function CookingSession({
     }
     if (putAway.hasDraft) {
       return confirmDiscardOf(
-        'Discard this container?',
+        'Discard this box?',
         "It isn't saved yet. Discarding it loses what you chose.",
       );
     }

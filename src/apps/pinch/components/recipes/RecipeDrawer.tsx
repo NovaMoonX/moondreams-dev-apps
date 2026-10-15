@@ -200,7 +200,7 @@ function RecipeDrawer({
   const reasons = [
     getMarkReason(),
     stockError === null && !isStockReady
-      ? 'Loading your prepared meals…'
+      ? 'Loading your fridge and freezer…'
       : null,
   ].filter((reason) => reason !== null);
 

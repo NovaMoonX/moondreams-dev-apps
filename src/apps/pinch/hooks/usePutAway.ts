@@ -153,7 +153,7 @@ export function usePutAway({
     } catch (undoError) {
       setUndoStates((current) => ({ ...current, [key]: 'FAILED' }));
       setNotice(
-        `Couldn't undo that. ${getErrorMessage(undoError, 'You can change it from Prepared meals.')}`,
+        `Couldn't undo that. ${getErrorMessage(undoError, 'You can change it in Fridge & freezer.')}`,
       );
     }
   };

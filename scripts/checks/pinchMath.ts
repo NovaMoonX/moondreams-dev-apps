@@ -3675,8 +3675,8 @@ assert.deepEqual(
   [
     false,
     true,
-    '2 prepared containers',
-    '3 planned meals and 1 prepared container',
+    '2 boxes in your fridge or freezer',
+    '3 planned meals and 1 box in your fridge or freezer',
   ],
   'a recipe whose only use is food in the fridge or freezer is archived, not erased',
 );
