@@ -14,7 +14,6 @@ import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import ClampedText from '@/components/ClampedText';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
-import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
@@ -25,7 +24,7 @@ import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
+import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import { UNIT_LABELS } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
@@ -48,7 +47,7 @@ import {
 import type { Gap, GapKind, ShoppingRequest } from '@apps/pinch/types';
 import { getCookServings, isCookHistoryFull } from '@apps/pinch/utils/cooks';
 import { isBulkMeal } from '@apps/pinch/utils/containers';
-import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
+import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getNutritionGaps,
@@ -242,13 +241,14 @@ function RecipeDrawer({
   const isPriced = cost !== undefined && cost.totalCents !== null;
   const costHelp =
     isPriced && leftOutCount > 0 ? (
-      <HelpTip variant='warning' title="What's left out" placement='bottom'>
-        <p>
-          This {formatLeftOut(cost.leftOut)} because there’s no price for{' '}
-          {leftOutCount === 1 ? 'it' : 'them'} yet.
-        </p>
-        <NudgeCountNote leftOut={cost.leftOut} open={cost.leftOut} />
-      </HelpTip>
+      <LeftOutTip
+        leftOut={cost.leftOut}
+        fix={
+          leftOutCount === 1
+            ? 'Add its price under the ingredient list.'
+            : 'Add their prices under the ingredient list.'
+        }
+      />
     ) : undefined;
 
   const facts: Fact[] = [
@@ -409,7 +409,11 @@ function RecipeDrawer({
             {isPriced && (
               <StatTile
                 label='Cost'
-                value={formatCost(cost.totalCents ?? 0)}
+                value={
+                  leftOutCount > 0
+                    ? `${formatCost(cost.totalCents ?? 0)} so far`
+                    : formatCost(cost.totalCents ?? 0)
+                }
                 detail={`For ${formatServings(recipe.servings)}`}
                 help={costHelp}
               />
