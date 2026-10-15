@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
@@ -128,12 +128,8 @@ function DayDrawer({
   const fixedSnapshots = meals.flatMap((meal) => meal.snapshot ?? []);
   const leftOutCount = countLeftOutIngredients(stats.leftOut);
   const shoppingItems = useAppSelector(selectShoppingItems);
-  const shoppingRow = useMemo(
-    () =>
-      getShoppingRow(
-        getDayOnList(meals, shoppingItems, recipesById, ingredientsById),
-      ),
-    [meals, shoppingItems, recipesById, ingredientsById],
+  const shoppingRow = getShoppingRow(
+    getDayOnList(meals, shoppingItems, recipesById, ingredientsById),
   );
 
   return (
