@@ -121,7 +121,6 @@ function GapNudge({ uid, gaps, lead, onFillIn }: GapNudgeProps) {
         {lead ? `${lead} ` : null}
         {text}{' '}
         <span className='whitespace-nowrap'>
-          <span className='max-[360px]:hidden'>· </span>
           <Button
             type='button'
             variant='link'
