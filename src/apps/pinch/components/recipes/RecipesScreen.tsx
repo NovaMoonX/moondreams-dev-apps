@@ -2,9 +2,8 @@ import { memo, useMemo, useState, type CSSProperties } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { BookOpen, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
-import EntryChip from '@/components/EntryChip';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -172,6 +171,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const canAddIdea = isIdeasLoaded && ideasLoadError === null;
   const total = isIdeas ? 0 : view === 'meals' ? meals.length : recipes.length;
   const hasSourceFilter = view === 'recipes' && sourceCounts.bySource.size > 0;
+  const hasSourceSection = view === 'recipes' && sources.length > 0;
   const stockMap = view === 'meals' ? stockByMeal : stockByRecipe;
   const stockCounts = useMemo(
     () =>
@@ -191,7 +191,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     emoji: CONTAINER_PLACE_EMOJIS[place],
   }));
   const hasStockFilter = !isIdeas && stockOptions.length > 0;
-  const hasFilterBar = !isIdeas && (hasSourceFilter || hasStockFilter);
+  const hasFilterBar = !isIdeas && (hasSourceSection || hasStockFilter);
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
 
@@ -606,25 +606,51 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             />
           }
         >
-          {hasSourceFilter && (
-            <FilterSection title='Source'>
-              <PillGroup
-                label='Sources'
-                options={sourceOptions}
-                value={sourceFilter}
-                onChange={setPickedSource}
-              />
-            </FilterSection>
-          )}
-          {hasStockFilter && (
-            <FilterSection title='In stock'>
-              <MultiPillGroup
-                label='In stock'
-                options={stockOptions}
-                values={stockPlaces}
-                onChange={setStockPlaces}
-              />
-            </FilterSection>
+          {(close) => (
+            <>
+              {hasSourceSection && (
+                <FilterSection
+                  title='Source'
+                  action={
+                    <Button
+                      type='button'
+                      variant='link'
+                      size='sm'
+                      className="relative h-6! min-h-0! px-0! py-0! text-xs before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+                      onClick={() => {
+                        close();
+                        openSubview({ kind: 'sources' });
+                      }}
+                    >
+                      Edit sources
+                    </Button>
+                  }
+                >
+                  {hasSourceFilter ? (
+                    <PillGroup
+                      label='Sources'
+                      options={sourceOptions}
+                      value={sourceFilter}
+                      onChange={setPickedSource}
+                    />
+                  ) : (
+                    <p className='text-muted-foreground text-sm'>
+                      None of your recipes has a source right now.
+                    </p>
+                  )}
+                </FilterSection>
+              )}
+              {hasStockFilter && (
+                <FilterSection title='In stock'>
+                  <MultiPillGroup
+                    label='In stock'
+                    options={stockOptions}
+                    values={stockPlaces}
+                    onChange={setStockPlaces}
+                  />
+                </FilterSection>
+              )}
+            </>
           )}
         </FilterBar>
       ) : (
@@ -638,16 +664,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           />
         )
       )}
-      {view === 'recipes' && sources.length > 0 && (
-        <div className='flex flex-wrap gap-2'>
-          <EntryChip
-            icon={<BookOpen className='h-4 w-4' />}
-            label='Sources'
-            count={sources.length}
-            onClick={() => openSubview({ kind: 'sources' })}
-          />
-        </div>
-      )}
       {getBody()}
       {openId && (
         <RecipeDrawer
@@ -655,6 +671,13 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           uid={uid}
           recipeId={openId}
           onClose={() => setOpenId(null)}
+          onOpenSource={(sourceId) => {
+            setOpenId(null);
+            setView('recipes');
+            setQuery('');
+            setStockPlaces([]);
+            setPickedSource(sourceId);
+          }}
           onPlan={(id) => {
             setOpenId(null);
             openSubview({

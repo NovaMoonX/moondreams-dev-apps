@@ -67,6 +67,7 @@ import {
   selectIngredients,
   selectIngredientsById,
   selectRecipesById,
+  selectSourceCounts,
   selectSources,
   selectSourcesById,
   selectSourcesLoadError,
@@ -139,6 +140,7 @@ function RecipeForm({
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
+  const sourceCounts = useAppSelector(selectSourceCounts);
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
   const tracking = useAppSelector((state) =>
     selectTweakTracking(state, recipeId),
@@ -273,8 +275,15 @@ function RecipeForm({
   const blocker = getBlocker();
 
   const sourceOptions = useMemo(
-    () => sources.map((source) => ({ value: source.id, label: source.label })),
-    [sources],
+    () =>
+      sources
+        .filter(
+          (source) =>
+            sourceCounts.bySource.has(source.id) ||
+            source.id === initialData.sourceChoice.choice,
+        )
+        .map((source) => ({ value: source.id, label: source.label })),
+    [sources, sourceCounts, initialData.sourceChoice.choice],
   );
 
   const fields = useMemo(

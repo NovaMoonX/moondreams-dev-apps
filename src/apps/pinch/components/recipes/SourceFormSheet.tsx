@@ -16,7 +16,6 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { MAX_SOURCE_LABEL_LENGTH } from '@apps/pinch/constants';
 import {
-  createSource,
   removeSource,
   renameSource,
 } from '@apps/pinch/store/actions/sourceActions';
@@ -28,8 +27,8 @@ const { custom } = FormFactories;
 
 interface SourceFormSheetProps {
   uid: string;
-  /** The source being renamed or deleted; null adds a new one. */
-  source: Source | null;
+  /** The source being renamed or deleted. */
+  source: Source;
   onClose: () => void;
 }
 
@@ -38,24 +37,20 @@ function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
   const { confirm } = useActionModal();
   const sources = useAppSelector(selectSources);
   const recipeCount =
-    useAppSelector(selectSourceCounts).bySource.get(source?.id ?? '') ?? 0;
-  const [label, setLabel] = useState(source?.label ?? '');
+    useAppSelector(selectSourceCounts).bySource.get(source.id) ?? 0;
+  const [label, setLabel] = useState(source.label);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const trimmed = label.trim();
-  const duplicate = findSourceByLabel(sources, trimmed, source?.id ?? null);
+  const duplicate = findSourceByLabel(sources, trimmed, source.id);
   const isFormComplete = trimmed !== '' && duplicate === null;
 
   const handleSubmit = async () => {
     setError(null);
     setIsSubmitting(true);
     try {
-      await dispatch(
-        source
-          ? renameSource({ uid, id: source.id, label })
-          : createSource({ uid, label }),
-      ).unwrap();
+      await dispatch(renameSource({ uid, id: source.id, label })).unwrap();
       onClose();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this source.'));
@@ -64,12 +59,9 @@ function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
   };
 
   const handleDelete = async () => {
-    if (!source) {
-      return;
-    }
     const getMessage = () => {
       if (recipeCount === 0) {
-        return `Delete "${source.label}"? This action cannot be undone.`;
+        return `Delete “${source.label}”? It isn't on any recipe, and this can't be undone.`;
       }
       if (recipeCount === 1) {
         return `"${source.label}" is on 1 recipe. It stays, and only loses this label.`;
@@ -113,7 +105,6 @@ function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
                     variant='outline'
                     placeholder='Serious Eats'
                     maxLength={MAX_SOURCE_LABEL_LENGTH}
-                    autoFocus={source === null}
                     value={String(props.value)}
                     onChange={(event) =>
                       props.onValueChange(event.target.value)
@@ -124,7 +115,7 @@ function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
             ),
           }),
         ]}
-        initialData={{ label: source?.label ?? '' }}
+        initialData={{ label: source.label }}
         columns={1}
         onDataChange={(data) =>
           setLabel(String((data as { label?: string }).label ?? ''))
@@ -139,12 +130,10 @@ function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
               `You already have a source called “${duplicate.label}”.`
             }
             leftActions={
-              source && (
-                <DeleteIconButton
-                  onClick={() => void handleDelete()}
-                  disabled={isSubmitting}
-                />
-              )
+              <DeleteIconButton
+                onClick={() => void handleDelete()}
+                disabled={isSubmitting}
+              />
             }
             cancelAction={
               <Button
@@ -162,7 +151,7 @@ function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
                 loading={isSubmitting}
                 disabled={isSubmitting || !isFormComplete}
               >
-                {source ? 'Save' : 'Add'}
+                Save
               </Button>
             }
           />

@@ -14,16 +14,21 @@ export interface ActiveFilter {
 
 interface FilterSectionProps {
   title: string;
+  /** A quiet link on the title's line, such as one that opens where the options are edited. */
+  action?: ReactNode;
   children: ReactNode;
 }
 
 /** One question inside a filter panel: a small uppercase title over its pills. */
-export function FilterSection({ title, children }: FilterSectionProps) {
+export function FilterSection({ title, action, children }: FilterSectionProps) {
   return (
     <section aria-label={title} className='space-y-2'>
-      <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-        {title}
-      </h3>
+      <div className='flex items-center justify-between gap-3'>
+        <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+          {title}
+        </h3>
+        {action}
+      </div>
       {children}
     </section>
   );
@@ -46,8 +51,8 @@ interface FilterBarProps {
   doneLabel?: string;
   /** A shorter button label for the narrowest phones, where the full one would be cut off ("Show 150"). */
   compactDoneLabel?: string;
-  /** The filter controls: a `FilterSection` per question. */
-  children: ReactNode;
+  /** The filter controls: a `FilterSection` per question. A function gets a way to close the panel, for a link that leaves it. */
+  children: ReactNode | ((close: () => void) => ReactNode);
 }
 
 /**
@@ -71,6 +76,10 @@ function FilterBar({
 }: FilterBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
+  const content =
+    typeof children === 'function'
+      ? children(() => setIsOpen(false))
+      : children;
   const activeCount = activeFilters.length;
   const hasActive = activeCount > 0;
 
@@ -139,7 +148,7 @@ function FilterBar({
       showCloseButton
       footer={<div className='px-4 pb-4'>{footer}</div>}
     >
-      <div className='space-y-5 pb-4'>{children}</div>
+      <div className='space-y-5 pb-4'>{content}</div>
     </Drawer>
   ) : null;
 
@@ -167,7 +176,7 @@ function FilterBar({
             {isOpen && (
               <div className='flex max-h-[min(32rem,75dvh)] flex-col gap-3'>
                 <div className='min-h-0 flex-1 space-y-5 overflow-y-auto'>
-                  {children}
+                  {content}
                 </div>
                 <div className='border-border shrink-0 border-t pt-3'>
                   {footer}
