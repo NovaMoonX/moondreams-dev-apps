@@ -29,6 +29,7 @@ interface RecipeRowProps {
   cost: RecipeCost | undefined;
   showPrices: boolean;
   showMacros: boolean;
+  showStock: boolean;
   onOpen: (id: string) => void;
 }
 
@@ -37,6 +38,7 @@ function RecipeRow({
   cost,
   showPrices,
   showMacros,
+  showStock,
   onOpen,
 }: RecipeRowProps) {
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipe.id);
@@ -45,7 +47,8 @@ function RecipeRow({
     (state) => selectCookSummaries(state).get(recipe.id)?.count ?? 0,
   );
   const stock = useAppSelector(
-    (state) => selectStockByRecipe(state).get(recipe.id),
+    (state) =>
+      showStock ? selectStockByRecipe(state).get(recipe.id) : undefined,
     shallowEqual,
   );
   const total = getTotalMinutes(recipe);

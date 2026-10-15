@@ -320,6 +320,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 meal={meal}
                 showPrices={viewOptions.options.showPrices}
                 showMacros={viewOptions.options.showMacros}
+                showStock={viewOptions.options.showStock}
                 onOpen={setOpenMealId}
               />
             </li>
@@ -390,7 +391,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 getRecipeRowHeight(
                   viewOptions.options.showPrices,
                   viewOptions.options.showMacros && isAnyMetricOn,
-                  getStockHeight(stockByRecipe.get(recipe.id), isPhone),
+                  viewOptions.options.showStock
+                    ? getStockHeight(stockByRecipe.get(recipe.id), isPhone)
+                    : 0,
                 ),
               0,
             );
@@ -420,6 +423,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                           cost={costs.get(recipe.id)}
                           showPrices={viewOptions.options.showPrices}
                           showMacros={viewOptions.options.showMacros}
+                          showStock={viewOptions.options.showStock}
                           onOpen={setOpenId}
                         />
                       </li>
@@ -490,6 +494,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             customizedCount={viewOptions.customizedCount}
             onChange={viewOptions.update}
             onReset={viewOptions.reset}
+            hasStockLines
             className='-my-3'
           />
         )}
@@ -531,6 +536,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               customizedCount={viewOptions.customizedCount}
               onChange={viewOptions.update}
               onReset={viewOptions.reset}
+              hasStockLines
             />
           }
         >

@@ -27,10 +27,17 @@ interface MealRowProps {
   meal: Meal;
   showPrices: boolean;
   showMacros: boolean;
+  showStock: boolean;
   onOpen: (id: string) => void;
 }
 
-function MealRow({ meal, showPrices, showMacros, onOpen }: MealRowProps) {
+function MealRow({
+  meal,
+  showPrices,
+  showMacros,
+  showStock,
+  onOpen,
+}: MealRowProps) {
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const costContext = useAppSelector(selectCostContext);
@@ -40,7 +47,9 @@ function MealRow({ meal, showPrices, showMacros, onOpen }: MealRowProps) {
   );
   const show = useAppSelector(selectShowNutrition);
   const stock = useAppSelector((state) => {
-    const found = selectStockByMealWithRecipes(state).get(meal.id);
+    const found = showStock
+      ? selectStockByMealWithRecipes(state).get(meal.id)
+      : undefined;
     return (
       found && {
         fridge: found.fridge,

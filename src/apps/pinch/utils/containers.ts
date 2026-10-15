@@ -786,18 +786,23 @@ export const getPutAwayText = (containers: Container[]) => {
   return total > 0 ? `Put away ${formatServings(total)}` : null;
 };
 
-export const getSavedText = (
-  batch: Pick<Container, 'servings' | 'place' | 'eatBy'>[],
-  now = Date.now(),
+/** What one put-away wrote and where, without its date. */
+export const getSavedHeadline = (
+  batch: Pick<Container, 'servings' | 'place'>[],
 ) => {
-  const { place, eatBy } = batch[0];
   const total = batch.reduce((sum, container) => sum + container.servings, 0);
   const what =
     batch.length === 1
       ? formatServings(total)
       : `${batch.length} containers (${formatServings(total)})`;
-  return `Saved ${what} in the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}, eat by ${getEatByPhrase(eatBy, now)}`;
+  return `Saved ${what} in the ${CONTAINER_PLACE_LABELS[batch[0].place].toLowerCase()}`;
 };
+
+export const getSavedText = (
+  batch: Pick<Container, 'servings' | 'place' | 'eatBy'>[],
+  now = Date.now(),
+) =>
+  `${getSavedHeadline(batch)}, eat by ${getEatByPhrase(batch[0].eatBy, now)}`;
 
 /** The containers one put-away wrote, which share a moment, a place and a date. */
 export const groupSavedBatches = (containers: Container[]) =>
