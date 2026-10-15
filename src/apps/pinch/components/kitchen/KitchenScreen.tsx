@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Plus, Store } from 'lucide-react';
+import { Plus, Store, Tag } from 'lucide-react';
 
 import EntryChip from '@/components/EntryChip';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
@@ -22,6 +22,7 @@ import {
 } from '@apps/pinch/components/kitchen/ingredientFilters';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
 import PreparedEntry from '@apps/pinch/components/containers/PreparedEntry';
+import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import {
   INGREDIENT_FLAG_OPTIONS,
@@ -44,7 +45,7 @@ import {
   selectStores,
   selectUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
-import type { KitchenView } from '@apps/pinch/types';
+import type { Gap, KitchenView } from '@apps/pinch/types';
 import {
   groupByFamily,
   searchIngredients,
@@ -64,7 +65,8 @@ const FLAG_OPTIONS = INGREDIENT_FLAG_OPTIONS.map((option) => ({ ...option }));
 type Overlay =
   | { kind: 'details'; id: string }
   | { kind: 'form'; id: string | null }
-  | { kind: 'product'; ingredientId: string; productId: string | null };
+  | { kind: 'product'; ingredientId: string; productId: string | null }
+  | { kind: 'fillIn'; gaps: Gap[] };
 
 interface KitchenScreenProps {
   uid: string;
@@ -302,15 +304,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
               }
             />
             <p className='text-muted-foreground text-xs'>
-              <strong className='text-foreground font-medium'>
-                Needs a price
-              </strong>{' '}
-              looks at what your recipes, meals and plans use.{' '}
-              <strong className='text-foreground font-medium'>
-                Has a price
-              </strong>{' '}
-              looks at what you've priced. Both only search Yours, even with All
-              picked.
+              Price filters look at Yours.
             </p>
           </FilterSection>
           <FilterSection title='Show only'>
@@ -337,22 +331,43 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           )}
         </FilterBar>
       )}
-      {(hasPrepared || storeCount > 0 || productCount > 0) && (
-        <nav aria-labelledby='kitchen-doors' className='space-y-1.5'>
-          <p id='kitchen-doors' className='text-muted-foreground text-xs'>
-            Also in Kitchen
-          </p>
-          <div className='flex flex-wrap gap-2'>
-            {hasPrepared && <PreparedEntry />}
-            {(storeCount > 0 || productCount > 0) && (
-              <EntryChip
-                icon={<Store className='h-4 w-4' />}
-                label='Stores & prices'
-                onClick={() => openSubview({ kind: 'products' })}
-              />
-            )}
-          </div>
-        </nav>
+      {(hasPrepared || storeCount > 0 || productCount > 0) &&
+        !hasFilters &&
+        trimmed === '' && (
+          <nav aria-labelledby='kitchen-doors' className='space-y-1.5'>
+            <p id='kitchen-doors' className='text-muted-foreground text-xs'>
+              Also in Kitchen
+            </p>
+            <div className='flex flex-wrap gap-2'>
+              {hasPrepared && <PreparedEntry />}
+              {(storeCount > 0 || productCount > 0) && (
+                <EntryChip
+                  icon={<Store className='h-4 w-4' />}
+                  label='Stores & prices'
+                  onClick={() => openSubview({ kind: 'products' })}
+                />
+              )}
+            </div>
+          </nav>
+        )}
+      {filters.price === 'needs' && shown.length > 0 && (
+        <Button
+          type='button'
+          variant='secondary'
+          className='h-10 gap-1.5'
+          onClick={() =>
+            setOverlay({
+              kind: 'fillIn',
+              gaps: shown.map((ingredient) => ({
+                kind: 'NO_PRODUCT',
+                ingredientId: ingredient.id,
+              })),
+            })
+          }
+        >
+          <Tag className='h-4 w-4' aria-hidden='true' />
+          Add prices
+        </Button>
       )}
       {groups.length === 0 ? (
         getEmptyState()
@@ -411,6 +426,13 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
             onClose={() => setOverlay(null)}
           />
         )}
+      {overlay?.kind === 'fillIn' && (
+        <FillInSheet
+          uid={uid}
+          gaps={overlay.gaps}
+          onClose={() => setOverlay(null)}
+        />
+      )}
     </div>
   );
 }
