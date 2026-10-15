@@ -8,18 +8,27 @@ interface EntryRowProps {
   icon: ReactNode;
   label: string;
   count: number;
+  detail?: ReactNode;
   onClick: () => void;
   className?: string;
 }
 
-function EntryRow({ icon, label, count, onClick, className }: EntryRowProps) {
+function EntryRow({
+  icon,
+  label,
+  count,
+  detail,
+  onClick,
+  className,
+}: EntryRowProps) {
   return (
     <Button
       type='button'
       variant='secondary'
       onClick={onClick}
       className={join(
-        'h-14 min-w-0 justify-start gap-2.5 rounded-2xl px-3',
+        'min-w-0 justify-start gap-2.5 rounded-2xl px-3',
+        detail ? 'h-auto min-h-14 py-2' : 'h-14',
         className,
       )}
     >
@@ -29,7 +38,10 @@ function EntryRow({ icon, label, count, onClick, className }: EntryRowProps) {
       >
         {icon}
       </span>
-      <span className='min-w-0 flex-1 truncate text-left'>{label}</span>
+      <span className='min-w-0 flex-1 text-left'>
+        <span className='block truncate'>{label}</span>
+        {detail}
+      </span>
       {count > 0 && (
         <span className='text-muted-foreground text-sm font-normal'>
           {count}

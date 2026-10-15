@@ -16,6 +16,8 @@ interface ListViewControlsProps {
   onReset: () => void;
   /** An ingredient list also chooses what its numbers are per. */
   hasBasis?: boolean;
+  /** A recipe or meal list can hide its fridge and freezer lines. */
+  hasStockLines?: boolean;
   className?: string;
 }
 
@@ -26,6 +28,7 @@ function ListViewControls({
   onChange,
   onReset,
   hasBasis = false,
+  hasStockLines = false,
   className,
 }: ListViewControlsProps) {
   const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
@@ -53,6 +56,14 @@ function ListViewControls({
           isDisabled={!isAnyMetricOn}
           onCheckedChange={(showMacros) => onChange({ showMacros })}
         />
+        {hasStockLines && (
+          <ViewOptionSwitch
+            label="Show what's in stock"
+            description='The fridge and freezer line under a recipe or meal'
+            checked={options.showStock}
+            onCheckedChange={(showStock) => onChange({ showStock })}
+          />
+        )}
       </div>
       {hasBasis && isAnyMetricOn && (
         <FilterSection title='Nutrition numbers'>

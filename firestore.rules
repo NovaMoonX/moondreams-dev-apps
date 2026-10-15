@@ -1535,6 +1535,44 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      // Rules can't loop and the evaluator stops at 1,000 expressions, so each event is checked by index and kept cheap.
+      // `matches` is a whole-string match.
+      function isContainerEvent(e) {
+        return e.size() == 5
+          && e.kind.matches('MADE|FRIDGE|FREEZE|THAW|EAT|TOSS|CLEAR|EDIT')
+          && e.at is int
+          && (e.servings == null || (e.servings is int && e.servings > 0 && e.servings < 101))
+          && (e.place == null || e.place.matches('FRIDGE|FREEZER'))
+          && (e.note == null || (e.note is string && e.note.size() <= 80));
+      }
+
+      function isContainerHistory(history) {
+        let n = history.size();
+        return history is list && n >= 1 && n <= 10
+          && (n <= 0 || isContainerEvent(history[0])) && (n <= 1 || isContainerEvent(history[1]))
+          && (n <= 2 || isContainerEvent(history[2])) && (n <= 3 || isContainerEvent(history[3]))
+          && (n <= 4 || isContainerEvent(history[4])) && (n <= 5 || isContainerEvent(history[5]))
+          && (n <= 6 || isContainerEvent(history[6])) && (n <= 7 || isContainerEvent(history[7]))
+          && (n <= 8 || isContainerEvent(history[8])) && (n <= 9 || isContainerEvent(history[9]));
+      }
+
+      function isContainer(data, id) {
+        return data.size() == 12
+          && data.keys().hasOnly(['id', 'title', 'recipeId', 'mealId', 'cookId', 'servings', 'status', 'place', 'eatBy', 'history', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.title, 120)
+          && (data.recipeId == null || isShortText(data.recipeId, 80))
+          && (data.mealId == null || isShortText(data.mealId, 80))
+          && (data.recipeId == null || data.mealId == null)
+          && (data.cookId == null || isShortText(data.cookId, 80))
+          && data.servings is int && data.servings >= 1 && data.servings <= 100
+          && data.status in ['IN_STOCK', 'DONE']
+          && data.place in ['FRIDGE', 'FREEZER']
+          && data.eatBy is int && data.eatBy % 86400000 == 0 && data.eatBy >= 946684800000 && data.eatBy <= 4102444800000
+          && isContainerHistory(data.history)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
       function isStore(data, id) {
         return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
@@ -1733,6 +1771,17 @@ service cloud.firestore {
           && request.resource.data.kind == resource.data.kind
           && request.resource.data.cookId == resource.data.get('cookId', null)
           && request.resource.data.changes == resource.data.get('changes', [])
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /containers/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isContainer(request.resource.data, id)
+          && request.resource.data.status == 'IN_STOCK';
+        allow update: if isKitchenOwner() && isContainer(request.resource.data, id)
+          && request.resource.data.recipeId == resource.data.recipeId
+          && request.resource.data.mealId == resource.data.mealId
+          && request.resource.data.cookId == resource.data.cookId
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

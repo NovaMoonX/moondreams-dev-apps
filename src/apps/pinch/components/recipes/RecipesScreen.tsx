@@ -5,12 +5,15 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { BookOpen, Plus } from 'lucide-react';
 
 import FilterBar, { FilterSection } from '@/components/FilterBar';
-import { PillGroup } from '@/components/PillGroup';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import LazyMount from '@/components/LazyMount';
 import SectionHeader from '@/components/SectionHeader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
+import ContainerFormSheet, {
+  type ContainerSubject,
+} from '@apps/pinch/components/containers/ContainerFormSheet';
 import IdeasView from '@apps/pinch/components/ideas/IdeasView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import EntryRow from '@apps/pinch/components/shared/EntryRow';
@@ -23,6 +26,9 @@ import MealRow from '@apps/pinch/components/recipes/MealRow';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import RecipeRow from '@apps/pinch/components/recipes/RecipeRow';
 import {
+  CONTAINER_PLACE_EMOJIS,
+  CONTAINER_PLACE_LABELS,
+  CONTAINER_PLACES,
   LIST_SEARCH_THRESHOLD,
   RECIPES_VIEW_LABELS,
   RECIPES_VIEWS,
@@ -33,7 +39,6 @@ import {
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
-  selectCostContext,
   selectIdeasLoadError,
   selectMeals,
   selectRecipeCosts,
@@ -42,11 +47,23 @@ import {
   selectSourceCounts,
   selectSources,
   selectSourcesById,
+  selectStockByMealWithRecipes,
+  selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
-import type { Gap, RecipesView, ShoppingRequest } from '@apps/pinch/types';
+import type {
+  ContainerPlace,
+  Gap,
+  RecipesView,
+  ShoppingRequest,
+} from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
+import {
+  getStockParts,
+  getStockPlaceCounts,
+  hasStockIn,
+  type StockSummary,
+} from '@apps/pinch/utils/containers';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
-import { getMealCost } from '@apps/pinch/utils/mealMath';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
@@ -59,10 +76,28 @@ const RECIPE_CHUNK = 20;
 const EAGER_RECIPE_CHUNKS = 1;
 const COVER_SIZE = 56;
 const ROW_PADDING_AND_RULE = 17;
-/** A row is its title and detail, plus a price line and a macro line when those are shown, and never shorter than its cover. */
-const getRecipeRowHeight = (showPrices: boolean, showMacros: boolean) =>
-  Math.max(COVER_SIZE, 40 + (showPrices ? 16 : 0) + (showMacros ? 22 : 0)) +
-  ROW_PADDING_AND_RULE;
+/** A row is its title and detail, plus a price line, a macro line and a stock line when those show, and never shorter than its cover. */
+const getRecipeRowHeight = (
+  showPrices: boolean,
+  showMacros: boolean,
+  stockHeight: number,
+) =>
+  Math.max(
+    COVER_SIZE,
+    40 + (showPrices ? 16 : 0) + (showMacros ? 22 : 0) + stockHeight,
+  ) + ROW_PADDING_AND_RULE;
+
+const getStockHeight = (
+  summary: StockSummary | undefined,
+  isPhone: boolean,
+) => {
+  if (summary === undefined) return 0;
+
+  const lines = getStockParts(summary).map((part) => (part.due ? 20 : 16));
+  return isPhone
+    ? lines.reduce((sum, line) => sum + line, 0) + 2 * (lines.length - 1)
+    : Math.max(...lines);
+};
 
 interface RecipesScreenProps {
   uid: string;
@@ -76,16 +111,19 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const recipes = useAppSelector(selectRecipes);
   const costs = useAppSelector(selectRecipeCosts);
   const meals = useAppSelector(selectMeals);
-  const costContext = useAppSelector(selectCostContext);
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
+  const stockByRecipe = useAppSelector(selectStockByRecipe);
+  const stockByMeal = useAppSelector(selectStockByMealWithRecipes);
   const ideaCount = useAppSelector((state) => state.pinch.ideas.items.length);
   const ideasLoadError = useAppSelector(selectIdeasLoadError);
   const isIdeasLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
   const [view, setView] = useState<RecipesView>('recipes');
   const [query, setQuery] = useState('');
   const [pickedSource, setPickedSource] = useState(SOURCE_FILTER_ANY);
+  const [stockPlaces, setStockPlaces] = useState<ContainerPlace[]>([]);
+  const [putAway, setPutAway] = useState<ContainerSubject | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
@@ -100,12 +138,32 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const isIdeas = view === 'ideas';
   const canAddIdea = isIdeasLoaded && ideasLoadError === null;
   const total = isIdeas ? 0 : view === 'meals' ? meals.length : recipes.length;
-  const hasFilterBar = view === 'recipes' && sourceCounts.bySource.size > 0;
+  const hasSourceFilter = view === 'recipes' && sourceCounts.bySource.size > 0;
+  const stockMap = view === 'meals' ? stockByMeal : stockByRecipe;
+  const stockCounts = useMemo(
+    () =>
+      getStockPlaceCounts(
+        view === 'meals'
+          ? meals.map((meal) => meal.id)
+          : recipes.map((recipe) => recipe.id),
+        stockMap,
+      ),
+    [view, meals, recipes, stockMap],
+  );
+  const stockOptions = CONTAINER_PLACES.filter(
+    (place) => stockCounts[place] > 0 || stockPlaces.includes(place),
+  ).map((place) => ({
+    value: place,
+    label: `${CONTAINER_PLACE_LABELS[place]} · ${stockCounts[place]}`,
+    emoji: CONTAINER_PLACE_EMOJIS[place],
+  }));
+  const hasStockFilter = !isIdeas && stockOptions.length > 0;
+  const hasFilterBar = !isIdeas && (hasSourceFilter || hasStockFilter);
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
 
   const getSourceFilter = () => {
-    if (!hasFilterBar) return SOURCE_FILTER_ANY;
+    if (!hasSourceFilter) return SOURCE_FILTER_ANY;
     if (pickedSource === SOURCE_FILTER_NONE || sourcesById.has(pickedSource)) {
       return pickedSource;
     }
@@ -126,11 +184,19 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               (getRecipeSource(recipe, sourcesById)?.id ??
                 SOURCE_FILTER_NONE) === sourceFilter,
           );
+    const inStock =
+      stockPlaces.length === 0
+        ? inSource
+        : inSource.filter((recipe) =>
+            stockPlaces.some((place) =>
+              hasStockIn(stockByRecipe.get(recipe.id), place),
+            ),
+          );
     return searchByName(
-      inSource.map((recipe) => ({ name: recipe.title, recipe })),
+      inStock.map((recipe) => ({ name: recipe.title, recipe })),
       trimmed,
     ).map(({ recipe }) => recipe);
-  }, [recipes, sourcesById, sourceFilter, trimmed]);
+  }, [recipes, sourcesById, sourceFilter, stockPlaces, stockByRecipe, trimmed]);
 
   const sourceOptions = useMemo(
     () => [
@@ -155,8 +221,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     ],
     [sources, sourceCounts, sourceFilter],
   );
-  const activeFilters =
-    sourceFilter === SOURCE_FILTER_ANY
+  const activeFilters = [
+    ...(sourceFilter === SOURCE_FILTER_ANY
       ? []
       : [
           {
@@ -166,16 +232,38 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 ? sourceLabel
                 : `From ${sourceLabel}`,
           },
-        ];
+        ]),
+    ...stockPlaces.map((place) => ({
+      key: `stock-${place}`,
+      label: `In the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
+    })),
+  ];
   const clearSourceFilter = () => setPickedSource(SOURCE_FILTER_ANY);
+  const clearFilters = () => {
+    setPickedSource(SOURCE_FILTER_ANY);
+    setStockPlaces([]);
+  };
+  const removeFilter = (key: string) =>
+    key === 'source'
+      ? clearSourceFilter()
+      : setStockPlaces((current) =>
+          current.filter((place) => `stock-${place}` !== key),
+        );
 
   const shownMeals = useMemo(
     () =>
       searchByName(
-        meals.map((meal) => ({ name: meal.name, meal })),
+        (stockPlaces.length === 0
+          ? meals
+          : meals.filter((meal) =>
+              stockPlaces.some((place) =>
+                hasStockIn(stockByMeal.get(meal.id), place),
+              ),
+            )
+        ).map((meal) => ({ name: meal.name, meal })),
         trimmed,
       ).map(({ meal }) => meal),
-    [meals, trimmed],
+    [meals, stockPlaces, stockByMeal, trimmed],
   );
 
   const getBody = () => {
@@ -198,6 +286,25 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           </p>
         );
       }
+      if (shownMeals.length === 0 && stockPlaces.length > 0) {
+        return (
+          <div className='space-y-3 py-6 text-center'>
+            <p className='text-muted-foreground text-sm wrap-break-word'>
+              {trimmed !== ''
+                ? `No saved meals in stock match “${trimmed}”.`
+                : 'No saved meals are in stock there.'}
+            </p>
+            <Button
+              type='button'
+              variant='secondary'
+              className='h-10'
+              onClick={clearFilters}
+            >
+              Clear filter
+            </Button>
+          </div>
+        );
+      }
       if (shownMeals.length === 0) {
         return (
           <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>
@@ -211,9 +318,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             <li key={meal.id}>
               <MealRow
                 meal={meal}
-                cost={getMealCost(meal.items, costContext)}
                 showPrices={viewOptions.options.showPrices}
                 showMacros={viewOptions.options.showMacros}
+                showStock={viewOptions.options.showStock}
                 onOpen={setOpenMealId}
               />
             </li>
@@ -229,17 +336,25 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         </p>
       );
     }
-    if (shown.length === 0 && sourceFilter !== SOURCE_FILTER_ANY) {
-      const scope =
+    if (shown.length === 0 && activeFilters.length > 0) {
+      const scope = [
         sourceFilter === SOURCE_FILTER_NONE
           ? 'without a source'
-          : `from ${sourceLabel}`;
+          : sourceFilter !== SOURCE_FILTER_ANY
+            ? `from ${sourceLabel}`
+            : null,
+        stockPlaces.length > 0
+          ? `in the ${stockPlaces.map((place) => CONTAINER_PLACE_LABELS[place].toLowerCase()).join(' or ')}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' ');
       return (
         <div className='space-y-3 py-6 text-center'>
           <p className='text-muted-foreground text-sm wrap-break-word'>
             {trimmed !== ''
               ? `Nothing ${scope} matches “${trimmed}” yet.`
-              : sourceFilter === SOURCE_FILTER_NONE
+              : sourceFilter === SOURCE_FILTER_NONE && stockPlaces.length === 0
                 ? 'Every recipe has a source.'
                 : `No recipes ${scope} yet.`}
           </p>
@@ -247,9 +362,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             type='button'
             variant='secondary'
             className='h-10'
-            onClick={clearSourceFilter}
+            onClick={clearFilters}
           >
-            Clear filter
+            Clear {activeFilters.length === 1 ? 'filter' : 'filters'}
           </Button>
         </div>
       );
@@ -270,15 +385,21 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               chunk * RECIPE_CHUNK,
               (chunk + 1) * RECIPE_CHUNK,
             );
-            const estimatedHeight =
-              rows.length *
-              getRecipeRowHeight(
-                viewOptions.options.showPrices,
-                viewOptions.options.showMacros && isAnyMetricOn,
-              );
+            const estimatedHeight = rows.reduce(
+              (sum, recipe) =>
+                sum +
+                getRecipeRowHeight(
+                  viewOptions.options.showPrices,
+                  viewOptions.options.showMacros && isAnyMetricOn,
+                  viewOptions.options.showStock
+                    ? getStockHeight(stockByRecipe.get(recipe.id), isPhone)
+                    : 0,
+                ),
+              0,
+            );
             return (
               <div
-                key={`${sourceFilter}-${trimmed}-${chunk}`}
+                key={`${sourceFilter}-${stockPlaces.join(',')}-${trimmed}-${chunk}`}
                 className={join(
                   'defer-offscreen',
                   chunk > 0 && 'border-border border-t',
@@ -302,6 +423,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                           cost={costs.get(recipe.id)}
                           showPrices={viewOptions.options.showPrices}
                           showMacros={viewOptions.options.showMacros}
+                          showStock={viewOptions.options.showStock}
                           onOpen={setOpenId}
                         />
                       </li>
@@ -360,6 +482,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             value={view}
             onChange={(next) => {
               setQuery('');
+              setStockPlaces([]);
               setView(next);
             }}
             isThin
@@ -371,6 +494,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             customizedCount={viewOptions.customizedCount}
             onChange={viewOptions.update}
             onReset={viewOptions.reset}
+            hasStockLines
             className='-my-3'
           />
         )}
@@ -389,30 +513,53 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         <FilterBar
           query={query}
           onQueryChange={setQuery}
-          searchPlaceholder={isPhone ? 'Search' : 'Search recipes'}
-          filterLabel='Filter recipes'
+          searchPlaceholder={
+            isPhone
+              ? 'Search'
+              : view === 'meals'
+                ? 'Search meals'
+                : 'Search recipes'
+          }
+          filterLabel={view === 'meals' ? 'Filter meals' : 'Filter recipes'}
           activeFilters={activeFilters}
-          onRemoveFilter={clearSourceFilter}
-          onClearFilters={clearSourceFilter}
-          doneLabel={`Show ${shown.length} ${shown.length === 1 ? 'recipe' : 'recipes'}`}
-          compactDoneLabel={`Show ${shown.length}`}
+          onRemoveFilter={removeFilter}
+          onClearFilters={clearFilters}
+          doneLabel={
+            view === 'meals'
+              ? `Show ${shownMeals.length} ${shownMeals.length === 1 ? 'meal' : 'meals'}`
+              : `Show ${shown.length} ${shown.length === 1 ? 'recipe' : 'recipes'}`
+          }
+          compactDoneLabel={`Show ${view === 'meals' ? shownMeals.length : shown.length}`}
           trailing={
             <ListViewControls
               options={viewOptions.options}
               customizedCount={viewOptions.customizedCount}
               onChange={viewOptions.update}
               onReset={viewOptions.reset}
+              hasStockLines
             />
           }
         >
-          <FilterSection title='Source'>
-            <PillGroup
-              label='Sources'
-              options={sourceOptions}
-              value={sourceFilter}
-              onChange={setPickedSource}
-            />
-          </FilterSection>
+          {hasSourceFilter && (
+            <FilterSection title='Source'>
+              <PillGroup
+                label='Sources'
+                options={sourceOptions}
+                value={sourceFilter}
+                onChange={setPickedSource}
+              />
+            </FilterSection>
+          )}
+          {hasStockFilter && (
+            <FilterSection title='In stock'>
+              <MultiPillGroup
+                label='In stock'
+                options={stockOptions}
+                values={stockPlaces}
+                onChange={setStockPlaces}
+              />
+            </FilterSection>
+          )}
         </FilterBar>
       ) : (
         hasSearch && (
@@ -456,6 +603,14 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           onOpenHistory={(id) => {
             setOpenId(null);
             setHistoryId(id);
+          }}
+          onOpenStock={(id) => {
+            setOpenId(null);
+            openSubview({ kind: 'containers', recipeId: id });
+          }}
+          onPutAway={(id) => {
+            setOpenId(null);
+            setPutAway({ kind: 'recipe', id });
           }}
           onOpenNote={(recipeId, noteId) => {
             setOpenId(null);
@@ -519,6 +674,24 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenMealId(null);
             setShopping(request);
           }}
+          onOpenStock={(id) => {
+            setOpenMealId(null);
+            openSubview({ kind: 'containers', mealId: id });
+          }}
+          onPutAway={(id) => {
+            setOpenMealId(null);
+            setPutAway({ kind: 'meal', id });
+          }}
+        />
+      )}
+      {putAway && (
+        <ContainerFormSheet
+          key={`${putAway.kind}-${putAway.kind === 'typed' ? putAway.name : putAway.id}`}
+          uid={uid}
+          initial={putAway}
+          onClose={() =>
+            setPutAway((current) => (current === putAway ? null : current))
+          }
         />
       )}
       {fillIn && (

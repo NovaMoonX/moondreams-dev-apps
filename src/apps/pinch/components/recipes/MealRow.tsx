@@ -1,18 +1,23 @@
+import { memo, useMemo } from 'react';
+import { shallowEqual } from 'react-redux';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
+import StockLine from '@apps/pinch/components/containers/StockLine';
 import {
   selectCostContext,
   selectIngredientsById,
   selectRecipesById,
   selectShowNutrition,
+  selectStockByMealWithRecipes,
 } from '@apps/pinch/store/selectors';
 import type { Meal } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
-import type { MealCost } from '@apps/pinch/utils/mealMath';
+import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
   hasShownValue,
@@ -20,17 +25,42 @@ import {
 
 interface MealRowProps {
   meal: Meal;
-  cost: MealCost;
   showPrices: boolean;
   showMacros: boolean;
+  showStock: boolean;
   onOpen: (id: string) => void;
 }
 
-function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
+function MealRow({
+  meal,
+  showPrices,
+  showMacros,
+  showStock,
+  onOpen,
+}: MealRowProps) {
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const costContext = useAppSelector(selectCostContext);
+  const cost = useMemo(
+    () => getMealCost(meal.items, costContext),
+    [meal.items, costContext],
+  );
   const show = useAppSelector(selectShowNutrition);
+  const stock = useAppSelector((state) => {
+    const found = showStock
+      ? selectStockByMealWithRecipes(state).get(meal.id)
+      : undefined;
+    return (
+      found && {
+        fridge: found.fridge,
+        freezer: found.freezer,
+        containers: found.containers,
+        nearestEatBy: found.nearestEatBy,
+        fridgeEatBy: found.fridgeEatBy,
+        freezerEatBy: found.freezerEatBy,
+      }
+    );
+  }, shallowEqual);
   const nutrition = showMacros
     ? getMealNutrition(
         meal.items,
@@ -80,6 +110,7 @@ function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
             className='text-muted-foreground mt-0.5 text-xs font-normal'
           />
         )}
+        <StockLine summary={stock} />
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {itemNames}
         </span>
@@ -92,4 +123,4 @@ function MealRow({ meal, cost, showPrices, showMacros, onOpen }: MealRowProps) {
   );
 }
 
-export default MealRow;
+export default memo(MealRow);

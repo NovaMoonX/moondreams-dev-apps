@@ -19,6 +19,7 @@ import {
   type IngredientFilters,
 } from '@apps/pinch/components/kitchen/ingredientFilters';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
+import PreparedEntry from '@apps/pinch/components/containers/PreparedEntry';
 import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import {
@@ -222,7 +223,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     <div className='space-y-4'>
       <SectionHeader
         title='Kitchen'
-        subtitle='Your ingredients, products and stores.'
+        subtitle="Your ingredients, products, stores and what you've put away."
       />
       <div className='grid grid-cols-2 gap-2'>
         <EntryRow
@@ -237,6 +238,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           count={productCount}
           onClick={() => openSubview({ kind: 'products' })}
         />
+        <PreparedEntry />
       </div>
       <div className='flex h-10 items-center justify-between gap-3'>
         <h3 className='text-muted-foreground flex min-w-0 items-baseline gap-2 text-xs font-semibold tracking-wide uppercase'>

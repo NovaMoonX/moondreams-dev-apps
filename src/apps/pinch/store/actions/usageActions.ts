@@ -29,6 +29,18 @@ const countPlannedMeals = async (uid: string, id: string) =>
     )
   ).data().count;
 
+/** How many containers of a recipe are still in the fridge or freezer, read from the server for the same reason as the planned meals. */
+const countContainers = async (uid: string, id: string) =>
+  (
+    await getCountFromServer(
+      query(
+        collection(db, 'apps', 'pinch', 'kitchens', uid, 'containers'),
+        where('recipeId', '==', id),
+        where('status', '==', 'IN_STOCK'),
+      ),
+    )
+  ).data().count;
+
 /** What still points at a recipe, ingredient or store: the loaded collections plus one read of the planned meals that list it. */
 export async function readUsage(
   uid: string,
@@ -41,16 +53,21 @@ export async function readUsage(
     return getStoreUsage(products.items, id);
   }
 
-  const plannedMeals = await countPlannedMeals(uid, id);
-  return kind === 'RECIPE'
-    ? getRecipeUsage(meals.items, id, plannedMeals)
-    : getIngredientUsage(
-        recipes.items,
-        meals.items,
-        products.items,
-        id,
-        plannedMeals,
-      );
+  if (kind === 'RECIPE') {
+    const [plannedMeals, containers] = await Promise.all([
+      countPlannedMeals(uid, id),
+      countContainers(uid, id),
+    ]);
+    return getRecipeUsage(meals.items, id, plannedMeals, containers);
+  }
+
+  return getIngredientUsage(
+    recipes.items,
+    meals.items,
+    products.items,
+    id,
+    await countPlannedMeals(uid, id),
+  );
 }
 
 interface GetUsageInput {

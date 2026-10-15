@@ -1,5 +1,9 @@
 import { combineReducers } from '@reduxjs/toolkit';
 
+import {
+  containersReducer,
+  type ContainersState,
+} from './slices/containersSlice';
 import { cooksReducer, type CooksState } from './slices/cooksSlice';
 import { familiesReducer, type FamiliesState } from './slices/familiesSlice';
 import { ideasReducer, type IdeasState } from './slices/ideasSlice';
@@ -34,6 +38,7 @@ export interface PinchState {
   ideas: IdeasState;
   cooks: CooksState;
   notes: NotesState;
+  containers: ContainersState;
 }
 
 export const pinchReducer = combineReducers({
@@ -50,4 +55,5 @@ export const pinchReducer = combineReducers({
   ideas: ideasReducer,
   cooks: cooksReducer,
   notes: notesReducer,
+  containers: containersReducer,
 });

@@ -12,6 +12,10 @@ import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
+import {
+  EatFromStockRows,
+  EatFromStockView,
+} from '@apps/pinch/components/containers/EatFromStock';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
@@ -32,7 +36,12 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { Gap, MealType, ShoppingRequest } from '@apps/pinch/types';
+import type {
+  ContainerPlace,
+  Gap,
+  MealType,
+  ShoppingRequest,
+} from '@apps/pinch/types';
 import {
   formatDayTitle,
   getLocalTodayDate,
@@ -94,6 +103,7 @@ function PlannedMealView({
   const [mealName, setMealName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isChoosing, setIsChoosing] = useState(false);
+  const [eatingPlace, setEatingPlace] = useState<ContainerPlace | null>(null);
 
   if (!meal) {
     return null;
@@ -107,6 +117,7 @@ function PlannedMealView({
 
   const today = getLocalTodayDate();
   const canPlanAhead = meal.date >= today;
+  const canEatFromStock = meal.date <= today;
   const markable =
     meal.date <= today && cooksLoadError === null
       ? getMarkableRecipes(meal.items, recipesById)
@@ -205,6 +216,17 @@ function PlannedMealView({
         footerEl,
       )
     : null;
+
+  if (eatingPlace !== null && canEatFromStock) {
+    return (
+      <EatFromStockView
+        uid={uid}
+        meal={meal}
+        place={eatingPlace}
+        onBack={() => setEatingPlace(null)}
+      />
+    );
+  }
 
   if (isChoosing && cookable.length > 1) {
     return (
@@ -386,7 +408,10 @@ function PlannedMealView({
             : `This day was priced on ${formatDateShort(repricedAt)}, so its meals keep those prices and numbers.`}
         </p>
       )}
-      {(canPlanAhead || markable.length > 0 || meal.snapshot) && (
+      {(canPlanAhead ||
+        canEatFromStock ||
+        markable.length > 0 ||
+        meal.snapshot) && (
         <ActionGroup>
           {canPlanAhead && cookable.length > 0 && (
             <StartCookingRow
@@ -416,6 +441,9 @@ function PlannedMealView({
             dayKey={getPlannedDayKey(meal.date)}
             isGrouped
           />
+          {canEatFromStock && (
+            <EatFromStockRows meal={meal} onOpen={setEatingPlace} />
+          )}
           {canPlanAhead && (
             <AddToShoppingRow
               isGrouped
@@ -425,6 +453,7 @@ function PlannedMealView({
                   kind: 'items',
                   items: meal.items,
                   label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
+                  mealId: meal.sourceMealId,
                 })
               }
             />

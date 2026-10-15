@@ -9,7 +9,12 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
 import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
-import { selectIngredients, selectRecipes } from '@apps/pinch/store/selectors';
+import StockLine from '@apps/pinch/components/containers/StockLine';
+import {
+  selectIngredients,
+  selectRecipes,
+  selectStockByRecipe,
+} from '@apps/pinch/store/selectors';
 import {
   searchByName,
   searchIngredients,
@@ -44,6 +49,7 @@ function ItemSearch({
   const dispatch = useAppDispatch();
   const ingredients = useAppSelector(selectIngredients);
   const recipes = useAppSelector(selectRecipes);
+  const stockByRecipe = useAppSelector(selectStockByRecipe);
   const [query, setQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,8 +149,11 @@ function ItemSearch({
                 >
                   🍲
                 </span>
-                <span className='min-w-0 flex-1 truncate font-medium'>
-                  {recipe.title}
+                <span className='min-w-0 flex-1'>
+                  <span className='block truncate font-medium'>
+                    {recipe.title}
+                  </span>
+                  <StockLine summary={stockByRecipe.get(recipe.id)} />
                 </span>
                 <span className='text-muted-foreground text-xs font-normal'>
                   Recipe

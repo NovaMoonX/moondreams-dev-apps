@@ -5,6 +5,7 @@ export interface Usage {
   savedMeals: number;
   recipes: number;
   products: number;
+  containers: number;
 }
 
 export const NO_USAGE: Usage = {
@@ -12,10 +13,16 @@ export const NO_USAGE: Usage = {
   savedMeals: 0,
   recipes: 0,
   products: 0,
+  containers: 0,
 };
 
 export const isInUse = (usage: Usage) =>
-  usage.plannedMeals + usage.savedMeals + usage.recipes + usage.products > 0;
+  usage.plannedMeals +
+    usage.savedMeals +
+    usage.recipes +
+    usage.products +
+    usage.containers >
+  0;
 
 const countSavedMeals = (
   meals: Meal[],
@@ -26,14 +33,16 @@ const countSavedMeals = (
     meal.items.some((item) => item.kind === kind && item.refId === id),
   ).length;
 
-/** What still points at a recipe: saved meals (loaded) and the planned meals the caller counted. */
+/** What still points at a recipe: saved meals (loaded) and the planned meals and in-stock containers the caller counted. */
 export const getRecipeUsage = (
   meals: Meal[],
   id: string,
   plannedMeals: number,
+  containers: number,
 ): Usage => ({
   ...NO_USAGE,
   plannedMeals,
+  containers,
   savedMeals: countSavedMeals(meals, 'RECIPE', id),
 });
 
@@ -46,6 +55,7 @@ export const getIngredientUsage = (
   plannedMeals: number,
 ): Usage => ({
   plannedMeals,
+  containers: 0,
   savedMeals: countSavedMeals(meals, 'INGREDIENT', id),
   recipes: recipes.filter((recipe) =>
     recipe.ingredients.some((line) => line.ingredientId === id),
@@ -71,6 +81,8 @@ export function describeUsage(usage: Usage): string {
       plural(usage.savedMeals, 'saved meal', 'saved meals'),
     usage.recipes > 0 && plural(usage.recipes, 'recipe', 'recipes'),
     usage.products > 0 && plural(usage.products, 'product', 'products'),
+    usage.containers > 0 &&
+      plural(usage.containers, 'prepared container', 'prepared containers'),
   ].filter((part): part is string => part !== false);
 
   return parts.length <= 2
