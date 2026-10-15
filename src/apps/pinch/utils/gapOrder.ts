@@ -11,7 +11,7 @@ import type {
   Unit,
 } from '@apps/pinch/types';
 import { bridge, toBase } from '@apps/pinch/utils/quantity';
-import { getItemsLines, roundAmount } from '@apps/pinch/utils/shopping';
+import { getItemsLines } from '@apps/pinch/utils/shopping';
 
 /** A piece with no weight of its own counts as this many grams when gaps are ranked. */
 const GRAMS_PER_UNWEIGHED_PIECE = 50;
@@ -141,8 +141,11 @@ export function rankGaps(gaps: Gap[], uses: Map<string, IngredientUse>) {
   return result;
 }
 
-const formatAmount = ({ amount, unit }: Pick<Amount, 'amount' | 'unit'>) =>
-  `${roundAmount(amount)} ${UNIT_LABELS[unit]}`;
+const formatAmount = ({ amount, unit }: Pick<Amount, 'amount' | 'unit'>) => {
+  const digits = amount >= 10 ? 0 : amount >= 1 ? 1 : 2;
+  const rounded = Number(amount.toFixed(digits));
+  return `${rounded} ${UNIT_LABELS[unit]}`;
+};
 
 /** The plan's need in the unit of its biggest line; null when its units can't be added up. */
 const getPlannedTotal = (

@@ -20,11 +20,20 @@ import { saveProduct } from '@apps/pinch/store/actions/productActions';
 import {
   selectDefaultProducts,
   selectIngredientsById,
+  selectPlannedMeals,
+  selectRecipes,
+  selectRecipesById,
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, Product, Unit } from '@apps/pinch/types';
 import { getGapKey } from '@apps/pinch/utils/gaps';
+import {
+  getIngredientUses,
+  getPackageUnit,
+  getUseText,
+  rankGaps,
+} from '@apps/pinch/utils/gapOrder';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 
 interface RowState {
@@ -48,10 +57,16 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const storesById = useAppSelector(selectStoresById);
-  const rows = useMemo(
-    () => [...new Map(gaps.map((gap) => [getGapKey(gap), gap])).values()],
-    [gaps],
+  const recipes = useAppSelector(selectRecipes);
+  const recipesById = useAppSelector(selectRecipesById);
+  const plannedMeals = useAppSelector(selectPlannedMeals);
+  const uses = useMemo(
+    () =>
+      getIngredientUses(recipes, plannedMeals, recipesById, ingredientsById),
+    [recipes, plannedMeals, recipesById, ingredientsById],
   );
+  const [rows] = useState(() => rankGaps(gaps, uses));
+  const [lastStoreId, setLastStoreId] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, RowState>>({});
   const [nutrition, setNutrition] = useState<
     Record<string, Record<string, string>>
@@ -62,10 +77,16 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
 
   const getRow = (gap: Gap): RowState =>
     values[getGapKey(gap)] ?? {
-      storeId: null,
+      storeId:
+        lastStoreId !== null && storesById.has(lastStoreId)
+          ? lastStoreId
+          : null,
       price: '',
       sizeAmount: '',
-      sizeUnit: 'LB',
+      sizeUnit: getPackageUnit(
+        uses.get(gap.ingredientId),
+        ingredientsById.get(gap.ingredientId),
+      ),
     };
   const update = (id: string, gap: Gap, patch: Partial<RowState>) =>
     setValues((current) => ({
@@ -125,6 +146,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const row = getRow(gap);
   const product: Product | undefined = defaultProducts.get(gap.ingredientId);
   const name = ingredient?.name ?? 'Removed ingredient';
+  const useText = getUseText(uses.get(gap.ingredientId), ingredient);
   const isNutrition = gap.kind === 'NO_NUTRITION';
   const metricsAsked = NUTRITION_CELLS.filter(
     (cell) => show[cell.key] && ingredient?.per100g[cell.key] === null,
@@ -205,12 +227,21 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
       title={isNutrition ? 'Nutrition values' : 'Prices and sizes'}
     >
       <div className='grid gap-4'>
-        <div className='flex items-center gap-3'>
-          <p className='min-w-0 flex-1 truncate text-lg font-medium'>{name}</p>
-          {rows.length > 1 && (
-            <span className='text-muted-foreground text-sm whitespace-nowrap'>
-              {index + 1} of {rows.length}
-            </span>
+        <div>
+          <div className='flex items-center gap-3'>
+            <p className='min-w-0 flex-1 truncate text-lg font-medium'>
+              {name}
+            </p>
+            {rows.length > 1 && (
+              <span className='text-muted-foreground text-sm whitespace-nowrap'>
+                {index + 1} of {rows.length}
+              </span>
+            )}
+          </div>
+          {useText && (
+            <p className='text-muted-foreground text-sm wrap-break-word'>
+              {useText}
+            </p>
           )}
         </div>
         {isNutrition && (
@@ -254,7 +285,10 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
             key={gap.ingredientId}
             uid={uid}
             value={row.storeId}
-            onChange={(storeId) => update(getGapKey(gap), gap, { storeId })}
+            onChange={(storeId) => {
+              update(getGapKey(gap), gap, { storeId });
+              if (storeId !== null) setLastStoreId(storeId);
+            }}
           />
         )}
         {gap.kind === 'NOT_COMPARABLE' && product && (
@@ -306,7 +340,8 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
                 />
                 <UnitSelect
                   value={row.sizeUnit}
-                  className='h-10 w-20 shrink-0'
+                  className='w-24 shrink-0'
+                  triggerClassName='h-10! py-0!'
                   onChange={(sizeUnit) =>
                     update(getGapKey(gap), gap, { sizeUnit })
                   }

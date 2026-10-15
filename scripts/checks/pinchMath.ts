@@ -4327,6 +4327,20 @@ assert.equal(
 );
 assert.equal(getUseText(undefined, undefined), null);
 assert.deepEqual(
+  [10.25, 1.284, 0.318].map((amount) =>
+    getUseText(
+      {
+        recipes: [{ title: 'X', amount, unit: 'TBSP', grams: 1 }],
+        planned: [],
+        grams: 1,
+      },
+      undefined,
+    ),
+  ),
+  ['Used in X · 10 tbsp', 'Used in X · 1.3 tbsp', 'Used in X · 0.32 tbsp'],
+  'amounts read rounded: whole from 10, one decimal from 1, two below',
+);
+assert.deepEqual(
   ['thigh', 'soy', 'garlic', 'lime'].map((id) =>
     getPackageUnit(r1Uses.get(id), r1Ingredients.get(id)),
   ),
