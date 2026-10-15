@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDateShort } from '@/utils/formatUtils';
 import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
 import { CONTAINER_PLACE_LABELS } from '@apps/pinch/constants';
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
@@ -17,6 +18,7 @@ import {
   getContainerTitle,
   getEatByPhrase,
   getEatByState,
+  getLastPlaceEvent,
   getServingsToEat,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -40,7 +42,12 @@ export function EatFromStockView({
   const { eat } = useContainerActions(uid);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
-  const rows = containers.filter((container) => container.place === place);
+  const rows = containers
+    .filter((container) => container.place === place)
+    .map((container) => ({
+      container,
+      title: getContainerTitle(container, recipesById, mealsById),
+    }));
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,17 +91,24 @@ export function EatFromStockView({
         </p>
       ) : (
         <ul className='divide-border divide-y'>
-          {rows.map((container) => {
+          {rows.map(({ container, title }) => {
             const count = getServingsToEat(container, meal);
+            const tag = [
+              getLastPlaceEvent(container.history)?.kind === 'THAW' && 'Thawed',
+              rows.some(
+                (other) =>
+                  other.title === title && other.container !== container,
+              ) && `Made ${formatDateShort(container.createdAt)}`,
+            ]
+              .filter(Boolean)
+              .join(' · ');
             return (
               <li
                 key={container.id}
                 className='flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between'
               >
                 <span className='min-w-0'>
-                  <span className='block wrap-break-word'>
-                    {getContainerTitle(container, recipesById, mealsById)}
-                  </span>
+                  <span className='block wrap-break-word'>{title}</span>
                   <span className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs'>
                     <span className='whitespace-nowrap'>
                       {formatServings(container.servings)} left
@@ -103,6 +117,7 @@ export function EatFromStockView({
                       Eat by {getEatByPhrase(container.eatBy)}
                     </span>
                     <EatByBadge state={getEatByState(container.eatBy)} />
+                    {tag && <span className='whitespace-nowrap'>{tag}</span>}
                   </span>
                 </span>
                 <Button
