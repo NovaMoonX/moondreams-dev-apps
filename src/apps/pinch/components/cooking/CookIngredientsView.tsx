@@ -9,7 +9,7 @@ import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
 import { selectIngredientsById } from '@apps/pinch/store/selectors';
 import type { Recipe } from '@apps/pinch/types';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
-import { formatSize } from '@apps/pinch/utils/productFormat';
+import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
@@ -98,7 +98,7 @@ function CookIngredientsView({
         name:
           ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
         note: line.note,
-        amountText: formatSize(
+        amountText: formatKitchenAmount(
           scaleAmount(line.amount, servings, recipe.servings),
           line.unit,
         ),

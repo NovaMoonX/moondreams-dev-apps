@@ -4238,4 +4238,117 @@ assert.deepEqual(
   'the servings stepper moves a whole serving a tap, with a half only below one',
 );
 
+const { formatKitchenAmount } =
+  await import('../../src/apps/pinch/utils/kitchenMeasure.ts');
+assert.deepEqual(
+  [
+    formatKitchenAmount(0.25, 'CUP'),
+    formatKitchenAmount(1 / 3, 'CUP'),
+    formatKitchenAmount(2 / 3, 'CUP'),
+    formatKitchenAmount(0.75, 'CUP'),
+    formatKitchenAmount(1, 'CUP'),
+    formatKitchenAmount(1.5, 'CUP'),
+    formatKitchenAmount(2.33, 'CUP'),
+    formatKitchenAmount(0.5, 'TSP'),
+    formatKitchenAmount(1.25, 'TSP'),
+    formatKitchenAmount(0.125, 'TSP'),
+  ],
+  [
+    '¼ cup',
+    '⅓ cup',
+    '⅔ cup',
+    '¾ cup',
+    '1 cup',
+    '1½ cups',
+    '2⅓ cups',
+    '½ tsp',
+    '1¼ tsp',
+    '⅛ tsp',
+  ],
+  'scaled amounts read as kitchen fractions, never decimals of a cup',
+);
+assert.deepEqual(
+  [
+    formatKitchenAmount(scaleAmount(0.25, 5, 4), 'CUP'),
+    formatKitchenAmount(0.31, 'CUP'),
+    formatKitchenAmount(0.125, 'CUP'),
+    formatKitchenAmount(scaleAmount(1, 1, 3), 'TBSP'),
+    formatKitchenAmount(0.5, 'TBSP'),
+    formatKitchenAmount(1.25, 'TBSP'),
+    formatKitchenAmount(0.4, 'CUP'),
+    formatKitchenAmount(0.17, 'LB'),
+    formatKitchenAmount(0.05, 'KG'),
+    formatKitchenAmount(0.05, 'L'),
+  ],
+  [
+    '5 tbsp',
+    '5 tbsp',
+    '2 tbsp',
+    '1 tsp',
+    '1½ tsp',
+    '3¾ tsp',
+    '6½ tbsp',
+    'about 2½ oz',
+    '50 g',
+    '50 ml',
+  ],
+  'a sliver of a cup reads in tablespoons, of a tablespoon in teaspoons, of a pound in ounces',
+);
+assert.deepEqual(
+  [
+    formatKitchenAmount(scaleAmount(6, 5, 4), 'EACH'),
+    formatKitchenAmount(2.5, 'EACH'),
+    formatKitchenAmount(scaleAmount(1, 1, 6), 'EACH'),
+    formatKitchenAmount(6, 'EACH'),
+    formatKitchenAmount(3.4, 'EACH'),
+    formatKitchenAmount(0.6, 'CUP'),
+    formatKitchenAmount(0.9, 'CUP'),
+    formatKitchenAmount(2.75, 'TBSP'),
+    formatKitchenAmount(scaleAmount(1, 1, 6), 'TSP'),
+    formatKitchenAmount(0.01, 'TSP'),
+  ],
+  [
+    'about 8',
+    '2½',
+    'about ½',
+    '6',
+    'about 3',
+    'about ⅔ cup',
+    'about 1 cup',
+    'about 2½ tbsp',
+    'about ⅛ tsp',
+    'a pinch',
+  ],
+  'whole items round to a whole or a half and say "about" when they had to round',
+);
+assert.deepEqual(
+  [
+    formatKitchenAmount(12.4, 'G'),
+    formatKitchenAmount(2.25, 'G'),
+    formatKitchenAmount(250, 'ML'),
+    formatKitchenAmount(1.25, 'KG'),
+    formatKitchenAmount(2.72, 'OZ'),
+    formatKitchenAmount(8, 'FL_OZ'),
+    formatKitchenAmount(2, 'LB'),
+    formatKitchenAmount(0.5, 'LB'),
+    formatKitchenAmount(1, 'PINCH'),
+    formatKitchenAmount(3, 'PINCH'),
+    formatKitchenAmount(0, 'CUP'),
+  ],
+  [
+    '12 g',
+    '2.3 g',
+    '250 ml',
+    '1.25 kg',
+    'about 2½ oz',
+    '8 fl oz',
+    '2 lb',
+    '½ lb',
+    'a pinch',
+    '3 pinches',
+    '0 cup',
+  ],
+  'units without a step-down round sensibly and keep their own unit',
+);
+
 console.log('pinchMath: all checks passed');
