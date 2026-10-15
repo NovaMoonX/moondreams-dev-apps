@@ -127,36 +127,38 @@ function CookPutAway({ putAway, care }: CookPutAwayProps) {
           {renderNotice('px-4 pb-3')}
         </section>
       )}
-      <section
-        aria-label={heading}
-        className={join(CARD_CLASS, 'space-y-3 px-4 py-4 text-center')}
-      >
-        <p className='font-medium'>{heading}</p>
-        <div className='flex flex-wrap justify-center gap-2'>
-          {PLACES.map((place) => {
-            const days =
-              place === 'FRIDGE' ? care?.fridgeDays : care?.freezerDays;
-            return (
-              <Pill
-                key={place}
-                isSelected={false}
-                emoji={CONTAINER_PLACE_EMOJIS[place]}
-                onClick={() => putAway.open(place)}
-              >
-                {days == null
-                  ? CONTAINER_PLACE_LABELS[place]
-                  : `${CONTAINER_PLACE_LABELS[place]} · keeps ${formatCareDays(days)}`}
+      {(putAway.isAsking || putAway.canOffer) && (
+        <section
+          aria-label={heading}
+          className={join(CARD_CLASS, 'space-y-3 px-4 py-4 text-center')}
+        >
+          <p className='font-medium'>{heading}</p>
+          <div className='flex flex-wrap justify-center gap-2'>
+            {PLACES.map((place) => {
+              const days =
+                place === 'FRIDGE' ? care?.fridgeDays : care?.freezerDays;
+              return (
+                <Pill
+                  key={place}
+                  isSelected={false}
+                  emoji={CONTAINER_PLACE_EMOJIS[place]}
+                  onClick={() => putAway.open(place)}
+                >
+                  {days == null
+                    ? CONTAINER_PLACE_LABELS[place]
+                    : `${CONTAINER_PLACE_LABELS[place]} · keeps ${formatCareDays(days)}`}
+                </Pill>
+              );
+            })}
+            {putAway.isAsking && (
+              <Pill isSelected={false} onClick={putAway.dismiss}>
+                Not this time
               </Pill>
-            );
-          })}
-          {putAway.isAsking && (
-            <Pill isSelected={false} onClick={putAway.dismiss}>
-              Not this time
-            </Pill>
-          )}
-        </div>
-        {batches.length === 0 && renderNotice('')}
-      </section>
+            )}
+          </div>
+          {batches.length === 0 && renderNotice('')}
+        </section>
+      )}
     </>
   );
 }
