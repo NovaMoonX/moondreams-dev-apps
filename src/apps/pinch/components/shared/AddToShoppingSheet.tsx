@@ -312,6 +312,9 @@ export function ShoppingPick({
   const isTicked = (row: ShopLineRow) =>
     choices[row.id] ?? (!getState(row).isCovered && !isUsuallyAtHome(row));
   const selected = rows.filter(isTicked);
+  const startsTicked = rows.some(
+    (row) => !getState(row).isCovered && !isUsuallyAtHome(row),
+  );
   const atHomeRows = rows.filter(isUsuallyAtHome);
   const shownRows = [
     ...rows.filter((row) => !isUsuallyAtHome(row)),
@@ -548,7 +551,9 @@ export function ShoppingPick({
           )}
           {rows.length > 0 && (
             <p className='text-muted-foreground text-sm'>
-              Untick what you already have.
+              {startsTicked
+                ? 'Untick what you already have.'
+                : 'Tick what you need.'}
             </p>
           )}
           {recipe && (
