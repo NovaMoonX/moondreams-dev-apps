@@ -6,6 +6,7 @@ import { Plus, Settings } from 'lucide-react';
 
 import PeriodSwitcher from '@/components/PeriodSwitcher';
 import SectionHeader from '@/components/SectionHeader';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -55,6 +56,9 @@ const VIEW_OPTIONS = CALENDAR_VIEWS.map((value) => ({
   label: CALENDAR_VIEW_LABELS[value],
 }));
 
+const parseCalendarView = (stored: unknown) =>
+  CALENDAR_VIEWS.find((candidate) => candidate === stored) ?? null;
+
 interface CalendarScreenProps {
   uid: string;
   /** The month the planned-meals listener is centred on; moved only when a view reaches past what is loaded. */
@@ -98,24 +102,41 @@ function CalendarScreen({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
-  const isPhone = useMediaQuery().isBelow('sm');
+  const { isBelow } = useMediaQuery();
+  const isPhone = isBelow('sm');
+  const isWide = !isBelow('lg');
+  const [storedView, setStoredView] = useLocalStorageState<CalendarView | null>(
+    `pinch:${uid}:calendar-view`,
+    null,
+    parseCalendarView,
+  );
 
-  const requestedView = searchParams.get('view');
-  const view: CalendarView =
-    requestedView === 'day'
-      ? 'week'
-      : (CALENDAR_VIEWS.find((candidate) => candidate === requestedView) ??
-        DEFAULT_CALENDAR_VIEW);
-  const range = getPeriodRange(view, anchorKey);
-  const periodTitle = formatPeriodTitle(view, anchorKey, todayKey);
+  const getView = (): CalendarView => {
+    const requested = searchParams.get('view');
+    if (requested === 'day') return 'week';
+    const linked = parseCalendarView(requested);
+    if (linked) return linked;
+    return storedView ?? DEFAULT_CALENDAR_VIEW[isWide ? 'wide' : 'narrow'];
+  };
+  const view = getView();
+  const isRollingWeek = view === 'week' && !isWide;
+  const range = getPeriodRange(view, anchorKey, isRollingWeek);
+  const periodTitle = formatPeriodTitle(
+    view,
+    anchorKey,
+    todayKey,
+    isRollingWeek,
+  );
   const isTodayShown = isDayInRange(todayKey, range);
+  const isFromToday = isRollingWeek && range.startKey === todayKey;
   const stats = useAppSelector((state) =>
     selectPeriodStats(state, range.startKey, range.endKey),
   );
   const isFirstRun = !hasPlannedMeals && !isPlannedLoadFailed;
 
   const getSummaryLabel = () => {
-    if (!isTodayShown) return null;
+    if (isFromToday) return 'Next 7 days';
+    if (!isTodayShown || isRollingWeek) return null;
     return view === 'month' ? 'This month' : 'This week';
   };
 
@@ -139,9 +160,12 @@ function CalendarScreen({
     });
 
   const goTo = (nextAnchorKey: string, nextView: CalendarView = view) => {
-    if (
-      !isRangeInWindow(getVisibleRange(nextView, nextAnchorKey), shownMonth)
-    ) {
+    const nextRange = getVisibleRange(
+      nextView,
+      nextAnchorKey,
+      nextView === 'week' && !isWide,
+    );
+    if (!isRangeInWindow(nextRange, shownMonth)) {
       onShownMonthChange(nextAnchorKey.slice(0, 7));
     }
     setSelectedKey(null);
@@ -150,13 +174,12 @@ function CalendarScreen({
 
   const changeView = (nextView: CalendarView) => {
     if (nextView === view) return;
-    const nextParams = new URLSearchParams(searchParams);
-    if (nextView === DEFAULT_CALENDAR_VIEW) {
+    setStoredView(nextView);
+    if (searchParams.has('view')) {
+      const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('view');
-    } else {
-      nextParams.set('view', nextView);
+      setSearchParams(nextParams, { replace: true });
     }
-    setSearchParams(nextParams, { replace: true });
     goTo(selectedKey ?? (isTodayShown ? todayKey : anchorKey), nextView);
   };
 
@@ -259,6 +282,7 @@ function CalendarScreen({
         <WeekView
           startKey={range.startKey}
           todayKey={todayKey}
+          hasEarlierDays={isFromToday}
           plannedByDay={plannedByDay}
           getMealTitle={getMealTitle}
           onOpenDay={(dayKey) => setOpenDay({ dayKey, mealId: null })}

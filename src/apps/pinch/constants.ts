@@ -268,7 +268,11 @@ export const UNIT_TO_BASE: Record<Unit, number> = {
 
 export const CALENDAR_VIEWS = ['month', 'week'] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
-export const DEFAULT_CALENDAR_VIEW: CalendarView = 'month';
+/** Month from `lg` up, where the grid has room for meal names; Week, starting today, on anything narrower. */
+export const DEFAULT_CALENDAR_VIEW: Record<'wide' | 'narrow', CalendarView> = {
+  wide: 'month',
+  narrow: 'week',
+};
 export const CALENDAR_VIEW_LABELS: Record<CalendarView, string> = {
   month: 'Month',
   week: 'Week',

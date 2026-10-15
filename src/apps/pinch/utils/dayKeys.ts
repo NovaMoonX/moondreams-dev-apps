@@ -96,13 +96,14 @@ export interface DayRange {
   endKey: string;
 }
 
-/** The days a view shows for its anchor day, both ends included. */
+/** The days a view shows for its anchor day, both ends included; a rolling week (a phone's agenda) starts on the anchor instead of its Sunday. */
 export function getPeriodRange(
   view: CalendarView,
   anchorKey: string,
+  isRollingWeek = false,
 ): DayRange {
   if (view === 'week') {
-    const startKey = getWeekStartKey(anchorKey);
+    const startKey = isRollingWeek ? anchorKey : getWeekStartKey(anchorKey);
     return { startKey, endKey: addDaysToKey(startKey, 6) };
   }
   const monthKey = anchorKey.slice(0, 7);
@@ -116,8 +117,9 @@ export function getPeriodRange(
 export function getVisibleRange(
   view: CalendarView,
   anchorKey: string,
+  isRollingWeek = false,
 ): DayRange {
-  const { startKey, endKey } = getPeriodRange(view, anchorKey);
+  const { startKey, endKey } = getPeriodRange(view, anchorKey, isRollingWeek);
   if (view !== 'month') return { startKey, endKey };
   const gridStart = getWeekStartKey(startKey);
   return { startKey: gridStart, endKey: addDaysToKey(gridStart, 41) };
@@ -145,6 +147,18 @@ export function isRangeInWindow(
 export const isDayInRange = (dayKey: string, { startKey, endKey }: DayRange) =>
   dayKey >= startKey && dayKey <= endKey;
 
+/** The days of today's Sunday-to-Saturday week that have already gone, oldest first; none on a Sunday. */
+export const getEarlierThisWeekKeys = (todayKey: string) => {
+  const startKey = getWeekStartKey(todayKey);
+  const count = Math.round(
+    (getDateOfDayKey(todayKey) - getDateOfDayKey(startKey)) / DAY_MS,
+  );
+  const keys = Array.from({ length: count }, (_, index) =>
+    addDaysToKey(startKey, index),
+  );
+  return keys;
+};
+
 const weekRangeFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',
@@ -162,9 +176,10 @@ export function formatPeriodTitle(
   view: CalendarView,
   anchorKey: string,
   todayKey: string,
+  isRollingWeek = false,
 ) {
   if (view === 'month') return formatMonthTitle(anchorKey.slice(0, 7));
-  const { startKey, endKey } = getPeriodRange('week', anchorKey);
+  const { startKey, endKey } = getPeriodRange('week', anchorKey, isRollingWeek);
   const isThisYear =
     startKey.slice(0, 4) === todayKey.slice(0, 4) &&
     endKey.slice(0, 4) === todayKey.slice(0, 4);

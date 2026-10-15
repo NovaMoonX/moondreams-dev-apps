@@ -4319,4 +4319,101 @@ assert.equal(getPutAwayText([]), null);
   );
 }
 
+{
+  const {
+    formatPeriodTitle,
+    getEarlierThisWeekKeys,
+    getPeriodRange,
+    getVisibleRange,
+    isRangeInWindow,
+    shiftAnchor,
+  } = await import('../../src/apps/pinch/utils/dayKeys.ts');
+
+  assert.deepEqual(
+    getPeriodRange('week', '2026-10-15', true),
+    { startKey: '2026-10-15', endKey: '2026-10-21' },
+    "a phone's week starts on today and runs seven days",
+  );
+  assert.deepEqual(
+    getPeriodRange('week', '2026-10-15'),
+    { startKey: '2026-10-11', endKey: '2026-10-17' },
+    'a wide week still runs Sunday to Saturday',
+  );
+  assert.deepEqual(
+    [
+      getPeriodRange('week', '2026-10-28', true),
+      getPeriodRange('week', '2026-12-29', true),
+    ],
+    [
+      { startKey: '2026-10-28', endKey: '2026-11-03' },
+      { startKey: '2026-12-29', endKey: '2027-01-04' },
+    ],
+    'a rolling week crosses a month and a year without losing a day',
+  );
+  assert.deepEqual(
+    [
+      getPeriodRange('week', '2026-10-29', true),
+      getPeriodRange('week', '2026-09-24', true),
+      getPeriodRange('week', '2026-04-02', true),
+    ],
+    [
+      { startKey: '2026-10-29', endKey: '2026-11-04' },
+      { startKey: '2026-09-24', endKey: '2026-09-30' },
+      { startKey: '2026-04-02', endKey: '2026-04-08' },
+    ],
+    'weeks holding a clock change (Nov 1 in Los Angeles, Sep 27 and Apr 5 in Auckland) keep seven days',
+  );
+  assert.deepEqual(
+    [
+      shiftAnchor('week', '2026-10-15', 1),
+      shiftAnchor('week', '2026-10-15', -1),
+    ],
+    ['2026-10-22', '2026-10-08'],
+    'the arrows step a rolling week by seven days from wherever it starts',
+  );
+  assert.deepEqual(getVisibleRange('week', '2026-10-15', true), {
+    startKey: '2026-10-15',
+    endKey: '2026-10-21',
+  });
+  assert.deepEqual(
+    [
+      isRangeInWindow(getVisibleRange('week', '2026-12-29', true), '2026-10'),
+      isRangeInWindow(getVisibleRange('week', '2026-12-25', true), '2026-10'),
+    ],
+    [false, true],
+    'a rolling week that reaches past the loaded months moves the listener, one inside them does not',
+  );
+  assert.deepEqual(
+    [
+      formatPeriodTitle('week', '2026-10-15', '2026-10-15', true),
+      formatPeriodTitle('week', '2026-10-29', '2026-10-15', true),
+      formatPeriodTitle('week', '2026-12-29', '2026-10-15', true),
+    ].map((title) => title.replace(/\s/g, ' ')),
+    ['Oct 15 – 21', 'Oct 29 – Nov 4', 'Dec 29, 2026 – Jan 4, 2027'],
+    "a rolling week's title names its own seven days",
+  );
+  assert.deepEqual(
+    [
+      getEarlierThisWeekKeys('2026-10-11'),
+      getEarlierThisWeekKeys('2026-10-15'),
+      getEarlierThisWeekKeys('2026-10-17'),
+      getEarlierThisWeekKeys('2026-11-03'),
+    ],
+    [
+      [],
+      ['2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14'],
+      [
+        '2026-10-11',
+        '2026-10-12',
+        '2026-10-13',
+        '2026-10-14',
+        '2026-10-15',
+        '2026-10-16',
+      ],
+      ['2026-11-01', '2026-11-02'],
+    ],
+    "the days folded above today are this week's Sunday up to yesterday, none on a Sunday, across a clock change",
+  );
+}
+
 console.log('pinchMath: all checks passed');
