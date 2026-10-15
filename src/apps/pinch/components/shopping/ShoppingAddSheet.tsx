@@ -149,8 +149,8 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
         ) : (
           <div className='space-y-3 pb-4'>
             <p className='text-muted-foreground text-sm'>
-              What do you need? It goes on the list at a typical serving, and a
-              tap on its row changes how much.
+              What do you need? It goes on the list at a typical serving, and
+              the arrow beside it on the list changes how much.
             </p>
             <div ref={fieldRef}>
               <ItemSearch
