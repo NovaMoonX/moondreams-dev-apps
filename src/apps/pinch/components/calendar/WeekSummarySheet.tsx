@@ -41,6 +41,8 @@ interface WeekSummarySheetProps {
   range: DayRange;
   stats: PeriodStats;
   todayKey: string;
+  /** The averages already show under the summary line, so the sheet leaves them out. */
+  isAveragesOnFront: boolean;
   /** A later action for the whole period (putting it on the shopping list) renders here, under the cost. */
   addToShoppingSlot?: ReactNode;
   onClose: () => void;
@@ -58,6 +60,7 @@ function WeekSummarySheet({
   range,
   stats,
   todayKey,
+  isAveragesOnFront,
   addToShoppingSlot,
   onClose,
   onOpenDay,
@@ -98,21 +101,23 @@ function WeekSummarySheet({
     ...stats.openLeftOut,
     ...getNutritionGaps(stats.openNutritionMissing, show),
   ];
-  const references = [
-    ...getCostAverages(stats, show.protein),
-    hasShownValue(stats.dailyNutrition, show)
-      ? {
-          key: 'nutrition',
-          label: 'Daily average',
-          value: (
-            <MacroStats
-              values={withWholeCalories(stats.dailyNutrition)}
-              show={show}
-            />
-          ),
-        }
-      : null,
-  ].filter((reference) => reference !== null);
+  const references = isAveragesOnFront
+    ? []
+    : [
+        ...getCostAverages(stats, show.protein),
+        hasShownValue(stats.dailyNutrition, show)
+          ? {
+              key: 'nutrition',
+              label: 'Daily average',
+              value: (
+                <MacroStats
+                  values={withWholeCalories(stats.dailyNutrition)}
+                  show={show}
+                />
+              ),
+            }
+          : null,
+      ].filter((reference) => reference !== null);
 
   const getDayLabel = (dayKey: string) => {
     if (dayKey === todayKey) return 'Today';

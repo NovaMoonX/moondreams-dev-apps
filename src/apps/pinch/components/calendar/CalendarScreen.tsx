@@ -312,6 +312,7 @@ function CalendarScreen({
           range={range}
           stats={stats}
           todayKey={todayKey}
+          isAveragesOnFront={viewOptions.options.showAverages}
           addToShoppingSlot={
             upcomingMealCount > 0 ? (
               <AddToShoppingRow

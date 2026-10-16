@@ -3,7 +3,6 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
-  BookOpen,
   CalendarPlus,
   ChevronLeft,
   CircleCheck,
@@ -49,8 +48,6 @@ import {
   selectRecipeNutrition,
   selectRecipesById,
   selectShowNutrition,
-  selectSourceCounts,
-  selectSourcesById,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type { Gap, GapKind, ShoppingRequest } from '@apps/pinch/types';
@@ -74,7 +71,6 @@ import {
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
-import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const gapLabel = (kind: GapKind | undefined) => {
   if (kind === 'NO_PRODUCT') return 'No price yet';
@@ -82,7 +78,7 @@ const gapLabel = (kind: GapKind | undefined) => {
   return null;
 };
 
-type DrawerView = 'recipe' | 'photo' | 'source' | 'history' | 'more';
+type DrawerView = 'recipe' | 'photo' | 'history' | 'more';
 
 interface BackLinkProps {
   onBack: () => void;
@@ -142,8 +138,6 @@ interface RecipeDrawerProps {
   uid: string;
   recipeId: string;
   onClose: () => void;
-  /** Shows the recipes that share this source. */
-  onOpenSource: (sourceId: string) => void;
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
@@ -159,7 +153,6 @@ function RecipeDrawer({
   uid,
   recipeId,
   onClose,
-  onOpenSource,
   onPlan,
   onModify,
   onFillIn,
@@ -174,8 +167,6 @@ function RecipeDrawer({
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
   const show = useAppSelector(selectShowNutrition);
-  const sourcesById = useAppSelector(selectSourcesById);
-  const sourceCounts = useAppSelector(selectSourceCounts);
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
   const { openSubview } = usePinchOverlay();
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
@@ -267,8 +258,6 @@ function RecipeDrawer({
     (cookSummary !== undefined ||
       isBulkMeal({ servings: recipe.servings, care, hasStock }));
 
-  const source = getRecipeSource(recipe, sourcesById);
-  const sourceCount = source ? (sourceCounts.bySource.get(source.id) ?? 0) : 0;
   const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
   const isPriced = cost !== undefined && cost.totalCents !== null;
   const costHelp =
@@ -308,8 +297,8 @@ function RecipeDrawer({
     if (!cookSummary) return null;
     const day = formatDateShort(cookSummary.lastCookedAt);
     return cookSummary.count === 1
-      ? `Cooked once, on ${day}`
-      : `Cooked ${cookSummary.count} times, last ${day}`;
+      ? { lead: 'Cooked once,', when: `on ${day}` }
+      : { lead: `Cooked ${cookSummary.count} times,`, when: `last ${day}` };
   };
   const cookedText = getCookedText();
   const hasMacros =
@@ -328,28 +317,6 @@ function RecipeDrawer({
         </div>
       );
     }
-    if (view === 'source' && source) {
-      return (
-        <div className='space-y-3'>
-          <BackLink onBack={backToRecipe} />
-          <div className='space-y-0.5'>
-            <p className='text-muted-foreground text-xs'>Where it's from</p>
-            <p className='font-medium wrap-break-word'>{source.label}</p>
-          </div>
-          {sourceCount > 1 ? (
-            <ActionRow
-              icon={<BookOpen className='h-4 w-4' />}
-              label={`Show the ${sourceCount} recipes from here`}
-              onClick={() => onOpenSource(source.id)}
-            />
-          ) : (
-            <p className='text-muted-foreground text-sm'>
-              No other recipe of yours comes from here yet.
-            </p>
-          )}
-        </div>
-      );
-    }
     if (view === 'history') {
       return (
         <div className='space-y-4'>
@@ -361,10 +328,11 @@ function RecipeDrawer({
             <ActionGroup>
               <GroupRow
                 icon={<TickMark />}
-                ariaLabel={`${cookedText}. Cooking history`}
+                ariaLabel={`${cookedText.lead} ${cookedText.when}. Cooking history`}
                 onClick={() => onOpenHistory(recipe.id)}
               >
-                {cookedText}
+                {cookedText.lead}{' '}
+                <span className='whitespace-nowrap'>{cookedText.when}</span>
               </GroupRow>
             </ActionGroup>
           )}
@@ -417,7 +385,7 @@ function RecipeDrawer({
               <ActionRow
                 isGrouped
                 icon={<CircleCheck className='h-4 w-4' />}
-                label='I cooked this'
+                label='Mark as cooked'
                 subtitle='Keeps a record you can change later'
                 isDisabled={!isLoaded || isHistoryFull || isMarking}
                 onClick={() => void handleMarkCooked()}
@@ -466,22 +434,12 @@ function RecipeDrawer({
       title={recipe.title}
       viewKey={shownView}
       actions={
-        <>
-          {source && (
-            <DoorButton
-              label={`Where it's from: ${source.label}`}
-              icon={<BookOpen className='h-5 w-5' aria-hidden='true' />}
-              isOpen={shownView === 'source'}
-              onClick={(opener) => openView('source', opener)}
-            />
-          )}
-          <DoorButton
-            label='Notes and history'
-            icon={<History className='h-5 w-5' aria-hidden='true' />}
-            isOpen={shownView === 'history'}
-            onClick={(opener) => openView('history', opener)}
-          />
-        </>
+        <DoorButton
+          label='Notes and history'
+          icon={<History className='h-5 w-5' aria-hidden='true' />}
+          isOpen={shownView === 'history'}
+          onClick={(opener) => openView('history', opener)}
+        />
       }
       footer={
         <div className='flex gap-2 px-4 pb-4'>
@@ -599,18 +557,6 @@ function RecipeDrawer({
           ))}
         </FormSection>
 
-        {cost && (
-          <GapNudge
-            uid={uid}
-            gaps={[
-              ...cost.leftOut,
-              ...getNutritionGaps(nutrition?.missing ?? [], show),
-            ]}
-            lead={isPriced ? undefined : 'See what it costs:'}
-            onFillIn={onFillIn}
-          />
-        )}
-
         {recipe.steps.length > 0 && (
           <FormSection title='Steps'>
             <ol className='space-y-3'>
@@ -628,8 +574,8 @@ function RecipeDrawer({
 
         {care && <RecipeCareSection care={care} />}
 
-        {(isPriced || hasMacros) && (
-          <div className='space-y-3'>
+        {(isPriced || hasMacros || cost) && (
+          <div className='space-y-3 empty:hidden'>
             {isPriced && (
               <StatTile
                 label='Cost'
@@ -639,6 +585,17 @@ function RecipeDrawer({
                     : formatCost(cost.totalCents ?? 0)
                 }
                 detail={`For ${formatServings(recipe.servings)}`}
+              />
+            )}
+            {cost && (
+              <GapNudge
+                uid={uid}
+                gaps={[
+                  ...cost.leftOut,
+                  ...getNutritionGaps(nutrition?.missing ?? [], show),
+                ]}
+                lead={isPriced ? undefined : 'See what it costs:'}
+                onFillIn={onFillIn}
               />
             )}
             {hasMacros && (

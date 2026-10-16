@@ -26,6 +26,8 @@ import {
   formatCostTile,
   formatRowPrice,
   getFixedNote,
+  getPlannedMealTitle,
+  getPlateTitle,
   getRepriceLines,
 } from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts';
@@ -4358,6 +4360,7 @@ assert.equal(getPutAwayText([]), null);
   ) =>
     getCostAverages(
       {
+        plannedCount: 2,
         mealsPriced: 2,
         avgPerMealCents: 29.6,
         proteinCentsPerGram: 1.2,
@@ -4399,6 +4402,33 @@ assert.equal(getPutAwayText([]), null);
       ['Per g protein so far $0.01'],
     ],
     'the averages line has an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
+  );
+  assert.deepEqual(
+    [
+      averagesOf({ plannedCount: 20, mealsPriced: 6, avgPerMealCents: 84 }),
+      averagesOf({
+        plannedCount: 20,
+        mealsPriced: 6,
+        avgPerMealCents: 84,
+        leftOut: [gapA],
+        openLeftOut: [gapA],
+      }),
+      averagesOf({
+        plannedCount: 20,
+        mealsPriced: 6,
+        avgPerMealCents: 84,
+        leftOut: [gapA],
+        openLeftOut: [],
+      }),
+      averagesOf({ plannedCount: 6, mealsPriced: 6, avgPerMealCents: 84 }),
+    ],
+    [
+      ['Avg per priced meal $0.84'],
+      ['Avg per priced meal so far $0.84'],
+      ['Avg per priced meal $0.84+'],
+      ['Avg per meal $0.84'],
+    ],
+    'an average over 6 priced meals of 20 says "per priced meal", keeping its so far or +, and plain "per meal" only when every planned meal is priced',
   );
   assert.equal(
     formatPeriodCost(789_450),
@@ -4943,6 +4973,73 @@ assert.deepEqual(
   ['$0.15 so far', '$0.15', 'No price yet', 'Not priced', '$0.15+'],
   'a tile says so far only while its gaps can still be priced, and a fixed day with a gap says + like its rows',
 );
+
+// ---- A plate's title names its items ----
+{
+  const long = 'Slow-cooker smoky black bean chili';
+  assert.deepEqual(
+    [
+      getPlateTitle(['Adobo chicken', 'Cilantro lime rice']),
+      getPlateTitle(['Adobo chicken', 'Cilantro lime rice', 'Banana']),
+      getPlateTitle(['A', 'B', 'C', 'D']),
+      getPlateTitle(['Adobo chicken']),
+      getPlateTitle([]),
+    ],
+    [
+      { title: 'Adobo chicken & Cilantro lime rice', namedCount: 2 },
+      { title: 'Adobo chicken, Cilantro lime rice and Banana', namedCount: 3 },
+      { title: 'A, B and\u00a02\u00a0more', namedCount: 2 },
+      { title: 'Adobo chicken', namedCount: 1 },
+      { title: '', namedCount: 0 },
+    ],
+    'a plate of two names both, of three names all three, and past three names two and counts the rest, never "& 1 more" where a name fits',
+  );
+  assert.deepEqual(
+    [
+      getPlateTitle(['Adobo chicken', long]).title,
+      getPlateTitle([long, 'Banana', 'Rice']).title,
+      getPlateTitle(['Adobo chicken', 'Banana', long]).title,
+    ],
+    [
+      'Adobo chicken &\u00a01\u00a0more',
+      `${long} &\u00a02\u00a0more`,
+      'Adobo chicken, Banana and\u00a01\u00a0more',
+    ],
+    'a name over 30 characters is counted instead of named, and the first is always named',
+  );
+  assert.ok(
+    ['A, B and\u00a02\u00a0more', 'Adobo chicken &\u00a01\u00a0more'].every(
+      (title) => /(and|&)\u00a0\d+\u00a0more$/.test(title),
+    ),
+    '"and 2 more" and "& 1 more" are joined with no-break spaces, so a heading never breaks inside them',
+  );
+  const plateRecipes = new Map([
+    ['adobo', { id: 'adobo', title: 'Adobo chicken' }],
+  ]) as unknown as Map<string, Recipe>;
+  const plateIngredients = new Map([
+    ['rice', { id: 'rice', name: 'Rice' }],
+  ]) as unknown as Map<string, ResolvedIngredient>;
+  const plateItems = [
+    { id: 'i1', kind: 'RECIPE', refId: 'adobo', servings: 2 },
+    { id: 'i2', kind: 'INGREDIENT', refId: 'rice', servings: 1 },
+  ] as PlannedMeal['items'];
+  assert.deepEqual(
+    [
+      getPlannedMealTitle(
+        { name: null, items: plateItems },
+        plateRecipes,
+        plateIngredients,
+      ),
+      getPlannedMealTitle(
+        { name: ' Taco night ', items: plateItems },
+        plateRecipes,
+        plateIngredients,
+      ),
+    ],
+    ['Adobo chicken & Rice', 'Taco night'],
+    'a planned plate the person named keeps its name, and an unnamed one is named by its items',
+  );
+}
 
 // ---- A cooked meal on the day drawer ----
 {
@@ -7687,7 +7784,7 @@ assert.equal(
     ]),
     [
       ['Thu dinner', 'Rice pot', '1 cup'],
-      ['Fri dinner', 'Rice pot & 1 more', '1.5 cup'],
+      ['Fri dinner', 'Rice pot & Rice', '1.5 cup'],
       ['Rice pot', null, '1 cup'],
     ],
     'a line’s sheet lists every meal behind it with the dish and what each asks of it now (the plate’s rice pot and its own half cup of rice together), leaving out one that is gone',

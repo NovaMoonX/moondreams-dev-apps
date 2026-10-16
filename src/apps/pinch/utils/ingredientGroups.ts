@@ -34,7 +34,7 @@ export const getGroupKey = (group: string | null | undefined) =>
 
 /**
  * A recipe's lines under their headings: the lines with no group first, with no heading (below a group they would read as part of it), then each group in the order its first line appears.
- * Two spellings of one name are one group. Every list of a recipe's lines goes through this, so the order is the same everywhere.
+ * Two spellings of one name are one group.
  */
 export function groupIngredientLines<T extends GroupedLine>(
   lines: T[],

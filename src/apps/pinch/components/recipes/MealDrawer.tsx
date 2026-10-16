@@ -7,9 +7,9 @@ import { ChevronLeft, Ellipsis, PackagePlus } from 'lucide-react';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
-import FactsLine from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
 import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
@@ -28,7 +28,7 @@ import {
 import type { Gap, ShoppingRequest } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
-  formatCost,
+  formatCostTile,
   formatRowPrice,
   getItemTitle,
 } from '@apps/pinch/utils/mealFormat';
@@ -38,6 +38,7 @@ import {
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import { withWholeCalories } from '@apps/pinch/utils/stats';
 
 interface BackLinkProps {
   onBack: () => void;
@@ -104,13 +105,6 @@ function MealDrawer({
     costContext.ingredientsById,
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
-  const getCostValue = () => {
-    if (cost.totalCents === null) return 'No price yet';
-    const total = formatCost(cost.totalCents);
-    return leftOutCount > 0
-      ? `${total} so far for the plate`
-      : `${total} for the plate`;
-  };
   const isOnPlate = (gap: Gap) =>
     meal.items.some(
       (item) => item.kind === 'INGREDIENT' && item.refId === gap.ingredientId,
@@ -209,24 +203,6 @@ function MealDrawer({
         </div>
       )}
       <div className={join('space-y-5', isMoreOpen && 'hidden')}>
-        <FactsLine
-          className='text-muted-foreground text-sm'
-          facts={[
-            {
-              key: 'cost',
-              content: (
-                <>
-                  {getCostValue()}
-                  {leftOutCount > 0 && (
-                    <span className='ml-1 inline-flex align-middle'>
-                      <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
-                    </span>
-                  )}
-                </>
-              ),
-            },
-          ]}
-        />
         <FormSection
           title='On the plate'
           detail={
@@ -259,12 +235,29 @@ function MealDrawer({
             })}
           </ul>
         </FormSection>
-        {hasShownValue(nutrition.values, show) && (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>For the plate</p>
-            <MacroStats values={nutrition.values} show={show} variant='tiles' />
-          </div>
-        )}
+        <div className='space-y-3'>
+          <StatTile
+            label='Cost'
+            value={formatCostTile(cost.totalCents, leftOutCount, false)}
+            help={
+              leftOutCount > 0 && cost.totalCents !== null ? (
+                <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
+              ) : undefined
+            }
+          />
+          {hasShownValue(nutrition.values, show) && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs font-medium'>
+                For the plate
+              </p>
+              <MacroStats
+                variant='tiles'
+                values={withWholeCalories(nutrition.values)}
+                show={show}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </DetailSheet>
   );

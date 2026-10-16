@@ -27,7 +27,6 @@ interface SummaryLineProps {
 const FACT_CLASS =
   "inline-flex items-baseline whitespace-nowrap before:w-4 before:shrink-0 before:text-center before:content-['·']";
 
-/** The calendar's line about the period shown: how many meals and what they cost, then the period's averages when there are any; a tap opens the summary. */
 function SummaryLine({
   label,
   stats,

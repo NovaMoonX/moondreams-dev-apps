@@ -58,7 +58,6 @@ function DetailSheet({
           scrollTops.current.set(shownKey.current, scroller.scrollTop);
         }
       };
-      // A shorter view keeps the sheet at the tallest height it has had, so switching never makes it jump.
       const { paddingTop, paddingBottom } = getComputedStyle(scroller);
       const padding =
         scroller === node
@@ -89,7 +88,7 @@ function DetailSheet({
   });
 
   const heading = actions ? (
-    <div className='flex items-start gap-2'>
+    <div className={join('flex items-start gap-2', isPhone && 'pt-2')}>
       <h2
         ref={labelDialog}
         id={`${dialogId}-title`}
@@ -109,7 +108,7 @@ function DetailSheet({
             size='icon'
             aria-label='Close'
             onClick={onDialogClose}
-            className='text-foreground! size-10 min-w-10 shrink-0 p-0'
+            className='text-foreground! ml-2 size-10 min-w-10 shrink-0 p-0'
           >
             <X className='h-5 w-5' aria-hidden='true' />
           </Button>

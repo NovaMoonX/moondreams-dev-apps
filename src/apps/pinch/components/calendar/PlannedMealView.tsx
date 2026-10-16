@@ -122,11 +122,10 @@ interface PlannedMealViewProps {
   onEdit: (plannedMealId: string, mealType: MealType) => void;
   /** Every recipe on the plate still to cook, cooked together in one session. */
   onStartCooking: (plate: PlateCookRecipe[]) => void;
-  /** Where the drawer's pinned footer is: this view puts its actions there, a quiet Modify on the left, More, and the one primary on the right. */
+  /** The drawer's pinned footer, which this view fills with its own actions. */
   footerEl: HTMLElement | null;
 }
 
-/** A planned meal inside the day drawer: the meal and its plate first, then what it costs; the actions that aren't its one primary wait behind More. */
 function PlannedMealView({
   uid,
   plannedMealId,
@@ -412,7 +411,7 @@ function PlannedMealView({
         {canModify && (
           <Button
             type='button'
-            variant={primaryButton ? 'secondary' : 'primary'}
+            variant='secondary'
             className={join(
               'max-sm:px-3',
               primaryButton ? 'shrink-0' : 'min-w-0 flex-1',
@@ -474,6 +473,7 @@ function PlannedMealView({
           meal={meal}
           place={place}
           containers={offer.eatFrom}
+          footerEl={footerEl}
           onBack={() => backFromEat(place, from)}
           onDone={() =>
             onViewChange((current) =>
