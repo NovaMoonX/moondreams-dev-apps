@@ -4126,7 +4126,7 @@ assert.deepEqual(
       showMacros: true,
       basis: 'PER_100G',
       showStock: true,
-      showAverages: true,
+      showStats: false,
     },
     false,
     true,
@@ -4136,21 +4136,25 @@ assert.deepEqual(
 );
 assert.deepEqual(
   [
-    DEFAULT_LIST_VIEW_OPTIONS.showAverages,
-    parseListViewOptions({ showPrices: true })?.showAverages,
-    parseListViewOptions({ showAverages: false })?.showAverages,
-    parseListViewOptions({ showAverages: 'off' })?.showAverages,
+    DEFAULT_LIST_VIEW_OPTIONS.showStats,
+    parseListViewOptions({ showPrices: true })?.showStats,
+    parseListViewOptions({ showStats: true })?.showStats,
+    parseListViewOptions({ showStats: 'on' })?.showStats,
+    parseListViewOptions({ showAverages: true })?.showStats,
+    parseListViewOptions({ showAverages: true, showStats: true })?.showStats,
+    'showAverages' in (parseListViewOptions({ showAverages: true }) ?? {}),
+    countCustomizedViewOptions(DEFAULT_LIST_VIEW_OPTIONS, 'calendar'),
     countCustomizedViewOptions(
-      { ...DEFAULT_LIST_VIEW_OPTIONS, showAverages: false },
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showStats: true },
       'calendar',
     ),
     countCustomizedViewOptions(
-      { ...DEFAULT_LIST_VIEW_OPTIONS, showAverages: false },
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showStats: true },
       'recipes',
     ),
   ],
-  [true, true, false, true, 1, 0],
-  "the Calendar's averages start shown, a choice stored before the switch existed reads as shown, and hiding them counts as a change on the Calendar only",
+  [false, false, true, false, false, true, false, 0, 1, 0],
+  "the Calendar's stats start off, a choice stored before the switch existed or a non-boolean reads as off, the old averages choice neither turns them on nor survives a write, and turning them on counts as a change on the Calendar only",
 );
 assert.deepEqual(
   [
@@ -4307,6 +4311,7 @@ assert.equal(getPutAwayText([]), null);
     getCostAverages,
     getDayCostText,
     getPeriodCostText,
+    getPeriodCostTile,
     getPricedCoverage,
     formatPeriodCost,
   } = await import('../../src/apps/pinch/utils/stats.ts');
@@ -4352,6 +4357,62 @@ assert.equal(getPutAwayText([]), null);
     ),
     '$4.10+',
     'a period whose every gap is on a fixed day says + like its day rows, never "so far"',
+  );
+
+  const costCases: [Parameters<typeof getPeriodCostTile>[0], string][] = [
+    [
+      { spendCents: 410, mealsPriced: 3, leftOut: [], openLeftOut: [] },
+      'whole',
+    ],
+    [
+      { spendCents: 410, mealsPriced: 3, leftOut: [gapA], openLeftOut: [gapA] },
+      'open',
+    ],
+    [
+      { spendCents: 410, mealsPriced: 3, leftOut: [gapA], openLeftOut: [] },
+      'fixed',
+    ],
+    [
+      {
+        spendCents: 789_450,
+        mealsPriced: 300,
+        leftOut: [gapA],
+        openLeftOut: [gapA],
+      },
+      'big',
+    ],
+  ];
+  assert.deepEqual(
+    costCases.map(([stats]) => getPeriodCostTile(stats)),
+    [
+      { value: '$4.10', label: 'Total' },
+      { value: '$4.10', label: 'Total so far' },
+      { value: '$4.10+', label: 'Total' },
+      { value: '$7,895', label: 'Total so far' },
+    ],
+    'the Total tile puts "so far" in its caption and "+" on its figure, and a big total drops its cents',
+  );
+  assert.deepEqual(
+    costCases.map(([stats]) => {
+      const tile = getPeriodCostTile(stats);
+      return tile === null
+        ? null
+        : tile.label === 'Total so far'
+          ? `${tile.value} so far`
+          : tile.value;
+    }),
+    costCases.map(([stats]) => getPeriodCostText(stats, false)),
+    'the Total tile and the summary line read one figure, so the tile row can take the total over from the line without the two ever disagreeing',
+  );
+  assert.equal(
+    getPeriodCostTile({
+      spendCents: 0,
+      mealsPriced: 0,
+      leftOut: [],
+      openLeftOut: [],
+    }),
+    null,
+    'with nothing priced there is no Total tile, and the summary line keeps saying "No price yet"',
   );
 
   const averagesOf = (
@@ -4401,7 +4462,7 @@ assert.equal(getPutAwayText([]), null);
       ['Avg per meal $0.30'],
       ['Per g protein so far $0.01'],
     ],
-    'the averages line has an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
+    'the stats tiles have an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
   );
   assert.deepEqual(
     [
