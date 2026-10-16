@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Play } from 'lucide-react';
 
+import TickMark from '@/components/TickMark';
 import { formatClock } from '@/utils/durationUtils';
 
 interface CookStepTimerProps {
@@ -11,19 +12,44 @@ interface CookStepTimerProps {
   clockClassName: string;
   /** Several cards stack under one step, so each takes less height. */
   isCompact: boolean;
+  /** This time already ran and its Time's up was dismissed this session. */
+  isDone: boolean;
   canStart: boolean;
   onStart: () => void;
 }
 
-/** One time a step mentions, ready to start. Start hands the screen to the timer view, so the card only ever waits. */
+/** One time a step mentions, ready to start. Start hands the screen to the timer view, so the card only ever waits; a time that already ran reads as done, with a quiet way to run it again. */
 function CookStepTimer({
   seconds,
   label,
   clockClassName,
   isCompact,
+  isDone,
   canStart,
   onStart,
 }: CookStepTimerProps) {
+  if (isDone) {
+    return (
+      <li
+        aria-label={`${label} timer, done`}
+        className='border-border text-muted-foreground flex min-h-10 items-center gap-2 rounded-2xl border px-4 text-sm'
+      >
+        <TickMark variant='soft' />
+        <span className='min-w-0 flex-1'>Done · {label}</span>
+        <Button
+          type='button'
+          variant='tertiary'
+          className="text-foreground! relative h-6 shrink-0 px-2 text-sm underline underline-offset-4 after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
+          aria-label={`Start again: the ${label} timer`}
+          disabled={!canStart}
+          onClick={onStart}
+        >
+          Start again
+        </Button>
+      </li>
+    );
+  }
+
   return (
     <li
       aria-label={`${label} timer`}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { BellRing, Pause } from 'lucide-react';
+import { BellRing } from 'lucide-react';
 
 import { formatClock } from '@/utils/durationUtils';
 import {
@@ -22,13 +22,15 @@ interface CookTimerStripProps {
   className?: string;
 }
 
-/** The timers running in the background as one row of pills, each only its time left and a short name; a tap brings that timer into focus, where its controls are. The tick lives here, so only the pills re-render as the seconds pass. */
-function CookTimerStrip({
-  timers,
-  onTick,
-  onFocus,
-  className,
-}: CookTimerStripProps) {
+/** The timers running in the background as one row of pills, each only its time left and a short name; a tap brings that timer into focus, where its controls are. The pills mount only while there are timers, so each return from the timer view reads the clock afresh instead of showing the last tick, and the tick lives here, so only the pills re-render as the seconds pass. */
+function CookTimerStrip(props: CookTimerStripProps) {
+  if (props.timers.length === 0) {
+    return null;
+  }
+  return <Pills {...props} />;
+}
+
+function Pills({ timers, onTick, onFocus, className }: CookTimerStripProps) {
   const hasRunning = timers.some((timer) => timer.status === 'running');
   const [now, setNow] = useState(() => Date.now());
 
@@ -44,10 +46,6 @@ function CookTimerStrip({
     return () => window.clearInterval(intervalId);
   }, [hasRunning, onTick]);
 
-  if (timers.length === 0) {
-    return null;
-  }
-
   return (
     <ul
       aria-label='Timers'
@@ -61,7 +59,7 @@ function CookTimerStrip({
             other.stepNumber === timer.stepNumber,
         );
         const name = isSharedStep
-          ? `${timer.stepName} · ${timer.label}`
+          ? `${timer.label} · ${timer.stepName}`
           : timer.stepName;
         const status =
           timer.status === 'done'
@@ -83,13 +81,6 @@ function CookTimerStrip({
               aria-hidden='true'
             />
           ),
-          timer.status === 'paused' && (
-            <Pause
-              key='icon'
-              className='text-muted-foreground h-4 w-4 shrink-0'
-              aria-hidden='true'
-            />
-          ),
           <span
             key='time'
             className={join(
@@ -105,11 +96,11 @@ function CookTimerStrip({
             key='name'
             className='text-muted-foreground min-w-0 truncate text-sm'
           >
-            {name}
+            {timer.status === 'paused' ? `Paused · ${name}` : name}
           </span>,
         ];
         return (
-          <li key={timer.id} className='flex max-w-64 min-w-36 shrink'>
+          <li key={timer.id} className='flex max-w-72 shrink-0'>
             {onFocus ? (
               <Button
                 type='button'
