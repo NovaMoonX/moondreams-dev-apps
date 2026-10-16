@@ -4421,12 +4421,10 @@ assert.equal(getPutAwayText([]), null);
   ) =>
     getCostAverages(
       {
-        plannedCount: 2,
-        mealsPriced: 2,
-        avgPerMealCents: 29.6,
+        fullyPricedMeals: 3,
+        avgPerFullyPricedMealCents: 29.6,
+        proteinPricedMeals: 3,
         proteinCentsPerGram: 1.2,
-        leftOut: [],
-        openLeftOut: [],
         ...patch,
       },
       isProteinOn,
@@ -4434,62 +4432,137 @@ assert.equal(getPutAwayText([]), null);
   assert.deepEqual(
     [
       averagesOf({}),
-      averagesOf({ leftOut: [gapA], openLeftOut: [gapA] }),
-      averagesOf({ leftOut: [gapA], openLeftOut: [] }),
+      averagesOf({}, true),
+      averagesOf({ proteinCentsPerGram: null }, true),
     ],
     [
-      ['Avg per meal $0.30'],
-      ['Avg per meal so far $0.30'],
-      ['Avg per meal $0.30+'],
+      ['Avg per fully priced meal $0.30'],
+      ['Avg per fully priced meal $0.30', 'Per g protein, fully priced $0.01'],
+      ['Avg per fully priced meal $0.30'],
     ],
-    'the average per meal says "so far" while a gap can still be priced and + once every gap is fixed, like the total above it',
+    'the averages name their base, fully priced meals, and carry no "so far" or "+" since nothing in that base is left out; the price per gram of protein shows only while protein is on and known',
   );
   assert.deepEqual(
     [
-      averagesOf({ mealsPriced: 1 }),
-      averagesOf({ mealsPriced: 0, avgPerMealCents: null }),
-      averagesOf({}, true),
-      averagesOf({ proteinCentsPerGram: null }, true),
-      averagesOf(
-        { mealsPriced: 1, leftOut: [gapA], openLeftOut: [gapA] },
+      averagesOf({ fullyPricedMeals: 2 }),
+      averagesOf({ fullyPricedMeals: 3 }),
+      averagesOf({ fullyPricedMeals: 0, avgPerFullyPricedMealCents: null }),
+      averagesOf({ fullyPricedMeals: 9, proteinPricedMeals: 2 }, true),
+      averagesOf({ fullyPricedMeals: 9, proteinPricedMeals: 3 }, true),
+    ],
+    [
+      [],
+      ['Avg per fully priced meal $0.30'],
+      [],
+      ['Avg per fully priced meal $0.30'],
+      ['Avg per fully priced meal $0.30', 'Per g protein, fully priced $0.01'],
+    ],
+    'an average needs three fully priced meals behind it and says nothing under that, the price per gram of protein counting its own meals',
+  );
+
+  const { getPeriodStats: getStatsOf, getPeriodTotal } =
+    await import('../../src/apps/pinch/utils/stats.ts');
+  const { buildSnapshot: buildStatsSnapshot } =
+    await import('../../src/apps/pinch/utils/mealMath.ts');
+  const statsContext = repriceContext(
+    [],
+    ['a', 'b', 'c'].map(repriceIngredient),
+    [product('a', 500, 1000, 'G'), product('b', 1000, 1000, 'G')],
+  );
+  const statsItem = (id: string, refId: string, servings = 1): MealItem => ({
+    id,
+    kind: refId === 'gone' ? 'RECIPE' : 'INGREDIENT',
+    refId,
+    servings,
+  });
+  const statsMeal = (
+    id: string,
+    items: MealItem[],
+    snapshot: PlannedSnapshot | null = null,
+  ) =>
+    ({
+      ...plannedOf(items, snapshot),
+      id,
+      date: getDateOfDayKey('2026-10-16'),
+    }) as PlannedMeal;
+  const statsRange = { startKey: '2026-10-15', endKey: '2026-10-21' };
+  const partialStats = getStatsOf(
+    [
+      statsMeal('f1', [statsItem('i', 'a')]),
+      statsMeal('f2', [statsItem('i', 'b')]),
+      statsMeal('f3', [statsItem('i', 'a', 2)]),
+      statsMeal('p1', [statsItem('i', 'a'), statsItem('j', 'c')]),
+      statsMeal('n1', [statsItem('i', 'c')]),
+      statsMeal('p2', [statsItem('i', 'a'), statsItem('j', 'gone')]),
+      statsMeal(
+        'z1',
+        [statsItem('i', 'b', 3)],
+        buildStatsSnapshot([statsItem('i', 'b', 3)], statsContext, 1000),
+      ),
+      statsMeal(
+        'z2',
+        [statsItem('i', 'a'), statsItem('j', 'c')],
+        buildStatsSnapshot(
+          [statsItem('i', 'a'), statsItem('j', 'c')],
+          statsContext,
+          1000,
+        ),
+      ),
+    ],
+    statsRange,
+    statsContext,
+  );
+  assert.deepEqual(
+    [
+      partialStats.plannedCount,
+      partialStats.mealsPriced,
+      partialStats.fullyPricedMeals,
+      partialStats.avgPerFullyPricedMealCents,
+    ],
+    [8, 7, 4, (50 + 100 + 100 + 300) / 4],
+    'the average divides the cost of the fully priced meals alone by their count: a meal with a gap, a frozen one with a gap, one with an item that has no cost and a meal with no price never pull it down',
+  );
+  assert.ok(
+    partialStats.spendCents / partialStats.mealsPriced <
+      (partialStats.avgPerFullyPricedMealCents ?? 0),
+    'the old average over every meal with any price comes out lower, because each meal with a gap adds only a floor',
+  );
+  assert.deepEqual(
+    [partialStats.proteinPricedMeals, partialStats.proteinCentsPerGram],
+    [4, (50 + 100 + 100 + 300) / (20 + 20 + 40 + 60)],
+    'the price per gram of protein spends only what the fully priced meals cost over only their protein, never the grams of a meal whose price is a floor',
+  );
+  assert.deepEqual(
+    getStatsOf([], statsRange, statsContext).avgPerFullyPricedMealCents,
+    null,
+    'an empty period has no average',
+  );
+  assert.deepEqual(
+    [
+      getPeriodTotal(partialStats, false),
+      getPeriodTotal(
+        getStatsOf(
+          [statsMeal('n1', [statsItem('i', 'c')])],
+          statsRange,
+          statsContext,
+        ),
+        false,
+      ),
+      getPeriodTotal(
+        getStatsOf(
+          [statsMeal('n1', [statsItem('i', 'c')])],
+          statsRange,
+          statsContext,
+        ),
         true,
       ),
     ],
     [
-      [],
-      [],
-      ['Avg per meal $0.30', 'Per g protein $0.01'],
-      ['Avg per meal $0.30'],
-      ['Per g protein so far $0.01'],
+      { value: '$7.00', label: 'Total so far' },
+      { value: 'No price yet', label: 'Total' },
+      { value: 'Not priced', label: 'Total' },
     ],
-    'the stats tiles have an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
-  );
-  assert.deepEqual(
-    [
-      averagesOf({ plannedCount: 20, mealsPriced: 6, avgPerMealCents: 84 }),
-      averagesOf({
-        plannedCount: 20,
-        mealsPriced: 6,
-        avgPerMealCents: 84,
-        leftOut: [gapA],
-        openLeftOut: [gapA],
-      }),
-      averagesOf({
-        plannedCount: 20,
-        mealsPriced: 6,
-        avgPerMealCents: 84,
-        leftOut: [gapA],
-        openLeftOut: [],
-      }),
-      averagesOf({ plannedCount: 6, mealsPriced: 6, avgPerMealCents: 84 }),
-    ],
-    [
-      ['Avg per priced meal $0.84'],
-      ['Avg per priced meal so far $0.84'],
-      ['Avg per priced meal $0.84+'],
-      ['Avg per meal $0.84'],
-    ],
-    'an average over 6 priced meals of 20 says "per priced meal", keeping its so far or +, and plain "per meal" only when every planned meal is priced',
+    'the summary sheet names its total as the front tile does, "Total so far" over the figure, and says nothing-priced in the line\'s words under the same name',
   );
   assert.equal(
     formatPeriodCost(789_450),
