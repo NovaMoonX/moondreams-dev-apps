@@ -63,7 +63,7 @@ function CookDishSwitch({ dishes, value, onChange }: CookDishSwitchProps) {
             )}
             onClick={() => onChange(dish.id)}
           >
-            <span className='block w-full min-w-0 truncate text-sm font-medium [@media(max-height:500px)]:w-auto'>
+            <span className='line-clamp-2 w-full min-w-0 text-sm font-medium wrap-break-word [@media(max-height:500px)]:w-auto'>
               {dish.title}
             </span>
             {!isShown && (

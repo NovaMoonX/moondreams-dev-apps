@@ -16,6 +16,8 @@ interface SubviewHeaderProps {
   title: string;
   onBack: () => void;
   className?: string;
+  /** Wraps a long title onto a second line instead of cutting it short. */
+  isTitleWrapped?: boolean;
 }
 
 /** The round back button and large title that open every subview; the larger type sets it apart from section subheaders. */
@@ -23,6 +25,7 @@ export function SubviewHeader({
   title,
   onBack,
   className = 'mb-3',
+  isTitleWrapped = false,
 }: SubviewHeaderProps) {
   return (
     <div className={join('flex items-center gap-2', className)}>
@@ -36,7 +39,12 @@ export function SubviewHeader({
       >
         <ChevronLeft className='h-5 w-5' />
       </Button>
-      <h1 className='min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight'>
+      <h1
+        className={join(
+          'min-w-0 flex-1 text-2xl font-semibold tracking-tight',
+          isTitleWrapped ? 'line-clamp-2 wrap-break-word' : 'truncate',
+        )}
+      >
         {title}
       </h1>
     </div>
@@ -58,6 +66,7 @@ interface SubviewProps {
    * content out. The screens underneath stay mounted, and a form's `FormFooterActions` pin to the bottom.
    */
   overlay?: boolean;
+  isTitleWrapped?: boolean;
 }
 
 /**
@@ -71,6 +80,7 @@ function Subview({
   onBack,
   className,
   overlay = false,
+  isTitleWrapped = false,
 }: SubviewProps) {
   const goBack = onBack ?? onClose;
   useSubviewHistory(onClose, onBack);
@@ -132,6 +142,7 @@ function Subview({
             <SubviewHeader
               title={title}
               onBack={goBack}
+              isTitleWrapped={isTitleWrapped}
               className='bg-background sticky top-0 z-20 -mx-4 -mt-6 px-4 pt-6 pb-3'
             />
           )}
@@ -151,6 +162,7 @@ function Subview({
           <SubviewHeader
             title={title}
             onBack={goBack}
+            isTitleWrapped={isTitleWrapped}
             className='sticky-app-bar bg-background/80 -mx-4 mb-3 min-h-14 px-4 py-2.5 backdrop-blur'
           />
         )}
