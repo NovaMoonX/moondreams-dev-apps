@@ -363,6 +363,12 @@ export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {
   meals: 'Saved meals',
   ideas: 'Ideas',
 };
+/** The Recipes header's add button for each view: one pattern, naming what it makes. */
+export const RECIPES_VIEW_NEW_LABELS: Record<RecipesView, string> = {
+  recipes: 'New recipe',
+  meals: 'New saved meal',
+  ideas: 'New idea',
+};
 
 /** Grams for a mass unit, millilitres for a volume unit, 1 for a count. */
 export const UNIT_TO_BASE: Record<Unit, number> = {

@@ -6,12 +6,14 @@ interface AddToShoppingRowProps {
   label?: string;
   subtitle: string;
   onClick: () => void;
+  isGrouped?: boolean;
 }
 
 function AddToShoppingRow({
   label = 'Add to shopping list',
   subtitle,
   onClick,
+  isGrouped = false,
 }: AddToShoppingRowProps) {
   return (
     <ActionRow
@@ -19,6 +21,7 @@ function AddToShoppingRow({
       label={label}
       subtitle={subtitle}
       onClick={onClick}
+      isGrouped={isGrouped}
     />
   );
 }

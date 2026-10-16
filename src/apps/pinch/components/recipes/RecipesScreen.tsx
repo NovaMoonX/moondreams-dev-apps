@@ -30,6 +30,7 @@ import {
   CONTAINER_PLACES,
   LIST_SEARCH_THRESHOLD,
   RECIPES_VIEW_LABELS,
+  RECIPES_VIEW_NEW_LABELS,
   RECIPES_VIEWS,
   SOFT_MAX_IDEAS,
   SOURCE_FILTER_ANY,
@@ -600,16 +601,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               type='button'
               size='sm'
               rounded='full'
-              className='gap-1'
+              className="relative gap-1 whitespace-nowrap after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
               disabled={isIdeas && !canAddIdea}
               onClick={handleNew}
             >
               <Plus className='h-4 w-4' aria-hidden='true' />
-              {isIdeas
-                ? 'New idea'
-                : view === 'meals'
-                  ? 'New saved meal'
-                  : 'New'}
+              {RECIPES_VIEW_NEW_LABELS[shownView]}
             </Button>
           )
         }

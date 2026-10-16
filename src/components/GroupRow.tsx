@@ -27,7 +27,7 @@ function GroupRow({ icon, children, onClick, ariaLabel }: GroupRowProps) {
       rounded='none'
       aria-label={ariaLabel}
       onClick={onClick}
-      className='text-foreground! hover:bg-muted flex min-h-10 w-full items-start justify-start gap-2.5 px-3 py-2.5 text-left text-sm font-normal whitespace-normal'
+      className='text-foreground! hover:bg-muted flex min-h-10 w-full items-start justify-start gap-3 px-4 py-2.5 text-left text-sm font-normal whitespace-normal'
     >
       {iconColumn}
       <span className='min-w-0 flex-1'>{children}</span>
@@ -46,7 +46,7 @@ interface GroupRowLinesProps {
 /** Several lines that one `GroupRow` sums up together, each with its own icon on the row's icon column. */
 export function GroupRowLines({ lines }: GroupRowLinesProps) {
   return (
-    <span className='grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-2.5'>
+    <span className='grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3'>
       {lines.map((line) => (
         <span key={line.key} className='contents'>
           <span className='text-center' aria-hidden='true'>
