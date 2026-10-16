@@ -275,6 +275,9 @@ import {
   getShoppingSourceLabels as stopLabels,
   getSourceLines as stopSourceLines,
   getSourceNames as stopNames,
+  formatShopAmount as stopAmountText,
+  getPlannedParts as stopParts,
+  getRowSourceShares as stopRowShares,
   getSourceShares as stopShares,
   isAsStopLeft as stopAsLeft,
   joinSourceNames as stopJoin,
@@ -6360,17 +6363,17 @@ assert.deepEqual(
     srcFor([]),
   ],
   [
-    'Rice pot (Thu)',
-    'Rice pot (Thu) and Taco night (Fri)',
-    'Rice pot & 1 more (Oct 30)',
+    'Thu dinner',
+    'Thu dinner and Fri dinner',
+    'Oct 30 dinner',
     'Rice pot',
     'Adobo and rice and Beans',
-    'Rice pot, Adobo and rice and 1 more',
-    'Rice pot, Beans and 1 more',
+    'Fri dinner, Adobo and rice and Rice pot',
+    'Beans, Rice pot and Soup',
     null,
     null,
   ],
-  'a line says what it is for by the planned meal’s name and day, the recipe or the saved meal; past two names it says how many more, never only a count, and a source that is gone is dropped quietly',
+  'a line says what it is for by name, planned meals by day and meal first, then recipes and saved meals by name, three in full and never only a count; a source that is gone is dropped quietly',
 );
 assert.equal(
   srcLabelMap.has('p-empty'),
@@ -7288,7 +7291,10 @@ assert.equal(
     }) as unknown as ShopPlannedMeal;
   const recipes = new Map([['rice-pot', srcRiceRecipe]]);
   const ingredients = new Map([
-    ['rice', { id: 'rice', name: 'Rice', serving: { amount: 0.25, unit: 'CUP' } }],
+    [
+      'rice',
+      { id: 'rice', name: 'Rice', serving: { amount: 0.25, unit: 'CUP' } },
+    ],
     ['salt', { id: 'salt', name: 'Salt', serving: { amount: 1, unit: 'TSP' } }],
   ]) as unknown as Map<string, ResolvedIngredient>;
   const many = Array.from({ length: 50 }, (_, index) =>
@@ -7297,14 +7303,17 @@ assert.equal(
   const planned = [
     plannedOn('thu', '2026-10-15', 'DINNER', null, [srcRecipeItem('a', 3)]),
     plannedOn('fri', '2026-10-16', 'DINNER', null, [srcRecipeItem('a', 3)]),
-    plannedOn('thu-lunch', '2026-10-15', 'LUNCH', null, [srcRecipeItem('a', 3)]),
+    plannedOn('thu-lunch', '2026-10-15', 'LUNCH', null, [
+      srcRecipeItem('a', 3),
+    ]),
     plannedOn('long-a', '2026-10-15', 'DINNER', 'Adobo chicken & 1 more', []),
-    plannedOn('long-b', '2026-10-16', 'DINNER', 'Adobo chicken & 1 more', []),
     ...many,
   ];
   const allSources = planned.map((meal) => meal.id);
   const labels = stopLabels(
-    [{ sources: [...allSources, 'recipe:rice-pot'] }] as unknown as ShoppingItem[],
+    [
+      { sources: [...allSources, 'recipe:rice-pot'] },
+    ] as unknown as ShoppingItem[],
     planned,
     recipes,
     new Map(),
@@ -7315,30 +7324,38 @@ assert.equal(
     [
       textFor(['fri']),
       textFor(['thu', 'fri']),
-      textFor(['fri', 'recipe:rice-pot', 'long-b']),
+      textFor(['fri', 'recipe:rice-pot', 'thu-lunch']),
       textFor(many.map((meal) => meal.id)),
-      textFor(['long-a', 'long-b']),
     ],
     [
-      'Rice pot (Fri)',
-      'Rice pot (Thu) and Rice pot (Fri)',
-      'Rice pot (Fri), Rice pot and 1 more',
-      'Plate 0 (Tue), Plate 1 (Tue) and 48 more',
-      'Adobo chicken & 1 more (Thu) and Adobo chicken & 1 more (Fri)',
+      'Fri dinner',
+      'Thu dinner and Fri dinner',
+      'Thu lunch, Fri dinner and Rice pot',
+      'Tue dinner (Plate 0), Tue dinner (Plate 1) and 48 more',
     ],
-    'a row names its meals, two in full and then how many more (50 reads "and 48 more", never a bare count), and two long names are kept whole',
+    'a row names its meals, up to three in full and then two and how many more (50 reads "and 48 more", never a bare count)',
   );
   assert.deepEqual(
-    stopNames(['thu', 'thu-lunch', 'fri'], labels, '2026-10-15').map(
+    stopNames(['thu', 'thu-lunch', 'fri', 'long-a'], labels, '2026-10-15').map(
       ({ name }) => name,
     ),
-    ['Rice pot (Thu dinner)', 'Rice pot (Thu lunch)', 'Rice pot (Fri)'],
-    'the same recipe planned twice on one day is told apart by its meal; on two days, by the day',
+    [
+      'Thu lunch',
+      'Thu dinner (Adobo chicken & 1 more)',
+      'Thu dinner (Rice pot)',
+      'Fri dinner',
+    ],
+    'the same recipe planned on two days or at two meals reads as two slots; two plates in one slot add their dish',
   );
   assert.deepEqual(
-    [stopJoin(['A', 'B', 'C'], 3), stopJoin(['A'], 2), stopJoin([], 2)],
-    ['A, B and C', 'A', ''],
-    'names join as a sentence up to the limit',
+    [
+      stopJoin(['A', 'B', 'C'], 2),
+      stopJoin(['A', 'B', 'C', 'D'], 2),
+      stopJoin(['A'], 2),
+      stopJoin([], 2),
+    ],
+    ['A, B and C', 'A, B and 2 more', 'A', ''],
+    'names join as a sentence; one past the limit is named, never "and 1 more"',
   );
 
   const context = {
@@ -7367,6 +7384,68 @@ assert.equal(
       null,
     ],
     'a source’s share is worked out the way its add was: a recipe at its own servings, a planned or saved meal’s items as they are now; one that no longer resolves has none',
+  );
+
+  const plate = plannedOn('plate', '2026-10-16', 'DINNER', null, [
+    srcRecipeItem('a', 3),
+    { id: 'b', kind: 'INGREDIENT', refId: 'rice', servings: 2 },
+  ]);
+  const named = plannedOn('named', '2026-10-17', 'DINNER', 'Rice night', [
+    srcRecipeItem('a', 3),
+    { id: 'b', kind: 'INGREDIENT', refId: 'rice', servings: 2 },
+  ]);
+  const parts = stopParts(
+    [{ sources: ['plate', 'named', 'thu'] }] as unknown as ShoppingItem[],
+    [plate, named, planned[0]],
+    recipes,
+    ingredients,
+  );
+  assert.deepEqual(
+    [...parts.entries()].map(([id, byIngredient]) => [id, [...byIngredient]]),
+    [['plate', [['salt', 'Rice pot']]]],
+    'a line’s sheet names the dish of an unnamed plate that wants it (salt is only in the rice pot), and keeps the plate for one two dishes share, a named plate or a one-dish plate',
+  );
+  const rowItem = {
+    id: 'rice__CUP',
+    ingredientId: 'rice',
+    amount: 3,
+    unit: 'CUP',
+    isChecked: false,
+    sources: ['thu', 'recipe:rice-pot', 'plate', 'gone'],
+    createdAt: 1,
+    updatedAt: 1,
+  } as ShoppingItem;
+  const rowLabels = stopLabels(
+    [rowItem],
+    [...planned, plate],
+    recipes,
+    new Map(),
+    ingredients,
+  );
+  assert.deepEqual(
+    stopRowShares(
+      [rowItem],
+      [rowItem],
+      rowLabels,
+      {
+        ...context,
+        plannedById: new Map(
+          [...planned, plate].map((meal) => [meal.id, meal]),
+        ),
+      },
+      '2026-10-15',
+      parts,
+    ).map(({ name, dish, amount }) => [
+      name,
+      dish,
+      amount && stopAmountText(amount),
+    ]),
+    [
+      ['Thu dinner', 'Rice pot', '1 cup'],
+      ['Fri dinner', 'Rice pot & 1 more', '1.5 cup'],
+      ['Rice pot', null, '1 cup'],
+    ],
+    'a line’s sheet lists every meal behind it with the dish and what each asks of it now (the plate’s rice pot and its own half cup of rice together), leaving out one that is gone',
   );
 
   const item = (
@@ -7409,8 +7488,11 @@ assert.equal(
     'a share lands on the item of its unit, or on the same ingredient moved to another unit of the same kind (453.592 g is 1 lb); a name-only line and an item the source never filled take nothing',
   );
 
-  const plan = (read: ShoppingItem[], shareMap: [string, number][], others: [string, number | null][]) =>
-    stopPlan('S', read, new Map(shareMap), new Map(others), 99);
+  const plan = (
+    read: ShoppingItem[],
+    shareMap: [string, number][],
+    others: [string, number | null][],
+  ) => stopPlan('S', read, new Map(shareMap), new Map(others), 99);
   const summary = (result: ReturnType<typeof plan>) => ({
     entries: result.entries.map(({ id, after }) => [
       id,
@@ -7498,7 +7580,11 @@ assert.equal(
     [['salt__TSP', 0]],
   );
   assert.deepEqual(
-    [summary(toNameOnly), summary(intoTwin).entries, intoTwin.entries[1].before?.createdAt],
+    [
+      summary(toNameOnly),
+      summary(intoTwin).entries,
+      intoTwin.entries[1].before?.createdAt,
+    ],
     [
       {
         entries: [
@@ -7535,7 +7621,11 @@ assert.equal(
   stopped.entries.forEach(({ id, after }) =>
     after ? store.set(id, after) : store.delete(id),
   );
-  store.set('rice__CUP', { ...store.get('rice__CUP')!, isChecked: true, updatedAt: 120 });
+  store.set('rice__CUP', {
+    ...store.get('rice__CUP')!,
+    isChecked: true,
+    updatedAt: 120,
+  });
   const undone = stopped.entries.filter(({ id, after }) =>
     stopAsLeft(store.get(id) ?? null, after),
   );
@@ -7545,7 +7635,11 @@ assert.equal(
   assert.deepEqual(
     [
       undone.map(({ id }) => id),
-      [...store.values()].map((entry) => [entry.id, entry.amount, entry.isChecked]),
+      [...store.values()].map((entry) => [
+        entry.id,
+        entry.amount,
+        entry.isChecked,
+      ]),
     ],
     [
       ['garlic__EACH', 'chicken__LB'],
@@ -7565,14 +7659,23 @@ assert.equal(
     item('salt', 'TSP', 1, ['thu-lunch']),
     item('beans', 'CUP', 1, ['gone']),
   ];
-  const listLabels = stopLabels(listItems, planned, recipes, new Map(), ingredients);
+  const listLabels = stopLabels(
+    listItems,
+    planned,
+    recipes,
+    new Map(),
+    ingredients,
+  );
   assert.deepEqual(
     stopMeals(
       listItems,
       new Map(
         [...listLabels.entries()].map(([source, label]) => [
           source,
-          { ...label, name: label.kind === 'planned' ? `Plan ${source}` : label.name },
+          {
+            ...label,
+            name: label.kind === 'planned' ? `Plan ${source}` : label.name,
+          },
         ]),
       ),
       '2026-10-16',

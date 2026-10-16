@@ -33,7 +33,10 @@ import {
   getPlannedDayKey,
   type DayRange,
 } from '@apps/pinch/utils/dayKeys';
-import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
+import {
+  getItemTitle,
+  getPlannedMealTitle,
+} from '@apps/pinch/utils/mealFormat';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
@@ -325,9 +328,7 @@ export function getShoppingSourceLabels(
     const { kind, id } = parseShoppingSource(source);
     if (kind === 'recipe') {
       const title = recipesById.get(id)?.title;
-      return title
-        ? { name: title, kind, dayKey: null, mealType: null }
-        : null;
+      return title ? { name: title, kind, dayKey: null, mealType: null } : null;
     }
     if (kind === 'meal') {
       const name = mealsById.get(id)?.name;
@@ -365,55 +366,117 @@ export const formatSourceSlot = (
     ? `${formatSourceDay(label.dayKey, todayKey)} ${MEAL_TYPE_LABELS[label.mealType].toLowerCase()}`
     : '';
 
-/** Each found source's name as a list says it: a planned meal carries its day ("Adobo chicken (Thu)"), and its slot when two would otherwise read the same ("Adobo chicken (Thu dinner)"). */
+/** Per unnamed planned meal of two or more items, the one item that put each ingredient on the list, by title, so a line's sheet says which dish wants it ("Adobo chicken") rather than the plate ("Adobo chicken & 1 more"). An ingredient two items share keeps the plate's name, and a plate the person named keeps it everywhere. */
+export type PlannedParts = Map<string, Map<string, string>>;
+
+export function getPlannedParts(
+  items: ShoppingItem[],
+  plannedMeals: PlannedMeal[],
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+): PlannedParts {
+  const sources = new Set(items.flatMap((item) => item.sources ?? []));
+  const result = new Map(
+    plannedMeals
+      .filter(
+        (meal) =>
+          sources.has(meal.id) && !meal.name?.trim() && meal.items.length > 1,
+      )
+      .map((meal) => {
+        const titlesByIngredient = meal.items.reduce((acc, item) => {
+          const title = getItemTitle(item, recipesById, ingredientsById);
+          new Set(
+            getItemRawLines(item, recipesById, ingredientsById).map(
+              (line) => line.ingredientId,
+            ),
+          ).forEach((id) => acc.set(id, (acc.get(id) ?? new Set()).add(title)));
+          return acc;
+        }, new Map<string, Set<string>>());
+        const parts = new Map(
+          [...titlesByIngredient.entries()].flatMap(([id, titles]) =>
+            titles.size === 1 ? [[id, [...titles][0]] as const] : [],
+          ),
+        );
+        return [meal.id, parts] as const;
+      }),
+  );
+  return result;
+}
+
+const MEAL_TYPE_INDEX = new Map(MEAL_TYPES.map((type, index) => [type, index]));
+
+/** The order the list says its meals in: planned meals by day (the ones that have passed first) and meal, then recipes and saved meals by name. */
+const getLabelOrder = (label: ShoppingSourceLabel) =>
+  label.dayKey === null
+    ? `1|${label.name.toLowerCase()}`
+    : `0|${label.dayKey}|${MEAL_TYPE_INDEX.get(label.mealType ?? 'DINNER') ?? 0}|${label.name.toLowerCase()}`;
+
+export const compareSourceLabels = (
+  a: { source: string; label: ShoppingSourceLabel },
+  b: { source: string; label: ShoppingSourceLabel },
+) =>
+  getLabelOrder(a.label).localeCompare(getLabelOrder(b.label)) ||
+  a.source.localeCompare(b.source);
+
+/** Each found source's name as the list says it, in the list's order: a planned meal by its slot ("Thu dinner", and its dish when two share a slot), a recipe or a saved meal by its own name. */
 export function getSourceNames(
   sources: string[],
   labels: Map<string, ShoppingSourceLabel>,
   todayKey: string,
 ): { source: string; name: string }[] {
-  const found = sources.flatMap((source) => {
-    const label = labels.get(source);
-    return label ? [{ source, label }] : [];
-  });
-  const byDay = (label: ShoppingSourceLabel) =>
-    label.dayKey
-      ? `${label.name} (${formatSourceDay(label.dayKey, todayKey)})`
-      : label.name;
+  const found = sources
+    .flatMap((source) => {
+      const label = labels.get(source);
+      return label
+        ? [
+            {
+              source,
+              label,
+              name:
+                label.kind === 'planned'
+                  ? formatSourceSlot(label, todayKey)
+                  : label.name,
+            },
+          ]
+        : [];
+    })
+    .sort(compareSourceLabels);
   const counts = found.reduce(
-    (acc, { label }) => acc.set(byDay(label), (acc.get(byDay(label)) ?? 0) + 1),
+    (acc, { name }) => acc.set(name, (acc.get(name) ?? 0) + 1),
     new Map<string, number>(),
   );
-  const result = found.map(({ source, label }) => ({
+  const result = found.map(({ source, label, name }) => ({
     source,
     name:
-      label.dayKey && (counts.get(byDay(label)) ?? 0) > 1
-        ? `${label.name} (${formatSourceSlot(label, todayKey)})`
-        : byDay(label),
+      label.kind === 'planned' && (counts.get(name) ?? 0) > 1
+        ? `${name} (${label.name})`
+        : name,
   }));
   return result;
 }
 
-/** "A", "A and B", "A, B and 3 more": names in full up to `limit`, then how many more. */
+/** "A", "A and B", "A, B and 3 more": names in full up to `limit`, then how many more; one more than the limit is named rather than counted. */
 export const joinSourceNames = (names: string[], limit: number) => {
   if (names.length <= 1) return names[0] ?? '';
-  const shown = names.slice(0, limit);
+  const shown = names.length > limit + 1 ? names.slice(0, limit) : names;
   const more = names.length - shown.length;
   return more > 0
     ? `${shown.join(', ')} and ${more} more`
     : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}`;
 };
 
-/** What a line is for, by name: "Adobo chicken (Thu) and Cilantro lime rice (Fri)", two names then "and 3 more", or null when nothing behind it still resolves. */
+/** What a line, or the whole list, is for, by name: "Thu dinner and Adobo chicken", three in full, past that two and "and 3 more"; null when nothing behind it still resolves. */
 export function getShoppingSourcesText(
   sources: string[],
   labels: Map<string, ShoppingSourceLabel>,
   todayKey: string,
-  limit = MAX_SOURCE_NAMES_SHOWN,
 ): string | null {
   const names = getSourceNames(sources, labels, todayKey).map(
     ({ name }) => name,
   );
-  return names.length === 0 ? null : joinSourceNames(names, limit);
+  return names.length === 0
+    ? null
+    : joinSourceNames(names, MAX_SOURCE_NAMES_SHOWN);
 }
 
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
@@ -889,11 +952,59 @@ export function planStopShopping(
   return result;
 }
 
+export interface RowSourceShare {
+  source: string;
+  name: string;
+  /** For a planned meal, the dish that wants the line (the plate's name when two of its dishes do). */
+  dish: string | null;
+  /** What the source asks of the row now, in the row's units; null when it wants only the name or can't be worked out. */
+  amount: ShopAmount | null;
+}
+
+/** Every source behind a row that still resolves, named as the row names it, with what each asks of the row now (`getSourceShares`, so the same share a stop would take off). */
+export function getRowSourceShares(
+  rowItems: ShoppingItem[],
+  items: ShoppingItem[],
+  labels: Map<string, ShoppingSourceLabel>,
+  context: ShoppingSourceContext,
+  todayKey: string,
+  parts: PlannedParts,
+): RowSourceShare[] {
+  const sources = [...new Set(rowItems.flatMap((item) => item.sources ?? []))];
+  const ingredientId = rowItems[0]?.ingredientId ?? '';
+  const result = getSourceNames(sources, labels, todayKey).map(
+    ({ source, name }) => {
+      const label = labels.get(source);
+      const lines = getSourceLines(source, context);
+      const shares = lines
+        ? getSourceShares(source, lines, items)
+        : new Map<string, number>();
+      const amount = sumShopAmounts(
+        rowItems.flatMap((item) => {
+          const share = shares.get(item.id);
+          return share ? [{ amount: share, unit: item.unit }] : [];
+        }),
+      );
+      return {
+        source,
+        name,
+        dish:
+          label?.kind === 'planned'
+            ? (parts.get(source)?.get(ingredientId) ?? label.name)
+            : null,
+        amount: amount && amount.amount > 0 ? amount : null,
+      };
+    },
+  );
+  return result;
+}
+
 /** Whether an item is still as a stop left it, so its Undo may put it back: still gone, or untouched since (the same `updatedAt`). */
 export const isAsStopLeft = (
   current: Pick<ShoppingItem, 'updatedAt'> | null,
   after: Pick<ShoppingItem, 'updatedAt'> | null,
-) => (after === null ? current === null : current?.updatedAt === after.updatedAt);
+) =>
+  after === null ? current === null : current?.updatedAt === after.updatedAt;
 
 export interface ShoppingMeal {
   source: string;
@@ -903,8 +1014,6 @@ export interface ShoppingMeal {
   openCount: number;
   isPast: boolean;
 }
-
-const MEAL_TYPE_INDEX = new Map(MEAL_TYPES.map((type, index) => [type, index]));
 
 const getRowsBySource = (side: ShoppingItem[]) => {
   const rowIds = getItemRowIds(side);
@@ -927,28 +1036,19 @@ export function getShoppingMeals(
 ): ShoppingMeal[] {
   const open = getRowsBySource(items.filter((item) => !item.isChecked));
   const got = getRowsBySource(items.filter((item) => item.isChecked));
-  const meals = [...labels.entries()].map(
-    ([source, label]): ShoppingMeal => {
-      const openCount = open.get(source)?.size ?? 0;
-      return {
-        source,
-        label,
-        rowCount: openCount + (got.get(source)?.size ?? 0),
-        openCount,
-        isPast: label.dayKey !== null && label.dayKey < todayKey,
-      };
-    },
-  );
-  const sortKey = ({ label }: ShoppingMeal) =>
-    label.dayKey === null
-      ? `1|${label.name.toLowerCase()}`
-      : `0|${label.dayKey}|${MEAL_TYPE_INDEX.get(label.mealType ?? 'DINNER') ?? 0}|${label.name.toLowerCase()}`;
+  const meals = [...labels.entries()].map(([source, label]): ShoppingMeal => {
+    const openCount = open.get(source)?.size ?? 0;
+    return {
+      source,
+      label,
+      rowCount: openCount + (got.get(source)?.size ?? 0),
+      openCount,
+      isPast: label.dayKey !== null && label.dayKey < todayKey,
+    };
+  });
   const result = meals
     .filter((meal) => meal.rowCount > 0)
-    .sort(
-      (a, b) =>
-        sortKey(a).localeCompare(sortKey(b)) || a.source.localeCompare(b.source),
-    );
+    .sort(compareSourceLabels);
   return result;
 }
 

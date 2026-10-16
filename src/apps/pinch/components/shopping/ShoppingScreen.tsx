@@ -12,8 +12,9 @@ import {
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Plus } from 'lucide-react';
+import { Plus, UtensilsCrossed } from 'lucide-react';
 
+import EntryTile from '@/components/EntryTile';
 import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
 import { PillGroup } from '@/components/PillGroup';
@@ -26,6 +27,7 @@ import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
+import ShoppingMealsSheet from '@apps/pinch/components/shopping/ShoppingMealsSheet';
 import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
   LIST_SEARCH_THRESHOLD,
@@ -48,6 +50,7 @@ import {
   selectShoppingCost,
   selectShoppingItems,
   selectShoppingLoadError,
+  selectShoppingMeals,
   selectShoppingOpenCount,
   selectShoppingRows,
   selectShoppingSourceLabels,
@@ -259,7 +262,8 @@ function useHeldRows() {
   return { held, hold };
 }
 
-type Overlay = { kind: 'add' } | { kind: 'item'; id: string };
+type Overlay =
+  { kind: 'add' } | { kind: 'item'; id: string } | { kind: 'meals' };
 
 interface ShoppingScreenProps {
   uid: string;
@@ -289,6 +293,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       getShoppingSourcesText(sources, sourceLabels, todayKey),
     [sourceLabels, todayKey],
   );
+  const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [query, setQuery] = useState('');
@@ -661,6 +666,19 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           placeholder='Search your list'
         />
       )}
+      {loadError === null &&
+        isLoaded &&
+        meals.length > 0 &&
+        activeQuery === '' && (
+          <nav aria-label='Also in Shopping' className='grid grid-cols-2 gap-3'>
+            <EntryTile
+              icon={<UtensilsCrossed className='size-4' />}
+              label='Meals on your list'
+              status={`For ${getForText(meals.map((meal) => meal.source))}`}
+              onClick={() => setOverlay({ kind: 'meals' })}
+            />
+          </nav>
+        )}
       {openCount > 0 &&
         shownView !== 'got' &&
         (coverage === 'some' || coverage === 'all') && (
@@ -702,12 +720,19 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       {overlay?.kind === 'add' && (
         <ShoppingAddSheet uid={uid} onClose={() => setOverlay(null)} />
       )}
+      {overlay?.kind === 'meals' && (
+        <ShoppingMealsSheet
+          uid={uid}
+          todayKey={todayKey}
+          onClose={() => setOverlay(null)}
+        />
+      )}
       {openRow && openItems.length > 0 && (
         <ShoppingItemSheet
           key={openRow.id}
           uid={uid}
           name={openRow.name}
-          forText={getForText(openRow.sources)}
+          todayKey={todayKey}
           items={openItems}
           onClose={() => setOverlay(null)}
           onRemove={() => handleRemove(openRow.name, openItems)}

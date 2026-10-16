@@ -29,6 +29,7 @@ import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 import {
   countOpenShopRows,
   getShoppingCost,
+  getPlannedParts,
   getShoppingMeals,
   getShoppingSourceLabels,
   groupShoppingItems,
@@ -501,9 +502,25 @@ export const selectShoppingSourceLabels = createSelector(
   getShoppingSourceLabels,
 );
 
+/** Which part of an unnamed plate each shopping line is for. */
+export const selectShoppingPlannedParts = createSelector(
+  [
+    selectShoppingItems,
+    selectPlannedMeals,
+    selectRecipesById,
+    selectIngredientsById,
+  ],
+  getPlannedParts,
+);
+
 /** What a source's share of the list is worked out from: the plan, saved meals, recipes and ingredients as they are now. */
 export const selectShoppingSourceContext = createSelector(
-  [selectPlannedMeals, selectMealsById, selectRecipesById, selectIngredientsById],
+  [
+    selectPlannedMeals,
+    selectMealsById,
+    selectRecipesById,
+    selectIngredientsById,
+  ],
   (plannedMeals, mealsById, recipesById, ingredientsById) => ({
     plannedById: new Map(plannedMeals.map((meal) => [meal.id, meal])),
     mealsById,
