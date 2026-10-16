@@ -4,10 +4,10 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
-import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
+import PeriodLeftOutHelp from '@apps/pinch/components/calendar/PeriodLeftOutHelp';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import {
   selectPlannedMeals,
@@ -20,7 +20,6 @@ import {
   formatDayTitle,
   type DayRange,
 } from '@apps/pinch/utils/dayKeys';
-import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   getNutritionGaps,
   hasShownValue,
@@ -41,8 +40,8 @@ interface WeekSummarySheetProps {
   range: DayRange;
   stats: PeriodStats;
   todayKey: string;
-  /** The averages already show under the summary line, so the sheet leaves them out. */
-  isAveragesOnFront: boolean;
+  /** The averages already show as tiles on the Calendar, so the sheet leaves them out. */
+  isStatsOnFront: boolean;
   /** A later action for the whole period (putting it on the shopping list) renders here, under the cost. */
   addToShoppingSlot?: ReactNode;
   onClose: () => void;
@@ -60,7 +59,7 @@ function WeekSummarySheet({
   range,
   stats,
   todayKey,
-  isAveragesOnFront,
+  isStatsOnFront,
   addToShoppingSlot,
   onClose,
   onOpenDay,
@@ -82,26 +81,11 @@ function WeekSummarySheet({
   );
   const tomorrowKey = addDaysToKey(todayKey, 1);
   const isPartial = stats.mealsPriced > 0 && stats.leftOut.length > 0;
-  const hasPassedDay = stats.byDay.some((day) => day.dayKey < todayKey);
-  const noPriceCount = countLeftOutIngredients(
-    stats.leftOut.filter((gap) => gap.kind === 'NO_PRODUCT'),
-  );
-  const noSizeCount = countLeftOutIngredients(
-    stats.leftOut.filter((gap) => gap.kind === 'NOT_COMPARABLE'),
-  );
-  const reasons = [
-    noPriceCount > 0
-      ? `${pluralize(noPriceCount, 'ingredient')} with no price yet`
-      : null,
-    noSizeCount > 0
-      ? `${pluralize(noSizeCount, 'ingredient')} whose package size can't be compared`
-      : null,
-  ].filter(Boolean);
   const gaps = [
     ...stats.openLeftOut,
     ...getNutritionGaps(stats.openNutritionMissing, show),
   ];
-  const references = isAveragesOnFront
+  const references = isStatsOnFront
     ? []
     : [
         ...getCostAverages(stats, show.protein),
@@ -150,18 +134,7 @@ function WeekSummarySheet({
             }
             help={
               isPartial ? (
-                <HelpTip
-                  variant='warning'
-                  title="What's left out"
-                  placement='bottom'
-                >
-                  <p>Leaves out {reasons.join(' and ')}.</p>
-                  {hasPassedDay && (
-                    <p className='text-muted-foreground'>
-                      Days that have passed keep the prices they had.
-                    </p>
-                  )}
-                </HelpTip>
+                <PeriodLeftOutHelp stats={stats} todayKey={todayKey} />
               ) : undefined
             }
           />

@@ -438,7 +438,7 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 **Context:** Read `TECHNICAL.md`'s Derived values (month stats, average per meal) and open question 6; `UX.md`'s Calendar (stats row) and Breakdown; A-List's `CounterRow` and `StatTile` use.
 
 ### Description
-Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the averages back on the front as one quiet line under the summary line (Avg per meal, Per g protein, the daily nutrition switched on), which the Calendar's View options can hide.
+Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the stats back as a choice: the Calendar's View options have "Show stats" (off to start), which draws a row of tiles under the summary line for the period shown (Total, Avg per meal, Per g protein while protein is on, and the daily nutrition switched on) and takes the total off the line.
 
 ### Possible Approach
 1. `selectMonthStats(monthKey)` in one pass over the window's planned meals: `{ spendCents, mealsPriced, avgPerMealCents, leftOut }`; the average divides by planned meals that have at least one priced item.

@@ -101,18 +101,14 @@ export function NutritionViewOptions({
 }: NutritionViewOptionsProps) {
   return (
     <ViewOptions isQuiet customizedCount={customizedCount} onReset={onReset}>
-      <NutritionEverywhere
-        onTurnOn={() => {
-          if (!options.showAverages) onChange({ showAverages: true });
-        }}
-      />
+      <NutritionEverywhere />
       <FilterSection title='On the calendar'>
         <div className='divide-border divide-y'>
           <ViewOptionSwitch
-            label='Show averages'
-            description='Avg per meal and daily nutrition, under the total'
-            checked={options.showAverages}
-            onCheckedChange={(showAverages) => onChange({ showAverages })}
+            label='Show stats'
+            description='Total, average per meal and daily nutrition, as tiles'
+            checked={options.showStats}
+            onCheckedChange={(showStats) => onChange({ showStats })}
           />
           <ViewOptionSwitch
             label='Show prices'

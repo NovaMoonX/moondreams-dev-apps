@@ -220,6 +220,13 @@ const getGapQualifier = (
   return stats.openLeftOut.length > 0 ? 'SO_FAR' : 'PLUS';
 };
 
+const getPeriodFigure = (
+  stats: Pick<PeriodStats, 'spendCents' | 'leftOut' | 'openLeftOut'>,
+) => ({
+  figure: formatPeriodCost(stats.spendCents),
+  qualifier: getGapQualifier(stats),
+});
+
 /** "$4.10", "$4.10 so far" while a left-out ingredient can still be priced, "$4.10+" once every gap is on a fixed day, "No price yet" with nothing priced, "Not priced" for a span that has passed. */
 export function getPeriodCostText(
   stats: Pick<
@@ -229,10 +236,24 @@ export function getPeriodCostText(
   isPast: boolean,
 ) {
   if (stats.mealsPriced === 0) return isPast ? 'Not priced' : 'No price yet';
-  const figure = formatPeriodCost(stats.spendCents);
-  const qualifier = getGapQualifier(stats);
+  const { figure, qualifier } = getPeriodFigure(stats);
   if (qualifier === 'SO_FAR') return `${figure} so far`;
   return qualifier === 'PLUS' ? `${figure}+` : figure;
+}
+
+/** The Total tile's figure and caption, worded from the same figure as the summary line ("$4.10" over "Total so far", "$4.10+" over "Total"); null with nothing priced, when the line says "No price yet" itself. */
+export function getPeriodCostTile(
+  stats: Pick<
+    PeriodStats,
+    'spendCents' | 'mealsPriced' | 'leftOut' | 'openLeftOut'
+  >,
+): { value: string; label: string } | null {
+  if (stats.mealsPriced === 0) return null;
+  const { figure, qualifier } = getPeriodFigure(stats);
+  return {
+    value: qualifier === 'PLUS' ? `${figure}+` : figure,
+    label: qualifier === 'SO_FAR' ? 'Total so far' : 'Total',
+  };
 }
 
 export interface CostAverage {
@@ -241,7 +262,7 @@ export interface CostAverage {
   value: string;
 }
 
-/** A period's cost averages, worded once for the averages line and the summary sheet: an average per meal only from two priced meals, and "per priced meal" while some planned meal has no price, since only priced meals divide it. */
+/** A period's cost averages, worded once for the stats tiles and the summary sheet: an average per meal only from two priced meals, and "per priced meal" while some planned meal has no price, since only priced meals divide it. */
 export function getCostAverages(
   stats: Pick<
     PeriodStats,
