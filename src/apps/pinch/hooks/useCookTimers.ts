@@ -9,8 +9,11 @@ import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 import {
   canStartTimer,
   countLiveTimers,
+  getFocusAfterDismiss,
+  getFocusAfterFinish,
   getFocusedTimerId,
   getTimerCaption,
+  type TimerFocus,
 } from '@apps/pinch/utils/cooks';
 
 interface TimerBase {
@@ -36,14 +39,7 @@ export type CookTimer = TimerBase &
 
 type Notice = 'unseen' | 'showing' | 'seen';
 
-interface Focus {
-  /** Whether the timer view is up; false while the timers run in the background. */
-  isShown: boolean;
-  /** The timer the person started or tapped last; a finished one still comes first. */
-  pickedId: string | null;
-}
-
-const UNFOCUSED: Focus = { isShown: false, pickedId: null };
+const UNFOCUSED: TimerFocus = { isShown: false, pickedId: null };
 
 const BEEP_OFFSETS_SECONDS = [0, 0.4, 0.8];
 const SETTLE_SLACK_MS = 20;
@@ -97,7 +93,7 @@ export function useCookTimers() {
   const { addToast } = useToast();
   const [timers, setTimers] = useState<CookTimer[]>([]);
   const [notice, setNotice] = useState<Notice>('unseen');
-  const [focus, setFocus] = useState<Focus>(UNFOCUSED);
+  const [focus, setFocus] = useState<TimerFocus>(UNFOCUSED);
   const timersRef = useRef<CookTimer[]>([]);
   const addToastRef = useRef(addToast);
   const audioRef = useRef<AudioContext | null>(null);
@@ -173,7 +169,7 @@ export function useCookTimers() {
           : timer,
       ),
     );
-    setFocus({ isShown: true, pickedId: finished[0].id });
+    setFocus(getFocusAfterFinish);
     alertDone(finished);
   }, [commit, alertDone]);
 
@@ -264,20 +260,12 @@ export function useCookTimers() {
     );
   };
 
-  /** Ends a timer (Reset when paused, Dismiss when done); the timer view closes with it unless another has finished. */
+  /** Ends a timer (Reset when paused, Dismiss when done); the timer view then shows another finished one or the one still picked, else closes. */
   const dismiss = (id: string) => {
     const before = timersRef.current;
     const next = before.filter((timer) => timer.id !== id);
     commit(next);
-    setFocus((current) =>
-      getFocusedTimerId(before, current.pickedId) === id
-        ? {
-            isShown:
-              current.isShown && next.some((timer) => timer.status === 'done'),
-            pickedId: null,
-          }
-        : current,
-    );
+    setFocus((current) => getFocusAfterDismiss(before, current, id));
     if (next.length === 0) {
       setNotice((current) => (current === 'showing' ? 'seen' : current));
     }

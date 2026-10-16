@@ -6883,6 +6883,55 @@ assert.deepEqual(
 );
 assert.deepEqual(
   [
+    plateCooks.getFocusAfterFinish({ isShown: true, pickedId: 'adobo' }),
+    plateCooks.getFocusAfterFinish({ isShown: false, pickedId: 'adobo' }),
+  ],
+  [
+    { isShown: true, pickedId: 'adobo' },
+    { isShown: true, pickedId: null },
+  ],
+  'a finish brings the timer view up, keeping the timer the person was watching (so Dismiss returns to it) and forgetting one already sent to the background',
+);
+const watchingAdobo = { isShown: true, pickedId: 'adobo' };
+assert.deepEqual(
+  [
+    plateCooks.getFocusAfterDismiss(
+      [running('adobo', 9_000), done('rice')],
+      watchingAdobo,
+      'rice',
+    ),
+    plateCooks.getFocusAfterDismiss(
+      [running('adobo', 9_000), done('rice')],
+      { isShown: true, pickedId: null },
+      'rice',
+    ),
+    plateCooks.getFocusAfterDismiss(
+      [paused('adobo'), running('rice', 9_000)],
+      watchingAdobo,
+      'adobo',
+    ),
+    plateCooks.getFocusAfterDismiss(
+      [done('adobo'), done('rice')],
+      watchingAdobo,
+      'adobo',
+    ),
+    plateCooks.getFocusAfterDismiss(
+      [running('adobo', 9_000), running('rice', 4_000)],
+      watchingAdobo,
+      'rice',
+    ),
+  ],
+  [
+    { isShown: true, pickedId: 'adobo' },
+    { isShown: false, pickedId: null },
+    { isShown: false, pickedId: null },
+    { isShown: true, pickedId: null },
+    watchingAdobo,
+  ],
+  'Dismiss on a finished timer returns to the timer the person was watching or just started, else to the step; Reset closes the view; another finished timer takes the front; ending a timer from its row changes nothing',
+);
+assert.deepEqual(
+  [
     plateCooks
       .getTimerRows(
         [

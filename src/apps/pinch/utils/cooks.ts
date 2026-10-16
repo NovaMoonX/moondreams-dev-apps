@@ -279,6 +279,39 @@ export const getFocusedTimerId = (
   return result;
 };
 
+export interface TimerFocus {
+  /** Whether the timer view is up; false while the timers run in the background. */
+  isShown: boolean;
+  /** The timer the person started or tapped last; a finished one still comes first. */
+  pickedId: string | null;
+}
+
+/** A finish brings the timer view up over whatever shows, and keeps what the person was watching so Dismiss returns to it. */
+export const getFocusAfterFinish = (focus: TimerFocus): TimerFocus => ({
+  isShown: true,
+  pickedId: focus.isShown ? focus.pickedId : null,
+});
+
+/** Ending the timer in focus (Reset or Dismiss) shows the next finished one, else the one still picked, else closes the view; ending another timer changes nothing. */
+export const getFocusAfterDismiss = (
+  timers: FocusableTimer[],
+  focus: TimerFocus,
+  id: string,
+): TimerFocus => {
+  if (getFocusedTimerId(timers, focus.pickedId) !== id) {
+    return focus;
+  }
+  const rest = timers.filter((timer) => timer.id !== id);
+  const pickedId = focus.pickedId === id ? null : focus.pickedId;
+  const result = {
+    isShown:
+      focus.isShown &&
+      rest.some((timer) => timer.status === 'done' || timer.id === pickedId),
+    pickedId,
+  };
+  return result;
+};
+
 /** Every timer but the one in focus, finished ones first, then in the order they started, so pausing one never moves it under the finger. */
 export const getTimerRows = <T extends { id: string; status: string }>(
   timers: T[],
