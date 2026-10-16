@@ -52,12 +52,12 @@ import {
   getPlannedCookId,
   getPlateNext,
   getPlateStart,
-  getPlateTitle,
   getStepName,
   isCookHistoryFull,
   splitStepTimers,
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
+import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
@@ -1193,7 +1193,9 @@ function CookingSubview({
   const getTitle = () => {
     if (entries.length === 1) return entries[0].recipe.title;
     const name = plannedMeal?.name?.trim() ?? '';
-    return name || getPlateTitle(entries.map((entry) => entry.recipe.title));
+    return (
+      name || getPlateTitle(entries.map((entry) => entry.recipe.title)).title
+    );
   };
 
   return (

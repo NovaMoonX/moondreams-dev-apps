@@ -258,27 +258,6 @@ export const splitStepTimers = <
   return result;
 };
 
-const NBSP = '\u00a0';
-const PLATE_TITLE_MAX_CHARS = 40;
-
-/** A plate's name from its dishes, up to three by name; the first and a count when the names would run past two lines on a phone. */
-export const getPlateTitle = (names: string[]) => {
-  if (names.length <= 1) return names[0] ?? '';
-  const [first, second] = names;
-  const more = (count: number) => `${count}${NBSP}more`;
-  const getNamed = () => {
-    if (names.length === 2) return `${first} & ${second}`;
-    if (names.length === 3) return `${first}, ${second} and ${names[2]}`;
-    return `${first}, ${second} and${NBSP}${more(names.length - 2)}`;
-  };
-  const named = getNamed();
-  const result =
-    named.length <= PLATE_TITLE_MAX_CHARS
-      ? named
-      : `${first} &${NBSP}${more(names.length - 1)}`;
-  return result;
-};
-
 /** A whole serving a tap, and a half only below one. */
 export const stepCookServings = (current: number, direction: 1 | -1) => {
   if (direction === 1) {
