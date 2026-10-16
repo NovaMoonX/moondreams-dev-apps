@@ -206,12 +206,10 @@ function CalendarScreen({
           hasRecipes || hasSavedMeals ? (
             <div className='flex items-center gap-1'>
               <NutritionViewOptions
-                prices={{
-                  checked: viewOptions.options.showPrices,
-                  customizedCount: viewOptions.customizedCount,
-                  onChange: (showPrices) => viewOptions.update({ showPrices }),
-                  onReset: viewOptions.reset,
-                }}
+                options={viewOptions.options}
+                customizedCount={viewOptions.customizedCount}
+                onChange={viewOptions.update}
+                onReset={viewOptions.reset}
               />
               <Button
                 type='button'
@@ -244,6 +242,7 @@ function CalendarScreen({
           label={getSummaryLabel()}
           stats={stats}
           isPast={range.endKey < todayKey}
+          showAverages={viewOptions.options.showAverages}
           onOpen={() => setIsSummaryOpen(true)}
         />
       )}
