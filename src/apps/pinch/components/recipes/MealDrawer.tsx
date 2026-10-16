@@ -25,7 +25,7 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { Gap, ShoppingRequest } from '@apps/pinch/types';
+import type { ContainerPlace, Gap, ShoppingRequest } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCostTile,
@@ -66,7 +66,7 @@ interface MealDrawerProps {
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
-  onOpenStock: (id: string) => void;
+  onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
 }
 
@@ -163,43 +163,48 @@ function MealDrawer({
       }
     >
       {isMoreOpen && (
-        <div className='space-y-3'>
+        <div className='space-y-5'>
           <BackLink onBack={closeMore} />
-          <ActionGroup>
-            <StockRows
-              target={{ kind: 'meal', id: meal.id }}
-              onOpenStock={() => onOpenStock(meal.id)}
-            />
-          </ActionGroup>
-          <ActionGroup>
-            <AddToShoppingRow
-              isGrouped
-              subtitle='Choose what you need for this meal'
-              onClick={() =>
-                onAddToShopping({
-                  kind: 'items',
-                  items: meal.items,
-                  label: meal.name,
-                  mealId: meal.id,
-                })
-              }
-            />
-            {stockError === null && (
-              <ActionRow
+          <StockRows
+            target={{ kind: 'meal', id: meal.id }}
+            onOpenStock={(place) => onOpenStock(meal.id, place)}
+          />
+          <div className='space-y-2'>
+            <ActionGroup isRoomy caption='What would you like to do?'>
+              <AddToShoppingRow
                 isGrouped
-                icon={<PackagePlus className='h-4 w-4' />}
-                label='Put some away'
-                subtitle='In the fridge or freezer, with an eat-by date'
-                isDisabled={!isStockReady}
-                onClick={() => onPutAway(meal.id)}
+                isRoomy
+                subtitle='Choose what you need for this meal'
+                onClick={() =>
+                  onAddToShopping({
+                    kind: 'items',
+                    items: meal.items,
+                    label: meal.name,
+                    mealId: meal.id,
+                  })
+                }
               />
+              {stockError === null && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<PackagePlus />}
+                  label='Put some away'
+                  subtitle={
+                    'In the fridge or freezer, with an eat\u2011by date'
+                  }
+                  isDisabled={!isStockReady}
+                  onClick={() => onPutAway(meal.id)}
+                />
+              )}
+            </ActionGroup>
+            {stockError === null && !isStockReady && (
+              <p className='text-muted-foreground text-sm'>
+                Loading your fridge and freezer…
+              </p>
             )}
-          </ActionGroup>
-          {stockError === null && !isStockReady && (
-            <p className='text-muted-foreground text-xs'>
-              Loading your fridge and freezer…
-            </p>
-          )}
+          </div>
         </div>
       )}
       <div className={join('space-y-5', isMoreOpen && 'hidden')}>

@@ -775,9 +775,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenId(null);
             setHistoryId(id);
           }}
-          onOpenStock={(id) => {
+          onOpenStock={(id, place) => {
             setOpenId(null);
-            openSubview({ kind: 'containers', recipeId: id });
+            openSubview({ kind: 'containers', recipeId: id, place });
           }}
           onPutAway={(id) => {
             setOpenId(null);
@@ -835,9 +835,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenMealId(null);
             setShopping(request);
           }}
-          onOpenStock={(id) => {
+          onOpenStock={(id, place) => {
             setOpenMealId(null);
-            openSubview({ kind: 'containers', mealId: id });
+            openSubview({ kind: 'containers', mealId: id, place });
           }}
           onPutAway={(id) => {
             setOpenMealId(null);

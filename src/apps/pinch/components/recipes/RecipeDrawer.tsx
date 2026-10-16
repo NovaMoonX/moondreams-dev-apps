@@ -50,7 +50,12 @@ import {
   selectShowNutrition,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
-import type { Gap, GapKind, ShoppingRequest } from '@apps/pinch/types';
+import type {
+  ContainerPlace,
+  Gap,
+  GapKind,
+  ShoppingRequest,
+} from '@apps/pinch/types';
 import {
   getCookId,
   getCookServings,
@@ -143,7 +148,7 @@ interface RecipeDrawerProps {
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
   onOpenHistory: (id: string) => void;
-  onOpenStock: (id: string) => void;
+  onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
   /** A null `noteId` starts a new note. */
   onOpenNote: (recipeId: string, noteId: string | null) => void;
@@ -354,71 +359,81 @@ function RecipeDrawer({
     }
     if (view === 'more') {
       return (
-        <div className='space-y-3'>
+        <div className='space-y-5'>
           <BackLink onBack={backToRecipe} />
-          <ActionGroup>
-            <StockRows
-              target={{ kind: 'recipe', id: recipe.id }}
-              onOpenStock={() => onOpenStock(recipe.id)}
-            />
-          </ActionGroup>
-          <ActionGroup>
-            {cookPlan === null && recipe.steps.length > 0 && (
-              <ActionRow
+          <StockRows
+            target={{ kind: 'recipe', id: recipe.id }}
+            onOpenStock={(place) => onOpenStock(recipe.id, place)}
+          />
+          <div className='space-y-2'>
+            <ActionGroup isRoomy caption='What would you like to do?'>
+              {cookPlan === null && recipe.steps.length > 0 && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<CookingPot />}
+                  label='Start cooking'
+                  subtitle='Steps one at a time, with a timer'
+                  onClick={startCooking}
+                />
+              )}
+              {cookPlan !== null && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<CalendarPlus />}
+                  label='Plan it'
+                  subtitle='On another day'
+                  onClick={() => onPlan(recipe.id)}
+                />
+              )}
+              {loadError === null && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  icon={<CircleCheck />}
+                  label='Mark as cooked'
+                  subtitle='Keeps a record you can change later'
+                  isDisabled={!isLoaded || isHistoryFull || isMarking}
+                  onClick={() => void handleMarkCooked()}
+                />
+              )}
+              <AddToShoppingRow
                 isGrouped
-                icon={<CookingPot className='h-4 w-4' />}
-                label='Start cooking'
-                subtitle='Steps one at a time, with a timer'
-                onClick={startCooking}
+                isRoomy
+                subtitle='Choose what you need for this recipe'
+                onClick={() =>
+                  onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
+                }
               />
+              {canPutAway && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<PackagePlus />}
+                  label='Put some away'
+                  subtitle={
+                    'In the fridge or freezer, with an eat\u2011by date'
+                  }
+                  isDisabled={!isStockReady}
+                  onClick={() => onPutAway(recipe.id)}
+                />
+              )}
+            </ActionGroup>
+            {reasons.map((reason) => (
+              <p key={reason} className='text-muted-foreground text-sm'>
+                {reason}
+              </p>
+            ))}
+            {markError && (
+              <p className='text-destructive text-sm' role='alert'>
+                {markError}
+              </p>
             )}
-            {cookPlan !== null && (
-              <ActionRow
-                isGrouped
-                icon={<CalendarPlus className='h-4 w-4' />}
-                label='Plan it'
-                subtitle='On another day'
-                onClick={() => onPlan(recipe.id)}
-              />
-            )}
-            {loadError === null && (
-              <ActionRow
-                isGrouped
-                icon={<CircleCheck className='h-4 w-4' />}
-                label='Mark as cooked'
-                subtitle='Keeps a record you can change later'
-                isDisabled={!isLoaded || isHistoryFull || isMarking}
-                onClick={() => void handleMarkCooked()}
-              />
-            )}
-            <AddToShoppingRow
-              isGrouped
-              subtitle='Choose what you need for this recipe'
-              onClick={() =>
-                onAddToShopping({ kind: 'recipe', recipeId: recipe.id })
-              }
-            />
-            {canPutAway && (
-              <ActionRow
-                isGrouped
-                icon={<PackagePlus className='h-4 w-4' />}
-                label='Put some away'
-                subtitle='In the fridge or freezer, with an eat-by date'
-                isDisabled={!isStockReady}
-                onClick={() => onPutAway(recipe.id)}
-              />
-            )}
-          </ActionGroup>
-          {reasons.map((reason) => (
-            <p key={reason} className='text-muted-foreground text-xs'>
-              {reason}
-            </p>
-          ))}
-          {markError && (
-            <p className='text-destructive text-sm' role='alert'>
-              {markError}
-            </p>
-          )}
+          </div>
         </div>
       );
     }
