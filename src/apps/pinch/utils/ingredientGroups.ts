@@ -62,7 +62,7 @@ export function groupIngredientLines<T extends GroupedLine>(
   return result;
 }
 
-/** The lines in the order `groupIngredientLines` shows them. */
+/** The lines in the order the grouped list shows them. */
 export const orderIngredientLines = <T extends GroupedLine>(lines: T[]) =>
   groupIngredientLines(lines).flatMap((group) => group.lines);
 
@@ -172,7 +172,7 @@ export const ungroupLines = <T extends MovableLine>(
     ),
   );
 
-/** Undoes `ungroupLines` on the lines as they are now: the group's lines that are still there get it back, in the order they had, and edits made since stay. */
+/** Undoes removing a group, on the lines as they are now: the group's lines that are still there get it back, in the order they had, and edits made since stay. */
 export function restoreLineGroup<T extends MovableLine>(
   current: T[],
   before: T[],

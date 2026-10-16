@@ -54,7 +54,7 @@ export interface IngredientRow {
   proposedName: string | null;
   /** Set when the person chose "Add as new ingredient": it is created with the recipe. */
   newName: string | null;
-  /** The heading it sits under, or null; rows are kept in the order `groupIngredientLines` shows them. */
+  /** The heading it sits under, or null; rows are kept in the order the list shows them, so the saved order is the shown one. */
   group: string | null;
 }
 

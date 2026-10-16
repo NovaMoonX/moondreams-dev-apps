@@ -53,6 +53,16 @@ import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 
+/** Puts focus back on a group's heading after its editor closes; a rename remounts the heading under its new name. */
+const focusGroupHeading = (group: string) =>
+  window.requestAnimationFrame(() =>
+    document
+      .querySelector<HTMLElement>(
+        `[data-group-heading="${CSS.escape(getGroupKey(group))}"]`,
+      )
+      ?.focus({ preventScroll: true }),
+  );
+
 /** The ingredients a search in this group leaves out: one already in it is there, and in another group it may be listed again. */
 const getUsedInGroup = (rows: IngredientRow[], group: string | null) =>
   rows
@@ -493,7 +503,11 @@ function GroupHeading({
   const close = () => {
     setIsOpen(false);
     const cleaned = cleanGroupName(draft);
-    if (cleaned !== null && cleaned !== name) onRename(cleaned);
+    if (cleaned !== null && cleaned !== name) {
+      onRename(cleaned);
+      return;
+    }
+    focusGroupHeading(name);
   };
   const remove = () => {
     setIsOpen(false);
@@ -518,6 +532,7 @@ function GroupHeading({
       aria-haspopup='dialog'
       aria-expanded={isOpen}
       aria-label={`${name}: rename or remove the group`}
+      data-group-heading={getGroupKey(name)}
       className='text-muted-foreground! h-10 max-w-full gap-1.5 px-2 text-sm font-medium'
       onClick={() => {
         if (isOpen) {
@@ -669,7 +684,7 @@ function RecipeIngredients({
   const removeGroup = (name: string) => {
     const before = rows;
     onChange(ungroupLines(rows, name));
-    onRemoved(`Removed the group ${name}`, () =>
+    onRemoved(`Removed the group “${name}”`, () =>
       latest.current.onChange(
         restoreLineGroup(latest.current.rows, before, name),
       ),
@@ -708,9 +723,19 @@ function RecipeIngredients({
                   name={group.name}
                   otherNames={groupNames.filter((name) => name !== group.name)}
                   lineCount={group.lines.length}
-                  onRename={(name) =>
-                    onChange(renameLineGroup(rows, group.name ?? '', name))
-                  }
+                  onRename={(name) => {
+                    const renamed = renameLineGroup(
+                      rows,
+                      group.name ?? '',
+                      name,
+                    );
+                    onChange(renamed);
+                    focusGroupHeading(
+                      renamed.find(
+                        (row) => getGroupKey(row.group) === getGroupKey(name),
+                      )?.group ?? name,
+                    );
+                  }}
                   onRemove={() => removeGroup(group.name ?? '')}
                 />
               )}

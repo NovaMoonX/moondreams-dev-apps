@@ -1068,6 +1068,39 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and every sheet was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
+### Issue 42: Ingredient groups: "For the chicken", "For the sauce"
+
+**Prerequisites:** Issue 6, Issue 14, Issue 33
+**Target PR Size:** ~1,200 lines (the field, one ordering helper, the form's group field and heading editor, the drawer's and cooking's headings, the step matching, the readers, the seed, checks and docs)
+**Files:**
+- `RecipeIngredient.group` in `types.ts`, `MAX_INGREDIENT_GROUP_LENGTH` in `constants.ts`, `utils/ingredientGroups.ts` (the order every list uses, the label for a line away from its heading, and the form's moves)
+- `RecipeIngredients.tsx` (the group field, the headings and their editor), `recipeFormModel.ts`, the drawer's Ingredients, `CookIngredientsView`, the in-step rows, `utils/stepIngredients.ts`, `utils/recipeChanges.ts`
+- `lib/extractRecipe.ts` (schema and prompt) and `utils/normalizeRecipe.ts`
+- The seed: Alex's adobo under two groups, with soy sauce and garlic in both; the nachos keep lines with no `group` key
+
+**Context:** Read `TECHNICAL.md` §6 ("Ingredient groups"), criterion 14 and open question 23; `UX.md`'s Recipe, Recipe details and Cooking mode; CLAUDE.md's "Design for 5 and for 50" (`PickOrCreate`), "Labeled hairline dividers use `@/components/SectionDivider`" and "Removing a row from a form shows an undo".
+
+### Description
+A recipe's ingredient lines can sit under headings, the way recipes are written ("For the chicken", "For the sauce"), and one ingredient can be in more than one group with its own amount in each. The headings show wherever the lines are listed, in one order; a step names which line it means; a reading keeps the recipe's own headings; the shopping list adds the amounts together.
+
+### Possible Approach
+1. `group: string | null` on each line, no collection: a group is its name on the lines. Every list goes through one pure helper (no group first, then groups in the order they appear).
+2. In the form, a `PickOrCreate` in each ingredient's editor and a tappable `SectionDivider` heading that renames the group (merging with another of the same name) or removes it with an Undo, keeping its lines.
+3. Extend the readers' schema with a required, nullable `group` and say in the prompt never to invent one; a split line keeps its group.
+4. Leave the rules' lines client-shaped: measure whether a per-line check fits the 1,000-expression budget at 60 lines, and prove access is unchanged.
+
+### CRUD & Entry-Point Requirements
+- [x] **Create / Read / Update / Delete:** put a line in a group or a new one, see the headings, move a line to another group, rename or remove a group (its lines stay).
+- [x] **Entry points:** an ingredient's editor in the recipe form, a heading in the form, the recipe drawer, cooking mode's Ingredients and steps, and the three readings.
+
+### Success Criteria
+- [x] A recipe with no groups looks the same in the drawer, the form and cooking mode; a recipe written before this (no `group` key) opens, cooks, shops and saves, and its save writes `group: null`; checked in the browser over a legacy-shaped document.
+- [x] Two lines of one ingredient in two groups are never merged by the form, the reader or the save, sum on the shopping list and in cost and nutrition, and say their group where they show away from their heading.
+- [x] Moving lines between groups records no tweak on a cooked recipe.
+- [x] The rules matrix (owner, another user, signed out; with groups, null and a legacy document) gives the same outcome on the new rules as on the previous ones.
+- [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math` and `check:pinch-ingest` cover the order, the moves, the step sharing and the reader's groups; driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 1, 5 and 30 lines and 1, 3 and 8 groups.
+- [x] `UX.md`, `TECHNICAL.md` and the README match what shipped.
+
 ## Beyond
 
 ### Issue 34: Hands-free voice navigation in cooking mode
