@@ -307,7 +307,7 @@ function PlannedMealView({
     if (action.kind === 'COOK') {
       return {
         key: 'cook',
-        icon: <CookingPot className='h-4 w-4' />,
+        icon: <CookingPot />,
         label: 'Start cooking',
         subtitle: 'Steps one at a time, with a timer',
         onClick: startCooking,
@@ -316,11 +316,7 @@ function PlannedMealView({
     if (action.kind === 'EAT') {
       return {
         key: `eat-${action.place}`,
-        icon: (
-          <span className='text-base leading-none'>
-            {CONTAINER_PLACE_EMOJIS[action.place]}
-          </span>
-        ),
+        icon: CONTAINER_PLACE_EMOJIS[action.place],
         label: `Eat from ${CONTAINER_PLACE_LABELS[action.place].toLowerCase()}`,
         subtitle: `${action.count} ${action.count === 1 ? 'box matches' : 'boxes match'} this meal`,
         onClick: () => eatFrom(action.place),
@@ -328,7 +324,7 @@ function PlannedMealView({
     }
     return {
       key: 'save',
-      icon: <BookmarkPlus className='h-4 w-4' />,
+      icon: <BookmarkPlus />,
       label: 'Save to Saved meals',
       subtitle: 'Keep this plate to plan again',
       onClick: () => showView({ kind: 'name' }),
@@ -509,35 +505,40 @@ function PlannedMealView({
     }
     if (view.kind === 'more') {
       return (
-        <div ref={moreViewRef} className='space-y-3'>
+        <div ref={moreViewRef} className='space-y-5'>
           <div className='space-y-1'>
             <BackLink onBack={closeMore} />
-            <p className='font-medium wrap-break-word'>{mealLabel}</p>
+            <h3 className='text-lg font-semibold wrap-break-word'>
+              {mealLabel}
+            </h3>
           </div>
-          {moreRows.length > 0 && (
-            <ActionGroup>
-              {moreRows.map((row) => (
-                <div key={row.key} data-more-row={row.key}>
-                  <ActionRow
-                    isGrouped
-                    icon={row.icon}
-                    label={row.label}
-                    subtitle={row.subtitle}
-                    onClick={row.onClick}
-                  />
-                </div>
-              ))}
-            </ActionGroup>
-          )}
-          <ActionRow
-            isDestructive
-            icon={<Trash2 className='h-4 w-4' />}
-            label='Remove from this day'
-            subtitle='Your recipes stay as they are'
-            isDisabled={isRemoving}
-            onClick={() => void handleRemove()}
-          />
-          {errorLine}
+          <ActionGroup isRoomy caption='What would you like to do?'>
+            {moreRows.map((row) => (
+              <div key={row.key} data-more-row={row.key}>
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={row.icon}
+                  label={row.label}
+                  subtitle={row.subtitle}
+                  onClick={row.onClick}
+                />
+              </div>
+            ))}
+          </ActionGroup>
+          <div className='space-y-2'>
+            <ActionRow
+              isRoomy
+              isDestructive
+              icon={<Trash2 />}
+              label='Remove from this day'
+              subtitle='Your recipes stay as they are'
+              isDisabled={isRemoving}
+              onClick={() => void handleRemove()}
+            />
+            {errorLine}
+          </div>
         </div>
       );
     }

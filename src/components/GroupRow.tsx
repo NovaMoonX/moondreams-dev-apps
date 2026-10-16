@@ -5,7 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 interface GroupRowProps {
-  /** An emoji or a small icon, in a fixed column so every row's text starts on one edge. Leave it out when each line of the content brings its own (`GroupRowLines`). */
+  /** An emoji or a small icon, in a fixed column so every row's text starts on one edge. */
   icon?: ReactNode;
   children: ReactNode;
   onClick: () => void;
@@ -74,26 +74,6 @@ function GroupRow({
         aria-hidden='true'
       />
     </Button>
-  );
-}
-
-interface GroupRowLinesProps {
-  lines: { key: string; icon: ReactNode; content: ReactNode }[];
-}
-
-/** Several lines that one `GroupRow` sums up together, each with its own icon on the row's icon column. */
-export function GroupRowLines({ lines }: GroupRowLinesProps) {
-  return (
-    <span className='grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3'>
-      {lines.map((line) => (
-        <span key={line.key} className='contents'>
-          <span className='text-center' aria-hidden='true'>
-            {line.icon}
-          </span>
-          <span>{line.content}</span>
-        </span>
-      ))}
-    </span>
   );
 }
 
