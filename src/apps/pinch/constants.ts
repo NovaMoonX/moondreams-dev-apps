@@ -399,6 +399,8 @@ export const CALENDAR_VIEW_LABELS: Record<CalendarView, string> = {
   month: 'Month',
   week: 'Week',
 };
+/** Fewer fully priced meals than this say too little for an average, so the Calendar shows none. */
+export const MIN_FULLY_PRICED_MEALS = 3;
 
 /** The meal type's colour tokens from `pinch.css`: the solid for an edge or a dot, the soft tint for a chip or a pill. */
 export const MEAL_TYPE_COLORS: Record<

@@ -1,4 +1,7 @@
-import { NUTRITION_METRICS } from '@apps/pinch/constants';
+import {
+  MIN_FULLY_PRICED_MEALS,
+  NUTRITION_METRICS,
+} from '@apps/pinch/constants';
 import type {
   Gap,
   NutritionValues,
@@ -14,6 +17,7 @@ import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getPlannedMealCost,
   type CostContext,
+  type MealCost,
 } from '@apps/pinch/utils/mealMath';
 import {
   getPlannedMealNutrition,
@@ -32,16 +36,21 @@ export interface Totals {
 export interface PeriodStats {
   spendCents: number;
   plannedCount: number;
-  /** Planned meals with at least one priced item: the average's divisor. */
+  /** Planned meals with at least one priced item: the Total's "nothing priced" test. */
   mealsPriced: number;
-  avgPerMealCents: number | null;
+  /** Planned meals with a price and nothing left out: the only ones an average divides over, since a meal with a gap is a floor. */
+  fullyPricedMeals: number;
+  /** What those meals cost on average; null with none. */
+  avgPerFullyPricedMealCents: number | null;
   leftOut: Gap[];
   /** What only the meals that aren't frozen yet leave out: the part a new price can still change, and so the part worth a nudge. */
   openLeftOut: Gap[];
   /** Per metric, the average over the days that know it (for a single day, that day's own total), so a day with nothing known never pulls it toward zero; null when no day does. */
   dailyNutrition: NutritionValues;
-  /** Spend over protein grams, for the meals where both are known. */
+  /** Spend over protein grams, for the fully priced meals that know their protein. */
   proteinCentsPerGram: number | null;
+  /** How many meals that figure comes from. */
+  proteinPricedMeals: number;
   nutritionMissing: IngredientMissing[];
   openNutritionMissing: IngredientMissing[];
   byDay: (Totals & { dayKey: string })[];
@@ -85,7 +94,12 @@ const dedupe = (gaps: Gap[]) => [
   ).values(),
 ];
 
-/** One walk over the planned meals of a span of days, a month, a week or a day: the spend, the average per meal, the nutrition averages and the totals by day and by meal type. */
+const isFullyPriced = (cost: MealCost) =>
+  cost.totalCents !== null &&
+  cost.leftOut.length === 0 &&
+  [...cost.items.values()].every((item) => item.cents !== null);
+
+/** One walk over the planned meals of a span of days, a month, a week or a day: the spend, the average per fully priced meal, the nutrition averages and the totals by day and by meal type. */
 export function getPeriodStats(
   plannedMeals: PlannedMeal[],
   range: DayRange,
@@ -124,9 +138,14 @@ export function getPeriodStats(
       if (cost.totalCents !== null) {
         acc.spendCents += cost.totalCents;
         acc.mealsPriced += 1;
+      }
+      if (cost.totalCents !== null && isFullyPriced(cost)) {
+        acc.fullSpendCents += cost.totalCents;
+        acc.fullyPricedMeals += 1;
         if (nutrition.values.protein !== null && nutrition.values.protein > 0) {
           acc.proteinSpendCents += cost.totalCents;
           acc.proteinGrams += nutrition.values.protein;
+          acc.proteinPricedMeals += 1;
         }
       }
       return acc;
@@ -136,6 +155,8 @@ export function getPeriodStats(
       plannedCount: 0,
       spendCents: 0,
       mealsPriced: 0,
+      fullSpendCents: 0,
+      fullyPricedMeals: 0,
       leftOut: [] as Gap[],
       nutrition: undefined as NutritionValues | undefined,
       nutritionMissing: [] as IngredientMissing[],
@@ -143,6 +164,7 @@ export function getPeriodStats(
       openNutritionMissing: [] as IngredientMissing[],
       proteinSpendCents: 0,
       proteinGrams: 0,
+      proteinPricedMeals: 0,
     },
   );
 
@@ -150,8 +172,11 @@ export function getPeriodStats(
     spendCents: walked.spendCents,
     plannedCount: walked.plannedCount,
     mealsPriced: walked.mealsPriced,
-    avgPerMealCents:
-      walked.mealsPriced === 0 ? null : walked.spendCents / walked.mealsPriced,
+    fullyPricedMeals: walked.fullyPricedMeals,
+    avgPerFullyPricedMealCents:
+      walked.fullyPricedMeals === 0
+        ? null
+        : walked.fullSpendCents / walked.fullyPricedMeals,
     leftOut: dedupe(walked.leftOut),
     openLeftOut: dedupe(walked.openLeftOut),
     dailyNutrition: Object.fromEntries(
@@ -167,6 +192,7 @@ export function getPeriodStats(
       walked.proteinGrams === 0
         ? null
         : walked.proteinSpendCents / walked.proteinGrams,
+    proteinPricedMeals: walked.proteinPricedMeals,
     nutritionMissing: walked.nutritionMissing,
     openNutritionMissing: walked.openNutritionMissing,
     byDay: [...walked.byDay]
@@ -256,43 +282,53 @@ export function getPeriodCostTile(
   };
 }
 
+/** The Total as the summary sheet's tile says it: the front tile's words, and the line's words ("No price yet", "Not priced") under the same name with nothing priced. */
+export const getPeriodTotal = (
+  stats: Pick<
+    PeriodStats,
+    'spendCents' | 'mealsPriced' | 'leftOut' | 'openLeftOut'
+  >,
+  isPast: boolean,
+) =>
+  getPeriodCostTile(stats) ?? {
+    value: getPeriodCostText(stats, isPast),
+    label: 'Total',
+  };
+
 export interface CostAverage {
   key: 'avg' | 'protein';
   label: string;
   value: string;
 }
 
-/** A period's cost averages, worded once for the stats tiles and the summary sheet: an average per meal only from two priced meals, and "per priced meal" while some planned meal has no price, since only priced meals divide it. */
+/** A period's cost averages, worded once for the stats tiles and the summary sheet. Each divides over fully priced meals only, since a meal with something left out is a floor, so it needs no "so far" or "+" and names its base; under three such meals it says nothing, not a figure from one or two dinners. */
 export function getCostAverages(
   stats: Pick<
     PeriodStats,
-    | 'plannedCount'
-    | 'mealsPriced'
-    | 'avgPerMealCents'
+    | 'fullyPricedMeals'
+    | 'avgPerFullyPricedMealCents'
+    | 'proteinPricedMeals'
     | 'proteinCentsPerGram'
-    | 'leftOut'
-    | 'openLeftOut'
   >,
   isProteinOn: boolean,
 ): CostAverage[] {
-  const qualifier = getGapQualifier(stats);
-  const word = (key: CostAverage['key'], label: string, cents: number) => ({
-    key,
-    label: qualifier === 'SO_FAR' ? `${label} so far` : label,
-    value: qualifier === 'PLUS' ? `${formatCost(cents)}+` : formatCost(cents),
-  });
   const averages = [
-    stats.mealsPriced >= 2 && stats.avgPerMealCents !== null
-      ? word(
-          'avg',
-          stats.mealsPriced < stats.plannedCount
-            ? 'Avg per priced meal'
-            : 'Avg per meal',
-          stats.avgPerMealCents,
-        )
+    stats.fullyPricedMeals >= MIN_FULLY_PRICED_MEALS &&
+    stats.avgPerFullyPricedMealCents !== null
+      ? {
+          key: 'avg' as const,
+          label: 'Avg per fully priced meal',
+          value: formatCost(stats.avgPerFullyPricedMealCents),
+        }
       : null,
-    isProteinOn && stats.proteinCentsPerGram !== null
-      ? word('protein', 'Per g protein', stats.proteinCentsPerGram)
+    isProteinOn &&
+    stats.proteinPricedMeals >= MIN_FULLY_PRICED_MEALS &&
+    stats.proteinCentsPerGram !== null
+      ? {
+          key: 'protein' as const,
+          label: 'Per g protein, fully priced',
+          value: formatCost(stats.proteinCentsPerGram),
+        }
       : null,
   ].filter((average) => average !== null);
 

@@ -435,13 +435,13 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 - `src/components/StatTile.tsx` (use as is)
 - `scripts/seeds/pinch.ts`
 
-**Context:** Read `TECHNICAL.md`'s Derived values (month stats, average per meal) and open question 6; `UX.md`'s Calendar (stats row) and Breakdown; A-List's `CounterRow` and `StatTile` use.
+**Context:** Read `TECHNICAL.md`'s Derived values (month stats, average per fully priced meal) and open question 6; `UX.md`'s Calendar (stats row) and Breakdown; A-List's `CounterRow` and `StatTile` use.
 
 ### Description
-Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the stats back as a choice: the Calendar's View options have "Show stats" (off to start), which draws a row of tiles under the summary line for the period shown (Total, Avg per meal, Per g protein while protein is on, and the daily nutrition switched on) and takes the total off the line.
+Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the stats back as a choice: the Calendar's View options have "Show stats" (off to start), which draws a row of tiles under the summary line for the period shown (Total, Avg per fully priced meal, Per g protein, fully priced while protein is on, and the daily nutrition switched on) and takes the total off the line.
 
 ### Possible Approach
-1. `selectMonthStats(monthKey)` in one pass over the window's planned meals: `{ spendCents, mealsPriced, avgPerMealCents, leftOut }`; the average divides by planned meals that have at least one priced item.
+1. `selectMonthStats(monthKey)` in one pass over the window's planned meals: `{ spendCents, mealsPriced, avgPerMealCents, leftOut }`; the average, as first built, divided by planned meals that have at least one priced item; round 7 replaced it with the meals that have nothing left out (`fullyPricedMeals`, `avgPerFullyPricedMealCents`), from three of them, because an average of floors read as a real price.
 2. `StatsRow` (two `StatTile`s, a `HelpTip` explaining the average, a "leaves out N items · Add prices" `GapNudge` that opens the fill-in sheet for the month's gaps). `BreakdownDrawer`: thin By day / By meal pills and one scrolling list under a fixed header.
 3. Check the row at 320px with five-figure amounts and with the nudge present (no height jump when it first appears).
 
