@@ -23,7 +23,7 @@ interface StatsTilesProps {
 
 const COLUMNS = ['grid-cols-2', 'grid-cols-2', 'grid-cols-3'];
 
-/** The tiles' numbers step down together on a phone as the longest grows, so none runs under the Total tile's warning icon. */
+// One size for every number in the row, set by the longest, so a long total never runs under its warning icon at 320px.
 const getValueSizeClass = (longest: number) => {
   if (longest <= 5) return undefined;
   if (longest === 6) return 'max-[360px]:text-sm';
@@ -31,7 +31,9 @@ const getValueSizeClass = (longest: number) => {
   return 'min-[360px]:max-sm:text-sm max-[360px]:text-[0.6875rem]';
 };
 
-/** The period's total, averages and daily nutrition as tiles, for the Calendar's "Show stats" option; a tap anywhere on them opens the summary the line above opens. */
+const keepSoFarTogether = (label: string) =>
+  label.replace(' so far', '\u00a0so\u00a0far');
+
 function StatsTiles({ stats, todayKey, onOpen }: StatsTilesProps) {
   const show = useAppSelector(selectShowNutrition);
   const isPhone = useMediaQuery().isBelow('sm');
@@ -67,6 +69,7 @@ function StatsTiles({ stats, todayKey, onOpen }: StatsTilesProps) {
 
   return (
     <div className='relative'>
+      {/* Behind the tiles, not around them, which would nest their help buttons; a keyboard reaches the summary through the line above. */}
       <Button
         type='button'
         variant='tertiary'
@@ -81,7 +84,7 @@ function StatsTiles({ stats, todayKey, onOpen }: StatsTilesProps) {
             {tiles.map((tile) => (
               <StatTile
                 key={tile.key}
-                label={tile.label.replace(' so far', '\u00a0so\u00a0far')}
+                label={keepSoFarTogether(tile.label)}
                 value={<span className={valueSizeClass}>{tile.value}</span>}
                 help={tile.help}
                 isLabelWrapped
