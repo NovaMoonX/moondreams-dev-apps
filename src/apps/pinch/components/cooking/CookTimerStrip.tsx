@@ -132,6 +132,12 @@ function CookTimerStrip({
                   )}
                   <span className='block truncate'>
                     {timer.stepName}
+                    {timers.some(
+                      (other) =>
+                        other.id !== timer.id &&
+                        other.recipeId === timer.recipeId &&
+                        other.stepNumber === timer.stepNumber,
+                    ) && ` · ${timer.label}`}
                     {timer.status === 'paused' && ' · paused'}
                   </span>
                 </span>

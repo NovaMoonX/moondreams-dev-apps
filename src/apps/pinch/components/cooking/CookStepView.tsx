@@ -1,17 +1,23 @@
-import { useMemo, useRef, type PointerEvent } from 'react';
+import { useRef, type PointerEvent, type ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import SuggestionChips from '@/components/SuggestionChips';
-import { findDurations, formatDuration } from '@/utils/durationUtils';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
-import { MAX_COOK_TIMERS, MAX_STEP_DOTS } from '@apps/pinch/constants';
+import CookStepTimer from '@apps/pinch/components/cooking/CookStepTimer';
+import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 import type { CookTimer } from '@apps/pinch/hooks/useCookTimers';
 
 const SWIPE_MIN_PX = 60;
 const SWIPE_AXIS_RATIO = 1.5;
 const LONG_STEP_CHARS = 160;
+const VERY_LONG_STEP_CHARS = 400;
 const ZOOMED_SCALE = 1.05;
+
+export interface StepTimerSlot {
+  seconds: number;
+  label: string;
+  timer: CookTimer | null;
+}
 
 interface CookStepViewProps {
   steps: string[];
@@ -19,41 +25,47 @@ interface CookStepViewProps {
   /** The lines this step names, scaled. */
   ingredients: CookRow[];
   isAmountNoteShown: boolean;
-  timers: CookTimer[];
+  timerSlots: StepTimerSlot[];
   isTimersFull: boolean;
+  /** Sits at the end of the step counter's row (the way to the ingredient list on a phone). */
+  action: ReactNode;
   onStartTimer: (stepNumber: number, seconds: number, label: string) => void;
+  onPauseTimer: (id: string) => void;
+  onResumeTimer: (id: string) => void;
+  onDismissTimer: (id: string) => void;
+  onTimerTick: () => void;
   onSwipe: (direction: 1 | -1) => void;
 }
+
+const getStepTextClass = (length: number) => {
+  if (length > VERY_LONG_STEP_CHARS) {
+    return 'text-xl leading-snug [@media(max-height:500px)]:text-lg';
+  }
+  if (length > LONG_STEP_CHARS) {
+    return 'text-2xl leading-snug [@media(max-height:500px)]:text-xl';
+  }
+  return 'text-[1.75rem] leading-[1.3] lg:text-3xl [@media(max-height:500px)]:text-2xl';
+};
 
 function CookStepView({
   steps,
   index,
   ingredients,
   isAmountNoteShown,
-  timers,
+  timerSlots,
   isTimersFull,
+  action,
   onStartTimer,
+  onPauseTimer,
+  onResumeTimer,
+  onDismissTimer,
+  onTimerTick,
   onSwipe,
 }: CookStepViewProps) {
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const step = steps[index];
   const stepNumber = index + 1;
-  const found = useMemo(
-    () =>
-      findDurations(step).map(({ seconds }) => ({
-        seconds,
-        label: formatDuration(seconds),
-        text: `⏲️ Start ${formatDuration(seconds)} timer`,
-      })),
-    [step],
-  );
-  const chips = found.filter(
-    (chip) =>
-      !timers.some(
-        (timer) =>
-          timer.stepNumber === stepNumber && timer.label === chip.label,
-      ),
-  );
+  const hasIdleSlot = timerSlots.some((slot) => slot.timer === null);
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     swipeStart.current =
@@ -81,86 +93,68 @@ function CookStepView({
 
   return (
     <div
-      className='flex flex-1 touch-pan-y touch-pinch-zoom flex-col gap-4'
+      className='flex flex-1 touch-pan-y touch-pinch-zoom flex-col'
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={() => {
         swipeStart.current = null;
       }}
     >
-      <div aria-live='polite' aria-atomic='true' className='space-y-4'>
-        <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+      <div className='flex min-h-10 items-center gap-3'>
+        <div
+          aria-hidden='true'
+          className='flex min-w-0 flex-1 items-center gap-3'
+        >
           <p className='text-muted-foreground text-sm font-medium whitespace-nowrap'>
             Step {stepNumber} of {steps.length}
           </p>
-          {steps.length > 1 && steps.length <= MAX_STEP_DOTS && (
-            <div className='flex items-center gap-1.5' aria-hidden='true'>
-              {steps.map((_, dotIndex) => (
-                <span
-                  key={dotIndex}
-                  className={join(
-                    'h-2 rounded-full',
-                    dotIndex === index ? 'bg-primary w-5' : 'w-2',
-                    dotIndex < index && 'bg-primary/50',
-                    dotIndex > index && 'bg-border',
-                  )}
-                />
-              ))}
+          {steps.length > 1 && (
+            <div className='bg-border h-1.5 max-w-32 min-w-6 flex-1 overflow-hidden rounded-full'>
+              <div
+                className='bg-primary h-full rounded-full'
+                style={{ width: `${(stepNumber / steps.length) * 100}%` }}
+              />
             </div>
           )}
         </div>
+        {action}
+      </div>
+      <div aria-live='polite' aria-atomic='true' className='mt-3'>
+        <span className='sr-only'>
+          Step {stepNumber} of {steps.length}.{' '}
+        </span>
         <p
           className={join(
-            'leading-snug font-medium wrap-break-word whitespace-pre-wrap',
-            step.length > LONG_STEP_CHARS ? 'text-xl' : 'text-2xl',
-            '[@media(max-height:500px)]:text-xl',
+            'font-medium wrap-break-word whitespace-pre-wrap',
+            getStepTextClass(step.length),
           )}
         >
           {step}
         </p>
-        {ingredients.length > 0 && (
-          <div className='space-y-1'>
-            <p className='text-muted-foreground text-xs'>In this step</p>
-            <ul className='divide-border divide-y'>
-              {ingredients.map((row) => (
-                <li
-                  key={row.id}
-                  className='flex items-baseline justify-between gap-3 py-1.5 text-base'
-                >
-                  <span className='min-w-0 wrap-break-word'>{row.name}</span>
-                  <span
-                    className={
-                      row.isMeasured
-                        ? 'shrink-0 font-semibold whitespace-nowrap'
-                        : 'text-muted-foreground max-w-[50%] text-right wrap-break-word'
-                    }
-                  >
-                    {row.amountText}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {isAmountNoteShown && (
-          <p className='text-muted-foreground text-xs'>
-            Amounts written in this step stay as they are.
-          </p>
-        )}
       </div>
-      {chips.length > 0 && (
-        <div className='space-y-2'>
-          <SuggestionChips
-            label='Timers in this step'
-            suggestions={chips.map((chip) => chip.text)}
-            isDisabled={isTimersFull}
-            onPick={(text) => {
-              const chip = chips.find((candidate) => candidate.text === text);
-              if (chip) onStartTimer(stepNumber, chip.seconds, chip.label);
-            }}
-          />
+      {timerSlots.length > 0 && (
+        <div className='mt-6 space-y-2 [@media(max-height:500px)]:mt-4'>
+          <ul aria-label='Timers in this step' className='space-y-2'>
+            {timerSlots.map((slot) => (
+              <CookStepTimer
+                key={slot.label}
+                seconds={slot.seconds}
+                label={slot.label}
+                timer={slot.timer}
+                isCompact={timerSlots.length > 1}
+                canStart={!isTimersFull}
+                onStart={() =>
+                  onStartTimer(stepNumber, slot.seconds, slot.label)
+                }
+                onPause={onPauseTimer}
+                onResume={onResumeTimer}
+                onDismiss={onDismissTimer}
+                onTick={onTimerTick}
+              />
+            ))}
+          </ul>
           <div role='status' className='empty:hidden'>
-            {isTimersFull && (
+            {isTimersFull && hasIdleSlot && (
               <p className='text-muted-foreground text-xs'>
                 {MAX_COOK_TIMERS} timers are going. Dismiss or finish one to
                 start another.
@@ -168,6 +162,51 @@ function CookStepView({
             )}
           </div>
         </div>
+      )}
+      {ingredients.length > 0 ? (
+        <section
+          aria-label='For this step'
+          className={join(
+            'bg-muted/50 border-border rounded-2xl border px-4 py-3',
+            timerSlots.length > 0
+              ? 'mt-6 [@media(max-height:500px)]:mt-4'
+              : 'mt-8 [@media(max-height:500px)]:mt-5',
+          )}
+        >
+          <p className='text-muted-foreground text-xs font-medium'>
+            For this step
+          </p>
+          <ul className='divide-border mt-1 divide-y'>
+            {ingredients.map((row) => (
+              <li
+                key={row.id}
+                className='flex items-baseline justify-between gap-3 py-1.5 text-sm'
+              >
+                <span className='min-w-0 wrap-break-word'>{row.name}</span>
+                <span
+                  className={
+                    row.isMeasured
+                      ? 'shrink-0 font-semibold whitespace-nowrap'
+                      : 'text-muted-foreground max-w-[50%] text-right wrap-break-word'
+                  }
+                >
+                  {row.amountText}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {isAmountNoteShown && (
+            <p className='text-muted-foreground border-border mt-1 border-t pt-2 text-xs'>
+              Amounts written in this step stay as they are.
+            </p>
+          )}
+        </section>
+      ) : (
+        isAmountNoteShown && (
+          <p className='text-muted-foreground mt-6 text-xs'>
+            Amounts written in this step stay as they are.
+          </p>
+        )
       )}
     </div>
   );

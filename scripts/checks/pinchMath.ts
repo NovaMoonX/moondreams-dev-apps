@@ -6501,6 +6501,63 @@ assert.deepEqual(
   'a session runs up to four timers across all its recipes; a finished one waiting for Dismiss doesn’t count',
 );
 
+const stepTimer = (
+  id: string,
+  recipeId: string,
+  stepNumber: number,
+  label: string,
+) => ({ id, recipeId, stepNumber, label });
+const simmerAndRest = [
+  { seconds: 600, label: '10 min' },
+  { seconds: 300, label: '5 min' },
+];
+const sessionTimers = [
+  stepTimer('simmer', 'adobo', 2, '10 min'),
+  stepTimer('marinate', 'adobo', 1, '30 min'),
+  stepTimer('rice', 'rice', 2, '10 min'),
+  stepTimer('edited', 'adobo', 2, '25 min'),
+];
+const onStepTwo = plateCooks.splitStepTimers(sessionTimers, {
+  recipeId: 'adobo',
+  stepNumber: 2,
+  durations: simmerAndRest,
+});
+assert.deepEqual(
+  {
+    cards: onStepTwo.slots.map((slot) => [slot.label, slot.timer?.id ?? null]),
+    strip: onStepTwo.elsewhere.map((timer) => timer.id),
+  },
+  {
+    cards: [
+      ['10 min', 'simmer'],
+      ['5 min', null],
+    ],
+    strip: ['marinate', 'rice', 'edited'],
+  },
+  'the step on screen holds a card per time it mentions, ready or running; a timer from another step, another recipe of the plate or a time the step no longer says stays in the strip',
+);
+assert.deepEqual(
+  plateCooks
+    .splitStepTimers(sessionTimers, null)
+    .elsewhere.map((timer) => timer.id),
+  ['simmer', 'marinate', 'rice', 'edited'],
+  'with no step on screen (the ingredient list, the Finish panel) every timer is in the strip, so none is ever out of sight',
+);
+assert.deepEqual(
+  plateCooks
+    .splitStepTimers([], {
+      recipeId: 'adobo',
+      stepNumber: 4,
+      durations: [1, 2, 3, 4, 5, 6].map((minutes) => ({
+        seconds: minutes * 60,
+        label: `${minutes} min`,
+      })),
+    })
+    .slots.map((slot) => slot.label),
+  ['1 min', '2 min', '3 min', '4 min'],
+  'a step that mentions six times offers cards for the first four, as many as can run at once',
+);
+
 const plateAt = (recipeId: string, stepIndex: number, stepCount: number) => ({
   recipeId,
   stepIndex,
