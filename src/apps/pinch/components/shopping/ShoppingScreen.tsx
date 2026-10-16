@@ -76,6 +76,8 @@ import {
 const EAGER_GROUPS = 3;
 const ROW_CHUNK = 12;
 const ROW_HEIGHT = 57;
+const DETAIL_LINE_HEIGHT = 16;
+const DETAIL_LINE_CHARS = 44;
 
 const MAX_NAMES_SHOWN = 4;
 const UNDO_TOAST_MS = 6000;
@@ -127,6 +129,13 @@ function ShoppingRows({
     { length: Math.ceil(visible.length / ROW_CHUNK) },
     (_, index) => visible.slice(index * ROW_CHUNK, (index + 1) * ROW_CHUNK),
   );
+  const getChunkHeight = (chunk: ShoppingRowData[]) =>
+    chunk.reduce((sum, row) => {
+      const detail = `${row.amountText ?? ''} · for ${getForText(row.sources) ?? ''}`;
+      return detail.length > DETAIL_LINE_CHARS
+        ? sum + ROW_HEIGHT + DETAIL_LINE_HEIGHT
+        : sum + ROW_HEIGHT;
+    }, 0);
 
   return (
     <>
@@ -134,14 +143,14 @@ function ShoppingRows({
         {chunks.map((chunk, index) => (
           <LazyMount
             key={index}
-            estimatedHeight={chunk.length * ROW_HEIGHT}
+            estimatedHeight={getChunkHeight(chunk)}
             eager={isEager && index === 0}
           >
             <ul
               className='divide-border defer-offscreen divide-y lg:break-inside-avoid'
               style={
                 {
-                  '--defer-size': `${chunk.length * ROW_HEIGHT}px`,
+                  '--defer-size': `${getChunkHeight(chunk)}px`,
                 } as CSSProperties
               }
             >

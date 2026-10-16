@@ -8,7 +8,7 @@ interface ShoppingRowProps {
   id: string;
   name: string;
   amountText: string | null;
-  /** What the line is for ("Adobo chicken (Thu) and Taco night (Fri)"), wrapping under the amount. */
+  /** What the line is for ("Thu dinner and Adobo chicken"), wrapping under the amount. */
   forText: string | null;
   isChecked: boolean;
   onToggle: (id: string, isChecked: boolean) => void;
