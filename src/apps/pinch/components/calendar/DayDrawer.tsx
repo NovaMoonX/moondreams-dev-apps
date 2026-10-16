@@ -10,7 +10,11 @@ import StatTile from '@/components/StatTile';
 import TickMark from '@/components/TickMark';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
-import { isPlannedMealCooked } from '@apps/pinch/components/calendar/plannedMealOffer';
+import {
+  isPlannedMealCooked,
+  PLANNED_MEAL_VIEW,
+  type PlannedMealSubview,
+} from '@apps/pinch/components/calendar/plannedMealOffer';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import {
@@ -116,9 +120,23 @@ function DayDrawer({
   const [pickedMealId, setPickedMealId] = useState<string | null>(
     initialMealId,
   );
+  const [mealView, setMealView] =
+    useState<PlannedMealSubview>(PLANNED_MEAL_VIEW);
   const plannedMealId = meals.some((meal) => meal.id === pickedMealId)
     ? pickedMealId
     : null;
+  const viewKey =
+    plannedMealId === null
+      ? 'day'
+      : [
+          plannedMealId,
+          mealView.kind,
+          mealView.kind === 'eat' ? mealView.place : '',
+        ].join(':');
+  const openMeal = (id: string) => {
+    setMealView(PLANNED_MEAL_VIEW);
+    setPickedMealId(id);
+  };
 
   const stats = useAppSelector((state) =>
     selectPeriodStats(state, dayKey, dayKey),
@@ -138,6 +156,7 @@ function DayDrawer({
       isOpen
       onClose={onClose}
       title={formatDayTitle(dayKey)}
+      viewKey={viewKey}
       footer={
         plannedMealId === null ? (
           <div className='px-4 pb-4'>
@@ -158,6 +177,8 @@ function DayDrawer({
         <PlannedMealView
           uid={uid}
           plannedMealId={plannedMealId}
+          view={mealView}
+          onViewChange={setMealView}
           onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
           onStartCooking={(plate) => {
@@ -266,7 +287,7 @@ function DayDrawer({
                               type='button'
                               variant='tertiary'
                               aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}: ${title}${isCooked ? ', cooked' : ''}`}
-                              onClick={() => setPickedMealId(meal.id)}
+                              onClick={() => openMeal(meal.id)}
                               className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
                             >
                               <span className='min-w-0 flex-1'>

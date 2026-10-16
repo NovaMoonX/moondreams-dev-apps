@@ -14,6 +14,8 @@ interface ActionRowProps {
   trailing?: ReactNode;
   /** Inside an `ActionGroup`, which draws the one frame. */
   isGrouped?: boolean;
+  /** Red, for the one row that removes something; it goes last, on its own. */
+  isDestructive?: boolean;
 }
 
 /** A tinted row for a drawer's block of actions. */
@@ -25,6 +27,7 @@ function ActionRow({
   isDisabled = false,
   trailing,
   isGrouped = false,
+  isDestructive = false,
 }: ActionRowProps) {
   const hasTrailing = Boolean(trailing);
   const button = (
@@ -33,7 +36,8 @@ function ActionRow({
       variant='tertiary'
       disabled={isDisabled}
       className={join(
-        'text-foreground! h-auto min-h-12 w-full justify-start gap-3 rounded-none py-2 text-left',
+        'h-auto min-h-12 w-full justify-start gap-3 rounded-none py-2 text-left',
+        isDestructive ? 'text-destructive!' : 'text-foreground!',
         hasTrailing && 'min-w-0 flex-1',
       )}
       onClick={onClick}
