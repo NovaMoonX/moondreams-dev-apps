@@ -2,10 +2,10 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 import { useStore } from 'react-redux';
 
@@ -35,7 +35,9 @@ import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookRecord, {
   type CookRecordStatus,
 } from '@apps/pinch/components/cooking/CookRecord';
-import CookStepView from '@apps/pinch/components/cooking/CookStepView';
+import CookStepView, {
+  type StepTimerSlot,
+} from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
 import CookTimerView from '@apps/pinch/components/cooking/CookTimerView';
 import {
@@ -72,6 +74,7 @@ import type { CookView, PlateCookRecipe, Recipe } from '@apps/pinch/types';
 import {
   getCookStartServings,
   getFirstSentence,
+  getMeanwhile,
   getPlannedCookId,
   getPlateNext,
   getPlateStart,
@@ -79,6 +82,8 @@ import {
   getStepName,
   getTimerNext,
   getTimerRows,
+  getTimerSecondary,
+  getTimerSlotKey,
   isCookHistoryFull,
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
@@ -99,7 +104,6 @@ import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
 const DONE_GUARD_MS = 600;
-const REVEAL_GAP_PX = 8;
 
 const LIST_FORMAT = new Intl.ListFormat('en-US', { type: 'conjunction' });
 const CHOICE_FORMAT = new Intl.ListFormat('en-US', { type: 'disjunction' });
@@ -114,6 +118,42 @@ const refuse = (reason: string, spoken?: string): CookVoiceResult => ({
   reason,
   spoken,
 });
+
+const createLiveCount = () => {
+  const listeners = new Set<() => void>();
+  const store = {
+    value: 0,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+    get: () => store.value,
+    set: (next: number) => {
+      if (next === store.value) return;
+      store.value = next;
+      listeners.forEach((listener) => listener());
+    },
+  };
+  return store;
+};
+
+function LeaveMessage({
+  count,
+}: {
+  count: ReturnType<typeof createLiveCount>;
+}) {
+  const going = useSyncExternalStore(count.subscribe, count.get);
+  if (going === 0) {
+    return <>Your timer has finished. Leaving closes cooking mode.</>;
+  }
+  return (
+    <>
+      {going} {going === 1 ? 'timer is' : 'timers are'} still going. Timers only
+      run while this screen is open, so leaving stops{' '}
+      {going === 1 ? 'it' : 'them'}.
+    </>
+  );
+}
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -182,9 +222,12 @@ function CookingSession({
   const [cookedIds, setCookedIds] = useState<Record<string, string>>({});
   const [undoState, setUndoState] = useState<'PENDING' | 'FAILED' | null>(null);
   const finishedAt = useRef(0);
+  const guardedUntil = useRef(0);
+  const missedFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const timers = useCookTimers();
+  const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
   const matchesByRecipe = useMemo(
@@ -358,19 +401,33 @@ function CookingSession({
       })),
     [stepText],
   );
-  const readySlots = getReadyStepTimers(
-    timers.timers,
-    isStepsView && !isFinishShown && hasSteps
-      ? {
-          recipeId: recipe.id,
-          stepNumber: index + 1,
-          durations: stepDurations,
-        }
-      : null,
+  const withDone = (
+    slots: { seconds: number; label: string }[],
+    recipeId: string,
+    stepNumber: number,
+  ): StepTimerSlot[] =>
+    slots.map((slot) => ({
+      ...slot,
+      isDone: timers.finishedSlots.has(
+        getTimerSlotKey({ recipeId, stepNumber, label: slot.label }),
+      ),
+    }));
+  const readySlots = withDone(
+    getReadyStepTimers(
+      timers.timers,
+      isStepsView && !isFinishShown && hasSteps
+        ? {
+            recipeId: recipe.id,
+            stepNumber: index + 1,
+            durations: stepDurations,
+          }
+        : null,
+    ),
+    recipe.id,
+    index + 1,
   );
   const isDraftOpen = isFinishShown && (note.isOpen || putAway.isOpen);
   const focused = isDraftOpen ? null : timers.focused;
-  const isTimerShown = focused !== null;
   const focusedEntry =
     focused === null
       ? null
@@ -385,6 +442,23 @@ function CookingSession({
   const focusedStepText = focusedSteps[focusedIndex] ?? '';
   const timerNext =
     focused === null || isFinishShown ? null : getTimerNext(positions, focused);
+  const timerSecondary =
+    focused === null ? null : getTimerSecondary(timerNext, focused.status);
+  const meanwhileTarget =
+    focused === null || focused.status === 'done' || isFinishShown
+      ? null
+      : getMeanwhile(positions, focused.recipeId, timerNext);
+  const meanwhileEntry =
+    meanwhileTarget === null
+      ? null
+      : (entries.find(
+          (candidate) => candidate.recipe.id === meanwhileTarget.recipeId,
+        ) ?? null);
+  const backLabel = isFinishShown
+    ? 'Back'
+    : isStepsView
+      ? `Back to step ${index + 1}`
+      : 'Back to ingredients';
   const dishes = entries.map((candidate) => {
     const stepCount = candidate.recipe.steps.length;
     const at = Math.min(
@@ -402,7 +476,7 @@ function CookingSession({
   const voice = useCookVoice({
     uid,
     step:
-      isStepsView && hasSteps && !isFinishShown && !isTimerShown
+      isStepsView && hasSteps && !isFinishShown && focused === null
         ? { key: `${recipe.id}:${index}`, spoken: spokenStep }
         : null,
   });
@@ -424,34 +498,6 @@ function CookingSession({
       ?.closest<HTMLElement>('[data-subview-overlay]')
       ?.scrollTo({ top: 0 });
 
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    const scroller = root?.closest<HTMLElement>('[data-subview-overlay]');
-    const cards = root?.querySelector<HTMLElement>('[data-cook-timers]');
-    const footer = root?.querySelector<HTMLElement>('.form-footer');
-    if (!root || !scroller || !cards || !footer) {
-      return;
-    }
-    const covered =
-      cards.getBoundingClientRect().bottom +
-      REVEAL_GAP_PX -
-      footer.getBoundingClientRect().top;
-    if (covered <= 0) {
-      return;
-    }
-    // Scroll to a block's top so no line is cut under the header, and never past the step's first line.
-    const headerBottom =
-      root.previousElementSibling?.getBoundingClientRect().bottom ??
-      scroller.getBoundingClientRect().top;
-    const stops = [
-      ...root.querySelectorAll<HTMLElement>('[data-cook-stop]'),
-    ].map((stop) => stop.getBoundingClientRect().top - headerBottom);
-    const target = stops.find((stop) => stop >= covered) ?? stops.at(-1) ?? 0;
-    if (target > 0) {
-      scroller.scrollBy({ top: target });
-    }
-  }, [recipe.id, index, isStepsView, isFinishShown, isTimerShown, voice.isOn]);
-
   const goBy = (direction: 1 | -1) => {
     if (isFinished) {
       if (direction === -1) setIsFinished(false);
@@ -465,13 +511,26 @@ function CookingSession({
     scrollToTop();
   };
 
+  useEffect(
+    () => goingCount.set(timers.liveCount),
+    [goingCount, timers.liveCount],
+  );
+
+  const ask = async (options: Parameters<typeof confirm>[0]) => {
+    const isConfirmed = await confirm(options);
+    if (missedFocus.current) {
+      missedFocus.current = false;
+      focusPrimary();
+    }
+    return isConfirmed;
+  };
+
   const confirmLeave = async () => {
     if (timers.liveCount === 0) return true;
 
-    const count = timers.liveCount;
-    const isConfirmed = await confirm({
+    const isConfirmed = await ask({
       title: 'Stop timers and leave?',
-      message: `${count} ${count === 1 ? 'timer is' : 'timers are'} still going. Timers only run while this screen is open, so leaving stops ${count === 1 ? 'it' : 'them'}.`,
+      message: <LeaveMessage count={goingCount} />,
       confirmText: 'Leave',
       cancelText: 'Stay',
       destructive: true,
@@ -480,7 +539,7 @@ function CookingSession({
   };
 
   const confirmDiscardOf = (title: string, message: string) =>
-    confirm({
+    ask({
       title,
       message,
       confirmText: 'Discard',
@@ -563,7 +622,7 @@ function CookingSession({
           recipeId: target.recipeId,
           servings: target.servings,
         })),
-        // eslint-disable-next-line react-hooks/purity -- runs from a tap only; the compiler loses track of it once the voice actions are connected
+        // eslint-disable-next-line react-hooks/purity -- runs from a tap; once the voice actions are connected the compiler flags every clock read here
         cookedAt: Date.now(),
       });
       return results
@@ -640,7 +699,7 @@ function CookingSession({
       return;
     }
     voice.stop();
-    // eslint-disable-next-line react-hooks/purity -- runs from a tap only; the compiler loses track of it once the voice actions are connected
+    // eslint-disable-next-line react-hooks/purity -- runs from a tap; once the voice actions are connected the compiler flags every clock read here
     finishedAt.current = Date.now();
     setIsFinished(true);
     scrollToTop();
@@ -654,6 +713,7 @@ function CookingSession({
   };
 
   const handleDone = () => {
+    // eslint-disable-next-line react-hooks/purity -- runs from a tap; once the voice actions are connected the compiler flags every clock read here
     if (Date.now() - finishedAt.current < DONE_GUARD_MS) return;
     void leave();
   };
@@ -757,14 +817,22 @@ function CookingSession({
     }
     const wasShown = shownFocusKey.current !== null;
     shownFocusKey.current = focusKey;
+    if (focusKey !== null) {
+      // eslint-disable-next-line react-hooks/purity -- runs in an effect; once the voice actions are connected the compiler flags every clock read here
+      guardedUntil.current = Date.now() + DONE_GUARD_MS;
+    }
     if (focusKey !== null && !wasShown) {
       rootRef.current
         ?.closest<HTMLElement>('[data-subview-overlay]')
         ?.scrollTo({ top: 0 });
     }
-    const frame = window.requestAnimationFrame(() =>
-      primaryRef.current?.focus({ preventScroll: true }),
-    );
+    const frame = window.requestAnimationFrame(() => {
+      if (hasDialogOnTop()) {
+        missedFocus.current = true;
+        return;
+      }
+      primaryRef.current?.focus({ preventScroll: true });
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [focusKey]);
 
@@ -845,9 +913,19 @@ function CookingSession({
 
   const makeVoiceActions = (): CookVoiceActions => ({
     next: () => {
-      if (focused !== null && timerNext !== null) {
+      if (timerSecondary === 'NEXT') {
         goNextFromTimer();
         return done();
+      }
+      if (timerSecondary === 'BACK') {
+        backToStep();
+        return done(backLabel);
+      }
+      if (focused !== null) {
+        return refuse(
+          "Time's up: say “dismiss” first.",
+          'The timer is ringing. Say dismiss to go back to your step.',
+        );
       }
       if (next.kind === 'FINISH') {
         return hasSteps
@@ -857,7 +935,6 @@ function CookingSession({
             )
           : refuse('This recipe has no steps yet.');
       }
-      if (focused !== null) backToStep();
       showStepsView();
       if (next.kind === 'STEP') {
         goBy(1);
@@ -939,9 +1016,14 @@ function CookingSession({
         slot.label,
       );
       if (id === null) return capRefusal;
+      const hasNext =
+        getTimerNext(positions, {
+          recipeId: voiceStep.recipe.id,
+          stepNumber: voiceStep.stepNumber,
+        }) !== null;
       return done(
         `Started the ${slot.label} timer`,
-        `Started the ${toSpokenLabel(slot.label)} timer. Say next step to keep going.`,
+        `Started the ${toSpokenLabel(slot.label)} timer. ${hasNext ? 'Say next step to keep going.' : 'Say back to see the step.'}`,
       );
     },
     pauseTimer: (seconds) => {
@@ -957,18 +1039,10 @@ function CookingSession({
       return done(`Resumed the ${timer.label} timer`);
     },
     stopTimer: (seconds, scope) => {
-      const ringing = getVoiceTimers().filter(
-        (timer) =>
-          timer.status === 'done' &&
-          (seconds === null || timer.label === formatDuration(seconds)),
-      );
-      if (ringing.length > 0) {
-        ringing.forEach((timer) => endTimer(timer.id));
-        return done(
-          ringing.length === 1
-            ? `Dismissed the ${ringing[0].label} timer`
-            : `Dismissed ${ringing.length} timers`,
-        );
+      const ringing = pickTimer(['done'], seconds);
+      if (ringing !== null) {
+        endTimer(ringing.id);
+        return done(`Dismissed the ${ringing.label} timer`);
       }
       if (scope === 'RINGING') return refuse('No timer is ringing.');
       const timer = pickTimer(['running', 'paused'], seconds);
@@ -1119,7 +1193,7 @@ function CookingSession({
       .recipe.title ?? null;
 
   const getTimerNote = () => {
-    if (focused?.status !== 'running') return null;
+    if (focused === null || focused.status === 'done') return null;
     if (!wakeLock.isSupported || wakeLock.hasFailed) {
       return 'This device may turn the screen off; timers keep running only while this screen is open.';
     }
@@ -1245,25 +1319,38 @@ function CookingSession({
         readySlots={
           timers.isFull
             ? []
-            : getReadyStepTimers(timers.timers, {
-                recipeId: focused.recipeId,
-                stepNumber: focused.stepNumber,
-                durations: findDurations(focusedStepText).map(
-                  ({ seconds }) => ({
-                    seconds,
-                    label: formatDuration(seconds),
-                  }),
-                ),
-              })
+            : withDone(
+                getReadyStepTimers(timers.timers, {
+                  recipeId: focused.recipeId,
+                  stepNumber: focused.stepNumber,
+                  durations: findDurations(focusedStepText).map(
+                    ({ seconds }) => ({
+                      seconds,
+                      label: formatDuration(seconds),
+                    }),
+                  ),
+                }),
+                focused.recipeId,
+                focused.stepNumber,
+              )
         }
         upNext={getUpNext()}
+        meanwhile={
+          meanwhileTarget === null || meanwhileEntry === null
+            ? null
+            : {
+                title: meanwhileEntry.recipe.title,
+                stepNumber: meanwhileTarget.stepIndex + 1,
+                stepCount: meanwhileEntry.recipe.steps.length,
+              }
+        }
         note={getTimerNote()}
         onTick={timers.settle}
         onPause={timers.pause}
         onResume={timers.resume}
         onReset={endTimer}
-        onDismiss={timers.dismiss}
         onFocus={timers.focus}
+        onMeanwhile={handleMeanwhile}
         onStart={(seconds, label) => {
           if (focusedRecipe !== null) {
             startTimer(focusedRecipe, focused.stepNumber, seconds, label);
@@ -1279,12 +1366,45 @@ function CookingSession({
       : focused?.status === 'paused'
         ? 'Resume'
         : 'Dismiss';
+  const isGuarded = () => Date.now() < guardedUntil.current;
   const handleFocusedAction = () => {
-    if (focused === null) return;
+    if (focused === null || isGuarded()) return;
     if (focused.status === 'running') timers.pause(focused.id);
     else if (focused.status === 'paused') timers.resume(focused.id);
     else endTimer(focused.id);
   };
+  const handleMeanwhile = () => {
+    if (meanwhileTarget !== null) {
+      jumpTo(meanwhileTarget.recipeId, meanwhileTarget.stepIndex);
+    }
+  };
+  const handleSecondary = () => {
+    if (timerSecondary === 'BACK') {
+      backToStep();
+      return;
+    }
+    if (focused?.status === 'done' && isGuarded()) return;
+    goNextFromTimer();
+  };
+  const getSecondaryLabels = () => {
+    if (timerSecondary === 'BACK') {
+      return {
+        text: backLabel,
+        aria:
+          isPlate && isStepsView
+            ? `${backLabel} of ${recipe.title}`
+            : undefined,
+      };
+    }
+    if (timerNext?.kind === 'RECIPE') {
+      const title =
+        entries.find((candidate) => candidate.recipe.id === timerNext.recipeId)
+          ?.recipe.title ?? 'the next recipe';
+      return { text: 'Next recipe', aria: `Next recipe: ${title}` };
+    }
+    return { text: 'Next', aria: undefined };
+  };
+  const secondaryLabels = getSecondaryLabels();
   const ingredientsContent = (
     <CookIngredientsView
       recipe={recipe}
@@ -1456,7 +1576,13 @@ function CookingSession({
           )}
         </div>
         <div className='form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
-          <div className='flex flex-col gap-2 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:gap-3'>
+          <div
+            className={join(
+              'flex flex-col gap-2 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:gap-3',
+              focused !== null &&
+                'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-xl',
+            )}
+          >
             {!isFinishShown && (
               <CookVoiceLine
                 voice={voice}
@@ -1474,7 +1600,7 @@ function CookingSession({
             <div className='flex gap-3 [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1'>
               {focused !== null ? (
                 <>
-                  {timerNext !== null && (
+                  {timerSecondary !== null && (
                     <Button
                       type='button'
                       variant='secondary'
@@ -1482,14 +1608,10 @@ function CookingSession({
                         'h-14 shrink-0 px-5 text-base',
                         '[@media(max-height:500px)]:h-11',
                       )}
-                      aria-label={
-                        timerNext.kind === 'STEP'
-                          ? 'Next step'
-                          : `Next: ${entries.find((candidate) => candidate.recipe.id === timerNext.recipeId)?.recipe.title ?? 'the next recipe'}`
-                      }
-                      onClick={goNextFromTimer}
+                      aria-label={secondaryLabels.aria}
+                      onClick={handleSecondary}
                     >
-                      {timerNext.kind === 'STEP' ? 'Next step' : 'Next recipe'}
+                      {secondaryLabels.text}
                     </Button>
                   )}
                   <Button

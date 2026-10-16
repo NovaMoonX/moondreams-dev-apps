@@ -1,5 +1,7 @@
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
+  ALERT_REPEAT_MS,
+  MAX_ALERT_REPEATS,
   MAX_COOK_TIMERS,
   MAX_COOKED_SERVINGS,
   MAX_STEP_TIMERS,
@@ -251,18 +253,24 @@ export const getReadyStepTimers = (
 type FocusableTimer = { id: string } & (
   | { status: 'running'; endsAt: number }
   | { status: 'paused' }
-  | { status: 'done' }
+  | { status: 'done'; endedAt: number }
 );
 
-/** The timer the timer view shows: a finished one first (the one picked, else the first to finish), then the one the person started or tapped, which keeps focus while paused, else the running one ending soonest. */
+/** The timer the timer view shows: the Time's up that has waited longest (it stays in front until dismissed, and a later finish queues behind it whatever started first), else the one the person started or tapped, which keeps focus while paused, else the running one ending soonest. */
 export const getFocusedTimerId = (
   timers: FocusableTimer[],
   pickedId: string | null,
 ) => {
   const picked = timers.find((timer) => timer.id === pickedId) ?? null;
   const getFocused = () => {
-    if (picked?.status === 'done') return picked;
-    const firstDone = timers.find((timer) => timer.status === 'done');
+    const firstDone = timers.reduce<FocusableTimer | null>(
+      (best, timer) =>
+        timer.status === 'done' &&
+        (best?.status !== 'done' || timer.endedAt < best.endedAt)
+          ? timer
+          : best,
+      null,
+    );
     if (firstDone) return firstDone;
     if (picked) return picked;
     const soonest = timers.reduce<FocusableTimer | null>(
@@ -278,6 +286,64 @@ export const getFocusedTimerId = (
   const result = getFocused()?.id ?? null;
   return result;
 };
+
+/** When each timer in `finished` rang, in the order they rang: its deadline, kept past `lastEndedAt` (the latest Time's up already waiting) so a clock stepped back never lets a later finish rank before one that is showing. */
+export const getEndedAts = (
+  finished: { id: string; endsAt: number }[],
+  lastEndedAt: number,
+) => {
+  const ordered = [...finished].sort((a, b) => a.endsAt - b.endsAt);
+  const result = ordered.reduce<{ last: number; ends: Map<string, number> }>(
+    (acc, timer) => {
+      const at = Math.max(timer.endsAt, acc.last + 1);
+      return { last: at, ends: new Map([...acc.ends, [timer.id, at]]) };
+    },
+    { last: lastEndedAt, ends: new Map() },
+  ).ends;
+  return result;
+};
+
+/** How long ago a Time's up rang, to the minute: "Rang just now" under one. */
+export const getRangAgo = (ageMs: number) => {
+  const minutes = Math.floor(Math.max(0, ageMs) / 60_000);
+  if (minutes < 1) return 'Rang just now';
+  if (minutes < 60) return `Rang ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `Rang ${hours} h ago` : `Rang ${hours} h ${rest} min ago`;
+};
+
+export interface AlertRing {
+  id: string;
+  lastAt: number;
+  repeats: number;
+}
+
+/** The Time's ups whose next repeat is due: a minute after each last buzzed, and never past `MAX_ALERT_REPEATS`. */
+export const getAlertRepeatsDue = (rings: AlertRing[], now: number) =>
+  rings
+    .filter(
+      (ring) =>
+        ring.repeats < MAX_ALERT_REPEATS &&
+        ring.lastAt + ALERT_REPEAT_MS <= now,
+    )
+    .map((ring) => ring.id);
+
+/** When the soonest repeat of an undismissed Time's up is due, or null once every one has used its repeats. */
+export const getNextAlertRepeatAt = (rings: AlertRing[]) => {
+  const due = rings
+    .filter((ring) => ring.repeats < MAX_ALERT_REPEATS)
+    .map((ring) => ring.lastAt + ALERT_REPEAT_MS);
+  const result = due.length === 0 ? null : Math.min(...due);
+  return result;
+};
+
+/** A timer's slot on a step: the same recipe, step and length, whichever timer ran there. */
+export const getTimerSlotKey = (timer: {
+  recipeId: string;
+  stepNumber: number;
+  label: string;
+}) => `${timer.recipeId}:${timer.stepNumber}:${timer.label}`;
 
 export interface TimerFocus {
   /** Whether the timer view is up; false while the timers run in the background. */
@@ -329,13 +395,13 @@ export type TimerNext =
   | { kind: 'STEP'; recipeId: string; stepIndex: number }
   | { kind: 'RECIPE'; recipeId: string };
 
-/** What follows a timer's step, for "Up next": its recipe's next step, or on that recipe's last step the next recipe still short of its own last; nothing once the person is already past it or every recipe is on its last. */
+/** What follows a timer's step, for "Up next": its recipe's next step, or on that recipe's last step the next recipe still short of its own last; nothing once the person is already on that step or past it, or every recipe is on its last. */
 export const getTimerNext = (
   recipes: { recipeId: string; stepIndex: number; stepCount: number }[],
   timer: { recipeId: string; stepNumber: number },
 ): TimerNext | null => {
   const own = recipes.find((recipe) => recipe.recipeId === timer.recipeId);
-  if (!own || own.stepIndex > timer.stepNumber) {
+  if (!own || own.stepIndex >= timer.stepNumber) {
     return null;
   }
   if (timer.stepNumber < own.stepCount) {
@@ -355,6 +421,54 @@ export const getTimerNext = (
     own.recipeId,
   );
   const result = next.kind === 'RECIPE' ? next : null;
+  return result;
+};
+
+export type TimerSecondary = 'NEXT' | 'BACK' | null;
+
+/** The footer's secondary beside Pause, Resume or Dismiss: Next only while the timer's next step is still ahead of the person; otherwise a live timer offers a way back to the step they were on (a peek from a pill), and a Time's up over a later step offers nothing, so two buttons never end at the same screen. */
+export const getTimerSecondary = (
+  next: TimerNext | null,
+  status: 'running' | 'paused' | 'done',
+): TimerSecondary => {
+  if (next !== null) return 'NEXT';
+  return status === 'done' ? null : 'BACK';
+};
+
+/** On a plate, the other recipe still short of its last step while the timer's runs (waiting is the moment to start it), with the step it would open on; nothing on a lone recipe, when "Up next" already names that recipe or when no other recipe has a step to do. */
+export const getMeanwhile = (
+  recipes: { recipeId: string; stepIndex: number; stepCount: number }[],
+  timerRecipeId: string,
+  next: TimerNext | null,
+) => {
+  const own = recipes.find((recipe) => recipe.recipeId === timerRecipeId);
+  if (recipes.length < 2 || !own) {
+    return null;
+  }
+
+  const other = getPlateNext(
+    recipes.map((recipe) =>
+      recipe.recipeId === own.recipeId
+        ? { ...recipe, stepIndex: Math.max(0, recipe.stepCount - 1) }
+        : recipe,
+    ),
+    own.recipeId,
+  );
+  const target =
+    other.kind === 'RECIPE'
+      ? recipes.find((recipe) => recipe.recipeId === other.recipeId)
+      : undefined;
+  if (
+    !target ||
+    (next?.kind === 'RECIPE' && next.recipeId === target.recipeId)
+  ) {
+    return null;
+  }
+
+  const result = {
+    recipeId: target.recipeId,
+    stepIndex: Math.min(target.stepIndex, target.stepCount - 1),
+  };
   return result;
 };
 

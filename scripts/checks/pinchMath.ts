@@ -62,10 +62,10 @@ import {
 import {
   appendEvent,
   getFinishedText,
+  formatStockAmount,
   getMealStockMap,
   getMoveNotes,
   getStartServings,
-  getStockSourcesText,
   buildContainer,
   getContainerTitle,
   getDaysLeft,
@@ -98,6 +98,7 @@ import {
   getStockParts,
   getStockPlaceCounts,
   getStockTitle,
+  hasStockIn,
   groupContainersByCook,
   isBulkMeal,
   isValidContainerServings,
@@ -4199,80 +4200,162 @@ assert.deepEqual(
   ['Adobo, renamed', 'Adobo chicken', 'Taco night', 'Adobo chicken'],
   "a container shows its recipe's or meal's current name, and keeps its own title when that is gone",
 );
-const rolled = getMealStockMap(
-  [
-    {
-      id: 'meal-1',
-      items: [
-        { id: 'a', kind: 'RECIPE', refId: 'adobo', servings: 2 },
-        { id: 'b', kind: 'RECIPE', refId: 'adobo', servings: 1 },
-        { id: 'c', kind: 'INGREDIENT', refId: 'rice', servings: 1 },
-      ],
-    },
-    {
-      id: 'meal-2',
-      items: [{ id: 'd', kind: 'RECIPE', refId: 'rice', servings: 1 }],
-    },
-  ],
-  maps.byRecipe,
-  maps.byMeal,
-);
-assert.deepEqual(
-  [rolled.get('meal-1'), rolled.has('meal-2')],
-  [
-    {
-      fridge: 4,
-      freezer: 4,
-      containers: 4,
-      nearestEatBy: dayOf(12),
-      fridgeEatBy: dayOf(15),
-      freezerEatBy: dayOf(12),
-      sources: [
-        { kind: 'meal', id: 'meal-1', servings: 2 },
-        { kind: 'recipe', id: 'adobo', servings: 6 },
-      ],
-    },
-    false,
-  ],
-  "a saved meal's stock is what was put away as that meal plus its own recipes' (a recipe listed twice counts once, an ingredient is no stock)",
-);
-const nameOf = (source: { id: string }) => source.id.toUpperCase();
-assert.deepEqual(
-  [
-    getStockSourcesText([{ kind: 'recipe', id: 'a', servings: 5 }], nameOf),
-    getStockSourcesText(
+{
+  const stockOf = (
+    fridge: number,
+    freezer: number,
+    fridgeEatBy: number | null = null,
+    freezerEatBy: number | null = null,
+  ) => ({
+    fridge,
+    freezer,
+    containers: 1,
+    nearestEatBy: fridgeEatBy ?? freezerEatBy,
+    fridgeEatBy,
+    freezerEatBy,
+  });
+  const plate = (id: string, ...refs: [string, 'RECIPE' | 'INGREDIENT'][]) => ({
+    id,
+    items: refs.map(([refId, kind], index) => ({
+      id: `${id}-${index}`,
+      kind,
+      refId,
+      servings: 2,
+    })),
+  });
+  const rollUp = (
+    meals: ReturnType<typeof plate>[],
+    byRecipe: [string, ReturnType<typeof stockOf>][],
+    byMeal: [string, ReturnType<typeof stockOf>][] = [],
+  ) => getMealStockMap(meals, new Map(byRecipe), new Map(byMeal));
+  const adoboAndRice = plate('meal-1', ['adobo', 'RECIPE'], ['rice', 'RECIPE']);
+
+  assert.deepEqual(
+    rollUp(
+      [adoboAndRice],
       [
-        { kind: 'recipe', id: 'a', servings: 5 },
-        { kind: 'recipe', id: 'b', servings: 3 },
+        ['adobo', stockOf(5, 0, dayOf(15))],
+        ['rice', stockOf(3, 0, dayOf(12))],
       ],
-      nameOf,
-    ),
-    getStockSourcesText(
-      [1, 2, 3, 4].map((n) => ({
-        kind: 'recipe' as const,
-        id: `r${n}`,
-        servings: 2,
-      })),
-      nameOf,
-    ),
-    getStockSourcesText(
+      [['meal-1', stockOf(2, 0, dayOf(16))]],
+    ).get('meal-1'),
+    { fridge: 5, freezer: 0, fridgeEatBy: dayOf(12), freezerEatBy: null },
+    'two dishes with 5 and 3 in the fridge plus 2 boxed as the plate are 5 whole plates, not 10, and the date is the nearest of what makes them',
+  );
+  assert.deepEqual(
+    rollUp(
+      [adoboAndRice],
       [
-        { kind: 'meal', id: 'm', servings: 2 },
-        { kind: 'recipe', id: 'a', servings: 2 },
-        { kind: 'recipe', id: 'b', servings: 2 },
-        { kind: 'recipe', id: 'c', servings: 2 },
+        ['adobo', stockOf(5, 5, dayOf(15), dayOf(60))],
+        ['rice', stockOf(3, 0, dayOf(12))],
       ],
-      nameOf,
-    ),
-  ],
-  [
-    null,
-    'A 5 · B 3',
-    '8 servings from 4 recipes',
-    '8 servings from 4 recipes and meals',
-  ],
-  'a mix of sources reads as names with their servings, or a count once there are more than three',
-);
+      [['meal-1', stockOf(2, 0, dayOf(16))]],
+    ).get('meal-1'),
+    { fridge: 5, freezer: 0, fridgeEatBy: dayOf(12), freezerEatBy: null },
+    'a place counts its own dishes: adobo in the freezer with no rice there is no plate in the freezer, and its date never reaches the fridge row',
+  );
+  assert.deepEqual(
+    [
+      rollUp([adoboAndRice], [['adobo', stockOf(5, 0, dayOf(12))]]).has(
+        'meal-1',
+      ),
+      rollUp(
+        [adoboAndRice],
+        [['adobo', stockOf(5, 0, dayOf(12))]],
+        [['meal-1', stockOf(2, 0, dayOf(16))]],
+      ).get('meal-1'),
+    ],
+    [
+      false,
+      { fridge: 2, freezer: 0, fridgeEatBy: dayOf(16), freezerEatBy: null },
+    ],
+    'a plate with one dish missing makes nothing from its dishes: with no plate boxes it has no stock, and a lone dish never sets the date of the boxed plates',
+  );
+  assert.deepEqual(
+    rollUp(
+      [adoboAndRice],
+      [
+        ['adobo', stockOf(0, 4, null, dayOf(40))],
+        ['rice', stockOf(0, 6, null, dayOf(30))],
+      ],
+    ).get('meal-1'),
+    { fridge: 0, freezer: 4, fridgeEatBy: null, freezerEatBy: dayOf(30) },
+    'the freezer is counted on its own, as the dish with the least in it',
+  );
+  assert.deepEqual(
+    [
+      rollUp(
+        [
+          plate(
+            'm',
+            ['adobo', 'RECIPE'],
+            ['adobo', 'RECIPE'],
+            ['rice', 'INGREDIENT'],
+          ),
+        ],
+        [['adobo', stockOf(4, 0, dayOf(12))]],
+      ).get('m')?.fridge,
+      rollUp(
+        [plate('m', ['rice', 'INGREDIENT'])],
+        [['rice', stockOf(9, 0)]],
+      ).has('m'),
+      rollUp(
+        [plate('m', ['rice', 'INGREDIENT'])],
+        [],
+        [['m', stockOf(3, 0, dayOf(12))]],
+      ).get('m')?.fridge,
+    ],
+    [4, false, 3],
+    'a recipe listed twice is one dish, an ingredient is no dish and no stock, and a plate of ingredients has only the boxes put away as that plate',
+  );
+
+  const rolledMeals = rollUp(
+    [
+      adoboAndRice,
+      plate('meal-partial', ['adobo', 'RECIPE'], ['pho', 'RECIPE']),
+      plate('meal-freezer', ['rice', 'RECIPE']),
+    ],
+    [
+      ['adobo', stockOf(5, 0, dayOf(18))],
+      ['rice', stockOf(3, 2, dayOf(15), dayOf(60))],
+    ],
+    [['meal-1', stockOf(2, 0, dayOf(16))]],
+  );
+  assert.deepEqual(
+    [
+      getStockPlaceCounts(
+        ['meal-1', 'meal-partial', 'meal-freezer', 'nope'],
+        rolledMeals,
+      ),
+      ['meal-1', 'meal-partial', 'meal-freezer'].map((id) =>
+        hasStockIn(rolledMeals.get(id), 'FRIDGE'),
+      ),
+      getStockParts(rolledMeals.get('meal-1')!, lateOnThe14th),
+    ],
+    [
+      { FRIDGE: 2, FREEZER: 1 },
+      [true, false, true],
+      [
+        {
+          place: 'FRIDGE',
+          servings: 5,
+          due: { state: 'SOON', label: 'Eat by tomorrow' },
+        },
+      ],
+    ],
+    "the Saved meals filter and its counts, and a meal's rows and badge, read whole plates: a meal with a dish missing is not in the fridge, and a row only appears for a place that has a plate",
+  );
+  assert.deepEqual(
+    [
+      formatStockAmount(1, 'recipe'),
+      formatStockAmount(5, 'recipe'),
+      formatStockAmount(1, 'meal'),
+      formatStockAmount(5, 'meal'),
+    ],
+    ['1 serving', '5 servings', '1 plate', '5 plates'],
+    "a recipe's stock counts servings and a saved meal's counts plates",
+  );
+}
 
 const byCook = groupContainersByCook([
   container({
@@ -4421,12 +4504,10 @@ assert.equal(getPutAwayText([]), null);
   ) =>
     getCostAverages(
       {
-        plannedCount: 2,
-        mealsPriced: 2,
-        avgPerMealCents: 29.6,
+        fullyPricedMeals: 3,
+        avgPerFullyPricedMealCents: 29.6,
+        proteinPricedMeals: 3,
         proteinCentsPerGram: 1.2,
-        leftOut: [],
-        openLeftOut: [],
         ...patch,
       },
       isProteinOn,
@@ -4434,62 +4515,137 @@ assert.equal(getPutAwayText([]), null);
   assert.deepEqual(
     [
       averagesOf({}),
-      averagesOf({ leftOut: [gapA], openLeftOut: [gapA] }),
-      averagesOf({ leftOut: [gapA], openLeftOut: [] }),
+      averagesOf({}, true),
+      averagesOf({ proteinCentsPerGram: null }, true),
     ],
     [
-      ['Avg per meal $0.30'],
-      ['Avg per meal so far $0.30'],
-      ['Avg per meal $0.30+'],
+      ['Avg per fully priced meal $0.30'],
+      ['Avg per fully priced meal $0.30', 'Per g protein, fully priced $0.01'],
+      ['Avg per fully priced meal $0.30'],
     ],
-    'the average per meal says "so far" while a gap can still be priced and + once every gap is fixed, like the total above it',
+    'the averages name their base, fully priced meals, and carry no "so far" or "+" since nothing in that base is left out; the price per gram of protein shows only while protein is on and known',
   );
   assert.deepEqual(
     [
-      averagesOf({ mealsPriced: 1 }),
-      averagesOf({ mealsPriced: 0, avgPerMealCents: null }),
-      averagesOf({}, true),
-      averagesOf({ proteinCentsPerGram: null }, true),
-      averagesOf(
-        { mealsPriced: 1, leftOut: [gapA], openLeftOut: [gapA] },
+      averagesOf({ fullyPricedMeals: 2 }),
+      averagesOf({ fullyPricedMeals: 3 }),
+      averagesOf({ fullyPricedMeals: 0, avgPerFullyPricedMealCents: null }),
+      averagesOf({ fullyPricedMeals: 9, proteinPricedMeals: 2 }, true),
+      averagesOf({ fullyPricedMeals: 9, proteinPricedMeals: 3 }, true),
+    ],
+    [
+      [],
+      ['Avg per fully priced meal $0.30'],
+      [],
+      ['Avg per fully priced meal $0.30'],
+      ['Avg per fully priced meal $0.30', 'Per g protein, fully priced $0.01'],
+    ],
+    'an average needs three fully priced meals behind it and says nothing under that, the price per gram of protein counting its own meals',
+  );
+
+  const { getPeriodStats: getStatsOf, getPeriodTotal } =
+    await import('../../src/apps/pinch/utils/stats.ts');
+  const { buildSnapshot: buildStatsSnapshot } =
+    await import('../../src/apps/pinch/utils/mealMath.ts');
+  const statsContext = repriceContext(
+    [],
+    ['a', 'b', 'c'].map(repriceIngredient),
+    [product('a', 500, 1000, 'G'), product('b', 1000, 1000, 'G')],
+  );
+  const statsItem = (id: string, refId: string, servings = 1): MealItem => ({
+    id,
+    kind: refId === 'gone' ? 'RECIPE' : 'INGREDIENT',
+    refId,
+    servings,
+  });
+  const statsMeal = (
+    id: string,
+    items: MealItem[],
+    snapshot: PlannedSnapshot | null = null,
+  ) =>
+    ({
+      ...plannedOf(items, snapshot),
+      id,
+      date: getDateOfDayKey('2026-10-16'),
+    }) as PlannedMeal;
+  const statsRange = { startKey: '2026-10-15', endKey: '2026-10-21' };
+  const partialStats = getStatsOf(
+    [
+      statsMeal('f1', [statsItem('i', 'a')]),
+      statsMeal('f2', [statsItem('i', 'b')]),
+      statsMeal('f3', [statsItem('i', 'a', 2)]),
+      statsMeal('p1', [statsItem('i', 'a'), statsItem('j', 'c')]),
+      statsMeal('n1', [statsItem('i', 'c')]),
+      statsMeal('p2', [statsItem('i', 'a'), statsItem('j', 'gone')]),
+      statsMeal(
+        'z1',
+        [statsItem('i', 'b', 3)],
+        buildStatsSnapshot([statsItem('i', 'b', 3)], statsContext, 1000),
+      ),
+      statsMeal(
+        'z2',
+        [statsItem('i', 'a'), statsItem('j', 'c')],
+        buildStatsSnapshot(
+          [statsItem('i', 'a'), statsItem('j', 'c')],
+          statsContext,
+          1000,
+        ),
+      ),
+    ],
+    statsRange,
+    statsContext,
+  );
+  assert.deepEqual(
+    [
+      partialStats.plannedCount,
+      partialStats.mealsPriced,
+      partialStats.fullyPricedMeals,
+      partialStats.avgPerFullyPricedMealCents,
+    ],
+    [8, 7, 4, (50 + 100 + 100 + 300) / 4],
+    'the average divides the cost of the fully priced meals alone by their count: a meal with a gap, a frozen one with a gap, one with an item that has no cost and a meal with no price never pull it down',
+  );
+  assert.ok(
+    partialStats.spendCents / partialStats.mealsPriced <
+      (partialStats.avgPerFullyPricedMealCents ?? 0),
+    'the old average over every meal with any price comes out lower, because each meal with a gap adds only a floor',
+  );
+  assert.deepEqual(
+    [partialStats.proteinPricedMeals, partialStats.proteinCentsPerGram],
+    [4, (50 + 100 + 100 + 300) / (20 + 20 + 40 + 60)],
+    'the price per gram of protein spends only what the fully priced meals cost over only their protein, never the grams of a meal whose price is a floor',
+  );
+  assert.deepEqual(
+    getStatsOf([], statsRange, statsContext).avgPerFullyPricedMealCents,
+    null,
+    'an empty period has no average',
+  );
+  assert.deepEqual(
+    [
+      getPeriodTotal(partialStats, false),
+      getPeriodTotal(
+        getStatsOf(
+          [statsMeal('n1', [statsItem('i', 'c')])],
+          statsRange,
+          statsContext,
+        ),
+        false,
+      ),
+      getPeriodTotal(
+        getStatsOf(
+          [statsMeal('n1', [statsItem('i', 'c')])],
+          statsRange,
+          statsContext,
+        ),
         true,
       ),
     ],
     [
-      [],
-      [],
-      ['Avg per meal $0.30', 'Per g protein $0.01'],
-      ['Avg per meal $0.30'],
-      ['Per g protein so far $0.01'],
+      { value: '$7.00', label: 'Total so far' },
+      { value: 'No price yet', label: 'Total' },
+      { value: 'Not priced', label: 'Total' },
     ],
-    'the stats tiles have an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
-  );
-  assert.deepEqual(
-    [
-      averagesOf({ plannedCount: 20, mealsPriced: 6, avgPerMealCents: 84 }),
-      averagesOf({
-        plannedCount: 20,
-        mealsPriced: 6,
-        avgPerMealCents: 84,
-        leftOut: [gapA],
-        openLeftOut: [gapA],
-      }),
-      averagesOf({
-        plannedCount: 20,
-        mealsPriced: 6,
-        avgPerMealCents: 84,
-        leftOut: [gapA],
-        openLeftOut: [],
-      }),
-      averagesOf({ plannedCount: 6, mealsPriced: 6, avgPerMealCents: 84 }),
-    ],
-    [
-      ['Avg per priced meal $0.84'],
-      ['Avg per priced meal so far $0.84'],
-      ['Avg per priced meal $0.84+'],
-      ['Avg per meal $0.84'],
-    ],
-    'an average over 6 priced meals of 20 says "per priced meal", keeping its so far or +, and plain "per meal" only when every planned meal is priced',
+    'the summary sheet names its total as the front tile does, "Total so far" over the figure, and says nothing-priced in the line\'s words under the same name',
   );
   assert.equal(
     formatPeriodCost(789_450),
@@ -6902,7 +7058,11 @@ const running = (id: string, endsAt: number) => ({
   endsAt,
 });
 const paused = (id: string) => ({ id, status: 'paused' as const });
-const done = (id: string) => ({ id, status: 'done' as const });
+const done = (id: string, endedAt = 0) => ({
+  id,
+  status: 'done' as const,
+  endedAt,
+});
 assert.deepEqual(
   [
     plateCooks.getFocusedTimerId(
@@ -6930,17 +7090,137 @@ assert.deepEqual(
 assert.deepEqual(
   [
     plateCooks.getFocusedTimerId(
-      [running('rice', 9_000), done('adobo'), done('beans')],
+      [running('rice', 9_000), done('adobo', 100)],
+      'rice',
+    ),
+    plateCooks.getFocusedTimerId([paused('rice'), done('adobo', 100)], 'rice'),
+    plateCooks.getFocusedTimerId(
+      [done('marinate', 300_000), done('simmer', 100_000)],
+      null,
+    ),
+  ],
+  ['adobo', 'adobo', 'simmer'],
+  'a finished timer outranks a running or paused pick, and of two finished timers listed in start order the one that rang first (marinate started first but rang at 300 s, simmer at 100 s) is in front',
+);
+assert.deepEqual(
+  [
+    plateCooks.getFocusedTimerId(
+      [done('simmer', 100_000), done('marinate', 300_000)],
+      'marinate',
+    ),
+    plateCooks.getFocusedTimerId(
+      [
+        done('marinate', 300_000),
+        done('simmer', 100_000),
+        done('rice', 200_000),
+      ],
       'rice',
     ),
     plateCooks.getFocusedTimerId(
-      [done('adobo'), running('rice', 9_000), done('beans')],
-      'beans',
+      [done('marinate', 300_000), running('rice', 9_000)],
+      'rice',
     ),
-    plateCooks.getFocusedTimerId([paused('rice'), done('adobo')], 'rice'),
   ],
-  ['adobo', 'beans', 'adobo'],
-  'a finished timer comes first, over a running or paused pick: the one just picked when it has finished, else the first to finish',
+  ['simmer', 'simmer', 'marinate'],
+  'a Time’s up already in front stays there when a later finish arrives, even when the later one is the timer the person had picked, and a running pick waits behind it',
+);
+assert.deepEqual(
+  [
+    [
+      ...plateCooks.getEndedAts(
+        [
+          { id: 'marinate', endsAt: 300_000 },
+          { id: 'simmer', endsAt: 100_000 },
+        ],
+        0,
+      ),
+    ],
+    [...plateCooks.getEndedAts([{ id: 'rice', endsAt: 5_000 }], 8_000)],
+    [
+      ...plateCooks.getEndedAts(
+        [
+          { id: 'a', endsAt: 7_000 },
+          { id: 'b', endsAt: 7_000 },
+        ],
+        0,
+      ),
+    ],
+  ],
+  [
+    [
+      ['simmer', 100_000],
+      ['marinate', 300_000],
+    ],
+    [['rice', 8_001]],
+    [
+      ['a', 7_000],
+      ['b', 7_001],
+    ],
+  ],
+  'two timers that finish in one settle are ranked by their deadlines, not their start order; a deadline behind a Time’s up already waiting (a clock stepped back) is moved past it; two with the same deadline still rank one before the other',
+);
+assert.deepEqual(
+  [0, 59_000, 60_000, 9 * 60_000, 61 * 60_000, 120 * 60_000, -400].map(
+    plateCooks.getRangAgo,
+  ),
+  [
+    'Rang just now',
+    'Rang just now',
+    'Rang 1 min ago',
+    'Rang 9 min ago',
+    'Rang 1 h 1 min ago',
+    'Rang 2 h ago',
+    'Rang just now',
+  ],
+  'a Time’s up says how long ago it rang to the minute: just now under 60 s, then minutes, then hours and minutes, and never a negative age',
+);
+const ring = (id: string, lastAt: number, repeats: number) => ({
+  id,
+  lastAt,
+  repeats,
+});
+assert.deepEqual(
+  [
+    plateCooks.getAlertRepeatsDue([ring('a', 0, 0)], 59_999),
+    plateCooks.getAlertRepeatsDue([ring('a', 0, 0)], 60_000),
+    plateCooks.getAlertRepeatsDue([ring('a', 0, 4)], 60_000),
+    plateCooks.getAlertRepeatsDue([ring('a', 0, 5)], 600_000),
+    plateCooks.getAlertRepeatsDue(
+      [ring('a', 0, 0), ring('b', 30_000, 0)],
+      60_000,
+    ),
+  ],
+  [[], ['a'], ['a'], [], ['a']],
+  'a Time’s up nobody dismissed repeats a minute after it last buzzed, five more times and no more, each timer on its own clock',
+);
+assert.deepEqual(
+  [
+    plateCooks.getNextAlertRepeatAt([]),
+    plateCooks.getNextAlertRepeatAt([ring('a', 10_000, 0)]),
+    plateCooks.getNextAlertRepeatAt([
+      ring('a', 10_000, 5),
+      ring('b', 40_000, 2),
+    ]),
+    plateCooks.getNextAlertRepeatAt([ring('a', 10_000, 5)]),
+  ],
+  [null, 70_000, 100_000, null],
+  'the next repeat is due a minute after the soonest timer that still has repeats left, and there is none once every Time’s up has used its five',
+);
+assert.deepEqual(
+  [
+    plateCooks.getTimerSlotKey({
+      recipeId: 'adobo',
+      stepNumber: 1,
+      label: '30 min',
+    }),
+    plateCooks.getTimerSlotKey({
+      recipeId: 'rice',
+      stepNumber: 1,
+      label: '30 min',
+    }),
+  ],
+  ['adobo:1:30 min', 'rice:1:30 min'],
+  'a timer slot is told apart by recipe, step and length, so the same length on another recipe of the plate is another slot',
 );
 assert.deepEqual(
   [
@@ -6957,12 +7237,12 @@ const watchingAdobo = { isShown: true, pickedId: 'adobo' };
 assert.deepEqual(
   [
     plateCooks.getFocusAfterDismiss(
-      [running('adobo', 9_000), done('rice')],
+      [running('adobo', 9_000), done('rice', 1)],
       watchingAdobo,
       'rice',
     ),
     plateCooks.getFocusAfterDismiss(
-      [running('adobo', 9_000), done('rice')],
+      [running('adobo', 9_000), done('rice', 1)],
       { isShown: true, pickedId: null },
       'rice',
     ),
@@ -6972,7 +7252,7 @@ assert.deepEqual(
       'adobo',
     ),
     plateCooks.getFocusAfterDismiss(
-      [done('adobo'), done('rice')],
+      [done('adobo', 1), done('rice', 2)],
       watchingAdobo,
       'adobo',
     ),
@@ -6998,7 +7278,7 @@ assert.deepEqual(
         [
           running('marinate', 9_000),
           paused('rice'),
-          done('rest'),
+          done('rest', 1),
           running('simmer', 2_000),
         ],
         'simmer',
@@ -7039,17 +7319,77 @@ assert.deepEqual(
       timerAt('adobo', 3),
     ),
     plateCooks.getTimerNext([plateAt('adobo', 0, 3)], timerAt('gone', 1)),
+    plateCooks.getTimerNext([plateAt('adobo', 1, 3)], timerAt('adobo', 2)),
   ],
   [
     { kind: 'STEP', recipeId: 'adobo', stepIndex: 1 },
-    { kind: 'STEP', recipeId: 'adobo', stepIndex: 1 },
+    null,
     null,
     null,
     { kind: 'RECIPE', recipeId: 'rice' },
     null,
     null,
+    { kind: 'STEP', recipeId: 'adobo', stepIndex: 2 },
   ],
-  '"Up next" after a timer is its recipe’s next step, also once the person moved on to it; nothing once they are past it, on a lone recipe’s last step or for a timer whose recipe is gone; on a plate, the last step leads to the next recipe still short of its own last',
+  '"Up next" after a timer is its recipe’s next step only while the person is before that step (on the timer’s own step, or a step behind it); on that next step or past it there is nothing to say, and the same for a lone recipe’s last step or a timer whose recipe is gone; on a plate, the last step leads to the next recipe still short of its own last',
+);
+const nextAt = (stepIndex: number, timerStep: number) =>
+  plateCooks.getTimerNext(
+    [plateAt('adobo', stepIndex, 3)],
+    timerAt('adobo', timerStep),
+  );
+assert.deepEqual(
+  [
+    plateCooks.getTimerSecondary(nextAt(0, 1), 'running'),
+    plateCooks.getTimerSecondary(nextAt(2, 1), 'done'),
+    plateCooks.getTimerSecondary(nextAt(2, 1), 'running'),
+    plateCooks.getTimerSecondary(nextAt(2, 1), 'paused'),
+    plateCooks.getTimerSecondary(nextAt(1, 1), 'done'),
+    plateCooks.getTimerSecondary(nextAt(2, 3), 'running'),
+    plateCooks.getTimerSecondary(nextAt(2, 3), 'done'),
+    plateCooks.getTimerSecondary(nextAt(0, 1), 'done'),
+  ],
+  ['NEXT', null, 'BACK', 'BACK', null, 'BACK', null, 'NEXT'],
+  'on the timer’s own step the footer offers Next; a Time’s up that rang over a later step (or over the very step it points to) offers only Dismiss, so no two buttons end at the same screen; a timer brought up from a pill while the person is further on offers a way back to their step instead, as does a running timer on the last step',
+);
+const platePositions = [plateAt('adobo', 0, 3), plateAt('rice', 0, 2)];
+assert.deepEqual(
+  [
+    plateCooks.getMeanwhile(
+      platePositions,
+      'adobo',
+      plateCooks.getTimerNext(platePositions, timerAt('adobo', 1)),
+    ),
+    plateCooks.getMeanwhile([plateAt('adobo', 0, 3)], 'adobo', null),
+    plateCooks.getMeanwhile(
+      [plateAt('adobo', 0, 3), plateAt('rice', 1, 2)],
+      'adobo',
+      null,
+    ),
+    plateCooks.getMeanwhile(
+      [plateAt('adobo', 2, 3), plateAt('rice', 0, 2)],
+      'adobo',
+      plateCooks.getTimerNext(
+        [plateAt('adobo', 2, 3), plateAt('rice', 0, 2)],
+        timerAt('adobo', 3),
+      ),
+    ),
+    plateCooks.getMeanwhile(
+      [plateAt('adobo', 0, 3), plateAt('rice', 0, 2), plateAt('beans', 1, 4)],
+      'rice',
+      { kind: 'STEP', recipeId: 'rice', stepIndex: 1 },
+    ),
+    plateCooks.getMeanwhile(platePositions, 'gone', null),
+  ],
+  [
+    { recipeId: 'rice', stepIndex: 0 },
+    null,
+    null,
+    null,
+    { recipeId: 'beans', stepIndex: 1 },
+    null,
+  ],
+  'on a plate the timer view offers the other recipe that still has a step to do, opening on its own current step; never on a lone recipe, when the other recipe is already on its last step, or when "Up next" already names that recipe; the next recipe in plate order comes first',
 );
 assert.deepEqual(
   [

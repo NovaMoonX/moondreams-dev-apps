@@ -361,10 +361,6 @@ function RecipeDrawer({
       return (
         <div className='space-y-5'>
           <BackLink onBack={backToRecipe} />
-          <StockRows
-            target={{ kind: 'recipe', id: recipe.id }}
-            onOpenStock={(place) => onOpenStock(recipe.id, place)}
-          />
           <div className='space-y-2'>
             <ActionGroup isRoomy caption='What would you like to do?'>
               {cookPlan === null && recipe.steps.length > 0 && (
@@ -434,6 +430,10 @@ function RecipeDrawer({
               </p>
             )}
           </div>
+          <StockRows
+            target={{ kind: 'recipe', id: recipe.id }}
+            onOpenStock={(place) => onOpenStock(recipe.id, place)}
+          />
         </div>
       );
     }

@@ -733,9 +733,23 @@ export const describeAmounts = (
   return result;
 };
 
+const isSooner = (
+  timer: { remainingMs: number; endedAt?: number },
+  than: { remainingMs: number; endedAt?: number },
+) =>
+  timer.remainingMs < than.remainingMs ||
+  (timer.remainingMs === than.remainingMs &&
+    (timer.endedAt ?? Infinity) < (than.endedAt ?? Infinity));
+
 /** The timer a spoken command means: the one in focus when it fits, else the one that ends soonest (with the said length, in the given states); null when none fits. */
 export const pickVoiceTimer = <
-  T extends { id: string; label: string; status: string; remainingMs: number },
+  T extends {
+    id: string;
+    label: string;
+    status: string;
+    remainingMs: number;
+    endedAt?: number;
+  },
 >(
   timers: T[],
   {
@@ -757,17 +771,20 @@ export const pickVoiceTimer = <
     candidates.find((timer) => timer.id === focusedId) ??
     candidates.reduce<T | null>(
       (soonest, timer) =>
-        soonest === null || timer.remainingMs < soonest.remainingMs
-          ? timer
-          : soonest,
+        soonest === null || isSooner(timer, soonest) ? timer : soonest,
       null,
     );
   return result;
 };
 
-/** The timers "how much time is left" answers about: the one in focus (else a finished one, else the soonest running, else a paused one), then the soonest other running timer, if any. */
+/** The timers "how much time is left" answers about: the one in focus (else the one that rang first, else the soonest running, else a paused one), then the soonest other running timer, if any. */
 export const pickTimersToTell = <
-  T extends { id: string; status: string; remainingMs: number },
+  T extends {
+    id: string;
+    status: string;
+    remainingMs: number;
+    endedAt?: number;
+  },
 >(
   timers: T[],
   focusedId: string | null,
@@ -775,9 +792,16 @@ export const pickTimersToTell = <
   const running = timers
     .filter((timer) => timer.status === 'running')
     .sort((a, b) => a.remainingMs - b.remainingMs);
+  const firstRang = timers
+    .filter((timer) => timer.status === 'done')
+    .reduce<T | null>(
+      (first, timer) =>
+        first === null || isSooner(timer, first) ? timer : first,
+      null,
+    );
   const first =
     timers.find((timer) => timer.id === focusedId) ??
-    timers.find((timer) => timer.status === 'done') ??
+    firstRang ??
     running[0] ??
     timers.find((timer) => timer.status === 'paused') ??
     null;

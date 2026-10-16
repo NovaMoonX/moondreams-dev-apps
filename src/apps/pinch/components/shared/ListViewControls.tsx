@@ -106,7 +106,7 @@ export function NutritionViewOptions({
         <div className='divide-border divide-y'>
           <ViewOptionSwitch
             label='Show stats'
-            description='Total, average per meal and daily nutrition, as tiles'
+            description='Total, average per fully priced meal and daily nutrition, as tiles'
             checked={options.showStats}
             onCheckedChange={(showStats) => onChange({ showStats })}
           />

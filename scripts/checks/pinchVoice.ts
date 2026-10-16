@@ -599,4 +599,44 @@ assert.deepEqual(
   'time left tells the timer in focus (else a finished one, else the soonest), then the soonest other running one',
 );
 
+const rangSet = [
+  {
+    id: 'late',
+    label: '30 min',
+    status: 'done',
+    remainingMs: 0,
+    endedAt: 2_000,
+  },
+  { id: 'run', label: '5 min', status: 'running', remainingMs: 60_000 },
+  {
+    id: 'early',
+    label: '10 min',
+    status: 'done',
+    remainingMs: 0,
+    endedAt: 1_000,
+  },
+];
+assert.deepEqual(
+  [
+    pickVoiceTimer(rangSet, {
+      statuses: ['done'],
+      label: null,
+      focusedId: null,
+    })?.id,
+    pickVoiceTimer(rangSet, {
+      statuses: ['done'],
+      label: null,
+      focusedId: 'late',
+    })?.id,
+    pickVoiceTimer(rangSet, {
+      statuses: ['done'],
+      label: '30 min',
+      focusedId: null,
+    })?.id,
+    pickTimersToTell(rangSet, null).map((timer) => timer.id),
+  ],
+  ['early', 'late', 'late', ['early', 'run']],
+  'with two Time’s ups listed latest first, stop and time left take the one that rang first unless another is in focus or named',
+);
+
 console.log('pinchVoice: all checks passed');

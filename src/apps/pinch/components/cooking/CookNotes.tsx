@@ -57,7 +57,7 @@ function CookNotes({ recipeId, onApply }: CookNotesProps) {
   const visibleCount = hidden > HIDDEN_WORTH_A_BUTTON ? limit : notes.length;
 
   return (
-    <section data-cook-stop='' aria-label='Notes for this recipe'>
+    <section aria-label='Notes for this recipe'>
       <Button
         type='button'
         variant='tertiary'

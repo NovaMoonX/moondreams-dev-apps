@@ -55,15 +55,11 @@ export interface StockSummary {
   freezerEatBy: number | null;
 }
 
-export interface StockSource {
-  kind: 'recipe' | 'meal';
-  id: string;
-  servings: number;
-}
-
-export interface MealStock extends StockSummary {
-  sources: StockSource[];
-}
+/** What a stock row or line reads: how many, and the nearest eat-by, in each place. */
+export type PlaceStock = Pick<
+  StockSummary,
+  'fridge' | 'freezer' | 'fridgeEatBy' | 'freezerEatBy'
+>;
 
 export type EatByMove = 'FRIDGE' | 'FREEZER' | 'THAW';
 
@@ -859,13 +855,13 @@ export const getStockMaps = (containers: Container[]) =>
   );
 
 export const hasStockIn = (
-  summary: StockSummary | undefined,
+  summary: PlaceStock | undefined,
   place: ContainerPlace,
 ) =>
   summary !== undefined &&
   (place === 'FRIDGE' ? summary.fridge : summary.freezer) > 0;
 
-export const getStockParts = (summary: StockSummary, now = Date.now()) =>
+export const getStockParts = (summary: PlaceStock, now = Date.now()) =>
   (['FRIDGE', 'FREEZER'] as const).flatMap((place) => {
     const servings = place === 'FRIDGE' ? summary.fridge : summary.freezer;
     if (servings <= 0) return [];
@@ -1004,77 +1000,77 @@ export const getContainerTitle = (
 const minOf = (a: number | null, b: number | null) =>
   a === null ? b : b === null ? a : Math.min(a, b);
 
-/** A saved meal's stock: containers put away as that meal plus those of its own recipes, each recipe counted once. */
+const servingsIn = (
+  summary: StockSummary | undefined,
+  place: ContainerPlace,
+) =>
+  summary === undefined
+    ? 0
+    : place === 'FRIDGE'
+      ? summary.fridge
+      : summary.freezer;
+
+const eatByIn = (summary: StockSummary | undefined, place: ContainerPlace) =>
+  summary === undefined
+    ? null
+    : place === 'FRIDGE'
+      ? summary.fridgeEatBy
+      : summary.freezerEatBy;
+
+/** A saved meal's stock in whole plates, per place: the boxes put away as that meal, plus as many more as its dishes make together, which is the dish with the least in that place. */
 export const getMealStockMap = (
   meals: Pick<Meal, 'id' | 'items'>[],
   byRecipe: Map<string, StockSummary>,
   byMeal: Map<string, StockSummary>,
 ) =>
   meals.reduce((map, meal) => {
-    const recipeIds = Array.from(
+    const own = byMeal.get(meal.id);
+    const dishes = Array.from(
       new Set(
         meal.items
           .filter((item) => item.kind === 'RECIPE')
           .map((item) => item.refId),
       ),
-    );
-    const sources = [
-      ...[byMeal.get(meal.id)].flatMap((summary) =>
-        summary ? [{ kind: 'meal' as const, id: meal.id, summary }] : [],
-      ),
-      ...recipeIds.flatMap((id) => {
-        const summary = byRecipe.get(id);
-        return summary ? [{ kind: 'recipe' as const, id, summary }] : [];
-      }),
-    ];
-    if (sources.length === 0) return map;
+    ).map((id) => byRecipe.get(id));
+    const getPlace = (place: ContainerPlace) => {
+      const fromDishes =
+        dishes.length === 0
+          ? 0
+          : Math.min(...dishes.map((dish) => servingsIn(dish, place)));
+      const plates = servingsIn(own, place) + fromDishes;
+      const counted = fromDishes > 0 ? [own, ...dishes] : [own];
+      return {
+        plates,
+        eatBy: counted.reduce<number | null>(
+          (nearest, summary) => minOf(nearest, eatByIn(summary, place)),
+          null,
+        ),
+      };
+    };
+    const fridge = getPlace('FRIDGE');
+    const freezer = getPlace('FREEZER');
+    if (fridge.plates + freezer.plates === 0) return map;
 
     return map.set(meal.id, {
-      fridge: sources.reduce((sum, { summary }) => sum + summary.fridge, 0),
-      freezer: sources.reduce((sum, { summary }) => sum + summary.freezer, 0),
-      containers: sources.reduce(
-        (sum, { summary }) => sum + summary.containers,
-        0,
-      ),
-      nearestEatBy: sources.reduce<number | null>(
-        (nearest, { summary }) => minOf(nearest, summary.nearestEatBy),
-        null,
-      ),
-      fridgeEatBy: sources.reduce<number | null>(
-        (nearest, { summary }) => minOf(nearest, summary.fridgeEatBy),
-        null,
-      ),
-      freezerEatBy: sources.reduce<number | null>(
-        (nearest, { summary }) => minOf(nearest, summary.freezerEatBy),
-        null,
-      ),
-      sources: sources.map(({ kind, id, summary }) => ({
-        kind,
-        id,
-        servings: summary.fridge + summary.freezer,
-      })),
+      fridge: fridge.plates,
+      freezer: freezer.plates,
+      fridgeEatBy: fridge.eatBy,
+      freezerEatBy: freezer.eatBy,
     });
-  }, new Map<string, MealStock>());
+  }, new Map<string, PlaceStock>());
 
-/** "Adobo chicken 10 · Cilantro lime rice 3", or "13 servings from 2 recipes" once there are more than three sources. */
-export const getStockSourcesText = (
-  sources: StockSource[],
-  getName: (source: StockSource) => string,
-) => {
-  if (sources.length < 2) return null;
-
-  const total = sources.reduce((sum, source) => sum + source.servings, 0);
-  if (sources.length <= 3) {
-    return sources
-      .map((source) => `${getName(source)} ${source.servings}`)
-      .join(' · ');
-  }
-  return `${formatServings(total)} from ${sources.length} ${sources.every((source) => source.kind === 'recipe') ? 'recipes' : 'recipes and meals'}`;
+/** What a stock count counts: a recipe's servings, a saved meal's plates. */
+export const getStockUnit = (count: number, kind: 'recipe' | 'meal') => {
+  const unit = kind === 'meal' ? 'plate' : 'serving';
+  return count === 1 ? unit : `${unit}s`;
 };
+
+export const formatStockAmount = (count: number, kind: 'recipe' | 'meal') =>
+  `${count} ${getStockUnit(count, kind)}`;
 
 export const getStockPlaceCounts = (
   ids: string[],
-  stock: Map<string, StockSummary>,
+  stock: Map<string, PlaceStock>,
 ): Record<ContainerPlace, number> =>
   ids.reduce(
     (counts, id) => {

@@ -1,7 +1,7 @@
-import { useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import MacroStats from '@/components/MacroStats';
@@ -27,7 +27,7 @@ import {
 import {
   getCostAverages,
   getDayCostText,
-  getPeriodCostText,
+  getPeriodTotal,
   getPricedCoverage,
   withWholeCalories,
   type PeriodStats,
@@ -52,7 +52,7 @@ interface WeekSummarySheetProps {
 const pluralize = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? '' : 's'}`;
 
-/** The period shown (a week, or a month in Month) in one sheet: its cost and how much of it is priced, its days, each opening its drawer, and a few reference figures. */
+/** The period shown (a week, or a month in Month) in one sheet: its total and how much of it is priced, a few reference figures under it, and its days, each opening its drawer. */
 function WeekSummarySheet({
   uid,
   title,
@@ -79,8 +79,25 @@ function WeekSummarySheet({
       ),
     [plannedMeals, startKey, endKey, recipesById, stats.leftOut],
   );
+  const [hasMoreDays, setHasMoreDays] = useState(false);
+  const watchDays = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return undefined;
+    const update = () =>
+      setHasMoreDays(
+        node.scrollTop + node.clientHeight < node.scrollHeight - 1,
+      );
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    if (node.firstElementChild) observer.observe(node.firstElementChild);
+    node.addEventListener('scroll', update, { passive: true });
+    return () => {
+      observer.disconnect();
+      node.removeEventListener('scroll', update);
+    };
+  }, []);
   const tomorrowKey = addDaysToKey(todayKey, 1);
   const isPartial = stats.mealsPriced > 0 && stats.leftOut.length > 0;
+  const total = getPeriodTotal(stats, endKey < todayKey);
   const gaps = [
     ...stats.openLeftOut,
     ...getNutritionGaps(stats.openNutritionMissing, show),
@@ -122,11 +139,11 @@ function WeekSummarySheet({
         </div>
       }
     >
-      <div className='flex max-h-[max(12rem,calc(92dvh-22rem))] flex-col gap-3'>
+      <div className='flex max-h-[max(12rem,calc(92dvh-15rem))] flex-col gap-3'>
         <div className='shrink-0 space-y-3'>
           <StatTile
-            label='Cost'
-            value={getPeriodCostText(stats, endKey < todayKey)}
+            label={total.label}
+            value={total.value}
             detail={
               isPartial
                 ? `${coverage.pricedCount} of ${pluralize(coverage.usedCount, 'ingredient')} priced`
@@ -138,55 +155,65 @@ function WeekSummarySheet({
               ) : undefined
             }
           />
-          <GapNudge uid={uid} gaps={gaps} onFillIn={onFillIn} />
-          {addToShoppingSlot}
-        </div>
-        <div className='flex-1 overflow-y-auto [@media(max-height:800px)]:min-h-36'>
-          <ul aria-label='Days' className='divide-border divide-y'>
-            {stats.byDay.map((day) => {
-              const label = getDayLabel(day.dayKey);
-              const costText = getDayCostText(day, day.dayKey < todayKey);
-              return (
-                <li key={day.dayKey}>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    aria-label={`Open ${formatDayTitle(day.dayKey)}: ${pluralize(day.count, 'meal')}, ${costText}`}
-                    onClick={() => onOpenDay(day.dayKey)}
-                    className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
-                  >
-                    <span className='min-w-0 flex-1'>
-                      <span className='text-foreground block text-sm font-medium'>
-                        {label}
-                      </span>
-                      <span className='text-muted-foreground block text-xs'>
-                        {pluralize(day.count, 'meal')}
-                      </span>
-                    </span>
-                    <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                      {costText}
-                    </span>
-                    <ChevronRight
-                      className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
-                      aria-hidden='true'
-                    />
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
           {references.length > 0 && (
-            <dl className='border-border space-y-1 border-t pt-3 text-sm'>
+            <dl className='space-y-1 text-sm [@media(max-height:500px)]:flex [@media(max-height:500px)]:flex-wrap [@media(max-height:500px)]:space-y-0 [@media(max-height:500px)]:gap-x-6'>
               {references.map((reference) => (
                 <div
                   key={reference.key}
-                  className='flex items-baseline justify-between gap-3'
+                  className='flex items-baseline justify-between gap-3 [@media(max-height:500px)]:justify-start'
                 >
                   <dt className='text-muted-foreground'>{reference.label}</dt>
                   <dd className='text-right'>{reference.value}</dd>
                 </div>
               ))}
             </dl>
+          )}
+          <GapNudge uid={uid} gaps={gaps} onFillIn={onFillIn} />
+          {addToShoppingSlot}
+        </div>
+        <div className='relative flex min-h-0 flex-1 flex-col [@media(max-height:800px)]:min-h-36'>
+          <div ref={watchDays} className='min-h-0 flex-1 overflow-y-auto'>
+            <ul aria-label='Days' className='divide-border divide-y'>
+              {stats.byDay.map((day) => {
+                const label = getDayLabel(day.dayKey);
+                const costText = getDayCostText(day, day.dayKey < todayKey);
+                return (
+                  <li key={day.dayKey}>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      aria-label={`Open ${formatDayTitle(day.dayKey)}: ${pluralize(day.count, 'meal')}, ${costText}`}
+                      onClick={() => onOpenDay(day.dayKey)}
+                      className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
+                    >
+                      <span className='min-w-0 flex-1'>
+                        <span className='text-foreground block text-sm font-medium'>
+                          {label}
+                        </span>
+                        <span className='text-muted-foreground block text-xs'>
+                          {pluralize(day.count, 'meal')}
+                        </span>
+                      </span>
+                      <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                        {costText}
+                      </span>
+                      <ChevronRight
+                        className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          {hasMoreDays && (
+            <div
+              aria-hidden='true'
+              className='from-popover pointer-events-none absolute inset-x-0 bottom-0 flex h-8 items-end justify-center bg-linear-to-t to-transparent'
+            >
+              <ChevronDown className='text-muted-foreground h-4 w-4' />
+            </div>
           )}
         </div>
       </div>

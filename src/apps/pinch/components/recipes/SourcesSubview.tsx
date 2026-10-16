@@ -1,20 +1,16 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight, Pencil } from 'lucide-react';
 
-import DeleteIconButton from '@/components/DeleteIconButton';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import Subview from '@/components/Subview';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
+import { useAppSelector } from '@/store';
 import SourceFormSheet from '@apps/pinch/components/recipes/SourceFormSheet';
 import { LIST_SEARCH_THRESHOLD } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { announceSourceShown } from '@apps/pinch/hooks/useSourceShown';
-import { removeSource } from '@apps/pinch/store/actions/sourceActions';
 import { selectSourceCounts, selectSources } from '@apps/pinch/store/selectors';
 import type { Source } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
@@ -25,15 +21,11 @@ interface SourcesSubviewProps {
 
 /** The sources with their recipe counts: a row shows that source's recipes, the pencil renames or deletes it. A source is made from a recipe's form, where it is used. */
 function SourcesSubview({ uid }: SourcesSubviewProps) {
-  const dispatch = useAppDispatch();
-  const { confirm } = useActionModal();
   const { closeSubview } = usePinchOverlay();
   const sources = useAppSelector(selectSources);
   const counts = useAppSelector(selectSourceCounts).bySource;
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const shown = useMemo(
     () =>
@@ -48,28 +40,6 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
   const showRecipes = (source: Source) => {
     announceSourceShown(source.id);
     closeSubview();
-  };
-
-  const handleDelete = async (source: Source) => {
-    const confirmed = await confirm({
-      title: 'Delete source',
-      message: `Delete “${source.label}”? It isn't on any recipe, and this can't be undone.`,
-      confirmText: 'Delete',
-      destructive: true,
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    setError(null);
-    setDeletingId(source.id);
-    try {
-      await dispatch(removeSource({ uid, id: source.id })).unwrap();
-    } catch (deleteError) {
-      setError(getErrorMessage(deleteError, 'Unable to delete this source.'));
-    } finally {
-      setDeletingId(null);
-    }
   };
 
   return (
@@ -144,15 +114,6 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
                       />
                     </Button>
                   )}
-                  {count === 0 && (
-                    <span className='mt-2'>
-                      <DeleteIconButton
-                        label={`Delete ${source.label}`}
-                        disabled={deletingId !== null}
-                        onClick={() => void handleDelete(source)}
-                      />
-                    </span>
-                  )}
                   <span className='mt-2'>
                     <Button
                       type='button'
@@ -169,11 +130,6 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
               );
             })}
           </ul>
-        )}
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
         )}
       </div>
       {editing && (
