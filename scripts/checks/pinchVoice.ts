@@ -526,10 +526,21 @@ assert.deepEqual(
     { name: 'Garlic', amountText: '½ tsp' },
   ]),
   {
-    show: 'Garlic: 4 and ½ tsp',
-    speak: 'Garlic, 4 and a half teaspoon.',
+    show: 'Garlic: 4, ½ tsp',
+    speak: 'Garlic, 4, plus a half teaspoon.',
   },
   'a name on two lines is said once with both amounts',
+);
+assert.deepEqual(
+  describeAmounts([
+    { name: 'Garlic', amountText: '4', groupLabel: 'For the chicken' },
+    { name: 'Garlic', amountText: '2', groupLabel: 'For the sauce' },
+  ]),
+  {
+    show: 'Garlic: 4 (For the chicken), 2 (For the sauce)',
+    speak: 'Garlic, 4, For the chicken, plus 2, For the sauce.',
+  },
+  'an ingredient in two groups says which group each amount is for',
 );
 
 console.log('pinchVoice: all checks passed');

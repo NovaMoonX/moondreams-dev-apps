@@ -694,23 +694,38 @@ export const describeTimersLeft = (timers: VoiceTimerState[]) => {
   return result;
 };
 
-/** The answer to "how much garlic": each name once with its amounts (a name on two lines has both), shown as written and said in words. */
+/** The answer to "how much garlic": each name once with its amounts (a name on two lines has both, each with its group when the recipe groups them), shown as written and said in words. */
 export const describeAmounts = (
-  rows: { name: string; amountText: string }[],
+  rows: { name: string; amountText: string; groupLabel?: string | null }[],
 ) => {
   const byName = rows.reduce((names, row) => {
-    names.set(row.name, [...(names.get(row.name) ?? []), row.amountText]);
+    names.set(row.name, [...(names.get(row.name) ?? []), row]);
     return names;
-  }, new Map<string, string[]>());
+  }, new Map<string, typeof rows>());
   const entries = [...byName.entries()];
   const result = {
     show: entries
-      .map(([name, amounts]) => `${name}: ${amounts.join(' and ')}`)
+      .map(
+        ([name, lines]) =>
+          `${name}: ${lines
+            .map((line) =>
+              line.groupLabel
+                ? `${line.amountText} (${line.groupLabel})`
+                : line.amountText,
+            )
+            .join(', ')}`,
+      )
       .join('; '),
     speak: `${entries
       .map(
-        ([name, amounts]) =>
-          `${name}, ${amounts.map(toSpokenAmount).join(' and ')}`,
+        ([name, lines]) =>
+          `${name}, ${lines
+            .map((line) =>
+              line.groupLabel
+                ? `${toSpokenAmount(line.amountText)}, ${line.groupLabel}`
+                : toSpokenAmount(line.amountText),
+            )
+            .join(', plus ')}`,
       )
       .join('. ')}.`,
   };

@@ -93,44 +93,43 @@ function CookVoiceHelp({
   ];
 
   return (
-    <HelpTip
-      title='What you can say'
-      linkLabel='What to say'
-      dismissLabel='Done'
-      className={join(
-        "relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']",
-        isHidden && 'hidden!',
-      )}
-    >
-      <ul className='space-y-1.5'>
-        {groups.map((group) => (
-          <li key={group.label} className='flex gap-3'>
-            <span className='text-muted-foreground w-16 shrink-0 pt-px text-xs'>
-              {group.label}
-            </span>
-            <span className='min-w-0'>
-              {group.phrases.map((phrase, at) => (
-                <span key={phrase}>
-                  <span className='whitespace-nowrap'>“{phrase}”</span>
-                  {at < group.phrases.length - 1 && ', '}
-                </span>
-              ))}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <p className='text-muted-foreground text-xs'>
-        English commands for now. On the last step, tap Finish yourself.
-      </p>
-      <div className='border-border border-t'>
-        <ViewOptionSwitch
-          label='Read steps aloud'
-          description='While voice is on, each step is read out as it appears.'
-          checked={voice.isReadingAloud}
-          onCheckedChange={voice.setIsReadingAloud}
-        />
-      </div>
-    </HelpTip>
+    <span className={isHidden ? 'hidden' : 'contents'}>
+      <HelpTip
+        title='What you can say'
+        linkLabel='What to say'
+        dismissLabel='Done'
+        className="relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
+      >
+        <ul className='space-y-1.5'>
+          {groups.map((group) => (
+            <li key={group.label} className='flex gap-3'>
+              <span className='text-muted-foreground w-16 shrink-0 pt-px text-xs'>
+                {group.label}
+              </span>
+              <span className='min-w-0'>
+                {group.phrases.map((phrase, at) => (
+                  <span key={phrase}>
+                    <span className='whitespace-nowrap'>“{phrase}”</span>
+                    {at < group.phrases.length - 1 && ', '}
+                  </span>
+                ))}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className='text-muted-foreground text-xs'>
+          English commands for now. On the last step, tap Finish yourself.
+        </p>
+        <div className='border-border border-t'>
+          <ViewOptionSwitch
+            label='Read steps aloud'
+            description='While voice is on, each step is read out as it appears.'
+            checked={voice.isReadingAloud}
+            onCheckedChange={voice.setIsReadingAloud}
+          />
+        </div>
+      </HelpTip>
+    </span>
   );
 }
 
