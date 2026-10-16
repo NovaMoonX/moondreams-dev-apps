@@ -31,6 +31,8 @@ interface EatFromStockViewProps {
   /** The containers the meal may eat from, already narrowed to its day and what it hasn't cooked. */
   containers: Container[];
   onBack: () => void;
+  /** Where an eat lands; the view it was opened from when left out. */
+  onDone?: () => void;
 }
 
 export function EatFromStockView({
@@ -39,6 +41,7 @@ export function EatFromStockView({
   place,
   containers,
   onBack,
+  onDone = onBack,
 }: EatFromStockViewProps) {
   const { eat } = useContainerActions(uid);
   const recipesById = useAppSelector(selectRecipesById);
@@ -59,7 +62,7 @@ export function EatFromStockView({
     setError(null);
     setBusyId(container.id);
     try {
-      if ((await eat(container, count)) !== undefined) onBack();
+      if ((await eat(container, count)) !== undefined) onDone();
     } catch (eatError) {
       setError(getErrorMessage(eatError, 'Unable to save this.'));
     } finally {

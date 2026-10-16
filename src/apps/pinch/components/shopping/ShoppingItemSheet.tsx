@@ -17,23 +17,34 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import { updateShoppingItem } from '@apps/pinch/store/actions/shoppingActions';
-import { selectShoppingById } from '@apps/pinch/store/selectors';
+import {
+  selectShoppingById,
+  selectShoppingItems,
+  selectShoppingPlannedParts,
+  selectShoppingSourceContext,
+  selectShoppingSourceLabels,
+} from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import {
+  formatShopAmount,
+  getRowSourceShares,
   getShoppingItemId,
   isValidAmount,
   roundAmount,
   sumShopAmounts,
 } from '@apps/pinch/utils/shopping';
 
+const SHARES_SHOWN = 5;
+const SHARES_FOLD_MIN_HIDDEN = 4;
+
 const { custom } = FormFactories;
 
 interface ShoppingItemSheetProps {
   uid: string;
   name: string;
-  /** What put it on the list ("Adobo chicken (Thu)"), or null when nothing behind it still resolves. */
-  forText: string | null;
+  /** The day the screen opened on, for naming planned meals. */
+  todayKey: string;
   /** The stored items one row of the list stands for, largest first. */
   items: ShoppingItem[];
   onClose: () => void;
@@ -44,13 +55,25 @@ interface ShoppingItemSheetProps {
 function ShoppingItemSheet({
   uid,
   name,
-  forText,
+  todayKey,
   items,
   onClose,
   onRemove,
 }: ShoppingItemSheetProps) {
   const dispatch = useAppDispatch();
   const itemsById = useAppSelector(selectShoppingById);
+  const allItems = useAppSelector(selectShoppingItems);
+  const labels = useAppSelector(selectShoppingSourceLabels);
+  const context = useAppSelector(selectShoppingSourceContext);
+  const parts = useAppSelector(selectShoppingPlannedParts);
+  const [isAllShown, setIsAllShown] = useState(false);
+  const shares = useMemo(
+    () => getRowSourceShares(items, allItems, labels, context, todayKey, parts),
+    [items, allItems, labels, context, todayKey, parts],
+  );
+  const isFolded =
+    !isAllShown && shares.length - SHARES_SHOWN >= SHARES_FOLD_MIN_HIDDEN;
+  const shownShares = isFolded ? shares.slice(0, SHARES_SHOWN) : shares;
   const [item] = items;
   const [shown] = useState(
     () => sumShopAmounts(items) ?? { amount: item.amount, unit: item.unit },
@@ -154,10 +177,46 @@ function ShoppingItemSheet({
 
   return (
     <FormSheet isOpen onClose={onClose} title={name}>
-      {forText && (
-        <p className='text-muted-foreground mb-3 text-sm wrap-break-word'>
-          For {forText}
-        </p>
+      {shares.length > 0 && (
+        <div className='mb-4'>
+          <p className='text-muted-foreground text-xs'>For</p>
+          <ul className='divide-border divide-y'>
+            {shownShares.map((share) => {
+              const amountText = formatShopAmount(share.amount);
+              return (
+                <li
+                  key={share.source}
+                  className='flex items-start justify-between gap-3 py-2 text-sm'
+                >
+                  <span className='min-w-0'>
+                    <span className='block wrap-break-word'>{share.name}</span>
+                    {share.dish && (
+                      <span className='text-muted-foreground block text-xs wrap-break-word'>
+                        {share.dish}
+                      </span>
+                    )}
+                  </span>
+                  {amountText && (
+                    <span className='text-muted-foreground shrink-0 whitespace-nowrap'>
+                      {amountText}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {isFolded && (
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-10 px-0!'
+              onClick={() => setIsAllShown(true)}
+            >
+              Show {shares.length - SHARES_SHOWN} more
+            </Button>
+          )}
+        </div>
       )}
       <Form
         id='pinch-shopping-item'

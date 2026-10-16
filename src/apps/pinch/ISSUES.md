@@ -235,7 +235,7 @@ A person writes a recipe by hand — a title, servings and ingredients with amou
 4. Rules for `recipes` (array caps, enum, bounds) and Storage for covers. Seed three recipes using catalog and custom ingredients.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** + New in the Recipes header opens the Recipe subview.
+- [ ] **Create:** + New recipe in the Recipes header opens the Recipe subview.
 - [ ] **Read:** the list, and the drawer on tap.
 - [ ] **Update:** Modify in the drawer opens the same subview.
 - [ ] **Delete:** the subview's trash icon with a destructive confirm (a recipe used by planned days is archived from Issue 17).
@@ -340,7 +340,7 @@ A month calendar where each planned meal is a thin meal-type bar with its emoji.
 2. `plannedMeals` slice, window listener (`date >= start && date < end` for the shown month ±1, keyed on the window key), `usePinchSync(uid, shownMonth)`; `selectPlannedByDay` builds `Map<dayKey, PlannedMeal[]>` once (`toDateInputValue` keys; the cell's `Date` is keyed with `toLocalDateInputValue`).
 3. `MealBarCell`: up to three bars in meal-type order and a "+N"; today accent, selected ring; no per-cell filtering. `DayDrawer` groups by meal type; `DayPeek` is a hover `Popover` with `max-sm:hidden` and the same content.
 4. `PlanMealSubview` opens from "+ Add" (the drawer closes first) on the chosen day and type (`PillGroup` of meal types, change day), a single `ItemSearch` over recipes and ingredients, a serving stepper, and "Add to Tuesday". `planMeal` writes a planned meal with `refIds` derived and `date` from `fromDateInputValue`.
-5. `PlannedMealView` swaps in place inside the drawer with "‹ Back" and shows items, servings and cost; "Remove from this day" is last, red, with a confirm. Calendar empty state offers "Plan your first meal" and "Add a recipe".
+5. `PlannedMealView` swaps in place inside the drawer with "‹ Back" and shows items, servings and cost; "Remove from this day" is last (since round 7, in its ⋯ More), red, with a confirm. Calendar empty state offers "Plan your first meal" and "Add a recipe".
 6. Check the day math in a timezone behind UTC (`America/Los_Angeles`): a meal planned for Oct 13 reads Oct 13 everywhere.
 
 ### CRUD & Entry-Point Requirements
@@ -700,7 +700,7 @@ Marking a meal made takes its ingredients out of stock. Prepared servings are al
 
 ### Issue 21: The shopping list with stock, low stock and stores
 
-**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal or a day or range of planned days (or one ingredient), merged by ingredient and unit, each line remembering what put it there, in shop sections, with To buy / Got it / All and an approximate cost (TECHNICAL.md §5b).
+**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal or a day or range of planned days (or one ingredient), merged by ingredient and unit, each line remembering and naming what put it there, in shop sections, with To buy / Got it / All, an approximate cost, and "Meals on your list" to see what the list is for and take one meal's share off (TECHNICAL.md §5b).
 **Target PR Size:** ~350 lines
 **Files:**
 - Shopping tab: `ShoppingScreen` (`components/shopping/`), `utils/shopping.ts`, a low-stock section and a group-by-store option
@@ -1067,6 +1067,39 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 - [ ] Driven on the scale kitchen at 4× CPU: tab switches, the stock list with about 300 containers, a recipe drawer and the Recipes list with stock lines, against the base build.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and every sheet was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
+
+### Issue 42: Ingredient groups: "For the chicken", "For the sauce"
+
+**Prerequisites:** Issue 6, Issue 14, Issue 33
+**Target PR Size:** ~1,200 lines (the field, one ordering helper, the form's group field and heading editor, the drawer's and cooking's headings, the step matching, the readers, the seed, checks and docs)
+**Files:**
+- `RecipeIngredient.group` in `types.ts`, `MAX_INGREDIENT_GROUP_LENGTH` in `constants.ts`, `utils/ingredientGroups.ts` (the order every list uses, the label for a line away from its heading, and the form's moves)
+- `RecipeIngredients.tsx` (the group field, the headings and their editor), `recipeFormModel.ts`, the drawer's Ingredients, `CookIngredientsView`, the in-step rows, `utils/stepIngredients.ts`, `utils/recipeChanges.ts`
+- `lib/extractRecipe.ts` (schema and prompt) and `utils/normalizeRecipe.ts`
+- The seed: Alex's adobo under two groups, with soy sauce and garlic in both; the nachos keep lines with no `group` key
+
+**Context:** Read `TECHNICAL.md` §6 ("Ingredient groups"), criterion 14 and open question 23; `UX.md`'s Recipe, Recipe details and Cooking mode; CLAUDE.md's "Design for 5 and for 50" (`PickOrCreate`), "Labeled hairline dividers use `@/components/SectionDivider`" and "Removing a row from a form shows an undo".
+
+### Description
+A recipe's ingredient lines can sit under headings, the way recipes are written ("For the chicken", "For the sauce"), and one ingredient can be in more than one group with its own amount in each. The headings show wherever the lines are listed, in one order; a step names which line it means; a reading keeps the recipe's own headings; the shopping list adds the amounts together.
+
+### Possible Approach
+1. `group: string | null` on each line, no collection: a group is its name on the lines. Every list goes through one pure helper (no group first, then groups in the order they appear).
+2. In the form, a `PickOrCreate` in each ingredient's editor and a tappable `SectionDivider` heading that renames the group (merging with another of the same name) or removes it with an Undo, keeping its lines.
+3. Extend the readers' schema with a required, nullable `group` and say in the prompt never to invent one; a split line keeps its group.
+4. Leave the rules' lines client-shaped: measure whether a per-line check fits the 1,000-expression budget at 60 lines, and prove access is unchanged.
+
+### CRUD & Entry-Point Requirements
+- [x] **Create / Read / Update / Delete:** put a line in a group or a new one, see the headings, move a line to another group, rename or remove a group (its lines stay).
+- [x] **Entry points:** an ingredient's editor in the recipe form, a heading in the form, the recipe drawer, cooking mode's Ingredients and steps, and the three readings.
+
+### Success Criteria
+- [x] A recipe with no groups looks the same in the drawer, the form and cooking mode; a recipe written before this (no `group` key) opens, cooks, shops and saves, and its save writes `group: null`; checked in the browser over a legacy-shaped document.
+- [x] Two lines of one ingredient in two groups are never merged by the form, the reader or the save, sum on the shopping list and in cost and nutrition, and say their group where they show away from their heading.
+- [x] Moving lines between groups records no tweak on a cooked recipe.
+- [x] The rules matrix (owner, another user, signed out; with groups, null and a legacy document) gives the same outcome on the new rules as on the previous ones.
+- [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math` and `check:pinch-ingest` cover the order, the moves, the step sharing and the reader's groups; driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 1, 5 and 30 lines and 1, 3 and 8 groups.
+- [x] `UX.md`, `TECHNICAL.md` and the README match what shipped.
 
 ## Beyond
 

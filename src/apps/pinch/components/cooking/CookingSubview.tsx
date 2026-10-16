@@ -79,6 +79,7 @@ import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
+import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
 const DONE_GUARD_MS = 600;
@@ -176,10 +177,15 @@ function CookingSession({
             id: line.id,
             ingredientId: line.ingredientId,
             names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
+            group: line.group ?? null,
           };
         }),
       ),
     [recipe.steps, recipe.ingredients, ingredientsById],
+  );
+  const repeatedGroups = useMemo(
+    () => getRepeatedLineGroups(recipe.ingredients),
+    [recipe.ingredients],
   );
   const rows = useMemo(
     () =>
@@ -196,8 +202,16 @@ function CookingSession({
                 line.unit,
               ),
         isMeasured: line.amount !== null,
+        group: line.group ?? null,
+        groupLabel: repeatedGroups.get(line.id) ?? null,
       })),
-    [recipe.ingredients, recipe.servings, ingredientsById, servings],
+    [
+      recipe.ingredients,
+      recipe.servings,
+      ingredientsById,
+      servings,
+      repeatedGroups,
+    ],
   );
   const wakeLock = useWakeLock(true);
   const {

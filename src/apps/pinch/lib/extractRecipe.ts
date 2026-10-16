@@ -60,8 +60,12 @@ const responseSchema = {
             SchemaType.STRING,
             'A preparation note such as "diced", and the source\'s own words for an amount it does not measure ("to taste", "a handful", "as needed"), only if the source has them.',
           ),
+          group: nullable(
+            SchemaType.STRING,
+            'The heading the line sits under in the recipe ("For the sauce", "Marinade"), word for word without its colon, or null when it sits under no heading. Never make one up, and never use the recipe\'s own "Ingredients" title.',
+          ),
         },
-        required: ['name', 'amount', 'unit', 'note'],
+        required: ['name', 'amount', 'unit', 'note', 'group'],
       },
     },
     steps: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
@@ -97,7 +101,8 @@ Rules:
 - Return the title, servings, times, ingredients and steps exactly as the recipe gives them. Never invent an amount, a time or a step.
 - Split each ingredient line into a name, an amount, a unit and a note. "Unit" must be one of ${UNITS.join(', ')}; use EACH for a count of whole items (6 cloves of garlic is 6 EACH) and null when no unit fits.
 - When a line gives no amount ("salt to taste", "a handful of fresh parsley", "olive oil as needed"), leave amount and unit null and keep those words in the note ("to taste", "a handful", "as needed"). Never turn them into a number.
-- A line that names two ingredients ("salt and pepper to taste") is two lines, each with the same amount, unit and note.
+- A line that names two ingredients ("salt and pepper to taste") is two lines, each with the same amount, unit, note and group.
+- Some recipes put their ingredients under headings ("For the sauce:", "Marinade"). Give each line the heading it sits under as its group, word for word, and null for a line under no heading. The same ingredient under two headings is two lines, each with its own amount. Never invent headings or sort lines into groups yourself.
 - Times are whole minutes (1 h 15 min is 75). Use null for anything the recipe does not say.
 - Storage: fill in fridgeDays, freezerDays, reheat and tip only when the recipe itself says how long leftovers keep, how to reheat them or how to store them. Never estimate how long food keeps, and use null when the recipe is silent.
 - Put anything you could not read or are unsure of in "unread", in plain words ("the last two ingredients are cut off").

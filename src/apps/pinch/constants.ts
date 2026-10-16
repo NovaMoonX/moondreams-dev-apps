@@ -347,6 +347,8 @@ export const MAX_RECIPE_TITLE_LENGTH = 200;
 export const MAX_RECIPE_DESCRIPTION_LENGTH = 2000;
 export const MAX_STEP_LENGTH = 2000;
 export const MAX_NOTE_LENGTH = 200;
+/** The cap the rules enforce on the heading a recipe line sits under ("For the sauce"). */
+export const MAX_INGREDIENT_GROUP_LENGTH = 40;
 export const MAX_MINUTES = 100_000;
 /** The cap the rules enforce. */
 export const MAX_CARE_DAYS = 365;
@@ -362,6 +364,12 @@ export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {
   recipes: 'Recipes',
   meals: 'Saved meals',
   ideas: 'Ideas',
+};
+/** The Recipes header's add button for each view: one pattern, naming what it makes. */
+export const RECIPES_VIEW_NEW_LABELS: Record<RecipesView, string> = {
+  recipes: 'New recipe',
+  meals: 'New saved meal',
+  ideas: 'New idea',
 };
 
 /** Grams for a mass unit, millilitres for a volume unit, 1 for a count. */

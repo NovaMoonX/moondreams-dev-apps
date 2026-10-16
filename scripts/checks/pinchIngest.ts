@@ -222,4 +222,71 @@ assert.equal(
   'splitting lines never takes a recipe past its cap',
 );
 
+// A recipe's own headings become groups, word for word; no heading is no group.
+const grouped = normalizeExtractedRecipe({
+  ingredients: [
+    {
+      name: 'chicken thighs',
+      amount: 2,
+      unit: 'LB',
+      note: null,
+      group: 'For the chicken:',
+    },
+    {
+      name: 'soy sauce',
+      amount: 0.25,
+      unit: 'CUP',
+      note: null,
+      group: '**For the chicken**',
+    },
+    {
+      name: 'soy sauce',
+      amount: 2,
+      unit: 'TBSP',
+      note: null,
+      group: 'For the sauce',
+    },
+    {
+      name: 'salt and pepper',
+      amount: null,
+      unit: null,
+      note: 'to taste',
+      group: '  For   the sauce ',
+    },
+    { name: 'rice', amount: 1, unit: 'CUP', note: null, group: null },
+    { name: 'lime', amount: 1, unit: null, note: null },
+    {
+      name: 'cilantro',
+      amount: null,
+      unit: null,
+      note: null,
+      group: 'Ingredients:',
+    },
+    { name: 'sesame seeds', amount: 1, unit: 'TSP', note: null, group: 7 },
+    {
+      name: 'scallions',
+      amount: 2,
+      unit: null,
+      note: null,
+      group: `${'Garnish '.repeat(10)}`,
+    },
+  ],
+});
+assert.deepEqual(
+  grouped.ingredients.map((line) => [line.name, line.amount, line.group]),
+  [
+    ['chicken thighs', 2, 'For the chicken'],
+    ['soy sauce', 0.25, 'For the chicken'],
+    ['soy sauce', 2, 'For the sauce'],
+    ['salt', null, 'For the sauce'],
+    ['pepper', null, 'For the sauce'],
+    ['rice', 1, null],
+    ['lime', 1, null],
+    ['cilantro', null, null],
+    ['sesame seeds', 1, null],
+    ['scallions', 2, 'Garnish Garnish Garnish Garnish Garnish'],
+  ],
+  'a heading loses its colon, markdown and extra spaces; the same ingredient under two headings stays two lines; a split line keeps its heading; no heading, the "Ingredients" title or a heading that is not text is no group; a long one is cut to 40 characters',
+);
+
 console.log('pinchIngest: all checks passed');
