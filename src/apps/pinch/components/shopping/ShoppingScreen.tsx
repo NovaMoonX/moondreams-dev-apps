@@ -65,6 +65,7 @@ import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getShoppingCostCoverage,
+  getShoppingMealsText,
   getShoppingSourcesText,
   getShopRowId,
   getShownShoppingView,
@@ -674,7 +675,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             <EntryTile
               icon={<UtensilsCrossed className='size-4' />}
               label='Meals on your list'
-              status={`For ${getForText(meals.map((meal) => meal.source))}`}
+              status={`For ${getShoppingMealsText(meals, todayKey)}`}
               onClick={() => setOverlay({ kind: 'meals' })}
             />
           </nav>

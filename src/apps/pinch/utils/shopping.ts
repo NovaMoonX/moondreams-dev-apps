@@ -479,6 +479,22 @@ export function getShoppingSourcesText(
     : joinSourceNames(names, MAX_SOURCE_NAMES_SHOWN);
 }
 
+/** What the whole list is for, soonest first: two meals by name ("Fri dinner and Fri snack", a slot two plates share said once) and how many more, or a third by name when it is the only one left. */
+export function getShoppingMealsText(
+  meals: Pick<ShoppingMeal, 'label'>[],
+  todayKey: string,
+): string {
+  const names = meals.map(({ label }) =>
+    label.kind === 'planned' ? formatSourceSlot(label, todayKey) : label.name,
+  );
+  const shown = [...new Set(names)].slice(0, MAX_SOURCE_NAMES_SHOWN);
+  const rest = names.filter((name) => !shown.includes(name));
+  if (rest.length <= 1) {
+    return joinSourceNames([...shown, ...rest], MAX_SOURCE_NAMES_SHOWN + 1);
+  }
+  return `${shown.join(', ')} and ${rest.length} more`;
+}
+
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
 export const isValidAmount = (amount: number) =>
   Number.isFinite(amount) && amount > 0 && amount <= MAX_SHOPPING_AMOUNT;

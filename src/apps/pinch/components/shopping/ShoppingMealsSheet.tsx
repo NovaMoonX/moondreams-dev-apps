@@ -6,8 +6,11 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import FactsLine, { type Fact } from '@/components/FactsLine';
+import SearchInput from '@/components/SearchInput';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
+import { LIST_SEARCH_THRESHOLD } from '@apps/pinch/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   stopShoppingFor,
@@ -26,6 +29,7 @@ import {
 } from '@apps/pinch/utils/shopping';
 
 const UNDO_TOAST_MS = 6000;
+const ROWS_SHOWN = 40;
 
 const undone = new Set<string>();
 
@@ -62,12 +66,23 @@ function ShoppingMealsSheet({
 }: ShoppingMealsSheetProps) {
   const dispatch = useAppDispatch();
   const { addToast, removeToast } = useToast();
+  const isPhone = useMediaQuery().isBelow('sm');
   const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));
   const labels = useAppSelector(selectShoppingSourceLabels);
   const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
   const [taken, setTaken] = useState<ShoppingMeal[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [limit, setLimit] = useState(ROWS_SHOWN);
 
+  const getTitle = (meal: ShoppingMeal) =>
+    meal.label.kind === 'planned'
+      ? formatSourceSlot(meal.label, todayKey)
+      : meal.label.name;
+  const getWhat = (meal: ShoppingMeal) =>
+    meal.label.kind === 'planned'
+      ? meal.label.name
+      : KIND_WORDS[meal.label.kind];
   const liveSources = new Set(meals.map((meal) => meal.source));
   const takenSources = new Set(
     taken
@@ -78,6 +93,17 @@ function ShoppingMealsSheet({
     ...meals,
     ...taken.filter((meal) => takenSources.has(meal.source)),
   ].sort(compareSourceLabels);
+  const hasSearch = shown.length >= LIST_SEARCH_THRESHOLD;
+  const needle = hasSearch ? query.trim().toLowerCase() : '';
+  const found =
+    needle === ''
+      ? shown
+      : shown.filter((meal) =>
+          [getTitle(meal), getWhat(meal)].some((text) =>
+            text.toLowerCase().includes(needle),
+          ),
+        );
+  const visible = found.length <= limit + 3 ? found : found.slice(0, limit);
   const names = new Map(
     getSourceNames(
       shown.map((meal) => meal.source),
@@ -165,10 +191,6 @@ function ShoppingMealsSheet({
     }
   };
 
-  const getTitle = (meal: ShoppingMeal) =>
-    meal.label.kind === 'planned'
-      ? formatSourceSlot(meal.label, todayKey)
-      : meal.label.name;
   const getFacts = (meal: ShoppingMeal): Fact[] =>
     takenSources.has(meal.source)
       ? [{ key: 'taken', content: 'Taken off your list' }]
@@ -178,9 +200,7 @@ function ShoppingMealsSheet({
             key: 'what',
             content: (
               <span className='wrap-break-word whitespace-normal'>
-                {meal.label.kind === 'planned'
-                  ? meal.label.name
-                  : KIND_WORDS[meal.label.kind]}
+                {getWhat(meal)}
               </span>
             ),
           },
@@ -188,8 +208,26 @@ function ShoppingMealsSheet({
         ];
 
   return (
-    <DetailSheet isOpen onClose={onClose} title='Meals on your list'>
-      <div className='flex max-h-[max(12rem,calc(92dvh-12rem))] flex-col gap-3 sm:max-h-none'>
+    <DetailSheet
+      isOpen
+      onClose={onClose}
+      title='Meals on your list'
+      footer={
+        isPhone ? undefined : (
+          <div className='flex justify-end'>
+            <Button
+              type='button'
+              variant='secondary'
+              data-modal-action='true'
+              onClick={onClose}
+            >
+              Done
+            </Button>
+          </div>
+        )
+      }
+    >
+      <div className='flex max-h-[max(12rem,calc(92dvh-12rem))] flex-col gap-3 sm:max-h-[calc(100dvh-21rem)]'>
         <div className='shrink-0 space-y-2'>
           <p className='text-muted-foreground text-sm'>
             Remove one and its share comes off your list. What you've ticked
@@ -200,14 +238,27 @@ function ShoppingMealsSheet({
               {error}
             </p>
           )}
+          {hasSearch && (
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder='Search these meals'
+            />
+          )}
         </div>
-        {shown.length === 0 ? (
+        {shown.length === 0 && (
           <p className='text-muted-foreground py-2 text-sm'>
             Your list isn't for any meal now.
           </p>
-        ) : (
+        )}
+        {shown.length > 0 && found.length === 0 && (
+          <p className='text-muted-foreground py-2 text-sm wrap-break-word'>
+            No meal on your list matches “{query.trim()}”.
+          </p>
+        )}
+        {found.length > 0 && (
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto [@media(max-height:800px)]:min-h-36'>
-            {shown.map((meal) => {
+            {visible.map((meal) => {
               const isStopping = stopping.has(meal.source);
               const isTaken = takenSources.has(meal.source);
               return (
@@ -237,7 +288,7 @@ function ShoppingMealsSheet({
                       aria-label={`Remove ${names.get(meal.source) ?? meal.label.name} from your list`}
                       loading={isStopping}
                       disabled={isStopping}
-                      className="relative mt-0.5 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']"
+                      className="relative -mt-0.5 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                       onClick={() => void handleStop(meal)}
                     >
                       Remove
@@ -246,6 +297,20 @@ function ShoppingMealsSheet({
                 </li>
               );
             })}
+            {visible.length < found.length && (
+              <li>
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  className='h-10 px-0!'
+                  onClick={() => setLimit(limit + ROWS_SHOWN)}
+                >
+                  Show {Math.min(found.length - visible.length, ROWS_SHOWN)}{' '}
+                  more
+                </Button>
+              </li>
+            )}
           </ul>
         )}
       </div>

@@ -277,6 +277,7 @@ import {
   getSourceNames as stopNames,
   formatShopAmount as stopAmountText,
   getPlannedParts as stopParts,
+  getShoppingMealsText as stopMealsText,
   getRowSourceShares as stopRowShares,
   getSourceShares as stopShares,
   isAsStopLeft as stopAsLeft,
@@ -7356,6 +7357,25 @@ assert.equal(
     ],
     ['A, B and C', 'A, B and 2 more', 'A', ''],
     'names join as a sentence; one past the limit is named, never "and 1 more"',
+  );
+
+  const doorMeals = (sources: string[]) =>
+    stopMealsText(
+      sources.map((source) => ({ label: labels.get(source)! })),
+      '2026-10-15',
+    );
+  assert.deepEqual(
+    [
+      doorMeals(['thu', 'fri']),
+      doorMeals(['thu-lunch', 'thu', 'recipe:rice-pot']),
+      doorMeals(['thu', 'long-a', 'fri', ...many.map((meal) => meal.id)]),
+    ],
+    [
+      'Thu dinner and Fri dinner',
+      'Thu lunch, Thu dinner and Rice pot',
+      'Thu dinner, Fri dinner and 50 more',
+    ],
+    'the door names the soonest meals and how many more, saying a slot two plates share once (two Thu dinners read "Thu dinner")',
   );
 
   const context = {
