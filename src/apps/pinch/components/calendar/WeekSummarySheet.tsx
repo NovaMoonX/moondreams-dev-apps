@@ -21,12 +21,12 @@ import {
   type DayRange,
 } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
-import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getNutritionGaps,
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import {
+  getCostAverages,
   getDayCostText,
   getPeriodCostText,
   getPricedCoverage,
@@ -99,20 +99,7 @@ function WeekSummarySheet({
     ...getNutritionGaps(stats.openNutritionMissing, show),
   ];
   const references = [
-    stats.mealsPriced >= 2 && stats.avgPerMealCents !== null
-      ? {
-          key: 'avg',
-          label: isPartial ? 'Avg per meal so far' : 'Avg per meal',
-          value: formatCost(stats.avgPerMealCents),
-        }
-      : null,
-    show.protein && stats.proteinCentsPerGram !== null
-      ? {
-          key: 'protein',
-          label: isPartial ? 'Per g protein so far' : 'Per g protein',
-          value: formatCost(stats.proteinCentsPerGram),
-        }
-      : null,
+    ...getCostAverages(stats, show.protein),
     hasShownValue(stats.dailyNutrition, show)
       ? {
           key: 'nutrition',

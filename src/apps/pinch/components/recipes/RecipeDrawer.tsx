@@ -18,6 +18,7 @@ import FormSection from '@/components/FormSection';
 import GroupRow from '@/components/GroupRow';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
+import TickMark from '@/components/TickMark';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -367,7 +368,7 @@ function RecipeDrawer({
           <ActionGroup>
             {cookedText && (
               <GroupRow
-                icon='✅'
+                icon={<TickMark />}
                 ariaLabel={`${cookedText}. Cooking history`}
                 onClick={() => onOpenHistory(recipe.id)}
               >

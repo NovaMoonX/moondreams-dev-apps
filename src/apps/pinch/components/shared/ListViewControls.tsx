@@ -87,34 +87,42 @@ function AboutTheNumbers() {
 }
 
 interface NutritionViewOptionsProps {
-  /** Whether the Week's meal rows show what each costs, and how many such choices differ from the default. */
-  prices?: {
-    checked: boolean;
-    customizedCount: number;
-    onChange: (showPrices: boolean) => void;
-    onReset: () => void;
-  };
+  options: ListViewOptions;
+  customizedCount: number;
+  onChange: (patch: Partial<ListViewOptions>) => void;
+  onReset: () => void;
 }
 
-/** The Calendar's "View options": the nutrition every screen shows, whether its rows show prices, and where the numbers come from. */
-export function NutritionViewOptions({ prices }: NutritionViewOptionsProps) {
+/** The Calendar's "View options": the nutrition every screen shows, whether the averages line and the Week's meal rows show their figures, and where the numbers come from. */
+export function NutritionViewOptions({
+  options,
+  customizedCount,
+  onChange,
+  onReset,
+}: NutritionViewOptionsProps) {
   return (
-    <ViewOptions
-      isQuiet
-      customizedCount={prices?.customizedCount}
-      onReset={prices?.onReset}
-    >
-      <NutritionEverywhere />
-      {prices && (
-        <FilterSection title='On this list'>
+    <ViewOptions isQuiet customizedCount={customizedCount} onReset={onReset}>
+      <NutritionEverywhere
+        onTurnOn={() => {
+          if (!options.showAverages) onChange({ showAverages: true });
+        }}
+      />
+      <FilterSection title='On the calendar'>
+        <div className='divide-border divide-y'>
+          <ViewOptionSwitch
+            label='Show averages'
+            description='Avg per meal and daily nutrition, under the total'
+            checked={options.showAverages}
+            onCheckedChange={(showAverages) => onChange({ showAverages })}
+          />
           <ViewOptionSwitch
             label='Show prices'
             description='On each meal in the week'
-            checked={prices.checked}
-            onCheckedChange={prices.onChange}
+            checked={options.showPrices}
+            onCheckedChange={(showPrices) => onChange({ showPrices })}
           />
-        </FilterSection>
-      )}
+        </div>
+      </FilterSection>
       <AboutTheNumbers />
     </ViewOptions>
   );

@@ -210,14 +210,65 @@ export const formatPeriodCost = (cents: number) =>
     ? formatCost(Math.round(cents / 100) * 100).replace(/\.00$/, '')
     : formatCost(cents);
 
-/** "$4.10", "$4.10 so far" while ingredients are left out, "No price yet" with nothing priced, "Not priced" for a span that has passed. */
+type GapQualifier = 'SO_FAR' | 'PLUS' | null;
+
+/** How a figure built from a period's cost owns up to what it leaves out: "so far" while a price added now can still change it, "+" once every gap sits on a day that has passed. */
+const getGapQualifier = (
+  stats: Pick<PeriodStats, 'leftOut' | 'openLeftOut'>,
+): GapQualifier => {
+  if (stats.leftOut.length === 0) return null;
+  return stats.openLeftOut.length > 0 ? 'SO_FAR' : 'PLUS';
+};
+
+/** "$4.10", "$4.10 so far" while a left-out ingredient can still be priced, "$4.10+" once every gap is on a fixed day, "No price yet" with nothing priced, "Not priced" for a span that has passed. */
 export function getPeriodCostText(
-  stats: Pick<PeriodStats, 'spendCents' | 'mealsPriced' | 'leftOut'>,
+  stats: Pick<
+    PeriodStats,
+    'spendCents' | 'mealsPriced' | 'leftOut' | 'openLeftOut'
+  >,
   isPast: boolean,
 ) {
   if (stats.mealsPriced === 0) return isPast ? 'Not priced' : 'No price yet';
   const figure = formatPeriodCost(stats.spendCents);
-  return stats.leftOut.length > 0 ? `${figure} so far` : figure;
+  const qualifier = getGapQualifier(stats);
+  if (qualifier === 'SO_FAR') return `${figure} so far`;
+  return qualifier === 'PLUS' ? `${figure}+` : figure;
+}
+
+export interface CostAverage {
+  key: 'avg' | 'protein';
+  label: string;
+  value: string;
+}
+
+/** A period's cost averages, worded once for the calendar's averages line and its summary sheet: "Avg per meal" from two priced meals and "Per g protein" while protein is on, each "so far" while a gap can still be priced and "+" once every gap is fixed; empty when neither has a figure. */
+export function getCostAverages(
+  stats: Pick<
+    PeriodStats,
+    | 'mealsPriced'
+    | 'avgPerMealCents'
+    | 'proteinCentsPerGram'
+    | 'leftOut'
+    | 'openLeftOut'
+  >,
+  isProteinOn: boolean,
+): CostAverage[] {
+  const qualifier = getGapQualifier(stats);
+  const word = (key: CostAverage['key'], label: string, cents: number) => ({
+    key,
+    label: qualifier === 'SO_FAR' ? `${label} so far` : label,
+    value: qualifier === 'PLUS' ? `${formatCost(cents)}+` : formatCost(cents),
+  });
+  const averages = [
+    stats.mealsPriced >= 2 && stats.avgPerMealCents !== null
+      ? word('avg', 'Avg per meal', stats.avgPerMealCents)
+      : null,
+    isProteinOn && stats.proteinCentsPerGram !== null
+      ? word('protein', 'Per g protein', stats.proteinCentsPerGram)
+      : null,
+  ].filter((average) => average !== null);
+
+  return averages;
 }
 
 /** One day's cost in a list: "$0.08", "$0.08+" while it leaves something out, "No price yet", or "Not priced" once the day has passed. */

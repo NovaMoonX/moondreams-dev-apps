@@ -4104,12 +4104,36 @@ assert.deepEqual(
   ],
   [
     true,
-    { showPrices: false, showMacros: true, basis: 'PER_100G', showStock: true },
+    {
+      showPrices: false,
+      showMacros: true,
+      basis: 'PER_100G',
+      showStock: true,
+      showAverages: true,
+    },
     false,
     true,
     null,
   ],
   'stock lines start shown, and a choice stored before the option existed reads as shown',
+);
+assert.deepEqual(
+  [
+    DEFAULT_LIST_VIEW_OPTIONS.showAverages,
+    parseListViewOptions({ showPrices: true })?.showAverages,
+    parseListViewOptions({ showAverages: false })?.showAverages,
+    parseListViewOptions({ showAverages: 'off' })?.showAverages,
+    countCustomizedViewOptions(
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showAverages: false },
+      'calendar',
+    ),
+    countCustomizedViewOptions(
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showAverages: false },
+      'recipes',
+    ),
+  ],
+  [true, true, false, true, 1, 0],
+  "the Calendar's averages start shown, a choice stored before the switch existed reads as shown, and hiding them counts as a change on the Calendar only",
 );
 assert.deepEqual(
   [
@@ -4263,6 +4287,7 @@ assert.equal(getPutAwayText([]), null);
 // ---------------------------------------------------------------------------
 {
   const {
+    getCostAverages,
     getDayCostText,
     getPeriodCostText,
     getPricedCoverage,
@@ -4271,29 +4296,94 @@ assert.equal(getPutAwayText([]), null);
   const { getDateOfDayKey } =
     await import('../../src/apps/pinch/utils/dayKeys.ts');
 
+  const gapA: Gap = { kind: 'NO_PRODUCT', ingredientId: 'a' };
   assert.deepEqual(
     [
       getPeriodCostText(
-        { spendCents: 410, mealsPriced: 3, leftOut: [] },
+        { spendCents: 410, mealsPriced: 3, leftOut: [], openLeftOut: [] },
         false,
       ),
       getPeriodCostText(
         {
           spendCents: 410,
           mealsPriced: 3,
-          leftOut: [{ kind: 'NO_PRODUCT', ingredientId: 'a' }],
+          leftOut: [gapA],
+          openLeftOut: [gapA],
         },
         false,
       ),
-      getPeriodCostText({ spendCents: 0, mealsPriced: 0, leftOut: [] }, false),
-      getPeriodCostText({ spendCents: 0, mealsPriced: 0, leftOut: [] }, true),
       getPeriodCostText(
-        { spendCents: 789_450, mealsPriced: 300, leftOut: [] },
+        { spendCents: 0, mealsPriced: 0, leftOut: [], openLeftOut: [] },
+        false,
+      ),
+      getPeriodCostText(
+        { spendCents: 0, mealsPriced: 0, leftOut: [], openLeftOut: [] },
+        true,
+      ),
+      getPeriodCostText(
+        { spendCents: 789_450, mealsPriced: 300, leftOut: [], openLeftOut: [] },
         false,
       ),
     ],
     ['$4.10', '$4.10 so far', 'No price yet', 'Not priced', '$7,895'],
     'a period reads its figure, "so far" while something is left out, and the shared words for nothing priced',
+  );
+  assert.equal(
+    getPeriodCostText(
+      { spendCents: 410, mealsPriced: 3, leftOut: [gapA], openLeftOut: [] },
+      true,
+    ),
+    '$4.10+',
+    'a period whose every gap is on a fixed day says + like its day rows, never "so far"',
+  );
+
+  const averagesOf = (
+    patch: Partial<Parameters<typeof getCostAverages>[0]>,
+    isProteinOn = false,
+  ) =>
+    getCostAverages(
+      {
+        mealsPriced: 2,
+        avgPerMealCents: 29.6,
+        proteinCentsPerGram: 1.2,
+        leftOut: [],
+        openLeftOut: [],
+        ...patch,
+      },
+      isProteinOn,
+    ).map((average) => `${average.label} ${average.value}`);
+  assert.deepEqual(
+    [
+      averagesOf({}),
+      averagesOf({ leftOut: [gapA], openLeftOut: [gapA] }),
+      averagesOf({ leftOut: [gapA], openLeftOut: [] }),
+    ],
+    [
+      ['Avg per meal $0.30'],
+      ['Avg per meal so far $0.30'],
+      ['Avg per meal $0.30+'],
+    ],
+    'the average per meal says "so far" while a gap can still be priced and + once every gap is fixed, like the total above it',
+  );
+  assert.deepEqual(
+    [
+      averagesOf({ mealsPriced: 1 }),
+      averagesOf({ mealsPriced: 0, avgPerMealCents: null }),
+      averagesOf({}, true),
+      averagesOf({ proteinCentsPerGram: null }, true),
+      averagesOf(
+        { mealsPriced: 1, leftOut: [gapA], openLeftOut: [gapA] },
+        true,
+      ),
+    ],
+    [
+      [],
+      [],
+      ['Avg per meal $0.30', 'Per g protein $0.01'],
+      ['Avg per meal $0.30'],
+      ['Per g protein so far $0.01'],
+    ],
+    'the averages line has an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
   );
   assert.equal(
     formatPeriodCost(789_450),
