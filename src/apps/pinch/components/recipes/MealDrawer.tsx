@@ -153,7 +153,7 @@ function MealDrawer({
             onClick={() => setIsMoreOpen((open) => !open)}
             className={join(
               'text-foreground! size-10 min-w-10 shrink-0 p-0',
-              isMoreOpen && 'bg-muted!',
+              isMoreOpen && 'bg-accent!',
             )}
           >
             <Ellipsis className='h-5 w-5' aria-hidden='true' />

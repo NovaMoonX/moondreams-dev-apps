@@ -127,7 +127,7 @@ function DoorButton({
       onClick={(event) => onClick(event.currentTarget)}
       className={join(
         'text-foreground! size-10 min-w-10 shrink-0 p-0',
-        isOpen && 'bg-muted!',
+        isOpen && 'bg-accent!',
       )}
     >
       {icon}

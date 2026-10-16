@@ -1,7 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 
-import { Drawer, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Drawer, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { X } from 'lucide-react';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -101,6 +102,18 @@ function DetailSheet({
       </h2>
       <div className='-my-1 -mr-2 flex shrink-0 items-center gap-1'>
         {actions}
+        {!isPhone && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            aria-label='Close'
+            onClick={onDialogClose}
+            className='text-foreground! size-10 min-w-10 shrink-0 p-0'
+          >
+            <X className='h-5 w-5' aria-hidden='true' />
+          </Button>
+        )}
       </div>
     </div>
   ) : (
@@ -130,6 +143,7 @@ function DetailSheet({
       isOpen={isOpen}
       onClose={onDialogClose}
       title={heading}
+      hideCloseButton={actions !== undefined}
     >
       <div
         ref={attachContent}
