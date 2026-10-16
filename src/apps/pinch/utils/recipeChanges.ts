@@ -68,7 +68,10 @@ const normalize = (content: RecipeContent) => ({
   servings: content.servings,
   prepMinutes: content.prepMinutes ?? null,
   cookMinutes: content.cookMinutes ?? null,
-  ingredients: content.ingredients.map(normalizeLine),
+  // Order has its own check, group by group, so a line moved to another group is no change here.
+  ingredients: content.ingredients
+    .map(normalizeLine)
+    .sort((a, b) => a.id.localeCompare(b.id)),
   steps: content.steps.map((step) => step.trim()).filter(Boolean),
   nutrition: Object.fromEntries(
     METRIC_KEYS.map((key) => [key, content.nutritionOverride?.[key] ?? null]),
@@ -120,7 +123,7 @@ const getLineChanges = (
   return [...(isAmountChanged ? [amountLine] : []), ...noteLine()];
 };
 
-/** Lines are compared without their group: moving a line to another heading reorganizes the list without changing the dish, so on its own it records no tweak. A line whose ingredient sits in several groups is named with its group. */
+/** Lines are compared without their group, and order only among lines that stayed in their group: moving a line to another heading reorganizes the list without changing the dish, so on its own it records no tweak. A line whose ingredient sits in several groups is named with its group. */
 const getIngredientChanges = (
   beforeLines: RecipeIngredient[],
   afterLines: RecipeIngredient[],
@@ -154,6 +157,9 @@ const getIngredientChanges = (
   const removed = before
     .filter((line) => !afterById.has(line.id))
     .map((line) => `Removed ${beforeLabel(line)}`);
+  const beforeKeys = new Map(
+    beforeLines.map((line) => [line.id, getGroupKey(line.group)]),
+  );
   const afterKeys = new Map(
     afterLines.map((line) => [line.id, getGroupKey(line.group)]),
   );
@@ -162,11 +168,13 @@ const getIngredientChanges = (
     groupKeys
       .flatMap((key) => ids.filter((id) => afterKeys.get(id) === key))
       .join('\u0000');
+  const isStill = (id: string) =>
+    beforeKeys.has(id) && beforeKeys.get(id) === afterKeys.get(id);
   const keptBefore = before
-    .filter((line) => afterById.has(line.id))
+    .filter((line) => isStill(line.id))
     .map((line) => line.id);
   const keptAfter = after
-    .filter((line) => beforeById.has(line.id))
+    .filter((line) => isStill(line.id))
     .map((line) => line.id);
   const reordered =
     inGroups(keptBefore) === inGroups(keptAfter)

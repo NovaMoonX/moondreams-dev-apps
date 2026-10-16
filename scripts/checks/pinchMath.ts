@@ -7463,6 +7463,17 @@ assert.equal(
         cooked,
         {
           ...cooked,
+          ingredients: placeLineInGroup(ordered, {
+            ...ordered[2],
+            group: 'For the sauce',
+          }),
+        },
+        new Map(),
+      ),
+      getRecipeChanges(
+        cooked,
+        {
+          ...cooked,
           ingredients: [
             ...ordered.filter((line) => line.id !== 'soy2'),
             grp('soy3', 'soy', 'For the sauce', 3),
@@ -7473,12 +7484,13 @@ assert.equal(
     ],
     [
       [],
+      [],
       [
         'Added Soy sauce (for the SAUCE), 3 tbsp',
         'Removed Soy sauce (For the sauce)',
       ],
     ],
-    'moving lines between groups records no tweak, and a change to an ingredient in several groups names its group',
+    'moving lines between groups (to the front or the end of one) records no tweak, and a change to an ingredient in several groups names its group',
   );
 
   const read = getDataFromExtracted(

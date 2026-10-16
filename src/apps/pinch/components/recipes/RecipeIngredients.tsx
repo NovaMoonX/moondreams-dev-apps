@@ -473,8 +473,8 @@ function GroupEditorBody({
         </Button>
         <p className='text-muted-foreground text-center text-xs'>
           {lineCount === 1
-            ? 'Its ingredient stays in the recipe, with no group.'
-            : `Its ${lineCount} ingredients stay in the recipe, with no group.`}
+            ? 'Its ingredient stays, with no group.'
+            : `Its ${lineCount} ingredients stay, with no group.`}
         </p>
       </div>
     </div>
