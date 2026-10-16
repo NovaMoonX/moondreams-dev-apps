@@ -15,6 +15,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import {
   stopShoppingFor,
   undoStopShopping,
+  type StopResult,
 } from '@apps/pinch/store/actions/shoppingActions';
 import {
   selectShoppingMeals,
@@ -25,7 +26,8 @@ import {
   formatSourceSlot,
   getSourceNames,
   type ShoppingMeal,
-  type StopPlan,
+  type StopEntry,
+  type StopRowCounts,
 } from '@apps/pinch/utils/shopping';
 
 const UNDO_TOAST_MS = 6000;
@@ -42,14 +44,23 @@ const getProgress = ({ openCount, rowCount }: ShoppingMeal) => {
     : `${openCount} of ${rowCount} to buy`;
 };
 
-const getStoppedText = ({ removedCount, keptCount }: StopPlan) => {
+const getStoppedText = (
+  { removed, reduced, kept, left }: StopRowCounts,
+  meal: ShoppingMeal,
+) => {
   const things = (count: number) =>
     count === 1 ? '1 thing' : `${count} things`;
-  const wentDown = `${things(keptCount)} went down; something else on your list still needs ${keptCount === 1 ? 'it' : 'them'}.`;
-  if (removedCount === 0) return keptCount === 0 ? undefined : wentDown;
-  return keptCount === 0
-    ? `${things(removedCount)} came off your list.`
-    : `${things(removedCount)} came off, and ${wentDown}`;
+  const stay = (count: number) => (count === 1 ? 'stays' : 'stay');
+  const clauses = [
+    removed > 0 && `${things(removed)} came off your list`,
+    reduced > 0 &&
+      `${things(reduced)} went down by this ${meal.label.kind === 'recipe' ? 'recipe' : 'meal'}'s share`,
+    kept > 0 &&
+      `${things(kept)} ${stay(kept)}, since something else on your list still needs ${kept === 1 ? 'it' : 'them'}`,
+    left > 0 &&
+      `${things(left)} ${stay(left)} as ${left === 1 ? 'it was' : 'they were'}`,
+  ].filter((clause) => clause !== false);
+  return clauses.length === 0 ? undefined : `${clauses.join('; ')}.`;
 };
 
 interface ShoppingMealsSheetProps {
@@ -58,7 +69,6 @@ interface ShoppingMealsSheetProps {
   onClose: () => void;
 }
 
-/** What the list is for, each planned meal, recipe or saved meal with how much of it is still to buy, and the one thing to do with one: stop shopping for it. */
 function ShoppingMealsSheet({
   uid,
   todayKey,
@@ -70,7 +80,9 @@ function ShoppingMealsSheet({
   const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));
   const labels = useAppSelector(selectShoppingSourceLabels);
   const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
-  const [taken, setTaken] = useState<ShoppingMeal[]>([]);
+  const [taken, setTaken] = useState<ReadonlyMap<string, ShoppingMeal>>(
+    new Map(),
+  );
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(ROWS_SHOWN);
@@ -84,15 +96,11 @@ function ShoppingMealsSheet({
       ? meal.label.name
       : KIND_WORDS[meal.label.kind];
   const liveSources = new Set(meals.map((meal) => meal.source));
-  const takenSources = new Set(
-    taken
-      .filter((meal) => !liveSources.has(meal.source))
-      .map((meal) => meal.source),
+  const takenMeals = [...taken.values()].filter(
+    (meal) => !liveSources.has(meal.source),
   );
-  const shown = [
-    ...meals,
-    ...taken.filter((meal) => takenSources.has(meal.source)),
-  ].sort(compareSourceLabels);
+  const takenSources = new Set(takenMeals.map((meal) => meal.source));
+  const shown = [...meals, ...takenMeals].sort(compareSourceLabels);
   const hasSearch = shown.length >= LIST_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const found =
@@ -115,7 +123,7 @@ function ShoppingMealsSheet({
     ).map(({ source, name }) => [source, name]),
   );
 
-  const undo = async (entries: StopPlan['entries']) => {
+  const undo = async (entries: StopEntry[]) => {
     try {
       const restored = await dispatch(
         undoStopShopping({ uid, entries }),
@@ -153,15 +161,15 @@ function ShoppingMealsSheet({
     setError(null);
     setStopping((current) => new Set(current).add(meal.source));
     try {
-      const result = await dispatch(
+      const result: StopResult = await dispatch(
         stopShoppingFor({ uid, source: meal.source }),
       ).unwrap();
-      setTaken((current) => [...current, meal]);
+      setTaken((current) => new Map(current).set(meal.source, meal));
       const id = generateUuid();
       addToast({
         id,
         title: `Took ${name} off your list`,
-        description: getStoppedText(result),
+        description: getStoppedText(result.rows, meal),
         type: 'success',
         duration: UNDO_TOAST_MS,
         action:
@@ -230,8 +238,8 @@ function ShoppingMealsSheet({
       <div className='flex max-h-[max(12rem,calc(92dvh-12rem))] flex-col gap-3 sm:max-h-[calc(100dvh-21rem)]'>
         <div className='shrink-0 space-y-2'>
           <p className='text-muted-foreground text-sm'>
-            Remove one and its share comes off your list. What you've ticked
-            stays.
+            Remove a meal and what it added comes off your list. What you've
+            ticked stays.
           </p>
           {error && (
             <p className='text-destructive text-sm' role='alert'>

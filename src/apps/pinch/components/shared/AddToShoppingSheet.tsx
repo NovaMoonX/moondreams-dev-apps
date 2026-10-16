@@ -219,7 +219,7 @@ export function ShoppingPick({
       : recipe
         ? getRecipeLines(recipe, ingredientsById, servings).map((line) => ({
             ...line,
-            source: getRecipeShoppingSource(recipe.id),
+            source: getRecipeShoppingSource(recipe.id, servings),
           }))
         : [];
     return groupShopLines(lines, ingredientsById);

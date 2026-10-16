@@ -502,7 +502,6 @@ export const selectShoppingSourceLabels = createSelector(
   getShoppingSourceLabels,
 );
 
-/** Which part of an unnamed plate each shopping line is for. */
 export const selectShoppingPlannedParts = createSelector(
   [
     selectShoppingItems,
@@ -513,7 +512,6 @@ export const selectShoppingPlannedParts = createSelector(
   getPlannedParts,
 );
 
-/** What a source's share of the list is worked out from: the plan, saved meals, recipes and ingredients as they are now. */
 export const selectShoppingSourceContext = createSelector(
   [
     selectPlannedMeals,
@@ -529,7 +527,6 @@ export const selectShoppingSourceContext = createSelector(
   }),
 );
 
-/** What the list is for, in the Meals on your list order, for the day the screen opened on. */
 export const selectShoppingMeals = createSelector(
   [
     selectShoppingItems,
