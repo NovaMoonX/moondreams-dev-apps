@@ -86,7 +86,7 @@ function StockRows({ target, onOpenStock }: StockRowsProps) {
         }))}
       />
       {sourcesText && (
-        <span className='text-muted-foreground mt-1 block pl-7.5 text-xs'>
+        <span className='text-muted-foreground mt-1 block pl-8 text-xs'>
           {sourcesText}
         </span>
       )}
