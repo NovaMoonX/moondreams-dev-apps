@@ -6,7 +6,8 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 interface ActionRowProps {
   icon: ReactNode;
   label: string;
-  subtitle: string;
+  /** A consequence the label can't carry; leave it out when there is none. */
+  subtitle?: string;
   onClick: () => void;
   isDisabled?: boolean;
   /** Sits at the row's right edge beside its button, not inside it (a help icon). */
@@ -42,9 +43,11 @@ function ActionRow({
       </span>
       <span className='min-w-0 text-left'>
         <span className='block'>{label}</span>
-        <span className='text-muted-foreground block text-xs font-normal'>
-          {subtitle}
-        </span>
+        {subtitle && (
+          <span className='text-muted-foreground block text-xs font-normal'>
+            {subtitle}
+          </span>
+        )}
       </span>
     </Button>
   );

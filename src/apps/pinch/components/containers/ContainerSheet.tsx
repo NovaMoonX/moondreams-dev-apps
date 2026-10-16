@@ -1,15 +1,14 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Ban,
-  CalendarClock,
   ChevronLeft,
-  CircleCheck,
+  ChevronRight,
+  Hash,
   PencilLine,
   Undo2,
-  Utensils,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -19,6 +18,7 @@ import FormSection from '@/components/FormSection';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -38,17 +38,25 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
+  canPutBack,
+  getBatchKey,
+  getBatchServingsText,
+  getBoxCountCopy,
   getContainerTitle,
+  getCountChangeCopy,
   getEatByDefault,
   getEatByHint,
+  getEatByLabel,
   getEatByPhrase,
   getEatByState,
-  getFinishedText,
   getEventText,
+  getFinishedText,
   getFreezeLine,
+  getFrozenText,
   getLastPlaceEvent,
   getMoveForPlace,
   getMoveNotes,
+  groupBatches,
   isValidEatBy,
 } from '@apps/pinch/utils/containers';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
@@ -56,22 +64,21 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 type SheetView =
   | { kind: 'details' }
-  | { kind: 'eat' }
+  | { kind: 'gone' }
   | { kind: 'move'; to: ContainerPlace }
   | { kind: 'eatBy' }
-  | { kind: 'count' };
-
-interface SubviewProps {
-  uid: string;
-  container: Container;
-  onBack: () => void;
-}
+  | { kind: 'count' }
+  | { kind: 'history' }
+  | { kind: 'boxes' };
 
 interface BackLinkProps {
   onClick: () => void;
+  label?: string;
 }
 
-function BackLink({ onClick }: BackLinkProps) {
+function BackLink({ onClick, label = 'Back' }: BackLinkProps) {
+  useBackStep(true, onClick);
+
   return (
     <Button
       type='button'
@@ -80,97 +87,100 @@ function BackLink({ onClick }: BackLinkProps) {
       onClick={onClick}
     >
       <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
+      {label}
     </Button>
   );
 }
 
-function EatView({
-  uid,
-  container,
-  onBack,
-  onFinished,
-}: SubviewProps & { onFinished: () => void }) {
-  const { eat } = useContainerActions(uid);
-  const [count, setCount] = useState(1);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const amount = Math.min(count, container.servings);
+interface ErrorLineProps {
+  error: string | null;
+}
 
-  const handleEat = async () => {
-    if (isSaving) return;
+function ErrorLine({ error }: ErrorLineProps) {
+  if (error === null) return null;
+
+  return (
+    <p className='text-destructive text-sm' role='alert'>
+      {error}
+    </p>
+  );
+}
+
+interface GoneViewProps {
+  isBatch: boolean;
+  onAnswer: (answer: 'EAT' | 'TOSS') => Promise<unknown>;
+  onBack: () => void;
+  onDone: () => void;
+}
+
+function GoneView({ isBatch, onAnswer, onBack, onDone }: GoneViewProps) {
+  const [busy, setBusy] = useState<'EAT' | 'TOSS' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handle = async (answer: 'EAT' | 'TOSS') => {
+    if (busy !== null) return;
 
     setError(null);
-    setIsSaving(true);
+    setBusy(answer);
     try {
-      const isFinished = await eat(container, amount);
-      if (isFinished === undefined) return;
-      if (isFinished) {
-        onFinished();
-        return;
-      }
-      onBack();
-    } catch (eatError) {
-      setError(getErrorMessage(eatError, 'Unable to save this.'));
+      if ((await onAnswer(answer)) !== undefined) onDone();
+    } catch (endError) {
+      setError(getErrorMessage(endError, 'Unable to save this.'));
     } finally {
-      setIsSaving(false);
+      setBusy(null);
     }
   };
 
   return (
     <div className='grid gap-4'>
       <BackLink onClick={onBack} />
-      <div className='space-y-1'>
-        <p className='font-medium'>How many did you eat?</p>
-        <p className='text-muted-foreground text-sm'>
-          {formatServings(container.servings)} in this container.
-        </p>
+      <p className='font-medium'>
+        {isBatch ? 'What happened to them?' : 'What happened to it?'}
+      </p>
+      <div className='grid grid-cols-2 gap-3'>
+        <Button
+          type='button'
+          variant='secondary'
+          className='h-12'
+          loading={busy === 'EAT'}
+          disabled={busy !== null}
+          onClick={() => void handle('EAT')}
+        >
+          {isBatch ? 'Ate them' : 'Ate it'}
+        </Button>
+        <Button
+          type='button'
+          variant='secondary'
+          className='h-12'
+          loading={busy === 'TOSS'}
+          disabled={busy !== null}
+          onClick={() => void handle('TOSS')}
+        >
+          Tossed
+        </Button>
       </div>
-      <Stepper
-        value={amount}
-        onChange={setCount}
-        label='Servings eaten'
-        min={1}
-        max={container.servings}
-        step={1}
-      />
-      {error && (
-        <p className='text-destructive text-sm' role='alert'>
-          {error}
-        </p>
-      )}
-      <ModalFooterActions
-        cancelAction={
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={onBack}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-        }
-        rightActions={
-          <Button
-            type='button'
-            loading={isSaving}
-            disabled={isSaving}
-            onClick={() => void handleEat()}
-          >
-            {`Ate ${amount}`}
-          </Button>
-        }
-      />
+      <ErrorLine error={error} />
     </div>
   );
+}
+
+interface MoveViewProps {
+  uid: string;
+  container: Container;
+  to: ContainerPlace;
+  isOneOfBatch: boolean;
+  onBack: () => void;
+  onDone: () => void;
 }
 
 function MoveView({
   uid,
   container,
   to,
+  isOneOfBatch,
   onBack,
-}: SubviewProps & { to: ContainerPlace }) {
+  onDone,
+}: MoveViewProps) {
   const { move: moveContainer } = useContainerActions(uid);
   const recipe = useAppSelector(selectRecipesById).get(
     container.recipeId ?? '',
@@ -191,6 +201,7 @@ function MoveView({
   const eatBy = fromDateInputValue(eatByText) ?? null;
   const isValid = eatBy !== null && isValidEatBy(eatBy);
   const label = to === 'FREEZER' ? 'Put in the freezer' : 'Thaw in the fridge';
+  const placeWord = to === 'FREEZER' ? 'freezer' : 'fridge';
 
   const handleMove = async () => {
     if (!isValid || isSaving) return;
@@ -198,8 +209,11 @@ function MoveView({
     setError(null);
     setIsSaving(true);
     try {
-      await moveContainer(container, to, eatBy);
-      onBack();
+      if ((await moveContainer(container, to, eatBy)) !== undefined) {
+        onDone();
+        return;
+      }
+      setIsSaving(false);
     } catch (moveError) {
       setError(getErrorMessage(moveError, 'Unable to save this.'));
       setIsSaving(false);
@@ -212,8 +226,9 @@ function MoveView({
       <div className='space-y-1'>
         <p className='font-medium'>{label}</p>
         <p className='text-muted-foreground text-sm'>
-          The whole container goes in the{' '}
-          {to === 'FREEZER' ? 'freezer' : 'fridge'}.
+          {isOneOfBatch
+            ? `One box goes in the ${placeWord}; the others stay where they are.`
+            : `The whole box goes in the ${placeWord}.`}
         </p>
       </div>
       {notes.length > 0 && (
@@ -224,11 +239,7 @@ function MoveView({
         onChange={setTypedEatBy}
         hint={getEatByHint(move, preset)}
       />
-      {error && (
-        <p className='text-destructive text-sm' role='alert'>
-          {error}
-        </p>
-      )}
+      <ErrorLine error={error} />
       <ModalFooterActions
         cancelAction={
           <Button
@@ -255,17 +266,19 @@ function MoveView({
   );
 }
 
-function EatByView({ uid, container, onBack }: SubviewProps) {
-  const { changeEatBy } = useContainerActions(uid);
-  const [typedEatBy, setTypedEatBy] = useState(
-    toDateInputValue(container.eatBy),
-  );
+interface EatByViewProps {
+  eatBy: number;
+  onSave: (eatBy: number) => Promise<unknown>;
+  onBack: () => void;
+}
+
+function EatByView({ eatBy: current, onSave, onBack }: EatByViewProps) {
+  const [typedEatBy, setTypedEatBy] = useState(toDateInputValue(current));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const eatBy = fromDateInputValue(typedEatBy) ?? null;
-  const canSave =
-    eatBy !== null && isValidEatBy(eatBy) && eatBy !== container.eatBy;
+  const canSave = eatBy !== null && isValidEatBy(eatBy) && eatBy !== current;
 
   const handleSave = async () => {
     if (!canSave || isSaving) return;
@@ -273,7 +286,7 @@ function EatByView({ uid, container, onBack }: SubviewProps) {
     setError(null);
     setIsSaving(true);
     try {
-      await changeEatBy(container, eatBy);
+      await onSave(eatBy);
       onBack();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this.'));
@@ -290,11 +303,7 @@ function EatByView({ uid, container, onBack }: SubviewProps) {
         onChange={setTypedEatBy}
         hint='Your call. Pick the last day you mean to eat it.'
       />
-      {error && (
-        <p className='text-destructive text-sm' role='alert'>
-          {error}
-        </p>
-      )}
+      <ErrorLine error={error} />
       <ModalFooterActions
         cancelAction={
           <Button
@@ -321,23 +330,47 @@ function EatByView({ uid, container, onBack }: SubviewProps) {
   );
 }
 
-function CountView({ uid, container, onBack }: SubviewProps) {
-  const { correctCount } = useContainerActions(uid);
+interface CountViewProps {
+  uid: string;
+  container: Container;
+  onBack: () => void;
+  onDone: () => void;
+}
+
+function CountView({ uid, container, onBack, onDone }: CountViewProps) {
+  const { eat, correctCount } = useContainerActions(uid);
   const [count, setCount] = useState(container.servings);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canSave = count !== container.servings;
+  const { change, line, action } = getCountChangeCopy(
+    container.servings,
+    count,
+  );
+
+  const save = async () => {
+    if (change.kind === 'SAME') return;
+    if (change.kind === 'COUNT') {
+      await correctCount(container, change.count);
+      onBack();
+      return;
+    }
+    const eaten = await eat(
+      container,
+      change.kind === 'ALL' ? 'ALL' : change.eaten,
+    );
+    if (eaten !== undefined) onDone();
+  };
 
   const handleSave = async () => {
-    if (!canSave || isSaving) return;
+    if (change.kind === 'SAME' || isSaving) return;
 
     setError(null);
     setIsSaving(true);
     try {
-      await correctCount(container, count);
-      onBack();
+      await save();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this.'));
+    } finally {
       setIsSaving(false);
     }
   };
@@ -345,26 +378,19 @@ function CountView({ uid, container, onBack }: SubviewProps) {
   return (
     <div className='grid gap-4'>
       <BackLink onClick={onBack} />
-      <div className='space-y-1'>
-        <p className='font-medium'>How many are really left?</p>
-        <p className='text-muted-foreground text-sm'>
-          The count says {formatServings(container.servings)} now. The history
-          notes the change.
-        </p>
-      </div>
+      <p className='font-medium'>How many are left?</p>
       <Stepper
         value={count}
         onChange={setCount}
         label='Servings left'
-        min={1}
+        min={0}
         max={MAX_CONTAINER_SERVINGS}
         step={1}
       />
-      {error && (
-        <p className='text-destructive text-sm' role='alert'>
-          {error}
-        </p>
-      )}
+      <p className='text-muted-foreground text-sm' role='status'>
+        {line}
+      </p>
+      <ErrorLine error={error} />
       <ModalFooterActions
         cancelAction={
           <Button
@@ -380,10 +406,10 @@ function CountView({ uid, container, onBack }: SubviewProps) {
           <Button
             type='button'
             loading={isSaving}
-            disabled={isSaving || !canSave}
+            disabled={isSaving || change.kind === 'SAME'}
             onClick={() => void handleSave()}
           >
-            Save
+            {action}
           </Button>
         }
       />
@@ -391,9 +417,177 @@ function CountView({ uid, container, onBack }: SubviewProps) {
   );
 }
 
+interface BoxCountViewProps {
+  boxes: Container[];
+  onEat: (eaten: Container[], left: number) => Promise<unknown>;
+  onBack: () => void;
+  onDone: () => void;
+}
+
+function BoxCountView({ boxes, onEat, onBack, onDone }: BoxCountViewProps) {
+  const [count, setCount] = useState(boxes.length);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { eaten, line, action } = getBoxCountCopy(boxes.length, count);
+
+  const handleSave = async () => {
+    if (eaten === 0 || isSaving) return;
+
+    setError(null);
+    setIsSaving(true);
+    try {
+      if ((await onEat(boxes.slice(0, eaten), count)) !== undefined) {
+        onDone();
+      }
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, 'Unable to save this.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className='grid gap-4'>
+      <BackLink onClick={onBack} />
+      <p className='font-medium'>How many boxes are left?</p>
+      <Stepper
+        value={count}
+        onChange={setCount}
+        label='Boxes left'
+        min={0}
+        max={boxes.length}
+        step={1}
+      />
+      <p className='text-muted-foreground text-sm' role='status'>
+        {line}
+      </p>
+      <ErrorLine error={error} />
+      <ModalFooterActions
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={onBack}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || eaten === 0}
+            onClick={() => void handleSave()}
+          >
+            {action}
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+interface HistoryListProps {
+  container: Container;
+}
+
+function HistoryList({ container }: HistoryListProps) {
+  return (
+    <FormSection title='History'>
+      <ul className='divide-border divide-y'>
+        {[...container.history].reverse().map((event, index) => (
+          <li key={`${event.at}-${index}`} className='py-2'>
+            <p className='text-sm wrap-break-word'>{getEventText(event)}</p>
+            <p className='text-muted-foreground text-xs'>
+              {formatDateShort(event.at)} · {formatTime(event.at)}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </FormSection>
+  );
+}
+
+interface FactsProps {
+  container: Container;
+  servingsText: string;
+  onChangeDate: () => void;
+  /** A quiet link that shares the date's line, so the sheet stays one screen on a small phone. */
+  trailing: ReactNode;
+}
+
+function Facts({
+  container,
+  servingsText,
+  onChangeDate,
+  trailing,
+}: FactsProps) {
+  const state = getEatByState(container.eatBy);
+  const dateLabel =
+    state === 'PAST'
+      ? `Past its date · ${getEatByPhrase(container.eatBy)}`
+      : getEatByLabel(container.eatBy);
+  const freezeLine = getFreezeLine(container.history);
+  const lastPlace = getLastPlaceEvent(container.history);
+  const thawedAt = lastPlace?.kind === 'THAW' ? lastPlace.at : null;
+
+  return (
+    <div className='space-y-1.5'>
+      <p className='text-muted-foreground flex flex-wrap gap-x-3 text-sm'>
+        <span className='whitespace-nowrap'>
+          <span aria-hidden='true'>
+            {CONTAINER_PLACE_EMOJIS[container.place]}
+          </span>{' '}
+          {CONTAINER_PLACE_LABELS[container.place]}
+        </span>
+        <span className='whitespace-nowrap'>{servingsText}</span>
+        {container.place === 'FREEZER' && (
+          <span className='whitespace-nowrap'>{getFrozenText(container)}</span>
+        )}
+      </p>
+      <div className='flex flex-wrap items-center justify-between gap-x-4 gap-y-2'>
+        <Button
+          type='button'
+          variant='tertiary'
+          aria-label={`${dateLabel}. Change the date`}
+          className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
+          onClick={onChangeDate}
+        >
+          {state === 'LATER' ? (
+            <span className='whitespace-nowrap'>{dateLabel}</span>
+          ) : (
+            <EatByBadge state={state} label={dateLabel} />
+          )}
+          <PencilLine
+            className='text-muted-foreground h-3.5 w-3.5 shrink-0'
+            aria-hidden='true'
+          />
+        </Button>
+        {trailing}
+      </div>
+      {(freezeLine || thawedAt !== null) && (
+        <p className='text-muted-foreground text-sm'>
+          {[
+            thawedAt !== null
+              ? `Thawed in the fridge on ${formatDateShort(thawedAt)}`
+              : null,
+            freezeLine,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface ContainerSheetProps {
   uid: string;
-  containerId: string;
+  /** The boxes one row stands for: a batch put away together, or a single box. */
+  containerIds: string[];
+  /** The batch the row showed; boxes that leave it (moved or re-dated alone) drop out of the sheet. */
+  batchKey: string | null;
   /** Finished containers are not in the live store. */
   finished: Container | null;
   onClose: () => void;
@@ -401,21 +595,51 @@ interface ContainerSheetProps {
 
 function ContainerSheet({
   uid,
-  containerId,
+  containerIds,
+  batchKey,
   finished,
   onClose,
 }: ContainerSheetProps) {
   const { confirm } = useActionModal();
-  const { eat, toss, remove, putBack } = useContainerActions(uid);
-  const live = useAppSelector(selectContainersById).get(containerId);
+  const {
+    eat,
+    toss,
+    changeEatBy,
+    remove,
+    putBack,
+    endBatch,
+    changeBatchEatBy,
+    removeBatch,
+  } = useContainerActions(uid);
+  const containersById = useAppSelector(selectContainersById);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
   const [view, setView] = useState<SheetView>({ kind: 'details' });
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const container = live ?? finished;
+  const live = containerIds.flatMap((id) => {
+    const box = containersById.get(id);
+    return box ? [box] : [];
+  });
+  const getBoxes = () => {
+    if (live.length === 0) return [];
+    const key = live.some((box) => getBatchKey(box) === batchKey)
+      ? batchKey
+      : getBatchKey(live[0]);
+    return groupBatches(live).find((batch) => batch.key === key)?.boxes ?? [];
+  };
+  const boxes = getBoxes();
+  const picked = pickedId === null ? undefined : containersById.get(pickedId);
+  const isBatch = picked === undefined && boxes.length > 1;
+  const container = picked ?? boxes[0] ?? finished;
   const backToDetails = () => setView({ kind: 'details' });
+  const pick = (id: string | null) => {
+    setPickedId(id);
+    setView({ kind: 'details' });
+    setError(null);
+  };
 
   const run = async (
     key: string,
@@ -438,8 +662,8 @@ function ContainerSheet({
       return (
         <div className='grid gap-4'>
           <p className='text-muted-foreground py-4 text-center text-sm'>
-            This container isn't in stock anymore. It may have been finished on
-            another device.
+            This isn't in your fridge or freezer anymore. It may have been
+            finished on another device.
           </p>
           <ModalFooterActions
             rightActions={
@@ -458,14 +682,27 @@ function ContainerSheet({
       container.recipeId === null
         ? undefined
         : recipesById.get(container.recipeId);
+    const otherPlace: ContainerPlace =
+      container.place === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
+    const placeWord = CONTAINER_PLACE_LABELS[container.place].toLowerCase();
+    const isEachOneServing = boxes.every((box) => box.servings === 1);
 
-    if (view.kind === 'eat' && isInStock) {
+    if (view.kind === 'gone' && isInStock) {
       return (
-        <EatView
-          uid={uid}
-          container={container}
+        <GoneView
+          isBatch={isBatch}
+          onAnswer={(answer) => {
+            if (isBatch) {
+              return endBatch(
+                boxes,
+                answer,
+                `${answer === 'EAT' ? 'Ate' : 'Tossed'} all ${boxes.length} boxes`,
+              );
+            }
+            return answer === 'EAT' ? eat(container, 'ALL') : toss(container);
+          }}
           onBack={backToDetails}
-          onFinished={onClose}
+          onDone={onClose}
         />
       );
     }
@@ -475,27 +712,110 @@ function ContainerSheet({
           uid={uid}
           container={container}
           to={view.to}
+          isOneOfBatch={isBatch}
           onBack={backToDetails}
+          onDone={onClose}
         />
       );
     }
     if (view.kind === 'eatBy' && isInStock) {
       return (
-        <EatByView uid={uid} container={container} onBack={backToDetails} />
+        <EatByView
+          eatBy={container.eatBy}
+          onSave={(eatBy) =>
+            isBatch
+              ? changeBatchEatBy(boxes, eatBy)
+              : changeEatBy(container, eatBy)
+          }
+          onBack={backToDetails}
+        />
+      );
+    }
+    if (view.kind === 'count' && isInStock && isBatch) {
+      return (
+        <BoxCountView
+          boxes={boxes}
+          onEat={(eaten, left) =>
+            endBatch(
+              eaten,
+              'EAT',
+              left === 0
+                ? `Ate all ${boxes.length} boxes`
+                : `Ate ${eaten.length} ${eaten.length === 1 ? 'box' : 'boxes'} · ${left} left`,
+            )
+          }
+          onBack={backToDetails}
+          onDone={onClose}
+        />
       );
     }
     if (view.kind === 'count' && isInStock) {
       return (
-        <CountView uid={uid} container={container} onBack={backToDetails} />
+        <CountView
+          uid={uid}
+          container={container}
+          onBack={backToDetails}
+          onDone={onClose}
+        />
+      );
+    }
+    if (view.kind === 'history') {
+      return (
+        <div className='grid gap-4'>
+          <BackLink onClick={backToDetails} />
+          <HistoryList container={container} />
+        </div>
+      );
+    }
+    if (view.kind === 'boxes' && isBatch) {
+      return (
+        <div className='grid gap-2'>
+          <BackLink onClick={backToDetails} />
+          <ul className='divide-border divide-y'>
+            {boxes.map((box, index) => (
+              <li key={box.id}>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  className='h-auto min-h-12 w-full justify-between gap-3 px-0! py-2 text-left font-normal'
+                  onClick={() => pick(box.id)}
+                >
+                  <span className='text-foreground'>
+                    Box {index + 1} · {formatServings(box.servings)}
+                  </span>
+                  <ChevronRight
+                    className='text-muted-foreground h-5 w-5 shrink-0'
+                    aria-hidden='true'
+                  />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
       );
     }
 
+    const getDeleteMessage = () => {
+      if (isBatch) {
+        return `They and their history are erased, and this can't be undone. If you ate them, “It's gone” keeps them in What you finished instead.`;
+      }
+      return isInStock
+        ? `${title} and its history are erased, and this can't be undone. If you ate it, “It's gone” keeps it in What you finished instead.`
+        : `${title} comes off What you finished and its history is erased. This can't be undone.`;
+    };
+    const getMoveLabel = () => {
+      if (otherPlace === 'FREEZER') {
+        return isBatch ? 'Put a box in the freezer' : 'Put in the freezer';
+      }
+      return isBatch ? 'Thaw a box in the fridge' : 'Thaw in the fridge';
+    };
+
     const handleDelete = async () => {
       const isConfirmed = await confirm({
-        title: 'Delete this container?',
-        message: isInStock
-          ? `${title} and its history are erased, and this can't be undone. If you ate it, “Ate it all” keeps it in Finished instead.`
-          : `${title} comes off Finished and its history is erased. This can't be undone.`,
+        title: isBatch
+          ? `Delete ${boxes.length} boxes of ${title}?`
+          : `Delete ${title}?`,
+        message: getDeleteMessage(),
         confirmText: 'Delete',
         destructive: true,
       });
@@ -504,131 +824,85 @@ function ContainerSheet({
       await run(
         'delete',
         async () => {
-          if ((await remove(container)) !== undefined) onClose();
+          const result = isBatch
+            ? await removeBatch(boxes)
+            : await remove(container);
+          if (result !== undefined) onClose();
         },
-        'Unable to delete this container.',
+        'Unable to delete this.',
       );
     };
 
-    const handleToss = async () => {
-      const isConfirmed = await confirm({
-        title: 'Threw it out?',
-        message: `${formatServings(container.servings)} of ${title} ${container.servings === 1 ? 'is' : 'are'} marked as thrown out and it moves to Finished. You can undo it for a few seconds.`,
-        confirmText: 'Threw it out',
-        cancelText: 'Keep it',
-        destructive: true,
-      });
-      if (!isConfirmed) return;
-
-      await run(
-        'toss',
+    const handleEatOne = () =>
+      run(
+        'eat-one',
         async () => {
-          if ((await toss(container)) !== undefined) onClose();
+          const result = isBatch
+            ? await eat(
+                boxes[0],
+                'ALL',
+                `${isEachOneServing ? 'Ate 1' : 'Ate a box'} · ${boxes.length - 1} left`,
+              )
+            : await eat(container, 1);
+          if (result !== undefined) onClose();
         },
         'Unable to save this.',
       );
-    };
 
-    const freezeLine = getFreezeLine(container.history);
-    const lastPlace = getLastPlaceEvent(container.history);
-    const thawedAt = lastPlace?.kind === 'THAW' ? lastPlace.at : null;
-    const state = getEatByState(container.eatBy);
-    const otherPlace: ContainerPlace =
-      container.place === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
-    const eatenOne = busy === 'eat-one';
+    const lastEnd = container.history.at(-1);
 
     return (
       <div className='grid gap-4'>
-        <div className='space-y-1.5'>
-          <p className='text-lg font-medium wrap-break-word'>{title}</p>
-          {isInStock ? (
-            <>
-              <p className='text-muted-foreground flex flex-wrap gap-x-3 text-sm'>
-                <span className='whitespace-nowrap'>
-                  <span aria-hidden='true'>
-                    {CONTAINER_PLACE_EMOJIS[container.place]}
-                  </span>{' '}
-                  {CONTAINER_PLACE_LABELS[container.place]}
-                </span>
-                <span className='whitespace-nowrap'>
-                  {formatServings(container.servings)} left
-                </span>
-              </p>
-              <p className='flex flex-wrap items-center gap-x-2 gap-y-1 text-sm'>
-                <span className='whitespace-nowrap'>
-                  Eat by {getEatByPhrase(container.eatBy)}
-                </span>
-                <EatByBadge state={state} />
-              </p>
-              {(freezeLine || thawedAt !== null) && (
-                <p className='text-muted-foreground text-sm'>
-                  {[
-                    thawedAt !== null
-                      ? `Thawed in the fridge on ${formatDateShort(thawedAt)}`
-                      : null,
-                    freezeLine,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-              )}
-            </>
-          ) : (
-            <p className='text-muted-foreground text-sm'>
-              {getFinishedText(container)} ·{' '}
-              {formatDateShort(container.updatedAt)}
-            </p>
-          )}
-        </div>
+        {picked !== undefined && boxes.length > 0 && (
+          <BackLink onClick={() => pick(null)} label='All the boxes' />
+        )}
+        {isInStock ? (
+          <Facts
+            container={container}
+            servingsText={
+              isBatch
+                ? getBatchServingsText(boxes)
+                : `${formatServings(container.servings)} left`
+            }
+            onChangeDate={() => setView({ kind: 'eatBy' })}
+            trailing={
+              <Button
+                type='button'
+                variant='tertiary'
+                className="decoration-muted-foreground/50 relative h-auto min-h-0 px-0! py-0! text-sm font-normal underline underline-offset-4 before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
+                onClick={() => setView({ kind: isBatch ? 'boxes' : 'history' })}
+              >
+                {isBatch ? 'See each box' : 'See its history'}
+              </Button>
+            }
+          />
+        ) : (
+          <p className='text-muted-foreground text-sm'>
+            {getFinishedText(container)} ·{' '}
+            {formatDateShort(container.updatedAt)}
+          </p>
+        )}
         {isInStock && (
-          <div className='space-y-2'>
+          <div className='space-y-3'>
+            <Button
+              type='button'
+              className='h-12 w-full'
+              disabled={busy === 'eat-one'}
+              onClick={() => void handleEatOne()}
+            >
+              {isBatch && !isEachOneServing ? 'Ate a box' : 'Ate one'}
+            </Button>
             <ActionGroup>
               <ActionRow
                 isGrouped
-                icon={<Utensils className='h-4 w-4' />}
-                label='Ate 1'
+                icon={<Ban className='h-4 w-4' />}
+                label="It's gone"
                 subtitle={
-                  container.servings === 1
-                    ? 'That is the last one'
-                    : `Leaves ${formatServings(container.servings - 1)}`
+                  isBatch
+                    ? 'Keeps them in What you finished'
+                    : 'Keeps it in What you finished'
                 }
-                isDisabled={eatenOne}
-                onClick={() =>
-                  void run(
-                    'eat-one',
-                    async () => {
-                      if ((await eat(container, 1)) === true) onClose();
-                    },
-                    'Unable to save this.',
-                  )
-                }
-              />
-              {container.servings > 2 && (
-                <ActionRow
-                  isGrouped
-                  icon={<Utensils className='h-4 w-4' />}
-                  label='Ate some…'
-                  subtitle='Choose how many'
-                  onClick={() => setView({ kind: 'eat' })}
-                />
-              )}
-              <ActionRow
-                isGrouped
-                icon={<CircleCheck className='h-4 w-4' />}
-                label='Ate it all'
-                subtitle='Moves it to Finished'
-                isDisabled={busy === 'eat-all'}
-                onClick={() =>
-                  void run(
-                    'eat-all',
-                    async () => {
-                      if ((await eat(container, 'ALL')) !== undefined) {
-                        onClose();
-                      }
-                    },
-                    'Unable to save this.',
-                  )
-                }
+                onClick={() => setView({ kind: 'gone' })}
               />
               <ActionRow
                 isGrouped
@@ -637,49 +911,31 @@ function ContainerSheet({
                     {CONTAINER_PLACE_EMOJIS[otherPlace]}
                   </span>
                 }
-                label={
-                  otherPlace === 'FREEZER'
-                    ? 'Put in the freezer'
-                    : 'Thaw in the fridge'
-                }
+                label={getMoveLabel()}
                 subtitle='Sets a new eat-by date'
                 onClick={() => setView({ kind: 'move', to: otherPlace })}
               />
               <ActionRow
                 isGrouped
-                icon={<CalendarClock className='h-4 w-4' />}
-                label='Change eat-by date'
-                subtitle={`Now ${getEatByPhrase(container.eatBy)}`}
-                onClick={() => setView({ kind: 'eatBy' })}
-              />
-              <ActionRow
-                isGrouped
-                icon={<PencilLine className='h-4 w-4' />}
-                label='Correct the count'
-                subtitle='Fix how many are left'
+                icon={<Hash className='h-4 w-4' />}
+                label={
+                  isBatch ? 'How many boxes are left?' : 'How many are left?'
+                }
                 onClick={() => setView({ kind: 'count' })}
-              />
-              <ActionRow
-                isGrouped
-                icon={<Ban className='h-4 w-4' />}
-                label='Threw it out'
-                subtitle='Keeps it in Finished'
-                isDisabled={busy === 'toss'}
-                onClick={() => void handleToss()}
               />
             </ActionGroup>
             {recipe === undefined && container.recipeId !== null && (
               <p className='text-muted-foreground text-xs'>
-                The recipe this came from is gone. The container keeps its name.
+                The recipe this came from is gone. The box keeps its name.
               </p>
             )}
           </div>
         )}
-        {!isInStock && container.history.at(-1)?.kind === 'CLEAR' && (
+        {canPutBack(container) && (
           <ActionRow
             icon={<Undo2 className='h-4 w-4' />}
-            label={`Put it back in the ${CONTAINER_PLACE_LABELS[container.place].toLowerCase()}`}
-            subtitle={`Back on your list with ${formatServings(container.servings)}`}
+            label={`Put it back in the ${placeWord}`}
+            subtitle={`With ${formatServings(lastEnd?.servings ?? 0)}`}
             isDisabled={busy === 'put-back'}
             onClick={() =>
               void run(
@@ -692,33 +948,27 @@ function ContainerSheet({
             }
           />
         )}
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
-        <FormSection title='History'>
-          <ul className='divide-border divide-y'>
-            {[...container.history].reverse().map((event, index) => (
-              <li key={`${event.at}-${index}`} className='py-2'>
-                <p className='text-sm wrap-break-word'>{getEventText(event)}</p>
-                <p className='text-muted-foreground text-xs'>
-                  {formatDateShort(event.at)} · {formatTime(event.at)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </FormSection>
+        <ErrorLine error={error} />
+        {!isInStock && <HistoryList container={container} />}
         <ModalFooterActions
           leftActions={
             <DeleteIconButton
-              label='Delete this container'
+              label={
+                isBatch
+                  ? `Delete these ${boxes.length} boxes`
+                  : `Delete ${title}`
+              }
               disabled={busy === 'delete'}
               onClick={() => void handleDelete()}
             />
           }
           rightActions={
-            <Button type='button' data-modal-action='true' onClick={onClose}>
+            <Button
+              type='button'
+              variant='secondary'
+              data-modal-action='true'
+              onClick={onClose}
+            >
               Done
             </Button>
           }
@@ -728,7 +978,15 @@ function ContainerSheet({
   };
 
   return (
-    <FormSheet isOpen onClose={onClose} title='Container'>
+    <FormSheet
+      isOpen
+      onClose={onClose}
+      title={
+        container
+          ? getContainerTitle(container, recipesById, mealsById)
+          : 'Fridge & freezer'
+      }
+    >
       {getBody()}
     </FormSheet>
   );

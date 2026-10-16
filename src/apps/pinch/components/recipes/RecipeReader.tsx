@@ -94,6 +94,11 @@ interface RecipeReaderProps {
     label: string,
   ) => void;
   onManual: () => void;
+  /** What the person had typed before stepping away, so coming back keeps it. */
+  initialText?: string;
+  initialLink?: string;
+  /** Keeps the pasted text or link as an idea instead of reading it now. */
+  onSaveAsIdea?: (kept: { text: string } | { link: string }) => void;
 }
 
 /** One way of starting a recipe, finished on its own screen: say what the AI will do, take the text, link or file, and read it. */
@@ -102,11 +107,14 @@ function RecipeReader({
   initialUrl,
   onRead,
   onManual,
+  initialText = '',
+  initialLink = '',
+  onSaveAsIdea,
 }: RecipeReaderProps) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<State>({ status: 'idle' });
-  const [text, setText] = useState('');
-  const [link, setLink] = useState(initialUrl ?? '');
+  const [text, setText] = useState(initialText);
+  const [link, setLink] = useState(initialUrl ?? initialLink);
   const [fileKey, setFileKey] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -224,6 +232,17 @@ function RecipeReader({
           >
             Fill in the recipe
           </Button>
+          {onSaveAsIdea && (
+            <Button
+              type='button'
+              variant='secondary'
+              className='w-full sm:w-auto sm:self-start'
+              disabled={isReading || text.trim() === ''}
+              onClick={() => onSaveAsIdea({ text })}
+            >
+              Save as an idea
+            </Button>
+          )}
         </>
       );
     }
@@ -259,6 +278,17 @@ function RecipeReader({
           >
             Fill in the recipe
           </Button>
+          {onSaveAsIdea && (
+            <Button
+              type='button'
+              variant='secondary'
+              className='w-full sm:w-auto sm:self-start'
+              disabled={isReading || link.trim() === ''}
+              onClick={() => onSaveAsIdea({ link })}
+            >
+              Save as an idea
+            </Button>
+          )}
         </>
       );
     }

@@ -174,7 +174,8 @@ export type KitchenView = 'yours' | 'all';
 export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
 export type NutritionMetric = keyof NutritionValues;
 export type RecipesView = 'recipes' | 'meals' | 'ideas';
-export type ShoppingView = 'toBuy' | 'got';
+export type ShoppingHalf = 'toBuy' | 'got';
+export type ShoppingView = ShoppingHalf | 'all';
 
 export type RecipeStartMethod = 'text' | 'file' | 'link' | 'manual';
 
@@ -184,7 +185,7 @@ export type IdeaStartMethod = 'link' | 'photo' | 'text';
 
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
 export type PinchSubview =
-  | { kind: 'stores' }
+  /** Stores & prices: every price grouped under the store it is at, and the stores themselves. */
   | { kind: 'products' }
   | { kind: 'sources' }
   | { kind: 'containers'; recipeId?: string; mealId?: string }
@@ -201,12 +202,14 @@ export type PinchSubview =
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
-  /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. A `plannedMealId` makes Finish mark that planned meal's cook. */
+  /** Cooking step by step, at each recipe's own servings; `servings` is what a plan has for tonight (it starts there only when that is more), and a `plannedMealId` makes Finish mark that planned meal's cooks. */
   | {
       kind: 'cook';
       recipeId: string;
       servings?: number;
       plannedMealId?: string;
+      /** A planned plate's recipes cooked in one session, in plate order, `recipeId` first; absent for one recipe. */
+      plate?: PlateCookRecipe[];
     }
   | {
       kind: 'plan';
@@ -278,11 +281,13 @@ export interface ShoppingItem {
   id: string;
   /** Immutable. */
   ingredientId: string;
-  /** Above zero, at most 1,000,000, two decimals. */
-  amount: number;
+  /** Above zero, at most 1,000,000, two decimals; null for a line that is just the name ("Parsley"), which is always in `EACH`. */
+  amount: number | null;
   /** Immutable: a different unit is a different item. */
   unit: Unit;
   isChecked: boolean;
+  /** What put it on the list: planned meal ids, `recipe:<id>` and `meal:<id>`, oldest first, at most 60; empty for something added on the list itself. Documents written before sources lack the key, which reads as empty. */
+  sources: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -381,14 +386,19 @@ export interface RecipeNote {
 
 export type ShoppingRequest =
   | { kind: 'recipe'; recipeId: string }
-  | { kind: 'items'; items: MealItem[]; label: string; mealId?: string | null };
+  | { kind: 'items'; items: MealItem[]; label: string; mealId?: string | null }
+  /** One day's planned meals, each remembered as what put its lines on the list. */
+  | { kind: 'day'; dayKey: string }
+  /** Planned days, both ends included (one day has the same start and end); the days before today are left out. */
+  | { kind: 'range'; startKey: string; endKey: string };
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {
   /** A row id, so edits and reordering keep stable keys. */
   id: string;
   ingredientId: string;
-  amount: number;
+  /** Null for a line with no amount ("salt to taste"), whose note says how much: it never scales and is left out of cost and nutrition without being a gap. Written with `EACH` as its unit. */
+  amount: number | null;
   unit: Unit;
   note: string | null;
 }
@@ -446,3 +456,9 @@ export interface RecipeCost {
 }
 
 export type CookView = 'steps' | 'ingredients';
+
+/** A recipe of a planned plate that cooking holds, with what the plan has for it tonight. */
+export interface PlateCookRecipe {
+  recipeId: string;
+  servings: number;
+}

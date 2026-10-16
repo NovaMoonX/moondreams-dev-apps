@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import HelpTip from '@/components/HelpTip';
@@ -8,10 +9,9 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
+import { isPlannedMealCooked } from '@apps/pinch/components/calendar/plannedMealOffer';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
@@ -19,17 +19,20 @@ import {
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectCooksById,
   selectCostContext,
   selectIngredientsById,
   selectPeriodStats,
   selectPlannedByDay,
   selectRecipesById,
+  selectShoppingItems,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type {
-  Gap,
   MealType,
   PlannedMeal,
+  Recipe,
+  ResolvedIngredient,
   ShoppingRequest,
 } from '@apps/pinch/types';
 import {
@@ -39,17 +42,47 @@ import {
 } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
-  formatCost,
-  formatRowCost,
+  formatCostTile,
+  formatRowPrice,
   getFixedNote,
   getItemTitle,
+  getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
-import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
+import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import { getDayOnList, type DayOnList } from '@apps/pinch/utils/shopping';
 
 const NO_MEALS: PlannedMeal[] = [];
+
+const getShoppingRow = ({ isListed, coveredCount, rowCount }: DayOnList) => {
+  if (isListed) {
+    return { label: 'On your list ✓', subtitle: "Add anything that's missing" };
+  }
+  const label = 'Add to shopping list';
+  if (coveredCount === 0) return { label, subtitle: '' };
+  return {
+    label,
+    subtitle:
+      coveredCount === rowCount
+        ? 'Already on your list'
+        : `${coveredCount} of ${rowCount} already on your list`,
+  };
+};
+
+const getMealDetail = (
+  meal: PlannedMeal,
+  recipesById: Map<string, Recipe>,
+  ingredientsById: Map<string, ResolvedIngredient>,
+) => {
+  const names = meal.items.map((item) =>
+    getItemTitle(item, recipesById, ingredientsById),
+  );
+  if (meal.name?.trim()) return names.join(', ');
+  if (names.length > 1) return `With ${names.slice(1).join(', ')}`;
+  return meal.items[0] ? formatServings(meal.items[0].servings) : null;
+};
 
 interface DayDrawerProps {
   uid: string;
@@ -59,7 +92,6 @@ interface DayDrawerProps {
   onClose: () => void;
   onAdd: (mealType: MealType | null) => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
-  onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
 }
 
@@ -71,7 +103,6 @@ function DayDrawer({
   onClose,
   onAdd,
   onEdit,
-  onFillIn,
   onAddToShopping,
 }: DayDrawerProps) {
   const { openSubview } = usePinchOverlay();
@@ -80,6 +111,7 @@ function DayDrawer({
   const costContext = useAppSelector(selectCostContext);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const cooksById = useAppSelector(selectCooksById);
   const [pickedMealId, setPickedMealId] = useState<string | null>(
     initialMealId,
   );
@@ -94,10 +126,11 @@ function DayDrawer({
   const [footerEl, setFooterEl] = useState<HTMLElement | null>(null);
   const isFrozen = meals.length > 0 && meals.every((meal) => meal.snapshot);
   const fixedSnapshots = meals.flatMap((meal) => meal.snapshot ?? []);
-  const isRepriced = fixedSnapshots.some(
-    (snapshot) => getRepricedAt(snapshot) !== null,
-  );
   const leftOutCount = countLeftOutIngredients(stats.leftOut);
+  const shoppingItems = useAppSelector(selectShoppingItems);
+  const shoppingRow = getShoppingRow(
+    getDayOnList(meals, shoppingItems, recipesById, ingredientsById),
+  );
 
   return (
     <DetailSheet
@@ -112,7 +145,7 @@ function DayDrawer({
               className='w-full'
               onClick={() => onAdd(null)}
             >
-              + Add to this day
+              Plan on this day
             </Button>
           </div>
         ) : (
@@ -126,15 +159,15 @@ function DayDrawer({
           plannedMealId={plannedMealId}
           onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
-          onFillIn={onFillIn}
-          onAddToShopping={onAddToShopping}
-          onStartCooking={(recipeId, servings) => {
+          onStartCooking={(plate) => {
+            if (plate.length === 0) return;
             onClose();
             openSubview({
               kind: 'cook',
-              recipeId,
-              servings,
+              recipeId: plate[0].recipeId,
+              servings: plate[0].servings,
               plannedMealId,
+              plate: plate.length > 1 ? plate : undefined,
             });
           }}
           footerEl={footerEl}
@@ -150,15 +183,11 @@ function DayDrawer({
               <div className='space-y-3'>
                 <StatTile
                   label='Cost'
-                  value={
-                    stats.mealsPriced === 0
-                      ? isFrozen
-                        ? isRepriced
-                          ? 'Still no price'
-                          : "Wasn't priced"
-                        : 'No prices yet'
-                      : formatCost(stats.spendCents)
-                  }
+                  value={formatCostTile(
+                    stats.mealsPriced === 0 ? null : stats.spendCents,
+                    leftOutCount,
+                    isFrozen,
+                  )}
                   detail={isFrozen ? getFixedNote(fixedSnapshots) : undefined}
                   help={
                     leftOutCount > 0 && stats.mealsPriced > 0 ? (
@@ -170,16 +199,9 @@ function DayDrawer({
                         <p>
                           Leaves out {leftOutCount}{' '}
                           {leftOutCount === 1 ? 'ingredient' : 'ingredients'}{' '}
-                          with no price yet.
-                        </p>
-                        <NudgeCountNote
-                          leftOut={stats.leftOut}
-                          open={stats.openLeftOut}
-                        />
-                        <p className='text-muted-foreground'>
                           {isFrozen
-                            ? 'This day has passed, so a price you add now counts from today on.'
-                            : "The cost goes up once they're priced."}
+                            ? 'that had no price when the day passed. A price you add now counts from today on.'
+                            : "with no price yet. The cost goes up once they're priced."}
                         </p>
                       </HelpTip>
                     ) : undefined
@@ -197,11 +219,6 @@ function DayDrawer({
                     />
                   </div>
                 )}
-                <GapNudge
-                  uid={uid}
-                  gaps={stats.openLeftOut}
-                  onFillIn={onFillIn}
-                />
               </div>
               {MEAL_TYPES.map((type) => {
                 const ofType = meals.filter((meal) => meal.mealType === type);
@@ -218,44 +235,62 @@ function DayDrawer({
                     <ul className='divide-border divide-y'>
                       {ofType.map((meal) => {
                         const mealCost = getPlannedMealCost(meal, costContext);
+                        const title = getPlannedMealTitle(
+                          meal,
+                          recipesById,
+                          ingredientsById,
+                        );
+                        const detail = getMealDetail(
+                          meal,
+                          recipesById,
+                          ingredientsById,
+                        );
+                        const isCooked = isPlannedMealCooked(
+                          meal,
+                          Array.from(
+                            new Set(
+                              meal.items.flatMap((item) =>
+                                item.kind === 'RECIPE' &&
+                                recipesById.has(item.refId)
+                                  ? [item.refId]
+                                  : [],
+                              ),
+                            ),
+                          ),
+                          cooksById,
+                        );
                         return (
                           <li key={meal.id}>
                             <Button
                               type='button'
                               variant='tertiary'
-                              aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}`}
+                              aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}: ${title}${isCooked ? ', cooked' : ''}`}
                               onClick={() => setPickedMealId(meal.id)}
-                              className='h-auto w-full flex-col items-stretch gap-0 px-0! py-1 text-left font-normal'
+                              className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
                             >
-                              {meal.items.map((item) => {
-                                const itemCost = mealCost.items.get(item.id);
-                                return (
-                                  <span
-                                    key={item.id}
-                                    className='flex items-center gap-3 py-1.5'
-                                  >
-                                    <span className='min-w-0 flex-1'>
-                                      <span className='text-foreground block truncate'>
-                                        {getItemTitle(
-                                          item,
-                                          recipesById,
-                                          ingredientsById,
-                                        )}
-                                      </span>
-                                      <span className='text-muted-foreground block text-xs'>
-                                        {formatServings(item.servings)}
-                                      </span>
-                                    </span>
-                                    <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                                      {formatRowCost(
-                                        itemCost?.cents,
-                                        meal.snapshot !== null,
-                                        getRepricedAt(meal.snapshot) !== null,
-                                      )}
-                                    </span>
+                              <span className='min-w-0 flex-1'>
+                                <span className='text-foreground block wrap-break-word whitespace-normal'>
+                                  {title}
+                                  {isCooked && (
+                                    <span aria-hidden='true'>{'\u00a0✅'}</span>
+                                  )}
+                                </span>
+                                {detail && (
+                                  <span className='text-muted-foreground block text-xs whitespace-normal'>
+                                    {detail}
                                   </span>
-                                );
-                              })}
+                                )}
+                              </span>
+                              <span className='text-muted-foreground mt-0.5 shrink-0 text-sm whitespace-nowrap'>
+                                {formatRowPrice(
+                                  mealCost.totalCents,
+                                  mealCost.leftOut.length > 0,
+                                )}
+                              </span>
+                              <ChevronRight
+                                className='text-muted-foreground mt-0.5 -ml-1 h-5 w-5 shrink-0'
+                                aria-hidden='true'
+                              />
                             </Button>
                           </li>
                         );
@@ -267,14 +302,9 @@ function DayDrawer({
               <RepriceDayRow uid={uid} dayKey={dayKey} />
               {getDateOfDayKey(dayKey) >= getLocalTodayDate() && (
                 <AddToShoppingRow
-                  subtitle='Choose what you need for the day'
-                  onClick={() =>
-                    onAddToShopping({
-                      kind: 'items',
-                      items: meals.flatMap((meal) => meal.items),
-                      label: formatDayTitle(dayKey),
-                    })
-                  }
+                  label={shoppingRow.label}
+                  subtitle={shoppingRow.subtitle}
+                  onClick={() => onAddToShopping({ kind: 'day', dayKey })}
                 />
               )}
             </>

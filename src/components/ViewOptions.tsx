@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Eye } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface ViewOptionSwitchProps {
@@ -57,6 +58,8 @@ interface ViewOptionsProps {
   customizedCount?: number;
   onReset?: () => void;
   className?: string;
+  /** A plain 40px icon for a header row, instead of the round button that sits beside a search field. */
+  isQuiet?: boolean;
   /** The options: `ViewOptionSwitch` rows and the like. */
   children: ReactNode;
 }
@@ -67,21 +70,27 @@ function ViewOptions({
   customizedCount = 0,
   onReset,
   className,
+  isQuiet = false,
   children,
 }: ViewOptionsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
   const isCustomized = customizedCount > 0;
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen && isPhone, () =>
+    setIsOpen(false),
+  );
 
   const trigger = (
     <Button
       type='button'
-      variant='secondary'
+      variant={isQuiet ? 'tertiary' : 'secondary'}
+      size={isQuiet ? 'icon' : undefined}
       rounded='full'
       aria-label={label}
       aria-expanded={isOpen}
       className={join(
-        'h-12 w-12 shrink-0 p-0',
+        'shrink-0 p-0',
+        isQuiet ? 'size-10' : 'h-12 w-12',
         isCustomized && 'bg-accent!',
         className,
       )}
@@ -107,8 +116,9 @@ function ViewOptions({
       <>
         {trigger}
         <Drawer
+          id={dialogId}
           isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
+          onClose={onDialogClose}
           title={label}
           showCloseButton
           footer={

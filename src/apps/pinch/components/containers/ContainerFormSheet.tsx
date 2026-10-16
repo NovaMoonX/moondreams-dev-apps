@@ -99,7 +99,7 @@ function SubjectPicker({ onPick }: SubjectPickerProps) {
       <SearchInput
         value={query}
         onChange={setQuery}
-        placeholder='Find a recipe or meal'
+        placeholder='Find a recipe or saved meal'
       />
       {trimmed === '' ? (
         <p className='text-muted-foreground px-1 text-sm'>
@@ -125,7 +125,7 @@ function SubjectPicker({ onPick }: SubjectPickerProps) {
                   {match.name}
                 </span>
                 <span className='text-muted-foreground text-xs font-normal'>
-                  {match.kind === 'recipe' ? 'Recipe' : 'Meal'}
+                  {match.kind === 'recipe' ? 'Recipe' : 'Saved meal'}
                 </span>
               </Button>
             </li>
@@ -201,9 +201,9 @@ function DetailsForm({
 
   const getNote = () => {
     if (loadError !== null) {
-      return "Your prepared meals couldn't load, so adding is paused.";
+      return "Your fridge and freezer couldn't load, so adding is paused.";
     }
-    return isReady ? null : 'Loading your prepared meals…';
+    return isReady ? null : 'Loading your fridge and freezer…';
   };
   const note = getNote();
   const canSave = draft.isValid && note === null && title !== '';
@@ -237,7 +237,7 @@ function DetailsForm({
       );
       onClose();
     } catch (saveError) {
-      setError(getErrorMessage(saveError, 'Unable to save this container.'));
+      setError(getErrorMessage(saveError, 'Unable to save this.'));
       setIsSubmitting(false);
     }
   };
@@ -245,22 +245,13 @@ function DetailsForm({
   return (
     <div className='grid gap-4'>
       <div className='flex items-start justify-between gap-3'>
-        <div className='min-w-0'>
-          <p className='text-lg font-medium wrap-break-word'>{title}</p>
-          <p className='text-muted-foreground text-sm'>
-            {subject.kind === 'recipe'
-              ? 'Recipe'
-              : subject.kind === 'meal'
-                ? 'Saved meal'
-                : 'Typed name'}
-          </p>
-        </div>
+        <p className='min-w-0 text-lg font-medium wrap-break-word'>{title}</p>
         {isChangeable && (
           <Button
             type='button'
             variant='link'
             size='sm'
-            className='h-10 shrink-0 px-0!'
+            className='-mt-1.5 h-10 shrink-0 px-0!'
             onClick={onChange}
           >
             Change
@@ -323,7 +314,7 @@ function ContainerFormSheet({
   const [subject, setSubject] = useState<ContainerSubject | null>(initial);
 
   return (
-    <FormSheet isOpen onClose={onClose} title='Container'>
+    <FormSheet isOpen onClose={onClose} title='Fridge & freezer'>
       {subject === null ? (
         <SubjectPicker onPick={setSubject} />
       ) : (

@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import IdeaThumbnail from '@apps/pinch/components/ideas/IdeaThumbnail';
+import { useIsIdeaWaiting } from '@apps/pinch/hooks/useIdeaSaving';
 import type { Idea } from '@apps/pinch/types';
 import { getIdeaDetail } from '@apps/pinch/utils/ideas';
 
@@ -11,7 +12,10 @@ interface IdeaRowProps {
 }
 
 function IdeaRow({ idea, onOpen }: IdeaRowProps) {
-  const detail = getIdeaDetail(idea);
+  const isWaiting = useIsIdeaWaiting(idea.id);
+  const detail = isWaiting
+    ? "Saves when you're back online"
+    : getIdeaDetail(idea);
 
   return (
     <Button

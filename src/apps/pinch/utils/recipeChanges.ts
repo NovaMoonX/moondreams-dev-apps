@@ -40,11 +40,19 @@ const clip = (text: string, max: number) =>
 
 const formatAmount = (amount: number) => String(Math.round(amount * 100) / 100);
 
+const formatQuantity = ({
+  amount,
+  unit,
+}: Pick<RecipeIngredient, 'amount' | 'unit'>) =>
+  amount === null
+    ? 'no amount'
+    : `${formatAmount(amount)} ${UNIT_LABELS[unit]}`;
+
 const normalizeLine = (line: RecipeIngredient): RecipeIngredient => ({
   id: line.id,
   ingredientId: line.ingredientId,
   amount: line.amount,
-  unit: line.unit,
+  unit: line.amount === null ? 'EACH' : line.unit,
   note: (line.note ?? '').trim() || null,
 });
 
@@ -85,14 +93,14 @@ const getLineChanges = (
   getName: (ingredientId: string) => string,
 ) => {
   const name = getName(after.ingredientId);
-  const isAmountChanged =
-    formatAmount(before.amount) !== formatAmount(after.amount) ||
-    before.unit !== after.unit;
+  const isAmountChanged = formatQuantity(before) !== formatQuantity(after);
   const amountLine =
-    before.unit === after.unit
+    before.unit === after.unit &&
+    before.amount !== null &&
+    after.amount !== null
       ? `${name} ${formatAmount(before.amount)} → ${formatAmount(after.amount)} ${UNIT_LABELS[after.unit]}`
-      : `${name} ${formatAmount(before.amount)} ${UNIT_LABELS[before.unit]} → ${formatAmount(after.amount)} ${UNIT_LABELS[after.unit]}`;
-  const swapLine = `Swapped ${getName(before.ingredientId)} for ${name}${isAmountChanged ? `, ${formatAmount(after.amount)} ${UNIT_LABELS[after.unit]}` : ''}`;
+      : `${name} ${formatQuantity(before)} → ${formatQuantity(after)}`;
+  const swapLine = `Swapped ${getName(before.ingredientId)} for ${name}${isAmountChanged ? `, ${formatQuantity(after)}` : ''}`;
   const noteLine = () => {
     if (before.note === after.note) return [];
     if (before.note === null) return [`Added a note to ${name}`];
@@ -119,9 +127,10 @@ const getIngredientChanges = (
   });
   const added = after
     .filter((line) => !beforeById.has(line.id))
-    .map(
-      (line) =>
-        `Added ${getName(line.ingredientId)}, ${formatAmount(line.amount)} ${UNIT_LABELS[line.unit]}`,
+    .map((line) =>
+      line.amount === null
+        ? `Added ${getName(line.ingredientId)}`
+        : `Added ${getName(line.ingredientId)}, ${formatQuantity(line)}`,
     );
   const removed = before
     .filter((line) => !afterById.has(line.id))

@@ -9,31 +9,50 @@ import {
   CONTAINER_PLACE_LABELS,
 } from '@apps/pinch/constants';
 import type { usePutAway } from '@apps/pinch/hooks/usePutAway';
+import type { ContainerPlace, RecipeCare } from '@apps/pinch/types';
 import {
   getEatByPhrase,
   getSavedHeadline,
   groupSavedBatches,
 } from '@apps/pinch/utils/containers';
+import { formatCareDays } from '@apps/pinch/utils/recipeCare';
 
 const CARD_CLASS = 'bg-muted/50 border-border w-full rounded-2xl border';
 
+const PLACES: ContainerPlace[] = ['FRIDGE', 'FREEZER'];
+
 interface CookPutAwayProps {
   putAway: ReturnType<typeof usePutAway>;
+  recipeId: string;
+  care: RecipeCare | null;
+  /** The recipe's name over each card when the screen cooks several. */
+  caption: string | null;
 }
 
-function CookPutAway({ putAway }: CookPutAwayProps) {
-  if (!putAway.isAvailable) {
+function CookPutAway({ putAway, recipeId, care, caption }: CookPutAwayProps) {
+  const entry = putAway.getEntry(recipeId);
+  if (!entry || !entry.isAvailable) {
     return null;
   }
 
-  if (putAway.fields) {
+  const captionLine = caption && (
+    <p className='text-muted-foreground text-xs wrap-break-word'>{caption}</p>
+  );
+
+  if (putAway.fields && putAway.openRecipeId === recipeId) {
     const { place, overNote } = putAway.fields;
     const heading = putAway.isPlaceFixed
       ? `Put some in the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`
       : 'Put some away';
     return (
-      <section aria-label={heading} className={CARD_CLASS}>
-        <p className='px-4 pt-3.5 font-medium'>{heading}</p>
+      <section
+        aria-label={caption ? `${caption}: ${heading}` : heading}
+        className={CARD_CLASS}
+      >
+        <div className='px-4 pt-3.5'>
+          {captionLine}
+          <p className='font-medium'>{heading}</p>
+        </div>
         <ContainerFields
           draft={putAway.fields}
           isPlaceFixed={putAway.isPlaceFixed}
@@ -55,18 +74,31 @@ function CookPutAway({ putAway }: CookPutAwayProps) {
     );
   }
 
-  const batches = groupSavedBatches(putAway.saved);
+  if (putAway.isOpen) {
+    return null;
+  }
+
+  const batches = groupSavedBatches(entry.saved);
+  const getHeading = () => {
+    if (entry.isAsking) return 'Putting any away?';
+    return batches.length > 0 ? 'Put another away' : 'Put some away';
+  };
+  const heading = getHeading();
   const renderNotice = (className: string) =>
-    putAway.notice && (
+    entry.notice && (
       <p className={join('text-destructive text-sm', className)} role='alert'>
-        {putAway.notice}
+        {entry.notice}
       </p>
     );
 
   return (
     <>
       {batches.length > 0 && (
-        <section aria-label='Put away' className={CARD_CLASS}>
+        <section
+          aria-label={caption ? `${caption}: put away` : 'Put away'}
+          className={CARD_CLASS}
+        >
+          {caption && <div className='px-4 pt-3'>{captionLine}</div>}
           <ul className='divide-border divide-y'>
             {batches.map((batch) => {
               const undo = putAway.getUndo(batch);
@@ -117,33 +149,41 @@ function CookPutAway({ putAway }: CookPutAwayProps) {
           {renderNotice('px-4 pb-3')}
         </section>
       )}
-      {putAway.isAsking && (
+      {(entry.isAsking || entry.canOffer) && (
         <section
-          aria-label='Putting any away?'
+          aria-label={caption ? `${caption}: ${heading}` : heading}
           className={join(CARD_CLASS, 'space-y-3 px-4 py-4 text-center')}
         >
-          <p className='font-medium'>Putting any away?</p>
-          <div className='flex flex-wrap justify-center gap-2'>
-            {(['FRIDGE', 'FREEZER'] as const).map((place) => (
-              <Pill
-                key={place}
-                isSelected={false}
-                emoji={CONTAINER_PLACE_EMOJIS[place]}
-                onClick={() => putAway.open(place)}
-              >
-                {`In the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`}
-              </Pill>
-            ))}
-            <Pill isSelected={false} onClick={putAway.dismiss}>
-              Not this time
-            </Pill>
+          <div>
+            {captionLine}
+            <p className='font-medium'>{heading}</p>
           </div>
-          {renderNotice('')}
+          <div className='flex flex-wrap justify-center gap-2'>
+            {PLACES.map((place) => {
+              const days =
+                place === 'FRIDGE' ? care?.fridgeDays : care?.freezerDays;
+              return (
+                <Pill
+                  key={place}
+                  isSelected={false}
+                  emoji={CONTAINER_PLACE_EMOJIS[place]}
+                  onClick={() => entry.open(place)}
+                >
+                  {days == null
+                    ? CONTAINER_PLACE_LABELS[place]
+                    : `${CONTAINER_PLACE_LABELS[place]} · keeps ${formatCareDays(days)}`}
+                </Pill>
+              );
+            })}
+            {entry.isAsking && (
+              <Pill isSelected={false} onClick={entry.dismiss}>
+                Not this time
+              </Pill>
+            )}
+          </div>
+          {batches.length === 0 && renderNotice('')}
         </section>
       )}
-      {batches.length === 0 &&
-        !putAway.isAsking &&
-        renderNotice('w-full text-center')}
     </>
   );
 }

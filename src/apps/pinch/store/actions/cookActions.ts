@@ -180,6 +180,78 @@ export const markPlannedCooked = createAsyncThunk<
   },
 );
 
+interface MarkPlannedPlateInput {
+  uid: string;
+  plannedMealId: string;
+  entries: { recipeId: string; servings: number }[];
+  cookedAt: number;
+}
+
+export interface MarkPlannedPlateResult extends MarkPlannedCookedResult {
+  recipeId: string;
+}
+
+/** One transaction for a plate's recipes, so their cooks land together or not at all; a recipe already marked for the meal keeps its cook. */
+export const markPlannedPlateCooked = createAsyncThunk<
+  MarkPlannedPlateResult[],
+  MarkPlannedPlateInput,
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/cooks/markPlannedPlate',
+  async (
+    { uid, plannedMealId, entries, cookedAt },
+    { getState, rejectWithValue },
+  ) => {
+    const state = getState();
+    const known = new Set(state.pinch.cooks.items.map((cook) => cook.id));
+    const problem =
+      entries
+        .map(({ recipeId, servings }) =>
+          known.has(getCookId(plannedMealId, recipeId))
+            ? null
+            : getAddProblem(state, recipeId, servings, cookedAt),
+        )
+        .find((entryProblem) => entryProblem !== null) ?? null;
+    if (problem !== null) return rejectWithValue(problem);
+
+    try {
+      const results = await runTransaction(db, async (transaction) => {
+        const targets = entries.map((entry) => {
+          const id = getCookId(plannedMealId, entry.recipeId);
+          return { entry, id, ref: cookDoc(uid, id) };
+        });
+        const snapshots = await Promise.all(
+          targets.map((target) => transaction.get(target.ref)),
+        );
+        const now = Date.now();
+        return targets.map(({ entry, id, ref }, index) => {
+          const snapshot = snapshots[index];
+          const { isNew, cook } = mergePlannedCook(
+            snapshot.exists() ? (snapshot.data() as Cook) : null,
+            {
+              id,
+              recipeId: entry.recipeId,
+              plannedMealId,
+              servings: entry.servings,
+              cookedAt,
+              createdAt: now,
+              updatedAt: now,
+            },
+          );
+          if (isNew) transaction.set(ref, cook);
+          return { recipeId: entry.recipeId, id, isNew };
+        });
+      });
+
+      return results;
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to mark this as cooked.'),
+      );
+    }
+  },
+);
+
 interface UpdateCookInput {
   uid: string;
   id: string;
@@ -241,6 +313,30 @@ export const removeCook = createAsyncThunk<
   }
 
   return id;
+});
+
+interface RemoveCooksInput {
+  uid: string;
+  ids: string[];
+}
+
+/** One batch, so taking back several cooks removes all of them or none. */
+export const removeCooks = createAsyncThunk<
+  string[],
+  RemoveCooksInput,
+  { rejectValue: string }
+>('pinch/cooks/removeMany', async ({ uid, ids }, { rejectWithValue }) => {
+  try {
+    const batch = writeBatch(db);
+    ids.forEach((id) => batch.delete(cookDoc(uid, id)));
+    await batch.commit();
+  } catch (error) {
+    return rejectWithValue(
+      getWriteMessage(error, 'Unable to delete these cooks.'),
+    );
+  }
+
+  return ids;
 });
 
 /** Reads the recipe's cooks from Firestore, since the store is empty while they load or after they fail to. A failure is the caller's to ignore: a cook whose recipe is gone is never read. */

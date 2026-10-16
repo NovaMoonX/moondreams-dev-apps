@@ -3,13 +3,11 @@ import { createPortal } from 'react-dom';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import {
-  ChevronLeft,
-  ChevronRight,
-  CookingPot,
-  ShoppingBasket,
-} from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { BookmarkPlus, ChevronLeft, CookingPot } from 'lucide-react';
 
+import { useBackStep } from '@/hooks/useBackHistory';
+import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
@@ -17,50 +15,49 @@ import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
+import { getPlannedMealOffer } from '@apps/pinch/components/calendar/plannedMealOffer';
 import { EatFromStockView } from '@apps/pinch/components/containers/EatFromStock';
-import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
+  CONTAINER_PLACES,
   MAX_NAME_LENGTH,
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
 } from '@apps/pinch/constants';
 import { savePlannedAsMeal } from '@apps/pinch/store/actions/mealActions';
 import { removePlannedMeal } from '@apps/pinch/store/actions/plannedMealActions';
-import { useEatFromStockPlaces } from '@apps/pinch/hooks/useEatFromStockPlaces';
+import { useMealContainers } from '@apps/pinch/hooks/useEatFromStockPlaces';
 import {
+  selectCooksById,
   selectCooksLoadError,
   selectCostContext,
   selectIngredientsById,
+  selectMeals,
   selectPlannedMeals,
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type {
   ContainerPlace,
-  Gap,
   MealType,
-  ShoppingRequest,
+  PlateCookRecipe,
 } from '@apps/pinch/types';
+import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import {
-  formatDayTitle,
-  getLocalTodayDate,
-  getPlannedDayKey,
-} from '@apps/pinch/utils/dayKeys';
-import { getMarkableRecipes } from '@apps/pinch/utils/cooks';
+  getMarkableRecipes,
+  getPlateCookRecipes,
+} from '@apps/pinch/utils/cooks';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
-  formatCost,
-  formatRowCost,
+  formatCostTile,
+  formatRowPrice,
   getFixedNote,
   getItemTitle,
+  getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
-import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
-import { formatDateShort } from '@/utils/formatUtils';
+import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import {
   getPlannedMealNutrition,
@@ -72,9 +69,8 @@ interface PlannedMealViewProps {
   plannedMealId: string;
   onBack: () => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
-  onFillIn: (gaps: Gap[]) => void;
-  onAddToShopping: (request: ShoppingRequest) => void;
-  onStartCooking: (recipeId: string, servings: number) => void;
+  /** Every recipe on the plate still to cook, cooked together in one session. */
+  onStartCooking: (plate: PlateCookRecipe[]) => void;
   /** Where the drawer's pinned footer is: this view puts its actions there, a quiet Modify on the left and the one primary on the right. */
   footerEl: HTMLElement | null;
 }
@@ -85,8 +81,6 @@ function PlannedMealView({
   plannedMealId,
   onBack,
   onEdit,
-  onFillIn,
-  onAddToShopping,
   onStartCooking,
   footerEl,
 }: PlannedMealViewProps) {
@@ -101,29 +95,56 @@ function PlannedMealView({
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const cooksLoadError = useAppSelector(selectCooksLoadError);
+  const cooksById = useAppSelector(selectCooksById);
+  const savedMeals = useAppSelector(selectMeals);
   const [error, setError] = useState<string | null>(null);
   const [isNaming, setIsNaming] = useState(false);
   const [mealName, setMealName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isChoosing, setIsChoosing] = useState(false);
   const [eatingPlace, setEatingPlace] = useState<ContainerPlace | null>(null);
-  const stockPlaces = useEatFromStockPlaces(meal ?? null);
+  const mealContainers = useMealContainers(meal ?? null);
+  const now = useNow();
+  useBackStep(true, onBack);
+  useBackStep(isNaming, () => setIsNaming(false));
 
   if (!meal) {
     return null;
   }
 
-  const cookable = meal.items.flatMap((item) => {
-    const recipe =
-      item.kind === 'RECIPE' ? recipesById.get(item.refId) : undefined;
-    return recipe && recipe.steps.length > 0 ? [{ item, recipe }] : [];
+  const recipeIds = Array.from(
+    new Set(
+      meal.items.flatMap((item) =>
+        item.kind === 'RECIPE' && recipesById.has(item.refId)
+          ? [item.refId]
+          : [],
+      ),
+    ),
+  );
+  const offer = getPlannedMealOffer({
+    meal,
+    recipeIds,
+    cookableRecipeIds: recipeIds.filter(
+      (recipeId) => (recipesById.get(recipeId)?.steps.length ?? 0) > 0,
+    ),
+    cookIds: cooksById,
+    containers: mealContainers,
+    savedPlates: savedMeals.map((saved) => saved.items),
+    now,
   });
-
-  const today = getLocalTodayDate();
-  const canPlanAhead = meal.date >= today;
-  const canEatFromStock = meal.date <= today;
+  const { primary } = offer;
+  const plate = getPlateCookRecipes(
+    meal.items,
+    recipesById,
+    offer.cookRecipeIds,
+  );
+  const eatPlaces = CONTAINER_PLACES.map((place) => ({
+    place,
+    count: offer.eatFrom.filter((container) => container.place === place)
+      .length,
+  })).filter((entry) => entry.count > 0);
+  const startCooking = () => onStartCooking(plate);
   const markable =
-    meal.date <= today && cooksLoadError === null
+    offer.canMarkCooked && cooksLoadError === null
       ? getMarkableRecipes(meal.items, recipesById)
       : [];
   const markableByItemId = new Map(
@@ -142,8 +163,7 @@ function PlannedMealView({
     costContext.ingredientsById,
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
-  const repricedAt = meal.snapshot ? getRepricedAt(meal.snapshot) : null;
-  const noPriceText = repricedAt === null ? "Wasn't priced" : 'Still no price';
+  const title = getPlannedMealTitle(meal, recipesById, ingredientsById);
 
   const handleSaveAsMeal = async () => {
     setError(null);
@@ -153,7 +173,7 @@ function PlannedMealView({
         savePlannedAsMeal({ uid, plannedMealId: meal.id, name: mealName }),
       ).unwrap();
       addToast({
-        title: `Saved ${mealName.trim()} to your meals`,
+        title: `Saved ${mealName.trim()} to Saved meals`,
         type: 'success',
       });
       setIsNaming(false);
@@ -185,42 +205,51 @@ function PlannedMealView({
   };
 
   const actions: ActionChip[] = [
-    canPlanAhead &&
-      cookable.length > 0 && {
+    plate.length > 0 &&
+      primary?.kind !== 'COOK' && {
         key: 'cook',
         icon: <CookingPot className='h-4 w-4' />,
         label: 'Start cooking',
         description: 'Start cooking: steps one at a time, with a timer',
-        onClick: () =>
-          cookable.length === 1
-            ? onStartCooking(cookable[0].recipe.id, cookable[0].item.servings)
-            : setIsChoosing(true),
+        onClick: startCooking,
       },
-    ...(canEatFromStock ? stockPlaces : []).map(({ place, count }) => ({
-      key: `eat-${place}`,
-      icon: (
-        <span className='text-base leading-none'>
-          {CONTAINER_PLACE_EMOJIS[place]}
-        </span>
-      ),
-      label: `Eat from ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
-      description: `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}: ${count} ${count === 1 ? 'container matches' : 'containers match'} this meal`,
-      onClick: () => setEatingPlace(place),
-    })),
-    canPlanAhead && {
-      key: 'shopping',
-      icon: <ShoppingBasket className='h-4 w-4' />,
-      label: 'Shopping list',
-      description: 'Add to shopping list: choose what you need for this meal',
-      onClick: () =>
-        onAddToShopping({
-          kind: 'items',
-          items: meal.items,
-          label: `${MEAL_TYPE_LABELS[meal.mealType]} on ${formatDayTitle(getPlannedDayKey(meal.date))}`,
-          mealId: meal.sourceMealId,
-        }),
+    ...eatPlaces
+      .filter(
+        ({ place }) => !(primary?.kind === 'EAT' && primary.place === place),
+      )
+      .map(({ place, count }) => ({
+        key: `eat-${place}`,
+        icon: (
+          <span className='text-base leading-none'>
+            {CONTAINER_PLACE_EMOJIS[place]}
+          </span>
+        ),
+        label: `Eat from ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
+        description: `Eat from your ${CONTAINER_PLACE_LABELS[place].toLowerCase()}: ${count} ${count === 1 ? 'box matches' : 'boxes match'} this meal`,
+        onClick: () => setEatingPlace(place),
+      })),
+    offer.canSaveAsMeal && {
+      key: 'save',
+      icon: <BookmarkPlus className='h-4 w-4' />,
+      label: 'Save to Saved meals',
+      description: 'Save to Saved meals: keep this plate to plan again',
+      onClick: () => setIsNaming(true),
     },
   ].filter((action) => action !== false);
+
+  const getPrimaryButton = () => {
+    if (primary === null) return null;
+    if (primary.kind === 'COOK') {
+      return { label: 'Start cooking', onClick: startCooking };
+    }
+    const placeLabel = CONTAINER_PLACE_LABELS[primary.place].toLowerCase();
+    return {
+      label: `Eat from ${placeLabel}`,
+      onClick: () => setEatingPlace(primary.place),
+    };
+  };
+  const primaryButton = getPrimaryButton();
+  const canModify = !meal.snapshot;
 
   const footer = footerEl
     ? createPortal(
@@ -243,85 +272,42 @@ function PlannedMealView({
               Save
             </Button>
           </div>
-        ) : (
+        ) : primaryButton || canModify ? (
           <div className='flex gap-2'>
-            {!meal.snapshot && (
+            {canModify && (
               <Button
                 type='button'
-                variant='secondary'
+                variant={primaryButton ? 'secondary' : 'primary'}
+                className={join(!primaryButton && 'flex-1')}
                 onClick={() => onEdit(meal.id, meal.mealType)}
               >
                 Modify
               </Button>
             )}
-            <Button
-              type='button'
-              className='flex-1'
-              onClick={() => setIsNaming(true)}
-            >
-              Save as a meal
-            </Button>
+            {primaryButton && (
+              <Button
+                type='button'
+                className='flex-1'
+                onClick={primaryButton.onClick}
+              >
+                {primaryButton.label}
+              </Button>
+            )}
           </div>
-        ),
+        ) : null,
         footerEl,
       )
     : null;
 
-  if (eatingPlace !== null && canEatFromStock) {
+  if (eatingPlace !== null) {
     return (
       <EatFromStockView
         uid={uid}
         meal={meal}
         place={eatingPlace}
+        containers={offer.eatFrom}
         onBack={() => setEatingPlace(null)}
       />
-    );
-  }
-
-  if (isChoosing && cookable.length > 1) {
-    return (
-      <div className='space-y-5'>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-10 gap-1 px-0!'
-          onClick={() => setIsChoosing(false)}
-        >
-          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-          Back
-        </Button>
-        <div className='space-y-1'>
-          <p className='font-medium'>Which one are you cooking?</p>
-          <p className='text-muted-foreground text-sm'>
-            It opens with the servings you planned.
-          </p>
-        </div>
-        <ul className='divide-border divide-y'>
-          {cookable.map(({ item, recipe }) => (
-            <li key={item.id}>
-              <Button
-                type='button'
-                variant='tertiary'
-                className='h-auto min-h-12 w-full items-start justify-start gap-3 px-0! py-2.5 text-left'
-                onClick={() => onStartCooking(recipe.id, item.servings)}
-              >
-                <span className='min-w-0 flex-1'>
-                  <span className='block font-medium wrap-break-word'>
-                    {recipe.title}
-                  </span>
-                  <span className='text-muted-foreground block text-xs font-normal'>
-                    {formatServings(item.servings)}
-                  </span>
-                </span>
-                <ChevronRight
-                  className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
-                  aria-hidden='true'
-                />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </div>
     );
   }
 
@@ -371,22 +357,21 @@ function PlannedMealView({
         Back
       </Button>
       <div className='space-y-3'>
-        <p className='font-medium'>
+        <p className='font-medium wrap-break-word'>
           <span aria-hidden='true'>{MEAL_TYPE_EMOJIS[meal.mealType]}</span>{' '}
           {MEAL_TYPE_LABELS[meal.mealType]}
+          {title && ` · ${title}`}
         </p>
         <ActionChips label='Meal actions' actions={actions} />
       </div>
       <div className='space-y-3'>
         <StatTile
           label='Cost'
-          value={
-            cost.totalCents === null
-              ? meal.snapshot
-                ? noPriceText
-                : 'No prices yet'
-              : formatCost(cost.totalCents)
-          }
+          value={formatCostTile(
+            cost.totalCents,
+            leftOutCount,
+            meal.snapshot !== null,
+          )}
           detail={meal.snapshot ? getFixedNote([meal.snapshot]) : undefined}
           help={
             leftOutCount > 0 && cost.totalCents !== null ? (
@@ -397,17 +382,10 @@ function PlannedMealView({
               >
                 <p>
                   Leaves out {leftOutCount}{' '}
-                  {leftOutCount === 1 ? 'ingredient' : 'ingredients'} with no
-                  price yet.
-                </p>
-                <NudgeCountNote
-                  leftOut={cost.leftOut}
-                  open={meal.snapshot ? [] : cost.leftOut}
-                />
-                <p className='text-muted-foreground'>
+                  {leftOutCount === 1 ? 'ingredient' : 'ingredients'}{' '}
                   {meal.snapshot
-                    ? 'This day has passed, so a price you add now counts from today on.'
-                    : "The cost goes up once they're priced."}
+                    ? 'that had no price when the day passed. A price you add now counts from today on.'
+                    : "with no price yet. The cost goes up once they're priced."}
                 </p>
               </HelpTip>
             ) : undefined
@@ -424,9 +402,6 @@ function PlannedMealView({
               show={show}
             />
           </div>
-        )}
-        {!meal.snapshot && (
-          <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={onFillIn} />
         )}
       </div>
       <ul className='divide-border divide-y'>
@@ -452,10 +427,14 @@ function PlannedMealView({
                 )}
               </div>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                {formatRowCost(
-                  itemCost?.cents,
-                  meal.snapshot !== null,
-                  repricedAt !== null,
+                <span aria-hidden={itemCost?.cents == null}>
+                  {formatRowPrice(
+                    itemCost?.cents,
+                    (itemCost?.gaps.length ?? 0) > 0,
+                  )}
+                </span>
+                {itemCost?.cents == null && (
+                  <span className='sr-only'>No price</span>
                 )}
               </span>
             </li>
@@ -463,14 +442,6 @@ function PlannedMealView({
         })}
       </ul>
       {error && <p className='text-destructive text-sm'>{error}</p>}
-      {meal.snapshot && (
-        <p className='text-muted-foreground text-sm'>
-          {repricedAt === null
-            ? 'This day has passed, so its meals keep the prices and numbers they had.'
-            : `This day was priced on ${formatDateShort(repricedAt)}, so its meals keep those prices and numbers.`}
-        </p>
-      )}
-      <RepriceDayRow uid={uid} dayKey={getPlannedDayKey(meal.date)} />
       <Button
         type='button'
         variant='tertiary'

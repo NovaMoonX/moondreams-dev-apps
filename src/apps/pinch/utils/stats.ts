@@ -1,15 +1,16 @@
-import { MEAL_TYPES, NUTRITION_METRICS } from '@apps/pinch/constants';
+import { NUTRITION_METRICS } from '@apps/pinch/constants';
 import type {
   Gap,
-  MealType,
   NutritionValues,
   PlannedMeal,
+  Recipe,
 } from '@apps/pinch/types';
 import {
   getPlannedDayKey,
   isDayInRange,
   type DayRange,
 } from '@apps/pinch/utils/dayKeys';
+import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getPlannedMealCost,
   type CostContext,
@@ -44,7 +45,6 @@ export interface PeriodStats {
   nutritionMissing: IngredientMissing[];
   openNutritionMissing: IngredientMissing[];
   byDay: (Totals & { dayKey: string })[];
-  byType: (Totals & { mealType: MealType })[];
 }
 
 const addNutrition = (
@@ -113,15 +113,6 @@ export function getPeriodStats(
           nutrition.values,
         ),
       );
-      acc.byType.set(
-        meal.mealType,
-        addTotals(
-          acc.byType.get(meal.mealType),
-          cost.totalCents,
-          cost.leftOut,
-          nutrition.values,
-        ),
-      );
       acc.nutrition = addNutrition(acc.nutrition, nutrition.values);
       acc.nutritionMissing.push(...nutrition.missing);
       if (!meal.snapshot) {
@@ -142,7 +133,6 @@ export function getPeriodStats(
     },
     {
       byDay: new Map<string, Totals>(),
-      byType: new Map<MealType, Totals>(),
       plannedCount: 0,
       spendCents: 0,
       mealsPriced: 0,
@@ -186,13 +176,58 @@ export function getPeriodStats(
         ...totals,
         leftOut: dedupe(totals.leftOut),
       })),
-    byType: MEAL_TYPES.flatMap((mealType) => {
-      const totals = walked.byType.get(mealType);
-      return totals
-        ? [{ mealType, ...totals, leftOut: dedupe(totals.leftOut) }]
-        : [];
-    }),
   };
+}
+
+/** How many distinct ingredients the planned meals of a span use, and how many of them have a price: "5 of 18 ingredients priced". A line with no amount can't be priced, so it isn't counted. */
+export function getPricedCoverage(
+  plannedMeals: PlannedMeal[],
+  range: DayRange,
+  recipesById: Map<string, Recipe>,
+  leftOut: Gap[],
+) {
+  const usedIds = plannedMeals
+    .filter((meal) => isDayInRange(getPlannedDayKey(meal.date), range))
+    .flatMap((meal) => meal.items)
+    .flatMap((item) =>
+      item.kind === 'RECIPE'
+        ? (recipesById
+            .get(item.refId)
+            ?.ingredients.flatMap((line) =>
+              line.amount === null ? [] : [line.ingredientId],
+            ) ?? [])
+        : [item.refId],
+    );
+  const leftOutIds = new Set(leftOut.map((gap) => gap.ingredientId));
+  const usedCount = new Set([...usedIds, ...leftOutIds]).size;
+
+  return { usedCount, pricedCount: usedCount - leftOutIds.size };
+}
+
+/** A period's total as the summary line and its tile say it; from $1,000 up it drops its cents, so both always read the same figure. */
+export const formatPeriodCost = (cents: number) =>
+  cents >= 100_000
+    ? formatCost(Math.round(cents / 100) * 100).replace(/\.00$/, '')
+    : formatCost(cents);
+
+/** "$4.10", "$4.10 so far" while ingredients are left out, "No price yet" with nothing priced, "Not priced" for a span that has passed. */
+export function getPeriodCostText(
+  stats: Pick<PeriodStats, 'spendCents' | 'mealsPriced' | 'leftOut'>,
+  isPast: boolean,
+) {
+  if (stats.mealsPriced === 0) return isPast ? 'Not priced' : 'No price yet';
+  const figure = formatPeriodCost(stats.spendCents);
+  return stats.leftOut.length > 0 ? `${figure} so far` : figure;
+}
+
+/** One day's cost in a list: "$0.08", "$0.08+" while it leaves something out, "No price yet", or "Not priced" once the day has passed. */
+export function getDayCostText(
+  totals: Pick<Totals, 'totalCents' | 'leftOut'>,
+  isPast: boolean,
+) {
+  if (totals.totalCents === null) return isPast ? 'Not priced' : 'No price yet';
+  const figure = formatCost(totals.totalCents);
+  return totals.leftOut.length > 0 ? `${figure}+` : figure;
 }
 
 /** Calories as a whole number, the way every screen shows them; the other metrics keep their decimal. */

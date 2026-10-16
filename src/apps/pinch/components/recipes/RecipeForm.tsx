@@ -20,7 +20,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { store, useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
@@ -38,10 +38,12 @@ import {
   getDataFromIdea,
   getInitialData,
   getReadSourceChoice,
+  isRowAmountValid,
   isValidMinutes,
   isValidNutrition,
   parseMinutes,
   parseNutrition,
+  toRecipeLine,
   type IngredientRow,
   type RecipeFormData,
 } from '@apps/pinch/components/recipes/recipeFormModel';
@@ -51,11 +53,12 @@ import {
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_NOTE_LENGTH,
   MAX_RECIPE_TITLE_LENGTH,
-  MAX_SERVING_AMOUNT,
   MAX_SOURCE_LABEL_LENGTH,
+  SECTION_COUNT_THRESHOLD,
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { announceRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
 import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
 import {
@@ -64,9 +67,13 @@ import {
 } from '@apps/pinch/store/actions/recipeActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
+  selectCookSummaries,
+  selectIdeas,
   selectIngredients,
   selectIngredientsById,
+  selectNotesByRecipe,
   selectRecipesById,
+  selectSourceCounts,
   selectSources,
   selectSourcesById,
   selectSourcesLoadError,
@@ -79,11 +86,15 @@ import type {
   RecipeNote,
   RecipeSource,
 } from '@apps/pinch/types';
+import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
+
+const capitalize = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
 
 export interface RecipeRead {
   recipe: ExtractedRecipe;
@@ -91,16 +102,8 @@ export interface RecipeRead {
   label: string;
 }
 
-const isRowValid = (row: IngredientRow) => {
-  const amount = Number(row.amount);
-  return (
-    row.ingredientId !== '' &&
-    row.amount.trim() !== '' &&
-    Number.isFinite(amount) &&
-    amount > 0 &&
-    amount <= MAX_SERVING_AMOUNT
-  );
-};
+const isRowValid = (row: IngredientRow) =>
+  row.ingredientId !== '' && isRowAmountValid(row);
 
 interface RecipeFormProps {
   uid: string;
@@ -133,12 +136,13 @@ function RecipeForm({
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const { subview, closeSubviewIf } = usePinchOverlay();
+  const { subview, closeSubviewIf, openSubviewFromToast } = usePinchOverlay();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
+  const sourceCounts = useAppSelector(selectSourceCounts);
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
   const tracking = useAppSelector((state) =>
     selectTweakTracking(state, recipeId),
@@ -201,13 +205,7 @@ function RecipeForm({
         prepMinutes: null,
         cookMinutes: null,
         coverPath: null,
-        ingredients: lines.map((row) => ({
-          id: row.id,
-          ingredientId: row.ingredientId,
-          amount: Number(row.amount),
-          unit: row.unit,
-          note: null,
-        })),
+        ingredients: lines.map(toRecipeLine),
         steps: [],
         care: null,
         nutritionOverride: null,
@@ -230,7 +228,7 @@ function RecipeForm({
         count:
           new Set(result.missing.map((entry) => entry.ingredientId)).size +
           unresolved,
-        total: lines.length + unresolved,
+        total: lines.filter((row) => !row.isAmountless).length + unresolved,
       },
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
@@ -240,7 +238,7 @@ function RecipeForm({
   const unresolvedCount = formData.ingredients.filter(
     (row) => row.ingredientId === '',
   ).length;
-  const getBlocker = () => {
+  const getBlocker = (): { text: string; target: string | null } | null => {
     if (
       !recipe &&
       formData.title.trim() === '' &&
@@ -248,33 +246,61 @@ function RecipeForm({
     ) {
       return null;
     }
-    if (formData.title.trim() === '') return 'Give it a title to save.';
+    const plain = (text: string) => ({ text, target: null });
+    if (formData.title.trim() === '') return plain('Give it a title to save.');
     if (formData.title.length > MAX_RECIPE_TITLE_LENGTH) {
-      return 'Shorten the title to save.';
+      return plain('Shorten the title to save.');
     }
     if (formData.description.length > MAX_RECIPE_DESCRIPTION_LENGTH) {
-      return 'Shorten the description to save.';
+      return plain('Shorten the description to save.');
     }
-    if (formData.ingredients.length === 0) return 'Add an ingredient to save.';
+    if (formData.ingredients.length === 0) {
+      return {
+        text: 'Add an ingredient to save.',
+        target: '[data-recipe-ingredients]',
+      };
+    }
     if (unresolvedCount > 0) {
-      return `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`;
+      return {
+        text: `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`,
+        target: '[data-ingredient-unresolved]',
+      };
     }
     if (!formData.ingredients.every(isRowValid)) {
-      return 'Check the ingredient amounts to save.';
+      return {
+        text: formData.ingredients.some(
+          (row) => !row.isAmountless && row.amount.trim() === '',
+        )
+          ? 'Add the missing amounts, or choose “No amount”, to save.'
+          : 'Check the ingredient amounts to save.',
+        target: '[data-ingredient-amount-wrong]',
+      };
     }
     if (!isValidMinutes(prep) || !isValidMinutes(cook)) {
-      return 'Check the prep and cook time to save.';
+      return plain('Check the prep and cook time to save.');
     }
     if (getCareProblem(formData.care) !== null) {
-      return 'Check the fridge and freezer days to save.';
+      return plain('Check the fridge and freezer days to save.');
     }
     return null;
   };
   const blocker = getBlocker();
+  const showBlocker = (target: string) => {
+    const element = document.querySelector<HTMLElement>(target);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element?.querySelector('button')?.focus({ preventScroll: true });
+  };
 
   const sourceOptions = useMemo(
-    () => sources.map((source) => ({ value: source.id, label: source.label })),
-    [sources],
+    () =>
+      sources
+        .filter(
+          (source) =>
+            sourceCounts.bySource.has(source.id) ||
+            source.id === initialData.sourceChoice.choice,
+        )
+        .map((source) => ({ value: source.id, label: source.label })),
+    [sources, sourceCounts, initialData.sourceChoice.choice],
   );
 
   const fields = useMemo(
@@ -317,6 +343,16 @@ function RecipeForm({
         },
       }),
       custom({
+        name: 'description',
+        label: '',
+        renderComponent: (props) => (
+          <RecipeDescriptionField
+            value={String(props.value)}
+            onChange={props.onValueChange}
+          />
+        ),
+      }),
+      custom({
         name: 'cover',
         label: '',
         renderComponent: () => (
@@ -357,13 +393,37 @@ function RecipeForm({
         ),
       }),
       custom({
-        name: 'description',
+        name: 'ingredients',
         label: '',
         renderComponent: (props) => (
-          <RecipeDescriptionField
-            value={String(props.value)}
-            onChange={props.onValueChange}
-          />
+          <FormSection
+            title='Ingredients'
+            detail={
+              (props.value as IngredientRow[]).length > SECTION_COUNT_THRESHOLD
+                ? (props.value as IngredientRow[]).length
+                : undefined
+            }
+          >
+            <RecipeIngredients
+              uid={uid}
+              rows={props.value as IngredientRow[]}
+              onChange={props.onValueChange}
+              onRemoved={showUndo}
+            />
+          </FormSection>
+        ),
+      }),
+      custom({
+        name: 'steps',
+        label: '',
+        renderComponent: (props) => (
+          <FormSection title='Steps'>
+            <RecipeSteps
+              steps={props.value as string[]}
+              onChange={props.onValueChange}
+              onRemoved={showUndo}
+            />
+          </FormSection>
         ),
       }),
       ...(hasSourcesFailed
@@ -401,36 +461,6 @@ function RecipeForm({
               },
             }),
           ]),
-      custom({
-        name: 'ingredients',
-        label: '',
-        renderComponent: (props) => (
-          <FormSection
-            title='Ingredients'
-            detail={(props.value as IngredientRow[]).length}
-          >
-            <RecipeIngredients
-              uid={uid}
-              rows={props.value as IngredientRow[]}
-              onChange={props.onValueChange}
-              onRemoved={showUndo}
-            />
-          </FormSection>
-        ),
-      }),
-      custom({
-        name: 'steps',
-        label: '',
-        renderComponent: (props) => (
-          <FormSection title='Steps'>
-            <RecipeSteps
-              steps={props.value as string[]}
-              onChange={props.onValueChange}
-              onRemoved={showUndo}
-            />
-          </FormSection>
-        ),
-      }),
       custom({
         name: 'care',
         label: '',
@@ -532,11 +562,41 @@ function RecipeForm({
     }
 
     const isUsed = isInUse(usage);
+    const state = store.getState();
+    const idea = selectIdeas(state).find(
+      (entry) => entry.recipeId === recipe.id,
+    );
+    const ideaLine = idea
+      ? ` “${idea.title}”, the idea you made it from, goes back to your ideas.`
+      : '';
+    const getHistoryLine = () => {
+      const { cooks, notes } = state.pinch;
+      if (
+        !cooks.isLoaded ||
+        cooks.loadError !== null ||
+        !notes.isLoaded ||
+        notes.loadError !== null
+      ) {
+        return ' Its cooking history and notes go with it.';
+      }
+      const cookCount = selectCookSummaries(state).get(recipe.id)?.count ?? 0;
+      const noteCount = selectNotesByRecipe(state).get(recipe.id)?.length ?? 0;
+      const history = `its cooking history (${cookCount === 1 ? 'once' : `${cookCount} times`})`;
+      const noted = noteCount === 1 ? 'its note' : `its ${noteCount} notes`;
+      if (cookCount > 0 && noteCount > 0) {
+        return ` ${capitalize(history)} and ${noted} are deleted too.`;
+      }
+      if (cookCount > 0) return ` ${capitalize(history)} is deleted too.`;
+      if (noteCount > 0) {
+        return ` ${capitalize(noted)} ${noteCount === 1 ? 'is' : 'are'} deleted too.`;
+      }
+      return '';
+    };
     const confirmed = await confirm({
       title: isUsed ? 'Remove recipe' : 'Delete recipe',
       message: isUsed
-        ? `"${recipe.title}" is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.`
-        : `Delete "${recipe.title}"? This action cannot be undone.`,
+        ? `“${recipe.title}” is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.${ideaLine}`
+        : `Delete “${recipe.title}”?${getHistoryLine()}${ideaLine} This can't be undone.`,
       confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,
     });
@@ -580,7 +640,7 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
-      const { linkedIdea } = await dispatch(
+      const { recipeId: savedId } = await dispatch(
         saveRecipe({
           uid,
           draft: {
@@ -590,13 +650,7 @@ function RecipeForm({
             servings: data.basics.servings,
             prepMinutes: parseMinutes(data.basics.prep),
             cookMinutes: parseMinutes(data.basics.cook),
-            ingredients: data.ingredients.map((row) => ({
-              id: row.id,
-              ingredientId: row.ingredientId,
-              amount: Number(row.amount),
-              unit: row.unit,
-              note: row.note,
-            })),
+            ingredients: data.ingredients.map(toRecipeLine),
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
             sourceId,
             newSource,
@@ -620,23 +674,24 @@ function RecipeForm({
           },
         }),
       ).unwrap();
-      if (initialIdea) {
-        addToast({
-          title: 'Recipe added',
-          description: linkedIdea
-            ? `“${initialIdea.title}” moved to Made into recipes.`
-            : undefined,
-          type: 'success',
-        });
-      } else if (
-        !recipe &&
-        subview?.kind === 'recipe' &&
-        subview.fromCalendar
-      ) {
+      if (!recipe) {
         addToast({
           title: `Added ${data.title.trim()} to your recipes`,
           type: 'success',
+          action: {
+            label: 'Plan it',
+            onClick: () =>
+              openSubviewFromToast({
+                kind: 'plan',
+                dayKey: getCellDayKey(new Date()),
+                mealType: null,
+                plannedMealId: null,
+                fromMealId: null,
+                fromRecipeId: savedId,
+              }),
+          },
         });
+        announceRecipeAdded(savedId);
       }
       closeSubviewIf((current) => current === subview);
     } catch (submitError) {
@@ -656,18 +711,10 @@ function RecipeForm({
   return (
     <>
       <UndoSnackbar pending={pending} onUndo={undo} />
-      {initialIdea && (
-        <p className='text-muted-foreground mb-4 text-sm wrap-break-word'>
-          From your idea:{' '}
-          <span className='text-foreground font-medium'>
-            {initialIdea.title}
-          </span>
-          {initialIdea.kind === 'PHOTO' && (
-            <span className='mt-1 block text-xs'>
-              Its photo stays with the idea. To have an AI read a picture, start
-              a new recipe with “From a file”.
-            </span>
-          )}
+      {initialIdea?.kind === 'PHOTO' && (
+        <p className='text-muted-foreground mb-4 text-sm'>
+          Its photo stays with the idea. To have an AI read a picture, start a
+          new recipe with “From a file”.
         </p>
       )}
       {initialNote && (
@@ -724,7 +771,22 @@ function RecipeForm({
         }}
         submitButton={
           <ModalFooterActions
-            note={blocker}
+            note={
+              blocker?.target ? (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  className="text-muted-foreground! relative h-auto min-h-0 justify-start rounded-none p-0 px-0! py-0! text-left text-xs font-normal whitespace-normal before:absolute before:inset-x-0 before:-top-4 before:-bottom-2 before:content-['']"
+                  onClick={() => showBlocker(blocker.target ?? '')}
+                >
+                  <span className='decoration-muted-foreground/50 underline underline-offset-4'>
+                    {blocker.text}
+                  </span>
+                </Button>
+              ) : (
+                blocker?.text
+              )
+            }
             leftActions={
               recipe && (
                 <DeleteIconButton

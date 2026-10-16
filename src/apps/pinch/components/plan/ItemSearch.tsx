@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
@@ -12,6 +13,7 @@ import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import {
   selectIngredients,
+  selectMeals,
   selectRecipes,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
@@ -21,6 +23,8 @@ import {
 } from '@apps/pinch/utils/catalogSearch';
 
 const MAX_RESULTS = 8;
+const PHONE_FOCUS_DELAY_MS = 350;
+const DESKTOP_FOCUS_DELAY_MS = 30;
 
 interface ItemSearchProps {
   uid: string;
@@ -28,6 +32,10 @@ interface ItemSearchProps {
   onPick: (ingredientId: string) => void;
   /** When given, the person's recipes are searched too and picking one calls this instead. */
   onPickRecipe?: (recipeId: string) => void;
+  /** When given, the person's saved meals are searched too and picking one calls this instead. */
+  onPickMeal?: (mealId: string) => void;
+  /** Shown under the field while nothing is typed. */
+  idle?: ReactNode;
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
   autoFocus?: boolean;
@@ -41,6 +49,8 @@ function ItemSearch({
   uid,
   onPick,
   onPickRecipe,
+  onPickMeal,
+  idle,
   excludeIds = [],
   autoFocus = false,
   resultsClassName,
@@ -49,10 +59,25 @@ function ItemSearch({
   const dispatch = useAppDispatch();
   const ingredients = useAppSelector(selectIngredients);
   const recipes = useAppSelector(selectRecipes);
+  const meals = useAppSelector(selectMeals);
+  const isPhone = useMediaQuery().isBelow('sm');
   const stockByRecipe = useAppSelector(selectStockByRecipe);
   const [query, setQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
+
+  // A drawer or overlay takes focus itself while it opens, so the field is focused once that settles.
+  useEffect(() => {
+    if (!autoFocus) {
+      return;
+    }
+    const timer = window.setTimeout(
+      () => fieldRef.current?.querySelector('input')?.focus(),
+      isPhone ? PHONE_FOCUS_DELAY_MS : DESKTOP_FOCUS_DELAY_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [autoFocus, isPhone]);
 
   const trimmed = query.trim();
   const matches = useMemo(
@@ -74,6 +99,13 @@ function ItemSearch({
             .slice(0, MAX_RESULTS)
         : [],
     [onPickRecipe, recipes, trimmed, excludeIds],
+  );
+  const mealMatches = useMemo(
+    () =>
+      onPickMeal && trimmed !== ''
+        ? searchByName(meals, trimmed).slice(0, MAX_RESULTS)
+        : [],
+    [onPickMeal, meals, trimmed],
   );
   const hasExactName = ingredients.some(
     (ingredient) =>
@@ -108,6 +140,16 @@ function ItemSearch({
     }
   };
 
+  const getPlaceholder = () => {
+    if (onPickMeal && meals.length > 0) {
+      return isPhone
+        ? 'Recipes, meals, ingredients'
+        : 'Search recipes, saved meals, ingredients';
+    }
+    if (onPickRecipe) return 'Search recipes, ingredients';
+    return 'Search ingredients';
+  };
+
   return (
     <div
       className='space-y-2'
@@ -117,20 +159,44 @@ function ItemSearch({
         event.preventDefault()
       }
     >
-      <SearchInput
-        value={query}
-        onChange={setQuery}
-        placeholder={
-          onPickRecipe ? 'Search recipes, ingredients' : 'Search ingredients'
-        }
-        autoFocus={autoFocus}
-      />
+      <div ref={fieldRef}>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={getPlaceholder()}
+        />
+      </div>
       {trimmed === '' ? (
-        <p className='text-muted-foreground px-1 text-sm'>
-          Type a name to find it, or add one that isn't in the list.
-        </p>
+        idle
       ) : (
         <ul className={join('divide-border divide-y', resultsClassName)}>
+          {mealMatches.map((meal) => (
+            <li key={meal.id}>
+              <Button
+                type='button'
+                variant='tertiary'
+                disabled={isDisabled}
+                onClick={() => {
+                  setQuery('');
+                  onPickMeal?.(meal.id);
+                }}
+                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
+              >
+                <span
+                  className='flex w-7 shrink-0 justify-center text-xl'
+                  aria-hidden='true'
+                >
+                  🍽️
+                </span>
+                <span className='min-w-0 flex-1 truncate font-medium'>
+                  {meal.name}
+                </span>
+                <span className='text-muted-foreground shrink-0 text-xs font-normal whitespace-nowrap'>
+                  Saved meal
+                </span>
+              </Button>
+            </li>
+          ))}
           {recipeMatches.map((recipe) => (
             <li key={recipe.id}>
               <Button

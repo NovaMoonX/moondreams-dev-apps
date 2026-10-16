@@ -13,6 +13,7 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CircleHelp, TriangleAlert } from 'lucide-react';
 
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const TIP_GAP_PX = 10;
@@ -52,6 +53,8 @@ interface HelpTipProps {
   placement?: 'top' | 'bottom';
   /** A caution ("this number leaves something out") instead of a question mark; opens the same way. */
   variant?: 'help' | 'warning';
+  /** The modal's dismiss button, for a screen where "Got it" already names something else. */
+  dismissLabel?: string;
   className?: string;
 }
 
@@ -93,6 +96,7 @@ function HelpTip({
   linkLabel,
   placement = 'bottom',
   variant = 'help',
+  dismissLabel = 'Got it',
   className,
 }: HelpTipProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -108,6 +112,9 @@ function HelpTip({
   const arrowRef = useRef<HTMLSpanElement>(null);
   const tipId = useId();
   const isTipShown = isOpen && !usesModal;
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen && usesModal, () =>
+    setIsOpen(false),
+  );
 
   // A modal or tooltip can sit over a drawer, and both close on one Escape: capture it so only it does.
   useEffect(() => {
@@ -154,8 +161,9 @@ function HelpTip({
 
   const modal = (
     <Modal
+      id={dialogId}
       isOpen={isOpen}
-      onClose={() => setIsOpen(false)}
+      onClose={onDialogClose}
       title={title}
       className='border-border border'
     >
@@ -163,7 +171,7 @@ function HelpTip({
         {body}
         <div className='flex justify-end'>
           <Button type='button' rounded='full' onClick={() => setIsOpen(false)}>
-            Got it
+            {dismissLabel}
           </Button>
         </div>
       </div>

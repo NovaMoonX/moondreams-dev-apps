@@ -6,6 +6,7 @@ import {
   FormFactories,
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQuery } from '@tanstack/react-query';
 
 import FallbackImage from '@/components/FallbackImage';
@@ -15,6 +16,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import {
@@ -25,8 +27,10 @@ import {
 import IdeaNoteField from '@apps/pinch/components/ideas/IdeaNoteField';
 import { IDEA_KIND_EMOJIS, MAX_IDEA_TITLE_LENGTH } from '@apps/pinch/constants';
 import { ideaPageQueryOptions } from '@apps/pinch/queries/ideaPageQueries';
+import { trackIdeaSave } from '@apps/pinch/hooks/useIdeaSaving';
 import {
   createIdea,
+  getNewIdeaProblem,
   type IdeaDraft,
 } from '@apps/pinch/store/actions/ideaActions';
 import { selectIdeas } from '@apps/pinch/store/selectors';
@@ -43,20 +47,63 @@ const { custom } = FormFactories;
 interface WayProps {
   uid: string;
   onClose: () => void;
+  /** Called with the saved idea's title. */
+  onSaved: (title: string) => void;
 }
 
-function useCreateIdea(uid: string, onDone: () => void) {
+const getShownTitle = (draft: IdeaDraft) =>
+  clipIdeaTitle(draft.title) ||
+  clipIdeaTitle(getWebLinkHost(toIdeaUrl(draft.url ?? '') ?? '') ?? '');
+
+function useCreateIdea(uid: string, onDone: (title: string) => void) {
   const dispatch = useAppDispatch();
+  const { addToast } = useToast();
+  const ideas = useAppSelector((state) => state.pinch.ideas);
+  const isMountedRef = useRef(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const showSaveFailed = (saveError: unknown) =>
+    addToast({
+      title: "That idea didn't save",
+      description: getErrorMessage(saveError, 'Unable to save this idea.'),
+      type: 'error',
+    });
+
   const submit = async (draft: IdeaDraft) => {
     setError(null);
+    const problem = getNewIdeaProblem(draft, ideas);
+    if (problem !== null) {
+      setError(problem);
+      return;
+    }
+    const title = getShownTitle(draft);
+
+    if (draft.kind !== 'PHOTO') {
+      const id = generateUuid();
+      const saved = dispatch(createIdea({ uid, draft, id })).unwrap();
+      trackIdeaSave(id, saved);
+      saved.catch(showSaveFailed);
+      onDone(title);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await dispatch(createIdea({ uid, draft })).unwrap();
-      onDone();
+      onDone(title);
     } catch (submitError) {
+      if (!isMountedRef.current) {
+        showSaveFailed(submitError);
+        return;
+      }
       setError(getErrorMessage(submitError, 'Unable to save this idea.'));
       setIsSubmitting(false);
     }
@@ -86,13 +133,8 @@ function WayFooter({
         note ?? (error && <span className='text-destructive'>{error}</span>)
       }
       cancelAction={
-        <Button
-          type='button'
-          variant='secondary'
-          onClick={onCancel}
-          disabled={isSubmitting}
-        >
-          Cancel
+        <Button type='button' variant='secondary' onClick={onCancel}>
+          {isSubmitting ? 'Close' : 'Cancel'}
         </Button>
       }
       rightActions={
@@ -144,17 +186,24 @@ function TitleField({
 }
 
 interface LinkWayProps extends WayProps {
-  onOpenExisting: (id: string) => void;
+  onOpenExisting?: (id: string) => void;
+  initialUrl?: string;
 }
 
-export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
+export function IdeaLinkWay({
+  uid,
+  onClose,
+  onSaved,
+  onOpenExisting,
+  initialUrl = '',
+}: LinkWayProps) {
   const ideas = useAppSelector(selectIdeas);
   const { submit, isSubmitting, error, clearError } = useCreateIdea(
     uid,
-    onClose,
+    onSaved,
   );
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState({ url: '', note: '' });
+  const [data, setData] = useState({ url: initialUrl, note: '' });
   const [typed, setTyped] = useState<{ link: string; title: string } | null>(
     null,
   );
@@ -246,15 +295,17 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
               <p className='min-w-0 text-sm'>
                 That one's already in your ideas
               </p>
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                className='h-10 shrink-0'
-                onClick={() => onOpenExisting(duplicate.id)}
-              >
-                Open it
-              </Button>
+              {onOpenExisting && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  className='h-10 shrink-0'
+                  onClick={() => onOpenExisting(duplicate.id)}
+                >
+                  Open it
+                </Button>
+              )}
             </div>
           );
         }
@@ -337,7 +388,7 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
       <Form
         id='pinch-idea-link'
         form={fields}
-        initialData={{ url: '', note: '' }}
+        initialData={{ url: initialUrl, note: '' }}
         columns={1}
         onDataChange={(next) => {
           setData(next as typeof data);
@@ -373,10 +424,10 @@ export function IdeaLinkWay({ uid, onClose, onOpenExisting }: LinkWayProps) {
   );
 }
 
-export function IdeaPhotoWay({ uid, onClose }: WayProps) {
+export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
   const { submit, isSubmitting, error, clearError } = useCreateIdea(
     uid,
-    onClose,
+    onSaved,
   );
   const upload = useImageUpload(null);
   const { pick, clear } = upload;
@@ -477,9 +528,11 @@ export function IdeaPhotoWay({ uid, onClose }: WayProps) {
             isSubmitting={isSubmitting}
             error={error}
             note={
-              upload.file !== null && title === ''
-                ? 'Give it a title to save.'
-                : null
+              isSubmitting
+                ? 'Uploading the picture. You can close this; it finishes on its own.'
+                : upload.file !== null && title === ''
+                  ? 'Give it a title to save.'
+                  : null
             }
             onCancel={onClose}
           />
@@ -489,13 +542,27 @@ export function IdeaPhotoWay({ uid, onClose }: WayProps) {
   );
 }
 
-export function IdeaTextWay({ uid, onClose }: WayProps) {
+interface TextWayProps extends WayProps {
+  initialTitle?: string;
+  initialNote?: string;
+}
+
+export function IdeaTextWay({
+  uid,
+  onClose,
+  onSaved,
+  initialTitle = '',
+  initialNote = '',
+}: TextWayProps) {
   const { submit, isSubmitting, error, clearError } = useCreateIdea(
     uid,
-    onClose,
+    onSaved,
   );
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState({ title: '', note: '' });
+  const [data, setData] = useState({
+    title: initialTitle,
+    note: initialNote,
+  });
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -539,7 +606,7 @@ export function IdeaTextWay({ uid, onClose }: WayProps) {
       <Form
         id='pinch-idea-text'
         form={fields}
-        initialData={{ title: '', note: '' }}
+        initialData={{ title: initialTitle, note: initialNote }}
         columns={1}
         onDataChange={(next) => {
           setData(next as typeof data);

@@ -10,6 +10,7 @@ import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
 import {
   RECIPE_NOTES_FIRST_PAGE,
   RECIPE_NOTES_PAGE_SIZE,
+  SECTION_COUNT_THRESHOLD,
   SOFT_MAX_RECIPE_NOTES,
 } from '@apps/pinch/constants';
 import {
@@ -28,9 +29,10 @@ interface RecipeNotesProps {
   recipeId: string;
   onAdd: () => void;
   onEdit: (noteId: string) => void;
+  onApply: (noteId: string) => void;
 }
 
-function RecipeNotes({ recipeId, onAdd, onEdit }: RecipeNotesProps) {
+function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
@@ -79,7 +81,14 @@ function RecipeNotes({ recipeId, onAdd, onEdit }: RecipeNotesProps) {
   }
 
   return (
-    <FormSection title='Notes' detail={notes.length}>
+    <FormSection
+      title='Notes'
+      detail={
+        visibleCount < notes.length || notes.length > SECTION_COUNT_THRESHOLD
+          ? notes.length
+          : undefined
+      }
+    >
       {addRow}
       <ul className='divide-border divide-y'>
         {notes.slice(0, visibleCount).map((note) => {
@@ -91,6 +100,7 @@ function RecipeNotes({ recipeId, onAdd, onEdit }: RecipeNotesProps) {
               cook={cookId === null ? null : (cooksById.get(cookId) ?? null)}
               writtenBefore={getWrittenBefore(note, lastTweakAt)}
               onEdit={onEdit}
+              onApply={onApply}
             />
           );
         })}

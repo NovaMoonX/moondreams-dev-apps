@@ -27,6 +27,7 @@ import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   finishedContainersQueryOptions,
+  OfflineEmptyReadError,
   scopedContainersQueryOptions,
 } from '@apps/pinch/queries/containerQueries';
 import {
@@ -37,18 +38,15 @@ import {
 import type { Container, ContainerPlace, Meal } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import {
+  getBatchKey,
   getClearOutMessage,
   getContainerTitle,
-  getPreparedSummary,
+  getEatByState,
+  groupBatches,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
-type ListView = ContainerPlace | 'FINISHED';
-
 const HIDDEN_WORTH_A_BUTTON = 3;
-
-const countContainers = (count: number) =>
-  `${count} ${count === 1 ? 'container' : 'containers'}`;
 
 const sumServings = (containers: Container[]) =>
   containers.reduce((sum, container) => sum + container.servings, 0);
@@ -68,6 +66,12 @@ interface ContainersSubviewProps {
 interface Scope {
   recipeId: string | null;
   mealId: string | null;
+}
+
+interface OpenSheet {
+  ids: string[];
+  batchKey: string | null;
+  finished: Container | null;
 }
 
 const getRecipeIdsOf = (meal: Meal | undefined) =>
@@ -94,13 +98,27 @@ const getScopeLookups = (scope: Scope, meal: Meal | undefined) => {
       ];
 };
 
+const isContainerOfScope = (
+  container: Container,
+  scope: Scope,
+  mealRecipeIds: Set<string>,
+) => {
+  if (scope.recipeId !== null) return container.recipeId === scope.recipeId;
+  if (scope.mealId === null) return true;
+  return (
+    container.mealId === scope.mealId ||
+    (container.recipeId !== null && mealRecipeIds.has(container.recipeId))
+  );
+};
+
 const combineScoped = (
-  results: { data?: Container[]; isError: boolean }[],
+  results: { data?: Container[]; isError: boolean; error: unknown }[],
 ) => ({
   data: results.some((result) => result.data === undefined)
     ? undefined
     : results.flatMap((result) => result.data ?? []),
   isError: results.some((result) => result.isError),
+  error: results.find((result) => result.isError)?.error ?? null,
 });
 
 function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
@@ -110,7 +128,8 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const containers = useAppSelector(selectContainers);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
-  const [pick, setPick] = useState<ListView | null>(null);
+  const [pick, setPick] = useState<ContainerPlace | null>(null);
+  const [isFinishedView, setIsFinishedView] = useState(false);
   const [scope, setScope] = useState({ recipeId, mealId });
   const [query, setQuery] = useState('');
   const [limits, setLimits] = useState<Record<ContainerPlace, number>>({
@@ -121,25 +140,31 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     CONTAINER_FINISHED_PAGE_SIZE,
   );
   const [scopedLimit, setScopedLimit] = useState(CONTAINER_FINISHED_PAGE_SIZE);
-  const [open, setOpen] = useState<Container | null>(null);
+  const [open, setOpen] = useState<OpenSheet | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [clearing, setClearing] = useState<ContainerPlace | null>(null);
   const [clearNote, setClearNote] = useState<ClearNote | null>(null);
 
-  const isFinishedView = pick === 'FINISHED';
   const isScoped = scope.recipeId !== null || scope.mealId !== null;
   const scopeMeal =
     scope.mealId === null ? undefined : mealsById.get(scope.mealId);
   const lookups = getScopeLookups(scope, scopeMeal);
+  const mealRecipeIds = new Set(getRecipeIdsOf(scopeMeal));
+  const hasStockInScope = containers.some((container) =>
+    isContainerOfScope(container, scope, mealRecipeIds),
+  );
+  // With nothing in stock, the finished read decides whether the link to it leads anywhere.
+  const needsFinished =
+    isFinishedView || (isReady && loadError === null && !hasStockInScope);
   const latestFinished = useQuery({
     ...finishedContainersQueryOptions(uid, finishedCount),
-    enabled: isFinishedView && !isScoped,
+    enabled: needsFinished && !isScoped,
     placeholderData: keepPreviousData,
   });
   const scopedFinished = useQueries({
     queries: lookups.map(({ field, id }) => ({
       ...scopedContainersQueryOptions(uid, field, id),
-      enabled: isFinishedView,
+      enabled: needsFinished,
     })),
     combine: combineScoped,
   });
@@ -147,21 +172,14 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
 
   const isOfScope = useMemo(() => {
     const recipeIds = new Set(getRecipeIdsOf(scopeMeal));
-    return (container: Container) => {
-      if (scope.recipeId !== null) return container.recipeId === scope.recipeId;
-      if (scope.mealId === null) return true;
-      return (
-        container.mealId === scope.mealId ||
-        (container.recipeId !== null && recipeIds.has(container.recipeId))
-      );
-    };
+    return (container: Container) =>
+      isContainerOfScope(container, scope, recipeIds);
   }, [scope, scopeMeal]);
 
   const inScope = useMemo(
     () => containers.filter(isOfScope),
     [containers, isOfScope],
   );
-  const summary = useMemo(() => getPreparedSummary(inScope), [inScope]);
   const trimmed = inScope.length >= LIST_SEARCH_THRESHOLD ? query.trim() : '';
 
   const shown = useMemo(
@@ -182,10 +200,34 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     }),
     [shown],
   );
+  const batchesByPlace = useMemo(
+    () => ({
+      FRIDGE: groupBatches(byPlace.FRIDGE),
+      FREEZER: groupBatches(byPlace.FREEZER),
+    }),
+    [byPlace],
+  );
 
-  // Until the person picks, and while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
+  const dueFirstPlace = useMemo<ContainerPlace>(() => {
+    const first = inScope
+      .filter(
+        (container) =>
+          container.status === 'IN_STOCK' &&
+          getEatByState(container.eatBy) !== 'LATER',
+      )
+      .reduce<Container | null>(
+        (soonest, container) =>
+          soonest === null || container.eatBy < soonest.eatBy
+            ? container
+            : soonest,
+        null,
+      );
+    return first?.place ?? 'FRIDGE';
+  }, [inScope]);
+
+  // Until the person picks, the place holding what is due first; while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
   const getShownPlace = (): ContainerPlace => {
-    const preferred = pick === null || pick === 'FINISHED' ? 'FRIDGE' : pick;
+    const preferred = pick ?? dueFirstPlace;
     const other = preferred === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
     const isAuto = pick === null || trimmed !== '';
     if (byPlace[preferred].length > 0 || !isAuto) return preferred;
@@ -198,15 +240,20 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       emoji: CONTAINER_PLACE_EMOJIS[place],
       label:
         byPlace[place].length > 0
-          ? `${CONTAINER_PLACE_LABELS[place]} · ${byPlace[place].length}`
+          ? `${CONTAINER_PLACE_LABELS[place]} · ${formatServings(sumServings(byPlace[place]))}`
           : CONTAINER_PLACE_LABELS[place],
     })),
-    { value: 'FINISHED' as const, label: 'Finished' },
   ];
 
-  const handleOpen = useCallback((container: Container) => {
-    setOpen(container);
-    setPick((current) => current ?? container.place);
+  const handleOpen = useCallback((boxes: Container[]) => {
+    const [first] = boxes;
+    const isFinished = first.status === 'DONE';
+    setOpen({
+      ids: boxes.map(({ id }) => id),
+      batchKey: isFinished ? null : getBatchKey(first),
+      finished: isFinished ? first : null,
+    });
+    if (!isFinished) setPick((current) => current ?? first.place);
   }, []);
 
   const finished = useMemo(
@@ -232,20 +279,14 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
   const clearScope = () => setScope({ recipeId: null, mealId: null });
 
   const twins = useMemo(() => {
-    const counts = inScope.reduce((map, container) => {
-      const key = `${container.place}|${getContainerTitle(container, recipesById, mealsById)}`;
+    const counts = groupBatches(inScope).reduce((map, { boxes: [first] }) => {
+      const key = `${first.place}|${getContainerTitle(first, recipesById, mealsById)}`;
       return map.set(key, (map.get(key) ?? 0) + 1);
     }, new Map<string, number>());
     return new Set(
       [...counts].filter(([, count]) => count > 1).map(([key]) => key),
     );
   }, [inScope, recipesById, mealsById]);
-
-  const getSubtitle = () => {
-    if (isFinishedView) return "What you've eaten or thrown out.";
-    if (summary.containerCount === 0) return undefined;
-    return `${formatServings(summary.fridgeServings + summary.freezerServings)} in ${countContainers(summary.containerCount)}`;
-  };
 
   const handleClear = async (place: ContainerPlace) => {
     const inPlace = containers.filter((container) => container.place === place);
@@ -254,7 +295,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     setClearNote(null);
     const isConfirmed = await confirm({
       title: `Clear out the ${placeWord}?`,
-      message: getClearOutMessage(inPlace.length, sumServings(inPlace)),
+      message: getClearOutMessage(inPlace.length, sumServings(inPlace), place),
       confirmText: `Clear out the ${placeWord}`,
       cancelText: inPlace.length === 1 ? 'Keep it' : 'Keep them',
       destructive: true,
@@ -288,12 +329,13 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     }
   };
 
-  const renderRow = (container: Container) => {
+  const renderRow = (boxes: Container[]) => {
+    const [container] = boxes;
     const title = getContainerTitle(container, recipesById, mealsById);
     return (
       <li key={container.id}>
         <ContainerRow
-          container={container}
+          boxes={boxes}
           title={title}
           isTwin={
             container.status === 'IN_STOCK' &&
@@ -309,14 +351,14 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     if (loadError !== null) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Your prepared meals couldn't load just now.
+          Your fridge and freezer couldn't load just now.
         </p>
       );
     }
     if (!isReady) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Loading your prepared meals…
+          Loading your fridge and freezer…
         </p>
       );
     }
@@ -350,7 +392,7 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     }
 
     const place = shownPlace;
-    const rows = byPlace[place];
+    const rows = batchesByPlace[place];
     const placeWord = CONTAINER_PLACE_LABELS[place].toLowerCase();
     const note = clearNote?.place === place ? clearNote : null;
     const noteLine = note && (
@@ -383,11 +425,8 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       rows.length - limit > HIDDEN_WORTH_A_BUTTON ? limit : rows.length;
     return (
       <section aria-label={CONTAINER_PLACE_LABELS[place]}>
-        <div className='flex min-h-10 flex-wrap items-center justify-between gap-x-3'>
-          <p className='text-muted-foreground text-sm whitespace-nowrap'>
-            {countContainers(rows.length)} · {formatServings(sumServings(rows))}
-          </p>
-          {canClear && (
+        {canClear && (
+          <div className='flex min-h-10 items-center justify-end'>
             <Button
               type='button'
               variant='link'
@@ -398,11 +437,11 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
             >
               Clear out the {placeWord}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
         {noteLine}
         <ul className='divide-border divide-y'>
-          {rows.slice(0, visible).map(renderRow)}
+          {rows.slice(0, visible).map(({ boxes }) => renderRow(boxes))}
         </ul>
         {visible < rows.length && (
           <Button
@@ -428,7 +467,9 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     if (finishedQuery.isError) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Finished meals couldn't load just now.
+          {finishedQuery.error instanceof OfflineEmptyReadError
+            ? "Couldn't load what you finished while you're offline."
+            : "What you finished couldn't load just now."}
         </p>
       );
     }
@@ -462,7 +503,9 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
       : CONTAINER_FINISHED_PAGE_SIZE;
     return (
       <div className='space-y-1'>
-        <ul className='divide-border divide-y'>{rows.map(renderRow)}</ul>
+        <ul className='divide-border divide-y'>
+          {rows.map((container) => renderRow([container]))}
+        </ul>
         {hasMore && (
           <Button
             type='button'
@@ -486,68 +529,101 @@ function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
     );
   };
 
+  const isListShown = isReady && loadError === null;
+  const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
+  const hasFinishedLink =
+    !isFinishedView &&
+    isListShown &&
+    (inScope.length > 0 || finished.length > 0);
+  const title = isFinishedView ? 'What you finished' : 'Fridge & freezer';
+  const switchView = (toFinished: boolean) => {
+    setIsFinishedView(toFinished);
+    setClearNote(null);
+    window.scrollTo({ top: 0 });
+  };
+
   return (
-    <Subview title='Prepared meals' onClose={closeSubview}>
+    <Subview
+      title={title}
+      onClose={closeSubview}
+      onBack={isFinishedView ? () => switchView(false) : undefined}
+    >
       <div className='space-y-4'>
         <SectionHeader
-          title='Prepared meals'
-          subtitle={getSubtitle()}
+          title={title}
           action={
-            <Button
-              type='button'
-              size='sm'
-              rounded='full'
-              className='gap-1'
-              aria-label='Add a container'
-              disabled={!isReady}
-              onClick={() => setIsAdding(true)}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              Add
-            </Button>
+            !isFinishedView && (
+              <Button
+                type='button'
+                size='sm'
+                rounded='full'
+                className='gap-1'
+                aria-label='Put something away'
+                disabled={!isReady}
+                onClick={() => setIsAdding(true)}
+              >
+                <Plus className='h-4 w-4' aria-hidden='true' />
+                Add
+              </Button>
+            )
           }
         />
-        <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
-          <PillGroup
-            label='Which containers'
-            options={viewOptions}
-            value={isFinishedView ? 'FINISHED' : shownPlace}
-            onChange={(next) => {
-              setPick(next);
-              setClearNote(null);
-            }}
-            isThin
-          />
-          {scopeName && (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              rounded='full'
-              aria-label={`Show everything, not only ${scopeName}`}
-              className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-              onClick={clearScope}
-            >
-              <span className='truncate'>Only {scopeName}</span>
-              <X className='h-3 w-3 shrink-0' aria-hidden='true' />
-            </Button>
-          )}
-        </div>
+        {(hasSwitch || scopeName) && (
+          <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
+            {hasSwitch && (
+              <PillGroup
+                label='Fridge or freezer'
+                options={viewOptions}
+                value={shownPlace}
+                onChange={(next) => {
+                  setPick(next);
+                  setClearNote(null);
+                }}
+                isThin
+              />
+            )}
+            {scopeName && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                rounded='full'
+                aria-label={`Show everything, not only ${scopeName}`}
+                className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+                onClick={clearScope}
+              >
+                <span className='truncate'>Only {scopeName}</span>
+                <X className='h-3 w-3 shrink-0' aria-hidden='true' />
+              </Button>
+            )}
+          </div>
+        )}
         {!isFinishedView && inScope.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
             onChange={setQuery}
-            placeholder='Search prepared meals'
+            placeholder='Search the fridge and freezer'
           />
         )}
         {isFinishedView ? getFinishedBody() : getStockBody()}
+        {hasFinishedLink && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='decoration-muted-foreground/50 h-10 px-0! text-sm font-normal underline underline-offset-4'
+            onClick={() => switchView(true)}
+          >
+            What you finished
+          </Button>
+        )}
       </div>
       {open && (
         <ContainerSheet
-          key={open.id}
+          key={open.ids[0]}
           uid={uid}
-          containerId={open.id}
-          finished={open.status === 'DONE' ? open : null}
+          containerIds={open.ids}
+          batchKey={open.batchKey}
+          finished={open.finished}
           onClose={() =>
             setOpen((current) => (current === open ? null : current))
           }

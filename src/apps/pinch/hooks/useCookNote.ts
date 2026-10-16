@@ -1,7 +1,5 @@
 import { useState } from 'react';
 
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { addNote } from '@apps/pinch/store/actions/noteActions';
@@ -11,61 +9,61 @@ import {
 } from '@apps/pinch/store/selectors';
 import { isNoteHistoryFull, isValidNoteText } from '@apps/pinch/utils/notes';
 
-interface UseCookNoteInput {
-  uid: string;
+interface CookNoteEntry {
   recipeId: string;
-  recipeTitle: string;
   /** The cook the note follows up; null until the cook has been written. */
   cookId: string | null;
-  onSaved: () => void;
 }
 
-export function useCookNote({
-  uid,
-  recipeId,
-  recipeTitle,
-  cookId,
-  onSaved,
-}: UseCookNoteInput) {
+interface UseCookNoteInput {
+  uid: string;
+  /** One per recipe cooked on this screen; one note box is open at a time. */
+  entries: CookNoteEntry[];
+}
+
+/** The note typed on the cooking screen's last panel, which confirms it in place rather than with a toast. */
+export function useCookNote({ uid, entries }: UseCookNoteInput) {
   const dispatch = useAppDispatch();
-  const { addToast } = useToast();
   const isNotesReady = useAppSelector(
     (state) =>
       state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
   );
-  const isFull = useAppSelector((state) =>
-    isNoteHistoryFull(selectNoteSummaries(state).get(recipeId)?.count ?? 0),
-  );
-  const [isOpen, setIsOpen] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
+  const noteSummaries = useAppSelector(selectNoteSummaries);
+  const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
+  const [savedRecipeIds, setSavedRecipeIds] = useState<string[]>([]);
   const [text, setText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const openEntry =
+    entries.find((entry) => entry.recipeId === openRecipeId) ?? null;
 
   const close = () => {
-    setIsOpen(false);
+    setOpenRecipeId(null);
     setText('');
     setError(null);
   };
 
   const reset = () => {
     close();
-    setIsSaved(false);
+    setSavedRecipeIds([]);
   };
 
   const save = async () => {
-    if (cookId === null || !isValidNoteText(text)) {
+    if (
+      openEntry === null ||
+      openEntry.cookId === null ||
+      !isValidNoteText(text)
+    ) {
       return;
     }
+    const { recipeId, cookId } = openEntry;
     setError(null);
     setIsSaving(true);
     try {
       await dispatch(addNote({ uid, recipeId, text, cookId })).unwrap();
-      addToast({ title: `Added a note to ${recipeTitle}`, type: 'success' });
-      setIsSaved(true);
+      setSavedRecipeIds((current) => [...current, recipeId]);
       setIsSaving(false);
       close();
-      onSaved();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this note.'));
       setIsSaving(false);
@@ -73,16 +71,24 @@ export function useCookNote({
   };
 
   return {
-    isAvailable: isNotesReady && !isFull,
-    isOpen,
-    isSaved,
-    hasDraft: cookId !== null && isOpen && !isSaving && text.trim() !== '',
+    isAvailable: (recipeId: string) =>
+      isNotesReady &&
+      !isNoteHistoryFull(noteSummaries.get(recipeId)?.count ?? 0),
+    isSaved: (recipeId: string) => savedRecipeIds.includes(recipeId),
+    savedRecipeIds,
+    openRecipeId: openEntry === null ? null : openEntry.recipeId,
+    isOpen: openEntry !== null,
+    hasDraft:
+      openEntry !== null &&
+      openEntry.cookId !== null &&
+      !isSaving &&
+      text.trim() !== '',
     canSave: isValidNoteText(text),
     text,
     setText,
     isSaving,
     error,
-    open: () => setIsOpen(true),
+    open: (recipeId: string) => setOpenRecipeId(recipeId),
     cancel: close,
     reset,
     save,

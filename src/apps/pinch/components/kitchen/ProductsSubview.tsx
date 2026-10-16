@@ -1,8 +1,17 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Plus, Star } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Star,
+  Store as StoreIcon,
+  Tag,
+} from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import FormSheet from '@/components/FormSheet';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -13,7 +22,10 @@ import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
+import StoreFormSheet from '@apps/pinch/components/kitchen/StoreFormSheet';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
+import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
+import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import {
   LIST_PAGE_SIZE,
   LIST_SEARCH_THRESHOLD,
@@ -30,11 +42,12 @@ import {
   selectProducts,
   selectProductsById,
   selectProductsByIngredient,
+  selectStores,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
-import { formatSize } from '@apps/pinch/utils/productFormat';
-import type { Product } from '@apps/pinch/types';
+import { formatSize, formatUnitPrice } from '@apps/pinch/utils/productFormat';
+import type { Product, Store } from '@apps/pinch/types';
 
 const REMOVED_STORE = 'Removed store';
 const DEFAULT_SORT = 'store';
@@ -65,7 +78,19 @@ interface ProductRowData {
   familyId: string;
   isDefault: boolean;
   hasSiblings: boolean;
+  /** Said in the unit of the ingredient's default price, so its places compare. */
+  unitPrice: string | null;
 }
+
+interface StoreGroup {
+  key: string;
+  /** The store's own document, while it exists; a removed one's heading can't be opened. */
+  store: Store | null;
+  name: string;
+  items: ProductRowData[];
+}
+
+type Adding = 'choose' | 'price';
 
 const byName = (a: ProductRowData, b: ProductRowData) =>
   a.name.localeCompare(b.name) || a.storeName.localeCompare(b.storeName);
@@ -91,6 +116,11 @@ const getOrderOptions = (sort: ProductSort) => {
     { value: 'reversed', label: second },
   ] as const;
 };
+
+const getStoreDomain = (store: Store | null) =>
+  store?.catalogStoreId
+    ? (CATALOG_STORES_BY_ID.get(store.catalogStoreId)?.domain ?? null)
+    : null;
 
 interface ProductRowProps {
   row: ProductRowData;
@@ -121,7 +151,7 @@ function ProductRow({ row, showStore, onOpen }: ProductRowProps) {
           {row.isDefault && row.hasSiblings && (
             <Star
               className='h-3.5 w-3.5 shrink-0 fill-current text-[var(--pinch-drizzle)]'
-              aria-label='Default product'
+              aria-label='Default price'
             />
           )}
         </span>
@@ -129,14 +159,68 @@ function ProductRow({ row, showStore, onOpen }: ProductRowProps) {
           {detail}
         </span>
       </span>
-      <span className='font-semibold whitespace-nowrap'>
-        {formatCents(product.priceCents)}
+      <span className='shrink-0 text-right'>
+        <span className='block font-semibold whitespace-nowrap'>
+          {formatCents(product.priceCents)}
+        </span>
+        {row.unitPrice && (
+          <span className='text-muted-foreground block text-xs font-normal whitespace-nowrap'>
+            {row.unitPrice}
+          </span>
+        )}
       </span>
       <ChevronRight
         className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
         aria-hidden='true'
       />
     </Button>
+  );
+}
+
+interface StoreHeadingProps {
+  group: StoreGroup;
+  onOpen: (storeId: string) => void;
+}
+
+function StoreHeading({ group, onOpen }: StoreHeadingProps) {
+  const { store } = group;
+  const content = (
+    <>
+      <StoreLogo
+        name={group.name}
+        domain={getStoreDomain(store)}
+        imagePath={store?.imagePath ?? null}
+        imageVersion={store?.updatedAt ?? 0}
+        size={20}
+      />
+      <span className='truncate'>{group.name}</span>
+    </>
+  );
+
+  return (
+    <SectionDivider
+      label={
+        store && store.isArchived !== true ? (
+          <Button
+            type='button'
+            variant='tertiary'
+            aria-label={`Open ${group.name}`}
+            onClick={() => onOpen(store.id)}
+            className='h-10 max-w-[65vw] min-w-0 gap-1.5 px-2! py-0 text-sm font-medium'
+          >
+            {content}
+            <ChevronRight
+              className='text-muted-foreground h-3.5 w-3.5 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+        ) : (
+          <span className='inline-flex h-10 max-w-[65vw] min-w-0 items-center gap-1.5 px-2'>
+            {content}
+          </span>
+        )
+      }
+    />
   );
 }
 
@@ -153,6 +237,7 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const storesById = useAppSelector(selectStoresById);
   const allStores = useAppSelector(selectAllStores);
+  const stores = useAppSelector(selectStores);
   const families = useAppSelector(selectIngredientFamilies);
   const [typedQuery, setQuery] = useState('');
   const [pickedFilters, setFilters] = useState<ProductFilters>(NO_FILTERS);
@@ -160,10 +245,18 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
   const [pickedOrder, setOrder] = useState<SortOrder>('natural');
   const [paging, setPaging] = useState({ key: '', limit: LIST_PAGE_SIZE });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [isPicking, setIsPicking] = useState(false);
+  const [adding, setAdding] = useState<Adding | null>(null);
+  const [storeForm, setStoreForm] = useState<{ storeId: string | null } | null>(
+    null,
+  );
   const [newIngredientId, setNewIngredientId] = useState<string | null>(null);
 
-  const hasControls = products.length >= LIST_SEARCH_THRESHOLD;
+  const storesWithoutPrices = useMemo(() => {
+    const priced = new Set(products.map((product) => product.storeId));
+    return stores.filter((store) => !priced.has(store.id));
+  }, [products, stores]);
+  const hasControls =
+    products.length + storesWithoutPrices.length >= LIST_SEARCH_THRESHOLD;
   const query = hasControls ? typedQuery : '';
   const filters = hasControls ? pickedFilters : NO_FILTERS;
   const sort = hasControls ? pickedSort : DEFAULT_SORT;
@@ -181,6 +274,10 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
         isDefault: defaultProducts.get(product.ingredientId)?.id === product.id,
         hasSiblings:
           (productsByIngredient.get(product.ingredientId)?.length ?? 0) > 1,
+        unitPrice: formatUnitPrice(
+          product,
+          defaultProducts.get(product.ingredientId)?.sizeUnit,
+        ),
       })),
     [
       products,
@@ -191,11 +288,11 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
     ],
   );
   const matching = useMemo(() => {
-    const stores = new Set(filters.storeIds);
+    const storeIds = new Set(filters.storeIds);
     const familyIds = new Set(filters.familyIds);
     const filtered = rows.filter(
       (row) =>
-        (stores.size === 0 || stores.has(row.product.storeId)) &&
+        (storeIds.size === 0 || storeIds.has(row.product.storeId)) &&
         (familyIds.size === 0 || familyIds.has(row.familyId)) &&
         (filters.defaults === 'any' ||
           row.isDefault === (filters.defaults === 'default')),
@@ -211,38 +308,6 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
 
     return [...searched].sort((a, b) => direction * COMPARATORS[sort](a, b));
   }, [rows, filters, query, sort, order]);
-
-  const pagingKey = JSON.stringify([filters, query.trim(), sort, order]);
-  const limit = paging.key === pagingKey ? paging.limit : LIST_PAGE_SIZE;
-  const visible = matching.slice(0, limit);
-  const hiddenCount = matching.length - visible.length;
-  const groups = useMemo(() => {
-    if (sort !== 'store') {
-      return [];
-    }
-    const byStore = visible.reduce(
-      (acc, row) =>
-        acc.set(row.storeName, [...(acc.get(row.storeName) ?? []), row]),
-      new Map<string, ProductRowData[]>(),
-    );
-    return [...byStore.entries()].map(([storeName, items]) => ({
-      storeName,
-      items,
-    }));
-  }, [visible, sort]);
-
-  const familyOptions = useMemo(() => {
-    const present = new Set(rows.map((row) => row.familyId));
-    return families
-      .filter((family) => present.has(family.id))
-      .map((family) => ({ value: family.id, label: family.name }));
-  }, [rows, families]);
-  const storeOptions = useMemo(() => {
-    const present = new Set(products.map((product) => product.storeId));
-    return allStores
-      .filter((store) => present.has(store.id))
-      .map((store) => ({ value: store.id, label: store.name }));
-  }, [products, allStores]);
 
   const activeFilters = [
     ...filters.storeIds.map((id) => ({
@@ -266,6 +331,70 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
           },
         ]),
   ];
+
+  const pagingKey = JSON.stringify([filters, query.trim(), sort, order]);
+  const limit = paging.key === pagingKey ? paging.limit : LIST_PAGE_SIZE;
+  const visible = matching.slice(0, limit);
+  const hiddenCount = matching.length - visible.length;
+  const emptyStores = useMemo(() => {
+    if (sort !== 'store' || hiddenCount > 0 || activeFilters.length > 0) {
+      return [];
+    }
+    const named = searchByName(storesWithoutPrices, query);
+    return order === 'natural' ? named : [...named].reverse();
+  }, [
+    sort,
+    hiddenCount,
+    activeFilters.length,
+    storesWithoutPrices,
+    query,
+    order,
+  ]);
+  const groups = useMemo((): StoreGroup[] => {
+    if (sort !== 'store') {
+      return [];
+    }
+    const byStore = visible.reduce(
+      (acc, row) =>
+        acc.set(row.product.storeId, [
+          ...(acc.get(row.product.storeId) ?? []),
+          row,
+        ]),
+      new Map<string, ProductRowData[]>(),
+    );
+    const withPrices = [...byStore.entries()].map(([storeId, items]) => ({
+      key: storeId,
+      store: storesById.get(storeId) ?? null,
+      name: items[0].storeName,
+      items,
+    }));
+    const removedLast = [
+      ...withPrices.filter((group) => group.store !== null),
+      ...emptyStores.map((store) => ({
+        key: store.id,
+        store,
+        name: store.name,
+        items: [],
+      })),
+      ...withPrices.filter((group) => group.store === null),
+    ];
+
+    return removedLast;
+  }, [visible, sort, storesById, emptyStores]);
+
+  const familyOptions = useMemo(() => {
+    const present = new Set(rows.map((row) => row.familyId));
+    return families
+      .filter((family) => present.has(family.id))
+      .map((family) => ({ value: family.id, label: family.name }));
+  }, [rows, families]);
+  const storeOptions = useMemo(() => {
+    const present = new Set(products.map((product) => product.storeId));
+    return allStores
+      .filter((store) => present.has(store.id))
+      .map((store) => ({ value: store.id, label: store.name }));
+  }, [products, allStores]);
+
   const removeFilter = (key: string) =>
     setFilters((current) => {
       if (key === 'defaults') {
@@ -286,12 +415,15 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
   const newIngredient = newIngredientId
     ? (ingredientsById.get(newIngredientId) ?? null)
     : null;
+  const editingStore = storeForm?.storeId
+    ? (storesById.get(storeForm.storeId) ?? null)
+    : null;
 
   const getSubtitle = () => {
     if (products.length === 0) {
       return undefined;
     }
-    const noun = products.length === 1 ? 'product' : 'products';
+    const noun = products.length === 1 ? 'price' : 'prices';
     return hasNarrowing
       ? `${matching.length} of ${products.length} ${noun}`
       : `${products.length} ${noun}`;
@@ -304,21 +436,21 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
   );
 
   const getBody = () => {
-    if (products.length === 0) {
+    if (products.length === 0 && stores.length === 0) {
       return (
         <p className='text-muted-foreground py-6 text-center text-sm'>
-          Add a product for an ingredient and it shows up here, grouped by where
-          you buy it.
+          Add what something costs where you buy it, and recipes can show what
+          they cost.
         </p>
       );
     }
-    if (matching.length === 0) {
+    if (matching.length === 0 && groups.length === 0) {
       return (
         <div className='space-y-3 py-6 text-center'>
           <p className='text-muted-foreground text-sm wrap-break-word'>
             {query.trim() !== ''
               ? `Nothing matches “${query.trim()}”${activeFilters.length > 0 ? ' with these filters' : ''}.`
-              : 'No products match these filters.'}
+              : 'No prices match these filters.'}
           </p>
           {activeFilters.length > 0 && (
             <Button
@@ -334,50 +466,100 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
       );
     }
     if (sort === 'store') {
-      return groups.map((group) => (
-        <section
-          key={group.storeName}
-          aria-label={group.storeName}
-          className='space-y-1'
-        >
-          <SectionDivider label={group.storeName} />
-          <ul className='divide-border divide-y'>
-            {group.items.map((row) => renderRow(row, false))}
-          </ul>
-        </section>
-      ));
+      return (
+        <div className='space-y-4 lg:block lg:columns-2 lg:space-y-0 lg:gap-x-8'>
+          {groups.map((group) => (
+            <section
+              key={group.key}
+              aria-label={group.name}
+              className='lg:mb-4 lg:break-inside-avoid'
+            >
+              <StoreHeading
+                group={group}
+                onOpen={(storeId) => setStoreForm({ storeId })}
+              />
+              {group.items.length === 0 ? (
+                <p className='text-muted-foreground pb-1 text-center text-sm'>
+                  No prices yet
+                </p>
+              ) : (
+                <ul className='divide-border divide-y'>
+                  {group.items.map((row) => renderRow(row, false))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
+      );
     }
     return (
-      <ul className='divide-border divide-y'>
+      <ul className='divide-border divide-y lg:grid lg:grid-cols-2 lg:gap-x-8 lg:divide-y-0'>
         {visible.map((row) => renderRow(row, true))}
       </ul>
     );
   };
 
-  const list = (
-    <>
-      {getBody()}
-      {hiddenCount > 0 && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-10 px-0!'
-          onClick={() =>
-            setPaging({ key: pagingKey, limit: limit + LIST_PAGE_SIZE })
-          }
-        >
-          Show {Math.min(hiddenCount, LIST_PAGE_SIZE)} more
-        </Button>
-      )}
-    </>
-  );
+  const getAddBody = () => {
+    if (adding === 'price') {
+      return (
+        <div className='space-y-3 pb-4'>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='h-10 gap-1 px-0!'
+            onClick={() => setAdding('choose')}
+          >
+            <ChevronLeft className='h-4 w-4' aria-hidden='true' />
+            Back
+          </Button>
+          <p className='text-muted-foreground text-sm'>
+            Which ingredient is it for?
+          </p>
+          <ItemSearch
+            uid={uid}
+            autoFocus
+            onPick={(ingredientId) => {
+              setAdding(null);
+              setNewIngredientId(ingredientId);
+            }}
+          />
+        </div>
+      );
+    }
+    return (
+      <div className='pb-4'>
+        <ActionGroup>
+          <ActionRow
+            isGrouped
+            icon={<Tag className='h-4 w-4' />}
+            label='A price'
+            subtitle='What something costs at one of your stores'
+            onClick={() => setAdding('price')}
+          />
+          <ActionRow
+            isGrouped
+            icon={<StoreIcon className='h-4 w-4' />}
+            label='A store'
+            subtitle='Somewhere you shop, from the list or your own'
+            onClick={() => {
+              setAdding(null);
+              setStoreForm({ storeId: null });
+            }}
+          />
+        </ActionGroup>
+      </div>
+    );
+  };
 
   return (
-    <Subview title='Products' onClose={closeSubview}>
+    <Subview
+      title='Stores & prices'
+      onClose={closeSubview}
+      className='lg:max-w-4xl'
+    >
       <div className='space-y-4'>
         <SectionHeader
-          title='Products'
+          title='Stores & prices'
           subtitle={getSubtitle()}
           action={
             <Button
@@ -385,10 +567,10 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
               size='sm'
               rounded='full'
               className='gap-1'
-              onClick={() => setIsPicking(true)}
+              onClick={() => setAdding('choose')}
             >
               <Plus className='h-4 w-4' aria-hidden='true' />
-              New product
+              Add
             </Button>
           }
         />
@@ -397,14 +579,14 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
             query={query}
             onQueryChange={setQuery}
             searchPlaceholder='Search'
-            filterLabel='Filter products'
+            filterLabel='Filter prices'
             activeFilters={activeFilters}
             onRemoveFilter={removeFilter}
             onClearFilters={clearFilters}
-            doneLabel={`Show ${matching.length} ${matching.length === 1 ? 'product' : 'products'}`}
+            doneLabel={`Show ${matching.length} ${matching.length === 1 ? 'price' : 'prices'}`}
             trailing={
               <SortControl
-                label='Sort products'
+                label='Sort prices'
                 options={SORT_CHOICES}
                 value={sort}
                 defaultValue={DEFAULT_SORT}
@@ -439,9 +621,9 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
                 />
               </FilterSection>
             )}
-            <FilterSection title='Which product'>
+            <FilterSection title='Which price'>
               <PillGroup
-                label='Which product'
+                label='Which price'
                 options={DEFAULT_CHOICES}
                 value={filters.defaults}
                 onChange={(defaults) =>
@@ -451,28 +633,37 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
             </FilterSection>
           </FilterBar>
         )}
-        {list}
+        {getBody()}
+        {hiddenCount > 0 && (
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='h-10 px-0!'
+            onClick={() =>
+              setPaging({ key: pagingKey, limit: limit + LIST_PAGE_SIZE })
+            }
+          >
+            Show {Math.min(hiddenCount, LIST_PAGE_SIZE)} more
+          </Button>
+        )}
       </div>
-      {isPicking && (
+      {adding && (
         <FormSheet
           isOpen
-          onClose={() => setIsPicking(false)}
-          title='New product'
+          onClose={() => setAdding(null)}
+          title={adding === 'price' ? 'Price' : 'What are you adding?'}
         >
-          <div className='space-y-3 pb-4'>
-            <p className='text-muted-foreground text-sm'>
-              Which ingredient is it for?
-            </p>
-            <ItemSearch
-              uid={uid}
-              autoFocus
-              onPick={(ingredientId) => {
-                setIsPicking(false);
-                setNewIngredientId(ingredientId);
-              }}
-            />
-          </div>
+          {getAddBody()}
         </FormSheet>
+      )}
+      {storeForm && (storeForm.storeId === null || editingStore) && (
+        <StoreFormSheet
+          key={storeForm.storeId ?? 'new'}
+          uid={uid}
+          store={editingStore}
+          onClose={() => setStoreForm(null)}
+        />
       )}
       {newIngredient && (
         <ProductFormSheet

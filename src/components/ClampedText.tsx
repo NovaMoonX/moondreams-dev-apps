@@ -5,9 +5,11 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 interface ClampedTextProps {
   text: string;
+  /** How many lines show before "More". */
+  maxLines?: 2 | 4;
 }
 
-function ClampedText({ text }: ClampedTextProps) {
+function ClampedText({ text, maxLines = 4 }: ClampedTextProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isClamped, setIsClamped] = useState(false);
   const observerRef = useRef<ResizeObserver | null>(null);
@@ -30,7 +32,7 @@ function ClampedText({ text }: ClampedTextProps) {
         ref={measure}
         className={join(
           'text-sm wrap-break-word whitespace-pre-wrap',
-          !isOpen && 'line-clamp-4',
+          !isOpen && (maxLines === 2 ? 'line-clamp-2' : 'line-clamp-4'),
         )}
       >
         {text}

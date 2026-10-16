@@ -27,7 +27,9 @@ import { getPeriodStats } from '@apps/pinch/utils/stats';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 import {
+  countOpenShopRows,
   getShoppingCost,
+  getShoppingSourceLabels,
   groupShoppingItems,
 } from '@apps/pinch/utils/shopping';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
@@ -46,7 +48,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded &&
   state.pinch.sources.isLoaded;
 
-/** Sources, the shopping list, ideas, cooking history, recipe notes and prepared meals are optional extras: their failures are left out so each only takes its own UI away. */
+/** Sources, the shopping list, ideas, cooking history, recipe notes and fridge and freezer stock are optional extras: their failures are left out so each only takes its own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
@@ -346,8 +348,10 @@ export const selectShoppingItems = (state: RootState) =>
 export const selectShoppingLoadError = (state: RootState) =>
   state.pinch.shopping.loadError;
 
-export const selectShoppingOpenCount = (state: RootState) =>
-  state.pinch.shopping.items.filter((item) => !item.isChecked).length;
+export const selectShoppingOpenCount = createSelector(
+  [selectShoppingItems],
+  countOpenShopRows,
+);
 
 export const selectShoppingById = createSelector(
   [selectShoppingItems],
@@ -360,14 +364,9 @@ const selectHeldShoppingRows = (
 ) => held;
 
 export const selectShoppingRows = createSelector(
-  [
-    selectShoppingItems,
-    selectIngredientsById,
-    selectIngredientFamilies,
-    selectHeldShoppingRows,
-  ],
-  (items, ingredientsById, families, held) =>
-    groupShoppingItems(items, ingredientsById, families, held),
+  [selectShoppingItems, selectIngredientsById, selectHeldShoppingRows],
+  (items, ingredientsById, held) =>
+    groupShoppingItems(items, ingredientsById, held),
 );
 
 export const selectShoppingCost = createSelector(
@@ -397,7 +396,7 @@ const NO_DISMISSALS: Record<string, number> = {};
 export const selectDismissedNudges = (state: RootState) =>
   state.pinch.settings.settings?.dismissedNudges ?? NO_DISMISSALS;
 
-/** The ingredients a recipe, a saved meal or a day not yet frozen uses: the ones whose missing price changes a number. */
+/** The ingredients a recipe, a saved meal or a day not yet frozen uses: the ones whose missing price changes a number, so a recipe line with no amount doesn't count. */
 export const selectUsedIngredientIds = createSelector(
   [
     selectAllRecipes,
@@ -407,7 +406,9 @@ export const selectUsedIngredientIds = createSelector(
   (recipes, meals, plannedMeals) =>
     new Set([
       ...recipes.flatMap((recipe) =>
-        recipe.ingredients.map((line) => line.ingredientId),
+        recipe.ingredients.flatMap((line) =>
+          line.amount === null ? [] : [line.ingredientId],
+        ),
       ),
       ...[
         ...meals.flatMap((meal) => meal.items),
@@ -485,6 +486,18 @@ export const selectStockByMealWithRecipes = createSelector(
 export const selectMealsById = createSelector(
   [selectMeals],
   (meals) => new Map(meals.map((meal) => [meal.id, meal])),
+);
+
+/** The names behind what put each line on the shopping list, computed once per change of the list, the plan, recipes or saved meals. */
+export const selectShoppingSourceLabels = createSelector(
+  [
+    selectShoppingItems,
+    selectPlannedMeals,
+    selectRecipesById,
+    selectMealsById,
+    selectIngredientsById,
+  ],
+  getShoppingSourceLabels,
 );
 
 /** The shown period's spend, average per meal and breakdowns, computed once per change of meals, prices or days shown. */

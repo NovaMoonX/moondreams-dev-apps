@@ -23,7 +23,7 @@ const containerDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'containers', id);
 
 const OFFLINE_MESSAGE = 'Check your connection and try again.';
-const GONE = 'This container is gone, so nothing was changed.';
+const GONE = 'This box is gone, so nothing was changed.';
 
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
@@ -56,6 +56,31 @@ const applyPlan = (
     return plan.fields;
   });
 
+/** One plan over every box of a batch in one transaction, so the batch changes whole or not at all. */
+const applyPlanToAll = (
+  uid: string,
+  ids: string[],
+  getPlan: (container: Container, now: number) => ContainerPlan,
+) =>
+  runTransaction(db, async (transaction) => {
+    const snapshots = await Promise.all(
+      ids.map((id) => transaction.get(containerDoc(uid, id))),
+    );
+    const now = Date.now();
+    const writes = snapshots.map((snapshot) => {
+      if (!snapshot.exists()) throw new Error(GONE);
+
+      const plan = getPlan(snapshot.data() as Container, now);
+      if ('error' in plan) throw new Error(plan.error);
+      return { ref: snapshot.ref, fields: plan.fields };
+    });
+    writes.forEach(({ ref, fields }) => transaction.update(ref, fields));
+    return writes.map(({ ref, fields }) => ({
+      id: ref.id,
+      at: fields.updatedAt,
+    }));
+  });
+
 interface WriteContainersInput {
   uid: string;
   containers: Container[];
@@ -76,9 +101,7 @@ export const writeContainers = createAsyncThunk<
       );
       await batch.commit();
     } catch (error) {
-      return rejectWithValue(
-        getWriteMessage(error, 'Unable to save this container.'),
-      );
+      return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
     }
 
     return containers.map((container) => container.id);
@@ -128,11 +151,13 @@ interface ChangeInput {
 interface ChangeResult {
   at: number;
   isFinished: boolean;
+  servingsLeft: number;
 }
 
 const toResult = (fields: Awaited<ReturnType<typeof applyPlan>>) => ({
   at: fields.updatedAt,
   isFinished: fields.status === 'DONE',
+  servingsLeft: fields.status === 'DONE' ? 0 : (fields.servings ?? 0),
 });
 
 /** `ALL` eats what is left when the transaction reads it. */
@@ -322,7 +347,7 @@ export const clearOutPlace = createAsyncThunk<
 
     return {
       cleared: done,
-      error: `Cleared out ${done.length} before it stopped. ${getWriteMessage(error, 'The rest are still on your list.')}`,
+      error: `Cleared out ${done.length} before it stopped. ${getWriteMessage(error, 'The rest are still there.')}`,
     };
   },
 );
@@ -372,10 +397,74 @@ export const undoClearOut = createAsyncThunk<
 
     return {
       restored: done.length,
-      error: getWriteMessage(error, 'The rest are still in Finished.'),
+      error: getWriteMessage(error, 'The rest are still in What you finished.'),
     };
   },
 );
+
+interface EndContainersInput {
+  uid: string;
+  ids: string[];
+  kind: 'EAT' | 'TOSS';
+}
+
+/** Ends every box of a batch (eaten whole or tossed); resolves to what its Undo needs. */
+export const endContainers = createAsyncThunk<
+  ClearedContainer[],
+  EndContainersInput,
+  { rejectValue: string }
+>(
+  'pinch/containers/endAll',
+  async ({ uid, ids, kind }, { rejectWithValue }) => {
+    try {
+      const ended = await applyPlanToAll(uid, ids, (container, now) =>
+        kind === 'EAT'
+          ? planEat(container, 'ALL', now)
+          : planToss(container, now),
+      );
+      void refreshFinished(uid);
+      return ended;
+    } catch (error) {
+      return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
+    }
+  },
+);
+
+export const changeContainersEatBy = createAsyncThunk<
+  string[],
+  { uid: string; ids: string[]; eatBy: number },
+  { rejectValue: string }
+>(
+  'pinch/containers/eatByAll',
+  async ({ uid, ids, eatBy }, { rejectWithValue }) => {
+    try {
+      await applyPlanToAll(uid, ids, (container, now) =>
+        planEatBy(container, eatBy, now),
+      );
+    } catch (error) {
+      return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
+    }
+
+    return ids;
+  },
+);
+
+export const removeContainers = createAsyncThunk<
+  string[],
+  { uid: string; ids: string[] },
+  { rejectValue: string }
+>('pinch/containers/removeAll', async ({ uid, ids }, { rejectWithValue }) => {
+  try {
+    const batch = writeBatch(db);
+    ids.forEach((id) => batch.delete(containerDoc(uid, id)));
+    await batch.commit();
+    void refreshFinished(uid);
+  } catch (error) {
+    return rejectWithValue(getWriteMessage(error, 'Unable to delete these.'));
+  }
+
+  return ids;
+});
 
 export const removeContainer = createAsyncThunk<
   string,
@@ -386,9 +475,7 @@ export const removeContainer = createAsyncThunk<
     await deleteDoc(containerDoc(uid, id));
     void refreshFinished(uid);
   } catch (error) {
-    return rejectWithValue(
-      getWriteMessage(error, 'Unable to delete this container.'),
-    );
+    return rejectWithValue(getWriteMessage(error, 'Unable to delete this.'));
   }
 
   return id;

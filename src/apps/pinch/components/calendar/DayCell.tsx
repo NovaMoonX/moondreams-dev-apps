@@ -5,11 +5,18 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DayPeek from '@apps/pinch/components/calendar/DayPeek';
 import MealChip from '@apps/pinch/components/calendar/MealChip';
-import { MEAL_TYPE_COLORS, MEAL_TYPE_EMOJIS } from '@apps/pinch/constants';
+import {
+  MEAL_TYPE_COLORS,
+  MEAL_TYPE_EMOJIS,
+  MONTH_CELL_MEAL_ORDER,
+} from '@apps/pinch/constants';
 import type { PlannedMeal } from '@apps/pinch/types';
 
 const MAX_PILLS = 3;
 const MAX_CHIPS = 3;
+const CELL_RANK = new Map(
+  MONTH_CELL_MEAL_ORDER.map((mealType, index) => [mealType, index]),
+);
 
 interface DayCellProps {
   date: Date;
@@ -33,7 +40,7 @@ function getPopoverAlignment(date: Date) {
   return 'center';
 }
 
-/** One day of the month grid: its number and its meals, a titled pill each on a wide screen or an emoji chip on a small one, with "+N" for the rest. */
+/** One day of the month grid: its number and its meals, dinner first, a titled pill each on a wide screen or an emoji chip on a small one, with "+N" for the rest. */
 function DayCell({
   date,
   dayKey,
@@ -51,6 +58,10 @@ function DayCell({
   const chipsShown = meals.length > MAX_CHIPS ? MAX_CHIPS - 1 : MAX_CHIPS;
   const shownCount = getMealTitle ? MAX_PILLS : chipsShown;
   const hiddenCount = Math.max(0, meals.length - shownCount);
+  const cellMeals = [...meals].sort(
+    (a, b) =>
+      (CELL_RANK.get(a.mealType) ?? 0) - (CELL_RANK.get(b.mealType) ?? 0),
+  );
 
   const face = (
     <span
@@ -69,7 +80,7 @@ function DayCell({
         {date.getDate()}
       </span>
       {getMealTitle ? (
-        meals.slice(0, shownCount).map((meal) => (
+        cellMeals.slice(0, shownCount).map((meal) => (
           <span
             key={meal.id}
             className='flex h-5 min-w-0 items-center gap-1 rounded-md border-l-[3px] pr-1 pl-1'
@@ -91,7 +102,7 @@ function DayCell({
         ))
       ) : (
         <span className='flex flex-wrap gap-0.5'>
-          {meals.slice(0, shownCount).map((meal) => (
+          {cellMeals.slice(0, shownCount).map((meal) => (
             <MealChip
               key={meal.id}
               mealType={meal.mealType}

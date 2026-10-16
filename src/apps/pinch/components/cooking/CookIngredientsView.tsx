@@ -1,22 +1,25 @@
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Stepper from '@/components/Stepper';
-import { useAppSelector } from '@/store';
-import { MAX_COOK_SERVINGS, MIN_COOK_SERVINGS } from '@apps/pinch/constants';
-import { selectIngredientsById } from '@apps/pinch/store/selectors';
+import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
 import type { Recipe } from '@apps/pinch/types';
-import { formatSize } from '@apps/pinch/utils/productFormat';
-import { scaleAmount } from '@apps/pinch/utils/quantity';
+import { stepCookServings } from '@apps/pinch/utils/cooks';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
-interface CookIngredientRowProps {
+export interface CookRow {
   id: string;
   name: string;
   note: string | null;
+  /** The scaled amount, or for a line with no amount its note ("to taste"), which never scales. */
   amountText: string;
+  isMeasured: boolean;
+}
+
+interface CookIngredientRowProps extends CookRow {
+  isInStep: boolean;
   isOut: boolean;
   onToggle: (id: string, isOut: boolean) => void;
 }
@@ -27,12 +30,19 @@ const CookIngredientRow = memo(function CookIngredientRow({
   name,
   note,
   amountText,
+  isMeasured,
+  isInStep,
   isOut,
   onToggle,
 }: CookIngredientRowProps) {
   return (
     <li>
-      <label className='flex cursor-pointer items-start gap-3 py-2.5'>
+      <label
+        className={join(
+          'flex cursor-pointer items-start gap-3 py-2.5',
+          isInStep && 'bg-accent/60 -mx-2 rounded-lg px-2',
+        )}
+      >
         <span className='mt-0.5 inline-flex shrink-0'>
           <Checkbox
             aria-label={`Got out ${name}`}
@@ -58,7 +68,10 @@ const CookIngredientRow = memo(function CookIngredientRow({
         </span>
         <span
           className={join(
-            'shrink-0 text-base font-medium whitespace-nowrap',
+            'text-base',
+            isMeasured
+              ? 'shrink-0 font-medium whitespace-nowrap'
+              : 'text-muted-foreground max-w-[50%] text-right wrap-break-word',
             isOut && 'text-muted-foreground line-through',
           )}
         >
@@ -71,7 +84,13 @@ const CookIngredientRow = memo(function CookIngredientRow({
 
 interface CookIngredientsViewProps {
   recipe: Recipe;
+  rows: CookRow[];
+  /** The lines the step on screen names, marked in the list when it sits beside the steps. */
+  stepLineIds: string[] | null;
+  /** Some step writes an amount of its own, which scaling leaves as it is. */
+  hasWrittenAmounts: boolean;
   servings: number;
+  plannedServings: number | null;
   gotOut: Record<string, boolean>;
   onServingsChange: (servings: number) => void;
   onToggle: (id: string, isOut: boolean) => void;
@@ -80,28 +99,16 @@ interface CookIngredientsViewProps {
 
 function CookIngredientsView({
   recipe,
+  rows,
+  stepLineIds,
+  hasWrittenAmounts,
   servings,
+  plannedServings,
   gotOut,
   onServingsChange,
   onToggle,
   onReset,
 }: CookIngredientsViewProps) {
-  const ingredientsById = useAppSelector(selectIngredientsById);
-
-  const rows = useMemo(
-    () =>
-      recipe.ingredients.map((line) => ({
-        id: line.id,
-        name:
-          ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
-        note: line.note,
-        amountText: formatSize(
-          scaleAmount(line.amount, servings, recipe.servings),
-          line.unit,
-        ),
-      })),
-    [recipe.ingredients, recipe.servings, ingredientsById, servings],
-  );
   const outCount = rows.filter((row) => gotOut[row.id]).length;
   const isScaled = recipe.servings > 0 && servings !== recipe.servings;
 
@@ -115,15 +122,26 @@ function CookIngredientsView({
           <Stepper
             label='Servings'
             value={servings}
-            min={MIN_COOK_SERVINGS}
+            min={0}
             max={MAX_COOK_SERVINGS}
-            onChange={onServingsChange}
+            step={1}
+            onChange={(next) =>
+              onServingsChange(
+                stepCookServings(servings, next > servings ? 1 : -1),
+              )
+            }
           />
         </div>
+        {plannedServings !== null && plannedServings < servings && (
+          <p className='text-muted-foreground text-sm'>
+            You planned {plannedServings} for tonight. The rest can be put away.
+          </p>
+        )}
         {isScaled && (
           <p className='text-muted-foreground text-xs'>
-            Scaled from {formatServings(recipe.servings)}. Amounts written in
-            the steps stay as they are.
+            Scaled from {formatServings(recipe.servings)}.
+            {hasWrittenAmounts &&
+              ' Amounts written in the steps stay as they are.'}
           </p>
         )}
       </div>
@@ -156,6 +174,7 @@ function CookIngredientsView({
               <CookIngredientRow
                 key={row.id}
                 {...row}
+                isInStep={stepLineIds?.includes(row.id) ?? false}
                 isOut={gotOut[row.id] === true}
                 onToggle={onToggle}
               />
