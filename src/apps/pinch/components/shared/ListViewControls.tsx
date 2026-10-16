@@ -21,7 +21,7 @@ import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
 
 interface NutritionEverywhereProps {
-  /** Called as a number is switched on, so the list it was switched on from shows it on its rows too. */
+  /** Called once a number switched on has saved, so the list it was switched on from shows it on its rows too; a failed save leaves the person's choice alone. */
   onTurnOn?: () => void;
 }
 
@@ -34,11 +34,11 @@ function NutritionEverywhere({ onTurnOn }: NutritionEverywhereProps) {
   const handleToggle = async (metric: NutritionMetric, isOn: boolean) => {
     if (uid === null) return;
     setError(null);
-    if (isOn) onTurnOn?.();
     try {
       await dispatch(
         saveSettings({ uid, showNutrition: { [metric]: isOn } }),
       ).unwrap();
+      if (isOn) onTurnOn?.();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this.'));
     }
@@ -93,7 +93,6 @@ interface NutritionViewOptionsProps {
   onReset: () => void;
 }
 
-/** The Calendar's "View options": the nutrition every screen shows, whether the averages line and the Week's meal rows show their figures, and where the numbers come from. */
 export function NutritionViewOptions({
   options,
   customizedCount,

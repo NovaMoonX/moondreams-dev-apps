@@ -33,7 +33,9 @@ const shoppingItem = (
   sources,
 });
 
-// The adobo lines are the recipe at its own four servings, added from its drawer; the rice lines are today's and tomorrow's dinners (two servings each), already got; the chicken breast was typed on the list.
+// The adobo lines are the recipe at its own four servings, added from its drawer before a recipe's source kept its servings (so that older
+// shape stays exercised: it reads as the recipe's own servings); the rice lines are today's and tomorrow's dinners (two servings each), already got;
+// the chicken breast was typed on the list.
 const ADOBO_ADDED = ['recipe:seed-pinch-recipe-adobo'];
 const DINNERS_ADDED = ['seed-pinch-planned-4', 'seed-pinch-planned-7'];
 const SEED_SHOPPING = [

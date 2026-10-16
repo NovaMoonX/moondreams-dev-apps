@@ -1,4 +1,5 @@
-import GroupRow, { GroupRowLines } from '@/components/GroupRow';
+import ActionGroup from '@/components/ActionGroup';
+import GroupRow from '@/components/GroupRow';
 import { useAppSelector } from '@/store';
 import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
 import {
@@ -12,6 +13,7 @@ import {
   selectStockByMealWithRecipes,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
+import type { ContainerPlace } from '@apps/pinch/types';
 import {
   getStockParts,
   getStockSourcesText,
@@ -22,7 +24,7 @@ import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface StockRowsProps {
   target: { kind: 'recipe' | 'meal'; id: string };
-  onOpenStock: () => void;
+  onOpenStock: (place: ContainerPlace) => void;
 }
 
 const isMealStock = (stock: StockSummary): stock is MealStock =>
@@ -55,42 +57,33 @@ function StockRows({ target, onOpenStock }: StockRowsProps) {
       )
     : null;
 
-  const ariaLabel = parts
-    .map((part) =>
-      [
-        `${formatServings(part.servings)} in your ${CONTAINER_PLACE_LABELS[part.place].toLowerCase()}`,
-        part.due?.label,
-      ]
-        .filter((piece) => piece !== undefined)
-        .join(', '),
-    )
-    .join('; ');
-
   return (
-    <GroupRow ariaLabel={ariaLabel} onClick={onOpenStock}>
-      <GroupRowLines
-        lines={parts.map((part) => ({
-          key: part.place,
-          icon: CONTAINER_PLACE_EMOJIS[part.place],
-          content: (
-            <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
-              <span>
-                {formatServings(part.servings)} in the{' '}
-                {CONTAINER_PLACE_LABELS[part.place].toLowerCase()}
-              </span>
+    <div className='space-y-2'>
+      <ActionGroup isRoomy caption='In your fridge and freezer'>
+        {parts.map((part) => {
+          const title = `${formatServings(part.servings)} in the ${CONTAINER_PLACE_LABELS[part.place].toLowerCase()}`;
+          return (
+            <GroupRow
+              key={part.place}
+              isRoomy
+              icon={CONTAINER_PLACE_EMOJIS[part.place]}
+              ariaLabel={part.due ? `${title}, ${part.due.label}` : undefined}
+              onClick={() => onOpenStock(part.place)}
+            >
+              <span className='block font-medium'>{title}</span>
               {part.due && (
-                <EatByBadge state={part.due.state} label={part.due.label} />
+                <span className='mt-1 flex'>
+                  <EatByBadge state={part.due.state} label={part.due.label} />
+                </span>
               )}
-            </span>
-          ),
-        }))}
-      />
+            </GroupRow>
+          );
+        })}
+      </ActionGroup>
       {sourcesText && (
-        <span className='text-muted-foreground mt-1 block pl-8 text-xs'>
-          {sourcesText}
-        </span>
+        <p className='text-muted-foreground text-sm'>{sourcesText}</p>
       )}
-    </GroupRow>
+    </div>
   );
 }
 

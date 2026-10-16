@@ -65,7 +65,8 @@ function CookVoiceHelp({
   voice,
   ingredientExample,
   dishExample,
-}: CookVoiceHelpProps) {
+  isHidden,
+}: CookVoiceHelpProps & { isHidden: boolean }) {
   const groups = [
     { label: 'Steps', phrases: ['next', 'back', 'repeat'] },
     { label: 'Views', phrases: ['ingredients', 'steps'] },
@@ -96,7 +97,10 @@ function CookVoiceHelp({
       title='What you can say'
       linkLabel='What to say'
       dismissLabel='Done'
-      className="relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
+      className={join(
+        "relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']",
+        isHidden && 'hidden!',
+      )}
     >
       <ul className='space-y-1.5'>
         {groups.map((group) => (
@@ -163,7 +167,7 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
       <p
         role='status'
         className={join(
-          'line-clamp-2 min-w-0 flex-1 text-sm',
+          'min-w-0 flex-1 truncate text-sm [@media(max-height:500px)]:line-clamp-2 [@media(max-height:500px)]:whitespace-normal',
           message === null || message.tone === 'HEARD'
             ? 'text-muted-foreground'
             : 'text-foreground font-medium',
@@ -171,7 +175,7 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
       >
         {message?.text ?? getStatusText(voice.status)}
       </p>
-      <CookVoiceHelp {...props} />
+      <CookVoiceHelp {...props} isHidden={message !== null} />
     </div>
   );
 }

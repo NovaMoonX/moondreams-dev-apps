@@ -528,17 +528,21 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
     }
     return (
       <div className='pb-4'>
-        <ActionGroup>
+        <ActionGroup isRoomy>
           <ActionRow
             isGrouped
-            icon={<Tag className='h-4 w-4' />}
+            isRoomy
+            hasChevron
+            icon={<Tag />}
             label='A price'
             subtitle='What something costs at one of your stores'
             onClick={() => setAdding('price')}
           />
           <ActionRow
             isGrouped
-            icon={<StoreIcon className='h-4 w-4' />}
+            isRoomy
+            hasChevron
+            icon={<StoreIcon />}
             label='A store'
             subtitle='Somewhere you shop, from the list or your own'
             onClick={() => {

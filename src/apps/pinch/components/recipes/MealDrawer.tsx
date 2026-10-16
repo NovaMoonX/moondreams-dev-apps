@@ -7,9 +7,9 @@ import { ChevronLeft, Ellipsis, PackagePlus } from 'lucide-react';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
-import FactsLine from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
 import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
@@ -25,10 +25,10 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { Gap, ShoppingRequest } from '@apps/pinch/types';
+import type { ContainerPlace, Gap, ShoppingRequest } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
-  formatCost,
+  formatCostTile,
   formatRowPrice,
   getItemTitle,
 } from '@apps/pinch/utils/mealFormat';
@@ -38,6 +38,7 @@ import {
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import { withWholeCalories } from '@apps/pinch/utils/stats';
 
 interface BackLinkProps {
   onBack: () => void;
@@ -65,7 +66,7 @@ interface MealDrawerProps {
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
-  onOpenStock: (id: string) => void;
+  onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
 }
 
@@ -104,13 +105,6 @@ function MealDrawer({
     costContext.ingredientsById,
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
-  const getCostValue = () => {
-    if (cost.totalCents === null) return 'No price yet';
-    const total = formatCost(cost.totalCents);
-    return leftOutCount > 0
-      ? `${total} so far for the plate`
-      : `${total} for the plate`;
-  };
   const isOnPlate = (gap: Gap) =>
     meal.items.some(
       (item) => item.kind === 'INGREDIENT' && item.refId === gap.ingredientId,
@@ -169,64 +163,51 @@ function MealDrawer({
       }
     >
       {isMoreOpen && (
-        <div className='space-y-3'>
+        <div className='space-y-5'>
           <BackLink onBack={closeMore} />
-          <ActionGroup>
-            <StockRows
-              target={{ kind: 'meal', id: meal.id }}
-              onOpenStock={() => onOpenStock(meal.id)}
-            />
-          </ActionGroup>
-          <ActionGroup>
-            <AddToShoppingRow
-              isGrouped
-              subtitle='Choose what you need for this meal'
-              onClick={() =>
-                onAddToShopping({
-                  kind: 'items',
-                  items: meal.items,
-                  label: meal.name,
-                  mealId: meal.id,
-                })
-              }
-            />
-            {stockError === null && (
-              <ActionRow
+          <StockRows
+            target={{ kind: 'meal', id: meal.id }}
+            onOpenStock={(place) => onOpenStock(meal.id, place)}
+          />
+          <div className='space-y-2'>
+            <ActionGroup isRoomy caption='What would you like to do?'>
+              <AddToShoppingRow
                 isGrouped
-                icon={<PackagePlus className='h-4 w-4' />}
-                label='Put some away'
-                subtitle='In the fridge or freezer, with an eat-by date'
-                isDisabled={!isStockReady}
-                onClick={() => onPutAway(meal.id)}
+                isRoomy
+                subtitle='Choose what you need for this meal'
+                onClick={() =>
+                  onAddToShopping({
+                    kind: 'items',
+                    items: meal.items,
+                    label: meal.name,
+                    mealId: meal.id,
+                  })
+                }
               />
+              {stockError === null && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<PackagePlus />}
+                  label='Put some away'
+                  subtitle={
+                    'In the fridge or freezer, with an eat\u2011by date'
+                  }
+                  isDisabled={!isStockReady}
+                  onClick={() => onPutAway(meal.id)}
+                />
+              )}
+            </ActionGroup>
+            {stockError === null && !isStockReady && (
+              <p className='text-muted-foreground text-sm'>
+                Loading your fridge and freezer…
+              </p>
             )}
-          </ActionGroup>
-          {stockError === null && !isStockReady && (
-            <p className='text-muted-foreground text-xs'>
-              Loading your fridge and freezer…
-            </p>
-          )}
+          </div>
         </div>
       )}
       <div className={join('space-y-5', isMoreOpen && 'hidden')}>
-        <FactsLine
-          className='text-muted-foreground text-sm'
-          facts={[
-            {
-              key: 'cost',
-              content: (
-                <>
-                  {getCostValue()}
-                  {leftOutCount > 0 && (
-                    <span className='ml-1 inline-flex align-middle'>
-                      <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
-                    </span>
-                  )}
-                </>
-              ),
-            },
-          ]}
-        />
         <FormSection
           title='On the plate'
           detail={
@@ -259,12 +240,29 @@ function MealDrawer({
             })}
           </ul>
         </FormSection>
-        {hasShownValue(nutrition.values, show) && (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>For the plate</p>
-            <MacroStats values={nutrition.values} show={show} variant='tiles' />
-          </div>
-        )}
+        <div className='space-y-3'>
+          <StatTile
+            label='Cost'
+            value={formatCostTile(cost.totalCents, leftOutCount, false)}
+            help={
+              leftOutCount > 0 && cost.totalCents !== null ? (
+                <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
+              ) : undefined
+            }
+          />
+          {hasShownValue(nutrition.values, show) && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs font-medium'>
+                For the plate
+              </p>
+              <MacroStats
+                variant='tiles'
+                values={withWholeCalories(nutrition.values)}
+                show={show}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </DetailSheet>
   );

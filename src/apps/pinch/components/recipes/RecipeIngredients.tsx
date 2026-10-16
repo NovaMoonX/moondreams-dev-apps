@@ -8,8 +8,9 @@ import {
 
 import { Button, Input, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Pencil, Plus, X } from 'lucide-react';
+import { Pencil, Plus, Trash2, Ungroup, X } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -53,7 +54,7 @@ import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 
-/** Puts focus back on a group's heading after its editor closes; a rename remounts the heading under its new name. */
+/** A rename remounts the heading under its new name, so focus finds it by its key. */
 const focusGroupHeading = (group: string) =>
   window.requestAnimationFrame(() =>
     document
@@ -86,7 +87,6 @@ interface GroupFieldProps {
   onChange: (group: string | null) => void;
 }
 
-/** Which heading the line sits under: the recipe's groups as pills after a dashed "New group", nothing preselected. In a recipe with no groups it waits behind a quiet link. */
 function GroupField({ group, names, isLive, onChange }: GroupFieldProps) {
   const [choice, setChoice] = useState(group ?? '');
   const [newText, setNewText] = useState('');
@@ -148,11 +148,11 @@ function GroupField({ group, names, isLive, onChange }: GroupFieldProps) {
           }
         }}
       />
-      {names.length === 0 && (
-        <p className='text-muted-foreground text-xs'>
-          Lines with the same group show together under its name.
-        </p>
-      )}
+      <p className='text-muted-foreground text-xs'>
+        {names.length === 0
+          ? 'Lines with the same group show together under its name.'
+          : 'Need it in two groups? Add the line again under the other.'}
+      </p>
     </div>
   );
 }
@@ -166,7 +166,6 @@ interface IngredientEditorProps {
   onRemove: () => void;
   /** The drawer has a footer button and puts "remove" in its body; an inline row shows it beside the fields. */
   showRemove: boolean;
-  /** Whether a typed group name applies as it is typed (in a drawer). */
   isGroupLive: boolean;
 }
 
@@ -285,14 +284,12 @@ function IngredientEditor({
           />
         )}
         {showRemove && (
-          <Button
-            type='button'
-            variant='tertiary'
-            className='text-destructive! h-10 w-full'
+          <ActionRow
+            isDestructive
+            icon={<Trash2 className='h-4 w-4' />}
+            label='Remove from this recipe'
             onClick={onRemove}
-          >
-            Remove from this recipe
-          </Button>
+          />
         )}
       </div>
     );
@@ -391,14 +388,12 @@ function IngredientEditor({
         onChange={(group) => onUpdate({ group })}
       />
       {showRemove && (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='text-destructive! h-10 w-full'
+        <ActionRow
+          isDestructive
+          icon={<Trash2 className='h-4 w-4' />}
+          label='Remove from this recipe'
           onClick={onRemove}
-        >
-          Remove from this recipe
-        </Button>
+        />
       )}
     </div>
   );
@@ -462,21 +457,17 @@ function GroupEditorBody({
           Another group has this name, so the two become one.
         </p>
       )}
-      <div>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='text-destructive! h-10 w-full'
-          onClick={onRemove}
-        >
-          Remove the group
-        </Button>
-        <p className='text-muted-foreground text-center text-xs'>
-          {lineCount === 1
+      <ActionRow
+        isDestructive
+        icon={<Ungroup className='h-4 w-4' />}
+        label='Remove the group'
+        subtitle={
+          lineCount === 1
             ? 'Its ingredient stays, with no group.'
-            : `Its ${lineCount} ingredients stay, with no group.`}
-        </p>
-      </div>
+            : `Its ${lineCount} ingredients stay, with no group.`
+        }
+        onClick={onRemove}
+      />
     </div>
   );
 }
@@ -489,7 +480,7 @@ interface GroupHeadingProps {
   onRemove: () => void;
 }
 
-/** A group's heading in the list; tapping it renames or removes the group, in a drawer on a phone and a popover under it from `sm` up. Closing keeps the typed name. */
+/** Closing the editor keeps the typed name. */
 function GroupHeading({
   name,
   otherNames,
@@ -610,10 +601,7 @@ interface RecipeIngredientsProps {
   onRemoved: (message: string, restore: () => void) => void;
 }
 
-/**
- * The recipe's ingredient lines as one-line summaries, under their group headings. On a phone adding and editing happen in a drawer that never leaves the form; from `sm` up a row opens its fields in place.
- * A new line joins the group just above the add button (the last one), and "Add another" keeps the group of the line before.
- */
+/** A new line joins the last group, the one just above the add button, and "Add another" keeps the group of the line before. */
 function RecipeIngredients({
   uid,
   rows,
@@ -908,7 +896,6 @@ interface IngredientDrawerProps {
   onClose: () => void;
 }
 
-/** Picks an ingredient and sets its amount without leaving the recipe: search, then the details of what was picked, then "Add another" (in the same group) or Done. */
 function IngredientDrawer({
   uid,
   rows,

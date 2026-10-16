@@ -16,7 +16,7 @@ export type PlannedMealAction =
   | { kind: 'EAT'; place: ContainerPlace; count: number }
   | { kind: 'SAVE' };
 
-/** Which view of a planned meal shows: the meal itself, its More actions, naming it as a saved meal, or eating from a place (opened from the meal's primary or from More). */
+/** `from` on an eat view is where its Back returns. */
 export type PlannedMealSubview =
   | { kind: 'meal' }
   | { kind: 'more' }

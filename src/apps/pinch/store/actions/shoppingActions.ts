@@ -20,12 +20,15 @@ import {
 import { selectShoppingSourceContext } from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import {
+  addSources,
+  countStopRows,
+  getKeyShares,
   getMergedFields,
   getNameOnlyItemId,
   getOtherShares,
   getShoppingItemId,
+  getSourceKey,
   getSourceLines,
-  getSourceShares,
   isAsStopLeft,
   isValidAmount,
   mergeSourcedLines,
@@ -36,7 +39,7 @@ import {
   type ShoppingLine,
   type SourcedLine,
   type StopEntry,
-  type StopPlan,
+  type StopRowCounts,
 } from '@apps/pinch/utils/shopping';
 
 const shoppingDoc = (uid: string, id: string) =>
@@ -75,7 +78,11 @@ function writeLine(
 ) {
   const existing = snapshot.exists() ? (snapshot.data() as ShoppingItem) : null;
   const fields = getMergedFields(existing, line, now, isChecked);
-  const sources = mergeSources(existing?.sources ?? [], line.sources);
+  const sources = addSources(
+    existing?.sources ?? [],
+    line.sources,
+    existing?.isChecked ?? false,
+  );
   if (existing) {
     transaction.update(snapshot.ref, { ...fields, sources });
     return;
@@ -327,14 +334,21 @@ export const clearCheckedShoppingItems = createAsyncThunk<
 
 interface StopShoppingForInput {
   uid: string;
+  /** The source's key, so every add of one recipe comes off together. */
   source: string;
+}
+
+export interface StopResult {
+  entries: StopEntry[];
+  /** Counted in the rows the list drew at the tap. */
+  rows: StopRowCounts;
 }
 
 const STOP_CHUNK_SIZE = SHOPPING_BATCH_SIZE / 2;
 
-/** Takes one planned meal's, recipe's or saved meal's share off the list (`planStopShopping`), worked out from the meal as it is now. Each chunk is one transaction that re-reads its items and their name-only lines first, so a change from another device is never lost; it needs a connection. Resolves to what it really wrote, for an Undo. */
+/** Each chunk is one transaction that re-reads its items and their name-only lines first, so a change from another device is never lost; it needs a connection. Resolves to what it really wrote, for an Undo. */
 export const stopShoppingFor = createAsyncThunk<
-  StopPlan,
+  StopResult,
   StopShoppingForInput,
   { state: RootState; rejectValue: string }
 >(
@@ -342,8 +356,7 @@ export const stopShoppingFor = createAsyncThunk<
   async ({ uid, source }, { getState, rejectWithValue }) => {
     const state = getState();
     const context = selectShoppingSourceContext(state);
-    const lines = getSourceLines(source, context);
-    if (!lines) {
+    if (!getSourceLines(source, context)) {
       return rejectWithValue(
         "That meal isn't on your plan any more, so its share can't be worked out.",
       );
@@ -351,7 +364,9 @@ export const stopShoppingFor = createAsyncThunk<
     const items = state.pinch.shopping.items;
     const otherShares = getOtherShares(source, items, context);
     const ids = items
-      .filter((item) => (item.sources ?? []).includes(source))
+      .filter((item) =>
+        (item.sources ?? []).some((other) => getSourceKey(other) === source),
+      )
       .map((item) => item.id);
 
     const stopChunk = (chunk: string[]) =>
@@ -381,7 +396,7 @@ export const stopShoppingFor = createAsyncThunk<
         const plan = planStopShopping(
           source,
           read,
-          getSourceShares(source, lines, read),
+          getKeyShares(source, read, context) ?? new Map(),
           otherShares,
           Date.now(),
         );
@@ -397,26 +412,17 @@ export const stopShoppingFor = createAsyncThunk<
 
     try {
       // One chunk after another, so two never merge into the same name-only line at once.
-      const result = await toChunks(ids, STOP_CHUNK_SIZE).reduce<
-        Promise<StopPlan>
-      >(
-        async (done, chunk) => {
-          const sum = await done;
-          const plan = await stopChunk(chunk);
-          return {
-            entries: [...sum.entries, ...plan.entries],
-            removedCount: sum.removedCount + plan.removedCount,
-            keptCount: sum.keptCount + plan.keptCount,
-            gotCount: sum.gotCount + plan.gotCount,
-          };
-        },
-        Promise.resolve({
-          entries: [],
-          removedCount: 0,
-          keptCount: 0,
-          gotCount: 0,
-        }),
-      );
+      const entries = await toChunks(ids, STOP_CHUNK_SIZE).reduce<
+        Promise<StopEntry[]>
+      >(async (done, chunk) => {
+        const written = await done;
+        const plan = await stopChunk(chunk);
+        return [...written, ...plan.entries];
+      }, Promise.resolve([]));
+      const result: StopResult = {
+        entries,
+        rows: countStopRows(entries, items),
+      };
       return result;
     } catch (error) {
       return rejectWithValue(
@@ -431,7 +437,7 @@ interface UndoStopShoppingInput {
   entries: StopEntry[];
 }
 
-/** Puts back exactly what a stop wrote, all of it in one transaction per chunk, except an item changed since (`isAsStopLeft`), which keeps what it has. Resolves to how many it put back. */
+/** Puts back exactly what a stop wrote, one transaction per chunk, except an item changed since, which keeps what it has. Resolves to how many it put back. */
 export const undoStopShopping = createAsyncThunk<
   number,
   UndoStopShoppingInput,

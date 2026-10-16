@@ -17,7 +17,8 @@ const REPEAT_GUARD_MS = 1200;
 const MESSAGE_MS = { HEARD: 2500, ANSWER: 8000, PROBLEM: 5000 } as const;
 
 export type CookVoiceResult =
-  { ok: true; show?: string; speak?: string } | { ok: false; reason: string };
+  | { ok: true; show?: string; speak?: string }
+  | { ok: false; reason: string; spoken?: string };
 
 /** What a spoken command can do on the cooking screen: the same things a tap does, and nothing that writes. */
 export interface CookVoiceActions {
@@ -157,7 +158,7 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
     const result = runCommand(command, run);
     if (!result.ok) {
       show(result.reason, 'PROBLEM');
-      if (isReadingAloud) sayRef.current(result.reason);
+      if (isReadingAloud) sayRef.current(result.spoken ?? result.reason);
       return;
     }
     const heard =

@@ -52,6 +52,7 @@ import {
   getFixedNote,
   getItemTitle,
   getPlannedMealTitle,
+  getPlateTitle,
 } from '@apps/pinch/utils/mealFormat';
 import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
@@ -85,8 +86,11 @@ const getMealDetail = (
     getItemTitle(item, recipesById, ingredientsById),
   );
   if (meal.name?.trim()) return names.join(', ');
-  if (names.length > 1) return `With ${names.slice(1).join(', ')}`;
-  return meal.items[0] ? formatServings(meal.items[0].servings) : null;
+  const { namedCount } = getPlateTitle(names);
+  if (namedCount < names.length) {
+    return `With ${names.slice(namedCount).join(', ')}`;
+  }
+  return names.length === 1 ? formatServings(meal.items[0].servings) : null;
 };
 
 interface DayDrawerProps {
@@ -313,7 +317,7 @@ function DayDrawer({
                                   {isCooked && (
                                     <>
                                       {'\u00a0'}
-                                      <TickMark />
+                                      <TickMark variant='soft' />
                                     </>
                                   )}
                                 </span>

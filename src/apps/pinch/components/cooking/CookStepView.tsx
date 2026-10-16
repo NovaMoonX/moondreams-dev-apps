@@ -26,6 +26,8 @@ interface CookStepViewProps {
   ingredients: CookRow[];
   isAmountNoteShown: boolean;
   timerSlots: StepTimerSlot[];
+  /** Null unless one of the step's cards holds a timer. */
+  timerNote: string | null;
   isTimersFull: boolean;
   /** Sits at the end of the step counter's row (the way to the ingredient list on a phone). */
   action: ReactNode;
@@ -37,14 +39,24 @@ interface CookStepViewProps {
   onSwipe: (direction: 1 | -1) => void;
 }
 
-const getStepTextClass = (length: number) => {
+/** The digits sit a size below the words so a running timer never outweighs the instruction; a short screen takes a size off both so the step and its card fit above the pinned buttons. */
+const getStepType = (length: number) => {
   if (length > VERY_LONG_STEP_CHARS) {
-    return 'text-xl leading-snug [@media(max-height:500px)]:text-lg';
+    return {
+      step: 'text-xl leading-snug [@media(max-height:640px)]:text-lg',
+      clock: 'text-xl [@media(max-height:640px)]:text-lg',
+    };
   }
   if (length > LONG_STEP_CHARS) {
-    return 'text-2xl leading-snug [@media(max-height:500px)]:text-xl';
+    return {
+      step: 'text-2xl leading-snug [@media(max-height:640px)]:text-xl',
+      clock: 'text-xl [@media(max-height:640px)]:text-lg',
+    };
   }
-  return 'text-[1.75rem] leading-[1.3] lg:text-3xl [@media(max-height:500px)]:text-2xl';
+  return {
+    step: 'text-[1.75rem] leading-[1.3] lg:text-3xl [@media(max-height:640px)]:text-2xl',
+    clock: 'text-2xl [@media(max-height:640px)]:text-xl',
+  };
 };
 
 function CookStepView({
@@ -53,6 +65,7 @@ function CookStepView({
   ingredients,
   isAmountNoteShown,
   timerSlots,
+  timerNote,
   isTimersFull,
   action,
   onStartTimer,
@@ -66,6 +79,7 @@ function CookStepView({
   const step = steps[index];
   const stepNumber = index + 1;
   const hasIdleSlot = timerSlots.some((slot) => slot.timer === null);
+  const type = getStepType(step.length);
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     swipeStart.current =
@@ -100,7 +114,7 @@ function CookStepView({
         swipeStart.current = null;
       }}
     >
-      <div className='flex min-h-10 items-center gap-3'>
+      <div data-cook-stop='' className='flex min-h-10 items-center gap-3'>
         <div
           aria-hidden='true'
           className='flex min-w-0 flex-1 items-center gap-3'
@@ -124,23 +138,28 @@ function CookStepView({
           Step {stepNumber} of {steps.length}.{' '}
         </span>
         <p
+          data-cook-stop=''
           className={join(
             'font-medium wrap-break-word whitespace-pre-wrap',
-            getStepTextClass(step.length),
+            type.step,
           )}
         >
           {step}
         </p>
       </div>
       {timerSlots.length > 0 && (
-        <div className='mt-6 space-y-2 [@media(max-height:500px)]:mt-4'>
+        <div
+          data-cook-timers=''
+          className='mt-6 space-y-2 [@media(max-height:640px)]:mt-4'
+        >
           <ul aria-label='Timers in this step' className='space-y-2'>
             {timerSlots.map((slot) => (
               <CookStepTimer
-                key={slot.label}
+                key={`${stepNumber}-${slot.label}`}
                 seconds={slot.seconds}
                 label={slot.label}
                 timer={slot.timer}
+                clockClassName={type.clock}
                 isCompact={timerSlots.length > 1}
                 canStart={!isTimersFull}
                 onStart={() =>
@@ -156,9 +175,12 @@ function CookStepView({
           <div role='status' className='empty:hidden'>
             {isTimersFull && hasIdleSlot && (
               <p className='text-muted-foreground text-xs'>
-                {MAX_COOK_TIMERS} timers are going. Dismiss or finish one to
-                start another.
+                {MAX_COOK_TIMERS} timers are going. Another can start once one
+                finishes or is reset.
               </p>
+            )}
+            {timerNote && (
+              <p className='text-muted-foreground text-xs'>{timerNote}</p>
             )}
           </div>
         </div>

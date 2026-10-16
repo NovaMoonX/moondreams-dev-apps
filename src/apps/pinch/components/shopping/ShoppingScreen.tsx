@@ -71,6 +71,7 @@ import {
   getShownShoppingView,
   type ShoppingGroup,
   type ShoppingRowData,
+  type ShoppingSourceLabel,
 } from '@apps/pinch/utils/shopping';
 
 const EAGER_GROUPS = 3;
@@ -103,6 +104,22 @@ const formatNames = (names: string[]) =>
     : `${names.slice(0, MAX_NAMES_SHOWN).join(', ')} and ${names.length - MAX_NAMES_SHOWN} more`;
 
 type GetForText = (sources: string[]) => string | null;
+
+// Rows share sources, and every render and height estimate asks again, so each set is worked out once per change of names.
+const makeForText = (
+  labels: Map<string, ShoppingSourceLabel>,
+  todayKey: string,
+): GetForText => {
+  const textBySources = new Map<string, string | null>();
+  return (sources) => {
+    const key = sources.join('|');
+    const known = textBySources.get(key);
+    if (known !== undefined) return known;
+    const text = getShoppingSourcesText(sources, labels, todayKey);
+    textBySources.set(key, text);
+    return text;
+  };
+};
 
 interface ShoppingRowsProps {
   rows: ShoppingRowData[];
@@ -298,9 +315,8 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sourceLabels = useAppSelector(selectShoppingSourceLabels);
   const [todayKey] = useState(() => toLocalDateInputValue(Date.now()));
-  const getForText = useCallback(
-    (sources: string[]) =>
-      getShoppingSourcesText(sources, sourceLabels, todayKey),
+  const getForText = useMemo(
+    () => makeForText(sourceLabels, todayKey),
     [sourceLabels, todayKey],
   );
   const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));

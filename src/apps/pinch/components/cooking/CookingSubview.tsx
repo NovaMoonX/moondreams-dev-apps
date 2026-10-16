@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useStore } from 'react-redux';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -74,8 +81,8 @@ import {
   describeTimersLeft,
   pickVoiceTimer,
 } from '@apps/pinch/utils/cookVoice';
+import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
-import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
@@ -83,6 +90,7 @@ import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
 const DONE_GUARD_MS = 600;
+const REVEAL_GAP_PX = 8;
 
 const LIST_FORMAT = new Intl.ListFormat('en-US', { type: 'conjunction' });
 const CHOICE_FORMAT = new Intl.ListFormat('en-US', { type: 'disjunction' });
@@ -92,7 +100,11 @@ const done = (show?: string, speak?: string): CookVoiceResult => ({
   show,
   speak,
 });
-const refuse = (reason: string): CookVoiceResult => ({ ok: false, reason });
+const refuse = (reason: string, spoken?: string): CookVoiceResult => ({
+  ok: false,
+  reason,
+  spoken,
+});
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -383,6 +395,34 @@ function CookingSession({
     rootRef.current
       ?.closest<HTMLElement>('[data-subview-overlay]')
       ?.scrollTo({ top: 0 });
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const scroller = root?.closest<HTMLElement>('[data-subview-overlay]');
+    const cards = root?.querySelector<HTMLElement>('[data-cook-timers]');
+    const footer = root?.querySelector<HTMLElement>('.form-footer');
+    if (!root || !scroller || !cards || !footer) {
+      return;
+    }
+    const covered =
+      cards.getBoundingClientRect().bottom +
+      REVEAL_GAP_PX -
+      footer.getBoundingClientRect().top;
+    if (covered <= 0) {
+      return;
+    }
+    // Scroll to a block's top so no line is cut under the header, and never past the step's first line.
+    const headerBottom =
+      root.previousElementSibling?.getBoundingClientRect().bottom ??
+      scroller.getBoundingClientRect().top;
+    const stops = [
+      ...root.querySelectorAll<HTMLElement>('[data-cook-stop]'),
+    ].map((stop) => stop.getBoundingClientRect().top - headerBottom);
+    const target = stops.find((stop) => stop >= covered) ?? stops.at(-1) ?? 0;
+    if (target > 0) {
+      scroller.scrollBy({ top: target });
+    }
+  }, [recipe.id, index, isStepsView, isFinishShown, voice.isOn]);
 
   const goBy = (direction: 1 | -1) => {
     if (isFinished) {
@@ -718,21 +758,27 @@ function CookingSession({
     state: string,
   ) => {
     if (candidates.length > 1) {
-      return `${candidates.length} timers are ${state}. Say which, like “${verb} the ${candidates[0].label} timer”.`;
+      return refuse(
+        `Say which: “${verb} the ${candidates[0].label} timer”`,
+        `${candidates.length} timers are ${state}. Say which one, like ${verb} the ${candidates[0].label} timer.`,
+      );
     }
-    return seconds === null
-      ? `No timer is ${state}.`
-      : `No ${formatDuration(seconds)} timer is ${state}.`;
+    return refuse(
+      seconds === null
+        ? `No timer is ${state}.`
+        : `No ${formatDuration(seconds)} timer is ${state}.`,
+    );
   };
 
   const voiceActions: CookVoiceActions = {
     next: () => {
       if (next.kind === 'FINISH') {
-        return refuse(
-          hasSteps
-            ? "That's the last step. Tap Finish when you're done."
-            : 'This recipe has no steps yet.',
-        );
+        return hasSteps
+          ? refuse(
+              "Last step: tap Finish when you're done.",
+              "That's the last step. Tap Finish when you're done.",
+            )
+          : refuse('This recipe has no steps yet.');
       }
       showStepsView();
       handleNext();
@@ -787,7 +833,7 @@ function CookingSession({
     pauseTimer: (seconds) => {
       const { timer, candidates } = pickTimer(['running'], seconds);
       if (timer === null) {
-        return refuse(getTimerProblem(candidates, seconds, 'pause', 'going'));
+        return getTimerProblem(candidates, seconds, 'pause', 'going');
       }
       timers.pause(timer.id);
       return done(`Paused the ${timer.label} timer`);
@@ -795,7 +841,7 @@ function CookingSession({
     resumeTimer: (seconds) => {
       const { timer, candidates } = pickTimer(['paused'], seconds);
       if (timer === null) {
-        return refuse(getTimerProblem(candidates, seconds, 'resume', 'paused'));
+        return getTimerProblem(candidates, seconds, 'resume', 'paused');
       }
       timers.resume(timer.id);
       return done(`Resumed the ${timer.label} timer`);
@@ -810,19 +856,20 @@ function CookingSession({
             : `Dismissed ${ringing.length} timers`,
         );
       }
-      if (scope === 'RINGING') {
-        return refuse(
-          timers.liveCount > 0
-            ? 'No timer is ringing. Say “stop the timer” to stop one that’s going.'
-            : 'No timer is ringing.',
-        );
-      }
+      if (scope === 'RINGING') return refuse('No timer is ringing.');
       const { timer, candidates } = pickTimer(['running', 'paused'], seconds);
       if (timer === null) {
-        return refuse(getTimerProblem(candidates, seconds, 'stop', 'going'));
+        return getTimerProblem(candidates, seconds, 'stop', 'going');
+      }
+      if (timer.status === 'running') {
+        timers.pause(timer.id);
+        return done(
+          `Paused the ${timer.label} timer`,
+          `Paused the timer. Say stop again to reset it.`,
+        );
       }
       handleDismissTimer(timer.id);
-      return done(`Stopped the ${timer.label} timer`);
+      return done(`Reset the ${timer.label} timer`);
     },
     timeLeft: () => {
       if (timers.timers.length === 0) return refuse('No timer is going.');
@@ -862,7 +909,10 @@ function CookingSession({
         const titles = entries
           .filter((candidate) => candidates.includes(candidate.recipe.id))
           .map((candidate) => candidate.recipe.title);
-        return refuse(`Say more of the name: ${CHOICE_FORMAT.format(titles)}.`);
+        return refuse(
+          `Which one: ${CHOICE_FORMAT.format(titles)}?`,
+          `Say more of the name: ${CHOICE_FORMAT.format(titles)}.`,
+        );
       }
       const target = entries.find(
         (candidate) => candidate.recipe.id === recipeId,
@@ -963,8 +1013,15 @@ function CookingSession({
     records.find((record) => record.recipeId === note.openRecipeId)?.entry
       .recipe.title ?? null;
 
-  const showLockNote =
-    !isRecorded && (!wakeLock.isSupported || wakeLock.hasFailed);
+  const getTimerNote = () => {
+    if (!stepTimers.slots.some((slot) => slot.timer !== null)) return null;
+    if (!wakeLock.isSupported || wakeLock.hasFailed) {
+      return 'This device may turn the screen off; timers keep running only while this screen is open.';
+    }
+    return timers.isNoticeShown
+      ? 'Keep this screen open: timers stop if you leave it.'
+      : null;
+  };
   const isChanged =
     isRemoved ||
     recipe.isArchived === true ||
@@ -990,6 +1047,7 @@ function CookingSession({
   );
   const stepContent = hasSteps ? (
     <CookStepView
+      key={`steps-${recipe.id}`}
       steps={recipe.steps}
       index={index}
       ingredients={isWide ? [] : stepRows}
@@ -997,6 +1055,7 @@ function CookingSession({
         isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
       }
       timerSlots={stepTimers.slots}
+      timerNote={getTimerNote()}
       isTimersFull={timers.isFull}
       action={ingredientsButton}
       onStartTimer={handleStartTimer}
@@ -1032,6 +1091,7 @@ function CookingSession({
   return (
     <Subview
       overlay
+      isTitleWrapped
       className='lg:max-w-5xl'
       title={title}
       headerAction={
@@ -1174,122 +1234,85 @@ function CookingSession({
               This recipe was changed or removed elsewhere.
             </p>
           )}
-          {showLockNote && (
-            <p className='text-muted-foreground text-xs'>
-              This phone may turn the screen off; timers keep running only while
-              this screen is open.
-            </p>
-          )}
         </div>
-        <div className='form-footer space-y-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
-          <div role='status' className='empty:hidden'>
-            {timers.isNoticeShown && !showLockNote && (
-              <p className='text-muted-foreground text-xs'>
-                Keep this screen open: timers stop if you leave it.
-              </p>
-            )}
-          </div>
-          <CookTimerStrip
-            timers={stepTimers.elsewhere}
-            listRef={stripRef}
-            onTick={timers.settle}
-            onPause={timers.pause}
-            onResume={timers.resume}
-            onDismiss={handleDismissTimer}
-            onJump={
-              isFinishShown && (note.isOpen || putAway.isOpen) ? null : jumpTo
-            }
-          />
-          <div className='flex flex-wrap gap-x-3 gap-y-2'>
+        <div className='form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
+          <div className='flex flex-col gap-2 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:gap-3'>
             {!isFinishShown && (
               <CookVoiceLine
                 voice={voice}
                 ingredientExample={ingredientExample}
                 dishExample={dishExample}
-                className='basis-full [@media(max-height:500px)]:max-w-2/5 [@media(max-height:500px)]:flex-1 [@media(max-height:500px)]:basis-0'
+                className='[@media(max-height:500px)]:w-44 [@media(max-height:500px)]:shrink-0'
               />
             )}
-            {isFinishShown && isRecorded && putAway.isOpen ? (
-              <>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  className={join(
-                    'h-14 shrink-0 px-6 text-base',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  disabled={putAway.isSaving}
-                  onClick={putAway.skip}
-                >
-                  Skip
-                </Button>
-                <Button
-                  type='button'
-                  className={join(
-                    'h-14 min-w-0 flex-1 text-lg',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  loading={putAway.isSaving}
-                  disabled={putAway.isSaving || !putAway.canSave}
-                  onClick={() => void putAway.save()}
-                >
-                  Save
-                </Button>
-              </>
-            ) : isFinishShown && isRecorded && note.isOpen ? (
-              <>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  className={join(
-                    'h-14 shrink-0 px-6 text-base',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  disabled={note.isSaving}
-                  onClick={() => void cancelNote()}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type='button'
-                  className={join(
-                    'h-14 min-w-0 flex-1 text-lg',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  loading={note.isSaving}
-                  disabled={note.isSaving || !note.canSave}
-                  onClick={() => void note.save()}
-                >
-                  Save note
-                </Button>
-              </>
-            ) : isFinishShown ? (
-              <Button
-                ref={primaryRef}
-                type='button'
-                className={join(
-                  'h-14 min-w-0 flex-1 text-lg',
-                  '[@media(max-height:500px)]:h-11',
-                )}
-                onClick={handleDone}
-              >
-                Done
-              </Button>
-            ) : isStepsView ? (
-              <>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  className={join(
-                    'h-14 shrink-0 px-6 text-base',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  aria-label='Back to the previous step'
-                  disabled={index <= 0}
-                  onClick={() => goBy(-1)}
-                >
-                  Back
-                </Button>
+            <CookTimerStrip
+              timers={stepTimers.elsewhere}
+              listRef={stripRef}
+              className='[@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1 [@media(max-height:500px)]:self-center'
+              onTick={timers.settle}
+              onPause={timers.pause}
+              onResume={timers.resume}
+              onDismiss={handleDismissTimer}
+              onJump={
+                isFinishShown && (note.isOpen || putAway.isOpen) ? null : jumpTo
+              }
+            />
+            <div className='flex gap-3 [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1'>
+              {isFinishShown && isRecorded && putAway.isOpen ? (
+                <>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    className={join(
+                      'h-14 shrink-0 px-6 text-base',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    disabled={putAway.isSaving}
+                    onClick={putAway.skip}
+                  >
+                    Skip
+                  </Button>
+                  <Button
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    loading={putAway.isSaving}
+                    disabled={putAway.isSaving || !putAway.canSave}
+                    onClick={() => void putAway.save()}
+                  >
+                    Save
+                  </Button>
+                </>
+              ) : isFinishShown && isRecorded && note.isOpen ? (
+                <>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    className={join(
+                      'h-14 shrink-0 px-6 text-base',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    disabled={note.isSaving}
+                    onClick={() => void cancelNote()}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    loading={note.isSaving}
+                    disabled={note.isSaving || !note.canSave}
+                    onClick={() => void note.save()}
+                  >
+                    Save note
+                  </Button>
+                </>
+              ) : isFinishShown ? (
                 <Button
                   ref={primaryRef}
                   type='button'
@@ -1297,36 +1320,63 @@ function CookingSession({
                     'h-14 min-w-0 flex-1 text-lg',
                     '[@media(max-height:500px)]:h-11',
                   )}
-                  aria-label={
-                    nextRecipe ? `Next: ${nextRecipe.title}` : undefined
-                  }
-                  disabled={!hasSteps && nextRecipe === null}
-                  onClick={handleNext}
+                  onClick={handleDone}
                 >
-                  {nextRecipe ? (
-                    <span className='min-w-0 truncate'>
-                      Next: {nextRecipe.title}
-                    </span>
-                  ) : next.kind === 'FINISH' && hasSteps ? (
-                    'Finish'
-                  ) : (
-                    'Next'
-                  )}
+                  Done
                 </Button>
-              </>
-            ) : (
-              <Button
-                ref={primaryRef}
-                type='button'
-                className={join(
-                  'h-14 min-w-0 flex-1 text-lg',
-                  '[@media(max-height:500px)]:h-11',
-                )}
-                onClick={() => showView('steps')}
-              >
-                Back to the steps
-              </Button>
-            )}
+              ) : isStepsView ? (
+                <>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    className={join(
+                      'h-14 shrink-0 px-6 text-base',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    aria-label='Back to the previous step'
+                    disabled={index <= 0}
+                    onClick={() => goBy(-1)}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    ref={primaryRef}
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    aria-label={
+                      nextRecipe ? `Next: ${nextRecipe.title}` : undefined
+                    }
+                    disabled={!hasSteps && nextRecipe === null}
+                    onClick={handleNext}
+                  >
+                    {nextRecipe ? (
+                      <span className='min-w-0 truncate'>
+                        Next: {nextRecipe.title}
+                      </span>
+                    ) : next.kind === 'FINISH' && hasSteps ? (
+                      'Finish'
+                    ) : (
+                      'Next'
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  ref={primaryRef}
+                  type='button'
+                  className={join(
+                    'h-14 min-w-0 flex-1 text-lg',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  onClick={() => showView('steps')}
+                >
+                  Back to the steps
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1365,7 +1415,6 @@ function CookingSubview({
   const { closeSubview } = usePinchOverlay();
   const store = useStore<RootState>();
   const recipesById = useAppSelector(selectRecipesById);
-  const ingredientsById = useAppSelector(selectIngredientsById);
   const plannedMeal = useAppSelector((state) =>
     plannedMealId === null
       ? null
@@ -1437,11 +1486,10 @@ function CookingSubview({
 
   const getTitle = () => {
     if (entries.length === 1) return entries[0].recipe.title;
-    const plateTitle =
-      plannedMeal === null
-        ? ''
-        : getPlannedMealTitle(plannedMeal, recipesById, ingredientsById);
-    return plateTitle || `${entries[0].recipe.title} +${entries.length - 1}`;
+    const name = plannedMeal?.name?.trim() ?? '';
+    return (
+      name || getPlateTitle(entries.map((entry) => entry.recipe.title)).title
+    );
   };
 
   return (

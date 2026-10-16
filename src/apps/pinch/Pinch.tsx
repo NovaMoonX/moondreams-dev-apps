@@ -320,10 +320,11 @@ function Pinch() {
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
       {subview?.kind === 'containers' && (
         <ContainersSubview
-          key={`${subview.recipeId ?? ''}-${subview.mealId ?? ''}`}
+          key={`${subview.recipeId ?? ''}-${subview.mealId ?? ''}-${subview.place ?? ''}`}
           uid={user.uid}
           recipeId={subview.recipeId ?? null}
           mealId={subview.mealId ?? null}
+          place={subview.place ?? null}
         />
       )}
       {subview?.kind === 'recipe' && (

@@ -188,7 +188,13 @@ export type PinchSubview =
   /** Stores & prices: every price grouped under the store it is at, and the stores themselves. */
   | { kind: 'products' }
   | { kind: 'sources' }
-  | { kind: 'containers'; recipeId?: string; mealId?: string }
+  /** Fridge & freezer; `place` is the one a door named, shown first. */
+  | {
+      kind: 'containers';
+      recipeId?: string;
+      mealId?: string;
+      place?: ContainerPlace;
+    }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
   | {
       kind: 'recipe';

@@ -61,6 +61,7 @@ interface ContainersSubviewProps {
   uid: string;
   recipeId: string | null;
   mealId: string | null;
+  place: ContainerPlace | null;
 }
 
 interface Scope {
@@ -121,14 +122,19 @@ const combineScoped = (
   error: results.find((result) => result.isError)?.error ?? null,
 });
 
-function ContainersSubview({ uid, recipeId, mealId }: ContainersSubviewProps) {
+function ContainersSubview({
+  uid,
+  recipeId,
+  mealId,
+  place,
+}: ContainersSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
   const { isReady, loadError, clearOut } = useContainerActions(uid);
   const containers = useAppSelector(selectContainers);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
-  const [pick, setPick] = useState<ContainerPlace | null>(null);
+  const [pick, setPick] = useState<ContainerPlace | null>(place);
   const [isFinishedView, setIsFinishedView] = useState(false);
   const [scope, setScope] = useState({ recipeId, mealId });
   const [query, setQuery] = useState('');
