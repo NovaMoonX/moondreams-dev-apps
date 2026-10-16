@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
@@ -10,7 +10,11 @@ import StatTile from '@/components/StatTile';
 import TickMark from '@/components/TickMark';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
-import { isPlannedMealCooked } from '@apps/pinch/components/calendar/plannedMealOffer';
+import {
+  isPlannedMealCooked,
+  PLANNED_MEAL_VIEW,
+  type PlannedMealSubview,
+} from '@apps/pinch/components/calendar/plannedMealOffer';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import {
@@ -116,9 +120,33 @@ function DayDrawer({
   const [pickedMealId, setPickedMealId] = useState<string | null>(
     initialMealId,
   );
+  const [mealView, setMealView] =
+    useState<PlannedMealSubview>(PLANNED_MEAL_VIEW);
   const plannedMealId = meals.some((meal) => meal.id === pickedMealId)
     ? pickedMealId
     : null;
+  const viewKey =
+    plannedMealId === null
+      ? 'day'
+      : [
+          plannedMealId,
+          mealView.kind,
+          mealView.kind === 'eat' ? mealView.place : '',
+        ].join(':');
+  const mealRowNodes = useRef(new Map<string, HTMLButtonElement>());
+  const openMeal = (id: string) => {
+    setMealView(PLANNED_MEAL_VIEW);
+    setPickedMealId(id);
+  };
+  const backToDay = () => {
+    setPickedMealId(null);
+    window.requestAnimationFrame(() => {
+      const row = plannedMealId
+        ? mealRowNodes.current.get(plannedMealId)
+        : null;
+      if (row?.isConnected) row.focus();
+    });
+  };
 
   const stats = useAppSelector((state) =>
     selectPeriodStats(state, dayKey, dayKey),
@@ -138,6 +166,7 @@ function DayDrawer({
       isOpen
       onClose={onClose}
       title={formatDayTitle(dayKey)}
+      viewKey={viewKey}
       footer={
         plannedMealId === null ? (
           <div className='px-4 pb-4'>
@@ -158,7 +187,9 @@ function DayDrawer({
         <PlannedMealView
           uid={uid}
           plannedMealId={plannedMealId}
-          onBack={() => setPickedMealId(null)}
+          view={mealView}
+          onViewChange={setMealView}
+          onBack={backToDay}
           onEdit={onEdit}
           onStartCooking={(plate) => {
             if (plate.length === 0) return;
@@ -263,10 +294,17 @@ function DayDrawer({
                         return (
                           <li key={meal.id}>
                             <Button
+                              ref={(node) => {
+                                if (node)
+                                  mealRowNodes.current.set(meal.id, node);
+                                return () => {
+                                  mealRowNodes.current.delete(meal.id);
+                                };
+                              }}
                               type='button'
                               variant='tertiary'
                               aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}: ${title}${isCooked ? ', cooked' : ''}`}
-                              onClick={() => setPickedMealId(meal.id)}
+                              onClick={() => openMeal(meal.id)}
                               className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
                             >
                               <span className='min-w-0 flex-1'>

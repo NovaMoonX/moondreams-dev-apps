@@ -4829,6 +4829,60 @@ assert.equal(getPutAwayText([]), null);
     'a day ahead has no primary or boxes, can still be cooked ahead, not marked',
   );
 
+  const freezerBox = container({
+    id: 'fz',
+    place: 'FREEZER',
+    eatBy: dayOf(20),
+  });
+  assert.deepEqual(
+    offerOf({ containers: [dueBox, freezerBox] }).more,
+    [
+      { kind: 'COOK' },
+      { kind: 'EAT', place: 'FREEZER', count: 1 },
+      { kind: 'SAVE' },
+    ],
+    "when tonight's due fridge box is the primary, More offers cooking, the freezer box and saving, never the fridge again",
+  );
+  assert.deepEqual(
+    offerOf().more,
+    [{ kind: 'SAVE' }],
+    "when cooking is tonight's primary, More doesn't offer it a second time",
+  );
+  assert.deepEqual(
+    offerOf({
+      cookIds: new Set(['m1__adobo', 'm1__rice']),
+      containers: [dueBox, freezerBox],
+    }).more,
+    [{ kind: 'SAVE' }],
+    'a cooked dinner offers no cooking and no box in More',
+  );
+  assert.deepEqual(
+    offerOf({ containers: [dueBox] }, dayOf(16)).more,
+    [{ kind: 'COOK' }, { kind: 'SAVE' }],
+    'a day ahead offers cooking ahead in More, and no box',
+  );
+  assert.deepEqual(
+    offerOf(
+      { containers: [dueBox, container({ id: 'f2', eatBy: dayOf(18) })] },
+      dayOf(14),
+    ).more,
+    [{ kind: 'EAT', place: 'FRIDGE', count: 2 }, { kind: 'SAVE' }],
+    'yesterday has no primary, so its fridge boxes are in More with their count, and no cooking',
+  );
+  assert.deepEqual(
+    offerOf(
+      {
+        meal: { id: 'm1', date: dayOf(12), items: [plate[0]] },
+        recipeIds: ['adobo'],
+        cookableRecipeIds: ['adobo'],
+        containers: [dueBox],
+      },
+      dayOf(12),
+    ).more,
+    [],
+    'a one-dish meal three days back offers nothing in More but taking it off the day',
+  );
+
   assert.equal(
     offerOf().canSaveAsMeal,
     true,
