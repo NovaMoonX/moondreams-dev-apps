@@ -483,6 +483,9 @@ export const NUTRITION_BASIS_OPTIONS = [
 ] as const;
 
 export const MAX_COOK_TIMERS = 4;
+/** An undismissed Time's up buzzes and beeps again this often, up to five more times. */
+export const ALERT_REPEAT_MS = 60_000;
+export const MAX_ALERT_REPEATS = 5;
 /** A step offers a timer card for each of the first four times it mentions, as many as can run at once. */
 export const MAX_STEP_TIMERS = MAX_COOK_TIMERS;
 

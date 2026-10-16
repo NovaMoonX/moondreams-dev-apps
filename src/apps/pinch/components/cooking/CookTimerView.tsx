@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { BellRing, ChevronDown, Pause, Play, RotateCcw } from 'lucide-react';
+import {
+  BellRing,
+  ChevronDown,
+  ChevronRight,
+  Pause,
+  Play,
+  RotateCcw,
+} from 'lucide-react';
 
 import SwipeArea from '@/components/SwipeArea';
 import { formatClock } from '@/utils/durationUtils';
@@ -13,9 +20,11 @@ import {
   getRemainingMs,
   type CookTimer,
 } from '@apps/pinch/hooks/useCookTimers';
+import { getRangAgo } from '@apps/pinch/utils/cooks';
 
 const TICK_MS = 250;
 const HOUR_MS = 3_600_000;
+const MINUTE_MS = 60_000;
 const ICON_BUTTON_CLASS =
   "relative size-10 shrink-0 after:absolute after:-inset-0.5 after:content-['']";
 
@@ -33,15 +42,17 @@ interface CookTimerViewProps {
   /** The timer's step's other times that have no timer yet and could start now. */
   readySlots: StepTimerSlot[];
   upNext: { caption: string; text: string } | null;
+  /** On a plate, the other recipe that has a step to do while this one waits. */
+  meanwhile: { title: string; stepNumber: number; stepCount: number } | null;
   /** The keep-the-screen-open line, only while the timer runs. */
   note: string | null;
   onTick: () => void;
   onPause: (id: string) => void;
   onResume: (id: string) => void;
   onReset: (id: string) => void;
-  onDismiss: (id: string) => void;
   onFocus: (id: string) => void;
   onStart: (seconds: number, label: string) => void;
+  onMeanwhile: () => void;
   onSwipe: (direction: 1 | -1) => void;
 }
 
@@ -57,21 +68,26 @@ function CookTimerView({
   others,
   readySlots,
   upNext,
+  meanwhile,
   note,
   onTick,
   onPause,
   onResume,
   onReset,
-  onDismiss,
   onFocus,
   onStart,
+  onMeanwhile,
   onSwipe,
 }: CookTimerViewProps) {
   const [isStepShown, setIsStepShown] = useState(false);
+  const [isReadyShown, setIsReadyShown] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const isTicking = [timer, ...others].some(
     (candidate) => candidate.status === 'running',
   );
+  const endedAt = timer.status === 'done' ? timer.endedAt : null;
+  const rangMinutes =
+    endedAt === null ? 0 : Math.floor(Math.max(0, now - endedAt) / MINUTE_MS);
 
   useEffect(() => {
     if (!isTicking) {
@@ -84,6 +100,19 @@ function CookTimerView({
     }, TICK_MS);
     return () => window.clearInterval(intervalId);
   }, [isTicking, onTick]);
+
+  useEffect(() => {
+    if (endedAt === null) {
+      return;
+    }
+
+    const age = Math.max(0, Date.now() - endedAt);
+    const timeoutId = window.setTimeout(
+      () => setNow(Date.now()),
+      MINUTE_MS - (age % MINUTE_MS) + 50,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [endedAt, rangMinutes]);
 
   const remainingMs = getRemainingMs(timer, now);
   const progress =
@@ -99,12 +128,35 @@ function CookTimerView({
         other.recipeId === candidate.recipeId &&
         other.stepNumber === candidate.stepNumber,
     );
+  const getRowName = (other: CookTimer) =>
+    sharesStep(other) ? `${other.label} · ${other.stepName}` : other.stepName;
+  const getRowTime = (other: CookTimer) =>
+    other.status === 'done'
+      ? "Time's up"
+      : formatClock(getRemainingMs(other, now));
+  const rowTimeClass = (other: CookTimer) =>
+    join(
+      'shrink-0 text-lg font-semibold whitespace-nowrap tabular-nums',
+      other.status === 'paused' && 'text-muted-foreground',
+    );
+  const rowTitle = (other: CookTimer) => (
+    <span className='min-w-0 flex-1'>
+      <span className='block text-sm font-medium wrap-break-word'>
+        {getRowName(other)}
+      </span>
+      {other.recipeTitle !== null && (
+        <span className='text-muted-foreground block truncate text-xs'>
+          {other.recipeTitle}
+        </span>
+      )}
+    </span>
+  );
 
   return (
     <SwipeArea
       onSwipe={onSwipe}
       className={join(
-        'mx-auto flex w-full max-w-xl flex-1 flex-col gap-4 [@media(max-height:640px)]:gap-3',
+        'mx-auto flex w-full max-w-xl flex-1 flex-col gap-4 [@media(max-height:600px)_and_(min-height:501px)]:gap-2 [@media(max-height:640px)]:gap-3',
         '[@media(max-height:500px)]:grid [@media(max-height:500px)]:max-w-none [@media(max-height:500px)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [@media(max-height:500px)]:content-start [@media(max-height:500px)]:gap-x-6',
       )}
     >
@@ -128,24 +180,20 @@ function CookTimerView({
             aria-hidden='true'
           />
         </Button>
-        {isStepShown && (
-          <div className='space-y-3 pt-1 pb-2'>
-            <p className='text-xl leading-snug font-medium wrap-break-word whitespace-pre-wrap'>
-              {stepText}
-            </p>
-            <CookStepAmounts
-              rows={stepRows}
-              isAmountNoteShown={isAmountNoteShown}
-            />
-          </div>
-        )}
       </div>
-      <div className='my-auto flex flex-col gap-4 [@media(max-height:500px)]:contents [@media(max-height:640px)]:gap-3'>
-        <div className='min-w-0 [@media(max-height:500px)]:col-start-1 [@media(max-height:500px)]:row-span-3 [@media(max-height:500px)]:row-start-1 [@media(max-height:500px)]:my-auto'>
+      <div className='my-auto flex flex-col gap-4 [@media(max-height:500px)]:contents [@media(max-height:600px)_and_(min-height:501px)]:gap-2 [@media(max-height:640px)]:gap-3'>
+        <div
+          className={join(
+            'min-w-0 [@media(max-height:500px)]:col-start-1 [@media(max-height:500px)]:row-span-3 [@media(max-height:500px)]:row-start-1',
+            isStepShown
+              ? '[@media(max-height:500px)]:self-start'
+              : '[@media(max-height:500px)]:my-auto',
+          )}
+        >
           <section
             aria-label={`${timer.label} timer`}
             className={join(
-              '@container rounded-3xl border px-5 pt-4 pb-5 text-center [@media(max-height:640px)]:pt-3 [@media(max-height:640px)]:pb-4',
+              '@container rounded-3xl border px-5 pt-4 pb-4 text-center [@media(max-height:640px)]:pt-3 [@media(max-height:640px)]:pb-3',
               isDone && 'border-primary bg-accent',
               isPaused && 'border-border bg-muted/50',
               timer.status === 'running' &&
@@ -158,13 +206,10 @@ function CookTimerView({
               </p>
             )}
             <p className='text-base font-medium text-balance wrap-break-word'>
-              {isPaused && (
-                <span className='text-muted-foreground'>Paused · </span>
-              )}
               {timer.stepName} · {timer.label}
             </p>
             {isDone ? (
-              <p className='flex items-center justify-center gap-3 py-3 text-[clamp(2.5rem,17cqi,5rem)] leading-none font-semibold whitespace-nowrap'>
+              <p className='flex items-center justify-center gap-3 py-3 text-[clamp(2.5rem,17cqi,5rem)] leading-none font-semibold whitespace-nowrap [@media(max-height:640px)]:py-2'>
                 <BellRing
                   className='size-[0.7em] shrink-0 motion-safe:animate-pulse'
                   aria-hidden='true'
@@ -196,24 +241,45 @@ function CookTimerView({
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
-            {isPaused && (
-              <Button
-                type='button'
-                variant='tertiary'
-                className='text-foreground! mt-3 h-10 gap-1.5 px-3 text-sm underline-offset-4'
-                aria-label={`Reset the ${timer.label} timer`}
-                onClick={() => onReset(timer.id)}
-              >
-                <RotateCcw className='h-4 w-4' aria-hidden='true' />
-                Reset
-              </Button>
-            )}
+            <div className='mt-2 flex h-6 items-center justify-center gap-1 text-sm'>
+              {isPaused && (
+                <>
+                  <span className='text-muted-foreground'>Paused</span>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    className="text-foreground! relative h-6 gap-1.5 px-2 text-sm underline-offset-4 after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
+                    aria-label={`Reset the ${timer.label} timer`}
+                    onClick={() => onReset(timer.id)}
+                  >
+                    <RotateCcw className='h-4 w-4' aria-hidden='true' />
+                    Reset
+                  </Button>
+                </>
+              )}
+              {endedAt !== null && (
+                <span className='text-muted-foreground'>
+                  {getRangAgo(now - endedAt)}
+                </span>
+              )}
+            </div>
             <span role='status' className='sr-only'>
               {isDone ? `The ${timer.label} timer is done.` : ''}
             </span>
           </section>
         </div>
-        {(others.length > 0 || readySlots.length > 0) && (
+        {isStepShown && (
+          <div className='min-w-0 space-y-3 [@media(max-height:500px)]:col-start-2'>
+            <p className='text-xl leading-snug font-medium wrap-break-word whitespace-pre-wrap'>
+              {stepText}
+            </p>
+            <CookStepAmounts
+              rows={stepRows}
+              isAmountNoteShown={isAmountNoteShown}
+            />
+          </div>
+        )}
+        {others.length > 0 && (
           <section
             aria-label='Other timers'
             className='min-w-0 [@media(max-height:500px)]:col-start-2'
@@ -223,16 +289,23 @@ function CookTimerView({
             </p>
             <ul className='border-border divide-border mt-1.5 divide-y rounded-2xl border'>
               {others.map((other) => {
-                const name = sharesStep(other)
-                  ? `${other.stepName} · ${other.label}`
-                  : other.stepName;
                 const otherStatus =
                   other.status === 'done'
                     ? ", time's up"
                     : other.status === 'paused'
                       ? ', paused'
                       : '';
-                return (
+                return isDone ? (
+                  <li
+                    key={other.id}
+                    className='flex min-h-14 items-center gap-3 px-4 py-2 [@media(max-height:640px)]:min-h-12'
+                  >
+                    {rowTitle(other)}
+                    <span className={rowTimeClass(other)}>
+                      {getRowTime(other)}
+                    </span>
+                  </li>
+                ) : (
                   <li
                     key={other.id}
                     className='flex min-h-14 items-center gap-3 pr-2 [@media(max-height:640px)]:min-h-12'
@@ -244,87 +317,95 @@ function CookTimerView({
                       aria-label={`Show the ${other.label} timer: ${other.recipeTitle === null ? '' : `${other.recipeTitle} · `}${other.stepName}${otherStatus}`}
                       onClick={() => onFocus(other.id)}
                     >
-                      <span className='min-w-0 flex-1'>
-                        <span className='block truncate text-sm font-medium'>
-                          {name}
-                        </span>
-                        {other.recipeTitle !== null && (
-                          <span className='text-muted-foreground block truncate text-xs'>
-                            {other.recipeTitle}
-                          </span>
-                        )}
-                      </span>
-                      <span
-                        className={join(
-                          'shrink-0 text-lg font-semibold whitespace-nowrap tabular-nums',
-                          other.status === 'paused' && 'text-muted-foreground',
-                        )}
-                      >
-                        {other.status === 'done'
-                          ? "Time's up"
-                          : formatClock(getRemainingMs(other, now))}
+                      {rowTitle(other)}
+                      <span className={rowTimeClass(other)}>
+                        {getRowTime(other)}
                       </span>
                     </Button>
-                    {other.status === 'done' ? (
-                      <Button
-                        type='button'
-                        variant='secondary'
-                        className='h-10 shrink-0 px-3 text-sm'
-                        aria-label={`Dismiss the ${other.label} timer: ${other.stepName}`}
-                        onClick={() => onDismiss(other.id)}
-                      >
-                        Dismiss
-                      </Button>
-                    ) : (
-                      <Button
-                        type='button'
-                        variant='secondary'
-                        size='icon'
-                        rounded='full'
-                        className={ICON_BUTTON_CLASS}
-                        aria-label={`${other.status === 'running' ? 'Pause' : 'Resume'} the ${other.label} timer: ${other.stepName}`}
-                        onClick={() =>
-                          other.status === 'running'
-                            ? onPause(other.id)
-                            : onResume(other.id)
-                        }
-                      >
-                        {other.status === 'running' ? (
-                          <Pause className='h-4 w-4' aria-hidden='true' />
-                        ) : (
-                          <Play className='h-4 w-4' aria-hidden='true' />
-                        )}
-                      </Button>
-                    )}
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='icon'
+                      rounded='full'
+                      className={ICON_BUTTON_CLASS}
+                      aria-label={`${other.status === 'running' ? 'Pause' : 'Resume'} the ${other.label} timer: ${other.stepName}`}
+                      onClick={() =>
+                        other.status === 'running'
+                          ? onPause(other.id)
+                          : onResume(other.id)
+                      }
+                    >
+                      {other.status === 'running' ? (
+                        <Pause className='h-4 w-4' aria-hidden='true' />
+                      ) : (
+                        <Play className='h-4 w-4' aria-hidden='true' />
+                      )}
+                    </Button>
                   </li>
                 );
               })}
-              {readySlots.map((slot) => (
-                <li
-                  key={`ready-${slot.label}`}
-                  className='flex min-h-14 items-center gap-3 pr-2 pl-4 [@media(max-height:640px)]:min-h-12'
-                >
-                  <span className='min-w-0 flex-1'>
-                    <span className='block truncate text-sm font-medium'>
-                      {slot.label}
-                    </span>
-                    <span className='text-muted-foreground block truncate text-xs'>
-                      Also in this step
-                    </span>
-                  </span>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    className='h-10 shrink-0 gap-1.5 px-3 text-sm'
-                    aria-label={`Start the ${slot.label} timer`}
-                    onClick={() => onStart(slot.seconds, slot.label)}
-                  >
-                    <Play className='h-4 w-4' aria-hidden='true' />
-                    Start
-                  </Button>
-                </li>
-              ))}
             </ul>
+          </section>
+        )}
+        {readySlots.length > 0 && !isDone && (
+          <section
+            aria-label='More timers on this step'
+            className='min-w-0 [@media(max-height:500px)]:col-start-2'
+          >
+            <Button
+              type='button'
+              variant='tertiary'
+              className='text-muted-foreground! h-10 w-full justify-between gap-2 px-0! text-left text-sm font-normal'
+              aria-expanded={isReadyShown}
+              onClick={() => setIsReadyShown((current) => !current)}
+            >
+              <span className='min-w-0 flex-1 truncate'>
+                {readySlots.length}{' '}
+                {readySlots.length === 1 ? 'more timer' : 'more timers'} on this
+                step · {isReadyShown ? 'Hide' : 'Show'}
+              </span>
+              <ChevronDown
+                className={join(
+                  'h-4 w-4 shrink-0 transition-transform',
+                  isReadyShown && 'rotate-180',
+                )}
+                aria-hidden='true'
+              />
+            </Button>
+            {isReadyShown && (
+              <ul className='border-border divide-border divide-y rounded-2xl border'>
+                {readySlots.map((slot) => (
+                  <li
+                    key={`ready-${slot.label}`}
+                    className='flex min-h-14 items-center gap-3 pr-2 pl-4 [@media(max-height:640px)]:min-h-12'
+                  >
+                    <span className='min-w-0 flex-1 text-sm font-medium wrap-break-word'>
+                      {slot.label}
+                      {slot.isDone && (
+                        <span className='text-muted-foreground font-normal'>
+                          {' '}
+                          · Done
+                        </span>
+                      )}
+                    </span>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className='h-10 shrink-0 gap-1.5 px-3 text-sm'
+                      aria-label={
+                        slot.isDone
+                          ? `Start again: the ${slot.label} timer`
+                          : `Start the ${slot.label} timer`
+                      }
+                      onClick={() => onStart(slot.seconds, slot.label)}
+                    >
+                      <Play className='h-4 w-4' aria-hidden='true' />
+                      {slot.isDone ? 'Start again' : 'Start'}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         )}
       </div>
@@ -336,10 +417,32 @@ function CookTimerView({
           <p className='text-muted-foreground text-xs font-medium'>
             {upNext.caption}
           </p>
-          <p className='mt-1 line-clamp-3 text-lg leading-snug wrap-break-word [@media(max-height:640px)]:line-clamp-2'>
+          <p className='mt-1 line-clamp-6 text-lg leading-snug wrap-break-word [@media(max-height:640px)]:line-clamp-3'>
             {upNext.text}
           </p>
         </section>
+      )}
+      {meanwhile && (
+        <Button
+          type='button'
+          variant='tertiary'
+          className={join(
+            'text-foreground! h-auto min-h-10 w-full min-w-0 justify-between gap-2 px-0! py-1 text-left text-sm font-normal',
+            '[@media(max-height:500px)]:col-start-2',
+            !upNext && 'mt-auto',
+          )}
+          onClick={onMeanwhile}
+        >
+          <span className='min-w-0 flex-1'>
+            <span className='text-muted-foreground'>Meanwhile: </span>
+            <span className='font-medium'>{meanwhile.title}</span>
+            <span className='text-muted-foreground whitespace-nowrap'>
+              {' '}
+              · Step {meanwhile.stepNumber} of {meanwhile.stepCount}
+            </span>
+          </span>
+          <ChevronRight className='h-4 w-4 shrink-0' aria-hidden='true' />
+        </Button>
       )}
       {note && (
         <p className='text-muted-foreground text-xs [@media(max-height:500px)]:col-start-1'>

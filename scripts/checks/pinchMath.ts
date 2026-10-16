@@ -6902,7 +6902,11 @@ const running = (id: string, endsAt: number) => ({
   endsAt,
 });
 const paused = (id: string) => ({ id, status: 'paused' as const });
-const done = (id: string) => ({ id, status: 'done' as const });
+const done = (id: string, endedAt = 0) => ({
+  id,
+  status: 'done' as const,
+  endedAt,
+});
 assert.deepEqual(
   [
     plateCooks.getFocusedTimerId(
@@ -6930,17 +6934,137 @@ assert.deepEqual(
 assert.deepEqual(
   [
     plateCooks.getFocusedTimerId(
-      [running('rice', 9_000), done('adobo'), done('beans')],
+      [running('rice', 9_000), done('adobo', 100)],
+      'rice',
+    ),
+    plateCooks.getFocusedTimerId([paused('rice'), done('adobo', 100)], 'rice'),
+    plateCooks.getFocusedTimerId(
+      [done('marinate', 300_000), done('simmer', 100_000)],
+      null,
+    ),
+  ],
+  ['adobo', 'adobo', 'simmer'],
+  'a finished timer outranks a running or paused pick, and of two finished timers listed in start order the one that rang first (marinate started first but rang at 300 s, simmer at 100 s) is in front',
+);
+assert.deepEqual(
+  [
+    plateCooks.getFocusedTimerId(
+      [done('simmer', 100_000), done('marinate', 300_000)],
+      'marinate',
+    ),
+    plateCooks.getFocusedTimerId(
+      [
+        done('marinate', 300_000),
+        done('simmer', 100_000),
+        done('rice', 200_000),
+      ],
       'rice',
     ),
     plateCooks.getFocusedTimerId(
-      [done('adobo'), running('rice', 9_000), done('beans')],
-      'beans',
+      [done('marinate', 300_000), running('rice', 9_000)],
+      'rice',
     ),
-    plateCooks.getFocusedTimerId([paused('rice'), done('adobo')], 'rice'),
   ],
-  ['adobo', 'beans', 'adobo'],
-  'a finished timer comes first, over a running or paused pick: the one just picked when it has finished, else the first to finish',
+  ['simmer', 'simmer', 'marinate'],
+  'a Time’s up already in front stays there when a later finish arrives, even when the later one is the timer the person had picked, and a running pick waits behind it',
+);
+assert.deepEqual(
+  [
+    [
+      ...plateCooks.getEndedAts(
+        [
+          { id: 'marinate', endsAt: 300_000 },
+          { id: 'simmer', endsAt: 100_000 },
+        ],
+        0,
+      ),
+    ],
+    [...plateCooks.getEndedAts([{ id: 'rice', endsAt: 5_000 }], 8_000)],
+    [
+      ...plateCooks.getEndedAts(
+        [
+          { id: 'a', endsAt: 7_000 },
+          { id: 'b', endsAt: 7_000 },
+        ],
+        0,
+      ),
+    ],
+  ],
+  [
+    [
+      ['simmer', 100_000],
+      ['marinate', 300_000],
+    ],
+    [['rice', 8_001]],
+    [
+      ['a', 7_000],
+      ['b', 7_001],
+    ],
+  ],
+  'two timers that finish in one settle are ranked by their deadlines, not their start order; a deadline behind a Time’s up already waiting (a clock stepped back) is moved past it; two with the same deadline still rank one before the other',
+);
+assert.deepEqual(
+  [0, 59_000, 60_000, 9 * 60_000, 61 * 60_000, 120 * 60_000, -400].map(
+    plateCooks.getRangAgo,
+  ),
+  [
+    'Rang just now',
+    'Rang just now',
+    'Rang 1 min ago',
+    'Rang 9 min ago',
+    'Rang 1 h 1 min ago',
+    'Rang 2 h ago',
+    'Rang just now',
+  ],
+  'a Time’s up says how long ago it rang to the minute: just now under 60 s, then minutes, then hours and minutes, and never a negative age',
+);
+const ring = (id: string, lastAt: number, repeats: number) => ({
+  id,
+  lastAt,
+  repeats,
+});
+assert.deepEqual(
+  [
+    plateCooks.getAlertRepeatsDue([ring('a', 0, 0)], 59_999),
+    plateCooks.getAlertRepeatsDue([ring('a', 0, 0)], 60_000),
+    plateCooks.getAlertRepeatsDue([ring('a', 0, 4)], 60_000),
+    plateCooks.getAlertRepeatsDue([ring('a', 0, 5)], 600_000),
+    plateCooks.getAlertRepeatsDue(
+      [ring('a', 0, 0), ring('b', 30_000, 0)],
+      60_000,
+    ),
+  ],
+  [[], ['a'], ['a'], [], ['a']],
+  'a Time’s up nobody dismissed repeats a minute after it last buzzed, five more times and no more, each timer on its own clock',
+);
+assert.deepEqual(
+  [
+    plateCooks.getNextAlertRepeatAt([]),
+    plateCooks.getNextAlertRepeatAt([ring('a', 10_000, 0)]),
+    plateCooks.getNextAlertRepeatAt([
+      ring('a', 10_000, 5),
+      ring('b', 40_000, 2),
+    ]),
+    plateCooks.getNextAlertRepeatAt([ring('a', 10_000, 5)]),
+  ],
+  [null, 70_000, 100_000, null],
+  'the next repeat is due a minute after the soonest timer that still has repeats left, and there is none once every Time’s up has used its five',
+);
+assert.deepEqual(
+  [
+    plateCooks.getTimerSlotKey({
+      recipeId: 'adobo',
+      stepNumber: 1,
+      label: '30 min',
+    }),
+    plateCooks.getTimerSlotKey({
+      recipeId: 'rice',
+      stepNumber: 1,
+      label: '30 min',
+    }),
+  ],
+  ['adobo:1:30 min', 'rice:1:30 min'],
+  'a timer slot is told apart by recipe, step and length, so the same length on another recipe of the plate is another slot',
 );
 assert.deepEqual(
   [
@@ -6957,12 +7081,12 @@ const watchingAdobo = { isShown: true, pickedId: 'adobo' };
 assert.deepEqual(
   [
     plateCooks.getFocusAfterDismiss(
-      [running('adobo', 9_000), done('rice')],
+      [running('adobo', 9_000), done('rice', 1)],
       watchingAdobo,
       'rice',
     ),
     plateCooks.getFocusAfterDismiss(
-      [running('adobo', 9_000), done('rice')],
+      [running('adobo', 9_000), done('rice', 1)],
       { isShown: true, pickedId: null },
       'rice',
     ),
@@ -6972,7 +7096,7 @@ assert.deepEqual(
       'adobo',
     ),
     plateCooks.getFocusAfterDismiss(
-      [done('adobo'), done('rice')],
+      [done('adobo', 1), done('rice', 2)],
       watchingAdobo,
       'adobo',
     ),
@@ -6998,7 +7122,7 @@ assert.deepEqual(
         [
           running('marinate', 9_000),
           paused('rice'),
-          done('rest'),
+          done('rest', 1),
           running('simmer', 2_000),
         ],
         'simmer',
@@ -7039,17 +7163,77 @@ assert.deepEqual(
       timerAt('adobo', 3),
     ),
     plateCooks.getTimerNext([plateAt('adobo', 0, 3)], timerAt('gone', 1)),
+    plateCooks.getTimerNext([plateAt('adobo', 1, 3)], timerAt('adobo', 2)),
   ],
   [
     { kind: 'STEP', recipeId: 'adobo', stepIndex: 1 },
-    { kind: 'STEP', recipeId: 'adobo', stepIndex: 1 },
+    null,
     null,
     null,
     { kind: 'RECIPE', recipeId: 'rice' },
     null,
     null,
+    { kind: 'STEP', recipeId: 'adobo', stepIndex: 2 },
   ],
-  '"Up next" after a timer is its recipe’s next step, also once the person moved on to it; nothing once they are past it, on a lone recipe’s last step or for a timer whose recipe is gone; on a plate, the last step leads to the next recipe still short of its own last',
+  '"Up next" after a timer is its recipe’s next step only while the person is before that step (on the timer’s own step, or a step behind it); on that next step or past it there is nothing to say, and the same for a lone recipe’s last step or a timer whose recipe is gone; on a plate, the last step leads to the next recipe still short of its own last',
+);
+const nextAt = (stepIndex: number, timerStep: number) =>
+  plateCooks.getTimerNext(
+    [plateAt('adobo', stepIndex, 3)],
+    timerAt('adobo', timerStep),
+  );
+assert.deepEqual(
+  [
+    plateCooks.getTimerSecondary(nextAt(0, 1), 'running'),
+    plateCooks.getTimerSecondary(nextAt(2, 1), 'done'),
+    plateCooks.getTimerSecondary(nextAt(2, 1), 'running'),
+    plateCooks.getTimerSecondary(nextAt(2, 1), 'paused'),
+    plateCooks.getTimerSecondary(nextAt(1, 1), 'done'),
+    plateCooks.getTimerSecondary(nextAt(2, 3), 'running'),
+    plateCooks.getTimerSecondary(nextAt(2, 3), 'done'),
+    plateCooks.getTimerSecondary(nextAt(0, 1), 'done'),
+  ],
+  ['NEXT', null, 'BACK', 'BACK', null, 'BACK', null, 'NEXT'],
+  'on the timer’s own step the footer offers Next; a Time’s up that rang over a later step (or over the very step it points to) offers only Dismiss, so no two buttons end at the same screen; a timer brought up from a pill while the person is further on offers a way back to their step instead, as does a running timer on the last step',
+);
+const platePositions = [plateAt('adobo', 0, 3), plateAt('rice', 0, 2)];
+assert.deepEqual(
+  [
+    plateCooks.getMeanwhile(
+      platePositions,
+      'adobo',
+      plateCooks.getTimerNext(platePositions, timerAt('adobo', 1)),
+    ),
+    plateCooks.getMeanwhile([plateAt('adobo', 0, 3)], 'adobo', null),
+    plateCooks.getMeanwhile(
+      [plateAt('adobo', 0, 3), plateAt('rice', 1, 2)],
+      'adobo',
+      null,
+    ),
+    plateCooks.getMeanwhile(
+      [plateAt('adobo', 2, 3), plateAt('rice', 0, 2)],
+      'adobo',
+      plateCooks.getTimerNext(
+        [plateAt('adobo', 2, 3), plateAt('rice', 0, 2)],
+        timerAt('adobo', 3),
+      ),
+    ),
+    plateCooks.getMeanwhile(
+      [plateAt('adobo', 0, 3), plateAt('rice', 0, 2), plateAt('beans', 1, 4)],
+      'rice',
+      { kind: 'STEP', recipeId: 'rice', stepIndex: 1 },
+    ),
+    plateCooks.getMeanwhile(platePositions, 'gone', null),
+  ],
+  [
+    { recipeId: 'rice', stepIndex: 0 },
+    null,
+    null,
+    null,
+    { recipeId: 'beans', stepIndex: 1 },
+    null,
+  ],
+  'on a plate the timer view offers the other recipe that still has a step to do, opening on its own current step; never on a lone recipe, when the other recipe is already on its last step, or when "Up next" already names that recipe; the next recipe in plate order comes first',
 );
 assert.deepEqual(
   [

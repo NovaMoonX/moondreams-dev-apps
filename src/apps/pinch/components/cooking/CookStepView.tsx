@@ -14,6 +14,8 @@ const VERY_LONG_STEP_CHARS = 400;
 export interface StepTimerSlot {
   seconds: number;
   label: string;
+  /** It already ran and its Time's up was dismissed this session. */
+  isDone: boolean;
 }
 
 interface CookStepViewProps {
@@ -68,7 +70,7 @@ function CookStepView({
 
   return (
     <SwipeArea className='flex flex-1 flex-col' onSwipe={onSwipe}>
-      <div data-cook-stop='' className='flex min-h-10 items-center gap-3'>
+      <div className='flex min-h-10 items-center gap-3'>
         <div
           aria-hidden='true'
           className='flex min-w-0 flex-1 items-center gap-3'
@@ -92,7 +94,6 @@ function CookStepView({
           Step {stepNumber} of {steps.length}.{' '}
         </span>
         <p
-          data-cook-stop=''
           className={join(
             'font-medium wrap-break-word whitespace-pre-wrap',
             type.step,
@@ -102,10 +103,7 @@ function CookStepView({
         </p>
       </div>
       {timerSlots.length > 0 && (
-        <div
-          data-cook-timers=''
-          className='mt-6 space-y-2 [@media(max-height:640px)]:mt-4'
-        >
+        <div className='mt-6 space-y-2 [@media(max-height:640px)]:mt-4'>
           <ul aria-label='Timers in this step' className='space-y-2'>
             {timerSlots.map((slot) => (
               <CookStepTimer
@@ -114,6 +112,7 @@ function CookStepView({
                 label={slot.label}
                 clockClassName={type.clock}
                 isCompact={timerSlots.length > 1}
+                isDone={slot.isDone}
                 canStart={!isTimersFull}
                 onStart={() =>
                   onStartTimer(stepNumber, slot.seconds, slot.label)
