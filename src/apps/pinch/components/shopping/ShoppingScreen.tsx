@@ -12,8 +12,9 @@ import {
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Plus } from 'lucide-react';
+import { Plus, UtensilsCrossed } from 'lucide-react';
 
+import EntryTile from '@/components/EntryTile';
 import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
 import { PillGroup } from '@/components/PillGroup';
@@ -26,6 +27,7 @@ import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
+import ShoppingMealsSheet from '@apps/pinch/components/shopping/ShoppingMealsSheet';
 import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
   LIST_SEARCH_THRESHOLD,
@@ -48,6 +50,7 @@ import {
   selectShoppingCost,
   selectShoppingItems,
   selectShoppingLoadError,
+  selectShoppingMeals,
   selectShoppingOpenCount,
   selectShoppingRows,
   selectShoppingSourceLabels,
@@ -62,6 +65,7 @@ import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getShoppingCostCoverage,
+  getShoppingMealsText,
   getShoppingSourcesText,
   getShopRowId,
   getShownShoppingView,
@@ -72,6 +76,8 @@ import {
 const EAGER_GROUPS = 3;
 const ROW_CHUNK = 12;
 const ROW_HEIGHT = 57;
+const DETAIL_LINE_HEIGHT = 16;
+const DETAIL_LINE_CHARS = 44;
 
 const MAX_NAMES_SHOWN = 4;
 const UNDO_TOAST_MS = 6000;
@@ -123,6 +129,13 @@ function ShoppingRows({
     { length: Math.ceil(visible.length / ROW_CHUNK) },
     (_, index) => visible.slice(index * ROW_CHUNK, (index + 1) * ROW_CHUNK),
   );
+  const getChunkHeight = (chunk: ShoppingRowData[]) =>
+    chunk.reduce((sum, row) => {
+      const detail = `${row.amountText ?? ''} · for ${getForText(row.sources) ?? ''}`;
+      return detail.length > DETAIL_LINE_CHARS
+        ? sum + ROW_HEIGHT + DETAIL_LINE_HEIGHT
+        : sum + ROW_HEIGHT;
+    }, 0);
 
   return (
     <>
@@ -130,14 +143,14 @@ function ShoppingRows({
         {chunks.map((chunk, index) => (
           <LazyMount
             key={index}
-            estimatedHeight={chunk.length * ROW_HEIGHT}
+            estimatedHeight={getChunkHeight(chunk)}
             eager={isEager && index === 0}
           >
             <ul
               className='divide-border defer-offscreen divide-y lg:break-inside-avoid'
               style={
                 {
-                  '--defer-size': `${chunk.length * ROW_HEIGHT}px`,
+                  '--defer-size': `${getChunkHeight(chunk)}px`,
                 } as CSSProperties
               }
             >
@@ -259,7 +272,8 @@ function useHeldRows() {
   return { held, hold };
 }
 
-type Overlay = { kind: 'add' } | { kind: 'item'; id: string };
+type Overlay =
+  { kind: 'add' } | { kind: 'item'; id: string } | { kind: 'meals' };
 
 interface ShoppingScreenProps {
   uid: string;
@@ -289,6 +303,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       getShoppingSourcesText(sources, sourceLabels, todayKey),
     [sourceLabels, todayKey],
   );
+  const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [query, setQuery] = useState('');
@@ -661,6 +676,19 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           placeholder='Search your list'
         />
       )}
+      {loadError === null &&
+        isLoaded &&
+        meals.length > 0 &&
+        activeQuery === '' && (
+          <nav aria-label='Also in Shopping' className='grid grid-cols-2 gap-3'>
+            <EntryTile
+              icon={<UtensilsCrossed className='size-4' />}
+              label='Meals on your list'
+              status={`For ${getShoppingMealsText(meals, todayKey)}`}
+              onClick={() => setOverlay({ kind: 'meals' })}
+            />
+          </nav>
+        )}
       {openCount > 0 &&
         shownView !== 'got' &&
         (coverage === 'some' || coverage === 'all') && (
@@ -702,12 +730,19 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       {overlay?.kind === 'add' && (
         <ShoppingAddSheet uid={uid} onClose={() => setOverlay(null)} />
       )}
+      {overlay?.kind === 'meals' && (
+        <ShoppingMealsSheet
+          uid={uid}
+          todayKey={todayKey}
+          onClose={() => setOverlay(null)}
+        />
+      )}
       {openRow && openItems.length > 0 && (
         <ShoppingItemSheet
           key={openRow.id}
           uid={uid}
           name={openRow.name}
-          forText={getForText(openRow.sources)}
+          todayKey={todayKey}
           items={openItems}
           onClose={() => setOverlay(null)}
           onRemove={() => handleRemove(openRow.name, openItems)}

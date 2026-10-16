@@ -8,7 +8,7 @@ interface ShoppingRowProps {
   id: string;
   name: string;
   amountText: string | null;
-  /** What the line is for ("Adobo chicken (Thu)"), cut short on its one line. */
+  /** What the line is for ("Thu dinner and Adobo chicken"), wrapping under the amount. */
   forText: string | null;
   isChecked: boolean;
   onToggle: (id: string, isChecked: boolean) => void;
@@ -45,15 +45,12 @@ function ShoppingRow({
             {name}
           </span>
           {(amountText || forText) && (
-            <span className='text-muted-foreground flex min-w-0 text-xs'>
+            <span className='text-muted-foreground block text-xs wrap-break-word'>
               {amountText && (
-                <span className='shrink-0 whitespace-nowrap'>{amountText}</span>
+                <span className='whitespace-nowrap'>{amountText}</span>
               )}
-              {forText && (
-                <span className='min-w-0 truncate'>
-                  {amountText ? `\u00a0· for ${forText}` : `For ${forText}`}
-                </span>
-              )}
+              {forText &&
+                (amountText ? `\u00a0·\u00a0for ${forText}` : `For ${forText}`)}
             </span>
           )}
         </span>

@@ -17,17 +17,26 @@ import {
   SHOPPING_BATCH_SIZE,
   UNITS,
 } from '@apps/pinch/constants';
+import { selectShoppingSourceContext } from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import {
   getMergedFields,
+  getNameOnlyItemId,
+  getOtherShares,
   getShoppingItemId,
+  getSourceLines,
+  getSourceShares,
+  isAsStopLeft,
   isValidAmount,
   mergeSourcedLines,
   mergeSources,
+  planStopShopping,
   roundAmount,
   type ListLine,
   type ShoppingLine,
   type SourcedLine,
+  type StopEntry,
+  type StopPlan,
 } from '@apps/pinch/utils/shopping';
 
 const shoppingDoc = (uid: string, id: string) =>
@@ -269,14 +278,9 @@ interface ClearCheckedInput {
   uid: string;
 }
 
-const toChunks = <T>(list: T[]) =>
-  Array.from(
-    { length: Math.ceil(list.length / SHOPPING_BATCH_SIZE) },
-    (_, index) =>
-      list.slice(
-        index * SHOPPING_BATCH_SIZE,
-        (index + 1) * SHOPPING_BATCH_SIZE,
-      ),
+const toChunks = <T>(list: T[], size = SHOPPING_BATCH_SIZE) =>
+  Array.from({ length: Math.ceil(list.length / size) }, (_, index) =>
+    list.slice(index * size, (index + 1) * size),
   );
 
 /** Resolves to the items it deleted, as they were, for an Undo; fewer than were ticked at the tap when another device un-ticked or removed one. */
@@ -320,6 +324,158 @@ export const clearCheckedShoppingItems = createAsyncThunk<
     }
   },
 );
+
+interface StopShoppingForInput {
+  uid: string;
+  source: string;
+}
+
+const STOP_CHUNK_SIZE = SHOPPING_BATCH_SIZE / 2;
+
+/** Takes one planned meal's, recipe's or saved meal's share off the list (`planStopShopping`), worked out from the meal as it is now. Each chunk is one transaction that re-reads its items and their name-only lines first, so a change from another device is never lost; it needs a connection. Resolves to what it really wrote, for an Undo. */
+export const stopShoppingFor = createAsyncThunk<
+  StopPlan,
+  StopShoppingForInput,
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/shopping/stopFor',
+  async ({ uid, source }, { getState, rejectWithValue }) => {
+    const state = getState();
+    const context = selectShoppingSourceContext(state);
+    const lines = getSourceLines(source, context);
+    if (!lines) {
+      return rejectWithValue(
+        "That meal isn't on your plan any more, so its share can't be worked out.",
+      );
+    }
+    const items = state.pinch.shopping.items;
+    const otherShares = getOtherShares(source, items, context);
+    const ids = items
+      .filter((item) => (item.sources ?? []).includes(source))
+      .map((item) => item.id);
+
+    const stopChunk = (chunk: string[]) =>
+      runTransaction(db, async (transaction) => {
+        const snapshots = await Promise.all(
+          chunk.map((id) => transaction.get(shoppingDoc(uid, id))),
+        );
+        const fresh = snapshots.flatMap((snapshot) =>
+          snapshot.exists() ? [snapshot.data() as ShoppingItem] : [],
+        );
+        const twinIds = [
+          ...new Set(
+            fresh
+              .filter((item) => item.unit !== 'EACH')
+              .map((item) => getNameOnlyItemId(item.ingredientId)),
+          ),
+        ].filter((id) => !chunk.includes(id));
+        const twins = await Promise.all(
+          twinIds.map((id) => transaction.get(shoppingDoc(uid, id))),
+        );
+        const read = [
+          ...fresh,
+          ...twins.flatMap((snapshot) =>
+            snapshot.exists() ? [snapshot.data() as ShoppingItem] : [],
+          ),
+        ];
+        const plan = planStopShopping(
+          source,
+          read,
+          getSourceShares(source, lines, read),
+          otherShares,
+          Date.now(),
+        );
+        plan.entries.forEach(({ id, after }) => {
+          if (after) {
+            transaction.set(shoppingDoc(uid, id), after);
+            return;
+          }
+          transaction.delete(shoppingDoc(uid, id));
+        });
+        return plan;
+      });
+
+    try {
+      // One chunk after another, so two never merge into the same name-only line at once.
+      const result = await toChunks(ids, STOP_CHUNK_SIZE).reduce<
+        Promise<StopPlan>
+      >(
+        async (done, chunk) => {
+          const sum = await done;
+          const plan = await stopChunk(chunk);
+          return {
+            entries: [...sum.entries, ...plan.entries],
+            removedCount: sum.removedCount + plan.removedCount,
+            keptCount: sum.keptCount + plan.keptCount,
+            gotCount: sum.gotCount + plan.gotCount,
+          };
+        },
+        Promise.resolve({
+          entries: [],
+          removedCount: 0,
+          keptCount: 0,
+          gotCount: 0,
+        }),
+      );
+      return result;
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, "Couldn't take that off your list."),
+      );
+    }
+  },
+);
+
+interface UndoStopShoppingInput {
+  uid: string;
+  entries: StopEntry[];
+}
+
+/** Puts back exactly what a stop wrote, all of it in one transaction per chunk, except an item changed since (`isAsStopLeft`), which keeps what it has. Resolves to how many it put back. */
+export const undoStopShopping = createAsyncThunk<
+  number,
+  UndoStopShoppingInput,
+  { rejectValue: string }
+>('pinch/shopping/undoStop', async ({ uid, entries }, { rejectWithValue }) => {
+  try {
+    const counts = await Promise.all(
+      toChunks(entries).map((chunk) =>
+        runTransaction(db, async (transaction) => {
+          const snapshots = await Promise.all(
+            chunk.map((entry) => transaction.get(shoppingDoc(uid, entry.id))),
+          );
+          const now = Date.now();
+          const restorable = chunk.filter((entry, index) =>
+            isAsStopLeft(
+              snapshots[index].exists()
+                ? (snapshots[index].data() as ShoppingItem)
+                : null,
+              entry.after,
+            ),
+          );
+          restorable.forEach(({ id, before }) => {
+            if (before) {
+              transaction.set(shoppingDoc(uid, id), {
+                ...before,
+                sources: before.sources ?? [],
+                updatedAt: now,
+              });
+              return;
+            }
+            transaction.delete(shoppingDoc(uid, id));
+          });
+          return restorable.length;
+        }),
+      ),
+    );
+
+    return counts.reduce((sum, count) => sum + count, 0);
+  } catch (error) {
+    return rejectWithValue(
+      getWriteMessage(error, "Couldn't put that back on your list."),
+    );
+  }
+});
 
 interface RestoreShoppingItemsInput {
   uid: string;

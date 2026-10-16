@@ -270,6 +270,20 @@ import {
   getShoppingSourceLabels as srcLabels,
   getShoppingSourcesText as srcText,
 } from '../../src/apps/pinch/utils/shopping.ts';
+import {
+  getShoppingMeals as stopMeals,
+  getShoppingSourceLabels as stopLabels,
+  getSourceLines as stopSourceLines,
+  getSourceNames as stopNames,
+  formatShopAmount as stopAmountText,
+  getPlannedParts as stopParts,
+  getShoppingMealsText as stopMealsText,
+  getRowSourceShares as stopRowShares,
+  getSourceShares as stopShares,
+  isAsStopLeft as stopAsLeft,
+  joinSourceNames as stopJoin,
+  planStopShopping as stopPlan,
+} from '../../src/apps/pinch/utils/shopping.ts';
 import type { Meal as SrcMeal } from '../../src/apps/pinch/types.ts';
 import {
   SHOPPING_VIEW_LABELS as designShopLabels,
@@ -6440,17 +6454,17 @@ assert.deepEqual(
     srcFor([]),
   ],
   [
-    'Rice pot (Thu)',
-    'Rice pot (Thu) and Taco night (Fri)',
-    'Rice pot & 1 more (Oct 30)',
+    'Thu dinner',
+    'Thu dinner and Fri dinner',
+    'Oct 30 dinner',
     'Rice pot',
     'Adobo and rice and Beans',
-    '3 meals',
-    '3 recipes',
+    'Fri dinner, Adobo and rice and Rice pot',
+    'Beans, Rice pot and Soup',
     null,
     null,
   ],
-  'a line says what it is for by the planned meal’s name and day, the recipe or the saved meal; past two it counts them, and a source that is gone is dropped quietly',
+  'a line says what it is for by name, planned meals by day and meal first, then recipes and saved meals by name, three in full and never only a count; a source that is gone is dropped quietly',
 );
 assert.equal(
   srcLabelMap.has('p-empty'),
@@ -7407,32 +7421,440 @@ assert.equal(
   );
 }
 
-// Two long sources are counted so the line under a row never cuts a name
-assert.equal(
-  srcText(
-    ['a', 'b'],
-    new Map([
-      [
-        'a',
-        {
-          name: 'Adobo chicken & 1 more',
-          dayKey: '2026-10-15',
-          isRecipe: false,
-        },
-      ],
-      [
-        'b',
-        {
-          name: 'Adobo chicken & 1 more',
-          dayKey: '2026-10-16',
-          isRecipe: false,
-        },
-      ],
+// What a shopping line is for is said by name; a stop takes one meal's share off the list
+{
+  const plannedOn = (
+    id: string,
+    dayKey: string,
+    mealType: 'LUNCH' | 'DINNER',
+    name: string | null,
+    items: MealItem[],
+  ) =>
+    ({
+      id,
+      date: Date.parse(`${dayKey}T00:00:00Z`),
+      mealType,
+      name,
+      items,
+    }) as unknown as ShopPlannedMeal;
+  const recipes = new Map([['rice-pot', srcRiceRecipe]]);
+  const ingredients = new Map([
+    [
+      'rice',
+      { id: 'rice', name: 'Rice', serving: { amount: 0.25, unit: 'CUP' } },
+    ],
+    ['salt', { id: 'salt', name: 'Salt', serving: { amount: 1, unit: 'TSP' } }],
+  ]) as unknown as Map<string, ResolvedIngredient>;
+  const many = Array.from({ length: 50 }, (_, index) =>
+    plannedOn(`p${index}`, '2026-10-20', 'DINNER', `Plate ${index}`, []),
+  );
+  const planned = [
+    plannedOn('thu', '2026-10-15', 'DINNER', null, [srcRecipeItem('a', 3)]),
+    plannedOn('fri', '2026-10-16', 'DINNER', null, [srcRecipeItem('a', 3)]),
+    plannedOn('thu-lunch', '2026-10-15', 'LUNCH', null, [
+      srcRecipeItem('a', 3),
     ]),
-    '2026-10-15',
-  ),
-  '2 meals',
-  'two sources whose names would run past a phone line are counted',
-);
+    plannedOn('long-a', '2026-10-15', 'DINNER', 'Adobo chicken & 1 more', []),
+    ...many,
+  ];
+  const allSources = planned.map((meal) => meal.id);
+  const labels = stopLabels(
+    [
+      { sources: [...allSources, 'recipe:rice-pot'] },
+    ] as unknown as ShoppingItem[],
+    planned,
+    recipes,
+    new Map(),
+    ingredients,
+  );
+  const textFor = (sources: string[]) => srcText(sources, labels, '2026-10-15');
+  assert.deepEqual(
+    [
+      textFor(['fri']),
+      textFor(['thu', 'fri']),
+      textFor(['fri', 'recipe:rice-pot', 'thu-lunch']),
+      textFor(many.map((meal) => meal.id)),
+    ],
+    [
+      'Fri dinner',
+      'Thu dinner and Fri dinner',
+      'Thu lunch, Fri dinner and Rice pot',
+      'Tue dinner (Plate 0), Tue dinner (Plate 1) and 48 more',
+    ],
+    'a row names its meals, up to three in full and then two and how many more (50 reads "and 48 more", never a bare count)',
+  );
+  assert.deepEqual(
+    stopNames(['thu', 'thu-lunch', 'fri', 'long-a'], labels, '2026-10-15').map(
+      ({ name }) => name,
+    ),
+    [
+      'Thu lunch',
+      'Thu dinner (Adobo chicken & 1 more)',
+      'Thu dinner (Rice pot)',
+      'Fri dinner',
+    ],
+    'the same recipe planned on two days or at two meals reads as two slots; two plates in one slot add their dish',
+  );
+  assert.deepEqual(
+    [
+      stopJoin(['A', 'B', 'C'], 2),
+      stopJoin(['A', 'B', 'C', 'D'], 2),
+      stopJoin(['A'], 2),
+      stopJoin([], 2),
+    ],
+    ['A, B and C', 'A, B and 2 more', 'A', ''],
+    'names join as a sentence; one past the limit is named, never "and 1 more"',
+  );
+
+  const doorMeals = (sources: string[]) =>
+    stopMealsText(
+      sources.map((source) => ({ label: labels.get(source)! })),
+      '2026-10-15',
+    );
+  assert.deepEqual(
+    [
+      doorMeals(['thu', 'fri']),
+      doorMeals(['thu-lunch', 'thu', 'recipe:rice-pot']),
+      doorMeals(['thu', 'long-a', 'fri', ...many.map((meal) => meal.id)]),
+    ],
+    [
+      'Thu dinner and Fri dinner',
+      'Thu lunch, Thu dinner and Rice pot',
+      'Thu dinner, Fri dinner and 50 more',
+    ],
+    'the door names the soonest meals and how many more, saying a slot two plates share once (two Thu dinners read "Thu dinner")',
+  );
+
+  const context = {
+    plannedById: new Map(planned.map((meal) => [meal.id, meal])),
+    mealsById: new Map([
+      ['m1', { id: 'm1', name: 'Rice night', items: [srcRecipeItem('a', 6)] }],
+    ]) as unknown as Map<string, SrcMeal>,
+    recipesById: recipes,
+    ingredientsById: ingredients,
+  };
+  assert.deepEqual(
+    [
+      stopSourceLines('recipe:rice-pot', context),
+      stopSourceLines('thu', context),
+      stopSourceLines('meal:m1', context)?.map((line) =>
+        line.amount === null ? null : roundAmount(line.amount),
+      ),
+      stopSourceLines('gone', context),
+      stopSourceLines('recipe:gone', context),
+    ],
+    [
+      [{ ingredientId: 'rice', amount: 1, unit: 'CUP' }],
+      [{ ingredientId: 'rice', amount: 1, unit: 'CUP', source: 'thu' }],
+      [2, 0.01],
+      null,
+      null,
+    ],
+    'a source’s share is worked out the way its add was: a recipe at its own servings, a planned or saved meal’s items as they are now; one that no longer resolves has none',
+  );
+
+  const plate = plannedOn('plate', '2026-10-16', 'DINNER', null, [
+    srcRecipeItem('a', 3),
+    { id: 'b', kind: 'INGREDIENT', refId: 'rice', servings: 2 },
+  ]);
+  const named = plannedOn('named', '2026-10-17', 'DINNER', 'Rice night', [
+    srcRecipeItem('a', 3),
+    { id: 'b', kind: 'INGREDIENT', refId: 'rice', servings: 2 },
+  ]);
+  const parts = stopParts(
+    [{ sources: ['plate', 'named', 'thu'] }] as unknown as ShoppingItem[],
+    [plate, named, planned[0]],
+    recipes,
+    ingredients,
+  );
+  assert.deepEqual(
+    [...parts.entries()].map(([id, byIngredient]) => [id, [...byIngredient]]),
+    [['plate', [['salt', 'Rice pot']]]],
+    'a line’s sheet names the dish of an unnamed plate that wants it (salt is only in the rice pot), and keeps the plate for one two dishes share, a named plate or a one-dish plate',
+  );
+  const rowItem = {
+    id: 'rice__CUP',
+    ingredientId: 'rice',
+    amount: 3,
+    unit: 'CUP',
+    isChecked: false,
+    sources: ['thu', 'recipe:rice-pot', 'plate', 'gone'],
+    createdAt: 1,
+    updatedAt: 1,
+  } as ShoppingItem;
+  const rowLabels = stopLabels(
+    [rowItem],
+    [...planned, plate],
+    recipes,
+    new Map(),
+    ingredients,
+  );
+  assert.deepEqual(
+    stopRowShares(
+      [rowItem],
+      [rowItem],
+      rowLabels,
+      {
+        ...context,
+        plannedById: new Map(
+          [...planned, plate].map((meal) => [meal.id, meal]),
+        ),
+      },
+      '2026-10-15',
+      parts,
+    ).map(({ name, dish, amount }) => [
+      name,
+      dish,
+      amount && stopAmountText(amount),
+    ]),
+    [
+      ['Thu dinner', 'Rice pot', '1 cup'],
+      ['Fri dinner', 'Rice pot & 1 more', '1.5 cup'],
+      ['Rice pot', null, '1 cup'],
+    ],
+    'a line’s sheet lists every meal behind it with the dish and what each asks of it now (the plate’s rice pot and its own half cup of rice together), leaving out one that is gone',
+  );
+
+  const item = (
+    ingredientId: string,
+    unit: Unit,
+    amount: number | null,
+    sources: string[],
+    isChecked = false,
+  ): ShoppingItem => ({
+    id: getShoppingItemId(ingredientId, unit),
+    ingredientId,
+    amount,
+    unit,
+    isChecked,
+    sources,
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  const shares = stopShares(
+    'S',
+    [
+      { ingredientId: 'rice', amount: 1, unit: 'CUP' },
+      { ingredientId: 'chicken', amount: 453.592, unit: 'G' },
+      { ingredientId: 'salt', amount: null, unit: 'EACH' },
+      { ingredientId: 'beans', amount: 2, unit: 'CUP' },
+    ],
+    [
+      item('rice', 'CUP', 3, ['S', 'O']),
+      item('chicken', 'LB', 2, ['S']),
+      item('salt', 'EACH', null, ['S']),
+      item('beans', 'CUP', 2, ['O']),
+    ],
+  );
+  assert.deepEqual(
+    [...shares.entries()].map(([id, amount]) => [id, roundAmount(amount)]),
+    [
+      ['rice__CUP', 1],
+      ['chicken__LB', 1],
+    ],
+    'a share lands on the item of its unit, or on the same ingredient moved to another unit of the same kind (453.592 g is 1 lb); a name-only line and an item the source never filled take nothing',
+  );
+
+  const plan = (
+    read: ShoppingItem[],
+    shareMap: [string, number][],
+    others: [string, number | null][],
+  ) => stopPlan('S', read, new Map(shareMap), new Map(others), 99);
+  const summary = (result: ReturnType<typeof plan>) => ({
+    entries: result.entries.map(({ id, after }) => [
+      id,
+      after ? [after.amount, after.sources, after.isChecked] : null,
+    ]),
+    counts: [result.removedCount, result.keptCount, result.gotCount],
+  });
+
+  assert.deepEqual(
+    summary(
+      plan(
+        [
+          item('chicken', 'LB', 2, ['S']),
+          item('rice', 'CUP', 3, ['S', 'O']),
+          item('garlic', 'EACH', 6, ['S'], true),
+          item('parsley', 'EACH', null, ['S']),
+          item('lime', 'EACH', null, ['S', 'O']),
+          item('milk', 'L', 1.5, ['S']),
+        ],
+        [
+          ['chicken__LB', 2],
+          ['rice__CUP', 1],
+          ['garlic__EACH', 6],
+          ['milk__L', 1],
+        ],
+        [['rice__CUP', 2]],
+      ),
+    ),
+    {
+      entries: [
+        ['garlic__EACH', [6, [], true]],
+        ['lime__EACH', [null, ['O'], false]],
+        ['parsley__EACH', null],
+        ['chicken__LB', null],
+        ['milk__L', [0.5, [], false]],
+        ['rice__CUP', [2, ['O'], false]],
+      ],
+      counts: [2, 3, 1],
+    },
+    'stopping a meal deletes what was only for it, keeps another meal’s share of a shared line, leaves a got line ticked without the tag, deletes a name-only line nothing else wants and keeps what the person typed on top (milk 0.5 L, untagged)',
+  );
+  assert.equal(
+    summary(plan([item('bread', 'EACH', 1, [])], [], [])).entries.length,
+    0,
+    'something added on the list itself carries no source, so a stop never touches it',
+  );
+  assert.deepEqual(
+    summary(
+      plan(
+        [
+          item('chicken', 'LB', 1, ['S', 'O']),
+          item('beef', 'LB', 1, ['S', 'G']),
+          item('egg', 'EACH', 2, ['S', 'O']),
+        ],
+        [
+          ['chicken__LB', 2],
+          ['beef__LB', 2],
+          ['egg__EACH', 2],
+        ],
+        [
+          ['chicken__LB', 1.5],
+          ['beef__LB', null],
+          ['egg__EACH', 0],
+        ],
+      ),
+    ).entries,
+    [
+      ['egg__EACH', [null, ['O'], false]],
+      ['beef__LB', [1, ['G'], false]],
+      ['chicken__LB', [1, ['O'], false]],
+    ],
+    'when the share runs past what is left, a line another meal wants keeps that meal’s share but never grows (1 lb, not 1.5), keeps its amount when that meal can’t be worked out, and an EACH line wanted only by name becomes just the name',
+  );
+  const toNameOnly = plan(
+    [item('salt', 'TSP', 1, ['S', 'O'])],
+    [['salt__TSP', 1]],
+    [['salt__TSP', 0]],
+  );
+  const intoTwin = plan(
+    [
+      item('salt', 'TSP', 1, ['S', 'O']),
+      { ...item('salt', 'EACH', null, ['X']), createdAt: 5 },
+    ],
+    [['salt__TSP', 1]],
+    [['salt__TSP', 0]],
+  );
+  assert.deepEqual(
+    [
+      summary(toNameOnly),
+      summary(intoTwin).entries,
+      intoTwin.entries[1].before?.createdAt,
+    ],
+    [
+      {
+        entries: [
+          ['salt__TSP', null],
+          ['salt__EACH', [null, ['O'], false]],
+        ],
+        counts: [0, 1, 0],
+      },
+      [
+        ['salt__TSP', null],
+        ['salt__EACH', [null, ['X', 'O'], false]],
+      ],
+      5,
+    ],
+    'a measured line another meal wants only by name moves to that ingredient’s name-only line, created or merged into, with its old line gone',
+  );
+
+  const before = [
+    item('chicken', 'LB', 2, ['S']),
+    item('rice', 'CUP', 3, ['S', 'O']),
+    item('garlic', 'EACH', 6, ['S'], true),
+  ];
+  const stopped = plan(
+    before,
+    [
+      ['chicken__LB', 2],
+      ['rice__CUP', 1],
+    ],
+    [['rice__CUP', 2]],
+  );
+  const store = new Map<string, ShoppingItem>(
+    before.map((entry) => [entry.id, entry]),
+  );
+  stopped.entries.forEach(({ id, after }) =>
+    after ? store.set(id, after) : store.delete(id),
+  );
+  store.set('rice__CUP', {
+    ...store.get('rice__CUP')!,
+    isChecked: true,
+    updatedAt: 120,
+  });
+  const undone = stopped.entries.filter(({ id, after }) =>
+    stopAsLeft(store.get(id) ?? null, after),
+  );
+  undone.forEach(({ id, before: was }) =>
+    was ? store.set(id, was) : store.delete(id),
+  );
+  assert.deepEqual(
+    [
+      undone.map(({ id }) => id),
+      [...store.values()].map((entry) => [
+        entry.id,
+        entry.amount,
+        entry.isChecked,
+      ]),
+    ],
+    [
+      ['garlic__EACH', 'chicken__LB'],
+      [
+        ['rice__CUP', 2, true],
+        ['garlic__EACH', 6, true],
+        ['chicken__LB', 2, false],
+      ],
+    ],
+    'an Undo puts back exactly what the stop wrote and skips a line changed since (rice ticked on another device keeps its tick)',
+  );
+
+  const listItems = [
+    { ...item('chicken', 'LB', 2, ['fri', 'thu']), id: 'chicken__LB' },
+    { ...item('chicken', 'OZ', 4, ['fri']), id: 'chicken__OZ' },
+    item('rice', 'CUP', 1, ['fri', 'recipe:rice-pot'], true),
+    item('salt', 'TSP', 1, ['thu-lunch']),
+    item('beans', 'CUP', 1, ['gone']),
+  ];
+  const listLabels = stopLabels(
+    listItems,
+    planned,
+    recipes,
+    new Map(),
+    ingredients,
+  );
+  assert.deepEqual(
+    stopMeals(
+      listItems,
+      new Map(
+        [...listLabels.entries()].map(([source, label]) => [
+          source,
+          {
+            ...label,
+            name: label.kind === 'planned' ? `Plan ${source}` : label.name,
+          },
+        ]),
+      ),
+      '2026-10-16',
+    ).map((meal) => [meal.source, meal.openCount, meal.rowCount, meal.isPast]),
+    [
+      ['thu-lunch', 1, 1, true],
+      ['thu', 1, 1, true],
+      ['fri', 1, 2, false],
+      ['recipe:rice-pot', 0, 1, false],
+    ],
+    'what the list is for runs by day and meal (the days that have passed first), then recipes and saved meals; a meal counts the rows the list draws (two units of chicken are one row) and a gone source is left out',
+  );
+}
 
 console.log('pinchMath: all checks passed');
