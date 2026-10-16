@@ -235,7 +235,7 @@ A person writes a recipe by hand — a title, servings and ingredients with amou
 4. Rules for `recipes` (array caps, enum, bounds) and Storage for covers. Seed three recipes using catalog and custom ingredients.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** + New in the Recipes header opens the Recipe subview.
+- [ ] **Create:** + New recipe in the Recipes header opens the Recipe subview.
 - [ ] **Read:** the list, and the drawer on tap.
 - [ ] **Update:** Modify in the drawer opens the same subview.
 - [ ] **Delete:** the subview's trash icon with a destructive confirm (a recipe used by planned days is archived from Issue 17).
