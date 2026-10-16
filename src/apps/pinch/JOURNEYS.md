@@ -85,6 +85,7 @@ Doors cluster on **starting and logging**; **looking things up** is starved.
 | Mark cooked, note, put away | 4 each | one moment each (the cook) | three doors for "I cooked it tonight" writing two kinds of record | cooked 3 (drawer chip, planned row, Finish: the planned row and Finish share one cook id, and a plate's Finish writes every recipe's cook at once; the drawer's chip does not know the plan yet, §7.4); notes and put away unchanged |
 | Open a recipe | 2 (Recipes row, idea "Open") | the moment is "cook tonight's plan" | planned meal, day drawer row, saved meal plate, container sheet, cooking history all name it and can't open it | 2 (unchanged; opening it where it is named is §7.4) |
 | Cooking mode | 2 (recipe, planned meal) | 2 | keep | 2: a plate's session opens every recipe of the dinner at once, and "Which one are you cooking?" is gone |
+| See what the list is for; stop shopping for a meal (round 7) | 0 (a row named one meal or counted "3 meals"; stopping meant removing lines one by one) | 1 (the plan changed, or the person is deciding what this shop is for) | a list that remembers what filled it should say so and let a meal go | 1: the "Meals on your list" tile under Shopping's search, only once a meal put something there; its sheet names every meal with what is left to buy and "Remove" takes that meal's share off with an Undo. Each row also names its meals and its sheet lists them with their share (a look-up, not a door). The meal names don't open the meal: the plan is a tab away and a drawer over the sheet would be an overlay on an overlay (with "Open a recipe" on the roadmap) |
 
 ### 4.2 What each screen volunteers (first view, 390×844, Alex)
 
@@ -98,7 +99,7 @@ Items are anything on screen the person didn't type and that isn't the screen's 
 | Recipe drawer (Adobo) | 8, ingredients start at 80% of the screen; the cook's own latest note is last, about 1,400 px down | 4 | facts, cooked line, cost tile, nudge, stock | 5 before the ingredients (noise 2 → 0), which start at y 543 (was 677); the latest note is a row of the "Your kitchen" block; 9 items on the wider count of the three-group front matter (was 11) |
 | Meal drawer / Day drawer (today, past) / Planned meal (past dinner) | 9 / 8, 6 / 9 | 4 / 5, 3 / 3–4 | nudge on every drawer, "Fixed when the day passed" said four ways | 5 / 5 today and 4 past / 3 past dinner |
 | Prepared meals / container sheet | 8 / 12 | 8 / 7 | four counts in two units; six subtitles under six actions | now Fridge & freezer and its box sheet: 5 / 5 |
-| Shopping | 6 | 5 | "4 to buy" three times | 5 (the count once, not three times) |
+| Shopping | 6 | 5 | "4 to buy" three times | 5 (the count once, not three times); round 7: Alex 5 → 6 (the "Meals on your list" door's line, a reference; each row's "for …" now names its meals instead of counting past two), Taylor's list from before sources 2 → 2 (no door), Jamie 0 → 0 |
 | Ideas | 1 | 1 | the calm reference everything else should match | 1 |
 
 Journey totals as audited: "what's tonight, then cook it" meets 29 items (4 decisions); "what's in the fridge?" 41 (4 decisions); the price backlog three times in the first two taps, none of them about tonight.

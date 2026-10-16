@@ -700,7 +700,7 @@ Marking a meal made takes its ingredients out of stock. Prepared servings are al
 
 ### Issue 21: The shopping list with stock, low stock and stores
 
-**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal or a day or range of planned days (or one ingredient), merged by ingredient and unit, each line remembering what put it there, in shop sections, with To buy / Got it / All and an approximate cost (TECHNICAL.md §5b).
+**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal or a day or range of planned days (or one ingredient), merged by ingredient and unit, each line remembering and naming what put it there, in shop sections, with To buy / Got it / All, an approximate cost, and "Meals on your list" to see what the list is for and take one meal's share off (TECHNICAL.md §5b).
 **Target PR Size:** ~350 lines
 **Files:**
 - Shopping tab: `ShoppingScreen` (`components/shopping/`), `utils/shopping.ts`, a low-stock section and a group-by-store option
