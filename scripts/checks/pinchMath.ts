@@ -62,10 +62,10 @@ import {
 import {
   appendEvent,
   getFinishedText,
+  formatStockAmount,
   getMealStockMap,
   getMoveNotes,
   getStartServings,
-  getStockSourcesText,
   buildContainer,
   getContainerTitle,
   getDaysLeft,
@@ -98,6 +98,7 @@ import {
   getStockParts,
   getStockPlaceCounts,
   getStockTitle,
+  hasStockIn,
   groupContainersByCook,
   isBulkMeal,
   isValidContainerServings,
@@ -4199,80 +4200,162 @@ assert.deepEqual(
   ['Adobo, renamed', 'Adobo chicken', 'Taco night', 'Adobo chicken'],
   "a container shows its recipe's or meal's current name, and keeps its own title when that is gone",
 );
-const rolled = getMealStockMap(
-  [
-    {
-      id: 'meal-1',
-      items: [
-        { id: 'a', kind: 'RECIPE', refId: 'adobo', servings: 2 },
-        { id: 'b', kind: 'RECIPE', refId: 'adobo', servings: 1 },
-        { id: 'c', kind: 'INGREDIENT', refId: 'rice', servings: 1 },
-      ],
-    },
-    {
-      id: 'meal-2',
-      items: [{ id: 'd', kind: 'RECIPE', refId: 'rice', servings: 1 }],
-    },
-  ],
-  maps.byRecipe,
-  maps.byMeal,
-);
-assert.deepEqual(
-  [rolled.get('meal-1'), rolled.has('meal-2')],
-  [
-    {
-      fridge: 4,
-      freezer: 4,
-      containers: 4,
-      nearestEatBy: dayOf(12),
-      fridgeEatBy: dayOf(15),
-      freezerEatBy: dayOf(12),
-      sources: [
-        { kind: 'meal', id: 'meal-1', servings: 2 },
-        { kind: 'recipe', id: 'adobo', servings: 6 },
-      ],
-    },
-    false,
-  ],
-  "a saved meal's stock is what was put away as that meal plus its own recipes' (a recipe listed twice counts once, an ingredient is no stock)",
-);
-const nameOf = (source: { id: string }) => source.id.toUpperCase();
-assert.deepEqual(
-  [
-    getStockSourcesText([{ kind: 'recipe', id: 'a', servings: 5 }], nameOf),
-    getStockSourcesText(
+{
+  const stockOf = (
+    fridge: number,
+    freezer: number,
+    fridgeEatBy: number | null = null,
+    freezerEatBy: number | null = null,
+  ) => ({
+    fridge,
+    freezer,
+    containers: 1,
+    nearestEatBy: fridgeEatBy ?? freezerEatBy,
+    fridgeEatBy,
+    freezerEatBy,
+  });
+  const plate = (id: string, ...refs: [string, 'RECIPE' | 'INGREDIENT'][]) => ({
+    id,
+    items: refs.map(([refId, kind], index) => ({
+      id: `${id}-${index}`,
+      kind,
+      refId,
+      servings: 2,
+    })),
+  });
+  const rollUp = (
+    meals: ReturnType<typeof plate>[],
+    byRecipe: [string, ReturnType<typeof stockOf>][],
+    byMeal: [string, ReturnType<typeof stockOf>][] = [],
+  ) => getMealStockMap(meals, new Map(byRecipe), new Map(byMeal));
+  const adoboAndRice = plate('meal-1', ['adobo', 'RECIPE'], ['rice', 'RECIPE']);
+
+  assert.deepEqual(
+    rollUp(
+      [adoboAndRice],
       [
-        { kind: 'recipe', id: 'a', servings: 5 },
-        { kind: 'recipe', id: 'b', servings: 3 },
+        ['adobo', stockOf(5, 0, dayOf(15))],
+        ['rice', stockOf(3, 0, dayOf(12))],
       ],
-      nameOf,
-    ),
-    getStockSourcesText(
-      [1, 2, 3, 4].map((n) => ({
-        kind: 'recipe' as const,
-        id: `r${n}`,
-        servings: 2,
-      })),
-      nameOf,
-    ),
-    getStockSourcesText(
+      [['meal-1', stockOf(2, 0, dayOf(16))]],
+    ).get('meal-1'),
+    { fridge: 5, freezer: 0, fridgeEatBy: dayOf(12), freezerEatBy: null },
+    'two dishes with 5 and 3 in the fridge plus 2 boxed as the plate are 5 whole plates, not 10, and the date is the nearest of what makes them',
+  );
+  assert.deepEqual(
+    rollUp(
+      [adoboAndRice],
       [
-        { kind: 'meal', id: 'm', servings: 2 },
-        { kind: 'recipe', id: 'a', servings: 2 },
-        { kind: 'recipe', id: 'b', servings: 2 },
-        { kind: 'recipe', id: 'c', servings: 2 },
+        ['adobo', stockOf(5, 5, dayOf(15), dayOf(60))],
+        ['rice', stockOf(3, 0, dayOf(12))],
       ],
-      nameOf,
-    ),
-  ],
-  [
-    null,
-    'A 5 · B 3',
-    '8 servings from 4 recipes',
-    '8 servings from 4 recipes and meals',
-  ],
-  'a mix of sources reads as names with their servings, or a count once there are more than three',
-);
+      [['meal-1', stockOf(2, 0, dayOf(16))]],
+    ).get('meal-1'),
+    { fridge: 5, freezer: 0, fridgeEatBy: dayOf(12), freezerEatBy: null },
+    'a place counts its own dishes: adobo in the freezer with no rice there is no plate in the freezer, and its date never reaches the fridge row',
+  );
+  assert.deepEqual(
+    [
+      rollUp([adoboAndRice], [['adobo', stockOf(5, 0, dayOf(12))]]).has(
+        'meal-1',
+      ),
+      rollUp(
+        [adoboAndRice],
+        [['adobo', stockOf(5, 0, dayOf(12))]],
+        [['meal-1', stockOf(2, 0, dayOf(16))]],
+      ).get('meal-1'),
+    ],
+    [
+      false,
+      { fridge: 2, freezer: 0, fridgeEatBy: dayOf(16), freezerEatBy: null },
+    ],
+    'a plate with one dish missing makes nothing from its dishes: with no plate boxes it has no stock, and a lone dish never sets the date of the boxed plates',
+  );
+  assert.deepEqual(
+    rollUp(
+      [adoboAndRice],
+      [
+        ['adobo', stockOf(0, 4, null, dayOf(40))],
+        ['rice', stockOf(0, 6, null, dayOf(30))],
+      ],
+    ).get('meal-1'),
+    { fridge: 0, freezer: 4, fridgeEatBy: null, freezerEatBy: dayOf(30) },
+    'the freezer is counted on its own, as the dish with the least in it',
+  );
+  assert.deepEqual(
+    [
+      rollUp(
+        [
+          plate(
+            'm',
+            ['adobo', 'RECIPE'],
+            ['adobo', 'RECIPE'],
+            ['rice', 'INGREDIENT'],
+          ),
+        ],
+        [['adobo', stockOf(4, 0, dayOf(12))]],
+      ).get('m')?.fridge,
+      rollUp(
+        [plate('m', ['rice', 'INGREDIENT'])],
+        [['rice', stockOf(9, 0)]],
+      ).has('m'),
+      rollUp(
+        [plate('m', ['rice', 'INGREDIENT'])],
+        [],
+        [['m', stockOf(3, 0, dayOf(12))]],
+      ).get('m')?.fridge,
+    ],
+    [4, false, 3],
+    'a recipe listed twice is one dish, an ingredient is no dish and no stock, and a plate of ingredients has only the boxes put away as that plate',
+  );
+
+  const rolledMeals = rollUp(
+    [
+      adoboAndRice,
+      plate('meal-partial', ['adobo', 'RECIPE'], ['pho', 'RECIPE']),
+      plate('meal-freezer', ['rice', 'RECIPE']),
+    ],
+    [
+      ['adobo', stockOf(5, 0, dayOf(18))],
+      ['rice', stockOf(3, 2, dayOf(15), dayOf(60))],
+    ],
+    [['meal-1', stockOf(2, 0, dayOf(16))]],
+  );
+  assert.deepEqual(
+    [
+      getStockPlaceCounts(
+        ['meal-1', 'meal-partial', 'meal-freezer', 'nope'],
+        rolledMeals,
+      ),
+      ['meal-1', 'meal-partial', 'meal-freezer'].map((id) =>
+        hasStockIn(rolledMeals.get(id), 'FRIDGE'),
+      ),
+      getStockParts(rolledMeals.get('meal-1')!, lateOnThe14th),
+    ],
+    [
+      { FRIDGE: 2, FREEZER: 1 },
+      [true, false, true],
+      [
+        {
+          place: 'FRIDGE',
+          servings: 5,
+          due: { state: 'SOON', label: 'Eat by tomorrow' },
+        },
+      ],
+    ],
+    "the Saved meals filter and its counts, and a meal's rows and badge, read whole plates: a meal with a dish missing is not in the fridge, and a row only appears for a place that has a plate",
+  );
+  assert.deepEqual(
+    [
+      formatStockAmount(1, 'recipe'),
+      formatStockAmount(5, 'recipe'),
+      formatStockAmount(1, 'meal'),
+      formatStockAmount(5, 'meal'),
+    ],
+    ['1 serving', '5 servings', '1 plate', '5 plates'],
+    "a recipe's stock counts servings and a saved meal's counts plates",
+  );
+}
 
 const byCook = groupContainersByCook([
   container({

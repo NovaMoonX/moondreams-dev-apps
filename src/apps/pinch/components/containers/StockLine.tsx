@@ -3,13 +3,19 @@ import {
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
 } from '@apps/pinch/constants';
-import { getStockParts, type StockSummary } from '@apps/pinch/utils/containers';
+import {
+  getStockParts,
+  getStockUnit,
+  type PlaceStock,
+} from '@apps/pinch/utils/containers';
 
 interface StockLineProps {
-  summary: StockSummary | undefined;
+  summary: PlaceStock | undefined;
+  /** What the numbers count, for screen readers: a recipe's servings or a saved meal's plates. */
+  kind?: 'recipe' | 'meal';
 }
 
-function StockLine({ summary }: StockLineProps) {
+function StockLine({ summary, kind = 'recipe' }: StockLineProps) {
   if (!summary) {
     return null;
   }
@@ -30,7 +36,7 @@ function StockLine({ summary }: StockLineProps) {
             <span aria-hidden='true'>{CONTAINER_PLACE_EMOJIS[part.place]}</span>{' '}
             {part.servings}
             <span className='sr-only'>
-              {part.servings === 1 ? ' serving' : ' servings'}
+              {` ${getStockUnit(part.servings, kind)}`}
             </span>{' '}
             in the {CONTAINER_PLACE_LABELS[part.place].toLowerCase()}
           </span>
