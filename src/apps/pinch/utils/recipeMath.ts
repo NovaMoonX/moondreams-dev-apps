@@ -11,7 +11,7 @@ import { getUnitCost } from '@apps/pinch/utils/unitCost';
 
 /** What one recipe line costs from the ingredient's product: unrounded cents, or the gap that kept it from being priced. A line with no amount is neither priced nor a gap. */
 export function getLineCost(
-  line: RecipeIngredient,
+  line: Omit<RecipeIngredient, 'group'>,
   ingredient: ResolvedIngredient | undefined,
   product: Product | undefined,
 ): LineCost {

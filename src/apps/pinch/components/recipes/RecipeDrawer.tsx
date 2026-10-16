@@ -21,6 +21,7 @@ import FactsLine, { type Fact } from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
 import GroupRow from '@/components/GroupRow';
 import MacroStats from '@/components/MacroStats';
+import SectionDivider from '@/components/SectionDivider';
 import StatTile from '@/components/StatTile';
 import TickMark from '@/components/TickMark';
 import { useBackStep } from '@/hooks/useBackHistory';
@@ -72,6 +73,7 @@ import {
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -548,46 +550,53 @@ function RecipeDrawer({
               : undefined
           }
         >
-          <ul className='divide-border divide-y'>
-            {recipe.ingredients.map((line) => {
-              const gap = isPriced
-                ? gapLabel(cost.lines.get(line.id)?.gap?.kind)
-                : null;
-              return (
-                <li
-                  key={line.id}
-                  className='flex items-baseline justify-between gap-3 py-2'
-                >
-                  <span className='min-w-0'>
-                    {ingredientsById.get(line.ingredientId)?.name ??
-                      'Removed ingredient'}
-                    {line.note && line.amount !== null && (
-                      <span className='text-muted-foreground block text-xs'>
-                        {line.note}
+          {groupIngredientLines(recipe.ingredients).map((group) => (
+            <div key={group.key}>
+              {group.name !== null && (
+                <SectionDivider label={group.name} className='pt-3 pb-1' />
+              )}
+              <ul className='divide-border divide-y'>
+                {group.lines.map((line) => {
+                  const gap = isPriced
+                    ? gapLabel(cost.lines.get(line.id)?.gap?.kind)
+                    : null;
+                  return (
+                    <li
+                      key={line.id}
+                      className='flex items-baseline justify-between gap-3 py-2'
+                    >
+                      <span className='min-w-0'>
+                        {ingredientsById.get(line.ingredientId)?.name ??
+                          'Removed ingredient'}
+                        {line.note && line.amount !== null && (
+                          <span className='text-muted-foreground block text-xs'>
+                            {line.note}
+                          </span>
+                        )}
+                        {gap && (
+                          <span className='text-muted-foreground block text-xs'>
+                            {gap}
+                          </span>
+                        )}
                       </span>
-                    )}
-                    {gap && (
-                      <span className='text-muted-foreground block text-xs'>
-                        {gap}
-                      </span>
-                    )}
-                  </span>
-                  {line.amount === null ? (
-                    line.note && (
-                      <span className='text-muted-foreground max-w-[50%] text-right text-sm wrap-break-word'>
-                        {line.note}
-                      </span>
-                    )
-                  ) : (
-                    <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                      {Math.round(line.amount * 100) / 100}{' '}
-                      {UNIT_LABELS[line.unit]}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                      {line.amount === null ? (
+                        line.note && (
+                          <span className='text-muted-foreground max-w-[50%] text-right text-sm wrap-break-word'>
+                            {line.note}
+                          </span>
+                        )
+                      ) : (
+                        <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                          {Math.round(line.amount * 100) / 100}{' '}
+                          {UNIT_LABELS[line.unit]}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </FormSection>
 
         {cost && (

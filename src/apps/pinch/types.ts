@@ -401,6 +401,8 @@ export interface RecipeIngredient {
   amount: number | null;
   unit: Unit;
   note: string | null;
+  /** The heading the line sits under ("For the sauce"), or null for none; one ingredient may have a line in several groups. Lines written before groups lack the key, which reads as null. */
+  group: string | null;
 }
 
 export interface RecipeCare {
