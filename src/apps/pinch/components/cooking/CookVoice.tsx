@@ -105,7 +105,12 @@ function CookVoiceHelp({
               {group.label}
             </span>
             <span className='min-w-0'>
-              {group.phrases.map((phrase) => `“${phrase}”`).join(', ')}
+              {group.phrases.map((phrase, at) => (
+                <span key={phrase}>
+                  <span className='whitespace-nowrap'>“{phrase}”</span>
+                  {at < group.phrases.length - 1 && ', '}
+                </span>
+              ))}
             </span>
           </li>
         ))}
