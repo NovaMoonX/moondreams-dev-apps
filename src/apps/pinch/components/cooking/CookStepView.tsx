@@ -26,7 +26,7 @@ interface CookStepViewProps {
   ingredients: CookRow[];
   isAmountNoteShown: boolean;
   timerSlots: StepTimerSlot[];
-  /** A line under the cards while one of them holds a timer: what leaving or a sleeping screen does to it. */
+  /** Null unless one of the step's cards holds a timer. */
   timerNote: string | null;
   isTimersFull: boolean;
   /** Sits at the end of the step counter's row (the way to the ingredient list on a phone). */
@@ -39,7 +39,7 @@ interface CookStepViewProps {
   onSwipe: (direction: 1 | -1) => void;
 }
 
-/** The step and its timers' digits share one ramp, the digits a size below the words so a running timer never outweighs the instruction; a short screen takes a size off both so a step and its timer fit above the pinned buttons. */
+/** The digits sit a size below the words so a running timer never outweighs the instruction; a short screen takes a size off both so the step and its card fit above the pinned buttons. */
 const getStepType = (length: number) => {
   if (length > VERY_LONG_STEP_CHARS) {
     return {

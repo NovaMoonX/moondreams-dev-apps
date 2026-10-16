@@ -28,7 +28,7 @@ interface CookTimerStripProps {
 const ICON_BUTTON_CLASS =
   "relative size-9 shrink-0 after:absolute after:-inset-0.5 after:content-['']";
 
-/** One slim row however many timers run, scrolling sideways past what fits, so it never grows over the step above it. The tick lives here, so only the pills re-render as the seconds pass. */
+/** One row that scrolls sideways, so more timers never grow it over the step. The tick lives here, so only the pills re-render as the seconds pass. */
 function CookTimerStrip({
   timers,
   listRef,

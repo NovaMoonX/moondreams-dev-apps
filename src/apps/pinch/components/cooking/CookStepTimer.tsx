@@ -18,7 +18,6 @@ interface CookStepTimerProps {
   label: string;
   /** The timer once started; null while the card waits for Start. */
   timer: CookTimer | null;
-  /** The digits' size, from the step's own type ramp. */
   clockClassName: string;
   /** Several cards stack under one step, so each takes less height. */
   isCompact: boolean;
