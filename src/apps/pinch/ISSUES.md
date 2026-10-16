@@ -980,12 +980,12 @@ Paste a link and a recipe form fills in for review.
 **Prerequisites:** Issue 6
 **Target PR Size:** ~300 lines (as built it also carries the timers and the ingredients view)
 **Files:**
-- `CookingSubview` (an overlay `Subview`) with `CookStepView`, `CookIngredientsView` and `CookTimerStrip`, the `useCookTimers` hook, and a general `useWakeLock` hook
+- `CookingSubview` (an overlay `Subview`) with `CookDishSwitch`, `CookStepView`, `CookStepTimer`, `CookIngredientsView` and `CookTimerStrip`, the `useCookTimers` hook, and a general `useWakeLock` hook
 
 **Context:** UX Recipe details.
 
 ### Description
-A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step lists the ingredients it names with their amounts in kitchen measures, an Ingredients view (beside the steps from `lg`) scales and ticks them, cooking opens at the recipe's own servings, a step's times become timers named for their step, leaving while a timer is going asks first, the recipe's latest note shows above the steps, a planned dinner of several recipes opens as one session (recipe pills, one timer strip, up to four timers for all of them), and Finish records the cook, one per recipe, in one panel with one Undo, put-away and a note.
+A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step leads in large type with a ready timer card for each time it mentions (one tap starts it; it counts down, pauses and says when it's done in the same place) and, set apart below, a quieter block of the ingredients it names with their amounts in kitchen measures; an Ingredients button beside the step counter opens the full list (beside the steps from `lg`), which scales and ticks them, cooking opens at the recipe's own servings, leaving while a timer is going asks first, the recipe's latest note shows above the steps, a planned dinner of several recipes opens as one session (dish cards that say each recipe's step, one strip for timers from other steps, up to four timers for all of them), and Finish records the cook, one per recipe, in one panel with one Undo, put-away and a note.
 
 ### Possible Approach
 1. Wake Lock API with a graceful fallback; step navigation by buttons, swipe and arrow keys; an Ingredients view that scales amounts with the shopping list's own `scaleAmount`; timers that run to a clock deadline.

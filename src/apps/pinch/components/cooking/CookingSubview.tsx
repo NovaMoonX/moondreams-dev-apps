@@ -4,18 +4,19 @@ import { useStore } from 'react-redux';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { NotebookPen } from 'lucide-react';
+import { ListChecks, NotebookPen } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import NoteTextField from '@/components/NoteTextField';
-import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useAppDispatch, useAppSelector, type RootState } from '@/store';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
+import { findDurations, formatDuration } from '@/utils/durationUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import CookDishSwitch from '@apps/pinch/components/cooking/CookDishSwitch';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNotes from '@apps/pinch/components/cooking/CookNotes';
 import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
@@ -24,10 +25,7 @@ import CookRecord, {
 } from '@apps/pinch/components/cooking/CookRecord';
 import CookStepView from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
-import {
-  COOK_VIEW_OPTIONS,
-  MAX_RECIPE_NOTE_LENGTH,
-} from '@apps/pinch/constants';
+import { MAX_RECIPE_NOTE_LENGTH } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { useCookNote } from '@apps/pinch/hooks/useCookNote';
 import { useCookTimers, type CookTimer } from '@apps/pinch/hooks/useCookTimers';
@@ -49,6 +47,7 @@ import {
   getPlateStart,
   getStepName,
   isCookHistoryFull,
+  splitStepTimers,
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
@@ -281,6 +280,37 @@ function CookingSession({
       : stepMatch.lineIds
           .map((id) => rows.find((row) => row.id === id))
           .filter((row) => row !== undefined);
+  const stepText = hasSteps ? recipe.steps[index] : '';
+  const stepDurations = useMemo(
+    () =>
+      findDurations(stepText).map(({ seconds }) => ({
+        seconds,
+        label: formatDuration(seconds),
+      })),
+    [stepText],
+  );
+  const stepTimers = splitStepTimers(
+    timers.timers,
+    isStepsView && !isFinishShown && hasSteps
+      ? {
+          recipeId: recipe.id,
+          stepNumber: index + 1,
+          durations: stepDurations,
+        }
+      : null,
+  );
+  const dishes = entries.map((candidate) => {
+    const stepCount = candidate.recipe.steps.length;
+    const at = Math.min(
+      plate[candidate.recipe.id]?.stepIndex ?? 0,
+      stepCount - 1,
+    );
+    return {
+      id: candidate.recipe.id,
+      title: candidate.recipe.title,
+      status: stepCount === 0 ? 'No steps' : `Step ${at + 1} of ${stepCount}`,
+    };
+  });
 
   const updateRecipe = (recipeId: string, patch: Partial<PlateCookState>) =>
     setPlate((current) => {
@@ -582,6 +612,7 @@ function CookingSession({
   const showView = (next: CookView) => {
     setView(next);
     scrollToTop();
+    focusPrimary();
   };
 
   useEffect(() => {
@@ -666,6 +697,17 @@ function CookingSession({
       onApply={(noteId) => void applyNote(noteId)}
     />
   );
+  const ingredientsButton = isWide ? null : (
+    <Button
+      type='button'
+      variant='secondary'
+      className='h-10 shrink-0 gap-2 px-4 text-sm'
+      onClick={() => showView('ingredients')}
+    >
+      <ListChecks className='h-4 w-4' aria-hidden='true' />
+      Ingredients
+    </Button>
+  );
   const stepContent = hasSteps ? (
     <CookStepView
       steps={recipe.steps}
@@ -674,15 +716,23 @@ function CookingSession({
       isAmountNoteShown={
         isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
       }
-      timers={timers.timers.filter((timer) => timer.recipeId === recipe.id)}
+      timerSlots={stepTimers.slots}
       isTimersFull={timers.isFull}
+      action={ingredientsButton}
       onStartTimer={handleStartTimer}
+      onPauseTimer={timers.pause}
+      onResumeTimer={timers.resume}
+      onDismissTimer={handleDismissTimer}
+      onTimerTick={timers.settle}
       onSwipe={goBy}
     />
   ) : (
-    <p className='text-muted-foreground flex-1 py-2 text-center text-sm'>
-      This recipe has no steps yet.
-    </p>
+    <div className='flex flex-1 flex-col items-center gap-3 py-2'>
+      <p className='text-muted-foreground text-center text-sm'>
+        This recipe has no steps yet.
+      </p>
+      {ingredientsButton}
+    </div>
   );
   const ingredientsContent = (
     <CookIngredientsView
@@ -705,28 +755,17 @@ function CookingSession({
       className='lg:max-w-5xl'
       title={title}
       onClose={closeSubview}
-      onBack={() => void leave()}
+      onBack={() => (isStepsView ? void leave() : showView('steps'))}
     >
-      <div ref={rootRef} className='flex flex-1 flex-col gap-4'>
+      <div
+        ref={rootRef}
+        className='flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2'
+      >
         {isPlate && !isFinishShown && (
-          <PillGroup
-            label='Recipe'
-            options={entries.map((candidate) => ({
-              value: candidate.recipe.id,
-              label: candidate.recipe.title,
-            }))}
+          <CookDishSwitch
+            dishes={dishes}
             value={recipe.id}
             onChange={showRecipe}
-            isThin
-          />
-        )}
-        {!isFinishShown && !isWide && (
-          <PillGroup
-            label='Show'
-            options={COOK_VIEW_OPTIONS}
-            value={view}
-            onChange={showView}
-            isThin
           />
         )}
         {!isFinishShown && !isWide && notesBlock}
@@ -866,7 +905,7 @@ function CookingSession({
             )}
           </div>
           <CookTimerStrip
-            timers={timers.timers}
+            timers={stepTimers.elsewhere}
             listRef={stripRef}
             onTick={timers.settle}
             onPause={timers.pause}

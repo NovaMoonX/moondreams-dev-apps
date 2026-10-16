@@ -79,7 +79,7 @@ const playBeeps = (context: AudioContext) =>
     oscillator.stop(startAt + 0.3);
   });
 
-/** Timers kept in memory only. Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one lights its pill, buzzes and beeps, and toasts only while the screen is hidden or covered. */
+/** Timers kept in memory only. Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one lights its card or pill, buzzes and beeps, and toasts only while the screen is hidden or covered. */
 export function useCookTimers() {
   const { addToast } = useToast();
   const [timers, setTimers] = useState<CookTimer[]>([]);

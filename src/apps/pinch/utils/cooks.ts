@@ -2,6 +2,7 @@ import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
   MAX_COOK_TIMERS,
   MAX_COOKED_SERVINGS,
+  MAX_STEP_TIMERS,
   MIN_COOK_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
@@ -225,6 +226,37 @@ export const countLiveTimers = (timers: { status: string }[]) =>
 
 export const canStartTimer = (timers: { status: string }[]) =>
   countLiveTimers(timers) < MAX_COOK_TIMERS;
+
+/** The step on screen gets one timer card per time it mentions (the first `MAX_STEP_TIMERS`), each holding its timer once started; every other timer of the session goes in the strip, so no timer shows in two places. */
+export const splitStepTimers = <
+  T extends { id: string; recipeId: string; stepNumber: number; label: string },
+>(
+  timers: T[],
+  shown: {
+    recipeId: string;
+    stepNumber: number;
+    durations: { seconds: number; label: string }[];
+  } | null,
+) => {
+  const slots = (shown?.durations.slice(0, MAX_STEP_TIMERS) ?? []).map(
+    (duration) => ({
+      ...duration,
+      timer:
+        timers.find(
+          (timer) =>
+            timer.recipeId === shown?.recipeId &&
+            timer.stepNumber === shown.stepNumber &&
+            timer.label === duration.label,
+        ) ?? null,
+    }),
+  );
+  const onCards = new Set(slots.map((slot) => slot.timer?.id));
+  const result = {
+    slots,
+    elsewhere: timers.filter((timer) => !onCards.has(timer.id)),
+  };
+  return result;
+};
 
 /** A whole serving a tap, and a half only below one. */
 export const stepCookServings = (current: number, direction: 1 | -1) => {

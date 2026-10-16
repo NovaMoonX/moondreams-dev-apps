@@ -65,22 +65,23 @@ function CookNotes({ recipeId, onApply }: CookNotesProps) {
         type='button'
         variant='tertiary'
         aria-expanded={isOpen}
-        className='text-foreground! h-auto min-h-12 w-full items-start justify-between gap-3 rounded-none px-3 py-2.5 text-left font-normal'
+        className='text-foreground! h-auto min-h-11 w-full items-start justify-between gap-2 rounded-none px-3 py-2.5 text-left font-normal'
         onClick={() => setIsOpen((open) => !open)}
       >
+        <span aria-hidden='true' className='w-5 shrink-0 text-center text-sm'>
+          📝
+        </span>
         {isOpen ? (
           <span className='min-w-0 flex-1 text-sm font-medium'>
             Your notes ({notes.length})
           </span>
         ) : (
           <span className='min-w-0 flex-1'>
-            <span
-              className={join(
-                'line-clamp-2 text-sm wrap-break-word',
-                '[@media(max-height:500px)]:line-clamp-1',
-              )}
-            >
-              <span className='font-medium'>{summary.label}</span>{' '}
+            <span className='line-clamp-1 text-sm wrap-break-word'>
+              <span className='font-medium'>
+                <span className='sr-only'>Your latest note, </span>
+                {formatDateShort(latest.createdAt)}:
+              </span>{' '}
               {leadWithAdvice(summary.body)}
             </span>
             {isChangedSince && (

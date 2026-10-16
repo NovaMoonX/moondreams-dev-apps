@@ -475,16 +475,11 @@ export const NUTRITION_BASIS_OPTIONS = [
 ] as const;
 
 export const MAX_COOK_TIMERS = 4;
+/** A step offers a timer card for each of the first four times it mentions, as many as can run at once. */
+export const MAX_STEP_TIMERS = MAX_COOK_TIMERS;
 
 export const MIN_COOK_SERVINGS = 0.5;
 export const MAX_COOK_SERVINGS = 1000;
-
-export const COOK_VIEW_OPTIONS = [
-  { value: 'steps', label: 'Steps' },
-  { value: 'ingredients', label: 'Ingredients' },
-] as const;
-
-export const MAX_STEP_DOTS = 12;
 
 export const MAX_COOKED_SERVINGS = 1000;
 /** The most cooks one recipe's history takes before asking to delete one: the action and the screens, not the rules. */
