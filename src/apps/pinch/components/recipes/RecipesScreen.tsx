@@ -742,13 +742,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           uid={uid}
           recipeId={openId}
           onClose={() => setOpenId(null)}
-          onOpenSource={(sourceId) => {
-            setOpenId(null);
-            setView('recipes');
-            setQuery('');
-            setStockPlaces([]);
-            setPickedSource(sourceId);
-          }}
           onPlan={(id) => {
             setOpenId(null);
             openSubview({
