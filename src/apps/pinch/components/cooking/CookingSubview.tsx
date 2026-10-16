@@ -612,6 +612,7 @@ function CookingSession({
   const showView = (next: CookView) => {
     setView(next);
     scrollToTop();
+    focusPrimary();
   };
 
   useEffect(() => {
