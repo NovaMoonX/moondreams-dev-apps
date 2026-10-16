@@ -5381,6 +5381,7 @@ assert.deepEqual(
     cookUtils.getPlateTitle([]),
     cookUtils.getPlateTitle(['Adobo chicken']),
     cookUtils.getPlateTitle(['Adobo chicken', 'Cilantro lime rice']),
+    cookUtils.getPlateTitle(['Weeknight wraps 8', 'Slow-cooker chili 10']),
     cookUtils.getPlateTitle(['Tacos', 'Rice', 'Beans']),
     cookUtils.getPlateTitle(['Tacos', 'Rice', 'Beans', 'Salsa']),
   ],
@@ -5388,6 +5389,7 @@ assert.deepEqual(
     '',
     'Adobo chicken',
     'Adobo chicken & Cilantro lime rice',
+    'Weeknight wraps 8 & Slow-cooker chili 10',
     'Tacos, Rice and Beans',
     'Tacos, Rice and 2 more',
   ],
@@ -5395,7 +5397,10 @@ assert.deepEqual(
 );
 assert.deepEqual(
   [
-    cookUtils.getPlateTitle(['Slow-cooker chicken tikka masala', 'Rice']),
+    cookUtils.getPlateTitle([
+      'Slow-cooker chicken tikka masala',
+      'Garlic naan',
+    ]),
     cookUtils.getPlateTitle(['Adobo chicken', 'Cilantro lime rice', 'Salad']),
   ],
   ['Slow-cooker chicken tikka masala & 1 more', 'Adobo chicken & 2 more'],
@@ -5405,7 +5410,7 @@ assert.ok(
   [
     cookUtils.getPlateTitle(['Tacos', 'Rice', 'Beans', 'Salsa']),
     cookUtils.getPlateTitle(['Adobo chicken', 'Cilantro lime rice', 'Salad']),
-  ].every((title) => /(and|&) \d+ more$/.test(title)),
+  ].every((title) => /(and|&)\u00a0\d+\u00a0more$/.test(title)),
   'the count in a plate title is glued to the words around it, so "and 2 more" never breaks across lines',
 );
 

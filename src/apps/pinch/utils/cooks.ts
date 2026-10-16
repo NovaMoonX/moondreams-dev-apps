@@ -259,7 +259,7 @@ export const splitStepTimers = <
 };
 
 const NBSP = '\u00a0';
-const PLATE_TITLE_MAX_CHARS = 36;
+const PLATE_TITLE_MAX_CHARS = 40;
 
 /** A plate's name from the dishes it cooks: "A & B", "A, B and C", then two and how many more; one past two lines at a phone's width falls back to the first and a count. "N more" never breaks across lines. */
 export const getPlateTitle = (names: string[]) => {

@@ -62,7 +62,7 @@ function CookNotes({ recipeId, onApply }: CookNotesProps) {
         type='button'
         variant='tertiary'
         aria-expanded={isOpen}
-        className="text-muted-foreground! relative h-auto min-h-0 w-full items-start justify-between gap-2 rounded-none px-0! py-0! text-left font-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] hover:bg-transparent"
+        className="text-muted-foreground! relative h-auto min-h-0 w-full items-start justify-between gap-2 rounded-none px-0! py-0! text-left font-normal after:absolute after:inset-x-0 after:-top-1 after:-bottom-4 after:content-[''] hover:bg-transparent"
         onClick={() => setIsOpen((open) => !open)}
       >
         <span aria-hidden='true' className='w-5 shrink-0 text-center text-sm'>

@@ -87,7 +87,7 @@ function CookTimerStrip({
         const name = getTimerCaption(timer);
         const caption = `${name} · ${timer.label}`;
         const pillClass = join(
-          'flex h-10 flex-1 snap-start items-center gap-2 rounded-full border py-0 pr-0.5 pl-4',
+          'flex h-10 flex-1 snap-start items-center gap-2 rounded-full border py-0 pr-0.5 pl-4 sm:max-w-sm',
           isPlate ? 'min-w-[min(18rem,85%)]' : 'min-w-[min(14rem,80%)]',
         );
         return timer.status === 'done' ? (
