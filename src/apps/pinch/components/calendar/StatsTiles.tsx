@@ -27,8 +27,8 @@ const COLUMNS = ['grid-cols-2', 'grid-cols-2', 'grid-cols-3'];
 const getValueSizeClass = (longest: number) => {
   if (longest <= 5) return undefined;
   if (longest === 6) return 'max-[360px]:text-sm';
-  if (longest === 7) return 'min-[360px]:max-sm:text-base max-[360px]:text-xs';
-  return 'min-[360px]:max-sm:text-sm max-[360px]:text-[0.6875rem]';
+  if (longest === 7) return 'min-[360px]:max-sm:text-sm max-[360px]:text-xs';
+  return 'min-[360px]:max-sm:text-xs max-[360px]:text-[0.625rem]';
 };
 
 const keepSoFarTogether = (label: string) =>
