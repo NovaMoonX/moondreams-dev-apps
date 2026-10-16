@@ -1,6 +1,8 @@
 import {
   MAX_SHOPPING_AMOUNT,
   MAX_SHOPPING_SOURCES,
+  MEAL_TYPE_LABELS,
+  MEAL_TYPES,
   SHOP_SECTION_BY_FAMILY,
   SHOP_SECTION_BY_INGREDIENT,
   SHOP_SECTION_LABELS,
@@ -14,6 +16,7 @@ import type {
   Gap,
   Meal,
   MealItem,
+  MealType,
   PlannedMeal,
   Product,
   Recipe,
@@ -52,8 +55,8 @@ export interface ListLine extends ShoppingLine {
   sources: string[];
 }
 
-/** Past this many characters two sources are counted, so the line under a row never cuts a name. */
-const MAX_SOURCE_NAMES_LENGTH = 40;
+/** Names a row's line spells out before "and N more", so the line stays within two lines on a phone. */
+const MAX_SOURCE_NAMES_SHOWN = 2;
 
 const RECIPE_SOURCE = 'recipe:';
 const MEAL_SOURCE = 'meal:';
@@ -63,9 +66,11 @@ export const getRecipeShoppingSource = (recipeId: string) =>
 export const getMealShoppingSource = (mealId: string) =>
   `${MEAL_SOURCE}${mealId}`;
 
+export type ShoppingSourceKind = 'recipe' | 'meal' | 'planned';
+
 /** What a source names: a recipe, a saved meal, or (anything else) a planned meal. */
 export function parseShoppingSource(source: string): {
-  kind: 'recipe' | 'meal' | 'planned';
+  kind: ShoppingSourceKind;
   id: string;
 } {
   if (source.startsWith(RECIPE_SOURCE)) {
@@ -296,9 +301,10 @@ export const formatSourceDay = (dayKey: string, todayKey: string) =>
 
 export interface ShoppingSourceLabel {
   name: string;
-  /** A planned meal's day; null for a recipe or a saved meal. */
+  kind: ShoppingSourceKind;
+  /** A planned meal's day and slot; null for a recipe or a saved meal. */
   dayKey: string | null;
-  isRecipe: boolean;
+  mealType: MealType | null;
 }
 
 /** The name of every source on the list that still resolves; a planned meal, recipe or saved meal that is gone (or not loaded) is left out. */
@@ -319,18 +325,25 @@ export function getShoppingSourceLabels(
     const { kind, id } = parseShoppingSource(source);
     if (kind === 'recipe') {
       const title = recipesById.get(id)?.title;
-      return title ? { name: title, dayKey: null, isRecipe: true } : null;
+      return title
+        ? { name: title, kind, dayKey: null, mealType: null }
+        : null;
     }
     if (kind === 'meal') {
       const name = mealsById.get(id)?.name;
-      return name ? { name, dayKey: null, isRecipe: false } : null;
+      return name ? { name, kind, dayKey: null, mealType: null } : null;
     }
     const meal = planned.get(id);
     const name = meal
       ? getPlannedMealTitle(meal, recipesById, ingredientsById)
       : '';
     return meal && name
-      ? { name, dayKey: getPlannedDayKey(meal.date), isRecipe: false }
+      ? {
+          name,
+          kind,
+          dayKey: getPlannedDayKey(meal.date),
+          mealType: meal.mealType,
+        }
       : null;
   };
 
@@ -343,25 +356,64 @@ export function getShoppingSourceLabels(
   return result;
 }
 
-/** What a line is for: "Adobo chicken (Thu) and Cilantro lime rice (Fri)", "3 meals", or null when nothing behind it still resolves. */
+/** "Thu dinner", "Oct 23 lunch": a planned meal's slot. */
+export const formatSourceSlot = (
+  label: Pick<ShoppingSourceLabel, 'dayKey' | 'mealType'>,
+  todayKey: string,
+) =>
+  label.dayKey && label.mealType
+    ? `${formatSourceDay(label.dayKey, todayKey)} ${MEAL_TYPE_LABELS[label.mealType].toLowerCase()}`
+    : '';
+
+/** Each found source's name as a list says it: a planned meal carries its day ("Adobo chicken (Thu)"), and its slot when two would otherwise read the same ("Adobo chicken (Thu dinner)"). */
+export function getSourceNames(
+  sources: string[],
+  labels: Map<string, ShoppingSourceLabel>,
+  todayKey: string,
+): { source: string; name: string }[] {
+  const found = sources.flatMap((source) => {
+    const label = labels.get(source);
+    return label ? [{ source, label }] : [];
+  });
+  const byDay = (label: ShoppingSourceLabel) =>
+    label.dayKey
+      ? `${label.name} (${formatSourceDay(label.dayKey, todayKey)})`
+      : label.name;
+  const counts = found.reduce(
+    (acc, { label }) => acc.set(byDay(label), (acc.get(byDay(label)) ?? 0) + 1),
+    new Map<string, number>(),
+  );
+  const result = found.map(({ source, label }) => ({
+    source,
+    name:
+      label.dayKey && (counts.get(byDay(label)) ?? 0) > 1
+        ? `${label.name} (${formatSourceSlot(label, todayKey)})`
+        : byDay(label),
+  }));
+  return result;
+}
+
+/** "A", "A and B", "A, B and 3 more": names in full up to `limit`, then how many more. */
+export const joinSourceNames = (names: string[], limit: number) => {
+  if (names.length <= 1) return names[0] ?? '';
+  const shown = names.slice(0, limit);
+  const more = names.length - shown.length;
+  return more > 0
+    ? `${shown.join(', ')} and ${more} more`
+    : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}`;
+};
+
+/** What a line is for, by name: "Adobo chicken (Thu) and Cilantro lime rice (Fri)", two names then "and 3 more", or null when nothing behind it still resolves. */
 export function getShoppingSourcesText(
   sources: string[],
   labels: Map<string, ShoppingSourceLabel>,
   todayKey: string,
+  limit = MAX_SOURCE_NAMES_SHOWN,
 ): string | null {
-  const found = sources.flatMap((source) => labels.get(source) ?? []);
-  if (found.length === 0) return null;
-  const getCount = () =>
-    `${found.length} ${found.every((label) => label.isRecipe) ? 'recipes' : 'meals'}`;
-  if (found.length > 2) return getCount();
-  const names = found
-    .map((label) =>
-      label.dayKey
-        ? `${label.name} (${formatSourceDay(label.dayKey, todayKey)})`
-        : label.name,
-    )
-    .join(' and ');
-  return names.length > MAX_SOURCE_NAMES_LENGTH ? getCount() : names;
+  const names = getSourceNames(sources, labels, todayKey).map(
+    ({ name }) => name,
+  );
+  return names.length === 0 ? null : joinSourceNames(names, limit);
 }
 
 /** An amount an item can hold: above zero, at most the cap. Round it first, since a typed 0.004 is nothing. */
@@ -616,6 +668,288 @@ export function getDayOnList(
     ).length,
     rowCount: rows.length,
   };
+}
+
+export interface ShoppingSourceContext {
+  plannedById: Map<string, PlannedMeal>;
+  mealsById: Map<string, Meal>;
+  recipesById: Map<string, Recipe>;
+  ingredientsById: Map<string, ResolvedIngredient>;
+}
+
+/** What a source asks of the list now, worked out the way its add was: a planned meal's or a saved meal's items as they are, a recipe at its own servings (the servings an add picked aren't kept). Null when the source no longer resolves. */
+export function getSourceLines(
+  source: string,
+  context: ShoppingSourceContext,
+): ShoppingLine[] | null {
+  const { kind, id } = parseShoppingSource(source);
+  if (kind === 'recipe') {
+    const recipe = context.recipesById.get(id);
+    return recipe ? getRecipeLines(recipe, context.ingredientsById) : null;
+  }
+  const items =
+    kind === 'meal'
+      ? context.mealsById.get(id)?.items
+      : context.plannedById.get(id)?.items;
+  return items
+    ? getSourcedLines(
+        [{ items, source }],
+        context.recipesById,
+        context.ingredientsById,
+      )
+    : null;
+}
+
+const carries = (item: Pick<ShoppingItem, 'sources'>, source: string) =>
+  (item.sources ?? []).includes(source);
+
+/** How much of each item carrying `source` its lines account for, in the item's own unit: a line lands on the item of its ingredient and unit, else on one of the same ingredient and kind of unit (an amount the person moved to another unit). A line with no amount, and an item that is just the name, account for nothing. */
+export function getSourceShares(
+  source: string,
+  lines: ShoppingLine[],
+  items: ShoppingItem[],
+): Map<string, number> {
+  const carrying = items
+    .filter((item) => item.amount !== null && carries(item, source))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const byId = new Map(carrying.map((item) => [item.id, item]));
+  const result = lines.reduce((acc, line) => {
+    if (line.amount === null) return acc;
+    const exact = byId.get(getShoppingItemId(line.ingredientId, line.unit));
+    const target =
+      exact ??
+      carrying.find(
+        (item) =>
+          item.ingredientId === line.ingredientId &&
+          UNIT_DIMENSION[item.unit] === UNIT_DIMENSION[line.unit],
+      );
+    if (!target) return acc;
+    const amount = exact
+      ? line.amount
+      : (line.amount * UNIT_TO_BASE[line.unit]) / UNIT_TO_BASE[target.unit];
+    return acc.set(target.id, (acc.get(target.id) ?? 0) + amount);
+  }, new Map<string, number>());
+  return result;
+}
+
+/** For each item carrying `source`, what its other sources ask of it now, in its own unit; null when one of them no longer resolves, so the rest can't be known. */
+export function getOtherShares(
+  source: string,
+  items: ShoppingItem[],
+  context: ShoppingSourceContext,
+): Map<string, number | null> {
+  const carrying = items.filter((item) => carries(item, source));
+  const others = [
+    ...new Set(carrying.flatMap((item) => item.sources ?? [])),
+  ].filter((other) => other !== source);
+  const sharesBySource = new Map(
+    others.map((other) => {
+      const lines = getSourceLines(other, context);
+      return [other, lines ? getSourceShares(other, lines, items) : null];
+    }),
+  );
+  const result = new Map(
+    carrying.map((item) => [
+      item.id,
+      (item.sources ?? [])
+        .filter((other) => other !== source)
+        .reduce<number | null>((sum, other) => {
+          const shares = sharesBySource.get(other);
+          return sum === null || !shares
+            ? null
+            : sum + (shares.get(item.id) ?? 0);
+        }, 0),
+    ]),
+  );
+  return result;
+}
+
+export interface StopEntry {
+  id: string;
+  /** The item as read; null for one this creates. */
+  before: ShoppingItem | null;
+  /** What it becomes; null deletes it. */
+  after: ShoppingItem | null;
+}
+
+export interface StopPlan {
+  entries: StopEntry[];
+  /** Things to buy that came off the list. */
+  removedCount: number;
+  /** Things to buy that stay, smaller or as they were, because something else also wants them. */
+  keptCount: number;
+  /** Things already got, which only lose the tag. */
+  gotCount: number;
+}
+
+/** The `EACH` item a line that is just the name lives on. */
+export const getNameOnlyItemId = (ingredientId: string) =>
+  getShoppingItemId(ingredientId, 'EACH');
+
+/** Takes one source's share off the list. A got item only loses the tag; one to buy loses the share, and goes once nothing is left of it (an amount that reaches zero, or a name-only line nothing else wants). When the share runs past what is left (the meal grew, or the person lowered the amount) and something else wants the item, it keeps that one's share, never more than it had, or becomes just the name; something the person added on the list (no sources) never carries the tag, so it is never touched. `read` holds every item carrying the source and the name-only item of each ingredient, as read. */
+export function planStopShopping(
+  source: string,
+  read: ShoppingItem[],
+  shares: Map<string, number>,
+  otherShares: Map<string, number | null>,
+  now: number,
+): StopPlan {
+  const readById = new Map(read.map((item) => [item.id, item]));
+  const carrying = read
+    .filter((item) => carries(item, source))
+    .sort(
+      (a, b) =>
+        Number(b.unit === 'EACH') - Number(a.unit === 'EACH') ||
+        a.id.localeCompare(b.id),
+    );
+
+  const initial = {
+    planned: new Map<string, ShoppingItem | null>(),
+    removedCount: 0,
+    keptCount: 0,
+    gotCount: 0,
+  };
+  type Step = typeof initial;
+  const current = (step: Step, id: string) =>
+    step.planned.has(id)
+      ? (step.planned.get(id) ?? null)
+      : (readById.get(id) ?? null);
+
+  const final = carrying.reduce((step, entry): Step => {
+    const item = current(step, entry.id) ?? entry;
+    const sources = (item.sources ?? []).filter((other) => other !== source);
+    const write = (
+      id: string,
+      after: ShoppingItem | null,
+      counted: 'removedCount' | 'keptCount' | 'gotCount',
+    ) => ({
+      ...step,
+      planned: new Map(step.planned).set(id, after),
+      [counted]: step[counted] + 1,
+    });
+    const keep = (amount: number | null) =>
+      write(
+        item.id,
+        { ...item, amount, sources, updatedAt: now },
+        item.isChecked ? 'gotCount' : 'keptCount',
+      );
+
+    if (item.isChecked) return keep(item.amount);
+    if (item.amount === null) {
+      return sources.length === 0
+        ? write(item.id, null, 'removedCount')
+        : keep(null);
+    }
+    const rest = roundAmount(item.amount - (shares.get(item.id) ?? 0));
+    if (rest > 0) return keep(rest);
+    if (sources.length === 0) return write(item.id, null, 'removedCount');
+    const other = otherShares.get(item.id);
+    if (other === undefined || other === null) return keep(item.amount);
+    const otherAmount = roundAmount(other);
+    if (otherAmount > 0) return keep(Math.min(item.amount, otherAmount));
+    if (item.unit === 'EACH') return keep(null);
+
+    const twinId = getNameOnlyItemId(item.ingredientId);
+    const twin = current(step, twinId);
+    const removed = write(item.id, null, 'keptCount');
+    return {
+      ...removed,
+      planned: new Map(removed.planned).set(
+        twinId,
+        twin
+          ? {
+              ...twin,
+              sources: mergeSources(twin.sources ?? [], sources),
+              updatedAt: now,
+            }
+          : {
+              id: twinId,
+              ingredientId: item.ingredientId,
+              amount: null,
+              unit: 'EACH',
+              isChecked: false,
+              sources: mergeSources([], sources),
+              createdAt: readById.get(twinId)?.createdAt ?? now,
+              updatedAt: now,
+            },
+      ),
+    };
+  }, initial);
+
+  const result: StopPlan = {
+    entries: [...final.planned.entries()].map(([id, after]) => ({
+      id,
+      before: readById.get(id) ?? null,
+      after,
+    })),
+    removedCount: final.removedCount,
+    keptCount: final.keptCount,
+    gotCount: final.gotCount,
+  };
+  return result;
+}
+
+/** Whether an item is still as a stop left it, so its Undo may put it back: still gone, or untouched since (the same `updatedAt`). */
+export const isAsStopLeft = (
+  current: Pick<ShoppingItem, 'updatedAt'> | null,
+  after: Pick<ShoppingItem, 'updatedAt'> | null,
+) => (after === null ? current === null : current?.updatedAt === after.updatedAt);
+
+export interface ShoppingMeal {
+  source: string;
+  label: ShoppingSourceLabel;
+  /** Rows of the list it put something on, drawn the way the list draws them, and how many of those are still to buy. */
+  rowCount: number;
+  openCount: number;
+  isPast: boolean;
+}
+
+const MEAL_TYPE_INDEX = new Map(MEAL_TYPES.map((type, index) => [type, index]));
+
+const getRowsBySource = (side: ShoppingItem[]) => {
+  const rowIds = getItemRowIds(side);
+  return side.reduce((acc, item) => {
+    (item.sources ?? []).forEach((source) =>
+      acc.set(
+        source,
+        (acc.get(source) ?? new Set<string>()).add(rowIds.get(item.id) ?? ''),
+      ),
+    );
+    return acc;
+  }, new Map<string, Set<string>>());
+};
+
+/** What the list is for: every source behind it that still resolves, planned meals by day (the ones that have passed first) and meal, then recipes and saved meals by name. */
+export function getShoppingMeals(
+  items: ShoppingItem[],
+  labels: Map<string, ShoppingSourceLabel>,
+  todayKey: string,
+): ShoppingMeal[] {
+  const open = getRowsBySource(items.filter((item) => !item.isChecked));
+  const got = getRowsBySource(items.filter((item) => item.isChecked));
+  const meals = [...labels.entries()].map(
+    ([source, label]): ShoppingMeal => {
+      const openCount = open.get(source)?.size ?? 0;
+      return {
+        source,
+        label,
+        rowCount: openCount + (got.get(source)?.size ?? 0),
+        openCount,
+        isPast: label.dayKey !== null && label.dayKey < todayKey,
+      };
+    },
+  );
+  const sortKey = ({ label }: ShoppingMeal) =>
+    label.dayKey === null
+      ? `1|${label.name.toLowerCase()}`
+      : `0|${label.dayKey}|${MEAL_TYPE_INDEX.get(label.mealType ?? 'DINNER') ?? 0}|${label.name.toLowerCase()}`;
+  const result = meals
+    .filter((meal) => meal.rowCount > 0)
+    .sort(
+      (a, b) =>
+        sortKey(a).localeCompare(sortKey(b)) || a.source.localeCompare(b.source),
+    );
+  return result;
 }
 
 export interface PlanSpan {
