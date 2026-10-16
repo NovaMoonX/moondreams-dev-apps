@@ -11,6 +11,7 @@ import {
   UNITS,
 } from '@apps/pinch/constants';
 import type { RecipeCare, Unit } from '@apps/pinch/types';
+import { cleanGroupName } from '@apps/pinch/utils/ingredientGroups';
 import { toCare } from '@apps/pinch/utils/recipeCare';
 
 export interface ExtractedIngredient {
@@ -18,6 +19,8 @@ export interface ExtractedIngredient {
   amount: number | null;
   unit: Unit | null;
   note: string | null;
+  /** The heading the recipe puts it under ("For the sauce"), or null; never made up. */
+  group: string | null;
 }
 
 /** What the reader found. It only ever fills the form; nothing is saved from it. */
@@ -55,6 +58,19 @@ const asMinutes = (value: unknown) =>
 const asWholeDays = (value: unknown) =>
   typeof value === 'number' ? Math.floor(value) : null;
 
+const GROUP_READ_LENGTH = 200;
+const HEADING_MARKS = /^[#*_\s]+|[#*_:\s]+$/g;
+const INGREDIENTS_TITLE = /^ingredients?$/i;
+
+/** A heading as the recipe writes it, without the colon or markdown around it; the recipe's own "Ingredients" title is no group. */
+const asGroup = (value: unknown) => {
+  const name = cleanGroupName(
+    asString(value)?.slice(0, GROUP_READ_LENGTH).replace(HEADING_MARKS, ''),
+  );
+  const result = name !== null && !INGREDIENTS_TITLE.test(name) ? name : null;
+  return result;
+};
+
 const UNMEASURED_TAIL =
   /^(.+?)[\s,;]+(to taste|as needed|as required|for garnish|to garnish|for serving|to serve)\.?$/i;
 const UNMEASURED_HEAD =
@@ -85,7 +101,7 @@ const joinNotes = (notes: (string | null)[]) =>
     .join(', ')
     .slice(0, MAX_NOTE_LENGTH) || null;
 
-/** A line with no amount read the way a cook means it: "salt and pepper to taste" is two lines noted "to taste", and "handful of parsley" is parsley noted "a handful". A measured line is left as it was read. */
+/** A line with no amount read the way a cook means it: "salt and pepper to taste" is two lines noted "to taste" under the same heading, and "handful of parsley" is parsley noted "a handful". A measured line is left as it was read. */
 const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
   if (line.amount !== null) return [line];
   const tail = UNMEASURED_TAIL.exec(line.name);
@@ -142,6 +158,7 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
               amount: asNumber(item.amount),
               unit: UNITS.find((unit) => unit === item.unit) ?? null,
               note: asString(item.note)?.slice(0, MAX_NOTE_LENGTH) ?? null,
+              group: asGroup(item.group),
             })
           : [];
       })

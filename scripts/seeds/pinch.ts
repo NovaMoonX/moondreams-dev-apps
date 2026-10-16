@@ -40,6 +40,7 @@ const SEED_SHOPPING = [
   shoppingItem('cat-chicken-thigh', 'LB', 2, false, ADOBO_ADDED),
   shoppingItem('cat-chicken-breast', 'LB', 1, false, []),
   shoppingItem('cat-soy-sauce', 'CUP', 0.25, false, ADOBO_ADDED),
+  shoppingItem('cat-soy-sauce', 'TBSP', 2, false, ADOBO_ADDED),
   shoppingItem('cat-garlic', 'EACH', 6, false, ADOBO_ADDED),
   shoppingItem('cat-lime-juice', 'TBSP', 2, true, DINNERS_ADDED),
   shoppingItem('cat-cilantro', 'CUP', 0.25, true, DINNERS_ADDED),
@@ -564,7 +565,20 @@ const line = (
   ingredientId: string,
   amount: number,
   unit: string,
+  group: string | null = null,
+) => ({ id, ingredientId, amount, unit, note: null, group });
+
+// Lines written before groups have no `group` key; the nachos keep that shape so the legacy path stays exercised.
+const legacyLine = (
+  id: string,
+  ingredientId: string,
+  amount: number,
+  unit: string,
 ) => ({ id, ingredientId, amount, unit, note: null });
+
+// Adobo's lines sit under two headings, with soy sauce and garlic in both.
+const FOR_THE_CHICKEN = 'For the chicken';
+const FOR_THE_SAUCE = 'For the sauce';
 
 const SEED_RECIPES = [
   {
@@ -576,23 +590,26 @@ const SEED_RECIPES = [
     cookMinutes: 35,
     coverPath: null,
     ingredients: [
-      line('adobo-1', 'cat-chicken-thigh', 2, 'LB'),
-      line('adobo-2', 'cat-soy-sauce', 0.25, 'CUP'),
-      line('adobo-3', 'cat-white-vinegar', 0.25, 'CUP'),
-      line('adobo-4', 'cat-garlic', 6, 'EACH'),
-      line('adobo-5', 'cat-bay-leaves', 2, 'EACH'),
-      line('adobo-6', 'cat-black-pepper', 1, 'TSP'),
+      line('adobo-1', 'cat-chicken-thigh', 2, 'LB', FOR_THE_CHICKEN),
+      line('adobo-2', 'cat-soy-sauce', 0.25, 'CUP', FOR_THE_CHICKEN),
+      line('adobo-4', 'cat-garlic', 4, 'EACH', FOR_THE_CHICKEN),
+      line('adobo-6', 'cat-black-pepper', 1, 'TSP', FOR_THE_CHICKEN),
+      line('adobo-8', 'cat-soy-sauce', 2, 'TBSP', FOR_THE_SAUCE),
+      line('adobo-3', 'cat-white-vinegar', 0.25, 'CUP', FOR_THE_SAUCE),
+      line('adobo-9', 'cat-garlic', 2, 'EACH', FOR_THE_SAUCE),
+      line('adobo-5', 'cat-bay-leaves', 2, 'EACH', FOR_THE_SAUCE),
       {
         id: 'adobo-7',
         ingredientId: 'cat-salt',
         amount: null,
         unit: 'EACH',
         note: 'to taste',
+        group: FOR_THE_SAUCE,
       },
     ],
     steps: [
-      'Marinate the chicken in the soy sauce, vinegar and garlic for 30 minutes.',
-      'Simmer everything with the bay leaves and pepper, covered, for 25 minutes.',
+      'Marinate the chicken in the soy sauce, garlic and pepper for 30 minutes.',
+      'Add the vinegar, the rest of the soy sauce and garlic, and the bay leaves, then simmer covered for 25 minutes.',
       'Uncover and reduce the sauce until it clings to the chicken.',
     ],
     // Nachos and the chili keep the older shape (no `care` key) so the legacy path stays exercised.
@@ -640,10 +657,10 @@ const SEED_RECIPES = [
     cookMinutes: 10,
     coverPath: null,
     ingredients: [
-      line('nachos-1', 'seed-pinch-ingredient-doritos', 9, 'OZ'),
-      line('nachos-2', 'cat-cheddar', 8, 'OZ'),
-      line('nachos-3', 'cat-jalapeno', 2, 'EACH'),
-      line('nachos-4', 'cat-salsa', 0.5, 'CUP'),
+      legacyLine('nachos-1', 'seed-pinch-ingredient-doritos', 9, 'OZ'),
+      legacyLine('nachos-2', 'cat-cheddar', 8, 'OZ'),
+      legacyLine('nachos-3', 'cat-jalapeno', 2, 'EACH'),
+      legacyLine('nachos-4', 'cat-salsa', 0.5, 'CUP'),
     ],
     steps: [],
     // Typed over the added-up calories; the other metrics stay derived.

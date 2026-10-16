@@ -8,6 +8,11 @@ import {
   NUTRITION_METRICS,
 } from '@apps/pinch/constants';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
+import {
+  cleanGroupName,
+  getGroupKey,
+  orderIngredientLines,
+} from '@apps/pinch/utils/ingredientGroups';
 import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
 import {
   EMPTY_CARE_TEXT,
@@ -49,6 +54,8 @@ export interface IngredientRow {
   proposedName: string | null;
   /** Set when the person chose "Add as new ingredient": it is created with the recipe. */
   newName: string | null;
+  /** The heading it sits under, or null; rows are kept in the order `groupIngredientLines` shows them. */
+  group: string | null;
 }
 
 export interface RecipeFormData {
@@ -85,6 +92,7 @@ export const getInitialData = (
     note: line.note ?? null,
     proposedName: null,
     newName: null,
+    group: cleanGroupName(line.group),
   })),
   steps: recipe?.steps ?? [],
   care: recipe ? getCareText(getRecipeCare(recipe)) : { ...EMPTY_CARE_TEXT },
@@ -103,7 +111,7 @@ export const getInitialData = (
   why: '',
 });
 
-/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. A second line for an ingredient already listed adds to it when the units agree and stays its own line when they don't, so no amount is lost, and a line the recipe gives no amount ("salt to taste") keeps none. */
+/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. A second line for an ingredient already listed under the same heading adds to it when the units agree and stays its own line when they don't, so no amount is lost; under another heading it is always its own line. A line the recipe gives no amount ("salt to taste") keeps none. */
 export const getDataFromExtracted = (
   extracted: ExtractedRecipe,
   ingredients: ResolvedIngredient[],
@@ -113,10 +121,12 @@ export const getDataFromExtracted = (
     const match = matchIngredient(line.name, ingredients);
     const unit = line.unit ?? match?.serving.unit ?? 'EACH';
     const { amount } = line;
+    const group = cleanGroupName(line.group);
     const existing = match
       ? acc.find(
           (row) =>
             row.ingredientId === match.id &&
+            getGroupKey(row.group) === getGroupKey(group) &&
             row.unit === unit &&
             row.amount.trim() !== '' &&
             amount !== null,
@@ -141,6 +151,7 @@ export const getDataFromExtracted = (
         note: line.note,
         proposedName: match ? null : line.name,
         newName: null,
+        group,
       },
     ];
   }, []);
@@ -154,7 +165,7 @@ export const getDataFromExtracted = (
       cook: extracted.cookMinutes === null ? '' : String(extracted.cookMinutes),
     },
     description: extracted.description ?? '',
-    ingredients: rows.slice(0, MAX_RECIPE_INGREDIENTS),
+    ingredients: orderIngredientLines(rows).slice(0, MAX_RECIPE_INGREDIENTS),
     steps: extracted.steps,
     care: getCareText(extracted.care),
   };
@@ -209,6 +220,7 @@ export const toRecipeLine = (row: IngredientRow): RecipeIngredient => ({
   amount: row.isAmountless ? null : Number(row.amount),
   unit: row.isAmountless ? 'EACH' : row.unit,
   note: row.note,
+  group: cleanGroupName(row.group),
 });
 
 const parseTyped = (text: string) => (text.trim() === '' ? null : Number(text));

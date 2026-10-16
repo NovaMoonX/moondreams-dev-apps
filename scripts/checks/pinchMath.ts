@@ -7064,6 +7064,7 @@ assert.equal(
       amount: null,
       unit: 'EACH',
       note: 'to taste',
+      group: null,
     },
     'a row with no amount saves none, in EACH, whatever unit the drawer last had',
   );
@@ -7091,6 +7092,7 @@ assert.equal(
         amount: 2,
         unit: 'LB' as const,
         note: null,
+        group: null,
       },
       {
         id: 'b',
@@ -7098,6 +7100,7 @@ assert.equal(
         amount: null,
         unit: 'EACH' as const,
         note: 'to taste',
+        group: null,
       },
     ],
     steps: [],
@@ -7287,5 +7290,295 @@ assert.equal(
   '2 meals',
   'two sources whose names would run past a phone line are counted',
 );
+
+// Ingredient groups: one order everywhere, an ingredient in several groups, and the form's moves
+{
+  const {
+    getRepeatedLineGroups,
+    groupIngredientLines,
+    orderIngredientLines,
+    placeLineInGroup,
+    renameLineGroup,
+    restoreLineGroup,
+    ungroupLines,
+  } = await import('../../src/apps/pinch/utils/ingredientGroups.ts');
+  const { getDataFromExtracted, getInitialData, toRecipeLine } =
+    await import('../../src/apps/pinch/components/recipes/recipeFormModel.ts');
+  const { resolveIngredients } =
+    await import('../../src/apps/pinch/utils/resolveIngredient.ts');
+  const grp = (
+    id: string,
+    ingredientId: string,
+    group: string | null,
+    amount: number | null = 1,
+    unit: Unit = 'TBSP',
+  ) => ({ id, ingredientId, amount, unit, note: null, group });
+  const ids = (lines: { id: string }[]) => lines.map((line) => line.id);
+  const heads = (lines: { group?: string | null }[]) =>
+    groupIngredientLines(lines).map((group) => [
+      group.name,
+      group.lines.length,
+    ]);
+  const adoboGroups = [
+    grp('thigh', 'chicken', 'For the chicken', 2, 'LB'),
+    grp('soy1', 'soy', 'For the chicken', 4),
+    grp('soy2', 'soy', 'For the sauce', 2),
+    grp('salt', 'salt', null, null, 'EACH'),
+    grp('garlic2', 'garlic', 'for the  SAUCE', 2, 'EACH'),
+    grp('garlic1', 'garlic', 'For the chicken', 4, 'EACH'),
+  ];
+
+  assert.deepEqual(
+    [heads(adoboGroups), ids(orderIngredientLines(adoboGroups))],
+    [
+      [
+        [null, 1],
+        ['For the chicken', 3],
+        ['For the sauce', 2],
+      ],
+      ['salt', 'thigh', 'soy1', 'garlic1', 'soy2', 'garlic2'],
+    ],
+    'lines with no group come first with no heading, then each group in the order its first line appears, and two spellings of one name are one group',
+  );
+  const legacyLines = [
+    { id: 'a', ingredientId: 'x', amount: 1, unit: 'TBSP', note: null },
+    grp('b', 'y', null),
+    grp('c', 'z', '   '),
+  ];
+  assert.deepEqual(
+    [heads(legacyLines), ids(orderIngredientLines(legacyLines))],
+    [[[null, 3]], ['a', 'b', 'c']],
+    'a recipe with no groups (keys missing, null or blank) is one block with no heading, in its own order',
+  );
+  assert.deepEqual(
+    [...getRepeatedLineGroups(adoboGroups)].sort(),
+    [
+      ['garlic1', 'For the chicken'],
+      ['garlic2', 'For the sauce'],
+      ['soy1', 'For the chicken'],
+      ['soy2', 'For the sauce'],
+    ],
+    'a line away from its heading is labelled with its group only when its ingredient sits in more than one group',
+  );
+
+  const ordered = orderIngredientLines(adoboGroups);
+  const moved = placeLineInGroup(ordered, {
+    ...ordered[0],
+    group: 'For the chicken',
+  });
+  const fresh = placeLineInGroup(ordered, grp('lime', 'lime', 'Garnish'));
+  const ungroupedNew = placeLineInGroup(ordered, grp('rice', 'rice', null));
+  assert.deepEqual(
+    [ids(moved), ids(fresh), ids(ungroupedNew)],
+    [
+      ['thigh', 'soy1', 'garlic1', 'salt', 'soy2', 'garlic2'],
+      ['salt', 'thigh', 'soy1', 'garlic1', 'soy2', 'garlic2', 'lime'],
+      ['salt', 'rice', 'thigh', 'soy1', 'garlic1', 'soy2', 'garlic2'],
+    ],
+    'a line moved or added to a group goes to the end of it, a new group goes last, and no group joins the lines at the top',
+  );
+  const merged = renameLineGroup(ordered, 'For the sauce', 'for the chicken');
+  const respelled = renameLineGroup(ordered, 'For the sauce', 'FOR THE SAUCE');
+  assert.deepEqual(
+    [heads(merged), heads(respelled)],
+    [
+      [
+        [null, 1],
+        ['For the chicken', 5],
+      ],
+      [
+        [null, 1],
+        ['For the chicken', 3],
+        ['FOR THE SAUCE', 2],
+      ],
+    ],
+    "renaming a group to another group's name makes them one, keeping that group's spelling; renaming to its own name in other letters respells it",
+  );
+  const ungrouped = ungroupLines(ordered, 'For the chicken');
+  const editedSince = ungrouped.filter((line) => line.id !== 'soy2');
+  assert.deepEqual(
+    [
+      heads(ungrouped),
+      ids(restoreLineGroup(ungrouped, ordered, 'For the chicken')),
+      ids(restoreLineGroup(editedSince, ordered, 'For the chicken')),
+    ],
+    [
+      [
+        [null, 4],
+        ['For the sauce', 2],
+      ],
+      ids(ordered),
+      ['salt', 'thigh', 'soy1', 'garlic1', 'garlic2'],
+    ],
+    'removing a group keeps its lines with no group, and Undo puts the group back where it was without bringing back a line removed since',
+  );
+
+  const steps = [
+    'Marinate the chicken with soy sauce and garlic.',
+    'Simmer with more soy sauce and garlic.',
+    'Add the garlic and serve.',
+  ];
+  const stepLines = ordered.map((line) => ({
+    id: line.id,
+    ingredientId: line.ingredientId,
+    group: line.group,
+    names: [
+      { chicken: 'Chicken thigh', soy: 'Soy sauce', salt: 'Salt' }[
+        line.ingredientId
+      ] ?? 'Garlic',
+    ],
+  }));
+  const { matchStepIngredients: matchGrouped } =
+    await import('../../src/apps/pinch/utils/stepIngredients.ts');
+  assert.deepEqual(
+    [
+      matchGrouped(steps, stepLines).map((step) => step.lineIds),
+      matchGrouped([steps[0]], stepLines).map((step) => step.lineIds),
+      matchGrouped(
+        ['Mix the soy sauce.', 'Add soy sauce.'],
+        [
+          { id: 's1', ingredientId: 'soy', group: 'A', names: ['Soy sauce'] },
+          { id: 's2', ingredientId: 'soy', group: 'B', names: ['Soy sauce'] },
+          { id: 's3', ingredientId: 'soy', group: 'C', names: ['Soy sauce'] },
+        ],
+      ).map((step) => step.lineIds),
+    ],
+    [
+      [['thigh', 'soy1', 'garlic1'], ['soy2', 'garlic2'], []],
+      [['thigh', 'soy1', 'soy2', 'garlic1', 'garlic2']],
+      [['s1'], ['s2', 's3']],
+    ],
+    "each step that names an ingredient in several groups takes the next group's line, the last one takes what is left, and a later mention takes nothing",
+  );
+
+  const cooked = { ...baseRecipe, ingredients: ordered };
+  assert.deepEqual(
+    [
+      getRecipeChanges(
+        cooked,
+        { ...cooked, ingredients: ungroupLines(ordered, 'For the chicken') },
+        new Map(),
+      ),
+      getRecipeChanges(
+        cooked,
+        {
+          ...cooked,
+          ingredients: [
+            ...ordered.filter((line) => line.id !== 'soy2'),
+            grp('soy3', 'soy', 'For the sauce', 3),
+          ],
+        },
+        new Map([['soy', { name: 'Soy sauce' }]]),
+      ),
+    ],
+    [
+      [],
+      [
+        'Added Soy sauce (for the SAUCE), 3 tbsp',
+        'Removed Soy sauce (For the sauce)',
+      ],
+    ],
+    'moving lines between groups records no tweak, and a change to an ingredient in several groups names its group',
+  );
+
+  const read = getDataFromExtracted(
+    {
+      title: 'Adobo',
+      servings: 4,
+      prepMinutes: null,
+      cookMinutes: null,
+      description: null,
+      ingredients: [
+        { name: 'soy sauce', amount: 2, unit: 'TBSP', note: null, group: null },
+        {
+          name: 'soy sauce',
+          amount: 4,
+          unit: 'TBSP',
+          note: null,
+          group: 'For the chicken',
+        },
+        {
+          name: 'soy sauce',
+          amount: 1,
+          unit: 'TBSP',
+          note: null,
+          group: 'For the chicken',
+        },
+        {
+          name: 'garlic',
+          amount: 2,
+          unit: 'EACH',
+          note: null,
+          group: 'For the sauce',
+        },
+        {
+          name: 'soy sauce',
+          amount: 2,
+          unit: 'TBSP',
+          note: null,
+          group: 'For the sauce',
+        },
+        {
+          name: 'jasmine rice',
+          amount: 1,
+          unit: 'CUP',
+          note: null,
+          group: null,
+        },
+      ],
+      steps: [],
+      care: null,
+      unread: [],
+    },
+    resolveIngredients([]),
+  );
+  assert.deepEqual(
+    read.ingredients.map((row) => [row.ingredientId, row.amount, row.group]),
+    [
+      ['cat-soy-sauce', '2', null],
+      ['cat-jasmine-rice', '1', null],
+      ['cat-soy-sauce', '5', 'For the chicken'],
+      ['cat-garlic', '2', 'For the sauce'],
+      ['cat-soy-sauce', '2', 'For the sauce'],
+    ],
+    'a reading adds a second line of one ingredient into the first only under the same heading, and lists the rows in group order',
+  );
+  const legacyStored = {
+    ...shopRecipe('legacy', 4, []),
+    ingredients: [
+      { id: 'a', ingredientId: 'x', amount: 1, unit: 'TBSP', note: null },
+    ],
+  } as unknown as Recipe;
+  assert.deepEqual(
+    getInitialData(legacyStored).ingredients.map(toRecipeLine),
+    [
+      {
+        id: 'a',
+        ingredientId: 'x',
+        amount: 1,
+        unit: 'TBSP',
+        note: null,
+        group: null,
+      },
+    ],
+    'a line saved before groups opens with no group and saves back with `group: null`',
+  );
+
+  const soyIngredients = new Map([
+    [
+      'soy',
+      shopIngredient('soy', 'Soy sauce', null, { amount: 1, unit: 'TBSP' }),
+    ],
+  ]);
+  const twoGroupRecipe = {
+    ...shopRecipe('twoGroups', 4, []),
+    ingredients: [grp('g1', 'soy', 'A', 4), grp('g2', 'soy', 'B', 2)],
+  } as Recipe;
+  assert.deepEqual(
+    getRecipeLines(twoGroupRecipe, soyIngredients),
+    [{ ingredientId: 'soy', amount: 6, unit: 'TBSP' }],
+    "one ingredient's lines in two groups are one line on the shopping list",
+  );
+}
 
 console.log('pinchMath: all checks passed');

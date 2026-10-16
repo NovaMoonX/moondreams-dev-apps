@@ -127,7 +127,15 @@ function CookStepView({
                   key={row.id}
                   className='flex items-baseline justify-between gap-3 py-1.5 text-base'
                 >
-                  <span className='min-w-0 wrap-break-word'>{row.name}</span>
+                  <span className='min-w-0 wrap-break-word'>
+                    {row.name}
+                    {row.groupLabel && (
+                      <span className='text-muted-foreground text-sm'>
+                        {' '}
+                        · {row.groupLabel}
+                      </span>
+                    )}
+                  </span>
                   <span
                     className={
                       row.isMeasured
