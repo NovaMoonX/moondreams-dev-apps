@@ -64,26 +64,56 @@ const MAX_SOURCE_NAMES_SHOWN = 2;
 const RECIPE_SOURCE = 'recipe:';
 const MEAL_SOURCE = 'meal:';
 
-export const getRecipeShoppingSource = (recipeId: string) =>
-  `${RECIPE_SOURCE}${recipeId}`;
+/** A recipe's source keeps the servings its add put on the list, so taking it back off takes the same amount. */
+export const getRecipeShoppingSource = (recipeId: string, servings: number) =>
+  `${RECIPE_SOURCE}${recipeId}:${roundAmount(servings)}`;
 export const getMealShoppingSource = (mealId: string) =>
   `${MEAL_SOURCE}${mealId}`;
 
 export type ShoppingSourceKind = 'recipe' | 'meal' | 'planned';
 
-/** What a source names: a recipe, a saved meal, or (anything else) a planned meal. */
-export function parseShoppingSource(source: string): {
+export interface ParsedShoppingSource {
   kind: ShoppingSourceKind;
   id: string;
-} {
+  /** What the source names without the servings, so one recipe added twice is one source. */
+  key: string;
+  /** Null for a meal, and for a recipe source written before servings were kept, which reads as the recipe's own servings. */
+  servings: number | null;
+}
+
+const splitServings = (rest: string) => {
+  const mark = rest.lastIndexOf(':');
+  const servings = mark > 0 ? Number(rest.slice(mark + 1)) : Number.NaN;
+  return Number.isFinite(servings) && servings > 0
+    ? { id: rest.slice(0, mark), servings }
+    : { id: rest, servings: null };
+};
+
+/** What a source names: a recipe, a saved meal, or (anything else) a planned meal. */
+export function parseShoppingSource(source: string): ParsedShoppingSource {
   if (source.startsWith(RECIPE_SOURCE)) {
-    return { kind: 'recipe', id: source.slice(RECIPE_SOURCE.length) };
+    const { id, servings } = splitServings(source.slice(RECIPE_SOURCE.length));
+    return { kind: 'recipe', id, key: `${RECIPE_SOURCE}${id}`, servings };
   }
   if (source.startsWith(MEAL_SOURCE)) {
-    return { kind: 'meal', id: source.slice(MEAL_SOURCE.length) };
+    return {
+      kind: 'meal',
+      id: source.slice(MEAL_SOURCE.length),
+      key: source,
+      servings: null,
+    };
   }
-  return { kind: 'planned', id: source };
+  return { kind: 'planned', id: source, key: source, servings: null };
 }
+
+export const getSourceKey = (source: string) => parseShoppingSource(source).key;
+
+const getSourceKeys = (sources: readonly string[]) => [
+  ...new Set(sources.map(getSourceKey)),
+];
+
+const carriesKey = (item: Pick<ShoppingItem, 'sources'>, key: string) =>
+  (item.sources ?? []).some((source) => getSourceKey(source) === key);
 
 export interface ShoppingRowData {
   /** One ingredient's amounts of the same kind (weights, volumes or counts) share a row. */
@@ -94,7 +124,7 @@ export interface ShoppingRowData {
   /** What to pick up, or null for a pinch of a spice or oil or a line that is just the name, which needs only its name. */
   amountText: string | null;
   isChecked: boolean;
-  /** What put the row's items on the list, each once. */
+  /** What put the row's items on the list, each once, by key. */
   sources: string[];
 }
 
@@ -245,13 +275,14 @@ export function getRowOnList(
   lines: SourcedLine[],
   rowItems: ShoppingItem[],
 ): RowOnList {
-  const sourcesOf = (items: ShoppingItem[]) =>
-    new Set(items.flatMap((item) => item.sources ?? []));
+  const keysOf = (items: ShoppingItem[]) =>
+    new Set(items.flatMap((item) => getSourceKeys(item.sources ?? [])));
   const openItems = rowItems.filter((item) => !item.isChecked);
-  const open = sourcesOf(openItems);
-  const got = sourcesOf(rowItems.filter((item) => item.isChecked));
+  const open = keysOf(openItems);
+  const got = keysOf(rowItems.filter((item) => item.isChecked));
   const isListed = (source: string | null) =>
-    !!source && (open.has(source) || got.has(source));
+    !!source &&
+    (open.has(getSourceKey(source)) || got.has(getSourceKey(source)));
   const rowSources = [
     ...new Set(lines.flatMap((line) => (line.source ? [line.source] : []))),
   ];
@@ -264,7 +295,7 @@ export function getRowOnList(
   return {
     addLines: isCovered ? lines : newLines,
     matched,
-    isMatchedOpen: matched.some((source) => open.has(source)),
+    isMatchedOpen: matched.some((source) => open.has(getSourceKey(source))),
     isCovered,
   };
 }
@@ -296,11 +327,20 @@ const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC',
 });
 
+const sourceDays = new Map<string, string>();
+
 /** "Thu" for a day in the coming week, else "Oct 23", so a weekday never points at the wrong week. */
-export const formatSourceDay = (dayKey: string, todayKey: string) =>
-  dayKey >= todayKey && dayKey <= addDaysToKey(todayKey, 6)
-    ? weekdayFormatter.format(getDateOfDayKey(dayKey))
-    : formatDayShort(dayKey);
+export const formatSourceDay = (dayKey: string, todayKey: string) => {
+  const key = `${dayKey}|${todayKey}`;
+  const known = sourceDays.get(key);
+  if (known !== undefined) return known;
+  const text =
+    dayKey >= todayKey && dayKey <= addDaysToKey(todayKey, 6)
+      ? weekdayFormatter.format(getDateOfDayKey(dayKey))
+      : formatDayShort(dayKey);
+  sourceDays.set(key, text);
+  return text;
+};
 
 export interface ShoppingSourceLabel {
   name: string;
@@ -310,7 +350,7 @@ export interface ShoppingSourceLabel {
   mealType: MealType | null;
 }
 
-/** The name of every source on the list that still resolves; a planned meal, recipe or saved meal that is gone (or not loaded) is left out. */
+/** The name of every source on the list that still resolves, by its key; a planned meal, recipe or saved meal that is gone (or not loaded) is left out. */
 export function getShoppingSourceLabels(
   items: ShoppingItem[],
   plannedMeals: PlannedMeal[],
@@ -318,7 +358,9 @@ export function getShoppingSourceLabels(
   mealsById: Map<string, Meal>,
   ingredientsById: Map<string, ResolvedIngredient>,
 ): Map<string, ShoppingSourceLabel> {
-  const sources = new Set(items.flatMap((item) => item.sources ?? []));
+  const sources = new Set(
+    items.flatMap((item) => getSourceKeys(item.sources ?? [])),
+  );
   const planned = new Map(
     plannedMeals
       .filter((meal) => sources.has(meal.id))
@@ -357,7 +399,6 @@ export function getShoppingSourceLabels(
   return result;
 }
 
-/** "Thu dinner", "Oct 23 lunch": a planned meal's slot. */
 export const formatSourceSlot = (
   label: Pick<ShoppingSourceLabel, 'dayKey' | 'mealType'>,
   todayKey: string,
@@ -366,7 +407,7 @@ export const formatSourceSlot = (
     ? `${formatSourceDay(label.dayKey, todayKey)} ${MEAL_TYPE_LABELS[label.mealType].toLowerCase()}`
     : '';
 
-/** Per unnamed planned meal of two or more items, the one item that put each ingredient on the list, by title, so a line's sheet says which dish wants it ("Adobo chicken") rather than the plate ("Adobo chicken & 1 more"). An ingredient two items share keeps the plate's name, and a plate the person named keeps it everywhere. */
+/** Per unnamed plate of two or more items, the dish that wants each ingredient, so a line's sheet names the dish rather than the plate; an ingredient two dishes share, and a plate the person named, keep the plate's name. */
 export type PlannedParts = Map<string, Map<string, string>>;
 
 export function getPlannedParts(
@@ -375,7 +416,9 @@ export function getPlannedParts(
   recipesById: Map<string, Recipe>,
   ingredientsById: Map<string, ResolvedIngredient>,
 ): PlannedParts {
-  const sources = new Set(items.flatMap((item) => item.sources ?? []));
+  const sources = new Set(
+    items.flatMap((item) => getSourceKeys(item.sources ?? [])),
+  );
   const result = new Map(
     plannedMeals
       .filter(
@@ -418,13 +461,13 @@ export const compareSourceLabels = (
   getLabelOrder(a.label).localeCompare(getLabelOrder(b.label)) ||
   a.source.localeCompare(b.source);
 
-/** Each found source's name as the list says it, in the list's order: a planned meal by its slot ("Thu dinner", and its dish when two share a slot), a recipe or a saved meal by its own name. */
+/** Each found source's name as the list says it, once per key, in the list's order: a planned meal by its slot ("Thu dinner", and its dish when two share a slot), a recipe or a saved meal by its own name. */
 export function getSourceNames(
   sources: string[],
   labels: Map<string, ShoppingSourceLabel>,
   todayKey: string,
 ): { source: string; name: string }[] {
-  const found = sources
+  const found = getSourceKeys(sources)
     .flatMap((source) => {
       const label = labels.get(source);
       return label
@@ -432,6 +475,7 @@ export function getSourceNames(
             {
               source,
               label,
+              order: getLabelOrder(label),
               name:
                 label.kind === 'planned'
                   ? formatSourceSlot(label, todayKey)
@@ -440,7 +484,10 @@ export function getSourceNames(
           ]
         : [];
     })
-    .sort(compareSourceLabels);
+    .sort(
+      (a, b) =>
+        a.order.localeCompare(b.order) || a.source.localeCompare(b.source),
+    );
   const counts = found.reduce(
     (acc, { name }) => acc.set(name, (acc.get(name) ?? 0) + 1),
     new Map<string, number>(),
@@ -465,7 +512,7 @@ export const joinSourceNames = (names: string[], limit: number) => {
     : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}`;
 };
 
-/** What a line, or the whole list, is for, by name: "Thu dinner and Adobo chicken", three in full, past that two and "and 3 more"; null when nothing behind it still resolves. */
+/** Null when nothing behind the line still resolves. */
 export function getShoppingSourcesText(
   sources: string[],
   labels: Map<string, ShoppingSourceLabel>,
@@ -479,7 +526,7 @@ export function getShoppingSourcesText(
     : joinSourceNames(names, MAX_SOURCE_NAMES_SHOWN);
 }
 
-/** What the whole list is for, soonest first: two meals by name ("Fri dinner and Fri snack", a slot two plates share said once) and how many more, or a third by name when it is the only one left. */
+/** A slot two plates share is said once, and a third meal is named rather than counted when it is the only one left. */
 export function getShoppingMealsText(
   meals: Pick<ShoppingMeal, 'label'>[],
   todayKey: string,
@@ -579,7 +626,7 @@ export function mergeSourcedLines(lines: SourcedLine[]): ListLine[] {
     });
 }
 
-/** An item's sources after an add: the added ones move to the end, and past the cap the oldest are let go. */
+/** Two lists of sources as one: the added ones move to the end, and past the cap the oldest are let go. */
 export function mergeSources(
   existing: readonly string[],
   added: readonly string[],
@@ -589,6 +636,42 @@ export function mergeSources(
     (source) => !fresh.includes(source),
   );
   const result = [...kept, ...fresh].slice(-MAX_SHOPPING_SOURCES);
+  return result;
+}
+
+/** An item's sources after an add, kept in step with its amount: the same recipe added again holds both adds' servings (an older entry that kept none stays beside it), and an item already got, whose amount starts again, keeps only this add's servings. */
+export function addSources(
+  existing: readonly string[],
+  added: readonly string[],
+  isRestart = false,
+): string[] {
+  const fresh = [...new Set(added)];
+  const freshKeys = new Set(fresh.map(getSourceKey));
+  const base = [...new Set(existing)].filter(
+    (source) => !isRestart || !freshKeys.has(getSourceKey(source)),
+  );
+  const merged = fresh.reduce((list, source) => {
+    const { id, key, servings } = parseShoppingSource(source);
+    const earlier =
+      servings === null
+        ? undefined
+        : list.find((other) => {
+            const parsed = parseShoppingSource(other);
+            return parsed.key === key && parsed.servings !== null;
+          });
+    const combined =
+      earlier === undefined || servings === null
+        ? source
+        : getRecipeShoppingSource(
+            id,
+            (parseShoppingSource(earlier).servings ?? 0) + servings,
+          );
+    return [
+      ...list.filter((other) => other !== source && other !== earlier),
+      combined,
+    ];
+  }, base);
+  const result = merged.slice(-MAX_SHOPPING_SOURCES);
   return result;
 }
 
@@ -737,7 +820,9 @@ export function getDayOnList(
   );
   const rows = groupShopLines(lines, ingredientsById);
   const itemsByRow = getItemsByRow(rows, items);
-  const listed = new Set(items.flatMap((item) => item.sources ?? []));
+  const listed = new Set(
+    items.flatMap((item) => getSourceKeys(item.sources ?? [])),
+  );
   const mealIds = [...new Set(lines.flatMap((line) => line.source ?? []))];
 
   return {
@@ -756,15 +841,21 @@ export interface ShoppingSourceContext {
   ingredientsById: Map<string, ResolvedIngredient>;
 }
 
-/** What a source asks of the list now, worked out the way its add was: a planned meal's or a saved meal's items as they are, a recipe at its own servings (the servings an add picked aren't kept). Null when the source no longer resolves. */
+/** What a source asks of the list now, worked out the way its add was: a recipe at the servings its add kept (its own servings for a source that kept none), a planned meal's or a saved meal's items as they are. Null when the source no longer resolves. */
 export function getSourceLines(
   source: string,
   context: ShoppingSourceContext,
 ): ShoppingLine[] | null {
-  const { kind, id } = parseShoppingSource(source);
+  const { kind, id, servings } = parseShoppingSource(source);
   if (kind === 'recipe') {
     const recipe = context.recipesById.get(id);
-    return recipe ? getRecipeLines(recipe, context.ingredientsById) : null;
+    return recipe
+      ? getRecipeLines(
+          recipe,
+          context.ingredientsById,
+          servings ?? recipe.servings,
+        )
+      : null;
   }
   const items =
     kind === 'meal'
@@ -779,17 +870,24 @@ export function getSourceLines(
     : null;
 }
 
-const carries = (item: Pick<ShoppingItem, 'sources'>, source: string) =>
-  (item.sources ?? []).includes(source);
+const isSourceFound = (key: string, context: ShoppingSourceContext) => {
+  const { kind, id } = parseShoppingSource(key);
+  if (kind === 'recipe') return context.recipesById.has(id);
+  return kind === 'meal'
+    ? context.mealsById.has(id)
+    : context.plannedById.has(id);
+};
 
-/** How much of each item carrying `source` its lines account for, in the item's own unit: a line lands on the item of its ingredient and unit, else on one of the same ingredient and kind of unit (an amount the person moved to another unit). A line with no amount, and an item that is just the name, account for nothing. */
+/** A line lands on the item of its unit, else on one of the same ingredient and kind of unit (an amount the person moved to another unit). */
 export function getSourceShares(
   source: string,
   lines: ShoppingLine[],
   items: ShoppingItem[],
 ): Map<string, number> {
   const carrying = items
-    .filter((item) => item.amount !== null && carries(item, source))
+    .filter(
+      (item) => item.amount !== null && (item.sources ?? []).includes(source),
+    )
     .sort((a, b) => a.id.localeCompare(b.id));
   const byId = new Map(carrying.map((item) => [item.id, item]));
   const result = lines.reduce((acc, line) => {
@@ -811,29 +909,49 @@ export function getSourceShares(
   return result;
 }
 
-/** For each item carrying `source`, what its other sources ask of it now, in its own unit; null when one of them no longer resolves, so the rest can't be known. */
+/** Adds up every add of the source an item kept; null when the source no longer resolves. */
+export function getKeyShares(
+  key: string,
+  items: ShoppingItem[],
+  context: ShoppingSourceContext,
+): Map<string, number> | null {
+  if (!isSourceFound(key, context)) return null;
+  const entries = [
+    ...new Set(
+      items.flatMap((item) =>
+        (item.sources ?? []).filter((source) => getSourceKey(source) === key),
+      ),
+    ),
+  ];
+  const result = entries.reduce((acc, entry) => {
+    getSourceShares(entry, getSourceLines(entry, context) ?? [], items).forEach(
+      (amount, id) => acc.set(id, (acc.get(id) ?? 0) + amount),
+    );
+    return acc;
+  }, new Map<string, number>());
+  return result;
+}
+
+/** Null for an item when one of its other sources no longer resolves, so the rest can't be known. */
 export function getOtherShares(
-  source: string,
+  key: string,
   items: ShoppingItem[],
   context: ShoppingSourceContext,
 ): Map<string, number | null> {
-  const carrying = items.filter((item) => carries(item, source));
+  const carrying = items.filter((item) => carriesKey(item, key));
   const others = [
-    ...new Set(carrying.flatMap((item) => item.sources ?? [])),
-  ].filter((other) => other !== source);
-  const sharesBySource = new Map(
-    others.map((other) => {
-      const lines = getSourceLines(other, context);
-      return [other, lines ? getSourceShares(other, lines, items) : null];
-    }),
+    ...new Set(carrying.flatMap((item) => getSourceKeys(item.sources ?? []))),
+  ].filter((other) => other !== key);
+  const sharesByKey = new Map(
+    others.map((other) => [other, getKeyShares(other, items, context)]),
   );
   const result = new Map(
     carrying.map((item) => [
       item.id,
-      (item.sources ?? [])
-        .filter((other) => other !== source)
+      getSourceKeys(item.sources ?? [])
+        .filter((other) => other !== key)
         .reduce<number | null>((sum, other) => {
-          const shares = sharesBySource.get(other);
+          const shares = sharesByKey.get(other);
           return sum === null || !shares
             ? null
             : sum + (shares.get(item.id) ?? 0);
@@ -843,31 +961,32 @@ export function getOtherShares(
   return result;
 }
 
+/** What a stop did to a line that carried the source: `kept` still has another source, `reduced` lost the share with nothing else behind what is left, `left` was asked for nothing and only lost the tag, `got` was already ticked. */
+export type StopOutcome = 'removed' | 'kept' | 'reduced' | 'left' | 'got';
+
 export interface StopEntry {
   id: string;
   /** The item as read; null for one this creates. */
   before: ShoppingItem | null;
   /** What it becomes; null deletes it. */
   after: ShoppingItem | null;
+  /** Null for a name-only line that only took in another line's sources. */
+  outcome: StopOutcome | null;
 }
 
 export interface StopPlan {
   entries: StopEntry[];
-  /** Things to buy that came off the list. */
-  removedCount: number;
-  /** Things to buy that stay, smaller or as they were, because something else also wants them. */
-  keptCount: number;
-  /** Things already got, which only lose the tag. */
-  gotCount: number;
 }
 
-/** The `EACH` item a line that is just the name lives on. */
 export const getNameOnlyItemId = (ingredientId: string) =>
   getShoppingItemId(ingredientId, 'EACH');
 
-/** Takes one source's share off the list. A got item only loses the tag; one to buy loses the share, and goes once nothing is left of it (an amount that reaches zero, or a name-only line nothing else wants). When the share runs past what is left (the meal grew, or the person lowered the amount) and something else wants the item, it keeps that one's share, never more than it had, or becomes just the name; something the person added on the list (no sources) never carries the tag, so it is never touched. `read` holds every item carrying the source and the name-only item of each ingredient, as read. */
+// Each add and each share is rounded to hundredths, so a line taken off in full can leave this much behind.
+const SHARE_SLACK = 0.02;
+
+/** What is left with no other source behind it stays, untagged, since it may be what the person typed. When the share runs past what is left and something else wants the item, it keeps that one's share, never more than it had, or becomes just the name. `read` holds every item carrying the source and each ingredient's name-only item. */
 export function planStopShopping(
-  source: string,
+  key: string,
   read: ShoppingItem[],
   shares: Map<string, number>,
   otherShares: Map<string, number | null>,
@@ -875,96 +994,134 @@ export function planStopShopping(
 ): StopPlan {
   const readById = new Map(read.map((item) => [item.id, item]));
   const carrying = read
-    .filter((item) => carries(item, source))
+    .filter((item) => carriesKey(item, key))
     .sort(
       (a, b) =>
         Number(b.unit === 'EACH') - Number(a.unit === 'EACH') ||
         a.id.localeCompare(b.id),
     );
-
-  const initial = {
-    planned: new Map<string, ShoppingItem | null>(),
-    removedCount: 0,
-    keptCount: 0,
-    gotCount: 0,
-  };
-  type Step = typeof initial;
-  const current = (step: Step, id: string) =>
-    step.planned.has(id)
-      ? (step.planned.get(id) ?? null)
+  type Planned = Map<string, StopEntry>;
+  const current = (planned: Planned, id: string) =>
+    planned.has(id)
+      ? (planned.get(id)?.after ?? null)
       : (readById.get(id) ?? null);
-
-  const final = carrying.reduce((step, entry): Step => {
-    const item = current(step, entry.id) ?? entry;
-    const sources = (item.sources ?? []).filter((other) => other !== source);
-    const write = (
-      id: string,
-      after: ShoppingItem | null,
-      counted: 'removedCount' | 'keptCount' | 'gotCount',
-    ) => ({
-      ...step,
-      planned: new Map(step.planned).set(id, after),
-      [counted]: step[counted] + 1,
-    });
-    const keep = (amount: number | null) =>
-      write(
-        item.id,
-        { ...item, amount, sources, updatedAt: now },
-        item.isChecked ? 'gotCount' : 'keptCount',
-      );
-
-    if (item.isChecked) return keep(item.amount);
-    if (item.amount === null) {
-      return sources.length === 0
-        ? write(item.id, null, 'removedCount')
-        : keep(null);
-    }
-    const rest = roundAmount(item.amount - (shares.get(item.id) ?? 0));
-    if (rest > 0) return keep(rest);
-    if (sources.length === 0) return write(item.id, null, 'removedCount');
-    const other = otherShares.get(item.id);
-    if (other === undefined || other === null) return keep(item.amount);
-    const otherAmount = roundAmount(other);
-    if (otherAmount > 0) return keep(Math.min(item.amount, otherAmount));
-    if (item.unit === 'EACH') return keep(null);
-
-    const twinId = getNameOnlyItemId(item.ingredientId);
-    const twin = current(step, twinId);
-    const removed = write(item.id, null, 'keptCount');
-    return {
-      ...removed,
-      planned: new Map(removed.planned).set(
-        twinId,
-        twin
-          ? {
-              ...twin,
-              sources: mergeSources(twin.sources ?? [], sources),
-              updatedAt: now,
-            }
-          : {
-              id: twinId,
-              ingredientId: item.ingredientId,
-              amount: null,
-              unit: 'EACH',
-              isChecked: false,
-              sources: mergeSources([], sources),
-              createdAt: readById.get(twinId)?.createdAt ?? now,
-              updatedAt: now,
-            },
-      ),
-    };
-  }, initial);
-
-  const result: StopPlan = {
-    entries: [...final.planned.entries()].map(([id, after]) => ({
+  const write = (
+    planned: Planned,
+    id: string,
+    after: ShoppingItem | null,
+    outcome: StopOutcome | null,
+  ) =>
+    new Map(planned).set(id, {
       id,
       before: readById.get(id) ?? null,
       after,
-    })),
-    removedCount: final.removedCount,
-    keptCount: final.keptCount,
-    gotCount: final.gotCount,
-  };
+      outcome: outcome ?? planned.get(id)?.outcome ?? null,
+    });
+
+  const final = carrying.reduce((planned, entry): Planned => {
+    const item = current(planned, entry.id) ?? entry;
+    const sources = (item.sources ?? []).filter(
+      (other) => getSourceKey(other) !== key,
+    );
+    const keep = (amount: number | null, outcome: StopOutcome) =>
+      write(
+        planned,
+        item.id,
+        { ...item, amount, sources, updatedAt: now },
+        outcome,
+      );
+    const keepOpen = (amount: number, isLower: boolean) =>
+      keep(amount, sources.length > 0 ? 'kept' : isLower ? 'reduced' : 'left');
+
+    if (item.isChecked) return keep(item.amount, 'got');
+    if (item.amount === null) {
+      return sources.length === 0
+        ? write(planned, item.id, null, 'removed')
+        : keep(null, 'kept');
+    }
+    const share = shares.get(item.id) ?? 0;
+    const rest = roundAmount(item.amount - share);
+    if (share === 0) return keepOpen(item.amount, false);
+    if (rest > SHARE_SLACK) return keepOpen(rest, true);
+    if (sources.length === 0) return write(planned, item.id, null, 'removed');
+    const other = otherShares.get(item.id);
+    if (other === undefined || other === null) {
+      return keep(item.amount, 'kept');
+    }
+    const otherAmount = roundAmount(other);
+    if (otherAmount > 0) {
+      return keep(Math.min(item.amount, otherAmount), 'kept');
+    }
+    if (item.unit === 'EACH') return keep(null, 'kept');
+
+    const twinId = getNameOnlyItemId(item.ingredientId);
+    const twin = current(planned, twinId);
+    return write(
+      write(planned, item.id, null, 'kept'),
+      twinId,
+      twin
+        ? {
+            ...twin,
+            sources: mergeSources(twin.sources ?? [], sources),
+            updatedAt: now,
+          }
+        : {
+            id: twinId,
+            ingredientId: item.ingredientId,
+            amount: null,
+            unit: 'EACH',
+            isChecked: false,
+            sources: mergeSources([], sources),
+            createdAt: readById.get(twinId)?.createdAt ?? now,
+            updatedAt: now,
+          },
+      null,
+    );
+  }, new Map<string, StopEntry>());
+
+  const result: StopPlan = { entries: [...final.values()] };
+  return result;
+}
+
+export interface StopRowCounts {
+  removed: number;
+  kept: number;
+  reduced: number;
+  left: number;
+}
+
+/** A row came off only when every line in it is gone; a got line only loses its tag, so it isn't counted. */
+export function countStopRows(
+  entries: StopEntry[],
+  items: ShoppingItem[],
+): StopRowCounts {
+  const open = items.filter((item) => !item.isChecked);
+  const rowIds = getItemRowIds(open);
+  const outcomes = new Map(
+    entries.flatMap((entry) =>
+      entry.outcome && entry.outcome !== 'got'
+        ? [[entry.id, entry.outcome] as const]
+        : [],
+    ),
+  );
+  const rows = [
+    ...groupByRow(open, (item) => rowIds.get(item.id) ?? '').values(),
+  ].filter((rowItems) => rowItems.some((item) => outcomes.has(item.id)));
+  const result = rows.reduce(
+    (counts, rowItems) => {
+      const kinds = rowItems.map((item) => outcomes.get(item.id));
+      const getKind = (): keyof StopRowCounts => {
+        if (kinds.every((kind) => kind === 'removed')) return 'removed';
+        if (kinds.includes('kept')) return 'kept';
+        return kinds.some((kind) => kind === 'removed' || kind === 'reduced')
+          ? 'reduced'
+          : 'left';
+      };
+      const kind = getKind();
+      return { ...counts, [kind]: counts[kind] + 1 };
+    },
+    { removed: 0, kept: 0, reduced: 0, left: 0 },
+  );
   return result;
 }
 
@@ -977,7 +1134,34 @@ export interface RowSourceShare {
   amount: ShopAmount | null;
 }
 
-/** Every source behind a row that still resolves, named as the row names it, with what each asks of the row now (`getSourceShares`, so the same share a stop would take off). */
+const getLeadUnit = (parts: ShopAmount[]) =>
+  parts.reduce((best, part) =>
+    part.amount * UNIT_TO_BASE[part.unit] >
+    best.amount * UNIT_TO_BASE[best.unit]
+      ? part
+      : best,
+  ).unit;
+
+// Largest remainder, so the rounded shares add up to the row's amount.
+const roundToTotal = (values: number[], step: number, target: number) => {
+  const units = values.map((value) => value / step);
+  const floors = units.map((unit) => Math.floor(unit + 1e-6));
+  const owed =
+    Math.round(target / step) - floors.reduce((sum, floor) => sum + floor, 0);
+  const raised = new Set(
+    units
+      .map((unit, index) => ({ index, remainder: unit - floors[index] }))
+      .sort((a, b) => b.remainder - a.remainder || a.index - b.index)
+      .slice(0, Math.max(0, owed))
+      .map(({ index }) => index),
+  );
+  const result = floors.map((floor, index) =>
+    roundAmount((floor + (raised.has(index) ? 1 : 0)) * step),
+  );
+  return result;
+};
+
+/** The same share a stop would take off. When every share is in the row's unit they are rounded to add up to the row's amount; otherwise each keeps its own unit. */
 export function getRowSourceShares(
   rowItems: ShoppingItem[],
   items: ShoppingItem[],
@@ -986,32 +1170,62 @@ export function getRowSourceShares(
   todayKey: string,
   parts: PlannedParts,
 ): RowSourceShare[] {
-  const sources = [...new Set(rowItems.flatMap((item) => item.sources ?? []))];
   const ingredientId = rowItems[0]?.ingredientId ?? '';
-  const result = getSourceNames(sources, labels, todayKey).map(
-    ({ source, name }) => {
-      const label = labels.get(source);
-      const lines = getSourceLines(source, context);
-      const shares = lines
-        ? getSourceShares(source, lines, items)
-        : new Map<string, number>();
-      const amount = sumShopAmounts(
-        rowItems.flatMap((item) => {
-          const share = shares.get(item.id);
-          return share ? [{ amount: share, unit: item.unit }] : [];
-        }),
-      );
-      return {
-        source,
-        name,
-        dish:
-          label?.kind === 'planned'
-            ? (parts.get(source)?.get(ingredientId) ?? label.name)
-            : null,
-        amount: amount && amount.amount > 0 ? amount : null,
-      };
-    },
-  );
+  const named = getSourceNames(
+    rowItems.flatMap((item) => item.sources ?? []),
+    labels,
+    todayKey,
+  ).map(({ source, name }) => {
+    const shares = getKeyShares(source, items, context);
+    const amounts = rowItems.flatMap((item) => {
+      const share = shares?.get(item.id);
+      return share ? [{ amount: share, unit: item.unit }] : [];
+    });
+    return { source, name, amounts };
+  });
+  const rowUnit = sumShopAmounts(rowItems)?.unit ?? null;
+  const shared = named.filter(({ amounts }) => amounts.length > 0);
+  const isOneUnit =
+    rowUnit !== null &&
+    shared.every(({ amounts }) => getLeadUnit(amounts) === rowUnit);
+  const getRounded = (unit: Unit) => {
+    const values = shared.map(({ amounts }) =>
+      amounts.reduce(
+        (sum, part) =>
+          sum + (part.amount * UNIT_TO_BASE[part.unit]) / UNIT_TO_BASE[unit],
+        0,
+      ),
+    );
+    const isCount = UNIT_DIMENSION[unit] === 'COUNT';
+    const total = roundAmount(values.reduce((sum, value) => sum + value, 0));
+    const rounded = roundToTotal(
+      values,
+      isCount ? 1 : 0.01,
+      isCount ? Math.ceil(total) : total,
+    );
+    return new Map(
+      shared.map(({ source }, index) => [source, rounded[index]] as const),
+    );
+  };
+  const rounded = isOneUnit && rowUnit ? getRounded(rowUnit) : null;
+
+  const result = named.map(({ source, name, amounts }) => {
+    const label = labels.get(source);
+    const share = rounded?.get(source);
+    const amount =
+      rowUnit && share !== undefined
+        ? { amount: share, unit: rowUnit }
+        : sumShopAmounts(amounts);
+    return {
+      source,
+      name,
+      dish:
+        label?.kind === 'planned'
+          ? (parts.get(source)?.get(ingredientId) ?? label.name)
+          : null,
+      amount: amount && amount.amount > 0 ? amount : null,
+    };
+  });
   return result;
 }
 
@@ -1023,6 +1237,7 @@ export const isAsStopLeft = (
   after === null ? current === null : current?.updatedAt === after.updatedAt;
 
 export interface ShoppingMeal {
+  /** The source's key, so a recipe added twice is one meal. */
   source: string;
   label: ShoppingSourceLabel;
   /** Rows of the list it put something on, drawn the way the list draws them, and how many of those are still to buy. */
@@ -1034,7 +1249,7 @@ export interface ShoppingMeal {
 const getRowsBySource = (side: ShoppingItem[]) => {
   const rowIds = getItemRowIds(side);
   return side.reduce((acc, item) => {
-    (item.sources ?? []).forEach((source) =>
+    getSourceKeys(item.sources ?? []).forEach((source) =>
       acc.set(
         source,
         (acc.get(source) ?? new Set<string>()).add(rowIds.get(item.id) ?? ''),
@@ -1044,7 +1259,6 @@ const getRowsBySource = (side: ShoppingItem[]) => {
   }, new Map<string, Set<string>>());
 };
 
-/** What the list is for: every source behind it that still resolves, planned meals by day (the ones that have passed first) and meal, then recipes and saved meals by name. */
 export function getShoppingMeals(
   items: ShoppingItem[],
   labels: Map<string, ShoppingSourceLabel>,
@@ -1217,7 +1431,7 @@ export function groupShoppingItems(
         name: ingredient?.name ?? 'Removed ingredient',
         amountText: formatShopAmount(getShopAmount(rowItems, section)),
         isChecked: byBase[0].isChecked,
-        sources: [...new Set(byBase.flatMap((item) => item.sources ?? []))],
+        sources: getSourceKeys(byBase.flatMap((item) => item.sources ?? [])),
       };
       return { row, section };
     });

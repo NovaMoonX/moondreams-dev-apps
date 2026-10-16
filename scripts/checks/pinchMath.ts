@@ -256,6 +256,7 @@ import {
   getSourcedLines as srcSourcedLines,
   mergeSourcedLines as srcMergeLines,
   mergeSources as srcMergeSources,
+  type SourcedLine,
 } from '../../src/apps/pinch/utils/shopping.ts';
 import { MAX_SHOPPING_SOURCES as SRC_MAX } from '../../src/apps/pinch/constants.ts';
 import {
@@ -6376,11 +6377,31 @@ assert.deepEqual(
     srcParse('seed-pinch-planned-4'),
   ],
   [
-    { kind: 'recipe', id: 'abc' },
-    { kind: 'meal', id: 'xyz' },
-    { kind: 'planned', id: 'seed-pinch-planned-4' },
+    { kind: 'recipe', id: 'abc', key: 'recipe:abc', servings: null },
+    { kind: 'meal', id: 'xyz', key: 'meal:xyz', servings: null },
+    {
+      kind: 'planned',
+      id: 'seed-pinch-planned-4',
+      key: 'seed-pinch-planned-4',
+      servings: null,
+    },
   ],
-  'a source names a recipe, a saved meal, or a planned meal by its own id',
+  'a source names a recipe, a saved meal, or a planned meal by its own id; a recipe source written before servings were kept has none',
+);
+assert.deepEqual(
+  [
+    srcParse('recipe:abc:8'),
+    srcParse('recipe:abc:2.5'),
+    srcParse('recipe:abc:'),
+    srcParse('recipe:abc:0'),
+  ].map(({ id, key, servings }) => [id, key, servings]),
+  [
+    ['abc', 'recipe:abc', 8],
+    ['abc', 'recipe:abc', 2.5],
+    ['abc:', 'recipe:abc:', null],
+    ['abc:0', 'recipe:abc:0', null],
+  ],
+  'a recipe source keeps the servings its add picked (half servings too) under the same key as the recipe; a tail that is not a positive number is part of the id',
 );
 
 const srcPlanned = (id: string, items: MealItem[]) =>
@@ -7722,7 +7743,7 @@ assert.equal(
       id,
       after ? [after.amount, after.sources, after.isChecked] : null,
     ]),
-    counts: [result.removedCount, result.keptCount, result.gotCount],
+    outcomes: result.entries.map(({ outcome }) => outcome),
   });
 
   assert.deepEqual(
@@ -7754,9 +7775,9 @@ assert.equal(
         ['milk__L', [0.5, [], false]],
         ['rice__CUP', [2, ['O'], false]],
       ],
-      counts: [2, 3, 1],
+      outcomes: ['got', 'kept', 'removed', 'removed', 'reduced', 'kept'],
     },
-    'stopping a meal deletes what was only for it, keeps another meal’s share of a shared line, leaves a got line ticked without the tag, deletes a name-only line nothing else wants and keeps what the person typed on top (milk 0.5 L, untagged)',
+    'stopping a meal deletes what was only for it, keeps another meal’s share of a shared line, leaves a got line ticked without the tag, deletes a name-only line nothing else wants and keeps what the person typed on top (milk 0.5 L, untagged, "reduced": nothing else needs it)',
   );
   assert.equal(
     summary(plan([item('bread', 'EACH', 1, [])], [], [])).entries.length,
@@ -7815,7 +7836,7 @@ assert.equal(
           ['salt__TSP', null],
           ['salt__EACH', [null, ['O'], false]],
         ],
-        counts: [0, 1, 0],
+        outcomes: ['kept', null],
       },
       [
         ['salt__TSP', null],
@@ -7911,6 +7932,379 @@ assert.equal(
       ['recipe:rice-pot', 0, 1, false],
     ],
     'what the list is for runs by day and meal (the days that have passed first), then recipes and saved meals; a meal counts the rows the list draws (two units of chicken are one row) and a gone source is left out',
+  );
+}
+
+// A recipe on the shopping list keeps the servings its add picked, so taking it off takes off exactly what it added
+{
+  const {
+    addSources,
+    countStopRows,
+    getKeyShares,
+    getOtherShares,
+    getRecipeShoppingSource,
+    getRowOnList,
+    getShoppingMeals,
+    getShoppingSourceLabels,
+    getSourceLines,
+    getSourceNames,
+    getRowSourceShares,
+    mergeSourcedLines,
+    planStopShopping,
+  } = await import('../../src/apps/pinch/utils/shopping.ts');
+  const adobo = {
+    id: 'adobo',
+    title: 'Adobo chicken',
+    servings: 4,
+    ingredients: [
+      { id: 'a1', ingredientId: 'thigh', amount: 2, unit: 'LB', note: null },
+      { id: 'a2', ingredientId: 'soy', amount: 0.25, unit: 'CUP', note: null },
+      { id: 'a3', ingredientId: 'soy', amount: 2, unit: 'TBSP', note: null },
+      {
+        id: 'a4',
+        ingredientId: 'salt',
+        amount: null,
+        unit: 'EACH',
+        note: 'to taste',
+      },
+    ],
+  } as unknown as Recipe;
+  const ingredients = new Map(
+    ['thigh', 'soy', 'salt', 'cilantro', 'garlic'].map((id) => [
+      id,
+      { id, name: id, familyId: null, serving: { amount: 0.25, unit: 'CUP' } },
+    ]),
+  ) as unknown as Map<string, ResolvedIngredient>;
+  const planned = (id: string, refId: string, servings: number) =>
+    ({
+      id,
+      date: Date.parse('2026-10-16T00:00:00Z'),
+      mealType: 'DINNER',
+      name: null,
+      items: [{ id: `${id}-i`, kind: 'INGREDIENT', refId, servings }],
+    }) as unknown as ShopPlannedMeal;
+  const plan = [
+    planned('p1', 'cilantro', 0.5),
+    planned('p2', 'cilantro', 0.5),
+    planned('thu', 'soy', 1),
+  ];
+  const context = {
+    plannedById: new Map(plan.map((meal) => [meal.id, meal])),
+    mealsById: new Map() as Map<string, SrcMeal>,
+    recipesById: new Map([['adobo', adobo]]),
+    ingredientsById: ingredients,
+  };
+  const recipeAdd = (servings: number) =>
+    getRecipeLines(adobo, ingredients, servings).map((line) => ({
+      ...line,
+      source: getRecipeShoppingSource('adobo', servings),
+    }));
+  const typed = (ingredientId: string, unit: Unit, amount: number) => [
+    { ingredientId, unit, amount, source: null },
+  ];
+  type List = Map<string, ShoppingItem>;
+  const add = (list: List, lines: SourcedLine[]): List =>
+    mergeSourcedLines(lines).reduce((next, line) => {
+      const id = getShoppingItemId(line.ingredientId, line.unit);
+      const existing = next.get(id) ?? null;
+      const fields = getMergedFields(existing, line, 1);
+      return new Map(next).set(id, {
+        id,
+        ingredientId: line.ingredientId,
+        unit: line.unit,
+        createdAt: existing?.createdAt ?? 1,
+        ...fields,
+        sources: addSources(
+          existing?.sources ?? [],
+          line.sources,
+          existing?.isChecked ?? false,
+        ),
+      });
+    }, list);
+  const stop = (list: List, key: string) => {
+    const items = [...list.values()];
+    const result = planStopShopping(
+      key,
+      items,
+      getKeyShares(key, items, context) ?? new Map(),
+      getOtherShares(key, items, context),
+      2,
+    );
+    const after = result.entries.reduce(
+      (next, { id, after: written }) =>
+        written
+          ? new Map(next).set(id, written)
+          : new Map([...next].filter(([known]) => known !== id)),
+      list,
+    );
+    return {
+      after,
+      rows: countStopRows(result.entries, items),
+      outcomes: result.entries.map(({ outcome }) => outcome),
+    };
+  };
+  const show = (list: List) =>
+    [...list.values()]
+      .map((item) => [item.id, item.amount, item.sources])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  const empty: List = new Map();
+
+  assert.deepEqual(
+    [
+      addSources([], ['recipe:adobo:8']),
+      addSources(['recipe:adobo:4'], ['recipe:adobo:8']),
+      addSources(['recipe:adobo:4'], ['recipe:adobo:4']),
+      addSources(['recipe:adobo', 'thu'], ['recipe:adobo:6']),
+      addSources(
+        ['recipe:adobo:4', 'recipe:adobo', 'thu'],
+        ['recipe:adobo:2'],
+        true,
+      ),
+      addSources(['thu', 'fri'], ['thu']),
+    ],
+    [
+      ['recipe:adobo:8'],
+      ['recipe:adobo:12'],
+      ['recipe:adobo:8'],
+      ['recipe:adobo', 'thu', 'recipe:adobo:6'],
+      ['thu', 'recipe:adobo:2'],
+      ['fri', 'thu'],
+    ],
+    'an add keeps a recipe’s servings in step with the amount: 4 then 8 servings hold 12, the same 4 twice hold 8, an older entry with no servings stays beside a new one, a got line that starts again keeps only the new add, and a meal is still kept once',
+  );
+  assert.deepEqual(
+    [
+      getSourceLines('recipe:adobo:8', context)?.find(
+        (line) => line.ingredientId === 'thigh',
+      )?.amount,
+      getSourceLines('recipe:adobo', context)?.find(
+        (line) => line.ingredientId === 'thigh',
+      )?.amount,
+    ],
+    [4, 2],
+    'a recipe source is worked out at the servings its add kept, and an older one at the recipe’s own',
+  );
+
+  const stepper = stop(add(empty, recipeAdd(8)), 'recipe:adobo');
+  assert.deepEqual(
+    [
+      show(stepper.after),
+      stepper.rows,
+      stepper.outcomes.every((outcome) => outcome === 'removed'),
+    ],
+    [[], { removed: 3, kept: 0, reduced: 0, left: 0 }, true],
+    'a recipe added at 8 servings from the stepper (it serves 4) comes off whole: thigh, soy sauce (one row for a cup and two tbsp) and salt, three rows',
+  );
+
+  const legacy: List = new Map(
+    [
+      ['thigh', 'LB', 2],
+      ['soy', 'CUP', 0.25],
+      ['soy', 'TBSP', 2],
+    ].map(([ingredientId, unit, amount]) => {
+      const id = getShoppingItemId(ingredientId as string, unit as Unit);
+      return [
+        id,
+        {
+          id,
+          ingredientId,
+          unit,
+          amount,
+          isChecked: false,
+          sources: ['recipe:adobo'],
+          createdAt: 1,
+          updatedAt: 1,
+        } as ShoppingItem,
+      ];
+    }),
+  );
+  const onTop = add(legacy, recipeAdd(6));
+  const repro = stop(onTop, 'recipe:adobo');
+  assert.deepEqual(
+    [
+      show(onTop).find(([id]) => id === 'thigh__LB'),
+      show(repro.after),
+      repro.rows,
+    ],
+    [
+      ['thigh__LB', 5, ['recipe:adobo', 'recipe:adobo:6']],
+      [],
+      { removed: 3, kept: 0, reduced: 0, left: 0 },
+    ],
+    'the reviewer’s case: a list from before servings were kept (Adobo at its own 4) plus an add at 6 comes off whole, with nothing left untagged',
+  );
+
+  const twice = add(add(empty, recipeAdd(4)), recipeAdd(8));
+  const twiceStopped = stop(twice, 'recipe:adobo');
+  assert.deepEqual(
+    [show(twice).find(([id]) => id === 'thigh__LB'), show(twiceStopped.after)],
+    [['thigh__LB', 6, ['recipe:adobo:12']], []],
+    'two adds of one recipe at different servings (4, then 8) hold 12 servings and come off together',
+  );
+
+  const withTyped = add(add(empty, typed('soy', 'CUP', 1)), recipeAdd(4));
+  const typedStopped = stop(withTyped, 'recipe:adobo');
+  assert.deepEqual(
+    [show(typedStopped.after), typedStopped.rows],
+    [[['soy__CUP', 1, []]], { removed: 2, kept: 0, reduced: 1, left: 0 }],
+    'what the person typed stays when the recipe comes off, untagged, and the soy sauce row is said to have gone down, not to be needed by something else',
+  );
+
+  const shared = add(add(empty, recipeAdd(4)), [
+    { ingredientId: 'soy', unit: 'TBSP', amount: 2, source: 'thu' },
+  ]);
+  const sharedStopped = stop(shared, 'recipe:adobo');
+  assert.deepEqual(
+    [show(sharedStopped.after), sharedStopped.rows],
+    [[['soy__TBSP', 2, ['thu']]], { removed: 2, kept: 1, reduced: 0, left: 0 }],
+    'a line that still has another source is the only one said to be needed by something else',
+  );
+
+  const roundingLine = (amount: number) =>
+    planStopShopping(
+      'S',
+      [
+        {
+          id: 'x__CUP',
+          ingredientId: 'x',
+          unit: 'CUP',
+          amount,
+          isChecked: false,
+          sources: ['S'],
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      new Map([['x__CUP', 2]]),
+      new Map(),
+      2,
+    ).entries.map(({ after, outcome }) => [after?.amount ?? null, outcome]);
+  assert.deepEqual(
+    [roundingLine(2.02), roundingLine(2.05)],
+    [[[null, 'removed']], [[0.05, 'reduced']]],
+    'a hundredth or two left by rounding the adds is nothing, while more than that stays',
+  );
+
+  const keyed = [
+    {
+      id: 'thigh__LB',
+      ingredientId: 'thigh',
+      unit: 'LB',
+      amount: 2,
+      isChecked: false,
+      sources: ['recipe:adobo:4'],
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    {
+      id: 'soy__CUP',
+      ingredientId: 'soy',
+      unit: 'CUP',
+      amount: 0.75,
+      isChecked: true,
+      sources: ['recipe:adobo', 'recipe:adobo:8'],
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ] as ShoppingItem[];
+  const keyedLabels = getShoppingSourceLabels(
+    keyed,
+    plan,
+    context.recipesById,
+    new Map(),
+    ingredients,
+  );
+  assert.deepEqual(
+    [
+      [...keyedLabels.keys()],
+      getShoppingMeals(keyed, keyedLabels, '2026-10-16').map(
+        ({ source, rowCount }) => [source, rowCount],
+      ),
+      getSourceNames(
+        ['recipe:adobo:4', 'recipe:adobo', 'recipe:adobo:8'],
+        keyedLabels,
+        '2026-10-16',
+      ),
+      getRowOnList(
+        recipeAdd(8).filter((line) => line.ingredientId === 'thigh'),
+        [keyed[0]],
+      ).isCovered,
+    ],
+    [
+      ['recipe:adobo'],
+      [['recipe:adobo', 2]],
+      [{ source: 'recipe:adobo', name: 'Adobo chicken' }],
+      true,
+    ],
+    'one recipe added at different servings is one meal on the list, named once, and a second add sees it already there',
+  );
+
+  const cilantro = {
+    id: 'cilantro__CUP',
+    ingredientId: 'cilantro',
+    unit: 'CUP',
+    amount: 0.25,
+    isChecked: false,
+    sources: ['p1', 'p2'],
+    createdAt: 1,
+    updatedAt: 1,
+  } as ShoppingItem;
+  const cilantroLabels = getShoppingSourceLabels(
+    [cilantro],
+    plan,
+    context.recipesById,
+    new Map(),
+    ingredients,
+  );
+  const rowShares = (row: ShoppingItem[]) =>
+    getRowSourceShares(
+      row,
+      row,
+      getShoppingSourceLabels(
+        row,
+        plan,
+        context.recipesById,
+        new Map(),
+        ingredients,
+      ),
+      context,
+      '2026-10-15',
+      new Map(),
+    ).map(({ amount }) => amount && [amount.amount, amount.unit]);
+  const garlic = (id: string) => planned(id, 'garlic', 3);
+  context.plannedById.set('g1', garlic('g1'));
+  context.plannedById.set('g2', garlic('g2'));
+  plan.push(garlic('g1'), garlic('g2'));
+  ingredients.set('garlic', {
+    id: 'garlic',
+    name: 'garlic',
+    familyId: null,
+    serving: { amount: 0.25, unit: 'EACH' },
+  } as unknown as ResolvedIngredient);
+  const garlicItem = {
+    id: 'garlic__EACH',
+    ingredientId: 'garlic',
+    unit: 'EACH',
+    amount: 1.5,
+    isChecked: false,
+    sources: ['g1', 'g2'],
+    createdAt: 1,
+    updatedAt: 1,
+  } as ShoppingItem;
+  assert.deepEqual(
+    [cilantroLabels.size, rowShares([cilantro]), rowShares([garlicItem])],
+    [
+      2,
+      [
+        [0.13, 'CUP'],
+        [0.12, 'CUP'],
+      ],
+      [
+        [1, 'EACH'],
+        [1, 'EACH'],
+      ],
+    ],
+    'a row’s shares add up to its amount: two halves of 0.25 cup read 0.13 and 0.12, and two 0.75 counts read 1 and 1 under the 2 to pick up',
   );
 }
 
