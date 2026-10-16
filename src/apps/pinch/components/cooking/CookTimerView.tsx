@@ -304,11 +304,13 @@ function CookTimerView({
                   key={`ready-${slot.label}`}
                   className='flex min-h-14 items-center gap-3 pr-2 pl-4 [@media(max-height:640px)]:min-h-12'
                 >
-                  <span className='min-w-0 flex-1 truncate text-sm font-medium'>
-                    {timer.stepName} · {slot.label}
-                  </span>
-                  <span className='text-muted-foreground shrink-0 text-lg font-semibold whitespace-nowrap tabular-nums'>
-                    {formatClock(slot.seconds * 1000)}
+                  <span className='min-w-0 flex-1'>
+                    <span className='block truncate text-sm font-medium'>
+                      {slot.label}
+                    </span>
+                    <span className='text-muted-foreground block truncate text-xs'>
+                      Also in this step
+                    </span>
                   </span>
                   <Button
                     type='button'
