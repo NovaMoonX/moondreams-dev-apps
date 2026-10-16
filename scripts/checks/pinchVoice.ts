@@ -8,9 +8,11 @@ import {
   parseCookCommand,
   pickTimersToTell,
   pickVoiceTimer,
+  readCookCommand,
   readSpokenDuration,
   toSingular,
   toSpokenAmount,
+  toSpokenLabel,
   type CookCommand,
   type CookVoiceContext,
 } from '../../src/apps/pinch/utils/cookVoice.ts';
@@ -31,6 +33,10 @@ const plate: CookVoiceContext = {
     { id: 'bay', names: ['Bay leaf'], isInStep: false },
     { id: 'tomato', names: ['Tomato'], isInStep: false },
     { id: 'jalapeno', names: ['Jalapeño'], isInStep: false },
+    { id: 'rice-line', names: ['Jasmine rice'], isInStep: false },
+    { id: 'vinegar', names: ['White vinegar'], isInStep: false },
+    { id: 'coconut', names: ['Coconut milk'], isInStep: false },
+    { id: 'tartar', names: ['Cream of tartar'], isInStep: false },
   ],
 };
 
@@ -71,44 +77,28 @@ expectKind(
     'OK, next!',
     'hey pinch next',
     'next please',
-    'continue',
-    'go on',
-    'move on',
-    'keep going',
+    'go to the next step',
   ],
   { kind: 'NEXT' },
   'every way to say next is next',
 );
 expectKind(
-  ['back', 'go back', 'previous', 'previous step', 'step back', 'Back one.'],
+  ['back', 'go back', 'previous', 'previous step', 'Back one.'],
   { kind: 'BACK' },
   'every way to say back is back',
 );
 expectKind(
-  [
-    'repeat',
-    'repeat that',
-    'read it',
-    'read the step',
-    'say that again',
-    'again',
-    'come again',
-  ],
+  ['repeat', 'repeat that', 'read it', 'read the step', 'read it again'],
   { kind: 'REPEAT' },
   'every way to ask again reads the step',
 );
 expectKind(
-  [
-    'ingredients',
-    'show ingredients',
-    'show me the ingredients',
-    'what do I need',
-  ],
+  ['ingredients', 'show ingredients', 'show me the ingredients'],
   { kind: 'SHOW_INGREDIENTS' },
   'asking for the ingredients shows them',
 );
 expectKind(
-  ['steps', 'show steps', 'back to the steps', 'instructions'],
+  ['steps', 'show steps', 'back to the steps'],
   { kind: 'SHOW_STEPS' },
   'asking for the steps shows them',
 );
@@ -127,12 +117,10 @@ expectKind(
   [
     'how much time is left',
     'how much time left',
-    'how much longer',
-    'how long',
     'time left',
     'how long is left on the timer',
     'how much time is left on the ten minute timer',
-    "what's left",
+    "what's the timer at",
   ],
   { kind: 'TIME_LEFT' },
   'asking how long is the time-left question',
@@ -180,14 +168,7 @@ expectKind(
   'resume resumes the timer',
 );
 expectKind(
-  [
-    'stop',
-    'dismiss',
-    'silence',
-    'quiet',
-    'stop the alarm',
-    'silence the alarm',
-  ],
+  ['stop', 'dismiss', 'silence', 'stop the alarm', 'silence the alarm'],
   { kind: 'STOP_TIMER', seconds: null, scope: 'RINGING' },
   'a bare stop or the alarm only silences a ringing timer',
 );
@@ -240,6 +221,35 @@ assert.deepEqual(
   'okay',
   'pinch',
   'hey',
+  'go on',
+  'keep going',
+  'continue',
+  'forward',
+  'move on',
+  'again',
+  'come again',
+  'what was that',
+  'say that again',
+  'method',
+  'instructions',
+  'what do I need',
+  'how long',
+  'how much longer',
+  "what's left",
+  'the other dish',
+  'quiet',
+  'mute',
+  'step back',
+  'cook the chicken',
+  'do the chicken',
+  'cook rice',
+  'do rice',
+  'open rice',
+  'skip to rice',
+  'jump to rice',
+  'move to rice',
+  'change to rice',
+  'show rice',
   '',
   'next next next next next next next next next next next next next next next next next next next next',
 ].forEach((phrase) =>
@@ -348,7 +358,12 @@ assert.deepEqual(
   'case and punctuation do not matter for a title',
 );
 expectKind(
-  ['next recipe', 'next dish', 'the other dish', 'switch recipe'],
+  ['finish', 'Done.', "I'm done", 'mark as cooked'],
+  { kind: 'FINISH' },
+  'every phrase that names finishing is the finish question, so it can be refused in words',
+);
+expectKind(
+  ['next recipe', 'next dish', 'switch recipe'],
   { kind: 'CYCLE_RECIPE', direction: 1 },
   'next recipe moves to the next dish',
 );
@@ -397,15 +412,84 @@ assert.deepEqual(
   'with 50 lines and 6 dishes, the exact name still wins over a longer one this step names',
 );
 
-assert.deepEqual(
-  parse(['necks', 'next']),
-  { kind: 'NEXT' },
-  "the recognizer's second guess is tried when the first is not a command",
+[
+  ["I'll go next door", 'next'],
+  ['text', 'necks', 'next'],
+  ['black', 'back', 'pack'],
+  ['pours', 'pause'],
+  ['necks', 'next'],
+  ['rapids', 'repeat'],
+  ['dun', 'done'],
+  ['next door', 'the next batch'],
+].forEach((guesses) =>
+  assert.equal(
+    parse(guesses),
+    null,
+    `a one-word command or a move in a lower-ranked guess never acts: ${JSON.stringify(guesses)}`,
+  ),
 );
 assert.deepEqual(
-  parse(['next door', 'the next batch']),
-  null,
-  'no guess that is a command means no command',
+  [
+    readCookCommand(['switch to rise', 'switch to rice'], plate),
+    readCookCommand(['stop the time', 'stop the timer'], plate),
+    readCookCommand(['how much garlic', 'how much garlic powder'], plate),
+  ],
+  [
+    {
+      command: {
+        kind: 'SWITCH_RECIPE',
+        recipeId: 'rice',
+        candidates: ['rice'],
+      },
+      transcript: 'switch to rice',
+    },
+    {
+      command: { kind: 'STOP_TIMER', seconds: null, scope: 'ANY' },
+      transcript: 'stop the timer',
+    },
+    {
+      command: { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic'] },
+      transcript: 'how much garlic',
+    },
+  ],
+  'a longer phrase in a lower-ranked guess counts, and the top guess wins when it is a command; the line names the guess that acted',
+);
+
+assert.deepEqual(
+  [
+    parse('how many cups of rice'),
+    parse('how many tablespoons of vinegar'),
+    parse('how many cloves of garlic'),
+    parse('how many fluid ounces of coconut milk'),
+    parse('how much cream of tartar'),
+    parse('how many cups of tomatoes'),
+  ],
+  [
+    { kind: 'AMOUNT', query: 'cups of rice', lineIds: ['rice-line'] },
+    { kind: 'AMOUNT', query: 'tablespoons of vinegar', lineIds: ['vinegar'] },
+    { kind: 'AMOUNT', query: 'cloves of garlic', lineIds: ['garlic'] },
+    {
+      kind: 'AMOUNT',
+      query: 'fluid ounces of coconut milk',
+      lineIds: ['coconut'],
+    },
+    { kind: 'AMOUNT', query: 'cream of tartar', lineIds: ['tartar'] },
+    { kind: 'AMOUNT', query: 'cups of tomatoes', lineIds: ['tomato'] },
+  ],
+  'a quantity before the ingredient ("cups of", "cloves of") is looked past, a plural still matches, and a name with "of" in it is kept whole',
+);
+assert.deepEqual(
+  [
+    parse('how many cups of cilantro'),
+    parse('how many people'),
+    parse('how many minutes'),
+  ],
+  [
+    { kind: 'AMOUNT', query: 'cups of cilantro', lineIds: [] },
+    { kind: 'AMOUNT', query: 'people', lineIds: [] },
+    { kind: 'AMOUNT', query: 'minutes', lineIds: [] },
+  ],
+  'a question with nothing found keeps the words searched, so the answer can name them',
 );
 
 assert.deepEqual(
@@ -461,6 +545,9 @@ assert.deepEqual(
     formatSpokenTime(3_600_000 + 5 * 60_000),
     formatSpokenTime(0),
     formatSpokenTime(60_000),
+    formatSpokenTime(150_000),
+    formatSpokenTime(599_000),
+    formatSpokenTime(12 * 60_000 + 50_000),
   ],
   [
     '12 minutes',
@@ -469,8 +556,25 @@ assert.deepEqual(
     '1 hour 5 minutes',
     '0 seconds',
     '1 minute',
+    '2 minutes 30 seconds',
+    '9 minutes 59 seconds',
+    '12 minutes',
   ],
-  'a time left is said in round words, with seconds only under two minutes',
+  'a time left is never said as more than is left: seconds under ten minutes, whole minutes from there',
+);
+assert.deepEqual(
+  ['30 min', '1 h 30 min', '1 min 30 sec', '2 h', '1 h 1 min', '45 sec'].map(
+    toSpokenLabel,
+  ),
+  [
+    '30 minute',
+    '1 hour 30 minutes',
+    '1 minute 30 seconds',
+    '2 hour',
+    '1 hour 1 minute',
+    '45 second',
+  ],
+  'a timer\'s length is said as "the 30 minute timer", and a length in two units agrees with its numbers',
 );
 assert.deepEqual(
   describeTimersLeft([
@@ -484,7 +588,7 @@ assert.deepEqual(
   ]),
   {
     show: '12:30 left on the 30 min timer',
-    speak: '13 minutes left on the 30 minute timer.',
+    speak: '12 minutes left on the 30 minute timer.',
   },
   'one timer is named by its length, said in whole words',
 );
@@ -506,10 +610,30 @@ assert.deepEqual(
     },
   ]),
   {
-    show: 'Marinate: 1:30 left, paused; Rice · Simmer: done',
+    show: '1:30 left, paused · Done',
     speak: 'Marinate: 1 minute 30 seconds left, paused. Rice · Simmer is done.',
   },
-  'several timers are each named, with paused and done said',
+  'several timers are each named aloud, with paused and done said; the line shows their clocks',
+);
+assert.deepEqual(
+  describeTimersLeft([
+    {
+      label: '25 min',
+      name: 'Add the vinegar',
+      status: 'running',
+      remainingMs: 1_499_000,
+      clock: '24:59',
+    },
+    {
+      label: '30 min',
+      name: 'Marinate the chicken',
+      status: 'running',
+      remainingMs: 1_795_000,
+      clock: '29:55',
+    },
+  ]).show,
+  '24:59 and 29:55 left',
+  'two running timers fit one line as their clocks, since the pills name them',
 );
 assert.deepEqual(
   describeAmounts([

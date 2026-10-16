@@ -3,6 +3,49 @@ import { findDurations } from '@/utils/durationUtils';
 /** A spoken phrase longer than this is talk, not a command. */
 const MAX_COMMAND_CHARS = 80;
 const MAX_QUERY_WORDS = 4;
+/** "Cups of rice" names a quantity before the ingredient: the words that can stand there. */
+const QUANTITY_WORDS = new Set([
+  'cup',
+  'tablespoon',
+  'tbsp',
+  'teaspoon',
+  'tsp',
+  'spoon',
+  'spoonful',
+  'ounce',
+  'oz',
+  'fluid ounce',
+  'pound',
+  'lb',
+  'gram',
+  'g',
+  'kilogram',
+  'kg',
+  'milliliter',
+  'ml',
+  'liter',
+  'litre',
+  'quart',
+  'pint',
+  'clove',
+  'can',
+  'tin',
+  'jar',
+  'pinch',
+  'dash',
+  'handful',
+  'bunch',
+  'sprig',
+  'stick',
+  'slice',
+  'piece',
+  'head',
+  'leaf',
+  'package',
+  'packet',
+  'bag',
+  'inch',
+]);
 const MAX_AMOUNT_MATCHES = 3;
 
 export type CookTimerScope = 'RINGING' | 'ANY';
@@ -13,6 +56,7 @@ export type CookCommand =
   | { kind: 'REPEAT' }
   | { kind: 'SHOW_INGREDIENTS' }
   | { kind: 'SHOW_STEPS' }
+  | { kind: 'FINISH' }
   | { kind: 'START_TIMER'; seconds: number | null }
   | { kind: 'PAUSE_TIMER'; seconds: number | null }
   | { kind: 'RESUME_TIMER'; seconds: number | null }
@@ -37,22 +81,18 @@ type PlainKind =
   | 'REPEAT'
   | 'SHOW_INGREDIENTS'
   | 'SHOW_STEPS'
+  | 'FINISH'
   | 'TIME_LEFT'
   | 'STOP_LISTENING';
 
+// Only what "What to say" shows and plain synonyms of it: an everyday phrase ("go on", "again") is said to people too.
 const PHRASES: Record<PlainKind, string[]> = {
   NEXT: [
     'next',
     'next step',
     'next one',
-    'continue',
-    'go on',
-    'go next',
-    'go forward',
-    'forward',
-    'move on',
-    'keep going',
-    'step forward',
+    'go to the next step',
+    'go to next step',
   ],
   BACK: [
     'back',
@@ -60,7 +100,6 @@ const PHRASES: Record<PlainKind, string[]> = {
     'previous',
     'previous step',
     'previous one',
-    'step back',
     'back one',
     'back a step',
     'go back a step',
@@ -74,19 +113,9 @@ const PHRASES: Record<PlainKind, string[]> = {
     'repeat step',
     'read it',
     'read it again',
-    'read that',
-    'read that again',
     'read the step',
     'read step',
     'read this step',
-    'read it out',
-    'say that again',
-    'say it again',
-    'again',
-    'come again',
-    'what was that',
-    'whats the step',
-    'what step am i on',
   ],
   SHOW_INGREDIENTS: [
     'ingredients',
@@ -101,8 +130,6 @@ const PHRASES: Record<PlainKind, string[]> = {
     'go to the ingredients',
     'open ingredients',
     'open the ingredients',
-    'list ingredients',
-    'what do i need',
   ],
   SHOW_STEPS: [
     'steps',
@@ -114,46 +141,31 @@ const PHRASES: Record<PlainKind, string[]> = {
     'back to steps',
     'go to steps',
     'go to the steps',
-    'instructions',
-    'show instructions',
-    'show the instructions',
-    'back to the instructions',
-    'method',
+  ],
+  FINISH: [
+    'finish',
+    'done',
+    'im done',
+    'i am done',
+    'mark as cooked',
+    'mark it as cooked',
   ],
   TIME_LEFT: [
     'how much time is left',
     'how much time left',
     'how much time is remaining',
     'how much time remaining',
-    'how much time',
-    'how much time do we have',
-    'how much time do i have',
-    'how much time have we got',
-    'how much longer',
-    'how much more time',
-    'how much is left',
-    'how long left',
-    'how long is left',
-    'how long remaining',
-    'how long',
-    'how long now',
-    'how long to go',
-    'how long more',
-    'how much to go',
     'time left',
     'time remaining',
-    'whats left',
+    'how long left',
+    'how long is left',
     'whats the time left',
-    'whats the timer',
     'whats the timer at',
     'timer check',
-    'time check',
     'check the timer',
     'check timer',
     'hows the timer',
     'hows the timer doing',
-    'how long until its done',
-    'how long till its done',
     'is the timer done',
   ],
   STOP_LISTENING: [
@@ -179,10 +191,6 @@ const PHRASES: Record<PlainKind, string[]> = {
 const CYCLE_PHRASES: Record<string, 1 | -1> = {
   'next recipe': 1,
   'next dish': 1,
-  'other recipe': 1,
-  'other dish': 1,
-  'the other recipe': 1,
-  'the other dish': 1,
   'switch recipe': 1,
   'switch recipes': 1,
   'switch dish': 1,
@@ -238,8 +246,6 @@ const BARE_TIMER_VERBS = new Set([
   'stop',
   'dismiss',
   'silence',
-  'quiet',
-  'mute',
 ]);
 
 const TIMER_PATTERN = new RegExp(
@@ -249,8 +255,7 @@ const TIMER_PATTERN = new RegExp(
 const AMOUNT_PATTERN =
   /^(?:how (?:much|many)|whats the amount of|amount of|how much of) (?<query>.+?)(?: (?:do (?:i|we) need|do (?:i|we) use|do (?:i|we) add|goes in|go in|does it need|does it take|is needed|is it|is that|is in this|is in it|goes in this|are there|in this step|for this step|in this|in it|again))?$/;
 
-const SWITCH_PATTERN =
-  /^(?:(?:switch|change|go|move|jump|skip)(?: over)? to|show me|show|open|cook|do) (?:the )?(?<query>.+)$/;
+const SWITCH_PATTERN = /^(?:switch to|go to|show me) (?:the )?(?<query>.+)$/;
 
 const NAME_FILLER = new Set([
   'the',
@@ -483,6 +488,14 @@ const parseTimer = (text: string): CookCommand | null => {
 const cleanQuery = (query: string) =>
   query.replace(/^(?:of )?(?:the |a |an |some )?/, '').trim();
 
+/** The ingredient words after a leading quantity ("cups of rice" is "rice"), or null when the query doesn't start with one. */
+const dropQuantity = (words: string[]) => {
+  const at = words.indexOf('of');
+  if (at < 1 || at > 2 || at === words.length - 1) return null;
+  const unit = words.slice(0, at).map(toSingular).join(' ');
+  return QUANTITY_WORDS.has(unit) ? words.slice(at + 1) : null;
+};
+
 const parseAmount = (
   text: string,
   context: CookVoiceContext,
@@ -491,14 +504,19 @@ const parseAmount = (
   if (!raw) return null;
   const query = cleanQuery(raw);
   const words = query.split(' ').filter(Boolean);
+  const ingredientWords = dropQuantity(words) ?? words;
   if (
-    words.length === 0 ||
-    words.length > MAX_QUERY_WORDS ||
+    ingredientWords.length === 0 ||
+    ingredientWords.length > MAX_QUERY_WORDS ||
     words.some((word) => QUERY_STOP_WORDS.has(word))
   ) {
     return null;
   }
-  const matches = matchByName(query, context.lines);
+  const asked = matchByName(query, context.lines);
+  const matches =
+    asked.length > 0 || ingredientWords === words
+      ? asked
+      : matchByName(ingredientWords.join(' '), context.lines);
   const inStep = matches.filter((line) => line.isInStep);
   const lineIds = (inStep.length > 0 ? inStep : matches)
     .slice(0, MAX_AMOUNT_MATCHES)
@@ -555,19 +573,46 @@ const parseOne = (
   return result;
 };
 
-/** The command a finished phrase is, or null when it isn't a whole command: kitchen talk never moves the screen. Tries each of the recognizer's guesses in order. */
+const NAVIGATION_KINDS = new Set<CookCommand['kind']>([
+  'NEXT',
+  'BACK',
+  'REPEAT',
+  'SHOW_INGREDIENTS',
+  'SHOW_STEPS',
+  'FINISH',
+]);
+
+/** A lower-ranked guess counts only as a phrase of two or more words that isn't a move ("black" heard as "back" never moves the step). */
+const isTrustedAlternate = (guess: string, command: CookCommand) =>
+  normalizeTranscript(guess).split(' ').length > 1 &&
+  !NAVIGATION_KINDS.has(command.kind);
+
+/** The command a finished phrase is and the guess it came from, or null when no guess is a whole command: the recognizer's top guess, else a longer phrase among its other guesses. */
+export const readCookCommand = (
+  alternatives: string | string[],
+  context: CookVoiceContext,
+): { command: CookCommand; transcript: string } | null => {
+  const guesses =
+    typeof alternatives === 'string' ? [alternatives] : alternatives;
+  const result = guesses.reduce<{
+    command: CookCommand;
+    transcript: string;
+  } | null>((found, guess, rank) => {
+    if (found !== null) return found;
+    const command = parseOne(guess, context);
+    if (command === null) return null;
+    if (rank > 0 && !isTrustedAlternate(guess, command)) return null;
+    return { command, transcript: normalizeTranscript(guess) };
+  }, null);
+  return result;
+};
+
+/** The command a finished phrase is, or null when it isn't a whole command: kitchen talk never moves the screen. */
 export const parseCookCommand = (
   alternatives: string | string[],
   context: CookVoiceContext,
-): CookCommand | null => {
-  const guesses =
-    typeof alternatives === 'string' ? [alternatives] : alternatives;
-  const result = guesses.reduce<CookCommand | null>(
-    (found, guess) => found ?? parseOne(guess, context),
-    null,
-  );
-  return result;
-};
+): CookCommand | null =>
+  readCookCommand(alternatives, context)?.command ?? null;
 
 /** One key per command, so the same command heard twice in a row can be told apart from a new one. */
 export const getCookCommandKey = (command: CookCommand) =>
@@ -619,7 +664,7 @@ export const toSpokenAmount = (amountText: string) => {
   return result;
 };
 
-/** A time left as said aloud: "12 minutes", "1 minute 30 seconds", "45 seconds". */
+/** A time left as said aloud, never more than is left: "12 minutes" from ten minutes up, "2 minutes 30 seconds" under that. */
 export const formatSpokenTime = (milliseconds: number) => {
   const total = Math.max(0, Math.ceil(milliseconds / 1000));
   const hours = Math.floor(total / 3600);
@@ -632,7 +677,7 @@ export const formatSpokenTime = (milliseconds: number) => {
       .filter(Boolean)
       .join(' ');
   }
-  if (total >= 120) return say(Math.round(total / 60), 'minute');
+  if (total >= 600) return say(minutes, 'minute');
   const result = [
     minutes > 0 && say(minutes, 'minute'),
     (seconds > 0 || minutes === 0) && say(seconds, 'second'),
@@ -653,12 +698,25 @@ export interface VoiceTimerState {
   clock: string;
 }
 
-/** A timer's length as said aloud: "30 min" is "30 minute", as in "the 30 minute timer". */
-export const toSpokenLabel = (label: string) =>
-  label
-    .replace(/\bh\b/g, 'hour')
-    .replace(/\bmin\b/g, 'minute')
-    .replace(/\bsec\b/g, 'second');
+const SPOKEN_LABEL_UNITS: Record<string, string> = {
+  h: 'hour',
+  min: 'minute',
+  sec: 'second',
+};
+
+/** A timer's length as said aloud: "30 min" is "30 minute", as in "the 30 minute timer", and "1 h 30 min" is "1 hour 30 minutes". */
+export const toSpokenLabel = (label: string) => {
+  const parts = Array.from(label.matchAll(/(\d+) (h|min|sec)\b/g));
+  if (parts.length === 0) return label;
+  const isCompound = parts.length > 1;
+  const result = parts
+    .map(([, count, unit]) => {
+      const word = SPOKEN_LABEL_UNITS[unit];
+      return `${count} ${word}${isCompound && count !== '1' ? 's' : ''}`;
+    })
+    .join(' ');
+  return result;
+};
 
 const describeOneTimer = (timer: VoiceTimerState) => {
   const spokenLabel = toSpokenLabel(timer.label);
@@ -675,21 +733,24 @@ const describeOneTimer = (timer: VoiceTimerState) => {
   };
 };
 
-/** The answer to "how much time is left": a line to show and a sentence to say, naming each timer only when there are several. */
+/** The answer to "how much time is left": a line to show (the clocks only, since the pills name the timers) and a sentence to say, naming each timer only when there are several. */
 export const describeTimersLeft = (timers: VoiceTimerState[]) => {
   if (timers.length === 1) return describeOneTimer(timers[0]);
   const parts = timers.map((timer) => {
     if (timer.status === 'done') {
-      return { show: `${timer.name}: done`, speak: `${timer.name} is done.` };
+      return { show: 'Done', speak: `${timer.name} is done.` };
     }
     const paused = timer.status === 'paused' ? ', paused' : '';
     return {
-      show: `${timer.name}: ${timer.clock} left${paused}`,
+      show: `${timer.clock} left${paused}`,
       speak: `${timer.name}: ${formatSpokenTime(timer.remainingMs)} left${paused}.`,
     };
   });
+  const isAllRunning = timers.every((timer) => timer.status === 'running');
   const result = {
-    show: parts.map((part) => part.show).join('; '),
+    show: isAllRunning
+      ? `${timers.map((timer) => timer.clock).join(' and ')} left`
+      : parts.map((part) => part.show).join(' · '),
     speak: parts.map((part) => part.speak).join(' '),
   };
   return result;
@@ -810,6 +871,9 @@ export const pickTimersToTell = <
   const result = other ? [first, other] : [first];
   return result;
 };
+
+/** Whether a deadline is still ahead, read when a command runs (not during render). */
+export const isBeforeDeadline = (deadline: number) => Date.now() < deadline;
 
 /** Each timer with the time it has left right now, for answering a spoken command. */
 export const withTimeLeft = <T>(

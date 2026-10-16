@@ -90,6 +90,7 @@ import {
 import {
   describeAmounts,
   describeTimersLeft,
+  isBeforeDeadline,
   pickTimersToTell,
   pickVoiceTimer,
   toSpokenLabel,
@@ -104,6 +105,8 @@ import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
 const DONE_GUARD_MS = 600;
+/** A spoken command lands up to a couple of seconds after the words, so "next" or "dismiss" this soon after a Time's up was meant before it. */
+const VOICE_DONE_GUARD_MS = 2000;
 
 const LIST_FORMAT = new Intl.ListFormat('en-US', { type: 'conjunction' });
 const CHOICE_FORMAT = new Intl.ListFormat('en-US', { type: 'disjunction' });
@@ -117,6 +120,13 @@ const refuse = (reason: string, spoken?: string): CookVoiceResult => ({
   ok: false,
   reason,
   spoken,
+});
+/** A refusal said aloud whatever Read steps aloud is set to, because it answers a question or a ringing timer. */
+const answerNo = (reason: string, spoken?: string): CookVoiceResult => ({
+  ok: false,
+  reason,
+  spoken,
+  isSpoken: true,
 });
 
 const createLiveCount = () => {
@@ -223,6 +233,8 @@ function CookingSession({
   const [undoState, setUndoState] = useState<'PENDING' | 'FAILED' | null>(null);
   const finishedAt = useRef(0);
   const guardedUntil = useRef(0);
+  const voiceGuardedUntil = useRef(0);
+  const hasCoachedNext = useRef(false);
   const missedFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -479,6 +491,7 @@ function CookingSession({
       isStepsView && hasSteps && !isFinishShown && focused === null
         ? { key: `${recipe.id}:${index}`, spoken: spokenStep }
         : null,
+    onTurnOn: timers.prepareSound,
   });
 
   const updateRecipe = (recipeId: string, patch: Partial<PlateCookState>) =>
@@ -819,7 +832,11 @@ function CookingSession({
     shownFocusKey.current = focusKey;
     if (focusKey !== null) {
       // eslint-disable-next-line react-hooks/purity -- runs in an effect; once the voice actions are connected the compiler flags every clock read here
-      guardedUntil.current = Date.now() + DONE_GUARD_MS;
+      const shownAt = Date.now();
+      guardedUntil.current = shownAt + DONE_GUARD_MS;
+      if (focusKey.endsWith(':true')) {
+        voiceGuardedUntil.current = shownAt + VOICE_DONE_GUARD_MS;
+      }
     }
     if (focusKey !== null && !wasShown) {
       rootRef.current
@@ -910,48 +927,83 @@ function CookingSession({
     }
     jumpTo(recipeId, plate[recipeId]?.stepIndex ?? 0);
   };
+  const getTitle = (recipeId: string) =>
+    entries.find((candidate) => candidate.recipe.id === recipeId)?.recipe
+      .title ?? 'the next recipe';
+  const isRingingInFront = focused?.status === 'done';
+  const isAnyRinging = timers.timers.some((timer) => timer.status === 'done');
+  const isJustRung = () =>
+    isRingingInFront && isBeforeDeadline(voiceGuardedUntil.current);
+  const justRang = (goal: string) =>
+    answerNo(
+      `Just rang: say that again ${goal}.`,
+      `The timer just rang. Say that again ${goal}.`,
+    );
+  const ringingRefusal = answerNo(
+    'That timer is ringing. Say “dismiss”.',
+    'That timer is ringing. Say dismiss.',
+  );
+  const finishRefusal = () => {
+    if (!hasSteps) return refuse('This recipe has no steps yet.');
+    if (next.kind === 'FINISH') {
+      return answerNo(
+        'Last step: tap Finish yourself.',
+        "That's the last step. Tap Finish when you're done.",
+      );
+    }
+    return answerNo(
+      'Finish is on the last step.',
+      "Finish is on the last step. Tap it yourself when you're done.",
+    );
+  };
+  const getVoiceRows = () =>
+    voiceStep.recipe.id === recipe.id
+      ? rows
+      : getRows(
+          voiceStep.recipe,
+          plate[voiceStep.recipe.id]?.servings ?? voiceStep.recipe.servings,
+        );
 
   const makeVoiceActions = (): CookVoiceActions => ({
     next: () => {
       if (timerSecondary === 'NEXT') {
+        if (isJustRung()) return justRang('to go on');
+        const crossesTo =
+          timerNext?.kind === 'RECIPE' ? getTitle(timerNext.recipeId) : null;
         goNextFromTimer();
-        return done();
+        return done(crossesTo === null ? undefined : `Showing ${crossesTo}`);
       }
       if (timerSecondary === 'BACK') {
         backToStep();
         return done(backLabel);
       }
       if (focused !== null) {
-        return refuse(
+        return answerNo(
           "Time's up: say “dismiss” first.",
           'The timer is ringing. Say dismiss to go back to your step.',
         );
       }
-      if (next.kind === 'FINISH') {
-        return hasSteps
-          ? refuse(
-              "Last step: tap Finish when you're done.",
-              "That's the last step. Tap Finish when you're done.",
-            )
-          : refuse('This recipe has no steps yet.');
-      }
-      showStepsView();
+      if (!isStepsView) return refuse('Say “steps” to go back to the steps.');
+      if (next.kind === 'FINISH') return finishRefusal();
       if (next.kind === 'STEP') {
         goBy(1);
         return done();
       }
       showRecipe(next.recipeId);
       focusPrimary();
-      return done();
+      return done(`Showing ${getTitle(next.recipeId)}`);
     },
     back: () => {
       if (focused !== null) {
         backToStep();
         return done();
       }
+      if (!isStepsView) {
+        showView('steps');
+        return done();
+      }
       if (!hasSteps) return refuse('This recipe has no steps yet.');
       if (index <= 0) return refuse("You're on the first step.");
-      showStepsView();
       goBy(-1);
       return done();
     },
@@ -974,6 +1026,7 @@ function CookingSession({
       showStepsView();
       return done();
     },
+    finish: finishRefusal,
     startTimer: (seconds) => {
       const durations = findDurations(voiceStep.text).map((found) => ({
         seconds: found.seconds,
@@ -1021,18 +1074,24 @@ function CookingSession({
           recipeId: voiceStep.recipe.id,
           stepNumber: voiceStep.stepNumber,
         }) !== null;
+      const coaching = hasCoachedNext.current
+        ? ''
+        : ` ${hasNext ? 'Say next step to keep going.' : 'Say back to see the step.'}`;
+      hasCoachedNext.current = true;
       return done(
         `Started the ${slot.label} timer`,
-        `Started the ${toSpokenLabel(slot.label)} timer. ${hasNext ? 'Say next step to keep going.' : 'Say back to see the step.'}`,
+        `Started the ${toSpokenLabel(slot.label)} timer.${coaching}`,
       );
     },
     pauseTimer: (seconds) => {
+      if (isAnyRinging) return ringingRefusal;
       const timer = pickTimer(['running'], seconds);
       if (timer === null) return noTimer(seconds, 'going');
       timers.pause(timer.id);
       return done(`Paused the ${timer.label} timer`);
     },
     resumeTimer: (seconds) => {
+      if (isAnyRinging) return ringingRefusal;
       const timer = pickTimer(['paused'], seconds);
       if (timer === null) return noTimer(seconds, 'paused');
       timers.resume(timer.id);
@@ -1041,6 +1100,9 @@ function CookingSession({
     stopTimer: (seconds, scope) => {
       const ringing = pickTimer(['done'], seconds);
       if (ringing !== null) {
+        if (ringing.id === focused?.id && isJustRung()) {
+          return justRang('to dismiss it');
+        }
         endTimer(ringing.id);
         return done(`Dismissed the ${ringing.label} timer`);
       }
@@ -1050,7 +1112,7 @@ function CookingSession({
       if (timer.status === 'running') {
         timers.pause(timer.id);
         return done(
-          `Paused the ${timer.label} timer`,
+          'Paused. Say “stop” again to reset it.',
           'Paused the timer. Say stop again to reset it.',
         );
       }
@@ -1059,7 +1121,7 @@ function CookingSession({
     },
     timeLeft: () => {
       const told = pickTimersToTell(getVoiceTimers(), focused?.id ?? null);
-      if (told.length === 0) return refuse('No timer is going.');
+      if (told.length === 0) return answerNo('No timer is going.');
       const { show, speak } = describeTimersLeft(
         told.map((timer) => ({
           label: timer.label,
@@ -1072,12 +1134,14 @@ function CookingSession({
       return done(show, speak);
     },
     amount: (lineIds, query) => {
+      const voiceRows = getVoiceRows();
       const found = lineIds.flatMap((id) =>
-        rows.filter((row) => row.id === id),
+        voiceRows.filter((row) => row.id === id),
       );
       if (found.length === 0) {
-        return refuse(
-          `${query.charAt(0).toUpperCase()}${query.slice(1)} isn't in this recipe.`,
+        return answerNo(
+          `I can't find “${query}” in this recipe's ingredients.`,
+          `I can't find ${query} in this recipe's ingredients.`,
         );
       }
       const { show, speak } = describeAmounts(found);
@@ -1088,7 +1152,7 @@ function CookingSession({
         const titles = entries
           .filter((candidate) => candidates.includes(candidate.recipe.id))
           .map((candidate) => candidate.recipe.title);
-        return refuse(
+        return answerNo(
           `Which one: ${CHOICE_FORMAT.format(titles)}?`,
           `Say more of the name: ${CHOICE_FORMAT.format(titles)}.`,
         );
@@ -1114,18 +1178,21 @@ function CookingSession({
       return done(`Showing ${target.title}`);
     },
   });
+  const voiceStepMatch =
+    matchesByRecipe.get(voiceStep.recipe.id)?.[voiceStep.stepNumber - 1] ??
+    null;
   const voiceContext = {
     recipes: entries.map((candidate) => ({
       id: candidate.recipe.id,
       title: candidate.recipe.title,
     })),
-    shownRecipeId: recipe.id,
-    lines: recipe.ingredients.map((line) => {
+    shownRecipeId: voiceStep.recipe.id,
+    lines: voiceStep.recipe.ingredients.map((line) => {
       const ingredient = ingredientsById.get(line.ingredientId);
       return {
         id: line.id,
         names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
-        isInStep: stepMatch?.lineIds.includes(line.id) ?? false,
+        isInStep: voiceStepMatch?.lineIds.includes(line.id) ?? false,
       };
     }),
   };
@@ -1134,10 +1201,12 @@ function CookingSession({
     runCookCommand(command, makeVoiceActions()),
   );
   useEffect(() => connectVoice(runVoiceCommand, voiceContext));
+  const namedLines = voiceContext.lines.filter((line) => line.names.length > 0);
+  const stepLines = namedLines.filter((line) => line.isInStep);
   const ingredientExample = (
-    [...(stepRows.length > 0 ? stepRows : rows)].sort(
-      (a, b) => a.name.split(' ').length - b.name.split(' ').length,
-    )[0]?.name ?? 'garlic'
+    [...(stepLines.length > 0 ? stepLines : namedLines)].sort(
+      (a, b) => a.names[0].split(' ').length - b.names[0].split(' ').length,
+    )[0]?.names[0] ?? 'garlic'
   ).toLowerCase();
   const dishExample = isPlate
     ? (entries
@@ -1588,7 +1657,7 @@ function CookingSession({
                 voice={voice}
                 ingredientExample={ingredientExample}
                 dishExample={dishExample}
-                className='[@media(max-height:500px)]:w-44 [@media(max-height:500px)]:shrink-0'
+                className='[@media(max-height:500px)]:max-w-44 [@media(max-height:500px)]:shrink-0'
               />
             )}
             <CookTimerStrip

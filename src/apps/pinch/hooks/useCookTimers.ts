@@ -398,6 +398,8 @@ export function useCookTimers() {
     isNoticeShown: notice === 'showing',
     settle,
     start,
+    /** Readies the Time's up sound; call it from a tap, since browsers only start sound after one. `start` calls it too. */
+    prepareSound,
     pause,
     resume,
     dismiss,

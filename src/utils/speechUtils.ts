@@ -7,6 +7,9 @@ interface SpeakOptions {
   onStart?: () => void;
   /** Runs once, when the reading ends, fails, is cancelled or outlasts a guard for its length. */
   onEnd?: () => void;
+  /** Gives up when the reading hasn't started by then (`onNoStart`, then `onEnd`). */
+  startTimeoutMs?: number;
+  onNoStart?: () => void;
 }
 
 const normalizeLang = (lang: string) => lang.toLowerCase().replace('_', '-');
@@ -47,7 +50,7 @@ const reading: { current: SpeechSynthesisUtterance | null } = { current: null };
 /** Reads `text` aloud, cancelling whatever was being read. Returns a function that stops it. Where text-to-speech is missing it calls `onEnd` at once. */
 export function speakText(
   text: string,
-  { lang, onStart, onEnd }: SpeakOptions,
+  { lang, onStart, onEnd, startTimeoutMs, onNoStart }: SpeakOptions,
 ): () => void {
   const synth = getSpeechSynthesis();
   if (synth === null || typeof SpeechSynthesisUtterance === 'undefined') {
@@ -61,14 +64,23 @@ export function speakText(
   const voice = pickVoice(synth.getVoices(), lang);
   if (voice !== null) utterance.voice = voice;
 
-  const state = { isEnded: false, guardId: 0 };
+  const state = { isEnded: false, guardId: 0, startId: 0 };
   const finish = () => {
     if (state.isEnded) return;
     state.isEnded = true;
     window.clearTimeout(state.guardId);
+    window.clearTimeout(state.startId);
     if (reading.current === utterance) reading.current = null;
     onEnd?.();
   };
+  if (startTimeoutMs !== undefined) {
+    state.startId = window.setTimeout(() => {
+      if (state.isEnded) return;
+      synth.cancel();
+      onNoStart?.();
+      finish();
+    }, startTimeoutMs);
+  }
   state.guardId = window.setTimeout(
     finish,
     Math.min(
@@ -76,7 +88,10 @@ export function speakText(
       MIN_SPEAK_GUARD_MS + text.length * SPEAK_MS_PER_CHAR,
     ),
   );
-  utterance.onstart = () => onStart?.();
+  utterance.onstart = () => {
+    window.clearTimeout(state.startId);
+    onStart?.();
+  };
   utterance.onend = finish;
   utterance.onerror = finish;
   reading.current = utterance;
@@ -95,7 +110,15 @@ export function speakText(
   };
 }
 
-/** Stops whatever text-to-speech is reading on this page. */
-export function stopSpeaking() {
-  getSpeechSynthesis()?.cancel();
+/** Readies text-to-speech from a tap with a silent, empty reading, since some browsers speak later only once a tap has. */
+export function primeSpeech() {
+  const synth = getSpeechSynthesis();
+  if (synth === null || typeof SpeechSynthesisUtterance === 'undefined') return;
+  try {
+    const utterance = new SpeechSynthesisUtterance(' ');
+    utterance.volume = 0;
+    synth.speak(utterance);
+  } catch (error) {
+    console.error('Text-to-speech could not be readied', error);
+  }
 }

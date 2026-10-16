@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
-import { speakText } from '@/utils/speechUtils';
+import { primeSpeech, speakText } from '@/utils/speechUtils';
 
 interface SpeechRecognitionLike {
   lang: string;
@@ -23,13 +23,15 @@ const FAST_SESSION_MS = 1500;
 const RESTART_DELAYS_MS = [250, 500, 1000, 2000, 4000];
 const MAX_FAST_FAILURES = RESTART_DELAYS_MS.length;
 const MAX_ALTERNATIVES = 3;
+/** A reading that hasn't started by then never will (no voice installed, a dropped event): stop trying to speak. */
+const SPEECH_START_TIMEOUT_MS = 1500;
 
 export type SpeechCommandsStatus =
   'off' | 'starting' | 'listening' | 'speaking';
 
-/** Why listening stopped by itself: the microphone was refused, there is none, the speech service kept failing, or it can't listen in this language. */
+/** Why listening stopped by itself: the microphone was refused, the browser's speech service is turned off, there is no microphone, the service kept failing, it can't listen in this language, or nothing was used for `idleStopMs`. */
 export type SpeechCommandsError =
-  'denied' | 'no-microphone' | 'unavailable' | 'language';
+  'denied' | 'service' | 'no-microphone' | 'unavailable' | 'language' | 'idle';
 
 interface Session {
   startedAt: number;
@@ -42,7 +44,10 @@ interface Session {
 interface ListenerOptions {
   lang: string;
   speechLang: string;
-  onFinalTranscript: (alternatives: string[]) => void;
+  /** Gets each finished phrase's guesses, best first; returns true when it used the phrase. */
+  onFinalTranscript: (alternatives: string[]) => boolean | void;
+  /** Stops listening after this long with no phrase used; never when left out. */
+  idleStopMs?: number;
 }
 
 const getRecognitionConstructor = (): RecognitionConstructor | null => {
@@ -58,7 +63,8 @@ const getRecognitionConstructor = (): RecognitionConstructor | null => {
   return result;
 };
 
-const createListener = (
+/** The listening machine behind `useSpeechCommands`, with its state setters passed in so it can be driven without React. */
+export const createSpeechListener = (
   setStatus: (status: SpeechCommandsStatus) => void,
   setError: (error: SpeechCommandsError | null) => void,
 ) => {
@@ -73,6 +79,8 @@ const createListener = (
     isHidden: false,
     failures: 0,
     restartId: 0,
+    idleId: 0,
+    canSpeak: true,
     speechToken: 0,
     stopReading: null as (() => void) | null,
   };
@@ -80,6 +88,18 @@ const createListener = (
   const clearRestart = () => {
     window.clearTimeout(state.restartId);
     state.restartId = 0;
+  };
+
+  const clearIdle = () => {
+    window.clearTimeout(state.idleId);
+    state.idleId = 0;
+  };
+
+  const armIdle = () => {
+    clearIdle();
+    const idleMs = state.options?.idleStopMs;
+    if (idleMs === undefined || !state.isWanted) return;
+    state.idleId = window.setTimeout(() => halt('idle'), idleMs);
   };
 
   const stopReading = () => {
@@ -98,13 +118,14 @@ const createListener = (
     state.recognition.abort();
   };
 
-  const halt = (error: SpeechCommandsError) => {
+  function halt(error: SpeechCommandsError) {
     state.isWanted = false;
+    clearIdle();
     abortSession();
     stopReading();
     setStatus('off');
     setError(error);
-  };
+  }
 
   const handleResult = (event: SpeechRecognitionEvent) => {
     const session = state.session;
@@ -123,8 +144,11 @@ const createListener = (
         const alternatives = Array.from({ length: result.length }, (_, at) =>
           result[at].transcript.trim(),
         ).filter((transcript) => transcript !== '');
-        if (alternatives.length > 0) {
-          state.options?.onFinalTranscript(alternatives);
+        if (
+          alternatives.length > 0 &&
+          state.options?.onFinalTranscript(alternatives)
+        ) {
+          armIdle();
         }
       });
   };
@@ -132,8 +156,8 @@ const createListener = (
   const handleError = (event: SpeechRecognitionErrorEvent) => {
     const session = state.session;
     if (session === null) return;
-    if (event.error === 'not-allowed' || event.error === 'service-not-allowed')
-      return halt('denied');
+    if (event.error === 'not-allowed') return halt('denied');
+    if (event.error === 'service-not-allowed') return halt('service');
     if (event.error === 'audio-capture') return halt('no-microphone');
     if (event.error === 'language-not-supported') return halt('language');
     if (event.error !== 'no-speech' && event.error !== 'aborted') {
@@ -242,23 +266,30 @@ const createListener = (
       state.isWanted = true;
       state.failures = 0;
       state.isHidden = document.visibilityState === 'hidden';
+      if (state.canSpeak) primeSpeech();
       setStatus('starting');
+      armIdle();
       beginSession();
     },
     stop: () => {
       state.isWanted = false;
+      clearIdle();
       abortSession();
       stopReading();
       setStatus('off');
     },
     say: (text: string) => {
-      if (text.trim() === '') return;
+      if (text.trim() === '' || !state.canSpeak) return;
       stopReading();
       const token = state.speechToken;
       state.isSpeaking = true;
       abortSession();
       state.stopReading = speakText(text, {
         lang: state.options?.speechLang ?? '',
+        startTimeoutMs: SPEECH_START_TIMEOUT_MS,
+        onNoStart: () => {
+          state.canSpeak = false;
+        },
         onStart: () => {
           if (token === state.speechToken && state.isWanted) {
             setStatus('speaking');
@@ -294,6 +325,7 @@ const createListener = (
     teardown: () => {
       state.isWanted = false;
       clearRestart();
+      clearIdle();
       stopReading();
       const recognition = state.recognition;
       state.recognition = null;
@@ -317,22 +349,25 @@ export function canUseSpeechCommands() {
 
 /**
  * Listens for spoken phrases with the browser's speech recognition while the person has it on, never on its own: `start`
- * from a tap. It restarts after the browser ends a session, backing off and giving up after repeated failures, pauses
- * while `say` reads something aloud (so it never hears itself; `quiet` cuts a reading short) and while the page is
- * hidden, and stops for good on a refused or missing microphone. Phrase matching is the caller's. Secure pages only.
+ * from a tap, which also readies the browser's voice. It restarts after the browser ends a session, backing off and
+ * giving up after repeated failures, pauses while `say` reads something aloud (so it never hears itself; `quiet` cuts a
+ * reading short; a voice that never starts is given up for the session) and while the page is hidden, and stops for
+ * good on a refused or missing microphone or after `idleStopMs` with nothing used. Phrase matching is the caller's.
+ * Secure pages only.
  */
 export function useSpeechCommands({
   lang,
   speechLang,
   onFinalTranscript,
+  idleStopMs,
 }: ListenerOptions) {
   const [isSupported] = useState(canUseSpeechCommands);
   const [status, setStatus] = useState<SpeechCommandsStatus>('off');
   const [error, setError] = useState<SpeechCommandsError | null>(null);
-  const [listener] = useState(() => createListener(setStatus, setError));
+  const [listener] = useState(() => createSpeechListener(setStatus, setError));
 
   useEffect(() => {
-    listener.setOptions({ lang, speechLang, onFinalTranscript });
+    listener.setOptions({ lang, speechLang, onFinalTranscript, idleStopMs });
   });
 
   useEffect(() => {

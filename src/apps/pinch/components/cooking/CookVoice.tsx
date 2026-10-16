@@ -9,21 +9,47 @@ import { useSheetHistory } from '@/hooks/useBackHistory';
 import type { SpeechCommandsError } from '@/hooks/useSpeechCommands';
 import type { CookVoice } from '@apps/pinch/hooks/useCookVoice';
 
-const ERROR_TEXT: Record<SpeechCommandsError, string> = {
-  denied:
-    "Pinch can't use the microphone. Allow the microphone for this site in your browser settings, then tap the mic again.",
-  'no-microphone':
-    "Your browser didn't find a microphone. Connect one, then tap the mic again.",
-  unavailable:
-    "Voice stopped: your browser's speech service isn't answering. Check your connection and tap the mic to try again.",
-  language: "Your browser can't listen in English here, so voice is off.",
+/** Why voice control stopped by itself: one line for the footer, and the whole cause with what to do for the explainer that a tap on the mic opens (none for a pause, which a tap simply ends). */
+const STOP_TEXT: Record<
+  SpeechCommandsError,
+  { line: string; detail: string | null }
+> = {
+  denied: {
+    line: 'The microphone is blocked.',
+    detail:
+      'Your browser blocked the microphone. Allow it for this site in your browser’s settings, then tap Turn on.',
+  },
+  service: {
+    line: 'Your browser’s speech service is off.',
+    detail:
+      'Your browser’s speech service is turned off, so voice control can’t listen. In Safari it needs Siri or Dictation, which you turn on in the device’s settings.',
+  },
+  'no-microphone': {
+    line: 'No microphone found.',
+    detail:
+      'Your browser didn’t find a microphone. Connect one, then tap Turn on.',
+  },
+  unavailable: {
+    line: 'Voice control stopped: no answer.',
+    detail:
+      'Your browser’s speech service stopped answering, so voice control turned off. Some browsers have no speech service; in others it needs a connection.',
+  },
+  language: {
+    line: 'Voice control can’t listen in English here.',
+    detail:
+      'Your browser can’t listen in English here, so voice control stays off.',
+  },
+  idle: {
+    line: 'Voice paused. Tap the mic to start it again.',
+    detail: null,
+  },
 };
 
 interface CookVoiceButtonProps {
   voice: CookVoice;
 }
 
-/** The microphone at the end of the cooking screen's title row: one tap turns voice on or off. */
+/** The microphone at the end of the cooking screen's title row: one tap turns voice control on or off. */
 export function CookVoiceButton({ voice }: CookVoiceButtonProps) {
   const isListening = voice.status === 'listening';
 
@@ -48,14 +74,17 @@ export function CookVoiceButton({ voice }: CookVoiceButtonProps) {
           className='pointer-events-none absolute -inset-1 animate-pulse rounded-full border-2 border-[var(--pinch-drizzle)] motion-reduce:animate-none'
         />
       )}
-      <Mic className='h-4 w-4' aria-hidden='true' />
+      <Mic
+        className={join('h-4 w-4', voice.isOn && 'fill-current')}
+        aria-hidden='true'
+      />
     </Button>
   );
 }
 
 interface CookVoiceHelpProps {
   voice: CookVoice;
-  /** An ingredient this recipe uses, for the "how much" example. */
+  /** An ingredient this step uses, for the "how much" example. */
   ingredientExample: string;
   /** Another dish on the plate, for the "switch to" example; null for one recipe. */
   dishExample: string | null;
@@ -65,8 +94,7 @@ function CookVoiceHelp({
   voice,
   ingredientExample,
   dishExample,
-  isHidden,
-}: CookVoiceHelpProps & { isHidden: boolean }) {
+}: CookVoiceHelpProps) {
   const groups = [
     { label: 'Steps', phrases: ['next', 'back', 'repeat'] },
     { label: 'Views', phrases: ['ingredients', 'steps'] },
@@ -74,8 +102,10 @@ function CookVoiceHelp({
       label: 'Timers',
       phrases: [
         'start the timer',
+        'start the ten minute timer',
         'pause',
         'resume',
+        'dismiss',
         'stop the timer',
         'how much time is left',
       ],
@@ -93,74 +123,91 @@ function CookVoiceHelp({
   ];
 
   return (
-    <span className={isHidden ? 'hidden' : 'contents'}>
-      <HelpTip
-        title='What you can say'
-        linkLabel='What to say'
-        dismissLabel='Done'
-        className="relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
-      >
-        <ul className='space-y-1.5'>
-          {groups.map((group) => (
-            <li key={group.label} className='flex gap-3'>
-              <span className='text-muted-foreground w-16 shrink-0 pt-px text-xs'>
-                {group.label}
-              </span>
-              <span className='min-w-0'>
-                {group.phrases.map((phrase, at) => (
-                  <span key={phrase}>
-                    <span className='whitespace-nowrap'>“{phrase}”</span>
-                    {at < group.phrases.length - 1 && ', '}
-                  </span>
-                ))}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className='text-muted-foreground text-xs'>
-          English commands for now. On the last step, tap Finish yourself.
-        </p>
-        <div className='border-border border-t'>
-          <ViewOptionSwitch
-            label='Read steps aloud'
-            description='While voice is on, each step is read out as it appears.'
-            checked={voice.isReadingAloud}
-            onCheckedChange={voice.setIsReadingAloud}
-          />
-        </div>
-      </HelpTip>
-    </span>
+    <HelpTip
+      title='Voice control'
+      linkLabel='What to say'
+      dismissLabel='Done'
+      className="relative shrink-0 whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
+    >
+      <ul className='space-y-1 text-sm [@media(max-height:500px)]:grid [@media(max-height:500px)]:grid-cols-2 [@media(max-height:500px)]:space-y-0 [@media(max-height:500px)]:gap-x-6 [@media(max-height:500px)]:gap-y-1'>
+        {groups.map((group) => (
+          <li
+            key={group.label}
+            className={join(
+              'flex gap-3',
+              group.label === 'Timers' &&
+                '[@media(max-height:500px)]:col-span-2',
+            )}
+          >
+            <span className='text-muted-foreground w-14 shrink-0 pt-0.5 text-xs'>
+              {group.label}
+            </span>
+            <span className='min-w-0'>
+              {group.phrases.map((phrase, at) => (
+                <span key={phrase}>
+                  <span className='whitespace-nowrap'>“{phrase}”</span>
+                  {at < group.phrases.length - 1 && ', '}
+                </span>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className='border-border border-t'>
+        <ViewOptionSwitch
+          label='Read steps aloud'
+          description='Answers are read aloud either way.'
+          checked={voice.isReadingAloud}
+          onCheckedChange={voice.setIsReadingAloud}
+        />
+      </div>
+    </HelpTip>
   );
 }
-
-const getStatusText = (status: CookVoice['status']) => {
-  if (status === 'starting') return 'Starting the mic…';
-  if (status === 'speaking') return 'Reading aloud…';
-  return 'Listening';
-};
 
 interface CookVoiceLineProps extends CookVoiceHelpProps {
   className?: string;
 }
 
-/** One line over the cooking footer's buttons while voice is on: what it is doing, what it last heard or answered, and what you can say. Also says once why voice stopped by itself. */
+/** One line over the cooking footer's buttons: while voice control is on, what to say (or what it last heard or answered) with the door to the full list; after it stops by itself, why, for a few seconds. */
 export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
-  const { voice } = props;
-  const message = voice.isOn ? voice.message : null;
+  const { voice, ingredientExample } = props;
 
   if (!voice.isOn) {
-    return voice.error === null ? null : (
-      <p
-        role='status'
+    return voice.shownError === null ? null : (
+      <div
         className={join(
-          'text-muted-foreground text-xs [@media(max-height:500px)]:self-center',
+          'flex min-h-6 items-center [@media(max-height:500px)]:self-center',
           className,
         )}
       >
-        {ERROR_TEXT[voice.error]}
-      </p>
+        <p
+          role='status'
+          className='text-muted-foreground min-w-0 flex-1 truncate text-sm [@media(max-height:500px)]:line-clamp-2 [@media(max-height:500px)]:whitespace-normal'
+        >
+          {STOP_TEXT[voice.shownError].line}
+        </p>
+      </div>
     );
   }
+
+  const { message, status } = voice;
+  const isHint = message === null && status === 'listening';
+  const getText = () => {
+    if (message !== null) return message.text;
+    if (status === 'starting') return 'Starting voice control…';
+    if (status === 'speaking') return 'Reading aloud… tap Next to skip';
+    return (
+      <>
+        <span className='text-xs sm:hidden'>
+          Say “next” or “how much {ingredientExample}”
+        </span>
+        <span className='max-sm:hidden'>
+          Say “next”, “repeat” or “how much {ingredientExample}”
+        </span>
+      </>
+    );
+  };
 
   return (
     <div
@@ -173,14 +220,15 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
         role='status'
         className={join(
           'min-w-0 flex-1 truncate text-sm [@media(max-height:500px)]:line-clamp-2 [@media(max-height:500px)]:whitespace-normal',
+          isHint && '[@media(max-height:500px)]:sr-only',
           message === null || message.tone === 'HEARD'
             ? 'text-muted-foreground'
             : 'text-foreground font-medium',
         )}
       >
-        {message?.text ?? getStatusText(voice.status)}
+        {getText()}
       </p>
-      <CookVoiceHelp {...props} isHidden={message !== null} />
+      <CookVoiceHelp {...props} />
     </div>
   );
 }
@@ -190,7 +238,7 @@ interface CookVoiceExplainerProps {
   ingredientExample: string;
 }
 
-/** What voice control does and who hears it, before the browser asks for the microphone the first time. */
+/** What voice control does and who hears it, before the browser asks for the microphone the first time, and again (with what went wrong) after it stopped by itself. */
 export function CookVoiceExplainer({
   voice,
   ingredientExample,
@@ -199,6 +247,7 @@ export function CookVoiceExplainer({
     voice.isExplainerOpen,
     voice.closeExplainer,
   );
+  const lastStop = voice.error === null ? null : STOP_TEXT[voice.error].detail;
 
   return (
     <Modal
@@ -209,19 +258,26 @@ export function CookVoiceExplainer({
       className='border-border border'
     >
       <div className='space-y-3 text-sm'>
+        {lastStop === null ? (
+          <p>
+            Say “next”, “back”, “repeat”, “start the timer” or “how much{' '}
+            {ingredientExample}” instead of tapping. Answers are read aloud;
+            Read steps aloud, in What to say, reads each step too.
+          </p>
+        ) : (
+          <p className='bg-muted/50 border-border rounded-xl border px-3 py-2'>
+            <strong>Last time:</strong> {lastStop}
+          </p>
+        )}
         <p>
-          With the mic on, you can say “next”, “back”, “repeat”, “start the
-          timer” or “how much {ingredientExample}” instead of tapping.
-        </p>
-        <p>
-          <strong>Your browser will ask to use the microphone.</strong> While
-          the mic is on, your browser’s speech service turns what you say into
-          text: Chrome sends the audio to Google for this, Safari to Apple.
-          Pinch keeps nothing.
+          <strong>Your browser will ask to use the microphone.</strong> Its
+          speech service turns all it hears into text, people nearby too: Google
+          in Chrome, Apple in Safari, Microsoft in Edge. A voice reading aloud
+          may send its text too. Pinch keeps nothing.
         </p>
         <p className='text-muted-foreground'>
-          Keep this screen open and on; voice stops when you leave it. English
-          commands for now.
+          Off when you leave or after 10 minutes without a command. English only
+          for now.
         </p>
         <ModalFooterActions
           cancelAction={

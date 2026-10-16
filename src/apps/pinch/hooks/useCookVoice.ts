@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
-import { useSpeechCommands } from '@/hooks/useSpeechCommands';
+import {
+  useSpeechCommands,
+  type SpeechCommandsError,
+} from '@/hooks/useSpeechCommands';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import {
   getCookCommandKey,
-  normalizeTranscript,
-  parseCookCommand,
+  readCookCommand,
   type CookCommand,
   type CookTimerScope,
   type CookVoiceContext,
@@ -15,10 +17,15 @@ import {
 /** The same command heard again this soon is the recognizer repeating itself, not the person. */
 const REPEAT_GUARD_MS = 1200;
 const MESSAGE_MS = { HEARD: 2500, ANSWER: 8000, PROBLEM: 5000 } as const;
+/** How long the line says why voice control stopped; the unlit mic says the rest. */
+const ERROR_LINE_MS = 8000;
+/** Ten minutes without a command turns voice control off, so the room isn't heard after the cooking. */
+const IDLE_STOP_MS = 10 * 60_000;
 
 export type CookVoiceResult =
   | { ok: true; show?: string; speak?: string }
-  | { ok: false; reason: string; spoken?: string };
+  /** `isSpoken`: said aloud even with Read steps aloud off (it answers a question or a ringing timer). */
+  | { ok: false; reason: string; spoken?: string; isSpoken?: boolean };
 
 /** What a spoken command can do on the cooking screen: the same things a tap does, and nothing that writes. */
 export interface CookVoiceActions {
@@ -27,6 +34,7 @@ export interface CookVoiceActions {
   repeat: () => CookVoiceResult;
   showIngredients: () => CookVoiceResult;
   showSteps: () => CookVoiceResult;
+  finish: () => CookVoiceResult;
   startTimer: (seconds: number | null) => CookVoiceResult;
   pauseTimer: (seconds: number | null) => CookVoiceResult;
   resumeTimer: (seconds: number | null) => CookVoiceResult;
@@ -68,6 +76,8 @@ export const runCookCommand = (
       return actions.showIngredients();
     case 'SHOW_STEPS':
       return actions.showSteps();
+    case 'FINISH':
+      return actions.finish();
     case 'START_TIMER':
       return actions.startTimer(command.seconds);
     case 'PAUSE_TIMER':
@@ -97,14 +107,20 @@ const getListenLang = () => {
   return lang.toLowerCase().startsWith('en') ? lang : 'en-US';
 };
 
+/** Stops that a tap on the mic should explain again before it retries (a pause for quiet only needs the tap). */
+const isExplainedStop = (error: SpeechCommandsError | null) =>
+  error !== null && error !== 'idle';
+
 interface UseCookVoiceOptions {
   uid: string;
   /** The step on screen as it is read aloud; null while no step is shown (a reading already going, such as an answer, then carries on). */
   step: { key: string; spoken: string } | null;
+  /** Runs inside the tap that turns voice control on, for browser features that need a tap (the timer's sound). */
+  onTurnOn?: () => void;
 }
 
-/** Hands-free cooking: listens for the cooking commands while the person has the mic on, runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered per person on this device. */
-export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
+/** Hands-free cooking: listens for the cooking commands while the person has the mic on, runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered per person on this device, and again after a stop it has to explain. */
+export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
   const [hasAgreed, setHasAgreed] = useLocalStoragePreference(
     `pinch:${uid}:voice:agreed`,
     false,
@@ -115,6 +131,9 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
   );
   const [isExplainerOpen, setIsExplainerOpen] = useState(false);
   const [message, setMessage] = useState<CookVoiceMessage | null>(null);
+  const [expiredError, setExpiredError] = useState<SpeechCommandsError | null>(
+    null,
+  );
   const [langs] = useState(() => ({
     listen: getListenLang(),
     speak: getPageLang(),
@@ -127,6 +146,7 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
   const messageCount = useRef(0);
   const sayRef = useRef<(text: string) => void>(() => undefined);
   const stopRef = useRef<() => void>(() => undefined);
+  const readStepKey = useRef<string | null>(null);
 
   const connect = useCallback(
     (
@@ -144,16 +164,20 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
   };
 
   const handleTranscript = (alternatives: string[]) => {
-    if (handlers.current === null) return;
+    if (handlers.current === null) return false;
     const { context: shown, run } = handlers.current;
-    const command = parseCookCommand(alternatives, shown);
-    if (command === null) return;
+    const heard = readCookCommand(alternatives, shown);
+    if (heard === null) {
+      setMessage(null);
+      return false;
+    }
+    const { command, transcript } = heard;
     if (command.kind === 'STOP_LISTENING') {
       stopRef.current();
       setMessage(null);
-      return;
+      return true;
     }
-    if (hasDialogOnTop()) return;
+    if (hasDialogOnTop()) return false;
 
     const key = getCookCommandKey(command);
     const now = Date.now();
@@ -161,28 +185,29 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
       key === lastHeard.current.key &&
       now - lastHeard.current.at < REPEAT_GUARD_MS
     ) {
-      return;
+      return true;
     }
     lastHeard.current = { key, at: now };
 
     const result = run(command);
     if (!result.ok) {
       show(result.reason, 'PROBLEM');
-      if (isReadingAloud) sayRef.current(result.spoken ?? result.reason);
-      return;
+      if (isReadingAloud || result.isSpoken) {
+        sayRef.current(result.spoken ?? result.reason);
+      }
+      return true;
     }
-    const heard =
-      alternatives.find((guess) => parseCookCommand(guess, shown) !== null) ??
-      alternatives[0];
     if (result.show) show(result.show, 'ANSWER');
-    else show(`Heard “${normalizeTranscript(heard)}”`, 'HEARD');
+    else show(`Heard “${transcript}”`, 'HEARD');
     if (result.speak) sayRef.current(result.speak);
+    return true;
   };
 
   const speech = useSpeechCommands({
     lang: langs.listen,
     speechLang: langs.speak,
     onFinalTranscript: handleTranscript,
+    idleStopMs: IDLE_STOP_MS,
   });
   const { say, quiet, stop, start } = speech;
 
@@ -190,6 +215,16 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
     sayRef.current = say;
     stopRef.current = stop;
   }, [say, stop]);
+
+  useEffect(() => {
+    if (speech.error === null) return;
+    const shownError = speech.error;
+    const timeoutId = window.setTimeout(
+      () => setExpiredError(shownError),
+      ERROR_LINE_MS,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [speech.error]);
 
   useEffect(() => {
     if (message === null) return;
@@ -206,19 +241,30 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
   const stepKey = step?.key ?? null;
   const spoken = step?.spoken ?? null;
 
+  // A step is read once per showing: listening coming back (a hidden tab, a reading that ended) doesn't read it again.
   useEffect(() => {
     if (isHearing && isReadingAloud && spoken !== null) {
+      if (readStepKey.current === stepKey) return;
+      readStepKey.current = stepKey;
       say(spoken);
       return;
     }
+    if (stepKey !== readStepKey.current) readStepKey.current = null;
     if (stepKey !== null) quiet();
   }, [isHearing, isReadingAloud, stepKey, spoken, say, quiet]);
+
+  const begin = () => {
+    readStepKey.current = null;
+    setExpiredError(null);
+    setMessage(null);
+    onTurnOn?.();
+    start();
+  };
 
   const turnOn = () => {
     setHasAgreed(true);
     setIsExplainerOpen(false);
-    setMessage(null);
-    start();
+    begin();
   };
 
   const toggle = () => {
@@ -227,19 +273,26 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
       setMessage(null);
       return;
     }
-    if (!hasAgreed) {
+    if (!hasAgreed || isExplainedStop(speech.error)) {
       setIsExplainerOpen(true);
       return;
     }
-    setMessage(null);
-    start();
+    begin();
+  };
+
+  const setReadingAloud = (isOn: boolean) => {
+    readStepKey.current = null;
+    setIsReadingAloud(isOn);
   };
 
   return {
     isSupported: speech.isSupported,
     status: speech.status,
     isOn: speech.isOn,
+    /** Why voice control last stopped by itself, until it starts again. */
     error: speech.error,
+    /** The stop the line still mentions: for a few seconds after it happens. */
+    shownError: speech.error === expiredError ? null : speech.error,
     message,
     isExplainerOpen,
     closeExplainer: () => setIsExplainerOpen(false),
@@ -248,7 +301,7 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
     toggle,
     stop,
     isReadingAloud,
-    setIsReadingAloud,
+    setIsReadingAloud: setReadingAloud,
   };
 }
 
