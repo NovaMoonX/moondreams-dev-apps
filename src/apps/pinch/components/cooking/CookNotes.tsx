@@ -57,22 +57,19 @@ function CookNotes({ recipeId, onApply }: CookNotesProps) {
   const visibleCount = hidden > HIDDEN_WORTH_A_BUTTON ? limit : notes.length;
 
   return (
-    <section
-      aria-label='Notes for this recipe'
-      className='bg-muted/50 border-border overflow-hidden rounded-2xl border'
-    >
+    <section data-cook-stop='' aria-label='Notes for this recipe'>
       <Button
         type='button'
         variant='tertiary'
         aria-expanded={isOpen}
-        className='text-foreground! h-auto min-h-11 w-full items-start justify-between gap-2 rounded-none px-3 py-2.5 text-left font-normal'
+        className="text-muted-foreground! relative h-auto min-h-0 w-full items-start justify-between gap-2 rounded-none px-0! py-0! text-left font-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] hover:bg-transparent"
         onClick={() => setIsOpen((open) => !open)}
       >
         <span aria-hidden='true' className='w-5 shrink-0 text-center text-sm'>
           📝
         </span>
         {isOpen ? (
-          <span className='min-w-0 flex-1 text-sm font-medium'>
+          <span className='text-foreground min-w-0 flex-1 text-sm font-medium'>
             Your notes ({notes.length})
           </span>
         ) : (
@@ -85,22 +82,19 @@ function CookNotes({ recipeId, onApply }: CookNotesProps) {
               {leadWithAdvice(summary.body)}
             </span>
             {isChangedSince && (
-              <span className='text-muted-foreground block text-xs'>
+              <span className='block text-xs'>
                 You've changed the recipe since.
               </span>
             )}
           </span>
         )}
         <ChevronDown
-          className={join(
-            'text-muted-foreground mt-0.5 h-4 w-4 shrink-0',
-            isOpen && 'rotate-180',
-          )}
+          className={join('mt-0.5 h-4 w-4 shrink-0', isOpen && 'rotate-180')}
           aria-hidden='true'
         />
       </Button>
       {isOpen && (
-        <div className='border-border border-t px-3'>
+        <div className='border-border mt-2.5 border-y'>
           <ul className='divide-border divide-y'>
             {notes.slice(0, visibleCount).map((note) => {
               const cookId = note.cookId ?? null;

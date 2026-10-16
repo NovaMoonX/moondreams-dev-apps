@@ -11,7 +11,6 @@ import {
 } from '@apps/pinch/hooks/useCookTimers';
 
 const TICK_MS = 250;
-const HOUR_MS = 3_600_000;
 
 interface CookStepTimerProps {
   seconds: number;
@@ -19,6 +18,8 @@ interface CookStepTimerProps {
   label: string;
   /** The timer once started; null while the card waits for Start. */
   timer: CookTimer | null;
+  /** The digits' size, from the step's own type ramp. */
+  clockClassName: string;
   /** Several cards stack under one step, so each takes less height. */
   isCompact: boolean;
   canStart: boolean;
@@ -34,6 +35,7 @@ function CookStepTimer({
   seconds,
   label,
   timer,
+  clockClassName,
   isCompact,
   canStart,
   onStart,
@@ -105,9 +107,9 @@ function CookStepTimer({
     <li
       aria-label={`${label} timer`}
       className={join(
-        'flex items-center gap-2 rounded-2xl border pr-2.5 pl-4',
+        'flex items-center gap-3 rounded-2xl border pr-2.5 pl-4',
         isCompact ? 'py-1.5' : 'py-2.5',
-        '[@media(max-height:500px)]:py-1.5',
+        '[@media(max-height:640px)]:py-1.5',
         status === 'ready' && 'border-border bg-background',
         status === 'running' &&
           'border-[var(--pinch-drizzle)] bg-[var(--pinch-drizzle-soft)]',
@@ -121,9 +123,7 @@ function CookStepTimer({
           aria-hidden='true'
           className={join(
             'leading-tight font-semibold tabular-nums',
-            isCompact || status === 'done' || remainingMs >= HOUR_MS
-              ? 'text-2xl'
-              : 'text-3xl',
+            clockClassName,
             status === 'paused' && 'text-muted-foreground',
           )}
         >
@@ -133,7 +133,7 @@ function CookStepTimer({
           {status === 'done' ? `The ${label} timer is done.` : ''}
         </span>
       </div>
-      {(status === 'running' || status === 'paused') && timer !== null && (
+      {status === 'paused' && timer !== null && (
         <Button
           type='button'
           variant='tertiary'
@@ -158,7 +158,7 @@ function CookStepTimer({
         className={join(
           'shrink-0 gap-1.5 px-4 text-base',
           isCompact ? 'h-10' : 'h-12',
-          '[@media(max-height:500px)]:h-10',
+          '[@media(max-height:640px)]:h-10',
         )}
         aria-label={`${main.text} the ${label} timer`}
         disabled={timer === null && !canStart}
