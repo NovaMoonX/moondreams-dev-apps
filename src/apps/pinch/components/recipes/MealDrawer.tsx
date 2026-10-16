@@ -165,10 +165,6 @@ function MealDrawer({
       {isMoreOpen && (
         <div className='space-y-5'>
           <BackLink onBack={closeMore} />
-          <StockRows
-            target={{ kind: 'meal', id: meal.id }}
-            onOpenStock={(place) => onOpenStock(meal.id, place)}
-          />
           <div className='space-y-2'>
             <ActionGroup isRoomy caption='What would you like to do?'>
               <AddToShoppingRow
@@ -205,6 +201,10 @@ function MealDrawer({
               </p>
             )}
           </div>
+          <StockRows
+            target={{ kind: 'meal', id: meal.id }}
+            onOpenStock={(place) => onOpenStock(meal.id, place)}
+          />
         </div>
       )}
       <div className={join('space-y-5', isMoreOpen && 'hidden')}>
