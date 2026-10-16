@@ -158,9 +158,16 @@ function CookingHistorySheet({
               {recipe?.title ?? 'This recipe'}
             </p>
             <p className='text-muted-foreground text-sm'>
-              {noteCook
-                ? `A note about the cook from ${formatDateShort(noteCook.cookedAt)}`
-                : 'A note about a cook'}
+              {noteCook ? (
+                <>
+                  A note about the cook from{' '}
+                  <span className='whitespace-nowrap'>
+                    {formatDateShort(noteCook.cookedAt)}
+                  </span>
+                </>
+              ) : (
+                'A note about a cook'
+              )}
             </p>
           </div>
           <NoteForm
