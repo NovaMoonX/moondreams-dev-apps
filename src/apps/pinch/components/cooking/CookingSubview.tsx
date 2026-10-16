@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -11,7 +12,7 @@ import { useStore } from 'react-redux';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ListChecks, NotebookPen } from 'lucide-react';
+import { ListChecks, NotebookPen, Pause, Play } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -36,6 +37,7 @@ import CookRecord, {
 } from '@apps/pinch/components/cooking/CookRecord';
 import CookStepView from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
+import CookTimerView from '@apps/pinch/components/cooking/CookTimerView';
 import {
   CookVoiceButton,
   CookVoiceExplainer,
@@ -50,7 +52,9 @@ import {
   type CookTimer,
 } from '@apps/pinch/hooks/useCookTimers';
 import {
+  runCookCommand,
   useCookVoice,
+  type CookActionCommand,
   type CookVoiceActions,
   type CookVoiceResult,
 } from '@apps/pinch/hooks/useCookVoice';
@@ -67,19 +71,24 @@ import { updateCook } from '@apps/pinch/store/actions/cookActions';
 import type { CookView, PlateCookRecipe, Recipe } from '@apps/pinch/types';
 import {
   getCookStartServings,
+  getFirstSentence,
   getPlannedCookId,
   getPlateNext,
   getPlateStart,
+  getReadyStepTimers,
   getStepName,
-  getTimerCaption,
+  getTimerNext,
+  getTimerRows,
   isCookHistoryFull,
-  splitStepTimers,
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
 import {
   describeAmounts,
   describeTimersLeft,
+  pickTimersToTell,
   pickVoiceTimer,
+  toSpokenLabel,
+  withTimeLeft,
 } from '@apps/pinch/utils/cookVoice';
 import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
@@ -174,34 +183,38 @@ function CookingSession({
   const [undoState, setUndoState] = useState<'PENDING' | 'FAILED' | null>(null);
   const finishedAt = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const stripRef = useRef<HTMLUListElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const timers = useCookTimers();
   const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const stepMatches = useMemo(
+  const matchesByRecipe = useMemo(
     () =>
-      matchStepIngredients(
-        recipe.steps,
-        recipe.ingredients.map((line) => {
-          const ingredient = ingredientsById.get(line.ingredientId);
-          return {
-            id: line.id,
-            ingredientId: line.ingredientId,
-            names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
-            group: line.group ?? null,
-          };
-        }),
+      new Map(
+        entries.map((candidate) => [
+          candidate.recipe.id,
+          matchStepIngredients(
+            candidate.recipe.steps,
+            candidate.recipe.ingredients.map((line) => {
+              const ingredient = ingredientsById.get(line.ingredientId);
+              return {
+                id: line.id,
+                ingredientId: line.ingredientId,
+                names: ingredient
+                  ? [ingredient.name, ...ingredient.aliases]
+                  : [],
+                group: line.group ?? null,
+              };
+            }),
+          ),
+        ]),
       ),
-    [recipe.steps, recipe.ingredients, ingredientsById],
+    [entries, ingredientsById],
   );
-  const repeatedGroups = useMemo(
-    () => getRepeatedLineGroups(recipe.ingredients),
-    [recipe.ingredients],
-  );
-  const rows = useMemo(
-    () =>
-      recipe.ingredients.map((line) => ({
+  const stepMatches = matchesByRecipe.get(recipe.id) ?? [];
+  const getRows = useCallback(
+    (target: Recipe, targetServings: number) => {
+      const repeatedGroups = getRepeatedLineGroups(target.ingredients);
+      const result = target.ingredients.map((line) => ({
         id: line.id,
         name:
           ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
@@ -210,20 +223,20 @@ function CookingSession({
           line.amount === null
             ? (line.note ?? '')
             : formatKitchenAmount(
-                scaleAmount(line.amount, servings, recipe.servings),
+                scaleAmount(line.amount, targetServings, target.servings),
                 line.unit,
               ),
         isMeasured: line.amount !== null,
         group: line.group ?? null,
         groupLabel: repeatedGroups.get(line.id) ?? null,
-      })),
-    [
-      recipe.ingredients,
-      recipe.servings,
-      ingredientsById,
-      servings,
-      repeatedGroups,
-    ],
+      }));
+      return result;
+    },
+    [ingredientsById],
+  );
+  const rows = useMemo(
+    () => getRows(recipe, servings),
+    [getRows, recipe, servings],
   );
   const wakeLock = useWakeLock(true);
   const {
@@ -313,14 +326,12 @@ function CookingSession({
   const lastIndex = recipe.steps.length - 1;
   const index = Math.min(stepIndex, lastIndex);
   const hasSteps = recipe.steps.length > 0;
-  const next = getPlateNext(
-    entries.map((candidate) => ({
-      recipeId: candidate.recipe.id,
-      stepIndex: plate[candidate.recipe.id]?.stepIndex ?? 0,
-      stepCount: candidate.recipe.steps.length,
-    })),
-    recipe.id,
-  );
+  const positions = entries.map((candidate) => ({
+    recipeId: candidate.recipe.id,
+    stepIndex: plate[candidate.recipe.id]?.stepIndex ?? 0,
+    stepCount: candidate.recipe.steps.length,
+  }));
+  const next = getPlateNext(positions, recipe.id);
   const nextRecipe =
     next.kind === 'RECIPE'
       ? (entries.find((candidate) => candidate.recipe.id === next.recipeId)
@@ -347,7 +358,7 @@ function CookingSession({
       })),
     [stepText],
   );
-  const stepTimers = splitStepTimers(
+  const readySlots = getReadyStepTimers(
     timers.timers,
     isStepsView && !isFinishShown && hasSteps
       ? {
@@ -357,6 +368,23 @@ function CookingSession({
         }
       : null,
   );
+  const isDraftOpen = isFinishShown && (note.isOpen || putAway.isOpen);
+  const focused = isDraftOpen ? null : timers.focused;
+  const isTimerShown = focused !== null;
+  const focusedEntry =
+    focused === null
+      ? null
+      : (entries.find(
+          (candidate) => candidate.recipe.id === focused.recipeId,
+        ) ?? null);
+  const focusedSteps = focusedEntry?.recipe.steps ?? [];
+  const focusedIndex =
+    focused === null
+      ? 0
+      : Math.max(0, Math.min(focused.stepNumber, focusedSteps.length) - 1);
+  const focusedStepText = focusedSteps[focusedIndex] ?? '';
+  const timerNext =
+    focused === null || isFinishShown ? null : getTimerNext(positions, focused);
   const dishes = entries.map((candidate) => {
     const stepCount = candidate.recipe.steps.length;
     const at = Math.min(
@@ -374,7 +402,7 @@ function CookingSession({
   const voice = useCookVoice({
     uid,
     step:
-      isStepsView && hasSteps && !isFinishShown
+      isStepsView && hasSteps && !isFinishShown && !isTimerShown
         ? { key: `${recipe.id}:${index}`, spoken: spokenStep }
         : null,
   });
@@ -422,7 +450,7 @@ function CookingSession({
     if (target > 0) {
       scroller.scrollBy({ top: target });
     }
-  }, [recipe.id, index, isStepsView, isFinishShown, voice.isOn]);
+  }, [recipe.id, index, isStepsView, isFinishShown, isTimerShown, voice.isOn]);
 
   const goBy = (direction: 1 | -1) => {
     if (isFinished) {
@@ -535,6 +563,7 @@ function CookingSession({
           recipeId: target.recipeId,
           servings: target.servings,
         })),
+        // eslint-disable-next-line react-hooks/purity -- runs from a tap only; the compiler loses track of it once the voice actions are connected
         cookedAt: Date.now(),
       });
       return results
@@ -611,6 +640,7 @@ function CookingSession({
       return;
     }
     voice.stop();
+    // eslint-disable-next-line react-hooks/purity -- runs from a tap only; the compiler loses track of it once the voice actions are connected
     finishedAt.current = Date.now();
     setIsFinished(true);
     scrollToTop();
@@ -655,55 +685,88 @@ function CookingSession({
     [recipe.id],
   );
 
-  const keepFocus = () =>
-    window.requestAnimationFrame(() => {
-      if (document.activeElement && document.activeElement !== document.body) {
-        return;
-      }
-      (stripRef.current ?? primaryRef.current)?.focus({ preventScroll: true });
-    });
-
-  const handleStartTimer = (
+  const startTimer = (
+    target: Recipe,
     stepNumber: number,
     seconds: number,
     label: string,
-  ) => {
+  ) =>
     timers.start(
       {
-        recipeId: recipe.id,
-        recipeTitle: isPlate ? recipe.title : null,
+        recipeId: target.id,
+        recipeTitle: isPlate ? target.title : null,
         stepNumber,
         stepName:
-          getStepName(recipe.steps[stepNumber - 1] ?? '') ||
+          getStepName(target.steps[stepNumber - 1] ?? '') ||
           `Step ${stepNumber}`,
       },
       seconds,
       label,
     );
-    keepFocus();
-  };
 
-  const jumpTo = (timer: CookTimer) => {
+  const jumpTo = (recipeId: string, stepIndex: number) => {
     const target = entries.find(
-      (candidate) => candidate.recipe.id === timer.recipeId,
+      (candidate) => candidate.recipe.id === recipeId,
     );
     if (!target) return;
-    updateRecipe(timer.recipeId, {
+    timers.unfocus();
+    updateRecipe(recipeId, {
       stepIndex: Math.max(
         0,
-        Math.min(timer.stepNumber, target.recipe.steps.length) - 1,
+        Math.min(stepIndex, target.recipe.steps.length - 1),
       ),
     });
-    setCurrentId(timer.recipeId);
+    setCurrentId(recipeId);
     setView('steps');
     setIsFinished(false);
     scrollToTop();
   };
 
-  const handleDismissTimer = (id: string) => {
-    timers.dismiss(id);
-    keepFocus();
+  const backToStep = () => {
+    timers.unfocus();
+    scrollToTop();
   };
+
+  const endTimer = (id: string) => {
+    timers.dismiss(id);
+    scrollToTop();
+  };
+
+  const goNextFromTimer = () => {
+    if (focused === null || timerNext === null) return;
+    if (focused.status === 'done') timers.dismiss(focused.id);
+    if (timerNext.kind === 'STEP') {
+      jumpTo(timerNext.recipeId, timerNext.stepIndex);
+      return;
+    }
+    const target = positions.find(
+      (position) => position.recipeId === timerNext.recipeId,
+    );
+    jumpTo(timerNext.recipeId, target?.stepIndex ?? 0);
+  };
+
+  const handleTimerSwipe = (direction: 1 | -1) =>
+    direction === 1 ? goNextFromTimer() : backToStep();
+
+  const focusKey =
+    focused === null ? null : `${focused.id}:${focused.status === 'done'}`;
+  const shownFocusKey = useRef(focusKey);
+  useEffect(() => {
+    if (shownFocusKey.current === focusKey) {
+      return;
+    }
+    const wasShown = shownFocusKey.current !== null;
+    shownFocusKey.current = focusKey;
+    if (focusKey !== null && !wasShown) {
+      rootRef.current
+        ?.closest<HTMLElement>('[data-subview-overlay]')
+        ?.scrollTo({ top: 0 });
+    }
+    const frame = window.requestAnimationFrame(() =>
+      primaryRef.current?.focus({ preventScroll: true }),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusKey]);
 
   const showView = (next: CookView) => {
     setView(next);
@@ -712,7 +775,7 @@ function CookingSession({
   };
 
   useEffect(() => {
-    if (!isStepsView || !hasSteps) {
+    if (focused === null && (!isStepsView || !hasSteps)) {
       return;
     }
 
@@ -727,8 +790,13 @@ function CookingSession({
       ) {
         return;
       }
-      if (event.key === 'ArrowRight') goBy(1);
-      if (event.key === 'ArrowLeft') goBy(-1);
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      if (focused === null) {
+        goBy(direction);
+        return;
+      }
+      handleTimerSwipe(direction);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -737,41 +805,50 @@ function CookingSession({
   const showStepsView = () => {
     if (!isStepsView) showView('steps');
   };
-  const voiceSlots = hasSteps
-    ? splitStepTimers(timers.timers, {
-        recipeId: recipe.id,
-        stepNumber: index + 1,
-        durations: stepDurations,
-      }).slots
-    : [];
+  const voiceStep =
+    focused !== null && focusedEntry !== null
+      ? {
+          recipe: focusedEntry.recipe,
+          stepNumber: focusedIndex + 1,
+          text: focusedStepText,
+        }
+      : { recipe, stepNumber: index + 1, text: stepText };
+  const spokenShownStep =
+    focused !== null && focusedEntry !== null
+      ? `${isPlate ? `${focusedEntry.recipe.title}. ` : ''}Step ${focusedIndex + 1} of ${focusedSteps.length}. ${focusedStepText}`
+      : spokenStep;
+  const getVoiceTimers = () => withTimeLeft(timers.timers, getRemainingMs);
   const pickTimer = (statuses: CookTimer['status'][], seconds: number | null) =>
-    pickVoiceTimer(timers.timers, {
+    pickVoiceTimer(getVoiceTimers(), {
       statuses,
       label: seconds === null ? null : formatDuration(seconds),
-      recipeId: recipe.id,
-      stepNumber: index + 1,
+      focusedId: focused?.id ?? null,
     });
-  const getTimerProblem = (
-    candidates: CookTimer[],
-    seconds: number | null,
-    verb: string,
-    state: string,
-  ) => {
-    if (candidates.length > 1) {
-      return refuse(
-        `Say which: “${verb} the ${candidates[0].label} timer”`,
-        `${candidates.length} timers are ${state}. Say which one, like ${verb} the ${candidates[0].label} timer.`,
-      );
-    }
-    return refuse(
+  const noTimer = (seconds: number | null, state: string) =>
+    refuse(
       seconds === null
         ? `No timer is ${state}.`
         : `No ${formatDuration(seconds)} timer is ${state}.`,
     );
+  const capRefusal = refuse(
+    `${MAX_COOK_TIMERS} timers are going already.`,
+    `${MAX_COOK_TIMERS} timers are going. Another can start once one finishes or is reset.`,
+  );
+
+  const showDish = (recipeId: string) => {
+    if (focused === null) {
+      showRecipe(recipeId);
+      return;
+    }
+    jumpTo(recipeId, plate[recipeId]?.stepIndex ?? 0);
   };
 
-  const voiceActions: CookVoiceActions = {
+  const makeVoiceActions = (): CookVoiceActions => ({
     next: () => {
+      if (focused !== null && timerNext !== null) {
+        goNextFromTimer();
+        return done();
+      }
       if (next.kind === 'FINISH') {
         return hasSteps
           ? refuse(
@@ -780,11 +857,21 @@ function CookingSession({
             )
           : refuse('This recipe has no steps yet.');
       }
+      if (focused !== null) backToStep();
       showStepsView();
-      handleNext();
+      if (next.kind === 'STEP') {
+        goBy(1);
+        return done();
+      }
+      showRecipe(next.recipeId);
+      focusPrimary();
       return done();
     },
     back: () => {
+      if (focused !== null) {
+        backToStep();
+        return done();
+      }
       if (!hasSteps) return refuse('This recipe has no steps yet.');
       if (index <= 0) return refuse("You're on the first step.");
       showStepsView();
@@ -792,64 +879,91 @@ function CookingSession({
       return done();
     },
     repeat: () =>
-      hasSteps
-        ? done(undefined, spokenStep)
-        : refuse('This recipe has no steps yet.'),
+      voiceStep.text === ''
+        ? refuse('This recipe has no steps yet.')
+        : done(undefined, spokenShownStep),
     showIngredients: () => {
-      if (isWide)
-        return refuse('The ingredients are already beside the steps.');
+      if (focused !== null) backToStep();
+      if (isWide) {
+        return focused !== null
+          ? done()
+          : refuse('The ingredients are already beside the steps.');
+      }
       if (view !== 'ingredients') showView('ingredients');
       return done();
     },
     showSteps: () => {
+      if (focused !== null) backToStep();
       showStepsView();
       return done();
     },
     startTimer: (seconds) => {
-      if (voiceSlots.length === 0) return refuse('No timer on this step.');
+      const durations = findDurations(voiceStep.text).map((found) => ({
+        seconds: found.seconds,
+        label: formatDuration(found.seconds),
+      }));
+      if (durations.length === 0) return refuse('No timer on this step.');
+      const ready = getReadyStepTimers(timers.timers, {
+        recipeId: voiceStep.recipe.id,
+        stepNumber: voiceStep.stepNumber,
+        durations,
+      });
       const slot =
         seconds === null
-          ? (voiceSlots.find(
-              (candidate) => candidate.timer?.status !== 'running',
-            ) ?? voiceSlots[0])
-          : voiceSlots.find((candidate) => candidate.seconds === seconds);
+          ? (ready[0] ?? durations[0])
+          : durations.find((candidate) => candidate.seconds === seconds);
       if (!slot) {
         return refuse(`No ${formatDuration(seconds ?? 0)} timer on this step.`);
       }
-      if (slot.timer?.status === 'running') {
-        return refuse(`The ${slot.label} timer is already going.`);
+      const existing = timers.timers.find(
+        (timer) =>
+          timer.recipeId === voiceStep.recipe.id &&
+          timer.stepNumber === voiceStep.stepNumber &&
+          timer.label === slot.label,
+      );
+      if (existing?.status === 'running') {
+        timers.focus(existing.id);
+        return done(`The ${slot.label} timer is already going`);
       }
-      if (slot.timer?.status === 'paused') {
-        timers.resume(slot.timer.id);
+      if (existing?.status === 'paused') {
+        timers.resume(existing.id);
+        timers.focus(existing.id);
         return done(`Resumed the ${slot.label} timer`);
       }
-      if (timers.isFull) {
-        return refuse(`${MAX_COOK_TIMERS} timers are going. Stop one first.`);
-      }
-      if (slot.timer !== null) timers.dismiss(slot.timer.id);
-      handleStartTimer(index + 1, slot.seconds, slot.label);
-      return done(`Started the ${slot.label} timer`);
+      if (existing) timers.dismiss(existing.id);
+      if (timers.isFull) return capRefusal;
+      const id = startTimer(
+        voiceStep.recipe,
+        voiceStep.stepNumber,
+        slot.seconds,
+        slot.label,
+      );
+      if (id === null) return capRefusal;
+      return done(
+        `Started the ${slot.label} timer`,
+        `Started the ${toSpokenLabel(slot.label)} timer. Say next step to keep going.`,
+      );
     },
     pauseTimer: (seconds) => {
-      const { timer, candidates } = pickTimer(['running'], seconds);
-      if (timer === null) {
-        return getTimerProblem(candidates, seconds, 'pause', 'going');
-      }
+      const timer = pickTimer(['running'], seconds);
+      if (timer === null) return noTimer(seconds, 'going');
       timers.pause(timer.id);
       return done(`Paused the ${timer.label} timer`);
     },
     resumeTimer: (seconds) => {
-      const { timer, candidates } = pickTimer(['paused'], seconds);
-      if (timer === null) {
-        return getTimerProblem(candidates, seconds, 'resume', 'paused');
-      }
+      const timer = pickTimer(['paused'], seconds);
+      if (timer === null) return noTimer(seconds, 'paused');
       timers.resume(timer.id);
       return done(`Resumed the ${timer.label} timer`);
     },
     stopTimer: (seconds, scope) => {
-      const ringing = pickTimer(['done'], seconds).candidates;
+      const ringing = getVoiceTimers().filter(
+        (timer) =>
+          timer.status === 'done' &&
+          (seconds === null || timer.label === formatDuration(seconds)),
+      );
       if (ringing.length > 0) {
-        ringing.forEach((timer) => handleDismissTimer(timer.id));
+        ringing.forEach((timer) => endTimer(timer.id));
         return done(
           ringing.length === 1
             ? `Dismissed the ${ringing[0].label} timer`
@@ -857,38 +971,29 @@ function CookingSession({
         );
       }
       if (scope === 'RINGING') return refuse('No timer is ringing.');
-      const { timer, candidates } = pickTimer(['running', 'paused'], seconds);
-      if (timer === null) {
-        return getTimerProblem(candidates, seconds, 'stop', 'going');
-      }
+      const timer = pickTimer(['running', 'paused'], seconds);
+      if (timer === null) return noTimer(seconds, 'going');
       if (timer.status === 'running') {
         timers.pause(timer.id);
         return done(
           `Paused the ${timer.label} timer`,
-          `Paused the timer. Say stop again to reset it.`,
+          'Paused the timer. Say stop again to reset it.',
         );
       }
-      handleDismissTimer(timer.id);
+      endTimer(timer.id);
       return done(`Reset the ${timer.label} timer`);
     },
     timeLeft: () => {
-      if (timers.timers.length === 0) return refuse('No timer is going.');
-      const onStep = timers.timers.filter(
-        (timer) =>
-          timer.recipeId === recipe.id && timer.stepNumber === index + 1,
-      );
-      const now = Date.now();
+      const told = pickTimersToTell(getVoiceTimers(), focused?.id ?? null);
+      if (told.length === 0) return refuse('No timer is going.');
       const { show, speak } = describeTimersLeft(
-        (onStep.length > 0 ? onStep : timers.timers).map((timer) => {
-          const remainingMs = getRemainingMs(timer, now);
-          return {
-            label: timer.label,
-            name: getTimerCaption(timer),
-            status: timer.status,
-            remainingMs,
-            clock: formatClock(remainingMs),
-          };
-        }),
+        told.map((timer) => ({
+          label: timer.label,
+          name: timer.stepName,
+          status: timer.status,
+          remainingMs: timer.remainingMs,
+          clock: formatClock(timer.remainingMs),
+        })),
       );
       return done(show, speak);
     },
@@ -918,10 +1023,10 @@ function CookingSession({
         (candidate) => candidate.recipe.id === recipeId,
       );
       if (!target) return refuse('That dish isn’t on this plate.');
-      if (target.recipe.id === recipe.id) {
+      if (target.recipe.id === recipe.id && focused === null) {
         return done(`You're on ${recipe.title}`);
       }
-      showRecipe(target.recipe.id);
+      showDish(target.recipe.id);
       return done(`Showing ${target.recipe.title}`);
     },
     cycleRecipe: (direction) => {
@@ -931,30 +1036,30 @@ function CookingSession({
       );
       const target =
         entries[(at + direction + entries.length) % entries.length].recipe;
-      showRecipe(target.id);
+      showDish(target.id);
       return done(`Showing ${target.title}`);
     },
-  };
-  const voiceContext = useMemo(
-    () => ({
-      recipes: entries.map((candidate) => ({
-        id: candidate.recipe.id,
-        title: candidate.recipe.title,
-      })),
-      shownRecipeId: recipe.id,
-      lines: recipe.ingredients.map((line) => {
-        const ingredient = ingredientsById.get(line.ingredientId);
-        return {
-          id: line.id,
-          names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
-          isInStep: stepMatch?.lineIds.includes(line.id) ?? false,
-        };
-      }),
+  });
+  const voiceContext = {
+    recipes: entries.map((candidate) => ({
+      id: candidate.recipe.id,
+      title: candidate.recipe.title,
+    })),
+    shownRecipeId: recipe.id,
+    lines: recipe.ingredients.map((line) => {
+      const ingredient = ingredientsById.get(line.ingredientId);
+      return {
+        id: line.id,
+        names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
+        isInStep: stepMatch?.lineIds.includes(line.id) ?? false,
+      };
     }),
-    [entries, recipe.id, recipe.ingredients, ingredientsById, stepMatch],
-  );
+  };
   const { connect: connectVoice } = voice;
-  useEffect(() => connectVoice(voiceActions, voiceContext));
+  const runVoiceCommand = useEffectEvent((command: CookActionCommand) =>
+    runCookCommand(command, makeVoiceActions()),
+  );
+  useEffect(() => connectVoice(runVoiceCommand, voiceContext));
   const ingredientExample = (
     [...(stepRows.length > 0 ? stepRows : rows)].sort(
       (a, b) => a.name.split(' ').length - b.name.split(' ').length,
@@ -1014,7 +1119,7 @@ function CookingSession({
       .recipe.title ?? null;
 
   const getTimerNote = () => {
-    if (!stepTimers.slots.some((slot) => slot.timer !== null)) return null;
+    if (focused?.status !== 'running') return null;
     if (!wakeLock.isSupported || wakeLock.hasFailed) {
       return 'This device may turn the screen off; timers keep running only while this screen is open.';
     }
@@ -1054,15 +1159,12 @@ function CookingSession({
       isAmountNoteShown={
         isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
       }
-      timerSlots={stepTimers.slots}
-      timerNote={getTimerNote()}
+      timerSlots={readySlots}
       isTimersFull={timers.isFull}
       action={ingredientsButton}
-      onStartTimer={handleStartTimer}
-      onPauseTimer={timers.pause}
-      onResumeTimer={timers.resume}
-      onDismissTimer={handleDismissTimer}
-      onTimerTick={timers.settle}
+      onStartTimer={(stepNumber, seconds, label) =>
+        startTimer(recipe, stepNumber, seconds, label)
+      }
       onSwipe={goBy}
     />
   ) : (
@@ -1073,6 +1175,116 @@ function CookingSession({
       {ingredientsButton}
     </div>
   );
+  const getUpNext = () => {
+    if (timerNext === null) return null;
+    const target = entries.find(
+      (candidate) => candidate.recipe.id === timerNext.recipeId,
+    );
+    if (!target) return null;
+    const stepIndex =
+      timerNext.kind === 'STEP'
+        ? timerNext.stepIndex
+        : Math.min(
+            plate[target.recipe.id]?.stepIndex ?? 0,
+            target.recipe.steps.length - 1,
+          );
+    const text = getFirstSentence(target.recipe.steps[stepIndex] ?? '');
+    if (!text) return null;
+    return {
+      caption:
+        timerNext.kind === 'STEP'
+          ? `Up next · Step ${stepIndex + 1}`
+          : `Up next · ${target.recipe.title}`,
+      text,
+    };
+  };
+  const getTimerContent = () => {
+    if (focused === null) return null;
+    const focusedRecipe = focusedEntry?.recipe ?? null;
+    const focusedServings =
+      focusedEntry === null
+        ? 0
+        : (plate[focusedEntry.recipe.id]?.servings ??
+          getCookStartServings(
+            focusedEntry.recipe.servings,
+            focusedEntry.plannedServings,
+          ));
+    const focusedRows =
+      focusedRecipe === null
+        ? []
+        : focusedRecipe.id === recipe.id
+          ? rows
+          : getRows(focusedRecipe, focusedServings);
+    const match =
+      focusedRecipe === null
+        ? null
+        : (matchesByRecipe.get(focusedRecipe.id)?.[focusedIndex] ?? null);
+    const stepRowsOfTimer =
+      match === null
+        ? []
+        : match.lineIds
+            .map((id) => focusedRows.find((row) => row.id === id))
+            .filter((row) => row !== undefined);
+    const isFocusedScaled =
+      focusedRecipe !== null &&
+      focusedRecipe.servings > 0 &&
+      focusedServings !== focusedRecipe.servings;
+    return (
+      <CookTimerView
+        key={focused.id}
+        timer={focused}
+        recipeTitle={isPlate ? (focusedRecipe?.title ?? null) : null}
+        stepNumber={focusedIndex + 1}
+        stepCount={Math.max(1, focusedSteps.length)}
+        stepText={focusedStepText}
+        stepRows={stepRowsOfTimer}
+        isAmountNoteShown={
+          isFocusedScaled && match !== null && match.hasWrittenAmount
+        }
+        others={getTimerRows(timers.timers, focused.id)}
+        readySlots={
+          timers.isFull
+            ? []
+            : getReadyStepTimers(timers.timers, {
+                recipeId: focused.recipeId,
+                stepNumber: focused.stepNumber,
+                durations: findDurations(focusedStepText).map(
+                  ({ seconds }) => ({
+                    seconds,
+                    label: formatDuration(seconds),
+                  }),
+                ),
+              })
+        }
+        upNext={getUpNext()}
+        note={getTimerNote()}
+        onTick={timers.settle}
+        onPause={timers.pause}
+        onResume={timers.resume}
+        onReset={endTimer}
+        onDismiss={timers.dismiss}
+        onFocus={timers.focus}
+        onStart={(seconds, label) => {
+          if (focusedRecipe !== null) {
+            startTimer(focusedRecipe, focused.stepNumber, seconds, label);
+          }
+        }}
+        onSwipe={handleTimerSwipe}
+      />
+    );
+  };
+  const focusedVerb =
+    focused?.status === 'running'
+      ? 'Pause'
+      : focused?.status === 'paused'
+        ? 'Resume'
+        : 'Dismiss';
+  const handleFocusedAction = () => {
+    if (focused === null) return;
+    if (focused.status === 'running') timers.pause(focused.id);
+    else if (focused.status === 'paused') timers.resume(focused.id);
+    else endTimer(focused.id);
+  };
   const ingredientsContent = (
     <CookIngredientsView
       recipe={recipe}
@@ -1100,21 +1312,29 @@ function CookingSession({
         ) : null
       }
       onClose={closeSubview}
-      onBack={() => (isStepsView ? void leave() : showView('steps'))}
+      onBack={() =>
+        focused !== null
+          ? backToStep()
+          : isStepsView
+            ? void leave()
+            : showView('steps')
+      }
     >
       <div
         ref={rootRef}
         className='flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2'
       >
-        {isPlate && !isFinishShown && (
+        {isPlate && !isFinishShown && focused === null && (
           <CookDishSwitch
             dishes={dishes}
             value={recipe.id}
             onChange={showRecipe}
           />
         )}
-        {!isFinishShown && !isWide && notesBlock}
-        {isFinishShown ? (
+        {!isFinishShown && !isWide && focused === null && notesBlock}
+        {focused !== null ? (
+          getTimerContent()
+        ) : isFinishShown ? (
           <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6'>
             <p className='text-center text-2xl leading-snug font-medium'>
               Nice work
@@ -1229,7 +1449,7 @@ function CookingSession({
           ingredientsContent
         )}
         <div role='status' className='space-y-1 empty:hidden'>
-          {isChanged && (
+          {isChanged && focused === null && (
             <p className='text-muted-foreground text-xs'>
               This recipe was changed or removed elsewhere.
             </p>
@@ -1246,19 +1466,52 @@ function CookingSession({
               />
             )}
             <CookTimerStrip
-              timers={stepTimers.elsewhere}
-              listRef={stripRef}
+              timers={focused === null ? getTimerRows(timers.timers, null) : []}
               className='[@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1 [@media(max-height:500px)]:self-center'
               onTick={timers.settle}
-              onPause={timers.pause}
-              onResume={timers.resume}
-              onDismiss={handleDismissTimer}
-              onJump={
-                isFinishShown && (note.isOpen || putAway.isOpen) ? null : jumpTo
-              }
+              onFocus={isDraftOpen ? null : timers.focus}
             />
             <div className='flex gap-3 [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1'>
-              {isFinishShown && isRecorded && putAway.isOpen ? (
+              {focused !== null ? (
+                <>
+                  {timerNext !== null && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className={join(
+                        'h-14 shrink-0 px-5 text-base',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      aria-label={
+                        timerNext.kind === 'STEP'
+                          ? 'Next step'
+                          : `Next: ${entries.find((candidate) => candidate.recipe.id === timerNext.recipeId)?.recipe.title ?? 'the next recipe'}`
+                      }
+                      onClick={goNextFromTimer}
+                    >
+                      {timerNext.kind === 'STEP' ? 'Next step' : 'Next recipe'}
+                    </Button>
+                  )}
+                  <Button
+                    ref={primaryRef}
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 gap-2 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    aria-label={`${focusedVerb} the ${focused.label} timer`}
+                    onClick={handleFocusedAction}
+                  >
+                    {focused.status === 'running' && (
+                      <Pause className='h-5 w-5' aria-hidden='true' />
+                    )}
+                    {focused.status === 'paused' && (
+                      <Play className='h-5 w-5' aria-hidden='true' />
+                    )}
+                    {focusedVerb}
+                  </Button>
+                </>
+              ) : isFinishShown && isRecorded && putAway.isOpen ? (
                 <>
                   <Button
                     type='button'

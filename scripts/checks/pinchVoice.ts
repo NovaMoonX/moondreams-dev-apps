@@ -6,6 +6,8 @@ import {
   formatSpokenTime,
   normalizeTranscript,
   parseCookCommand,
+  pickTimersToTell,
+  pickVoiceTimer,
   readSpokenDuration,
   toSingular,
   toSpokenAmount,
@@ -541,6 +543,60 @@ assert.deepEqual(
     speak: 'Garlic, 4, For the chicken, plus 2, For the sauce.',
   },
   'an ingredient in two groups says which group each amount is for',
+);
+
+const timerSet = [
+  { id: 'a', label: '30 min', status: 'running', remainingMs: 900_000 },
+  { id: 'b', label: '10 min', status: 'running', remainingMs: 120_000 },
+  { id: 'c', label: '25 min', status: 'paused', remainingMs: 600_000 },
+  { id: 'd', label: '5 min', status: 'done', remainingMs: 0 },
+];
+assert.deepEqual(
+  [
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: null,
+      focusedId: 'a',
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: null,
+      focusedId: null,
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: null,
+      focusedId: 'c',
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: '30 min',
+      focusedId: null,
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['paused'],
+      label: null,
+      focusedId: null,
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: '25 min',
+      focusedId: null,
+    }),
+  ],
+  ['a', 'b', 'b', 'a', 'c', null],
+  'pause and resume act on the timer in focus, else the one that ends soonest, and a said length must match',
+);
+assert.deepEqual(
+  [
+    pickTimersToTell(timerSet, 'a').map((timer) => timer.id),
+    pickTimersToTell(timerSet, 'c').map((timer) => timer.id),
+    pickTimersToTell(timerSet, null).map((timer) => timer.id),
+    pickTimersToTell(timerSet.slice(0, 1), null).map((timer) => timer.id),
+    pickTimersToTell([], null),
+  ],
+  [['a', 'b'], ['c', 'b'], ['d', 'b'], ['a'], []],
+  'time left tells the timer in focus (else a finished one, else the soonest), then the soonest other running one',
 );
 
 console.log('pinchVoice: all checks passed');

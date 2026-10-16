@@ -653,7 +653,8 @@ export interface VoiceTimerState {
   clock: string;
 }
 
-const toSpokenLabel = (label: string) =>
+/** A timer's length as said aloud: "30 min" is "30 minute", as in "the 30 minute timer". */
+export const toSpokenLabel = (label: string) =>
   label
     .replace(/\bh\b/g, 'hour')
     .replace(/\bmin\b/g, 'minute')
@@ -732,41 +733,69 @@ export const describeAmounts = (
   return result;
 };
 
-/** The timer a spoken command means: one with the said length if any, on the step on screen first, else the only one in the session; null with the candidates when that leaves several or none. */
+/** The timer a spoken command means: the one in focus when it fits, else the one that ends soonest (with the said length, in the given states); null when none fits. */
 export const pickVoiceTimer = <
-  T extends {
-    recipeId: string;
-    stepNumber: number;
-    label: string;
-    status: string;
-  },
+  T extends { id: string; label: string; status: string; remainingMs: number },
 >(
   timers: T[],
   {
     statuses,
     label,
-    recipeId,
-    stepNumber,
+    focusedId,
   }: {
     statuses: T['status'][];
     label: string | null;
-    recipeId: string;
-    stepNumber: number;
+    focusedId: string | null;
   },
-) => {
+): T | null => {
   const candidates = timers.filter(
     (timer) =>
       statuses.includes(timer.status) &&
       (label === null || timer.label === label),
   );
-  const onStep = candidates.filter(
-    (timer) => timer.recipeId === recipeId && timer.stepNumber === stepNumber,
-  );
-  const getTimer = () => {
-    if (onStep.length > 0) return onStep[0];
-    if (candidates.length === 1) return candidates[0];
-    return null;
-  };
-  const result = { timer: getTimer(), candidates };
+  const result =
+    candidates.find((timer) => timer.id === focusedId) ??
+    candidates.reduce<T | null>(
+      (soonest, timer) =>
+        soonest === null || timer.remainingMs < soonest.remainingMs
+          ? timer
+          : soonest,
+      null,
+    );
+  return result;
+};
+
+/** The timers "how much time is left" answers about: the one in focus (else a finished one, else the soonest running, else a paused one), then the soonest other running timer, if any. */
+export const pickTimersToTell = <
+  T extends { id: string; status: string; remainingMs: number },
+>(
+  timers: T[],
+  focusedId: string | null,
+): T[] => {
+  const running = timers
+    .filter((timer) => timer.status === 'running')
+    .sort((a, b) => a.remainingMs - b.remainingMs);
+  const first =
+    timers.find((timer) => timer.id === focusedId) ??
+    timers.find((timer) => timer.status === 'done') ??
+    running[0] ??
+    timers.find((timer) => timer.status === 'paused') ??
+    null;
+  if (first === null) return [];
+  const other = running.find((timer) => timer.id !== first.id);
+  const result = other ? [first, other] : [first];
+  return result;
+};
+
+/** Each timer with the time it has left right now, for answering a spoken command. */
+export const withTimeLeft = <T>(
+  timers: T[],
+  getRemainingMs: (timer: T, now: number) => number,
+) => {
+  const now = Date.now();
+  const result = timers.map((timer) => ({
+    ...timer,
+    remainingMs: getRemainingMs(timer, now),
+  }));
   return result;
 };

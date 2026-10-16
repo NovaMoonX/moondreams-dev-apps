@@ -4126,7 +4126,7 @@ assert.deepEqual(
       showMacros: true,
       basis: 'PER_100G',
       showStock: true,
-      showAverages: true,
+      showStats: false,
     },
     false,
     true,
@@ -4136,21 +4136,25 @@ assert.deepEqual(
 );
 assert.deepEqual(
   [
-    DEFAULT_LIST_VIEW_OPTIONS.showAverages,
-    parseListViewOptions({ showPrices: true })?.showAverages,
-    parseListViewOptions({ showAverages: false })?.showAverages,
-    parseListViewOptions({ showAverages: 'off' })?.showAverages,
+    DEFAULT_LIST_VIEW_OPTIONS.showStats,
+    parseListViewOptions({ showPrices: true })?.showStats,
+    parseListViewOptions({ showStats: true })?.showStats,
+    parseListViewOptions({ showStats: 'on' })?.showStats,
+    parseListViewOptions({ showAverages: true })?.showStats,
+    parseListViewOptions({ showAverages: true, showStats: true })?.showStats,
+    'showAverages' in (parseListViewOptions({ showAverages: true }) ?? {}),
+    countCustomizedViewOptions(DEFAULT_LIST_VIEW_OPTIONS, 'calendar'),
     countCustomizedViewOptions(
-      { ...DEFAULT_LIST_VIEW_OPTIONS, showAverages: false },
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showStats: true },
       'calendar',
     ),
     countCustomizedViewOptions(
-      { ...DEFAULT_LIST_VIEW_OPTIONS, showAverages: false },
+      { ...DEFAULT_LIST_VIEW_OPTIONS, showStats: true },
       'recipes',
     ),
   ],
-  [true, true, false, true, 1, 0],
-  "the Calendar's averages start shown, a choice stored before the switch existed reads as shown, and hiding them counts as a change on the Calendar only",
+  [false, false, true, false, false, true, false, 0, 1, 0],
+  "the Calendar's stats start off, a choice stored before the switch existed or a non-boolean reads as off, the old averages choice neither turns them on nor survives a write, and turning them on counts as a change on the Calendar only",
 );
 assert.deepEqual(
   [
@@ -4307,6 +4311,7 @@ assert.equal(getPutAwayText([]), null);
     getCostAverages,
     getDayCostText,
     getPeriodCostText,
+    getPeriodCostTile,
     getPricedCoverage,
     formatPeriodCost,
   } = await import('../../src/apps/pinch/utils/stats.ts');
@@ -4352,6 +4357,62 @@ assert.equal(getPutAwayText([]), null);
     ),
     '$4.10+',
     'a period whose every gap is on a fixed day says + like its day rows, never "so far"',
+  );
+
+  const costCases: [Parameters<typeof getPeriodCostTile>[0], string][] = [
+    [
+      { spendCents: 410, mealsPriced: 3, leftOut: [], openLeftOut: [] },
+      'whole',
+    ],
+    [
+      { spendCents: 410, mealsPriced: 3, leftOut: [gapA], openLeftOut: [gapA] },
+      'open',
+    ],
+    [
+      { spendCents: 410, mealsPriced: 3, leftOut: [gapA], openLeftOut: [] },
+      'fixed',
+    ],
+    [
+      {
+        spendCents: 789_450,
+        mealsPriced: 300,
+        leftOut: [gapA],
+        openLeftOut: [gapA],
+      },
+      'big',
+    ],
+  ];
+  assert.deepEqual(
+    costCases.map(([stats]) => getPeriodCostTile(stats)),
+    [
+      { value: '$4.10', label: 'Total' },
+      { value: '$4.10', label: 'Total so far' },
+      { value: '$4.10+', label: 'Total' },
+      { value: '$7,895', label: 'Total so far' },
+    ],
+    'the Total tile puts "so far" in its caption and "+" on its figure, and a big total drops its cents',
+  );
+  assert.deepEqual(
+    costCases.map(([stats]) => {
+      const tile = getPeriodCostTile(stats);
+      return tile === null
+        ? null
+        : tile.label === 'Total so far'
+          ? `${tile.value} so far`
+          : tile.value;
+    }),
+    costCases.map(([stats]) => getPeriodCostText(stats, false)),
+    'the Total tile and the summary line read one figure, so the tile row can take the total over from the line without the two ever disagreeing',
+  );
+  assert.equal(
+    getPeriodCostTile({
+      spendCents: 0,
+      mealsPriced: 0,
+      leftOut: [],
+      openLeftOut: [],
+    }),
+    null,
+    'with nothing priced there is no Total tile, and the summary line keeps saying "No price yet"',
   );
 
   const averagesOf = (
@@ -4401,7 +4462,7 @@ assert.equal(getPutAwayText([]), null);
       ['Avg per meal $0.30'],
       ['Per g protein so far $0.01'],
     ],
-    'the averages line has an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
+    'the stats tiles have an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
   );
   assert.deepEqual(
     [
@@ -6793,35 +6854,36 @@ const sessionTimers = [
   stepTimer('rice', 'rice', 2, '10 min'),
   stepTimer('edited', 'adobo', 2, '25 min'),
 ];
-const onStepTwo = plateCooks.splitStepTimers(sessionTimers, {
-  recipeId: 'adobo',
-  stepNumber: 2,
-  durations: simmerAndRest,
-});
 assert.deepEqual(
-  {
-    cards: onStepTwo.slots.map((slot) => [slot.label, slot.timer?.id ?? null]),
-    strip: onStepTwo.elsewhere.map((timer) => timer.id),
-  },
-  {
-    cards: [
-      ['10 min', 'simmer'],
-      ['5 min', null],
-    ],
-    strip: ['marinate', 'rice', 'edited'],
-  },
-  'the step on screen holds a card per time it mentions, ready or running; a timer from another step, another recipe of the plate or a time the step no longer says stays in the strip',
+  plateCooks
+    .getReadyStepTimers(sessionTimers, {
+      recipeId: 'adobo',
+      stepNumber: 2,
+      durations: simmerAndRest,
+    })
+    .map((slot) => slot.label),
+  ['5 min'],
+  'the step on screen offers a Start card only for a time it mentions with no timer yet: its running 10 min lives in the timer view or the pill row, and a timer from another step, another recipe or a time the step no longer says never hides a card',
 );
 assert.deepEqual(
   plateCooks
-    .splitStepTimers(sessionTimers, null)
-    .elsewhere.map((timer) => timer.id),
-  ['simmer', 'marinate', 'rice', 'edited'],
-  'with no step on screen (the ingredient list, the Finish panel) every timer is in the strip, so none is ever out of sight',
+    .getReadyStepTimers(sessionTimers, {
+      recipeId: 'rice',
+      stepNumber: 1,
+      durations: simmerAndRest,
+    })
+    .map((slot) => slot.label),
+  ['10 min', '5 min'],
+  'a timer on another recipe of the plate with the same length and step number leaves this recipe’s cards ready',
+);
+assert.deepEqual(
+  plateCooks.getReadyStepTimers(sessionTimers, null),
+  [],
+  'with no step on screen (the ingredient list, the Finish panel) there are no cards',
 );
 assert.deepEqual(
   plateCooks
-    .splitStepTimers([], {
+    .getReadyStepTimers([], {
       recipeId: 'adobo',
       stepNumber: 4,
       durations: [1, 2, 3, 4, 5, 6].map((minutes) => ({
@@ -6829,9 +6891,128 @@ assert.deepEqual(
         label: `${minutes} min`,
       })),
     })
-    .slots.map((slot) => slot.label),
+    .map((slot) => slot.label),
   ['1 min', '2 min', '3 min', '4 min'],
   'a step that mentions six times offers cards for the first four, as many as can run at once',
+);
+
+const running = (id: string, endsAt: number) => ({
+  id,
+  status: 'running' as const,
+  endsAt,
+});
+const paused = (id: string) => ({ id, status: 'paused' as const });
+const done = (id: string) => ({ id, status: 'done' as const });
+assert.deepEqual(
+  [
+    plateCooks.getFocusedTimerId(
+      [running('rice', 9_000), running('adobo', 4_000)],
+      null,
+    ),
+    plateCooks.getFocusedTimerId(
+      [running('rice', 9_000), running('adobo', 4_000)],
+      'rice',
+    ),
+    plateCooks.getFocusedTimerId(
+      [paused('rice'), running('adobo', 4_000)],
+      'rice',
+    ),
+    plateCooks.getFocusedTimerId([paused('rice'), paused('adobo')], null),
+    plateCooks.getFocusedTimerId([], null),
+    plateCooks.getFocusedTimerId(
+      [running('rice', 9_000), running('adobo', 4_000)],
+      'dismissed',
+    ),
+  ],
+  ['adobo', 'rice', 'rice', 'rice', null, 'adobo'],
+  'with nothing picked the running timer ending soonest is in focus; the one started or tapped stays in focus, also while paused, even when another ends sooner; a pick that is gone falls back to the soonest',
+);
+assert.deepEqual(
+  [
+    plateCooks.getFocusedTimerId(
+      [running('rice', 9_000), done('adobo'), done('beans')],
+      'rice',
+    ),
+    plateCooks.getFocusedTimerId(
+      [done('adobo'), running('rice', 9_000), done('beans')],
+      'beans',
+    ),
+    plateCooks.getFocusedTimerId([paused('rice'), done('adobo')], 'rice'),
+  ],
+  ['adobo', 'beans', 'adobo'],
+  'a finished timer comes first, over a running or paused pick: the one just picked when it has finished, else the first to finish',
+);
+assert.deepEqual(
+  [
+    plateCooks.getFocusAfterFinish({ isShown: true, pickedId: 'adobo' }),
+    plateCooks.getFocusAfterFinish({ isShown: false, pickedId: 'adobo' }),
+  ],
+  [
+    { isShown: true, pickedId: 'adobo' },
+    { isShown: true, pickedId: null },
+  ],
+  'a finish brings the timer view up, keeping the timer the person was watching (so Dismiss returns to it) and forgetting one already sent to the background',
+);
+const watchingAdobo = { isShown: true, pickedId: 'adobo' };
+assert.deepEqual(
+  [
+    plateCooks.getFocusAfterDismiss(
+      [running('adobo', 9_000), done('rice')],
+      watchingAdobo,
+      'rice',
+    ),
+    plateCooks.getFocusAfterDismiss(
+      [running('adobo', 9_000), done('rice')],
+      { isShown: true, pickedId: null },
+      'rice',
+    ),
+    plateCooks.getFocusAfterDismiss(
+      [paused('adobo'), running('rice', 9_000)],
+      watchingAdobo,
+      'adobo',
+    ),
+    plateCooks.getFocusAfterDismiss(
+      [done('adobo'), done('rice')],
+      watchingAdobo,
+      'adobo',
+    ),
+    plateCooks.getFocusAfterDismiss(
+      [running('adobo', 9_000), running('rice', 4_000)],
+      watchingAdobo,
+      'rice',
+    ),
+  ],
+  [
+    { isShown: true, pickedId: 'adobo' },
+    { isShown: false, pickedId: null },
+    { isShown: false, pickedId: null },
+    { isShown: true, pickedId: null },
+    watchingAdobo,
+  ],
+  'Dismiss on a finished timer returns to the timer the person was watching or just started, else to the step; Reset closes the view; another finished timer takes the front; ending a timer from its row changes nothing',
+);
+assert.deepEqual(
+  [
+    plateCooks
+      .getTimerRows(
+        [
+          running('marinate', 9_000),
+          paused('rice'),
+          done('rest'),
+          running('simmer', 2_000),
+        ],
+        'simmer',
+      )
+      .map((timer) => timer.id),
+    plateCooks
+      .getTimerRows([running('marinate', 9_000), paused('rice')], null)
+      .map((timer) => timer.id),
+  ],
+  [
+    ['rest', 'marinate', 'rice'],
+    ['marinate', 'rice'],
+  ],
+  'the other timers (and the pill row, with nothing in focus) list a finished one first, then the rest in the order they started, so pausing one never moves it',
 );
 
 const plateAt = (recipeId: string, stepIndex: number, stepCount: number) => ({
@@ -6839,6 +7020,61 @@ const plateAt = (recipeId: string, stepIndex: number, stepCount: number) => ({
   stepIndex,
   stepCount,
 });
+const timerAt = (recipeId: string, stepNumber: number) => ({
+  recipeId,
+  stepNumber,
+});
+assert.deepEqual(
+  [
+    plateCooks.getTimerNext([plateAt('adobo', 0, 3)], timerAt('adobo', 1)),
+    plateCooks.getTimerNext([plateAt('adobo', 1, 3)], timerAt('adobo', 1)),
+    plateCooks.getTimerNext([plateAt('adobo', 2, 3)], timerAt('adobo', 1)),
+    plateCooks.getTimerNext([plateAt('adobo', 2, 3)], timerAt('adobo', 3)),
+    plateCooks.getTimerNext(
+      [plateAt('adobo', 2, 3), plateAt('rice', 0, 2)],
+      timerAt('adobo', 3),
+    ),
+    plateCooks.getTimerNext(
+      [plateAt('adobo', 1, 3), plateAt('rice', 1, 2)],
+      timerAt('adobo', 3),
+    ),
+    plateCooks.getTimerNext([plateAt('adobo', 0, 3)], timerAt('gone', 1)),
+  ],
+  [
+    { kind: 'STEP', recipeId: 'adobo', stepIndex: 1 },
+    { kind: 'STEP', recipeId: 'adobo', stepIndex: 1 },
+    null,
+    null,
+    { kind: 'RECIPE', recipeId: 'rice' },
+    null,
+    null,
+  ],
+  '"Up next" after a timer is its recipe’s next step, also once the person moved on to it; nothing once they are past it, on a lone recipe’s last step or for a timer whose recipe is gone; on a plate, the last step leads to the next recipe still short of its own last',
+);
+assert.deepEqual(
+  [
+    plateCooks.getFirstSentence(
+      'Add the vinegar, then simmer for 25 minutes. Stir once. Serve.',
+    ),
+    plateCooks.getFirstSentence('Cook the rice.'),
+    plateCooks.getFirstSentence('Bake at 180°C for 1.5 hours. Rest it.'),
+    plateCooks.getFirstSentence('Season to taste e.g. salt'),
+    plateCooks.getFirstSentence('Chop the onions\nthen fry them. Done.'),
+    plateCooks.getFirstSentence('  Whisk the eggs!  2 at a time.'),
+    plateCooks.getFirstSentence(''),
+  ],
+  [
+    'Add the vinegar, then simmer for 25 minutes.',
+    'Cook the rice.',
+    'Bake at 180°C for 1.5 hours.',
+    'Season to taste e.g. salt',
+    'Chop the onions',
+    'Whisk the eggs!',
+    '',
+  ],
+  '"Up next" reads a step up to its first sentence end or line break, never at a decimal point or a stop before a lowercase word',
+);
+
 assert.deepEqual(
   [
     plateCooks.getPlateNext(

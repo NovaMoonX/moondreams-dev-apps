@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Pause, Play, RotateCcw } from 'lucide-react';
+import { BellRing, Pause } from 'lucide-react';
 
 import { formatClock } from '@/utils/durationUtils';
 import {
@@ -14,29 +14,19 @@ import { getTimerCaption } from '@apps/pinch/utils/cooks';
 const TICK_MS = 250;
 
 interface CookTimerStripProps {
+  /** Finished ones first, then in the order they started. */
   timers: CookTimer[];
-  listRef: Ref<HTMLUListElement>;
   onTick: () => void;
-  onPause: (id: string) => void;
-  onResume: (id: string) => void;
-  onDismiss: (id: string) => void;
-  /** Shows the timer's recipe and step; null while the screen holds a draft it shouldn't leave. */
-  onJump: ((timer: CookTimer) => void) | null;
+  /** Brings a timer into focus; null while the screen holds a draft the timer view shouldn't cover. */
+  onFocus: ((id: string) => void) | null;
   className?: string;
 }
 
-const ICON_BUTTON_CLASS =
-  "relative size-9 shrink-0 after:absolute after:-inset-0.5 after:content-['']";
-
-/** One row that scrolls sideways, so more timers never grow it over the step. The tick lives here, so only the pills re-render as the seconds pass. */
+/** The timers running in the background as one row of pills, each only its time left and a short name; a tap brings that timer into focus, where its controls are. The tick lives here, so only the pills re-render as the seconds pass. */
 function CookTimerStrip({
   timers,
-  listRef,
   onTick,
-  onPause,
-  onResume,
-  onDismiss,
-  onJump,
+  onFocus,
   className,
 }: CookTimerStripProps) {
   const hasRunning = timers.some((timer) => timer.status === 'running');
@@ -58,134 +48,81 @@ function CookTimerStrip({
     return null;
   }
 
-  const isPlate = timers.some((timer) => timer.recipeTitle !== null);
-  const renderTarget = (timer: CookTimer, children: ReactNode) =>
-    onJump ? (
-      <Button
-        type='button'
-        variant='tertiary'
-        className="text-foreground! relative h-full min-h-0 min-w-0 flex-1 justify-start rounded-full px-0! py-0! text-left font-normal after:absolute after:inset-x-0 after:-inset-y-px after:content-[''] hover:bg-transparent"
-        onClick={() => onJump(timer)}
-      >
-        {children}
-      </Button>
-    ) : (
-      <span className='flex min-w-0 flex-1'>{children}</span>
-    );
-
   return (
     <ul
-      ref={listRef}
-      tabIndex={-1}
       aria-label='Timers'
-      className={join(
-        'flex snap-x gap-2 overflow-x-auto outline-none',
-        className,
-      )}
+      className={join('flex snap-x gap-2 overflow-x-auto', className)}
     >
       {timers.map((timer) => {
-        const name = getTimerCaption(timer);
-        const caption = `${name} · ${timer.label}`;
-        const pillClass = join(
-          'flex h-10 flex-1 snap-start items-center gap-2 rounded-full border py-0 pr-0.5 pl-4 sm:max-w-sm',
-          isPlate ? 'min-w-[min(18rem,85%)]' : 'min-w-[min(14rem,80%)]',
+        const isSharedStep = timers.some(
+          (other) =>
+            other.id !== timer.id &&
+            other.recipeId === timer.recipeId &&
+            other.stepNumber === timer.stepNumber,
         );
-        return timer.status === 'done' ? (
-          <li
-            key={timer.id}
-            className={join(pillClass, 'bg-accent border-primary pr-1')}
-          >
-            {renderTarget(
-              timer,
-              <span className='min-w-0 truncate text-sm font-semibold'>
-                Time's up: {caption}
-              </span>,
+        const name = isSharedStep
+          ? `${timer.stepName} · ${timer.label}`
+          : timer.stepName;
+        const status =
+          timer.status === 'done'
+            ? ", time's up"
+            : timer.status === 'paused'
+              ? ', paused'
+              : '';
+        const pillClass = join(
+          'flex h-10 w-full min-w-0 snap-start items-center justify-start gap-2 rounded-full border px-3.5 text-left',
+          timer.status === 'done' && 'border-primary bg-accent',
+          timer.status === 'paused' && 'border-border bg-muted/50',
+          timer.status === 'running' && 'border-border bg-background',
+        );
+        const content = [
+          timer.status === 'done' && (
+            <BellRing
+              key='icon'
+              className='h-4 w-4 shrink-0'
+              aria-hidden='true'
+            />
+          ),
+          timer.status === 'paused' && (
+            <Pause
+              key='icon'
+              className='text-muted-foreground h-4 w-4 shrink-0'
+              aria-hidden='true'
+            />
+          ),
+          <span
+            key='time'
+            className={join(
+              'shrink-0 text-base font-semibold whitespace-nowrap tabular-nums',
+              timer.status === 'paused' && 'text-muted-foreground',
             )}
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              className="relative h-8 shrink-0 rounded-full px-3 after:absolute after:-inset-1 after:content-['']"
-              aria-label={`Dismiss the ${timer.label} timer: ${name}`}
-              onClick={() => onDismiss(timer.id)}
-            >
-              Dismiss
-            </Button>
-          </li>
-        ) : (
-          <li
-            key={timer.id}
-            className={join(pillClass, 'border-border bg-background')}
           >
-            {renderTarget(
-              timer,
-              <span
-                className={join(
-                  'flex min-w-0 flex-1 gap-2',
-                  timer.recipeTitle === null
-                    ? 'items-baseline'
-                    : 'items-center',
-                )}
-              >
-                <span
-                  className={join(
-                    'text-lg font-semibold tabular-nums',
-                    timer.status === 'paused' && 'text-muted-foreground',
-                  )}
-                >
-                  {formatClock(getRemainingMs(timer, now))}
-                </span>
-                <span className='text-muted-foreground min-w-0 text-xs'>
-                  {timer.recipeTitle !== null && (
-                    <span className='block truncate'>{timer.recipeTitle}</span>
-                  )}
-                  <span className='block truncate'>
-                    {timer.stepName}
-                    {timers.some(
-                      (other) =>
-                        other.id !== timer.id &&
-                        other.recipeId === timer.recipeId &&
-                        other.stepNumber === timer.stepNumber,
-                    ) && ` · ${timer.label}`}
-                    {timer.status === 'paused' && ' · paused'}
-                  </span>
-                </span>
-              </span>,
-            )}
-            <span className='flex shrink-0 items-center gap-3'>
-              {timer.status === 'paused' && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='icon'
-                  rounded='full'
-                  className={ICON_BUTTON_CLASS}
-                  aria-label={`Reset the ${timer.label} timer: ${name}`}
-                  onClick={() => onDismiss(timer.id)}
-                >
-                  <RotateCcw className='h-4 w-4' aria-hidden='true' />
-                </Button>
-              )}
+            {timer.status === 'done'
+              ? "Time's up"
+              : formatClock(getRemainingMs(timer, now))}
+          </span>,
+          <span
+            key='name'
+            className='text-muted-foreground min-w-0 truncate text-sm'
+          >
+            {name}
+          </span>,
+        ];
+        return (
+          <li key={timer.id} className='flex max-w-64 min-w-36 shrink'>
+            {onFocus ? (
               <Button
                 type='button'
                 variant='tertiary'
-                size='icon'
-                rounded='full'
-                className={ICON_BUTTON_CLASS}
-                aria-label={`${timer.status === 'running' ? 'Pause' : 'Resume'} the ${timer.label} timer: ${name}`}
-                onClick={() =>
-                  timer.status === 'running'
-                    ? onPause(timer.id)
-                    : onResume(timer.id)
-                }
+                className={join('text-foreground! py-0 font-normal', pillClass)}
+                aria-label={`${getTimerCaption(timer)}, ${timer.label} timer${status}`}
+                onClick={() => onFocus(timer.id)}
               >
-                {timer.status === 'running' ? (
-                  <Pause className='h-4 w-4' aria-hidden='true' />
-                ) : (
-                  <Play className='h-4 w-4' aria-hidden='true' />
-                )}
+                {content}
               </Button>
-            </span>
+            ) : (
+              <span className={pillClass}>{content}</span>
+            )}
           </li>
         );
       })}

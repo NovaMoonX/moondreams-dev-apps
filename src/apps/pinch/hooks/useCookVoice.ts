@@ -46,8 +46,15 @@ export interface CookVoiceMessage {
   tone: keyof typeof MESSAGE_MS;
 }
 
-const runCommand = (
-  command: Exclude<CookCommand, { kind: 'STOP_LISTENING' }>,
+/** A command the screen carries out (everything but "stop listening", which the hook handles). */
+export type CookActionCommand = Exclude<
+  CookCommand,
+  { kind: 'STOP_LISTENING' }
+>;
+
+/** Runs a command through the screen's actions. */
+export const runCookCommand = (
+  command: CookActionCommand,
   actions: CookVoiceActions,
 ): CookVoiceResult => {
   switch (command.kind) {
@@ -92,7 +99,7 @@ const getListenLang = () => {
 
 interface UseCookVoiceOptions {
   uid: string;
-  /** The step on screen as it is read aloud; null while no step is shown. */
+  /** The step on screen as it is read aloud; null while no step is shown (a reading already going, such as an answer, then carries on). */
   step: { key: string; spoken: string } | null;
 }
 
@@ -113,7 +120,7 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
     speak: getPageLang(),
   }));
   const handlers = useRef<{
-    actions: CookVoiceActions;
+    run: (command: CookActionCommand) => CookVoiceResult;
     context: CookVoiceContext;
   } | null>(null);
   const lastHeard = useRef({ key: '', at: 0 });
@@ -122,8 +129,11 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
   const stopRef = useRef<() => void>(() => undefined);
 
   const connect = useCallback(
-    (actions: CookVoiceActions, context: CookVoiceContext) => {
-      handlers.current = { actions, context };
+    (
+      run: (command: CookActionCommand) => CookVoiceResult,
+      context: CookVoiceContext,
+    ) => {
+      handlers.current = { run, context };
     },
     [],
   );
@@ -135,7 +145,7 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
 
   const handleTranscript = (alternatives: string[]) => {
     if (handlers.current === null) return;
-    const { context: shown, actions: run } = handlers.current;
+    const { context: shown, run } = handlers.current;
     const command = parseCookCommand(alternatives, shown);
     if (command === null) return;
     if (command.kind === 'STOP_LISTENING') {
@@ -155,7 +165,7 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
     }
     lastHeard.current = { key, at: now };
 
-    const result = runCommand(command, run);
+    const result = run(command);
     if (!result.ok) {
       show(result.reason, 'PROBLEM');
       if (isReadingAloud) sayRef.current(result.spoken ?? result.reason);
@@ -201,7 +211,7 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
       say(spoken);
       return;
     }
-    quiet();
+    if (stepKey !== null) quiet();
   }, [isHearing, isReadingAloud, stepKey, spoken, say, quiet]);
 
   const turnOn = () => {

@@ -152,7 +152,10 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
     return voice.error === null ? null : (
       <p
         role='status'
-        className={join('text-muted-foreground self-center text-xs', className)}
+        className={join(
+          'text-muted-foreground text-xs [@media(max-height:500px)]:self-center',
+          className,
+        )}
       >
         {ERROR_TEXT[voice.error]}
       </p>
@@ -161,7 +164,10 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
 
   return (
     <div
-      className={join('flex min-h-6 items-center gap-3 self-center', className)}
+      className={join(
+        'flex min-h-6 items-center gap-3 [@media(max-height:500px)]:self-center',
+        className,
+      )}
     >
       <p
         role='status'
