@@ -918,17 +918,22 @@ function CookingSession({
           isFocusedScaled && match !== null && match.hasWrittenAmount
         }
         others={getTimerRows(timers.timers, focused.id)}
-        readySlots={getReadyStepTimers(timers.timers, {
-          recipeId: focused.recipeId,
-          stepNumber: focused.stepNumber,
-          durations: findDurations(focusedStepText).map(({ seconds }) => ({
-            seconds,
-            label: formatDuration(seconds),
-          })),
-        })}
+        readySlots={
+          timers.isFull
+            ? []
+            : getReadyStepTimers(timers.timers, {
+                recipeId: focused.recipeId,
+                stepNumber: focused.stepNumber,
+                durations: findDurations(focusedStepText).map(
+                  ({ seconds }) => ({
+                    seconds,
+                    label: formatDuration(seconds),
+                  }),
+                ),
+              })
+        }
         upNext={getUpNext()}
         note={getTimerNote()}
-        isTimersFull={timers.isFull}
         onTick={timers.settle}
         onPause={timers.pause}
         onResume={timers.resume}

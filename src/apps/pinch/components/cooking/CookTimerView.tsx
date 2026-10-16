@@ -9,7 +9,6 @@ import { formatClock } from '@/utils/durationUtils';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookStepAmounts from '@apps/pinch/components/cooking/CookStepAmounts';
 import type { StepTimerSlot } from '@apps/pinch/components/cooking/CookStepView';
-import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 import {
   getRemainingMs,
   type CookTimer,
@@ -31,12 +30,11 @@ interface CookTimerViewProps {
   isAmountNoteShown: boolean;
   /** The session's other timers, finished ones first. */
   others: CookTimer[];
-  /** The timer's step's other times that have no timer yet. */
+  /** The timer's step's other times that have no timer yet and could start now. */
   readySlots: StepTimerSlot[];
   upNext: { caption: string; text: string } | null;
   /** The keep-the-screen-open line, only while the timer runs. */
   note: string | null;
-  isTimersFull: boolean;
   onTick: () => void;
   onPause: (id: string) => void;
   onResume: (id: string) => void;
@@ -60,7 +58,6 @@ function CookTimerView({
   readySlots,
   upNext,
   note,
-  isTimersFull,
   onTick,
   onPause,
   onResume,
@@ -144,7 +141,7 @@ function CookTimerView({
         )}
       </div>
       <div className='my-auto flex flex-col gap-4 [@media(max-height:500px)]:contents [@media(max-height:640px)]:gap-3'>
-        <div className='min-w-0 space-y-2 [@media(max-height:500px)]:col-start-1 [@media(max-height:500px)]:row-span-3 [@media(max-height:500px)]:row-start-1 [@media(max-height:500px)]:my-auto'>
+        <div className='min-w-0 [@media(max-height:500px)]:col-start-1 [@media(max-height:500px)]:row-span-3 [@media(max-height:500px)]:row-start-1 [@media(max-height:500px)]:my-auto'>
           <section
             aria-label={`${timer.label} timer`}
             className={join(
@@ -215,7 +212,6 @@ function CookTimerView({
               {isDone ? `The ${timer.label} timer is done.` : ''}
             </span>
           </section>
-          {note && <p className='text-muted-foreground text-xs'>{note}</p>}
         </div>
         {(others.length > 0 || readySlots.length > 0) && (
           <section
@@ -319,7 +315,6 @@ function CookTimerView({
                     variant='secondary'
                     className='h-10 shrink-0 gap-1.5 px-3 text-sm'
                     aria-label={`Start the ${slot.label} timer`}
-                    disabled={isTimersFull}
                     onClick={() => onStart(slot.seconds, slot.label)}
                   >
                     <Play className='h-4 w-4' aria-hidden='true' />
@@ -328,12 +323,6 @@ function CookTimerView({
                 </li>
               ))}
             </ul>
-            {isTimersFull && readySlots.length > 0 && (
-              <p role='status' className='text-muted-foreground mt-1.5 text-xs'>
-                {MAX_COOK_TIMERS} timers are going. Another can start once one
-                finishes or is reset.
-              </p>
-            )}
           </section>
         )}
       </div>
@@ -349,6 +338,11 @@ function CookTimerView({
             {upNext.text}
           </p>
         </section>
+      )}
+      {note && (
+        <p className='text-muted-foreground text-xs [@media(max-height:500px)]:col-start-1'>
+          {note}
+        </p>
       )}
     </SwipeArea>
   );
