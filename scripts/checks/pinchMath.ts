@@ -4359,6 +4359,7 @@ assert.equal(getPutAwayText([]), null);
   ) =>
     getCostAverages(
       {
+        plannedCount: 2,
         mealsPriced: 2,
         avgPerMealCents: 29.6,
         proteinCentsPerGram: 1.2,
@@ -4400,6 +4401,33 @@ assert.equal(getPutAwayText([]), null);
       ['Per g protein so far $0.01'],
     ],
     'the averages line has an average per meal only from two priced meals and the price per gram of protein only while protein is on and known, so a week with one priced meal says nothing',
+  );
+  assert.deepEqual(
+    [
+      averagesOf({ plannedCount: 20, mealsPriced: 6, avgPerMealCents: 84 }),
+      averagesOf({
+        plannedCount: 20,
+        mealsPriced: 6,
+        avgPerMealCents: 84,
+        leftOut: [gapA],
+        openLeftOut: [gapA],
+      }),
+      averagesOf({
+        plannedCount: 20,
+        mealsPriced: 6,
+        avgPerMealCents: 84,
+        leftOut: [gapA],
+        openLeftOut: [],
+      }),
+      averagesOf({ plannedCount: 6, mealsPriced: 6, avgPerMealCents: 84 }),
+    ],
+    [
+      ['Avg per priced meal $0.84'],
+      ['Avg per priced meal so far $0.84'],
+      ['Avg per priced meal $0.84+'],
+      ['Avg per meal $0.84'],
+    ],
+    'an average over 6 priced meals of 20 says "per priced meal", keeping its so far or +, and plain "per meal" only when every planned meal is priced',
   );
   assert.equal(
     formatPeriodCost(789_450),

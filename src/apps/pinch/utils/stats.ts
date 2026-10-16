@@ -241,10 +241,11 @@ export interface CostAverage {
   value: string;
 }
 
-/** A period's cost averages, worded once for the calendar's averages line and its summary sheet: "Avg per meal" from two priced meals and "Per g protein" while protein is on, each "so far" while a gap can still be priced and "+" once every gap is fixed; empty when neither has a figure. */
+/** A period's cost averages, worded once for the calendar's averages line and its summary sheet: "Avg per meal" from two priced meals ("Avg per priced meal" while some planned meal has no price, since only priced meals divide it) and "Per g protein" while protein is on, each "so far" while a gap can still be priced and "+" once every gap is fixed; empty when neither has a figure. */
 export function getCostAverages(
   stats: Pick<
     PeriodStats,
+    | 'plannedCount'
     | 'mealsPriced'
     | 'avgPerMealCents'
     | 'proteinCentsPerGram'
@@ -261,7 +262,13 @@ export function getCostAverages(
   });
   const averages = [
     stats.mealsPriced >= 2 && stats.avgPerMealCents !== null
-      ? word('avg', 'Avg per meal', stats.avgPerMealCents)
+      ? word(
+          'avg',
+          stats.mealsPriced < stats.plannedCount
+            ? 'Avg per priced meal'
+            : 'Avg per meal',
+          stats.avgPerMealCents,
+        )
       : null,
     isProteinOn && stats.proteinCentsPerGram !== null
       ? word('protein', 'Per g protein', stats.proteinCentsPerGram)
