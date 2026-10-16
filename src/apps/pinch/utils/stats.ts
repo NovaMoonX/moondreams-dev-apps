@@ -241,7 +241,7 @@ export interface CostAverage {
   value: string;
 }
 
-/** A period's cost averages, worded once for the calendar's averages line and its summary sheet: "Avg per meal" from two priced meals ("Avg per priced meal" while some planned meal has no price, since only priced meals divide it) and "Per g protein" while protein is on, each "so far" while a gap can still be priced and "+" once every gap is fixed; empty when neither has a figure. */
+/** A period's cost averages, worded once for the averages line and the summary sheet: an average per meal only from two priced meals, and "per priced meal" while some planned meal has no price, since only priced meals divide it. */
 export function getCostAverages(
   stats: Pick<
     PeriodStats,

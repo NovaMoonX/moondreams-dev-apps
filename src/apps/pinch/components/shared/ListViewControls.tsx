@@ -93,7 +93,6 @@ interface NutritionViewOptionsProps {
   onReset: () => void;
 }
 
-/** The Calendar's "View options": the nutrition every screen shows, whether the averages line and the Week's meal rows show their figures, and where the numbers come from. */
 export function NutritionViewOptions({
   options,
   customizedCount,

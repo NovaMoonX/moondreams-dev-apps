@@ -121,7 +121,7 @@ const findAll = (words: string[], phrase: string[], taken: Set<number>) =>
 
 /**
  * For each step, the recipe lines it is the first to name (by name or alias, whole phrases first, then the first or last word of a name when only one ingredient could mean it), since an amount is measured once, and whether it writes an amount of its own.
- * An ingredient with lines in several groups is shared out: each step that names it takes the next group's lines, in the order the groups show, and the last step that names it takes what is left. Pure, so a caller memoizes it per recipe.
+ * An ingredient with lines in several groups is shared out: each step that names it takes the next group's lines, in the order the groups show, and the last step that names it takes what is left.
  */
 export function matchStepIngredients(
   steps: string[],
