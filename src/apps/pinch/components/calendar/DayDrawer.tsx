@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
@@ -133,9 +133,19 @@ function DayDrawer({
           mealView.kind,
           mealView.kind === 'eat' ? mealView.place : '',
         ].join(':');
+  const mealRowNodes = useRef(new Map<string, HTMLButtonElement>());
   const openMeal = (id: string) => {
     setMealView(PLANNED_MEAL_VIEW);
     setPickedMealId(id);
+  };
+  const backToDay = () => {
+    setPickedMealId(null);
+    window.requestAnimationFrame(() => {
+      const row = plannedMealId
+        ? mealRowNodes.current.get(plannedMealId)
+        : null;
+      if (row?.isConnected) row.focus();
+    });
   };
 
   const stats = useAppSelector((state) =>
@@ -179,7 +189,7 @@ function DayDrawer({
           plannedMealId={plannedMealId}
           view={mealView}
           onViewChange={setMealView}
-          onBack={() => setPickedMealId(null)}
+          onBack={backToDay}
           onEdit={onEdit}
           onStartCooking={(plate) => {
             if (plate.length === 0) return;
@@ -284,6 +294,13 @@ function DayDrawer({
                         return (
                           <li key={meal.id}>
                             <Button
+                              ref={(node) => {
+                                if (node)
+                                  mealRowNodes.current.set(meal.id, node);
+                                return () => {
+                                  mealRowNodes.current.delete(meal.id);
+                                };
+                              }}
                               type='button'
                               variant='tertiary'
                               aria-label={`Open ${MEAL_TYPE_LABELS[type].toLowerCase()}: ${title}${isCooked ? ', cooked' : ''}`}

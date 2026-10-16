@@ -155,6 +155,8 @@ function PlannedMealView({
   const [isSaving, setIsSaving] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const moreViewRef = useRef<HTMLDivElement>(null);
   const mealContainers = useMealContainers(meal ?? null);
   const now = useNow();
 
@@ -223,9 +225,31 @@ function PlannedMealView({
     setError(null);
     onViewChange(next);
   };
+  const focusSoon = (getNode: () => HTMLElement | null | undefined) => {
+    window.requestAnimationFrame(() => {
+      const node = getNode();
+      if (node?.isConnected) node.focus();
+    });
+  };
   const closeMore = () => {
     showView(PLANNED_MEAL_VIEW);
-    window.requestAnimationFrame(() => moreRef.current?.focus());
+    focusSoon(() => moreRef.current);
+  };
+  const backToMore = (rowKey: string) => {
+    showView({ kind: 'more' });
+    focusSoon(() =>
+      moreViewRef.current?.querySelector<HTMLElement>(
+        `[data-more-row="${rowKey}"] button`,
+      ),
+    );
+  };
+  const backFromEat = (place: ContainerPlace, from: 'meal' | 'more') => {
+    if (from === 'more') {
+      backToMore(`eat-${place}`);
+      return;
+    }
+    showView(PLANNED_MEAL_VIEW);
+    focusSoon(() => primaryRef.current);
   };
   const eatFrom = (place: ContainerPlace) =>
     showView({
@@ -367,7 +391,7 @@ function PlannedMealView({
           <Button
             type='button'
             variant='secondary'
-            onClick={() => showView({ kind: 'more' })}
+            onClick={() => backToMore('save')}
           >
             Cancel
           </Button>
@@ -420,6 +444,7 @@ function PlannedMealView({
         </Button>
         {primaryButton && (
           <Button
+            ref={primaryRef}
             type='button'
             className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
             onClick={primaryButton.onClick}
@@ -442,15 +467,14 @@ function PlannedMealView({
 
   const getViewBody = () => {
     if (view.kind === 'eat') {
-      const backTo: PlannedMealSubview =
-        view.from === 'more' ? { kind: 'more' } : PLANNED_MEAL_VIEW;
+      const { place, from } = view;
       return (
         <EatFromStockView
           uid={uid}
           meal={meal}
-          place={view.place}
+          place={place}
           containers={offer.eatFrom}
-          onBack={() => showView(backTo)}
+          onBack={() => backFromEat(place, from)}
           onDone={() =>
             onViewChange((current) =>
               current.kind === 'eat' ? PLANNED_MEAL_VIEW : current,
@@ -462,7 +486,7 @@ function PlannedMealView({
     if (view.kind === 'name') {
       return (
         <div className='space-y-5'>
-          <BackLink onBack={() => showView({ kind: 'more' })} />
+          <BackLink onBack={() => backToMore('save')} />
           <div className='space-y-1.5'>
             <Label>Name this meal</Label>
             <Input
@@ -485,7 +509,7 @@ function PlannedMealView({
     }
     if (view.kind === 'more') {
       return (
-        <div className='space-y-3'>
+        <div ref={moreViewRef} className='space-y-3'>
           <div className='space-y-1'>
             <BackLink onBack={closeMore} />
             <p className='font-medium wrap-break-word'>{mealLabel}</p>
@@ -493,14 +517,15 @@ function PlannedMealView({
           {moreRows.length > 0 && (
             <ActionGroup>
               {moreRows.map((row) => (
-                <ActionRow
-                  key={row.key}
-                  isGrouped
-                  icon={row.icon}
-                  label={row.label}
-                  subtitle={row.subtitle}
-                  onClick={row.onClick}
-                />
+                <div key={row.key} data-more-row={row.key}>
+                  <ActionRow
+                    isGrouped
+                    icon={row.icon}
+                    label={row.label}
+                    subtitle={row.subtitle}
+                    onClick={row.onClick}
+                  />
+                </div>
               ))}
             </ActionGroup>
           )}
