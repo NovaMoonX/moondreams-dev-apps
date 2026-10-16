@@ -82,7 +82,7 @@ function Pinch() {
     Partial<Record<PinchTab, number>>
   >({});
   const showShoppingTab = useCallback(() => {
-    if (subviewRef.current !== null) {
+    if (subviewRef.current !== null || hasDialogOnTop()) {
       return;
     }
     const next = new URLSearchParams(window.location.search);

@@ -78,7 +78,7 @@ function RecipeRow({
         </span>
         {showPrices && cost?.perServingCents != null && (
           <span className='text-muted-foreground block text-xs font-normal whitespace-nowrap'>
-            {formatRowPrice(cost.perServingCents, leftOutCount > 0)} / serving
+            {formatRowPrice(cost.perServingCents, leftOutCount > 0)} per serving
           </span>
         )}
         {showPrices && cost && cost.perServingCents == null && (

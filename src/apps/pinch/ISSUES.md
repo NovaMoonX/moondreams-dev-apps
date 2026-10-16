@@ -288,7 +288,7 @@ Every recipe shows its total cost and cost per serving, calculated from its ingr
 **Files:**
 - `src/apps/pinch/components/shared/GapNudge.tsx`, `FillInSheet.tsx`
 - `src/apps/pinch/components/recipes/RecipeDrawer.tsx`, `kitchen/IngredientRow.tsx` (nudge placement)
-- `src/apps/pinch/store/slices/settingsSlice.ts`, `actions/settingsActions.ts` (`dismissNudge`), `listeners/kitchenListeners.ts`
+- `src/apps/pinch/store/slices/settingsSlice.ts`, `actions/settingsActions.ts` (`saveSettings`), `listeners/kitchenListeners.ts`
 - `src/apps/pinch/utils/gaps.ts` (dismissals)
 - `firestore.rules` (the `kitchens/{uid}` document: settings shape validation)
 - `scripts/seeds/pinch.ts`
@@ -299,7 +299,7 @@ Every recipe shows its total cost and cost per serving, calculated from its ingr
 Where a gap changes a number, one quiet line says so and offers to fix it: "2 ingredients need a price · Add prices". Tapping it opens a short sheet that walks through just those ingredients. Closing the line keeps it away for that ingredient. Missing details appear only as these in-context lines. Superseded in the Pinch audit: the close is "Not now", which quiets the line until the page reloads; the stored dismissal is still read but no longer written.
 
 ### Possible Approach
-1. `KitchenSettings` type, slice and listener; the kitchen document is created lazily by the first `dismissNudge` or `saveSettings` (a field-scoped dotted-path write). Rules for the document: `showNutrition` shape, `dismissedNudges` ≤ 500 keys.
+1. `KitchenSettings` type, slice and listener; the kitchen document is created lazily by the first `saveSettings` (an early build also created it on a dismissal) (a field-scoped dotted-path write). Rules for the document: `showNutrition` shape, `dismissedNudges` ≤ 500 keys.
 2. `gaps.ts` now filters by `dismissedNudges`; `GapNudge` renders only when the filtered list is non-empty (muted text, a link, a ✕ with a 40px hit area).
 3. `FillInSheet` (`FormSheet`): one row per ingredient with only the fields that gap needs (a product's store, price and size; a package size for "can't compare"); rows left blank stay unchanged; Save is always available; saving goes through `saveProduct` and clears that ingredient's dismissal keys in the same write.
 4. Place the nudge in the recipe drawer under the cost line and on an ingredient row ("No price yet", muted, no ✕). The stats row and meal builder reuse it in Issues 10 and 12.

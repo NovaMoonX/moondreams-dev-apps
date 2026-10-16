@@ -35,14 +35,10 @@ import {
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface MealDrawerProps {
-  /** Not read: a saved meal's prices are added from its recipes. */
-  uid?: string;
   mealId: string;
   onClose: () => void;
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
-  /** Not read: a saved meal's prices are added from its recipes. */
-  onFillIn?: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
   onOpenStock: (id: string) => void;
   onPutAway: (id: string) => void;

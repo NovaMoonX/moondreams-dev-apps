@@ -412,9 +412,6 @@ Each needs a data change, a rules change, an owner decision, or is simply larger
 - Polish: "Not cooked" beside "Cooked" on a past cooked meal reads as two states; "Past its date" is a red pill on each of 20+ fridge rows (Q12); What you finished has no search from 8 rows and no bulk end; Amount and Unit differ by 4px in the ingredient drawer; View options' left edges differ between "Nutrition, everywhere" and "On this list"; the plate Finish panel at 1280 pins a 992px timer strip under a 448px column.
 - Pre-existing and the same on the base, both in shared components (so a cross-app check): `Subview`'s back button is 28×28 with no hit-area pseudo-element, and an unselected `Pill`'s keyboard focus ring is cream on a cream page.
 - Seeds: cook times are written at noon UTC and show as 5:00 AM in Los Angeles; one store with no prices (KITA's request) would show "No prices yet" without a write.
-- Dead code: the callerless `dismissNudge` thunk (checked) and the meal drawer's unused `uid` and `onFillIn` props.
-- Rows say "/ serving" where drawers say "per serving".
-- The shopping toast's "View" checks for an open subview but not an open sheet, so it could close a sheet holding typed prices.
 - The near-match suggestions don't catch typos ("parmisan").
 - **Owner actions, not code:** edit the live hub description in the Admin dashboard (the hub reads Firestore first); decide Q6 (the saved meal's Shopping chip) and Q12 (the red "Past its date" pill, and scoping Clear out).
 
