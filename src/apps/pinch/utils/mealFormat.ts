@@ -31,7 +31,7 @@ export function getPlateTitle(names: string[]): {
 } {
   const isShort = (list: string[]) =>
     list.every((name) => name.length <= MAX_NAMED_ITEM_LENGTH);
-  const more = (count: number) => `${count} more`;
+  const more = (count: number) => `${count}\u00a0more`;
   if (names.length <= 1) {
     return { title: names[0] ?? '', namedCount: names.length };
   }
@@ -46,12 +46,12 @@ export function getPlateTitle(names: string[]): {
   }
   if (names.length > 2 && isShort(names.slice(0, 2))) {
     return {
-      title: `${names[0]}, ${names[1]} and ${more(names.length - 2)}`,
+      title: `${names[0]}, ${names[1]} and\u00a0${more(names.length - 2)}`,
       namedCount: 2,
     };
   }
   return {
-    title: `${names[0]} & ${more(names.length - 1)}`,
+    title: `${names[0]} &\u00a0${more(names.length - 1)}`,
     namedCount: 1,
   };
 }
