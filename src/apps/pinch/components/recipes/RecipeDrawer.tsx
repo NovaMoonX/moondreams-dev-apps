@@ -417,7 +417,7 @@ function RecipeDrawer({
               <ActionRow
                 isGrouped
                 icon={<CircleCheck className='h-4 w-4' />}
-                label='I cooked this'
+                label='Mark as cooked'
                 subtitle='Keeps a record you can change later'
                 isDisabled={!isLoaded || isHistoryFull || isMarking}
                 onClick={() => void handleMarkCooked()}
