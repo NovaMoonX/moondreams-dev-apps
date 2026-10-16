@@ -36,3 +36,4 @@ jobs:
         env:
           TZ: Pacific/Auckland
       - run: npm run check:pinch-ingest
+      - run: npm run check:pinch-voice

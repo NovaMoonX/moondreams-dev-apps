@@ -1168,13 +1168,6 @@ function CookingSession({
           )}
         </div>
         <div className='form-footer space-y-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
-          {!isFinishShown && (
-            <CookVoiceLine
-              voice={voice}
-              ingredientExample={ingredientExample}
-              dishExample={dishExample}
-            />
-          )}
           <div role='status' className='empty:hidden'>
             {timers.isNoticeShown && !showLockNote && (
               <p className='text-muted-foreground text-xs'>
@@ -1193,7 +1186,15 @@ function CookingSession({
               isFinishShown && (note.isOpen || putAway.isOpen) ? null : jumpTo
             }
           />
-          <div className='flex gap-3'>
+          <div className='flex flex-wrap gap-x-3 gap-y-2'>
+            {!isFinishShown && (
+              <CookVoiceLine
+                voice={voice}
+                ingredientExample={ingredientExample}
+                dishExample={dishExample}
+                className='basis-full [@media(max-height:500px)]:max-w-2/5 [@media(max-height:500px)]:flex-1 [@media(max-height:500px)]:basis-0'
+              />
+            )}
             {isFinishShown && isRecorded && putAway.isOpen ? (
               <>
                 <Button

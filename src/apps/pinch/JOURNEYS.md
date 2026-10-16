@@ -85,6 +85,7 @@ Doors cluster on **starting and logging**; **looking things up** is starved.
 | Mark cooked, note, put away | 4 each | one moment each (the cook) | three doors for "I cooked it tonight" writing two kinds of record | cooked 3 (drawer chip, planned row, Finish: the planned row and Finish share one cook id, and a plate's Finish writes every recipe's cook at once; the drawer's chip does not know the plan yet, §7.4); notes and put away unchanged |
 | Open a recipe | 2 (Recipes row, idea "Open") | the moment is "cook tonight's plan" | planned meal, day drawer row, saved meal plate, container sheet, cooking history all name it and can't open it | 2 (unchanged; opening it where it is named is §7.4) |
 | Cooking mode | 2 (recipe, planned meal) | 2 | keep | 2: a plate's session opens every recipe of the dinner at once, and "Which one are you cooking?" is gone |
+| Turn on voice | 0 | 1 (hands are busy at the stove, G7) | new | 1: the mic at the end of cooking mode's title row, on the steps and the ingredient list, only where the browser can listen; the first tap explains, later taps start at once, and "stop listening", Finish and leaving turn it off. No other door: voice only makes sense at the stove |
 
 ### 4.2 What each screen volunteers (first view, 390×844, Alex)
 
@@ -100,6 +101,7 @@ Items are anything on screen the person didn't type and that isn't the screen's 
 | Prepared meals / container sheet | 8 / 12 | 8 / 7 | four counts in two units; six subtitles under six actions | now Fridge & freezer and its box sheet: 5 / 5 |
 | Shopping | 6 | 5 | "4 to buy" three times | 5 (the count once, not three times) |
 | Ideas | 1 | 1 | the calm reference everything else should match | 1 |
+| Cooking mode (tonight's plate, step 1) | — | — | the other dish's step, the note line, the step counter, the timer card, "For this step" | 5 with voice off (the mic is a control, not an item, and adds nothing); 7 while voice is on: the "Listening" line (a **status**, replaced for a moment by what it heard, an answer or why a command can't apply) and "What to say" (a **reference**), both in the footer, so the step doesn't move (its top stays at y 254); nothing at all where the browser can't listen |
 
 Journey totals as audited: "what's tonight, then cook it" meets 29 items (4 decisions); "what's in the fridge?" 41 (4 decisions); the price backlog three times in the first two taps, none of them about tonight.
 

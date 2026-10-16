@@ -669,7 +669,7 @@ const describeOneTimer = (timer: VoiceTimerState) => {
   }
   const isPaused = timer.status === 'paused';
   return {
-    show: `${timer.clock} left${isPaused ? ', paused' : ''} · ${timer.label} timer`,
+    show: `${timer.clock} left on the ${timer.label} timer${isPaused ? ' (paused)' : ''}`,
     speak: `${formatSpokenTime(timer.remainingMs)} left on the ${spokenLabel} timer.${isPaused ? " It's paused." : ''}`,
   };
 };
@@ -683,12 +683,12 @@ export const describeTimersLeft = (timers: VoiceTimerState[]) => {
     }
     const paused = timer.status === 'paused' ? ', paused' : '';
     return {
-      show: `${timer.name}: ${timer.clock}${paused}`,
+      show: `${timer.name}: ${timer.clock} left${paused}`,
       speak: `${timer.name}: ${formatSpokenTime(timer.remainingMs)} left${paused}.`,
     };
   });
   const result = {
-    show: parts.map((part) => part.show).join(' · '),
+    show: parts.map((part) => part.show).join('; '),
     speak: parts.map((part) => part.speak).join(' '),
   };
   return result;
@@ -705,8 +705,8 @@ export const describeAmounts = (
   const entries = [...byName.entries()];
   const result = {
     show: entries
-      .map(([name, amounts]) => `${name} · ${amounts.join(' and ')}`)
-      .join(', '),
+      .map(([name, amounts]) => `${name}: ${amounts.join(' and ')}`)
+      .join('; '),
     speak: `${entries
       .map(
         ([name, amounts]) =>

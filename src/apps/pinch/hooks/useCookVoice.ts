@@ -95,22 +95,6 @@ interface UseCookVoiceOptions {
   step: { key: string; spoken: string } | null;
 }
 
-const NO_ACTIONS: CookVoiceActions = {
-  next: () => ({ ok: false, reason: '' }),
-  back: () => ({ ok: false, reason: '' }),
-  repeat: () => ({ ok: false, reason: '' }),
-  showIngredients: () => ({ ok: false, reason: '' }),
-  showSteps: () => ({ ok: false, reason: '' }),
-  startTimer: () => ({ ok: false, reason: '' }),
-  pauseTimer: () => ({ ok: false, reason: '' }),
-  resumeTimer: () => ({ ok: false, reason: '' }),
-  stopTimer: () => ({ ok: false, reason: '' }),
-  timeLeft: () => ({ ok: false, reason: '' }),
-  amount: () => ({ ok: false, reason: '' }),
-  switchRecipe: () => ({ ok: false, reason: '' }),
-  cycleRecipe: () => ({ ok: false, reason: '' }),
-};
-
 /** Hands-free cooking: listens for the cooking commands while the person has the mic on, runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered per person on this device. */
 export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
   const [hasAgreed, setHasAgreed] = useLocalStoragePreference(
@@ -129,17 +113,12 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
   }));
   const handlers = useRef<{
     actions: CookVoiceActions;
-    context: CookVoiceContext | null;
-  }>({ actions: NO_ACTIONS, context: null });
-  const isReadingRef = useRef(isReadingAloud);
+    context: CookVoiceContext;
+  } | null>(null);
   const lastHeard = useRef({ key: '', at: 0 });
   const messageCount = useRef(0);
   const sayRef = useRef<(text: string) => void>(() => undefined);
   const stopRef = useRef<() => void>(() => undefined);
-
-  useEffect(() => {
-    isReadingRef.current = isReadingAloud;
-  }, [isReadingAloud]);
 
   const connect = useCallback(
     (actions: CookVoiceActions, context: CookVoiceContext) => {
@@ -154,8 +133,8 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
   };
 
   const handleTranscript = (alternatives: string[]) => {
+    if (handlers.current === null) return;
     const { context: shown, actions: run } = handlers.current;
-    if (shown === null) return;
     const command = parseCookCommand(alternatives, shown);
     if (command === null) return;
     if (command.kind === 'STOP_LISTENING') {
@@ -178,7 +157,7 @@ export function useCookVoice({ uid, step }: UseCookVoiceOptions) {
     const result = runCommand(command, run);
     if (!result.ok) {
       show(result.reason, 'PROBLEM');
-      if (isReadingRef.current) sayRef.current(result.reason);
+      if (isReadingAloud) sayRef.current(result.reason);
       return;
     }
     const heard =

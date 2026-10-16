@@ -318,8 +318,8 @@ export function canUseSpeechCommands() {
 /**
  * Listens for spoken phrases with the browser's speech recognition while the person has it on, never on its own: `start`
  * from a tap. It restarts after the browser ends a session, backing off and giving up after repeated failures, pauses
- * while `say` reads something aloud (so it never hears itself) and while the page is hidden, and stops for good on a
- * refused or missing microphone. Phrase matching is the caller's.
+ * while `say` reads something aloud (so it never hears itself; `quiet` cuts a reading short) and while the page is
+ * hidden, and stops for good on a refused or missing microphone. Phrase matching is the caller's. Secure pages only.
  */
 export function useSpeechCommands({
   lang,

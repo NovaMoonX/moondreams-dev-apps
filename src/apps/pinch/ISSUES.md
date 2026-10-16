@@ -1073,23 +1073,31 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 ### Issue 34: Hands-free voice navigation in cooking mode
 
 **Prerequisites:** Cooking mode (Issue 33)
-**Target PR Size:** ~400 lines
+**Target PR Size:** ~1,200 lines (most of it the grammar's checks)
 **Files:**
-- Speech commands hook
+- `src/hooks/useSpeechCommands.ts` (shared: support check, start and stop, restarts, errors, pausing while it speaks and while the page is hidden), `src/utils/speechUtils.ts` (shared: reading text aloud in a voice for the page's language)
+- `utils/cookVoice.ts` (the pure grammar, `parseCookCommand`, and the spoken answers), `hooks/useCookVoice.ts` (the explainer's answer and Read steps aloud per person, what it heard, the step read aloud), `components/cooking/CookVoice.tsx` (the mic, the line over the buttons, the explainer, "What you can say")
+- `CookingSubview.tsx` (the actions a command can take, the same ones a tap takes), the shared `Subview`'s `headerAction`, `scripts/checks/pinchVoice.ts` (`npm run check:pinch-voice`)
 
 **Context:** Cooking mode.
 
 ### Description
-Say "next" and "back" with messy hands.
+Say "next", "back", "repeat", "start the timer" or "how much garlic" with floury, wet or busy hands.
 
 ### Possible Approach
-1. Web Speech API with an on-device fallback if available; clear on/off control.
+1. The browser's own speech recognition and speech synthesis (no new service, dependency or Function); where they are missing or the page isn't secure, the feature isn't on screen.
+2. Ask on the first tap with what is heard and by whom, then one tap starts it each time; never on its own.
+3. A small, exact grammar matched against whole final phrases, so kitchen talk does nothing, and commands that do only what a tap does: never a write, never Finish.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Read:** cooking mode.
+- [x] **Read:** cooking mode, the mic at the end of the title row (steps and ingredient list).
 
 ### Success Criteria
-- [ ] Works hands-free where supported and is invisible where it isn't.
+- [x] Works hands-free where supported and is invisible where it isn't (no constructor, an insecure page).
+- [x] Nothing listens until a tap; the first tap explains first; a refused microphone is said once and never retried on its own; leaving, Finish, "stop listening" and the mic stop it; a hidden page pauses it and coming back resumes it.
+- [x] "Next" on the last step never opens the Finish panel; no command writes data.
+- [x] Listening pauses while it reads aloud and starts again after; a run of failed starts stops with a line; driven with a fake recognizer and speech engine (77 checks), the grammar by `npm run check:pinch-voice`.
+- [ ] Checked on real devices with a real microphone (Chrome on Android and desktop, Safari on iOS and macOS) and in a noisy kitchen.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 

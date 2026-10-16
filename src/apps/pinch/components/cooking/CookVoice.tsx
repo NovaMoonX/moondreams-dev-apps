@@ -131,21 +131,30 @@ const getStatusText = (status: CookVoice['status']) => {
   return 'Listening';
 };
 
-/** One line above the cooking footer while voice is on: what it is doing, what it last heard or answered, and what you can say. Also says once why voice stopped by itself. */
-export function CookVoiceLine(props: CookVoiceHelpProps) {
+interface CookVoiceLineProps extends CookVoiceHelpProps {
+  className?: string;
+}
+
+/** One line over the cooking footer's buttons while voice is on: what it is doing, what it last heard or answered, and what you can say. Also says once why voice stopped by itself. */
+export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
   const { voice } = props;
   const message = voice.isOn ? voice.message : null;
 
   if (!voice.isOn) {
     return voice.error === null ? null : (
-      <p role='status' className='text-muted-foreground text-xs'>
+      <p
+        role='status'
+        className={join('text-muted-foreground self-center text-xs', className)}
+      >
         {ERROR_TEXT[voice.error]}
       </p>
     );
   }
 
   return (
-    <div className='flex min-h-8 items-center gap-3'>
+    <div
+      className={join('flex min-h-6 items-center gap-3 self-center', className)}
+    >
       <p
         role='status'
         className={join(

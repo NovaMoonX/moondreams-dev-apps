@@ -361,6 +361,40 @@ assert.deepEqual(
   'a title that is not on screen is not a command',
 );
 
+const bigKitchen: CookVoiceContext = {
+  recipes: Array.from({ length: 6 }, (_, at) => ({
+    id: `recipe-${at}`,
+    title: `Batch ${at} stew`,
+  })),
+  shownRecipeId: 'recipe-0',
+  lines: [
+    ...Array.from({ length: 48 }, (_, at) => ({
+      id: `line-${at}`,
+      names: [`Spice blend ${at}`],
+      isInStep: at % 7 === 0,
+    })),
+    { id: 'garlic', names: ['Garlic'], isInStep: false },
+    { id: 'garlic-salt', names: ['Garlic salt'], isInStep: true },
+  ],
+};
+assert.deepEqual(
+  [
+    parse('how much garlic', bigKitchen),
+    parse('how much spice blend 41', bigKitchen),
+    parse('switch to batch 4', bigKitchen),
+  ],
+  [
+    { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic'] },
+    { kind: 'AMOUNT', query: 'spice blend 41', lineIds: ['line-41'] },
+    {
+      kind: 'SWITCH_RECIPE',
+      recipeId: 'recipe-4',
+      candidates: ['recipe-4'],
+    },
+  ],
+  'with 50 lines and 6 dishes, the exact name still wins over a longer one this step names',
+);
+
 assert.deepEqual(
   parse(['necks', 'next']),
   { kind: 'NEXT' },
@@ -447,7 +481,7 @@ assert.deepEqual(
     },
   ]),
   {
-    show: '12:30 left · 30 min timer',
+    show: '12:30 left on the 30 min timer',
     speak: '13 minutes left on the 30 minute timer.',
   },
   'one timer is named by its length, said in whole words',
@@ -470,7 +504,7 @@ assert.deepEqual(
     },
   ]),
   {
-    show: 'Marinate: 1:30, paused · Rice · Simmer: done',
+    show: 'Marinate: 1:30 left, paused; Rice · Simmer: done',
     speak: 'Marinate: 1 minute 30 seconds left, paused. Rice · Simmer is done.',
   },
   'several timers are each named, with paused and done said',
@@ -481,7 +515,7 @@ assert.deepEqual(
     { name: 'Soy sauce', amountText: '¼ cup' },
   ]),
   {
-    show: 'Garlic · 6, Soy sauce · ¼ cup',
+    show: 'Garlic: 6; Soy sauce: ¼ cup',
     speak: 'Garlic, 6. Soy sauce, a quarter cup.',
   },
   'amounts are shown as written and said in words',
@@ -492,7 +526,7 @@ assert.deepEqual(
     { name: 'Garlic', amountText: '½ tsp' },
   ]),
   {
-    show: 'Garlic · 4 and ½ tsp',
+    show: 'Garlic: 4 and ½ tsp',
     speak: 'Garlic, 4 and a half teaspoon.',
   },
   'a name on two lines is said once with both amounts',
