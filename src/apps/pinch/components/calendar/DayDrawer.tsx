@@ -7,6 +7,7 @@ import DetailSheet from '@/components/DetailSheet';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
+import TickMark from '@/components/TickMark';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
 import { isPlannedMealCooked } from '@apps/pinch/components/calendar/plannedMealOffer';
@@ -272,7 +273,10 @@ function DayDrawer({
                                 <span className='text-foreground block wrap-break-word whitespace-normal'>
                                   {title}
                                   {isCooked && (
-                                    <span aria-hidden='true'>{'\u00a0✅'}</span>
+                                    <>
+                                      {'\u00a0'}
+                                      <TickMark />
+                                    </>
                                   )}
                                 </span>
                                 {detail && (
