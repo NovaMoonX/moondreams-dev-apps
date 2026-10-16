@@ -6793,35 +6793,36 @@ const sessionTimers = [
   stepTimer('rice', 'rice', 2, '10 min'),
   stepTimer('edited', 'adobo', 2, '25 min'),
 ];
-const onStepTwo = plateCooks.splitStepTimers(sessionTimers, {
-  recipeId: 'adobo',
-  stepNumber: 2,
-  durations: simmerAndRest,
-});
 assert.deepEqual(
-  {
-    cards: onStepTwo.slots.map((slot) => [slot.label, slot.timer?.id ?? null]),
-    strip: onStepTwo.elsewhere.map((timer) => timer.id),
-  },
-  {
-    cards: [
-      ['10 min', 'simmer'],
-      ['5 min', null],
-    ],
-    strip: ['marinate', 'rice', 'edited'],
-  },
-  'the step on screen holds a card per time it mentions, ready or running; a timer from another step, another recipe of the plate or a time the step no longer says stays in the strip',
+  plateCooks
+    .getReadyStepTimers(sessionTimers, {
+      recipeId: 'adobo',
+      stepNumber: 2,
+      durations: simmerAndRest,
+    })
+    .map((slot) => slot.label),
+  ['5 min'],
+  'the step on screen offers a Start card only for a time it mentions with no timer yet: its running 10 min lives in the timer view or the pill row, and a timer from another step, another recipe or a time the step no longer says never hides a card',
 );
 assert.deepEqual(
   plateCooks
-    .splitStepTimers(sessionTimers, null)
-    .elsewhere.map((timer) => timer.id),
-  ['simmer', 'marinate', 'rice', 'edited'],
-  'with no step on screen (the ingredient list, the Finish panel) every timer is in the strip, so none is ever out of sight',
+    .getReadyStepTimers(sessionTimers, {
+      recipeId: 'rice',
+      stepNumber: 1,
+      durations: simmerAndRest,
+    })
+    .map((slot) => slot.label),
+  ['10 min', '5 min'],
+  'a timer on another recipe of the plate with the same length and step number leaves this recipe’s cards ready',
+);
+assert.deepEqual(
+  plateCooks.getReadyStepTimers(sessionTimers, null),
+  [],
+  'with no step on screen (the ingredient list, the Finish panel) there are no cards',
 );
 assert.deepEqual(
   plateCooks
-    .splitStepTimers([], {
+    .getReadyStepTimers([], {
       recipeId: 'adobo',
       stepNumber: 4,
       durations: [1, 2, 3, 4, 5, 6].map((minutes) => ({
@@ -6829,9 +6830,79 @@ assert.deepEqual(
         label: `${minutes} min`,
       })),
     })
-    .slots.map((slot) => slot.label),
+    .map((slot) => slot.label),
   ['1 min', '2 min', '3 min', '4 min'],
   'a step that mentions six times offers cards for the first four, as many as can run at once',
+);
+
+const running = (id: string, endsAt: number) => ({
+  id,
+  status: 'running' as const,
+  endsAt,
+});
+const paused = (id: string) => ({ id, status: 'paused' as const });
+const done = (id: string) => ({ id, status: 'done' as const });
+assert.deepEqual(
+  [
+    plateCooks.getFocusedTimerId(
+      [running('rice', 9_000), running('adobo', 4_000)],
+      null,
+    ),
+    plateCooks.getFocusedTimerId(
+      [running('rice', 9_000), running('adobo', 4_000)],
+      'rice',
+    ),
+    plateCooks.getFocusedTimerId(
+      [paused('rice'), running('adobo', 4_000)],
+      'rice',
+    ),
+    plateCooks.getFocusedTimerId([paused('rice'), paused('adobo')], null),
+    plateCooks.getFocusedTimerId([], null),
+    plateCooks.getFocusedTimerId(
+      [running('rice', 9_000), running('adobo', 4_000)],
+      'dismissed',
+    ),
+  ],
+  ['adobo', 'rice', 'rice', 'rice', null, 'adobo'],
+  'with nothing picked the running timer ending soonest is in focus; the one started or tapped stays in focus, also while paused, even when another ends sooner; a pick that is gone falls back to the soonest',
+);
+assert.deepEqual(
+  [
+    plateCooks.getFocusedTimerId(
+      [running('rice', 9_000), done('adobo'), done('beans')],
+      'rice',
+    ),
+    plateCooks.getFocusedTimerId(
+      [done('adobo'), running('rice', 9_000), done('beans')],
+      'beans',
+    ),
+    plateCooks.getFocusedTimerId([paused('rice'), done('adobo')], 'rice'),
+  ],
+  ['adobo', 'beans', 'adobo'],
+  'a finished timer comes first, over a running or paused pick: the one just picked when it has finished, else the first to finish',
+);
+assert.deepEqual(
+  [
+    plateCooks
+      .getTimerRows(
+        [
+          running('marinate', 9_000),
+          paused('rice'),
+          done('rest'),
+          running('simmer', 2_000),
+        ],
+        'simmer',
+      )
+      .map((timer) => timer.id),
+    plateCooks
+      .getTimerRows([running('marinate', 9_000), paused('rice')], null)
+      .map((timer) => timer.id),
+  ],
+  [
+    ['rest', 'marinate', 'rice'],
+    ['marinate', 'rice'],
+  ],
+  'the other timers (and the pill row, with nothing in focus) list a finished one first, then the rest in the order they started, so pausing one never moves it',
 );
 
 const plateAt = (recipeId: string, stepIndex: number, stepCount: number) => ({
@@ -6839,6 +6910,61 @@ const plateAt = (recipeId: string, stepIndex: number, stepCount: number) => ({
   stepIndex,
   stepCount,
 });
+const timerAt = (recipeId: string, stepNumber: number) => ({
+  recipeId,
+  stepNumber,
+});
+assert.deepEqual(
+  [
+    plateCooks.getTimerNext([plateAt('adobo', 0, 3)], timerAt('adobo', 1)),
+    plateCooks.getTimerNext([plateAt('adobo', 1, 3)], timerAt('adobo', 1)),
+    plateCooks.getTimerNext([plateAt('adobo', 2, 3)], timerAt('adobo', 1)),
+    plateCooks.getTimerNext([plateAt('adobo', 2, 3)], timerAt('adobo', 3)),
+    plateCooks.getTimerNext(
+      [plateAt('adobo', 2, 3), plateAt('rice', 0, 2)],
+      timerAt('adobo', 3),
+    ),
+    plateCooks.getTimerNext(
+      [plateAt('adobo', 1, 3), plateAt('rice', 1, 2)],
+      timerAt('adobo', 3),
+    ),
+    plateCooks.getTimerNext([plateAt('adobo', 0, 3)], timerAt('gone', 1)),
+  ],
+  [
+    { kind: 'STEP', recipeId: 'adobo', stepIndex: 1 },
+    { kind: 'STEP', recipeId: 'adobo', stepIndex: 1 },
+    null,
+    null,
+    { kind: 'RECIPE', recipeId: 'rice' },
+    null,
+    null,
+  ],
+  '"Up next" after a timer is its recipe’s next step, also once the person moved on to it; nothing once they are past it, on a lone recipe’s last step or for a timer whose recipe is gone; on a plate, the last step leads to the next recipe still short of its own last',
+);
+assert.deepEqual(
+  [
+    plateCooks.getFirstSentence(
+      'Add the vinegar, then simmer for 25 minutes. Stir once. Serve.',
+    ),
+    plateCooks.getFirstSentence('Cook the rice.'),
+    plateCooks.getFirstSentence('Bake at 180°C for 1.5 hours. Rest it.'),
+    plateCooks.getFirstSentence('Season to taste e.g. salt'),
+    plateCooks.getFirstSentence('Chop the onions\nthen fry them. Done.'),
+    plateCooks.getFirstSentence('  Whisk the eggs!  2 at a time.'),
+    plateCooks.getFirstSentence(''),
+  ],
+  [
+    'Add the vinegar, then simmer for 25 minutes.',
+    'Cook the rice.',
+    'Bake at 180°C for 1.5 hours.',
+    'Season to taste e.g. salt',
+    'Chop the onions',
+    'Whisk the eggs!',
+    '',
+  ],
+  '"Up next" reads a step up to its first sentence end or line break, never at a decimal point or a stop before a lowercase word',
+);
+
 assert.deepEqual(
   [
     plateCooks.getPlateNext(

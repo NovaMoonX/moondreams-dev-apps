@@ -9,6 +9,7 @@ import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 import {
   canStartTimer,
   countLiveTimers,
+  getFocusedTimerId,
   getTimerCaption,
 } from '@apps/pinch/utils/cooks';
 
@@ -22,6 +23,8 @@ interface TimerBase {
   /** The step's first words, what the timer is called on screen. */
   stepName: string;
   label: string;
+  /** The whole length it was started with, for the progress bar. */
+  durationMs: number;
 }
 
 export type CookTimer = TimerBase &
@@ -32,6 +35,15 @@ export type CookTimer = TimerBase &
   );
 
 type Notice = 'unseen' | 'showing' | 'seen';
+
+interface Focus {
+  /** Whether the timer view is up; false while the timers run in the background. */
+  isShown: boolean;
+  /** The timer the person started or tapped last; a finished one still comes first. */
+  pickedId: string | null;
+}
+
+const UNFOCUSED: Focus = { isShown: false, pickedId: null };
 
 const BEEP_OFFSETS_SECONDS = [0, 0.4, 0.8];
 const SETTLE_SLACK_MS = 20;
@@ -45,6 +57,7 @@ const baseOf = (timer: CookTimer): TimerBase => ({
   stepNumber: timer.stepNumber,
   stepName: timer.stepName,
   label: timer.label,
+  durationMs: timer.durationMs,
 });
 
 const dropOldFinished = (timers: CookTimer[]) => {
@@ -79,11 +92,12 @@ const playBeeps = (context: AudioContext) =>
     oscillator.stop(startAt + 0.3);
   });
 
-/** Timers kept in memory only. Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one lights its card or pill, buzzes and beeps, and toasts only while the screen is hidden or covered. */
+/** Timers kept in memory only, and which one the timer view shows (`focused`, null while they run in the background). Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one comes into focus, buzzes and beeps, and toasts only while the screen is hidden or covered. */
 export function useCookTimers() {
   const { addToast } = useToast();
   const [timers, setTimers] = useState<CookTimer[]>([]);
   const [notice, setNotice] = useState<Notice>('unseen');
+  const [focus, setFocus] = useState<Focus>(UNFOCUSED);
   const timersRef = useRef<CookTimer[]>([]);
   const addToastRef = useRef(addToast);
   const audioRef = useRef<AudioContext | null>(null);
@@ -159,6 +173,7 @@ export function useCookTimers() {
           : timer,
       ),
     );
+    setFocus({ isShown: true, pickedId: finished[0].id });
     alertDone(finished);
   }, [commit, alertDone]);
 
@@ -186,31 +201,36 @@ export function useCookTimers() {
 
   useOnTabReturn(settle);
 
+  /** Starts a timer and brings it into focus; returns its id, or null at the cap. */
   const start = (
-    base: Omit<TimerBase, 'id' | 'label'>,
+    base: Omit<TimerBase, 'id' | 'label' | 'durationMs'>,
     seconds: number,
     label: string,
   ) => {
     if (!canStartTimer(timersRef.current)) {
-      return;
+      return null;
     }
 
     prepareSound();
     const now = Date.now();
+    const id = generateUuid();
     commit(
       dropOldFinished([
         ...timersRef.current,
         {
           ...base,
-          id: generateUuid(),
+          id,
           label,
+          durationMs: seconds * 1000,
           status: 'running',
           startedAt: now,
           endsAt: now + seconds * 1000,
         },
       ]),
     );
+    setFocus({ isShown: true, pickedId: id });
     setNotice((current) => (current === 'unseen' ? 'showing' : current));
+    return id;
   };
 
   const pause = (id: string) => {
@@ -244,24 +264,49 @@ export function useCookTimers() {
     );
   };
 
+  /** Ends a timer (Reset when paused, Dismiss when done); the timer view closes with it unless another has finished. */
   const dismiss = (id: string) => {
-    const next = timersRef.current.filter((timer) => timer.id !== id);
+    const before = timersRef.current;
+    const next = before.filter((timer) => timer.id !== id);
     commit(next);
+    setFocus((current) =>
+      getFocusedTimerId(before, current.pickedId) === id
+        ? {
+            isShown:
+              current.isShown && next.some((timer) => timer.status === 'done'),
+            pickedId: null,
+          }
+        : current,
+    );
     if (next.length === 0) {
       setNotice((current) => (current === 'showing' ? 'seen' : current));
     }
   };
 
+  const focusTimer = (id: string) => {
+    if (timersRef.current.some((timer) => timer.id === id)) {
+      setFocus({ isShown: true, pickedId: id });
+    }
+  };
+
+  const unfocus = () => setFocus(UNFOCUSED);
+
   const clear = () => {
     commit([]);
+    setFocus(UNFOCUSED);
     setNotice((current) => (current === 'showing' ? 'seen' : current));
   };
 
   const liveCount = countLiveTimers(timers);
+  const focusedId = focus.isShown
+    ? getFocusedTimerId(timers, focus.pickedId)
+    : null;
+  const focused = timers.find((timer) => timer.id === focusedId) ?? null;
 
   return {
     timers,
     liveCount,
+    focused,
     isFull: !canStartTimer(timers),
     isNoticeShown: notice === 'showing',
     settle,
@@ -269,6 +314,8 @@ export function useCookTimers() {
     pause,
     resume,
     dismiss,
+    focus: focusTimer,
+    unfocus,
     clear,
   };
 }

@@ -227,34 +227,101 @@ export const countLiveTimers = (timers: { status: string }[]) =>
 export const canStartTimer = (timers: { status: string }[]) =>
   countLiveTimers(timers) < MAX_COOK_TIMERS;
 
-/** The step on screen gets one timer card per time it mentions (the first `MAX_STEP_TIMERS`), each holding its timer once started; every other timer of the session goes in the strip, so no timer shows in two places. */
-export const splitStepTimers = <
-  T extends { id: string; recipeId: string; stepNumber: number; label: string },
->(
-  timers: T[],
+/** The times a step mentions (the first `MAX_STEP_TIMERS`) that have no timer yet, each a card with Start; a started one lives in the timer view or the pill row instead, so no timer shows in two places. */
+export const getReadyStepTimers = (
+  timers: { recipeId: string; stepNumber: number; label: string }[],
   shown: {
     recipeId: string;
     stepNumber: number;
     durations: { seconds: number; label: string }[];
   } | null,
 ) => {
-  const slots = (shown?.durations.slice(0, MAX_STEP_TIMERS) ?? []).map(
-    (duration) => ({
-      ...duration,
-      timer:
-        timers.find(
-          (timer) =>
-            timer.recipeId === shown?.recipeId &&
-            timer.stepNumber === shown.stepNumber &&
-            timer.label === duration.label,
-        ) ?? null,
-    }),
+  const result = (shown?.durations.slice(0, MAX_STEP_TIMERS) ?? []).filter(
+    (duration) =>
+      !timers.some(
+        (timer) =>
+          timer.recipeId === shown?.recipeId &&
+          timer.stepNumber === shown.stepNumber &&
+          timer.label === duration.label,
+      ),
   );
-  const onCards = new Set(slots.map((slot) => slot.timer?.id));
-  const result = {
-    slots,
-    elsewhere: timers.filter((timer) => !onCards.has(timer.id)),
+  return result;
+};
+
+type FocusableTimer = { id: string } & (
+  | { status: 'running'; endsAt: number }
+  | { status: 'paused' }
+  | { status: 'done' }
+);
+
+/** The timer the timer view shows: a finished one first (the one picked, else the first to finish), then the one the person started or tapped, which keeps focus while paused, else the running one ending soonest. */
+export const getFocusedTimerId = (
+  timers: FocusableTimer[],
+  pickedId: string | null,
+) => {
+  const picked = timers.find((timer) => timer.id === pickedId) ?? null;
+  const getFocused = () => {
+    if (picked?.status === 'done') return picked;
+    const firstDone = timers.find((timer) => timer.status === 'done');
+    if (firstDone) return firstDone;
+    if (picked) return picked;
+    const soonest = timers.reduce<FocusableTimer | null>(
+      (best, timer) =>
+        timer.status === 'running' &&
+        (best?.status !== 'running' || timer.endsAt < best.endsAt)
+          ? timer
+          : best,
+      null,
+    );
+    return soonest ?? timers[0] ?? null;
   };
+  const result = getFocused()?.id ?? null;
+  return result;
+};
+
+/** Every timer but the one in focus, finished ones first, then in the order they started, so pausing one never moves it under the finger. */
+export const getTimerRows = <T extends { id: string; status: string }>(
+  timers: T[],
+  focusedId: string | null,
+) => {
+  const others = timers.filter((timer) => timer.id !== focusedId);
+  const result = [
+    ...others.filter((timer) => timer.status === 'done'),
+    ...others.filter((timer) => timer.status !== 'done'),
+  ];
+  return result;
+};
+
+export type TimerNext =
+  | { kind: 'STEP'; recipeId: string; stepIndex: number }
+  | { kind: 'RECIPE'; recipeId: string };
+
+/** What follows a timer's step, for "Up next": its recipe's next step, or on that recipe's last step the next recipe still short of its own last; nothing once the person is already past it or every recipe is on its last. */
+export const getTimerNext = (
+  recipes: { recipeId: string; stepIndex: number; stepCount: number }[],
+  timer: { recipeId: string; stepNumber: number },
+): TimerNext | null => {
+  const own = recipes.find((recipe) => recipe.recipeId === timer.recipeId);
+  if (!own || own.stepIndex > timer.stepNumber) {
+    return null;
+  }
+  if (timer.stepNumber < own.stepCount) {
+    return {
+      kind: 'STEP',
+      recipeId: own.recipeId,
+      stepIndex: timer.stepNumber,
+    };
+  }
+
+  const next = getPlateNext(
+    recipes.map((recipe) =>
+      recipe.recipeId === own.recipeId
+        ? { ...recipe, stepIndex: Math.max(0, recipe.stepCount - 1) }
+        : recipe,
+    ),
+    own.recipeId,
+  );
+  const result = next.kind === 'RECIPE' ? next : null;
   return result;
 };
 
@@ -285,6 +352,14 @@ const TRAILING_LITTLE_WORDS = new Set([
   'to',
   'with',
 ]);
+
+/** A step up to its first sentence end (a stop, question or exclamation mark before a capital or a digit) or its first line break, for "Up next". */
+export const getFirstSentence = (text: string) => {
+  const trimmed = text.trim();
+  const end = trimmed.search(/[.!?](?=\s+[\p{Lu}\d])|\n/u);
+  const result = end < 0 ? trimmed : trimmed.slice(0, end + 1).trim();
+  return result;
+};
 
 /** A step's first few words ("Brown the beef"), so two timers are told apart by what is cooking. */
 export const getStepName = (step: string) => {
