@@ -26,7 +26,6 @@ interface MealRowProps {
   onOpen: () => void;
 }
 
-/** One planned meal as a tappable row: its emoji chip, what is on the plate, its type, a round tick once cooked, and what it costs. */
 function MealRow({
   meal,
   title,
@@ -78,7 +77,7 @@ function MealRow({
             {subtitle && isCooked && ' · '}
             {isCooked && (
               <span className='whitespace-nowrap'>
-                <TickMark /> Cooked
+                <TickMark variant='soft' /> Cooked
               </span>
             )}
           </span>

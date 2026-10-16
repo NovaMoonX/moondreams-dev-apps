@@ -317,7 +317,7 @@ function DayDrawer({
                                   {isCooked && (
                                     <>
                                       {'\u00a0'}
-                                      <TickMark />
+                                      <TickMark variant='soft' />
                                     </>
                                   )}
                                 </span>
