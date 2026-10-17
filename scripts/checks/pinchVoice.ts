@@ -1,0 +1,766 @@
+import assert from 'node:assert/strict';
+
+import {
+  describeAmounts,
+  describeTimersLeft,
+  formatSpokenTime,
+  normalizeTranscript,
+  parseCookCommand,
+  pickTimersToTell,
+  pickVoiceTimer,
+  readCookCommand,
+  readSpokenDuration,
+  toSingular,
+  toSpokenAmount,
+  toSpokenLabel,
+  type CookCommand,
+  type CookVoiceContext,
+} from '../../src/apps/pinch/utils/cookVoice.ts';
+
+const plate: CookVoiceContext = {
+  recipes: [
+    { id: 'adobo', title: 'Adobo chicken' },
+    { id: 'rice', title: 'Cilantro lime rice' },
+    { id: 'soup', title: 'Chicken noodle soup' },
+  ],
+  shownRecipeId: 'adobo',
+  lines: [
+    { id: 'thigh', names: ['Chicken thigh', 'chicken thighs'], isInStep: true },
+    { id: 'soy', names: ['Soy sauce', 'shoyu'], isInStep: true },
+    { id: 'garlic', names: ['Garlic'], isInStep: true },
+    { id: 'powder', names: ['Garlic powder'], isInStep: false },
+    { id: 'chili', names: ['Chili powder'], isInStep: false },
+    { id: 'bay', names: ['Bay leaf'], isInStep: false },
+    { id: 'tomato', names: ['Tomato'], isInStep: false },
+    { id: 'jalapeno', names: ['Jalapeño'], isInStep: false },
+    { id: 'rice-line', names: ['Jasmine rice'], isInStep: false },
+    { id: 'vinegar', names: ['White vinegar'], isInStep: false },
+    { id: 'coconut', names: ['Coconut milk'], isInStep: false },
+    { id: 'tartar', names: ['Cream of tartar'], isInStep: false },
+  ],
+};
+
+const single: CookVoiceContext = {
+  ...plate,
+  recipes: [{ id: 'adobo', title: 'Adobo chicken' }],
+};
+
+const parse = (text: string | string[], context = plate) =>
+  parseCookCommand(text, context);
+
+const expectKind = (
+  phrases: string[],
+  expected: CookCommand,
+  message: string,
+) =>
+  phrases.forEach((phrase) =>
+    assert.deepEqual(parse(phrase), expected, `${message}: "${phrase}"`),
+  );
+
+assert.equal(
+  normalizeTranscript('  Okay, Pinch… NEXT step, please! '),
+  'next step',
+  'a lead-in, punctuation, case and a trailing please are dropped',
+);
+assert.equal(
+  normalizeTranscript('Crème fraîche?'),
+  'creme fraiche',
+  'accents come off',
+);
+
+expectKind(
+  [
+    'next',
+    'Next.',
+    'NEXT STEP',
+    'okay next',
+    'OK, next!',
+    'hey pinch next',
+    'next please',
+    'go to the next step',
+  ],
+  { kind: 'NEXT' },
+  'every way to say next is next',
+);
+expectKind(
+  ['back', 'go back', 'previous', 'previous step', 'Back one.'],
+  { kind: 'BACK' },
+  'every way to say back is back',
+);
+expectKind(
+  ['repeat', 'repeat that', 'read it', 'read the step', 'read it again'],
+  { kind: 'REPEAT' },
+  'every way to ask again reads the step',
+);
+expectKind(
+  ['ingredients', 'show ingredients', 'show me the ingredients'],
+  { kind: 'SHOW_INGREDIENTS' },
+  'asking for the ingredients shows them',
+);
+expectKind(
+  ['steps', 'show steps', 'back to the steps'],
+  { kind: 'SHOW_STEPS' },
+  'asking for the steps shows them',
+);
+expectKind(
+  [
+    'stop listening',
+    'turn off voice',
+    'voice off',
+    'turn off the mic',
+    'okay stop listening',
+  ],
+  { kind: 'STOP_LISTENING' },
+  'every way to turn voice off turns it off',
+);
+expectKind(
+  [
+    'how much time is left',
+    'how much time left',
+    'time left',
+    'how long is left on the timer',
+    'how much time is left on the ten minute timer',
+    "what's the timer at",
+  ],
+  { kind: 'TIME_LEFT' },
+  'asking how long is the time-left question',
+);
+
+expectKind(
+  ['start the timer', 'start timer', 'Start a timer.', 'start the timer again'],
+  { kind: 'START_TIMER', seconds: null },
+  'start the timer starts the step timer',
+);
+expectKind(
+  [
+    'start the ten minute timer',
+    'start the 10 minute timer',
+    'start the 10-minute timer',
+    'set a timer for 10 minutes',
+    'start timer for ten minutes',
+  ],
+  { kind: 'START_TIMER', seconds: 600 },
+  'a length said with the timer picks the timer of that length',
+);
+expectKind(
+  ['start the twenty five minute timer', 'start the twenty-five minute timer'],
+  { kind: 'START_TIMER', seconds: 1500 },
+  'tens and ones said as words make one number',
+);
+expectKind(
+  ['start the half an hour timer', 'start the thirty minute timer'],
+  { kind: 'START_TIMER', seconds: 1800 },
+  'half an hour is thirty minutes',
+);
+expectKind(
+  ['start the hour and a half timer', 'start the one and a half hour timer'],
+  { kind: 'START_TIMER', seconds: 5400 },
+  'an hour and a half is ninety minutes',
+);
+expectKind(
+  ['pause', 'pause the timer', 'pause timer', 'hold the timer'],
+  { kind: 'PAUSE_TIMER', seconds: null },
+  'pause pauses the timer',
+);
+expectKind(
+  ['resume', 'resume the timer', 'unpause', 'continue the timer'],
+  { kind: 'RESUME_TIMER', seconds: null },
+  'resume resumes the timer',
+);
+expectKind(
+  ['stop', 'dismiss', 'silence', 'stop the alarm', 'silence the alarm'],
+  { kind: 'STOP_TIMER', seconds: null, scope: 'RINGING' },
+  'a bare stop or the alarm only silences a ringing timer',
+);
+expectKind(
+  [
+    'stop the timer',
+    'dismiss the timer',
+    'silence the timer',
+    'cancel the timer',
+    'reset the timer',
+    'turn off the timer',
+  ],
+  { kind: 'STOP_TIMER', seconds: null, scope: 'ANY' },
+  'stop the timer stops one that is going',
+);
+assert.deepEqual(
+  parse('stop the 10 minute timer'),
+  { kind: 'STOP_TIMER', seconds: 600, scope: 'ANY' },
+  'a length picks which timer to stop',
+);
+assert.deepEqual(
+  parse('pause the twenty minute timer'),
+  { kind: 'PAUSE_TIMER', seconds: 1200 },
+  'a length picks which timer to pause',
+);
+
+[
+  "I'll go next door",
+  'the next batch',
+  'next time use less salt',
+  'back of the pan',
+  'put it back',
+  'pause for effect',
+  'stop it',
+  'stop that',
+  'start',
+  'start the oven',
+  'set the table',
+  'hold on',
+  'turn off the stove',
+  'clear',
+  'how much',
+  'how much do you want',
+  'how much does it cost',
+  'how much is that',
+  'how many people are coming',
+  'show me the money',
+  'go to the store',
+  'switch to the big pan',
+  'okay',
+  'pinch',
+  'hey',
+  'go on',
+  'keep going',
+  'continue',
+  'forward',
+  'move on',
+  'again',
+  'come again',
+  'what was that',
+  'say that again',
+  'method',
+  'instructions',
+  'what do I need',
+  'how long',
+  'how much longer',
+  "what's left",
+  'the other dish',
+  'quiet',
+  'mute',
+  'step back',
+  'cook the chicken',
+  'do the chicken',
+  'cook rice',
+  'do rice',
+  'open rice',
+  'skip to rice',
+  'jump to rice',
+  'move to rice',
+  'change to rice',
+  'show rice',
+  '',
+  'next next next next next next next next next next next next next next next next next next next next',
+].forEach((phrase) =>
+  assert.equal(
+    parse(phrase),
+    null,
+    `kitchen talk is not a command: "${phrase}"`,
+  ),
+);
+
+assert.deepEqual(
+  parse('how much garlic'),
+  { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic'] },
+  '"garlic" is the garlic, not the garlic powder',
+);
+assert.deepEqual(
+  parse('how much garlic powder do I need'),
+  { kind: 'AMOUNT', query: 'garlic powder', lineIds: ['powder'] },
+  '"garlic powder" is the garlic powder, and a trailing "do I need" is dropped',
+);
+assert.deepEqual(
+  parse('how much powder'),
+  { kind: 'AMOUNT', query: 'powder', lineIds: ['powder', 'chili'] },
+  'a word two lines share answers with both',
+);
+assert.deepEqual(
+  parse('how much chicken'),
+  { kind: 'AMOUNT', query: 'chicken', lineIds: ['thigh'] },
+  'one word of a longer name finds it',
+);
+assert.deepEqual(
+  parse('How many chicken thighs?'),
+  { kind: 'AMOUNT', query: 'chicken thighs', lineIds: ['thigh'] },
+  'a plural finds its singular name',
+);
+assert.deepEqual(
+  parse('how many bay leaves'),
+  { kind: 'AMOUNT', query: 'bay leaves', lineIds: ['bay'] },
+  'leaves finds leaf',
+);
+assert.deepEqual(
+  parse('how many tomatoes'),
+  { kind: 'AMOUNT', query: 'tomatoes', lineIds: ['tomato'] },
+  'tomatoes finds tomato',
+);
+assert.deepEqual(
+  parse('how much jalapeno'),
+  { kind: 'AMOUNT', query: 'jalapeno', lineIds: ['jalapeno'] },
+  'a name with an accent is found without it',
+);
+assert.deepEqual(
+  parse('how much shoyu'),
+  { kind: 'AMOUNT', query: 'shoyu', lineIds: ['soy'] },
+  'another name an ingredient goes by finds it',
+);
+assert.deepEqual(
+  parse('how much of the soy sauce'),
+  { kind: 'AMOUNT', query: 'soy sauce', lineIds: ['soy'] },
+  '"of the" before the name is dropped',
+);
+assert.deepEqual(
+  parse('how much cilantro'),
+  { kind: 'AMOUNT', query: 'cilantro', lineIds: [] },
+  'an ingredient the recipe lacks is still the question, with nothing found',
+);
+assert.deepEqual(
+  parse('how much garlic', {
+    ...plate,
+    lines: [
+      { id: 'garlic-a', names: ['Garlic'], isInStep: false },
+      { id: 'garlic-b', names: ['Garlic'], isInStep: true },
+    ],
+  }),
+  { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic-b'] },
+  'when two lines match as well, the one this step names wins',
+);
+
+assert.deepEqual(
+  parse('switch to rice'),
+  { kind: 'SWITCH_RECIPE', recipeId: 'rice', candidates: ['rice'] },
+  'one word of a title switches to it',
+);
+assert.deepEqual(
+  parse('go to the cilantro rice'),
+  { kind: 'SWITCH_RECIPE', recipeId: 'rice', candidates: ['rice'] },
+  'a few words of a title switch to it',
+);
+assert.deepEqual(
+  parse('show me the soup'),
+  { kind: 'SWITCH_RECIPE', recipeId: 'soup', candidates: ['soup'] },
+  '"show me" with a title switches to it',
+);
+assert.deepEqual(
+  parse('switch to chicken'),
+  { kind: 'SWITCH_RECIPE', recipeId: 'soup', candidates: ['adobo', 'soup'] },
+  'a word two titles share goes to the one that is not on screen',
+);
+assert.deepEqual(
+  parse('switch to chicken', { ...plate, shownRecipeId: 'rice' }),
+  { kind: 'SWITCH_RECIPE', recipeId: null, candidates: ['adobo', 'soup'] },
+  'a word two other titles share asks which',
+);
+assert.deepEqual(
+  parse('Switch to ADOBO.'),
+  { kind: 'SWITCH_RECIPE', recipeId: 'adobo', candidates: ['adobo'] },
+  'case and punctuation do not matter for a title',
+);
+expectKind(
+  ['finish', 'Done.', "I'm done", 'mark as cooked'],
+  { kind: 'FINISH' },
+  'every phrase that names finishing is the finish question, so it can be refused in words',
+);
+expectKind(
+  ['next recipe', 'next dish', 'switch recipe'],
+  { kind: 'CYCLE_RECIPE', direction: 1 },
+  'next recipe moves to the next dish',
+);
+assert.deepEqual(
+  parse('previous recipe'),
+  { kind: 'CYCLE_RECIPE', direction: -1 },
+  'previous recipe moves back a dish',
+);
+assert.deepEqual(
+  parse('switch to rice', single),
+  null,
+  'a title that is not on screen is not a command',
+);
+
+const bigKitchen: CookVoiceContext = {
+  recipes: Array.from({ length: 6 }, (_, at) => ({
+    id: `recipe-${at}`,
+    title: `Batch ${at} stew`,
+  })),
+  shownRecipeId: 'recipe-0',
+  lines: [
+    ...Array.from({ length: 48 }, (_, at) => ({
+      id: `line-${at}`,
+      names: [`Spice blend ${at}`],
+      isInStep: at % 7 === 0,
+    })),
+    { id: 'garlic', names: ['Garlic'], isInStep: false },
+    { id: 'garlic-salt', names: ['Garlic salt'], isInStep: true },
+  ],
+};
+assert.deepEqual(
+  [
+    parse('how much garlic', bigKitchen),
+    parse('how much spice blend 41', bigKitchen),
+    parse('switch to batch 4', bigKitchen),
+  ],
+  [
+    { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic'] },
+    { kind: 'AMOUNT', query: 'spice blend 41', lineIds: ['line-41'] },
+    {
+      kind: 'SWITCH_RECIPE',
+      recipeId: 'recipe-4',
+      candidates: ['recipe-4'],
+    },
+  ],
+  'with 50 lines and 6 dishes, the exact name still wins over a longer one this step names',
+);
+
+[
+  ["I'll go next door", 'next'],
+  ['text', 'necks', 'next'],
+  ['black', 'back', 'pack'],
+  ['pours', 'pause'],
+  ['necks', 'next'],
+  ['rapids', 'repeat'],
+  ['dun', 'done'],
+  ['next door', 'the next batch'],
+].forEach((guesses) =>
+  assert.equal(
+    parse(guesses),
+    null,
+    `a one-word command or a move in a lower-ranked guess never acts: ${JSON.stringify(guesses)}`,
+  ),
+);
+assert.deepEqual(
+  [
+    readCookCommand(['switch to rise', 'switch to rice'], plate),
+    readCookCommand(['stop the time', 'stop the timer'], plate),
+    readCookCommand(['how much garlic', 'how much garlic powder'], plate),
+  ],
+  [
+    {
+      command: {
+        kind: 'SWITCH_RECIPE',
+        recipeId: 'rice',
+        candidates: ['rice'],
+      },
+      transcript: 'switch to rice',
+    },
+    {
+      command: { kind: 'STOP_TIMER', seconds: null, scope: 'ANY' },
+      transcript: 'stop the timer',
+    },
+    {
+      command: { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic'] },
+      transcript: 'how much garlic',
+    },
+  ],
+  'a longer phrase in a lower-ranked guess counts, and the top guess wins when it is a command; the line names the guess that acted',
+);
+
+assert.deepEqual(
+  [
+    parse('how many cups of rice'),
+    parse('how many tablespoons of vinegar'),
+    parse('how many cloves of garlic'),
+    parse('how many fluid ounces of coconut milk'),
+    parse('how much cream of tartar'),
+    parse('how many cups of tomatoes'),
+  ],
+  [
+    { kind: 'AMOUNT', query: 'cups of rice', lineIds: ['rice-line'] },
+    { kind: 'AMOUNT', query: 'tablespoons of vinegar', lineIds: ['vinegar'] },
+    { kind: 'AMOUNT', query: 'cloves of garlic', lineIds: ['garlic'] },
+    {
+      kind: 'AMOUNT',
+      query: 'fluid ounces of coconut milk',
+      lineIds: ['coconut'],
+    },
+    { kind: 'AMOUNT', query: 'cream of tartar', lineIds: ['tartar'] },
+    { kind: 'AMOUNT', query: 'cups of tomatoes', lineIds: ['tomato'] },
+  ],
+  'a quantity before the ingredient ("cups of", "cloves of") is looked past, a plural still matches, and a name with "of" in it is kept whole',
+);
+assert.deepEqual(
+  [
+    parse('how many cups of cilantro'),
+    parse('how many people'),
+    parse('how many minutes'),
+  ],
+  [
+    { kind: 'AMOUNT', query: 'cups of cilantro', lineIds: [] },
+    { kind: 'AMOUNT', query: 'people', lineIds: [] },
+    { kind: 'AMOUNT', query: 'minutes', lineIds: [] },
+  ],
+  'a question with nothing found keeps the words searched, so the answer can name them',
+);
+
+assert.deepEqual(
+  [
+    readSpokenDuration('ten minute'),
+    readSpokenDuration('1 hour 30 minutes'),
+    readSpokenDuration('forty five seconds'),
+    readSpokenDuration('a minute'),
+    readSpokenDuration('big'),
+    readSpokenDuration('10 minute big'),
+  ],
+  [600, 5400, 45, 60, null, null],
+  'a spoken length is read only when it is nothing but a length',
+);
+assert.deepEqual(
+  ['tomatoes', 'leaves', 'peaches', 'cheeses', 'glass', 'rice', 'berries'].map(
+    toSingular,
+  ),
+  ['tomato', 'leaf', 'peach', 'cheese', 'glass', 'rice', 'berry'],
+  'common recipe plurals become singular',
+);
+
+assert.deepEqual(
+  [
+    toSpokenAmount('1½ tbsp'),
+    toSpokenAmount('¼ cup'),
+    toSpokenAmount('1 tsp'),
+    toSpokenAmount('2 lb'),
+    toSpokenAmount('about 2½ oz'),
+    toSpokenAmount('6'),
+    toSpokenAmount('1½ cups'),
+    toSpokenAmount('a pinch'),
+    toSpokenAmount('to taste'),
+  ],
+  [
+    '1 and a half tablespoons',
+    'a quarter cup',
+    '1 teaspoon',
+    '2 pounds',
+    'about 2 and a half ounces',
+    '6',
+    '1 and a half cups',
+    'a pinch',
+    'to taste',
+  ],
+  'amounts are read out in words, never as glyphs or abbreviations',
+);
+assert.deepEqual(
+  [
+    formatSpokenTime(12 * 60_000 + 20_000),
+    formatSpokenTime(90_000),
+    formatSpokenTime(45_000),
+    formatSpokenTime(3_600_000 + 5 * 60_000),
+    formatSpokenTime(0),
+    formatSpokenTime(60_000),
+    formatSpokenTime(150_000),
+    formatSpokenTime(599_000),
+    formatSpokenTime(12 * 60_000 + 50_000),
+  ],
+  [
+    '12 minutes',
+    '1 minute 30 seconds',
+    '45 seconds',
+    '1 hour 5 minutes',
+    '0 seconds',
+    '1 minute',
+    '2 minutes 30 seconds',
+    '9 minutes 59 seconds',
+    '12 minutes',
+  ],
+  'a time left is never said as more than is left: seconds under ten minutes, whole minutes from there',
+);
+assert.deepEqual(
+  ['30 min', '1 h 30 min', '1 min 30 sec', '2 h', '1 h 1 min', '45 sec'].map(
+    toSpokenLabel,
+  ),
+  [
+    '30 minute',
+    '1 hour 30 minutes',
+    '1 minute 30 seconds',
+    '2 hour',
+    '1 hour 1 minute',
+    '45 second',
+  ],
+  'a timer\'s length is said as "the 30 minute timer", and a length in two units agrees with its numbers',
+);
+assert.deepEqual(
+  describeTimersLeft([
+    {
+      label: '30 min',
+      name: 'Marinate the chicken',
+      status: 'running',
+      remainingMs: 750_000,
+      clock: '12:30',
+    },
+  ]),
+  {
+    show: '12:30 left on the 30 min timer',
+    speak: '12 minutes left on the 30 minute timer.',
+  },
+  'one timer is named by its length, said in whole words',
+);
+assert.deepEqual(
+  describeTimersLeft([
+    {
+      label: '30 min',
+      name: 'Marinate',
+      status: 'paused',
+      remainingMs: 90_000,
+      clock: '1:30',
+    },
+    {
+      label: '15 min',
+      name: 'Rice · Simmer',
+      status: 'done',
+      remainingMs: 0,
+      clock: '0:00',
+    },
+  ]),
+  {
+    show: '1:30 left, paused · Done',
+    speak: 'Marinate: 1 minute 30 seconds left, paused. Rice · Simmer is done.',
+  },
+  'several timers are each named aloud, with paused and done said; the line shows their clocks',
+);
+assert.deepEqual(
+  describeTimersLeft([
+    {
+      label: '25 min',
+      name: 'Add the vinegar',
+      status: 'running',
+      remainingMs: 1_499_000,
+      clock: '24:59',
+    },
+    {
+      label: '30 min',
+      name: 'Marinate the chicken',
+      status: 'running',
+      remainingMs: 1_795_000,
+      clock: '29:55',
+    },
+  ]).show,
+  '24:59 and 29:55 left',
+  'two running timers fit one line as their clocks, since the pills name them',
+);
+assert.deepEqual(
+  describeAmounts([
+    { name: 'Garlic', amountText: '6' },
+    { name: 'Soy sauce', amountText: '¼ cup' },
+  ]),
+  {
+    show: 'Garlic: 6; Soy sauce: ¼ cup',
+    speak: 'Garlic, 6. Soy sauce, a quarter cup.',
+  },
+  'amounts are shown as written and said in words',
+);
+assert.deepEqual(
+  describeAmounts([
+    { name: 'Garlic', amountText: '4' },
+    { name: 'Garlic', amountText: '½ tsp' },
+  ]),
+  {
+    show: 'Garlic: 4, ½ tsp',
+    speak: 'Garlic, 4, plus a half teaspoon.',
+  },
+  'a name on two lines is said once with both amounts',
+);
+assert.deepEqual(
+  describeAmounts([
+    { name: 'Garlic', amountText: '4', groupLabel: 'For the chicken' },
+    { name: 'Garlic', amountText: '2', groupLabel: 'For the sauce' },
+  ]),
+  {
+    show: 'Garlic: 4 (For the chicken), 2 (For the sauce)',
+    speak: 'Garlic, 4, For the chicken, plus 2, For the sauce.',
+  },
+  'an ingredient in two groups says which group each amount is for',
+);
+
+const timerSet = [
+  { id: 'a', label: '30 min', status: 'running', remainingMs: 900_000 },
+  { id: 'b', label: '10 min', status: 'running', remainingMs: 120_000 },
+  { id: 'c', label: '25 min', status: 'paused', remainingMs: 600_000 },
+  { id: 'd', label: '5 min', status: 'done', remainingMs: 0 },
+];
+assert.deepEqual(
+  [
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: null,
+      focusedId: 'a',
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: null,
+      focusedId: null,
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: null,
+      focusedId: 'c',
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: '30 min',
+      focusedId: null,
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['paused'],
+      label: null,
+      focusedId: null,
+    })?.id,
+    pickVoiceTimer(timerSet, {
+      statuses: ['running'],
+      label: '25 min',
+      focusedId: null,
+    }),
+  ],
+  ['a', 'b', 'b', 'a', 'c', null],
+  'pause and resume act on the timer in focus, else the one that ends soonest, and a said length must match',
+);
+assert.deepEqual(
+  [
+    pickTimersToTell(timerSet, 'a').map((timer) => timer.id),
+    pickTimersToTell(timerSet, 'c').map((timer) => timer.id),
+    pickTimersToTell(timerSet, null).map((timer) => timer.id),
+    pickTimersToTell(timerSet.slice(0, 1), null).map((timer) => timer.id),
+    pickTimersToTell([], null),
+  ],
+  [['a', 'b'], ['c', 'b'], ['d', 'b'], ['a'], []],
+  'time left tells the timer in focus (else a finished one, else the soonest), then the soonest other running one',
+);
+
+const rangSet = [
+  {
+    id: 'late',
+    label: '30 min',
+    status: 'done',
+    remainingMs: 0,
+    endedAt: 2_000,
+  },
+  { id: 'run', label: '5 min', status: 'running', remainingMs: 60_000 },
+  {
+    id: 'early',
+    label: '10 min',
+    status: 'done',
+    remainingMs: 0,
+    endedAt: 1_000,
+  },
+];
+assert.deepEqual(
+  [
+    pickVoiceTimer(rangSet, {
+      statuses: ['done'],
+      label: null,
+      focusedId: null,
+    })?.id,
+    pickVoiceTimer(rangSet, {
+      statuses: ['done'],
+      label: null,
+      focusedId: 'late',
+    })?.id,
+    pickVoiceTimer(rangSet, {
+      statuses: ['done'],
+      label: '30 min',
+      focusedId: null,
+    })?.id,
+    pickTimersToTell(rangSet, null).map((timer) => timer.id),
+  ],
+  ['early', 'late', 'late', ['early', 'run']],
+  'with two Time’s ups listed latest first, stop and time left take the one that rang first unless another is in focus or named',
+);
+
+console.log('pinchVoice: all checks passed');

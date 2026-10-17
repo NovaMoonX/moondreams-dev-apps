@@ -16,6 +16,8 @@ interface SubviewHeaderProps {
   title: string;
   onBack: () => void;
   className?: string;
+  /** One screen-wide switch at the end of the title row (a microphone), never a call to action. */
+  action?: ReactNode;
   /** Wraps a long title onto a second line instead of cutting it short. */
   isTitleWrapped?: boolean;
 }
@@ -25,6 +27,7 @@ export function SubviewHeader({
   title,
   onBack,
   className = 'mb-3',
+  action,
   isTitleWrapped = false,
 }: SubviewHeaderProps) {
   return (
@@ -48,6 +51,7 @@ export function SubviewHeader({
       >
         {title}
       </h1>
+      {action}
     </div>
   );
 }
@@ -58,6 +62,8 @@ interface SubviewProps {
   onClose: () => void;
   /** Omit when the content draws its own `SubviewHeader` because its back step changes. */
   title?: string;
+  /** One screen-wide switch at the end of the title row (a microphone), never a call to action. */
+  headerAction?: ReactNode;
   /** What the header's back button, the browser's back gesture and Escape do when they step back inside the subview (or confirm leaving it) instead of leaving at once. */
   onBack?: () => void;
   className?: string;
@@ -78,6 +84,7 @@ function Subview({
   children,
   onClose,
   title,
+  headerAction,
   onBack,
   className,
   overlay = false,
@@ -143,6 +150,7 @@ function Subview({
             <SubviewHeader
               title={title}
               onBack={goBack}
+              action={headerAction}
               isTitleWrapped={isTitleWrapped}
               className='bg-background sticky top-0 z-20 -mx-4 -mt-6 px-4 pt-6 pb-3'
             />
@@ -163,6 +171,7 @@ function Subview({
           <SubviewHeader
             title={title}
             onBack={goBack}
+            action={headerAction}
             isTitleWrapped={isTitleWrapped}
             className='sticky-app-bar bg-background/80 -mx-4 mb-3 min-h-14 px-4 py-2.5 backdrop-blur'
           />
