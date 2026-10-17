@@ -314,7 +314,6 @@ function CalendarScreen({
           showPrices={viewOptions.options.showPrices}
           onOpenDay={(dayKey) => setOpenDay({ dayKey, mealId: null })}
           onOpenMeal={(dayKey, mealId) => setOpenDay({ dayKey, mealId })}
-          onAdd={(dayKey) => openPlan(dayKey, null)}
         />
       )}
       {isSummaryOpen && (
