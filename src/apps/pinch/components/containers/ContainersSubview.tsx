@@ -542,10 +542,11 @@ function ContainersSubview({
 
   const isListShown = isReady && loadError === null;
   const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
+  // The cast makes it a plain boolean: passed as it is, React Compiler treats the call as able to mutate the scope it came from.
   const door = getFinishedDoor({
     isListShown: isListShown && !isFinishedView,
     isScoped,
-    hasStockInScope,
+    hasStockInScope: !!hasStockInScope,
     finishedCount: finished.length,
     isRead: finishedQuery.data !== undefined || finishedQuery.isError,
   });
