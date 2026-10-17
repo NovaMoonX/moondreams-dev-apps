@@ -302,6 +302,14 @@ export const RECIPE_START_METHODS: {
     description: 'Start with a blank recipe',
   },
 ];
+
+/** Not a way to make the recipe now, so it follows the list of ways as a quiet row. */
+export const KEEP_AS_IDEA_METHOD = {
+  id: 'idea',
+  emoji: '💡',
+  title: 'Keep it as an idea',
+  description: 'Save a link, a photo or a few words for later',
+};
 /** Months loaded on each side of the window's centre: enough that paging a month or a few weeks seldom restarts the listener. */
 export const MONTH_WINDOW_PADDING = 2;
 

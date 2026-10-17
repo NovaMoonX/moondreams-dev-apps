@@ -1,12 +1,23 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
 import { FirebaseError } from 'firebase/app';
+import { Lightbulb, RotateCcw } from 'lucide-react';
 
-import { MAX_PASTE_CHARS, MAX_UPLOAD_BYTES } from '@apps/pinch/constants';
+import ActionChips, { type ActionChip } from '@/components/ActionChips';
+import FilePickCard from '@/components/FilePickCard';
+import FormSection from '@/components/FormSection';
+import IntroCard from '@/components/IntroCard';
+import MethodPicker from '@/components/MethodPicker';
+import ModalFooterActions from '@/components/ModalFooterActions';
+import {
+  MAX_PASTE_CHARS,
+  MAX_UPLOAD_BYTES,
+  RECIPE_START_METHODS,
+} from '@apps/pinch/constants';
 import {
   extractRecipeFromFile,
   extractRecipeFromPage,
@@ -66,12 +77,14 @@ const getFailureMessage = (
   if (source === 'AI_TEXT') {
     return "We couldn't read that text right now. Try again, or write it yourself below.";
   }
-  return "We couldn't read that right now. Try a clearer photo or a PDF, or write it yourself below.";
+  return "We couldn't read that file right now. Try a clearer photo or a PDF, or write it yourself below.";
 };
 
 const getEmptyMessage = (source: RecipeSource, canPasteText: boolean) => {
   if (source !== 'AI_LINK') {
-    return "We couldn't find a recipe in that. Try a clearer photo or paste the text.";
+    return source === 'AI_TEXT'
+      ? "We couldn't find a recipe in that text. Try pasting the whole recipe, or write it yourself below."
+      : "We couldn't find a recipe in that file. Try a clearer photo, or paste the text.";
   }
   return canPasteText
     ? "We couldn't find a recipe on that page. Paste its text instead, or write it yourself below."
@@ -83,10 +96,56 @@ type State =
   | { status: 'reading'; label: string }
   | { status: 'failed'; message: string };
 
+type ReaderMethod = Exclude<RecipeStartMethod, 'manual'>;
+
+const SAVED_LINE =
+  'You look it over first. Nothing is saved until you save it.';
+
+const FIELD_CLASS =
+  'rounded-none border-0 bg-transparent px-4 focus:outline-none';
+
+const READER_COPY: Record<ReaderMethod, { caption: string; lead: string }> = {
+  link: {
+    caption: 'Recipe link',
+    lead: "Paste a recipe page's link. We open it, and an AI reads it and fills in the form.",
+  },
+  text: {
+    caption: 'Recipe text',
+    lead: 'Paste a recipe from a chat or a note. An AI reads it and fills in the form.',
+  },
+  file: {
+    caption: 'Recipe file',
+    lead: 'Choose a photo, screenshot or PDF. An AI reads it and fills in the form.',
+  },
+};
+
+const getMethodEmoji = (id: RecipeStartMethod) =>
+  RECIPE_START_METHODS.find((method) => method.id === id)?.emoji ?? '📝';
+
+const MANUAL_METHOD = RECIPE_START_METHODS.find(
+  (method) => method.id === 'manual',
+);
+
+/** Whether the screen is still on show, so a reading that finishes after the person went back doesn't carry them forward. */
+function useIsMounted() {
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  return useCallback(() => isMountedRef.current, []);
+}
+
 interface RecipeReaderProps {
-  method: Exclude<RecipeStartMethod, 'manual'>;
+  method: ReaderMethod;
   /** A link the person already has, so the link way opens with it filled in; nothing is sent until they tap the button. */
   initialUrl?: string;
+  /** The idea that link came from, named in the card at the top. */
+  ideaTitle?: string;
   /** Called with what the reader found; the form fills what was read and the person reviews it before saving. */
   onRead: (
     recipe: ExtractedRecipe,
@@ -94,6 +153,10 @@ interface RecipeReaderProps {
     label: string,
   ) => void;
   onManual: () => void;
+  /** The footer's Back: the same step as the header's back button. */
+  onBack: () => void;
+  /** Whether the person is holding a pasted link or text that going back would lose. */
+  onTypedChange?: (isTyped: boolean) => void;
   /** What the person had typed before stepping away, so coming back keeps it. */
   initialText?: string;
   initialLink?: string;
@@ -101,12 +164,15 @@ interface RecipeReaderProps {
   onSaveAsIdea?: (kept: { text: string } | { link: string }) => void;
 }
 
-/** One way of starting a recipe, finished on its own screen: say what the AI will do, take the text, link or file, and read it. */
+/** One way of starting a recipe, finished on its own screen: say what the AI will do, take the text, link or file, and read it from a pinned footer. */
 function RecipeReader({
   method,
   initialUrl,
+  ideaTitle,
   onRead,
   onManual,
+  onBack,
+  onTypedChange,
   initialText = '',
   initialLink = '',
   onSaveAsIdea,
@@ -115,11 +181,22 @@ function RecipeReader({
   const [state, setState] = useState<State>({ status: 'idle' });
   const [text, setText] = useState(initialText);
   const [link, setLink] = useState(initialUrl ?? initialLink);
+  const [file, setFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const linkRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const isMounted = useIsMounted();
   const isReading = state.status === 'reading';
   const canPasteText = initialUrl === undefined;
+  const typed = method === 'text' ? text : link;
+  const copy = READER_COPY[method];
+
+  useEffect(() => {
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      (method === 'text' ? textRef : linkRef).current?.focus();
+    }
+  }, [method]);
 
   const run = async (
     label: string,
@@ -129,6 +206,9 @@ function RecipeReader({
     setState({ status: 'reading', label });
     try {
       const extracted = await read();
+      if (!isMounted()) {
+        return;
+      }
       if (extracted.ingredients.length === 0) {
         setState({
           status: 'failed',
@@ -144,6 +224,9 @@ function RecipeReader({
         error,
         error instanceof AIError ? error.customErrorData : null,
       );
+      if (!isMounted()) {
+        return;
+      }
       setState({
         status: 'failed',
         message: getFailureMessage(error, source, canPasteText),
@@ -153,8 +236,9 @@ function RecipeReader({
     }
   };
 
-  const handleFile = (file: File) => {
-    if (file.size > MAX_UPLOAD_BYTES) {
+  const handleFile = (next: File) => {
+    if (next.size > MAX_UPLOAD_BYTES) {
+      setFile(null);
       setState({
         status: 'failed',
         message:
@@ -164,17 +248,13 @@ function RecipeReader({
       return;
     }
 
-    void run(file.name, 'AI_FILE', () => extractRecipeFromFile(file));
+    setFile(next);
+    void run(next.name, 'AI_FILE', () => extractRecipeFromFile(next));
   };
 
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-    const file = event.dataTransfer.files[0];
-    if (!file || isReading) {
-      return;
-    }
-    if (file.type !== 'application/pdf' && !file.type.startsWith('image/')) {
+  const handleDroppedFile = (next: File) => {
+    if (next.type !== 'application/pdf' && !next.type.startsWith('image/')) {
+      setFile(null);
       setState({
         status: 'failed',
         message:
@@ -183,7 +263,7 @@ function RecipeReader({
       return;
     }
 
-    handleFile(file);
+    handleFile(next);
   };
 
   const handleLink = () => {
@@ -203,141 +283,216 @@ function RecipeReader({
     );
   };
 
-  const getView = () => {
-    if (method === 'text') {
+  const handleRetryFile = () => {
+    if (file !== null) {
+      handleFile(file);
+    }
+  };
+
+  const handleText = () =>
+    void run('your text', 'AI_TEXT', () => extractRecipeFromText(text));
+
+  const handleTyped = (next: string) => {
+    onTypedChange?.(next.trim() !== '' && next !== (initialUrl ?? ''));
+    setState((current) =>
+      current.status === 'failed' ? { status: 'idle' } : current,
+    );
+  };
+
+  const getStatus = () => {
+    if (state.status === 'reading') {
       return (
-        <>
-          <p className='text-muted-foreground text-sm'>
-            An AI reads it and fills in the form. It isn’t saved.
-          </p>
-          <Textarea
-            rows={10}
-            variant='outline'
-            aria-label='Paste a recipe'
-            placeholder='Paste the recipe here: the title, ingredients and steps'
-            maxLength={MAX_PASTE_CHARS}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-          />
-          <Button
-            type='button'
-            className='w-full sm:w-auto sm:self-start'
-            loading={isReading}
-            disabled={isReading || text.trim() === ''}
-            onClick={() =>
-              void run('your text', 'AI_TEXT', () =>
-                extractRecipeFromText(text),
-              )
-            }
-          >
-            Fill in the recipe
-          </Button>
-          {onSaveAsIdea && (
-            <Button
-              type='button'
-              variant='secondary'
-              className='w-full sm:w-auto sm:self-start'
-              disabled={isReading || text.trim() === ''}
-              onClick={() => onSaveAsIdea({ text })}
-            >
-              Save as an idea
-            </Button>
-          )}
-        </>
+        <p className='text-muted-foreground truncate text-sm' role='status'>
+          Reading {method === 'file' ? 'the file' : state.label}…
+        </p>
       );
     }
-
-    if (method === 'link') {
+    if (state.status === 'failed') {
       return (
-        <>
-          <p className='text-muted-foreground text-sm'>
-            We open the page and an AI fills in the form from it. It isn't
-            saved.
-          </p>
-          <Input
-            type='url'
-            inputMode='url'
-            variant='outline'
-            aria-label='Recipe link'
-            placeholder='https://…'
-            value={link}
-            onChange={(event) => setLink(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && link.trim() !== '' && !isReading) {
-                event.preventDefault();
-                handleLink();
-              }
-            }}
-          />
-          <Button
-            type='button'
-            className='w-full sm:w-auto sm:self-start'
-            loading={isReading}
-            disabled={isReading || link.trim() === ''}
-            onClick={handleLink}
-          >
-            Fill in the recipe
-          </Button>
-          {onSaveAsIdea && (
-            <Button
-              type='button'
-              variant='secondary'
-              className='w-full sm:w-auto sm:self-start'
-              disabled={isReading || link.trim() === ''}
-              onClick={() => onSaveAsIdea({ link })}
-            >
-              Save as an idea
-            </Button>
-          )}
-        </>
+        <p className='text-destructive text-sm break-words' role='alert'>
+          {state.message}
+        </p>
+      );
+    }
+    return null;
+  };
+
+  const getStatusLine = () =>
+    getStatus() ?? <p className='text-muted-foreground text-xs'>{getHint()}</p>;
+
+  const getField = () => {
+    if (method === 'text') {
+      return (
+        <Textarea
+          ref={textRef}
+          rows={8}
+          variant='base'
+          rounded='none'
+          aria-label='Paste a recipe'
+          placeholder='Paste the recipe here: the title, ingredients and steps'
+          maxLength={MAX_PASTE_CHARS}
+          className={join(FIELD_CLASS, 'py-3')}
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            handleTyped(event.target.value);
+          }}
+        />
       );
     }
 
     return (
-      <>
-        <p className='text-muted-foreground text-sm'>
-          An AI reads the file and fills in the form. It isn’t saved.
-        </p>
-        <div
-          className={join(
-            'flex flex-col items-center gap-3 rounded-2xl border border-dashed px-4 py-8 text-center',
-            isDragging
-              ? 'bg-accent/40 border-[var(--pinch-drizzle)]'
-              : 'border-border',
-          )}
-          onDragOver={(event) => {
+      <Input
+        ref={linkRef}
+        type='url'
+        inputMode='url'
+        variant='base'
+        rounded='none'
+        aria-label='Paste a recipe link'
+        placeholder='https://…'
+        className={join(FIELD_CLASS, 'h-14')}
+        value={link}
+        onChange={(event) => {
+          setLink(event.target.value);
+          handleTyped(event.target.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && link.trim() !== '' && !isReading) {
             event.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-              setIsDragging(false);
-            }
-          }}
-          onDrop={handleDrop}
+            handleLink();
+          }
+        }}
+      />
+    );
+  };
+
+  const getIntro = () =>
+    ideaTitle === undefined || initialUrl === undefined
+      ? { lead: copy.lead, rest: SAVED_LINE }
+      : {
+          lead: `From your idea: ${ideaTitle}`,
+          rest: 'We open its link, and an AI reads the page and fills in the form. You look it over first. Nothing is saved until you save it.',
+        };
+
+  const getHint = () => {
+    if (method === 'file') {
+      return 'Clear, straight-on photos read best.';
+    }
+    if (method === 'text') {
+      return `Up to ${MAX_PASTE_CHARS.toLocaleString()} characters.`;
+    }
+    if (!canPasteText) {
+      return 'The address saved with your idea.';
+    }
+    return 'Copy the address from your browser and paste it here. If the site asks you to sign in, paste its text instead.';
+  };
+
+  const getChips = (): ActionChip[] => {
+    if (method === 'file') {
+      return file !== null && state.status === 'failed'
+        ? [
+            {
+              key: 'retry',
+              icon: <RotateCcw className='h-4 w-4' />,
+              label: 'Try this file again',
+              onClick: handleRetryFile,
+            },
+          ]
+        : [];
+    }
+    if (!onSaveAsIdea) {
+      return [];
+    }
+
+    return [
+      {
+        key: 'idea',
+        icon: <Lightbulb className='h-4 w-4' />,
+        label: 'Save as an idea',
+        description: 'Save as an idea instead of reading it',
+        isDisabled: isReading || typed.trim() === '',
+        onClick: () => onSaveAsIdea(method === 'text' ? { text } : { link }),
+      },
+    ];
+  };
+
+  const getNote = () => {
+    if (method === 'file' || isReading || typed.trim() !== '') {
+      return null;
+    }
+    return method === 'link' ? 'Paste a link first' : 'Paste the recipe first';
+  };
+
+  const getPrimary = () => {
+    if (method === 'file') {
+      return (
+        <Button
+          type='button'
+          loading={isReading}
+          disabled={isReading}
+          onClick={() => fileRef.current?.click()}
         >
-          <span
-            className='bg-accent grid size-12 place-items-center rounded-xl text-2xl'
-            aria-hidden='true'
-          >
-            📎
-          </span>
-          <p className='text-sm'>
-            A photo, screenshot or PDF,{' '}
-            <span className='whitespace-nowrap'>up to 10 MB.</span>
-          </p>
-          <Button
-            type='button'
-            loading={isReading}
-            disabled={isReading}
-            onClick={() => fileRef.current?.click()}
-          >
-            Choose a file
-          </Button>
-          <p className='text-muted-foreground text-xs max-sm:hidden'>
-            or drop it here
-          </p>
-        </div>
+          {file !== null && state.status === 'failed'
+            ? 'Choose another file'
+            : 'Choose a file'}
+        </Button>
+      );
+    }
+
+    return (
+      <Button
+        type='button'
+        loading={isReading}
+        disabled={isReading || typed.trim() === ''}
+        onClick={method === 'link' ? handleLink : handleText}
+      >
+        Fill in the recipe
+      </Button>
+    );
+  };
+
+  const intro = getIntro();
+
+  return (
+    <div className='flex flex-1 flex-col gap-4 [@media(min-height:700px)]:gap-6'>
+      <IntroCard icon={getMethodEmoji(method)} lead={intro.lead}>
+        {intro.rest}
+      </IntroCard>
+      <FormSection title={copy.caption}>
+        {method === 'file' ? (
+          <FilePickCard
+            accepts='A photo, screenshot or PDF'
+            limit={`Up to ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB`}
+            emoji={getMethodEmoji('file')}
+            picked={
+              file && {
+                name: file.name,
+                size: file.size,
+                emoji: file.type === 'application/pdf' ? '📄' : '🖼️',
+              }
+            }
+            status={getStatusLine()}
+            isDisabled={isReading}
+            onPick={() => fileRef.current?.click()}
+            onDropFile={handleDroppedFile}
+          />
+        ) : (
+          <div className='border-border bg-card focus-within:border-foreground/40 overflow-hidden rounded-2xl border'>
+            {getField()}
+            <div className='border-border border-t px-4 py-2.5'>
+              {getStatusLine()}
+            </div>
+          </div>
+        )}
+      </FormSection>
+      <ActionChips actions={getChips()} label='What else you can do with it' />
+      {MANUAL_METHOD && (
+        <MethodPicker
+          disabled={isReading}
+          methods={[{ ...MANUAL_METHOD, isQuiet: true, onPick: onManual }]}
+        />
+      )}
+      {method === 'file' && (
         <Input
           key={fileKey}
           ref={fileRef}
@@ -346,34 +501,20 @@ function RecipeReader({
           aria-label='Upload a recipe'
           className='hidden'
           onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) handleFile(file);
+            const next = event.target.files?.[0];
+            if (next) handleFile(next);
           }}
         />
-      </>
-    );
-  };
-
-  return (
-    <div className='space-y-4'>
-      {getView()}
-      {state.status === 'reading' && (
-        <p className='text-muted-foreground truncate text-sm' role='status'>
-          Reading {state.label}…
-        </p>
       )}
-      {state.status === 'failed' && (
-        <p className='text-destructive text-sm break-words'>{state.message}</p>
-      )}
-      <Button
-        type='button'
-        variant='link'
-        className='h-10 justify-start px-0!'
-        disabled={isReading}
-        onClick={onManual}
-      >
-        Write it yourself instead
-      </Button>
+      <ModalFooterActions
+        note={getNote()}
+        cancelAction={
+          <Button type='button' variant='secondary' onClick={onBack}>
+            Back
+          </Button>
+        }
+        rightActions={getPrimary()}
+      />
     </div>
   );
 }
