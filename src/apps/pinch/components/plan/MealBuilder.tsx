@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -59,6 +59,7 @@ import {
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getBuilderNote,
+  getBuilderSnapshot,
   getDefaultMealType,
   getNearDayOptions,
   getOfferablePicks,
@@ -78,6 +79,17 @@ const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((value) => ({
 }));
 
 const OTHER_DAY = 'other';
+
+// A landscape phone has so little height that the footer's note is folded into the primary's label.
+const SHORT_SCREEN_QUERY = '(max-height: 449px)';
+
+const subscribeToHeight = (onChange: () => void) => {
+  const query = window.matchMedia(SHORT_SCREEN_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+};
+
+const getIsShortScreen = () => window.matchMedia(SHORT_SCREEN_QUERY).matches;
 
 // The most the recent list unfolds to; the one search finds anything past it.
 const MAX_RECENT_PICKS = 12;
@@ -153,9 +165,15 @@ function MealBuilder({
     existingPlanned?.mealType ?? initialType,
   );
   const [isOtherDay, setIsOtherDay] = useState(false);
-  const [query, setQuery] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isRecentExpanded, setIsRecentExpanded] = useState(false);
   const [isSearchFirst] = useState(
-    mode === 'plan' && !existingPlanned && !starter && !startRecipeId,
+    () =>
+      mode === 'plan' &&
+      !existingPlanned &&
+      !starter &&
+      !startRecipeId &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches,
   );
   const [items, setItems] = useState<MealItem[]>(
     existingPlanned?.items ??
@@ -237,6 +255,20 @@ function MealBuilder({
       ).slice(0, MAX_RECENT_PICKS),
     [recentPicks, items, savedMeals],
   );
+  const [openingTotal] = useState(offerablePicks.length);
+  const snapshot = getBuilderSnapshot({
+    items,
+    name,
+    when: existingPlanned ? `${dayKey}|${mealType}` : null,
+  });
+  const [openedWith] = useState(snapshot);
+  const isDirty = snapshot !== openedWith;
+  const isShortScreen = useSyncExternalStore(
+    subscribeToHeight,
+    getIsShortScreen,
+    () => false,
+  );
+  const isAskingRef = useRef(false);
   const plateTitle = getPlannedMealTitle(
     { name: source?.name ?? existingPlanned?.name ?? null, items },
     recipesById,
@@ -430,6 +462,49 @@ function MealBuilder({
     }
   };
 
+  const getDiscardCopy = () => {
+    if (existingPlanned || existingMeal) {
+      return {
+        title: 'Discard your changes?',
+        message:
+          "They aren't saved yet. If you leave now, this meal stays as it was.",
+      };
+    }
+    return {
+      title: 'Discard this meal?',
+      message:
+        mode === 'meal'
+          ? "It isn't saved yet. If you leave now, what you've added is lost."
+          : "It isn't on your plan yet. If you leave now, what's on the plate is lost.",
+    };
+  };
+
+  const goBack = async () => {
+    if (!isDirty || isSubmitting) {
+      closeSubview();
+      return;
+    }
+    if (isAskingRef.current) {
+      return;
+    }
+
+    const openedAs = subview;
+    isAskingRef.current = true;
+    try {
+      const confirmed = await confirm({
+        ...getDiscardCopy(),
+        confirmText: 'Discard',
+        cancelText: 'Keep editing',
+        destructive: true,
+      });
+      if (confirmed) {
+        closeSubviewIf((current) => current === openedAs);
+      }
+    } finally {
+      isAskingRef.current = false;
+    }
+  };
+
   const getServingCaption = (item: MealItem) => {
     if (item.kind === 'RECIPE') {
       const recipe = recipesById.get(item.refId);
@@ -460,7 +535,9 @@ function MealBuilder({
         hasDay: date !== null,
         hasItems: items.length > 0,
       });
-  const isTyping = query.trim() !== '';
+  const submitLabel = isShortScreen && note ? note : getSubmitLabel();
+  const isTitleGiven =
+    mode === 'meal' || Boolean(source?.name ?? existingPlanned?.name);
   const getEmptyLine = () => {
     const what =
       mode === 'plan'
@@ -475,7 +552,13 @@ function MealBuilder({
   );
 
   return (
-    <Subview overlay title={title} isTitleWrapped onClose={closeSubview}>
+    <Subview
+      overlay
+      title={title}
+      isTitleWrapped={isTitleGiven}
+      onClose={closeSubview}
+      onBack={() => void goBack()}
+    >
       <div className='flex flex-1 flex-col gap-5'>
         <UndoSnackbar pending={pending} onUndo={undo} />
         {mode === 'plan' ? (
@@ -561,8 +644,7 @@ function MealBuilder({
           ) : (
             <ItemSearch
               uid={uid}
-              query={query}
-              onQueryChange={setQuery}
+              onTypingChange={setIsTyping}
               excludeIds={items.map((item) => item.refId)}
               onPick={(id) => addItem('INGREDIENT', id)}
               onPickRecipe={(id) => addItem('RECIPE', id)}
@@ -637,7 +719,7 @@ function MealBuilder({
         </section>
 
         {items.length > 0 && (
-          <div className='bg-accent/60 space-y-2 rounded-2xl p-3'>
+          <div className='bg-accent/60 border-border/60 space-y-2 rounded-2xl border p-3'>
             <p className='flex items-center gap-1.5 text-sm'>
               <span className='font-semibold'>
                 {cost.totalCents === null
@@ -671,6 +753,9 @@ function MealBuilder({
             uid={uid}
             caption={recentCaption}
             picks={offerablePicks}
+            openingTotal={openingTotal}
+            isExpanded={isRecentExpanded}
+            onExpandedChange={setIsRecentExpanded}
             onPick={pickRecent}
           />
         )}
@@ -679,7 +764,7 @@ function MealBuilder({
           !isTyping &&
           items.length === 0 &&
           offerablePicks.length < FEW_PICKS && (
-            <p className='bg-accent/60 rounded-2xl p-4 text-sm'>
+            <p className='bg-accent/60 border-border/60 rounded-2xl border p-4 text-sm'>
               {getEmptyLine()}
             </p>
           )}
@@ -687,7 +772,7 @@ function MealBuilder({
         {error && <p className='text-destructive text-sm'>{error}</p>}
 
         <ModalFooterActions
-          note={note}
+          note={isShortScreen ? null : note}
           leftActions={
             existingMeal && (
               <DeleteIconButton
@@ -700,7 +785,7 @@ function MealBuilder({
             <Button
               type='button'
               variant='secondary'
-              onClick={closeSubview}
+              onClick={() => void goBack()}
               disabled={isSubmitting}
             >
               Cancel
@@ -713,7 +798,7 @@ function MealBuilder({
               disabled={isSubmitting || !isValid}
               onClick={() => void handleSubmit()}
             >
-              {getSubmitLabel()}
+              {submitLabel}
             </Button>
           }
         />
