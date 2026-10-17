@@ -38,8 +38,9 @@ function CookStepTimer({
         <span className='min-w-0 flex-1'>Done · {label}</span>
         <Button
           type='button'
-          variant='tertiary'
-          className="text-foreground! relative h-6 shrink-0 px-2 text-sm underline underline-offset-4 after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
+          variant='secondary'
+          size='sm'
+          className="relative h-7 shrink-0 rounded-full px-3 text-sm after:absolute after:-inset-1.5 after:content-['']"
           aria-label={`Start again: the ${label} timer`}
           disabled={!canStart}
           onClick={onStart}

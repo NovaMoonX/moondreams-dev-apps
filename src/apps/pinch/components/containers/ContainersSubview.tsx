@@ -11,7 +11,6 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Eraser, History, Plus, X } from 'lucide-react';
 
-import ActionChips from '@/components/ActionChips';
 import EntryTile from '@/components/EntryTile';
 import LabelChip from '@/components/LabelChip';
 import { PillGroup } from '@/components/PillGroup';
@@ -455,27 +454,11 @@ function ContainersSubview({
       );
     }
 
-    const canClear = !isScoped && trimmed === '';
     const limit = limits[place];
     const visible =
       rows.length - limit > HIDDEN_WORTH_A_BUTTON ? limit : rows.length;
     return (
       <section aria-label={CONTAINER_PLACE_LABELS[place]}>
-        {canClear && (
-          <ActionChips
-            className='justify-end pb-1'
-            actions={[
-              {
-                key: 'clear-out',
-                icon: <Eraser className='h-4 w-4' />,
-                label: `Clear out the ${placeWord}`,
-                isDestructive: true,
-                isLoading: clearing === place,
-                onClick: () => void handleClear(place),
-              },
-            ]}
-          />
-        )}
         {noteLine}
         <ul className='divide-border divide-y'>
           {rows.slice(0, visible).map(({ boxes }) => renderRow(boxes))}
@@ -561,6 +544,11 @@ function ContainersSubview({
   };
 
   const isListShown = isReady && loadError === null;
+  const canClear =
+    isListShown &&
+    !isScoped &&
+    trimmed === '' &&
+    byPlace[shownPlace].length > 0;
   const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
   // The cast makes it a plain boolean: passed as it is, React Compiler treats the call as able to mutate the scope it came from.
   const door = getFinishedDoor({
@@ -593,22 +581,38 @@ function ContainersSubview({
           subtitle={
             isFinishedView
               ? "Boxes you've used up or cleared out."
-              : 'What you have put away, with what to eat first.'
+              : 'Put away, with what to eat first.'
           }
           action={
             !isFinishedView && (
-              <Button
-                type='button'
-                size='sm'
-                rounded='full'
-                className='gap-1'
-                aria-label='Add something you put away'
-                disabled={!isReady}
-                onClick={() => setIsAdding(true)}
-              >
-                <Plus className='h-4 w-4' aria-hidden='true' />
-                Add
-              </Button>
+              <div className='flex items-center gap-1'>
+                {canClear && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    rounded='full'
+                    className="border-destructive/40 text-destructive! hover:bg-destructive/10 relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
+                    aria-label={`Clear out the ${CONTAINER_PLACE_LABELS[shownPlace].toLowerCase()}`}
+                    loading={clearing === shownPlace}
+                    onClick={() => void handleClear(shownPlace)}
+                  >
+                    <Eraser className='h-4 w-4' aria-hidden='true' />
+                  </Button>
+                )}
+                <Button
+                  type='button'
+                  size='sm'
+                  rounded='full'
+                  className='gap-1'
+                  aria-label='Add something you put away'
+                  disabled={!isReady}
+                  onClick={() => setIsAdding(true)}
+                >
+                  <Plus className='h-4 w-4' aria-hidden='true' />
+                  Add
+                </Button>
+              </div>
             )
           }
         />

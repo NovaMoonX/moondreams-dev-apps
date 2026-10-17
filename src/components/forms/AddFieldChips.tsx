@@ -36,7 +36,7 @@ function AddFieldChips({
             type='button'
             variant='tertiary'
             size='sm'
-            className='border-border h-auto min-h-9 justify-start gap-2 rounded-full border px-3 py-1.5 text-sm font-medium'
+            className="border-border relative h-auto min-h-9 justify-start gap-2 rounded-full border px-3 py-1.5 text-sm font-medium after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-['']"
             onClick={() => onAdd(chip.key)}
           >
             <span className='text-muted-foreground'>{chip.icon}</span>

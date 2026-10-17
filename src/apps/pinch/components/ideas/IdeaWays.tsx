@@ -413,7 +413,9 @@ export function IdeaLinkWay({
             note={
               isLooking
                 ? 'Looking up the page. You can save in a moment.'
-                : undefined
+                : link === null
+                  ? 'Paste a link to save.'
+                  : undefined
             }
             error={error}
             onCancel={onClose}
@@ -629,6 +631,7 @@ export function IdeaTextWay({
             canSave={canSave}
             isSubmitting={isSubmitting}
             error={error}
+            note={title === '' ? 'Write a few words to save.' : null}
             onCancel={onClose}
           />
         }

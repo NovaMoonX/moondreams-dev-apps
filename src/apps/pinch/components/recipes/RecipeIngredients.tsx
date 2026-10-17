@@ -316,7 +316,7 @@ function IngredientEditor({
           </div>
         </div>
       ) : (
-        <div className='space-y-1'>
+        <div className='space-y-3'>
           <div className='grid grid-cols-2 gap-3'>
             <Field label='Amount'>
               {(id) => (
