@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Plus } from 'lucide-react';
@@ -77,12 +77,24 @@ interface RecentPickRowsProps {
   uid: string;
   caption: string;
   picks: RecentPick[];
+  /** How many rows were offered when the screen opened, which decides whether a fold is drawn at all. */
+  openingTotal: number;
+  isExpanded: boolean;
+  onExpandedChange: (isExpanded: boolean) => void;
   /** Called with `RECIPE:<id>` or `MEAL:<id>`. */
   onPick: (value: string) => void;
 }
 
 /** The person's recent recipes and saved meals as roomy rows with their facts and what is in the fridge or freezer, six of them until "Show N more". */
-function RecentPickRows({ uid, caption, picks, onPick }: RecentPickRowsProps) {
+function RecentPickRows({
+  uid,
+  caption,
+  picks,
+  openingTotal,
+  isExpanded,
+  onExpandedChange,
+  onPick,
+}: RecentPickRowsProps) {
   const { options } = useListViewOptions(uid, 'recipes');
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
@@ -90,8 +102,11 @@ function RecentPickRows({ uid, caption, picks, onPick }: RecentPickRowsProps) {
   const costContext = useAppSelector(selectCostContext);
   const stockByRecipe = useAppSelector(selectStockByRecipe);
   const stockByMeal = useAppSelector(selectStockByMealWithRecipes);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const { shown, hasToggle } = getRecentRowWindow(picks.length, isExpanded);
+  const { shown, hasToggle } = getRecentRowWindow(
+    picks.length,
+    isExpanded,
+    openingTotal,
+  );
 
   const getRecipeRow = (pick: RecentPick) => {
     const recipe = recipesById.get(pick.id);
@@ -186,7 +201,7 @@ function RecentPickRows({ uid, caption, picks, onPick }: RecentPickRowsProps) {
           size='sm'
           className='h-10 px-0!'
           aria-expanded={isExpanded}
-          onClick={() => setIsExpanded((current) => !current)}
+          onClick={() => onExpandedChange(!isExpanded)}
         >
           {isExpanded ? 'Show fewer' : `Show ${picks.length - shown} more`}
         </Button>
