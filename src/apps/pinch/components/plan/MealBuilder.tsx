@@ -82,6 +82,9 @@ const OTHER_DAY = 'other';
 // The most the recent list unfolds to; the one search finds anything past it.
 const MAX_RECENT_PICKS = 12;
 
+// Under this many things to offer, an empty plate says what to do next instead of leaving the screen bare.
+const FEW_PICKS = 5;
+
 const copyItems = (items: MealItem[]) =>
   items.map((item) => ({ ...item, id: generateUuid() }));
 
@@ -458,6 +461,15 @@ function MealBuilder({
         hasItems: items.length > 0,
       });
   const isTyping = query.trim() !== '';
+  const getEmptyLine = () => {
+    const what =
+      mode === 'plan'
+        ? 'a recipe, a saved meal or a single ingredient'
+        : 'a recipe or an ingredient';
+    return offerablePicks.length === 0
+      ? `Search for ${what}, and it goes on the plate.`
+      : `Tap one above, or search for ${what}. It goes on the plate.`;
+  };
   const recentCaption = getRecentCaption(
     new Set(offerablePicks.map((pick) => pick.kind)),
   );
@@ -521,6 +533,7 @@ function MealBuilder({
             icon='🍽️'
             label='Name'
             title='Name'
+            lines={2}
             summary={name.trim()}
             placeholder='Add a name'
             defaultOpen={existingMeal === null}
@@ -661,6 +674,15 @@ function MealBuilder({
             onPick={pickRecent}
           />
         )}
+
+        {!isFull &&
+          !isTyping &&
+          items.length === 0 &&
+          offerablePicks.length < FEW_PICKS && (
+            <p className='bg-accent/60 rounded-2xl p-4 text-sm'>
+              {getEmptyLine()}
+            </p>
+          )}
 
         {error && <p className='text-destructive text-sm'>{error}</p>}
 
