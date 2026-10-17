@@ -284,8 +284,7 @@ function DayDrawer({
         <div className='space-y-5'>
           {meals.length === 0 ? (
             <p className='text-muted-foreground py-2 text-center text-sm'>
-              This day is open. Plan a recipe, a saved meal or a single
-              ingredient on it.
+              Plan a recipe, a saved meal or a single ingredient on this day.
             </p>
           ) : (
             <>
