@@ -70,7 +70,7 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
             Nothing matches “{query.trim()}”.
           </p>
         ) : (
-          <ul className='divide-border divide-y'>
+          <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border px-3'>
             {shown.map((source) => {
               const count = counts.get(source.id) ?? 0;
               const summary = (

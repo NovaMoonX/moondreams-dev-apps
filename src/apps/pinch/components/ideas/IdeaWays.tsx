@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import FallbackImage from '@/components/FallbackImage';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PhotoPicker from '@/components/forms/PhotoPicker';
+import IntroCard from '@/components/IntroCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useImageUpload } from '@/hooks/useImageUpload';
@@ -605,6 +606,12 @@ export function IdeaTextWay({
 
   return (
     <div ref={bodyRef} className='space-y-4'>
+      <IntroCard
+        icon={IDEA_KIND_EMOJIS.TEXT}
+        lead='Jot it down now, cook it later.'
+      >
+        It goes on your ideas list until you turn it into a recipe.
+      </IntroCard>
       <Form
         id='pinch-idea-text'
         form={fields}
