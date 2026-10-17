@@ -783,6 +783,12 @@ export const getStartServings = (container: Container) =>
   container.history.find((event) => event.place !== null)?.servings ?? null;
 
 /** Counts what was eaten from the history, so a corrected count reads true; a history that may have been trimmed past the cap names no number it can't vouch for. */
+export const getFinishedKind = (container: Container) => {
+  const last = container.history.at(-1)?.kind;
+  const result = last === 'TOSS' || last === 'CLEAR' ? last : 'EAT';
+  return result;
+};
+
 export const getFinishedText = (container: Container) => {
   const last = container.history.at(-1);
   const isWhole =

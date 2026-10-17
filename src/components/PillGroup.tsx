@@ -21,8 +21,8 @@ const MAX_QUIET_HIDDEN = 3;
 export interface PillOption<T extends string> {
   value: T;
   label: string;
-  /** Shown instead of `label` below 360px, where a long one would wrap the row; `label` stays the accessible name. */
-  compactLabel?: string;
+  /** A count or note after the label ("10 servings"); below 360px it moves to a second line inside the pill, so the row stays on one line with every word kept. */
+  detail?: string;
   emoji?: string;
   /** A small image or icon in place of an emoji (a store's logo). */
   icon?: ReactNode;
@@ -227,7 +227,10 @@ export function PillOptions<T extends string>({
                 icon={option.icon}
                 isThin={isThin}
                 isSelected={isSelected(option.value)}
-                ariaLabel={option.compactLabel ? option.label : undefined}
+                className={join(
+                  option.detail &&
+                    'max-[359px]:h-auto! max-[359px]:min-h-8! max-[359px]:py-0.5!',
+                )}
                 onClick={() => {
                   onToggle(option.value);
                   if (isSingle) {
@@ -236,15 +239,16 @@ export function PillOptions<T extends string>({
                   }
                 }}
               >
-                {option.compactLabel ? (
-                  <>
-                    <span className='truncate max-[359px]:hidden'>
-                      {option.label}
+                {option.detail ? (
+                  <span className='flex min-w-0 items-center gap-x-1 max-[359px]:flex-col max-[359px]:items-start max-[359px]:gap-y-0 max-[359px]:leading-tight'>
+                    <span className='truncate'>{option.label}</span>
+                    <span aria-hidden='true' className='max-[359px]:hidden'>
+                      ·
                     </span>
-                    <span className='truncate min-[360px]:hidden'>
-                      {option.compactLabel}
+                    <span className='truncate max-[359px]:text-[11px] max-[359px]:opacity-80'>
+                      {option.detail}
                     </span>
-                  </>
+                  </span>
                 ) : (
                   option.label
                 )}

@@ -12,6 +12,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Eraser, History, Plus, X } from 'lucide-react';
 
 import EntryTile from '@/components/EntryTile';
+import IntroCard from '@/components/IntroCard';
 import LabelChip from '@/components/LabelChip';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -26,6 +27,7 @@ import ContainerFormSheet from '@apps/pinch/components/containers/ContainerFormS
 import ContainerRow from '@apps/pinch/components/containers/ContainerRow';
 import ContainerSheet from '@apps/pinch/components/containers/ContainerSheet';
 import {
+  CONTAINER_EMOJI,
   CONTAINER_FINISHED_PAGE_SIZE,
   CONTAINER_LIST_PAGE_SIZE,
   CONTAINER_PLACE_EMOJIS,
@@ -273,13 +275,10 @@ function ContainersSubview({
     ...CONTAINER_PLACES.map((place) => ({
       value: place,
       emoji: CONTAINER_PLACE_EMOJIS[place],
-      label:
+      label: CONTAINER_PLACE_LABELS[place],
+      detail:
         byPlace[place].length > 0
-          ? `${CONTAINER_PLACE_LABELS[place]} · ${formatServings(sumServings(byPlace[place]))}`
-          : CONTAINER_PLACE_LABELS[place],
-      compactLabel:
-        byPlace[place].length > 0
-          ? `${CONTAINER_PLACE_LABELS[place]} · ${sumServings(byPlace[place])}`
+          ? formatServings(sumServings(byPlace[place]))
           : undefined,
     })),
   ];
@@ -580,12 +579,18 @@ function ContainersSubview({
       onBack={isFinishedView ? () => switchView(false) : undefined}
     >
       <div className='space-y-4'>
+        {isFinishedView && (
+          <IntroCard
+            icon={CONTAINER_EMOJI}
+            lead="Boxes you've used up or cleared out."
+          >
+            Tap one to see what happened to it.
+          </IntroCard>
+        )}
         <SectionHeader
           title={title}
           subtitle={
-            isFinishedView
-              ? "Boxes you've used up or cleared out."
-              : 'Put away, with what to eat first.'
+            isFinishedView ? undefined : 'Put away, with what to eat first.'
           }
           action={
             !isFinishedView && (
