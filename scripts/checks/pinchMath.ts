@@ -34,6 +34,7 @@ import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts'
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
   getBuilderNote,
+  getBuilderSnapshot,
   getDefaultMealType,
   getNearDayOptions,
   getOfferablePicks,
@@ -5172,6 +5173,69 @@ assert.equal(getPutAwayText([]), null);
       { shown: 12, hasToggle: true },
     ],
     'an unfolded list shows every row and keeps its toggle so it can fold again',
+  );
+  assert.deepEqual(
+    [
+      [9, false, 10],
+      [7, false, 10],
+      [6, false, 10],
+      [9, true, 12],
+      [9, false, 9],
+      [10, false, 9],
+    ].map(([total, isExpanded, openingTotal]) =>
+      getRecentRowWindow(
+        Number(total),
+        Boolean(isExpanded),
+        Number(openingTotal),
+      ),
+    ),
+    [
+      { shown: 6, hasToggle: true },
+      { shown: 6, hasToggle: true },
+      { shown: 6, hasToggle: false },
+      { shown: 9, hasToggle: true },
+      { shown: 9, hasToggle: false },
+      { shown: 10, hasToggle: false },
+    ],
+    'a fold drawn when the screen opened stays through picks until nothing is tucked away, so rows 7 to 9 never appear at once after a pick, and a list that opened unfolded never grows a fold under the finger',
+  );
+  const plate = [
+    { id: 'a', kind: 'RECIPE' as const, refId: 'adobo', servings: 4 },
+    { id: 'b', kind: 'INGREDIENT' as const, refId: 'banana', servings: 1 },
+  ];
+  const snapshotOf = (
+    items: Parameters<typeof getBuilderSnapshot>[0]['items'],
+    name = '',
+    when: string | null = null,
+  ) => getBuilderSnapshot({ items, name, when });
+  const opened = snapshotOf(plate, 'Taco night', '2026-10-16|DINNER');
+  assert.deepEqual(
+    [
+      snapshotOf(
+        plate.map((row) => ({ ...row, id: `copy-${row.id}` })),
+        'Taco night',
+        '2026-10-16|DINNER',
+      ) === opened,
+      snapshotOf(plate, '  Taco night ', '2026-10-16|DINNER') === opened,
+      snapshotOf(
+        [...plate.slice(0, 1), ...plate.slice(1)],
+        'Taco night',
+        '2026-10-16|DINNER',
+      ) === opened,
+      snapshotOf(
+        plate.map((row) => ({ ...row, servings: row.servings + 1 })),
+        'Taco night',
+        '2026-10-16|DINNER',
+      ) === opened,
+      snapshotOf(plate.slice(0, 1), 'Taco night', '2026-10-16|DINNER') ===
+        opened,
+      snapshotOf(plate, 'Taco nights', '2026-10-16|DINNER') === opened,
+      snapshotOf(plate, 'Taco night', '2026-10-17|DINNER') === opened,
+      snapshotOf([], '') === snapshotOf([], '   '),
+      snapshotOf([], 'Taco night') === snapshotOf([], ''),
+    ],
+    [true, true, true, false, false, false, false, true, false],
+    'a builder counts as changed only when its plate, its name or (for a planned meal) its day and meal differ from how it opened: ids and stray spaces change nothing, a serving count, a removed dish, a typed name or a moved day do, and a name alone on an empty plate does',
   );
   const picks = [
     { kind: 'RECIPE' as const, id: 'adobo', label: 'Adobo chicken', at: 3 },
