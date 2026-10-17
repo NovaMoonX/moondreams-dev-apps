@@ -117,6 +117,7 @@ import {
   planClearOut,
   getClearOutMessage,
   getFinishedDoor,
+  getFinishedRead,
   getPutBackText,
   getEventText,
 } from '../../src/apps/pinch/utils/containers.ts';
@@ -3223,6 +3224,16 @@ assert.deepEqual(
   'a clear-out says what it takes out of which place and what it keeps, and the Undo says how many came back',
 );
 
+assert.deepEqual(
+  [
+    getFinishedRead(true, false),
+    getFinishedRead(true, true),
+    getFinishedRead(false, true),
+    getFinishedRead(false, false),
+  ],
+  ['FAILED', 'FAILED', 'LOADED', 'LOADING'],
+  'a finished read that errored is failed even while an earlier answer is held, and no answer yet is loading rather than empty',
+);
 const doorOf = (overrides: Partial<Parameters<typeof getFinishedDoor>[0]>) =>
   getFinishedDoor({
     isListShown: true,

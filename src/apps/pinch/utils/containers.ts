@@ -491,6 +491,15 @@ export type FinishedDoor = 'SHOW' | 'HOLD' | 'HIDE';
 /** Where the read of what is finished stands: a failure is its own answer, never "nothing". */
 export type FinishedRead = 'LOADING' | 'LOADED' | 'FAILED';
 
+/** A read that errored is `FAILED` even when an earlier answer is still held; with neither an error nor an answer it is still landing. */
+export const getFinishedRead = (
+  isError: boolean,
+  hasData: boolean,
+): FinishedRead => {
+  if (isError) return 'FAILED';
+  return hasData ? 'LOADED' : 'LOADING';
+};
+
 interface FinishedDoorInput {
   isListShown: boolean;
   isScoped: boolean;

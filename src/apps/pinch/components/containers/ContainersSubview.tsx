@@ -55,8 +55,8 @@ import {
   getContainerTitle,
   getEatByState,
   getFinishedDoor,
+  getFinishedRead,
   groupBatches,
-  type FinishedRead,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
@@ -567,17 +567,16 @@ function ContainersSubview({
 
   const isListShown = isReady && loadError === null;
   const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
-  const getFinishedRead = (): FinishedRead => {
-    if (finishedQuery.isError) return 'FAILED';
-    return finishedQuery.data === undefined ? 'LOADING' : 'LOADED';
-  };
   // The cast makes it a plain boolean: passed as it is, React Compiler treats the call as able to mutate the scope it came from.
   const door = getFinishedDoor({
     isListShown: isListShown && !isFinishedView,
     isScoped,
     hasStockInScope: !!hasStockInScope,
     finishedCount: finished.length,
-    read: getFinishedRead(),
+    read: getFinishedRead(
+      finishedQuery.isError,
+      finishedQuery.data !== undefined,
+    ),
     expectsDoor: !isScoped && hasSeen,
   });
   const title = isFinishedView ? 'What you finished' : 'Fridge & freezer';
