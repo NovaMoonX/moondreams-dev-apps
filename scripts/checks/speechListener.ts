@@ -178,7 +178,7 @@ Object.assign(globalThis, {
 });
 Date.now = () => clock.now;
 
-const IDLE_MS = 600_000;
+const IDLE_MS = 900_000;
 
 const setUp = (used: (alternatives: string[]) => boolean = () => true) => {
   clock.now = 0;
@@ -380,14 +380,14 @@ const entries = (name: string) =>
   assert.equal(
     seen.status,
     'listening',
-    'a used phrase starts the ten minutes again',
+    'a used phrase starts the fifteen minutes again',
   );
   hear('the next batch');
   advance(1);
   assert.deepEqual(
     [seen.status, seen.error],
     ['off', 'idle'],
-    'a phrase that was not used does not, so listening stops ten minutes after the last command',
+    'a phrase that was not used does not, so listening stops fifteen minutes after the last command',
   );
   advance(20_000);
   assert.equal(

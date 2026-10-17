@@ -19,8 +19,8 @@ const REPEAT_GUARD_MS = 1200;
 const MESSAGE_MS = { HEARD: 2500, ANSWER: 8000, PROBLEM: 5000 } as const;
 /** How long the line says why voice control stopped; the unlit mic says the rest. */
 const ERROR_LINE_MS = 8000;
-/** Ten minutes without a command turns voice control off, so the room isn't heard after the cooking. */
-const IDLE_STOP_MS = 10 * 60_000;
+/** Fifteen minutes without a command turns voice control off, so the room isn't heard after the cooking. */
+const IDLE_STOP_MS = 15 * 60_000;
 
 export type CookVoiceResult =
   | { ok: true; show?: string; speak?: string }

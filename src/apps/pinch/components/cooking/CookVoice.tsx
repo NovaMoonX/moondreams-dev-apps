@@ -1,8 +1,8 @@
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Mic } from 'lucide-react';
+import { ChevronDown, Mic } from 'lucide-react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
-import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { ViewOptionSwitch } from '@/components/ViewOptions';
 import { useSheetHistory } from '@/hooks/useBackHistory';
@@ -17,27 +17,25 @@ const STOP_TEXT: Record<
   denied: {
     line: 'The microphone is blocked.',
     detail:
-      'Your browser blocked the microphone. Allow it for this site in your browser’s settings, then tap Turn on.',
+      'Your browser blocked the microphone. Allow it in the browser’s settings for this site, then tap Turn on.',
   },
   service: {
     line: 'Your browser’s speech service is off.',
     detail:
-      'Your browser’s speech service is turned off, so voice control can’t listen. In Safari it needs Siri or Dictation, which you turn on in the device’s settings.',
+      'Your browser’s speech service is off. In Safari, turn on Siri or Dictation in the device’s settings.',
   },
   'no-microphone': {
     line: 'No microphone found.',
-    detail:
-      'Your browser didn’t find a microphone. Connect one, then tap Turn on.',
+    detail: 'No microphone was found. Connect one, then tap Turn on.',
   },
   unavailable: {
     line: 'Voice control stopped: no answer.',
     detail:
-      'Your browser’s speech service stopped answering, so voice control turned off. Some browsers have no speech service; in others it needs a connection.',
+      'Your browser’s speech service stopped answering. Some browsers have none; others need a connection.',
   },
   language: {
     line: 'Voice control can’t listen in English here.',
-    detail:
-      'Your browser can’t listen in English here, so voice control stays off.',
+    detail: 'Your browser can’t listen in English here.',
   },
   idle: {
     line: 'Voice paused. Tap the mic to start it again.',
@@ -82,6 +80,62 @@ export function CookVoiceButton({ voice }: CookVoiceButtonProps) {
   );
 }
 
+interface DisclosureLineProps {
+  label: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+/** A quiet line that opens more in place, under what matters first. */
+function DisclosureLine({ label, isOpen, onToggle }: DisclosureLineProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='text-muted-foreground! h-10 w-full justify-between gap-2 px-0! text-left text-sm font-normal'
+      aria-expanded={isOpen}
+      onClick={onToggle}
+    >
+      <span className='min-w-0 flex-1 truncate'>{label}</span>
+      <ChevronDown
+        className={join(
+          'h-4 w-4 shrink-0 transition-transform',
+          isOpen && 'rotate-180',
+        )}
+        aria-hidden='true'
+      />
+    </Button>
+  );
+}
+
+/** Puts focus on `target` once a modal has opened, after the modal's own focus lands on its first control (the disclosure line, which isn't the place to start). */
+const useFocusOnOpen = (
+  isOpen: boolean,
+  target: RefObject<HTMLButtonElement | null>,
+) =>
+  useEffect(() => {
+    if (!isOpen) return;
+    const timeoutId = window.setTimeout(() => target.current?.focus(), 80);
+    return () => window.clearTimeout(timeoutId);
+  }, [isOpen, target]);
+
+/** The first commands as rows, what to say then what it does; two to a row on a phone held sideways, so they fit without scrolling. */
+function CommandRows({ rows }: { rows: [string, string][] }) {
+  return (
+    <div className='grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1.5 [@media(max-height:500px)]:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)]'>
+      {rows.map(([phrase, result]) => (
+        <div key={phrase} className='contents'>
+          <span className='font-medium whitespace-nowrap'>“{phrase}”</span>
+          <span className='text-muted-foreground'>{result}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const PINNED_FOOTER =
+  'bg-popover sticky bottom-0 -mx-6 -mb-6 rounded-b-lg px-6 pt-2 pb-4';
+
 interface CookVoiceHelpProps {
   voice: CookVoice;
   /** An ingredient this step uses, for the "how much" example. */
@@ -90,78 +144,135 @@ interface CookVoiceHelpProps {
   dishExample: string | null;
 }
 
+/** "What to say": the commands that matter in the middle of a step, the rest one tap away, and the Read steps aloud setting. */
 function CookVoiceHelp({
   voice,
   ingredientExample,
   dishExample,
 }: CookVoiceHelpProps) {
-  const groups = [
-    { label: 'Steps', phrases: ['next', 'back', 'repeat'] },
-    { label: 'Views', phrases: ['ingredients', 'steps'] },
+  const [isOpen, setIsOpen] = useState(false);
+  const [isMoreShown, setIsMoreShown] = useState(false);
+  const doneRef = useRef<HTMLButtonElement>(null);
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen, () =>
+    setIsOpen(false),
+  );
+  useFocusOnOpen(isOpen, doneRef);
+  const firstRows: [string, string][] = [
+    ['next', 'Next step'],
+    ['back', 'Step before'],
+    ['repeat', 'Reads it aloud'],
+    ['start the timer', 'Starts its timer'],
+    [`how much ${ingredientExample}`, 'Says the amount'],
+  ];
+  const moreGroups: { label: string; rows: [string, string][] }[] = [
     {
-      label: 'Timers',
-      phrases: [
-        'start the timer',
-        'start the ten minute timer',
-        'pause',
-        'resume',
-        'dismiss',
-        'stop the timer',
-        'how much time is left',
+      label: 'Views',
+      rows: [
+        ['ingredients', 'Shows the ingredient list'],
+        ['steps', 'Back to the steps'],
       ],
     },
-    { label: 'Amounts', phrases: [`how much ${ingredientExample}`] },
+    {
+      label: 'Timers',
+      rows: [
+        ['start the ten minute timer', 'Starts the timer of that length'],
+        ['pause', 'Pauses the timer'],
+        ['resume', 'Starts it again'],
+        ['dismiss', 'Silences a timer that rang'],
+        ['stop the timer', 'Pauses it, then resets it'],
+        ['how much time is left', 'Says the time left'],
+      ],
+    },
     ...(dishExample === null
       ? []
       : [
           {
             label: 'Dishes',
-            phrases: [`switch to ${dishExample}`, 'next recipe'],
+            rows: [
+              [`switch to ${dishExample}`, 'Shows that dish'],
+              ['next recipe', 'Shows the next dish'],
+            ] as [string, string][],
           },
         ]),
-    { label: 'Voice', phrases: ['stop listening'] },
+    { label: 'Voice control', rows: [['stop listening', 'Turns it off']] },
   ];
 
   return (
-    <HelpTip
-      title='Voice control'
-      linkLabel='What to say'
-      dismissLabel='Done'
-      className="relative shrink-0 whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
-    >
-      <ul className='space-y-1 text-sm [@media(max-height:500px)]:grid [@media(max-height:500px)]:grid-cols-2 [@media(max-height:500px)]:space-y-0 [@media(max-height:500px)]:gap-x-6 [@media(max-height:500px)]:gap-y-1'>
-        {groups.map((group) => (
-          <li
-            key={group.label}
+    <>
+      <Button
+        type='button'
+        variant='link'
+        size='sm'
+        className="relative inline! h-auto! min-h-0! shrink-0 p-0! align-baseline text-xs whitespace-nowrap underline after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
+        onClick={() => {
+          setIsMoreShown(false);
+          setIsOpen(true);
+        }}
+      >
+        What to say
+      </Button>
+      <Modal
+        id={dialogId}
+        isOpen={isOpen}
+        onClose={onDialogClose}
+        title='Voice control'
+        className='border-border border'
+      >
+        <div className='space-y-3 text-left text-sm'>
+          <CommandRows rows={firstRows} />
+          <DisclosureLine
+            label='More commands'
+            isOpen={isMoreShown}
+            onToggle={() => setIsMoreShown((current) => !current)}
+          />
+          {isMoreShown && (
+            <div className='space-y-3'>
+              {moreGroups.map((group) => (
+                <section key={group.label} className='space-y-1'>
+                  <h3 className='text-muted-foreground text-xs'>
+                    {group.label}
+                  </h3>
+                  <ul className='space-y-1'>
+                    {group.rows.map(([phrase, result]) => (
+                      <li key={phrase}>
+                        <span className='font-medium'>“{phrase}”</span>{' '}
+                        <span className='text-muted-foreground'>
+                          · {result}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          )}
+          <div className='border-border border-t'>
+            <ViewOptionSwitch
+              label='Read steps aloud'
+              description='Reads each step aloud as it appears.'
+              checked={voice.isReadingAloud}
+              onCheckedChange={voice.setIsReadingAloud}
+            />
+          </div>
+          <div
             className={join(
-              'flex gap-3',
-              group.label === 'Timers' &&
-                '[@media(max-height:500px)]:col-span-2',
+              PINNED_FOOTER,
+              'flex justify-end',
+              isMoreShown && 'border-border border-t',
             )}
           >
-            <span className='text-muted-foreground w-14 shrink-0 pt-0.5 text-xs'>
-              {group.label}
-            </span>
-            <span className='min-w-0'>
-              {group.phrases.map((phrase, at) => (
-                <span key={phrase}>
-                  <span className='whitespace-nowrap'>“{phrase}”</span>
-                  {at < group.phrases.length - 1 && ', '}
-                </span>
-              ))}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div className='border-border border-t'>
-        <ViewOptionSwitch
-          label='Read steps aloud'
-          description='Answers are read aloud either way.'
-          checked={voice.isReadingAloud}
-          onCheckedChange={voice.setIsReadingAloud}
-        />
-      </div>
-    </HelpTip>
+            <Button
+              ref={doneRef}
+              type='button'
+              rounded='full'
+              onClick={() => setIsOpen(false)}
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 
@@ -238,14 +349,20 @@ interface CookVoiceExplainerProps {
   ingredientExample: string;
 }
 
-/** What voice control does and who hears it, before the browser asks for the microphone the first time, and again (with what went wrong) after it stopped by itself. */
+/** What voice control does and who hears it, before the browser asks for the microphone the first time, and again (with what went wrong) after it stopped by itself: the two things that matter first, the rest under How it works. */
 export function CookVoiceExplainer({
   voice,
   ingredientExample,
 }: CookVoiceExplainerProps) {
+  const [isDetailShown, setIsDetailShown] = useState(false);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useFocusOnOpen(voice.isExplainerOpen, cancelRef);
   const { dialogId, onDialogClose } = useSheetHistory(
     voice.isExplainerOpen,
-    voice.closeExplainer,
+    () => {
+      setIsDetailShown(false);
+      voice.closeExplainer();
+    },
   );
   const lastStop = voice.error === null ? null : STOP_TEXT[voice.error].detail;
 
@@ -257,40 +374,74 @@ export function CookVoiceExplainer({
       title='Voice control'
       className='border-border border'
     >
-      <div className='space-y-3 text-sm'>
+      <div
+        className={join(
+          '[&_.form-footer]:bg-popover space-y-3 text-sm [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:-mx-6 [&_.form-footer]:-mb-6 [&_.form-footer]:rounded-b-lg [&_.form-footer]:px-6 [&_.form-footer]:pt-2 [&_.form-footer]:pb-4',
+          isDetailShown &&
+            '[&_.form-footer]:border-border [&_.form-footer]:border-t',
+        )}
+      >
         {lastStop === null ? (
           <p>
-            Say “next”, “back”, “repeat”, “start the timer” or “how much{' '}
-            {ingredientExample}” instead of tapping. Answers are read aloud;
-            Read steps aloud, in What to say, reads each step too.
+            Say “next”, “back” or “how much {ingredientExample}” instead of
+            tapping.
           </p>
         ) : (
           <p className='bg-muted/50 border-border rounded-xl border px-3 py-2'>
-            <strong>Last time:</strong> {lastStop}
+            Last time: {lastStop}
           </p>
         )}
         <p>
-          <strong>Your browser will ask to use the microphone.</strong> Its
-          speech service turns all it hears into text, people nearby too: Google
-          in Chrome, Apple in Safari, Microsoft in Edge. A voice reading aloud
-          may send its text too. Pinch keeps nothing.
+          Your browser will ask to use the microphone, and its speech service
+          hears what you say. Pinch keeps nothing.
         </p>
-        <p className='text-muted-foreground'>
-          Off when you leave or after 10 minutes without a command. English only
-          for now.
-        </p>
+        <DisclosureLine
+          label='How it works'
+          isOpen={isDetailShown}
+          onToggle={() => setIsDetailShown((current) => !current)}
+        />
+        {isDetailShown && (
+          <ul className='marker:text-muted-foreground list-disc space-y-1.5 pl-4'>
+            <li>
+              Chrome sends the audio to Google, Safari to Apple, Edge to
+              Microsoft.
+            </li>
+            <li>It hears everyone nearby, not only you.</li>
+            <li>Answers are read aloud.</li>
+            <li>Read steps aloud, in What to say, reads each step too.</li>
+            <li>
+              Some browser voices work online, so what they read is sent too.
+            </li>
+            <li>
+              It turns off when you leave this screen, or after 15 minutes
+              without a command.
+            </li>
+            <li>It never finishes the cook: you tap Finish.</li>
+            <li>Commands are in English for now.</li>
+          </ul>
+        )}
         <ModalFooterActions
           cancelAction={
             <Button
+              ref={cancelRef}
               type='button'
               variant='secondary'
-              onClick={voice.closeExplainer}
+              onClick={() => {
+                setIsDetailShown(false);
+                voice.closeExplainer();
+              }}
             >
               Not now
             </Button>
           }
           rightActions={
-            <Button type='button' onClick={voice.turnOn}>
+            <Button
+              type='button'
+              onClick={() => {
+                setIsDetailShown(false);
+                voice.turnOn();
+              }}
+            >
               Turn on
             </Button>
           }
