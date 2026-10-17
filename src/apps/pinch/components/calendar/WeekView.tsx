@@ -222,11 +222,15 @@ function WeekView({
         {meals.length > MAX_AGENDA_MEALS && (
           <Button
             type='button'
-            variant='link'
+            variant='tertiary'
             onClick={() => onOpenDay(dayKey)}
-            className='h-10 px-0!'
+            className='h-10 w-full justify-between! px-0!'
           >
-            Show {meals.length - MAX_AGENDA_MEALS} more
+            <span>{meals.length - MAX_AGENDA_MEALS} more meals</span>
+            <ChevronRight
+              className='text-muted-foreground h-5 w-5'
+              aria-hidden='true'
+            />
           </Button>
         )}
       </section>
