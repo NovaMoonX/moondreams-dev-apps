@@ -7,6 +7,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import PeriodLeftOutHelp from '@apps/pinch/components/calendar/PeriodLeftOutHelp';
 import { selectShowNutrition } from '@apps/pinch/store/selectors';
+import type { NutritionValues } from '@apps/pinch/types';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import {
   getCostAverages,
@@ -23,6 +24,36 @@ interface StatsTilesProps {
   onOpen?: () => void;
   /** The tiles are one day's: the total is always there, in the line's words with nothing priced (no summary line says it here), and the nutrition reads "That day". */
   day?: { isPast: boolean };
+  /** The nutrition is already on screen elsewhere (a day drawer's front), so this view holds the cost tiles alone. */
+  isNutritionHidden?: boolean;
+}
+
+interface NutritionTilesProps {
+  values: NutritionValues;
+  caption: string;
+}
+
+/** The nutrition switched on in View options, as the tiles every Calendar view shows, under a caption that says what they average or total; nothing when none of them is known. */
+export function NutritionTiles({ values, caption }: NutritionTilesProps) {
+  const show = useAppSelector(selectShowNutrition);
+  const isPhone = useMediaQuery().isBelow('sm');
+  const whole = withWholeCalories(values);
+
+  if (!hasShownValue(whole, show)) {
+    return null;
+  }
+
+  return (
+    <div className='space-y-1.5'>
+      <p className='text-muted-foreground text-xs font-medium'>{caption}</p>
+      <MacroStats
+        variant='tiles'
+        isCompact={!isPhone}
+        values={whole}
+        show={show}
+      />
+    </div>
+  );
 }
 
 const COLUMNS = ['grid-cols-2', 'grid-cols-2', 'grid-cols-3'];
@@ -61,15 +92,21 @@ const getFigureLength = (tile: { value: string }) =>
 const keepSoFarTogether = (label: string) =>
   label.replace(' so far', '\u00a0so\u00a0far');
 
-function StatsTiles({ stats, todayKey, onOpen, day }: StatsTilesProps) {
+function StatsTiles({
+  stats,
+  todayKey,
+  onOpen,
+  day,
+  isNutritionHidden = false,
+}: StatsTilesProps) {
   const show = useAppSelector(selectShowNutrition);
-  const isPhone = useMediaQuery().isBelow('sm');
   const total = day
     ? getPeriodTotal(stats, day.isPast)
     : getPeriodCostTile(stats);
   const isPartial = stats.mealsPriced > 0 && stats.leftOut.length > 0;
-  const daily = withWholeCalories(stats.dailyNutrition);
-  const hasDaily = hasShownValue(daily, show);
+  const hasDaily =
+    !isNutritionHidden &&
+    hasShownValue(withWholeCalories(stats.dailyNutrition), show);
   const tiles = [
     ...(total
       ? [
@@ -158,17 +195,10 @@ function StatsTiles({ stats, todayKey, onOpen, day }: StatsTilesProps) {
           </div>
         )}
         {hasDaily && (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs font-medium'>
-              {day ? 'That day' : 'Daily average'}
-            </p>
-            <MacroStats
-              variant='tiles'
-              isCompact={!isPhone}
-              values={daily}
-              show={show}
-            />
-          </div>
+          <NutritionTiles
+            values={stats.dailyNutrition}
+            caption={day ? 'That day' : 'Daily average'}
+          />
         )}
       </div>
     </div>

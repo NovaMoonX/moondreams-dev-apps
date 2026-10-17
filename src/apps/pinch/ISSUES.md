@@ -447,7 +447,7 @@ Above the month, a stats row shows what the month cost and the average cost per 
 
 ### CRUD & Entry-Point Requirements
 - [ ] No entity.
-- [ ] **Read:** the stats row on the Calendar; the breakdown drawer from tapping it; a day's own stats in its drawer (the tiles, or the "Stats for this day" row).
+- [ ] **Read:** the stats row on the Calendar; the breakdown drawer from tapping it; a day's own stats in its drawer (the Total and the nutrition switched on, and the "Stats for this day" row for the cost averages).
 
 ### Success Criteria
 - [ ] Numbers equal the sum of the visible days for a seeded month; an empty month reads $0.00 and "—".
