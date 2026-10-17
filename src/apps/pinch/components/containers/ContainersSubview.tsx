@@ -585,14 +585,14 @@ function ContainersSubview({
           }
           action={
             !isFinishedView && (
-              <div className='flex items-center gap-1'>
+              <div className='flex items-center gap-2'>
                 {canClear && (
                   <Button
                     type='button'
                     variant='secondary'
                     size='sm'
                     rounded='full'
-                    className="border-destructive/40 text-destructive! hover:bg-destructive/10 relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
+                    className="border-destructive/60 text-destructive! hover:bg-destructive/10 relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
                     aria-label={`Clear out the ${CONTAINER_PLACE_LABELS[shownPlace].toLowerCase()}`}
                     loading={clearing === shownPlace}
                     onClick={() => void handleClear(shownPlace)}
@@ -645,7 +645,7 @@ function ContainersSubview({
           <SearchInput
             value={query}
             onChange={setQuery}
-            placeholder='Search the fridge and freezer'
+            placeholder='Search fridge and freezer'
           />
         )}
         {door === 'SHOW' ? (

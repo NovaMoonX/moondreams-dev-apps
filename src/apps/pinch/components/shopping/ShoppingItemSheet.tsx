@@ -105,9 +105,10 @@ function ShoppingItemSheet({
           ? []
           : [formatSize(rowItem.amount, rowItem.unit)],
       );
-      return amounts.length > 1
-        ? `On your list as ${amounts.join(' and ')}. Saving keeps one amount.`
-        : null;
+      if (amounts.length > 1) {
+        return `On your list as ${amounts.join(' and ')}. Saving keeps one amount.`;
+      }
+      return isChanged ? null : 'Change the amount or unit to save.';
     }
     const there =
       inNewUnit.amount === null
