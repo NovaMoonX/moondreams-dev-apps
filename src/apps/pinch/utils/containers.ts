@@ -488,26 +488,33 @@ export const getClearOutMessage = (
 
 export type FinishedDoor = 'SHOW' | 'HOLD' | 'HIDE';
 
+/** Where the read of what is finished stands: a failure is its own answer, never "nothing". */
+export type FinishedRead = 'LOADING' | 'LOADED' | 'FAILED';
+
 interface FinishedDoorInput {
   isListShown: boolean;
   isScoped: boolean;
   hasStockInScope: boolean;
   finishedCount: number;
-  /** The finished read has landed, with rows, none or a failure. */
-  isRead: boolean;
+  read: FinishedRead;
+  /** Something says boxes are finished (this device saw some last time), so the door's place is held while the read lands. */
+  expectsDoor: boolean;
 }
 
-/** Whether the list's door to what is finished shows, holds its place while the read lands, or is not drawn: it shows once something is finished, and a scope with boxes in stock shows it unread (its read can be large). */
+/** Whether the list's door to what is finished shows, holds its place while the read lands, or is not drawn: it shows once something is finished or the read failed (the view it opens says so), and a scope with boxes in stock shows it unread (its read can be large). */
 export const getFinishedDoor = ({
   isListShown,
   isScoped,
   hasStockInScope,
   finishedCount,
-  isRead,
+  read,
+  expectsDoor,
 }: FinishedDoorInput): FinishedDoor => {
   if (!isListShown) return 'HIDE';
   if (finishedCount > 0 || (isScoped && hasStockInScope)) return 'SHOW';
-  return isRead ? 'HIDE' : 'HOLD';
+  if (read === 'FAILED') return 'SHOW';
+  if (read === 'LOADING') return expectsDoor ? 'HOLD' : 'HIDE';
+  return 'HIDE';
 };
 
 export const getPutBackText = (restored: number, total: number) =>
