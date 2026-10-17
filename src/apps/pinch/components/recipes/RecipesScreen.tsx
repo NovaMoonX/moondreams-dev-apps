@@ -109,6 +109,20 @@ const getStockHeight = (
     : Math.max(...lines);
 };
 
+// Closing a sheet steps its history entry back, and the browser then restores the scroll the page
+// had when it opened, so a jump to the top has to come after that.
+const scrollToTopAfterSheetCloses = () => {
+  const toTop = () => {
+    window.clearTimeout(giveUp);
+    window.setTimeout(() => window.scrollTo({ top: 0 }), 0);
+  };
+  const giveUp = window.setTimeout(
+    () => window.removeEventListener('popstate', toTop),
+    1000,
+  );
+  window.addEventListener('popstate', toTop, { once: true });
+};
+
 interface NoMatchProps {
   text: string;
   actionLabel: string | null;
@@ -189,12 +203,14 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     setRevealId(recipeId);
   });
 
-  useOnSourceShown((sourceId) => {
+  const showSource = (sourceId: string) => {
     setView('recipes');
     setQuery('');
     setStockPlaces([]);
     setPickedSource(sourceId);
-  });
+  };
+
+  useOnSourceShown(showSource);
 
   useEffect(() => {
     if (revealId === null) {
@@ -770,6 +786,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           onAddToShopping={(request) => {
             setOpenId(null);
             setShopping(request);
+          }}
+          onShowSource={(sourceId) => {
+            setOpenId(null);
+            showSource(sourceId);
+            scrollToTopAfterSheetCloses();
           }}
           onOpenHistory={(id) => {
             setOpenId(null);
