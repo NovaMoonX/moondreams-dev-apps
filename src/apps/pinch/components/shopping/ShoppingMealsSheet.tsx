@@ -7,6 +7,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import DetailSheet from '@/components/DetailSheet';
 import FactsLine, { type Fact } from '@/components/FactsLine';
 import SearchInput from '@/components/SearchInput';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -307,16 +308,10 @@ function ShoppingMealsSheet({
             })}
             {visible.length < found.length && (
               <li>
-                <Button
-                  type='button'
-                  variant='link'
-                  size='sm'
-                  className='h-10 px-0!'
-                  onClick={() => setLimit(limit + ROWS_SHOWN)}
-                >
+                <ShowMoreButton onClick={() => setLimit(limit + ROWS_SHOWN)}>
                   Show {Math.min(found.length - visible.length, ROWS_SHOWN)}{' '}
                   more
-                </Button>
+                </ShowMoreButton>
               </li>
             )}
           </ul>

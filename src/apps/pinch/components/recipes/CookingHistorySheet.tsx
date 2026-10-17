@@ -6,6 +6,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft, ChevronRight, NotebookPen } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
@@ -300,10 +301,8 @@ function CookingHistorySheet({
             })}
             {(hidden > HIDDEN_WORTH_A_BUTTON || isCollapsible) && (
               <li>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='h-10 justify-start px-0!'
+                <ShowMoreButton
+                  isOpen={isCollapsible}
                   onClick={() =>
                     setLimit(
                       isCollapsible
@@ -315,7 +314,7 @@ function CookingHistorySheet({
                   {isCollapsible
                     ? 'Show fewer'
                     : `Show ${Math.min(COOK_HISTORY_PAGE_SIZE, hidden)} more`}
-                </Button>
+                </ShowMoreButton>
               </li>
             )}
           </ul>

@@ -18,6 +18,7 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import Subview from '@/components/Subview';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { useAppSelector } from '@/store';
@@ -480,10 +481,7 @@ function ContainersSubview({
           {rows.slice(0, visible).map(({ boxes }) => renderRow(boxes))}
         </ul>
         {visible < rows.length && (
-          <Button
-            type='button'
-            variant='tertiary'
-            className='h-10 justify-start px-0!'
+          <ShowMoreButton
             onClick={() =>
               setLimits((current) => ({
                 ...current,
@@ -493,7 +491,7 @@ function ContainersSubview({
           >
             Show {Math.min(CONTAINER_LIST_PAGE_SIZE, rows.length - visible)}{' '}
             more
-          </Button>
+          </ShowMoreButton>
         )}
       </section>
     );
@@ -543,11 +541,8 @@ function ContainersSubview({
           {rows.map((container) => renderRow([container]))}
         </ul>
         {hasMore && (
-          <Button
-            type='button'
-            variant='tertiary'
-            className='h-10 justify-start px-0!'
-            loading={!isScoped && latestFinished.isFetching}
+          <ShowMoreButton
+            isLoading={!isScoped && latestFinished.isFetching}
             onClick={() =>
               isScoped
                 ? setScopedLimit(
@@ -559,7 +554,7 @@ function ContainersSubview({
             }
           >
             Show {moreCount} more
-          </Button>
+          </ShowMoreButton>
         )}
       </div>
     );
@@ -618,7 +613,7 @@ function ContainersSubview({
           }
         />
         {(hasSwitch || scopeName) && (
-          <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
+          <div className='flex flex-wrap items-center gap-x-2 gap-y-4'>
             {hasSwitch && (
               <PillGroup
                 label='Fridge or freezer'

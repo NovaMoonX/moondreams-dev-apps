@@ -69,9 +69,9 @@ function CookRecord({
         {undoState === 'READY' && (
           <Button
             type='button'
-            variant='tertiary'
+            variant='secondary'
             size='sm'
-            className="relative -mr-2 h-8 shrink-0 px-2 underline after:absolute after:-inset-1 after:content-['']"
+            className="relative -mr-1 h-9 shrink-0 rounded-full px-4 after:absolute after:-inset-0.5 after:content-['']"
             onClick={onUndo}
           >
             Undo

@@ -14,6 +14,7 @@ import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import RevealChip from '@/components/RevealChip';
 import SectionDivider from '@/components/SectionDivider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
@@ -98,11 +99,8 @@ function GroupField({ group, names, isLive, onChange }: GroupFieldProps) {
 
   if (!isShown) {
     return (
-      <Button
-        type='button'
-        variant='link'
-        size='sm'
-        className='h-10 px-0!'
+      <RevealChip
+        icon={<Plus className='h-4 w-4' aria-hidden='true' />}
         onClick={() => {
           setIsShown(true);
           window.requestAnimationFrame(() =>
@@ -110,8 +108,8 @@ function GroupField({ group, names, isLive, onChange }: GroupFieldProps) {
           );
         }}
       >
-        + Put it in a group
-      </Button>
+        Put it in a group
+      </RevealChip>
     );
   }
 
@@ -302,11 +300,8 @@ function IngredientEditor({
           <p className='font-medium'>Amount</p>
           <div className='flex min-h-10 flex-wrap items-center gap-x-3'>
             <span className='text-muted-foreground'>No amount</span>
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='h-10 px-0!'
+            <RevealChip
+              icon={<Plus className='h-4 w-4' aria-hidden='true' />}
               onClick={() => {
                 setIsAmountJustAdded(true);
                 onUpdate({
@@ -317,7 +312,7 @@ function IngredientEditor({
               }}
             >
               Add an amount
-            </Button>
+            </RevealChip>
           </div>
         </div>
       ) : (
@@ -346,18 +341,14 @@ function IngredientEditor({
               />
             </div>
           </div>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-10 px-0!'
+          <RevealChip
             onClick={() => {
               onUpdate({ isAmountless: true, amount: '' });
               if (!row.note) noteRef.current?.focus();
             }}
           >
             No amount (to taste, a handful…)
-          </Button>
+          </RevealChip>
         </div>
       )}
       <Field label='Detail'>

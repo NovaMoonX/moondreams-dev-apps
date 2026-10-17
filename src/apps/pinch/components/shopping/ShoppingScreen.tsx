@@ -22,6 +22,7 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
@@ -189,15 +190,11 @@ function ShoppingRows({
         ))}
       </div>
       {hiddenCount > 0 && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-10 px-0!'
+        <ShowMoreButton
           onClick={() => setLimit(limit + SHOPPING_GROUP_PAGE_SIZE)}
         >
           Show {Math.min(hiddenCount, SHOPPING_GROUP_PAGE_SIZE)} more
-        </Button>
+        </ShowMoreButton>
       )}
     </>
   );

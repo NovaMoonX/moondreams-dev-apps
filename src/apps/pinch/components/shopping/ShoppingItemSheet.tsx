@@ -13,6 +13,7 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
@@ -206,15 +207,9 @@ function ShoppingItemSheet({
             })}
           </ul>
           {isFolded && (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className='h-10 px-0!'
-              onClick={() => setIsAllShown(true)}
-            >
+            <ShowMoreButton onClick={() => setIsAllShown(true)}>
               Show {shares.length - SHARES_SHOWN} more
-            </Button>
+            </ShowMoreButton>
           )}
         </div>
       )}

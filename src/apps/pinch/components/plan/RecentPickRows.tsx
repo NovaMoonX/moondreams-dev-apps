@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Plus } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
@@ -195,16 +196,12 @@ function RecentPickRows({
           )}
       </ActionGroup>
       {hasToggle && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-10 px-0!'
-          aria-expanded={isExpanded}
+        <ShowMoreButton
+          isOpen={isExpanded}
           onClick={() => onExpandedChange(!isExpanded)}
         >
           {isExpanded ? 'Show fewer' : `Show ${picks.length - shown} more`}
-        </Button>
+        </ShowMoreButton>
       )}
     </div>
   );
