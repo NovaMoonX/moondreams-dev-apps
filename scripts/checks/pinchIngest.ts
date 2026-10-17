@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 
 import { normalizeExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
-import { formatFileSize } from '../../src/utils/fileUtils.ts';
+import { formatFileSize, isReadableFile } from '../../src/utils/fileUtils.ts';
 import type { IngredientRecord } from '../../src/apps/pinch/types.ts';
 import { matchIngredient } from '../../src/apps/pinch/utils/ingredientMatch.ts';
+import {
+  canPasteTextInstead,
+  classifyReadFailure,
+  getReadFailureLine,
+  type ReadFailure,
+} from '../../src/apps/pinch/utils/readFailures.ts';
 import { resolveIngredients } from '../../src/apps/pinch/utils/resolveIngredient.ts';
 
 const custom = (id: string, name: string): IngredientRecord => ({
@@ -295,6 +301,128 @@ assert.deepEqual(
   [300, 1536, 1_048_575, 2_400_000, 10 * 1024 * 1024].map(formatFileSize),
   ['1 KB', '2 KB', '1.0 MB', '2.3 MB', '10.0 MB'],
   'a file with something in it is never 0 KB, a size just under a megabyte rolls over to MB instead of reading 1024 KB, and megabytes carry one decimal',
+);
+
+// the picker and the drop take the same files: a photo or PDF by its type, a HEIC the browser left untyped by its extension, nothing else
+const asFile = (name: string, type: string) => ({ name, type });
+assert.deepEqual(
+  [
+    asFile('menu.pdf', 'application/pdf'),
+    asFile('card.jpeg', 'image/jpeg'),
+    asFile('IMG_0042.HEIC', ''),
+    asFile('notes.txt', 'text/plain'),
+    asFile(
+      'recipe.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ),
+    asFile('heic', ''),
+    asFile('recipe.txt', ''),
+    asFile('photo.png.exe', 'application/x-msdownload'),
+  ].map(isReadableFile),
+  [true, true, true, false, false, false, false, false],
+  'a PDF and a JPEG are readable by type, an untyped .heic by its extension; a .txt, a .docx, a bare "heic" name, an untyped .txt and a typed executable are not',
+);
+
+// a failed reading is blamed on what caused it, never on the link or the text when the connection or the reader is the cause
+const causes = (online: boolean, errors: unknown[]): ReadFailure[] =>
+  errors.map((error) => classifyReadFailure(error, online));
+const callable = (kind: string, message = kind) => ({
+  code: `functions/${kind}`,
+  message,
+});
+const ai = (code: string, status?: number) => ({
+  code,
+  message: 'ai',
+  customErrorData: status === undefined ? undefined : { status },
+});
+assert.deepEqual(
+  causes(true, [
+    callable('internal'),
+    callable('deadline-exceeded'),
+    callable('unavailable'),
+    callable('unavailable', "Couldn't load that link."),
+    callable('invalid-argument'),
+    callable('not-found'),
+    callable('failed-precondition'),
+    callable('resource-exhausted'),
+    callable('permission-denied'),
+    ai('fetch-error'),
+    ai('fetch-error', 429),
+    ai('fetch-error', 503),
+    ai('fetch-error', 403),
+    ai('fetch-error', 404),
+    new TypeError('Failed to fetch'),
+    {
+      code: 'error',
+      message:
+        'AI: Error fetching from https://example.test/m:generateContent: Failed to fetch (AI/error)',
+    },
+    new TypeError("Cannot read properties of undefined (reading 'x')"),
+    new SyntaxError('Unexpected token'),
+  ]),
+  [
+    'unreachable',
+    'unreachable',
+    'unreachable',
+    'link',
+    'link',
+    'link',
+    'link',
+    'busy',
+    'unavailable',
+    'unreachable',
+    'busy',
+    'busy',
+    'unavailable',
+    'unavailable',
+    'unreachable',
+    'unreachable',
+    'unread',
+    'unread',
+  ],
+  'the function failing, timing out or being offline is the reader; only a page it could not open is the link; a busy or refused AI is its own cause; a code bug or an unparsable answer is "could not read"',
+);
+assert.deepEqual(
+  causes(false, [
+    callable('invalid-argument'),
+    callable('unavailable', "Couldn't load that link."),
+    ai('fetch-error', 429),
+    new SyntaxError('Unexpected token'),
+    null,
+  ]),
+  ['unreachable', 'unreachable', 'unreachable', 'unreachable', 'unreachable'],
+  'while the device is offline every failure is the connection, whatever error came back',
+);
+const everyLine = (['AI_LINK', 'AI_TEXT', 'AI_FILE'] as const).flatMap(
+  (source) =>
+    (
+      ['unreachable', 'busy', 'unavailable', 'link', 'unread', 'empty'] as const
+    ).map((cause) => ({
+      cause,
+      source,
+      line: getReadFailureLine(cause, source),
+    })),
+);
+assert.deepEqual(
+  everyLine
+    .filter(({ cause }) => cause === 'unreachable')
+    .map(({ line }) => /link|text|file|page|recipe/i.test(line)),
+  [false, false, false],
+  'a line about the connection never names the link, the text or the file',
+);
+assert.deepEqual(
+  everyLine.filter(({ line }) =>
+    /paste (its|the) text|write it yourself/i.test(line),
+  ),
+  [],
+  'no failure line points to a door by name: the rows under it are the doors',
+);
+assert.deepEqual(
+  (
+    ['unreachable', 'busy', 'unavailable', 'link', 'unread', 'empty'] as const
+  ).filter(canPasteTextInstead),
+  ['link', 'unread', 'empty'],
+  'pasting the text is offered when the link or the page is the trouble, never for the connection or the reader',
 );
 
 console.log('pinchIngest: all checks passed');

@@ -1,7 +1,5 @@
-import { formatList } from '@/utils/formatUtils';
 import {
   MIN_FULLY_PRICED_MEALS,
-  NUTRITION_CELLS,
   NUTRITION_METRICS,
 } from '@apps/pinch/constants';
 import type {
@@ -338,11 +336,10 @@ export function getCostAverages(
   return averages;
 }
 
-/** What a day's stats view holds beyond its Total tile, said in words for the row that opens it ("Calories, protein and cost averages"); null when it holds nothing more, so no row opens a view that only repeats the Total. */
+/** What a day's stats view holds that the drawer's front does not: its Total and nutrition tiles already sit there, so only the cost averages are left to offer. Null when a day has none, so no row opens a view that only repeats the front. */
 export function getDayStatsOffer(
   stats: Pick<
     PeriodStats,
-    | 'dailyNutrition'
     | 'fullyPricedMeals'
     | 'avgPerFullyPricedMealCents'
     | 'proteinPricedMeals'
@@ -350,27 +347,18 @@ export function getDayStatsOffer(
   >,
   show: NutritionSwitches,
 ): { subtitle: string } | null {
-  const parts = [
-    ...NUTRITION_CELLS.filter(
-      (cell) => show[cell.key] && stats.dailyNutrition[cell.key] !== null,
-    ).map((cell) => cell.label.toLowerCase()),
-    ...(getCostAverages(stats, show.protein).length > 0
-      ? ['cost averages']
-      : []),
-  ];
-  if (parts.length === 0) return null;
+  if (getCostAverages(stats, show.protein).length === 0) return null;
 
-  const text = formatList(parts);
-  return { subtitle: `${text.charAt(0).toUpperCase()}${text.slice(1)}` };
+  return { subtitle: 'Cost averages' };
 }
 
-/** One day's cost in a list: "$0.08", "$0.08+" while it leaves something out, "No price yet", or "Not priced" once the day has passed. */
+/** One day's cost in a list, as the day's drawer tile says it: "$0.08", "$0.08+" while it leaves something out, "No price yet", or "Not priced" once the day has passed. */
 export function getDayCostText(
   totals: Pick<Totals, 'totalCents' | 'leftOut'>,
   isPast: boolean,
 ) {
   if (totals.totalCents === null) return isPast ? 'Not priced' : 'No price yet';
-  const figure = formatCost(totals.totalCents);
+  const figure = formatPeriodCost(totals.totalCents);
   return totals.leftOut.length > 0 ? `${figure}+` : figure;
 }
 

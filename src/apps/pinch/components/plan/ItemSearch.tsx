@@ -34,9 +34,8 @@ interface ItemSearchProps {
   onPickRecipe?: (recipeId: string) => void;
   /** When given, the person's saved meals are searched too and picking one calls this instead. */
   onPickMeal?: (mealId: string) => void;
-  /** The typed text, when the caller shows something else only while nothing is typed; leave out to let the field keep it. */
-  query?: string;
-  onQueryChange?: (query: string) => void;
+  /** Called only when the field goes from empty to typed or back, so a caller that hides something while typing doesn't render on every keystroke. */
+  onTypingChange?: (isTyping: boolean) => void;
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
   autoFocus?: boolean;
@@ -51,8 +50,7 @@ function ItemSearch({
   onPick,
   onPickRecipe,
   onPickMeal,
-  query: controlledQuery,
-  onQueryChange,
+  onTypingChange,
   excludeIds = [],
   autoFocus = false,
   resultsClassName,
@@ -64,9 +62,7 @@ function ItemSearch({
   const meals = useAppSelector(selectMeals);
   const isPhone = useMediaQuery().isBelow('sm');
   const stockByRecipe = useAppSelector(selectStockByRecipe);
-  const [ownQuery, setOwnQuery] = useState('');
-  const query = controlledQuery ?? ownQuery;
-  const setQuery = onQueryChange ?? setOwnQuery;
+  const [query, setTypedQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -84,6 +80,12 @@ function ItemSearch({
   }, [autoFocus, isPhone]);
 
   const trimmed = query.trim();
+  const setQuery = (next: string) => {
+    setTypedQuery(next);
+    if ((next.trim() !== '') !== (trimmed !== '')) {
+      onTypingChange?.(next.trim() !== '');
+    }
+  };
   const matches = useMemo(
     () =>
       searchIngredients(ingredients, trimmed)

@@ -34,6 +34,7 @@ import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts'
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
   getBuilderNote,
+  getBuilderSnapshot,
   getDefaultMealType,
   getNearDayOptions,
   getOfferablePicks,
@@ -117,6 +118,7 @@ import {
   planClearOut,
   getClearOutMessage,
   getFinishedDoor,
+  getFinishedRead,
   getPutBackText,
   getEventText,
 } from '../../src/apps/pinch/utils/containers.ts';
@@ -3223,33 +3225,63 @@ assert.deepEqual(
   'a clear-out says what it takes out of which place and what it keeps, and the Undo says how many came back',
 );
 
+assert.deepEqual(
+  [
+    getFinishedRead(true, false),
+    getFinishedRead(true, true),
+    getFinishedRead(false, true),
+    getFinishedRead(false, false),
+  ],
+  ['FAILED', 'FAILED', 'LOADED', 'LOADING'],
+  'a finished read that errored is failed even while an earlier answer is held, and no answer yet is loading rather than empty',
+);
 const doorOf = (overrides: Partial<Parameters<typeof getFinishedDoor>[0]>) =>
   getFinishedDoor({
     isListShown: true,
     isScoped: false,
     hasStockInScope: true,
     finishedCount: 0,
-    isRead: true,
+    read: 'LOADED',
+    expectsDoor: false,
     ...overrides,
   });
 assert.deepEqual(
   [
     doorOf({ finishedCount: 3 }),
-    doorOf({ finishedCount: 0, isRead: true }),
-    doorOf({ finishedCount: 0, isRead: false }),
+    doorOf({ finishedCount: 0, read: 'LOADED' }),
+    doorOf({ finishedCount: 0, read: 'LOADED', expectsDoor: true }),
     doorOf({ finishedCount: 3, isListShown: false }),
   ],
-  ['SHOW', 'HIDE', 'HOLD', 'HIDE'],
-  'the door to What you finished shows only once something is finished, holds its place while the read lands, and is not drawn when the read found nothing or the list is not shown',
+  ['SHOW', 'HIDE', 'HIDE', 'HIDE'],
+  'the door to What you finished shows once something is finished, and is not drawn when a landed read found nothing (whatever was expected) or the list is not shown',
 );
 assert.deepEqual(
   [
-    doorOf({ isScoped: true, hasStockInScope: true, isRead: false }),
-    doorOf({ isScoped: true, hasStockInScope: false, isRead: false }),
-    doorOf({ isScoped: true, hasStockInScope: false, isRead: true }),
+    doorOf({ read: 'LOADING', expectsDoor: false }),
+    doorOf({ read: 'LOADING', expectsDoor: true }),
+    doorOf({ read: 'LOADING', expectsDoor: true, isListShown: false }),
   ],
-  ['SHOW', 'HOLD', 'HIDE'],
-  'a recipe or meal scope with boxes in stock shows the door without reading its (up to 200) containers, and one with nothing in stock waits for the read',
+  ['HIDE', 'HOLD', 'HIDE'],
+  'while the read lands the door keeps its place only when something says boxes are finished, so a first-weeks list never has a gap that closes',
+);
+assert.deepEqual(
+  [
+    doorOf({ read: 'FAILED' }),
+    doorOf({ read: 'FAILED', expectsDoor: true }),
+    doorOf({ read: 'FAILED', isScoped: true, hasStockInScope: false }),
+    doorOf({ read: 'FAILED', isListShown: false }),
+  ],
+  ['SHOW', 'SHOW', 'SHOW', 'HIDE'],
+  'a read that failed (offline with a cold cache, a missing index) still draws the door, so the view it opens can say it could not load instead of the door vanishing as if nothing were finished',
+);
+assert.deepEqual(
+  [
+    doorOf({ isScoped: true, hasStockInScope: true, read: 'LOADING' }),
+    doorOf({ isScoped: true, hasStockInScope: false, read: 'LOADING' }),
+    doorOf({ isScoped: true, hasStockInScope: false, read: 'LOADED' }),
+  ],
+  ['SHOW', 'HIDE', 'HIDE'],
+  'a recipe or meal scope with boxes in stock shows the door without reading its (up to 200) containers, and one with nothing in stock draws it only once its read has found something',
 );
 
 const toFreezer = planOf(planMove(container(), 'FREEZER', dayOf(20), 6000));
@@ -4688,8 +4720,10 @@ assert.equal(getPutAwayText([]), null);
   );
   assert.equal(formatPeriodCost(99_999), '$999.99');
 
-  const { getDayStatsOffer } =
+  const { getDayStatsOffer, withWholeCalories } =
     await import('../../src/apps/pinch/utils/stats.ts');
+  const { hasShownValue } =
+    await import('../../src/apps/pinch/utils/nutritionMath.ts');
   const dayRange = { startKey: '2026-10-16', endKey: '2026-10-16' };
   const dayOf = (meals: PlannedMeal[]) =>
     getStatsOf(meals, dayRange, statsContext);
@@ -4743,16 +4777,67 @@ assert.equal(getPutAwayText([]), null);
       getDayStatsOffer(threeFullDay, showOnly()),
       getDayStatsOffer(twoFullDay, showOnly('calories', 'protein')),
       getDayStatsOffer(twoFullDay, showOnly('carbs')),
+      getDayStatsOffer(
+        twoFullDay,
+        showOnly('calories', 'protein', 'carbs', 'fat'),
+      ),
       getDayStatsOffer(unpricedDay, showOnly('fat')),
     ],
     [
-      { subtitle: 'Calories, protein, and cost averages' },
       { subtitle: 'Cost averages' },
-      { subtitle: 'Calories and protein' },
-      { subtitle: 'Carbs' },
-      { subtitle: 'Fat' },
+      { subtitle: 'Cost averages' },
+      null,
+      null,
+      null,
+      null,
     ],
-    'the stats row names only what its view holds beyond the Total: the nutrition switched on, and the cost averages when the day has enough meals behind them',
+    'the stats row names only the cost averages: the Total and the nutrition switched on are on the drawer\'s front, so a day with nutrition on and under three fully priced meals reports no extra row, and with the averages it says "Cost averages" whatever is switched on',
+  );
+  const nutritionFront = (day: typeof twoFullDay, ...metrics: string[]) =>
+    hasShownValue(withWholeCalories(day.dailyNutrition), showOnly(...metrics));
+  assert.deepEqual(
+    [
+      nutritionFront(twoFullDay, 'calories', 'protein'),
+      nutritionFront(twoFullDay, 'carbs'),
+      nutritionFront(twoFullDay),
+      nutritionFront(unknownDay, 'calories', 'protein'),
+      nutritionFront(unpricedDay, 'fat'),
+    ],
+    [true, true, false, false, true],
+    "a day's front draws its nutrition tiles for the metrics switched on that the day knows, and none with every switch off or nothing known; a day with nothing priced still has its nutrition to show",
+  );
+  assert.deepEqual(
+    [
+      getDayStatsOffer(
+        {
+          fullyPricedMeals: 3,
+          avgPerFullyPricedMealCents: 29.6,
+          proteinPricedMeals: 0,
+          proteinCentsPerGram: null,
+        },
+        showOnly('protein'),
+      ),
+      getDayStatsOffer(
+        {
+          fullyPricedMeals: 2,
+          avgPerFullyPricedMealCents: 29.6,
+          proteinPricedMeals: 2,
+          proteinCentsPerGram: 1.2,
+        },
+        showOnly('protein'),
+      ),
+      getDayStatsOffer(
+        {
+          fullyPricedMeals: 3,
+          avgPerFullyPricedMealCents: null,
+          proteinPricedMeals: 3,
+          proteinCentsPerGram: 1.2,
+        },
+        showOnly('calories'),
+      ),
+    ],
+    [{ subtitle: 'Cost averages' }, null, null],
+    "the offer follows the averages' own rules: three fully priced meals with a figure, and nothing under that or without the figure, whether or not protein is on",
   );
   assert.deepEqual(
     [
@@ -4760,7 +4845,7 @@ assert.equal(getPutAwayText([]), null);
       getDayStatsOffer(unpricedDay, showOnly()),
     ],
     [null, null],
-    'a metric the day does not know is never named, so no row opens a view with nothing in it',
+    'a day with nothing to average has no row, so none opens a view with nothing in it',
   );
   assert.deepEqual(
     [
@@ -4813,6 +4898,51 @@ assert.equal(getPutAwayText([]), null);
       getDayCostText(entry, false).replace(/\+$/, ''),
     ]),
     "each day's figure in its drawer is the figure its row shows in the week summary, from one walk or from a walk of the day alone",
+  );
+  const bigDayGap: Gap = { kind: 'NO_PRODUCT', ingredientId: 'a' };
+  assert.deepEqual(
+    [99_999, 100_000, 123_456].map((cents) => [
+      getPeriodTotal(
+        { spendCents: cents, mealsPriced: 3, leftOut: [], openLeftOut: [] },
+        false,
+      ).value,
+      getDayCostText({ totalCents: cents, leftOut: [] }, false),
+    ]),
+    [
+      ['$999.99', '$999.99'],
+      ['$1,000', '$1,000'],
+      ['$1,235', '$1,235'],
+    ],
+    'a day of $1,000 or more reads one figure in its drawer tile and in its row of the week summary: both drop the cents from $1,000 up',
+  );
+  assert.deepEqual(
+    [
+      getPeriodTotal(
+        {
+          spendCents: 123_456,
+          mealsPriced: 3,
+          leftOut: [bigDayGap],
+          openLeftOut: [bigDayGap],
+        },
+        false,
+      ),
+      getPeriodTotal(
+        {
+          spendCents: 123_456,
+          mealsPriced: 3,
+          leftOut: [bigDayGap],
+          openLeftOut: [],
+        },
+        true,
+      ),
+      getDayCostText({ totalCents: 123_456, leftOut: [bigDayGap] }, false),
+    ],
+    [
+      { value: '$1,235', label: 'Total so far' },
+      { value: '$1,235+', label: 'Total' },
+      '$1,235+',
+    ],
+    'a big day with something left out says so the same way in its tile and its row: the figure from $1,000 up without cents, "+" or "so far" after it',
   );
   assert.deepEqual(
     [
@@ -5172,6 +5302,69 @@ assert.equal(getPutAwayText([]), null);
       { shown: 12, hasToggle: true },
     ],
     'an unfolded list shows every row and keeps its toggle so it can fold again',
+  );
+  assert.deepEqual(
+    [
+      [9, false, 10],
+      [7, false, 10],
+      [6, false, 10],
+      [9, true, 12],
+      [9, false, 9],
+      [10, false, 9],
+    ].map(([total, isExpanded, openingTotal]) =>
+      getRecentRowWindow(
+        Number(total),
+        Boolean(isExpanded),
+        Number(openingTotal),
+      ),
+    ),
+    [
+      { shown: 6, hasToggle: true },
+      { shown: 6, hasToggle: true },
+      { shown: 6, hasToggle: false },
+      { shown: 9, hasToggle: true },
+      { shown: 9, hasToggle: false },
+      { shown: 10, hasToggle: false },
+    ],
+    'a fold drawn when the screen opened stays through picks until nothing is tucked away, so rows 7 to 9 never appear at once after a pick, and a list that opened unfolded never grows a fold under the finger',
+  );
+  const plate = [
+    { id: 'a', kind: 'RECIPE' as const, refId: 'adobo', servings: 4 },
+    { id: 'b', kind: 'INGREDIENT' as const, refId: 'banana', servings: 1 },
+  ];
+  const snapshotOf = (
+    items: Parameters<typeof getBuilderSnapshot>[0]['items'],
+    name = '',
+    when: string | null = null,
+  ) => getBuilderSnapshot({ items, name, when });
+  const opened = snapshotOf(plate, 'Taco night', '2026-10-16|DINNER');
+  assert.deepEqual(
+    [
+      snapshotOf(
+        plate.map((row) => ({ ...row, id: `copy-${row.id}` })),
+        'Taco night',
+        '2026-10-16|DINNER',
+      ) === opened,
+      snapshotOf(plate, '  Taco night ', '2026-10-16|DINNER') === opened,
+      snapshotOf(
+        [...plate.slice(0, 1), ...plate.slice(1)],
+        'Taco night',
+        '2026-10-16|DINNER',
+      ) === opened,
+      snapshotOf(
+        plate.map((row) => ({ ...row, servings: row.servings + 1 })),
+        'Taco night',
+        '2026-10-16|DINNER',
+      ) === opened,
+      snapshotOf(plate.slice(0, 1), 'Taco night', '2026-10-16|DINNER') ===
+        opened,
+      snapshotOf(plate, 'Taco nights', '2026-10-16|DINNER') === opened,
+      snapshotOf(plate, 'Taco night', '2026-10-17|DINNER') === opened,
+      snapshotOf([], '') === snapshotOf([], '   '),
+      snapshotOf([], 'Taco night') === snapshotOf([], ''),
+    ],
+    [true, true, true, false, false, false, false, true, false],
+    'a builder counts as changed only when its plate, its name or (for a planned meal) its day and meal differ from how it opened: ids and stray spaces change nothing, a serving count, a removed dish, a typed name or a moved day do, and a name alone on an empty plate does',
   );
   const picks = [
     { kind: 'RECIPE' as const, id: 'adobo', label: 'Adobo chicken', at: 3 },

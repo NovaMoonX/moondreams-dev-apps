@@ -1,6 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -13,6 +18,8 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import Subview from '@/components/Subview';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ContainerFormSheet from '@apps/pinch/components/containers/ContainerFormSheet';
@@ -29,7 +36,9 @@ import {
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  containerKeys,
   finishedContainersQueryOptions,
+  hasSeenFinished,
   OfflineEmptyReadError,
   scopedContainersQueryOptions,
 } from '@apps/pinch/queries/containerQueries';
@@ -46,6 +55,7 @@ import {
   getContainerTitle,
   getEatByState,
   getFinishedDoor,
+  getFinishedRead,
   groupBatches,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -180,6 +190,20 @@ function ContainersSubview({
     combine: combineScoped,
   });
   const finishedQuery = isScoped ? scopedFinished : latestFinished;
+  const [hasSeen] = useState(() => hasSeenFinished(uid));
+  const queryClient = useQueryClient();
+  const networkStatus = useNetworkStatus();
+  const retryFailedReads = useCallback(() => {
+    void queryClient.refetchQueries({
+      queryKey: containerKeys.all(uid),
+      type: 'active',
+      predicate: (query) => query.state.status === 'error',
+    });
+  }, [queryClient, uid]);
+  useOnTabReturn(retryFailedReads);
+  useEffect(() => {
+    if (networkStatus === 'reconnected') retryFailedReads();
+  }, [networkStatus, retryFailedReads]);
 
   const isOfScope = useMemo(() => {
     const recipeIds = new Set(getRecipeIdsOf(scopeMeal));
@@ -549,7 +573,11 @@ function ContainersSubview({
     isScoped,
     hasStockInScope: !!hasStockInScope,
     finishedCount: finished.length,
-    isRead: finishedQuery.data !== undefined || finishedQuery.isError,
+    read: getFinishedRead(
+      finishedQuery.isError,
+      finishedQuery.data !== undefined,
+    ),
+    expectsDoor: !isScoped && hasSeen,
   });
   const title = isFinishedView ? 'What you finished' : 'Fridge & freezer';
   const switchView = (toFinished: boolean) => {

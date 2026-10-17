@@ -447,7 +447,7 @@ Above the month, a stats row shows what the month cost and the average cost per 
 
 ### CRUD & Entry-Point Requirements
 - [ ] No entity.
-- [ ] **Read:** the stats row on the Calendar; the breakdown drawer from tapping it; a day's own stats in its drawer (the tiles, or the "Stats for this day" row).
+- [ ] **Read:** the stats row on the Calendar; the breakdown drawer from tapping it; a day's own stats in its drawer (the Total and the nutrition switched on, and the "Stats for this day" row for the cost averages).
 
 ### Success Criteria
 - [ ] Numbers equal the sum of the visible days for a seeded month; an empty month reads $0.00 and "—".
@@ -1052,7 +1052,7 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 1. One document per container (`servings`, `status`, `place`, `eatBy` as a date-only value, `history` of at most ten events), never split; finishing keeps the document, deleting erases it. A put-away writes one to twenty containers in one batch, each with its own history.
 2. Every change that depends on the stored state is a `runTransaction` over a pure plan, so another device's change is never written over.
 3. Keep the rules' history check lean: the evaluator's 1,000-expression limit allows about ten events checked by index.
-4. One listener for what is in stock; Finished is read through TanStack Query with its composite index: when its step opens and, so the "What you finished" door shows only once something is finished, once when the list opens.
+4. One listener for what is in stock; Finished is read through TanStack Query with its composite index: when its step opens and, so the "What you finished" door shows only once something is finished, once when the list opens; a read that fails still draws the door and the step says it could not load.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read / Update / Delete:** put some away (as one container or several), see what is in stock and finished, eat some or all, correct the count, move between fridge and freezer, change the eat-by date, throw it out, delete it.

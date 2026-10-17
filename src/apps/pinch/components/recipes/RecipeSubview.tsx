@@ -69,6 +69,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     subview?.kind === 'recipe' && subview.fromCalendar === true;
   const isDirtyRef = useRef(false);
   const isTypedRef = useRef(false);
+  const isAskingRef = useRef(false);
   const existing =
     useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ideasById = useAppSelector(selectIdeasById);
@@ -107,14 +108,21 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     });
   };
 
-  const askToDiscard = (title: string, message: string) =>
-    confirm({
-      title,
-      message,
-      confirmText: 'Discard',
-      cancelText: 'Keep editing',
-      destructive: true,
-    });
+  const askToDiscard = async (title: string, message: string) => {
+    if (isAskingRef.current) return false;
+    isAskingRef.current = true;
+    try {
+      return await confirm({
+        title,
+        message,
+        confirmText: 'Discard',
+        cancelText: 'Keep editing',
+        destructive: true,
+      });
+    } finally {
+      isAskingRef.current = false;
+    }
+  };
 
   const leave = async () => {
     if (isDirtyRef.current) {
@@ -127,17 +135,21 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     closeSubview();
   };
 
-  const stepBackFromReader = async () => {
+  const confirmDiscardTyped = async (action: string) => {
+    if (!isTypedRef.current) return true;
     const startedOn = stage;
-    if (isTypedRef.current) {
-      const what = startedOn === 'link' ? 'link' : 'text';
-      const confirmed = await askToDiscard(
-        `Discard this ${what}?`,
-        `Nothing has been read or saved yet. If you go back now, the ${what} is lost.`,
-      );
-      if (!confirmed || stageRef.current !== startedOn) return;
-      isTypedRef.current = false;
-    }
+    const what = startedOn === 'link' ? 'link' : 'text';
+    const confirmed = await askToDiscard(
+      `Discard this ${what}?`,
+      `Nothing has been read or saved yet. If you ${action}, the ${what} is lost.`,
+    );
+    if (!confirmed || stageRef.current !== startedOn) return false;
+    isTypedRef.current = false;
+    return true;
+  };
+
+  const stepBackFromReader = async () => {
+    if (!(await confirmDiscardTyped('go back now'))) return;
     if (fromIdea) {
       closeSubview();
       return;
@@ -148,6 +160,19 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
       return;
     }
     setStage('start');
+  };
+
+  const startBlank = async () => {
+    if (await confirmDiscardTyped('start a blank recipe now')) {
+      setStage('form');
+    }
+  };
+
+  const switchToText = async () => {
+    if (await confirmDiscardTyped('paste its text instead')) {
+      setKept(null);
+      setStage('text');
+    }
   };
 
   const goBack = () => {
@@ -256,10 +281,8 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           setTitle(reading.title ?? '');
           setStage('form');
         }}
-        onManual={() => {
-          isTypedRef.current = false;
-          setStage('form');
-        }}
+        onManual={() => void startBlank()}
+        onPasteText={() => void switchToText()}
         onSaveAsIdea={
           fromIdea
             ? undefined

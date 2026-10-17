@@ -81,6 +81,27 @@ export function getWhenSummary(
   return result;
 }
 
+interface BuilderSnapshotState {
+  items: readonly { kind: ItemKind; refId: string; servings: number }[];
+  name: string;
+  /** What a planned meal is moved by (its day and meal), or null where only the plate and name count. */
+  when: string | null;
+}
+
+/** What a builder holds as one string, so a screen can tell whether anything changed since it opened. */
+export function getBuilderSnapshot({
+  items,
+  name,
+  when,
+}: BuilderSnapshotState) {
+  const result = JSON.stringify([
+    items.map(({ kind, refId, servings }) => [kind, refId, servings]),
+    name.trim(),
+    when,
+  ]);
+  return result;
+}
+
 interface BuilderNoteState {
   mode: 'plan' | 'meal';
   hasName: boolean;
@@ -109,8 +130,15 @@ export function getBuilderNote({
 export const COLLAPSED_RECENT_ROWS = 6;
 const MAX_QUIET_HIDDEN_ROWS = 3;
 
-export function getRecentRowWindow(total: number, isExpanded: boolean) {
-  const hasToggle = total > COLLAPSED_RECENT_ROWS + MAX_QUIET_HIDDEN_ROWS;
+/** `openingTotal` is how many rows there were when the screen opened: a fold drawn then stays until nothing is tucked away, so a pick never makes hidden rows appear at once. */
+export function getRecentRowWindow(
+  total: number,
+  isExpanded: boolean,
+  openingTotal = total,
+) {
+  const hasToggle =
+    openingTotal > COLLAPSED_RECENT_ROWS + MAX_QUIET_HIDDEN_ROWS &&
+    total > COLLAPSED_RECENT_ROWS;
   const shown = hasToggle && !isExpanded ? COLLAPSED_RECENT_ROWS : total;
   return { shown, hasToggle };
 }

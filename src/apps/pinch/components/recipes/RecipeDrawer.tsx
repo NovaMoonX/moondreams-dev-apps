@@ -50,6 +50,7 @@ import {
   selectRecipeNutrition,
   selectRecipesById,
   selectShowNutrition,
+  selectSourceCounts,
   selectSourcesById,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
@@ -86,6 +87,8 @@ const gapLabel = (kind: GapKind | undefined) => {
   if (kind === 'NOT_COMPARABLE') return "Can't compare with the package size";
   return null;
 };
+
+const SOURCE_LABEL_KEEP_END = 14;
 
 type DrawerView = 'recipe' | 'photo' | 'history' | 'more';
 
@@ -176,6 +179,7 @@ function RecipeDrawer({
 }: RecipeDrawerProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const sourcesById = useAppSelector(selectSourcesById);
+  const sourceCounts = useAppSelector(selectSourceCounts).bySource;
   const ingredientsById = useAppSelector(selectIngredientsById);
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
@@ -253,6 +257,8 @@ function RecipeDrawer({
 
   const care = getRecipeCare(recipe);
   const source = getRecipeSource(recipe, sourcesById);
+  const hasMoreFromSource =
+    source !== null && (sourceCounts.get(source.id) ?? 0) > 1;
   const getCookPlan = () => {
     if (tonight === null || recipe.steps.length === 0) return null;
     const [plannedMealId, servings] = tonight.split('|');
@@ -501,18 +507,25 @@ function RecipeDrawer({
           <div className='space-y-2'>
             {source && (
               <div className='flex'>
-                <LabelChip
-                  ariaLabel={`From ${source.label}: show its recipes`}
-                  icon={
-                    <ChevronRight
-                      className='h-3 w-3 shrink-0'
-                      aria-hidden='true'
-                    />
-                  }
-                  onClick={() => onShowSource(source.id)}
-                >
-                  {`From ${source.label}`}
-                </LabelChip>
+                {hasMoreFromSource ? (
+                  <LabelChip
+                    ariaLabel={`From ${source.label}: show its recipes`}
+                    keepEnd={SOURCE_LABEL_KEEP_END}
+                    icon={
+                      <ChevronRight
+                        className='h-3 w-3 shrink-0'
+                        aria-hidden='true'
+                      />
+                    }
+                    onClick={() => onShowSource(source.id)}
+                  >
+                    {`From ${source.label}`}
+                  </LabelChip>
+                ) : (
+                  <LabelChip keepEnd={SOURCE_LABEL_KEEP_END}>
+                    {`From ${source.label}`}
+                  </LabelChip>
+                )}
               </div>
             )}
             {(recipe.coverPath || recipe.description || facts.length > 0) && (
