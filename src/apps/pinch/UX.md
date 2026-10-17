@@ -641,7 +641,7 @@ block-beta
 | failed | one warm sentence in the card's hint line, in red, with what was typed or picked kept ("We couldn't open that link. Check the address, or paste the recipe's text instead."), details logged, never the service's message |
 | not a link | "That doesn't look like a web link. Check it and try again." before anything is sent |
 | too big | "That file is too big to read. Try a photo or a PDF under 10 MB." |
-| no recipe found | "We couldn't find a recipe in that. Try a clearer photo or paste the text." |
+| no recipe found | "We couldn't find a recipe in that file. Try a clearer photo, or paste the text." (a pasted text: "…in that text. Try pasting the whole recipe, or write it yourself below.") |
 
 **Recipe** (subview — create and edit)
 

@@ -77,12 +77,14 @@ const getFailureMessage = (
   if (source === 'AI_TEXT') {
     return "We couldn't read that text right now. Try again, or write it yourself below.";
   }
-  return "We couldn't read that right now. Try a clearer photo or a PDF, or write it yourself below.";
+  return "We couldn't read that file right now. Try a clearer photo or a PDF, or write it yourself below.";
 };
 
 const getEmptyMessage = (source: RecipeSource, canPasteText: boolean) => {
   if (source !== 'AI_LINK') {
-    return "We couldn't find a recipe in that. Try a clearer photo or paste the text.";
+    return source === 'AI_TEXT'
+      ? "We couldn't find a recipe in that text. Try pasting the whole recipe, or write it yourself below."
+      : "We couldn't find a recipe in that file. Try a clearer photo, or paste the text.";
   }
   return canPasteText
     ? "We couldn't find a recipe on that page. Paste its text instead, or write it yourself below."
