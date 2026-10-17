@@ -16,7 +16,7 @@ interface SummaryRowProps {
   onClick?: () => void;
 }
 
-/** A value the person can change, as a caption, the value and a chevron, for a sheet that swaps its own content to change it. `SummaryEditor` is the same row where an editor opens beside it. */
+/** A value the person can change, as a caption, the value and a chevron in a hairline frame, for a sheet that swaps its own content to change it. `SummaryEditor` is the same row where an editor opens beside it. */
 function SummaryRow({
   label,
   children,
@@ -50,11 +50,11 @@ function SummaryRow({
       variant='tertiary'
       aria-label={ariaLabel}
       onClick={onClick}
-      className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+      className='border-border hover:bg-muted text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-2xl border px-3! py-2 text-left'
     >
       {body}
       <ChevronRight
-        className='text-muted-foreground mt-2.5 h-5 w-5 shrink-0'
+        className='text-muted-foreground mt-2.5 -ml-1 size-5 shrink-0'
         aria-hidden='true'
       />
     </Button>

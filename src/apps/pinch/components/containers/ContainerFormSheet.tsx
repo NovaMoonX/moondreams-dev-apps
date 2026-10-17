@@ -5,12 +5,14 @@ import {
   Form,
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
-import { Plus } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronLeft, Plus } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -40,15 +42,18 @@ export type ContainerSubject =
 
 interface SubjectPickerProps {
   onPick: (subject: ContainerSubject) => void;
+  /** Given when the picker replaced a form that keeps what was typed, so back returns to it. */
+  onBack?: () => void;
 }
 
-function SubjectPicker({ onPick }: SubjectPickerProps) {
+function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
   const recipes = useAppSelector(selectRecipes);
   const meals = useAppSelector(selectMeals);
   const [query, setQuery] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
   const isPhone = useMediaQuery().isBelow('sm');
   const trimmed = query.trim();
+  useBackStep(onBack !== undefined, () => onBack?.());
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -89,13 +94,24 @@ function SubjectPicker({ onPick }: SubjectPickerProps) {
   return (
     <div
       ref={bodyRef}
-      className='space-y-3'
+      className='grid gap-3'
       onKeyDown={(event) =>
         event.key === 'Enter' &&
         event.target instanceof HTMLInputElement &&
         event.preventDefault()
       }
     >
+      {onBack && (
+        <Button
+          type='button'
+          variant='tertiary'
+          className='h-10 gap-1 justify-self-start px-0!'
+          onClick={onBack}
+        >
+          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
+          Back
+        </Button>
+      )}
       <p className='font-medium'>What are you putting away?</p>
       <SearchInput
         value={query}
@@ -306,20 +322,31 @@ function ContainerFormSheet({
   onClose,
 }: ContainerFormSheetProps) {
   const [subject, setSubject] = useState<ContainerSubject | null>(initial);
+  const [isPicking, setIsPicking] = useState(false);
+  const isPickerShown = subject === null || isPicking;
 
   return (
     <FormSheet isOpen onClose={onClose} title='Fridge & freezer'>
-      {subject === null ? (
-        <SubjectPicker onPick={setSubject} />
-      ) : (
-        <DetailsForm
-          key={`${subject.kind}-${subject.kind === 'typed' ? subject.name : subject.id}`}
-          uid={uid}
-          subject={subject}
-          isChangeable={initial === null}
-          onChange={() => setSubject(null)}
-          onClose={onClose}
+      {isPickerShown && (
+        <SubjectPicker
+          onPick={(next) => {
+            setSubject(next);
+            setIsPicking(false);
+          }}
+          onBack={subject === null ? undefined : () => setIsPicking(false)}
         />
+      )}
+      {subject !== null && (
+        <div className={join(isPickerShown && 'hidden')}>
+          <DetailsForm
+            key={`${subject.kind}-${subject.kind === 'typed' ? subject.name : subject.id}`}
+            uid={uid}
+            subject={subject}
+            isChangeable={initial === null}
+            onChange={() => setIsPicking(true)}
+            onClose={onClose}
+          />
+        </div>
       )}
     </FormSheet>
   );

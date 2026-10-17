@@ -150,7 +150,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
               endKey: addDaysToKey(todayKey, PLAN_DAYS - 1),
             }}
             onClose={onClose}
-            columnClassName='max-h-[max(12rem,calc(92dvh-19rem))]'
+            columnClassName='max-h-[max(22rem,calc(92dvh-19rem))]'
             hasViewAction={false}
           />
         ) : (
