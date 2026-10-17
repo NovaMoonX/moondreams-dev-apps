@@ -21,6 +21,8 @@ const MAX_QUIET_HIDDEN = 3;
 export interface PillOption<T extends string> {
   value: T;
   label: string;
+  /** Shown instead of `label` below 360px, where a long one would wrap the row; `label` stays the accessible name. */
+  compactLabel?: string;
   emoji?: string;
   /** A small image or icon in place of an emoji (a store's logo). */
   icon?: ReactNode;
@@ -225,6 +227,7 @@ export function PillOptions<T extends string>({
                 icon={option.icon}
                 isThin={isThin}
                 isSelected={isSelected(option.value)}
+                ariaLabel={option.compactLabel ? option.label : undefined}
                 onClick={() => {
                   onToggle(option.value);
                   if (isSingle) {
@@ -233,7 +236,18 @@ export function PillOptions<T extends string>({
                   }
                 }}
               >
-                {option.label}
+                {option.compactLabel ? (
+                  <>
+                    <span className='truncate max-[359px]:hidden'>
+                      {option.label}
+                    </span>
+                    <span className='truncate min-[360px]:hidden'>
+                      {option.compactLabel}
+                    </span>
+                  </>
+                ) : (
+                  option.label
+                )}
               </Pill>
             ))}
           </PillRow>
