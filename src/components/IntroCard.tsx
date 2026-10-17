@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 
 interface IntroCardProps {
-  /** An emoji or a small icon, in a 40px chip. */
   icon: ReactNode;
   /** What is about to happen, in one plain sentence. */
   lead: ReactNode;

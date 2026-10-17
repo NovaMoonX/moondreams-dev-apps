@@ -142,6 +142,8 @@ interface RecipeReaderProps {
   method: ReaderMethod;
   /** A link the person already has, so the link way opens with it filled in; nothing is sent until they tap the button. */
   initialUrl?: string;
+  /** The idea that link came from, named in the card at the top. */
+  ideaTitle?: string;
   /** Called with what the reader found; the form fills what was read and the person reviews it before saving. */
   onRead: (
     recipe: ExtractedRecipe,
@@ -164,6 +166,7 @@ interface RecipeReaderProps {
 function RecipeReader({
   method,
   initialUrl,
+  ideaTitle,
   onRead,
   onManual,
   onBack,
@@ -361,6 +364,14 @@ function RecipeReader({
     );
   };
 
+  const getIntro = () =>
+    ideaTitle === undefined || initialUrl === undefined
+      ? { lead: copy.lead, rest: SAVED_LINE }
+      : {
+          lead: `From your idea: ${ideaTitle}`,
+          rest: 'We open its link, and an AI reads the page and fills in the form. You look it over first. Nothing is saved until you save it.',
+        };
+
   const getHint = () => {
     if (method === 'file') {
       return 'Clear, straight-on photos read best.';
@@ -368,9 +379,10 @@ function RecipeReader({
     if (method === 'text') {
       return `Up to ${MAX_PASTE_CHARS.toLocaleString()} characters.`;
     }
-    return canPasteText
-      ? 'Copy the address from your browser and paste it here. If the site asks you to sign in, paste its text instead.'
-      : 'Copy the address from your browser and paste it here.';
+    if (!canPasteText) {
+      return 'The address saved with your idea.';
+    }
+    return 'Copy the address from your browser and paste it here. If the site asks you to sign in, paste its text instead.';
   };
 
   const getChips = (): ActionChip[] => {
@@ -437,10 +449,12 @@ function RecipeReader({
     );
   };
 
+  const intro = getIntro();
+
   return (
     <div className='flex flex-1 flex-col gap-4 [@media(min-height:700px)]:gap-6'>
-      <IntroCard icon={getMethodEmoji(method)} lead={copy.lead}>
-        {SAVED_LINE}
+      <IntroCard icon={getMethodEmoji(method)} lead={intro.lead}>
+        {intro.rest}
       </IntroCard>
       <FormSection title={copy.caption}>
         {method === 'file' ? (

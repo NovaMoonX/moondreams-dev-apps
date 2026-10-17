@@ -8,18 +8,14 @@ import { formatFileSize } from '@/utils/fileUtils';
 export interface PickedFile {
   name: string;
   size: number;
-  /** One emoji for the kind of file, in the chip beside its name. */
   emoji: string;
 }
 
 interface FilePickCardProps {
   /** What can be chosen, in the person's words ("A photo, screenshot or PDF"). */
   accepts: string;
-  /** The size cap, said beside it ("Up to 10 MB"). */
   limit: string;
-  /** The emoji for the empty slot's chip. */
   emoji: string;
-  /** The file chosen so far; the card shows it instead of the empty slot. */
   picked: PickedFile | null;
   /** A line under the slot or the picked file: a tip, what is happening to it, or why it failed. */
   status: ReactNode;

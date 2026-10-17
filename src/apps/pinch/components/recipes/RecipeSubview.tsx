@@ -224,53 +224,44 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
       );
     }
     return (
-      <>
-        {fromIdea && (
-          <p className='text-muted-foreground mb-4 text-sm wrap-break-word'>
-            From your idea:{' '}
-            <span className='text-foreground font-medium'>
-              {fromIdea.title}
-            </span>
-          </p>
-        )}
-        <RecipeReader
-          key={stage}
-          method={stage}
-          initialUrl={
-            stage === 'link' && fromIdea?.kind === 'LINK'
-              ? (fromIdea.url ?? undefined)
-              : undefined
-          }
-          initialText={kept && 'text' in kept ? kept.text : undefined}
-          initialLink={kept && 'link' in kept ? kept.link : undefined}
-          onBack={goBack}
-          onTypedChange={(isTyped) => {
-            isTypedRef.current = isTyped;
-          }}
-          onRead={(recipe, source, label) => {
-            isTypedRef.current = false;
-            const reading = fromIdea
-              ? getReadingForIdea(recipe, fromIdea)
-              : recipe;
-            isDirtyRef.current = true;
-            setRead({ recipe: reading, source, label });
-            setTitle(reading.title ?? '');
-            setStage('form');
-          }}
-          onManual={() => {
-            isTypedRef.current = false;
-            setStage('form');
-          }}
-          onSaveAsIdea={
-            fromIdea
-              ? undefined
-              : (next) => {
-                  setKept(next);
-                  setStage('idea');
-                }
-          }
-        />
-      </>
+      <RecipeReader
+        key={stage}
+        method={stage}
+        ideaTitle={fromIdea?.title}
+        initialUrl={
+          stage === 'link' && fromIdea?.kind === 'LINK'
+            ? (fromIdea.url ?? undefined)
+            : undefined
+        }
+        initialText={kept && 'text' in kept ? kept.text : undefined}
+        initialLink={kept && 'link' in kept ? kept.link : undefined}
+        onBack={goBack}
+        onTypedChange={(isTyped) => {
+          isTypedRef.current = isTyped;
+        }}
+        onRead={(recipe, source, label) => {
+          isTypedRef.current = false;
+          const reading = fromIdea
+            ? getReadingForIdea(recipe, fromIdea)
+            : recipe;
+          isDirtyRef.current = true;
+          setRead({ recipe: reading, source, label });
+          setTitle(reading.title ?? '');
+          setStage('form');
+        }}
+        onManual={() => {
+          isTypedRef.current = false;
+          setStage('form');
+        }}
+        onSaveAsIdea={
+          fromIdea
+            ? undefined
+            : (next) => {
+                setKept(next);
+                setStage('idea');
+              }
+        }
+      />
     );
   };
 
