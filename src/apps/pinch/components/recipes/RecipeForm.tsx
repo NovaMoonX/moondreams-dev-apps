@@ -239,14 +239,14 @@ function RecipeForm({
     (row) => row.ingredientId === '',
   ).length;
   const getBlocker = (): { text: string; target: string | null } | null => {
+    const plain = (text: string) => ({ text, target: null });
     if (
       !recipe &&
       formData.title.trim() === '' &&
       formData.ingredients.length === 0
     ) {
-      return null;
+      return plain('Add a title and an ingredient to save.');
     }
-    const plain = (text: string) => ({ text, target: null });
     if (formData.title.trim() === '') return plain('Give it a title to save.');
     if (formData.title.length > MAX_RECIPE_TITLE_LENGTH) {
       return plain('Shorten the title to save.');

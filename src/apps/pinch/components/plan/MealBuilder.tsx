@@ -719,7 +719,7 @@ function MealBuilder({
         </section>
 
         {items.length > 0 && (
-          <div className='bg-accent/60 border-border/60 space-y-2 rounded-2xl border p-3'>
+          <div className='bg-accent/60 border-border space-y-2 rounded-2xl border p-3'>
             <p className='flex items-center gap-1.5 text-sm'>
               <span className='font-semibold'>
                 {cost.totalCents === null
@@ -764,7 +764,7 @@ function MealBuilder({
           !isTyping &&
           items.length === 0 &&
           offerablePicks.length < FEW_PICKS && (
-            <p className='bg-accent/60 border-border/60 rounded-2xl border p-4 text-sm'>
+            <p className='bg-accent/60 border-border rounded-2xl border p-4 text-sm'>
               {getEmptyLine()}
             </p>
           )}
