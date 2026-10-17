@@ -98,6 +98,8 @@ function ShoppingItemSheet({
 
   const getNote = () => {
     if (!inNewUnit) {
+      if (!isValid) return 'Add an amount to save.';
+
       const amounts = items.flatMap((rowItem) =>
         rowItem.amount === null
           ? []

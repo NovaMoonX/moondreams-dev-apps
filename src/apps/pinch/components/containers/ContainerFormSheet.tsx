@@ -15,12 +15,14 @@ import SummaryRow from '@/components/SummaryRow';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
+import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ContainerFields from '@apps/pinch/components/containers/ContainerFields';
 import { MAX_CONTAINER_SERVINGS, MAX_NAME_LENGTH } from '@apps/pinch/constants';
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
 import { useContainerDraft } from '@apps/pinch/hooks/useContainerDraft';
 import {
+  selectCookSummaries,
   selectMeals,
   selectMealsById,
   selectRecipes,
@@ -32,6 +34,7 @@ import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 const { custom } = FormFactories;
 
 const MAX_RESULTS = 4;
+const MAX_RECENT = 4;
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 
@@ -39,6 +42,37 @@ export type ContainerSubject =
   | { kind: 'recipe'; id: string }
   | { kind: 'meal'; id: string }
   | { kind: 'typed'; name: string };
+
+interface PickRowProps {
+  emoji: string;
+  name: string;
+  note: string;
+  onPick: () => void;
+}
+
+function PickRow({ emoji, name, note, onPick }: PickRowProps) {
+  return (
+    <li>
+      <Button
+        type='button'
+        variant='tertiary'
+        onClick={onPick}
+        className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
+      >
+        <span
+          className='flex w-7 shrink-0 justify-center text-xl'
+          aria-hidden='true'
+        >
+          {emoji}
+        </span>
+        <span className='min-w-0 flex-1 truncate font-medium'>{name}</span>
+        <span className='text-muted-foreground text-xs font-normal'>
+          {note}
+        </span>
+      </Button>
+    </li>
+  );
+}
 
 interface SubjectPickerProps {
   onPick: (subject: ContainerSubject) => void;
@@ -49,6 +83,7 @@ interface SubjectPickerProps {
 function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
   const recipes = useAppSelector(selectRecipes);
   const meals = useAppSelector(selectMeals);
+  const cookSummaries = useAppSelector(selectCookSummaries);
   const [query, setQuery] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
   const isPhone = useMediaQuery().isBelow('sm');
@@ -86,6 +121,20 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
     return found;
   }, [recipes, meals, trimmed]);
 
+  const recent = useMemo(
+    () =>
+      recipes
+        .flatMap((recipe) => {
+          const summary = cookSummaries.get(recipe.id);
+          return summary
+            ? [{ recipe, lastCookedAt: summary.lastCookedAt }]
+            : [];
+        })
+        .sort((a, b) => b.lastCookedAt - a.lastCookedAt)
+        .slice(0, MAX_RECENT),
+    [recipes, cookSummaries],
+  );
+
   const shown = matches.slice(0, MAX_RESULTS);
   const hasExactName = matches.some(
     (match) => match.name.trim().toLowerCase() === trimmed.toLowerCase(),
@@ -119,33 +168,39 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
         placeholder='Find a recipe or saved meal'
       />
       {trimmed === '' ? (
-        <p className='text-muted-foreground px-1 text-sm'>
-          Pick a recipe or a saved meal, or type a name for anything else.
-        </p>
+        <div className='grid gap-1'>
+          {recent.length > 0 && (
+            <>
+              <p className='text-muted-foreground px-1 text-sm'>
+                Cooked lately
+              </p>
+              <ul className='divide-border divide-y'>
+                {recent.map(({ recipe, lastCookedAt }) => (
+                  <PickRow
+                    key={recipe.id}
+                    emoji='🍲'
+                    name={recipe.title}
+                    note={`Cooked ${formatDateShort(lastCookedAt)}`}
+                    onPick={() => onPick({ kind: 'recipe', id: recipe.id })}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+          <p className='text-muted-foreground px-1 pt-2 text-sm'>
+            Pick a recipe or a saved meal, or type a name for anything else.
+          </p>
+        </div>
       ) : (
         <ul className='divide-border divide-y'>
           {shown.map((match) => (
-            <li key={`${match.kind}-${match.id}`}>
-              <Button
-                type='button'
-                variant='tertiary'
-                onClick={() => onPick({ kind: match.kind, id: match.id })}
-                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
-              >
-                <span
-                  className='flex w-7 shrink-0 justify-center text-xl'
-                  aria-hidden='true'
-                >
-                  {match.kind === 'recipe' ? '🍲' : '🍽️'}
-                </span>
-                <span className='min-w-0 flex-1 truncate font-medium'>
-                  {match.name}
-                </span>
-                <span className='text-muted-foreground text-xs font-normal'>
-                  {match.kind === 'recipe' ? 'Recipe' : 'Saved meal'}
-                </span>
-              </Button>
-            </li>
+            <PickRow
+              key={`${match.kind}-${match.id}`}
+              emoji={match.kind === 'recipe' ? '🍲' : '🍽️'}
+              name={match.name}
+              note={match.kind === 'recipe' ? 'Recipe' : 'Saved meal'}
+              onPick={() => onPick({ kind: match.kind, id: match.id })}
+            />
           ))}
           {matches.length > MAX_RESULTS && (
             <li className='text-muted-foreground py-2 text-sm'>

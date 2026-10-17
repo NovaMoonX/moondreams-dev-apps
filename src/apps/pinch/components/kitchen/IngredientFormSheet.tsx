@@ -487,6 +487,27 @@ function IngredientFormSheet({
     (!extras.serving.enabled ||
       isPositive(parseAmount(extras.serving.value.amount), MAX_SERVING_AMOUNT));
 
+  const getBlocker = () => {
+    if (isFormComplete) return null;
+    if (!isCatalog && formData.name.trim() === '') return 'Add a name to save.';
+    if (!isCatalog && formData.name.length > MAX_NAME_LENGTH) {
+      return 'Shorten the name to save.';
+    }
+    if (
+      formData.family.choice === NEW_CHOICE &&
+      formData.family.newText.trim() === ''
+    ) {
+      return 'Name the new family, or pick one.';
+    }
+    if (
+      extras.nutrition.enabled &&
+      (per100g === null || !Object.values(per100g).every(isMetric))
+    ) {
+      return 'Finish the nutrition numbers, or take them out.';
+    }
+    return 'Add the serving size, or take it out.';
+  };
+
   const familyOptions = useMemo(
     () => families.map((family) => ({ value: family.id, label: family.name })),
     [families],
@@ -674,6 +695,7 @@ function IngredientFormSheet({
         }}
         submitButton={
           <ModalFooterActions
+            note={getBlocker()}
             leftActions={
               (isCatalog ? ingredient.isAdjusted : record !== null) && (
                 <DeleteIconButton

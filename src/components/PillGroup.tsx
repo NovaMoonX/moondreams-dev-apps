@@ -6,11 +6,11 @@ import {
   type ReactNode,
 } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Pill from '@/components/Pill';
 import SearchInput from '@/components/SearchInput';
+import ShowMoreButton from '@/components/ShowMoreButton';
 
 const SEARCH_THRESHOLD = 12;
 /** Two rows of pills: keep in step with `max-h-22` below. */
@@ -49,12 +49,18 @@ const moveTo = <T,>(list: readonly T[], from: number, to: number) => {
 export function PillRow({
   label,
   children,
+  isThin = false,
 }: {
   label: string;
   children: ReactNode;
+  isThin?: boolean;
 }) {
   return (
-    <div role='group' aria-label={label} className='flex flex-wrap gap-2'>
+    <div
+      role='group'
+      aria-label={label}
+      className={join('flex flex-wrap', isThin ? 'gap-x-2 gap-y-4' : 'gap-2')}
+    >
       {children}
     </div>
   );
@@ -210,7 +216,7 @@ export function PillOptions<T extends string>({
         }
       >
         <div ref={contentRef}>
-          <PillRow label={label}>
+          <PillRow label={label} isThin={isThin}>
             {leading}
             {visible.map((option) => (
               <Pill
@@ -240,16 +246,12 @@ export function PillOptions<T extends string>({
       )}
       {showToggle && (
         <div className='flex items-center justify-between gap-3'>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-10 px-0!'
-            aria-expanded={isExpanded}
+          <ShowMoreButton
+            isOpen={isExpanded}
             onClick={() => setIsExpanded((current) => !current)}
           >
             {isExpanded ? 'Show fewer' : `Show all ${options.length}`}
-          </Button>
+          </ShowMoreButton>
           {selectedCount > 0 && (
             <span className='text-muted-foreground text-xs whitespace-nowrap'>
               {selectedCount} selected

@@ -241,14 +241,15 @@ function CookTimerView({
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
-            <div className='mt-2 flex h-6 items-center justify-center gap-1 text-sm'>
+            <div className='mt-2 flex h-7 items-center justify-center gap-1.5 text-sm'>
               {isPaused && (
                 <>
                   <span className='text-muted-foreground'>Paused</span>
                   <Button
                     type='button'
-                    variant='tertiary'
-                    className="text-foreground! relative h-6 gap-1.5 px-2 text-sm underline-offset-4 after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
+                    variant='secondary'
+                    size='sm'
+                    className="relative h-7 gap-1.5 rounded-full px-3 text-sm after:absolute after:-inset-1 after:content-['']"
                     aria-label={`Reset the ${timer.label} timer`}
                     onClick={() => onReset(timer.id)}
                   >
