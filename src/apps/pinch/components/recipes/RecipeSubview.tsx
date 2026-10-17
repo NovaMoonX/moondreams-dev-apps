@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -87,6 +87,12 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const [kept, setKept] = useState<Kept | null>(null);
   const [title, setTitle] = useState(existing?.title ?? fromIdea?.title ?? '');
 
+  const stageRef = useRef(stage);
+
+  useEffect(() => {
+    stageRef.current = stage;
+  }, [stage]);
+
   const isReaderStage =
     stage !== 'start' && stage !== 'form' && stage !== 'idea';
   const backToReader = () => setStage(kept && 'link' in kept ? 'link' : 'text');
@@ -122,13 +128,14 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   };
 
   const stepBackFromReader = async () => {
+    const startedOn = stage;
     if (isTypedRef.current) {
-      const what = stage === 'link' ? 'link' : 'text';
+      const what = startedOn === 'link' ? 'link' : 'text';
       const confirmed = await askToDiscard(
         `Discard this ${what}?`,
         `Nothing has been read or saved yet. If you go back now, the ${what} is lost.`,
       );
-      if (!confirmed) return;
+      if (!confirmed || stageRef.current !== startedOn) return;
       isTypedRef.current = false;
     }
     if (fromIdea) {
