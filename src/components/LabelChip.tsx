@@ -62,7 +62,9 @@ function LabelChip({
       className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
       onClick={onClick}
     >
-      {label}
+      <span className='inline-flex max-w-full min-w-0 items-center gap-1'>
+        {label}
+      </span>
     </Button>
   );
 }
