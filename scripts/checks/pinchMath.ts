@@ -33,9 +33,13 @@ import {
 import { getRecipeNutrition } from '../../src/apps/pinch/utils/nutritionMath.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
+  getBuilderNote,
   getDefaultMealType,
   getNearDayOptions,
+  getOfferablePicks,
   getPlanDayWord,
+  getRecentRowWindow,
+  getWhenSummary,
   rankRecentPicks,
 } from '../../src/apps/pinch/utils/planPicks.ts';
 import {
@@ -4942,6 +4946,116 @@ assert.equal(getPutAwayText([]), null);
     ],
     ['LUNCH', 'DINNER', 'BREAKFAST', 'LUNCH', 'BREAKFAST', 'DINNER', 'DINNER'],
     'a meal the day already has moves the default to the nearest main meal it lacks, and a full day keeps the clock meal',
+  );
+}
+
+// Plan builder: the When row, the footer's reason, and the recent rows kept beside the plate.
+{
+  const dinner = { label: 'Dinner', emoji: '🍝' };
+  assert.deepEqual(
+    [
+      getWhenSummary('2026-10-15', '2026-10-15', dinner),
+      getWhenSummary('2026-10-16', '2026-10-15', dinner),
+      getWhenSummary('2026-10-24', '2026-10-15', dinner),
+      getWhenSummary('2027-01-02', '2026-12-31', dinner),
+    ].map((text) => text.replace(/\s/g, ' ')),
+    [
+      'Today · 🍝 Dinner',
+      'Tomorrow · 🍝 Dinner',
+      'Sat, Oct 24 · 🍝 Dinner',
+      'Sat, Jan 2 · 🍝 Dinner',
+    ],
+    "the When row says today and tomorrow in words and any other day by its weekday and date, then the meal, counting whole UTC days across a year's end",
+  );
+  const noteOf = (
+    mode: 'plan' | 'meal',
+    hasName: boolean,
+    hasDay: boolean,
+    hasItems: boolean,
+  ) => getBuilderNote({ mode, hasName, hasDay, hasItems });
+  assert.deepEqual(
+    [
+      noteOf('plan', false, true, false),
+      noteOf('plan', false, false, true),
+      noteOf('plan', false, false, false),
+      noteOf('plan', false, true, true),
+      noteOf('meal', false, true, false),
+      noteOf('meal', false, true, true),
+      noteOf('meal', true, true, false),
+      noteOf('meal', true, true, true),
+    ],
+    [
+      'Add something for the plate',
+      'Pick a day first',
+      'Pick a day and add something for the plate',
+      null,
+      'Add a name and something for the plate',
+      'Add a name first',
+      'Add something for the plate',
+      null,
+    ],
+    'the footer names exactly what is missing for the primary to work: a plan needs a day and a plate, a saved meal a name and a plate, and nothing is said once both are there',
+  );
+  assert.deepEqual(
+    [0, 6, 9, 10, 12].map((total) => getRecentRowWindow(total, false)),
+    [
+      { shown: 0, hasToggle: false },
+      { shown: 6, hasToggle: false },
+      { shown: 9, hasToggle: false },
+      { shown: 6, hasToggle: true },
+      { shown: 6, hasToggle: true },
+    ],
+    'recent rows fold to six only when more than three would be tucked away',
+  );
+  assert.deepEqual(
+    [9, 10, 12].map((total) => getRecentRowWindow(total, true)),
+    [
+      { shown: 9, hasToggle: false },
+      { shown: 10, hasToggle: true },
+      { shown: 12, hasToggle: true },
+    ],
+    'an unfolded list shows every row and keeps its toggle so it can fold again',
+  );
+  const picks = [
+    { kind: 'RECIPE' as const, id: 'adobo', label: 'Adobo chicken', at: 3 },
+    { kind: 'RECIPE' as const, id: 'rice', label: 'Rice', at: 2 },
+    { kind: 'MEAL' as const, id: 'm-both', label: 'Adobo and rice', at: 1 },
+    { kind: 'MEAL' as const, id: 'm-more', label: 'Taco night', at: 0 },
+  ];
+  const meals = new Map([
+    ['m-both', ['adobo', 'rice']],
+    ['m-more', ['adobo', 'tortillas']],
+  ]);
+  assert.deepEqual(
+    [
+      getOfferablePicks(picks, new Set(), meals).map((pick) => pick.id),
+      getOfferablePicks(picks, new Set(['adobo']), meals).map(
+        (pick) => pick.id,
+      ),
+      getOfferablePicks(picks, new Set(['adobo', 'rice']), meals).map(
+        (pick) => pick.id,
+      ),
+    ],
+    [
+      ['adobo', 'rice', 'm-both', 'm-more'],
+      ['rice', 'm-both', 'm-more'],
+      ['m-more'],
+    ],
+    'what is already on the plate is not offered again: a recipe on it drops out, and a saved meal drops out only once every item of it is there',
+  );
+  assert.deepEqual(
+    rankRecentPicks({
+      recipes: [
+        { id: 'adobo', title: 'Adobo chicken', createdAt: 5 },
+        { id: 'adobo', title: 'Adobo chicken', createdAt: 5 },
+        { id: 'rice', title: 'Rice', createdAt: 4 },
+      ],
+      meals: [],
+      plannedMeals: [],
+      cookSummaries: new Map(),
+    }).map((pick) => pick.id),
+    ['adobo', 'rice'],
+    'two records that share an id are offered once, so a list keyed by it never has two children with one key',
   );
 }
 
