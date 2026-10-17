@@ -4688,8 +4688,10 @@ assert.equal(getPutAwayText([]), null);
   );
   assert.equal(formatPeriodCost(99_999), '$999.99');
 
-  const { getDayStatsOffer } =
+  const { getDayStatsOffer, withWholeCalories } =
     await import('../../src/apps/pinch/utils/stats.ts');
+  const { hasShownValue } =
+    await import('../../src/apps/pinch/utils/nutritionMath.ts');
   const dayRange = { startKey: '2026-10-16', endKey: '2026-10-16' };
   const dayOf = (meals: PlannedMeal[]) =>
     getStatsOf(meals, dayRange, statsContext);
@@ -4743,16 +4745,67 @@ assert.equal(getPutAwayText([]), null);
       getDayStatsOffer(threeFullDay, showOnly()),
       getDayStatsOffer(twoFullDay, showOnly('calories', 'protein')),
       getDayStatsOffer(twoFullDay, showOnly('carbs')),
+      getDayStatsOffer(
+        twoFullDay,
+        showOnly('calories', 'protein', 'carbs', 'fat'),
+      ),
       getDayStatsOffer(unpricedDay, showOnly('fat')),
     ],
     [
-      { subtitle: 'Calories, protein, and cost averages' },
       { subtitle: 'Cost averages' },
-      { subtitle: 'Calories and protein' },
-      { subtitle: 'Carbs' },
-      { subtitle: 'Fat' },
+      { subtitle: 'Cost averages' },
+      null,
+      null,
+      null,
+      null,
     ],
-    'the stats row names only what its view holds beyond the Total: the nutrition switched on, and the cost averages when the day has enough meals behind them',
+    'the stats row names only the cost averages: the Total and the nutrition switched on are on the drawer\'s front, so a day with nutrition on and under three fully priced meals reports no extra row, and with the averages it says "Cost averages" whatever is switched on',
+  );
+  const nutritionFront = (day: typeof twoFullDay, ...metrics: string[]) =>
+    hasShownValue(withWholeCalories(day.dailyNutrition), showOnly(...metrics));
+  assert.deepEqual(
+    [
+      nutritionFront(twoFullDay, 'calories', 'protein'),
+      nutritionFront(twoFullDay, 'carbs'),
+      nutritionFront(twoFullDay),
+      nutritionFront(unknownDay, 'calories', 'protein'),
+      nutritionFront(unpricedDay, 'fat'),
+    ],
+    [true, true, false, false, true],
+    "a day's front draws its nutrition tiles for the metrics switched on that the day knows, and none with every switch off or nothing known; a day with nothing priced still has its nutrition to show",
+  );
+  assert.deepEqual(
+    [
+      getDayStatsOffer(
+        {
+          fullyPricedMeals: 3,
+          avgPerFullyPricedMealCents: 29.6,
+          proteinPricedMeals: 0,
+          proteinCentsPerGram: null,
+        },
+        showOnly('protein'),
+      ),
+      getDayStatsOffer(
+        {
+          fullyPricedMeals: 2,
+          avgPerFullyPricedMealCents: 29.6,
+          proteinPricedMeals: 2,
+          proteinCentsPerGram: 1.2,
+        },
+        showOnly('protein'),
+      ),
+      getDayStatsOffer(
+        {
+          fullyPricedMeals: 3,
+          avgPerFullyPricedMealCents: null,
+          proteinPricedMeals: 3,
+          proteinCentsPerGram: 1.2,
+        },
+        showOnly('calories'),
+      ),
+    ],
+    [{ subtitle: 'Cost averages' }, null, null],
+    "the offer follows the averages' own rules: three fully priced meals with a figure, and nothing under that or without the figure, whether or not protein is on",
   );
   assert.deepEqual(
     [
@@ -4760,7 +4813,7 @@ assert.equal(getPutAwayText([]), null);
       getDayStatsOffer(unpricedDay, showOnly()),
     ],
     [null, null],
-    'a metric the day does not know is never named, so no row opens a view with nothing in it',
+    'a day with nothing to average has no row, so none opens a view with nothing in it',
   );
   assert.deepEqual(
     [
@@ -4813,6 +4866,51 @@ assert.equal(getPutAwayText([]), null);
       getDayCostText(entry, false).replace(/\+$/, ''),
     ]),
     "each day's figure in its drawer is the figure its row shows in the week summary, from one walk or from a walk of the day alone",
+  );
+  const bigDayGap: Gap = { kind: 'NO_PRODUCT', ingredientId: 'a' };
+  assert.deepEqual(
+    [99_999, 100_000, 123_456].map((cents) => [
+      getPeriodTotal(
+        { spendCents: cents, mealsPriced: 3, leftOut: [], openLeftOut: [] },
+        false,
+      ).value,
+      getDayCostText({ totalCents: cents, leftOut: [] }, false),
+    ]),
+    [
+      ['$999.99', '$999.99'],
+      ['$1,000', '$1,000'],
+      ['$1,235', '$1,235'],
+    ],
+    'a day of $1,000 or more reads one figure in its drawer tile and in its row of the week summary: both drop the cents from $1,000 up',
+  );
+  assert.deepEqual(
+    [
+      getPeriodTotal(
+        {
+          spendCents: 123_456,
+          mealsPriced: 3,
+          leftOut: [bigDayGap],
+          openLeftOut: [bigDayGap],
+        },
+        false,
+      ),
+      getPeriodTotal(
+        {
+          spendCents: 123_456,
+          mealsPriced: 3,
+          leftOut: [bigDayGap],
+          openLeftOut: [],
+        },
+        true,
+      ),
+      getDayCostText({ totalCents: 123_456, leftOut: [bigDayGap] }, false),
+    ],
+    [
+      { value: '$1,235', label: 'Total so far' },
+      { value: '$1,235+', label: 'Total' },
+      '$1,235+',
+    ],
+    'a big day with something left out says so the same way in its tile and its row: the figure from $1,000 up without cents, "+" or "so far" after it',
   );
   assert.deepEqual(
     [

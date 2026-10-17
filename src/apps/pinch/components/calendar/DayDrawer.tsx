@@ -18,7 +18,9 @@ import {
   type PlannedMealSubview,
 } from '@apps/pinch/components/calendar/plannedMealOffer';
 import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
-import StatsTiles from '@apps/pinch/components/calendar/StatsTiles';
+import StatsTiles, {
+  NutritionTiles,
+} from '@apps/pinch/components/calendar/StatsTiles';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import {
   MEAL_TYPE_EMOJIS,
@@ -117,7 +119,7 @@ interface DayDrawerProps {
   uid: string;
   dayKey: string;
   todayKey: string;
-  /** View options' "Show stats": the day's tiles sit under its title instead of behind a row. */
+  /** View options' "Show stats": the day's cost averages sit under its title too, instead of behind a row. */
   isStatsShown: boolean;
   /** Opens straight onto this planned meal, with the day's list one Back away. */
   initialMealId?: string | null;
@@ -267,7 +269,12 @@ function DayDrawer({
             </h3>
           </div>
           <div className='space-y-3'>
-            <StatsTiles stats={stats} todayKey={todayKey} day={{ isPast }} />
+            <StatsTiles
+              stats={stats}
+              todayKey={todayKey}
+              day={{ isPast }}
+              isNutritionHidden
+            />
             {frozenNote && (
               <p className='text-muted-foreground text-xs'>{frozenNote}</p>
             )}
@@ -277,7 +284,8 @@ function DayDrawer({
         <div className='space-y-5'>
           {meals.length === 0 ? (
             <p className='text-muted-foreground py-2 text-center text-sm'>
-              Nothing planned for this day yet.
+              This day is open. Plan a recipe, a saved meal or a single
+              ingredient on it.
             </p>
           ) : (
             <>
@@ -302,6 +310,12 @@ function DayDrawer({
                 )}
                 {isStatsShown && frozenNote && (
                   <p className='text-muted-foreground text-xs'>{frozenNote}</p>
+                )}
+                {!isStatsShown && (
+                  <NutritionTiles
+                    values={stats.dailyNutrition}
+                    caption='That day'
+                  />
                 )}
                 {statsOffer && (
                   <div ref={statsRowNode}>
