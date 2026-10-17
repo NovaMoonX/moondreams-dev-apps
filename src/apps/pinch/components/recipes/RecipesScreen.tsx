@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Plus } from 'lucide-react';
+import { BookOpen, Plus } from 'lucide-react';
 
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -30,6 +30,7 @@ import {
   CONTAINER_PLACES,
   LIST_SEARCH_THRESHOLD,
   RECIPES_VIEW_LABELS,
+  RECIPES_VIEW_NEW_LABELS,
   RECIPES_VIEWS,
   SOFT_MAX_IDEAS,
   SOURCE_FILTER_ANY,
@@ -39,6 +40,7 @@ import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { useOnRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
 import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
+import { useOnSourceShown } from '@apps/pinch/hooks/useSourceShown';
 import {
   selectIdeas,
   selectIdeasLoadError,
@@ -105,6 +107,20 @@ const getStockHeight = (
   return isPhone
     ? lines.reduce((sum, line) => sum + line, 0) + 2 * (lines.length - 1)
     : Math.max(...lines);
+};
+
+// Closing a sheet steps its history entry back, and the browser then restores the scroll the page
+// had when it opened, so a jump to the top has to come after that.
+const scrollToTopAfterSheetCloses = () => {
+  const toTop = () => {
+    window.clearTimeout(giveUp);
+    window.setTimeout(() => window.scrollTo({ top: 0 }), 0);
+  };
+  const giveUp = window.setTimeout(
+    () => window.removeEventListener('popstate', toTop),
+    1000,
+  );
+  window.addEventListener('popstate', toTop, { once: true });
 };
 
 interface NoMatchProps {
@@ -186,6 +202,15 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     setStockPlaces([]);
     setRevealId(recipeId);
   });
+
+  const showSource = (sourceId: string) => {
+    setView('recipes');
+    setQuery('');
+    setStockPlaces([]);
+    setPickedSource(sourceId);
+  };
+
+  useOnSourceShown(showSource);
 
   useEffect(() => {
     if (revealId === null) {
@@ -596,21 +621,33 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         title='Recipes'
         action={
           (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
-            <Button
-              type='button'
-              size='sm'
-              rounded='full'
-              className='gap-1'
-              disabled={isIdeas && !canAddIdea}
-              onClick={handleNew}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              {isIdeas
-                ? 'New idea'
-                : view === 'meals'
-                  ? 'New saved meal'
-                  : 'New'}
-            </Button>
+            <div className='flex items-center gap-1'>
+              {hasSourceSection && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='icon'
+                  rounded='full'
+                  aria-label='Sources'
+                  title='Sources'
+                  className='size-10 shrink-0 p-0'
+                  onClick={() => openSubview({ kind: 'sources' })}
+                >
+                  <BookOpen className='h-5 w-5' aria-hidden='true' />
+                </Button>
+              )}
+              <Button
+                type='button'
+                size='sm'
+                rounded='full'
+                className="relative gap-1 whitespace-nowrap after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+                disabled={isIdeas && !canAddIdea}
+                onClick={handleNew}
+              >
+                <Plus className='h-4 w-4' aria-hidden='true' />
+                {RECIPES_VIEW_NEW_LABELS[shownView]}
+              </Button>
+            </div>
           )
         }
       />
@@ -678,52 +715,34 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             />
           }
         >
-          {(close) => (
-            <>
-              {hasSourceSection && (
-                <FilterSection
-                  title='Source'
-                  action={
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      className="relative h-6! min-h-0! px-0! py-0! text-xs before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-                      onClick={() => {
-                        close();
-                        openSubview({ kind: 'sources' });
-                      }}
-                    >
-                      Edit sources
-                    </Button>
-                  }
-                >
-                  {hasSourceFilter ? (
-                    <PillGroup
-                      label='Sources'
-                      options={sourceOptions}
-                      value={sourceFilter}
-                      onChange={setPickedSource}
-                    />
-                  ) : (
-                    <p className='text-muted-foreground text-sm'>
-                      None of your recipes has a source right now.
-                    </p>
-                  )}
-                </FilterSection>
-              )}
-              {hasStockFilter && (
-                <FilterSection title='In stock'>
-                  <MultiPillGroup
-                    label='In stock'
-                    options={stockOptions}
-                    values={stockPlaces}
-                    onChange={setStockPlaces}
+          <>
+            {hasSourceSection && (
+              <FilterSection title='Source'>
+                {hasSourceFilter ? (
+                  <PillGroup
+                    label='Sources'
+                    options={sourceOptions}
+                    value={sourceFilter}
+                    onChange={setPickedSource}
                   />
-                </FilterSection>
-              )}
-            </>
-          )}
+                ) : (
+                  <p className='text-muted-foreground text-sm'>
+                    None of your recipes has a source right now.
+                  </p>
+                )}
+              </FilterSection>
+            )}
+            {hasStockFilter && (
+              <FilterSection title='In stock'>
+                <MultiPillGroup
+                  label='In stock'
+                  options={stockOptions}
+                  values={stockPlaces}
+                  onChange={setStockPlaces}
+                />
+              </FilterSection>
+            )}
+          </>
         </FilterBar>
       ) : (
         hasSearch && (
@@ -745,13 +764,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           uid={uid}
           recipeId={openId}
           onClose={() => setOpenId(null)}
-          onOpenSource={(sourceId) => {
-            setOpenId(null);
-            setView('recipes');
-            setQuery('');
-            setStockPlaces([]);
-            setPickedSource(sourceId);
-          }}
           onPlan={(id) => {
             setOpenId(null);
             openSubview({
@@ -775,13 +787,18 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenId(null);
             setShopping(request);
           }}
+          onShowSource={(sourceId) => {
+            setOpenId(null);
+            showSource(sourceId);
+            scrollToTopAfterSheetCloses();
+          }}
           onOpenHistory={(id) => {
             setOpenId(null);
             setHistoryId(id);
           }}
-          onOpenStock={(id) => {
+          onOpenStock={(id, place) => {
             setOpenId(null);
-            openSubview({ kind: 'containers', recipeId: id });
+            openSubview({ kind: 'containers', recipeId: id, place });
           }}
           onPutAway={(id) => {
             setOpenId(null);
@@ -839,9 +856,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenMealId(null);
             setShopping(request);
           }}
-          onOpenStock={(id) => {
+          onOpenStock={(id, place) => {
             setOpenMealId(null);
-            openSubview({ kind: 'containers', mealId: id });
+            openSubview({ kind: 'containers', mealId: id, place });
           }}
           onPutAway={(id) => {
             setOpenMealId(null);

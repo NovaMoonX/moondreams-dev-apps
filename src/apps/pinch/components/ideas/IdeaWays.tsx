@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import FallbackImage from '@/components/FallbackImage';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PhotoPicker from '@/components/forms/PhotoPicker';
+import IntroCard from '@/components/IntroCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useImageUpload } from '@/hooks/useImageUpload';
@@ -413,7 +414,9 @@ export function IdeaLinkWay({
             note={
               isLooking
                 ? 'Looking up the page. You can save in a moment.'
-                : undefined
+                : link === null
+                  ? 'Paste a link to save.'
+                  : undefined
             }
             error={error}
             onCancel={onClose}
@@ -603,6 +606,10 @@ export function IdeaTextWay({
 
   return (
     <div ref={bodyRef} className='space-y-4'>
+      <IntroCard
+        icon={IDEA_KIND_EMOJIS.TEXT}
+        lead='Jot it down now, cook it later.'
+      />
       <Form
         id='pinch-idea-text'
         form={fields}
@@ -629,6 +636,7 @@ export function IdeaTextWay({
             canSave={canSave}
             isSubmitting={isSubmitting}
             error={error}
+            note={title === '' ? 'Write a few words to save.' : null}
             onCancel={onClose}
           />
         }

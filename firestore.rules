@@ -1440,7 +1440,8 @@ service cloud.firestore {
           && (value.tip == null || isShortText(value.tip, 300)));
       }
 
-      // Rules can't walk a list, so each ingredient line and step is shaped by the client; the rules cap the counts and the fields around them.
+      // Rules can't walk a list, so each ingredient line (its group included) and step is shaped by the client: checking even one field of 60 lines
+      // by index runs past the evaluator's 1,000 expressions and would refuse a long recipe. The rules cap the counts and the fields around them.
       function isRecipe(data, id) {
         return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'care', 'nutritionOverride', 'source', 'sourceId', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])

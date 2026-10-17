@@ -6,11 +6,11 @@ import {
   type ReactNode,
 } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Pill from '@/components/Pill';
 import SearchInput from '@/components/SearchInput';
+import ShowMoreButton from '@/components/ShowMoreButton';
 
 const SEARCH_THRESHOLD = 12;
 /** Two rows of pills: keep in step with `max-h-22` below. */
@@ -21,6 +21,8 @@ const MAX_QUIET_HIDDEN = 3;
 export interface PillOption<T extends string> {
   value: T;
   label: string;
+  /** A count or note after the label ("10 servings"); below 360px it moves to a second line inside the pill, so the row stays on one line with every word kept. */
+  detail?: string;
   emoji?: string;
   /** A small image or icon in place of an emoji (a store's logo). */
   icon?: ReactNode;
@@ -49,12 +51,18 @@ const moveTo = <T,>(list: readonly T[], from: number, to: number) => {
 export function PillRow({
   label,
   children,
+  isThin = false,
 }: {
   label: string;
   children: ReactNode;
+  isThin?: boolean;
 }) {
   return (
-    <div role='group' aria-label={label} className='flex flex-wrap gap-2'>
+    <div
+      role='group'
+      aria-label={label}
+      className={join('flex flex-wrap', isThin ? 'gap-x-2 gap-y-4' : 'gap-2')}
+    >
       {children}
     </div>
   );
@@ -210,7 +218,7 @@ export function PillOptions<T extends string>({
         }
       >
         <div ref={contentRef}>
-          <PillRow label={label}>
+          <PillRow label={label} isThin={isThin}>
             {leading}
             {visible.map((option) => (
               <Pill
@@ -219,6 +227,10 @@ export function PillOptions<T extends string>({
                 icon={option.icon}
                 isThin={isThin}
                 isSelected={isSelected(option.value)}
+                className={join(
+                  option.detail &&
+                    'max-[359px]:h-auto! max-[359px]:min-h-8! max-[359px]:py-0.5!',
+                )}
                 onClick={() => {
                   onToggle(option.value);
                   if (isSingle) {
@@ -227,7 +239,19 @@ export function PillOptions<T extends string>({
                   }
                 }}
               >
-                {option.label}
+                {option.detail ? (
+                  <span className='flex min-w-0 items-center gap-x-1 max-[359px]:flex-col max-[359px]:items-start max-[359px]:gap-y-0 max-[359px]:leading-tight'>
+                    <span className='truncate'>{option.label}</span>
+                    <span aria-hidden='true' className='max-[359px]:hidden'>
+                      ·
+                    </span>
+                    <span className='truncate max-[359px]:text-[11px] max-[359px]:opacity-80'>
+                      {option.detail}
+                    </span>
+                  </span>
+                ) : (
+                  option.label
+                )}
               </Pill>
             ))}
           </PillRow>
@@ -240,16 +264,12 @@ export function PillOptions<T extends string>({
       )}
       {showToggle && (
         <div className='flex items-center justify-between gap-3'>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-10 px-0!'
-            aria-expanded={isExpanded}
+          <ShowMoreButton
+            isOpen={isExpanded}
             onClick={() => setIsExpanded((current) => !current)}
           >
             {isExpanded ? 'Show fewer' : `Show all ${options.length}`}
-          </Button>
+          </ShowMoreButton>
           {selectedCount > 0 && (
             <span className='text-muted-foreground text-xs whitespace-nowrap'>
               {selectedCount} selected

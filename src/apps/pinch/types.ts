@@ -188,7 +188,13 @@ export type PinchSubview =
   /** Stores & prices: every price grouped under the store it is at, and the stores themselves. */
   | { kind: 'products' }
   | { kind: 'sources' }
-  | { kind: 'containers'; recipeId?: string; mealId?: string }
+  /** Fridge & freezer; `place` is the one a door named, shown first. */
+  | {
+      kind: 'containers';
+      recipeId?: string;
+      mealId?: string;
+      place?: ContainerPlace;
+    }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
   | {
       kind: 'recipe';
@@ -401,6 +407,8 @@ export interface RecipeIngredient {
   amount: number | null;
   unit: Unit;
   note: string | null;
+  /** The heading the line sits under ("For the sauce"), or null for none; one ingredient may have a line in several groups. Lines written before groups lack the key, which reads as null. */
+  group: string | null;
 }
 
 export interface RecipeCare {

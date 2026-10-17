@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft } from 'lucide-react';
@@ -31,6 +32,10 @@ interface EatFromStockViewProps {
   /** The containers the meal may eat from, already narrowed to its day and what it hasn't cooked. */
   containers: Container[];
   onBack: () => void;
+  /** Where an eat lands; the view it was opened from when left out. */
+  onDone?: () => void;
+  /** The sheet's pinned footer: with one box to eat from, its "Ate N" is the footer's one filled button. */
+  footerEl?: HTMLElement | null;
 }
 
 export function EatFromStockView({
@@ -39,6 +44,8 @@ export function EatFromStockView({
   place,
   containers,
   onBack,
+  onDone = onBack,
+  footerEl = null,
 }: EatFromStockViewProps) {
   const { eat } = useContainerActions(uid);
   const recipesById = useAppSelector(selectRecipesById);
@@ -59,12 +66,33 @@ export function EatFromStockView({
     setError(null);
     setBusyId(container.id);
     try {
-      if ((await eat(container, count)) !== undefined) onBack();
+      if ((await eat(container, count)) !== undefined) onDone();
     } catch (eatError) {
       setError(getErrorMessage(eatError, 'Unable to save this.'));
     } finally {
       setBusyId(null);
     }
+  };
+  const onlyRow = rows.length === 1 && footerEl !== null ? rows[0] : null;
+  const getEatButton = (
+    container: Container,
+    title: string,
+    isOnly: boolean,
+  ) => {
+    const count = getServingsToEat(container, meal);
+    return (
+      <Button
+        type='button'
+        variant={isOnly ? 'primary' : 'secondary'}
+        className={isOnly ? 'w-full' : 'h-10 shrink-0'}
+        aria-label={`Ate ${count} of ${title}`}
+        loading={busyId === container.id}
+        disabled={busyId !== null}
+        onClick={() => void handleEat(container, count)}
+      >
+        {`Ate ${count}`}
+      </Button>
+    );
   };
 
   return (
@@ -94,7 +122,6 @@ export function EatFromStockView({
       ) : (
         <ul className='divide-border divide-y'>
           {rows.map(({ container, title }) => {
-            const count = getServingsToEat(container, meal);
             const state = getEatByState(container.eatBy);
             const tag = [
               getLastPlaceEvent(container.history)?.kind === 'THAW' && 'Thawed',
@@ -129,16 +156,7 @@ export function EatFromStockView({
                     {tag && <span className='whitespace-nowrap'>{tag}</span>}
                   </span>
                 </span>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  className='h-10 shrink-0'
-                  loading={busyId === container.id}
-                  disabled={busyId !== null}
-                  onClick={() => void handleEat(container, count)}
-                >
-                  {`Ate ${count}`}
-                </Button>
+                {onlyRow === null && getEatButton(container, title, false)}
               </li>
             );
           })}
@@ -149,6 +167,12 @@ export function EatFromStockView({
           {error}
         </p>
       )}
+      {onlyRow &&
+        footerEl &&
+        createPortal(
+          getEatButton(onlyRow.container, onlyRow.title, true),
+          footerEl,
+        )}
     </div>
   );
 }

@@ -29,6 +29,8 @@ import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 import {
   countOpenShopRows,
   getShoppingCost,
+  getPlannedParts,
+  getShoppingMeals,
   getShoppingSourceLabels,
   groupShoppingItems,
 } from '@apps/pinch/utils/shopping';
@@ -498,6 +500,40 @@ export const selectShoppingSourceLabels = createSelector(
     selectIngredientsById,
   ],
   getShoppingSourceLabels,
+);
+
+export const selectShoppingPlannedParts = createSelector(
+  [
+    selectShoppingItems,
+    selectPlannedMeals,
+    selectRecipesById,
+    selectIngredientsById,
+  ],
+  getPlannedParts,
+);
+
+export const selectShoppingSourceContext = createSelector(
+  [
+    selectPlannedMeals,
+    selectMealsById,
+    selectRecipesById,
+    selectIngredientsById,
+  ],
+  (plannedMeals, mealsById, recipesById, ingredientsById) => ({
+    plannedById: new Map(plannedMeals.map((meal) => [meal.id, meal])),
+    mealsById,
+    recipesById,
+    ingredientsById,
+  }),
+);
+
+export const selectShoppingMeals = createSelector(
+  [
+    selectShoppingItems,
+    selectShoppingSourceLabels,
+    (_state: RootState, todayKey: string) => todayKey,
+  ],
+  getShoppingMeals,
 );
 
 /** The shown period's spend, average per meal and breakdowns, computed once per change of meals, prices or days shown. */

@@ -19,6 +19,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SortControl, { type SortOrder } from '@/components/SortControl';
 import Subview from '@/components/Subview';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
@@ -483,7 +484,7 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
                   No prices yet
                 </p>
               ) : (
-                <ul className='divide-border divide-y'>
+                <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
                   {group.items.map((row) => renderRow(row, false))}
                 </ul>
               )}
@@ -528,17 +529,21 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
     }
     return (
       <div className='pb-4'>
-        <ActionGroup>
+        <ActionGroup isRoomy>
           <ActionRow
             isGrouped
-            icon={<Tag className='h-4 w-4' />}
+            isRoomy
+            hasChevron
+            icon={<Tag />}
             label='A price'
             subtitle='What something costs at one of your stores'
             onClick={() => setAdding('price')}
           />
           <ActionRow
             isGrouped
-            icon={<StoreIcon className='h-4 w-4' />}
+            isRoomy
+            hasChevron
+            icon={<StoreIcon />}
             label='A store'
             subtitle='Somewhere you shop, from the list or your own'
             onClick={() => {
@@ -635,17 +640,13 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
         )}
         {getBody()}
         {hiddenCount > 0 && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-10 px-0!'
+          <ShowMoreButton
             onClick={() =>
               setPaging({ key: pagingKey, limit: limit + LIST_PAGE_SIZE })
             }
           >
             Show {Math.min(hiddenCount, LIST_PAGE_SIZE)} more
-          </Button>
+          </ShowMoreButton>
         )}
       </div>
       {adding && (

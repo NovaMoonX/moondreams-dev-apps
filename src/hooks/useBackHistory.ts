@@ -122,9 +122,30 @@ const handlePop = () => {
   leaveDeadEntry();
 };
 
+const OPEN_POPUP_SELECTOR =
+  '[aria-haspopup][aria-expanded="true"], [role="listbox"], [role="menu"]';
+
+// Escape takes a sheet's swapped-in view back one step, like the back gesture, before the sheet
+// sees it as a close. Capture, so the sheet's own listener never gets it.
+const handleEscape = (event: KeyboardEvent) => {
+  if (event.key !== 'Escape' || event.defaultPrevented) return;
+  const top = layers[layers.length - 1];
+  const holder = [...layers].reverse().find((layer) => layer.kind !== 'step');
+  if (top?.kind !== 'step' || holder?.kind !== 'dialog') return;
+  const isPopupOpen =
+    (event.target instanceof Element &&
+      event.target.closest(OPEN_POPUP_SELECTOR) !== null) ||
+    document.querySelector('[role="tooltip"]') !== null;
+  if (isPopupOpen || getDialogsAbove(getDialog(holder)).length > 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  top.goBack();
+};
+
 // Always listening, so landing on an entry kept from before a reload steps on instead of costing a press.
 if (typeof window !== 'undefined') {
   window.addEventListener('popstate', handlePop);
+  window.addEventListener('keydown', handleEscape, true);
 }
 
 const queueFlush = () => {
@@ -192,7 +213,7 @@ export function usePageHistory(onBack: () => void) {
   useHistoryLayer(true, onBack, 'page', null);
 }
 
-/** A swapped-in view of a drawer or sheet (a "‹ Back" view) takes the back gesture while `isActive`, stepping back to the view before it. */
+/** A swapped-in view of a drawer or sheet (a "‹ Back" view) takes the back gesture and Escape while `isActive`, stepping back to the view before it. */
 export function useBackStep(isActive: boolean, onBack: () => void) {
   useHistoryLayer(isActive, onBack, 'step', null);
 }

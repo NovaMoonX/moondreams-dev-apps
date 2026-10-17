@@ -1,36 +1,50 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useStore } from 'react-redux';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { NotebookPen } from 'lucide-react';
+import {
+  ChevronLeft,
+  ListChecks,
+  NotebookPen,
+  Pause,
+  Play,
+} from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import NoteTextField from '@/components/NoteTextField';
-import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useAppDispatch, useAppSelector, type RootState } from '@/store';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
+import { findDurations, formatDuration } from '@/utils/durationUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import CookDishSwitch from '@apps/pinch/components/cooking/CookDishSwitch';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNotes from '@apps/pinch/components/cooking/CookNotes';
 import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookRecord, {
   type CookRecordStatus,
 } from '@apps/pinch/components/cooking/CookRecord';
-import CookStepView from '@apps/pinch/components/cooking/CookStepView';
+import CookStepView, {
+  type StepTimerSlot,
+} from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
-import {
-  COOK_VIEW_OPTIONS,
-  MAX_RECIPE_NOTE_LENGTH,
-} from '@apps/pinch/constants';
+import CookTimerView from '@apps/pinch/components/cooking/CookTimerView';
+import { MAX_RECIPE_NOTE_LENGTH } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { useCookNote } from '@apps/pinch/hooks/useCookNote';
-import { useCookTimers, type CookTimer } from '@apps/pinch/hooks/useCookTimers';
+import { useCookTimers } from '@apps/pinch/hooks/useCookTimers';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { usePutAway } from '@apps/pinch/hooks/usePutAway';
 import {
@@ -44,23 +58,67 @@ import { updateCook } from '@apps/pinch/store/actions/cookActions';
 import type { CookView, PlateCookRecipe, Recipe } from '@apps/pinch/types';
 import {
   getCookStartServings,
+  getFirstSentence,
+  getMeanwhile,
   getPlannedCookId,
   getPlateNext,
   getPlateStart,
+  getReadyStepTimers,
   getStepName,
+  getTimerNext,
+  getTimerRows,
+  getTimerSecondary,
+  getTimerSlotKey,
   isCookHistoryFull,
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
+import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
-import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
+import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
 const DONE_GUARD_MS = 600;
 
 const LIST_FORMAT = new Intl.ListFormat('en-US', { type: 'conjunction' });
+
+const createLiveCount = () => {
+  const listeners = new Set<() => void>();
+  const store = {
+    value: 0,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+    get: () => store.value,
+    set: (next: number) => {
+      if (next === store.value) return;
+      store.value = next;
+      listeners.forEach((listener) => listener());
+    },
+  };
+  return store;
+};
+
+function LeaveMessage({
+  count,
+}: {
+  count: ReturnType<typeof createLiveCount>;
+}) {
+  const going = useSyncExternalStore(count.subscribe, count.get);
+  if (going === 0) {
+    return <>Your timer has finished. Leaving closes cooking mode.</>;
+  }
+  return (
+    <>
+      {going} {going === 1 ? 'timer is' : 'timers are'} still going. Timers only
+      run while this screen is open, so leaving stops{' '}
+      {going === 1 ? 'it' : 'them'}.
+    </>
+  );
+}
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -129,30 +187,42 @@ function CookingSession({
   const [cookedIds, setCookedIds] = useState<Record<string, string>>({});
   const [undoState, setUndoState] = useState<'PENDING' | 'FAILED' | null>(null);
   const finishedAt = useRef(0);
+  const guardedUntil = useRef(0);
+  const missedFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const stripRef = useRef<HTMLUListElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const timers = useCookTimers();
+  const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const stepMatches = useMemo(
+  const matchesByRecipe = useMemo(
     () =>
-      matchStepIngredients(
-        recipe.steps,
-        recipe.ingredients.map((line) => {
-          const ingredient = ingredientsById.get(line.ingredientId);
-          return {
-            id: line.id,
-            ingredientId: line.ingredientId,
-            names: ingredient ? [ingredient.name, ...ingredient.aliases] : [],
-          };
-        }),
+      new Map(
+        entries.map((candidate) => [
+          candidate.recipe.id,
+          matchStepIngredients(
+            candidate.recipe.steps,
+            candidate.recipe.ingredients.map((line) => {
+              const ingredient = ingredientsById.get(line.ingredientId);
+              return {
+                id: line.id,
+                ingredientId: line.ingredientId,
+                names: ingredient
+                  ? [ingredient.name, ...ingredient.aliases]
+                  : [],
+                group: line.group ?? null,
+              };
+            }),
+          ),
+        ]),
       ),
-    [recipe.steps, recipe.ingredients, ingredientsById],
+    [entries, ingredientsById],
   );
-  const rows = useMemo(
-    () =>
-      recipe.ingredients.map((line) => ({
+  const stepMatches = matchesByRecipe.get(recipe.id) ?? [];
+  const getRows = useCallback(
+    (target: Recipe, targetServings: number) => {
+      const repeatedGroups = getRepeatedLineGroups(target.ingredients);
+      const result = target.ingredients.map((line) => ({
         id: line.id,
         name:
           ingredientsById.get(line.ingredientId)?.name ?? 'Removed ingredient',
@@ -161,12 +231,20 @@ function CookingSession({
           line.amount === null
             ? (line.note ?? '')
             : formatKitchenAmount(
-                scaleAmount(line.amount, servings, recipe.servings),
+                scaleAmount(line.amount, targetServings, target.servings),
                 line.unit,
               ),
         isMeasured: line.amount !== null,
-      })),
-    [recipe.ingredients, recipe.servings, ingredientsById, servings],
+        group: line.group ?? null,
+        groupLabel: repeatedGroups.get(line.id) ?? null,
+      }));
+      return result;
+    },
+    [ingredientsById],
+  );
+  const rows = useMemo(
+    () => getRows(recipe, servings),
+    [getRows, recipe, servings],
   );
   const wakeLock = useWakeLock(true);
   const {
@@ -256,14 +334,12 @@ function CookingSession({
   const lastIndex = recipe.steps.length - 1;
   const index = Math.min(stepIndex, lastIndex);
   const hasSteps = recipe.steps.length > 0;
-  const next = getPlateNext(
-    entries.map((candidate) => ({
-      recipeId: candidate.recipe.id,
-      stepIndex: plate[candidate.recipe.id]?.stepIndex ?? 0,
-      stepCount: candidate.recipe.steps.length,
-    })),
-    recipe.id,
-  );
+  const positions = entries.map((candidate) => ({
+    recipeId: candidate.recipe.id,
+    stepIndex: plate[candidate.recipe.id]?.stepIndex ?? 0,
+    stepCount: candidate.recipe.steps.length,
+  }));
+  const next = getPlateNext(positions, recipe.id);
   const nextRecipe =
     next.kind === 'RECIPE'
       ? (entries.find((candidate) => candidate.recipe.id === next.recipeId)
@@ -281,6 +357,85 @@ function CookingSession({
       : stepMatch.lineIds
           .map((id) => rows.find((row) => row.id === id))
           .filter((row) => row !== undefined);
+  const stepText = hasSteps ? recipe.steps[index] : '';
+  const stepDurations = useMemo(
+    () =>
+      findDurations(stepText).map(({ seconds }) => ({
+        seconds,
+        label: formatDuration(seconds),
+      })),
+    [stepText],
+  );
+  const withDone = (
+    slots: { seconds: number; label: string }[],
+    recipeId: string,
+    stepNumber: number,
+  ): StepTimerSlot[] =>
+    slots.map((slot) => ({
+      ...slot,
+      isDone: timers.finishedSlots.has(
+        getTimerSlotKey({ recipeId, stepNumber, label: slot.label }),
+      ),
+    }));
+  const readySlots = withDone(
+    getReadyStepTimers(
+      timers.timers,
+      isStepsView && !isFinishShown && hasSteps
+        ? {
+            recipeId: recipe.id,
+            stepNumber: index + 1,
+            durations: stepDurations,
+          }
+        : null,
+    ),
+    recipe.id,
+    index + 1,
+  );
+  const isDraftOpen = isFinishShown && (note.isOpen || putAway.isOpen);
+  const focused = isDraftOpen ? null : timers.focused;
+  const focusedEntry =
+    focused === null
+      ? null
+      : (entries.find(
+          (candidate) => candidate.recipe.id === focused.recipeId,
+        ) ?? null);
+  const focusedSteps = focusedEntry?.recipe.steps ?? [];
+  const focusedIndex =
+    focused === null
+      ? 0
+      : Math.max(0, Math.min(focused.stepNumber, focusedSteps.length) - 1);
+  const focusedStepText = focusedSteps[focusedIndex] ?? '';
+  const timerNext =
+    focused === null || isFinishShown ? null : getTimerNext(positions, focused);
+  const timerSecondary =
+    focused === null ? null : getTimerSecondary(timerNext, focused.status);
+  const meanwhileTarget =
+    focused === null || focused.status === 'done' || isFinishShown
+      ? null
+      : getMeanwhile(positions, focused.recipeId, timerNext);
+  const meanwhileEntry =
+    meanwhileTarget === null
+      ? null
+      : (entries.find(
+          (candidate) => candidate.recipe.id === meanwhileTarget.recipeId,
+        ) ?? null);
+  const backLabel = isFinishShown
+    ? 'Back'
+    : isStepsView
+      ? `Back to step ${index + 1}`
+      : 'Back to ingredients';
+  const dishes = entries.map((candidate) => {
+    const stepCount = candidate.recipe.steps.length;
+    const at = Math.min(
+      plate[candidate.recipe.id]?.stepIndex ?? 0,
+      stepCount - 1,
+    );
+    return {
+      id: candidate.recipe.id,
+      title: candidate.recipe.title,
+      status: stepCount === 0 ? 'No steps' : `Step ${at + 1} of ${stepCount}`,
+    };
+  });
 
   const updateRecipe = (recipeId: string, patch: Partial<PlateCookState>) =>
     setPlate((current) => {
@@ -312,13 +467,26 @@ function CookingSession({
     scrollToTop();
   };
 
+  useEffect(
+    () => goingCount.set(timers.liveCount),
+    [goingCount, timers.liveCount],
+  );
+
+  const ask = async (options: Parameters<typeof confirm>[0]) => {
+    const isConfirmed = await confirm(options);
+    if (missedFocus.current) {
+      missedFocus.current = false;
+      focusPrimary();
+    }
+    return isConfirmed;
+  };
+
   const confirmLeave = async () => {
     if (timers.liveCount === 0) return true;
 
-    const count = timers.liveCount;
-    const isConfirmed = await confirm({
+    const isConfirmed = await ask({
       title: 'Stop timers and leave?',
-      message: `${count} ${count === 1 ? 'timer is' : 'timers are'} still going. Timers only run while this screen is open, so leaving stops ${count === 1 ? 'it' : 'them'}.`,
+      message: <LeaveMessage count={goingCount} />,
       confirmText: 'Leave',
       cancelText: 'Stay',
       destructive: true,
@@ -327,7 +495,7 @@ function CookingSession({
   };
 
   const confirmDiscardOf = (title: string, message: string) =>
-    confirm({
+    ask({
       title,
       message,
       confirmText: 'Discard',
@@ -529,63 +697,104 @@ function CookingSession({
     [recipe.id],
   );
 
-  const keepFocus = () =>
-    window.requestAnimationFrame(() => {
-      if (document.activeElement && document.activeElement !== document.body) {
-        return;
-      }
-      (stripRef.current ?? primaryRef.current)?.focus({ preventScroll: true });
-    });
-
-  const handleStartTimer = (
+  const startTimer = (
+    target: Recipe,
     stepNumber: number,
     seconds: number,
     label: string,
-  ) => {
+  ) =>
     timers.start(
       {
-        recipeId: recipe.id,
-        recipeTitle: isPlate ? recipe.title : null,
+        recipeId: target.id,
+        recipeTitle: isPlate ? target.title : null,
         stepNumber,
         stepName:
-          getStepName(recipe.steps[stepNumber - 1] ?? '') ||
+          getStepName(target.steps[stepNumber - 1] ?? '') ||
           `Step ${stepNumber}`,
       },
       seconds,
       label,
     );
-    keepFocus();
-  };
 
-  const jumpTo = (timer: CookTimer) => {
+  const jumpTo = (recipeId: string, stepIndex: number) => {
     const target = entries.find(
-      (candidate) => candidate.recipe.id === timer.recipeId,
+      (candidate) => candidate.recipe.id === recipeId,
     );
     if (!target) return;
-    updateRecipe(timer.recipeId, {
+    timers.unfocus();
+    updateRecipe(recipeId, {
       stepIndex: Math.max(
         0,
-        Math.min(timer.stepNumber, target.recipe.steps.length) - 1,
+        Math.min(stepIndex, target.recipe.steps.length - 1),
       ),
     });
-    setCurrentId(timer.recipeId);
+    setCurrentId(recipeId);
     setView('steps');
     setIsFinished(false);
     scrollToTop();
   };
 
-  const handleDismissTimer = (id: string) => {
-    timers.dismiss(id);
-    keepFocus();
+  const backToStep = () => {
+    timers.unfocus();
+    scrollToTop();
   };
+
+  const endTimer = (id: string) => {
+    timers.dismiss(id);
+    scrollToTop();
+  };
+
+  const goNextFromTimer = () => {
+    if (focused === null || timerNext === null) return;
+    if (focused.status === 'done') timers.dismiss(focused.id);
+    if (timerNext.kind === 'STEP') {
+      jumpTo(timerNext.recipeId, timerNext.stepIndex);
+      return;
+    }
+    const target = positions.find(
+      (position) => position.recipeId === timerNext.recipeId,
+    );
+    jumpTo(timerNext.recipeId, target?.stepIndex ?? 0);
+  };
+
+  const handleTimerSwipe = (direction: 1 | -1) =>
+    direction === 1 ? goNextFromTimer() : backToStep();
+
+  const focusKey =
+    focused === null ? null : `${focused.id}:${focused.status === 'done'}`;
+  const shownFocusKey = useRef(focusKey);
+  useEffect(() => {
+    if (shownFocusKey.current === focusKey) {
+      return;
+    }
+    const wasShown = shownFocusKey.current !== null;
+    shownFocusKey.current = focusKey;
+    if (focusKey !== null) {
+      guardedUntil.current = Date.now() + DONE_GUARD_MS;
+    }
+    if (focusKey !== null && !wasShown) {
+      rootRef.current
+        ?.closest<HTMLElement>('[data-subview-overlay]')
+        ?.scrollTo({ top: 0 });
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (hasDialogOnTop()) {
+        missedFocus.current = true;
+        return;
+      }
+      primaryRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusKey]);
 
   const showView = (next: CookView) => {
     setView(next);
     scrollToTop();
+    focusPrimary();
   };
 
   useEffect(() => {
-    if (!isStepsView || !hasSteps) {
+    if (focused === null && (!isStepsView || !hasSteps)) {
       return;
     }
 
@@ -600,8 +809,13 @@ function CookingSession({
       ) {
         return;
       }
-      if (event.key === 'ArrowRight') goBy(1);
-      if (event.key === 'ArrowLeft') goBy(-1);
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      if (focused === null) {
+        goBy(direction);
+        return;
+      }
+      handleTimerSwipe(direction);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -652,8 +866,15 @@ function CookingSession({
     records.find((record) => record.recipeId === note.openRecipeId)?.entry
       .recipe.title ?? null;
 
-  const showLockNote =
-    !isRecorded && (!wakeLock.isSupported || wakeLock.hasFailed);
+  const getTimerNote = () => {
+    if (focused === null || focused.status === 'done') return null;
+    if (!wakeLock.isSupported || wakeLock.hasFailed) {
+      return 'This device may turn the screen off; timers keep running only while this screen is open.';
+    }
+    return timers.isNoticeShown
+      ? 'Keep this screen open: timers stop if you leave it.'
+      : null;
+  };
   const isChanged =
     isRemoved ||
     recipe.isArchived === true ||
@@ -666,24 +887,198 @@ function CookingSession({
       onApply={(noteId) => void applyNote(noteId)}
     />
   );
+  const ingredientsButton = isWide ? null : (
+    <Button
+      type='button'
+      variant='secondary'
+      className='h-10 shrink-0 gap-2 px-4 text-sm'
+      onClick={() => showView('ingredients')}
+    >
+      <ListChecks className='h-4 w-4' aria-hidden='true' />
+      Ingredients
+    </Button>
+  );
   const stepContent = hasSteps ? (
     <CookStepView
+      key={`steps-${recipe.id}`}
       steps={recipe.steps}
       index={index}
       ingredients={isWide ? [] : stepRows}
       isAmountNoteShown={
         isScaled && stepMatch !== null && stepMatch.hasWrittenAmount
       }
-      timers={timers.timers.filter((timer) => timer.recipeId === recipe.id)}
+      timerSlots={readySlots}
       isTimersFull={timers.isFull}
-      onStartTimer={handleStartTimer}
+      action={ingredientsButton}
+      onStartTimer={(stepNumber, seconds, label) =>
+        startTimer(recipe, stepNumber, seconds, label)
+      }
       onSwipe={goBy}
     />
   ) : (
-    <p className='text-muted-foreground flex-1 py-2 text-center text-sm'>
-      This recipe has no steps yet.
-    </p>
+    <div className='flex flex-1 flex-col items-center gap-3 py-2'>
+      <p className='text-muted-foreground text-center text-sm'>
+        This recipe has no steps yet.
+      </p>
+      {ingredientsButton}
+    </div>
   );
+  const getUpNext = () => {
+    if (timerNext === null) return null;
+    const target = entries.find(
+      (candidate) => candidate.recipe.id === timerNext.recipeId,
+    );
+    if (!target) return null;
+    const stepIndex =
+      timerNext.kind === 'STEP'
+        ? timerNext.stepIndex
+        : Math.min(
+            plate[target.recipe.id]?.stepIndex ?? 0,
+            target.recipe.steps.length - 1,
+          );
+    const text = getFirstSentence(target.recipe.steps[stepIndex] ?? '');
+    if (!text) return null;
+    return {
+      caption:
+        timerNext.kind === 'STEP'
+          ? `Up next · Step ${stepIndex + 1}`
+          : `Up next · ${target.recipe.title}`,
+      text,
+    };
+  };
+  const getTimerContent = () => {
+    if (focused === null) return null;
+    const focusedRecipe = focusedEntry?.recipe ?? null;
+    const focusedServings =
+      focusedEntry === null
+        ? 0
+        : (plate[focusedEntry.recipe.id]?.servings ??
+          getCookStartServings(
+            focusedEntry.recipe.servings,
+            focusedEntry.plannedServings,
+          ));
+    const focusedRows =
+      focusedRecipe === null
+        ? []
+        : focusedRecipe.id === recipe.id
+          ? rows
+          : getRows(focusedRecipe, focusedServings);
+    const match =
+      focusedRecipe === null
+        ? null
+        : (matchesByRecipe.get(focusedRecipe.id)?.[focusedIndex] ?? null);
+    const stepRowsOfTimer =
+      match === null
+        ? []
+        : match.lineIds
+            .map((id) => focusedRows.find((row) => row.id === id))
+            .filter((row) => row !== undefined);
+    const isFocusedScaled =
+      focusedRecipe !== null &&
+      focusedRecipe.servings > 0 &&
+      focusedServings !== focusedRecipe.servings;
+    return (
+      <CookTimerView
+        key={focused.id}
+        timer={focused}
+        recipeTitle={isPlate ? (focusedRecipe?.title ?? null) : null}
+        stepNumber={focusedIndex + 1}
+        stepCount={Math.max(1, focusedSteps.length)}
+        stepText={focusedStepText}
+        stepRows={stepRowsOfTimer}
+        isAmountNoteShown={
+          isFocusedScaled && match !== null && match.hasWrittenAmount
+        }
+        others={getTimerRows(timers.timers, focused.id)}
+        readySlots={
+          timers.isFull
+            ? []
+            : withDone(
+                getReadyStepTimers(timers.timers, {
+                  recipeId: focused.recipeId,
+                  stepNumber: focused.stepNumber,
+                  durations: findDurations(focusedStepText).map(
+                    ({ seconds }) => ({
+                      seconds,
+                      label: formatDuration(seconds),
+                    }),
+                  ),
+                }),
+                focused.recipeId,
+                focused.stepNumber,
+              )
+        }
+        upNext={getUpNext()}
+        meanwhile={
+          meanwhileTarget === null || meanwhileEntry === null
+            ? null
+            : {
+                title: meanwhileEntry.recipe.title,
+                stepNumber: meanwhileTarget.stepIndex + 1,
+                stepCount: meanwhileEntry.recipe.steps.length,
+              }
+        }
+        note={getTimerNote()}
+        onTick={timers.settle}
+        onPause={timers.pause}
+        onResume={timers.resume}
+        onReset={endTimer}
+        onFocus={timers.focus}
+        onMeanwhile={handleMeanwhile}
+        onStart={(seconds, label) => {
+          if (focusedRecipe !== null) {
+            startTimer(focusedRecipe, focused.stepNumber, seconds, label);
+          }
+        }}
+        onSwipe={handleTimerSwipe}
+      />
+    );
+  };
+  const focusedVerb =
+    focused?.status === 'running'
+      ? 'Pause'
+      : focused?.status === 'paused'
+        ? 'Resume'
+        : 'Dismiss';
+  const isGuarded = () => Date.now() < guardedUntil.current;
+  const handleFocusedAction = () => {
+    if (focused === null || isGuarded()) return;
+    if (focused.status === 'running') timers.pause(focused.id);
+    else if (focused.status === 'paused') timers.resume(focused.id);
+    else endTimer(focused.id);
+  };
+  const handleMeanwhile = () => {
+    if (meanwhileTarget !== null) {
+      jumpTo(meanwhileTarget.recipeId, meanwhileTarget.stepIndex);
+    }
+  };
+  const handleSecondary = () => {
+    if (timerSecondary === 'BACK') {
+      backToStep();
+      return;
+    }
+    if (focused?.status === 'done' && isGuarded()) return;
+    goNextFromTimer();
+  };
+  const getSecondaryLabels = () => {
+    if (timerSecondary === 'BACK') {
+      return {
+        text: backLabel,
+        aria:
+          isPlate && isStepsView
+            ? `${backLabel} of ${recipe.title}`
+            : undefined,
+      };
+    }
+    if (timerNext?.kind === 'RECIPE') {
+      const title =
+        entries.find((candidate) => candidate.recipe.id === timerNext.recipeId)
+          ?.recipe.title ?? 'the next recipe';
+      return { text: 'Next recipe', aria: `Next recipe: ${title}` };
+    }
+    return { text: 'Next', aria: undefined };
+  };
+  const secondaryLabels = getSecondaryLabels();
   const ingredientsContent = (
     <CookIngredientsView
       recipe={recipe}
@@ -702,36 +1097,34 @@ function CookingSession({
   return (
     <Subview
       overlay
+      isTitleWrapped
       className='lg:max-w-5xl'
       title={title}
       onClose={closeSubview}
-      onBack={() => void leave()}
+      onBack={() =>
+        focused !== null
+          ? backToStep()
+          : isStepsView
+            ? void leave()
+            : showView('steps')
+      }
     >
-      <div ref={rootRef} className='flex flex-1 flex-col gap-4'>
-        {isPlate && !isFinishShown && (
-          <PillGroup
-            label='Recipe'
-            options={entries.map((candidate) => ({
-              value: candidate.recipe.id,
-              label: candidate.recipe.title,
-            }))}
+      <div
+        ref={rootRef}
+        className='flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2'
+      >
+        {isPlate && !isFinishShown && focused === null && (
+          <CookDishSwitch
+            dishes={dishes}
             value={recipe.id}
             onChange={showRecipe}
-            isThin
           />
         )}
-        {!isFinishShown && !isWide && (
-          <PillGroup
-            label='Show'
-            options={COOK_VIEW_OPTIONS}
-            value={view}
-            onChange={showView}
-            isThin
-          />
-        )}
-        {!isFinishShown && !isWide && notesBlock}
-        {isFinishShown ? (
-          <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6'>
+        {!isFinishShown && !isWide && focused === null && notesBlock}
+        {focused !== null ? (
+          getTimerContent()
+        ) : isFinishShown ? (
+          <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6 [@media(max-height:600px)]:gap-3 [@media(max-height:600px)]:py-2'>
             <p className='text-center text-2xl leading-snug font-medium'>
               Nice work
             </p>
@@ -821,10 +1214,11 @@ function CookingSession({
             {!note.isOpen && !putAway.isOpen && (
               <Button
                 type='button'
-                variant='tertiary'
-                className='h-10 self-center underline'
+                variant='secondary'
+                className='border-border h-10 gap-1 self-center border'
                 onClick={() => setIsFinished(false)}
               >
+                <ChevronLeft className='h-4 w-4' />
                 Back to the last step
               </Button>
             )}
@@ -845,119 +1239,117 @@ function CookingSession({
           ingredientsContent
         )}
         <div role='status' className='space-y-1 empty:hidden'>
-          {isChanged && (
+          {isChanged && focused === null && (
             <p className='text-muted-foreground text-xs'>
               This recipe was changed or removed elsewhere.
             </p>
           )}
-          {showLockNote && (
-            <p className='text-muted-foreground text-xs'>
-              This phone may turn the screen off; timers keep running only while
-              this screen is open.
-            </p>
-          )}
         </div>
-        <div className='form-footer space-y-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
-          <div role='status' className='empty:hidden'>
-            {timers.isNoticeShown && !showLockNote && (
-              <p className='text-muted-foreground text-xs'>
-                Keep this screen open: timers stop if you leave it.
-              </p>
+        <div className='form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
+          <div
+            className={join(
+              'flex flex-col gap-2 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:gap-3',
+              focused !== null &&
+                'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-xl',
             )}
-          </div>
-          <CookTimerStrip
-            timers={timers.timers}
-            listRef={stripRef}
-            onTick={timers.settle}
-            onPause={timers.pause}
-            onResume={timers.resume}
-            onDismiss={handleDismissTimer}
-            onJump={
-              isFinishShown && (note.isOpen || putAway.isOpen) ? null : jumpTo
-            }
-          />
-          <div className='flex gap-3'>
-            {isFinishShown && isRecorded && putAway.isOpen ? (
-              <>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  className={join(
-                    'h-14 shrink-0 px-6 text-base',
-                    '[@media(max-height:500px)]:h-11',
+          >
+            <CookTimerStrip
+              timers={focused === null ? getTimerRows(timers.timers, null) : []}
+              className='[@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1 [@media(max-height:500px)]:self-center'
+              onTick={timers.settle}
+              onFocus={isDraftOpen ? null : timers.focus}
+            />
+            <div className='flex gap-3 [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1'>
+              {focused !== null ? (
+                <>
+                  {timerSecondary !== null && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className={join(
+                        'h-14 shrink-0 px-5 text-base',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      aria-label={secondaryLabels.aria}
+                      onClick={handleSecondary}
+                    >
+                      {secondaryLabels.text}
+                    </Button>
                   )}
-                  disabled={putAway.isSaving}
-                  onClick={putAway.skip}
-                >
-                  Skip
-                </Button>
-                <Button
-                  type='button'
-                  className={join(
-                    'h-14 min-w-0 flex-1 text-lg',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  loading={putAway.isSaving}
-                  disabled={putAway.isSaving || !putAway.canSave}
-                  onClick={() => void putAway.save()}
-                >
-                  Save
-                </Button>
-              </>
-            ) : isFinishShown && isRecorded && note.isOpen ? (
-              <>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  className={join(
-                    'h-14 shrink-0 px-6 text-base',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  disabled={note.isSaving}
-                  onClick={() => void cancelNote()}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type='button'
-                  className={join(
-                    'h-14 min-w-0 flex-1 text-lg',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  loading={note.isSaving}
-                  disabled={note.isSaving || !note.canSave}
-                  onClick={() => void note.save()}
-                >
-                  Save note
-                </Button>
-              </>
-            ) : isFinishShown ? (
-              <Button
-                ref={primaryRef}
-                type='button'
-                className={join(
-                  'h-14 min-w-0 flex-1 text-lg',
-                  '[@media(max-height:500px)]:h-11',
-                )}
-                onClick={handleDone}
-              >
-                Done
-              </Button>
-            ) : isStepsView ? (
-              <>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  className={join(
-                    'h-14 shrink-0 px-6 text-base',
-                    '[@media(max-height:500px)]:h-11',
-                  )}
-                  aria-label='Back to the previous step'
-                  disabled={index <= 0}
-                  onClick={() => goBy(-1)}
-                >
-                  Back
-                </Button>
+                  <Button
+                    ref={primaryRef}
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 gap-2 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    aria-label={`${focusedVerb} the ${focused.label} timer`}
+                    onClick={handleFocusedAction}
+                  >
+                    {focused.status === 'running' && (
+                      <Pause className='h-5 w-5' aria-hidden='true' />
+                    )}
+                    {focused.status === 'paused' && (
+                      <Play className='h-5 w-5' aria-hidden='true' />
+                    )}
+                    {focusedVerb}
+                  </Button>
+                </>
+              ) : isFinishShown && isRecorded && putAway.isOpen ? (
+                <>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    className={join(
+                      'h-14 shrink-0 px-6 text-base',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    disabled={putAway.isSaving}
+                    onClick={putAway.skip}
+                  >
+                    Skip
+                  </Button>
+                  <Button
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    loading={putAway.isSaving}
+                    disabled={putAway.isSaving || !putAway.canSave}
+                    onClick={() => void putAway.save()}
+                  >
+                    Save
+                  </Button>
+                </>
+              ) : isFinishShown && isRecorded && note.isOpen ? (
+                <>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    className={join(
+                      'h-14 shrink-0 px-6 text-base',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    disabled={note.isSaving}
+                    onClick={() => void cancelNote()}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    loading={note.isSaving}
+                    disabled={note.isSaving || !note.canSave}
+                    onClick={() => void note.save()}
+                  >
+                    Save note
+                  </Button>
+                </>
+              ) : isFinishShown ? (
                 <Button
                   ref={primaryRef}
                   type='button'
@@ -965,36 +1357,63 @@ function CookingSession({
                     'h-14 min-w-0 flex-1 text-lg',
                     '[@media(max-height:500px)]:h-11',
                   )}
-                  aria-label={
-                    nextRecipe ? `Next: ${nextRecipe.title}` : undefined
-                  }
-                  disabled={!hasSteps && nextRecipe === null}
-                  onClick={handleNext}
+                  onClick={handleDone}
                 >
-                  {nextRecipe ? (
-                    <span className='min-w-0 truncate'>
-                      Next: {nextRecipe.title}
-                    </span>
-                  ) : next.kind === 'FINISH' && hasSteps ? (
-                    'Finish'
-                  ) : (
-                    'Next'
-                  )}
+                  Done
                 </Button>
-              </>
-            ) : (
-              <Button
-                ref={primaryRef}
-                type='button'
-                className={join(
-                  'h-14 min-w-0 flex-1 text-lg',
-                  '[@media(max-height:500px)]:h-11',
-                )}
-                onClick={() => showView('steps')}
-              >
-                Back to the steps
-              </Button>
-            )}
+              ) : isStepsView ? (
+                <>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    className={join(
+                      'h-14 shrink-0 px-6 text-base',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    aria-label='Back to the previous step'
+                    disabled={index <= 0}
+                    onClick={() => goBy(-1)}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    ref={primaryRef}
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    aria-label={
+                      nextRecipe ? `Next: ${nextRecipe.title}` : undefined
+                    }
+                    disabled={!hasSteps && nextRecipe === null}
+                    onClick={handleNext}
+                  >
+                    {nextRecipe ? (
+                      <span className='min-w-0 truncate'>
+                        Next: {nextRecipe.title}
+                      </span>
+                    ) : next.kind === 'FINISH' && hasSteps ? (
+                      'Finish'
+                    ) : (
+                      'Next'
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  ref={primaryRef}
+                  type='button'
+                  className={join(
+                    'h-14 min-w-0 flex-1 text-lg',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  onClick={() => showView('steps')}
+                >
+                  Back to the steps
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1032,7 +1451,6 @@ function CookingSubview({
   const { closeSubview } = usePinchOverlay();
   const store = useStore<RootState>();
   const recipesById = useAppSelector(selectRecipesById);
-  const ingredientsById = useAppSelector(selectIngredientsById);
   const plannedMeal = useAppSelector((state) =>
     plannedMealId === null
       ? null
@@ -1104,11 +1522,10 @@ function CookingSubview({
 
   const getTitle = () => {
     if (entries.length === 1) return entries[0].recipe.title;
-    const plateTitle =
-      plannedMeal === null
-        ? ''
-        : getPlannedMealTitle(plannedMeal, recipesById, ingredientsById);
-    return plateTitle || `${entries[0].recipe.title} +${entries.length - 1}`;
+    const name = plannedMeal?.name?.trim() ?? '';
+    return (
+      name || getPlateTitle(entries.map((entry) => entry.recipe.title)).title
+    );
   };
 
   return (

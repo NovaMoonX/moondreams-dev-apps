@@ -1,8 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check } from 'lucide-react';
-
 import Pill from '@/components/Pill';
+import TickMark from '@/components/TickMark';
 import ContainerFields from '@apps/pinch/components/containers/ContainerFields';
 import {
   CONTAINER_PLACE_EMOJIS,
@@ -107,11 +106,8 @@ function CookPutAway({ putAway, recipeId, care, caption }: CookPutAwayProps) {
                   key={batch[0].id}
                   className='flex items-start gap-3 px-4 py-3'
                 >
-                  <span
-                    className='bg-accent text-accent-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full'
-                    aria-hidden='true'
-                  >
-                    <Check className='h-3.5 w-3.5' />
+                  <span className='mt-0.5 flex shrink-0 text-sm'>
+                    <TickMark />
                   </span>
                   <span className='min-w-0 flex-1'>
                     <span className='block text-sm font-medium text-balance'>
@@ -129,9 +125,9 @@ function CookPutAway({ putAway, recipeId, care, caption }: CookPutAwayProps) {
                   {undo?.state === null && (
                     <Button
                       type='button'
-                      variant='tertiary'
+                      variant='secondary'
                       size='sm'
-                      className="relative -my-1.5 -mr-2 h-8 shrink-0 px-2 underline after:absolute after:-inset-1 after:content-['']"
+                      className="relative -mr-1 h-9 shrink-0 rounded-full px-4 after:absolute after:-inset-0.5 after:content-['']"
                       onClick={() => void putAway.undo(batch)}
                     >
                       Undo

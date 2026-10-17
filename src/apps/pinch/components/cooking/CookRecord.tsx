@@ -1,8 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check } from 'lucide-react';
-
 import Stepper from '@/components/Stepper';
+import TickMark from '@/components/TickMark';
 import { MAX_COOKED_SERVINGS } from '@apps/pinch/constants';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
 
@@ -56,26 +55,23 @@ function CookRecord({
       className='bg-muted/50 border-border w-full rounded-2xl border'
     >
       <div role='status' className='flex min-h-14 items-center gap-3 px-4 py-2'>
-        <span
-          className={join(
-            'flex size-6 shrink-0 items-center justify-center rounded-full',
-            isRecorded
-              ? 'bg-accent text-accent-foreground'
-              : 'border-border border',
-          )}
-          aria-hidden='true'
-        >
-          {isRecorded && <Check className='h-3.5 w-3.5' />}
-        </span>
+        {isRecorded ? (
+          <TickMark />
+        ) : (
+          <span
+            aria-hidden='true'
+            className='border-border size-[1.15em] shrink-0 rounded-full border'
+          />
+        )}
         <span className='min-w-0 flex-1 font-medium text-balance'>
           {TITLES[status]}
         </span>
         {undoState === 'READY' && (
           <Button
             type='button'
-            variant='tertiary'
+            variant='secondary'
             size='sm'
-            className="relative -mr-2 h-8 shrink-0 px-2 underline after:absolute after:-inset-1 after:content-['']"
+            className="relative -mr-1 h-9 shrink-0 rounded-full px-4 after:absolute after:-inset-0.5 after:content-['']"
             onClick={onUndo}
           >
             Undo

@@ -5,12 +5,16 @@ import { ChevronRight } from 'lucide-react';
 
 import { formatDateShort } from '@/utils/formatUtils';
 import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
-import { CONTAINER_EMOJI, CONTAINER_PLACE_EMOJIS } from '@apps/pinch/constants';
+import {
+  CONTAINER_FINISH_EMOJIS,
+  CONTAINER_PLACE_EMOJIS,
+} from '@apps/pinch/constants';
 import type { Container } from '@apps/pinch/types';
 import {
   getBatchServingsText,
   getEatByLabel,
   getEatByState,
+  getFinishedKind,
   getFinishedText,
   getFrozenText,
   getLastPlaceEvent,
@@ -45,7 +49,9 @@ function ContainerRow({ boxes, title, isTwin, onOpen }: ContainerRowProps) {
         className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
         aria-hidden='true'
       >
-        {isFinished ? CONTAINER_EMOJI : CONTAINER_PLACE_EMOJIS[container.place]}
+        {isFinished
+          ? CONTAINER_FINISH_EMOJIS[getFinishedKind(container)]
+          : CONTAINER_PLACE_EMOJIS[container.place]}
       </span>
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block font-medium wrap-break-word'>

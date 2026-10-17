@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -25,6 +25,8 @@ const NO_MEALS: PlannedMeal[] = [];
 const NO_KEYS: string[] = [];
 const MAX_COLUMN_MEALS = 5;
 const MAX_AGENDA_MEALS = 6;
+// The day's own button stretched over its whole block, so a day with nothing in it opens from the line under its name too.
+const EMPTY_DAY_DOOR = "after:absolute after:inset-0 after:content-['']";
 const WEEKDAY_FORMATTER = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
   timeZone: 'UTC',
@@ -41,7 +43,6 @@ interface WeekViewProps {
   showPrices: boolean;
   onOpenDay: (dayKey: string) => void;
   onOpenMeal: (dayKey: string, mealId: string) => void;
-  onAdd: (dayKey: string) => void;
 }
 
 /** The seven days of a week: a vertical agenda on a phone, a column per day from `lg` up. */
@@ -54,7 +55,6 @@ function WeekView({
   showPrices,
   onOpenDay,
   onOpenMeal,
-  onAdd,
 }: WeekViewProps) {
   const isWide = !useMediaQuery().isBelow('lg');
   const [isEarlierOpen, setIsEarlierOpen] = useState(false);
@@ -68,18 +68,25 @@ function WeekView({
         {dayKeys.map((dayKey) => {
           const meals = plannedByDay.get(dayKey) ?? NO_MEALS;
           const isToday = dayKey === todayKey;
+          const isEmpty = meals.length === 0;
           return (
             <section
               key={dayKey}
               aria-label={formatDayTitle(dayKey)}
-              className='bg-muted flex min-h-64 min-w-0 flex-col gap-1 rounded-lg p-1.5'
+              className={join(
+                'bg-muted flex min-h-64 min-w-0 flex-col gap-1 rounded-lg p-1.5',
+                isEmpty && 'relative',
+              )}
             >
               <Button
                 type='button'
                 variant='tertiary'
-                aria-label={`Open ${formatDayTitle(dayKey)}`}
+                aria-label={`Open ${formatDayTitle(dayKey)}${isEmpty ? ', nothing planned' : ''}`}
                 onClick={() => onOpenDay(dayKey)}
-                className='h-auto min-h-0 flex-col gap-0.5 px-0! py-1 font-normal'
+                className={join(
+                  'h-auto min-h-0 flex-col gap-0.5 px-0! py-1 font-normal',
+                  isEmpty && EMPTY_DAY_DOOR,
+                )}
               >
                 <span className='text-muted-foreground text-[11px] font-semibold tracking-wide uppercase'>
                   {WEEKDAY_FORMATTER.format(getDateOfDayKey(dayKey))}
@@ -128,15 +135,6 @@ function WeekView({
                   +{meals.length - MAX_COLUMN_MEALS} more
                 </Button>
               )}
-              <Button
-                type='button'
-                variant='tertiary'
-                aria-label={`Plan on ${formatDayTitle(dayKey)}`}
-                onClick={() => onAdd(dayKey)}
-                className='text-muted-foreground! mt-auto h-8 min-h-0 w-full p-0'
-              >
-                <Plus className='h-4 w-4' aria-hidden='true' />
-              </Button>
             </section>
           );
         })}
@@ -164,16 +162,24 @@ function WeekView({
 
   const renderDay = (dayKey: string) => {
     const meals = plannedByDay.get(dayKey) ?? NO_MEALS;
+    const isEmpty = meals.length === 0;
     return (
-      <section key={dayKey} aria-label={formatDayTitle(dayKey)}>
+      <section
+        key={dayKey}
+        aria-label={formatDayTitle(dayKey)}
+        className={join(isEmpty && 'relative')}
+      >
         <SectionDivider
           label={
             <Button
               type='button'
               variant='tertiary'
-              aria-label={`Open ${formatDayTitle(dayKey)}`}
+              aria-label={`Open ${formatDayTitle(dayKey)}${isEmpty ? ', nothing planned' : ''}`}
               onClick={() => onOpenDay(dayKey)}
-              className='h-10 min-h-0 gap-1 px-2! py-0 text-sm font-medium'
+              className={join(
+                'h-10 min-h-0 gap-1 px-2! py-0 text-sm font-medium',
+                isEmpty && EMPTY_DAY_DOOR,
+              )}
             >
               {dayKey === todayKey ? (
                 <span className='rounded-full bg-[var(--pinch-drizzle-fill)] px-2.5 py-0.5 text-xs font-semibold text-[var(--pinch-drizzle-fill-foreground)]'>
@@ -188,21 +194,12 @@ function WeekView({
               />
             </Button>
           }
-          trailing={
-            <Button
-              type='button'
-              variant='tertiary'
-              size='icon'
-              aria-label={`Plan on ${formatDayTitle(dayKey)}`}
-              onClick={() => onAdd(dayKey)}
-              className='-mx-1 size-10'
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-            </Button>
-          }
         />
-        {meals.length === 0 ? (
-          <p className='text-muted-foreground pb-1 text-center text-sm'>
+        {isEmpty ? (
+          <p
+            aria-hidden='true'
+            className='text-muted-foreground pb-1 text-center text-sm'
+          >
             Nothing planned
           </p>
         ) : (
@@ -225,11 +222,15 @@ function WeekView({
         {meals.length > MAX_AGENDA_MEALS && (
           <Button
             type='button'
-            variant='link'
+            variant='tertiary'
             onClick={() => onOpenDay(dayKey)}
-            className='h-10 px-0!'
+            className='h-10 w-full justify-between! px-0!'
           >
-            Show {meals.length - MAX_AGENDA_MEALS} more
+            <span>{meals.length - MAX_AGENDA_MEALS} more meals</span>
+            <ChevronRight
+              className='text-muted-foreground h-5 w-5'
+              aria-hidden='true'
+            />
           </Button>
         )}
       </section>

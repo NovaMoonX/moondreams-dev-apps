@@ -1,5 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import TickMark from '@/components/TickMark';
 import { useAppSelector } from '@/store';
 import MealChip from '@apps/pinch/components/calendar/MealChip';
 import { MEAL_TYPE_LABELS } from '@apps/pinch/constants';
@@ -25,7 +26,6 @@ interface MealRowProps {
   onOpen: () => void;
 }
 
-/** One planned meal as a tappable row: its emoji chip, what is on the plate, its type, ✅ once cooked, and what it costs. */
 function MealRow({
   meal,
   title,
@@ -54,9 +54,6 @@ function MealRow({
     return leftOut.length > 0 ? `${figure}+` : figure;
   };
   const costText = getCostText();
-  const detail = [subtitle, isCooked ? '✅ Cooked' : null]
-    .filter(Boolean)
-    .join(' · ');
 
   return (
     <Button
@@ -74,8 +71,16 @@ function MealRow({
         <span className='text-foreground line-clamp-2 block text-sm font-medium break-words whitespace-normal'>
           {title}
         </span>
-        {detail && (
-          <span className='text-muted-foreground block text-xs'>{detail}</span>
+        {(subtitle || isCooked) && (
+          <span className='text-muted-foreground block text-xs'>
+            {subtitle}
+            {subtitle && isCooked && ' · '}
+            {isCooked && (
+              <span className='whitespace-nowrap'>
+                <TickMark variant='soft' /> Cooked
+              </span>
+            )}
+          </span>
         )}
       </span>
       {costText && (

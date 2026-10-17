@@ -1,3 +1,4 @@
+import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 
 export interface StepIngredientLine {
@@ -5,10 +6,11 @@ export interface StepIngredientLine {
   ingredientId: string;
   /** The ingredient's name and the other names it goes by. */
   names: string[];
+  group?: string | null;
 }
 
 export interface StepIngredients {
-  /** The lines a step is the first to name, in the order it names them. */
+  /** The lines a step is the first to name (an ingredient in several groups: the next group's), in the order it names them. */
   lineIds: string[];
   /** The step writes an amount of its own ("2 cups of the broth"), which scaling doesn't touch. */
   hasWrittenAmount: boolean;
@@ -117,7 +119,10 @@ const findAll = (words: string[], phrase: string[], taken: Set<number>) =>
     return fits ? [...starts, start] : starts;
   }, []);
 
-/** For each step, the recipe lines it is the first to name (by name or alias, whole phrases first, then the first or last word of a name when only one ingredient could mean it), since an amount is measured once, and whether it writes an amount of its own. Pure, so a caller memoizes it per recipe. */
+/**
+ * For each step, the recipe lines it is the first to name (by name or alias, whole phrases first, then the first or last word of a name when only one ingredient could mean it), since an amount is measured once, and whether it writes an amount of its own.
+ * An ingredient with lines in several groups is shared out: each step that names it takes the next group's lines, in the order the groups show, and the last step that names it takes what is left.
+ */
 export function matchStepIngredients(
   steps: string[],
   lines: StepIngredientLine[],
@@ -171,22 +176,54 @@ export function matchStepIngredients(
       .map(([ingredientId]) => ingredientId);
   };
 
-  const { result } = steps.reduce(
-    (acc, step) => {
-      const fresh = findNamed(step).filter((id) => !acc.listed.has(id));
-      acc.result.push({
-        lineIds: fresh.flatMap((ingredientId) =>
-          lines
-            .filter((line) => line.ingredientId === ingredientId)
-            .map((line) => line.id),
-        ),
-        hasWrittenAmount: WRITTEN_AMOUNT.test(step),
-      });
-      fresh.forEach((id) => acc.listed.add(id));
-      return acc;
-    },
-    { result: [] as StepIngredients[], listed: new Set<string>() },
+  const batchesById = groupIngredientLines(lines)
+    .flatMap((group) => [
+      ...group.lines.reduce(
+        (byIngredient, line) =>
+          byIngredient.set(line.ingredientId, [
+            ...(byIngredient.get(line.ingredientId) ?? []),
+            line.id,
+          ]),
+        new Map<string, string[]>(),
+      ),
+    ])
+    .reduce(
+      (acc, [ingredientId, ids]) =>
+        acc.set(ingredientId, [...(acc.get(ingredientId) ?? []), ids]),
+      new Map<string, string[][]>(),
+    );
+  const named = steps.map(findNamed);
+  const mentionsById = named.reduce(
+    (acc, ids, stepIndex) =>
+      ids.reduce(
+        (byId, id) => byId.set(id, [...(byId.get(id) ?? []), stepIndex]),
+        acc,
+      ),
+    new Map<string, number[]>(),
   );
+  const assigned = [...mentionsById].reduce((acc, [ingredientId, mentions]) => {
+    const batches = batchesById.get(ingredientId) ?? [];
+    const shared = Math.min(mentions.length, batches.length);
+    return mentions
+      .slice(0, shared)
+      .reduce(
+        (byStep, stepIndex, turn) =>
+          byStep.set(
+            `${stepIndex}:${ingredientId}`,
+            (turn === shared - 1
+              ? batches.slice(turn)
+              : [batches[turn]]
+            ).flat(),
+          ),
+        acc,
+      );
+  }, new Map<string, string[]>());
+  const result = steps.map((step, stepIndex) => ({
+    lineIds: named[stepIndex].flatMap(
+      (ingredientId) => assigned.get(`${stepIndex}:${ingredientId}`) ?? [],
+    ),
+    hasWrittenAmount: WRITTEN_AMOUNT.test(step),
+  }));
 
   return result;
 }

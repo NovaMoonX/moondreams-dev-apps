@@ -16,6 +16,7 @@ import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
 import {
   getItemTitle,
   getPlannedMealTitle,
+  getPlateTitle,
 } from '@apps/pinch/utils/mealFormat';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
@@ -31,7 +32,10 @@ const getMealDetail = (
     getItemTitle(item, recipesById, ingredientsById),
   );
   if (meal.name?.trim()) return names.join(', ');
-  return names.length > 1 ? `With ${names.slice(1).join(', ')}` : null;
+  const { namedCount } = getPlateTitle(names);
+  return namedCount < names.length
+    ? `With ${names.slice(namedCount).join(', ')}`
+    : null;
 };
 
 interface DayPeekProps {

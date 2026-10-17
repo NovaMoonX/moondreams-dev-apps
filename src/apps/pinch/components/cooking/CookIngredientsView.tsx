@@ -1,12 +1,16 @@
 import { memo } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { RotateCcw } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
+import SectionDivider from '@/components/SectionDivider';
 import Stepper from '@/components/Stepper';
 import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
 import type { Recipe } from '@apps/pinch/types';
 import { stepCookServings } from '@apps/pinch/utils/cooks';
+import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 export interface CookRow {
@@ -16,9 +20,13 @@ export interface CookRow {
   /** The scaled amount, or for a line with no amount its note ("to taste"), which never scales. */
   amountText: string;
   isMeasured: boolean;
+  /** The heading it sits under in the list, or null. */
+  group: string | null;
+  /** Its group again where it is shown away from its heading (a step), set only when its ingredient is in more than one group. */
+  groupLabel: string | null;
 }
 
-interface CookIngredientRowProps extends CookRow {
+interface CookIngredientRowProps extends Omit<CookRow, 'group' | 'groupLabel'> {
   isInStep: boolean;
   isOut: boolean;
   onToggle: (id: string, isOut: boolean) => void;
@@ -158,28 +166,40 @@ function CookIngredientsView({
                 : `${outCount} of ${rows.length} got out`}
             </p>
             {outCount > 0 && (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-10 px-0!'
-                onClick={onReset}
-              >
-                Reset
-              </Button>
+              <ActionChips
+                actions={[
+                  {
+                    key: 'reset',
+                    icon: <RotateCcw className='h-4 w-4' />,
+                    label: 'Reset',
+                    onClick: onReset,
+                  },
+                ]}
+              />
             )}
           </div>
-          <ul className='divide-border divide-y'>
-            {rows.map((row) => (
-              <CookIngredientRow
-                key={row.id}
-                {...row}
-                isInStep={stepLineIds?.includes(row.id) ?? false}
-                isOut={gotOut[row.id] === true}
-                onToggle={onToggle}
-              />
-            ))}
-          </ul>
+          {groupIngredientLines(rows).map((group) => (
+            <div key={group.key}>
+              {group.name !== null && (
+                <SectionDivider label={group.name} className='pt-3 pb-1' />
+              )}
+              <ul className='divide-border divide-y'>
+                {group.lines.map((row) => (
+                  <CookIngredientRow
+                    key={row.id}
+                    id={row.id}
+                    name={row.name}
+                    note={row.note}
+                    amountText={row.amountText}
+                    isMeasured={row.isMeasured}
+                    isInStep={stepLineIds?.includes(row.id) ?? false}
+                    isOut={gotOut[row.id] === true}
+                    onToggle={onToggle}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
     </div>

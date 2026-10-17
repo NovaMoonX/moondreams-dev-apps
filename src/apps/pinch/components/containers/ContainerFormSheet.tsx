@@ -5,19 +5,24 @@ import {
   Form,
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
-import { Plus } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronLeft, Plus } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
+import SummaryRow from '@/components/SummaryRow';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
+import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ContainerFields from '@apps/pinch/components/containers/ContainerFields';
 import { MAX_CONTAINER_SERVINGS, MAX_NAME_LENGTH } from '@apps/pinch/constants';
 import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
 import { useContainerDraft } from '@apps/pinch/hooks/useContainerDraft';
 import {
+  selectCookSummaries,
   selectMeals,
   selectMealsById,
   selectRecipes,
@@ -29,6 +34,7 @@ import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 const { custom } = FormFactories;
 
 const MAX_RESULTS = 4;
+const MAX_RECENT = 4;
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 
@@ -37,17 +43,52 @@ export type ContainerSubject =
   | { kind: 'meal'; id: string }
   | { kind: 'typed'; name: string };
 
-interface SubjectPickerProps {
-  onPick: (subject: ContainerSubject) => void;
+interface PickRowProps {
+  emoji: string;
+  name: string;
+  note: string;
+  onPick: () => void;
 }
 
-function SubjectPicker({ onPick }: SubjectPickerProps) {
+function PickRow({ emoji, name, note, onPick }: PickRowProps) {
+  return (
+    <li>
+      <Button
+        type='button'
+        variant='tertiary'
+        onClick={onPick}
+        className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-1.5 text-left'
+      >
+        <span
+          className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)] text-xl'
+          aria-hidden='true'
+        >
+          {emoji}
+        </span>
+        <span className='min-w-0 flex-1 truncate font-medium'>{name}</span>
+        <span className='text-muted-foreground text-xs font-normal'>
+          {note}
+        </span>
+      </Button>
+    </li>
+  );
+}
+
+interface SubjectPickerProps {
+  onPick: (subject: ContainerSubject) => void;
+  /** Given when the picker replaced a form that keeps what was typed, so back returns to it. */
+  onBack?: () => void;
+}
+
+function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
   const recipes = useAppSelector(selectRecipes);
   const meals = useAppSelector(selectMeals);
+  const cookSummaries = useAppSelector(selectCookSummaries);
   const [query, setQuery] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
   const isPhone = useMediaQuery().isBelow('sm');
   const trimmed = query.trim();
+  useBackStep(onBack !== undefined, () => onBack?.());
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -80,6 +121,20 @@ function SubjectPicker({ onPick }: SubjectPickerProps) {
     return found;
   }, [recipes, meals, trimmed]);
 
+  const recent = useMemo(
+    () =>
+      recipes
+        .flatMap((recipe) => {
+          const summary = cookSummaries.get(recipe.id);
+          return summary
+            ? [{ recipe, lastCookedAt: summary.lastCookedAt }]
+            : [];
+        })
+        .sort((a, b) => b.lastCookedAt - a.lastCookedAt)
+        .slice(0, MAX_RECENT),
+    [recipes, cookSummaries],
+  );
+
   const shown = matches.slice(0, MAX_RESULTS);
   const hasExactName = matches.some(
     (match) => match.name.trim().toLowerCase() === trimmed.toLowerCase(),
@@ -88,47 +143,64 @@ function SubjectPicker({ onPick }: SubjectPickerProps) {
   return (
     <div
       ref={bodyRef}
-      className='space-y-3'
+      className='grid gap-3'
       onKeyDown={(event) =>
         event.key === 'Enter' &&
         event.target instanceof HTMLInputElement &&
         event.preventDefault()
       }
     >
+      {onBack && (
+        <Button
+          type='button'
+          variant='tertiary'
+          className='h-10 gap-1 justify-self-start px-0!'
+          onClick={onBack}
+        >
+          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
+          Back
+        </Button>
+      )}
       <p className='font-medium'>What are you putting away?</p>
       <SearchInput
         value={query}
         onChange={setQuery}
-        placeholder='Find a recipe or saved meal'
+        placeholder='Find a recipe or meal'
       />
       {trimmed === '' ? (
-        <p className='text-muted-foreground px-1 text-sm'>
-          Pick a recipe or a saved meal, or type a name for anything else.
-        </p>
+        <div className='grid gap-1'>
+          {recent.length > 0 && (
+            <>
+              <p className='text-muted-foreground px-1 text-sm'>
+                Cooked lately
+              </p>
+              <ul className='divide-border divide-y'>
+                {recent.map(({ recipe, lastCookedAt }) => (
+                  <PickRow
+                    key={recipe.id}
+                    emoji='🍲'
+                    name={recipe.title}
+                    note={`Cooked ${formatDateShort(lastCookedAt)}`}
+                    onPick={() => onPick({ kind: 'recipe', id: recipe.id })}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+          <p className='text-muted-foreground px-1 pt-2 text-sm'>
+            Pick a recipe or a saved meal, or type a name for anything else.
+          </p>
+        </div>
       ) : (
         <ul className='divide-border divide-y'>
           {shown.map((match) => (
-            <li key={`${match.kind}-${match.id}`}>
-              <Button
-                type='button'
-                variant='tertiary'
-                onClick={() => onPick({ kind: match.kind, id: match.id })}
-                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
-              >
-                <span
-                  className='flex w-7 shrink-0 justify-center text-xl'
-                  aria-hidden='true'
-                >
-                  {match.kind === 'recipe' ? '🍲' : '🍽️'}
-                </span>
-                <span className='min-w-0 flex-1 truncate font-medium'>
-                  {match.name}
-                </span>
-                <span className='text-muted-foreground text-xs font-normal'>
-                  {match.kind === 'recipe' ? 'Recipe' : 'Saved meal'}
-                </span>
-              </Button>
-            </li>
+            <PickRow
+              key={`${match.kind}-${match.id}`}
+              emoji={match.kind === 'recipe' ? '🍲' : '🍽️'}
+              name={match.name}
+              note={match.kind === 'recipe' ? 'Recipe' : 'Saved meal'}
+              onPick={() => onPick({ kind: match.kind, id: match.id })}
+            />
           ))}
           {matches.length > MAX_RESULTS && (
             <li className='text-muted-foreground py-2 text-sm'>
@@ -244,20 +316,13 @@ function DetailsForm({
 
   return (
     <div className='grid gap-4'>
-      <div className='flex items-start justify-between gap-3'>
-        <p className='min-w-0 text-lg font-medium wrap-break-word'>{title}</p>
-        {isChangeable && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='-mt-1.5 h-10 shrink-0 px-0!'
-            onClick={onChange}
-          >
-            Change
-          </Button>
-        )}
-      </div>
+      <SummaryRow
+        label='Putting away'
+        ariaLabel={`Putting away ${title}. Pick something else`}
+        onClick={isChangeable ? onChange : undefined}
+      >
+        {title}
+      </SummaryRow>
       <Form
         id='pinch-container'
         form={fields}
@@ -312,20 +377,31 @@ function ContainerFormSheet({
   onClose,
 }: ContainerFormSheetProps) {
   const [subject, setSubject] = useState<ContainerSubject | null>(initial);
+  const [isPicking, setIsPicking] = useState(false);
+  const isPickerShown = subject === null || isPicking;
 
   return (
     <FormSheet isOpen onClose={onClose} title='Fridge & freezer'>
-      {subject === null ? (
-        <SubjectPicker onPick={setSubject} />
-      ) : (
-        <DetailsForm
-          key={`${subject.kind}-${subject.kind === 'typed' ? subject.name : subject.id}`}
-          uid={uid}
-          subject={subject}
-          isChangeable={initial === null}
-          onChange={() => setSubject(null)}
-          onClose={onClose}
+      {isPickerShown && (
+        <SubjectPicker
+          onPick={(next) => {
+            setSubject(next);
+            setIsPicking(false);
+          }}
+          onBack={subject === null ? undefined : () => setIsPicking(false)}
         />
+      )}
+      {subject !== null && (
+        <div className={join(isPickerShown && 'hidden')}>
+          <DetailsForm
+            key={`${subject.kind}-${subject.kind === 'typed' ? subject.name : subject.id}`}
+            uid={uid}
+            subject={subject}
+            isChangeable={initial === null}
+            onChange={() => setIsPicking(true)}
+            onClose={onClose}
+          />
+        </div>
       )}
     </FormSheet>
   );
