@@ -256,10 +256,13 @@ function DayDrawer({
           footerEl={footerEl}
         />
       ) : isStatsView ? (
-        <div ref={statsViewNode} className='space-y-5'>
+        <div
+          ref={statsViewNode}
+          className='space-y-5 [@media(max-height:600px)]:space-y-3'
+        >
           <div className='space-y-1'>
             <BackLink onBack={closeStats} />
-            <h3 className='text-lg font-semibold [@media(max-height:500px)]:sr-only'>
+            <h3 className='text-lg font-semibold [@media(max-height:600px)]:sr-only'>
               Stats for this day
             </h3>
           </div>
