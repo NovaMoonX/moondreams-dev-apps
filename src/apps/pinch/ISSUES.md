@@ -375,7 +375,7 @@ A planned meal can hold any mix of recipes and ingredients, each with its own se
 
 ### Possible Approach
 1. `mealMath.ts`: item cost (`servings ×` recipe per-serving cost, or an ingredient's per-serving cost through its serving size, default 100 g for a custom ingredient) and planned-meal totals with `leftOut`.
-2. `MealBuilder`: day and type pills with "Change", the item search (recipes, ingredients, and later saved meals) with kind labels, per-row steppers and remove controls, a cost line with the `GapNudge`, footer `Cancel` / `Add to Tuesday` (or `Save` when editing).
+2. `MealBuilder`: day and type pills with "Change" (round 7: a framed "When" row that opens the day and meal editor, the header "Plan a meal"), the item search (recipes, ingredients, and later saved meals) with kind labels, per-row steppers and remove controls, a cost line with the `GapNudge`, footer `Cancel` / `Add to Tuesday` (or `Save` when editing).
 3. `updatePlannedMeal`: a field-scoped `updateDoc` of `date`, `mealType`, `items`, `refIds`, `name`. Modify in the planned meal view closes the drawer and opens the subview.
 4. Add an optional serving-size chip to the ingredient form (so a Doritos item can say what "1 serving" is).
 
@@ -411,7 +411,7 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 ### Possible Approach
 1. `Meal` slice and listener; `saveMeal` / `removeMeal`; `planMeal` accepts `sourceMealId` and `name` and copies items with new row ids.
 2. Meals pill in Recipes: `MealRow`s, `MealDrawer` (items, servings, total cost with nudge, "Plan it" primary that closes the drawer and opens Plan a meal on a chosen day, Modify / Copy / Delete in the muted block); `MealSubview` is the same builder without a day.
-3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected) and saved meals in the one search. "Save to Saved meals" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
+3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected; round 7: roomy rows with their facts and stock that stay after the first pick) and saved meals in the one search. "Save to Saved meals" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
 4. Rules for `meals` (≤ 30 items, shape); seed a few meals and a planned meal copied from one.
 
 ### CRUD & Entry-Point Requirements

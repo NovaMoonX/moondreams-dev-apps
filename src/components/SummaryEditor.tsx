@@ -40,7 +40,7 @@ function EditorBody({ focusDelay, onDone, children }: EditorBodyProps) {
         HTMLInputElement | HTMLTextAreaElement
       >('input, textarea');
       field?.focus();
-      if (field && field.type !== 'number') {
+      if (field && field.selectionStart !== null) {
         field.setSelectionRange(field.value.length, field.value.length);
       }
     }, focusDelay);
@@ -75,6 +75,10 @@ interface SummaryEditorProps {
   lines?: 1 | 2;
   /** Opens by itself once, for the one question a blank record starts with. */
   defaultOpen?: boolean;
+  /** A roomy row in a hairline card, for a screen whose first row is what it acts on; the row's icon chip goes with it. */
+  isFramed?: boolean;
+  /** An emoji or icon in a round chip before the text; only shown on a framed row. */
+  icon?: ReactNode;
   /** The editor: its first field is focused when it opens, and Enter in a one-line field closes it. */
   children: ReactNode;
 }
@@ -88,6 +92,8 @@ function SummaryEditor({
   title,
   lines = 1,
   defaultOpen = false,
+  isFramed = false,
+  icon,
   children,
 }: SummaryEditorProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -108,9 +114,27 @@ function SummaryEditor({
       aria-haspopup='dialog'
       aria-expanded={isOpen}
       onClick={() => setIsOpen((open) => !open)}
-      className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+      className={join(
+        'h-auto w-full items-start justify-start gap-3 text-left',
+        isFramed
+          ? 'border-border hover:bg-muted text-foreground! min-h-16 rounded-2xl border px-3! py-2'
+          : 'min-h-11 px-0! py-2',
+      )}
     >
-      <span className='min-w-0 flex-1'>
+      {isFramed && icon !== undefined && (
+        <span
+          className='bg-accent text-accent-foreground mt-0.5 grid size-10 shrink-0 place-items-center rounded-full text-lg leading-none [&_svg]:size-5'
+          aria-hidden='true'
+        >
+          {icon}
+        </span>
+      )}
+      <span
+        className={join(
+          'min-w-0 flex-1',
+          isFramed && 'flex min-h-11 flex-col justify-center',
+        )}
+      >
         <span className='text-muted-foreground block text-xs font-normal'>
           {label}
         </span>
@@ -130,7 +154,10 @@ function SummaryEditor({
         )}
       </span>
       <ChevronRight
-        className='text-muted-foreground mt-2.5 h-5 w-5 shrink-0'
+        className={join(
+          'text-muted-foreground shrink-0',
+          isFramed ? 'mt-3 -ml-1 size-5' : 'mt-2.5 h-5 w-5',
+        )}
         aria-hidden='true'
       />
     </Button>

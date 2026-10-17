@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -34,8 +34,9 @@ interface ItemSearchProps {
   onPickRecipe?: (recipeId: string) => void;
   /** When given, the person's saved meals are searched too and picking one calls this instead. */
   onPickMeal?: (mealId: string) => void;
-  /** Shown under the field while nothing is typed. */
-  idle?: ReactNode;
+  /** The typed text, when the caller shows something else only while nothing is typed; leave out to let the field keep it. */
+  query?: string;
+  onQueryChange?: (query: string) => void;
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
   autoFocus?: boolean;
@@ -50,7 +51,8 @@ function ItemSearch({
   onPick,
   onPickRecipe,
   onPickMeal,
-  idle,
+  query: controlledQuery,
+  onQueryChange,
   excludeIds = [],
   autoFocus = false,
   resultsClassName,
@@ -62,7 +64,9 @@ function ItemSearch({
   const meals = useAppSelector(selectMeals);
   const isPhone = useMediaQuery().isBelow('sm');
   const stockByRecipe = useAppSelector(selectStockByRecipe);
-  const [query, setQuery] = useState('');
+  const [ownQuery, setOwnQuery] = useState('');
+  const query = controlledQuery ?? ownQuery;
+  const setQuery = onQueryChange ?? setOwnQuery;
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -111,6 +115,20 @@ function ItemSearch({
     (ingredient) =>
       ingredient.name.trim().toLowerCase() === trimmed.toLowerCase(),
   );
+
+  const canCreate = !hasExactName && trimmed.length <= MAX_NAME_LENGTH;
+  const hasResults =
+    mealMatches.length + recipeMatches.length + matches.length > 0;
+  const getNoMatchLine = () => {
+    if (hasResults) return null;
+    if (canCreate) {
+      return `Nothing called “${trimmed}” yet. You can add it as a new ingredient.`;
+    }
+    return hasExactName
+      ? `“${trimmed}” is already added.`
+      : `Keep the name to ${MAX_NAME_LENGTH} characters or fewer.`;
+  };
+  const noMatchLine = getNoMatchLine();
 
   const createFromName = async () => {
     setError(null);
@@ -166,109 +184,114 @@ function ItemSearch({
           placeholder={getPlaceholder()}
         />
       </div>
-      {trimmed === '' ? (
-        idle
-      ) : (
-        <ul className={join('divide-border divide-y', resultsClassName)}>
-          {mealMatches.map((meal) => (
-            <li key={meal.id}>
-              <Button
-                type='button'
-                variant='tertiary'
-                disabled={isDisabled}
-                onClick={() => {
-                  setQuery('');
-                  onPickMeal?.(meal.id);
-                }}
-                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
-              >
-                <span
-                  className='flex w-7 shrink-0 justify-center text-xl'
-                  aria-hidden='true'
-                >
-                  🍽️
-                </span>
-                <span className='min-w-0 flex-1 truncate font-medium'>
-                  {meal.name}
-                </span>
-                <span className='text-muted-foreground shrink-0 text-xs font-normal whitespace-nowrap'>
-                  Saved meal
-                </span>
-              </Button>
-            </li>
-          ))}
-          {recipeMatches.map((recipe) => (
-            <li key={recipe.id}>
-              <Button
-                type='button'
-                variant='tertiary'
-                disabled={isDisabled}
-                onClick={() => {
-                  setQuery('');
-                  onPickRecipe?.(recipe.id);
-                }}
-                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
-              >
-                <span
-                  className='flex w-7 shrink-0 justify-center text-xl'
-                  aria-hidden='true'
-                >
-                  🍲
-                </span>
-                <span className='min-w-0 flex-1'>
-                  <span className='block truncate font-medium'>
-                    {recipe.title}
-                  </span>
-                  <StockLine summary={stockByRecipe.get(recipe.id)} />
-                </span>
-                <span className='text-muted-foreground text-xs font-normal'>
-                  Recipe
-                </span>
-              </Button>
-            </li>
-          ))}
-          {matches.map((ingredient) => (
-            <li key={ingredient.id}>
-              <Button
-                type='button'
-                variant='tertiary'
-                disabled={isDisabled}
-                onClick={() => {
-                  setQuery('');
-                  onPick(ingredient.id);
-                }}
-                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
-              >
-                <span className='min-w-0 flex-1 truncate font-medium'>
-                  {ingredient.name}
-                </span>
-                {onPickRecipe && (
-                  <span className='text-muted-foreground text-xs font-normal'>
-                    Ingredient
-                  </span>
-                )}
-              </Button>
-            </li>
-          ))}
-          {!hasExactName && trimmed.length <= MAX_NAME_LENGTH && (
-            <li>
-              <Button
-                type='button'
-                variant='tertiary'
-                disabled={isCreating || isDisabled}
-                onClick={() => void createFromName()}
-                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
-              >
-                <span className='bg-secondary text-secondary-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-full'>
-                  <Plus className='h-4 w-4' aria-hidden='true' />
-                </span>
-                <span className='min-w-0 flex-1 truncate font-medium'>
-                  New ingredient “{trimmed}”
-                </span>
-              </Button>
-            </li>
+      {trimmed !== '' && (
+        <div className='border-border overflow-hidden rounded-2xl border'>
+          {noMatchLine && (
+            <p className='text-muted-foreground border-border border-b px-4 py-3 text-sm last:border-b-0'>
+              {noMatchLine}
+            </p>
           )}
-        </ul>
+          <ul className={join('divide-border divide-y', resultsClassName)}>
+            {mealMatches.map((meal) => (
+              <li key={meal.id}>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  disabled={isDisabled}
+                  onClick={() => {
+                    setQuery('');
+                    onPickMeal?.(meal.id);
+                  }}
+                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
+                >
+                  <span
+                    className='flex w-7 shrink-0 justify-center text-xl'
+                    aria-hidden='true'
+                  >
+                    🍽️
+                  </span>
+                  <span className='min-w-0 flex-1 truncate font-medium'>
+                    {meal.name}
+                  </span>
+                  <span className='text-muted-foreground shrink-0 text-xs font-normal whitespace-nowrap'>
+                    Saved meal
+                  </span>
+                </Button>
+              </li>
+            ))}
+            {recipeMatches.map((recipe) => (
+              <li key={recipe.id}>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  disabled={isDisabled}
+                  onClick={() => {
+                    setQuery('');
+                    onPickRecipe?.(recipe.id);
+                  }}
+                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
+                >
+                  <span
+                    className='flex w-7 shrink-0 justify-center text-xl'
+                    aria-hidden='true'
+                  >
+                    🍲
+                  </span>
+                  <span className='min-w-0 flex-1'>
+                    <span className='block truncate font-medium'>
+                      {recipe.title}
+                    </span>
+                    <StockLine summary={stockByRecipe.get(recipe.id)} />
+                  </span>
+                  <span className='text-muted-foreground text-xs font-normal'>
+                    Recipe
+                  </span>
+                </Button>
+              </li>
+            ))}
+            {matches.map((ingredient) => (
+              <li key={ingredient.id}>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  disabled={isDisabled}
+                  onClick={() => {
+                    setQuery('');
+                    onPick(ingredient.id);
+                  }}
+                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
+                >
+                  <span className='min-w-0 flex-1 truncate font-medium'>
+                    {ingredient.name}
+                  </span>
+                  {onPickRecipe && (
+                    <span className='text-muted-foreground text-xs font-normal'>
+                      Ingredient
+                    </span>
+                  )}
+                </Button>
+              </li>
+            ))}
+            {canCreate && (
+              <li>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  disabled={isCreating || isDisabled}
+                  onClick={() => void createFromName()}
+                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
+                >
+                  <span className='bg-secondary text-secondary-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-full'>
+                    <Plus className='h-4 w-4' aria-hidden='true' />
+                  </span>
+                  <span className='min-w-0 flex-1 truncate font-medium'>
+                    New ingredient “{trimmed}”
+                  </span>
+                </Button>
+              </li>
+            )}
+          </ul>
+        </div>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
     </div>
