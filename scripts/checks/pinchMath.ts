@@ -112,6 +112,7 @@ import {
   planClear,
   planClearOut,
   getClearOutMessage,
+  getFinishedDoor,
   getPutBackText,
   getEventText,
 } from '../../src/apps/pinch/utils/containers.ts';
@@ -3216,6 +3217,35 @@ assert.deepEqual(
     'Put back 7 of 9; the rest changed since',
   ],
   'a clear-out says what it takes out of which place and what it keeps, and the Undo says how many came back',
+);
+
+const doorOf = (overrides: Partial<Parameters<typeof getFinishedDoor>[0]>) =>
+  getFinishedDoor({
+    isListShown: true,
+    isScoped: false,
+    hasStockInScope: true,
+    finishedCount: 0,
+    isRead: true,
+    ...overrides,
+  });
+assert.deepEqual(
+  [
+    doorOf({ finishedCount: 3 }),
+    doorOf({ finishedCount: 0, isRead: true }),
+    doorOf({ finishedCount: 0, isRead: false }),
+    doorOf({ finishedCount: 3, isListShown: false }),
+  ],
+  ['SHOW', 'HIDE', 'HOLD', 'HIDE'],
+  'the door to What you finished shows only once something is finished, holds its place while the read lands, and is not drawn when the read found nothing or the list is not shown',
+);
+assert.deepEqual(
+  [
+    doorOf({ isScoped: true, hasStockInScope: true, isRead: false }),
+    doorOf({ isScoped: true, hasStockInScope: false, isRead: false }),
+    doorOf({ isScoped: true, hasStockInScope: false, isRead: true }),
+  ],
+  ['SHOW', 'HOLD', 'HIDE'],
+  'a recipe or meal scope with boxes in stock shows the door without reading its (up to 200) containers, and one with nothing in stock waits for the read',
 );
 
 const toFreezer = planOf(planMove(container(), 'FREEZER', dayOf(20), 6000));

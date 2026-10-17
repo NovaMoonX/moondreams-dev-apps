@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { RotateCcw } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import DetailSheet from '@/components/DetailSheet';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import HelpTip from '@/components/HelpTip';
@@ -125,15 +127,16 @@ function NutritionReview({
   );
 
   const resetButton = isEdited && (
-    <Button
-      type='button'
-      variant='link'
-      size='sm'
-      className='h-10 justify-start px-0!'
-      onClick={reset}
-    >
-      Reset to what we calculated
-    </Button>
+    <ActionChips
+      actions={[
+        {
+          key: 'reset',
+          icon: <RotateCcw className='h-4 w-4' />,
+          label: 'Reset to what we calculated',
+          onClick: reset,
+        },
+      ]}
+    />
   );
 
   if (shownCells.length === 0) {
