@@ -515,20 +515,21 @@ export function ShoppingPick({
                   : undefined
               }
             >
-              {span.startKey > span.endKey ? (
-                'These days have passed'
-              ) : (
-                <SpanText {...span} />
-              )}
-              {isPlanLoaded && span.startKey <= span.endKey && (
-                <span className='text-muted-foreground text-sm'>
-                  {' · '}
-                  <span className='whitespace-nowrap'>
+              <span className='flex flex-wrap items-baseline gap-x-2'>
+                <span>
+                  {span.startKey > span.endKey ? (
+                    'These days have passed'
+                  ) : (
+                    <SpanText {...span} />
+                  )}
+                </span>
+                {isPlanLoaded && span.startKey <= span.endKey && (
+                  <span className='text-muted-foreground text-sm whitespace-nowrap'>
                     {formatMealCount(span.meals.length)}
                     {span.isClamped && ' from today on'}
                   </span>
-                </span>
-              )}
+                )}
+              </span>
             </SummaryRow>
           ) : (
             <p className='text-lg font-medium wrap-break-word'>{label}</p>
