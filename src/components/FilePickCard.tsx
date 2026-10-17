@@ -2,6 +2,7 @@ import { useState, type DragEvent, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Upload } from 'lucide-react';
 
 import { formatFileSize } from '@/utils/fileUtils';
 
@@ -12,10 +13,12 @@ export interface PickedFile {
 }
 
 interface FilePickCardProps {
-  /** What can be chosen, in the person's words ("A photo, screenshot or PDF"). */
+  /** The slot's one action, in the person's words ("Tap to choose a file"). */
+  title: string;
+  /** What can be chosen, in the person's words ("Photo, screenshot or PDF"). */
   accepts: string;
+  /** The size limit, joined to what can be chosen on one line ("up to 10 MB"). */
   limit: string;
-  emoji: string;
   picked: PickedFile | null;
   /** A line under the slot or the picked file: a tip, what is happening to it, or why it failed. */
   status: ReactNode;
@@ -27,9 +30,9 @@ interface FilePickCardProps {
 
 /** A place to choose or drop one file: an empty slot that says what it takes, then the file with its size once there is one. */
 function FilePickCard({
+  title,
   accepts,
   limit,
-  emoji,
   picked,
   status,
   isDisabled = false,
@@ -90,14 +93,14 @@ function FilePickCard({
           className='h-auto min-h-40 w-full flex-col gap-2 rounded-2xl px-4! py-6 text-center font-normal whitespace-normal'
         >
           <span
-            className='bg-accent grid size-12 place-items-center rounded-xl text-2xl leading-none'
+            className='bg-accent text-foreground grid size-12 place-items-center rounded-xl'
             aria-hidden='true'
           >
-            {emoji}
+            <Upload className='h-6 w-6' />
           </span>
-          <span className='text-foreground text-sm font-medium'>{accepts}</span>
+          <span className='text-foreground text-sm font-medium'>{title}</span>
           <span className='text-muted-foreground text-xs'>
-            {limit}
+            {accepts} · {limit}
             <span className='max-sm:hidden'> · or drop it here</span>
           </span>
         </Button>
