@@ -541,6 +541,8 @@ export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({
   emoji: CONTAINER_PLACE_EMOJIS[place],
 }));
 export const CONTAINER_EMOJI = '🍱';
+export const CONTAINER_FINISH_EMOJIS: Record<'EAT' | 'TOSS' | 'CLEAR', string> =
+  { EAT: '🍽️', TOSS: '🗑️', CLEAR: '🧹' };
 export const CONTAINER_EVENT_KINDS: ContainerEventKind[] = [
   'MADE',
   'FRIDGE',

@@ -3,17 +3,36 @@ import { useMemo, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Pencil } from 'lucide-react';
 
+import IntroCard from '@/components/IntroCard';
 import SearchInput from '@/components/SearchInput';
-import SectionHeader from '@/components/SectionHeader';
 import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
 import SourceFormSheet from '@apps/pinch/components/recipes/SourceFormSheet';
 import { LIST_SEARCH_THRESHOLD } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { announceSourceShown } from '@apps/pinch/hooks/useSourceShown';
-import { selectSourceCounts, selectSources } from '@apps/pinch/store/selectors';
+import {
+  selectRecipes,
+  selectSourceCounts,
+  selectSources,
+  selectSourcesById,
+} from '@apps/pinch/store/selectors';
 import type { Source } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
+import { getRecipeSource } from '@apps/pinch/utils/sources';
+
+const TITLES_SHOWN = 2;
+
+const getRecipesLine = (count: number, titles: string[]) => {
+  if (count === 0) return 'Not on any recipe';
+  const noun = count === 1 ? 'recipe' : 'recipes';
+  const rest = count - TITLES_SHOWN;
+  const names =
+    rest > 0
+      ? `${titles.slice(0, TITLES_SHOWN).join(', ')} and ${rest} more`
+      : titles.join(', ');
+  return `${count} ${noun} · ${names}`;
+};
 
 interface SourcesSubviewProps {
   uid: string;
@@ -24,6 +43,8 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const sources = useAppSelector(selectSources);
   const counts = useAppSelector(selectSourceCounts).bySource;
+  const recipes = useAppSelector(selectRecipes);
+  const sourcesById = useAppSelector(selectSourcesById);
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -35,6 +56,16 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
       ).map(({ source }) => source),
     [sources, query],
   );
+  const titlesBySource = useMemo(
+    () =>
+      recipes.reduce((acc, recipe) => {
+        const source = getRecipeSource(recipe, sourcesById);
+        return source
+          ? acc.set(source.id, [...(acc.get(source.id) ?? []), recipe.title])
+          : acc;
+      }, new Map<string, string[]>()),
+    [recipes, sourcesById],
+  );
   const editing = sources.find((source) => source.id === editingId) ?? null;
 
   const showRecipes = (source: Source) => {
@@ -45,14 +76,11 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
   return (
     <Subview title='Sources' onClose={closeSubview}>
       <div className='space-y-4'>
-        <SectionHeader
-          title='Sources'
-          subtitle={
-            sources.length === 0
-              ? undefined
-              : `${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`
-          }
-        />
+        {sources.length > 0 && sources.length < LIST_SEARCH_THRESHOLD && (
+          <IntroCard icon='📚' lead='Where your recipes come from.'>
+            Rename one and every recipe from it follows.
+          </IntroCard>
+        )}
         {sources.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
@@ -85,10 +113,11 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
                     <span className='text-foreground block font-medium wrap-break-word'>
                       {source.label}
                     </span>
-                    <span className='text-muted-foreground block text-xs font-normal'>
-                      {count === 0
-                        ? 'Not on any recipe'
-                        : `${count} ${count === 1 ? 'recipe' : 'recipes'}`}
+                    <span className='text-muted-foreground block truncate text-xs font-normal'>
+                      {getRecipesLine(
+                        count,
+                        titlesBySource.get(source.id) ?? [],
+                      )}
                     </span>
                   </span>
                 </>
