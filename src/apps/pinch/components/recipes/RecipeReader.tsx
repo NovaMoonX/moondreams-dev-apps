@@ -343,7 +343,7 @@ function RecipeReader({
     if (!canPasteText) {
       return 'The address saved with your idea.';
     }
-    return "Copy the address from your browser's address bar.";
+    return 'Copy the address from your browser.';
   };
 
   const getChips = (): ActionChip[] => {
@@ -417,7 +417,7 @@ function RecipeReader({
             id: 'paste-text',
             emoji: getMethodEmoji('text'),
             title: 'Paste its text instead',
-            description: 'Copy the recipe from the page',
+            description: 'Copy it from the page',
             isQuiet: true,
             onPick: onPasteText,
           },
