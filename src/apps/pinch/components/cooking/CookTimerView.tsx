@@ -249,7 +249,7 @@ function CookTimerView({
                     type='button'
                     variant='secondary'
                     size='sm'
-                    className="relative h-7 gap-1.5 rounded-full px-3 text-sm after:absolute after:-inset-1 after:content-['']"
+                    className="relative h-7 gap-1.5 rounded-full px-3 text-sm after:absolute after:-inset-1.5 after:content-['']"
                     aria-label={`Reset the ${timer.label} timer`}
                     onClick={() => onReset(timer.id)}
                   >

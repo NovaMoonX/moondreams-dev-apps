@@ -57,10 +57,10 @@ function PickRow({ emoji, name, note, onPick }: PickRowProps) {
         type='button'
         variant='tertiary'
         onClick={onPick}
-        className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
+        className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-1.5 text-left'
       >
         <span
-          className='flex w-7 shrink-0 justify-center text-xl'
+          className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)] text-xl'
           aria-hidden='true'
         >
           {emoji}
@@ -165,7 +165,7 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
       <SearchInput
         value={query}
         onChange={setQuery}
-        placeholder='Find a recipe or saved meal'
+        placeholder='Find a recipe or meal'
       />
       {trimmed === '' ? (
         <div className='grid gap-1'>
