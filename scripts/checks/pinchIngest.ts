@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { normalizeExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
+import { formatFileSize } from '../../src/utils/fileUtils.ts';
 import type { IngredientRecord } from '../../src/apps/pinch/types.ts';
 import { matchIngredient } from '../../src/apps/pinch/utils/ingredientMatch.ts';
 import { resolveIngredients } from '../../src/apps/pinch/utils/resolveIngredient.ts';
@@ -287,6 +288,13 @@ assert.deepEqual(
     ['scallions', 2, 'Garnish Garnish Garnish Garnish Garnish'],
   ],
   'a heading loses its colon, markdown and extra spaces; the same ingredient under two headings stays two lines; a split line keeps its heading; no heading, the "Ingredients" title or a heading that is not text is no group; a long one is cut to 40 characters',
+);
+
+// a picked file's size is said in the units a person reads, with no "0 KB" and no "1024 KB" at the edge
+assert.deepEqual(
+  [300, 1536, 1_048_575, 2_400_000, 10 * 1024 * 1024].map(formatFileSize),
+  ['1 KB', '2 KB', '1.0 MB', '2.3 MB', '10.0 MB'],
+  'a file with something in it is never 0 KB, a size just under a megabyte rolls over to MB instead of reading 1024 KB, and megabytes carry one decimal',
 );
 
 console.log('pinchIngest: all checks passed');
