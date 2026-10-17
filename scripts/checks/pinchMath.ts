@@ -118,6 +118,7 @@ import {
   planClearOut,
   getClearOutMessage,
   getFinishedDoor,
+  getFinishedRead,
   getPutBackText,
   getEventText,
 } from '../../src/apps/pinch/utils/containers.ts';
@@ -3224,33 +3225,63 @@ assert.deepEqual(
   'a clear-out says what it takes out of which place and what it keeps, and the Undo says how many came back',
 );
 
+assert.deepEqual(
+  [
+    getFinishedRead(true, false),
+    getFinishedRead(true, true),
+    getFinishedRead(false, true),
+    getFinishedRead(false, false),
+  ],
+  ['FAILED', 'FAILED', 'LOADED', 'LOADING'],
+  'a finished read that errored is failed even while an earlier answer is held, and no answer yet is loading rather than empty',
+);
 const doorOf = (overrides: Partial<Parameters<typeof getFinishedDoor>[0]>) =>
   getFinishedDoor({
     isListShown: true,
     isScoped: false,
     hasStockInScope: true,
     finishedCount: 0,
-    isRead: true,
+    read: 'LOADED',
+    expectsDoor: false,
     ...overrides,
   });
 assert.deepEqual(
   [
     doorOf({ finishedCount: 3 }),
-    doorOf({ finishedCount: 0, isRead: true }),
-    doorOf({ finishedCount: 0, isRead: false }),
+    doorOf({ finishedCount: 0, read: 'LOADED' }),
+    doorOf({ finishedCount: 0, read: 'LOADED', expectsDoor: true }),
     doorOf({ finishedCount: 3, isListShown: false }),
   ],
-  ['SHOW', 'HIDE', 'HOLD', 'HIDE'],
-  'the door to What you finished shows only once something is finished, holds its place while the read lands, and is not drawn when the read found nothing or the list is not shown',
+  ['SHOW', 'HIDE', 'HIDE', 'HIDE'],
+  'the door to What you finished shows once something is finished, and is not drawn when a landed read found nothing (whatever was expected) or the list is not shown',
 );
 assert.deepEqual(
   [
-    doorOf({ isScoped: true, hasStockInScope: true, isRead: false }),
-    doorOf({ isScoped: true, hasStockInScope: false, isRead: false }),
-    doorOf({ isScoped: true, hasStockInScope: false, isRead: true }),
+    doorOf({ read: 'LOADING', expectsDoor: false }),
+    doorOf({ read: 'LOADING', expectsDoor: true }),
+    doorOf({ read: 'LOADING', expectsDoor: true, isListShown: false }),
   ],
-  ['SHOW', 'HOLD', 'HIDE'],
-  'a recipe or meal scope with boxes in stock shows the door without reading its (up to 200) containers, and one with nothing in stock waits for the read',
+  ['HIDE', 'HOLD', 'HIDE'],
+  'while the read lands the door keeps its place only when something says boxes are finished, so a first-weeks list never has a gap that closes',
+);
+assert.deepEqual(
+  [
+    doorOf({ read: 'FAILED' }),
+    doorOf({ read: 'FAILED', expectsDoor: true }),
+    doorOf({ read: 'FAILED', isScoped: true, hasStockInScope: false }),
+    doorOf({ read: 'FAILED', isListShown: false }),
+  ],
+  ['SHOW', 'SHOW', 'SHOW', 'HIDE'],
+  'a read that failed (offline with a cold cache, a missing index) still draws the door, so the view it opens can say it could not load instead of the door vanishing as if nothing were finished',
+);
+assert.deepEqual(
+  [
+    doorOf({ isScoped: true, hasStockInScope: true, read: 'LOADING' }),
+    doorOf({ isScoped: true, hasStockInScope: false, read: 'LOADING' }),
+    doorOf({ isScoped: true, hasStockInScope: false, read: 'LOADED' }),
+  ],
+  ['SHOW', 'HIDE', 'HIDE'],
+  'a recipe or meal scope with boxes in stock shows the door without reading its (up to 200) containers, and one with nothing in stock draws it only once its read has found something',
 );
 
 const toFreezer = planOf(planMove(container(), 'FREEZER', dayOf(20), 6000));

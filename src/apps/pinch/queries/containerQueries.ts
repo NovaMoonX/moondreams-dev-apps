@@ -1,4 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
+import { FirebaseError } from 'firebase/app';
 import {
   collection,
   getDocs,
@@ -27,7 +28,12 @@ const containersOf = (uid: string) =>
 export class OfflineEmptyReadError extends Error {}
 
 const readContainers = async (source: Parameters<typeof getDocs>[0]) => {
-  const snapshot = await getDocs(source);
+  const snapshot = await getDocs(source).catch((error: unknown) => {
+    if (!(error instanceof FirebaseError && error.code === 'unavailable')) {
+      console.error('Pinch containers read failed', error);
+    }
+    throw error;
+  });
   if (snapshot.empty && snapshot.metadata.fromCache) {
     throw new OfflineEmptyReadError("Couldn't reach the server.");
   }
@@ -37,19 +43,41 @@ const readContainers = async (source: Parameters<typeof getDocs>[0]) => {
   return containers;
 };
 
+const getFinishedHintKey = (uid: string) => `pinch:${uid}:has-finished`;
+
+/** Whether this device last saw finished boxes, so the door to them keeps its place while the read lands; a wrong guess only moves the list once. */
+export const hasSeenFinished = (uid: string) => {
+  try {
+    return localStorage.getItem(getFinishedHintKey(uid)) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const rememberFinished = (uid: string, hasAny: boolean) => {
+  try {
+    localStorage.setItem(getFinishedHintKey(uid), String(hasAny));
+  } catch {
+    // Only the held place is lost.
+  }
+};
+
 /** Read on demand rather than listened to: finished containers only pile up. */
 export const finishedContainersQueryOptions = (uid: string, count: number) =>
   queryOptions({
     queryKey: containerKeys.finished(uid, count),
-    queryFn: () =>
-      readContainers(
+    queryFn: async () => {
+      const containers = await readContainers(
         query(
           containersOf(uid),
           where('status', '==', 'DONE'),
           orderBy('updatedAt', 'desc'),
           limit(count),
         ),
-      ),
+      );
+      rememberFinished(uid, containers.length > 0);
+      return containers;
+    },
     staleTime: 30_000,
     retry: false,
   });

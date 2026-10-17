@@ -14,6 +14,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
 import SummaryRow from '@/components/SummaryRow';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
   toDateInputValue,
@@ -130,7 +131,7 @@ export function ShoppingPick({
   uid,
   request,
   onClose,
-  columnClassName = 'max-h-[max(12rem,calc(92dvh-22rem))]',
+  columnClassName = 'max-h-[max(22rem,calc(92dvh-22rem))]',
   hasViewAction = true,
 }: ShoppingPickProps) {
   const dispatch = useAppDispatch();
@@ -161,6 +162,7 @@ export function ShoppingPick({
       : { startKey: todayKey, endKey: addDaysToKey(todayKey, NEXT_DAYS - 1) },
   );
   const [draft, setDraft] = useState<DraftRange | null>(null);
+  useBackStep(draft !== null, () => setDraft(null));
   const [choices, setChoices] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -499,7 +501,12 @@ export function ShoppingPick({
 
   return (
     <div className='grid gap-4'>
-      <div className={join('flex flex-col gap-3', columnClassName)}>
+      <div
+        className={join(
+          'flex flex-col gap-3 [@media(max-height:500px)]:max-h-none',
+          columnClassName,
+        )}
+      >
         <div className='shrink-0 space-y-3'>
           {isRange ? (
             <SummaryRow
@@ -534,13 +541,6 @@ export function ShoppingPick({
           ) : (
             <p className='text-lg font-medium wrap-break-word'>{label}</p>
           )}
-          {rows.length > 0 && (
-            <p className='text-muted-foreground text-sm'>
-              {startsTicked
-                ? 'Untick what you already have.'
-                : 'Tick what you need.'}
-            </p>
-          )}
           {recipe && (
             <div className='flex flex-wrap items-center gap-3'>
               <span className='text-sm'>For</span>
@@ -555,14 +555,24 @@ export function ShoppingPick({
             </div>
           )}
           {stockLine && (
-            <p className='text-muted-foreground text-sm'>{stockLine}</p>
+            <p className='text-muted-foreground text-sm [@media(max-height:500px)]:hidden'>
+              {stockLine}
+            </p>
           )}
           {rows.length > 0 && (
             <div className='flex items-center justify-between gap-3'>
-              <p className='text-muted-foreground text-sm'>
-                Adding {selected.length} of {rows.length}
-              </p>
+              <div className='text-muted-foreground min-w-0 text-sm'>
+                <p>
+                  Adding {selected.length} of {rows.length}
+                </p>
+                <p className='text-xs'>
+                  {startsTicked
+                    ? 'Untick what you already have.'
+                    : 'Tick what you need.'}
+                </p>
+              </div>
               <ActionChips
+                className='shrink-0'
                 actions={[
                   {
                     key: 'tick-all',
@@ -590,7 +600,7 @@ export function ShoppingPick({
             {getEmptyText()}
           </p>
         ) : (
-          <ul className='divide-border flex-1 divide-y overflow-y-auto [@media(max-height:800px)]:min-h-36'>
+          <ul className='divide-border flex-1 divide-y overflow-y-auto [@media(max-height:500px)]:overflow-visible [@media(max-height:800px)]:min-h-36'>
             {shownRows.map((row) => {
               const state = getState(row);
               const hint = getOnListHint(
