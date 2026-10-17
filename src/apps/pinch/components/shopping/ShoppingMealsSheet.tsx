@@ -11,7 +11,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
-import { LIST_SEARCH_THRESHOLD } from '@apps/pinch/constants';
+import { LIST_SEARCH_THRESHOLD, MEAL_TYPE_EMOJIS } from '@apps/pinch/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   stopShoppingFor,
@@ -37,6 +37,13 @@ const ROWS_SHOWN = 40;
 const undone = new Set<string>();
 
 const KIND_WORDS = { recipe: 'Recipe', meal: 'Saved meal' } as const;
+
+const getEmoji = ({ label }: ShoppingMeal) => {
+  if (label.kind === 'planned') {
+    return label.mealType ? MEAL_TYPE_EMOJIS[label.mealType] : '🍽️';
+  }
+  return label.kind === 'recipe' ? '🍲' : '🍽️';
+};
 
 const getProgress = ({ openCount, rowCount }: ShoppingMeal) => {
   if (openCount === 0) return 'Got everything';
@@ -275,6 +282,12 @@ function ShoppingMealsSheet({
                   key={meal.source}
                   className='flex min-h-14 items-start gap-3 py-2.5'
                 >
+                  <span
+                    className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)]'
+                    aria-hidden='true'
+                  >
+                    {getEmoji(meal)}
+                  </span>
                   <div className='min-w-0 flex-1'>
                     <p
                       className={join(
