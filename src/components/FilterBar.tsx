@@ -4,6 +4,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { SlidersHorizontal, X } from 'lucide-react';
 
+import LabelChip from '@/components/LabelChip';
 import SearchInput from '@/components/SearchInput';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -197,19 +198,14 @@ function FilterBar({
         <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
           {leading}
           {activeFilters.map((filter) => (
-            <Button
+            <LabelChip
               key={filter.key}
-              type='button'
-              variant='tertiary'
-              size='sm'
-              rounded='full'
-              aria-label={`Remove filter: ${filter.label}`}
-              className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+              ariaLabel={`Remove filter: ${filter.label}`}
+              icon={<X className='h-3 w-3 shrink-0' aria-hidden='true' />}
               onClick={() => onRemoveFilter(filter.key)}
             >
-              <span className='truncate'>{filter.label}</span>
-              <X className='h-3 w-3 shrink-0' aria-hidden='true' />
-            </Button>
+              {filter.label}
+            </LabelChip>
           ))}
           {hasActive && (
             <Button

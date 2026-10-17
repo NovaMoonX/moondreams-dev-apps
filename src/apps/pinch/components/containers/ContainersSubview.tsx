@@ -6,6 +6,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus, X } from 'lucide-react';
 
+import LabelChip from '@/components/LabelChip';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
@@ -589,18 +590,13 @@ function ContainersSubview({
               />
             )}
             {scopeName && (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                rounded='full'
-                aria-label={`Show everything, not only ${scopeName}`}
-                className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+              <LabelChip
+                ariaLabel={`Show everything, not only ${scopeName}`}
+                icon={<X className='h-3 w-3 shrink-0' aria-hidden='true' />}
                 onClick={clearScope}
               >
-                <span className='truncate'>Only {scopeName}</span>
-                <X className='h-3 w-3 shrink-0' aria-hidden='true' />
-              </Button>
+                {`Only ${scopeName}`}
+              </LabelChip>
             )}
           </div>
         )}
