@@ -314,7 +314,6 @@ function CalendarScreen({
           showPrices={viewOptions.options.showPrices}
           onOpenDay={(dayKey) => setOpenDay({ dayKey, mealId: null })}
           onOpenMeal={(dayKey, mealId) => setOpenDay({ dayKey, mealId })}
-          onAdd={(dayKey) => openPlan(dayKey, null)}
         />
       )}
       {isSummaryOpen && (
@@ -360,6 +359,8 @@ function CalendarScreen({
           key={`${openDay.dayKey}:${openDay.mealId ?? ''}`}
           uid={uid}
           dayKey={openDay.dayKey}
+          todayKey={todayKey}
+          isStatsShown={isStatsShown}
           initialMealId={openDay.mealId}
           onClose={() => setOpenDay(null)}
           onAdd={(mealType) => {

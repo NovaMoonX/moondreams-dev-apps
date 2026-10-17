@@ -4653,6 +4653,133 @@ assert.equal(getPutAwayText([]), null);
     'the summary line and the sheet round a big total the same way',
   );
   assert.equal(formatPeriodCost(99_999), '$999.99');
+
+  const { getDayStatsOffer } =
+    await import('../../src/apps/pinch/utils/stats.ts');
+  const dayRange = { startKey: '2026-10-16', endKey: '2026-10-16' };
+  const dayOf = (meals: PlannedMeal[]) =>
+    getStatsOf(meals, dayRange, statsContext);
+  const showOnly = (...metrics: string[]) => ({
+    calories: metrics.includes('calories'),
+    protein: metrics.includes('protein'),
+    carbs: metrics.includes('carbs'),
+    fat: metrics.includes('fat'),
+  });
+  const fullMeals = [
+    statsMeal('f1', [statsItem('i', 'a')]),
+    statsMeal('f2', [statsItem('i', 'b')]),
+    statsMeal('f3', [statsItem('i', 'a', 2)]),
+  ];
+  const threeFullDay = dayOf(fullMeals);
+  const twoFullDay = dayOf(fullMeals.slice(0, 2));
+  const unpricedDay = dayOf([statsMeal('n1', [statsItem('i', 'c')])]);
+  const unknownDay = dayOf([statsMeal('g1', [statsItem('i', 'gone')])]);
+  const frozenItems = [statsItem('i', 'a'), statsItem('j', 'c')];
+  const frozenDay = dayOf([
+    statsMeal(
+      'z2',
+      frozenItems,
+      buildStatsSnapshot(frozenItems, statsContext, 1000),
+    ),
+  ]);
+  assert.deepEqual(
+    [
+      getPeriodTotal(threeFullDay, false),
+      getCostAverages(threeFullDay, true).map(
+        (average) => `${average.label} ${average.value}`,
+      ),
+    ],
+    [
+      { value: '$2.50', label: 'Total' },
+      ['Avg per fully priced meal $0.83', 'Per g protein, fully priced $0.03'],
+    ],
+    "a day reads its tiles through the week's own functions: three fully priced meals give a Total, an average over those meals and, with protein on, the price per gram",
+  );
+  assert.deepEqual(
+    [
+      getCostAverages(twoFullDay, true),
+      getDayStatsOffer(twoFullDay, showOnly()),
+    ],
+    [[], null],
+    'two fully priced meals are under the floor of three, so a day shows no average, and with no nutrition on it has nothing to offer beyond its Total',
+  );
+  assert.deepEqual(
+    [
+      getDayStatsOffer(threeFullDay, showOnly('calories', 'protein')),
+      getDayStatsOffer(threeFullDay, showOnly()),
+      getDayStatsOffer(twoFullDay, showOnly('calories', 'protein')),
+      getDayStatsOffer(twoFullDay, showOnly('carbs')),
+      getDayStatsOffer(unpricedDay, showOnly('fat')),
+    ],
+    [
+      { subtitle: 'Calories, protein, and cost averages' },
+      { subtitle: 'Cost averages' },
+      { subtitle: 'Calories and protein' },
+      { subtitle: 'Carbs' },
+      { subtitle: 'Fat' },
+    ],
+    'the stats row names only what its view holds beyond the Total: the nutrition switched on, and the cost averages when the day has enough meals behind them',
+  );
+  assert.deepEqual(
+    [
+      getDayStatsOffer(unknownDay, showOnly('calories', 'protein')),
+      getDayStatsOffer(unpricedDay, showOnly()),
+    ],
+    [null, null],
+    'a metric the day does not know is never named, so no row opens a view with nothing in it',
+  );
+  assert.deepEqual(
+    [
+      getPeriodTotal(unpricedDay, false).value,
+      getPeriodTotal(unpricedDay, true).value,
+      getPeriodTotal(frozenDay, true).value,
+    ],
+    [
+      getDayCostText(unpricedDay.byDay[0], false),
+      getDayCostText(unpricedDay.byDay[0], true),
+      getDayCostText(frozenDay.byDay[0], true),
+    ],
+    'a day with nothing priced, a passed day with nothing priced and a fixed day with a gap read in the drawer exactly as their row in the week reads',
+  );
+  assert.equal(
+    getPeriodTotal(frozenDay, true).label,
+    'Total',
+    'a day whose every gap is on a fixed day says + on its figure and never "so far" in its caption',
+  );
+
+  const weekMeals = [
+    ['2026-10-15', 'f1', [statsItem('i', 'a')]],
+    ['2026-10-15', 'p1', [statsItem('i', 'a'), statsItem('j', 'c')]],
+    ['2026-10-16', 'f2', [statsItem('i', 'b')]],
+    ['2026-10-17', 'n1', [statsItem('i', 'c')]],
+    ['2026-10-18', 'f3', [statsItem('i', 'a', 2)]],
+    ['2026-10-18', 'f4', [statsItem('i', 'b', 2)]],
+  ].map(
+    ([dayKey, id, items]) =>
+      ({
+        ...statsMeal(id as string, items as MealItem[]),
+        date: getDateOfDayKey(dayKey as string),
+      }) as PlannedMeal,
+  );
+  const week = getStatsOf(weekMeals, statsRange, statsContext);
+  assert.deepEqual(
+    week.byDay.map((entry) => {
+      const day = getStatsOf(
+        weekMeals,
+        { startKey: entry.dayKey, endKey: entry.dayKey },
+        statsContext,
+      );
+      return [
+        day.spendCents,
+        getPeriodTotal(day, false).value.replace(/\+$/, ''),
+      ];
+    }),
+    week.byDay.map((entry) => [
+      entry.totalCents ?? 0,
+      getDayCostText(entry, false).replace(/\+$/, ''),
+    ]),
+    "each day's figure in its drawer is the figure its row shows in the week summary, from one walk or from a walk of the day alone",
+  );
   assert.deepEqual(
     [
       getDayCostText({ totalCents: 8, leftOut: [] }, false),
