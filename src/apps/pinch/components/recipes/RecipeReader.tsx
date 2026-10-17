@@ -4,15 +4,15 @@ import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
-import { FirebaseError } from 'firebase/app';
-import { Lightbulb, RotateCcw } from 'lucide-react';
+import { Lightbulb, RefreshCw } from 'lucide-react';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import FilePickCard from '@/components/FilePickCard';
 import FormSection from '@/components/FormSection';
 import IntroCard from '@/components/IntroCard';
-import MethodPicker from '@/components/MethodPicker';
+import MethodPicker, { type Method } from '@/components/MethodPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { isReadableFile } from '@/utils/fileUtils';
 import {
   MAX_PASTE_CHARS,
   MAX_UPLOAD_BYTES,
@@ -26,6 +26,12 @@ import {
 } from '@apps/pinch/lib/extractRecipe';
 import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
+import {
+  canPasteTextInstead,
+  classifyReadFailure,
+  getReadFailureLine,
+  type ReadFailure,
+} from '@apps/pinch/utils/readFailures';
 
 const asWebLink = (text: string) => {
   const trimmed = text.trim();
@@ -43,63 +49,20 @@ const asWebLink = (text: string) => {
   }
 };
 
-const getFailureMessage = (
-  error: unknown,
-  source: RecipeSource,
-  canPasteText: boolean,
-) => {
-  if (error instanceof FirebaseError && error.code.startsWith('functions/')) {
-    return canPasteText
-      ? "We couldn't open that link. Check the address, or paste the recipe's text instead."
-      : "We couldn't open that link. Check the address, or write it yourself below.";
-  }
-
-  const status =
-    error instanceof AIError ? error.customErrorData?.status : undefined;
-  if (status === 429) {
-    return 'The reader is busy right now. Give it a minute and try again, or write it yourself below.';
-  }
-  if (
-    error instanceof AIError &&
-    error.code === 'fetch-error' &&
-    status === undefined
-  ) {
-    return "We couldn't reach the reader. Check your connection and try again, or write it yourself below.";
-  }
-  if (status === 403 || status === 404) {
-    return "The recipe reader isn't available right now. You can write it yourself below.";
-  }
-  if (source === 'AI_LINK') {
-    return canPasteText
-      ? "We couldn't read a recipe from that page. Paste its text instead, or write it yourself below."
-      : "We couldn't read a recipe from that page. You can write it yourself below.";
-  }
-  if (source === 'AI_TEXT') {
-    return "We couldn't read that text right now. Try again, or write it yourself below.";
-  }
-  return "We couldn't read that file right now. Try a clearer photo or a PDF, or write it yourself below.";
-};
-
-const getEmptyMessage = (source: RecipeSource, canPasteText: boolean) => {
-  if (source !== 'AI_LINK') {
-    return source === 'AI_TEXT'
-      ? "We couldn't find a recipe in that text. Try pasting the whole recipe, or write it yourself below."
-      : "We couldn't find a recipe in that file. Try a clearer photo, or paste the text.";
-  }
-  return canPasteText
-    ? "We couldn't find a recipe on that page. Paste its text instead, or write it yourself below."
-    : "We couldn't find a recipe on that page. You can write it yourself below.";
-};
-
 type State =
   | { status: 'idle' }
   | { status: 'reading'; label: string }
-  | { status: 'failed'; message: string };
+  | { status: 'failed'; message: string; canPasteInstead: boolean };
 
 type ReaderMethod = Exclude<RecipeStartMethod, 'manual'>;
 
-const SAVED_LINE =
-  'You look it over first. Nothing is saved until you save it.';
+const SAVED_LINE = 'You look it over before anything is saved.';
+
+const failed = (message: string, canPasteInstead = false): State => ({
+  status: 'failed',
+  message,
+  canPasteInstead,
+});
 
 const FIELD_CLASS =
   'rounded-none border-0 bg-transparent px-4 focus:outline-none';
@@ -107,15 +70,15 @@ const FIELD_CLASS =
 const READER_COPY: Record<ReaderMethod, { caption: string; lead: string }> = {
   link: {
     caption: 'Recipe link',
-    lead: "Paste a recipe page's link. We open it, and an AI reads it and fills in the form.",
+    lead: 'An AI reads the page and fills in the form.',
   },
   text: {
     caption: 'Recipe text',
-    lead: 'Paste a recipe from a chat or a note. An AI reads it and fills in the form.',
+    lead: 'An AI reads your text and fills in the form.',
   },
   file: {
     caption: 'Recipe file',
-    lead: 'Choose a photo, screenshot or PDF. An AI reads it and fills in the form.',
+    lead: 'An AI reads the file and fills in the form.',
   },
 };
 
@@ -153,6 +116,8 @@ interface RecipeReaderProps {
     label: string,
   ) => void;
   onManual: () => void;
+  /** Switches a link that would not open to pasting the page's text; the link is typed work, so the screen above asks before it is lost. */
+  onPasteText?: () => void;
   /** The footer's Back: the same step as the header's back button. */
   onBack: () => void;
   /** Whether the person is holding a pasted link or text that going back would lose. */
@@ -172,6 +137,7 @@ function RecipeReader({
   onRead,
   onManual,
   onBack,
+  onPasteText,
   onTypedChange,
   initialText = '',
   initialLink = '',
@@ -198,6 +164,14 @@ function RecipeReader({
     }
   }, [method]);
 
+  const fail = (cause: ReadFailure, source: RecipeSource) =>
+    setState(
+      failed(
+        getReadFailureLine(cause, source),
+        method === 'link' && canPasteText && canPasteTextInstead(cause),
+      ),
+    );
+
   const run = async (
     label: string,
     source: RecipeSource,
@@ -210,10 +184,7 @@ function RecipeReader({
         return;
       }
       if (extracted.ingredients.length === 0) {
-        setState({
-          status: 'failed',
-          message: getEmptyMessage(source, canPasteText),
-        });
+        fail('empty', source);
         return;
       }
 
@@ -227,24 +198,27 @@ function RecipeReader({
       if (!isMounted()) {
         return;
       }
-      setState({
-        status: 'failed',
-        message: getFailureMessage(error, source, canPasteText),
-      });
+      fail(classifyReadFailure(error, navigator.onLine), source);
     } finally {
       setFileKey((current) => current + 1);
     }
   };
 
+  const rejectFile = (message: string) => {
+    setFile(null);
+    setState(failed(message));
+    setFileKey((current) => current + 1);
+  };
+
   const handleFile = (next: File) => {
+    if (!isReadableFile(next)) {
+      rejectFile("That file isn't a photo or a PDF.");
+      return;
+    }
     if (next.size > MAX_UPLOAD_BYTES) {
-      setFile(null);
-      setState({
-        status: 'failed',
-        message:
-          'That file is too big to read. Try a photo or a PDF under 10 MB.',
-      });
-      setFileKey((current) => current + 1);
+      rejectFile(
+        'That file is too big to read. Try a photo or a PDF under 10 MB.',
+      );
       return;
     }
 
@@ -252,27 +226,12 @@ function RecipeReader({
     void run(next.name, 'AI_FILE', () => extractRecipeFromFile(next));
   };
 
-  const handleDroppedFile = (next: File) => {
-    if (next.type !== 'application/pdf' && !next.type.startsWith('image/')) {
-      setFile(null);
-      setState({
-        status: 'failed',
-        message:
-          "That isn't a photo, screenshot or PDF. Try one of those, or write it yourself below.",
-      });
-      return;
-    }
-
-    handleFile(next);
-  };
-
   const handleLink = () => {
     const url = asWebLink(link);
     if (url === null) {
-      setState({
-        status: 'failed',
-        message: "That doesn't look like a web link. Check it and try again.",
-      });
+      setState(
+        failed("That doesn't look like a web link. Check it and try again."),
+      );
       return;
     }
 
@@ -329,7 +288,7 @@ function RecipeReader({
           variant='base'
           rounded='none'
           aria-label='Paste a recipe'
-          placeholder='Paste the recipe here: the title, ingredients and steps'
+          placeholder='A recipe from a chat or a note'
           maxLength={MAX_PASTE_CHARS}
           className={join(FIELD_CLASS, 'py-3')}
           value={text}
@@ -371,7 +330,7 @@ function RecipeReader({
       ? { lead: copy.lead, rest: SAVED_LINE }
       : {
           lead: `From your idea: ${ideaTitle}`,
-          rest: 'We open its link, and an AI reads the page and fills in the form. You look it over first. Nothing is saved until you save it.',
+          rest: 'We open its link, and an AI reads the page and fills in the form. You look it over before anything is saved.',
         };
 
   const getHint = () => {
@@ -384,7 +343,7 @@ function RecipeReader({
     if (!canPasteText) {
       return 'The address saved with your idea.';
     }
-    return 'Copy the address from your browser and paste it here. If the site asks you to sign in, paste its text instead.';
+    return "Copy the address from your browser's address bar.";
   };
 
   const getChips = (): ActionChip[] => {
@@ -393,7 +352,7 @@ function RecipeReader({
         ? [
             {
               key: 'retry',
-              icon: <RotateCcw className='h-4 w-4' />,
+              icon: <RefreshCw className='h-4 w-4' />,
               label: 'Try this file again',
               onClick: handleRetryFile,
             },
@@ -451,6 +410,24 @@ function RecipeReader({
     );
   };
 
+  const getMethods = (): Method[] => [
+    ...(state.status === 'failed' && state.canPasteInstead && onPasteText
+      ? [
+          {
+            id: 'paste-text',
+            emoji: getMethodEmoji('text'),
+            title: 'Paste its text instead',
+            description: 'Copy the recipe from the page',
+            isQuiet: true,
+            onPick: onPasteText,
+          },
+        ]
+      : []),
+    ...(MANUAL_METHOD
+      ? [{ ...MANUAL_METHOD, isQuiet: true, onPick: onManual }]
+      : []),
+  ];
+
   const intro = getIntro();
 
   return (
@@ -461,9 +438,9 @@ function RecipeReader({
       <FormSection title={copy.caption}>
         {method === 'file' ? (
           <FilePickCard
-            accepts='A photo, screenshot or PDF'
-            limit={`Up to ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB`}
-            emoji={getMethodEmoji('file')}
+            title='Tap to choose a file'
+            accepts='Photo, screenshot or PDF'
+            limit={`up to ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB`}
             picked={
               file && {
                 name: file.name,
@@ -474,7 +451,7 @@ function RecipeReader({
             status={getStatusLine()}
             isDisabled={isReading}
             onPick={() => fileRef.current?.click()}
-            onDropFile={handleDroppedFile}
+            onDropFile={handleFile}
           />
         ) : (
           <div className='border-border bg-card focus-within:border-foreground/40 overflow-hidden rounded-2xl border'>
@@ -486,12 +463,7 @@ function RecipeReader({
         )}
       </FormSection>
       <ActionChips actions={getChips()} label='What else you can do with it' />
-      {MANUAL_METHOD && (
-        <MethodPicker
-          disabled={isReading}
-          methods={[{ ...MANUAL_METHOD, isQuiet: true, onPick: onManual }]}
-        />
-      )}
+      <MethodPicker disabled={isReading} methods={getMethods()} />
       {method === 'file' && (
         <Input
           key={fileKey}

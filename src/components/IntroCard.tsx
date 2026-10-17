@@ -19,8 +19,10 @@ function IntroCard({ icon, lead, children }: IntroCardProps) {
         {icon}
       </span>
       <div className='min-w-0 flex-1 space-y-1 text-sm'>
-        <p className='text-foreground font-medium'>{lead}</p>
-        {children && <p className='text-muted-foreground'>{children}</p>}
+        <p className='text-foreground font-medium text-pretty'>{lead}</p>
+        {children && (
+          <p className='text-muted-foreground text-pretty'>{children}</p>
+        )}
       </div>
     </div>
   );
