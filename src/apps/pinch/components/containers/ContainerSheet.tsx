@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Hash,
+  History,
   PencilLine,
   Undo2,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import ActionRow from '@/components/ActionRow';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
 import FormSheet from '@/components/FormSheet';
+import GroupRow from '@/components/GroupRow';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
 import { useBackStep } from '@/hooks/useBackHistory';
@@ -513,16 +515,9 @@ interface FactsProps {
   container: Container;
   servingsText: string;
   onChangeDate: () => void;
-  /** A quiet link that shares the date's line, so the sheet stays one screen on a small phone. */
-  trailing: ReactNode;
 }
 
-function Facts({
-  container,
-  servingsText,
-  onChangeDate,
-  trailing,
-}: FactsProps) {
+function Facts({ container, servingsText, onChangeDate }: FactsProps) {
   const state = getEatByState(container.eatBy);
   const dateLabel =
     state === 'PAST'
@@ -546,26 +541,23 @@ function Facts({
           <span className='whitespace-nowrap'>{getFrozenText(container)}</span>
         )}
       </p>
-      <div className='flex flex-wrap items-center justify-between gap-x-4 gap-y-2'>
-        <Button
-          type='button'
-          variant='tertiary'
-          aria-label={`${dateLabel}. Change the date`}
-          className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
-          onClick={onChangeDate}
-        >
-          {state === 'LATER' ? (
-            <span className='whitespace-nowrap'>{dateLabel}</span>
-          ) : (
-            <EatByBadge state={state} label={dateLabel} />
-          )}
-          <PencilLine
-            className='text-muted-foreground h-3.5 w-3.5 shrink-0'
-            aria-hidden='true'
-          />
-        </Button>
-        {trailing}
-      </div>
+      <Button
+        type='button'
+        variant='tertiary'
+        aria-label={`${dateLabel}. Change the date`}
+        className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
+        onClick={onChangeDate}
+      >
+        {state === 'LATER' ? (
+          <span className='whitespace-nowrap'>{dateLabel}</span>
+        ) : (
+          <EatByBadge state={state} label={dateLabel} />
+        )}
+        <PencilLine
+          className='text-muted-foreground h-3.5 w-3.5 shrink-0'
+          aria-hidden='true'
+        />
+      </Button>
       {(freezeLine || thawedAt !== null) && (
         <p className='text-muted-foreground text-sm'>
           {[
@@ -777,10 +769,10 @@ function ContainerSheet({
                 <Button
                   type='button'
                   variant='tertiary'
-                  className='h-auto min-h-12 w-full justify-between gap-3 px-0! py-2 text-left font-normal'
+                  className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-2 text-left font-normal'
                   onClick={() => pick(box.id)}
                 >
-                  <span className='text-foreground'>
+                  <span className='text-foreground min-w-0 flex-1'>
                     Box {index + 1} · {formatServings(box.servings)}
                   </span>
                   <ChevronRight
@@ -803,6 +795,7 @@ function ContainerSheet({
         ? `${title} and its history are erased, and this can't be undone. If you ate it, “It's gone” keeps it in What you finished instead.`
         : `${title} comes off What you finished and its history is erased. This can't be undone.`;
     };
+    const entries = container.history.length;
     const getMoveLabel = () => {
       if (otherPlace === 'FREEZER') {
         return isBatch ? 'Put a box in the freezer' : 'Put in the freezer';
@@ -865,16 +858,6 @@ function ContainerSheet({
                 : `${formatServings(container.servings)} left`
             }
             onChangeDate={() => setView({ kind: 'eatBy' })}
-            trailing={
-              <Button
-                type='button'
-                variant='tertiary'
-                className="decoration-muted-foreground/50 relative h-auto min-h-0 px-0! py-0! text-sm font-normal underline underline-offset-4 before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
-                onClick={() => setView({ kind: isBatch ? 'boxes' : 'history' })}
-              >
-                {isBatch ? 'See each box' : 'See its history'}
-              </Button>
-            }
           />
         ) : (
           <p className='text-muted-foreground text-sm'>
@@ -923,6 +906,20 @@ function ContainerSheet({
                 }
                 onClick={() => setView({ kind: 'count' })}
               />
+              <GroupRow
+                icon={<History className='h-4 w-4' />}
+                onClick={() => setView({ kind: isBatch ? 'boxes' : 'history' })}
+              >
+                <span className='text-base'>
+                  {isBatch ? 'Each box' : 'History'}
+                </span>
+                {!isBatch && (
+                  <span className='text-muted-foreground text-sm whitespace-nowrap'>
+                    {' · '}
+                    {entries === 1 ? '1 entry' : `${entries} entries`}
+                  </span>
+                )}
+              </GroupRow>
             </ActionGroup>
             {recipe === undefined && container.recipeId !== null && (
               <p className='text-muted-foreground text-xs'>

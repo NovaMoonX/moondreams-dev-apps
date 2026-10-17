@@ -12,8 +12,9 @@ import {
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Plus, UtensilsCrossed } from 'lucide-react';
+import { BrushCleaning, Plus, UtensilsCrossed } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import EntryTile from '@/components/EntryTile';
 import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
@@ -572,17 +573,17 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       );
     };
     const clearButton = !isSearching && gotCount > 0 && (
-      <Button
-        type='button'
-        variant='link'
-        size='sm'
-        loading={isClearing}
-        disabled={isClearing}
-        className="relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-        onClick={() => void handleClear()}
-      >
-        Clear what you got
-      </Button>
+      <ActionChips
+        actions={[
+          {
+            key: 'clear-got',
+            icon: <BrushCleaning className='h-4 w-4' />,
+            label: 'Clear what you got',
+            isLoading: isClearing,
+            onClick: () => void handleClear(),
+          },
+        ]}
+      />
     );
     const renderHalf = (half: ShoppingHalf) =>
       matches[half] < SHOP_SECTION_DIVIDER_MIN_ROWS ? (
@@ -643,9 +644,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     return (
       <>
         {shownView === 'got' && clearButton && (
-          <div className='flex min-h-10 items-center justify-end'>
-            {clearButton}
-          </div>
+          <div className='flex justify-end'>{clearButton}</div>
         )}
         {matches[shownView] === 0 ? getEmpty() : renderHalf(shownView)}
       </>

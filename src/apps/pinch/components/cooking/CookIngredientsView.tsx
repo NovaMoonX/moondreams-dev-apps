@@ -1,8 +1,10 @@
 import { memo } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { RotateCcw } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import SectionDivider from '@/components/SectionDivider';
 import Stepper from '@/components/Stepper';
 import { MAX_COOK_SERVINGS } from '@apps/pinch/constants';
@@ -164,15 +166,16 @@ function CookIngredientsView({
                 : `${outCount} of ${rows.length} got out`}
             </p>
             {outCount > 0 && (
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-10 px-0!'
-                onClick={onReset}
-              >
-                Reset
-              </Button>
+              <ActionChips
+                actions={[
+                  {
+                    key: 'reset',
+                    icon: <RotateCcw className='h-4 w-4' />,
+                    label: 'Reset',
+                    onClick: onReset,
+                  },
+                ]}
+              />
             )}
           </div>
           {groupIngredientLines(rows).map((group) => (

@@ -4,8 +4,10 @@ import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Plus, X } from 'lucide-react';
+import { Eraser, History, Plus, X } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
+import EntryTile from '@/components/EntryTile';
 import LabelChip from '@/components/LabelChip';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -43,6 +45,7 @@ import {
   getClearOutMessage,
   getContainerTitle,
   getEatByState,
+  getFinishedDoor,
   groupBatches,
 } from '@apps/pinch/utils/containers';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -160,9 +163,10 @@ function ContainersSubview({
   const hasStockInScope = containers.some((container) =>
     isContainerOfScope(container, scope, mealRecipeIds),
   );
-  // With nothing in stock, the finished read decides whether the link to it leads anywhere.
+  // Whether anything is finished decides if the door to it shows; a recipe's or meal's own read can be big, so it waits until that scope has nothing in stock.
   const needsFinished =
-    isFinishedView || (isReady && loadError === null && !hasStockInScope);
+    isFinishedView ||
+    (isReady && loadError === null && (!isScoped || !hasStockInScope));
   const latestFinished = useQuery({
     ...finishedContainersQueryOptions(uid, finishedCount),
     enabled: needsFinished && !isScoped,
@@ -433,18 +437,19 @@ function ContainersSubview({
     return (
       <section aria-label={CONTAINER_PLACE_LABELS[place]}>
         {canClear && (
-          <div className='flex min-h-10 items-center justify-end'>
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              disabled={clearing === place}
-              className="text-destructive! relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-              onClick={() => void handleClear(place)}
-            >
-              Clear out the {placeWord}
-            </Button>
-          </div>
+          <ActionChips
+            className='justify-end pb-1'
+            actions={[
+              {
+                key: 'clear-out',
+                icon: <Eraser className='h-4 w-4' />,
+                label: `Clear out the ${placeWord}`,
+                isDestructive: true,
+                isLoading: clearing === place,
+                onClick: () => void handleClear(place),
+              },
+            ]}
+          />
         )}
         {noteLine}
         <ul className='divide-border divide-y'>
@@ -538,10 +543,14 @@ function ContainersSubview({
 
   const isListShown = isReady && loadError === null;
   const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
-  const hasFinishedLink =
-    !isFinishedView &&
-    isListShown &&
-    (inScope.length > 0 || finished.length > 0);
+  // The cast makes it a plain boolean: passed as it is, React Compiler treats the call as able to mutate the scope it came from.
+  const door = getFinishedDoor({
+    isListShown: isListShown && !isFinishedView,
+    isScoped,
+    hasStockInScope: !!hasStockInScope,
+    finishedCount: finished.length,
+    isRead: finishedQuery.data !== undefined || finishedQuery.isError,
+  });
   const title = isFinishedView ? 'What you finished' : 'Fridge & freezer';
   const switchView = (toFinished: boolean) => {
     setIsFinishedView(toFinished);
@@ -607,17 +616,21 @@ function ContainersSubview({
             placeholder='Search the fridge and freezer'
           />
         )}
-        {isFinishedView ? getFinishedBody() : getStockBody()}
-        {hasFinishedLink && (
-          <Button
-            type='button'
-            variant='tertiary'
-            className='decoration-muted-foreground/50 h-10 px-0! text-sm font-normal underline underline-offset-4'
-            onClick={() => switchView(true)}
+        {door === 'SHOW' ? (
+          <nav
+            aria-label='Also in Fridge & freezer'
+            className='grid grid-cols-2 gap-3'
           >
-            What you finished
-          </Button>
+            <EntryTile
+              icon={<History className='size-4' />}
+              label='What you finished'
+              onClick={() => switchView(true)}
+            />
+          </nav>
+        ) : (
+          door === 'HOLD' && <div className='h-14' aria-hidden='true' />
         )}
+        {isFinishedView ? getFinishedBody() : getStockBody()}
       </div>
       {open && (
         <ContainerSheet

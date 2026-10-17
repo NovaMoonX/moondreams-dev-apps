@@ -7,11 +7,13 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CalendarDays } from 'lucide-react';
+import { ListChecks, ListX } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
+import SummaryRow from '@/components/SummaryRow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
   toDateInputValue,
@@ -500,44 +502,35 @@ export function ShoppingPick({
       <div className={join('flex flex-col gap-3', columnClassName)}>
         <div className='shrink-0 space-y-3'>
           {isRange ? (
-            <div className='flex items-start gap-3'>
-              <CalendarDays
-                className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
-                aria-hidden='true'
-              />
-              <div className='min-w-0 flex-1'>
-                <p className='font-medium wrap-break-word'>
+            <SummaryRow
+              label='Days'
+              ariaLabel='Change the days'
+              onClick={
+                isPlanLoaded
+                  ? () =>
+                      setDraft({
+                        startKey: span.startKey,
+                        endKey: span.startKey > span.endKey ? '' : span.endKey,
+                      })
+                  : undefined
+              }
+            >
+              <span className='flex flex-wrap items-baseline gap-x-2'>
+                <span>
                   {span.startKey > span.endKey ? (
                     'These days have passed'
                   ) : (
                     <SpanText {...span} />
                   )}
-                </p>
+                </span>
                 {isPlanLoaded && span.startKey <= span.endKey && (
-                  <p className='text-muted-foreground text-sm'>
+                  <span className='text-muted-foreground text-sm whitespace-nowrap'>
                     {formatMealCount(span.meals.length)}
                     {span.isClamped && ' from today on'}
-                  </p>
+                  </span>
                 )}
-              </div>
-              {isPlanLoaded && (
-                <Button
-                  type='button'
-                  variant='link'
-                  size='sm'
-                  aria-label='Change the days'
-                  className="relative h-6! min-h-0! shrink-0 px-0! py-0! before:absolute before:-inset-x-2 before:-inset-y-2 before:content-['']"
-                  onClick={() =>
-                    setDraft({
-                      startKey: span.startKey,
-                      endKey: span.startKey > span.endKey ? '' : span.endKey,
-                    })
-                  }
-                >
-                  Change
-                </Button>
-              )}
-            </div>
+              </span>
+            </SummaryRow>
           ) : (
             <p className='text-lg font-medium wrap-break-word'>{label}</p>
           )}
@@ -569,22 +562,26 @@ export function ShoppingPick({
               <p className='text-muted-foreground text-sm'>
                 Adding {selected.length} of {rows.length}
               </p>
-              <Button
-                type='button'
-                variant='link'
-                size='sm'
-                className='h-10 px-0!'
-                disabled={!isReady}
-                onClick={() =>
-                  setChoices(
-                    Object.fromEntries(
-                      rows.map((row) => [row.id, !isAllTicked]),
+              <ActionChips
+                actions={[
+                  {
+                    key: 'tick-all',
+                    icon: isAllTicked ? (
+                      <ListX className='h-4 w-4' />
+                    ) : (
+                      <ListChecks className='h-4 w-4' />
                     ),
-                  )
-                }
-              >
-                {isAllTicked ? 'Untick all' : 'Tick all'}
-              </Button>
+                    label: isAllTicked ? 'Untick all' : 'Tick all',
+                    isDisabled: !isReady,
+                    onClick: () =>
+                      setChoices(
+                        Object.fromEntries(
+                          rows.map((row) => [row.id, !isAllTicked]),
+                        ),
+                      ),
+                  },
+                ]}
+              />
             </div>
           )}
         </div>
