@@ -1,9 +1,12 @@
+import { formatList } from '@/utils/formatUtils';
 import {
   MIN_FULLY_PRICED_MEALS,
+  NUTRITION_CELLS,
   NUTRITION_METRICS,
 } from '@apps/pinch/constants';
 import type {
   Gap,
+  NutritionSwitches,
   NutritionValues,
   PlannedMeal,
   Recipe,
@@ -333,6 +336,32 @@ export function getCostAverages(
   ].filter((average) => average !== null);
 
   return averages;
+}
+
+/** What a day's stats view holds beyond its Total tile, said in words for the row that opens it ("Calories, protein and cost averages"); null when it holds nothing more, so no row opens a view that only repeats the Total. */
+export function getDayStatsOffer(
+  stats: Pick<
+    PeriodStats,
+    | 'dailyNutrition'
+    | 'fullyPricedMeals'
+    | 'avgPerFullyPricedMealCents'
+    | 'proteinPricedMeals'
+    | 'proteinCentsPerGram'
+  >,
+  show: NutritionSwitches,
+): { subtitle: string } | null {
+  const parts = [
+    ...NUTRITION_CELLS.filter(
+      (cell) => show[cell.key] && stats.dailyNutrition[cell.key] !== null,
+    ).map((cell) => cell.label.toLowerCase()),
+    ...(getCostAverages(stats, show.protein).length > 0
+      ? ['cost averages']
+      : []),
+  ];
+  if (parts.length === 0) return null;
+
+  const text = formatList(parts);
+  return { subtitle: `${text.charAt(0).toUpperCase()}${text.slice(1)}` };
 }
 
 /** One day's cost in a list: "$0.08", "$0.08+" while it leaves something out, "No price yet", or "Not priced" once the day has passed. */

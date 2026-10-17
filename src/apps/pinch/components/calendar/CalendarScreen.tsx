@@ -359,6 +359,8 @@ function CalendarScreen({
           key={`${openDay.dayKey}:${openDay.mealId ?? ''}`}
           uid={uid}
           dayKey={openDay.dayKey}
+          todayKey={todayKey}
+          isStatsShown={isStatsShown}
           initialMealId={openDay.mealId}
           onClose={() => setOpenDay(null)}
           onAdd={(mealType) => {

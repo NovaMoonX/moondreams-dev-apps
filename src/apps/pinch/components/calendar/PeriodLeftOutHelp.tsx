@@ -33,7 +33,8 @@ function PeriodLeftOutHelp({ stats, todayKey }: PeriodLeftOutHelpProps) {
       <p>Leaves out {reasons.join(' and ')}.</p>
       {hasPassedDay && (
         <p className='text-muted-foreground'>
-          Days that have passed keep the prices they had.
+          Days that have passed keep the prices they had, and a price you add
+          now counts from today on.
         </p>
       )}
     </HelpTip>
