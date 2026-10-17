@@ -11,6 +11,7 @@ import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import {
   getCostAverages,
   getPeriodCostTile,
+  getPeriodTotal,
   withWholeCalories,
   type PeriodStats,
 } from '@apps/pinch/utils/stats';
@@ -18,12 +19,15 @@ import {
 interface StatsTilesProps {
   stats: PeriodStats;
   todayKey: string;
-  onOpen: () => void;
+  /** Opens the summary through a target behind the tiles; omitted where the tiles already sit in a view of their own. */
+  onOpen?: () => void;
+  /** The tiles are one day's: the total is always there, in the line's words with nothing priced (no summary line says it here), and the nutrition reads "That day". */
+  day?: { isPast: boolean };
 }
 
 const COLUMNS = ['grid-cols-2', 'grid-cols-2', 'grid-cols-3'];
 
-// One size for every number in a row, set by the longest and never under the caption's 12px, so a long total never runs under its warning icon.
+// One size for every number in a row, set by the longest and never under the caption's 12px, so a long total never runs under its warning icon. A row of two or one is wide enough for two more characters at full size, and a phrase ("No price yet") has no icon beside it.
 const getSizeTier = (length: number) => {
   if (length <= 5) return 0;
   if (length === 6) return 1;
@@ -48,16 +52,21 @@ const getValueSizeClass = (longest: number, narrowLongest = longest) =>
     NARROW_SIZES[getSizeTier(narrowLongest)],
   );
 
-// At 12px, 8 characters ("$12,345+") don't fit a three-across tile under 360px: the total takes the whole row there and the other two share the next.
+// At 12px, 8 characters ("$12,345+") don't fit a three-across tile under 360px (7 in a day's drawer, 16px narrower than the Calendar): the total takes the whole row there and the other two share the next.
 const NARROW_FULL_ROW_LENGTH = 8;
+
+const getFigureLength = (tile: { value: string }) =>
+  tile.value.startsWith('$') ? tile.value.length : 0;
 
 const keepSoFarTogether = (label: string) =>
   label.replace(' so far', '\u00a0so\u00a0far');
 
-function StatsTiles({ stats, todayKey, onOpen }: StatsTilesProps) {
+function StatsTiles({ stats, todayKey, onOpen, day }: StatsTilesProps) {
   const show = useAppSelector(selectShowNutrition);
   const isPhone = useMediaQuery().isBelow('sm');
-  const total = getPeriodCostTile(stats);
+  const total = day
+    ? getPeriodTotal(stats, day.isPast)
+    : getPeriodCostTile(stats);
   const isPartial = stats.mealsPriced > 0 && stats.leftOut.length > 0;
   const daily = withWholeCalories(stats.dailyNutrition);
   const hasDaily = hasShownValue(daily, show);
@@ -83,27 +92,35 @@ function StatsTiles({ stats, todayKey, onOpen }: StatsTilesProps) {
     return null;
   }
 
-  const longest = Math.max(...tiles.map((tile) => tile.value.length));
+  const longest =
+    Math.max(...tiles.map(getFigureLength)) - (tiles.length === 3 ? 0 : 2);
   const isTotalFullRowOnNarrow =
     tiles.length === 3 &&
     tiles[0].key === 'total' &&
-    tiles[0].value.length >= NARROW_FULL_ROW_LENGTH;
+    tiles[0].value.length >= NARROW_FULL_ROW_LENGTH - (day ? 1 : 0);
   const narrowLongest = isTotalFullRowOnNarrow
-    ? Math.max(...tiles.slice(1).map((tile) => tile.value.length))
+    ? Math.max(...tiles.slice(1).map(getFigureLength))
     : longest;
 
   return (
     <div className='relative'>
-      {/* Behind the tiles, not around them, which would nest their help buttons; a keyboard reaches the summary through the line above. */}
-      <Button
-        type='button'
-        variant='tertiary'
-        tabIndex={-1}
-        aria-hidden='true'
-        onClick={onOpen}
-        className='absolute inset-0 h-full w-full rounded-2xl'
-      />
-      <div className='pointer-events-none relative space-y-3 [&_button]:pointer-events-auto'>
+      {onOpen && (
+        // Behind the tiles, not around them, which would nest their help buttons; a keyboard reaches the summary through the line above.
+        <Button
+          type='button'
+          variant='tertiary'
+          tabIndex={-1}
+          aria-hidden='true'
+          onClick={onOpen}
+          className='absolute inset-0 h-full w-full rounded-2xl'
+        />
+      )}
+      <div
+        className={join(
+          'relative space-y-3',
+          onOpen && 'pointer-events-none [&_button]:pointer-events-auto',
+        )}
+      >
         {tiles.length > 0 && (
           <div
             className={join(
@@ -143,7 +160,7 @@ function StatsTiles({ stats, todayKey, onOpen }: StatsTilesProps) {
         {hasDaily && (
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs font-medium'>
-              Daily average
+              {day ? 'That day' : 'Daily average'}
             </p>
             <MacroStats
               variant='tiles'

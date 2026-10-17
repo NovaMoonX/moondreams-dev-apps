@@ -12,7 +12,13 @@ import { useStore } from 'react-redux';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ListChecks, NotebookPen, Pause, Play } from 'lucide-react';
+import {
+  ChevronLeft,
+  ListChecks,
+  NotebookPen,
+  Pause,
+  Play,
+} from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -1614,10 +1620,11 @@ function CookingSession({
             {!note.isOpen && !putAway.isOpen && (
               <Button
                 type='button'
-                variant='tertiary'
-                className='h-10 self-center underline'
+                variant='secondary'
+                className='border-border h-10 gap-1 self-center border'
                 onClick={() => setIsFinished(false)}
               >
+                <ChevronLeft className='h-4 w-4' />
                 Back to the last step
               </Button>
             )}

@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -41,7 +41,6 @@ interface WeekViewProps {
   showPrices: boolean;
   onOpenDay: (dayKey: string) => void;
   onOpenMeal: (dayKey: string, mealId: string) => void;
-  onAdd: (dayKey: string) => void;
 }
 
 /** The seven days of a week: a vertical agenda on a phone, a column per day from `lg` up. */
@@ -54,7 +53,6 @@ function WeekView({
   showPrices,
   onOpenDay,
   onOpenMeal,
-  onAdd,
 }: WeekViewProps) {
   const isWide = !useMediaQuery().isBelow('lg');
   const [isEarlierOpen, setIsEarlierOpen] = useState(false);
@@ -128,15 +126,6 @@ function WeekView({
                   +{meals.length - MAX_COLUMN_MEALS} more
                 </Button>
               )}
-              <Button
-                type='button'
-                variant='tertiary'
-                aria-label={`Plan on ${formatDayTitle(dayKey)}`}
-                onClick={() => onAdd(dayKey)}
-                className='text-muted-foreground! mt-auto h-8 min-h-0 w-full p-0'
-              >
-                <Plus className='h-4 w-4' aria-hidden='true' />
-              </Button>
             </section>
           );
         })}
@@ -186,18 +175,6 @@ function WeekView({
                 className='text-muted-foreground h-3.5 w-3.5'
                 aria-hidden='true'
               />
-            </Button>
-          }
-          trailing={
-            <Button
-              type='button'
-              variant='tertiary'
-              size='icon'
-              aria-label={`Plan on ${formatDayTitle(dayKey)}`}
-              onClick={() => onAdd(dayKey)}
-              className='-mx-1 size-10'
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
             </Button>
           }
         />

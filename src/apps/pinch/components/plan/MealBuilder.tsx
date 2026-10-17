@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
@@ -11,6 +10,7 @@ import Subview from '@/components/Subview';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
+import SummaryEditor from '@/components/SummaryEditor';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
@@ -19,6 +19,8 @@ import { generateUuid } from '@/utils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
+import RecentPickRows from '@apps/pinch/components/plan/RecentPickRows';
+import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import Stepper from '@/components/Stepper';
 import {
   MAX_MEAL_ITEMS,
@@ -47,11 +49,7 @@ import {
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { ItemKind, MealItem, MealType } from '@apps/pinch/types';
-import {
-  formatDayTitle,
-  getCellDayKey,
-  getPlannedDayKey,
-} from '@apps/pinch/utils/dayKeys';
+import { getCellDayKey, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import {
   formatCost,
@@ -60,9 +58,12 @@ import {
 } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
+  getBuilderNote,
   getDefaultMealType,
   getNearDayOptions,
+  getOfferablePicks,
   getPlanDayWord,
+  getWhenSummary,
   rankRecentPicks,
 } from '@apps/pinch/utils/planPicks';
 import {
@@ -78,8 +79,11 @@ const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((value) => ({
 
 const OTHER_DAY = 'other';
 
-// Past 12 options a pill row adds its own search, and the item search is the one place to look.
+// The most the recent list unfolds to; the one search finds anything past it.
 const MAX_RECENT_PICKS = 12;
+
+// Under this many things to offer, an empty plate says what to do next instead of leaving the screen bare.
+const FEW_PICKS = 5;
 
 const copyItems = (items: MealItem[]) =>
   items.map((item) => ({ ...item, id: generateUuid() }));
@@ -148,10 +152,8 @@ function MealBuilder({
   const [chosenType, setChosenType] = useState<MealType | null>(
     existingPlanned?.mealType ?? initialType,
   );
-  const [isChanging, setIsChanging] = useState(
-    startRecipeId !== null || starter !== null,
-  );
   const [isOtherDay, setIsOtherDay] = useState(false);
+  const [query, setQuery] = useState('');
   const [isSearchFirst] = useState(
     mode === 'plan' && !existingPlanned && !starter && !startRecipeId,
   );
@@ -221,6 +223,20 @@ function MealBuilder({
       }),
     [mode, recipes, savedMeals, plannedMeals, cookSummaries],
   );
+  const offerablePicks = useMemo(
+    () =>
+      getOfferablePicks(
+        recentPicks,
+        new Set(items.map((item) => item.refId)),
+        new Map(
+          savedMeals.map((meal) => [
+            meal.id,
+            meal.items.map((item) => item.refId),
+          ]),
+        ),
+      ).slice(0, MAX_RECENT_PICKS),
+    [recentPicks, items, savedMeals],
+  );
   const plateTitle = getPlannedMealTitle(
     { name: source?.name ?? existingPlanned?.name ?? null, items },
     recipesById,
@@ -228,17 +244,11 @@ function MealBuilder({
   );
   const getTitle = () => {
     if (mode === 'meal') {
-      return name.trim() || existingMeal?.name || 'Saved meal';
+      return name.trim() || (existingMeal ? 'Saved meal' : 'New saved meal');
     }
-    if (plateTitle) {
-      return plateTitle;
-    }
-    return date === null
-      ? MEAL_TYPE_LABELS[mealType]
-      : `${MEAL_TYPE_LABELS[mealType]} · ${formatDayTitle(dayKey)}`;
+    return plateTitle || 'Plan a meal';
   };
   const title = getTitle();
-  const isSlotTitle = mode === 'plan' && plateTitle === '';
   const isFull = items.length >= MAX_MEAL_ITEMS;
   const isMissing =
     (mode === 'plan' && plannedMealId !== null && existingPlanned === null) ||
@@ -320,32 +330,6 @@ function MealBuilder({
       return;
     }
     addItem('RECIPE', id);
-  };
-
-  const getRecentRow = () => {
-    if (mode !== 'plan' || existingPlanned || items.length > 0) {
-      return undefined;
-    }
-    const picks = recentPicks.slice(0, MAX_RECENT_PICKS);
-    if (picks.length === 0) {
-      return undefined;
-    }
-    const caption = getRecentCaption(new Set(picks.map((pick) => pick.kind)));
-    return (
-      <div className='space-y-2 pt-1'>
-        <p className='text-muted-foreground text-sm'>{caption}</p>
-        <PillGroup
-          label={caption}
-          options={picks.map((pick) => ({
-            value: `${pick.kind}:${pick.id}`,
-            label: pick.label,
-            emoji: pick.kind === 'MEAL' ? '🍽️' : '🍲',
-          }))}
-          value={null}
-          onChange={pickRecent}
-        />
-      </div>
-    );
   };
 
   const rows = () =>
@@ -462,85 +446,98 @@ function MealBuilder({
 
   const getDayWord = (key: string) => getPlanDayWord(key, todayKey);
 
-  const getChangeLabel = () => {
-    if (isChanging) return 'Done';
-    return isSlotTitle ? 'Change day or meal' : 'Change';
-  };
-
   const getSubmitLabel = () => {
     if (mode === 'meal' || existingPlanned) return 'Save';
     if (date === null) return 'Plan';
     return `Plan for ${getDayWord(dayKey)}`;
   };
 
+  const note = isSubmitting
+    ? null
+    : getBuilderNote({
+        mode,
+        hasName: name.trim() !== '',
+        hasDay: date !== null,
+        hasItems: items.length > 0,
+      });
+  const isTyping = query.trim() !== '';
+  const getEmptyLine = () => {
+    const what =
+      mode === 'plan'
+        ? 'a recipe, a saved meal or a single ingredient'
+        : 'a recipe or an ingredient';
+    return offerablePicks.length === 0
+      ? `Search for ${what}, and it goes on the plate.`
+      : `Tap one above, or search for ${what}. It goes on the plate.`;
+  };
+  const recentCaption = getRecentCaption(
+    new Set(offerablePicks.map((pick) => pick.kind)),
+  );
+
   return (
-    <Subview overlay title={title} onClose={closeSubview}>
+    <Subview overlay title={title} isTitleWrapped onClose={closeSubview}>
       <div className='flex flex-1 flex-col gap-5'>
         <UndoSnackbar pending={pending} onUndo={undo} />
         {mode === 'plan' ? (
-          <div className='space-y-3'>
-            <div
-              className={join(
-                'flex items-center gap-3',
-                isSlotTitle ? 'justify-start' : 'justify-between',
+          <SummaryEditor
+            isFramed
+            icon='📅'
+            label='When'
+            title='Day and meal'
+            lines={2}
+            summary={
+              date === null
+                ? ''
+                : getWhenSummary(dayKey, todayKey, {
+                    label: MEAL_TYPE_LABELS[mealType],
+                    emoji: MEAL_TYPE_EMOJIS[mealType],
+                  })
+            }
+            placeholder='Pick a day'
+            problem={date === null ? 'A meal needs a day to go on.' : null}
+          >
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-xs'>Day</p>
+              <PillGroup
+                label='Day'
+                options={dayOptions}
+                value={dayPillValue}
+                onChange={(value) => {
+                  setIsOtherDay(value === OTHER_DAY);
+                  if (value !== OTHER_DAY) setDayKey(value);
+                }}
+              />
+              {dayPillValue === OTHER_DAY && (
+                <Input
+                  type='date'
+                  variant='outline'
+                  aria-label='Other day'
+                  value={dayKey}
+                  onChange={(event) => setDayKey(event.target.value)}
+                />
               )}
-            >
-              {!isSlotTitle && (
-                <p className='min-w-0 font-medium'>
-                  {date === null ? 'Pick a day' : formatDayTitle(dayKey)} ·{' '}
-                  <span className='whitespace-nowrap'>
-                    {MEAL_TYPE_EMOJIS[mealType]} {MEAL_TYPE_LABELS[mealType]}
-                  </span>
-                </p>
-              )}
-              <Button
-                type='button'
-                variant='link'
-                className={join('h-10 shrink-0', isSlotTitle && 'px-0!')}
-                aria-expanded={isChanging}
-                onClick={() => setIsChanging((current) => !current)}
-              >
-                {getChangeLabel()}
-              </Button>
             </div>
-            {isChanging && (
-              <div className='space-y-3'>
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground text-xs'>Day</p>
-                  <PillGroup
-                    label='Day'
-                    options={dayOptions}
-                    value={dayPillValue}
-                    onChange={(value) => {
-                      setIsOtherDay(value === OTHER_DAY);
-                      if (value !== OTHER_DAY) setDayKey(value);
-                    }}
-                  />
-                  {dayPillValue === OTHER_DAY && (
-                    <Input
-                      type='date'
-                      variant='outline'
-                      aria-label='Other day'
-                      value={dayKey}
-                      onChange={(event) => setDayKey(event.target.value)}
-                    />
-                  )}
-                </div>
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground text-xs'>Meal</p>
-                  <PillGroup
-                    label='Meal'
-                    options={MEAL_TYPE_OPTIONS}
-                    value={mealType}
-                    onChange={setChosenType}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-xs'>Meal</p>
+              <PillGroup
+                label='Meal'
+                options={MEAL_TYPE_OPTIONS}
+                value={mealType}
+                onChange={setChosenType}
+              />
+            </div>
+          </SummaryEditor>
         ) : (
-          <div className='space-y-1.5'>
-            <Label>Name</Label>
+          <SummaryEditor
+            isFramed
+            icon='🍽️'
+            label='Name'
+            title='Name'
+            lines={2}
+            summary={name.trim()}
+            placeholder='Add a name'
+            defaultOpen={existingMeal === null}
+          >
             <Input
               variant='outline'
               aria-label='Meal name'
@@ -549,7 +546,7 @@ function MealBuilder({
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
-          </div>
+          </SummaryEditor>
         )}
 
         <section aria-label="What's on the plate" className='space-y-3'>
@@ -564,26 +561,43 @@ function MealBuilder({
           ) : (
             <ItemSearch
               uid={uid}
+              query={query}
+              onQueryChange={setQuery}
               excludeIds={items.map((item) => item.refId)}
               onPick={(id) => addItem('INGREDIENT', id)}
               onPickRecipe={(id) => addItem('RECIPE', id)}
               onPickMeal={mode === 'plan' ? pickSavedMeal : undefined}
               autoFocus={isSearchFirst}
-              idle={getRecentRow()}
             />
           )}
           {items.length > 0 && (
-            <ul className='divide-border divide-y'>
+            <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
               {items.map((item) => {
                 const itemTitle = getItemTitle(
                   item,
                   recipesById,
                   ingredientsById,
                 );
+                const recipe =
+                  item.kind === 'RECIPE' ? recipesById.get(item.refId) : null;
                 return (
-                  <li key={item.id} className='py-2'>
-                    <div className='flex items-start gap-3'>
-                      <span className='min-w-0 flex-1 pt-2 font-medium wrap-break-word'>
+                  <li key={item.id} className='px-3 py-2'>
+                    <div className='flex min-h-11 items-start gap-3'>
+                      {item.kind === 'RECIPE' ? (
+                        <CoverImage
+                          coverPath={recipe?.coverPath ?? null}
+                          version={recipe?.updatedAt ?? 0}
+                          size={40}
+                        />
+                      ) : (
+                        <span
+                          className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
+                          aria-hidden='true'
+                        >
+                          🥕
+                        </span>
+                      )}
+                      <span className='min-w-0 flex-1 pt-2.5 font-medium wrap-break-word'>
                         {itemTitle}
                       </span>
                       <Button
@@ -597,7 +611,7 @@ function MealBuilder({
                         <X className='h-4 w-4' aria-hidden='true' />
                       </Button>
                     </div>
-                    <div className='-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1'>
+                    <div className='-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-13'>
                       <Stepper
                         isCompact
                         label={`Servings of ${itemTitle}`}
@@ -652,9 +666,28 @@ function MealBuilder({
           </div>
         )}
 
+        {!isFull && !isTyping && offerablePicks.length > 0 && (
+          <RecentPickRows
+            uid={uid}
+            caption={recentCaption}
+            picks={offerablePicks}
+            onPick={pickRecent}
+          />
+        )}
+
+        {!isFull &&
+          !isTyping &&
+          items.length === 0 &&
+          offerablePicks.length < FEW_PICKS && (
+            <p className='bg-accent/60 rounded-2xl p-4 text-sm'>
+              {getEmptyLine()}
+            </p>
+          )}
+
         {error && <p className='text-destructive text-sm'>{error}</p>}
 
         <ModalFooterActions
+          note={note}
           leftActions={
             existingMeal && (
               <DeleteIconButton

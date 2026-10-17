@@ -486,6 +486,30 @@ export const getClearOutMessage = (
 ) =>
   `This takes ${countContainers(count)} (${formatServings(servings)}) out of the ${CONTAINER_PLACE_LABELS[place].toLowerCase()} and keeps ${count === 1 ? 'it' : 'them'} in What you finished as cleared out. You can undo it right after.`;
 
+export type FinishedDoor = 'SHOW' | 'HOLD' | 'HIDE';
+
+interface FinishedDoorInput {
+  isListShown: boolean;
+  isScoped: boolean;
+  hasStockInScope: boolean;
+  finishedCount: number;
+  /** The finished read has landed, with rows, none or a failure. */
+  isRead: boolean;
+}
+
+/** Whether the list's door to what is finished shows, holds its place while the read lands, or is not drawn: it shows once something is finished, and a scope with boxes in stock shows it unread (its read can be large). */
+export const getFinishedDoor = ({
+  isListShown,
+  isScoped,
+  hasStockInScope,
+  finishedCount,
+  isRead,
+}: FinishedDoorInput): FinishedDoor => {
+  if (!isListShown) return 'HIDE';
+  if (finishedCount > 0 || (isScoped && hasStockInScope)) return 'SHOW';
+  return isRead ? 'HIDE' : 'HOLD';
+};
+
 export const getPutBackText = (restored: number, total: number) =>
   restored === total
     ? `Put ${countContainers(restored)} back`

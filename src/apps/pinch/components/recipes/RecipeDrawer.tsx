@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   CalendarPlus,
   ChevronLeft,
+  ChevronRight,
   CircleCheck,
   CookingPot,
   Ellipsis,
@@ -19,6 +20,7 @@ import DetailSheet from '@/components/DetailSheet';
 import FactsLine, { type Fact } from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
 import GroupRow from '@/components/GroupRow';
+import LabelChip from '@/components/LabelChip';
 import MacroStats from '@/components/MacroStats';
 import SectionDivider from '@/components/SectionDivider';
 import StatTile from '@/components/StatTile';
@@ -48,6 +50,7 @@ import {
   selectRecipeNutrition,
   selectRecipesById,
   selectShowNutrition,
+  selectSourcesById,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type {
@@ -75,6 +78,7 @@ import {
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { getRecipeSource } from '@apps/pinch/utils/sources';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -147,6 +151,8 @@ interface RecipeDrawerProps {
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
+  /** Closes the drawer and shows the Recipes list narrowed to this source. */
+  onShowSource: (sourceId: string) => void;
   onOpenHistory: (id: string) => void;
   onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
@@ -162,12 +168,14 @@ function RecipeDrawer({
   onModify,
   onFillIn,
   onAddToShopping,
+  onShowSource,
   onOpenHistory,
   onOpenStock,
   onPutAway,
   onOpenNote,
 }: RecipeDrawerProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
+  const sourcesById = useAppSelector(selectSourcesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
@@ -244,6 +252,7 @@ function RecipeDrawer({
   };
 
   const care = getRecipeCare(recipe);
+  const source = getRecipeSource(recipe, sourcesById);
   const getCookPlan = () => {
     if (tonight === null || recipe.steps.length === 0) return null;
     const [plannedMealId, servings] = tonight.split('|');
@@ -485,33 +494,56 @@ function RecipeDrawer({
     >
       {viewBody}
       <div className={join('space-y-5', viewBody !== null && 'hidden')}>
-        {(recipe.coverPath || recipe.description || facts.length > 0) && (
-          <div className='flex items-start gap-3'>
-            {recipe.coverPath && (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='stripped'
-                aria-label='Show the photo'
-                onClick={(event) => openView('photo', event.currentTarget)}
-                className='shrink-0 rounded-xl p-0'
-              >
-                <CoverImage
-                  coverPath={recipe.coverPath}
-                  version={recipe.updatedAt}
-                  size={64}
-                />
-              </Button>
+        {(source ||
+          recipe.coverPath ||
+          recipe.description ||
+          facts.length > 0) && (
+          <div className='space-y-2'>
+            {source && (
+              <div className='flex'>
+                <LabelChip
+                  ariaLabel={`From ${source.label}: show its recipes`}
+                  icon={
+                    <ChevronRight
+                      className='h-3 w-3 shrink-0'
+                      aria-hidden='true'
+                    />
+                  }
+                  onClick={() => onShowSource(source.id)}
+                >
+                  {`From ${source.label}`}
+                </LabelChip>
+              </div>
             )}
-            <div className='min-w-0 flex-1 space-y-1'>
-              {recipe.description && (
-                <ClampedText text={recipe.description} maxLines={2} />
-              )}
-              <FactsLine
-                facts={facts}
-                className='text-muted-foreground text-sm'
-              />
-            </div>
+            {(recipe.coverPath || recipe.description || facts.length > 0) && (
+              <div className='flex items-start gap-3'>
+                {recipe.coverPath && (
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='stripped'
+                    aria-label='Show the photo'
+                    onClick={(event) => openView('photo', event.currentTarget)}
+                    className='shrink-0 rounded-xl p-0'
+                  >
+                    <CoverImage
+                      coverPath={recipe.coverPath}
+                      version={recipe.updatedAt}
+                      size={64}
+                    />
+                  </Button>
+                )}
+                <div className='min-w-0 flex-1 space-y-1'>
+                  {recipe.description && (
+                    <ClampedText text={recipe.description} maxLines={2} />
+                  )}
+                  <FactsLine
+                    facts={facts}
+                    className='text-muted-foreground text-sm'
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 

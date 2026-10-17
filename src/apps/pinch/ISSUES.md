@@ -375,7 +375,7 @@ A planned meal can hold any mix of recipes and ingredients, each with its own se
 
 ### Possible Approach
 1. `mealMath.ts`: item cost (`servings ×` recipe per-serving cost, or an ingredient's per-serving cost through its serving size, default 100 g for a custom ingredient) and planned-meal totals with `leftOut`.
-2. `MealBuilder`: day and type pills with "Change", the item search (recipes, ingredients, and later saved meals) with kind labels, per-row steppers and remove controls, a cost line with the `GapNudge`, footer `Cancel` / `Add to Tuesday` (or `Save` when editing).
+2. `MealBuilder`: day and type pills with "Change" (round 7: a framed "When" row that opens the day and meal editor, the header "Plan a meal"), the item search (recipes, ingredients, and later saved meals) with kind labels, per-row steppers and remove controls, a cost line with the `GapNudge`, footer `Cancel` / `Add to Tuesday` (or `Save` when editing).
 3. `updatePlannedMeal`: a field-scoped `updateDoc` of `date`, `mealType`, `items`, `refIds`, `name`. Modify in the planned meal view closes the drawer and opens the subview.
 4. Add an optional serving-size chip to the ingredient form (so a Doritos item can say what "1 serving" is).
 
@@ -411,7 +411,7 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 ### Possible Approach
 1. `Meal` slice and listener; `saveMeal` / `removeMeal`; `planMeal` accepts `sourceMealId` and `name` and copies items with new row ids.
 2. Meals pill in Recipes: `MealRow`s, `MealDrawer` (items, servings, total cost with nudge, "Plan it" primary that closes the drawer and opens Plan a meal on a chosen day, Modify / Copy / Delete in the muted block); `MealSubview` is the same builder without a day.
-3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected) and saved meals in the one search. "Save to Saved meals" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
+3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected; round 7: roomy rows with their facts and stock that stay after the first pick) and saved meals in the one search. "Save to Saved meals" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
 4. Rules for `meals` (≤ 30 items, shape); seed a few meals and a planned meal copied from one.
 
 ### CRUD & Entry-Point Requirements
@@ -438,7 +438,7 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 **Context:** Read `TECHNICAL.md`'s Derived values (month stats, average per fully priced meal) and open question 6; `UX.md`'s Calendar (stats row) and Breakdown; A-List's `CounterRow` and `StatTile` use.
 
 ### Description
-Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the stats back as a choice: the Calendar's View options have "Show stats" (off to start), which draws a row of tiles under the summary line for the period shown (Total, Avg per fully priced meal, Per g protein, fully priced while protein is on, and the daily nutrition switched on) and takes the total off the line.
+Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the stats back as a choice: the Calendar's View options have "Show stats" (off to start), which draws a row of tiles under the summary line for the period shown (Total, Avg per fully priced meal, Per g protein, fully priced while protein is on, and the daily nutrition switched on) and takes the total off the line. A day's drawer carries the same stats for that day: the tiles under its title with "Show stats" on, or a "Stats for this day" row that swaps them in place while it is off and the day has more than its total.
 
 ### Possible Approach
 1. `selectMonthStats(monthKey)` in one pass over the window's planned meals: `{ spendCents, mealsPriced, avgPerMealCents, leftOut }`; the average, as first built, divided by planned meals that have at least one priced item; round 7 replaced it with the meals that have nothing left out (`fullyPricedMeals`, `avgPerFullyPricedMealCents`), from three of them, because an average of floors read as a real price.
@@ -447,7 +447,7 @@ Above the month, a stats row shows what the month cost and the average cost per 
 
 ### CRUD & Entry-Point Requirements
 - [ ] No entity.
-- [ ] **Read:** the stats row on the Calendar; the breakdown drawer from tapping it.
+- [ ] **Read:** the stats row on the Calendar; the breakdown drawer from tapping it; a day's own stats in its drawer (the tiles, or the "Stats for this day" row).
 
 ### Success Criteria
 - [ ] Numbers equal the sum of the visible days for a seeded month; an empty month reads $0.00 and "—".
@@ -1052,7 +1052,7 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 1. One document per container (`servings`, `status`, `place`, `eatBy` as a date-only value, `history` of at most ten events), never split; finishing keeps the document, deleting erases it. A put-away writes one to twenty containers in one batch, each with its own history.
 2. Every change that depends on the stored state is a `runTransaction` over a pure plan, so another device's change is never written over.
 3. Keep the rules' history check lean: the evaluator's 1,000-expression limit allows about ten events checked by index.
-4. One listener for what is in stock; Finished is read on demand through TanStack Query with its composite index.
+4. One listener for what is in stock; Finished is read through TanStack Query with its composite index: when its step opens and, so the "What you finished" door shows only once something is finished, once when the list opens.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read / Update / Delete:** put some away (as one container or several), see what is in stock and finished, eat some or all, correct the count, move between fridge and freezer, change the eat-by date, throw it out, delete it.

@@ -10,6 +10,7 @@ import { Plus } from 'lucide-react';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
+import SummaryRow from '@/components/SummaryRow';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -244,20 +245,13 @@ function DetailsForm({
 
   return (
     <div className='grid gap-4'>
-      <div className='flex items-start justify-between gap-3'>
-        <p className='min-w-0 text-lg font-medium wrap-break-word'>{title}</p>
-        {isChangeable && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='-mt-1.5 h-10 shrink-0 px-0!'
-            onClick={onChange}
-          >
-            Change
-          </Button>
-        )}
-      </div>
+      <SummaryRow
+        label='Putting away'
+        ariaLabel={`Putting away ${title}. Pick something else`}
+        onClick={isChangeable ? onChange : undefined}
+      >
+        {title}
+      </SummaryRow>
       <Form
         id='pinch-container'
         form={fields}
