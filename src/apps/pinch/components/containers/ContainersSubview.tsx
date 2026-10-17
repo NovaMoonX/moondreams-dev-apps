@@ -595,6 +595,11 @@ function ContainersSubview({
       <div className='space-y-4'>
         <SectionHeader
           title={title}
+          subtitle={
+            isFinishedView
+              ? "Boxes you've used up or cleared out."
+              : 'What you have put away, with what to eat first.'
+          }
           action={
             !isFinishedView && (
               <Button
@@ -602,7 +607,7 @@ function ContainersSubview({
                 size='sm'
                 rounded='full'
                 className='gap-1'
-                aria-label='Put something away'
+                aria-label='Add something you put away'
                 disabled={!isReady}
                 onClick={() => setIsAdding(true)}
               >
