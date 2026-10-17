@@ -19,6 +19,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SortControl, { type SortOrder } from '@/components/SortControl';
 import Subview from '@/components/Subview';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
@@ -639,17 +640,13 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
         )}
         {getBody()}
         {hiddenCount > 0 && (
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='h-10 px-0!'
+          <ShowMoreButton
             onClick={() =>
               setPaging({ key: pagingKey, limit: limit + LIST_PAGE_SIZE })
             }
           >
             Show {Math.min(hiddenCount, LIST_PAGE_SIZE)} more
-          </Button>
+          </ShowMoreButton>
         )}
       </div>
       {adding && (

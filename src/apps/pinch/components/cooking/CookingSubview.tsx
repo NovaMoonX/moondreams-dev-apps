@@ -1530,7 +1530,7 @@ function CookingSession({
         {focused !== null ? (
           getTimerContent()
         ) : isFinishShown ? (
-          <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6'>
+          <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6 [@media(max-height:600px)]:gap-3 [@media(max-height:600px)]:py-2'>
             <p className='text-center text-2xl leading-snug font-medium'>
               Nice work
             </p>

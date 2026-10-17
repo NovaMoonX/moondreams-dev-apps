@@ -38,6 +38,7 @@ export function SubviewHeader({
         size='icon'
         rounded='full'
         aria-label='Back'
+        className="relative before:absolute before:-inset-1.5 before:content-['']"
         onClick={onBack}
       >
         <ChevronLeft className='h-5 w-5' />

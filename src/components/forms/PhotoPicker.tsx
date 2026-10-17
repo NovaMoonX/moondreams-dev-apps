@@ -64,6 +64,7 @@ function PhotoPicker({
         type='button'
         variant='secondary'
         size='sm'
+        className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
         disabled={isBusy}
         onClick={() => inputRef.current?.click()}
       >
@@ -72,8 +73,9 @@ function PhotoPicker({
       {photoUrl && onRemove && (
         <Button
           type='button'
-          variant='link'
+          variant='tertiary'
           size='sm'
+          className="text-destructive! relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           disabled={isBusy}
           onClick={onRemove}
         >
