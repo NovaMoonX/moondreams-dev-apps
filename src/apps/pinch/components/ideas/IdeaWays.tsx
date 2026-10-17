@@ -609,9 +609,7 @@ export function IdeaTextWay({
       <IntroCard
         icon={IDEA_KIND_EMOJIS.TEXT}
         lead='Jot it down now, cook it later.'
-      >
-        It goes on your ideas list until you turn it into a recipe.
-      </IntroCard>
+      />
       <Form
         id='pinch-idea-text'
         form={fields}

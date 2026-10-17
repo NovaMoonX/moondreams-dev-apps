@@ -184,7 +184,7 @@ function ShoppingItemSheet({
       {shares.length > 0 && (
         <div className='mb-4'>
           <p className='text-muted-foreground mb-1.5 text-xs'>For</p>
-          <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border px-3'>
+          <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
             {shownShares.map((share) => {
               const amountText = formatShopAmount(share.amount);
               return (
