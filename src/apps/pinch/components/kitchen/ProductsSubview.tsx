@@ -484,7 +484,7 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
                   No prices yet
                 </p>
               ) : (
-                <ul className='divide-border divide-y'>
+                <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
                   {group.items.map((row) => renderRow(row, false))}
                 </ul>
               )}

@@ -464,7 +464,7 @@ function ContainersSubview({
     return (
       <section aria-label={CONTAINER_PLACE_LABELS[place]}>
         {noteLine}
-        <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border px-3'>
+        <ul className='border-border divide-border mb-1 divide-y rounded-2xl border px-3'>
           {rows.slice(0, visible).map(({ boxes }) => renderRow(boxes))}
         </ul>
         {visible < rows.length && (
@@ -524,7 +524,7 @@ function ContainersSubview({
       : CONTAINER_FINISHED_PAGE_SIZE;
     return (
       <div className='space-y-1'>
-        <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border px-3'>
+        <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
           {rows.map((container) => renderRow([container]))}
         </ul>
         {hasMore && (
