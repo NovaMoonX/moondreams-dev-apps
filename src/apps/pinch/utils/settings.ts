@@ -1,3 +1,4 @@
+import type { DevicePushState } from '@/lib/notifications/devicePush';
 import {
   CONTAINER_FREEZER_DAYS,
   CONTAINER_FRIDGE_DAYS,
@@ -5,6 +6,7 @@ import {
   DEFAULT_REMINDER_HOUR,
   FREEZER_DAYS_RANGE,
   FRIDGE_DAYS_RANGE,
+  FRIDGE_GUIDANCE_DAYS,
   LEAD_DAYS_CHOICES,
 } from '@apps/pinch/constants';
 import type { PinchReminderSettings, PinchSettings } from '@apps/pinch/types';
@@ -28,6 +30,21 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   updatedAt: 0,
   lastDigestDay: null,
 };
+
+/** A stored document with any key it predates filled from the defaults, or the defaults themselves when there is none. */
+export const getSettingsWithDefaults = (
+  document: PinchSettings | null,
+): PinchSettings =>
+  document === null
+    ? DEFAULT_PINCH_SETTINGS
+    : {
+        ...DEFAULT_PINCH_SETTINGS,
+        ...document,
+        reminders: {
+          ...DEFAULT_PINCH_SETTINGS.reminders,
+          ...document.reminders,
+        },
+      };
 
 export const BUILT_IN_USUAL_DAYS: UsualDays = {
   fridge: CONTAINER_FRIDGE_DAYS,
@@ -126,3 +143,30 @@ export const getZoneAbbreviation = (timeZone: string | null, at: number) => {
     return '';
   }
 };
+
+/** The line under "Reminders on this device": the reason to turn it on while it is off, and how to get unstuck when the browser won't let it. Empty while the device is still being read. */
+export const getDeviceReminderText = (state: DevicePushState | null) => {
+  if (state === null) return '';
+  if (state === 'on') {
+    return 'Pinch can send this device reminders. Turn it off to stop every Moondreams reminder here.';
+  }
+  if (state === 'blocked') {
+    return 'This site is blocked from sending notifications. Allow them in your browser’s site settings, then come back.';
+  }
+  if (state === 'unsupported') {
+    return 'This browser can’t show reminders. On an iPhone or iPad, add this site to your Home Screen and open it from there.';
+  }
+  return 'Allow notifications so Pinch can nudge you when something needs you, even with the app closed.';
+};
+
+/** The note under a failed attempt to turn reminders on; nothing for a closed question, which changed nothing. */
+export const getTurnOnFailureText = (
+  result: 'on' | 'blocked' | 'unsupported' | 'dismissed' | 'failed',
+) =>
+  result === 'failed'
+    ? 'We couldn’t turn reminders on. Check your connection and try again.'
+    : null;
+
+/** Whether the fridge number is past what most food-safety guidance gives for cooked leftovers, so the screen says so quietly. */
+export const isAboveFridgeGuidance = (fridgeDays: number) =>
+  fridgeDays > FRIDGE_GUIDANCE_DAYS;

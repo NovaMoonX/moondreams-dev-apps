@@ -35,7 +35,7 @@ import {
   groupShoppingItems,
 } from '@apps/pinch/utils/shopping';
 import {
-  DEFAULT_PINCH_SETTINGS,
+  getSettingsWithDefaults,
   getUsualDays,
 } from '@apps/pinch/utils/settings';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
@@ -564,9 +564,14 @@ const NO_SWITCHES = {
 export const selectShowNutrition = (state: RootState) =>
   state.pinch.settings.settings?.showNutrition ?? NO_SWITCHES;
 
-/** The person's reminders and keeping days; the defaults until their first change. */
-export const selectPinchSettings = (state: RootState) =>
-  state.pinch.pinchSettings.settings ?? DEFAULT_PINCH_SETTINGS;
+const selectPinchSettingsDocument = (state: RootState) =>
+  state.pinch.pinchSettings.settings;
+
+/** The person's reminders and keeping days; the defaults until their first change, and under a document written before a key existed, that key's default. */
+export const selectPinchSettings = createSelector(
+  [selectPinchSettingsDocument],
+  getSettingsWithDefaults,
+);
 
 /** Whether a document exists, so the first change writes the whole thing and later ones only their fields. */
 export const selectHasPinchSettings = (state: RootState) =>

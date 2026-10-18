@@ -67,6 +67,7 @@ function EatSoonOptions({ uid, reminders }: EatSoonOptionsProps) {
       <div className='space-y-2'>
         <p className='text-muted-foreground text-xs'>Send it at</p>
         <Select
+          className='sm:max-w-60'
           options={HOUR_OPTIONS}
           value={String(reminders.hour)}
           onChange={(hour) =>
@@ -130,8 +131,7 @@ function RemindersSection({ uid }: RemindersSectionProps) {
     <SettingsGroup
       title='Reminders'
       footer={
-        device !== null &&
-        !isOn && (
+        device === 'off' && (
           <p>Turn on reminders for this device to choose what you get.</p>
         )
       }

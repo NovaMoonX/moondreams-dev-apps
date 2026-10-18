@@ -307,6 +307,10 @@ import {
   formatReminderHour as stgHour,
   getSettingsUpdates as stgUpdates,
   getUsualDays as stgUsual,
+  getSettingsWithDefaults as stgWithDefaults,
+  getDeviceReminderText as stgDeviceText,
+  getTurnOnFailureText as stgFailureText,
+  isAboveFridgeGuidance as stgAbove,
   getZoneAbbreviation as stgZone,
   isValidFreezerDays as stgFreezer,
   isValidFridgeDays as stgFridge,
@@ -9918,6 +9922,67 @@ assert.equal(
   );
   assert.equal(stgZone('America/Los_Angeles', Date.UTC(2026, 9, 18)), 'PDT');
   assert.equal(stgZone('America/Los_Angeles', Date.UTC(2026, 0, 18)), 'PST');
+  assert.deepEqual(
+    stgWithDefaults(null),
+    stgDefaults,
+    'no document reads as the defaults',
+  );
+  const olderDocument = {
+    fridgeDays: 6,
+    freezerDays: null,
+    updatedAt: 5,
+    reminders: { eatSoon: true, timers: false, hour: 7 },
+  } as unknown as Parameters<typeof stgWithDefaults>[0];
+  assert.deepEqual(
+    stgWithDefaults(olderDocument)?.reminders,
+    {
+      eatSoon: true,
+      timers: false,
+      leadDays: 1,
+      hour: 7,
+      timeZone: null,
+    },
+    'a document written before a reminder key existed reads that key as its default',
+  );
+  assert.equal(
+    stgWithDefaults(olderDocument)?.lastDigestDay,
+    null,
+    'and before lastDigestDay existed as none',
+  );
+  assert.deepEqual(
+    [null, 'off', 'on', 'blocked', 'unsupported'].map((state) =>
+      stgDeviceText(state as Parameters<typeof stgDeviceText>[0]) === '',
+    ),
+    [true, false, false, false, false],
+    'every state of the device row says something, except while it is still being read',
+  );
+  assert.match(
+    stgDeviceText('off'),
+    /^Allow notifications so Pinch can nudge you/,
+    'the reason to allow comes with the switch',
+  );
+  assert.match(
+    stgDeviceText('blocked'),
+    /browser’s site settings/,
+    'a blocked browser is told where to change it',
+  );
+  assert.match(
+    stgDeviceText('unsupported'),
+    /Home Screen/,
+    'an iPhone is told how to get reminders',
+  );
+  assert.deepEqual(
+    (['on', 'blocked', 'unsupported', 'dismissed', 'failed'] as const).map(
+      stgFailureText,
+    ),
+    [null, null, null, null, 'We couldn’t turn reminders on. Check your connection and try again.'],
+    'only a failure that a retry can fix is worded, and it says so',
+  );
+  assert.deepEqual(
+    [3, 4, 5, 14].map(stgAbove),
+    [false, false, true, true],
+    'the food-safety line starts above four fridge days',
+  );
   assert.equal(stgZone(null, 0), '');
   assert.equal(stgZone('Not/AZone', 0), '', 'an unknown zone names nothing');
 }
