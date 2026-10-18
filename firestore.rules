@@ -1348,6 +1348,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Written and read only by the photo-search Cloud Function (admin SDK): the shared answer cache and the usage counters that keep its free tier from running out.
+    match /apps/pinch/imageSearchCache/{key} {
+      allow read, write: if false;
+    }
+
+    match /apps/pinch/imageSearchUsage/{key} {
+      allow read, write: if false;
+    }
+
     // Everything in a kitchen is private to one person and nests under their uid; there is no admin or role branch.
     match /apps/pinch/kitchens/{uid} {
       function isKitchenOwner() {

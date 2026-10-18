@@ -43,7 +43,7 @@
     "fb:rules:storage": "firebase deploy --only storage",
     "fb:rules": "firebase deploy --only database,firestore:rules,storage",
     "catalog:build": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/catalog/buildCatalog.ts",
-    "check:pinch-ingest": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchIngest.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchLinks.ts",
+    "check:pinch-ingest": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchIngest.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchLinks.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/imageSearch.ts",
     "check:pinch-math": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchMath.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/durations.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchFridge.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchDigest.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchOrganize.ts",
     "check:pinch-voice": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchVoice.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/speechListener.ts",
     "check:indexes": "tsx scripts/checkFirestoreIndexes.ts",
