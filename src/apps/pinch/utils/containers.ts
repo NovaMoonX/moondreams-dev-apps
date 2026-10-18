@@ -463,18 +463,122 @@ export const planClear = (container: Container, now: number): ContainerPlan =>
         },
       };
 
-/** What a clear-out of one place still writes: a container that is gone, finished or in the other place since the tap is left as it is. */
+export type BulkKind = 'CLEAR' | 'TOSS' | 'EAT' | 'MOVE';
+
+export type SkipReason = 'GONE' | 'FINISHED' | 'MOVED' | 'REDATED';
+
+export type SkipCounts = Record<SkipReason, number>;
+
+export interface BulkAction {
+  kind: BulkKind;
+  /** The place the screen showed: a box in the other place by now is left as it is, and a move goes to the other one. */
+  from: ContainerPlace;
+  /** Leaves a box alone once its date is no longer in the past, for acting on what the screen called past its date. */
+  isPastOnly?: boolean;
+  /** A move's care by recipe id, so each box gets the date a single move would suggest. */
+  cares?: Record<string, RecipeCare | null>;
+}
+
+export interface BulkWrite {
+  id: string;
+  fields: ContainerFields;
+  /** Where a moved box was and its date then, which its Undo puts back; null for any other act. */
+  before: { place: ContainerPlace; eatBy: number } | null;
+}
+
+export const NO_SKIPS: SkipCounts = {
+  GONE: 0,
+  FINISHED: 0,
+  MOVED: 0,
+  REDATED: 0,
+};
+
+export const getOtherPlace = (place: ContainerPlace): ContainerPlace =>
+  place === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
+
+const planBulkWrite = (
+  container: Container,
+  action: BulkAction,
+  now: number,
+): ContainerPlan => {
+  if (action.kind === 'CLEAR') return planClear(container, now);
+  if (action.kind === 'TOSS') return planToss(container, now);
+  if (action.kind === 'EAT') return planEat(container, 'ALL', now);
+
+  const to = getOtherPlace(action.from);
+  const care =
+    container.recipeId === null
+      ? null
+      : (action.cares?.[container.recipeId] ?? null);
+  const { eatBy } = getEatByDefault(
+    getMoveForPlace(to, action.from),
+    care,
+    now,
+    container.eatBy,
+  );
+  return planMove(container, to, eatBy, now);
+};
+
+const planBulkOne = (
+  container: Container | null,
+  action: BulkAction,
+  now: number,
+): { write: BulkWrite } | { skip: SkipReason } => {
+  if (container === null) return { skip: 'GONE' };
+  if (container.status !== 'IN_STOCK') return { skip: 'FINISHED' };
+  if (container.place !== action.from) return { skip: 'MOVED' };
+  if (
+    action.isPastOnly === true &&
+    getEatByState(container.eatBy, now) !== 'PAST'
+  ) {
+    return { skip: 'REDATED' };
+  }
+
+  const plan = planBulkWrite(container, action, now);
+  if ('error' in plan) return { skip: 'FINISHED' };
+
+  return {
+    write: {
+      id: container.id,
+      fields: plan.fields,
+      before:
+        action.kind === 'MOVE'
+          ? { place: container.place, eatBy: container.eatBy }
+          : null,
+    },
+  };
+};
+
+/** What a bulk act still writes, one pass over what the transaction just read: a box that is gone, finished, in the other place or (for a past-its-date act) re-dated since the tap is left as it is and counted by why. */
+export const planBulk = (
+  containers: (Container | null)[],
+  action: BulkAction,
+  now: number,
+) => {
+  const plans = containers.map((container) =>
+    planBulkOne(container, action, now),
+  );
+  return {
+    writes: plans.flatMap((plan) => ('write' in plan ? [plan.write] : [])),
+    skipped: plans.reduce<SkipCounts>(
+      (counts, plan) =>
+        'skip' in plan
+          ? { ...counts, [plan.skip]: counts[plan.skip] + 1 }
+          : counts,
+      NO_SKIPS,
+    ),
+  };
+};
+
+/** What a clear-out of one place still writes. */
 export const planClearOut = (
   containers: (Container | null)[],
   place: ContainerPlace,
   now: number,
 ) =>
-  containers.flatMap((container) => {
-    if (container === null || container.place !== place) return [];
-
-    const plan = planClear(container, now);
-    return 'fields' in plan ? [{ id: container.id, fields: plan.fields }] : [];
-  });
+  planBulk(containers, { kind: 'CLEAR', from: place }, now).writes.map(
+    ({ id, fields }) => ({ id, fields }),
+  );
 
 const countContainers = (count: number) =>
   `${count} ${count === 1 ? 'box' : 'boxes'}`;
@@ -530,6 +634,165 @@ export const getPutBackText = (restored: number, total: number) =>
   restored === total
     ? `Put ${countContainers(restored)} back`
     : `Put back ${restored} of ${total}; the rest changed since`;
+
+/** The in-stock boxes whose date has passed, in the order they came. */
+export const getPastDueBoxes = (containers: Container[], now = Date.now()) =>
+  containers.filter(
+    (container) =>
+      container.status === 'IN_STOCK' &&
+      getEatByState(container.eatBy, now) === 'PAST',
+  );
+
+export const getPastDueText = (count: number) =>
+  `${count} ${count === 1 ? 'is' : 'are'} past ${count === 1 ? 'its' : 'their'} date`;
+
+export const getTossAction = (count: number) =>
+  count === 1 ? 'Toss it' : 'Toss them';
+
+export const getSelectionTitle = (count: number) =>
+  count === 0 ? 'Select boxes' : `${count} selected`;
+
+/** Why the selection's actions are off, in the footer beside them; null while they are on. */
+export const getSelectionNote = (count: number) =>
+  count === 0 ? 'Tap the boxes you want to act on.' : null;
+
+const MAX_BULK_NAMES = 3;
+
+export interface BulkNames {
+  lines: string[];
+  /** Boxes in the rows past the ones named. */
+  more: number;
+}
+
+/** The rows a confirm names, soonest date first and three at most, each with what tells near-identical rows apart: how many and the day it was due. */
+export const getBulkNames = (
+  batches: ContainerBatch[],
+  getTitle: (container: Container) => string,
+  now = Date.now(),
+): BulkNames => {
+  const sorted = [...batches].sort((a, b) => byEatBy(a.boxes[0], b.boxes[0]));
+  const lines = sorted.slice(0, MAX_BULK_NAMES).map(({ boxes }) => {
+    const [first] = boxes;
+    return [
+      getTitle(first),
+      getBatchServingsText(boxes),
+      `Eat by ${formatDayShort(getPlannedDayKey(first.eatBy), now)}`,
+    ].join(' · ');
+  });
+  const more = sorted
+    .slice(MAX_BULK_NAMES)
+    .reduce((sum, { boxes }) => sum + boxes.length, 0);
+  return { lines, more };
+};
+
+/** Up to three distinct names, then "and N more". */
+export const getNamesLine = (names: string[]) => {
+  const unique = Array.from(new Set(names));
+  if (unique.length === 0) return null;
+  if (unique.length <= MAX_BULK_NAMES) return formatList(unique);
+
+  return `${unique.slice(0, MAX_BULK_NAMES).join(', ')} and ${unique.length - MAX_BULK_NAMES} more`;
+};
+
+export const getTossConfirmTitle = (count: number) =>
+  `Toss ${countContainers(count)}?`;
+
+export const getTossConfirmNote = (count: number) =>
+  `${count === 1 ? 'It stays' : 'They stay'} in What you finished as tossed. You can undo it right after.`;
+
+const getCountWord = (count: number) => (count === 1 ? 'one' : `${count}`);
+
+/** What a bulk act skipped and why, in a sentence; null when it skipped nothing. */
+export const getSkippedText = (skipped: SkipCounts) => {
+  const parts = [
+    skipped.FINISHED > 0 &&
+      `${getCountWord(skipped.FINISHED)} ${skipped.FINISHED === 1 ? 'was' : 'were'} already finished`,
+    skipped.MOVED > 0 &&
+      `${getCountWord(skipped.MOVED)} ${skipped.MOVED === 1 ? 'was' : 'were'} in the other place by then`,
+    skipped.REDATED > 0 &&
+      `${getCountWord(skipped.REDATED)} got a new date`,
+    skipped.GONE > 0 &&
+      `${getCountWord(skipped.GONE)} ${skipped.GONE === 1 ? 'was' : 'were'} deleted`,
+  ].filter((part) => part !== false);
+  if (parts.length === 0) return null;
+
+  const sentence = formatList(parts);
+  return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
+};
+
+const BULK_VERBS: Record<Exclude<BulkKind, 'MOVE'>, string> = {
+  EAT: 'Ate',
+  TOSS: 'Tossed',
+  CLEAR: 'Cleared out',
+};
+
+/** "Tossed 4 boxes", or "Tossed 4 of 5 boxes" when some were left alone. */
+const getBulkResultText = (
+  action: Pick<BulkAction, 'kind' | 'from'>,
+  requested: number,
+  changed: number,
+) => {
+  const amount =
+    changed === requested
+      ? countContainers(changed)
+      : `${changed} of ${countContainers(requested)}`;
+  if (action.kind !== 'MOVE') return `${BULK_VERBS[action.kind]} ${amount}`;
+
+  return action.from === 'FRIDGE'
+    ? `Put ${amount} in the freezer`
+    : `Thawed ${amount} in the fridge`;
+};
+
+/** What a bulk move leaves on the boxes' dates, said once for all of them. */
+const getMoveDatesText = (eatBys: number[], now: number) => {
+  if (eatBys.length === 0) return null;
+
+  const first = Math.min(...eatBys);
+  const last = Math.max(...eatBys);
+  return first === last
+    ? `Eat by ${getEatByPhrase(first, now)}`
+    : `Eat by dates run from ${getEatByPhrase(first, now)} to ${getEatByPhrase(last, now)}`;
+};
+
+interface BulkToastInput {
+  action: Pick<BulkAction, 'kind' | 'from'>;
+  requested: number;
+  changed: number;
+  skipped: SkipCounts;
+  /** The dates a move gave its boxes. */
+  eatBys: number[];
+  /** What the boxes were, for the line under the title. */
+  names: string | null;
+  now?: number;
+}
+
+/** The toast over a bulk act's Undo: what it did, in the count it really wrote, and one line of what else is worth knowing (what it left alone, the dates a move set, or the names). */
+export const getBulkToast = ({
+  action,
+  requested,
+  changed,
+  skipped,
+  eatBys,
+  names,
+  now = Date.now(),
+}: BulkToastInput) => {
+  if (action.kind === 'CLEAR') {
+    return {
+      title: `Cleared out the ${CONTAINER_PLACE_LABELS[action.from].toLowerCase()}`,
+      description: countContainers(changed),
+    };
+  }
+
+  const lines = [
+    action.kind === 'MOVE' ? getMoveDatesText(eatBys, now) : null,
+    getSkippedText(skipped),
+  ].filter((line) => line !== null);
+  return {
+    title: getBulkResultText(action, requested, changed),
+    description:
+      lines.length > 0 ? lines.join(' ') : (names ?? undefined),
+  };
+};
 
 export const planMove = (
   container: Container,
@@ -732,6 +995,36 @@ export const planUndoEnd = (
     fields: {
       servings,
       status: 'IN_STOCK',
+      history: container.history.slice(0, -1),
+      updatedAt: now,
+    },
+  };
+};
+
+const PLACE_EVENT_KINDS: ContainerEventKind[] = ['FRIDGE', 'FREEZE', 'THAW'];
+
+/** Puts a moved box back where it was with its date then, only while that move is still its last event, so a later eat, edit or move is never rewound. */
+export const planUndoMove = (
+  container: Container,
+  at: number,
+  before: { place: ContainerPlace; eatBy: number },
+  now: number,
+): ContainerPlan => {
+  const last = container.history.at(-1);
+  if (
+    container.status !== 'IN_STOCK' ||
+    container.place === before.place ||
+    !last ||
+    last.at !== at ||
+    !PLACE_EVENT_KINDS.includes(last.kind)
+  ) {
+    return { error: 'That has changed since, so it could not be undone.' };
+  }
+
+  return {
+    fields: {
+      place: before.place,
+      eatBy: before.eatBy,
       history: container.history.slice(0, -1),
       updatedAt: now,
     },

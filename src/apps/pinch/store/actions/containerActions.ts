@@ -9,14 +9,18 @@ import { CONTAINER_CLEAR_CHUNK_SIZE } from '@apps/pinch/constants';
 import { containerKeys } from '@apps/pinch/queries/containerQueries';
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
-  planClearOut,
+  NO_SKIPS,
+  planBulk,
   planCount,
   planEat,
   planEatBy,
   planMove,
   planToss,
   planUndoEnd,
+  planUndoMove,
+  type BulkAction,
   type ContainerPlan,
+  type SkipCounts,
 } from '@apps/pinch/utils/containers';
 
 const containerDoc = (uid: string, id: string) =>
@@ -294,60 +298,80 @@ const runInChunks = <T, R>(
 export interface ClearedContainer {
   id: string;
   at: number;
+  /** A moved box's place and date before the move, which its Undo puts back. */
+  before?: { place: ContainerPlace; eatBy: number };
+  /** A moved box's date after the move. */
+  eatBy?: number;
 }
 
-interface ClearOutInput {
+interface ChangeInPlaceInput {
   uid: string;
-  place: ContainerPlace;
   ids: string[];
+  action: BulkAction;
 }
 
-interface ClearOutResult {
-  cleared: ClearedContainer[];
-  /** Set when a later chunk failed after earlier ones were cleared. */
+interface ChangeInPlaceResult {
+  changed: ClearedContainer[];
+  skipped: SkipCounts;
+  /** Set when a later chunk failed after earlier ones were written. */
   error: string | null;
 }
 
-/** Ends every container still in stock in that place among `ids`, re-read inside each chunk's transaction; resolves to the ones it really cleared. */
-export const clearOutPlace = createAsyncThunk<
-  ClearOutResult,
-  ClearOutInput,
+const addCounts = (a: SkipCounts, b: SkipCounts): SkipCounts => ({
+  GONE: a.GONE + b.GONE,
+  FINISHED: a.FINISHED + b.FINISHED,
+  MOVED: a.MOVED + b.MOVED,
+  REDATED: a.REDATED + b.REDATED,
+});
+
+/** Applies one act (clear out, toss, eat, move) to every box among `ids` that is still as the screen thought, each chunk re-read inside its own transaction; resolves to the boxes it really changed and why it left the others. */
+export const changeContainersInPlace = createAsyncThunk<
+  ChangeInPlaceResult,
+  ChangeInPlaceInput,
   { rejectValue: string }
 >(
-  'pinch/containers/clearOut',
-  async ({ uid, place, ids }, { rejectWithValue }) => {
+  'pinch/containers/changeInPlace',
+  async ({ uid, ids, action }, { rejectWithValue }) => {
     const { done, error } = await runInChunks(
       ids,
-      (chunk): Promise<ClearedContainer[]> =>
+      (chunk): Promise<{ changed: ClearedContainer[]; skipped: SkipCounts }[]> =>
         runTransaction(db, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((id) => transaction.get(containerDoc(uid, id))),
           );
-          const writes = planClearOut(
+          const { writes, skipped } = planBulk(
             snapshots.map((snapshot) =>
               snapshot.exists() ? (snapshot.data() as Container) : null,
             ),
-            place,
+            action,
             Date.now(),
           );
           writes.forEach(({ id, fields }) =>
             transaction.update(containerDoc(uid, id), fields),
           );
-          return writes.map(({ id, fields }) => ({
+          const changed = writes.map(({ id, fields, before }) => ({
             id,
             at: fields.updatedAt,
+            ...(before === null ? {} : { before, eatBy: fields.eatBy }),
           }));
+          return [{ changed, skipped }];
         }),
     );
-    if (done.length > 0) void refreshFinished(uid);
-    if (error === null) return { cleared: done, error: null };
-    if (done.length === 0) {
-      return rejectWithValue(getWriteMessage(error, "Couldn't clear it out."));
+    const changed = done.flatMap((entry) => entry.changed);
+    const skipped = done.reduce(
+      (counts, entry) => addCounts(counts, entry.skipped),
+      NO_SKIPS,
+    );
+    if (changed.length > 0) void refreshFinished(uid);
+    if (error === null) return { changed, skipped, error: null };
+    if (changed.length === 0) {
+      return rejectWithValue(getWriteMessage(error, "Couldn't save that."));
     }
 
     return {
-      cleared: done,
-      error: `Cleared out ${done.length} before it stopped. ${getWriteMessage(error, 'The rest are still there.')}`,
+      changed,
+      skipped,
+      error: `${changed.length} changed before it stopped. ${getWriteMessage(error, 'The rest are as they were.')}`,
     };
   },
 );
@@ -362,7 +386,7 @@ interface UndoClearOutResult {
   error: string | null;
 }
 
-/** Puts back each cleared container whose last event is still that clear-out; one changed since is left as it is. */
+/** Puts back each changed box whose last event is still that act (an end event, or a move); one that changed since is left as it is. */
 export const undoClearOut = createAsyncThunk<
   UndoClearOutResult,
   UndoClearOutInput,
@@ -380,7 +404,10 @@ export const undoClearOut = createAsyncThunk<
           const snapshot = snapshots[index];
           if (!snapshot.exists()) return [];
 
-          const plan = planUndoEnd(snapshot.data() as Container, entry.at, now);
+          const container = snapshot.data() as Container;
+          const plan = entry.before
+            ? planUndoMove(container, entry.at, entry.before, now)
+            : planUndoEnd(container, entry.at, now);
           return 'fields' in plan
             ? [{ ref: snapshot.ref, fields: plan.fields }]
             : [];
@@ -397,7 +424,7 @@ export const undoClearOut = createAsyncThunk<
 
     return {
       restored: done.length,
-      error: getWriteMessage(error, 'The rest are still in What you finished.'),
+      error: getWriteMessage(error, 'The rest are as the act left them.'),
     };
   },
 );
