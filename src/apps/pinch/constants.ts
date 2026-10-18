@@ -6,6 +6,8 @@ import type {
   IdeaStartMethod,
   KitchenView,
   MealType,
+  PackageEventKind,
+  PackagePlace,
   PinchTab,
   ReminderKind,
   RecipesView,
@@ -590,6 +592,61 @@ export const FREEZER_STEP_DAYS = 7;
 /** Most food-safety guidance says three to four days for cooked leftovers in the fridge, so the note under Settings starts above this. */
 export const FRIDGE_GUIDANCE_DAYS = 4;
 
+export const PACKAGE_PLACES: PackagePlace[] = ['PANTRY', 'FRIDGE', 'FREEZER'];
+export const PACKAGE_PLACE_LABELS: Record<PackagePlace, string> = {
+  PANTRY: 'Pantry',
+  FRIDGE: 'Fridge',
+  FREEZER: 'Freezer',
+};
+export const PACKAGE_PLACE_EMOJIS: Record<PackagePlace, string> = {
+  PANTRY: '🥫',
+  FRIDGE: '🥛',
+  FREEZER: '❄️',
+};
+export const PACKAGE_PLACE_OPTIONS = PACKAGE_PLACES.map((place) => ({
+  value: place,
+  label: PACKAGE_PLACE_LABELS[place],
+  emoji: PACKAGE_PLACE_EMOJIS[place],
+}));
+export const PACKAGE_EMOJI = '📦';
+/** The chip on an ingredient's row: what it is, by the part of the shop it comes from. */
+export const PANTRY_SECTION_EMOJIS: Record<ShopSection, string> = {
+  produce: '🥬',
+  meat: '🥩',
+  dairy: '🥛',
+  bakery: '🍞',
+  pantry: '🥫',
+  spices: '🧂',
+  snacks: '🍿',
+  frozen: '🍦',
+  other: PACKAGE_EMOJI,
+};
+export const PACKAGE_EVENT_KINDS: PackageEventKind[] = [
+  'ADDED',
+  'USED',
+  'MOVED',
+  'TOSSED',
+  'EDITED',
+];
+/** Set by the rules evaluator's budget, like a box's history. */
+export const MAX_PACKAGE_HISTORY = 10;
+export const MAX_PACKAGE_NOTE_LENGTH = 80;
+export const MAX_PACKAGE_AMOUNT = 1_000_000;
+/** Counted by the client only; the rules do not count documents. */
+export const SOFT_MAX_PACKAGES = 500;
+export const PACKAGE_LIST_PAGE_SIZE = 20;
+/** Past this many ingredients the short intro goes and the list splits into what needs a look and the rest. */
+export const PANTRY_INTRO_MAX_INGREDIENTS = 4;
+export const PANTRY_SPLIT_MIN_ROWS = 8;
+/** The most packages an ingredient's list draws before its "Show more". */
+export const PACKAGE_ROWS_PAGE_SIZE = 8;
+/** The quick answers to "when does it expire?": days from today. The two other answers, a date picked by hand and no date, aren't a number of days. */
+export const PACKAGE_DATE_CHOICES = [
+  { value: 'DAYS_3', days: 3, label: '3 days' },
+  { value: 'WEEK_1', days: 7, label: '1 week' },
+  { value: 'MONTH_1', days: 30, label: '1 month' },
+] as const;
+
 export const LEAD_DAYS_CHOICES = [1, 2, 3];
 export const DEFAULT_LEAD_DAYS = 1;
 export const DEFAULT_REMINDER_HOUR = 9;
@@ -607,6 +664,13 @@ export const REMINDER_KINDS: {
     title: 'Food to eat soon or past its date',
     description:
       'One note in the morning that names what is due. The dish names show on your lock screen.',
+  },
+  {
+    key: 'expiring',
+    emoji: '🥫',
+    title: 'Ingredients about to expire',
+    description:
+      'The same morning note also names the packages in your pantry that are past their date or about to be.',
   },
   {
     key: 'timers',

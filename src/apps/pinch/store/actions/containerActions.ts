@@ -269,7 +269,7 @@ interface ChunksResult<R> {
 }
 
 /** One chunk after another, each its own transaction: a chunk that committed stays committed when a later one fails. */
-const runInChunks = <T, R>(
+export const runInChunks = <T, R>(
   items: T[],
   runChunk: (chunk: T[]) => Promise<R[]>,
 ): Promise<ChunksResult<R>> =>

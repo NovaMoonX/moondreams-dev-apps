@@ -154,8 +154,8 @@ interface RecipeDrawerProps {
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
-  /** Closes the drawer and shows the Recipes list narrowed to this source. */
-  onShowSource: (sourceId: string) => void;
+  /** Closes the drawer and shows the Recipes list narrowed to this source; a drawer opened from somewhere with no recipe list leaves it out, and the source is then only a label. */
+  onShowSource?: (sourceId: string) => void;
   onOpenHistory: (id: string) => void;
   onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
@@ -258,7 +258,9 @@ function RecipeDrawer({
   const care = getRecipeCare(recipe);
   const source = getRecipeSource(recipe, sourcesById);
   const hasMoreFromSource =
-    source !== null && (sourceCounts.get(source.id) ?? 0) > 1;
+    source !== null &&
+    onShowSource !== undefined &&
+    (sourceCounts.get(source.id) ?? 0) > 1;
   const getCookPlan = () => {
     if (tonight === null || recipe.steps.length === 0) return null;
     const [plannedMealId, servings] = tonight.split('|');

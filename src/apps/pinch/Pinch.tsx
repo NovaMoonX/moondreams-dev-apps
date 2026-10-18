@@ -21,6 +21,7 @@ import ContainersSubview from '@apps/pinch/components/containers/ContainersSubvi
 import IdeaAddSheet from '@apps/pinch/components/ideas/IdeaAddSheet';
 import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
+import PantrySubview from '@apps/pinch/components/pantry/PantrySubview';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
 import SettingsSubview from '@apps/pinch/components/settings/SettingsSubview';
@@ -56,11 +57,12 @@ const OVERLAY_SUBVIEWS: PinchSubview['kind'][] = [
   'cook',
 ];
 
-/** A notification's link (`?open=fridge`) opens Fridge & freezer as the page loads. */
-const getLinkedSubview = (): PinchSubview | null =>
-  new URLSearchParams(window.location.search).get('open') === 'fridge'
-    ? { kind: 'containers' }
-    : null;
+/** A notification's link (`?open=fridge` or `?open=pantry`) opens that screen as the page loads. */
+const getLinkedSubview = (): PinchSubview | null => {
+  const open = new URLSearchParams(window.location.search).get('open');
+  if (open === 'fridge') return { kind: 'containers' };
+  return open === 'pantry' ? { kind: 'pantry' } : null;
+};
 
 const getHistoryIndex = () => {
   const index: unknown = window.history.state?.idx;
@@ -333,6 +335,7 @@ function Pinch() {
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
       {subview?.kind === 'settings' && <SettingsSubview uid={user.uid} />}
+      {subview?.kind === 'pantry' && <PantrySubview uid={user.uid} />}
       {subview?.kind === 'containers' && (
         <ContainersSubview
           key={`${subview.recipeId ?? ''}-${subview.mealId ?? ''}-${subview.place ?? ''}`}

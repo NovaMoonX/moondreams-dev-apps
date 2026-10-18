@@ -1581,6 +1581,44 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      // Same budget as a box's history: each event is checked by index and kept cheap. `amount` is what was added, used or tossed.
+      function isPackageEvent(e) {
+        return e.size() == 5
+          && e.kind in ['ADDED', 'USED', 'MOVED', 'TOSSED', 'EDITED']
+          && e.at is int
+          && (e.amount == null || isPositiveAmount(e.amount))
+          && (e.place == null || e.place in ['PANTRY', 'FRIDGE', 'FREEZER'])
+          && (e.note == null || (e.note is string && e.note.size() <= 80));
+      }
+
+      function isPackageHistory(history) {
+        let n = history.size();
+        return history is list && n >= 1 && n <= 10
+          && (n <= 0 || isPackageEvent(history[0])) && (n <= 1 || isPackageEvent(history[1]))
+          && (n <= 2 || isPackageEvent(history[2])) && (n <= 3 || isPackageEvent(history[3]))
+          && (n <= 4 || isPackageEvent(history[4])) && (n <= 5 || isPackageEvent(history[5]))
+          && (n <= 6 || isPackageEvent(history[6])) && (n <= 7 || isPackageEvent(history[7]))
+          && (n <= 8 || isPackageEvent(history[8])) && (n <= 9 || isPackageEvent(history[9]));
+      }
+
+      // A package is one physical thing (a carton, a bag). `expiresAt` is a date-only value (UTC midnight, 2000 to 2100) or null for no date known.
+      function isPackage(data, id) {
+        return data.size() == 13
+          && data.keys().hasOnly(['id', 'ingredientId', 'ingredientName', 'productId', 'amount', 'unit', 'place', 'expiresAt', 'openedAt', 'status', 'history', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.ingredientId, 80)
+          && isShortText(data.ingredientName, 120)
+          && (data.productId == null || isShortText(data.productId, 80))
+          && isPositiveAmount(data.amount)
+          && isUnit(data.unit)
+          && data.place in ['PANTRY', 'FRIDGE', 'FREEZER']
+          && (data.expiresAt == null || (data.expiresAt is int && data.expiresAt % 86400000 == 0 && data.expiresAt >= 946684800000 && data.expiresAt <= 4102444800000))
+          && (data.openedAt == null || data.openedAt is int)
+          && data.status in ['IN_STOCK', 'DONE']
+          && isPackageHistory(data.history)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
       function isStore(data, id) {
         return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
@@ -1793,6 +1831,15 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
+      match /packages/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isPackage(request.resource.data, id)
+          && request.resource.data.status == 'IN_STOCK';
+        allow update: if isKitchenOwner() && isPackage(request.resource.data, id)
+          && request.resource.data.ingredientId == resource.data.ingredientId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
       match /families/{id} {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isFamily(request.resource.data, id);
@@ -1814,9 +1861,9 @@ service cloud.firestore {
       // A kind added later is read with get(key, default) and left out of hasAll, like any key added to a shape already in production.
       function isReminders(value) {
         return value is map
-          && value.keys().hasOnly(['eatSoon', 'timers', 'leadDays', 'hour', 'timeZone'])
+          && value.keys().hasOnly(['eatSoon', 'expiring', 'timers', 'leadDays', 'hour', 'timeZone'])
           && value.keys().hasAll(['eatSoon', 'timers', 'leadDays', 'hour', 'timeZone'])
-          && value.eatSoon is bool && value.timers is bool
+          && value.eatSoon is bool && value.get('expiring', false) is bool && value.timers is bool
           && value.leadDays is int && value.leadDays >= 1 && value.leadDays <= 3
           && value.hour is int && value.hour >= 0 && value.hour <= 23
           && (value.timeZone == null || (value.timeZone is string && value.timeZone.size() >= 1 && value.timeZone.size() <= 64));

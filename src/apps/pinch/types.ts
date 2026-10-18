@@ -119,11 +119,13 @@ export interface KitchenSettings {
 }
 
 /** What Pinch can remind a person about. Each kind is a switch under `PinchSettings.reminders`. */
-export type ReminderKind = 'eatSoon' | 'timers';
+export type ReminderKind = 'eatSoon' | 'expiring' | 'timers';
 
 export interface PinchReminderSettings {
   /** The morning note naming what is due or past its date. */
   eatSoon: boolean;
+  /** The same note also naming the packages in the pantry that are past their date or about to be. Documents written before it lack the key, which reads as false. */
+  expiring: boolean;
   /** A push when a cooking timer ends, for when the screen is off. */
   timers: boolean;
   /** How many days ahead a box counts as due, 1 to 3. */
@@ -218,6 +220,8 @@ export type PinchSubview =
   | { kind: 'sources' }
   /** Reminders and how long a new box keeps. */
   | { kind: 'settings' }
+  /** The ingredients the person has on hand, grouped, each package with its own amount and date. */
+  | { kind: 'pantry' }
   /** Fridge & freezer; `place` is the one a door named, shown first. */
   | {
       kind: 'containers';
@@ -396,6 +400,46 @@ export interface Container {
   eatBy: number;
   /** Oldest first, capped. */
   history: ContainerEvent[];
+  /** Immutable. */
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type PackagePlace = 'PANTRY' | 'FRIDGE' | 'FREEZER';
+export type PackageStatus = 'IN_STOCK' | 'DONE';
+export type PackageEventKind = 'ADDED' | 'USED' | 'MOVED' | 'TOSSED' | 'EDITED';
+
+export interface PackageEvent {
+  kind: PackageEventKind;
+  /** An instant. */
+  at: number;
+  /** What was added, used or tossed, in the package's unit at the time; null for a move or an edit. */
+  amount: number | null;
+  /** Set for ADDED and MOVED, else null. */
+  place: PackagePlace | null;
+  note: string | null;
+}
+
+/** One physical thing the person has: a bag of rice, a carton of milk. Two cartons of one ingredient are two packages. */
+export interface Package {
+  id: string;
+  /** Immutable. */
+  ingredientId: string;
+  /** The ingredient's name when this was last saved, for the morning note, which can't read the catalog; screens read the live name by `ingredientId`. */
+  ingredientName: string;
+  /** The pack it is, which can fill in its size. A product that is gone reads as none. */
+  productId: string | null;
+  /** What is left, in `unit`. A finished package keeps the amount it had when it ended. */
+  amount: number;
+  unit: Unit;
+  place: PackagePlace;
+  /** Date-only: UTC midnight of the last day to use it. Null is no date known, never a guess. */
+  expiresAt: number | null;
+  /** An instant: when it was first used from. */
+  openedAt: number | null;
+  status: PackageStatus;
+  /** Oldest first, capped. */
+  history: PackageEvent[];
   /** Immutable. */
   createdAt: number;
   updatedAt: number;

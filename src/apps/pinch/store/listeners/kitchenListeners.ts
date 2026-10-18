@@ -16,6 +16,7 @@ import type {
   IngredientRecord,
   KitchenSettings,
   Meal,
+  Package,
   PinchSettings,
   PlannedMeal,
   Product,
@@ -162,6 +163,22 @@ export function startContainersListener(
     ),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Container)),
+    onError,
+  );
+}
+
+export function startPackagesListener(
+  uid: string,
+  onChange: (packages: Package[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(
+      kitchenCollection(uid, 'packages'),
+      where('status', '==', 'IN_STOCK'),
+    ),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as Package)),
     onError,
   );
 }

@@ -2,7 +2,7 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
-import { MEAL_TYPES } from '@apps/pinch/constants';
+import { DEFAULT_LEAD_DAYS, MEAL_TYPES } from '@apps/pinch/constants';
 import type {
   Idea,
   PlannedMeal,
@@ -16,6 +16,7 @@ import {
   groupContainersByCook,
 } from '@apps/pinch/utils/containers';
 import { getCookSummaries, groupCooksByRecipe } from '@apps/pinch/utils/cooks';
+import { byUseBy, groupPackagesByIngredient } from '@apps/pinch/utils/packages';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import {
   getNoteSummaries,
@@ -312,6 +313,39 @@ export const selectContainersLoadError = (state: RootState) =>
 
 export const selectIsContainersReady = (state: RootState) =>
   state.pinch.containers.isLoaded && state.pinch.containers.loadError === null;
+
+const selectPackageItems = (state: RootState) => state.pinch.packages.items;
+
+/** What is in the pantry: soonest date first, no date last. */
+export const selectPackages = createSelector(
+  [selectPackageItems],
+  (packages) => [...packages].sort(byUseBy),
+);
+
+export const selectPackagesById = createSelector(
+  [selectPackages],
+  (packages) => new Map(packages.map((pkg) => [pkg.id, pkg])),
+);
+
+/** The in-stock packages of each ingredient, soonest date first. */
+export const selectPackagesByIngredient = createSelector(
+  [selectPackages],
+  groupPackagesByIngredient,
+);
+
+export const selectPackagesLoadError = (state: RootState) =>
+  state.pinch.packages.loadError;
+
+export const selectIsPackagesReady = (state: RootState) =>
+  state.pinch.packages.isLoaded && state.pinch.packages.loadError === null;
+
+/** Whether the person has ever put a package in the pantry, so a screen that would only be noise for someone who never has draws nothing. */
+export const selectHasPackages = (state: RootState) =>
+  state.pinch.packages.items.length > 0;
+
+/** How many days ahead a package counts as due: the person's own lead days, the one window their morning note uses too. */
+export const selectLeadDays = (state: RootState) =>
+  state.pinch.pinchSettings.settings?.reminders.leadDays ?? DEFAULT_LEAD_DAYS;
 
 const selectNoteItems = (state: RootState) => state.pinch.notes.items;
 
