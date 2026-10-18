@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { PendingUndo } from '@/hooks/useUndoRemoval';
 
@@ -26,9 +27,10 @@ const getBottom = () => {
 interface SnackbarBarProps {
   pending: PendingUndo;
   onUndo: () => void;
+  isOverSheet: boolean;
 }
 
-function SnackbarBar({ pending, onUndo }: SnackbarBarProps) {
+function SnackbarBar({ pending, onUndo, isOverSheet }: SnackbarBarProps) {
   const [bottom, setBottom] = useState(getBottom);
 
   useEffect(() => {
@@ -47,7 +49,10 @@ function SnackbarBar({ pending, onUndo }: SnackbarBarProps) {
 
   return (
     <div
-      className='bg-foreground text-background fixed inset-x-4 z-50 mx-auto flex max-w-md items-center gap-1 rounded-2xl py-1 pr-1 pl-4 shadow-lg motion-safe:animate-[snackbar-in_160ms_ease-out]'
+      className={join(
+        'bg-foreground text-background fixed inset-x-4 mx-auto flex max-w-md items-center gap-1 rounded-2xl py-1 pr-1 pl-4 shadow-lg motion-safe:animate-[snackbar-in_160ms_ease-out]',
+        isOverSheet ? 'z-[105]' : 'z-50',
+      )}
       style={{ bottom }}
     >
       <span
@@ -72,10 +77,16 @@ function SnackbarBar({ pending, onUndo }: SnackbarBarProps) {
 interface UndoSnackbarProps {
   pending: PendingUndo | null;
   onUndo: () => void;
+  /** For a removal made inside a drawer: the bar floats above the drawer, over its own footer, instead of under it. */
+  isOverSheet?: boolean;
 }
 
 /** A bar with the seconds left to undo a removal, floating above a pinned form footer; keep it mounted so screen readers hear the message. */
-function UndoSnackbar({ pending, onUndo }: UndoSnackbarProps) {
+function UndoSnackbar({
+  pending,
+  onUndo,
+  isOverSheet = false,
+}: UndoSnackbarProps) {
   return (
     <>
       <div role='status' aria-live='polite' className='sr-only'>
@@ -83,7 +94,13 @@ function UndoSnackbar({ pending, onUndo }: UndoSnackbarProps) {
           ? `${pending.message}. You can undo it for a few seconds.`
           : ''}
       </div>
-      {pending && <SnackbarBar pending={pending} onUndo={onUndo} />}
+      {pending && (
+        <SnackbarBar
+          pending={pending}
+          onUndo={onUndo}
+          isOverSheet={isOverSheet}
+        />
+      )}
     </>
   );
 }

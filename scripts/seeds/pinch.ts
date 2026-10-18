@@ -622,6 +622,21 @@ const SEED_RECIPES = [
         'Warm it in a covered pan over low heat with a splash of water, about 10 minutes.',
       tip: 'Keep the sauce with the chicken. It thickens in the fridge, so loosen it with a little water.',
     },
+    // The other recipes have no `links` key, the shape from before links.
+    links: [
+      {
+        id: 'seed-pinch-link-adobo-video',
+        kind: 'HOW_TO',
+        label: null,
+        url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+      },
+      {
+        id: 'seed-pinch-link-adobo-article',
+        kind: 'ARTICLE',
+        label: null,
+        url: 'https://www.seriouseats.com/',
+      },
+    ],
     nutritionOverride: null,
     source: 'MANUAL',
     sourceId: 'seed-pinch-source-recipe-cards',

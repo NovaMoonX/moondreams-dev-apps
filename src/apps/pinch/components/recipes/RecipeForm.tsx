@@ -4,18 +4,14 @@ import {
   Button,
   Form,
   FormFactories,
-  Input,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
-import Field from '@/components/forms/Field';
-import PhotoPicker from '@/components/forms/PhotoPicker';
-import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useImageUpload } from '@/hooks/useImageUpload';
@@ -31,8 +27,12 @@ import {
   RecipeDescriptionField,
   RecipeTimesField,
   RecipeTitleField,
+  RecipeWhyField,
 } from '@apps/pinch/components/recipes/RecipeBasics';
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
+import RecipeLinksField from '@apps/pinch/components/recipes/RecipeLinksField';
+import RecipePhotoField from '@apps/pinch/components/recipes/RecipePhotoField';
+import RecipeSourceField from '@apps/pinch/components/recipes/RecipeSourceField';
 import {
   getDataFromExtracted,
   getDataFromIdea,
@@ -51,9 +51,7 @@ import RecipeSteps from '@apps/pinch/components/recipes/RecipeSteps';
 import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
-  MAX_RECIPE_NOTE_LENGTH,
   MAX_RECIPE_TITLE_LENGTH,
-  MAX_SOURCE_LABEL_LENGTH,
   SECTION_COUNT_THRESHOLD,
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
@@ -89,6 +87,11 @@ import type {
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
+import {
+  hasLinksProblem,
+  isOverLinkCap,
+  toRecipeLinks,
+} from '@apps/pinch/utils/recipeLinks';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
@@ -192,6 +195,8 @@ function RecipeForm({
     isValidMinutes(prep) &&
     isValidMinutes(cook) &&
     getCareProblem(formData.care) === null &&
+    !hasLinksProblem(formData.links) &&
+    !isOverLinkCap(formData.links) &&
     isValidNutrition(formData.nutrition);
 
   const calculation = useMemo(() => {
@@ -208,6 +213,7 @@ function RecipeForm({
         ingredients: lines.map(toRecipeLine),
         steps: [],
         care: null,
+        links: [],
         nutritionOverride: null,
         source: 'MANUAL',
         sourceId: null,
@@ -281,6 +287,14 @@ function RecipeForm({
     }
     if (getCareProblem(formData.care) !== null) {
       return plain('Check the fridge and freezer days to save.');
+    }
+    if (hasLinksProblem(formData.links)) {
+      return plain(
+        'Fix or take out the link that is not a web address to save.',
+      );
+    }
+    if (isOverLinkCap(formData.links)) {
+      return plain('Take a link out to save: a recipe holds up to 8.');
     }
     return null;
   };
@@ -356,40 +370,20 @@ function RecipeForm({
         name: 'cover',
         label: '',
         renderComponent: () => (
-          <FormSection title='Photo'>
-            <div className='flex items-center gap-4'>
-              <span
-                className='bg-accent grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl text-3xl'
-                aria-hidden='true'
-              >
-                {coverUrl ? (
-                  <FallbackImage
-                    src={coverUrl}
-                    alt=''
-                    fallback='🍲'
-                    className='size-full object-cover'
-                  />
-                ) : (
-                  '🍲'
-                )}
-              </span>
-              <PhotoPicker
-                photoUrl={coverUrl}
-                showPreview={false}
-                error={coverError}
-                onSelect={(file) => {
-                  pickCover(file);
-                  setIsCoverRemoved(false);
-                  isDirtyRef.current = true;
-                }}
-                onRemove={() => {
-                  clearCover();
-                  setIsCoverRemoved(true);
-                  isDirtyRef.current = true;
-                }}
-              />
-            </div>
-          </FormSection>
+          <RecipePhotoField
+            photoUrl={coverUrl}
+            error={coverError}
+            onSelect={(file) => {
+              pickCover(file);
+              setIsCoverRemoved(false);
+              isDirtyRef.current = true;
+            }}
+            onRemove={() => {
+              clearCover();
+              setIsCoverRemoved(true);
+              isDirtyRef.current = true;
+            }}
+          />
         ),
       }),
       custom({
@@ -432,33 +426,13 @@ function RecipeForm({
             custom({
               name: 'sourceChoice',
               label: '',
-              renderComponent: (props) => {
-                const value = props.value as RecipeFormData['sourceChoice'];
-                return (
-                  <FormSection title="Where it's from">
-                    <div className='space-y-2' onKeyDown={blockEnterSubmit}>
-                      <PickOrCreate
-                        label='Sources'
-                        options={sourceOptions}
-                        choice={value.choice}
-                        newText={value.newText}
-                        newPillLabel='New source'
-                        newPlaceholder='Serious Eats'
-                        maxLength={MAX_SOURCE_LABEL_LENGTH}
-                        isFocusedOnOpen={false}
-                        clearLabel='Remove source'
-                        onChange={(choice, newText) =>
-                          props.onValueChange({ choice, newText })
-                        }
-                      />
-                      <p className='text-muted-foreground text-xs'>
-                        Optional. It shows on the recipe, and you can filter by
-                        it.
-                      </p>
-                    </div>
-                  </FormSection>
-                );
-              },
+              renderComponent: (props) => (
+                <RecipeSourceField
+                  value={props.value as RecipeFormData['sourceChoice']}
+                  options={sourceOptions}
+                  onChange={props.onValueChange}
+                />
+              ),
             }),
           ]),
       custom({
@@ -467,6 +441,16 @@ function RecipeForm({
         renderComponent: (props) => (
           <RecipeCareField
             value={props.value as RecipeFormData['care']}
+            onChange={props.onValueChange}
+          />
+        ),
+      }),
+      custom({
+        name: 'links',
+        label: '',
+        renderComponent: (props) => (
+          <RecipeLinksField
+            value={props.value as RecipeFormData['links']}
             onChange={props.onValueChange}
           />
         ),
@@ -491,25 +475,10 @@ function RecipeForm({
               name: 'why',
               label: '',
               renderComponent: (props) => (
-                <div className='space-y-1.5' onKeyDown={blockEnterSubmit}>
-                  <Field label='What changed and why?' isCompact>
-                    {() => (
-                      <Input
-                        variant='outline'
-                        maxLength={MAX_RECIPE_NOTE_LENGTH}
-                        placeholder='Less vinegar, it was too sharp'
-                        value={String(props.value)}
-                        onChange={(event) =>
-                          props.onValueChange(event.target.value)
-                        }
-                      />
-                    )}
-                  </Field>
-                  <p className='text-muted-foreground text-xs'>
-                    Optional. Saving adds a note to this recipe with today's
-                    date and what you changed.
-                  </p>
-                </div>
+                <RecipeWhyField
+                  value={String(props.value)}
+                  onChange={props.onValueChange}
+                />
               ),
             }),
           ]
@@ -666,6 +635,7 @@ function RecipeForm({
             ],
             nutritionOverride: parseNutrition(data.nutrition),
             care: parseCareText(data.care),
+            links: toRecipeLinks(data.links),
             steps: data.steps.map((step) => step.trim()).filter(Boolean),
             coverFile: upload.file,
             removeCover: isCoverRemoved,

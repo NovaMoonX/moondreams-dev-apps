@@ -32,6 +32,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
+import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSection';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
@@ -79,6 +80,7 @@ import {
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 
@@ -256,6 +258,7 @@ function RecipeDrawer({
   };
 
   const care = getRecipeCare(recipe);
+  const links = getRecipeLinks(recipe);
   const source = getRecipeSource(recipe, sourcesById);
   const hasMoreFromSource =
     source !== null && (sourceCounts.get(source.id) ?? 0) > 1;
@@ -670,6 +673,8 @@ function RecipeDrawer({
             )}
           </div>
         )}
+
+        <RecipeLinksSection links={links} />
       </div>
     </DetailSheet>
   );

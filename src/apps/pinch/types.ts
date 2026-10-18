@@ -418,6 +418,19 @@ export interface RecipeCare {
   tip: string | null;
 }
 
+/** What a recipe link is for. At most one recipe link is a `HOW_TO`, the primary how-to video. */
+export type RecipeLinkKind =
+  'HOW_TO' | 'ARTICLE' | 'ORIGINAL' | 'TECHNIQUE' | 'OTHER';
+
+export interface RecipeLink {
+  id: string;
+  kind: RecipeLinkKind;
+  /** The person's own label; null shows the kind's default. */
+  label: string | null;
+  /** An http(s) address, trimmed. */
+  url: string;
+}
+
 export interface Recipe {
   id: string;
   title: string;
@@ -436,6 +449,8 @@ export interface Recipe {
   sourceId: string | null;
   /** A recipe written before care lacks the key, which reads as null. */
   care: RecipeCare | null;
+  /** A recipe written before links lacks the key, which reads as `[]`. */
+  links: RecipeLink[];
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
   createdAt: number;
