@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Plus, Store, Tag } from 'lucide-react';
+import { Plus, Settings, Store, Tag } from 'lucide-react';
 
 import EntryTile from '@/components/EntryTile';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
@@ -245,16 +245,30 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         <SectionHeader
           title='Kitchen'
           action={
-            <Button
-              type='button'
-              size='sm'
-              rounded='full'
-              className='gap-1'
-              onClick={() => setOverlay({ kind: 'form', id: null })}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              New ingredient
-            </Button>
+            <div className='flex items-center gap-1'>
+              <Button
+                type='button'
+                variant='tertiary'
+                size='icon'
+                rounded='full'
+                aria-label='Settings'
+                title='Settings'
+                className='size-10 shrink-0 p-0'
+                onClick={() => openSubview({ kind: 'settings' })}
+              >
+                <Settings className='h-5 w-5' aria-hidden='true' />
+              </Button>
+              <Button
+                type='button'
+                size='sm'
+                rounded='full'
+                className='gap-1'
+                onClick={() => setOverlay({ kind: 'form', id: null })}
+              >
+                <Plus className='h-4 w-4' aria-hidden='true' />
+                New ingredient
+              </Button>
+            </div>
           }
         />
         <p className='text-muted-foreground -mt-1 text-sm'>

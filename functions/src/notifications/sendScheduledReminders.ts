@@ -25,8 +25,9 @@ if (getApps().length === 0) {
 // app family's scale — a handful of households, not a high-volume queue.
 // Cloud Tasks (or an equivalent delayed-task queue) is the standard way to
 // get exact-time delivery at real scale; at this scale it's not worth the
-// extra infrastructure.
-const POLL_INTERVAL_MINUTES = 5;
+// extra infrastructure. One minute, so a cooking timer of a minute or more
+// is picked up before it ends and goes out on time.
+const POLL_INTERVAL_MINUTES = 1;
 const POLL_INTERVAL_MS = POLL_INTERVAL_MINUTES * 60 * 1000;
 
 // A reminder this far overdue is no longer useful ("starting in 20 minutes"
@@ -143,7 +144,7 @@ async function deliverReminder(
 
 export const sendScheduledReminders = onSchedule(
   {
-    schedule: `every ${POLL_INTERVAL_MINUTES} minutes`,
+    schedule: '* * * * *',
     timeoutSeconds: POLL_INTERVAL_MS / 1000 + 60,
   },
   async () => {
