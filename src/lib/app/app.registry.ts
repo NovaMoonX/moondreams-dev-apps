@@ -14,6 +14,7 @@ export type AppRegistryEntry = {
    - in /public folder: logos and banners
    - cloudflare-worker.js
    - repo root README.md (its "Current apps" list: one line per app)
+   - `resumeParams` for an app that keeps its place in the URL
 */
 export const APP_REGISTRY: AppRegistryEntry[] = [
   {

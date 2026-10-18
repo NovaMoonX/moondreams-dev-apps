@@ -86,8 +86,11 @@ function Layout() {
   const isUpdateReady = useUpdateReady();
   const isBannerVisible = networkStatus !== null || isUpdateReady;
   const isHeaderHidden = useHideOnScroll();
-  const [isNavOpen, setIsNavOpen] = useState(false);
-  const swipeToOpen = useSwipeRight(() => setIsNavOpen(true));
+  const { key: locationKey } = useLocation();
+  const [navOpenKey, setNavOpenKey] = useState<string | null>(null);
+  // Tied to the location it was opened on, so Back or any navigation closes it.
+  const isNavOpen = navOpenKey === locationKey;
+  const swipeToOpen = useSwipeRight(() => setNavOpenKey(locationKey));
 
   useLayoutEffect(() => {
     document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
@@ -117,7 +120,10 @@ function Layout() {
         {...swipeToOpen}
       >
         <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
-          <AppNavPanel isOpen={isNavOpen} onOpenChange={setIsNavOpen} />
+          <AppNavPanel
+            isOpen={isNavOpen}
+            onOpenChange={(isOpen) => setNavOpenKey(isOpen ? locationKey : null)}
+          />
         </div>
 
         <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>

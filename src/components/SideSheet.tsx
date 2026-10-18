@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
 } from 'react';
@@ -12,9 +11,12 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
+
 const CLOSE_MS = 200;
 const SWIPE_CLOSE_PX = 72;
-const FOCUSABLE = 'a[href], button:not([disabled]), [role="switch"], [tabindex]:not([tabindex="-1"])';
+const PANEL_WIDTH_PX = 320;
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 interface SideSheetProps {
   isOpen: boolean;
@@ -22,7 +24,6 @@ interface SideSheetProps {
   title: string;
   /** A function child gets `close`, which plays the exit before `onClose` runs; call it from a row that also navigates. */
   children: ReactNode | ((close: () => void) => ReactNode);
-  /** Pinned under the scrolling body. */
   footer?: ReactNode;
 }
 
@@ -41,11 +42,6 @@ function SideSheetPanel({ onClose, title, children, footer }: Omit<SideSheetProp
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
 
-  useEffect(() => {
-    panelRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
-    return () => opener?.focus?.();
-  }, [opener]);
-
   const close = () => {
     if (isClosing) {
       return;
@@ -54,29 +50,53 @@ function SideSheetPanel({ onClose, title, children, footer }: Omit<SideSheetProp
     window.setTimeout(onClose, CLOSE_MS);
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      close();
-      return;
-    }
-    if (event.key !== 'Tab') {
-      return;
-    }
-    const focusable = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (!first || !last) {
-      return;
-    }
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
+  useEffect(() => {
+    panelRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    const root = document.documentElement;
+    const { overflow, scrollbarGutter } = root.style;
+    root.style.overflow = 'hidden';
+    root.style.scrollbarGutter = 'stable';
+
+    return () => {
+      root.style.overflow = overflow;
+      root.style.scrollbarGutter = scrollbarGutter;
+      if (opener?.isConnected && !opener.matches('input, textarea, select, [contenteditable]')) {
+        opener.focus({ preventScroll: true });
+      }
+    };
+  }, [opener]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        close();
+        return;
+      }
+      if (event.key !== 'Tab') {
+        return;
+      }
+      const focusable = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (!first || !last) {
+        return;
+      }
+      if (!active || !panelRef.current?.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  });
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') {
@@ -115,23 +135,31 @@ function SideSheetPanel({ onClose, title, children, footer }: Omit<SideSheetProp
     if (!drag || !drag.isHorizontal) {
       return;
     }
-    const shouldClose = drag.lastDx < -SWIPE_CLOSE_PX;
     setDragX(null);
-    if (shouldClose) {
+    if (drag.lastDx < -SWIPE_CLOSE_PX) {
       close();
     }
   };
 
+  const isDragging = dragX !== null;
   const translate = isClosing ? '-100%' : `${dragX ?? 0}px`;
+  const scrimOpacity = isClosing ? 0 : Math.max(0, 1 + (dragX ?? 0) / PANEL_WIDTH_PX);
 
   return createPortal(
-    <div className='fixed inset-0 z-[90]' onKeyDown={handleKeyDown}>
+    <div
+      className='fixed inset-0 z-[90] touch-pan-y'
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+    >
       <div
         aria-hidden='true'
         className={join(
-          'side-sheet-scrim absolute inset-0 touch-none bg-black/40 transition-opacity duration-200 motion-reduce:transition-none',
-          isClosing && 'opacity-0',
+          'side-sheet-scrim absolute inset-0 bg-black/40',
+          !isDragging && 'transition-opacity duration-200 motion-reduce:transition-none',
         )}
+        style={{ opacity: scrimOpacity }}
         onClick={close}
       />
       <div
@@ -140,14 +168,10 @@ function SideSheetPanel({ onClose, title, children, footer }: Omit<SideSheetProp
         aria-modal='true'
         aria-label={title}
         className={join(
-          'side-sheet-panel bg-background border-border absolute inset-y-0 left-0 border-r flex w-[min(20rem,85vw)] touch-pan-y flex-col overscroll-contain shadow-xl',
-          dragX === null && 'transition-transform duration-200 motion-reduce:transition-none',
+          'side-sheet-panel bg-background border-border absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] touch-pan-y flex-col overscroll-contain border-r shadow-xl',
+          !isDragging && 'transition-transform duration-200 motion-reduce:transition-none',
         )}
         style={{ transform: `translateX(${translate})` }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
-        onPointerCancel={handlePointerEnd}
       >
         <div className='flex shrink-0 items-center justify-between gap-2 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-2 pl-[max(1rem,env(safe-area-inset-left))]'>
           <h2 className='text-foreground text-xl font-semibold'>{title}</h2>
@@ -177,7 +201,7 @@ function SideSheetPanel({ onClose, title, children, footer }: Omit<SideSheetProp
   );
 }
 
-/** A panel that slides in from the left over a scrim: Escape, a scrim tap, a swipe left or the close button dismiss it. Phones and desktop alike. */
+/** A panel that slides in from the left over a scrim: Escape, a scrim tap, a swipe left or the close button dismiss it. */
 function SideSheet({ isOpen, ...panelProps }: SideSheetProps) {
   if (!isOpen) {
     return null;

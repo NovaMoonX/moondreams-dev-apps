@@ -32,7 +32,6 @@ function toResumeLocation(pathname: string, search: string) {
   return result;
 }
 
-/** Remembers where the person is in an app for the rest of this visit. */
 export function rememberAppLocation(uid: string, pathname: string, search: string) {
   const location = toResumeLocation(pathname, search);
   const app = getRegistryAppForPath(pathname);
@@ -55,6 +54,19 @@ export function getAppResumePath(uid: string | null, appId: string, frontDoor: s
     return frontDoor;
   }
   const [pathname, query] = saved.split('?');
-  const result = toResumeLocation(pathname, query ? `?${query}` : '') ?? frontDoor;
+  const isOwnApp = getRegistryAppForPath(pathname)?.id === appId;
+  const result = (isOwnApp && toResumeLocation(pathname, query ? `?${query}` : '')) || frontDoor;
   return result;
+}
+
+/** Forgets every remembered location; sign-out and an account switch call it. */
+export function clearAppResume() {
+  Object.keys(memory).forEach((uid) => delete memory[uid]);
+  try {
+    Object.keys(sessionStorage)
+      .filter((key) => key.startsWith(STORAGE_PREFIX))
+      .forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    // Storage is unavailable, so nothing was kept there.
+  }
 }

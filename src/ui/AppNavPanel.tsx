@@ -44,9 +44,10 @@ function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
   const currentApp =
     apps.find((app) => pathname === app.path || pathname.startsWith(`${app.path}/`)) ?? null;
 
-  const goTo = (path: string) => {
-    if (path !== `${pathname}${search}`) {
-      navigate(path);
+  const here = `${pathname}${search}`;
+  const goTo = (path: string, isResume = false) => {
+    if (path !== here) {
+      navigate(path, { state: isResume ? { resumed: true } : null });
     }
   };
 
@@ -59,7 +60,7 @@ function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
         aria-label='Open menu'
         aria-haspopup='dialog'
         aria-expanded={isOpen}
-        className='h-10 w-10 p-0'
+        className='-ml-2.5 h-10 w-10 p-0'
         onClick={() => onOpenChange(true)}
       >
         <Menu className='h-5 w-5' />
@@ -99,6 +100,8 @@ function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
               </li>
               {apps.map((app) => {
                 const isCurrent = currentApp?.id === app.id;
+                const resumePath = getAppResumePath(user?.uid ?? null, app.id, app.path);
+                const canRestart = isCurrent && here !== app.path;
 
                 return (
                   <li key={app.id}>
@@ -109,12 +112,15 @@ function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
                       aria-current={isCurrent ? 'page' : undefined}
                       className={rowClassName(isCurrent)}
                       onClick={() => {
-                        goTo(isCurrent ? app.path : getAppResumePath(user?.uid ?? null, app.id, app.path));
+                        goTo(isCurrent ? app.path : resumePath, !isCurrent && resumePath !== app.path);
                         close();
                       }}
                     >
                       <AppLogo id={app.id} />
-                      <span className='min-w-0 flex-1 truncate'>{app.name}</span>
+                      <span className='flex min-w-0 flex-1 flex-col'>
+                        <span className='truncate'>{app.name}</span>
+                        {canRestart && <span className='text-muted-foreground truncate text-xs'>Back to start</span>}
+                      </span>
                       {isCurrent && <Check className='text-primary h-5 w-5 shrink-0' />}
                     </Button>
                   </li>

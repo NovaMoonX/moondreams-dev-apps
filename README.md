@@ -12,7 +12,7 @@ A collection of mini-apps built to fit whatever felt useful, fun, or simply inte
 - 🧭 **Waypoint** — a collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.
 - 🎟️ **A-List Tracker** — a personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.
 
-The header's menu (the hamburger, top left) slides in every app you can open, and an app reopens where you last left it, such as an A-List tab or a Waypoint trip. Swipe right on the header to open it and left to close.
+The header's menu (the hamburger, top left) slides in every app you can open, and apps that keep their place in the URL (A-List's tabs, Waypoint's trips) reopen where you last left them. Swipe right on the header to open it and left to close.
 
 ## Quick start
 
