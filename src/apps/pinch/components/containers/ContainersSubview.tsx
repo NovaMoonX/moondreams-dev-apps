@@ -9,18 +9,34 @@ import {
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Eraser, History, Plus, X } from 'lucide-react';
+import {
+  Check,
+  Eraser,
+  History,
+  ListChecks,
+  Plus,
+  Refrigerator,
+  Snowflake,
+  Trash2,
+  Utensils,
+  X,
+} from 'lucide-react';
 
 import EntryTile from '@/components/EntryTile';
 import IntroCard from '@/components/IntroCard';
 import LabelChip from '@/components/LabelChip';
+import Pill from '@/components/Pill';
 import { PillGroup } from '@/components/PillGroup';
+import PromptRow from '@/components/PromptRow';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
+import SelectionBar from '@/components/SelectionBar';
 import Subview from '@/components/Subview';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
+import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ContainerFormSheet from '@apps/pinch/components/containers/ContainerFormSheet';
@@ -53,13 +69,24 @@ import type { Container, ContainerPlace, Meal } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import {
   getBatchKey,
+  getBulkNames,
   getClearOutMessage,
   getContainerTitle,
   getEatByState,
   getFinishedDoor,
   getFinishedRead,
+  getNamesLine,
+  getPastDueBoxes,
+  getPastDueText,
+  getSelectionNote,
+  getSelectionTitle,
+  getTossAction,
+  getTossConfirmNote,
+  getTossConfirmTitle,
   groupBatches,
+  type BulkAction,
 } from '@apps/pinch/utils/containers';
+import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const HIDDEN_WORTH_A_BUTTON = 3;
@@ -67,7 +94,7 @@ const HIDDEN_WORTH_A_BUTTON = 3;
 const sumServings = (containers: Container[]) =>
   containers.reduce((sum, container) => sum + container.servings, 0);
 
-interface ClearNote {
+interface ActNote {
   place: ContainerPlace;
   text: string;
   isError: boolean;
@@ -146,7 +173,10 @@ function ContainersSubview({
 }: ContainersSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
-  const { isReady, loadError, clearOut } = useContainerActions(uid);
+  const { isReady, loadError, clearOut, changeInPlace } =
+    useContainerActions(uid);
+  const selection = useSelection();
+  const { isBelow } = useMediaQuery();
   const containers = useAppSelector(selectContainers);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
@@ -165,7 +195,8 @@ function ContainersSubview({
   const [open, setOpen] = useState<OpenSheet | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [clearing, setClearing] = useState<ContainerPlace | null>(null);
-  const [clearNote, setClearNote] = useState<ClearNote | null>(null);
+  const [acting, setActing] = useState<BulkAction['kind'] | null>(null);
+  const [actNote, setActNote] = useState<ActNote | null>(null);
 
   const isScoped = scope.recipeId !== null || scope.mealId !== null;
   const scopeMeal =
@@ -330,7 +361,7 @@ function ContainersSubview({
     const inPlace = containers.filter((container) => container.place === place);
     const placeWord = CONTAINER_PLACE_LABELS[place].toLowerCase();
     setPick(place);
-    setClearNote(null);
+    setActNote(null);
     const isConfirmed = await confirm({
       title: `Clear out the ${placeWord}?`,
       message: getClearOutMessage(inPlace.length, sumServings(inPlace), place),
@@ -348,22 +379,129 @@ function ContainersSubview({
       );
       if (result === undefined) return;
       if (result.error !== null) {
-        setClearNote({ place, text: result.error, isError: true });
+        setActNote({ place, text: result.error, isError: true });
       } else if (result.count === 0) {
-        setClearNote({
+        setActNote({
           place,
           text: 'Nothing was left there to clear out.',
           isError: false,
         });
       }
     } catch (error) {
-      setClearNote({
+      setActNote({
         place,
         text: getErrorMessage(error, "Couldn't clear it out."),
         isError: true,
       });
     } finally {
       setClearing((current) => (current === place ? null : current));
+    }
+  };
+
+  const isSelecting = selection.isActive;
+  const shownBoxes = byPlace[shownPlace];
+  const pastBoxes = useMemo(() => getPastDueBoxes(shownBoxes), [shownBoxes]);
+  const selectedBoxes = shownBoxes.filter((box) => selection.ids.has(box.id));
+  const toggleBoxes = selection.toggle;
+  const handleToggle = useCallback(
+    (boxes: Container[]) => toggleBoxes(boxes.map(({ id }) => id)),
+    [toggleBoxes],
+  );
+  const getTitleOf = (box: Container) =>
+    getContainerTitle(box, recipesById, mealsById);
+
+  const confirmToss = (boxes: Container[]) => {
+    const { lines, more } = getBulkNames(groupBatches(boxes), getTitleOf);
+    return confirm({
+      title: getTossConfirmTitle(boxes.length),
+      message: (
+        <div className='space-y-3 text-left'>
+          <ul className='space-y-2'>
+            {lines.map(({ title, details }, index) => (
+              <li key={index}>
+                <span className='block font-medium'>{title}</span>
+                <span className='text-muted-foreground flex flex-wrap gap-x-3 text-sm'>
+                  {details.map((detail) => (
+                    <span key={detail} className='whitespace-nowrap'>
+                      {detail}
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {more > 0 && (
+            <p>
+              and {more} more {more === 1 ? 'box' : 'boxes'}
+            </p>
+          )}
+          <p>{getTossConfirmNote(boxes.length)}</p>
+        </div>
+      ),
+      confirmText: getTossAction(boxes.length),
+      cancelText: boxes.length === 1 ? 'Keep it' : 'Keep them',
+      destructive: true,
+    });
+  };
+
+  const getCares = (boxes: Container[]) =>
+    Object.fromEntries(
+      boxes.flatMap(({ recipeId }) => {
+        const recipe =
+          recipeId === null ? undefined : recipesById.get(recipeId);
+        return recipeId === null || recipe === undefined
+          ? []
+          : [[recipeId, getRecipeCare(recipe)]];
+      }),
+    );
+
+  const handleAct = async (
+    kind: 'EAT' | 'TOSS' | 'MOVE',
+    boxes: Container[],
+    isPastOnly = false,
+  ) => {
+    if (acting !== null || boxes.length === 0) return;
+
+    const place = shownPlace;
+    const action: BulkAction = {
+      kind,
+      from: place,
+      isPastOnly,
+      cares: kind === 'MOVE' ? getCares(boxes) : undefined,
+    };
+    if (kind === 'TOSS' && !(await confirmToss(boxes))) return;
+
+    setActNote(null);
+    setPick(place);
+    setActing(kind);
+    try {
+      const result = await changeInPlace(
+        action,
+        boxes.map(({ id }) => id),
+        (changedIds) =>
+          getNamesLine(
+            boxes.filter((box) => changedIds.includes(box.id)).map(getTitleOf),
+          ),
+      );
+      if (result === undefined) return;
+      if (result.count > 0) selection.exit();
+      if (result.error !== null) {
+        setActNote({ place, text: result.error, isError: true });
+      } else if (result.count === 0) {
+        setActNote({
+          place,
+          text: result.skippedText ?? 'Nothing was left there to change.',
+          isError: false,
+        });
+      }
+    } catch (error) {
+      setActNote({
+        place,
+        text: getErrorMessage(error, "Couldn't save that."),
+        isError: true,
+      });
+    } finally {
+      setActing(null);
     }
   };
 
@@ -380,6 +518,9 @@ function ContainersSubview({
             twins.has(`${container.place}|${title}`)
           }
           onOpen={handleOpen}
+          isSelecting={isSelecting}
+          isSelected={boxes.every((box) => selection.ids.has(box.id))}
+          onToggle={handleToggle}
         />
       </li>
     );
@@ -432,7 +573,7 @@ function ContainersSubview({
     const place = shownPlace;
     const rows = batchesByPlace[place];
     const placeWord = CONTAINER_PLACE_LABELS[place].toLowerCase();
-    const note = clearNote?.place === place ? clearNote : null;
+    const note = actNote?.place === place ? actNote : null;
     const noteLine = note && (
       <p
         role={note.isError ? 'alert' : 'status'}
@@ -547,12 +688,12 @@ function ContainersSubview({
   };
 
   const isListShown = isReady && loadError === null;
-  const canClear =
-    isListShown &&
-    !isScoped &&
-    trimmed === '' &&
-    byPlace[shownPlace].length > 0;
+  const isWhole = isListShown && !isScoped && trimmed === '';
+  const canClear = isWhole && shownBoxes.length > 0;
+  const canSelect = isListShown && !isFinishedView && shownBoxes.length >= 2;
   const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
+  const hasPastDueRow =
+    isWhole && !isFinishedView && !isSelecting && pastBoxes.length > 0;
   // The cast makes it a plain boolean: passed as it is, React Compiler treats the call as able to mutate the scope it came from.
   const door = getFinishedDoor({
     isListShown: isListShown && !isFinishedView,
@@ -565,19 +706,111 @@ function ContainersSubview({
     ),
     expectsDoor: !isScoped && hasSeen,
   });
-  const title = isFinishedView ? 'What you finished' : 'Fridge & freezer';
+  const isDoorShown = !isSelecting;
+  const getTitle = () => {
+    if (isSelecting) return getSelectionTitle(selectedBoxes.length);
+    return isFinishedView ? 'What you finished' : 'Fridge & freezer';
+  };
+  const title = getTitle();
   const switchView = (toFinished: boolean) => {
     setIsFinishedView(toFinished);
-    setClearNote(null);
+    setActNote(null);
     window.scrollTo({ top: 0 });
   };
 
+  const placeWord = CONTAINER_PLACE_LABELS[shownPlace].toLowerCase();
+  const isToFreezer = shownPlace === 'FRIDGE';
+  const isNarrowed = isScoped || trimmed !== '';
+  const isNothingTicked = selectedBoxes.length === 0;
+  const isBlocked = isNothingTicked || acting !== null;
+  const isEveryTicked = (boxes: Container[]) =>
+    boxes.length > 0 && boxes.every((box) => selection.ids.has(box.id));
+  const toggleAll = (boxes: Container[]) =>
+    toggleBoxes(boxes.map(({ id }) => id));
+
+  const getOnBack = () => {
+    if (isSelecting) return selection.exit;
+    return isFinishedView ? () => switchView(false) : undefined;
+  };
+  const getSelectAllLabel = () => {
+    const isPhone = isBelow('sm');
+    if (isNarrowed) return isPhone ? 'All shown' : 'Select all shown';
+    return isPhone
+      ? `All in the ${placeWord}`
+      : `Select all in the ${placeWord}`;
+  };
+
+  const getSubtitle = () => {
+    if (isFinishedView) return undefined;
+    return isSelecting
+      ? 'Eat, toss or move several at once.'
+      : 'Put away, with what to eat first.';
+  };
+
+  const getHeaderAction = () => {
+    if (isFinishedView) return false;
+    if (isSelecting) {
+      return (
+        <Button
+          type='button'
+          variant='secondary'
+          size='sm'
+          rounded='full'
+          className='h-7 px-3'
+          onClick={selection.exit}
+        >
+          Cancel
+        </Button>
+      );
+    }
+    return (
+      <div className='flex items-center gap-2'>
+        {canSelect && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className="relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
+            aria-label='Select boxes'
+            title='Select boxes'
+            onClick={selection.start}
+          >
+            <ListChecks className='h-4 w-4' aria-hidden='true' />
+          </Button>
+        )}
+        {canClear && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className="border-destructive/60 text-destructive! hover:bg-destructive/10 relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
+            aria-label={`Clear out the ${placeWord}`}
+            loading={clearing === shownPlace}
+            onClick={() => void handleClear(shownPlace)}
+          >
+            <Eraser className='h-4 w-4' aria-hidden='true' />
+          </Button>
+        )}
+        <Button
+          type='button'
+          size='sm'
+          rounded='full'
+          className='gap-1'
+          aria-label='Add something you put away'
+          disabled={!isReady}
+          onClick={() => setIsAdding(true)}
+        >
+          <Plus className='h-4 w-4' aria-hidden='true' />
+          Add
+        </Button>
+      </div>
+    );
+  };
+
   return (
-    <Subview
-      title={title}
-      onClose={closeSubview}
-      onBack={isFinishedView ? () => switchView(false) : undefined}
-    >
+    <Subview title={title} onClose={closeSubview} onBack={getOnBack()}>
       <div className='space-y-4'>
         {isFinishedView && (
           <IntroCard
@@ -589,41 +822,8 @@ function ContainersSubview({
         )}
         <SectionHeader
           title={title}
-          subtitle={
-            isFinishedView ? undefined : 'Put away, with what to eat first.'
-          }
-          action={
-            !isFinishedView && (
-              <div className='flex items-center gap-2'>
-                {canClear && (
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    rounded='full'
-                    className="border-destructive/60 text-destructive! hover:bg-destructive/10 relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
-                    aria-label={`Clear out the ${CONTAINER_PLACE_LABELS[shownPlace].toLowerCase()}`}
-                    loading={clearing === shownPlace}
-                    onClick={() => void handleClear(shownPlace)}
-                  >
-                    <Eraser className='h-4 w-4' aria-hidden='true' />
-                  </Button>
-                )}
-                <Button
-                  type='button'
-                  size='sm'
-                  rounded='full'
-                  className='gap-1'
-                  aria-label='Add something you put away'
-                  disabled={!isReady}
-                  onClick={() => setIsAdding(true)}
-                >
-                  <Plus className='h-4 w-4' aria-hidden='true' />
-                  Add
-                </Button>
-              </div>
-            )
-          }
+          subtitle={getSubtitle()}
+          action={getHeaderAction()}
         />
         {(hasSwitch || scopeName) && (
           <div className='flex flex-wrap items-center gap-x-2 gap-y-4'>
@@ -634,7 +834,7 @@ function ContainersSubview({
                 value={shownPlace}
                 onChange={(next) => {
                   setPick(next);
-                  setClearNote(null);
+                  setActNote(null);
                 }}
                 isThin
               />
@@ -650,6 +850,47 @@ function ContainersSubview({
             )}
           </div>
         )}
+        {isSelecting && (
+          <p role='status' className='sr-only'>
+            {getSelectionTitle(selectedBoxes.length)}
+          </p>
+        )}
+        {isSelecting && isListShown && shownBoxes.length > 0 && (
+          <div
+            role='group'
+            aria-label='Select several at once'
+            className='flex flex-wrap items-center gap-x-2 gap-y-4'
+          >
+            {pastBoxes.length > 0 && (
+              <Pill
+                isThin
+                isSelected={isEveryTicked(pastBoxes)}
+                icon={
+                  isEveryTicked(pastBoxes) ? (
+                    <Check className='h-3 w-3' aria-hidden='true' />
+                  ) : undefined
+                }
+                onClick={() => toggleAll(pastBoxes)}
+              >
+                {isBelow('sm')
+                  ? 'All past their date'
+                  : 'Select all past their date'}
+              </Pill>
+            )}
+            <Pill
+              isThin
+              isSelected={isEveryTicked(shownBoxes)}
+              icon={
+                isEveryTicked(shownBoxes) ? (
+                  <Check className='h-3 w-3' aria-hidden='true' />
+                ) : undefined
+              }
+              onClick={() => toggleAll(shownBoxes)}
+            >
+              {getSelectAllLabel()}
+            </Pill>
+          </div>
+        )}
         {!isFinishedView && inScope.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
@@ -657,7 +898,7 @@ function ContainersSubview({
             placeholder='Search fridge and freezer'
           />
         )}
-        {door === 'SHOW' ? (
+        {isDoorShown && door === 'SHOW' ? (
           <nav
             aria-label='Also in Fridge & freezer'
             className='grid grid-cols-2 gap-3'
@@ -669,10 +910,58 @@ function ContainersSubview({
             />
           </nav>
         ) : (
+          isDoorShown &&
           door === 'HOLD' && <div className='h-14' aria-hidden='true' />
+        )}
+        {hasPastDueRow && (
+          <PromptRow
+            icon='⏳'
+            title={getPastDueText(pastBoxes.length)}
+            actionLabel={getTossAction(pastBoxes.length)}
+            isBusy={acting === 'TOSS'}
+            isDisabled={acting !== null}
+            onAction={() => void handleAct('TOSS', pastBoxes, true)}
+          />
         )}
         {isFinishedView ? getFinishedBody() : getStockBody()}
       </div>
+      {isSelecting && (
+        <SelectionBar
+          note={isNothingTicked ? getSelectionNote(0) : null}
+          actions={[
+            {
+              key: 'toss',
+              label: 'Toss',
+              icon: <Trash2 className='h-4 w-4' aria-hidden='true' />,
+              isDestructive: true,
+              isDisabled: isBlocked,
+              isLoading: acting === 'TOSS',
+              onClick: () => void handleAct('TOSS', selectedBoxes),
+            },
+            {
+              key: 'move',
+              label: isToFreezer ? 'Put in the freezer' : 'Thaw in the fridge',
+              shortLabel: isToFreezer ? 'Freeze' : 'Thaw',
+              icon: isToFreezer ? (
+                <Snowflake className='h-4 w-4' aria-hidden='true' />
+              ) : (
+                <Refrigerator className='h-4 w-4' aria-hidden='true' />
+              ),
+              isDisabled: isBlocked,
+              isLoading: acting === 'MOVE',
+              onClick: () => void handleAct('MOVE', selectedBoxes),
+            },
+          ]}
+          primary={{
+            key: 'eat',
+            label: 'Ate it all',
+            icon: <Utensils className='h-4 w-4' aria-hidden='true' />,
+            isDisabled: isBlocked,
+            isLoading: acting === 'EAT',
+            onClick: () => void handleAct('EAT', selectedBoxes),
+          }}
+        />
+      )}
       {open && (
         <ContainerSheet
           key={open.ids[0]}

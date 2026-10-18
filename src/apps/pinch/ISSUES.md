@@ -1041,7 +1041,8 @@ A recipe can say how many days what it makes keeps in the fridge and the freezer
 - `store/slices/containersSlice.ts`, `startContainersListener`, `store/actions/containerActions.ts`, `queries/containerQueries.ts`, the container selectors, `hooks/useContainerActions.ts`, `useContainerDraft.ts`, `usePutAway.ts`
 - `components/containers/` (`PreparedEntry`, `ContainersSubview`, `ContainerRow`, `ContainerSheet`, `ContainerFormSheet`, `ContainerFields`, `EatByField`, `EatByBadge`, `StockLine`, `StockRows`, `EatFromStock`), `components/cooking/CookPutAway.tsx`
 - Changed: Kitchen (the row), `EntryTile` (the Fridge & freezer door, which began as `EntryChip`), Recipes and Meals (rows, filter, drawers), the plate builder's search, the planned meal view, the shopping sheet, the cooking history sheet, `CookingSubview`
-- The seeds: ten containers in every state for Alex, about 300 in stock and 260 finished for the scale kitchen
+- The seeds: thirteen containers in every state for Alex (three of them past their date in the fridge), about 300 in stock and 260 finished for the scale kitchen
+- Bulk acts (round 8): `changeContainersInPlace`, `planBulk` and `planUndoMove` (one planner for the clear-out, a toss, "Ate it all" and a move), `src/hooks/useSelection.ts`, `src/components/SelectionBar.tsx`, `src/components/PromptRow.tsx`, `scripts/checks/pinchFridge.ts`
 
 **Context:** Read `TECHNICAL.md` decision 23, §5g, criterion 13 and open question 22; `UX.md`'s Fridge & freezer; CLAUDE.md's "Pick the atomic write that fits", "Know which of the two kinds of time value a field is" and the Firestore rules section on indexes and the evaluator.
 
@@ -1057,6 +1058,7 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read / Update / Delete:** put some away (as one container or several), see what is in stock and finished, eat some or all, correct the count, move between fridge and freezer, change the eat-by date, throw it out, delete it.
 - [ ] **Entry points:** Kitchen's row, a recipe's and a saved meal's drawer, cooking mode's last screen, the Fridge & freezer list's "Add", a planned meal's "Eat from your fridge or freezer".
+- [ ] **Bulk (round 8):** a row above the list tosses what is past its date, and Select ticks several boxes to eat, toss or move together; those are the only two doors (a box's sheet is still the way to act on one, the eraser empties a whole place).
 
 ### Success Criteria
 - [ ] Eat soon and past its date read right in the viewer's own time zone, west and east of UTC (`npm run check:pinch-math` under `America/Los_Angeles` and `Pacific/Auckland`), and an eat-by is never shown in local time.
@@ -1064,6 +1066,8 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 - [ ] A failed or denied containers listener degrades only its own UI; checked by loading the previous rules into the emulator.
 - [ ] Two quick taps eat one portion and save one container, and Enter then Enter on a list row eats nothing; Escape and the back gesture close one thing at a time; leaving the put-away details after a change asks first, and a save that isn't confirmed yet never holds the screen.
 - [ ] A thaw or move of a container already past its date keeps that date and says so; a recipe whose only use is food in the fridge or freezer is archived, not erased.
+- [ ] Every bulk act (toss what is past its date, Ate it all, Toss, move, clear out) re-reads each box in a `runTransaction` per 200, touches only boxes still in stock and still in the place the screen showed, reports what it really did ("Tossed 3 of 4 boxes · One was already finished."), takes a second tap once, and its Undo puts back only what is still as the act left it; a bulk toss and a bulk move are proven against the emulator as the owner (allowed), another user and a signed-out visitor (denied), with no change to the rules.
+- [ ] Select mode on the scale kitchen at 4× CPU: entering it, a tick and "select all past their date" each under a second with no render storm; the footer and the first row both reachable at 390×844, 320×568, 375×667, 390×560 and 844×390 in light and dark; Space ticks a row and Escape, Cancel, the back button and the back gesture each end the mode one layer at a time without moving the list.
 - [ ] Driven on the scale kitchen at 4× CPU: tab switches, the stock list with about 300 containers, a recipe drawer and the Recipes list with stock lines, against the base build.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and every sheet was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
