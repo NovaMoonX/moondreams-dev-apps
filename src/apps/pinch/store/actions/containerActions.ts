@@ -334,7 +334,9 @@ export const changeContainersInPlace = createAsyncThunk<
   async ({ uid, ids, action }, { rejectWithValue }) => {
     const { done, error } = await runInChunks(
       ids,
-      (chunk): Promise<{ changed: ClearedContainer[]; skipped: SkipCounts }[]> =>
+      (
+        chunk,
+      ): Promise<{ changed: ClearedContainer[]; skipped: SkipCounts }[]> =>
         runTransaction(db, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((id) => transaction.get(containerDoc(uid, id))),

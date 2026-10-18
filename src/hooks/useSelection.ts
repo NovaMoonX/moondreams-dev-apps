@@ -4,6 +4,8 @@ import { hasDialogOnTop } from '@/utils/dialogUtils';
 
 const NOTHING: ReadonlySet<string> = new Set();
 
+const RESTORE_WINDOW_MS = 300;
+
 const OPEN_POPUP_SELECTOR =
   '[aria-haspopup][aria-expanded="true"], [role="listbox"], [role="menu"]';
 
@@ -45,6 +47,30 @@ export function useSelection(): Selection {
       ),
     [],
   );
+
+  // The back gesture ends the mode and the browser then puts the page back where the earlier history entry left it, not where the person scrolled to.
+  useEffect(() => {
+    if (!isActive) return;
+
+    const place = { top: window.scrollY };
+    const handleScroll = () => {
+      place.top = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (place.top === 0) return;
+
+      const restore = () => {
+        if (window.scrollY === 0) window.scrollTo({ top: place.top });
+      };
+      window.addEventListener('scroll', restore, { passive: true });
+      window.setTimeout(
+        () => window.removeEventListener('scroll', restore),
+        RESTORE_WINDOW_MS,
+      );
+    };
+  }, [isActive]);
 
   // Capture, so a dialog on top is still there to be seen before it closes itself on this keydown.
   useEffect(() => {

@@ -50,63 +50,62 @@ function ContainerRow({
   const isFrozen = container.place === 'FREEZER';
   const hasMadeTag = isTwin && !isFrozen;
 
-  const body = (
-    <>
-      <span
-        className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
-        aria-hidden='true'
-      >
-        {isFinished
-          ? CONTAINER_FINISH_EMOJIS[getFinishedKind(container)]
-          : CONTAINER_PLACE_EMOJIS[container.place]}
+  const chip = (
+    <span
+      className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
+      aria-hidden='true'
+    >
+      {isFinished
+        ? CONTAINER_FINISH_EMOJIS[getFinishedKind(container)]
+        : CONTAINER_PLACE_EMOJIS[container.place]}
+    </span>
+  );
+  const text = (
+    <span className='min-w-0 flex-1'>
+      <span className='text-foreground block font-medium wrap-break-word'>
+        {title}
       </span>
-      <span className='min-w-0 flex-1'>
-        <span className='text-foreground block font-medium wrap-break-word'>
-          {title}
-        </span>
-        <span className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-normal'>
-          {isFinished ? (
+      <span className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-normal'>
+        {isFinished ? (
+          <span className='whitespace-nowrap'>
+            {getFinishedText(container)} ·{' '}
+            {formatDateShort(container.updatedAt)}
+          </span>
+        ) : (
+          <>
             <span className='whitespace-nowrap'>
-              {getFinishedText(container)} ·{' '}
-              {formatDateShort(container.updatedAt)}
+              {getBatchServingsText(boxes)}
             </span>
-          ) : (
-            <>
+            {isFrozen && (
               <span className='whitespace-nowrap'>
-                {getBatchServingsText(boxes)}
+                {getFrozenText(container)}
               </span>
-              {isFrozen && (
+            )}
+            {isEatByShown(container) &&
+              (state === 'LATER' ? (
                 <span className='whitespace-nowrap'>
-                  {getFrozenText(container)}
+                  {getEatByLabel(container.eatBy)}
                 </span>
-              )}
-              {isEatByShown(container) &&
-                (state === 'LATER' ? (
-                  <span className='whitespace-nowrap'>
-                    {getEatByLabel(container.eatBy)}
-                  </span>
-                ) : (
-                  <EatByBadge
-                    state={state}
-                    label={getEatByLabel(container.eatBy)}
-                  />
-                ))}
-              {(isThawed || hasMadeTag) && (
-                <span className='whitespace-nowrap'>
-                  {[
-                    isThawed && 'Thawed',
-                    hasMadeTag &&
-                      `Made ${formatDateShort(container.createdAt)}`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              )}
-            </>
-          )}
-        </span>
+              ) : (
+                <EatByBadge
+                  state={state}
+                  label={getEatByLabel(container.eatBy)}
+                />
+              ))}
+            {(isThawed || hasMadeTag) && (
+              <span className='whitespace-nowrap'>
+                {[
+                  isThawed && 'Thawed',
+                  hasMadeTag && `Made ${formatDateShort(container.createdAt)}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            )}
+          </>
+        )}
       </span>
-    </>
+    </span>
   );
 
   if (isSelecting && !isFinished) {
@@ -119,7 +118,8 @@ function ContainerRow({
             onCheckedChange={() => onToggle?.(boxes)}
           />
         </span>
-        {body}
+        {chip}
+        {text}
       </label>
     );
   }
@@ -131,7 +131,8 @@ function ContainerRow({
       onClick={() => onOpen(boxes)}
       className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
     >
-      {body}
+      {chip}
+      {text}
       <ChevronRight
         className='text-muted-foreground mt-2.5 h-5 w-5 shrink-0'
         aria-hidden='true'

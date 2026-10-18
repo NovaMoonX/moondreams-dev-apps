@@ -658,27 +658,32 @@ export const getSelectionNote = (count: number) =>
 
 const MAX_BULK_NAMES = 3;
 
+export interface BulkNameLine {
+  title: string;
+  /** What tells it from a row like it: how many, and the day it was due. */
+  details: string[];
+}
+
 export interface BulkNames {
-  lines: string[];
+  lines: BulkNameLine[];
   /** Boxes in the rows past the ones named. */
   more: number;
 }
 
-/** The rows a confirm names, soonest date first and three at most, each with what tells near-identical rows apart: how many and the day it was due. */
+/** The rows a confirm names, soonest date first and three at most. */
 export const getBulkNames = (
   batches: ContainerBatch[],
   getTitle: (container: Container) => string,
   now = Date.now(),
 ): BulkNames => {
   const sorted = [...batches].sort((a, b) => byEatBy(a.boxes[0], b.boxes[0]));
-  const lines = sorted.slice(0, MAX_BULK_NAMES).map(({ boxes }) => {
-    const [first] = boxes;
-    return [
-      getTitle(first),
+  const lines = sorted.slice(0, MAX_BULK_NAMES).map(({ boxes }) => ({
+    title: getTitle(boxes[0]),
+    details: [
       getBatchServingsText(boxes),
-      `Eat by ${formatDayShort(getPlannedDayKey(first.eatBy), now)}`,
-    ].join(' · ');
-  });
+      `Eat by ${formatDayShort(getPlannedDayKey(boxes[0].eatBy), now)}`,
+    ],
+  }));
   const more = sorted
     .slice(MAX_BULK_NAMES)
     .reduce((sum, { boxes }) => sum + boxes.length, 0);
@@ -709,8 +714,7 @@ export const getSkippedText = (skipped: SkipCounts) => {
       `${getCountWord(skipped.FINISHED)} ${skipped.FINISHED === 1 ? 'was' : 'were'} already finished`,
     skipped.MOVED > 0 &&
       `${getCountWord(skipped.MOVED)} ${skipped.MOVED === 1 ? 'was' : 'were'} in the other place by then`,
-    skipped.REDATED > 0 &&
-      `${getCountWord(skipped.REDATED)} got a new date`,
+    skipped.REDATED > 0 && `${getCountWord(skipped.REDATED)} got a new date`,
     skipped.GONE > 0 &&
       `${getCountWord(skipped.GONE)} ${skipped.GONE === 1 ? 'was' : 'were'} deleted`,
   ].filter((part) => part !== false);
@@ -789,8 +793,7 @@ export const getBulkToast = ({
   ].filter((line) => line !== null);
   return {
     title: getBulkResultText(action, requested, changed),
-    description:
-      lines.length > 0 ? lines.join(' ') : (names ?? undefined),
+    description: lines.length > 0 ? lines.join(' ') : (names ?? undefined),
   };
 };
 

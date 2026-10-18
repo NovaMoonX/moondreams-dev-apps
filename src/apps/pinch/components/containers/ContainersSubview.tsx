@@ -416,9 +416,18 @@ function ContainersSubview({
       title: getTossConfirmTitle(boxes.length),
       message: (
         <div className='space-y-3 text-left'>
-          <ul className='space-y-1'>
-            {lines.map((line, index) => (
-              <li key={index}>{line}</li>
+          <ul className='space-y-2'>
+            {lines.map(({ title, details }, index) => (
+              <li key={index}>
+                <span className='block font-medium'>{title}</span>
+                <span className='text-muted-foreground flex flex-wrap gap-x-3 text-sm'>
+                  {details.map((detail) => (
+                    <span key={detail} className='whitespace-nowrap'>
+                      {detail}
+                    </span>
+                  ))}
+                </span>
+              </li>
             ))}
           </ul>
           {more > 0 && (
@@ -463,6 +472,7 @@ function ContainersSubview({
     if (kind === 'TOSS' && !(await confirmToss(boxes))) return;
 
     setActNote(null);
+    setPick(place);
     setActing(kind);
     try {
       const result = await changeInPlace(
@@ -839,6 +849,11 @@ function ContainersSubview({
               </LabelChip>
             )}
           </div>
+        )}
+        {isSelecting && (
+          <p role='status' className='sr-only'>
+            {getSelectionTitle(selectedBoxes.length)}
+          </p>
         )}
         {isSelecting && isListShown && shownBoxes.length > 0 && (
           <div

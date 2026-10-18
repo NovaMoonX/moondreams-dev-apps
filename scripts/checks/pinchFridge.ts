@@ -375,9 +375,9 @@ const names = getBulkNames(groupBatches([...sixRows].reverse()), titleOf, NOW);
 assert.deepEqual(
   names.lines,
   [
-    'A · 2 servings · Eat by Oct 10',
-    'B · 2 servings · Eat by Oct 11',
-    'C · 2 servings · Eat by Oct 12',
+    { title: 'A', details: ['2 servings', 'Eat by Oct 10'] },
+    { title: 'B', details: ['2 servings', 'Eat by Oct 11'] },
+    { title: 'C', details: ['2 servings', 'Eat by Oct 12'] },
   ],
   'a confirm names three rows, soonest date first, each with its servings and the day it was due',
 );
@@ -394,7 +394,7 @@ const batch = ['x', 'y', 'z'].map((id) =>
 const batchNames = getBulkNames(groupBatches(batch), titleOf, NOW);
 assert.deepEqual(
   [batchNames.lines, batchNames.more],
-  [['Rice · 3 boxes of 2 servings · Eat by Oct 12'], 0],
+  [[{ title: 'Rice', details: ['3 boxes of 2 servings', 'Eat by Oct 12'] }], 0],
   'boxes put away together are one line that says how many boxes it is',
 );
 assert.deepEqual(
