@@ -814,28 +814,38 @@ A recipe can use another (a house sauce in a dish), with cost and nutrition flow
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
-### Issue 26: Tag and filter recipes
+### Issue 26: Collections: group recipes your own way, and star the saved meals you make again
 
-**Prerequisites:** Issue 6
-**Target PR Size:** ~300 lines
+**Prerequisites:** Issue 6, Issue 11
+**Target PR Size:** ~2,200 lines (the collection record and its listener, the recipe form's row and editor, the filter question and the Collections sheet, the drawer's pills, the star, the suggestions helper, the rules, the seeds, checks and docs)
 **Files:**
-- `tags` on recipes, filter pills in Recipes
+- `Collection` and `Recipe.collectionIds` and `Meal.isFavorite` in `types.ts`; the collection constants in `constants.ts`; `utils/collections.ts` (labels, counts, the filter, the suggestions, the form's choice, the delete's chunks) and `utils/favorites.ts`
+- `collectionsSlice.ts`, `startCollectionsListener`, `collectionActions.ts` (rename, delete), `saveRecipe`'s `collectionIds` and `newCollections`, `setMealFavorite`
+- `RecipeCollectionsField.tsx` (the form's row and editor), `CollectionsSheet.tsx`, the Recipes filter's Collections and Favorites questions, `RecipeDrawer`'s pills, `StarButton` on `MealRow` and `MealDrawer`
+- `firestore.rules` (`collections`, `collectionIds`, `isFavorite`), the seeds (Alex's two collections and a starred meal, Taylor's twelve), `scripts/checks/pinchOrganize.ts`
 
-**Context:** UX Recipes tab.
+**Context:** The owner asked for recipes in several groups ("Bulk", "High-protein"), suggested ones, and starred meals. Modeled on Sources (a record per person, an id on the recipe); read `TECHNICAL.md` §6a.2 and §5a.2, Security Rules criterion 15 and open question 25, and CLAUDE.md's "A record created only because another record names it", "A filter lists only values that are present" and "A toggled icon-button state is shown by filling the icon".
 
 ### Description
-Tags such as mains, sides, sauces and desserts, with filter pills above the list.
+A recipe can be in many collections the person names. They are made in the recipe form (where the recipe's own numbers suggest High-protein, Quick and Freezer-friendly, never added on their own), listed in a Collections question in the Recipes filter with the ones that hold a recipe and their counts, shown on the recipe's drawer beside its source, and renamed or deleted from a sheet behind the filter. A saved meal can be starred: favorites list first, the plan builder's recents lead with them, and a long list's filter gets a Favorites pill.
 
 ### Possible Approach
-1. Add `tags: string[]` (backfilled), `PickOrCreate` for tags, thin filter pills.
+1. A `collections` record per person (`{ id, label, createdAt, updatedAt }`) and `Recipe.collectionIds: string[]`, so a rename follows every recipe; a missing key reads as empty and every save of the form writes it.
+2. New collections typed in the form are written in the recipe's own batch (never an orphan); deleting one re-reads every recipe in chunked transactions and says how many it came off.
+3. Suggestions are a pure helper over the recipe's protein (trusted only when every ingredient's protein is known or typed), times and storage notes; Vegetarian is left out because nothing stored can say it.
+4. `Meal.isFavorite` is written only by the star (a field-scoped update of the value asked for), and `selectMeals` is a stable favorites-first sort of newest first.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read / Update / Delete:** tags on a recipe and the filter.
+- [x] **Create / Read / Update / Delete:** put a recipe in collections and take it out, make a collection in the form, see it in the filter and the drawer, rename or delete it from the sheet; star and unstar a saved meal.
+- [x] **Entry points:** the recipe form's Collections row; the Recipes filter's Collections question and its pencil; the drawer's collection pills; the star on a saved meal's row and drawer; the Favorites question on Saved meals.
 
 ### Success Criteria
-- [ ] Legacy recipes without tags read and edit.
-- [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
-- [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
+- [x] A recipe and a saved meal written before this (no `collectionIds`, no `isFavorite`) read, edit and save, checked in the browser and on the emulator over legacy-shaped documents.
+- [x] The rules matrix (owner, another user, signed out; valid, extra key, missing key, 41-character label, 20 and 21 ids, wrong types, legacy documents) gives the intended new allows and no other change against the previous rules.
+- [x] Deleting a collection that 450 recipes name takes it off every one in three transactions and says 450.
+- [x] Checks cover the suggestions at their edges (25 g, 30 minutes, an unknown time, an unknown protein, already in), the delete's chunks and re-read, the filter's options and counts, favorites order and the tap guard, and the rules' caps.
+- [x] Driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 0, 3 and 50 collections and a recipe in 8.
+- [x] `UX.md`, `TECHNICAL.md`, `JOURNEYS.md` and the README match what shipped.
 
 ### Issue 27: Add a one-off item to a meal
 
@@ -1141,6 +1151,37 @@ A person can choose what Pinch reminds them about and how long a new fridge or f
 - [ ] A real push reaching a real phone, locked, and the installed iPhone case: not checkable from the sandbox.
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
 - [x] `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `functions/README.md` and the README match what shipped.
+
+### Issue 44: Recipe form editors, Sources rows that open, and recipe links
+
+**Prerequisites:** Issue 6, Issue 40
+**Target PR Size:** ~1,100 lines (two summary rows and their editors, the Sources row and sheet, the links model, helpers, field and drawer section, the rule, the checks and docs)
+**Files:**
+- `RecipePhotoField`, `RecipeSourceField`, `RecipeWhyField` (in `RecipeBasics`) and `RecipeLinksField` as `SummaryEditor` rows in `RecipeForm`; `PhotoPicker`'s `cover` variant; `SummaryEditor`'s `leading` and `shouldFocus`, the popover's height cap and its drawer footer's `form-footer` class; `UndoSnackbar`'s `isOverSheet`
+- `SourcesSubview` (every row opens the source) and `SourceFormSheet` ("Show the N recipes from X")
+- `Recipe.links` and `RecipeLink` in `types.ts`, the caps and labels in `constants.ts`, `utils/recipeLinks.ts`, `recipeFormModel.ts`, `saveRecipe`, `RecipeLinksSection` in `RecipeDrawer`, `links` in `isRecipe` in `firestore.rules`, `scripts/checks/pinchLinks.ts`, the Adobo seed
+
+**Context:** Read `TECHNICAL.md` §5a and §5f.2; `UX.md`'s Recipe form, Recipe details and Sources; CLAUDE.md's "A phone form shows a few inputs at a time", "Never stack an overlay on an overlay" and "Parsing pasted text for a link never glues tokens together".
+
+### Description
+The recipe form's photo and source are summary rows with an editor, like its title and times, so it opens with fewer controls. The Sources screen's rows open their source (the pencil is gone), and the sheet holds the way to its recipes. A recipe can keep one how-to video and other links with default or custom labels, shown at the bottom of the recipe and opening the other site in a new tab.
+
+### Possible Approach
+1. Photo and source become `SummaryEditor` rows (a drawer on a phone, a popover from `sm`); the photo editor is `PhotoPicker variant='cover'` (choose, take on a touch screen, remove, the type and size line). The write paths do not change.
+2. Every Sources row is one button that opens `SourceFormSheet`; a source with recipes starts the sheet with the roomy "Show the N recipes" row (the door's one home), one on no recipe says so.
+3. `Recipe.links` read through `getRecipeLinks` (`cleanLinks`: web addresses only, one how-to, eight in all); the form row's editor keeps one open row at a time inside its one drawer and removes with the Undo countdown above the drawer; the drawer's section is last, built of `Button href target='_blank'`.
+4. `links` in `hasOnly` and `get('links', []) is list && size() <= 8` in `isRecipe`; verify the owner, another user and a signed-out visitor against the emulator with the base rules as the control, and a legacy recipe read, edit and save.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read / Update / Delete:** add, see, relabel and remove a how-to video and other links from the form's Links row and see them at the bottom of the recipe.
+- [ ] **Entry points:** the Links, Photo and Where it's from rows; each Sources row; the how-to card and link rows in the drawer.
+
+### Success Criteria
+- [ ] A recipe written before links (no key) opens with no links section, edits and saves, and its save writes `links: []`; checked in the browser over a legacy-shaped document.
+- [ ] A YouTube link pasted as `youtu.be`, `watch?v=`, `/shorts/` or `/embed/` shows its thumbnail; any other address shows the tinted tile; none of them embeds or plays.
+- [ ] The Source sheet opens from every row, closes with one back press or Escape, returns focus to its row and "Show the N recipes" leaves one clean history entry.
+- [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editors were measured at 390×844 and 320×568 in light and dark and at 1280.
+- [ ] The README Build Plan lines are checked off; `UX.md` and `TECHNICAL.md` still match what shipped.
 
 ## Beyond
 

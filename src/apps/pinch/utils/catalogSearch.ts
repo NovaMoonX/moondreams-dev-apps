@@ -1,5 +1,6 @@
 import { CATALOG_FAMILIES_BY_ID } from '@apps/pinch/catalog';
 import type {
+  Collection,
   Recipe,
   ResolvedFamily,
   ResolvedIngredient,
@@ -247,11 +248,12 @@ export interface RecipeSearchEntry {
   rest: string;
 }
 
-/** Each recipe's title and the rest of what a person might type to find it (its ingredients' names and aliases, its source and its description), normalized once. */
+/** Each recipe's title and the rest of what a person might type to find it (its ingredients' names and aliases, its source, its collections and its description), normalized once. */
 export function buildRecipeSearchIndex(
   recipes: Recipe[],
   ingredientsById: Map<string, ResolvedIngredient>,
   sourcesById: Map<string, Source>,
+  collectionsById: Map<string, Collection> = new Map(),
 ): RecipeSearchEntry[] {
   const result = recipes.map((recipe) => ({
     recipe,
@@ -263,6 +265,9 @@ export function buildRecipeSearchIndex(
           return ingredient ? [ingredient.name, ...ingredient.aliases] : [];
         }),
         getRecipeSource(recipe, sourcesById)?.label ?? '',
+        ...(recipe.collectionIds ?? []).map(
+          (id) => collectionsById.get(id)?.label ?? '',
+        ),
         recipe.description ?? '',
       ].join(' '),
     ),

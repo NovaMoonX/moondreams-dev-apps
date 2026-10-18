@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { BookOpen, Plus } from 'lucide-react';
+import { BookOpen, Pencil, Plus, Star } from 'lucide-react';
 
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -18,6 +18,7 @@ import IdeasView from '@apps/pinch/components/ideas/IdeasView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
+import CollectionsSheet from '@apps/pinch/components/recipes/CollectionsSheet';
 import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
 import NoteSheet from '@apps/pinch/components/notes/NoteSheet';
 import MealDrawer from '@apps/pinch/components/recipes/MealDrawer';
@@ -25,6 +26,11 @@ import MealRow from '@apps/pinch/components/recipes/MealRow';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import RecipeRow from '@apps/pinch/components/recipes/RecipeRow';
 import {
+  COLLECTION_FILTER_ANY,
+  COLLECTION_FILTER_NONE,
+  COLLECTION_NOUN,
+  COLLECTION_NOUN_PLURAL,
+  COLLECTIONS_TITLE,
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
   CONTAINER_PLACES,
@@ -37,11 +43,15 @@ import {
   SOURCE_FILTER_NONE,
 } from '@apps/pinch/constants';
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
+import { useMealFavorite } from '@apps/pinch/hooks/useMealFavorite';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { useOnRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
 import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
 import { useOnSourceShown } from '@apps/pinch/hooks/useSourceShown';
 import {
+  selectCollectionCounts,
+  selectCollections,
+  selectCollectionsById,
   selectIdeas,
   selectIdeasLoadError,
   selectIngredientsById,
@@ -72,7 +82,12 @@ import {
   hasStockIn,
   type StockSummary,
 } from '@apps/pinch/utils/containers';
+import {
+  filterByCollection,
+  getCollectionFilterOptions,
+} from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
+import { isStarred } from '@apps/pinch/utils/favorites';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 import { getIdeaSearchText } from '@apps/pinch/utils/ideas';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
@@ -162,6 +177,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
+  const collections = useAppSelector(selectCollections);
+  const collectionsById = useAppSelector(selectCollectionsById);
+  const collectionCounts = useAppSelector(selectCollectionCounts);
+  const toggleFavorite = useMealFavorite(uid);
   const stockByRecipe = useAppSelector(selectStockByRecipe);
   const stockByMeal = useAppSelector(selectStockByMealWithRecipes);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -178,6 +197,14 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     'recipes:source',
     SOURCE_FILTER_ANY,
   );
+  const [pickedCollection, setPickedCollection] = usePinchSessionState(
+    'recipes:collection',
+    COLLECTION_FILTER_ANY,
+  );
+  const [pickedFavorites, setPickedFavorites] = usePinchSessionState(
+    'recipes:favorites',
+    false,
+  );
   const [stockPlaces, setStockPlaces] = usePinchSessionState<ContainerPlace[]>(
     'recipes:stock',
     [],
@@ -190,6 +217,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     recipeId: string;
     noteId: string | null;
   } | null>(null);
+  const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
@@ -199,6 +227,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     setView('recipes');
     setQuery('');
     setPickedSource(SOURCE_FILTER_ANY);
+    setPickedCollection(COLLECTION_FILTER_ANY);
     setStockPlaces([]);
     setRevealId(recipeId);
   });
@@ -207,7 +236,16 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     setView('recipes');
     setQuery('');
     setStockPlaces([]);
+    setPickedCollection(COLLECTION_FILTER_ANY);
     setPickedSource(sourceId);
+  };
+
+  const showCollection = (collectionId: string) => {
+    setView('recipes');
+    setQuery('');
+    setStockPlaces([]);
+    setPickedSource(SOURCE_FILTER_ANY);
+    setPickedCollection(collectionId);
   };
 
   useOnSourceShown(showSource);
@@ -238,6 +276,16 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const hasSourceFilter =
     shownView === 'recipes' && sourceCounts.bySource.size > 0;
   const hasSourceSection = shownView === 'recipes' && sources.length > 0;
+  const hasCollectionSection =
+    shownView === 'recipes' && collections.length > 0;
+  const hasCollectionFilter =
+    hasCollectionSection && collectionCounts.byCollection.size > 0;
+  const favoriteCount = meals.filter(isStarred).length;
+  const hasFavoritesFilter =
+    shownView === 'meals' &&
+    favoriteCount > 0 &&
+    meals.length >= LIST_SEARCH_THRESHOLD;
+  const isFavoritesOn = hasFavoritesFilter && pickedFavorites;
   const stockMap = shownView === 'meals' ? stockByMeal : stockByRecipe;
   const stockCounts = useMemo(
     () =>
@@ -271,7 +319,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     !isIdeas &&
     stockOptions.length > 0 &&
     (shownView === 'recipes' || meals.length >= LIST_SEARCH_THRESHOLD);
-  const hasFilterBar = !isIdeas && (hasSourceSection || hasStockFilter);
+  const hasFilterBar =
+    !isIdeas &&
+    (hasSourceSection ||
+      hasCollectionSection ||
+      hasFavoritesFilter ||
+      hasStockFilter);
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
 
@@ -288,13 +341,34 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       ? 'No source'
       : (sourcesById.get(sourceFilter)?.label ?? '');
 
+  const getCollectionFilter = () => {
+    if (!hasCollectionFilter) return COLLECTION_FILTER_ANY;
+    if (
+      pickedCollection === COLLECTION_FILTER_NONE ||
+      collectionsById.has(pickedCollection)
+    ) {
+      return pickedCollection;
+    }
+    return COLLECTION_FILTER_ANY;
+  };
+  const collectionFilter = getCollectionFilter();
+  const collectionLabel =
+    collectionFilter === COLLECTION_FILTER_NONE
+      ? `No ${COLLECTION_NOUN}`
+      : (collectionsById.get(collectionFilter)?.label ?? '');
+
   const isSearching = trimmed !== '';
   const searchIndex = useMemo(
     () =>
       isSearching
-        ? buildRecipeSearchIndex(recipes, ingredientsById, sourcesById)
+        ? buildRecipeSearchIndex(
+            recipes,
+            ingredientsById,
+            sourcesById,
+            collectionsById,
+          )
         : null,
-    [isSearching, recipes, ingredientsById, sourcesById],
+    [isSearching, recipes, ingredientsById, sourcesById, collectionsById],
   );
   const searched = useMemo(
     () => (searchIndex ? searchRecipes(searchIndex, trimmed) : recipes),
@@ -309,16 +383,29 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               (getRecipeSource(recipe, sourcesById)?.id ??
                 SOURCE_FILTER_NONE) === sourceFilter,
           );
+    const inCollection = filterByCollection(
+      inSource,
+      collectionFilter,
+      collections,
+    );
     const inStock =
       stockPlaces.length === 0
-        ? inSource
-        : inSource.filter((recipe) =>
+        ? inCollection
+        : inCollection.filter((recipe) =>
             stockPlaces.some((place) =>
               hasStockIn(stockByRecipe.get(recipe.id), place),
             ),
           );
     return inStock;
-  }, [searched, sourcesById, sourceFilter, stockPlaces, stockByRecipe]);
+  }, [
+    searched,
+    sourcesById,
+    sourceFilter,
+    collectionFilter,
+    collections,
+    stockPlaces,
+    stockByRecipe,
+  ]);
 
   const sourceOptions = useMemo(
     () => [
@@ -343,6 +430,15 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     ],
     [sources, sourceCounts, sourceFilter],
   );
+  const collectionOptions = useMemo(
+    () =>
+      getCollectionFilterOptions(
+        collections,
+        collectionCounts,
+        collectionFilter,
+      ),
+    [collections, collectionCounts, collectionFilter],
+  );
   const activeFilters = [
     ...(sourceFilter === SOURCE_FILTER_ANY
       ? []
@@ -355,22 +451,37 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 : `From ${sourceLabel}`,
           },
         ]),
+    ...(collectionFilter === COLLECTION_FILTER_ANY
+      ? []
+      : [
+          {
+            key: 'collection',
+            label:
+              collectionFilter === COLLECTION_FILTER_NONE
+                ? `In no ${COLLECTION_NOUN}`
+                : `In ${collectionLabel}`,
+          },
+        ]),
+    ...(isFavoritesOn ? [{ key: 'favorites', label: 'Favorites' }] : []),
     ...stockPlaces.map((place) => ({
       key: `stock-${place}`,
       label: `In the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
     })),
   ];
-  const clearSourceFilter = () => setPickedSource(SOURCE_FILTER_ANY);
   const clearFilters = () => {
     setPickedSource(SOURCE_FILTER_ANY);
+    setPickedCollection(COLLECTION_FILTER_ANY);
+    setPickedFavorites(false);
     setStockPlaces([]);
   };
-  const removeFilter = (key: string) =>
-    key === 'source'
-      ? clearSourceFilter()
-      : setStockPlaces((current) =>
-          current.filter((place) => `stock-${place}` !== key),
-        );
+  const removeFilter = (key: string) => {
+    if (key === 'source') return setPickedSource(SOURCE_FILTER_ANY);
+    if (key === 'collection') return setPickedCollection(COLLECTION_FILTER_ANY);
+    if (key === 'favorites') return setPickedFavorites(false);
+    return setStockPlaces((current) =>
+      current.filter((place) => `stock-${place}` !== key),
+    );
+  };
 
   const shownMeals = useMemo(
     () =>
@@ -382,10 +493,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 hasStockIn(stockByMeal.get(meal.id), place),
               ),
             )
-        ).map((meal) => ({ name: meal.name, meal })),
+        )
+          .filter((meal) => !isFavoritesOn || isStarred(meal))
+          .map((meal) => ({ name: meal.name, meal })),
         trimmed,
       ).map(({ meal }) => meal),
-    [meals, stockPlaces, stockByMeal, trimmed],
+    [meals, stockPlaces, stockByMeal, trimmed, isFavoritesOn],
   );
 
   const getBody = () => {
@@ -409,13 +522,19 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           </p>
         );
       }
-      if (shownMeals.length === 0 && stockPlaces.length > 0) {
+      if (shownMeals.length === 0 && activeFilters.length > 0) {
+        const scope = [
+          isFavoritesOn ? 'favorite' : null,
+          stockPlaces.length > 0 ? 'in stock' : null,
+        ]
+          .filter(Boolean)
+          .join(' ');
         return (
           <div className='space-y-3 py-6 text-center'>
             <p className='text-muted-foreground text-sm wrap-break-word'>
               {trimmed !== ''
-                ? `No saved meals in stock match “${trimmed}”.`
-                : 'No saved meals are in stock there.'}
+                ? `No ${scope} saved meals match “${trimmed}”.`
+                : `No ${scope} saved meals there.`}
             </p>
             <Button
               type='button'
@@ -423,14 +542,19 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               className='h-10'
               onClick={clearFilters}
             >
-              Clear filter
+              {`Clear ${activeFilters.length === 1 ? 'filter' : 'filters'}`}
             </Button>
           </div>
         );
       }
       if (shownMeals.length === 0) {
         const recipeMatches = searchRecipes(
-          buildRecipeSearchIndex(recipes, ingredientsById, sourcesById),
+          buildRecipeSearchIndex(
+            recipes,
+            ingredientsById,
+            sourcesById,
+            collectionsById,
+          ),
           trimmed,
         ).length;
         return (
@@ -442,8 +566,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             }
             actionLabel={recipeMatches > 0 ? 'Show recipes' : null}
             onAction={() => {
-              setPickedSource(SOURCE_FILTER_ANY);
-              setStockPlaces([]);
+              clearFilters();
               setView('recipes');
             }}
           />
@@ -459,6 +582,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                 showMacros={viewOptions.options.showMacros}
                 showStock={viewOptions.options.showStock}
                 onOpen={setOpenMealId}
+                onToggleFavorite={toggleFavorite}
               />
             </li>
           ))}
@@ -480,6 +604,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           : sourceFilter !== SOURCE_FILTER_ANY
             ? `from ${sourceLabel}`
             : null,
+        collectionFilter === COLLECTION_FILTER_NONE
+          ? `in no ${COLLECTION_NOUN}`
+          : collectionFilter !== COLLECTION_FILTER_ANY
+            ? `in the ${collectionLabel} ${COLLECTION_NOUN}`
+            : null,
         stockPlaces.length > 0
           ? `in the ${stockPlaces.map((place) => CONTAINER_PLACE_LABELS[place].toLowerCase()).join(' or ')}`
           : null,
@@ -489,9 +618,15 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       const outside = searched.length;
       const getText = () => {
         if (trimmed === '') {
-          return sourceFilter === SOURCE_FILTER_NONE && stockPlaces.length === 0
-            ? 'Every recipe has a source.'
-            : `No recipes ${scope} yet.`;
+          if (activeFilters.length === 1) {
+            if (sourceFilter === SOURCE_FILTER_NONE) {
+              return 'Every recipe has a source.';
+            }
+            if (collectionFilter === COLLECTION_FILTER_NONE) {
+              return `Every recipe is in a ${COLLECTION_NOUN}.`;
+            }
+          }
+          return `No recipes ${scope} yet.`;
         }
         if (outside === 0) return `Nothing matches “${trimmed}” yet.`;
         return `Nothing ${scope} matches “${trimmed}”, but ${outside === 1 ? '1 other recipe does' : `${outside} other recipes do`}.`;
@@ -556,7 +691,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             );
             return (
               <div
-                key={`${sourceFilter}-${stockPlaces.join(',')}-${chunk}`}
+                key={`${sourceFilter}-${collectionFilter}-${stockPlaces.join(',')}-${chunk}`}
                 className={join(
                   'defer-offscreen',
                   chunk > 0 && 'border-border border-t',
@@ -715,34 +850,92 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             />
           }
         >
-          <>
-            {hasSourceSection && (
-              <FilterSection title='Source'>
-                {hasSourceFilter ? (
-                  <PillGroup
-                    label='Sources'
-                    options={sourceOptions}
-                    value={sourceFilter}
-                    onChange={setPickedSource}
+          {(closeFilters) => (
+            <>
+              {hasSourceSection && (
+                <FilterSection title='Source'>
+                  {hasSourceFilter ? (
+                    <PillGroup
+                      label='Sources'
+                      options={sourceOptions}
+                      value={sourceFilter}
+                      onChange={setPickedSource}
+                    />
+                  ) : (
+                    <p className='text-muted-foreground text-sm'>
+                      None of your recipes has a source right now.
+                    </p>
+                  )}
+                </FilterSection>
+              )}
+              {hasCollectionSection && (
+                <FilterSection
+                  title={COLLECTIONS_TITLE}
+                  action={
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='icon'
+                      rounded='full'
+                      aria-label={`Edit ${COLLECTION_NOUN_PLURAL}`}
+                      title={`Edit ${COLLECTION_NOUN_PLURAL}`}
+                      className='-my-2 size-10 shrink-0 p-0'
+                      onClick={() => {
+                        closeFilters();
+                        setIsCollectionsOpen(true);
+                      }}
+                    >
+                      <Pencil className='h-4 w-4' aria-hidden='true' />
+                    </Button>
+                  }
+                >
+                  {hasCollectionFilter ? (
+                    <PillGroup
+                      label={COLLECTIONS_TITLE}
+                      options={collectionOptions}
+                      value={collectionFilter}
+                      onChange={setPickedCollection}
+                    />
+                  ) : (
+                    <p className='text-muted-foreground text-sm'>
+                      {`None of your recipes is in a ${COLLECTION_NOUN} right now.`}
+                    </p>
+                  )}
+                </FilterSection>
+              )}
+              {hasFavoritesFilter && (
+                <FilterSection title='Favorites'>
+                  <MultiPillGroup
+                    label='Favorites'
+                    options={[
+                      {
+                        value: 'favorites',
+                        label: `Favorites · ${favoriteCount}`,
+                        icon: (
+                          <Star
+                            className='h-4 w-4 fill-current text-[var(--pinch-drizzle)]'
+                            aria-hidden='true'
+                          />
+                        ),
+                      },
+                    ]}
+                    values={isFavoritesOn ? ['favorites'] : []}
+                    onChange={(values) => setPickedFavorites(values.length > 0)}
                   />
-                ) : (
-                  <p className='text-muted-foreground text-sm'>
-                    None of your recipes has a source right now.
-                  </p>
-                )}
-              </FilterSection>
-            )}
-            {hasStockFilter && (
-              <FilterSection title='In stock'>
-                <MultiPillGroup
-                  label='In stock'
-                  options={stockOptions}
-                  values={stockPlaces}
-                  onChange={setStockPlaces}
-                />
-              </FilterSection>
-            )}
-          </>
+                </FilterSection>
+              )}
+              {hasStockFilter && (
+                <FilterSection title='In stock'>
+                  <MultiPillGroup
+                    label='In stock'
+                    options={stockOptions}
+                    values={stockPlaces}
+                    onChange={setStockPlaces}
+                  />
+                </FilterSection>
+              )}
+            </>
+          )}
         </FilterBar>
       ) : (
         hasSearch && (
@@ -790,6 +983,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           onShowSource={(sourceId) => {
             setOpenId(null);
             showSource(sourceId);
+            scrollToTopAfterSheetCloses();
+          }}
+          onShowCollection={(collectionId) => {
+            setOpenId(null);
+            showCollection(collectionId);
             scrollToTopAfterSheetCloses();
           }}
           onOpenHistory={(id) => {
@@ -864,6 +1062,13 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenMealId(null);
             setPutAway({ kind: 'meal', id });
           }}
+          onToggleFavorite={toggleFavorite}
+        />
+      )}
+      {isCollectionsOpen && (
+        <CollectionsSheet
+          uid={uid}
+          onClose={() => setIsCollectionsOpen(false)}
         />
       )}
       {putAway && (
