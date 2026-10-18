@@ -5,7 +5,6 @@ import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 
 interface CoverImageProps {
   coverPath: string | null;
-  /** A web photo the recipe keeps the address of; a recipe has this or `coverPath`, not both. */
   coverUrl: string | null;
   /** The recipe's `updatedAt`, so a replaced cover is fetched again. */
   version: number;

@@ -16,7 +16,8 @@ export const webPhotoKeys = {
     ['pinch', 'webPhotos', getPhotoQueryKey(query)] as const,
 };
 
-/** The photos the web search finds for a recipe's title: one answer per search text, kept half an hour so reopening the drawer doesn't ask again, never persisted (the addresses are third-party). A failure is not kept as an answer: the next open asks again. */
+// Never persisted: the addresses are third-party.
+
 export const webPhotosQueryOptions = (query: string) =>
   queryOptions({
     queryKey: webPhotoKeys.search(query),

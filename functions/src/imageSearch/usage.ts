@@ -1,8 +1,6 @@
-/** The counting rules behind the daily budget and the per-person limit, kept free of Firestore so a check can run them. */
-
 const dayFormatters = new Map<string, Intl.DateTimeFormat>();
 
-/** The calendar day (`YYYY-MM-DD`) at `now` in a zone, so a quota that resets at Pacific midnight is counted by Pacific days. */
+/** A quota that resets at Pacific midnight is counted by Pacific days. */
 export const getQuotaDay = (now: number, timeZone: string) => {
   const formatter =
     dayFormatters.get(timeZone) ??
@@ -27,7 +25,6 @@ export interface PersonUsage {
   dayCount: number;
 }
 
-/** One uncached search by one person: at most `PERSON_PER_WINDOW` in a minute and `PERSON_PER_DAY` in a UTC day. A refused search is not counted, so waiting is enough. */
 export const stepPersonUsage = (
   previous: PersonUsage | null,
   now: number,
@@ -54,13 +51,11 @@ export const stepPersonUsage = (
   };
 };
 
-/** One call against a provider's day: refused once `cap` calls are counted. */
 export const stepBudget = (count: number, cap: number) => ({
   allowed: count < cap,
   next: count < cap ? count + 1 : count,
 });
 
-/** An env value that is a whole number of zero or more, else the fallback. */
 export const readCap = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
   return value !== undefined &&

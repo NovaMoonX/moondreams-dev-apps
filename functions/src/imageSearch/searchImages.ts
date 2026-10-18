@@ -11,21 +11,21 @@ import {
 
 export const MIN_QUERY_LENGTH = 2;
 export const MAX_QUERY_LENGTH = 80;
-/** A found set is kept a week; "nothing found" only ten minutes, so a gap in a provider never sticks. A failed answer is never kept. */
+// "Nothing found" is kept only ten minutes, so a gap in a provider never sticks; a failure is never kept.
+
 export const RESULTS_TTL_MS = 7 * 86_400_000;
 export const EMPTY_TTL_MS = 10 * 60_000;
-/** The whole search, every provider included, gives up after this long. */
 export const SEARCH_DEADLINE_MS = 10_000;
-/** Bump when the shape of results changes, so an older cached answer is not served. */
+// Bump when the shape of results changes, so an older cached answer is not served.
+
 const CACHE_VERSION = 1;
 
-/** Trimmed, one space between words, at most `MAX_QUERY_LENGTH` characters; empty when there is nothing to search for. */
 export const normalizeQuery = (value: unknown) =>
   typeof value === 'string'
     ? value.replace(/\s+/g, ' ').trim().slice(0, MAX_QUERY_LENGTH).trim()
     : '';
 
-/** One cache entry per search text and per list of providers, so changing `IMAGE_SEARCH_PROVIDERS` takes effect at once instead of serving the old list's answers. */
+/** The provider list is part of the key, so changing it takes effect at once instead of serving the old list's answers. */
 export const getCacheId = (query: string, providerIds: string[]) =>
   createHash('sha256')
     .update(`v${CACHE_VERSION}|${providerIds.join(',')}|${query.toLowerCase()}`)
@@ -49,12 +49,9 @@ export interface SearchDeps {
     get: (id: string) => Promise<CacheEntry | null>;
     set: (id: string, entry: CacheEntry) => Promise<void>;
   };
-  /** Counts one call against the provider's day; false when the day is used up. */
   reserve: (providerId: string, quota: ProviderQuota) => Promise<boolean>;
-  /** Counts one uncached search against the person's limit; false when they are over it. */
   takeTurn: () => Promise<boolean>;
   log: (message: string, detail: Record<string, string>) => void;
-  /** Overrides `SEARCH_DEADLINE_MS` and the per-request limit, for a check that wants to see a timeout without waiting for it. */
   timeouts?: { searchMs: number; requestMs: number };
 }
 
@@ -92,7 +89,7 @@ const tryProvider = async (
   });
 };
 
-/** Tries the providers in order. The first answer with pictures wins; null means none of them could answer at all, and `[]` that at least one answered with nothing. */
+/** The first answer with pictures wins. Null: none could answer at all. `[]`: at least one answered with nothing. */
 const tryProviders = async (
   [provider, ...rest]: ImageProvider[],
   query: string,
@@ -110,7 +107,7 @@ const tryProviders = async (
     : tryProviders(rest, query, signal, deps, true);
 };
 
-/** Pictures for a search text: a fresh cached answer first, then the providers in order. The person's limit and each provider's day are counted only for a search that has to go out. Throws `ImageSearchError` when it is refused or no provider could answer. */
+/** The person's limit and each provider's day are counted only for a search that has to go out. */
 export async function searchImages(
   rawQuery: string,
   deps: SearchDeps,

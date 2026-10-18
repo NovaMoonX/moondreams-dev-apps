@@ -11,12 +11,9 @@ const UPLOAD_NOTE =
 
 interface RecipePhotoFieldProps {
   uid: string;
-  /** The cover the form shows now, or null. */
   cover: ShownCover | null;
   error: string | null;
-  /** Web photo suggestions are for a recipe being made, never for one being edited. */
   canSuggest: boolean;
-  /** The recipe's title as it is typed, which the suggestions search with. */
   title: string;
   onSelect: (file: File | null) => void;
   onPickWeb: (photo: WebPhoto) => void;

@@ -13,30 +13,25 @@ export interface FetchInit {
   redirect?: 'follow' | 'error';
 }
 
-/** `fetch`, narrowed to what the providers use so a check can hand them a fake. */
 export type FetchLike = (url: string, init: FetchInit) => Promise<Response>;
 
 export interface ProviderContext {
   fetch: FetchLike;
-  /** Aborts every request of one search when its time is up. */
   signal: AbortSignal;
-  /** How long one request may take; `REQUEST_TIMEOUT_MS` when omitted. */
   requestTimeoutMs?: number;
 }
 
-/** A day's calls a provider allows, counted in the quota's own time zone so our day ends when theirs does. */
+/** Counted in the quota's own time zone, so our day ends when theirs does. */
 export interface ProviderQuota {
   dailyCap: number;
   timeZone: string;
 }
 
-/** A provider of picture results. Adding one is one file that exports a factory and one line in `providers.ts`. */
 export interface ImageProvider {
   id: string;
   quota: ProviderQuota | null;
-  /** False while the provider can't be used (a missing key, a pause after repeated failures); it is skipped without counting against its quota. */
+  /** False while it can't be used (no key, paused); it is then skipped without counting against its quota. */
   isAvailable: (signal: AbortSignal) => Promise<boolean>;
-  /** Resolves with its results (maybe none) and throws a `ProviderFailure` when it could not answer. */
   search: (query: string, context: ProviderContext) => Promise<ImageResult[]>;
 }
 
@@ -48,7 +43,6 @@ export class ProviderFailure extends Error {
   }
 }
 
-/** What the search refuses with; the callable turns the code into one warm sentence. */
 export type ImageSearchErrorCode = 'unavailable' | 'rate_limited';
 
 export class ImageSearchError extends Error {

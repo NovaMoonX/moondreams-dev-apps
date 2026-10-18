@@ -18,7 +18,8 @@ import { getPhotoQuery, getPhotoQueryKey } from '@apps/pinch/utils/recipeCover';
 
 const POT = '🍲';
 
-/** Whether a picture loads, tried once with its own timeout: a hotlinked photo is often gone or refuses to be shown elsewhere, and the person should hear that when they pick it, not after saving. */
+// A hotlinked photo is often gone or refuses to be shown elsewhere, so the person hears it at the tap, not after saving.
+
 const probeImage = (url: string, timeoutMs: number) =>
   new Promise<boolean>((resolve) => {
     const image = new Image();
@@ -40,14 +41,11 @@ const SKELETON_TILES = Array.from(
 
 interface RecipePhotoSuggestionsProps {
   uid: string;
-  /** The recipe's title as it is typed. */
   title: string;
-  /** The address of the cover that is chosen now, so its tile shows as selected. */
   selectedUrl: string | null;
   onPick: (photo: WebPhoto) => void;
 }
 
-/** "Photos from the web" under a new recipe's upload control: the recipe's title is searched once it has stopped changing, and a tap on a picture that loads picks it. Nothing is drawn until the title is long enough, and nothing at all when the person turned suggestions off in Settings. */
 function RecipePhotoSuggestions({
   uid,
   title,

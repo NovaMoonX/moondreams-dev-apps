@@ -394,13 +394,11 @@ export const MAX_CARE_TIP_LENGTH = 300;
 export const RECIPE_COVER_MAX_DIMENSION = 1280;
 /** A web cover is kept as an address; the rules refuse a longer one. */
 export const MAX_COVER_URL_LENGTH = 2000;
-/** The photo search needs this much of a title before it asks, and sends at most this much of it. */
 export const PHOTO_QUERY_MIN_TITLE_LENGTH = 3;
 export const PHOTO_QUERY_MAX_TITLE_LENGTH = 70;
 export const PHOTO_RESULT_COUNT = 6;
 /** The callable gives up at 10 seconds; the app waits a little longer than that for its answer. */
 export const PHOTO_LOOKUP_TIMEOUT_MS = 14_000;
-/** How long a picked photo gets to load once before it is called unreachable. */
 export const PHOTO_PROBE_TIMEOUT_MS = 8000;
 
 /** The most links one recipe holds, the how-to video included: the rules check the count, the client shapes each link. */

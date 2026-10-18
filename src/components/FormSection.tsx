@@ -4,7 +4,6 @@ interface FormSectionProps {
   title: string;
   /** A count or a short status beside the title ("8", "Edited"). */
   detail?: ReactNode;
-  /** One quiet action at the end of the heading line ("Turn off"), centered on a 40px line so its target is full size. */
   action?: ReactNode;
   children: ReactNode;
 }

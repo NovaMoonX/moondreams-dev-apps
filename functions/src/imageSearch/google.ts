@@ -7,10 +7,11 @@ import {
   type ProviderContext,
 } from './types.js';
 
-// Option 1: the Custom Search JSON API with `searchType=image`. The field names below come from Google's public reference; nothing here has been run against the live service.
+// Field names are from Google's public reference; nothing here has run against the live service.
 const ENDPOINT = 'https://www.googleapis.com/customsearch/v1';
 const MAX_BYTES = 256 * 1024;
-/** Google's free tier is 100 queries a day, counted from midnight Pacific time; stop ten short so a miscount never reaches the paid tier. */
+// The free tier is 100 queries a day from midnight Pacific; stopping ten short keeps a miscount off the paid tier.
+
 const DAILY_CAP = 90;
 const QUOTA_ZONE = 'America/Los_Angeles';
 
@@ -41,7 +42,7 @@ export type SecretReader = (
   signal: AbortSignal,
 ) => Promise<string | null>;
 
-/** Google Programmable Search, picture results, safe search on. It needs the secrets `GOOGLE_CSE_KEY` (an API key) and `GOOGLE_CSE_CX` (the search engine id); until both can be read it says it is unavailable and is skipped, never an error. */
+/** Skipped, never an error, until both `GOOGLE_CSE_KEY` and `GOOGLE_CSE_CX` can be read. */
 export function createGoogleProvider(readSecret: SecretReader): ImageProvider {
   const readCredentials = async (signal: AbortSignal) => {
     const [key, cx] = await Promise.all([

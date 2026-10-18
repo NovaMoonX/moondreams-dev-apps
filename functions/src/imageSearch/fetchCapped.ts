@@ -6,13 +6,12 @@ interface CappedRequest {
   fetch: FetchLike;
   url: string;
   init: Omit<FetchInit, 'signal'>;
-  /** The search's own signal; a request also gives up after `timeoutMs` (`REQUEST_TIMEOUT_MS`) on its own. */
   signal: AbortSignal;
   maxBytes: number;
   timeoutMs?: number;
 }
 
-/** What an upstream answered: its status and at most `maxBytes` of body as text. A longer body is cut off, so a hostile answer can't use up the instance's memory or time. */
+/** A body longer than `maxBytes` is cut off, so a hostile answer can't use up the instance's memory or time. */
 export interface CappedResponse {
   status: number;
   text: string;
@@ -33,7 +32,7 @@ const readCapped = async (response: Response, maxBytes: number) => {
   return Buffer.concat(chunks).subarray(0, maxBytes).toString('utf8');
 };
 
-/** One request with a timeout and a size cap; any network error, timeout or abort is a `ProviderFailure` with a short code (never the address or the error's own text, which can carry a key). */
+/** A failure carries a short code, never the address or the error's own text, which can hold a key. */
 export async function fetchCapped({
   fetch,
   url,

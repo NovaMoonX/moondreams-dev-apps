@@ -1183,6 +1183,37 @@ The recipe form's photo and source are summary rows with an editor, like its tit
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editors were measured at 390×844 and 320×568 in light and dark and at 1280.
 - [ ] The README Build Plan lines are checked off; `UX.md` and `TECHNICAL.md` still match what shipped.
 
+### Issue 45: Photo suggestions for a new recipe, and a web photo as a cover
+
+**Prerequisites:** Issue 6, Issue 44
+**Target PR Size:** ~1,900 lines (the function and its provider layer, its checks, the cover field, the drawer block, the grid, the setting, the rules and the docs)
+**Files:**
+- `functions/src/imageSearch/` (`searchImages`, `ddg`, `google`, `providers`, `optionalSecret`, `usage`, `results`, `fetchCapped`, `types`), `functions/src/apps/pinch/searchRecipeImages.ts`, the export in `functions/src/index.ts`, `functions/README.md`
+- `Recipe.coverUrl` and `WebPhoto` in `types.ts`, the caps in `constants.ts`, `utils/recipeCover.ts`, `saveRecipe`, `CoverImage` and its five callers, `RecipePhotoField`, `RecipePhotoSuggestions`, `queries/photoQueries.ts`, `src/components/ImageChoiceGrid`, `FormSection`'s `action`, `PhotoPicker`'s `isCompact`
+- `PinchSettings.suggestPhotos`, `PhotosSection` in Settings, `coverUrl` and `suggestPhotos` and the two server-only collections in `firestore.rules`, `scripts/checks/imageSearch.ts` and `pinchPhotos.ts`
+
+**Context:** Read `TECHNICAL.md` §5i and open question 26; `functions/README.md`'s `searchRecipeImages` note; CLAUDE.md's "Cloud Functions", "Every AI entry point says what happens before anything is sent" and "An image from a URL that can stop working".
+
+### Description
+Opening the Photo row of a new recipe shows six pictures found by searching the web with its title, under the upload buttons. Picking one makes it the cover, kept as its web address (no copy, no Storage); an upload and a web photo replace each other and Remove goes back to none. Which search answers is one environment switch, DuckDuckGo first and Google as the fallback.
+
+### Possible Approach
+1. A callable over a provider layer with a shared cache, daily budgets and a per-person limit, built and checked against fakes; the live services were not reachable from the sandbox.
+2. `coverUrl` beside `coverPath`, at most one set, drawn everywhere through `FallbackImage` with the pot tile as the fallback; the rules enforce https, the length and the exclusivity.
+3. The block in the Photo editor of a new recipe only, with the line that says what is sent, a Turn off chip and a Settings row.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read / Update / Delete:** pick a web photo for a new recipe, see it on the row, the list and the drawer, replace it with an upload or another photo, and remove it.
+- [ ] **Entry points:** the Photo row's editor (new recipes only), the block's Turn off chip, and Settings' "Suggest photos for new recipes".
+
+### Success Criteria
+- [ ] A recipe written before web covers (no `coverUrl`) opens, edits and saves, and the save writes `coverUrl: null`; checked in the browser over a legacy-shaped document.
+- [ ] Editing a recipe never searches; a title under three letters, the switch off, or no title draws nothing and sends nothing.
+- [ ] A result with a non-https address is dropped, an unreachable picture is not chosen, and a failed or empty search leaves the upload working.
+- [ ] The rules were proved on the emulator as the owner, another user and signed out against the base rules.
+- [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editor was measured at 390×844, 375×667, 320×568, 844×390 and 1280×900 in light and dark.
+- [ ] Nothing has to exist in production before the merge; the README says how to turn Google on.
+
 ## Beyond
 
 ### Issue 34: Hands-free voice navigation in cooking mode

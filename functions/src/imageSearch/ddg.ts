@@ -7,7 +7,7 @@ import {
   type ProviderContext,
 } from './types.js';
 
-// DuckDuckGo has no public image API. This follows the two requests its own page makes (a token from the results page, then the JSON the picture grid loads), which can change or be blocked at any time; nothing here has been run against the live service.
+// DuckDuckGo has no public image API: these are the two requests its own page makes, so they can change or be blocked at any time.
 const PAGE_URL = 'https://duckduckgo.com/';
 const IMAGES_URL = 'https://duckduckgo.com/i.js';
 const USER_AGENT =
@@ -21,7 +21,7 @@ const FAILURES_BEFORE_PAUSE = 3;
 const PAUSE_MS = 5 * 60_000;
 const DAILY_CAP = 1500;
 
-/** The `vqd` token in the results page: the digits and dashes after `vqd=`, with or without a quote. It scans with `indexOf` and looks at 65 characters at a time, never a pattern over the whole page, and tries the next `vqd=` when one has no usable token. */
+/** The token after `vqd=`, found by `indexOf` and a look at 65 characters, never a pattern over the whole page (a hostile page makes those quadratic). */
 export const findToken = (
   page: string,
   from = 0,
@@ -88,7 +88,8 @@ const getImages = async (
   return parseImages(response.text);
 };
 
-/** The pictures request, tried once more when it fails or comes back empty: the first answer for a fresh token is sometimes empty. */
+// The first answer for a fresh token is sometimes empty, so it is asked once more.
+
 const getImagesWithRetry = async (
   query: string,
   token: string,
@@ -123,7 +124,7 @@ const search = async (query: string, context: ProviderContext) => {
   return getImagesWithRetry(query, token, context);
 };
 
-/** Option 3: DuckDuckGo images, no key, safe search on. After three failures in a row it steps aside for five minutes, so a blocked address costs a search no time while Google answers. */
+/** Steps aside for five minutes after three failures in a row, so a blocked address costs a search nothing while the next provider answers. */
 export function createDdgProvider(now: () => number = Date.now): ImageProvider {
   const state = { failures: 0, pausedUntil: 0 };
 

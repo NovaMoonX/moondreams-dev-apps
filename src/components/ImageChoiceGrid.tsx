@@ -9,25 +9,20 @@ import FallbackImage from '@/components/FallbackImage';
 export interface ImageChoice {
   key: string;
   src: string;
-  /** What the picture is, for screen readers. */
   label: string;
-  /** A choice that can't be picked: dimmed, and said so to screen readers. */
   isUnavailable?: boolean;
 }
 
 interface ImageChoiceGridProps {
-  /** Names the group for screen readers. */
   label: string;
   choices: ImageChoice[];
   selectedKey: string | null;
-  /** The choice being checked before it is selected: it shows a spinner while the others stay tappable. */
   checkingKey?: string | null;
-  /** Shown in a tile whose picture can't load. */
   fallback: ReactNode;
   onPick: (key: string) => void;
 }
 
-/** Pictures to choose one from, three to a row: each tile is a toggle whose selected state is a heavy inner border and a check, never a colour alone. The border is drawn by an overlay, not a focus ring, because the app removes the ring from a control the pointer just focused. */
+/** The selected border is an overlay, not a focus ring: the app strips the ring from a control the pointer just tapped. */
 function ImageChoiceGrid({
   label,
   choices,

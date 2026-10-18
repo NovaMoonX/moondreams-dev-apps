@@ -6,11 +6,9 @@ import {
 } from '@apps/pinch/constants';
 import type { Recipe, WebPhoto } from '@apps/pinch/types';
 
-/** Whether a recipe has a cover to draw: an upload, or a web photo it keeps the address of. */
 export const hasCover = (recipe: Pick<Recipe, 'coverPath' | 'coverUrl'>) =>
   Boolean(recipe.coverPath || recipe.coverUrl);
 
-/** An https address of a length the rules take, with no sign-in in it. */
 export const isCoverUrl = (value: unknown): value is string => {
   if (typeof value !== 'string' || value.length > MAX_COVER_URL_LENGTH) {
     return false;
@@ -28,7 +26,6 @@ export const isCoverUrl = (value: unknown): value is string => {
   }
 };
 
-/** The site of an address without `www.`, or an empty string when it isn't one. */
 export const getUrlHost = (value: string) => {
   try {
     return new URL(value).hostname.replace(/^www\./, '');
@@ -37,7 +34,7 @@ export const getUrlHost = (value: string) => {
   }
 };
 
-/** What the photo search is asked for a recipe's title: the title and the word "recipe", so a search for "Adobo" looks for the dish and not the island. Null while the title is too short to look for. */
+/** The word "recipe" makes a search for "Adobo" find the dish, not the island. */
 export const getPhotoQuery = (title: string) => {
   const words = title.replace(/\s+/g, ' ').trim();
   return words.length < PHOTO_QUERY_MIN_TITLE_LENGTH
@@ -45,11 +42,10 @@ export const getPhotoQuery = (title: string) => {
     : `${words.slice(0, PHOTO_QUERY_MAX_TITLE_LENGTH).trim()} recipe`;
 };
 
-/** The same text asked twice reads as one search, so it is fetched once. */
 export const getPhotoQueryKey = (query: string) =>
   query.replace(/\s+/g, ' ').trim().toLowerCase();
 
-/** What the function answered, checked again here because it is a network answer: only https pictures with an https thumbnail, copied by name, at most six. */
+/** A network answer is checked again here and copied by name. */
 export const toWebPhotos = (value: unknown): WebPhoto[] => {
   if (!Array.isArray(value)) return [];
   return value
@@ -74,16 +70,14 @@ export const toWebPhotos = (value: unknown): WebPhoto[] => {
 };
 
 interface CoverChoice {
-  /** Where an uploaded file goes, used when there is one. */
   uploadPath: string;
   hasFile: boolean;
-  /** The web photo the person picked, null when they picked none. */
   webUrl: string | null;
   removeCover: boolean;
   existing: Pick<Recipe, 'coverPath' | 'coverUrl'> | null;
 }
 
-/** The two cover fields a save writes. A recipe has at most one: the one chosen last wins and the other is written null in the same update. Untouched, an edit keeps what the recipe had (a missing `coverUrl` key reads as null and is written back). */
+/** A recipe has at most one cover: the one chosen last wins and the other is written null in the same update. */
 export const getCoverFields = ({
   uploadPath,
   hasFile,
@@ -102,9 +96,8 @@ export const getCoverFields = ({
 
 export interface ShownCover {
   url: string;
-  /** The smaller picture for a small tile; the same address when there is only one. */
   thumbUrl: string;
-  /** The site a web photo comes from, null for an upload (so a line that says "From ..." shows only for a web photo). */
+  /** Null for an upload, so a "From ..." line shows only for a web photo. */
   host: string | null;
 }
 
@@ -112,13 +105,10 @@ interface ShownCoverInput {
   uploadUrl: string | null;
   web: WebPhoto | null;
   isRemoved: boolean;
-  /** `coverUrl` of the recipe being edited. */
   savedWebUrl: string | null;
-  /** The download address of the recipe's uploaded cover once it has loaded. */
   storageUrl: string | null;
 }
 
-/** The cover the form shows: an upload picked now, else a web photo picked now, else nothing once it was removed, else what the recipe already has. */
 export const getShownCover = ({
   uploadUrl,
   web,

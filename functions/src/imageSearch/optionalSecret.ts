@@ -15,7 +15,7 @@ interface SecretReaderOptions {
   timeoutMs?: number;
 }
 
-/** Reads a secret that may not exist yet. A value in the environment wins (local development, or a secret bound to the function later); otherwise it is read from Secret Manager with the function's own credentials. Anything missing, denied or slow answers null, so a provider that needs it is skipped and nothing else notices. The answer is remembered for ten minutes, and "not there" for two, so a request costs no extra round trip. The value never reaches a log or a response. */
+/** The environment first, then Secret Manager with the function's own credentials. Missing, denied or slow is null, so a provider that needs it is skipped; the value never reaches a log or a response. */
 export function createOptionalSecretReader({
   fetch,
   env = process.env,
