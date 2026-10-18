@@ -19,6 +19,7 @@ import { hasDialogOnTop } from '@/utils/dialogUtils';
 import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
 import ContainersSubview from '@apps/pinch/components/containers/ContainersSubview';
 import IdeaAddSheet from '@apps/pinch/components/ideas/IdeaAddSheet';
+import CookingResumeRow from '@apps/pinch/components/cooking/CookingResumeRow';
 import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
@@ -356,6 +357,7 @@ function Pinch() {
           servings={subview.servings}
           plannedMealId={subview.plannedMealId ?? null}
           plate={subview.plate}
+          resume={subview.resume}
         />
       )}
       {subview?.kind === 'plan' && (
@@ -373,6 +375,7 @@ function Pinch() {
       <div className={join(isTabHidden && 'hidden')}>
         <div className='page pb-28 lg:pb-8 lg:pl-34'>
           <div className='mx-auto max-w-4xl space-y-4 py-6'>
+            {subview?.kind !== 'cook' && <CookingResumeRow uid={user.uid} />}
             <PinchSessionContext.Provider value={session}>
               {getScreen()}
             </PinchSessionContext.Provider>

@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { PenLine } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import ClampedText from '@/components/ClampedText';
 import { formatDateShort } from '@/utils/formatUtils';
 import ChangeList from '@apps/pinch/components/notes/ChangeList';
@@ -77,17 +78,17 @@ function NoteEntry({
           </p>
         )}
         {onApply && !isTweak && (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            aria-label={`Apply the note from ${date} to the recipe`}
-            className='-my-1 h-10 gap-1.5 px-0! text-sm font-normal'
-            onClick={() => onApply(note.id)}
-          >
-            <PenLine className='h-4 w-4' aria-hidden='true' />
-            Apply to the recipe
-          </Button>
+          <ActionChips
+            actions={[
+              {
+                key: 'apply',
+                icon: <PenLine className='h-4 w-4' />,
+                label: 'Apply to the recipe',
+                description: `Apply the note from ${date} to the recipe`,
+                onClick: () => onApply(note.id),
+              },
+            ]}
+          />
         )}
       </div>
     </li>

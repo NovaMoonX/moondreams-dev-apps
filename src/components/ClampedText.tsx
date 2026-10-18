@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+
+import ShowMoreButton from '@/components/ShowMoreButton';
 
 interface ClampedTextProps {
   text: string;
-  /** How many lines show before "More". */
+  /** How many lines show before "Show more". */
   maxLines?: 2 | 4;
 }
 
@@ -38,16 +39,12 @@ function ClampedText({ text, maxLines = 4 }: ClampedTextProps) {
         {text}
       </p>
       {(isClamped || isOpen) && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-10 px-0!'
-          aria-expanded={isOpen}
+        <ShowMoreButton
+          isOpen={isOpen}
           onClick={() => setIsOpen((open) => !open)}
         >
-          {isOpen ? 'Less' : 'More'}
-        </Button>
+          {isOpen ? 'Show less' : 'Show more'}
+        </ShowMoreButton>
       )}
     </div>
   );
