@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -77,7 +78,7 @@ function SnackbarBar({ pending, onUndo, isOverSheet }: SnackbarBarProps) {
 interface UndoSnackbarProps {
   pending: PendingUndo | null;
   onUndo: () => void;
-  /** For a removal made inside a drawer: the bar floats above the drawer, over its own footer, instead of under it. */
+  /** For a removal made inside a drawer: the bar is drawn at the page's root so it floats above the drawer, over its own footer, instead of under it. */
   isOverSheet?: boolean;
 }
 
@@ -87,6 +88,10 @@ function UndoSnackbar({
   onUndo,
   isOverSheet = false,
 }: UndoSnackbarProps) {
+  const bar = pending && (
+    <SnackbarBar pending={pending} onUndo={onUndo} isOverSheet={isOverSheet} />
+  );
+
   return (
     <>
       <div role='status' aria-live='polite' className='sr-only'>
@@ -94,13 +99,7 @@ function UndoSnackbar({
           ? `${pending.message}. You can undo it for a few seconds.`
           : ''}
       </div>
-      {pending && (
-        <SnackbarBar
-          pending={pending}
-          onUndo={onUndo}
-          isOverSheet={isOverSheet}
-        />
-      )}
+      {bar && isOverSheet ? createPortal(bar, document.body) : bar}
     </>
   );
 }

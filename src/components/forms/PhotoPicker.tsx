@@ -122,22 +122,28 @@ function PhotoPicker({
           <Button
             type='button'
             variant='secondary'
-            className='h-11 gap-2'
+            className='h-11 gap-2 px-3 whitespace-nowrap'
             disabled={isBusy}
             onClick={() => openPicker(false)}
           >
-            <ImagePlus className='h-4 w-4' aria-hidden='true' />
+            <ImagePlus
+              className='h-4 w-4 max-[360px]:hidden'
+              aria-hidden='true'
+            />
             {photoUrl ? changeLabel : uploadLabel}
           </Button>
           {isTouch && (
             <Button
               type='button'
               variant='secondary'
-              className='h-11 gap-2'
+              className='h-11 gap-2 px-3 whitespace-nowrap'
               disabled={isBusy}
               onClick={() => openPicker(true)}
             >
-              <Camera className='h-4 w-4' aria-hidden='true' />
+              <Camera
+                className='h-4 w-4 max-[360px]:hidden'
+                aria-hidden='true'
+              />
               Take a photo
             </Button>
           )}

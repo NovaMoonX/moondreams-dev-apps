@@ -59,7 +59,7 @@ function HowToCard({ link }: HowToCardProps) {
           <span className='text-muted-foreground block truncate text-xs'>
             {host}
           </span>
-          <span className='flex items-center gap-1 text-sm font-medium'>
+          <span className='bg-accent text-accent-foreground inline-flex h-7 items-center gap-1 rounded-full px-3 text-sm font-medium'>
             Watch
             <ExternalLink className='size-3.5' aria-hidden='true' />
           </span>

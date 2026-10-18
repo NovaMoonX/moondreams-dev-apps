@@ -730,6 +730,7 @@ function RecipeForm({
         onDataChange={(data) => {
           const next = data as RecipeFormData;
           setFormData(next);
+          setError(null);
           onTitleChange(next.title);
           isDirtyRef.current =
             initialRead !== null ||
@@ -742,7 +743,9 @@ function RecipeForm({
         submitButton={
           <ModalFooterActions
             note={
-              blocker?.target ? (
+              error ? (
+                <span className='text-destructive'>{error}</span>
+              ) : blocker?.target ? (
                 <Button
                   type='button'
                   variant='tertiary'
@@ -787,7 +790,6 @@ function RecipeForm({
           />
         }
       />
-      {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
     </>
   );
 }

@@ -48,6 +48,8 @@ const pasteAsOneLink = (
 
 interface AddressFieldProps {
   label: string;
+  /** The caption is already on screen (a section heading): the field keeps the label for screen readers only. */
+  isLabelHidden?: boolean;
   value: string;
   placeholder: string;
   shouldFocus?: boolean;
@@ -56,30 +58,37 @@ interface AddressFieldProps {
 
 function AddressField({
   label,
+  isLabelHidden = false,
   value,
   placeholder,
   shouldFocus = false,
   onChange,
 }: AddressFieldProps) {
   const problem = getLinkUrlProblem(value);
+  const input = (
+    <Input
+      variant='outline'
+      inputMode='url'
+      aria-label={isLabelHidden ? label : undefined}
+      autoFocus={shouldFocus}
+      className={COMPACT_INPUT_CLASS}
+      placeholder={placeholder}
+      maxLength={MAX_LINK_URL_LENGTH}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      onPaste={(event) => pasteAsOneLink(event, onChange)}
+    />
+  );
 
   return (
     <div className='space-y-1'>
-      <Field label={label} isCompact>
-        {() => (
-          <Input
-            variant='outline'
-            inputMode='url'
-            autoFocus={shouldFocus}
-            className={COMPACT_INPUT_CLASS}
-            placeholder={placeholder}
-            maxLength={MAX_LINK_URL_LENGTH}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onPaste={(event) => pasteAsOneLink(event, onChange)}
-          />
-        )}
-      </Field>
+      {isLabelHidden ? (
+        input
+      ) : (
+        <Field label={label} isCompact>
+          {() => input}
+        </Field>
+      )}
       {problem && (
         <p className='text-destructive text-xs' role='alert'>
           {problem}
@@ -99,7 +108,7 @@ const getRowDetail = (draft: LinkDraft) => {
   if (getLinkUrlProblem(draft.url) !== null) {
     return { text: 'Not a web address', isBad: true };
   }
-  return { text: getLinkHost(toWebLink(draft.url) ?? ''), isBad: false };
+  return { text: getLinkHost(draft.url), isBad: false };
 };
 
 interface LinkRowProps {
@@ -258,9 +267,13 @@ function LinksEditor({ value, onChange, onRemoved }: LinksEditorProps) {
 
   return (
     <div className='space-y-5'>
-      <div className='space-y-1.5'>
+      <div className='space-y-2'>
+        <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+          How-to video
+        </h3>
         <AddressField
           label='How-to video'
+          isLabelHidden
           value={howTo.url}
           placeholder='Paste a YouTube or other video link'
           onChange={(url) => onChange({ ...value, howTo: { ...howTo, url } })}
