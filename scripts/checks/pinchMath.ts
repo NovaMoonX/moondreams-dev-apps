@@ -147,6 +147,7 @@ import {
   groupNotesByRecipe,
   isNoteHistoryFull,
   isValidNoteText,
+  leadWithAdvice,
 } from '../../src/apps/pinch/utils/notes.ts';
 import {
   getRecipeChanges,
@@ -6153,6 +6154,99 @@ assert.deepEqual(
     '',
   ],
   "a timer is named by its step's first words, without a little word left dangling at the end",
+);
+
+const trayLine = (name: string, amountText: string) => ({ name, amountText });
+assert.deepEqual(
+  [
+    cookUtils.getAmountsSummary([]),
+    cookUtils.getAmountsSummary([trayLine('Garlic', '4')]),
+    cookUtils.getAmountsSummary([
+      trayLine('Garlic', '4'),
+      trayLine('Soy sauce', '¼ cup'),
+    ]),
+    cookUtils.getAmountsSummary([
+      trayLine('Chicken thigh', '2 lb'),
+      trayLine('Soy sauce', '¼ cup'),
+      trayLine('Garlic', '4'),
+    ]),
+    cookUtils.getAmountsSummary([
+      trayLine('Chicken thigh', '2 lb'),
+      trayLine('Soy sauce', '¼ cup'),
+      trayLine('Garlic', '4'),
+      trayLine('Black pepper', '1 tsp'),
+    ]),
+    cookUtils.getAmountsSummary(
+      Array.from({ length: 12 }, (_, at) =>
+        trayLine(`Item ${at + 1}`, '1 cup'),
+      ),
+    ),
+  ],
+  [
+    { count: 0, caption: 'For this step · 0 items', text: '' },
+    { count: 1, caption: 'For this step · 1 item', text: 'Garlic 4' },
+    {
+      count: 2,
+      caption: 'For this step · 2 items',
+      text: 'Garlic 4 and Soy sauce ¼ cup',
+    },
+    {
+      count: 3,
+      caption: 'For this step · 3 items',
+      text: 'Chicken thigh 2 lb, Soy sauce ¼ cup, and Garlic 4',
+    },
+    {
+      count: 4,
+      caption: 'For this step · 4 items',
+      text: 'Chicken thigh 2 lb, Soy sauce ¼ cup, Garlic 4, and 1 more',
+    },
+    {
+      count: 12,
+      caption: 'For this step · 12 items',
+      text: 'Item 1 1 cup, Item 2 1 cup, Item 3 1 cup, and 9 more',
+    },
+  ],
+  "the tray names a step's first three lines with their amounts and counts the rest (twelve lines read as three and 9 more)",
+);
+assert.equal(
+  cookUtils.getAmountsSummary([
+    trayLine('Salt', ''),
+    trayLine('Pepper', 'to taste'),
+  ]).text,
+  'Salt and Pepper to taste',
+  'a line with no amount text is named alone, and one with only a note keeps the note',
+);
+
+assert.deepEqual(
+  [
+    cookUtils.isCookNoteShown(0, [], 'adobo'),
+    cookUtils.isCookNoteShown(0, ['rice'], 'adobo'),
+    cookUtils.isCookNoteShown(0, ['adobo'], 'adobo'),
+    cookUtils.isCookNoteShown(1, [], 'adobo'),
+    cookUtils.isCookNoteShown(2, ['rice'], 'adobo'),
+  ],
+  [true, true, false, false, false],
+  'the note shows where the cook starts, for the recipe on screen only, and stays away after Got it or on any later step',
+);
+
+assert.deepEqual(
+  [
+    leadWithAdvice('Too salty. Next time use half the soy sauce.'),
+    leadWithAdvice('Great. NEXT TIME double it! Then serve.'),
+    leadWithAdvice('Next time less vinegar.'),
+    leadWithAdvice('We liked it. The sauce was ready early.'),
+    leadWithAdvice('Not much to say next time we will see'),
+    leadWithAdvice(''),
+  ],
+  [
+    '…Next time use half the soy sauce.',
+    '…NEXT TIME double it! Then serve.',
+    'Next time less vinegar.',
+    'We liked it. The sauce was ready early.',
+    'Not much to say next time we will see',
+    '',
+  ],
+  'a note leads with its "Next time" sentence when something comes before it, and is shown whole otherwise',
 );
 
 // ============================================================

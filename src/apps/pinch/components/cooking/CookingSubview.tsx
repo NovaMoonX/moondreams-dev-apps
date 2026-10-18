@@ -34,9 +34,9 @@ import {
   formatDuration,
 } from '@/utils/durationUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import CookDishSwitch from '@apps/pinch/components/cooking/CookDishSwitch';
+import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
-import CookNotes from '@apps/pinch/components/cooking/CookNotes';
+import CookNoteCard from '@apps/pinch/components/cooking/CookNoteCard';
 import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookRecord, {
   type CookRecordStatus,
@@ -46,6 +46,7 @@ import CookStepView, {
 } from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
 import CookTimerView from '@apps/pinch/components/cooking/CookTimerView';
+import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
 import {
   CookVoiceButton,
   CookVoiceExplainer,
@@ -91,6 +92,7 @@ import {
   getTimerSecondary,
   getTimerSlotKey,
   isCookHistoryFull,
+  isCookNoteShown,
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
 import {
@@ -232,6 +234,7 @@ function CookingSession({
   };
   const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
+  const [gotItNotes, setGotItNotes] = useState<string[]>([]);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -1270,7 +1273,7 @@ function CookingSession({
   const getTimerNote = () => {
     if (focused === null || focused.status === 'done') return null;
     if (!wakeLock.isSupported || wakeLock.hasFailed) {
-      return 'This device may turn the screen off; timers keep running only while this screen is open.';
+      return 'This screen may turn off. Your timer stays right, but it can only ring while the screen is on.';
     }
     return timers.isNoticeShown
       ? 'Keep this screen open: timers stop if you leave it.'
@@ -1281,10 +1284,24 @@ function CookingSession({
     recipe.isArchived === true ||
     recipe.updatedAt !== openedUpdatedAt.get(recipe.id);
 
-  const notesBlock = (
-    <CookNotes
+  const dishStrip =
+    isPlate && !isFinishShown && focused === null ? (
+      <CookDishStrip dishes={dishes} value={recipe.id} onChange={showRecipe} />
+    ) : null;
+  const isDishStripInStep = isStepsView && hasSteps && !isWide;
+  const noteCard = isCookNoteShown(index, gotItNotes, recipe.id) ? (
+    <CookNoteCard
       key={recipe.id}
       recipeId={recipe.id}
+      onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
+      onApply={(noteId) => void applyNote(noteId)}
+    />
+  ) : null;
+  const notesDoor = (
+    <RecipeNotes
+      recipeId={recipe.id}
+      onAdd={null}
+      onEdit={null}
       onApply={(noteId) => void applyNote(noteId)}
     />
   );
@@ -1311,6 +1328,8 @@ function CookingSession({
       timerSlots={readySlots}
       isTimersFull={timers.isFull}
       action={ingredientsButton}
+      aside={noteCard}
+      dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)
       }
@@ -1499,7 +1518,7 @@ function CookingSession({
     <Subview
       overlay
       isTitleWrapped
-      className='lg:max-w-5xl'
+      className='lg:max-w-5xl [@media(max-height:500px)]:max-w-4xl'
       title={title}
       headerAction={
         voice.isSupported && !isFinishShown ? (
@@ -1519,14 +1538,7 @@ function CookingSession({
         ref={rootRef}
         className='flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2'
       >
-        {isPlate && !isFinishShown && focused === null && (
-          <CookDishSwitch
-            dishes={dishes}
-            value={recipe.id}
-            onChange={showRecipe}
-          />
-        )}
-        {!isFinishShown && !isWide && focused === null && notesBlock}
+        {!isDishStripInStep && dishStrip}
         {focused !== null ? (
           getTimerContent()
         ) : isFinishShown ? (
@@ -1631,18 +1643,19 @@ function CookingSession({
           </div>
         ) : isWide ? (
           <div className='grid flex-1 grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-10'>
-            <div className='flex flex-col gap-4'>
-              {notesBlock}
-              {stepContent}
-            </div>
-            <div className='border-border border-l pl-8'>
+            <div className='flex flex-col gap-4'>{stepContent}</div>
+            <div className='border-border space-y-6 border-l pl-8'>
               {ingredientsContent}
+              {notesDoor}
             </div>
           </div>
         ) : isStepsView ? (
           stepContent
         ) : (
-          ingredientsContent
+          <div className='space-y-6'>
+            {ingredientsContent}
+            {notesDoor}
+          </div>
         )}
         <div role='status' className='space-y-1 empty:hidden'>
           {isChanged && focused === null && (

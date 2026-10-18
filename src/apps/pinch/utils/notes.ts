@@ -133,3 +133,11 @@ export const getCookChoiceLabels = (
       : formatDay(cook.cookedAt),
   );
 };
+
+const NEXT_TIME = /[.!?]\s+(?=next time\b)/i;
+
+/** A note's words from its "Next time…" sentence on, when it has one, so the advice leads and what happened before it is only a "…" away. */
+export const leadWithAdvice = (text: string) => {
+  const match = NEXT_TIME.exec(text);
+  return match ? `…${text.slice(match.index + match[0].length)}` : text;
+};

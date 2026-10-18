@@ -2,6 +2,45 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 
+/** A step's lines as flat rows, name on the left and amount on the right. */
+export function CookAmountRows({
+  rows,
+  className,
+}: {
+  rows: CookRow[];
+  className?: string;
+}) {
+  return (
+    <ul className={join('divide-border divide-y', className)}>
+      {rows.map((row) => (
+        <li
+          key={row.id}
+          className='flex items-baseline justify-between gap-3 py-1.5 text-sm'
+        >
+          <span className='min-w-0 wrap-break-word'>
+            {row.name}
+            {row.groupLabel && (
+              <span className='text-muted-foreground text-xs'>
+                {' '}
+                · {row.groupLabel}
+              </span>
+            )}
+          </span>
+          <span
+            className={
+              row.isMeasured
+                ? 'shrink-0 font-semibold whitespace-nowrap'
+                : 'text-muted-foreground max-w-[50%] text-right wrap-break-word'
+            }
+          >
+            {row.amountText}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 interface CookStepAmountsProps {
   /** The lines the step names, scaled. */
   rows: CookRow[];
@@ -32,33 +71,7 @@ function CookStepAmounts({
       )}
     >
       <p className='text-muted-foreground text-xs font-medium'>For this step</p>
-      <ul className='divide-border mt-1 divide-y'>
-        {rows.map((row) => (
-          <li
-            key={row.id}
-            className='flex items-baseline justify-between gap-3 py-1.5 text-sm'
-          >
-            <span className='min-w-0 wrap-break-word'>
-              {row.name}
-              {row.groupLabel && (
-                <span className='text-muted-foreground text-xs'>
-                  {' '}
-                  · {row.groupLabel}
-                </span>
-              )}
-            </span>
-            <span
-              className={
-                row.isMeasured
-                  ? 'shrink-0 font-semibold whitespace-nowrap'
-                  : 'text-muted-foreground max-w-[50%] text-right wrap-break-word'
-              }
-            >
-              {row.amountText}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <CookAmountRows rows={rows} className='mt-1' />
       {isAmountNoteShown && (
         <p className='text-muted-foreground border-border mt-1 border-t pt-2 text-xs'>
           Amounts written in this step stay as they are.
