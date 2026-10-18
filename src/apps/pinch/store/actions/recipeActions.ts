@@ -19,6 +19,7 @@ import {
 import { getRecipeChanges } from '@apps/pinch/utils/recipeChanges';
 import { getTweakReason } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
+import { getCoverFields, isCoverUrl } from '@apps/pinch/utils/recipeCover';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
@@ -105,6 +106,8 @@ export interface RecipeDraft {
   newSource: { id: string; label: string } | null;
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
+  /** The web photo picked for the cover, as its https address, or null. It and `coverFile` are never both set: the draft passes the one chosen last. */
+  coverUrl: string | null;
   removeCover: boolean;
   /** Set on its own after the recipe has committed, and only if the idea is still there. */
   fromIdeaId: string | null;
@@ -178,7 +181,7 @@ const getTweak = (
   return tweak;
 };
 
-/** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). A cooked recipe's edit also records a tweak note in the same batch, so the note exists exactly when the recipe changed. The cover goes to Storage first and is cleaned up if the write fails. */
+/** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). A cooked recipe's edit also records a tweak note in the same batch, so the note exists exactly when the recipe changed. An uploaded cover goes to Storage first and is cleaned up if the write fails; a web cover is only its address, and the upload it replaces is deleted once the write has committed. */
 export const saveRecipe = createAsyncThunk<
   SaveRecipeResult,
   SaveRecipeInput,
@@ -204,8 +207,20 @@ export const saveRecipe = createAsyncThunk<
             (entry) => entry.id === draft.fromIdeaId,
           ) ?? null)
         : null;
+    if (draft.coverUrl !== null && !isCoverUrl(draft.coverUrl)) {
+      return rejectWithValue(
+        'That photo’s web address can’t be saved. Pick another one.',
+      );
+    }
     const path = getRecipeCoverPath(uid, recipeId);
     const tweak = getTweak(getState(), existing, draft, now);
+    const cover = getCoverFields({
+      uploadPath: path,
+      hasFile: draft.coverFile !== null,
+      webUrl: draft.coverUrl,
+      removeCover: draft.removeCover,
+      existing,
+    });
 
     try {
       await freezeBeforeEdit(uid, getState());
@@ -216,18 +231,13 @@ export const saveRecipe = createAsyncThunk<
         );
       }
 
-      const coverPath = draft.coverFile
-        ? path
-        : draft.removeCover
-          ? null
-          : (existing?.coverPath ?? null);
       const fields = {
         title: draft.title.trim(),
         description: draft.description,
         servings: draft.servings,
         prepMinutes: draft.prepMinutes,
         cookMinutes: draft.cookMinutes,
-        coverPath,
+        ...cover,
         ingredients: draft.ingredients,
         steps: draft.steps,
         care: draft.care,
@@ -314,7 +324,7 @@ export const saveRecipe = createAsyncThunk<
       );
     }
 
-    if (draft.removeCover && !draft.coverFile && existing?.coverPath) {
+    if (existing?.coverPath && cover.coverPath !== existing.coverPath) {
       await deleteFile(existing.coverPath).catch(() => undefined);
     }
 

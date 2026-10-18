@@ -86,6 +86,7 @@ import type {
   Recipe,
   RecipeNote,
   RecipeSource,
+  WebPhoto,
 } from '@apps/pinch/types';
 import {
   getCollectionsToSave,
@@ -96,6 +97,7 @@ import {
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
+import { getShownCover } from '@apps/pinch/utils/recipeCover';
 import {
   hasLinksProblem,
   isOverLinkCap,
@@ -169,6 +171,7 @@ function RecipeForm({
   const upload = useImageUpload(null);
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
   const [isCoverRemoved, setIsCoverRemoved] = useState(false);
+  const [webCover, setWebCover] = useState<WebPhoto | null>(null);
   const [initialData] = useState(() =>
     initialRead
       ? {
@@ -192,8 +195,13 @@ function RecipeForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const coverUrl =
-    upload.previewUrl ?? (isCoverRemoved ? null : existingCoverUrl);
+  const cover = getShownCover({
+    uploadUrl: upload.previewUrl,
+    web: webCover,
+    isRemoved: isCoverRemoved,
+    savedWebUrl: recipe?.coverUrl ?? null,
+    storageUrl: existingCoverUrl,
+  });
   const prep = parseMinutes(formData.basics.prep);
   const cook = parseMinutes(formData.basics.cook);
   const isFormComplete =
@@ -222,6 +230,7 @@ function RecipeForm({
         prepMinutes: null,
         cookMinutes: null,
         coverPath: null,
+        coverUrl: null,
         ingredients: lines.map(toRecipeLine),
         steps: [],
         care: null,
@@ -409,15 +418,25 @@ function RecipeForm({
         label: '',
         renderComponent: () => (
           <RecipePhotoField
-            photoUrl={coverUrl}
+            uid={uid}
+            cover={cover}
             error={coverError}
+            canSuggest={recipe === null}
+            title={formData.title}
             onSelect={(file) => {
               pickCover(file);
               setIsCoverRemoved(false);
               isDirtyRef.current = true;
             }}
+            onPickWeb={(photo) => {
+              clearCover();
+              setWebCover(photo);
+              setIsCoverRemoved(false);
+              isDirtyRef.current = true;
+            }}
             onRemove={() => {
               clearCover();
+              setWebCover(null);
               setIsCoverRemoved(true);
               isDirtyRef.current = true;
             }}
@@ -554,7 +573,9 @@ function RecipeForm({
     ],
     [
       uid,
-      coverUrl,
+      cover,
+      recipe,
+      formData.title,
       coverError,
       pickCover,
       clearCover,
@@ -700,6 +721,7 @@ function RecipeForm({
             links: toRecipeLinks(data.links),
             steps: data.steps.map((step) => step.trim()).filter(Boolean),
             coverFile: upload.file,
+            coverUrl: upload.file ? null : (webCover?.imageUrl ?? null),
             removeCover: isCoverRemoved,
             fromIdeaId: initialIdea?.id ?? null,
             tweakReason: data.why,

@@ -140,6 +140,8 @@ export interface PinchSettings {
   fridgeDays: number | null;
   /** Days a box starts with in the freezer; null is the built-in number. */
   freezerDays: number | null;
+  /** Whether a new recipe's Photo drawer searches the web with its title for pictures to pick. A document written before this key lacks it, which reads as true. */
+  suggestPhotos: boolean;
   reminders: PinchReminderSettings;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */
@@ -472,6 +474,15 @@ export interface RecipeLink {
   url: string;
 }
 
+/** One picture the photo search found: both addresses are https. The thumbnail is what the grid loads; the full picture is loaded only once the person picks it. */
+export interface WebPhoto {
+  thumbUrl: string;
+  imageUrl: string;
+  title: string;
+  /** The site the picture was found on, without `www.`. */
+  host: string;
+}
+
 export interface Recipe {
   id: string;
   title: string;
@@ -479,8 +490,10 @@ export interface Recipe {
   servings: number;
   prepMinutes: number | null;
   cookMinutes: number | null;
-  /** Storage path of the cover image. */
+  /** Storage path of the cover image the person uploaded. A recipe has at most one of `coverPath` and `coverUrl`. */
   coverPath: string | null;
+  /** The https address of a cover picked from the web search: the picture stays on its own site and may stop loading. A recipe written before web covers lacks the key, which reads as null. */
+  coverUrl: string | null;
   ingredients: RecipeIngredient[];
   steps: string[];
   /** Per serving; a null metric falls back to the value added up from the ingredients. */

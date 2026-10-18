@@ -475,6 +475,7 @@ export async function seedPinchScale(
       prepMinutes: 5 + Math.floor(random() * 25),
       cookMinutes: index % 4 === 0 ? null : 10 + Math.floor(random() * 50),
       coverPath: null,
+      coverUrl: null,
       ingredients: Array.from({ length: lineCount }, (_, lineIndex) => ({
         id: `scale-recipe-${index}-line-${lineIndex}`,
         ingredientId: pick(ingredients).id,

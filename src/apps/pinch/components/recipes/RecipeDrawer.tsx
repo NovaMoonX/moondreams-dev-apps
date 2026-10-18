@@ -90,6 +90,7 @@ import {
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { hasCover } from '@apps/pinch/utils/recipeCover';
 import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
@@ -355,6 +356,7 @@ function RecipeDrawer({
           <BackLink onBack={backToRecipe} />
           <CoverImage
             coverPath={recipe.coverPath}
+            coverUrl={recipe.coverUrl ?? null}
             version={recipe.updatedAt}
             className='w-full'
           />
@@ -526,7 +528,7 @@ function RecipeDrawer({
       <div className={join('space-y-5', viewBody !== null && 'hidden')}>
         {(source ||
           recipeCollections.length > 0 ||
-          recipe.coverPath ||
+          hasCover(recipe) ||
           recipe.description ||
           facts.length > 0) && (
           <div className='space-y-2'>
@@ -595,9 +597,9 @@ function RecipeDrawer({
                 )}
               </div>
             )}
-            {(recipe.coverPath || recipe.description || facts.length > 0) && (
+            {(hasCover(recipe) || recipe.description || facts.length > 0) && (
               <div className='flex items-start gap-3'>
-                {recipe.coverPath && (
+                {hasCover(recipe) && (
                   <Button
                     type='button'
                     variant='tertiary'
@@ -608,6 +610,7 @@ function RecipeDrawer({
                   >
                     <CoverImage
                       coverPath={recipe.coverPath}
+                      coverUrl={recipe.coverUrl ?? null}
                       version={recipe.updatedAt}
                       size={64}
                     />

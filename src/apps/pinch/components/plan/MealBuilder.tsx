@@ -668,6 +668,7 @@ function MealBuilder({
                       {item.kind === 'RECIPE' ? (
                         <CoverImage
                           coverPath={recipe?.coverPath ?? null}
+                          coverUrl={recipe?.coverUrl ?? null}
                           version={recipe?.updatedAt ?? 0}
                           size={40}
                         />

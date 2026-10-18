@@ -20,6 +20,7 @@ export interface UsualDays {
 export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   fridgeDays: null,
   freezerDays: null,
+  suggestPhotos: true,
   reminders: {
     eatSoon: false,
     timers: false,
@@ -78,6 +79,7 @@ export const isValidReminderHour = (hour: number) =>
 export interface PinchSettingsPatch {
   fridgeDays?: number;
   freezerDays?: number;
+  suggestPhotos?: boolean;
   reminders?: Partial<PinchReminderSettings>;
 }
 
@@ -89,6 +91,7 @@ export const createSettings = (
   ...DEFAULT_PINCH_SETTINGS,
   fridgeDays: patch.fridgeDays ?? DEFAULT_PINCH_SETTINGS.fridgeDays,
   freezerDays: patch.freezerDays ?? DEFAULT_PINCH_SETTINGS.freezerDays,
+  suggestPhotos: patch.suggestPhotos ?? DEFAULT_PINCH_SETTINGS.suggestPhotos,
   reminders: { ...DEFAULT_PINCH_SETTINGS.reminders, ...patch.reminders },
   updatedAt: now,
 });
@@ -104,6 +107,9 @@ export const getSettingsUpdates = (
   ...(patch.freezerDays === undefined
     ? []
     : [{ path: ['freezerDays'], value: patch.freezerDays }]),
+  ...(patch.suggestPhotos === undefined
+    ? []
+    : [{ path: ['suggestPhotos'], value: patch.suggestPhotos }]),
   ...Object.entries(patch.reminders ?? {}).flatMap(([key, value]) =>
     value === undefined ? [] : [{ path: ['reminders', key], value }],
   ),

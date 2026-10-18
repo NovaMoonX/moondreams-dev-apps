@@ -633,6 +633,7 @@ const SEED_RECIPES = [
     prepMinutes: 10,
     cookMinutes: 35,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       line('adobo-1', 'cat-chicken-thigh', 2, 'LB', FOR_THE_CHICKEN),
       line('adobo-2', 'cat-soy-sauce', 0.25, 'CUP', FOR_THE_CHICKEN),
@@ -695,6 +696,7 @@ const SEED_RECIPES = [
     prepMinutes: 5,
     cookMinutes: 20,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       line('rice-1', 'cat-jasmine-rice', 1, 'CUP'),
       line('rice-2', 'cat-cilantro', 0.25, 'CUP'),
@@ -720,6 +722,7 @@ const SEED_RECIPES = [
     prepMinutes: null,
     cookMinutes: 10,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       legacyLine('nachos-1', 'seed-pinch-ingredient-doritos', 9, 'OZ'),
       legacyLine('nachos-2', 'cat-cheddar', 8, 'OZ'),
@@ -742,6 +745,7 @@ const SEED_RECIPES = [
     prepMinutes: null,
     cookMinutes: 40,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       line('chili-1', 'cat-jasmine-rice', 1, 'CUP'),
       line('chili-2', 'cat-salt', 1, 'TSP'),

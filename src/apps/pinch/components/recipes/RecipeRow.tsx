@@ -66,6 +66,7 @@ function RecipeRow({
     >
       <CoverImage
         coverPath={recipe.coverPath ?? null}
+        coverUrl={recipe.coverUrl ?? null}
         version={recipe.updatedAt}
         size={56}
       />
