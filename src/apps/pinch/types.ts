@@ -118,6 +118,34 @@ export interface KitchenSettings {
   updatedAt: number;
 }
 
+/** What Pinch can remind a person about. Each kind is a switch under `PinchSettings.reminders`. */
+export type ReminderKind = 'eatSoon' | 'timers';
+
+export interface PinchReminderSettings {
+  /** The morning note naming what is due or past its date. */
+  eatSoon: boolean;
+  /** A push when a cooking timer ends, for when the screen is off. */
+  timers: boolean;
+  /** How many days ahead a box counts as due, 1 to 3. */
+  leadDays: number;
+  /** The local hour, 0 to 23, the morning note goes out. */
+  hour: number;
+  /** The zone `hour` is in, written by the device that set it; null reads as UTC. */
+  timeZone: string | null;
+}
+
+/** The person's own choices, at `apps/pinch/settings/{uid}`: reminders and how long a new box keeps. Created by their first change; until then the defaults apply and nothing is stored. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
+export interface PinchSettings {
+  /** Days a box starts with in the fridge; null is the built-in number. */
+  fridgeDays: number | null;
+  /** Days a box starts with in the freezer; null is the built-in number. */
+  freezerDays: number | null;
+  reminders: PinchReminderSettings;
+  updatedAt: number;
+  /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */
+  lastDigestDay: string | null;
+}
+
 export type MealType =
   'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'DESSERT' | 'DRINK';
 export type ItemKind = 'RECIPE' | 'INGREDIENT';
@@ -188,6 +216,8 @@ export type PinchSubview =
   /** Stores & prices: every price grouped under the store it is at, and the stores themselves. */
   | { kind: 'products' }
   | { kind: 'sources' }
+  /** Reminders and how long a new box keeps. */
+  | { kind: 'settings' }
   /** Fridge & freezer; `place` is the one a door named, shown first. */
   | {
       kind: 'containers';

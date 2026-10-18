@@ -34,6 +34,10 @@ import {
   getShoppingSourceLabels,
   groupShoppingItems,
 } from '@apps/pinch/utils/shopping';
+import {
+  DEFAULT_PINCH_SETTINGS,
+  getUsualDays,
+} from '@apps/pinch/utils/settings';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const selectRecords = (state: RootState) => state.pinch.ingredients.records;
@@ -41,6 +45,7 @@ const selectFamilyItems = (state: RootState) => state.pinch.families.items;
 
 export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.settings.isLoaded &&
+  state.pinch.pinchSettings.isLoaded &&
   state.pinch.plannedMeals.isLoaded &&
   state.pinch.meals.isLoaded &&
   state.pinch.ingredients.isLoaded &&
@@ -558,3 +563,24 @@ const NO_SWITCHES = {
 /** Which nutrition metrics the person has switched on; all off until they do. */
 export const selectShowNutrition = (state: RootState) =>
   state.pinch.settings.settings?.showNutrition ?? NO_SWITCHES;
+
+/** The person's reminders and keeping days; the defaults until their first change. */
+export const selectPinchSettings = (state: RootState) =>
+  state.pinch.pinchSettings.settings ?? DEFAULT_PINCH_SETTINGS;
+
+/** Whether a document exists, so the first change writes the whole thing and later ones only their fields. */
+export const selectHasPinchSettings = (state: RootState) =>
+  state.pinch.pinchSettings.settings !== null;
+
+/** The days a new fridge or freezer box starts with. */
+export const selectUsualDays = createSelector(
+  [
+    (state: RootState) => state.pinch.pinchSettings.settings?.fridgeDays,
+    (state: RootState) => state.pinch.pinchSettings.settings?.freezerDays,
+  ],
+  (fridgeDays, freezerDays) =>
+    getUsualDays({
+      fridgeDays: fridgeDays ?? null,
+      freezerDays: freezerDays ?? null,
+    }),
+);

@@ -16,6 +16,7 @@ import type {
   IngredientRecord,
   KitchenSettings,
   Meal,
+  PinchSettings,
   PlannedMeal,
   Product,
   Recipe,
@@ -187,6 +188,20 @@ export function startSettingsListener(
     doc(db, 'apps', 'pinch', 'kitchens', uid),
     (snapshot) =>
       onChange(snapshot.exists() ? (snapshot.data() as KitchenSettings) : null),
+    onError,
+  );
+}
+
+/** The person's reminders and keeping days: one document at their own uid, absent until their first change. */
+export function startPinchSettingsListener(
+  uid: string,
+  onChange: (settings: PinchSettings | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'apps', 'pinch', 'settings', uid),
+    (snapshot) =>
+      onChange(snapshot.exists() ? (snapshot.data() as PinchSettings) : null),
     onError,
   );
 }
