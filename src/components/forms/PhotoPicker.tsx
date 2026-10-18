@@ -104,7 +104,7 @@ function PhotoPicker({
       <div className='space-y-3'>
         {fileInput}
         <div
-          className='bg-accent text-accent-foreground grid aspect-video max-h-44 w-full place-items-center overflow-hidden rounded-2xl text-6xl'
+          className='bg-accent text-accent-foreground grid aspect-video max-h-44 w-full place-items-center overflow-hidden rounded-2xl text-6xl [@media(max-height:600px)]:max-h-20'
           aria-hidden='true'
         >
           {photoUrl ? (
@@ -122,12 +122,12 @@ function PhotoPicker({
           <Button
             type='button'
             variant='secondary'
-            className='h-11 gap-2 px-3 whitespace-nowrap'
+            className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
             disabled={isBusy}
             onClick={() => openPicker(false)}
           >
             <ImagePlus
-              className='h-4 w-4 max-[360px]:hidden'
+              className='h-4 w-4 shrink-0 max-[380px]:hidden'
               aria-hidden='true'
             />
             {photoUrl ? changeLabel : uploadLabel}
@@ -136,12 +136,12 @@ function PhotoPicker({
             <Button
               type='button'
               variant='secondary'
-              className='h-11 gap-2 px-3 whitespace-nowrap'
+              className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
               disabled={isBusy}
               onClick={() => openPicker(true)}
             >
               <Camera
-                className='h-4 w-4 max-[360px]:hidden'
+                className='h-4 w-4 shrink-0 max-[380px]:hidden'
                 aria-hidden='true'
               />
               Take a photo
@@ -189,7 +189,7 @@ function PhotoPicker({
           type='button'
           variant='tertiary'
           size='sm'
-          className="text-destructive! relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+          className="border-destructive/40 hover:bg-destructive/10 text-destructive! relative border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           disabled={isBusy}
           onClick={onRemove}
         >
