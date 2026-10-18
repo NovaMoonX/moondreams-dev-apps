@@ -7,6 +7,7 @@ import type {
   KitchenView,
   MealType,
   PinchTab,
+  ReminderKind,
   RecipesView,
   RecipeStartMethod,
   ShoppingView,
@@ -578,3 +579,43 @@ export const CONTAINER_FINISHED_PAGE_SIZE = 25;
 export const CONTAINER_QUERY_LIMIT = 200;
 /** Containers one transaction of a clear-out or its Undo re-reads and writes, under Firestore's 500: the action's limit, not the rules'. */
 export const CONTAINER_CLEAR_CHUNK_SIZE = 200;
+
+/** The days a new box starts with when the person has chosen none: Settings changes these two for them. */
+export const FRIDGE_DAYS_RANGE = { min: 1, max: 14 } as const;
+export const FREEZER_DAYS_RANGE = { min: 7, max: 365 } as const;
+export const FRIDGE_DAY_CHOICES = [2, 3, 4, 5, 7];
+export const FREEZER_DAY_CHOICES = [14, 30, 60, 90, 180, 365];
+/** The custom stepper for the freezer moves a week at a time, since a year of single days is 275 taps. */
+export const FREEZER_STEP_DAYS = 7;
+/** Most food-safety guidance says three to four days for cooked leftovers in the fridge, so the note under Settings starts above this. */
+export const FRIDGE_GUIDANCE_DAYS = 4;
+
+export const LEAD_DAYS_CHOICES = [1, 2, 3];
+export const DEFAULT_LEAD_DAYS = 1;
+export const DEFAULT_REMINDER_HOUR = 9;
+
+/** Reminder kinds in the order Settings lists them; a new kind is a row here, a key on `PinchReminderSettings` and a source in the digest function. */
+export const REMINDER_KINDS: {
+  key: ReminderKind;
+  emoji: string;
+  title: string;
+  description: string;
+}[] = [
+  {
+    key: 'eatSoon',
+    emoji: '🍱',
+    title: 'Food to eat soon or past its date',
+    description:
+      'One note in the morning that names what is due. The dish names show on your lock screen.',
+  },
+  {
+    key: 'timers',
+    emoji: '⏲️',
+    title: 'Timers when the screen is off',
+    description:
+      'A push when a cooking timer ends, even if you switched apps. It can’t reach a phone that is offline.',
+  },
+];
+
+/** A timer's push goes out this long after its end, so a page that is awake can cancel it first and ring on its own. */
+export const TIMER_PUSH_GRACE_MS = 3000;

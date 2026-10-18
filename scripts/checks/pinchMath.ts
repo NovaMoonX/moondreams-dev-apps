@@ -301,6 +301,23 @@ import {
   SHOPPING_VIEW_LABELS as designShopLabels,
   SHOPPING_VIEWS as designShopViews,
 } from '../../src/apps/pinch/constants.ts';
+import {
+  BUILT_IN_USUAL_DAYS as stgBuiltIn,
+  DEFAULT_PINCH_SETTINGS as stgDefaults,
+  createSettings as stgCreate,
+  formatReminderHour as stgHour,
+  getSettingsUpdates as stgUpdates,
+  getUsualDays as stgUsual,
+  getSettingsWithDefaults as stgWithDefaults,
+  getDeviceReminderText as stgDeviceText,
+  getTurnOnFailureText as stgFailureText,
+  isAboveFridgeGuidance as stgAbove,
+  getZoneAbbreviation as stgZone,
+  isValidFreezerDays as stgFreezer,
+  isValidFridgeDays as stgFridge,
+  isValidLeadDays as stgLead,
+  isValidReminderHour as stgValidHour,
+} from '../../src/apps/pinch/utils/settings.ts';
 
 const ingredient = (
   id: string,
@@ -9839,6 +9856,229 @@ assert.equal(
     [{ ingredientId: 'soy', amount: 6, unit: 'TBSP' }],
     "one ingredient's lines in two groups are one line on the shopping list",
   );
+}
+
+
+// Settings: how long a new box keeps, and the document a first change writes
+{
+  assert.deepEqual(
+    stgUsual(null),
+    { fridge: 4, freezer: 90 },
+    'a person with no settings document gets the built-in days',
+  );
+  assert.deepEqual(
+    stgUsual({ fridgeDays: 5, freezerDays: null }),
+    { fridge: 5, freezer: 90 },
+    'a field the person never chose keeps the built-in number',
+  );
+  assert.deepEqual(stgBuiltIn, { fridge: 4, freezer: 90 });
+
+  const usual = { fridge: 5, freezer: 120 };
+  const fridge = getEatByDefault('FRIDGE', null, lateOnThe14th, null, usual);
+  const freezer = getEatByDefault('FREEZER', null, lateOnThe14th, null, usual);
+  assert.deepEqual(
+    [fridge, freezer].map((preset) => [
+      preset.days,
+      preset.eatBy - todayOn14,
+      preset.isFromSettings,
+      preset.isFromRecipe,
+    ]),
+    [
+      [5, 5 * DAY, true, false],
+      [120, 120 * DAY, true, false],
+    ],
+    "a new box starts at the person's own days, counted from the local day",
+  );
+  assert.deepEqual(
+    getEatByDefault('FRIDGE', null, lateOnThe14th, null, stgBuiltIn),
+    getEatByDefault('FRIDGE', null, lateOnThe14th),
+    'the built-in days are what an unchanged person gets, so nothing moves for them',
+  );
+  assert.equal(
+    getEatByDefault('FRIDGE', null, lateOnThe14th, null, stgBuiltIn)
+      .isFromSettings,
+    false,
+    'choosing the built-in number is not a changed default',
+  );
+  assert.deepEqual(
+    [
+      getEatByDefault('FRIDGE', careOf(3, null), lateOnThe14th, null, usual),
+      getEatByDefault('FREEZER', careOf(3, 60), lateOnThe14th, null, usual),
+    ].map((preset) => [preset.days, preset.isFromRecipe, preset.isFromSettings]),
+    [
+      [3, true, false],
+      [60, true, false],
+    ],
+    "a recipe's own days still win over the person's usual",
+  );
+  assert.deepEqual(
+    [
+      getEatByDefault('THAW', null, lateOnThe14th, null, usual).days,
+      getEatByDefault('THAW', null, lateOnThe14th, null, {
+        fridge: 1,
+        freezer: 90,
+      }).days,
+    ],
+    [2, 1],
+    'a thawed box keeps its two-day window unless the fridge number is shorter',
+  );
+  const past = getEatByDefault('FRIDGE', null, lateOnThe14th, dayOf(11), usual);
+  assert.deepEqual(
+    [past.eatBy, past.wasPast, past.isFromSettings],
+    [dayOf(11), true, false],
+    'a box already past its date keeps that date whatever the usual days are',
+  );
+  const hint = getEatByHint('FRIDGE', fridge);
+  assert.equal(
+    hint,
+    'Your call. Starts at your usual 5 days for the fridge; change it to what you trust.',
+  );
+  assert.equal(
+    getEatByHint('FREEZER', freezer),
+    'Your call. Starts at your usual 4 months for the freezer; change it to what you trust.',
+  );
+  assert.doesNotMatch(
+    `${hint} ${getEatByHint('FREEZER', freezer)}`,
+    /safe|keeps|spoil|fresh/i,
+    "the hint about the person's own days claims nothing about safety",
+  );
+
+  assert.deepEqual(
+    [1, 14, 0, 15, 2.5].map(stgFridge),
+    [true, true, false, false, false],
+    'fridge days are whole numbers from 1 to 14',
+  );
+  assert.deepEqual(
+    [7, 365, 6, 366, 90.5].map(stgFreezer),
+    [true, true, false, false, false],
+    'freezer days are whole numbers from 7 to 365',
+  );
+  assert.deepEqual(
+    [1, 2, 3, 0, 4].map(stgLead),
+    [true, true, true, false, false],
+    'a note can look one to three days ahead',
+  );
+  assert.deepEqual(
+    [0, 9, 23, -1, 24, 9.5].map(stgValidHour),
+    [true, true, true, false, false, false],
+  );
+
+  assert.deepEqual(
+    stgCreate({ fridgeDays: 5 }, 1000),
+    {
+      fridgeDays: 5,
+      freezerDays: null,
+      reminders: {
+        eatSoon: false,
+        timers: false,
+        leadDays: 1,
+        hour: 9,
+        timeZone: null,
+      },
+      updatedAt: 1000,
+      lastDigestDay: null,
+    },
+    'a first change writes the whole document, the defaults under it',
+  );
+  assert.deepEqual(
+    stgCreate({ reminders: { eatSoon: true, timeZone: 'America/Denver' } }, 7)
+      .reminders,
+    {
+      eatSoon: true,
+      timers: false,
+      leadDays: 1,
+      hour: 9,
+      timeZone: 'America/Denver',
+    },
+    "a first reminder change keeps the other reminder defaults",
+  );
+  assert.equal(stgDefaults.updatedAt, 0, 'the defaults are never written as they are');
+  assert.deepEqual(
+    stgUpdates({ fridgeDays: 6 }, 9),
+    [{ path: ['fridgeDays'], value: 6 }, { path: ['updatedAt'], value: 9 }],
+    'a later change names only its own field, so another device is never overwritten',
+  );
+  assert.deepEqual(
+    stgUpdates(
+      { reminders: { eatSoon: true, hour: undefined, timeZone: 'UTC' } },
+      9,
+    ),
+    [
+      { path: ['reminders', 'eatSoon'], value: true },
+      { path: ['reminders', 'timeZone'], value: 'UTC' },
+      { path: ['updatedAt'], value: 9 },
+    ],
+    'a reminder change is one dotted path per field and skips what it leaves out',
+  );
+  assert.deepEqual(
+    [0, 9, 12, 13, 23].map(stgHour),
+    ['12:00 am', '9:00 am', '12:00 pm', '1:00 pm', '11:00 pm'],
+  );
+  assert.equal(stgZone('America/Los_Angeles', Date.UTC(2026, 9, 18)), 'PDT');
+  assert.equal(stgZone('America/Los_Angeles', Date.UTC(2026, 0, 18)), 'PST');
+  assert.deepEqual(
+    stgWithDefaults(null),
+    stgDefaults,
+    'no document reads as the defaults',
+  );
+  const olderDocument = {
+    fridgeDays: 6,
+    freezerDays: null,
+    updatedAt: 5,
+    reminders: { eatSoon: true, timers: false, hour: 7 },
+  } as unknown as Parameters<typeof stgWithDefaults>[0];
+  assert.deepEqual(
+    stgWithDefaults(olderDocument)?.reminders,
+    {
+      eatSoon: true,
+      timers: false,
+      leadDays: 1,
+      hour: 7,
+      timeZone: null,
+    },
+    'a document written before a reminder key existed reads that key as its default',
+  );
+  assert.equal(
+    stgWithDefaults(olderDocument)?.lastDigestDay,
+    null,
+    'and before lastDigestDay existed as none',
+  );
+  assert.deepEqual(
+    [null, 'off', 'on', 'blocked', 'unsupported'].map((state) =>
+      stgDeviceText(state as Parameters<typeof stgDeviceText>[0]) === '',
+    ),
+    [true, false, false, false, false],
+    'every state of the device row says something, except while it is still being read',
+  );
+  assert.match(
+    stgDeviceText('off'),
+    /^Allow notifications so Pinch can nudge you/,
+    'the reason to allow comes with the switch',
+  );
+  assert.match(
+    stgDeviceText('blocked'),
+    /browser’s site settings/,
+    'a blocked browser is told where to change it',
+  );
+  assert.match(
+    stgDeviceText('unsupported'),
+    /Home Screen/,
+    'an iPhone is told how to get reminders',
+  );
+  assert.deepEqual(
+    (['on', 'blocked', 'unsupported', 'dismissed', 'failed'] as const).map(
+      stgFailureText,
+    ),
+    [null, null, null, null, 'We couldn’t turn reminders on. Check your connection and try again.'],
+    'only a failure that a retry can fix is worded, and it says so',
+  );
+  assert.deepEqual(
+    [3, 4, 5, 14].map(stgAbove),
+    [false, false, true, true],
+    'the food-safety line starts above four fridge days',
+  );
+  assert.equal(stgZone(null, 0), '');
+  assert.equal(stgZone('Not/AZone', 0), '', 'an unknown zone names nothing');
 }
 
 console.log('pinchMath: all checks passed');

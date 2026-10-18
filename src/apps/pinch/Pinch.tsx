@@ -23,6 +23,7 @@ import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
+import SettingsSubview from '@apps/pinch/components/settings/SettingsSubview';
 import ShoppingScreen from '@apps/pinch/components/shopping/ShoppingScreen';
 import MealSubview from '@apps/pinch/components/recipes/MealSubview';
 import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
@@ -55,6 +56,12 @@ const OVERLAY_SUBVIEWS: PinchSubview['kind'][] = [
   'cook',
 ];
 
+/** A notification's link (`?open=fridge`) opens Fridge & freezer as the page loads. */
+const getLinkedSubview = (): PinchSubview | null =>
+  new URLSearchParams(window.location.search).get('open') === 'fridge'
+    ? { kind: 'containers' }
+    : null;
+
 const getHistoryIndex = () => {
   const index: unknown = window.history.state?.idx;
   return typeof index === 'number' ? index : null;
@@ -64,7 +71,7 @@ function Pinch() {
   const { user, loading } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [, startTransition] = useTransition();
-  const [subview, setSubview] = useState<PinchSubview | null>(null);
+  const [subview, setSubview] = useState<PinchSubview | null>(getLinkedSubview);
   const [isStartOpen, setIsStartOpen] = useState(false);
   const [isIdeaSheetOpen, setIsIdeaSheetOpen] = useState(false);
   const isStartFromCalendarRef = useRef(false);
@@ -157,6 +164,13 @@ function Pinch() {
   useEffect(() => {
     subviewRef.current = subview;
   }, [subview]);
+
+  useEffect(() => {
+    if (!searchParams.has('open')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('open');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   usePinchTheme();
   usePinchSync(user?.uid ?? null, shownMonth);
@@ -318,6 +332,7 @@ function Pinch() {
       )}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
+      {subview?.kind === 'settings' && <SettingsSubview uid={user.uid} />}
       {subview?.kind === 'containers' && (
         <ContainersSubview
           key={`${subview.recipeId ?? ''}-${subview.mealId ?? ''}-${subview.place ?? ''}`}

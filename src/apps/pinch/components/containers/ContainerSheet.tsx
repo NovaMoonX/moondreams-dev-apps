@@ -37,6 +37,7 @@ import {
   selectContainersById,
   selectMealsById,
   selectRecipesById,
+  selectUsualDays,
 } from '@apps/pinch/store/selectors';
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
@@ -188,11 +189,13 @@ function MoveView({
     container.recipeId ?? '',
   );
   const move = getMoveForPlace(to, container.place);
+  const usualDays = useAppSelector(selectUsualDays);
   const preset = getEatByDefault(
     move,
     recipe ? getRecipeCare(recipe) : null,
     undefined,
     container.eatBy,
+    usualDays,
   );
   const notes = getMoveNotes(container, move, preset);
   const [typedEatBy, setTypedEatBy] = useState<string | null>(null);

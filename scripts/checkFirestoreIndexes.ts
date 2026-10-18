@@ -100,6 +100,16 @@ const collectChain = (top: ts.CallExpression, source: ts.SourceFile): Pick<Query
   return walk(top, []);
 };
 
+/** Whether a later `where`/`orderBy` continues this chain, looking through `limit` and the other methods that don't constrain it, so a trailing `.limit(n).get()` doesn't hide the query. */
+const continuesChain = (node: ts.CallExpression): boolean => {
+  const parent = node.parent;
+  if (!ts.isPropertyAccessExpression(parent) || parent.expression !== node) return false;
+  if (QUERY_METHODS.has(parent.name.text)) return true;
+  return PASSTHROUGH_METHODS.has(parent.name.text) && ts.isCallExpression(parent.parent)
+    ? continuesChain(parent.parent)
+    : false;
+};
+
 const findQuerySites = (path: string): QuerySite[] => {
   const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
   const sites: QuerySite[] = [];
@@ -111,11 +121,7 @@ const findQuerySites = (path: string): QuerySite[] => {
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node)) {
       const method = methodName(node);
-      const parentIsChain =
-        ts.isPropertyAccessExpression(node.parent) &&
-        (QUERY_METHODS.has(node.parent.name.text) || PASSTHROUGH_METHODS.has(node.parent.name.text));
-
-      if (method && QUERY_METHODS.has(method) && !parentIsChain) {
+      if (method && QUERY_METHODS.has(method) && !continuesChain(node)) {
         sites.push({ location: locate(node), ...collectChain(node, source) });
       }
 

@@ -19,6 +19,10 @@ import {
 } from './slices/plannedMealsSlice';
 import { productsReducer, type ProductsState } from './slices/productsSlice';
 import { recipesReducer, type RecipesState } from './slices/recipesSlice';
+import {
+  pinchSettingsReducer,
+  type PinchSettingsState,
+} from './slices/pinchSettingsSlice';
 import { settingsReducer, type SettingsState } from './slices/settingsSlice';
 import { shoppingReducer, type ShoppingState } from './slices/shoppingSlice';
 import { sourcesReducer, type SourcesState } from './slices/sourcesSlice';
@@ -26,6 +30,7 @@ import { storesReducer, type StoresState } from './slices/storesSlice';
 
 export interface PinchState {
   settings: SettingsState;
+  pinchSettings: PinchSettingsState;
   plannedMeals: PlannedMealsState;
   meals: MealsState;
   ingredients: IngredientsState;
@@ -43,6 +48,7 @@ export interface PinchState {
 
 export const pinchReducer = combineReducers({
   settings: settingsReducer,
+  pinchSettings: pinchSettingsReducer,
   plannedMeals: plannedMealsReducer,
   meals: mealsReducer,
   ingredients: ingredientsReducer,

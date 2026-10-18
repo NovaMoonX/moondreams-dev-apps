@@ -4,8 +4,6 @@ import {
   BULK_MEAL_SERVINGS,
   CONTAINER_EAT_SOON_DAYS,
   CONTAINER_FREEZER_DATE_DAYS,
-  CONTAINER_FREEZER_DAYS,
-  CONTAINER_FRIDGE_DAYS,
   CONTAINER_PLACE_LABELS,
   CONTAINER_SITTING_SERVINGS,
   CONTAINER_THAWED_DAYS,
@@ -36,6 +34,10 @@ import {
 } from '@apps/pinch/utils/dayKeys';
 import { formatCareDays } from '@apps/pinch/utils/recipeCare';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import {
+  BUILT_IN_USUAL_DAYS,
+  type UsualDays,
+} from '@apps/pinch/utils/settings';
 
 export type EatByState = 'PAST' | 'SOON' | 'LATER';
 
@@ -67,6 +69,8 @@ export interface EatByDefault {
   eatBy: number;
   days: number;
   isFromRecipe: boolean;
+  /** The days are the person's own number from Settings, not the built-in one (a fridge or freezer start only). */
+  isFromSettings: boolean;
   isKept: boolean;
   wasPast: boolean;
 }
@@ -137,21 +141,16 @@ export const getEatByDefault = (
   care: RecipeCare | null,
   now = Date.now(),
   currentEatBy: number | null = null,
+  usual: UsualDays = BUILT_IN_USUAL_DAYS,
 ): EatByDefault => {
   const today = getLocalTodayDate(now);
   const recipeDays =
     (move === 'FREEZER' ? care?.freezerDays : care?.fridgeDays) ?? null;
   const getDays = () => {
     if (move === 'THAW') {
-      return Math.min(
-        CONTAINER_THAWED_DAYS,
-        recipeDays ?? CONTAINER_THAWED_DAYS,
-      );
+      return Math.min(CONTAINER_THAWED_DAYS, recipeDays ?? usual.fridge);
     }
-    return (
-      recipeDays ??
-      (move === 'FREEZER' ? CONTAINER_FREEZER_DAYS : CONTAINER_FRIDGE_DAYS)
-    );
+    return recipeDays ?? (move === 'FREEZER' ? usual.freezer : usual.fridge);
   };
   const days = getDays();
   const fresh = today + days * DAY_MS;
@@ -163,6 +162,10 @@ export const getEatByDefault = (
   };
   const eatBy = getEatBy();
   const isKept = eatBy !== fresh;
+  const builtIn =
+    move === 'FREEZER'
+      ? BUILT_IN_USUAL_DAYS.freezer
+      : BUILT_IN_USUAL_DAYS.fridge;
 
   const result = {
     eatBy,
@@ -171,6 +174,8 @@ export const getEatByDefault = (
       !isKept &&
       recipeDays !== null &&
       (move !== 'THAW' || recipeDays < CONTAINER_THAWED_DAYS),
+    isFromSettings:
+      !isKept && move !== 'THAW' && recipeDays === null && days !== builtIn,
     isKept,
     wasPast,
   };
@@ -188,6 +193,9 @@ export const getEatByHint = (move: EatByMove, preset: EatByDefault) => {
   }
   if (move === 'THAW') {
     return `Your call. Once thawed, this starts at ${formatCareDays(preset.days)}.`;
+  }
+  if (preset.isFromSettings) {
+    return `Your call. Starts at your usual ${formatCareDays(preset.days)} for the ${move === 'FREEZER' ? 'freezer' : 'fridge'}; change it to what you trust.`;
   }
   return `Your call. A starting point of ${formatCareDays(preset.days)}; change it to what you trust.`;
 };

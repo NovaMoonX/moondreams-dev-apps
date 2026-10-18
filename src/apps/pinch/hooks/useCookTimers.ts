@@ -6,6 +6,7 @@ import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { generateUuid } from '@/utils';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
+import { useTimerPush } from '@apps/pinch/hooks/useTimerPush';
 import {
   canStartTimer,
   countLiveTimers,
@@ -102,6 +103,7 @@ export function useCookTimers() {
   const [focus, setFocus] = useState<TimerFocus>(UNFOCUSED);
   const [finishedSlots, setFinishedSlots] = useState<string[]>([]);
   const timersRef = useRef<CookTimer[]>([]);
+  useTimerPush(timers);
   const addToastRef = useRef(addToast);
   const audioRef = useRef<AudioContext | null>(null);
   const ringsRef = useRef(new Map<string, AlertRing>());

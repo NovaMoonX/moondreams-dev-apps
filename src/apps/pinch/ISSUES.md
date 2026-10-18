@@ -1105,6 +1105,43 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math` and `check:pinch-ingest` cover the order, the moves, the step sharing and the reader's groups; driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 1, 5 and 30 lines and 1, 3 and 8 groups.
 - [x] `UX.md`, `TECHNICAL.md` and the README match what shipped.
 
+### Issue 43: Settings: reminders, the morning note, timer pushes and how long new boxes keep
+
+**Prerequisites:** Issue 33, Issue 41
+**Target PR Size:** ~2,000 lines (the document and its rules, the listener and helpers, the screen, the device push helpers, the Function and its checks, the timer hook, the seed and docs)
+**Files:**
+- `PinchSettings`, `ReminderKind` in `types.ts`; `REMINDER_KINDS`, the day ranges and choices in `constants.ts`; `utils/settings.ts`; `getEatByDefault`'s `usual` argument in `utils/containers.ts`
+- `store/slices/pinchSettingsSlice.ts`, `store/actions/pinchSettingsActions.ts`, `startPinchSettingsListener`, `usePinchSettings`, `usePinchSync`
+- `components/settings/` (`SettingsSubview`, `RemindersSection`, `KeepingSection`), `src/components/SettingsGroup.tsx` and `SettingsRow.tsx`, the gear in `KitchenScreen`, `?open=fridge` in `Pinch.tsx`
+- `src/lib/notifications/devicePush.ts`, `notificationsQueries.ts`, `registerDeviceToken.ts`, `enablePushNotifications.ts`
+- `hooks/useTimerPush.ts` and one call in `useCookTimers`
+- `functions/src/apps/pinch/` (`sendEatSoonDigest`, `eatSoonDigest`), `functions/src/notifications/sendPush.ts` and `sendScheduledReminders.ts`, `functions/README.md`, `firestore.indexes.json`
+- `firestore.rules` (`apps/pinch/settings/{uid}`), `scripts/seeds/pinchScale.ts`, `scripts/checks/pinchMath.ts` and `pinchDigest.ts`, `scripts/checkFirestoreIndexes.ts`
+
+**Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 15 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
+
+### Description
+A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. A gear in Kitchen's header opens Settings: this device's notifications (asked for on a tap), a switch per kind of reminder (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
+
+### Possible Approach
+1. One small document per person, written by their first change, owner-only, with its own rules block; readers default, later changes are dotted paths.
+2. `getEatByDefault` takes the person's usual days; the three places a default is made pass them.
+3. The device's push is read from the browser and turned on only from a tap; the choice to turn it off sticks across reloads.
+4. A scheduled function, one push a day per person in their own hour, through the one FCM sender; a timer hook that schedules and cancels a reminder per running timer.
+
+### CRUD & Entry-Point Requirements
+- [x] **Create / Read / Update / Delete:** the first change creates the document, every switch and pill updates it, reading shows the defaults before it exists; there is no delete in the screen (the rules allow the owner one).
+- [x] **Entry points:** the gear in Kitchen's header (the one door), the put-away form, cooking mode's Finish panel and a box's move view for the days, a notification's link for Fridge & freezer.
+
+### Success Criteria
+- [x] Nothing is written until the first change; a person with no document sees the defaults and a new box starts at 4 and 90 days as before.
+- [x] The rules matrix (owner, another user, signed out; out-of-bounds days, hour and lead time, a non-bool switch, an extra key, a pre-stamped `lastDigestDay`, a legacy document) gives the intended outcome on the new rules and denies on the previous ones; every pre-existing rule on the touched collections and the reminders rules answer the same.
+- [x] The note: nothing due sends nothing; past only, due only and both read right for 1, 2, 3 and 12 dishes; the hour boundary, other zones, an already-sent day and a person with the switch off are checked, and the handler was run against Taylor's boxes with a stub sender.
+- [x] A timer's push is scheduled when it starts, cancelled by pause, reset, finishing in view and leaving, and left to go out when it ends while the page is hidden.
+- [ ] A real push reaching a real phone, locked, and the installed iPhone case: not checkable from the sandbox.
+- [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
+- [x] `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `functions/README.md` and the README match what shipped.
+
 ## Beyond
 
 ### Issue 34: Hands-free voice navigation in cooking mode

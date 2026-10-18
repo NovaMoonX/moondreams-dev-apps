@@ -8,6 +8,7 @@ import {
   selectContainersByCookId,
   selectIsContainersReady,
   selectStockByRecipe,
+  selectUsualDays,
 } from '@apps/pinch/store/selectors';
 import type { Container, ContainerPlace, Recipe } from '@apps/pinch/types';
 import { CONTAINER_SITTING_SERVINGS } from '@apps/pinch/constants';
@@ -64,6 +65,7 @@ export function usePutAway({ uid, entries }: UsePutAwayInput) {
   const { putAway, undoSaved } = useContainerActions(uid);
   const isReady = useAppSelector(selectIsContainersReady);
   const stockByRecipe = useAppSelector(selectStockByRecipe);
+  const usualDays = useAppSelector(selectUsualDays);
   const containersByCookId = useAppSelector(selectContainersByCookId);
   const [details, setDetails] = useState<Details | null>(null);
   const [dismissedCookIds, setDismissedCookIds] = useState<string[]>([]);
@@ -109,7 +111,7 @@ export function usePutAway({ uid, entries }: UsePutAwayInput) {
       ? 1
       : Math.min(details.containers, getContainerCountMax(details.servings));
   const move = getMoveForPlace(details?.place ?? 'FRIDGE', null);
-  const preset = getEatByDefault(move, care);
+  const preset = getEatByDefault(move, care, undefined, null, usualDays);
   const eatByText = details?.typedEatBy ?? toDateInputValue(preset.eatBy);
   const eatBy = fromDateInputValue(eatByText) ?? null;
   const isValid =
