@@ -201,7 +201,7 @@ function RecipeCollectionsField({
       summary={labels.join(', ')}
       placeholder={placeholder}
       lines={2}
-      isFocusedOnOpen={false}
+      shouldFocus={false}
     >
       <CollectionsEditor
         value={value}

@@ -9,6 +9,7 @@ import {
 import {
   MAX_MINUTES,
   MAX_RECIPE_DESCRIPTION_LENGTH,
+  MAX_RECIPE_NOTE_LENGTH,
   MAX_RECIPE_TITLE_LENGTH,
 } from '@apps/pinch/constants';
 import { formatMinutes } from '@apps/pinch/utils/recipeFormat';
@@ -174,6 +175,36 @@ export function RecipeTimesField({ prep, cook, onChange }: TimesFieldProps) {
         />
       </div>
       {problem && <p className='text-destructive text-xs'>{problem}</p>}
+    </SummaryEditor>
+  );
+}
+
+interface WhyFieldProps {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+export function RecipeWhyField({ value, onChange }: WhyFieldProps) {
+  return (
+    <SummaryEditor
+      label='What changed and why?'
+      title='What changed and why?'
+      summary={value.trim()}
+      placeholder='Add a reason'
+      lines={2}
+    >
+      <Input
+        variant='outline'
+        aria-label='What changed and why?'
+        maxLength={MAX_RECIPE_NOTE_LENGTH}
+        placeholder='Less vinegar, it was too sharp'
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <p className='text-muted-foreground text-xs'>
+        Saving adds a note to this recipe with today's date and what you
+        changed.
+      </p>
     </SummaryEditor>
   );
 }

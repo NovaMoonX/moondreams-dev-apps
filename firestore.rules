@@ -1445,10 +1445,11 @@ service cloud.firestore {
         return value is list && value.size() <= 20;
       }
 
-      // Rules can't walk a list, so each ingredient line (its group included) and step is shaped by the client: checking even one field of 60 lines
+      // Rules can't walk a list, so each ingredient line (its group included), step and link is shaped by the client: checking even one field of 60 lines
       // by index runs past the evaluator's 1,000 expressions and would refuse a long recipe. The rules cap the counts and the fields around them.
+      // A recipe written before links existed has no key.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'care', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1462,6 +1463,7 @@ service cloud.firestore {
           && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
           && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
           && data.steps is list && data.steps.size() <= 60
+          && data.get('links', []) is list && data.get('links', []).size() <= 8
           && data.source in ['MANUAL', 'AI_TEXT', 'AI_FILE', 'AI_LINK']
           && (data.get('sourceId', null) == null || isShortText(data.sourceId, 80))
           && isCollectionIds(data.get('collectionIds', []))

@@ -1111,6 +1111,37 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math` and `check:pinch-ingest` cover the order, the moves, the step sharing and the reader's groups; driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 1, 5 and 30 lines and 1, 3 and 8 groups.
 - [x] `UX.md`, `TECHNICAL.md` and the README match what shipped.
 
+### Issue 44: Recipe form editors, Sources rows that open, and recipe links
+
+**Prerequisites:** Issue 6, Issue 40
+**Target PR Size:** ~1,100 lines (two summary rows and their editors, the Sources row and sheet, the links model, helpers, field and drawer section, the rule, the checks and docs)
+**Files:**
+- `RecipePhotoField`, `RecipeSourceField`, `RecipeWhyField` (in `RecipeBasics`) and `RecipeLinksField` as `SummaryEditor` rows in `RecipeForm`; `PhotoPicker`'s `cover` variant; `SummaryEditor`'s `leading` and `shouldFocus`, the popover's height cap and its drawer footer's `form-footer` class; `UndoSnackbar`'s `isOverSheet`
+- `SourcesSubview` (every row opens the source) and `SourceFormSheet` ("Show the N recipes from X")
+- `Recipe.links` and `RecipeLink` in `types.ts`, the caps and labels in `constants.ts`, `utils/recipeLinks.ts`, `recipeFormModel.ts`, `saveRecipe`, `RecipeLinksSection` in `RecipeDrawer`, `links` in `isRecipe` in `firestore.rules`, `scripts/checks/pinchLinks.ts`, the Adobo seed
+
+**Context:** Read `TECHNICAL.md` §5a and §5f.2; `UX.md`'s Recipe form, Recipe details and Sources; CLAUDE.md's "A phone form shows a few inputs at a time", "Never stack an overlay on an overlay" and "Parsing pasted text for a link never glues tokens together".
+
+### Description
+The recipe form's photo and source are summary rows with an editor, like its title and times, so it opens with fewer controls. The Sources screen's rows open their source (the pencil is gone), and the sheet holds the way to its recipes. A recipe can keep one how-to video and other links with default or custom labels, shown at the bottom of the recipe and opening the other site in a new tab.
+
+### Possible Approach
+1. Photo and source become `SummaryEditor` rows (a drawer on a phone, a popover from `sm`); the photo editor is `PhotoPicker variant='cover'` (choose, take on a touch screen, remove, the type and size line). The write paths do not change.
+2. Every Sources row is one button that opens `SourceFormSheet`; a source with recipes starts the sheet with the roomy "Show the N recipes" row (the door's one home), one on no recipe says so.
+3. `Recipe.links` read through `getRecipeLinks` (`cleanLinks`: web addresses only, one how-to, eight in all); the form row's editor keeps one open row at a time inside its one drawer and removes with the Undo countdown above the drawer; the drawer's section is last, built of `Button href target='_blank'`.
+4. `links` in `hasOnly` and `get('links', []) is list && size() <= 8` in `isRecipe`; verify the owner, another user and a signed-out visitor against the emulator with the base rules as the control, and a legacy recipe read, edit and save.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read / Update / Delete:** add, see, relabel and remove a how-to video and other links from the form's Links row and see them at the bottom of the recipe.
+- [ ] **Entry points:** the Links, Photo and Where it's from rows; each Sources row; the how-to card and link rows in the drawer.
+
+### Success Criteria
+- [ ] A recipe written before links (no key) opens with no links section, edits and saves, and its save writes `links: []`; checked in the browser over a legacy-shaped document.
+- [ ] A YouTube link pasted as `youtu.be`, `watch?v=`, `/shorts/` or `/embed/` shows its thumbnail; any other address shows the tinted tile; none of them embeds or plays.
+- [ ] The Source sheet opens from every row, closes with one back press or Escape, returns focus to its row and "Show the N recipes" leaves one clean history entry.
+- [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editors were measured at 390×844 and 320×568 in light and dark and at 1280.
+- [ ] The README Build Plan lines are checked off; `UX.md` and `TECHNICAL.md` still match what shipped.
+
 ## Beyond
 
 ### Issue 34: Hands-free voice navigation in cooking mode

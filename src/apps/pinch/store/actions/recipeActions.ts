@@ -29,6 +29,7 @@ import type {
   Recipe,
   RecipeCare,
   RecipeIngredient,
+  RecipeLink,
   RecipeNote,
   RecipeSource,
   Source,
@@ -86,6 +87,8 @@ export interface RecipeDraft {
   steps: string[];
   /** How to keep the leftovers, or null; written on every save, so older recipes gain the key. */
   care: RecipeCare | null;
+  /** The how-to video and other links; written on every save, so older recipes gain the key. */
+  links: RecipeLink[];
   /** Per serving, typed over the added-up value; null keeps every metric derived. */
   nutritionOverride: NutritionValues | null;
   /** How a new recipe came to be; an edit keeps the recipe's own. */
@@ -228,6 +231,7 @@ export const saveRecipe = createAsyncThunk<
         ingredients: draft.ingredients,
         steps: draft.steps,
         care: draft.care,
+        links: draft.links,
         nutritionOverride: draft.nutritionOverride,
         sourceId: draft.sourceId,
         updatedAt: now,

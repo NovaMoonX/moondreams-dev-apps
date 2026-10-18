@@ -25,6 +25,11 @@ import {
   getRecipeCare,
   type CareText,
 } from '@apps/pinch/utils/recipeCare';
+import {
+  getLinksText,
+  getRecipeLinks,
+  type LinksText,
+} from '@apps/pinch/utils/recipeLinks';
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
   Collection,
@@ -71,6 +76,7 @@ export interface RecipeFormData {
   ingredients: IngredientRow[];
   steps: string[];
   care: CareText;
+  links: LinksText;
   sourceChoice: SourceChoice;
   collections: CollectionsChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
@@ -104,6 +110,7 @@ export const getInitialData = (
   })),
   steps: recipe?.steps ?? [],
   care: recipe ? getCareText(getRecipeCare(recipe)) : { ...EMPTY_CARE_TEXT },
+  links: getLinksText(recipe ? getRecipeLinks(recipe) : []),
   sourceChoice: {
     choice: recipe ? (getRecipeSource(recipe, sourcesById)?.id ?? '') : '',
     newText: '',

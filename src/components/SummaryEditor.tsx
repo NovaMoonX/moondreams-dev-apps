@@ -26,16 +26,22 @@ const subscribeToHeight = (onChange: () => void) => {
 const getIsShortScreen = () => window.matchMedia(SHORT_SCREEN_QUERY).matches;
 
 interface EditorBodyProps {
-  focusDelay: number | null;
+  focusDelay: number;
+  shouldFocus: boolean;
   onDone: () => void;
   children: ReactNode;
 }
 
-function EditorBody({ focusDelay, onDone, children }: EditorBodyProps) {
+function EditorBody({
+  focusDelay,
+  shouldFocus,
+  onDone,
+  children,
+}: EditorBodyProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (focusDelay === null) {
+    if (!shouldFocus) {
       return;
     }
     const timer = window.setTimeout(() => {
@@ -48,7 +54,7 @@ function EditorBody({ focusDelay, onDone, children }: EditorBodyProps) {
       }
     }, focusDelay);
     return () => window.clearTimeout(timer);
-  }, [focusDelay]);
+  }, [focusDelay, shouldFocus]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
@@ -82,8 +88,10 @@ interface SummaryEditorProps {
   isFramed?: boolean;
   /** An emoji or icon in a round chip before the text; only shown on a framed row. */
   icon?: ReactNode;
-  /** Whether the editor's first field takes focus when it opens; off for an editor that starts with options to pick, where a keyboard would cover them. */
-  isFocusedOnOpen?: boolean;
+  /** A picture or tile before the text, for a field whose value is an image. */
+  leading?: ReactNode;
+  /** Whether the editor's first text field takes focus when it opens (default). Off where the editor's first field is already filled in, or has none. */
+  shouldFocus?: boolean;
   /** The editor: its first field is focused when it opens, and Enter in a one-line field closes it. */
   children: ReactNode;
 }
@@ -99,7 +107,8 @@ function SummaryEditor({
   defaultOpen = false,
   isFramed = false,
   icon,
-  isFocusedOnOpen = true,
+  leading,
+  shouldFocus = true,
   children,
 }: SummaryEditorProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -121,7 +130,8 @@ function SummaryEditor({
       aria-expanded={isOpen}
       onClick={() => setIsOpen((open) => !open)}
       className={join(
-        'h-auto w-full items-start justify-start gap-3 text-left',
+        'h-auto w-full justify-start gap-3 text-left',
+        leading === undefined ? 'items-start' : 'items-center',
         isFramed
           ? 'border-border hover:bg-muted text-foreground! min-h-16 rounded-2xl border px-3! py-2'
           : 'min-h-11 px-0! py-2',
@@ -133,6 +143,11 @@ function SummaryEditor({
           aria-hidden='true'
         >
           {icon}
+        </span>
+      )}
+      {leading !== undefined && (
+        <span className='shrink-0' aria-hidden='true'>
+          {leading}
         </span>
       )}
       <span
@@ -162,7 +177,9 @@ function SummaryEditor({
       <ChevronRight
         className={join(
           'text-muted-foreground shrink-0',
-          isFramed ? 'mt-3 -ml-1 size-5' : 'mt-2.5 h-5 w-5',
+          isFramed
+            ? 'mt-3 -ml-1 size-5'
+            : join('h-5 w-5', leading === undefined && 'mt-2.5'),
         )}
         aria-hidden='true'
       />
@@ -185,11 +202,12 @@ function SummaryEditor({
             onClose={close}
             title={title}
             showCloseButton
-            footer={<div className='px-4 pb-4'>{doneButton}</div>}
+            footer={<div className='form-footer px-4 pb-4'>{doneButton}</div>}
           >
             <div className='pb-4'>
               <EditorBody
-                focusDelay={isFocusedOnOpen ? PHONE_FOCUS_DELAY_MS : null}
+                focusDelay={PHONE_FOCUS_DELAY_MS}
+                shouldFocus={shouldFocus}
                 onDone={close}
               >
                 {children}
@@ -214,12 +232,15 @@ function SummaryEditor({
         {isOpen && (
           <div className='space-y-3'>
             <h3 className='text-sm font-semibold'>{title}</h3>
-            <EditorBody
-              focusDelay={isFocusedOnOpen ? DESKTOP_FOCUS_DELAY_MS : null}
-              onDone={close}
-            >
-              {children}
-            </EditorBody>
+            <div className='-mx-1 max-h-[min(30rem,55dvh)] overflow-y-auto px-1'>
+              <EditorBody
+                focusDelay={DESKTOP_FOCUS_DELAY_MS}
+                shouldFocus={shouldFocus}
+                onDone={close}
+              >
+                {children}
+              </EditorBody>
+            </div>
             {doneButton}
           </div>
         )}

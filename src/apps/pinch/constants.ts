@@ -7,6 +7,7 @@ import type {
   KitchenView,
   MealType,
   PinchTab,
+  RecipeLinkKind,
   RecipesView,
   RecipeStartMethod,
   ShoppingView,
@@ -390,6 +391,31 @@ export const MAX_CARE_REHEAT_LENGTH = 300;
 export const MAX_CARE_TIP_LENGTH = 300;
 /** The longest edge of a recipe cover: it shows in a list row and a drawer header. */
 export const RECIPE_COVER_MAX_DIMENSION = 1280;
+
+/** The most links one recipe holds, the how-to video included: the rules check the count, the client shapes each link. */
+export const MAX_RECIPE_LINKS = 8;
+export const MAX_LINK_LABEL_LENGTH = 40;
+export const MAX_LINK_URL_LENGTH = 2000;
+export const RECIPE_LINK_LABELS: Record<RecipeLinkKind, string> = {
+  HOW_TO: 'How-to video',
+  ARTICLE: 'Article',
+  ORIGINAL: 'Original recipe',
+  TECHNIQUE: 'Technique',
+  OTHER: 'Link',
+};
+export const RECIPE_LINK_EMOJIS: Record<RecipeLinkKind, string> = {
+  HOW_TO: '🎬',
+  ARTICLE: '📰',
+  ORIGINAL: '📖',
+  TECHNIQUE: '🔪',
+  OTHER: '🔗',
+};
+/** The default labels a link beside the how-to video can pick; a link with none picked is a plain "Link". */
+export const RECIPE_LINK_KIND_OPTIONS = [
+  { value: 'ARTICLE', label: RECIPE_LINK_LABELS.ARTICLE },
+  { value: 'ORIGINAL', label: RECIPE_LINK_LABELS.ORIGINAL },
+  { value: 'TECHNIQUE', label: RECIPE_LINK_LABELS.TECHNIQUE },
+] as const;
 
 export const RECIPES_VIEWS: RecipesView[] = ['recipes', 'meals', 'ideas'];
 export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {

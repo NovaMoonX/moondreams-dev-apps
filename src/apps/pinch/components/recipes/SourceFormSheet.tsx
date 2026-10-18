@@ -8,6 +8,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import ActionRow from '@/components/ActionRow';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import Field from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
@@ -27,12 +28,19 @@ const { custom } = FormFactories;
 
 interface SourceFormSheetProps {
   uid: string;
-  /** The source being renamed or deleted. */
+  /** The source being opened: its recipes, its name and its delete. */
   source: Source;
+  /** Closes this and the Sources screen and leaves the Recipes list filtered to the source. */
+  onShowRecipes: () => void;
   onClose: () => void;
 }
 
-function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
+function SourceFormSheet({
+  uid,
+  source,
+  onShowRecipes,
+  onClose,
+}: SourceFormSheetProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const sources = useAppSelector(selectSources);
@@ -42,6 +50,7 @@ function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const recipesText = recipeCount === 1 ? 'recipe' : `${recipeCount} recipes`;
   const trimmed = label.trim();
   const duplicate = findSourceByLabel(sources, trimmed, source.id);
   const isFormComplete = trimmed !== '' && duplicate === null;
@@ -91,6 +100,19 @@ function SourceFormSheet({ uid, source, onClose }: SourceFormSheetProps) {
 
   return (
     <FormSheet isOpen onClose={onClose} title='Source'>
+      {recipeCount > 0 ? (
+        <div className='mb-4'>
+          <ActionRow
+            isRoomy
+            hasChevron
+            icon='📖'
+            label={`Show the ${recipesText} from ${source.label}`}
+            onClick={onShowRecipes}
+          />
+        </div>
+      ) : (
+        <p className='text-muted-foreground mb-4 text-sm'>Not on any recipe</p>
+      )}
       <Form
         id='pinch-source'
         form={[
