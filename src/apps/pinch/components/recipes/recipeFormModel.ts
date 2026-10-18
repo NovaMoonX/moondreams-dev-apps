@@ -13,6 +13,11 @@ import {
   getGroupKey,
   orderIngredientLines,
 } from '@apps/pinch/utils/ingredientGroups';
+import {
+  EMPTY_COLLECTIONS_CHOICE,
+  getInitialCollectionsChoice,
+  type CollectionsChoice,
+} from '@apps/pinch/utils/collections';
 import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
 import {
   EMPTY_CARE_TEXT,
@@ -22,6 +27,7 @@ import {
 } from '@apps/pinch/utils/recipeCare';
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
+  Collection,
   Idea,
   NutritionMetric,
   NutritionValues,
@@ -66,6 +72,7 @@ export interface RecipeFormData {
   steps: string[];
   care: CareText;
   sourceChoice: SourceChoice;
+  collections: CollectionsChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
   nutrition: Record<NutritionMetric, string>;
   /** Why the recipe is being changed; becomes the tweak's note when saving records one. */
@@ -75,6 +82,7 @@ export interface RecipeFormData {
 export const getInitialData = (
   recipe: Recipe | null,
   sourcesById: Map<string, Source> = new Map(),
+  collections: readonly Collection[] = [],
 ): RecipeFormData => ({
   title: recipe?.title ?? '',
   basics: {
@@ -100,6 +108,9 @@ export const getInitialData = (
     choice: recipe ? (getRecipeSource(recipe, sourcesById)?.id ?? '') : '',
     newText: '',
   },
+  collections: recipe
+    ? getInitialCollectionsChoice(recipe, collections)
+    : EMPTY_COLLECTIONS_CHOICE,
   nutrition: Object.fromEntries(
     NUTRITION_METRICS.map((metric) => [
       metric,

@@ -34,7 +34,7 @@ interface SaveMealInput {
   items: DraftItem[];
 }
 
-/** Saves a meal, or changes only its name and items. */
+/** An edit never writes `isFavorite`: only the star owns it. */
 export const saveMeal = createAsyncThunk<
   string,
   SaveMealInput,
@@ -55,6 +55,7 @@ export const saveMeal = createAsyncThunk<
         id: mealId,
         name: name.trim(),
         items: toItems(items),
+        isFavorite: false,
         createdAt: now,
         updatedAt: now,
       };
@@ -66,6 +67,30 @@ export const saveMeal = createAsyncThunk<
 
   return mealId;
 });
+
+interface SetMealFavoriteInput {
+  uid: string;
+  id: string;
+  isFavorite: boolean;
+}
+
+/** Writes the value asked for, never a toggle read from a cache. */
+export const setMealFavorite = createAsyncThunk<
+  void,
+  SetMealFavoriteInput,
+  { rejectValue: string }
+>(
+  'pinch/meals/setFavorite',
+  async ({ uid, id, isFavorite }, { rejectWithValue }) => {
+    try {
+      await updateDoc(mealDoc(uid, id), { isFavorite, updatedAt: Date.now() });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to change this star.'),
+      );
+    }
+  },
+);
 
 interface RemoveMealInput {
   uid: string;
@@ -122,6 +147,7 @@ export const savePlannedAsMeal = createAsyncThunk<
           servings: item.servings,
         })),
       ),
+      isFavorite: false,
       createdAt: now,
       updatedAt: now,
     };

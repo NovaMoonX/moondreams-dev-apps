@@ -36,10 +36,16 @@ import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
-import { SECTION_COUNT_THRESHOLD, UNIT_LABELS } from '@apps/pinch/constants';
+import {
+  COLLECTION_NOUN_PLURAL,
+  SECTION_COUNT_THRESHOLD,
+  UNIT_LABELS,
+} from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectCollectionCounts,
+  selectCollections,
   selectContainersLoadError,
   selectCookSummaries,
   selectCooksById,
@@ -60,6 +66,10 @@ import type {
   GapKind,
   ShoppingRequest,
 } from '@apps/pinch/types';
+import {
+  getCollectionChipWindow,
+  getRecipeCollections,
+} from '@apps/pinch/utils/collections';
 import {
   getCookId,
   getCookServings,
@@ -156,6 +166,8 @@ interface RecipeDrawerProps {
   onAddToShopping: (request: ShoppingRequest) => void;
   /** Closes the drawer and shows the Recipes list narrowed to this source. */
   onShowSource: (sourceId: string) => void;
+  /** Closes the drawer and shows the Recipes list narrowed to this collection. */
+  onShowCollection: (collectionId: string) => void;
   onOpenHistory: (id: string) => void;
   onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
@@ -172,6 +184,7 @@ function RecipeDrawer({
   onFillIn,
   onAddToShopping,
   onShowSource,
+  onShowCollection,
   onOpenHistory,
   onOpenStock,
   onPutAway,
@@ -180,6 +193,9 @@ function RecipeDrawer({
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts).bySource;
+  const collections = useAppSelector(selectCollections);
+  const collectionCounts = useAppSelector(selectCollectionCounts).byCollection;
+  const [isChipsExpanded, setIsChipsExpanded] = useState(false);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
@@ -259,6 +275,11 @@ function RecipeDrawer({
   const source = getRecipeSource(recipe, sourcesById);
   const hasMoreFromSource =
     source !== null && (sourceCounts.get(source.id) ?? 0) > 1;
+  const recipeCollections = getRecipeCollections(recipe, collections);
+  const chipWindow = getCollectionChipWindow(
+    recipeCollections.length,
+    isChipsExpanded,
+  );
   const getCookPlan = () => {
     if (tonight === null || recipe.steps.length === 0) return null;
     const [plannedMealId, servings] = tonight.split('|');
@@ -501,29 +522,72 @@ function RecipeDrawer({
       {viewBody}
       <div className={join('space-y-5', viewBody !== null && 'hidden')}>
         {(source ||
+          recipeCollections.length > 0 ||
           recipe.coverPath ||
           recipe.description ||
           facts.length > 0) && (
           <div className='space-y-2'>
-            {source && (
-              <div className='flex'>
-                {hasMoreFromSource ? (
+            {(source || recipeCollections.length > 0) && (
+              <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
+                {source &&
+                  (hasMoreFromSource ? (
+                    <LabelChip
+                      ariaLabel={`From ${source.label}: show its recipes`}
+                      keepEnd={SOURCE_LABEL_KEEP_END}
+                      icon={
+                        <ChevronRight
+                          className='h-3 w-3 shrink-0'
+                          aria-hidden='true'
+                        />
+                      }
+                      onClick={() => onShowSource(source.id)}
+                    >
+                      {`From ${source.label}`}
+                    </LabelChip>
+                  ) : (
+                    <LabelChip keepEnd={SOURCE_LABEL_KEEP_END}>
+                      {`From ${source.label}`}
+                    </LabelChip>
+                  ))}
+                {recipeCollections
+                  .slice(0, chipWindow.shown)
+                  .map((collection) =>
+                    (collectionCounts.get(collection.id) ?? 0) > 1 ? (
+                      <LabelChip
+                        key={collection.id}
+                        ariaLabel={`In ${collection.label}: show its recipes`}
+                        keepEnd={SOURCE_LABEL_KEEP_END}
+                        icon={
+                          <ChevronRight
+                            className='h-3 w-3 shrink-0'
+                            aria-hidden='true'
+                          />
+                        }
+                        onClick={() => onShowCollection(collection.id)}
+                      >
+                        {collection.label}
+                      </LabelChip>
+                    ) : (
+                      <LabelChip
+                        key={collection.id}
+                        keepEnd={SOURCE_LABEL_KEEP_END}
+                      >
+                        {collection.label}
+                      </LabelChip>
+                    ),
+                  )}
+                {chipWindow.canFold && (
                   <LabelChip
-                    ariaLabel={`From ${source.label}: show its recipes`}
-                    keepEnd={SOURCE_LABEL_KEEP_END}
-                    icon={
-                      <ChevronRight
-                        className='h-3 w-3 shrink-0'
-                        aria-hidden='true'
-                      />
+                    ariaLabel={
+                      isChipsExpanded
+                        ? `Show fewer ${COLLECTION_NOUN_PLURAL}`
+                        : `Show all ${recipeCollections.length} ${COLLECTION_NOUN_PLURAL}`
                     }
-                    onClick={() => onShowSource(source.id)}
+                    onClick={() => setIsChipsExpanded((current) => !current)}
                   >
-                    {`From ${source.label}`}
-                  </LabelChip>
-                ) : (
-                  <LabelChip keepEnd={SOURCE_LABEL_KEEP_END}>
-                    {`From ${source.label}`}
+                    {isChipsExpanded
+                      ? 'Show fewer'
+                      : `+${recipeCollections.length - chipWindow.shown} more`}
                   </LabelChip>
                 )}
               </div>

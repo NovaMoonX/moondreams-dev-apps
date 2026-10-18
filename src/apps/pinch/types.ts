@@ -137,6 +137,8 @@ export interface Meal {
   id: string;
   name: string;
   items: MealItem[];
+  /** Starred by the person: favorites list first. Meals written before favorites lack the key, which reads as false. */
+  isFavorite: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -276,6 +278,15 @@ export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE' | 'AI_LINK';
 export interface Source {
   id: string;
   /** Trimmed, 1 to 80 characters, and different from every other source's label ignoring case. */
+  label: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A named set of recipes the person made ("Bulk", "High-protein"); a recipe names the ones it is in by `collectionIds`. */
+export interface Collection {
+  id: string;
+  /** Trimmed, 1 to 40 characters, and different from every other collection's label ignoring case, spaces and hyphens. */
   label: string;
   createdAt: number;
   updatedAt: number;
@@ -436,6 +447,8 @@ export interface Recipe {
   sourceId: string | null;
   /** A recipe written before care lacks the key, which reads as null. */
   care: RecipeCare | null;
+  /** The `Collection`s it is in, at most 20. A recipe written before collections lacks the key, which reads as empty; an id no collection has is ignored. */
+  collectionIds: string[];
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
   createdAt: number;

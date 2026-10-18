@@ -100,6 +100,30 @@ export const SOURCE_BATCH_SIZE = 400;
 /** The recipes filter's two answers that aren't a source; a source id is a UUID, so neither can collide with one. */
 export const SOURCE_FILTER_ANY = 'any';
 export const SOURCE_FILTER_NONE = 'none';
+
+// Collections: what the person calls a named set of recipes. Every word on screen comes from these two nouns.
+export const COLLECTION_NOUN = 'collection';
+export const COLLECTION_NOUN_PLURAL = 'collections';
+export const COLLECTIONS_TITLE = `${COLLECTION_NOUN_PLURAL.charAt(0).toUpperCase()}${COLLECTION_NOUN_PLURAL.slice(1)}`;
+export const MAX_COLLECTION_LABEL_LENGTH = 40;
+/** Counted by the client only: the rules cannot count documents. */
+export const MAX_COLLECTIONS = 50;
+/** The rules' cap on how many collections one recipe names. */
+export const MAX_RECIPE_COLLECTIONS = 20;
+/** Under Firestore's 500 writes: the action's limit, not the rules'. */
+export const COLLECTION_BATCH_SIZE = 200;
+/** A collection id is a UUID, so neither can collide with one. */
+export const COLLECTION_FILTER_ANY = 'any';
+export const COLLECTION_FILTER_NONE = 'none';
+export const COLLECTION_CHIPS_SHOWN = 4;
+export const COLLECTION_CHIPS_QUIET_HIDDEN = 3;
+export const HIGH_PROTEIN_GRAMS = 25;
+export const QUICK_MAX_MINUTES = 30;
+export const COLLECTION_SUGGESTION_LABELS = {
+  HIGH_PROTEIN: 'High-protein',
+  QUICK: 'Quick',
+  FREEZER_FRIENDLY: 'Freezer-friendly',
+} as const;
 export const MAX_SERVING_AMOUNT = 1_000_000;
 /** What "1 serving" is for an ingredient with no serving size of its own. */
 export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;
