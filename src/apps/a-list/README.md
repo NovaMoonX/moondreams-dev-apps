@@ -30,7 +30,7 @@ A friend just joined A-List. The membership is a flat monthly fee, so its value 
 
 ## How it Feels
 
-- **App-like, thumb-first** — A phone-shaped app: a bottom bar with Dashboard, Calendar and Watchlist — Calendar in the middle, where the app opens — and details in drawers, no page-hopping. Home and the other apps are in the header's app switcher, not on the page.
+- **App-like, thumb-first** — A phone-shaped app: a bottom bar with Dashboard, Calendar and Watchlist — Calendar in the middle, where the app opens — and details in drawers, no page-hopping. Home and the other apps are in the header's menu, not on the page; leaving A-List and coming back reopens the tab you were on.
 - **Playful, a little theatrical** — AMC red and marquee gold, round inputs and pills, and an emoji wherever it says something.
 - **Posters first** — The calendar is the star, and each poster fills its whole day like a photo calendar. Two movies on a day split corner to corner, three are cut like a pizza in thirds, four make quadrants — a month of movies reads like a collage.
 - **Low effort to log** — Quick prompts, sensible defaults, and as little typing as possible. Anything optional waits behind a "+ Add" link.

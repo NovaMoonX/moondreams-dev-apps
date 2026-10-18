@@ -1,21 +1,21 @@
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { getRegistryAppForPath, SITE_VERSION } from '@/lib/app';
+import { getRegistryAppForPath, rememberAppLocation, SITE_VERSION } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
 import { useHideOnScroll } from '@hooks/useHideOnScroll';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
+import { useSwipeRight } from '@hooks/useSwipeRight';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
-import AppSwitcher from '@ui/AppSwitcher';
+import AppNavPanel from '@ui/AppNavPanel';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
-import ThemeToggle from '@ui/ThemeToggle';
 
 function LocationSync() {
   const navigate = useNavigate();
@@ -53,6 +53,12 @@ function LocationSync() {
     handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation, user]);
 
+  useEffect(() => {
+    if (user) {
+      rememberAppLocation(user.uid, location.pathname, location.search);
+    }
+  }, [user, location.pathname, location.search]);
+
   // The hub's manifest (index.html) is the only one, so the site installs as a single app; each mini-app only gets its own tab icon and title.
   useEffect(() => {
     const app = getRegistryAppForPath(location.pathname);
@@ -80,6 +86,8 @@ function Layout() {
   const isUpdateReady = useUpdateReady();
   const isBannerVisible = networkStatus !== null || isUpdateReady;
   const isHeaderHidden = useHideOnScroll();
+  const [isNavOpen, setIsNavOpen] = useState(false);
+  const swipeToOpen = useSwipeRight(() => setIsNavOpen(true));
 
   useLayoutEffect(() => {
     document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
@@ -106,13 +114,13 @@ function Layout() {
           isBannerVisible ? 'top-9' : 'top-0',
           isHeaderHidden && (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
         )}
+        {...swipeToOpen}
       >
         <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
-          <ThemeToggle className='flex items-center' />
+          <AppNavPanel isOpen={isNavOpen} onOpenChange={setIsNavOpen} />
         </div>
 
         <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>
-          <AppSwitcher />
           <DevAccountSwitcher />
         </div>
 

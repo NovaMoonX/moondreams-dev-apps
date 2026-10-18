@@ -16,9 +16,7 @@ import ChangePhotoModal from '@/ui/ChangePhotoModal';
 import ProfileModal from '@/ui/ProfileModal';
 import UserAvatar from '@/ui/UserAvatar';
 import { VersionLabel } from '@components/VersionLabel';
-import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
-import { useMediaQuery } from '@hooks/useMediaQuery';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 type AuthAvatarProps = {
@@ -35,7 +33,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     isAdmin,
     isDisplayNameUpdating,
   } = useAuth();
-  const { apps } = useAppCatalog();
   const { option, separator, custom } = DropdownMenuFactories;
   const [nameInput, setNameInput] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -43,7 +40,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { isBelow } = useMediaQuery();
   const { confirm } = useActionModal();
   const isAwayFromHome = pathname !== '/';
 
@@ -99,9 +95,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   };
 
   const navItems = [
-    ...(isAwayFromHome && isBelow('sm') && apps.length === 0
-      ? [option({ label: 'Home', value: 'home', icon: <House className='size-4' /> })]
-      : []),
     ...(isAdmin ? [option({ label: 'Admin', value: 'admin', icon: <ShieldCheck className='size-4' /> })] : []),
   ];
 
@@ -137,10 +130,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   ];
 
   const handleItemSelect = async (value: string) => {
-    if (value === 'home') {
-      navigate('/');
-      return;
-    }
     if (value === 'admin') {
       navigate('/admin');
       return;
