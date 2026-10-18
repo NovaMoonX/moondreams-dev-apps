@@ -91,9 +91,11 @@ interface PantryRowData {
 
 interface PantrySubviewProps {
   uid: string;
+  /** Opens this ingredient's packages first, for a door that came from the ingredient. */
+  ingredientId: string | null;
 }
 
-function PantrySubview({ uid }: PantrySubviewProps) {
+function PantrySubview({ uid, ingredientId: startIngredientId }: PantrySubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
   const { isReady, loadError, changeInPlace } = usePackageActions(uid);
@@ -105,7 +107,17 @@ function PantrySubview({ uid }: PantrySubviewProps) {
   const [pick, setPick] = useState<PackagePlace | null>(null);
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PACKAGE_LIST_PAGE_SIZE);
-  const [open, setOpen] = useState<OpenSheet | null>(null);
+  const [open, setOpen] = useState<OpenSheet | null>(() => {
+    if (startIngredientId === null) return null;
+
+    const own = packages.filter((pkg) => pkg.ingredientId === startIngredientId);
+    return own.length === 0
+      ? null
+      : {
+          ingredientId: startIngredientId,
+          packageId: own.length === 1 ? own[0].id : null,
+        };
+  });
   const [form, setForm] = useState<FormTarget | null>(null);
   const [recipeId, setRecipeId] = useState<string | null>(null);
   const [isMoving, setIsMoving] = useState(false);

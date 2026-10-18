@@ -202,6 +202,12 @@ const BIG_TWEAK = [
 const CONTAINERS_PER_RECIPE = [0, 1, 2, 0, 3, 1, 2, 0, 2, 3];
 const MEAL_CONTAINER_COUNT = 10;
 const FINISHED_CONTAINER_COUNT = 260;
+/** 120 packages over the first 60 ingredients: one ingredient holds eight, 53 hold two and six hold one. */
+const PACKAGE_INGREDIENT_COUNT = 60;
+const PACKAGES_ON_BUSIEST_INGREDIENT = 8;
+const INGREDIENTS_WITH_ONE_PACKAGE = 6;
+const PACKAGE_UNITS = ['LB', 'OZ', 'G', 'KG', 'L', 'CUP', 'EACH'] as const;
+const PACKAGE_PLACES = ['PANTRY', 'FRIDGE', 'FREEZER'] as const;
 const SHOPPING_FAMILY_COUNT = 25;
 // The last label is long on purpose, to see a name wrap on a phone.
 const SOURCE_LABELS = [
@@ -246,7 +252,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list whose weighed lines say which meals they are for, 80 recipe ideas, about 330 cooks, about 310 notes, about 300 containers in stock and about 260 finished ones. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list whose weighed lines say which meals they are for, 80 recipe ideas, about 330 cooks, about 310 notes, about 300 containers in stock and about 260 finished ones, and 120 pantry packages over 60 ingredients (one with eight). Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -286,6 +292,7 @@ export async function seedPinchScale(
       freezerDays: null,
       reminders: {
         eatSoon: true,
+        expiring: true,
         timers: false,
         leadDays: 1,
         hour: 9,
@@ -820,6 +827,44 @@ export async function seedPinchScale(
   [...stockedContainers, ...finishedContainers].forEach((container) =>
     add(`containers/${container.id}`, container),
   );
+
+  const packageRandom = makeRandom(20260102);
+  const packageInt = (min: number, max: number) =>
+    min + Math.floor(packageRandom() * (max - min + 1));
+  ingredients.slice(0, PACKAGE_INGREDIENT_COUNT).forEach((ingredient, index) => {
+    const count =
+      index === 0
+        ? PACKAGES_ON_BUSIEST_INGREDIENT
+        : index >= PACKAGE_INGREDIENT_COUNT - INGREDIENTS_WITH_ONE_PACKAGE
+          ? 1
+          : 2;
+    Array.from({ length: count }, (_, copy) => {
+      const unit = PACKAGE_UNITS[(index + copy) % PACKAGE_UNITS.length];
+      const place = PACKAGE_PLACES[(index + copy) % PACKAGE_PLACES.length];
+      const amount = unit === 'EACH' ? packageInt(1, 12) : packageInt(1, 40) / 4;
+      const addedAt = today - packageInt(1, 30) * DAY_MS + 10 * 3_600_000;
+      const hasDate = packageRandom() > 0.15;
+      const days =
+        place === 'FREEZER' ? packageInt(20, 120) : packageInt(-5, 25);
+      add(`packages/scale-package-${index}-${copy}`, {
+        id: `scale-package-${index}-${copy}`,
+        ingredientId: ingredient.id,
+        ingredientName: ingredient.name,
+        productId: null,
+        amount,
+        unit,
+        place,
+        expiresAt: hasDate ? today + days * DAY_MS : null,
+        openedAt: null,
+        status: 'IN_STOCK',
+        history: [
+          { kind: 'ADDED', at: addedAt, amount, place, note: null },
+        ],
+        createdAt: addedAt,
+        updatedAt: addedAt,
+      });
+    });
+  });
 
   await writeAll(firestore, writes);
 

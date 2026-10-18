@@ -876,6 +876,59 @@ export interface TakePlan {
   short: TakeShortfall[];
 }
 
+export interface TakeGroup {
+  ingredientId: string;
+  name: string;
+  packageCount: number;
+  /** What comes out, per kind of unit, in each package's own unit. */
+  totals: AmountTotal[];
+  isConverted: boolean;
+  /** What the packages couldn't cover, if anything. */
+  short: TakeShortfall | null;
+}
+
+/** A plan's takes as one entry per ingredient, in the order the plan drew them. */
+export const getTakeGroups = (
+  plan: TakePlan,
+  getName: (ingredientId: string) => string,
+): TakeGroup[] =>
+  Array.from(
+    plan.takes
+      .reduce(
+        (byIngredient, take) =>
+          byIngredient.set(take.ingredientId, [
+            ...(byIngredient.get(take.ingredientId) ?? []),
+            take,
+          ]),
+        new Map<string, PackageTake[]>(),
+      )
+      .entries(),
+    ([ingredientId, takes]) => ({
+      ingredientId,
+      name: getName(ingredientId),
+      packageCount: takes.length,
+      totals: sumAmounts(takes),
+      isConverted: takes.some((take) => take.isConverted),
+      short:
+        plan.short.find((entry) => entry.ingredientId === ingredientId) ??
+        null,
+    }),
+  );
+
+/** "2 cup", "about 0.42 lb", "1 cup and 1.25 lb". */
+export const getTakeAmountText = (group: TakeGroup) =>
+  `${group.isConverted ? 'about ' : ''}${group.totals.map(formatTotal).join(' and ')}`;
+
+/** What was taken, in one line: "Took 2 cup rice from 1 package", or a count when it was several things. */
+export const getTakenHeadline = (groups: TakeGroup[]) => {
+  if (groups.length !== 1) {
+    return `Took ${groups.length} things out of your pantry`;
+  }
+
+  const [group] = groups;
+  return `Took ${getTakeAmountText(group)} ${group.name.toLowerCase()} from ${countPackages(group.packageCount)}`;
+};
+
 /** What turns a weight into a volume or a count for one ingredient: its own numbers, or none. */
 export type GetConversions = (ingredientId: string) => Conversions;
 

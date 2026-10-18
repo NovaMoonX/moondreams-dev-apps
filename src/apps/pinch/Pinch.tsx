@@ -335,7 +335,13 @@ function Pinch() {
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
       {subview?.kind === 'settings' && <SettingsSubview uid={user.uid} />}
-      {subview?.kind === 'pantry' && <PantrySubview uid={user.uid} />}
+      {subview?.kind === 'pantry' && (
+        <PantrySubview
+          key={subview.ingredientId ?? ''}
+          uid={user.uid}
+          ingredientId={subview.ingredientId ?? null}
+        />
+      )}
       {subview?.kind === 'containers' && (
         <ContainersSubview
           key={`${subview.recipeId ?? ''}-${subview.mealId ?? ''}-${subview.place ?? ''}`}

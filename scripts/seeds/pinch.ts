@@ -199,6 +199,121 @@ const SEED_NOTES = [
   },
 ];
 
+type SeedPackageEventKind = 'ADDED' | 'USED' | 'MOVED' | 'TOSSED' | 'EDITED';
+
+/** Eight packages over five ingredients, each its own document: two cartons of milk with different dates and amounts, a tray of chicken past its date beside a frozen one, a bag of rice with no date, and herbs and greens due soon. `expiresInDays` is from the seed's day, null for no date; the amount is what is left. */
+const SEED_PACKAGES = [
+  {
+    id: 'seed-pinch-package-milk-1',
+    ingredientId: 'cat-whole-milk',
+    ingredientName: 'Whole milk',
+    amount: 1,
+    unit: 'L',
+    place: 'FRIDGE',
+    expiresInDays: 1,
+    openedDaysAgo: null,
+    events: [{ kind: 'ADDED', daysAgo: 4, amount: 1, place: 'FRIDGE' }],
+  },
+  {
+    id: 'seed-pinch-package-milk-2',
+    ingredientId: 'cat-whole-milk',
+    ingredientName: 'Whole milk',
+    amount: 0.5,
+    unit: 'L',
+    place: 'FRIDGE',
+    expiresInDays: 6,
+    openedDaysAgo: 2,
+    events: [
+      { kind: 'ADDED', daysAgo: 7, amount: 1, place: 'FRIDGE' },
+      { kind: 'USED', daysAgo: 2, amount: 0.5, place: null },
+    ],
+  },
+  {
+    id: 'seed-pinch-package-chicken-fridge',
+    ingredientId: 'cat-chicken-thigh',
+    ingredientName: 'Chicken thigh',
+    amount: 1.2,
+    unit: 'LB',
+    place: 'FRIDGE',
+    expiresInDays: -2,
+    openedDaysAgo: null,
+    events: [{ kind: 'ADDED', daysAgo: 6, amount: 1.2, place: 'FRIDGE' }],
+  },
+  {
+    id: 'seed-pinch-package-chicken-freezer',
+    ingredientId: 'cat-chicken-thigh',
+    ingredientName: 'Chicken thigh',
+    amount: 2,
+    unit: 'LB',
+    place: 'FREEZER',
+    expiresInDays: 75,
+    openedDaysAgo: null,
+    events: [{ kind: 'ADDED', daysAgo: 20, amount: 2, place: 'FREEZER' }],
+  },
+  {
+    id: 'seed-pinch-package-rice',
+    ingredientId: 'cat-jasmine-rice',
+    ingredientName: 'Jasmine rice',
+    amount: 8,
+    unit: 'LB',
+    place: 'PANTRY',
+    expiresInDays: null,
+    openedDaysAgo: 25,
+    events: [
+      { kind: 'ADDED', daysAgo: 30, amount: 12, place: 'PANTRY' },
+      { kind: 'USED', daysAgo: 25, amount: 4, place: null },
+    ],
+  },
+  {
+    id: 'seed-pinch-package-cilantro',
+    ingredientId: 'cat-cilantro',
+    ingredientName: 'Cilantro',
+    amount: 1,
+    unit: 'CUP',
+    place: 'FRIDGE',
+    expiresInDays: 1,
+    openedDaysAgo: null,
+    events: [{ kind: 'ADDED', daysAgo: 5, amount: 1, place: 'FRIDGE' }],
+  },
+  {
+    id: 'seed-pinch-package-spinach-1',
+    ingredientId: 'cat-spinach',
+    ingredientName: 'Spinach',
+    amount: 5,
+    unit: 'OZ',
+    place: 'FRIDGE',
+    expiresInDays: 3,
+    openedDaysAgo: null,
+    events: [{ kind: 'ADDED', daysAgo: 3, amount: 5, place: 'FRIDGE' }],
+  },
+  {
+    id: 'seed-pinch-package-spinach-2',
+    ingredientId: 'cat-spinach',
+    ingredientName: 'Spinach',
+    amount: 10,
+    unit: 'OZ',
+    place: 'FRIDGE',
+    expiresInDays: 9,
+    openedDaysAgo: null,
+    events: [{ kind: 'ADDED', daysAgo: 1, amount: 10, place: 'FRIDGE' }],
+  },
+] satisfies {
+  id: string;
+  ingredientId: string;
+  ingredientName: string;
+  amount: number;
+  unit: string;
+  place: 'PANTRY' | 'FRIDGE' | 'FREEZER';
+  expiresInDays: number | null;
+  openedDaysAgo: number | null;
+  events: {
+    kind: SeedPackageEventKind;
+    daysAgo: number;
+    amount: number;
+    place: 'PANTRY' | 'FRIDGE' | 'FREEZER' | null;
+  }[];
+}[];
+
 type SeedEventKind =
   'MADE' | 'FRIDGE' | 'FREEZE' | 'THAW' | 'EAT' | 'TOSS' | 'CLEAR' | 'EDIT';
 
@@ -972,6 +1087,32 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           updatedAt: lastAt,
         });
     }),
+    ...SEED_PACKAGES.map(
+      ({ expiresInDays, openedDaysAgo, events, ...pkg }) => {
+        const history = events.map(({ daysAgo, ...event }) => ({
+          ...event,
+          note: null,
+          at: today - daysAgo * DAY_MS + 10 * 3_600_000,
+        }));
+        return kitchenRef
+          .collection('packages')
+          .doc(pkg.id)
+          .set({
+            ...pkg,
+            productId: null,
+            expiresAt:
+              expiresInDays === null ? null : today + expiresInDays * DAY_MS,
+            openedAt:
+              openedDaysAgo === null
+                ? null
+                : today - openedDaysAgo * DAY_MS + 10 * 3_600_000,
+            status: 'IN_STOCK',
+            history,
+            createdAt: history[0].at,
+            updatedAt: history[history.length - 1].at,
+          });
+      },
+    ),
     ...SEED_NOTES.map(({ daysAgo, hour, ...entry }) => {
       const at = today - daysAgo * DAY_MS + hour * 3_600_000;
       return kitchenRef
@@ -1055,6 +1196,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_SHOPPING.length +
       SEED_COOKS.length +
       SEED_CONTAINERS.length +
+      SEED_PACKAGES.length +
       SEED_NOTES.length +
       SEED_IDEAS.length +
       SEED_INGREDIENTS.length +

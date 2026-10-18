@@ -31,6 +31,7 @@ import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
+import LineStockMarker from '@apps/pinch/components/pantry/LineStockMarker';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
@@ -45,6 +46,8 @@ import {
   selectCooksById,
   selectIngredientsById,
   selectIsContainersReady,
+  selectHasPackages,
+  selectPackagesByIngredient,
   selectPlannedByDay,
   selectRecipeCosts,
   selectRecipeNutrition,
@@ -68,6 +71,7 @@ import {
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { isBulkMeal } from '@apps/pinch/utils/containers';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import { getLineStock } from '@apps/pinch/utils/packages';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getNutritionGaps,
@@ -187,6 +191,8 @@ function RecipeDrawer({
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
   const { openSubview } = usePinchOverlay();
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
+  const hasPantry = useAppSelector(selectHasPackages);
+  const packagesByIngredient = useAppSelector(selectPackagesByIngredient);
   const isStockReady = useAppSelector(selectIsContainersReady);
   const stockError = useAppSelector(selectContainersLoadError);
   const hasStock = useAppSelector((state) =>
@@ -580,6 +586,18 @@ function RecipeDrawer({
                   const gap = isPriced
                     ? gapLabel(cost.lines.get(line.id)?.gap?.kind)
                     : null;
+                  const ingredient = ingredientsById.get(line.ingredientId);
+                  const pantry = hasPantry
+                    ? getLineStock(
+                        line,
+                        packagesByIngredient.get(line.ingredientId),
+                        undefined,
+                        {
+                          gramsPerMl: ingredient?.gramsPerMl ?? null,
+                          gramsEach: ingredient?.gramsEach ?? null,
+                        },
+                      )
+                    : null;
                   return (
                     <li
                       key={line.id}
@@ -599,18 +617,21 @@ function RecipeDrawer({
                           </span>
                         )}
                       </span>
-                      {line.amount === null ? (
-                        line.note && (
-                          <span className='text-muted-foreground max-w-[50%] text-right text-sm wrap-break-word'>
-                            {line.note}
+                      <span className='flex max-w-[55%] shrink-0 flex-col items-end gap-0.5 text-right'>
+                        {line.amount === null ? (
+                          line.note && (
+                            <span className='text-muted-foreground text-sm wrap-break-word'>
+                              {line.note}
+                            </span>
+                          )
+                        ) : (
+                          <span className='text-muted-foreground text-sm whitespace-nowrap'>
+                            {Math.round(line.amount * 100) / 100}{' '}
+                            {UNIT_LABELS[line.unit]}
                           </span>
-                        )
-                      ) : (
-                        <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                          {Math.round(line.amount * 100) / 100}{' '}
-                          {UNIT_LABELS[line.unit]}
-                        </span>
-                      )}
+                        )}
+                        {pantry !== null && <LineStockMarker stock={pantry} />}
+                      </span>
                     </li>
                   );
                 })}

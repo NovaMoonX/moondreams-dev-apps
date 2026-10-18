@@ -37,6 +37,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNoteCard from '@apps/pinch/components/cooking/CookNoteCard';
+import CookPantryTake from '@apps/pinch/components/cooking/CookPantryTake';
 import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookRecord, {
   type CookRecordStatus,
@@ -68,6 +69,7 @@ import {
   type CookVoiceResult,
 } from '@apps/pinch/hooks/useCookVoice';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePantryTake } from '@apps/pinch/hooks/usePantryTake';
 import { usePutAway } from '@apps/pinch/hooks/usePutAway';
 import {
   selectCooksById,
@@ -108,6 +110,7 @@ import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { getRecipeLines } from '@apps/pinch/utils/shopping';
 import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
 import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 
@@ -375,6 +378,33 @@ function CookingSession({
       cookId: record.recordedCookId,
     })),
   });
+
+  const pantryTake = usePantryTake(
+    uid,
+    useMemo(
+      () =>
+        records
+          .filter((record) => record.recordedCookId !== null)
+          .flatMap((record) =>
+            getRecipeLines(
+              record.entry.recipe,
+              ingredientsById,
+              record.servings,
+            ).flatMap((line) =>
+              line.amount === null
+                ? []
+                : [
+                    {
+                      ingredientId: line.ingredientId,
+                      amount: line.amount,
+                      unit: line.unit,
+                    },
+                  ],
+            ),
+          ),
+      [records, ingredientsById],
+    ),
+  );
 
   const putAway = usePutAway({
     uid,
@@ -1572,6 +1602,9 @@ function CookingSession({
                 }
                 problem={getRecordProblem()}
               />
+            )}
+            {!note.isOpen && !putAway.isOpen && isRecorded && (
+              <CookPantryTake take={pantryTake} />
             )}
             {!note.isOpen &&
               recordedEntries.map((record) => (

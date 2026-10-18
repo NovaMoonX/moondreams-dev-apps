@@ -22,6 +22,7 @@ import {
 } from '@apps/pinch/components/kitchen/ingredientFilters';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
 import PreparedEntry from '@apps/pinch/components/containers/PreparedEntry';
+import PackageFormSheet from '@apps/pinch/components/pantry/PackageFormSheet';
 import PantryEntry from '@apps/pinch/components/pantry/PantryEntry';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
@@ -69,6 +70,7 @@ type Overlay =
   | { kind: 'details'; id: string }
   | { kind: 'form'; id: string | null }
   | { kind: 'product'; ingredientId: string; productId: string | null }
+  | { kind: 'package'; ingredientId: string }
   | { kind: 'fillIn'; gaps: Gap[] };
 
 interface KitchenScreenProps {
@@ -428,6 +430,24 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           }
           onEditProduct={(ingredientId, productId) =>
             setOverlay({ kind: 'product', ingredientId, productId })
+          }
+          onOpenPantry={(ingredientId) => {
+            setOverlay(null);
+            openSubview({ kind: 'pantry', ingredientId });
+          }}
+          onAddPackage={(ingredientId) =>
+            setOverlay({ kind: 'package', ingredientId })
+          }
+        />
+      )}
+      {overlay?.kind === 'package' && (
+        <PackageFormSheet
+          key={overlay.ingredientId}
+          uid={uid}
+          pkg={null}
+          ingredientId={overlay.ingredientId}
+          onClose={() =>
+            setOverlay({ kind: 'details', id: overlay.ingredientId })
           }
         />
       )}

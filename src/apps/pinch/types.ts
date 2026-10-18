@@ -220,8 +220,8 @@ export type PinchSubview =
   | { kind: 'sources' }
   /** Reminders and how long a new box keeps. */
   | { kind: 'settings' }
-  /** The ingredients the person has on hand, grouped, each package with its own amount and date. */
-  | { kind: 'pantry' }
+  /** The ingredients the person has on hand, grouped, each package with its own amount and date; `ingredientId` opens that ingredient's packages first. */
+  | { kind: 'pantry'; ingredientId?: string }
   /** Fridge & freezer; `place` is the one a door named, shown first. */
   | {
       kind: 'containers';

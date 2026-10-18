@@ -30,7 +30,9 @@ import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { addToShoppingList } from '@apps/pinch/store/actions/shoppingActions';
 import {
   selectIngredientsById,
+  selectHasPackages,
   selectMealsById,
+  selectPackagesByIngredient,
   selectPlannedByDay,
   selectRecipesById,
   selectShoppingById,
@@ -44,6 +46,10 @@ import {
   getShoppingStockLine,
   type StockedItem,
 } from '@apps/pinch/utils/containers';
+import {
+  getLineStock,
+  getLineStockText,
+} from '@apps/pinch/utils/packages';
 import {
   addDaysToKey,
   formatDayTitle,
@@ -144,6 +150,8 @@ export function ShoppingPick({
   const loadError = useAppSelector(selectShoppingLoadError);
   const stockByRecipe = useAppSelector(selectStockByRecipe);
   const stockByMeal = useAppSelector(selectStockByMeal);
+  const hasPantry = useAppSelector(selectHasPackages);
+  const packagesByIngredient = useAppSelector(selectPackagesByIngredient);
   const mealsById = useAppSelector(selectMealsById);
   const plannedByDay = useAppSelector(selectPlannedByDay);
   const planWindowKey = useAppSelector(
@@ -305,12 +313,40 @@ export function ShoppingPick({
     stockByMeal,
   ]);
   const stockLine = getShoppingStockLine(stocked, request.kind !== 'recipe');
-  const isTicked = (row: ShopLineRow) =>
-    choices[row.id] ?? (!getState(row).isCovered && !isUsuallyAtHome(row));
+  // What the pantry holds of a row's ingredient, measured against everything the row asks for; a package past its date or an amount that can't be compared never counts as enough.
+  const getPantry = (row: ShopLineRow) => {
+    if (!hasPantry) return null;
+
+    const need = getShopAmount(row.lines, row.section);
+    const ingredient = ingredientsById.get(row.ingredientId);
+    return getLineStock(
+      { amount: need?.amount ?? null, unit: need?.unit ?? 'EACH' },
+      packagesByIngredient.get(row.ingredientId),
+      undefined,
+      {
+        gramsPerMl: ingredient?.gramsPerMl ?? null,
+        gramsEach: ingredient?.gramsEach ?? null,
+      },
+    );
+  };
+  const hasEnough = (row: ShopLineRow) => getPantry(row)?.kind === 'HAVE';
+  const startsOn = (row: ShopLineRow) =>
+    !getState(row).isCovered && !isUsuallyAtHome(row) && !hasEnough(row);
+  const isTicked = (row: ShopLineRow) => choices[row.id] ?? startsOn(row);
   const selected = rows.filter(isTicked);
-  const startsTicked = rows.some(
-    (row) => !getState(row).isCovered && !isUsuallyAtHome(row),
-  );
+  const startsTicked = rows.some(startsOn);
+  const getPantryHint = (row: ShopLineRow) => {
+    const pantry = getPantry(row);
+    if (pantry === null || pantry.kind === 'NONE' || pantry.kind === 'OTHER') {
+      return null;
+    }
+    if (pantry.kind === 'HAVE') {
+      return `${getLineStockText(pantry)} in your pantry. Tick to add it anyway.`;
+    }
+    return pantry.kind === 'PAST'
+      ? 'What is in your pantry is past its date.'
+      : `${getLineStockText(pantry)} in your pantry.`;
+  };
   const atHomeRows = rows.filter(isUsuallyAtHome);
   const shownRows = [
     ...rows.filter((row) => !isUsuallyAtHome(row)),
@@ -603,11 +639,12 @@ export function ShoppingPick({
           <ul className='divide-border flex-1 divide-y overflow-y-auto [@media(max-height:500px)]:overflow-visible [@media(max-height:800px)]:min-h-36'>
             {shownRows.map((row) => {
               const state = getState(row);
-              const hint = getOnListHint(
-                state,
-                formatSourceNames(state.matched.map(nameSource)),
-                state.openText,
-              );
+              const hint =
+                getOnListHint(
+                  state,
+                  formatSourceNames(state.matched.map(nameSource)),
+                  state.openText,
+                ) ?? getPantryHint(row);
               const amountText = formatShopAmount(
                 getShopAmount(state.addLines, row.section),
               );
