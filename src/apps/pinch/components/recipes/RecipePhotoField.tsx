@@ -56,16 +56,17 @@ function RecipePhotoField({
         </span>
       }
     >
-      <div className='space-y-5'>
+      <div className='space-y-4 [@media(max-height:600px)_and_(min-width:640px)]:grid [@media(max-height:600px)_and_(min-width:640px)]:grid-cols-2 [@media(max-height:600px)_and_(min-width:640px)]:items-start [@media(max-height:600px)_and_(min-width:640px)]:gap-5 [@media(max-height:600px)_and_(min-width:640px)]:space-y-0'>
         <PhotoPicker
           variant='cover'
+          isCompact={canSuggest}
           photoUrl={cover?.url ?? null}
           placeholder={PLACEHOLDER}
           uploadLabel='Choose a photo'
           changeLabel='Choose another'
           note={
             cover?.host
-              ? `From ${cover.host}. Pinch keeps its web address, not a copy, so it stops showing if that site takes it down.`
+              ? `From ${cover.host}. Kept as a web link, not a copy, so it can disappear.`
               : UPLOAD_NOTE
           }
           error={error}

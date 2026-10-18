@@ -134,7 +134,7 @@ function RecipePhotoSuggestions({
             {SKELETON_TILES.map((tile) => (
               <div
                 key={tile}
-                className='bg-accent aspect-square animate-pulse rounded-xl'
+                className='bg-accent aspect-4/3 animate-pulse rounded-xl'
               />
             ))}
           </div>
@@ -204,7 +204,7 @@ function RecipePhotoSuggestions({
       }
     >
       <p className='text-muted-foreground text-xs'>
-        Searches the web with your recipe’s title. Nothing else is sent.
+        Searches the web with this title. Nothing else is sent.
       </p>
       <div className='space-y-2'>{getBody()}</div>
     </FormSection>

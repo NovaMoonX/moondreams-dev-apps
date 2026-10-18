@@ -27,7 +27,7 @@ interface ImageChoiceGridProps {
   onPick: (key: string) => void;
 }
 
-/** Pictures to choose one from, three to a row: each tile is a toggle whose selected state is a ring and a check, never a colour alone. */
+/** Pictures to choose one from, three to a row: each tile is a toggle whose selected state is a heavy inner border and a check, never a colour alone. The border is drawn by an overlay, not a focus ring, because the app removes the ring from a control the pointer just focused. */
 function ImageChoiceGrid({
   label,
   choices,
@@ -56,10 +56,8 @@ function ImageChoiceGrid({
             disabled={choice.isUnavailable}
             onClick={() => onPick(choice.key)}
             className={join(
-              'bg-accent relative block aspect-square h-auto w-full overflow-hidden rounded-xl border p-0 transition-none',
-              isSelected
-                ? 'border-primary ring-primary ring-offset-background ring-2 ring-offset-2'
-                : 'border-border',
+              'bg-accent relative block aspect-4/3 h-auto w-full overflow-hidden rounded-xl border p-0 transition-none',
+              isSelected ? 'border-primary' : 'border-border',
               choice.isUnavailable && 'opacity-40',
             )}
           >
@@ -78,10 +76,12 @@ function ImageChoiceGrid({
             />
             {isSelected && (
               <span
-                className='bg-primary text-primary-foreground absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full shadow-sm'
+                className='border-primary pointer-events-none absolute inset-0 rounded-[inherit] border-[3px]'
                 aria-hidden='true'
               >
-                <Check className='size-4' strokeWidth={3} />
+                <span className='bg-primary text-primary-foreground absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full shadow-sm'>
+                  <Check className='size-4' strokeWidth={3} />
+                </span>
               </span>
             )}
             {isChecking && (
