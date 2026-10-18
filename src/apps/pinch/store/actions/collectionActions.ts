@@ -41,7 +41,6 @@ interface RenameCollectionInput {
   label: string;
 }
 
-/** A field-scoped write: the recipes name it by id, so every one follows the new name. */
 export const renameCollection = createAsyncThunk<
   string,
   RenameCollectionInput,
@@ -93,11 +92,10 @@ interface RemoveCollectionInput {
 
 interface RemoveCollectionResult {
   id: string;
-  /** How many recipes it was really taken off, as read inside the transactions. */
   recipeCount: number;
 }
 
-/** Takes the collection off every recipe that names it, a transaction per chunk that re-reads each recipe and writes only those still naming it (a recipe's `updatedAt` is left alone: it versions the cover), then deletes the collection itself, so a chunk that fails leaves it in place to be deleted again. */
+/** The collection document goes last, so a failed chunk leaves it to be deleted again; a recipe's `updatedAt` stays because it versions the cover. */
 export const removeCollection = createAsyncThunk<
   RemoveCollectionResult,
   RemoveCollectionInput,

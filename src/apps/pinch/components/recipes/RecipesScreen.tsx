@@ -281,7 +281,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const hasCollectionFilter =
     hasCollectionSection && collectionCounts.byCollection.size > 0;
   const favoriteCount = meals.filter(isStarred).length;
-  const hasFavoritesFilter = shownView === 'meals' && favoriteCount > 0;
+  const hasFavoritesFilter =
+    shownView === 'meals' &&
+    favoriteCount > 0 &&
+    meals.length >= LIST_SEARCH_THRESHOLD;
   const isFavoritesOn = hasFavoritesFilter && pickedFavorites;
   const stockMap = shownView === 'meals' ? stockByMeal : stockByRecipe;
   const stockCounts = useMemo(

@@ -110,17 +110,14 @@ export const MAX_COLLECTION_LABEL_LENGTH = 40;
 export const MAX_COLLECTIONS = 50;
 /** The rules' cap on how many collections one recipe names. */
 export const MAX_RECIPE_COLLECTIONS = 20;
-/** Recipes one transaction of a collection's removal re-reads and writes: the action's limit, under Firestore's 500. */
+/** Under Firestore's 500 writes: the action's limit, not the rules'. */
 export const COLLECTION_BATCH_SIZE = 200;
-/** The recipes filter's two answers that aren't a collection; a collection id is a UUID, so neither can collide with one. */
+/** A collection id is a UUID, so neither can collide with one. */
 export const COLLECTION_FILTER_ANY = 'any';
 export const COLLECTION_FILTER_NONE = 'none';
-/** A recipe's drawer names this many collections, and folds the rest only when more than `COLLECTION_CHIPS_QUIET_HIDDEN` would hide. */
 export const COLLECTION_CHIPS_SHOWN = 4;
 export const COLLECTION_CHIPS_QUIET_HIDDEN = 3;
-/** Whole grams of protein per serving, as shown, at or above which "High-protein" is suggested. */
 export const HIGH_PROTEIN_GRAMS = 25;
-/** Prep plus cook at or under which "Quick" is suggested; both times have to be known. */
 export const QUICK_MAX_MINUTES = 30;
 export const COLLECTION_SUGGESTION_LABELS = {
   HIGH_PROTEIN: 'High-protein',

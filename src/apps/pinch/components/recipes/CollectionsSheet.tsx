@@ -65,7 +65,6 @@ interface CollectionEditViewProps {
   onBack: () => void;
 }
 
-/** One collection's name and its delete, swapped into the sheet in place. */
 function CollectionEditView({
   uid,
   collection,
@@ -230,7 +229,6 @@ interface CollectionsSheetProps {
   onClose: () => void;
 }
 
-/** Where collections are renamed and deleted: a list with each one's recipes, and a row swaps in its name and trash. They are made from a recipe's form, where they are used. */
 function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
   const collections = useAppSelector(selectCollections);
   const counts = useAppSelector(selectCollectionCounts).byCollection;

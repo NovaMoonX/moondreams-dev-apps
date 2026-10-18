@@ -13,15 +13,15 @@ import {
 import type { Collection, NutritionValues } from '@apps/pinch/types';
 import type { NutritionResult } from '@apps/pinch/utils/nutritionMath';
 
-/** A collection as far as a label lookup needs it: one the form typed but hasn't saved has no timestamps yet. */
+/** A typed collection the form hasn't saved has no timestamps yet. */
 type Named = Pick<Collection, 'id' | 'label'>;
 
-/** What a recipe needs to say about its collections; a recipe written before collections has no key. */
+/** A recipe written before collections has no key. */
 interface InCollections {
   collectionIds?: readonly string[] | null;
 }
 
-/** Two labels are one collection when they differ only in case, spaces or hyphens ("High-protein", "high protein"). */
+/** "High-protein" and "high protein" are one collection. */
 export const getCollectionKey = (label: string) => {
   const trimmed = label.trim().toLowerCase();
   const plain = trimmed.replace(/[^\p{L}\p{N}]+/gu, '');
@@ -45,7 +45,6 @@ export const findCollectionByLabel = (
   return result;
 };
 
-/** The collections a recipe is in, in the order given; an id no collection has is ignored. */
 export const getRecipeCollections = <T extends Named>(
   recipe: InCollections,
   collections: readonly T[],
@@ -58,7 +57,6 @@ export const getRecipeCollections = <T extends Named>(
 
 export interface CollectionCounts {
   byCollection: Map<string, number>;
-  /** Recipes that are in no collection that still exists. */
   withoutCollection: number;
 }
 
@@ -85,7 +83,7 @@ export const getCollectionCounts = (
   return result;
 };
 
-/** The filter's pills: Any, each collection that holds a listed recipe with its count (the picked one stays while empty), and "No collection" only while some recipe is in none. */
+/** The picked collection stays offered while it is empty, so the pills never read as broken. */
 export const getCollectionFilterOptions = (
   collections: readonly Collection[],
   counts: CollectionCounts,
@@ -133,7 +131,6 @@ export const filterByCollection = <T extends InCollections>(
   );
 };
 
-/** How many of a recipe's collection chips show: all of them, unless more than three would be tucked away. */
 export const getCollectionChipWindow = (total: number, isExpanded: boolean) => {
   const canFold =
     total - COLLECTION_CHIPS_SHOWN > COLLECTION_CHIPS_QUIET_HIDDEN;
@@ -143,7 +140,7 @@ export const getCollectionChipWindow = (total: number, isExpanded: boolean) => {
 };
 
 export interface SuggestionSource {
-  /** Protein per serving the suggestion may read, from `getTrustedProtein`. */
+  /** Null when it can't be trusted. */
   protein: number | null;
   prepMinutes: number | null;
   cookMinutes: number | null;
@@ -152,11 +149,10 @@ export interface SuggestionSource {
 
 export interface CollectionSuggestion {
   label: string;
-  /** The collection of that name the recipe would join; null makes a new one. */
   collectionId: string | null;
 }
 
-/** Protein per serving the suggestions may read: the person's own number, else the added-up one only when no ingredient with an amount lacked a protein value. */
+/** A sum with an unknown ingredient in it is a guess, so only the person's own number or a complete sum counts. */
 export const getTrustedProtein = (
   calculated: NutritionResult,
   typed: NutritionValues | null,
@@ -169,7 +165,7 @@ export const getTrustedProtein = (
   return isComplete ? calculated.values.protein : null;
 };
 
-/** Collections worth offering for a recipe, from its own numbers: High-protein, Quick (prep plus cook, both known) and Freezer-friendly (its care says it freezes). One the recipe is already in, or that can't be made for want of room, is left out. */
+/** Suggestions never add anything; one the recipe is already in, or that can't be made for want of room, is left out. */
 export const getSuggestedCollections = (
   source: SuggestionSource,
   collections: readonly Named[],
@@ -207,7 +203,7 @@ export const getSuggestedCollections = (
   return result;
 };
 
-/** What the recipe form holds for the collections row: the ids chosen, and the new ones typed on the way, which are written with the recipe. */
+/** The ids chosen, and the new ones typed on the way, which are written with the recipe. */
 export interface CollectionsChoice {
   ids: string[];
   added: { id: string; label: string }[];
@@ -234,7 +230,6 @@ interface ChoiceChange {
   outcome: ChoiceOutcome;
 }
 
-/** Picks or unpicks one collection; unpicking a new one typed on the way drops it, so nothing is written for it. */
 export const toggleCollection = (
   choice: CollectionsChoice,
   id: string,
@@ -255,7 +250,6 @@ export const toggleCollection = (
   return { choice: { ...choice, ids: [...choice.ids, id] }, outcome: 'ok' };
 };
 
-/** Puts the recipe in the collection called `label`: the one that has that name, or a new one with an id from `makeId`. */
 export const addCollectionByLabel = (
   choice: CollectionsChoice,
   collections: readonly Named[],
@@ -286,7 +280,6 @@ export const addCollectionByLabel = (
   };
 };
 
-/** The chosen collections' names, alphabetical, for the row's one line. */
 export const getChoiceLabels = (
   choice: CollectionsChoice,
   collections: readonly Named[],
@@ -304,7 +297,7 @@ export const getChoiceLabels = (
   return result;
 };
 
-/** What a save writes: the ids that still name a collection (one deleted on another device is dropped) and the new ones that are still chosen. */
+/** An id deleted on another device is dropped here. */
 export const getCollectionsToSave = (
   choice: CollectionsChoice,
   collections: readonly Named[],
@@ -323,7 +316,6 @@ export const getCollectionsToSave = (
   return result;
 };
 
-/** The recipes that name a collection, in groups one transaction can re-read and write. */
 export const getRemovalChunks = (
   recipes: readonly (InCollections & { id: string })[],
   collectionId: string,
@@ -339,7 +331,7 @@ export const getRemovalChunks = (
   return result;
 };
 
-/** What a recipe's collections become without one, or null when the stored list doesn't name it (another device already took it out): then nothing is written. */
+/** Null when the stored list doesn't name it (another device already took it out): nothing is written then. */
 export const withoutCollection = (ids: unknown, collectionId: string) => {
   if (!Array.isArray(ids) || !ids.includes(collectionId)) return null;
   const result = ids.filter((id) => id !== collectionId);

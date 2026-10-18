@@ -62,7 +62,7 @@ const getWriteMessage = (error: unknown, fallback: string) => {
     : fallback;
 };
 
-/** An edit writes the collections the form offered; without them an older recipe still gains the key, and a newer one keeps its stored list. */
+/** A form that couldn't offer collections leaves the stored list alone, but an older recipe still gains the key. */
 const getCollectionFields = (
   existing: Recipe,
   collectionIds: string[] | null,

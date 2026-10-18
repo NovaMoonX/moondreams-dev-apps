@@ -34,7 +34,7 @@ interface SaveMealInput {
   items: DraftItem[];
 }
 
-/** Saves a meal, or changes only its name and items: an edit never writes `isFavorite`, which only the star owns. */
+/** An edit never writes `isFavorite`: only the star owns it. */
 export const saveMeal = createAsyncThunk<
   string,
   SaveMealInput,
@@ -74,7 +74,7 @@ interface SetMealFavoriteInput {
   isFavorite: boolean;
 }
 
-/** The star: a field-scoped write of the value asked for, so it never overwrites a rename or an item change made elsewhere and queues offline like any single update. */
+/** Writes the value asked for, never a toggle read from a cache. */
 export const setMealFavorite = createAsyncThunk<
   void,
   SetMealFavoriteInput,

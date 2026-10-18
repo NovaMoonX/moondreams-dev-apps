@@ -4,10 +4,9 @@ import { Star } from 'lucide-react';
 
 interface StarButtonProps {
   isOn: boolean;
-  /** What the star is for ("Favorite Adobo and rice"); whether it is on is `aria-pressed`, so the label never flips. */
+  /** Names what the star is for; whether it is on is `aria-pressed`, so the label never flips. */
   label: string;
   onClick: () => void;
-  /** The filled star's colour, a `text-*` class. */
   onClassName?: string;
   className?: string;
 }

@@ -45,14 +45,15 @@ interface CollectionsEditorProps {
   suggestions: CollectionSuggestion[];
 }
 
-/** The pills of every collection, a dashed "New" pill first that reveals a name field, and the suggestions under them. */
 function CollectionsEditor({
   value,
   onChange,
   collections,
   suggestions,
 }: CollectionsEditorProps) {
-  const [isCreating, setIsCreating] = useState(false);
+  const hasNone = collections.length + value.added.length === 0;
+  const [isCreating, setIsCreating] = useState(hasNone);
+  const [hasTappedNew, setHasTappedNew] = useState(false);
   const [typed, setTyped] = useState('');
   const [note, setNote] = useState<string | null>(null);
 
@@ -108,7 +109,10 @@ function CollectionsEditor({
             <Pill
               isSelected={isCreating}
               className='border-primary/60 border border-dashed'
-              onClick={() => setIsCreating((current) => !current)}
+              onClick={() => {
+                setIsCreating((current) => !current);
+                setHasTappedNew(true);
+              }}
             >
               <Plus className='h-3.5 w-3.5' aria-hidden='true' />
               {`New ${COLLECTION_NOUN}`}
@@ -120,7 +124,7 @@ function CollectionsEditor({
         <div className='flex items-center gap-2'>
           <Input
             value={typed}
-            autoFocus
+            autoFocus={hasTappedNew}
             variant='outline'
             aria-label={`Name the new ${COLLECTION_NOUN}`}
             placeholder='Bulk'
@@ -144,6 +148,11 @@ function CollectionsEditor({
             Add
           </Button>
         </div>
+      )}
+      {hasNone && (
+        <p className='text-muted-foreground text-sm'>
+          {`Group recipes your own way, like Weeknight or Bulk. A recipe can be in as many ${COLLECTION_NOUN_PLURAL} as you like.`}
+        </p>
       )}
       {isFull && (
         <p className='text-muted-foreground text-xs'>
@@ -173,7 +182,6 @@ interface RecipeCollectionsFieldProps {
   suggestions: CollectionSuggestion[];
 }
 
-/** The form's one-line Collections row: what the recipe is in, or what is worth trying, opening the picker. */
 function RecipeCollectionsField({
   value,
   onChange,

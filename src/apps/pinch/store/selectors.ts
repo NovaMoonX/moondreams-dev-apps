@@ -243,7 +243,7 @@ export const selectCollectionsById = createSelector(
 export const selectCollectionsLoadError = (state: RootState) =>
   state.pinch.collections.loadError;
 
-/** An optional extra: until it has loaded, or after it failed, the form leaves a recipe's collections as they are. */
+/** Until it has loaded, or after it failed, the form leaves a recipe's collections as they are. */
 export const selectIsCollectionsReady = (state: RootState) =>
   state.pinch.collections.isLoaded &&
   state.pinch.collections.loadError === null;
@@ -505,7 +505,6 @@ export const selectCostContext = createSelector(
 
 const selectMealItems = (state: RootState) => state.pinch.meals.items;
 
-/** The saved meals: starred ones first, then newest first. */
 export const selectMeals = createSelector([selectMealItems], (meals) =>
   sortFavoritesFirst([...meals].sort((a, b) => b.createdAt - a.createdAt)),
 );

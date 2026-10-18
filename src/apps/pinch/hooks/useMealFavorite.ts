@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -8,11 +8,14 @@ import { setMealFavorite } from '@apps/pinch/store/actions/mealActions';
 import type { Meal } from '@apps/pinch/types';
 import { isStarred, shouldIgnoreStarTap } from '@apps/pinch/utils/favorites';
 
-/** The star's tap for a saved meal: writes only the star, ignores a tap while the last one hasn't shown yet, and says so when the write fails. */
 export function useMealFavorite(uid: string) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const pending = useRef(new Map<string, boolean>());
+  const toast = useRef(addToast);
+  useEffect(() => {
+    toast.current = addToast;
+  });
 
   const toggle = useCallback(
     (meal: Pick<Meal, 'id' | 'name' | 'isFavorite'>) => {
@@ -25,7 +28,7 @@ export function useMealFavorite(uid: string) {
       dispatch(setMealFavorite({ uid, id: meal.id, isFavorite: next }))
         .unwrap()
         .catch((error: unknown) =>
-          addToast({
+          toast.current({
             title: next
               ? `Couldn't star ${meal.name}`
               : `Couldn't take the star off ${meal.name}`,
@@ -39,7 +42,7 @@ export function useMealFavorite(uid: string) {
           }
         });
     },
-    [dispatch, uid, addToast],
+    [dispatch, uid],
   );
 
   return toggle;
