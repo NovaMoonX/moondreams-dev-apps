@@ -241,7 +241,7 @@ interface ListenRowsProps {
   selected: ListenChoice;
 }
 
-/** The three ways the mic can listen, as rows with one chosen: a tap on a row changes it at once. On the narrowest phones the icon chip goes, so a row keeps one line for its title and one for its hint; held sideways the rows sit three across. */
+/** The three ways the mic can listen, as rows with one chosen: a tap on a row changes it at once. The icon chip goes on the narrowest phones and on a phone held sideways, where the rows sit three across, so a row keeps a line for its title. */
 function ListenRows({ voice, onChoose, selected }: ListenRowsProps) {
   return (
     <div
@@ -277,7 +277,7 @@ function ListenRows({ voice, onChoose, selected }: ListenRowsProps) {
           >
             <span
               aria-hidden='true'
-              className='bg-accent text-accent-foreground grid size-8 shrink-0 place-items-center rounded-full max-[360px]:hidden [&_svg]:size-4'
+              className='bg-accent text-accent-foreground grid size-8 shrink-0 place-items-center rounded-full max-[360px]:hidden [&_svg]:size-4 [@media(max-height:500px)]:hidden'
             >
               {row.icon}
             </span>
