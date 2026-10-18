@@ -18,6 +18,12 @@ const SEED_SOURCES = [
   { id: 'seed-pinch-source-nyt', label: 'NYT Cooking' },
 ];
 
+// High-protein is on the adobo and the nachos, Weeknight on the adobo and the rice; the retired chili has no `collectionIds` key, the shape from before collections.
+const SEED_COLLECTIONS = [
+  { id: 'seed-pinch-collection-high-protein', label: 'High-protein' },
+  { id: 'seed-pinch-collection-weeknight', label: 'Weeknight' },
+];
+
 const shoppingItem = (
   ingredientId: string,
   unit: string,
@@ -625,6 +631,10 @@ const SEED_RECIPES = [
     nutritionOverride: null,
     source: 'MANUAL',
     sourceId: 'seed-pinch-source-recipe-cards',
+    collectionIds: [
+      'seed-pinch-collection-high-protein',
+      'seed-pinch-collection-weeknight',
+    ],
   },
   {
     id: 'seed-pinch-recipe-rice',
@@ -649,6 +659,7 @@ const SEED_RECIPES = [
     nutritionOverride: null,
     source: 'MANUAL',
     sourceId: 'seed-pinch-source-serious-eats',
+    collectionIds: ['seed-pinch-collection-weeknight'],
   },
   {
     id: 'seed-pinch-recipe-nachos',
@@ -669,6 +680,7 @@ const SEED_RECIPES = [
     nutritionOverride: { calories: 520, protein: null, carbs: null, fat: null },
     source: 'MANUAL',
     sourceId: null,
+    collectionIds: ['seed-pinch-collection-high-protein'],
   },
   // Deleted by Alex while a planned day still used it, so it is archived: hidden from lists and pickers, still named on that day.
   {
@@ -707,10 +719,12 @@ const item = (
 });
 
 // Days are offsets from today (UTC midnight): an empty day, one meal, a full day, five meals and a day of ten, so the cells and drawer show every size.
+// "Adobo and rice" is starred; "Snack plate" has no `isFavorite` key, the shape from before favorites.
 const SEED_MEALS = [
   {
     id: 'seed-pinch-meal-adobo-rice',
     name: 'Adobo and rice',
+    isFavorite: true,
     items: [
       item('a', 'RECIPE', 'seed-pinch-recipe-adobo', 2),
       item('b', 'RECIPE', 'seed-pinch-recipe-rice', 2),
@@ -892,6 +906,12 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(source.id)
         .set({ ...source, createdAt, updatedAt: createdAt }),
     ),
+    ...SEED_COLLECTIONS.map((collection) =>
+      kitchenRef
+        .collection('collections')
+        .doc(collection.id)
+        .set({ ...collection, createdAt, updatedAt: createdAt }),
+    ),
     ...SEED_IDEAS.map((entry, index) =>
       kitchenRef
         .collection('ideas')
@@ -1016,6 +1036,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     firestoreDocuments:
       SEED_FAMILIES.length +
       SEED_SOURCES.length +
+      SEED_COLLECTIONS.length +
       SEED_SHOPPING.length +
       SEED_COOKS.length +
       SEED_CONTAINERS.length +

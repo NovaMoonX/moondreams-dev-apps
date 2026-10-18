@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
+  startCollectionsListener,
   startContainersListener,
   startCooksListener,
   startFamiliesListener,
@@ -18,6 +19,11 @@ import {
   startSourcesListener,
   startStoresListener,
 } from '@apps/pinch/store/listeners/kitchenListeners';
+import {
+  clearCollections,
+  setCollections,
+  setCollectionsLoadError,
+} from '@apps/pinch/store/slices/collectionsSlice';
 import {
   clearContainers,
   setContainers,
@@ -103,6 +109,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearProducts());
       dispatch(clearRecipes());
       dispatch(clearSources());
+      dispatch(clearCollections());
       dispatch(clearShopping());
       dispatch(clearIdeas());
       dispatch(clearCooks());
@@ -176,6 +183,19 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
         dispatch(
           setSourcesLoadError(
             getErrorMessage(error, 'Unable to load your recipe sources.'),
+          ),
+        );
+      },
+    );
+
+    const unsubscribeCollections = startCollectionsListener(
+      uid,
+      (collections) => dispatch(setCollections(collections)),
+      (error) => {
+        console.error('Pinch collections listener failed', error);
+        dispatch(
+          setCollectionsLoadError(
+            getErrorMessage(error, 'Unable to load your recipe collections.'),
           ),
         );
       },
@@ -276,6 +296,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       unsubscribeCooks();
       unsubscribeIdeas();
       unsubscribeShopping();
+      unsubscribeCollections();
       unsubscribeSources();
       unsubscribeRecipes();
       unsubscribeProducts();

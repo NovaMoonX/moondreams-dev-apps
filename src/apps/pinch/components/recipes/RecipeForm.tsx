@@ -27,6 +27,7 @@ import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
 import RecipeCareField from '@apps/pinch/components/recipes/RecipeCareField';
+import RecipeCollectionsField from '@apps/pinch/components/recipes/RecipeCollectionsField';
 import {
   RecipeDescriptionField,
   RecipeTimesField,
@@ -67,10 +68,12 @@ import {
 } from '@apps/pinch/store/actions/recipeActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
+  selectCollections,
   selectCookSummaries,
   selectIdeas,
   selectIngredients,
   selectIngredientsById,
+  selectIsCollectionsReady,
   selectNotesByRecipe,
   selectRecipesById,
   selectSourceCounts,
@@ -86,6 +89,12 @@ import type {
   RecipeNote,
   RecipeSource,
 } from '@apps/pinch/types';
+import {
+  getCollectionsToSave,
+  getSuggestedCollections,
+  getTrustedProtein,
+  type CollectionsChoice,
+} from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
@@ -144,6 +153,9 @@ function RecipeForm({
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
+  const collections = useAppSelector(selectCollections);
+  const isCollectionsReady = useAppSelector(selectIsCollectionsReady);
+  const [ownsCollections] = useState(isCollectionsReady);
   const tracking = useAppSelector((state) =>
     selectTweakTracking(state, recipeId),
   );
@@ -167,7 +179,7 @@ function RecipeForm({
       : initialIdea
         ? getDataFromIdea(initialIdea, sources)
         : {
-            ...getInitialData(recipe, sourcesById),
+            ...getInitialData(recipe, sourcesById, collections),
             why: initialNote?.text ?? '',
           },
   );
@@ -211,6 +223,7 @@ function RecipeForm({
         nutritionOverride: null,
         source: 'MANUAL',
         sourceId: null,
+        collectionIds: [],
         isArchived: false,
         createdAt: 0,
         updatedAt: 0,
@@ -224,6 +237,7 @@ function RecipeForm({
 
     return {
       values: result.values,
+      missing: result.missing,
       leftOut: {
         count:
           new Set(result.missing.map((entry) => entry.ingredientId)).size +
@@ -232,6 +246,30 @@ function RecipeForm({
       },
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
+
+  const typedNutrition = isValidNutrition(formData.nutrition)
+    ? parseNutrition(formData.nutrition)
+    : null;
+  const protein =
+    typedNutrition?.protein != null ||
+    (formData.ingredients.length > 0 && formData.ingredients.every(isRowValid))
+      ? getTrustedProtein(calculation, typedNutrition)
+      : null;
+  const freezerDays = parseCareText(formData.care)?.freezerDays ?? null;
+  const suggestions = useMemo(
+    () =>
+      getSuggestedCollections(
+        {
+          protein,
+          prepMinutes: isValidMinutes(prep) ? prep : null,
+          cookMinutes: isValidMinutes(cook) ? cook : null,
+          freezerDays,
+        },
+        [...collections, ...formData.collections.added],
+        formData.collections.ids,
+      ),
+    [protein, prep, cook, freezerDays, collections, formData.collections],
+  );
 
   const isBlankByHand =
     recipeId === null && initialRead === null && initialIdea === null;
@@ -461,6 +499,22 @@ function RecipeForm({
               },
             }),
           ]),
+      ...(ownsCollections
+        ? [
+            custom({
+              name: 'collections',
+              label: '',
+              renderComponent: (props) => (
+                <RecipeCollectionsField
+                  value={props.value as CollectionsChoice}
+                  onChange={props.onValueChange}
+                  collections={collections}
+                  suggestions={suggestions}
+                />
+              ),
+            }),
+          ]
+        : []),
       custom({
         name: 'care',
         label: '',
@@ -539,6 +593,9 @@ function RecipeForm({
       isDirtyRef,
       hasSourcesFailed,
       sourceOptions,
+      ownsCollections,
+      collections,
+      suggestions,
       isBlankByHand,
       showUndo,
       tracking,
@@ -640,6 +697,9 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
+      const { collectionIds, newCollections } = ownsCollections
+        ? getCollectionsToSave(data.collections, collections)
+        : { collectionIds: null, newCollections: [] };
       const { recipeId: savedId } = await dispatch(
         saveRecipe({
           uid,
@@ -654,6 +714,8 @@ function RecipeForm({
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
             sourceId,
             newSource,
+            collectionIds,
+            newCollections,
             newIngredients: [
               ...new Map(
                 data.ingredients

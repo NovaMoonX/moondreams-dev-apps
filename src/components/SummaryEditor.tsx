@@ -26,7 +26,7 @@ const subscribeToHeight = (onChange: () => void) => {
 const getIsShortScreen = () => window.matchMedia(SHORT_SCREEN_QUERY).matches;
 
 interface EditorBodyProps {
-  focusDelay: number;
+  focusDelay: number | null;
   onDone: () => void;
   children: ReactNode;
 }
@@ -35,6 +35,9 @@ function EditorBody({ focusDelay, onDone, children }: EditorBodyProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (focusDelay === null) {
+      return;
+    }
     const timer = window.setTimeout(() => {
       const field = bodyRef.current?.querySelector<
         HTMLInputElement | HTMLTextAreaElement
@@ -79,6 +82,8 @@ interface SummaryEditorProps {
   isFramed?: boolean;
   /** An emoji or icon in a round chip before the text; only shown on a framed row. */
   icon?: ReactNode;
+  /** Whether the editor's first field takes focus when it opens; off for an editor that starts with options to pick, where a keyboard would cover them. */
+  isFocusedOnOpen?: boolean;
   /** The editor: its first field is focused when it opens, and Enter in a one-line field closes it. */
   children: ReactNode;
 }
@@ -94,6 +99,7 @@ function SummaryEditor({
   defaultOpen = false,
   isFramed = false,
   icon,
+  isFocusedOnOpen = true,
   children,
 }: SummaryEditorProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -182,7 +188,10 @@ function SummaryEditor({
             footer={<div className='px-4 pb-4'>{doneButton}</div>}
           >
             <div className='pb-4'>
-              <EditorBody focusDelay={PHONE_FOCUS_DELAY_MS} onDone={close}>
+              <EditorBody
+                focusDelay={isFocusedOnOpen ? PHONE_FOCUS_DELAY_MS : null}
+                onDone={close}
+              >
                 {children}
               </EditorBody>
             </div>
@@ -205,7 +214,10 @@ function SummaryEditor({
         {isOpen && (
           <div className='space-y-3'>
             <h3 className='text-sm font-semibold'>{title}</h3>
-            <EditorBody focusDelay={DESKTOP_FOCUS_DELAY_MS} onDone={close}>
+            <EditorBody
+              focusDelay={isFocusedOnOpen ? DESKTOP_FOCUS_DELAY_MS : null}
+              onDone={close}
+            >
               {children}
             </EditorBody>
             {doneButton}

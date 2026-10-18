@@ -203,6 +203,20 @@ const CONTAINERS_PER_RECIPE = [0, 1, 2, 0, 3, 1, 2, 0, 2, 3];
 const MEAL_CONTAINER_COUNT = 10;
 const FINISHED_CONTAINER_COUNT = 260;
 const SHOPPING_FAMILY_COUNT = 25;
+const COLLECTION_LABELS = [
+  'High-protein',
+  'Weeknight',
+  'Bulk',
+  'Freezer-friendly',
+  'Quick',
+  'Sunday cooking',
+  'Kid-approved',
+  'Soups',
+  'Grill',
+  'Brunch',
+  'Holiday',
+  'Meal prep',
+];
 // The last label is long on purpose, to see a name wrap on a phone.
 const SOURCE_LABELS = [
   'Serious Eats',
@@ -246,7 +260,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list whose weighed lines say which meals they are for, 80 recipe ideas, about 330 cooks, about 310 notes, about 300 containers in stock and about 260 finished ones. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources and in 12 collections, 60 saved meals (7 starred), about 1,100 planned meals over three months, an 80-item shopping list whose weighed lines say which meals they are for, 80 recipe ideas, about 330 cooks, about 310 notes, about 300 containers in stock and about 260 finished ones. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -376,6 +390,37 @@ export async function seedPinchScale(
     }),
   );
 
+  // Twelve collections over the 200 recipes: a fifth of the recipes have no key at all (the shape from before collections), recipe 7 is in eight of them, and the rest are in none, one or two. Draws no random number.
+  const collections = COLLECTION_LABELS.map((label, index) => ({
+    id: `scale-collection-${index}`,
+    label,
+  }));
+  collections.forEach((collection) =>
+    add(`collections/${collection.id}`, {
+      ...collection,
+      createdAt,
+      updatedAt: createdAt,
+    }),
+  );
+  const getCollectionFields = (index: number) => {
+    if (index % 5 === 4) return {};
+    if (index === 7) {
+      return {
+        collectionIds: collections.slice(0, 8).map(({ id }) => id),
+      };
+    }
+    const first = index % collections.length;
+    const second = (first + 5) % collections.length;
+    if (index % 3 === 0) {
+      return {
+        collectionIds: [collections[first].id, collections[second].id],
+      };
+    }
+    return {
+      collectionIds: index % 3 === 1 ? [collections[first].id] : [],
+    };
+  };
+
   const getSourceId = (index: number) => {
     const slot = index % 17;
     return slot >= 15 ? null : sources[Math.max(0, slot - 3)].id;
@@ -424,6 +469,7 @@ export async function seedPinchScale(
       nutritionOverride: null,
       source: 'MANUAL',
       sourceId: getSourceId(index),
+      ...getCollectionFields(index),
       isArchived: false,
     };
   });
@@ -581,8 +627,18 @@ export async function seedPinchScale(
     name: `${pick(RECIPE_WORDS)} plate ${index + 1}`,
     items: mealItems(2 + (index % 3), index),
   }));
-  meals.forEach((meal) =>
-    add(`meals/${meal.id}`, { ...meal, createdAt, updatedAt: createdAt }),
+  // Every ninth meal is starred, every other even one is explicitly not, and the rest have no `isFavorite` key.
+  const getFavoriteFields = (index: number) => {
+    if (index % 9 === 4) return { isFavorite: true };
+    return index % 2 === 0 ? { isFavorite: false } : {};
+  };
+  meals.forEach((meal, index) =>
+    add(`meals/${meal.id}`, {
+      ...meal,
+      ...getFavoriteFields(index),
+      createdAt,
+      updatedAt: createdAt,
+    }),
   );
 
   const totalDays = DAYS_BACK + DAYS_AHEAD + 1;

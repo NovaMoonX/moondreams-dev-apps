@@ -5,6 +5,7 @@ import {
   formatDayTitle,
   getDateOfDayKey,
 } from '@apps/pinch/utils/dayKeys';
+import { isStarred, sortFavoritesFirst } from '@apps/pinch/utils/favorites';
 
 /** Today and the six days after it: the days the plan builder offers as pills. */
 export const NEAR_DAY_COUNT = 7;
@@ -162,11 +163,18 @@ export interface RecentPick {
   id: string;
   label: string;
   at: number;
+  /** A starred saved meal; recipes are never starred. */
+  isFavorite?: boolean;
 }
 
 interface RecentPickSources {
   recipes: readonly { id: string; title: string; createdAt: number }[];
-  meals: readonly { id: string; name: string; createdAt: number }[];
+  meals: readonly {
+    id: string;
+    name: string;
+    createdAt: number;
+    isFavorite?: boolean;
+  }[];
   plannedMeals: readonly {
     createdAt: number;
     sourceMealId: string | null;
@@ -175,7 +183,7 @@ interface RecentPickSources {
   cookSummaries: ReadonlyMap<string, { lastCookedAt: number }>;
 }
 
-/** Recipes and saved meals, the most recently planned, cooked or made first. */
+/** Recipes and saved meals, the most recently planned, cooked or made first, with starred saved meals ahead of them. */
 export function rankRecentPicks({
   recipes,
   meals,
@@ -209,6 +217,7 @@ export function rankRecentPicks({
       kind: 'MEAL' as const,
       id: meal.id,
       label: meal.name,
+      isFavorite: isStarred(meal),
       at: Math.max(
         meal.createdAt,
         lastPlannedAt.get(`MEAL:${meal.id}`) ?? -Infinity,
@@ -216,13 +225,15 @@ export function rankRecentPicks({
     })),
   ];
   const seen = new Set<string>();
-  const result = picks
-    .filter((pick) => {
-      const key = `${pick.kind}:${pick.id}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => b.at - a.at || a.label.localeCompare(b.label));
+  const result = sortFavoritesFirst(
+    picks
+      .filter((pick) => {
+        const key = `${pick.kind}:${pick.id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => b.at - a.at || a.label.localeCompare(b.label)),
+  );
   return result;
 }

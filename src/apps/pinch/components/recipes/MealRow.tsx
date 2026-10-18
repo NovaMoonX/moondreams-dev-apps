@@ -5,6 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import MacroStats from '@/components/MacroStats';
+import StarButton from '@/components/StarButton';
 import { useAppSelector } from '@/store';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import {
@@ -16,6 +17,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Meal } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import { isStarred } from '@apps/pinch/utils/favorites';
 import { formatRowPrice, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
@@ -29,6 +31,7 @@ interface MealRowProps {
   showMacros: boolean;
   showStock: boolean;
   onOpen: (id: string) => void;
+  onToggleFavorite: (meal: Meal) => void;
 }
 
 function MealRow({
@@ -37,6 +40,7 @@ function MealRow({
   showMacros,
   showStock,
   onOpen,
+  onToggleFavorite,
 }: MealRowProps) {
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -81,42 +85,51 @@ function MealRow({
     .join(', ');
 
   return (
-    <Button
-      type='button'
-      variant='tertiary'
-      onClick={() => onOpen(meal.id)}
-      className='h-auto w-full items-start justify-start gap-3 px-0! py-2 text-left'
-    >
-      <span
-        className='bg-accent text-accent-foreground flex size-14 shrink-0 items-center justify-center rounded-xl text-2xl'
-        aria-hidden='true'
+    <div className='relative'>
+      <Button
+        type='button'
+        variant='tertiary'
+        onClick={() => onOpen(meal.id)}
+        className='h-auto w-full items-start justify-start gap-3 px-0! py-2 text-left'
       >
-        🍽️
-      </span>
-      <span className='min-w-0 flex-1'>
-        <span className='text-foreground block truncate font-medium'>
-          {meal.name}
+        <span
+          className='bg-accent text-accent-foreground flex size-14 shrink-0 items-center justify-center rounded-xl text-2xl'
+          aria-hidden='true'
+        >
+          🍽️
         </span>
-        <span className='text-muted-foreground block truncate text-xs font-normal'>
-          {detail}
+        <span className='min-w-0 flex-1'>
+          <span className='text-foreground block truncate pr-9 font-medium'>
+            {meal.name}
+          </span>
+          <span className='text-muted-foreground block truncate text-xs font-normal'>
+            {detail}
+          </span>
+          {nutrition && hasShownValue(nutrition.values, show) && (
+            <MacroStats
+              values={nutrition.values}
+              show={show}
+              className='text-muted-foreground mt-0.5 text-xs font-normal'
+            />
+          )}
+          <StockLine summary={stock} kind='meal' />
+          <span className='text-muted-foreground block truncate text-xs font-normal'>
+            {itemNames}
+          </span>
         </span>
-        {nutrition && hasShownValue(nutrition.values, show) && (
-          <MacroStats
-            values={nutrition.values}
-            show={show}
-            className='text-muted-foreground mt-0.5 text-xs font-normal'
-          />
-        )}
-        <StockLine summary={stock} kind='meal' />
-        <span className='text-muted-foreground block truncate text-xs font-normal'>
-          {itemNames}
-        </span>
-      </span>
-      <ChevronRight
-        className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
-        aria-hidden='true'
+        <ChevronRight
+          className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
+          aria-hidden='true'
+        />
+      </Button>
+      <StarButton
+        isOn={isStarred(meal)}
+        label={`Favorite ${meal.name}`}
+        onClassName='text-[var(--pinch-drizzle)]'
+        className='absolute top-0 right-7'
+        onClick={() => onToggleFavorite(meal)}
       />
-    </Button>
+    </div>
   );
 }
 
