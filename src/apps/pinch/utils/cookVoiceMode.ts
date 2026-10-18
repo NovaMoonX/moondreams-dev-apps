@@ -1,13 +1,15 @@
 import { COOK_LOCK_MS, COOK_WAKE_SPELLINGS } from '@apps/pinch/constants';
-import { toPlainText } from '@apps/pinch/utils/cookVoice';
+import {
+  readCookCommand,
+  toPlainText,
+  type CookVoiceContext,
+} from '@apps/pinch/utils/cookVoice';
 
-/** How the mic is meant to be used when it is on: one command window per tap, or waiting for the wake phrase. */
 export type VoiceMode = 'TAP' | 'WAKE';
 
 /** OFF: the mic is closed. WAITING: open, ignoring everything but the wake phrase. WINDOW: open for commands for a few seconds. LOCKED: open for commands until a fixed time, no wake phrase. */
 export type VoicePhase = 'OFF' | 'WAITING' | 'WINDOW' | 'LOCKED';
 
-/** Why voice turned itself off: what the recognizer reported, or a time that ran out. */
 export type VoiceStop =
   | 'denied'
   | 'service'
@@ -20,29 +22,24 @@ export type VoiceStop =
 export interface VoiceState {
   mode: VoiceMode;
   phase: VoicePhase;
-  /** Counts the times a command window opened or was extended, so its timer and its draining bar start over. */
+  /** Changes each time a command window opens or is extended, so its timer starts over. */
   epoch: number;
-  /** When the lock ends: set exactly while the phase is LOCKED. */
   lockEndsAt: number | null;
-  /** Why the last session ended on its own, until the mic is on again. */
   stopped: VoiceStop | null;
 }
 
 export type VoiceEvent =
-  /** The mic button. */
   | { type: 'TAP_MIC' }
-  /** A row in the voice sheet: "Tap to talk", "Say Hey Pinch" or "Keep listening". `at` is the time of the tap. */
+  /** `at` is the time of the tap, so the step stays pure. */
   | { type: 'CHOOSE'; choice: VoiceMode | 'LOCK'; at: number }
-  /** The pills in the first-use sheet: remembers how to listen without turning the mic on. */
+  /** Remembers how to listen without turning the mic on. */
   | { type: 'MODE'; mode: VoiceMode }
   | { type: 'WAKE_HEARD' }
   | { type: 'COMMAND_HEARD' }
   | { type: 'WINDOW_ENDED' }
   | { type: 'WAIT_ENDED' }
   | { type: 'LOCK_ENDED' }
-  /** "Stop listening", Finish, leaving. */
   | { type: 'STOP' }
-  /** The recognizer stopped by itself (a refused microphone, a speech service that kept failing). */
   | { type: 'ENGINE_STOPPED'; reason: VoiceStop };
 
 export const createVoiceState = (mode: VoiceMode): VoiceState => ({
@@ -114,7 +111,7 @@ const tapMic = (state: VoiceState): VoiceState => {
   return turnOff(state);
 };
 
-/** What each event does to the mic, as one pure step: the screen only carries out the change of phase (`getVoiceEffect`). A step that changes nothing returns the same object. */
+/** One pure step; a step that changes nothing returns the same object. */
 export const reduceVoice = (
   state: VoiceState,
   event: VoiceEvent,
@@ -145,7 +142,7 @@ export const reduceVoice = (
   }
 };
 
-/** What the screen has to do with the recognizer after a step: start it when the mic opens, stop it when it closes. */
+/** START when the mic opens, STOP when it closes. */
 export const getVoiceEffect = (
   previous: VoiceState,
   next: VoiceState,
@@ -154,10 +151,6 @@ export const getVoiceEffect = (
   if (previous.phase !== 'OFF' && next.phase === 'OFF') return 'STOP';
   return null;
 };
-
-/** Whether a phase is one where the person's commands run: not while the mic only waits for the wake phrase. */
-export const isTakingCommands = (phase: VoicePhase) =>
-  phase === 'WINDOW' || phase === 'LOCKED';
 
 const WAKE_FILLERS = new Set([
   'um',
@@ -183,7 +176,7 @@ const dropFillers = (text: string) => {
   return words.slice(skipped).join(' ');
 };
 
-/** What follows the wake phrase when a guess starts with it (after up to two "um"/"okay"s), "" when nothing does, and null when it doesn't start with it: "add a pinch of salt", "okay, pinch the edges" and "hey, pinch of salt" never wake it. */
+/** What follows the wake phrase at the start of a guess ("" when nothing does), or null: "add a pinch of salt" and "hey, pinch of salt" never wake it. */
 const readWakeRest = (guess: string): string | null => {
   const text = dropFillers(toPlainText(guess));
   const spelling = COOK_WAKE_SPELLINGS.find(
@@ -194,7 +187,7 @@ const readWakeRest = (guess: string): string | null => {
   return rest === 'of' || rest.startsWith('of ') ? null : rest;
 };
 
-/** The wake phrase in a finished phrase's guesses (best first): for each guess what follows it, or null where that guess has no wake phrase; null overall when none does. Any guess can wake it (waking costs a few seconds of listening and nothing else), but what follows keeps its rank, so a lower-ranked "next" is still never a command. */
+/** Per guess, what follows the wake phrase, or null; null overall when no guess has it. Any guess can wake it, but what follows keeps its rank, so a lower-ranked "next" never runs. */
 export const readWakeWord = (
   alternatives: string | string[],
 ): { rests: (string | null)[] } | null => {
@@ -202,4 +195,35 @@ export const readWakeWord = (
     typeof alternatives === 'string' ? [alternatives] : alternatives;
   const rests = guesses.map(readWakeRest);
   return rests.some((rest) => rest !== null) ? { rests } : null;
+};
+
+export type HeardPlan =
+  | { kind: 'IGNORE' }
+  | { kind: 'CLEAR' }
+  | { kind: 'COMMAND'; heard: HeardCommand }
+  | { kind: 'WAKE'; heard: HeardCommand | null }
+  | { kind: 'MISSED' };
+
+type HeardCommand = NonNullable<ReturnType<typeof readCookCommand>>;
+
+/** What a finished phrase means in each phase: waiting hears only the wake phrase (and a command after it), a window runs commands and quotes back anything else, kept open runs commands and ignores the rest. */
+export const planHeard = (
+  phase: VoicePhase,
+  alternatives: string[],
+  context: CookVoiceContext,
+): HeardPlan => {
+  if (phase === 'OFF') return { kind: 'IGNORE' };
+  const woke = readWakeWord(alternatives);
+  if (phase === 'WAITING') {
+    if (woke === null) return { kind: 'IGNORE' };
+    const heard = readCookCommand(
+      woke.rests.map((guess) => guess ?? ''),
+      context,
+    );
+    return { kind: 'WAKE', heard };
+  }
+  const heard = readCookCommand(alternatives, context);
+  if (heard !== null) return { kind: 'COMMAND', heard };
+  if (phase === 'LOCKED') return { kind: 'CLEAR' };
+  return woke === null ? { kind: 'MISSED' } : { kind: 'WAKE', heard: null };
 };

@@ -14,7 +14,7 @@ import {
 import {
   createVoiceState,
   getVoiceEffect,
-  isTakingCommands,
+  planHeard,
   readWakeWord,
   reduceVoice,
   type VoiceEvent,
@@ -229,7 +229,53 @@ assert.equal(
   'and the phrase alone is not a command',
 );
 
-const PHASES: VoicePhase[] = ['OFF', 'WAITING', 'WINDOW', 'LOCKED'];
+type PlanCase = [
+  phase: VoicePhase,
+  heard: string[],
+  kind: ReturnType<typeof planHeard>['kind'],
+  command: string | null,
+];
+const planCases: PlanCase[] = [
+  ['OFF', ['hey pinch next'], 'IGNORE', null],
+  ['OFF', ['next'], 'IGNORE', null],
+  ['WAITING', ['next'], 'IGNORE', null],
+  ['WAITING', ['stop listening'], 'IGNORE', null],
+  ['WAITING', ['add a pinch of salt'], 'IGNORE', null],
+  ['WAITING', ['a pinch'], 'IGNORE', null],
+  ['WAITING', ['okay pinch the edges'], 'IGNORE', null],
+  ['WAITING', ['how much garlic'], 'IGNORE', null],
+  ['WAITING', ['hey pinch'], 'WAKE', null],
+  ['WAITING', ['Hey, Pinch.'], 'WAKE', null],
+  ['WAITING', ['hey pinch next step'], 'WAKE', 'NEXT'],
+  ['WAITING', ['hey pinch stop listening'], 'WAKE', 'STOP_LISTENING'],
+  ['WAITING', ['hey pinch how much garlic'], 'WAKE', 'AMOUNT'],
+  ['WAITING', ['hey pinch the weather today'], 'WAKE', null],
+  ['WAITING', ['hey punch back', 'hey pinch back'], 'WAKE', null],
+  ['WINDOW', ['next'], 'COMMAND', 'NEXT'],
+  ['WINDOW', ['hey pinch next'], 'COMMAND', 'NEXT'],
+  ['WINDOW', ['stop listening'], 'COMMAND', 'STOP_LISTENING'],
+  ['WINDOW', ['hey pinch'], 'WAKE', null],
+  ['WINDOW', ['can you pass the salt'], 'MISSED', null],
+  ['WINDOW', ['a pinch of salt'], 'MISSED', null],
+  ['LOCKED', ['next'], 'COMMAND', 'NEXT'],
+  ['LOCKED', ['hey pinch next'], 'COMMAND', 'NEXT'],
+  ['LOCKED', ['hey pinch'], 'CLEAR', null],
+  ['LOCKED', ['the kids are loud'], 'CLEAR', null],
+  ['LOCKED', ['a pinch of salt'], 'CLEAR', null],
+];
+planCases.forEach(([phase, heard, kind, command]) => {
+  const plan = planHeard(phase, heard, context);
+  const found =
+    plan.kind === 'COMMAND' || plan.kind === 'WAKE'
+      ? (plan.heard?.command.kind ?? null)
+      : null;
+  assert.deepEqual(
+    [plan.kind, found],
+    [kind, command],
+    `${phase}: "${heard.join('" / "')}" is ${kind}${command === null ? '' : ` ${command}`}`,
+  );
+});
+
 const at = 1_000_000;
 const stateOf = (
   phase: VoicePhase,
@@ -840,12 +886,6 @@ assert.equal(
   'the lock ends fifteen minutes after the tap',
 );
 assert.equal(COOK_LOCK_MS, 900_000, 'the lock is fifteen minutes');
-
-assert.deepEqual(
-  PHASES.map(isTakingCommands),
-  [false, false, true, true],
-  'commands run in a window and in the lock, never while only waiting for the phrase',
-);
 
 {
   const seeds = Array.from({ length: 200 }, (_, index) => index + 1);
