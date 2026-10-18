@@ -342,6 +342,7 @@ function PantrySubview({
           <PackageRow
             pkg={only}
             title={row.name}
+            emoji={row.emoji}
             soonDays={soonDays}
             isSelecting
             isSelected={selection.ids.has(only.id)}
@@ -352,19 +353,27 @@ function PantrySubview({
     }
     return (
       <li key={row.view.ingredientId}>
-        <label className='flex min-h-12 w-full cursor-pointer items-center gap-3 pt-2 select-none'>
-          <span className='inline-flex shrink-0'>
+        <label className='flex min-h-14 w-full cursor-pointer items-start gap-3 py-2 select-none'>
+          <span className='mt-0.5 inline-flex shrink-0'>
             <Checkbox
               aria-label={`All ${list.length} packages of ${row.name}`}
               checked={isEveryTicked(list)}
               onCheckedChange={() => toggleAll(list)}
             />
           </span>
-          <span className='min-w-0 flex-1 font-medium wrap-break-word'>
-            {row.name}
+          <span
+            className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
+            aria-hidden='true'
+          >
+            {row.emoji}
           </span>
-          <span className='text-muted-foreground shrink-0 text-xs whitespace-nowrap'>
-            {list.length} packages
+          <span className='min-w-0 flex-1'>
+            <span className='block font-medium wrap-break-word'>
+              {row.name}
+            </span>
+            <span className='text-muted-foreground block text-xs'>
+              {list.length} packages
+            </span>
           </span>
         </label>
         <ul>
@@ -497,7 +506,7 @@ function PantrySubview({
           variant='secondary'
           size='sm'
           rounded='full'
-          className='h-7 px-3'
+          className="relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']"
           onClick={selection.exit}
         >
           Cancel
@@ -524,7 +533,7 @@ function PantrySubview({
           type='button'
           size='sm'
           rounded='full'
-          className='gap-1'
+          className="relative gap-1 after:absolute after:-inset-1.5 after:content-['']"
           aria-label='Add a package'
           disabled={!isReady}
           onClick={() => setForm({ pkg: null, ingredientId: null })}

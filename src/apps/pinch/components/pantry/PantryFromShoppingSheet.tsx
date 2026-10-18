@@ -5,6 +5,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import PackageFields, {
@@ -58,6 +59,7 @@ function PantryFromShoppingSheet({
   onClose,
 }: PantryFromShoppingSheetProps) {
   const { addToast } = useToast();
+  const { isBelow } = useMediaQuery();
   const { openSubviewFromToast } = usePinchOverlay();
   const { add, isReady, loadError } = usePackageActions(uid);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -194,7 +196,7 @@ function PantryFromShoppingSheet({
               variant='secondary'
               onClick={() => advance(addedCount)}
             >
-              {isLast ? 'Skip' : 'Skip for now'}
+              {isLast || isBelow('sm') ? 'Skip' : 'Skip for now'}
             </Button>
           }
           rightActions={

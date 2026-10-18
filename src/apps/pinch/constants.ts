@@ -670,7 +670,7 @@ export const REMINDER_KINDS: {
     emoji: '🥫',
     title: 'Ingredients about to expire',
     description:
-      'The same morning note also names the packages in your pantry that are past their date or about to be.',
+      'The same morning note also names the ingredients in your pantry that are past their date or about to be. Their names show on your lock screen.',
   },
   {
     key: 'timers',

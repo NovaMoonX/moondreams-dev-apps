@@ -13,8 +13,10 @@ import {
   byUseBy,
   canPutPackageBack,
   getDateInDays,
+  getLineMarkers,
   getLineStock,
   getLineStockText,
+  type LineStock,
   getNewPackagesProblem,
   getPackageBulkNames,
   getPackageBulkToast,
@@ -1147,6 +1149,52 @@ assert.deepEqual(
     'Past its date',
     'Not in your pantry',
   ],
+);
+
+// The marks on a recipe's lines say only the exception, and the share once
+const have: LineStock = { kind: 'HAVE', have: null, isConverted: false };
+const none: LineStock = { kind: 'NONE' };
+const past: LineStock = { kind: 'PAST' };
+const some: LineStock = { kind: 'SOME', have: { unit: 'CUP', amount: 1 }, isConverted: false };
+const marks = (stocks: LineStock[]) =>
+  getLineMarkers(stocks.map((stock, index) => ({ id: String(index), stock })));
+const markedTexts = (stocks: LineStock[]) =>
+  stocks.map((_, index) => marks(stocks).byId.get(String(index)));
+assert.deepEqual(
+  markedTexts([have, have, have, none]),
+  [null, null, null, 'Not in your pantry'],
+  'a list the pantry mostly covers flags the one it lacks',
+);
+assert.equal(marks([have, have, have, none]).summary, '3 of 4 in your pantry');
+assert.deepEqual(
+  markedTexts([have, none, none, none, none]),
+  ['You have it', null, null, null, null],
+  'a list it hardly touches flags the one it has, never "not in your pantry" down every row',
+);
+assert.deepEqual(
+  markedTexts([have, none]),
+  [null, 'Not in your pantry'],
+  'half and half flags what is missing, the part that sends someone shopping',
+);
+assert.deepEqual(markedTexts([none, none, none]), [null, null, null], 'a pantry with none of it says nothing');
+assert.equal(marks([none, none, none]).summary, null);
+assert.deepEqual(
+  markedTexts([some, none, none, past]),
+  ['You have 1 cup', null, null, 'Past its date'],
+  'a package past its date is always said',
+);
+assert.deepEqual(
+  markedTexts([have, have, past]),
+  [null, null, 'Past its date'],
+  'and it is not counted as in the pantry',
+);
+assert.equal(marks([have, have, past]).summary, '2 of 3 in your pantry');
+assert.deepEqual(markedTexts([]), []);
+assert.equal(marks([]).summary, null);
+assert.deepEqual(
+  markedTexts([{ kind: 'OTHER' }, none, none]),
+  ['In your pantry', null, null],
+  'a line it can only compare by kind is in the pantry without a promise of enough',
 );
 
 // With the ingredient's own weight per cup a bag in pounds and a recipe in cups meet in grams

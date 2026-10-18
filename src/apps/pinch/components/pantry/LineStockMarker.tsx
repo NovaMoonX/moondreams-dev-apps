@@ -1,14 +1,16 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import TickMark from '@/components/TickMark';
-import { getLineStockText, type LineStock } from '@apps/pinch/utils/packages';
+import type { LineStock } from '@apps/pinch/utils/packages';
 
 interface LineStockMarkerProps {
   stock: LineStock;
+  /** The words for it; see `getLineMarkers`. */
+  text: string;
 }
 
 /** What the pantry says of a recipe line, in quiet words under its amount: a tick when there is enough, the date problem when what there is can't be used, and plainly when there is none. */
-function LineStockMarker({ stock }: LineStockMarkerProps) {
+function LineStockMarker({ stock, text }: LineStockMarkerProps) {
   return (
     <span
       className={join(
@@ -17,7 +19,7 @@ function LineStockMarker({ stock }: LineStockMarkerProps) {
       )}
     >
       {stock.kind === 'HAVE' && <TickMark variant='soft' />}
-      <span>{getLineStockText(stock)}</span>
+      <span>{text}</span>
     </span>
   );
 }

@@ -71,7 +71,11 @@ import {
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { isBulkMeal } from '@apps/pinch/utils/containers';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
-import { getLineStock } from '@apps/pinch/utils/packages';
+import {
+  getLineMarkers,
+  getLineStock,
+  type LineStock,
+} from '@apps/pinch/utils/packages';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getNutritionGaps,
@@ -299,6 +303,32 @@ function RecipeDrawer({
         }
       />
     ) : undefined;
+
+  const pantryStocks = hasPantry
+    ? new Map<string, LineStock>(
+        recipe.ingredients.map((line) => {
+          const ingredient = ingredientsById.get(line.ingredientId);
+          return [
+            line.id,
+            getLineStock(
+              line,
+              packagesByIngredient.get(line.ingredientId),
+              undefined,
+              {
+                gramsPerMl: ingredient?.gramsPerMl ?? null,
+                gramsEach: ingredient?.gramsEach ?? null,
+              },
+            ),
+          ];
+        }),
+      )
+    : null;
+  const pantryMarkers =
+    pantryStocks === null
+      ? null
+      : getLineMarkers(
+          Array.from(pantryStocks, ([id, stock]) => ({ id, stock })),
+        );
 
   const totalMinutes = getTotalMinutes(recipe);
   const facts: Fact[] = [
@@ -571,9 +601,14 @@ function RecipeDrawer({
         <FormSection
           title='Ingredients'
           detail={
-            recipe.ingredients.length > SECTION_COUNT_THRESHOLD
+            (pantryMarkers?.summary == null ? undefined : (
+              <span className='tracking-normal normal-case'>
+                {pantryMarkers.summary}
+              </span>
+            )) ??
+            (recipe.ingredients.length > SECTION_COUNT_THRESHOLD
               ? recipe.ingredients.length
-              : undefined
+              : undefined)
           }
         >
           {groupIngredientLines(recipe.ingredients).map((group) => (
@@ -586,18 +621,8 @@ function RecipeDrawer({
                   const gap = isPriced
                     ? gapLabel(cost.lines.get(line.id)?.gap?.kind)
                     : null;
-                  const ingredient = ingredientsById.get(line.ingredientId);
-                  const pantry = hasPantry
-                    ? getLineStock(
-                        line,
-                        packagesByIngredient.get(line.ingredientId),
-                        undefined,
-                        {
-                          gramsPerMl: ingredient?.gramsPerMl ?? null,
-                          gramsEach: ingredient?.gramsEach ?? null,
-                        },
-                      )
-                    : null;
+                  const pantryText = pantryMarkers?.byId.get(line.id) ?? null;
+                  const pantry = pantryStocks?.get(line.id) ?? null;
                   return (
                     <li
                       key={line.id}
@@ -630,7 +655,9 @@ function RecipeDrawer({
                             {UNIT_LABELS[line.unit]}
                           </span>
                         )}
-                        {pantry !== null && <LineStockMarker stock={pantry} />}
+                        {pantry !== null && pantryText !== null && (
+                          <LineStockMarker stock={pantry} text={pantryText} />
+                        )}
                       </span>
                     </li>
                   );

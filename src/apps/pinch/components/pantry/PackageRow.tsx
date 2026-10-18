@@ -21,6 +21,8 @@ interface PackageRowProps {
   pkg: Package;
   /** The ingredient's name, for a package that stands alone in a list; a package under its ingredient's own heading leaves it out. */
   title?: string;
+  /** What leads the row when the package stands for its ingredient; the place's own emoji otherwise. */
+  emoji?: string;
   /** The person's window for "due soon". */
   soonDays: number;
   onOpen?: (pkg: Package) => void;
@@ -42,6 +44,7 @@ const getOpenedText = (pkg: Package) => {
 function PackageRow({
   pkg,
   title,
+  emoji,
   soonDays,
   onOpen,
   isSelecting = false,
@@ -60,7 +63,7 @@ function PackageRow({
       className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
       aria-hidden='true'
     >
-      {PACKAGE_PLACE_EMOJIS[pkg.place]}
+      {emoji ?? PACKAGE_PLACE_EMOJIS[pkg.place]}
     </span>
   );
   const text = (
@@ -98,7 +101,7 @@ function PackageRow({
             onCheckedChange={() => onToggle?.(pkg)}
           />
         </span>
-        {chip}
+        {!isNested && chip}
         {text}
       </label>
     );

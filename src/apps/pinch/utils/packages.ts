@@ -21,7 +21,6 @@ import type {
   Unit,
 } from '@apps/pinch/types';
 import {
-  getDaysLeft,
   getEatByLabel,
   getEatByState,
   getNamesLine,
@@ -1155,6 +1154,35 @@ export const getLineStockText = (stock: LineStock) => {
   }
 };
 
+export interface LineMarkers {
+  /** The words a line carries, by line id; a line with nothing to say is null. */
+  byId: Map<string, string | null>;
+  /** Said once beside the list: how many lines the pantry has, or null when it has none of them. */
+  summary: string | null;
+}
+
+/** The marks for a recipe's lines, saying only the exception: a line past its date always, and then whichever of "in your pantry" and "not in your pantry" is the minority, so a list the pantry mostly covers flags what is missing and a list it hardly touches flags what is there. The share is said once as the summary. */
+export const getLineMarkers = (
+  entries: { id: string; stock: LineStock }[],
+): LineMarkers => {
+  const isPresent = (stock: LineStock) =>
+    stock.kind === 'HAVE' || stock.kind === 'SOME' || stock.kind === 'OTHER';
+  const present = entries.filter((entry) => isPresent(entry.stock)).length;
+  const absent = entries.filter((entry) => entry.stock.kind === 'NONE').length;
+  const flagsAbsent = present >= absent;
+  const getText = (stock: LineStock) => {
+    if (stock.kind === 'PAST') return getLineStockText(stock);
+    if (flagsAbsent)
+      return stock.kind === 'NONE' ? getLineStockText(stock) : null;
+    return isPresent(stock) ? getLineStockText(stock) : null;
+  };
+  return {
+    byId: new Map(entries.map((entry) => [entry.id, getText(entry.stock)])),
+    summary:
+      present === 0 ? null : `${present} of ${entries.length} in your pantry`,
+  };
+};
+
 export const getPackageEventText = (event: PackageEvent, unit: Unit) => {
   const amount = event.amount === null ? '' : formatSize(event.amount, unit);
   const where = event.place === null ? '' : getPlaceText(event.place);
@@ -1185,13 +1213,6 @@ export const getOpenedDays = (
           (getLocalTodayDate(now) - getLocalTodayDate(pkg.openedAt)) / DAY_MS,
         ),
       );
-
-export const getDaysLeftText = (expiresAt: number, now = Date.now()) => {
-  const days = getDaysLeft(expiresAt, now);
-  return days < 0
-    ? `${-days} ${days === -1 ? 'day' : 'days'} ago`
-    : `${days} ${days === 1 ? 'day' : 'days'} left`;
-};
 
 const MAX_USE_IT_UP_RECIPES = 20;
 
