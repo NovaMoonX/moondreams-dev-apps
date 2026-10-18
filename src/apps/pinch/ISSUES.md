@@ -844,7 +844,7 @@ A recipe can be in many collections the person names. They are made in the recip
 - [x] The rules matrix (owner, another user, signed out; valid, extra key, missing key, 41-character label, 20 and 21 ids, wrong types, legacy documents) gives the intended new allows and no other change against the previous rules.
 - [x] Deleting a collection that 450 recipes name takes it off every one in three transactions and says 450.
 - [x] Checks cover the suggestions at their edges (25 g, 30 minutes, an unknown time, an unknown protein, already in), the delete's chunks and re-read, the filter's options and counts, favorites order and the tap guard, and the rules' caps.
-- [x] Driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 0, 5 and 50 collections and a recipe in 8.
+- [x] Driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 0, 3 and 50 collections and a recipe in 8.
 - [x] `UX.md`, `TECHNICAL.md`, `JOURNEYS.md` and the README match what shipped.
 
 ### Issue 27: Add a one-off item to a meal
