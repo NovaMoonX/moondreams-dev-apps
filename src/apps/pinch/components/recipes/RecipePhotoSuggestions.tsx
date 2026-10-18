@@ -113,7 +113,7 @@ function RecipePhotoSuggestions({
   };
 
   const handleTurnOff = async () => {
-    await save({ suggestPhotos: false });
+    if (!(await save({ suggestPhotos: false }))) return;
     addToast({
       title: 'Photo suggestions are off',
       type: 'info',

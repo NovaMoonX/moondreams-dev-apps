@@ -26,7 +26,9 @@ export function usePinchSettings(uid: string) {
           description: result.payload ?? 'Unable to save your settings.',
           type: 'error',
         });
+        return false;
       }
+      return true;
     },
     [addToast, dispatch, uid],
   );
