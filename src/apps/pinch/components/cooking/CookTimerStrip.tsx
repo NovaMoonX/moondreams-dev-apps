@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { BellRing } from 'lucide-react';
 
+import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { formatClock } from '@/utils/durationUtils';
 import {
   getRemainingMs,
@@ -33,6 +34,8 @@ function CookTimerStrip(props: CookTimerStripProps) {
 function Pills({ timers, onTick, onFocus, className }: CookTimerStripProps) {
   const hasRunning = timers.some((timer) => timer.status === 'running');
   const [now, setNow] = useState(() => Date.now());
+
+  useOnTabReturn(() => setNow(Date.now()));
 
   useEffect(() => {
     if (!hasRunning) {

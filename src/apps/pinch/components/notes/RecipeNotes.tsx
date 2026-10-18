@@ -27,8 +27,10 @@ const HIDDEN_WORTH_A_BUTTON = 3;
 
 interface RecipeNotesProps {
   recipeId: string;
-  onAdd: () => void;
-  onEdit: (noteId: string) => void;
+  /** Null reads the notes without the add row (cooking mode, where a note is written on the final panel). */
+  onAdd: (() => void) | null;
+  /** Null reads the notes without the Edit buttons. */
+  onEdit: ((noteId: string) => void) | null;
   onApply: (noteId: string) => void;
 }
 
@@ -66,7 +68,7 @@ function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
     visibleCount === notes.length &&
     notes.length > RECIPE_NOTES_FIRST_PAGE + HIDDEN_WORTH_A_BUTTON;
 
-  const addRow = (
+  const addRow = onAdd && (
     <ActionRow
       icon={<NotebookPen className='h-4 w-4' />}
       label='Add a note'

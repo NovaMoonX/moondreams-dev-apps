@@ -525,3 +525,29 @@ export const getStepName = (step: string) => {
 
   return kept.join(' ');
 };
+
+const SUMMARY_NAMED_LINES = 3;
+const SUMMARY_FORMAT = new Intl.ListFormat('en-US', { type: 'conjunction' });
+
+/** What the tray under a step says before it is opened: how many lines the step names, and the first three of them with their amounts ("Soy sauce ¼ cup, Garlic 4, Black pepper 1 tsp, and 2 more"). */
+export const getAmountsSummary = (
+  rows: { name: string; amountText: string }[],
+) => {
+  const named = rows
+    .slice(0, SUMMARY_NAMED_LINES)
+    .map((row) => [row.name, row.amountText].filter(Boolean).join(' '));
+  const more = rows.length - named.length;
+  const result = {
+    count: rows.length,
+    caption: `For this step · ${rows.length} ${rows.length === 1 ? 'item' : 'items'}`,
+    text: SUMMARY_FORMAT.format(more > 0 ? [...named, `${more} more`] : named),
+  };
+  return result;
+};
+
+/** The recipe's note card shows where the cook starts (the first step) until the person says "Got it" for this cook. */
+export const isCookNoteShown = (
+  stepIndex: number,
+  dismissedRecipeIds: string[],
+  recipeId: string,
+) => stepIndex === 0 && !dismissedRecipeIds.includes(recipeId);
