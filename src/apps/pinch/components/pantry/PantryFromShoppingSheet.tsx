@@ -84,7 +84,8 @@ function PantryFromShoppingSheet({
   const stock = byIngredient.get(row.ingredientId) ?? [];
 
   const getNote = () => {
-    if (loadError !== null) return "Your pantry couldn't load, so adding is paused.";
+    if (loadError !== null)
+      return "Your pantry couldn't load, so adding is paused.";
     if (!isReady) return 'Loading your pantry…';
     if (!isValidPackageAmount(amount)) return 'Say how much there is.';
     return answer.isAnswered
@@ -197,11 +198,7 @@ function PantryFromShoppingSheet({
             </Button>
           }
           rightActions={
-            <Button
-              type='button'
-              disabled={note !== null}
-              onClick={handleSave}
-            >
+            <Button type='button' disabled={note !== null} onClick={handleSave}>
               {isLast ? 'Save' : 'Save and next'}
             </Button>
           }

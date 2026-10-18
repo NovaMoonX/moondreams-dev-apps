@@ -117,7 +117,8 @@ export const getEatByPhrase = (
   const days = getDaysLeft(eatBy, now);
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
-  if (withWeekday && days > 1 && days < 7) return weekdayFormatter.format(eatBy);
+  if (withWeekday && days > 1 && days < 7)
+    return weekdayFormatter.format(eatBy);
   return formatDayShort(getPlannedDayKey(eatBy), now);
 };
 

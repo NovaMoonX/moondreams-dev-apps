@@ -46,10 +46,7 @@ import {
   getShoppingStockLine,
   type StockedItem,
 } from '@apps/pinch/utils/containers';
-import {
-  getLineStock,
-  getLineStockText,
-} from '@apps/pinch/utils/packages';
+import { getLineStock, getLineStockText } from '@apps/pinch/utils/packages';
 import {
   addDaysToKey,
   formatDayTitle,

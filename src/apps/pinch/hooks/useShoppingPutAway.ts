@@ -8,7 +8,9 @@ const getKey = (uid: string) => `pinch:${uid}:pantry-put-away`;
 
 const readLedger = (uid: string): string[] => {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(getKey(uid)) ?? '[]');
+    const parsed: unknown = JSON.parse(
+      localStorage.getItem(getKey(uid)) ?? '[]',
+    );
     return Array.isArray(parsed)
       ? parsed.filter((entry): entry is string => typeof entry === 'string')
       : [];
@@ -44,9 +46,7 @@ export function useShoppingPutAway(uid: string) {
   const markPutAway = useCallback(
     (items: Pick<ShoppingItem, 'id' | 'updatedAt'>[]) =>
       setRemembered((current) => {
-        const next = [...current, ...items.map(stampOf)].slice(
-          -MAX_REMEMBERED,
-        );
+        const next = [...current, ...items.map(stampOf)].slice(-MAX_REMEMBERED);
         writeLedger(uid, next);
         return new Set(next);
       }),

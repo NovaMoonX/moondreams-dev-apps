@@ -24,7 +24,11 @@ interface IngredientStockProps {
 }
 
 /** What the person has of an ingredient, on the ingredient's own drawer: each package with its amount and date, soonest first, and a way to add one. It draws for an ingredient that has packages, or for anyone who keeps a pantry; a first run sees nothing. */
-function IngredientStock({ ingredientId, onOpen, onAdd }: IngredientStockProps) {
+function IngredientStock({
+  ingredientId,
+  onOpen,
+  onAdd,
+}: IngredientStockProps) {
   const packages =
     useAppSelector(selectPackagesByIngredient).get(ingredientId) ?? [];
   const hasPantry = useAppSelector(selectHasPackages);

@@ -95,7 +95,10 @@ interface PantrySubviewProps {
   ingredientId: string | null;
 }
 
-function PantrySubview({ uid, ingredientId: startIngredientId }: PantrySubviewProps) {
+function PantrySubview({
+  uid,
+  ingredientId: startIngredientId,
+}: PantrySubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
   const { isReady, loadError, changeInPlace } = usePackageActions(uid);
@@ -110,7 +113,9 @@ function PantrySubview({ uid, ingredientId: startIngredientId }: PantrySubviewPr
   const [open, setOpen] = useState<OpenSheet | null>(() => {
     if (startIngredientId === null) return null;
 
-    const own = packages.filter((pkg) => pkg.ingredientId === startIngredientId);
+    const own = packages.filter(
+      (pkg) => pkg.ingredientId === startIngredientId,
+    );
     return own.length === 0
       ? null
       : {

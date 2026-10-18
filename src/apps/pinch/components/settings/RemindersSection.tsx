@@ -37,6 +37,14 @@ const LEAD_OPTIONS = LEAD_DAYS_CHOICES.map((days) => ({
   label: `${days} ${days === 1 ? 'day' : 'days'}`,
 }));
 
+/** The kinds that share the one morning note, and so its days ahead and its hour. */
+const isDigestKind = (kind: ReminderKind) =>
+  kind === 'eatSoon' || kind === 'expiring';
+
+/** The options sit once, under the first of the note's kinds that is on. */
+const getOptionsHost = (reminders: PinchSettings['reminders']) =>
+  reminders.eatSoon ? 'eatSoon' : reminders.expiring ? 'expiring' : null;
+
 interface EatSoonOptionsProps {
   uid: string;
   reminders: PinchSettings['reminders'];
@@ -121,7 +129,7 @@ function RemindersSection({ uid }: RemindersSectionProps) {
     save({
       reminders: {
         [kind]: isChecked,
-        ...(kind === 'eatSoon' && isChecked
+        ...(isDigestKind(kind) && isChecked
           ? { timeZone: getDeviceTimeZone() }
           : {}),
       },
@@ -174,7 +182,7 @@ function RemindersSection({ uid }: RemindersSectionProps) {
             />
           }
         >
-          {kind.key === 'eatSoon' && settings.reminders.eatSoon && isOn && (
+          {isOn && getOptionsHost(settings.reminders) === kind.key && (
             <EatSoonOptions uid={uid} reminders={settings.reminders} />
           )}
         </SettingsRow>

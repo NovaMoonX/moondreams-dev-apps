@@ -910,8 +910,7 @@ export const getTakeGroups = (
       totals: sumAmounts(takes),
       isConverted: takes.some((take) => take.isConverted),
       short:
-        plan.short.find((entry) => entry.ingredientId === ingredientId) ??
-        null,
+        plan.short.find((entry) => entry.ingredientId === ingredientId) ?? null,
     }),
   );
 

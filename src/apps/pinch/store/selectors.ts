@@ -317,9 +317,8 @@ export const selectIsContainersReady = (state: RootState) =>
 const selectPackageItems = (state: RootState) => state.pinch.packages.items;
 
 /** What is in the pantry: soonest date first, no date last. */
-export const selectPackages = createSelector(
-  [selectPackageItems],
-  (packages) => [...packages].sort(byUseBy),
+export const selectPackages = createSelector([selectPackageItems], (packages) =>
+  [...packages].sort(byUseBy),
 );
 
 export const selectPackagesById = createSelector(

@@ -70,7 +70,9 @@ export function usePantryTake(uid: string, lines: TakeLine[]) {
         getName,
       );
       if (result.changed.length === 0) {
-        setError('They were used or finished somewhere else, so nothing was taken.');
+        setError(
+          'They were used or finished somewhere else, so nothing was taken.',
+        );
         return;
       }
       setTaken({ groups: takenGroups, changed: result.changed });

@@ -677,7 +677,9 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
                 label='Got it'
                 trailing={hasPantryChip ? undefined : clearButton}
               />
-              {hasPantryChip && <div className='flex justify-end'>{clearButton}</div>}
+              {hasPantryChip && (
+                <div className='flex justify-end'>{clearButton}</div>
+              )}
               <ShoppingRows
                 key='all-got'
                 rows={found.got.flatMap((group) => group.rows)}

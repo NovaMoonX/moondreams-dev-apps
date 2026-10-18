@@ -831,40 +831,41 @@ export async function seedPinchScale(
   const packageRandom = makeRandom(20260102);
   const packageInt = (min: number, max: number) =>
     min + Math.floor(packageRandom() * (max - min + 1));
-  ingredients.slice(0, PACKAGE_INGREDIENT_COUNT).forEach((ingredient, index) => {
-    const count =
-      index === 0
-        ? PACKAGES_ON_BUSIEST_INGREDIENT
-        : index >= PACKAGE_INGREDIENT_COUNT - INGREDIENTS_WITH_ONE_PACKAGE
-          ? 1
-          : 2;
-    Array.from({ length: count }, (_, copy) => {
-      const unit = PACKAGE_UNITS[(index + copy) % PACKAGE_UNITS.length];
-      const place = PACKAGE_PLACES[(index + copy) % PACKAGE_PLACES.length];
-      const amount = unit === 'EACH' ? packageInt(1, 12) : packageInt(1, 40) / 4;
-      const addedAt = today - packageInt(1, 30) * DAY_MS + 10 * 3_600_000;
-      const hasDate = packageRandom() > 0.15;
-      const days =
-        place === 'FREEZER' ? packageInt(20, 120) : packageInt(-5, 25);
-      add(`packages/scale-package-${index}-${copy}`, {
-        id: `scale-package-${index}-${copy}`,
-        ingredientId: ingredient.id,
-        ingredientName: ingredient.name,
-        productId: null,
-        amount,
-        unit,
-        place,
-        expiresAt: hasDate ? today + days * DAY_MS : null,
-        openedAt: null,
-        status: 'IN_STOCK',
-        history: [
-          { kind: 'ADDED', at: addedAt, amount, place, note: null },
-        ],
-        createdAt: addedAt,
-        updatedAt: addedAt,
+  ingredients
+    .slice(0, PACKAGE_INGREDIENT_COUNT)
+    .forEach((ingredient, index) => {
+      const count =
+        index === 0
+          ? PACKAGES_ON_BUSIEST_INGREDIENT
+          : index >= PACKAGE_INGREDIENT_COUNT - INGREDIENTS_WITH_ONE_PACKAGE
+            ? 1
+            : 2;
+      Array.from({ length: count }, (_, copy) => {
+        const unit = PACKAGE_UNITS[(index + copy) % PACKAGE_UNITS.length];
+        const place = PACKAGE_PLACES[(index + copy) % PACKAGE_PLACES.length];
+        const amount =
+          unit === 'EACH' ? packageInt(1, 12) : packageInt(1, 40) / 4;
+        const addedAt = today - packageInt(1, 30) * DAY_MS + 10 * 3_600_000;
+        const hasDate = packageRandom() > 0.15;
+        const days =
+          place === 'FREEZER' ? packageInt(20, 120) : packageInt(-5, 25);
+        add(`packages/scale-package-${index}-${copy}`, {
+          id: `scale-package-${index}-${copy}`,
+          ingredientId: ingredient.id,
+          ingredientName: ingredient.name,
+          productId: null,
+          amount,
+          unit,
+          place,
+          expiresAt: hasDate ? today + days * DAY_MS : null,
+          openedAt: null,
+          status: 'IN_STOCK',
+          history: [{ kind: 'ADDED', at: addedAt, amount, place, note: null }],
+          createdAt: addedAt,
+          updatedAt: addedAt,
+        });
       });
     });
-  });
 
   await writeAll(firestore, writes);
 

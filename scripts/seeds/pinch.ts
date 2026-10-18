@@ -1087,32 +1087,30 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           updatedAt: lastAt,
         });
     }),
-    ...SEED_PACKAGES.map(
-      ({ expiresInDays, openedDaysAgo, events, ...pkg }) => {
-        const history = events.map(({ daysAgo, ...event }) => ({
-          ...event,
-          note: null,
-          at: today - daysAgo * DAY_MS + 10 * 3_600_000,
-        }));
-        return kitchenRef
-          .collection('packages')
-          .doc(pkg.id)
-          .set({
-            ...pkg,
-            productId: null,
-            expiresAt:
-              expiresInDays === null ? null : today + expiresInDays * DAY_MS,
-            openedAt:
-              openedDaysAgo === null
-                ? null
-                : today - openedDaysAgo * DAY_MS + 10 * 3_600_000,
-            status: 'IN_STOCK',
-            history,
-            createdAt: history[0].at,
-            updatedAt: history[history.length - 1].at,
-          });
-      },
-    ),
+    ...SEED_PACKAGES.map(({ expiresInDays, openedDaysAgo, events, ...pkg }) => {
+      const history = events.map(({ daysAgo, ...event }) => ({
+        ...event,
+        note: null,
+        at: today - daysAgo * DAY_MS + 10 * 3_600_000,
+      }));
+      return kitchenRef
+        .collection('packages')
+        .doc(pkg.id)
+        .set({
+          ...pkg,
+          productId: null,
+          expiresAt:
+            expiresInDays === null ? null : today + expiresInDays * DAY_MS,
+          openedAt:
+            openedDaysAgo === null
+              ? null
+              : today - openedDaysAgo * DAY_MS + 10 * 3_600_000,
+          status: 'IN_STOCK',
+          history,
+          createdAt: history[0].at,
+          updatedAt: history[history.length - 1].at,
+        });
+    }),
     ...SEED_NOTES.map(({ daysAgo, hour, ...entry }) => {
       const at = today - daysAgo * DAY_MS + hour * 3_600_000;
       return kitchenRef

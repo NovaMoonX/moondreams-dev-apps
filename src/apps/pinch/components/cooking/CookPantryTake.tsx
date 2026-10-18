@@ -60,7 +60,9 @@ function CookPantryTake({ take }: CookPantryTakeProps) {
             size='sm'
             className={PILL_BUTTON}
             loading={take.busy === 'TAKE'}
-            disabled={take.busy !== null || take.chosenCount === 0 || !take.isReady}
+            disabled={
+              take.busy !== null || take.chosenCount === 0 || !take.isReady
+            }
             onClick={() => void take.take()}
           >
             Take out
