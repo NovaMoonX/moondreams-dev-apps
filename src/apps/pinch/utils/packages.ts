@@ -687,17 +687,6 @@ export const planUndoPackageMove = (
   };
 };
 
-/** A finished package can come back while the use or toss that ended it is still its last event. */
-export const canPutPackageBack = (pkg: Pick<Package, 'status' | 'history'>) => {
-  const last = pkg.history.at(-1);
-  return (
-    pkg.status === 'DONE' &&
-    last !== undefined &&
-    END_KINDS.includes(last.kind) &&
-    last.amount !== null
-  );
-};
-
 export type PackageBulkKind = 'TOSS' | 'USE_UP' | 'MOVE';
 
 export type PackageSkipReason = 'GONE' | 'FINISHED' | 'REDATED' | 'SAME_PLACE';

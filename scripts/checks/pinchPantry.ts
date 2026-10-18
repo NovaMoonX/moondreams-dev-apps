@@ -11,7 +11,6 @@ import {
   appendPackageEvent,
   buildPackage,
   byUseBy,
-  canPutPackageBack,
   getDateInDays,
   getLineMarkers,
   getLineStock,
@@ -492,22 +491,6 @@ const backFromUsedUp = fieldsOf(planUndoEnd(afterUsedUp, NOW, NOW + 1000));
 assert.deepEqual(
   [backFromUsedUp.amount, backFromUsedUp.status],
   [2, 'IN_STOCK'],
-);
-const afterToss = {
-  ...start,
-  ...fieldsOf(planPackageToss(start, NOW)),
-} as Package;
-assert.equal(canPutPackageBack(afterToss), true);
-assert.equal(canPutPackageBack(start), false);
-assert.equal(
-  canPutPackageBack({
-    ...afterToss,
-    history: [
-      ...afterToss.history,
-      makePackageEvent('EDITED', NOW + 5, { note: 'x' }),
-    ],
-  }),
-  false,
 );
 const changedSince = {
   ...afterUse,
@@ -1155,7 +1138,11 @@ assert.deepEqual(
 const have: LineStock = { kind: 'HAVE', have: null, isConverted: false };
 const none: LineStock = { kind: 'NONE' };
 const past: LineStock = { kind: 'PAST' };
-const some: LineStock = { kind: 'SOME', have: { unit: 'CUP', amount: 1 }, isConverted: false };
+const some: LineStock = {
+  kind: 'SOME',
+  have: { unit: 'CUP', amount: 1 },
+  isConverted: false,
+};
 const marks = (stocks: LineStock[]) =>
   getLineMarkers(stocks.map((stock, index) => ({ id: String(index), stock })));
 const markedTexts = (stocks: LineStock[]) =>
@@ -1176,7 +1163,11 @@ assert.deepEqual(
   [null, 'Not in your pantry'],
   'half and half flags what is missing, the part that sends someone shopping',
 );
-assert.deepEqual(markedTexts([none, none, none]), [null, null, null], 'a pantry with none of it says nothing');
+assert.deepEqual(
+  markedTexts([none, none, none]),
+  [null, null, null],
+  'a pantry with none of it says nothing',
+);
 assert.equal(marks([none, none, none]).summary, null);
 assert.deepEqual(
   markedTexts([some, none, none, past]),

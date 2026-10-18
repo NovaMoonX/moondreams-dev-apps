@@ -751,7 +751,7 @@ function PackageSheet({
               isGrouped
               icon={<Scale className='h-4 w-4' />}
               label='Used some or all'
-              subtitle='Say how much is left'
+              subtitle='Say how much you used'
               onClick={() => setView({ kind: 'use' })}
             />
           )}

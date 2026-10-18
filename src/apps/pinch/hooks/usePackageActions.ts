@@ -3,7 +3,6 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { SOFT_MAX_PACKAGES } from '@apps/pinch/constants';
 import {
   changePackagesInPlace,
   consumePackage,
@@ -26,13 +25,11 @@ import type { Package, PackagePlace } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import {
   buildPackage,
-  canPutPackageBack,
   getNewPackagesProblem,
   getPackageBulkToast,
   getPackageSkippedText,
   getPackageUndoText,
   getPlaceText,
-  isPackageListFull,
   type NewPackageInput,
   type PackageBulkAction,
   type PackageEdit,
@@ -249,23 +246,6 @@ export function usePackageActions(uid: string) {
       dispatch(takeFromPackages({ uid, takes })).unwrap(),
     );
 
-  /** A finished package back in stock, for a mis-tap the toast's Undo no longer covers. */
-  const putBack = (pkg: Package, name: string) =>
-    once(pkg.id, async () => {
-      const last = pkg.history.at(-1);
-      if (!canPutPackageBack(pkg) || last === undefined) {
-        throw new Error('That has changed since, so it could not be undone.');
-      }
-      if (isReady && isPackageListFull(inStockCount)) {
-        throw new Error(
-          `You have ${SOFT_MAX_PACKAGES} packages in your pantry. Finish or delete one to put this back.`,
-        );
-      }
-      await dispatch(undoPackageEnd({ uid, id: pkg.id, at: last.at })).unwrap();
-      addToast({ title: `Put ${name} back`, type: 'success' });
-      return true;
-    });
-
   return {
     isReady,
     loadError,
@@ -279,6 +259,5 @@ export function usePackageActions(uid: string) {
     changeInPlace,
     takeOut,
     undoChanges,
-    putBack,
   };
 }
