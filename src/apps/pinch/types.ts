@@ -216,6 +216,8 @@ export type PinchSubview =
       plannedMealId?: string;
       /** A planned plate's recipes cooked in one session, in plate order, `recipeId` first; absent for one recipe. */
       plate?: PlateCookRecipe[];
+      /** Where a saved session left off, when the screen opens to pick it up. */
+      resume?: CookingResume;
     }
   | {
       kind: 'plan';
@@ -469,4 +471,23 @@ export type CookView = 'steps' | 'ingredients';
 export interface PlateCookRecipe {
   recipeId: string;
   servings: number;
+}
+
+/** A cooking timer as it is saved on this device: a wall-clock deadline while running, what was left while paused, when it rang once done. */
+export type ResumeTimer = {
+  recipeId: string;
+  stepNumber: number;
+  label: string;
+  durationMs: number;
+} & (
+  | { status: 'running'; startedAt: number; endsAt: number }
+  | { status: 'paused'; remainingMs: number }
+  | { status: 'done'; endedAt: number }
+);
+
+/** What a cooking session needs to be picked up again: the dish on screen, each recipe's step and servings, and the timers. */
+export interface CookingResume {
+  currentId: string;
+  positions: Record<string, { stepIndex: number; servings: number }>;
+  timers: ResumeTimer[];
 }

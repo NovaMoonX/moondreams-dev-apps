@@ -27,6 +27,7 @@ import { clearUserInfoStore } from '@/hooks/useUserInfo';
 import { ADMIN_EMAIL, APP_REGISTRY } from '@/lib/app';
 import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
 import { ensureDocExists } from '@/lib/firebase';
+import { clearViewerSessions } from '@/utils/viewerSessionUtils';
 import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
 import { setCurrentUser } from '@/store/slices/userSlice';
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         dispatch(resetAllState());
         queryClient.clear();
         clearUserInfoStore();
+        if (previousUserId) clearViewerSessions(previousUserId);
       }
 
       previousUserIdRef.current = nextUserId;
@@ -203,6 +205,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     currentLocationRef.current = 'home';
+    if (auth.currentUser) clearViewerSessions(auth.currentUser.uid);
     window.location.href = '/';
     await signOut(auth);
   }, []);
