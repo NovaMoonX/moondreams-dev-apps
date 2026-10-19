@@ -6,13 +6,13 @@ import {
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronLeft, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
@@ -88,7 +88,6 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const isPhone = useMediaQuery().isBelow('sm');
   const trimmed = query.trim();
-  useBackStep(onBack !== undefined, () => onBack?.());
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -150,17 +149,7 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
         event.preventDefault()
       }
     >
-      {onBack && (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-10 gap-1 justify-self-start px-0!'
-          onClick={onBack}
-        >
-          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-          Back
-        </Button>
-      )}
+      {onBack && <BackLink onBack={onBack} />}
       <p className='font-medium'>What are you putting away?</p>
       <SearchInput
         value={query}

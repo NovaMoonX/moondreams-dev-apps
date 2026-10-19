@@ -2,16 +2,16 @@ import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronLeft, Ellipsis, PackagePlus } from 'lucide-react';
+import { Ellipsis, PackagePlus } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
 import MacroStats from '@/components/MacroStats';
 import StarButton from '@/components/StarButton';
 import StatTile from '@/components/StatTile';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import {
@@ -43,26 +43,6 @@ import {
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
-
-interface BackLinkProps {
-  onBack: () => void;
-}
-
-function BackLink({ onBack }: BackLinkProps) {
-  useBackStep(true, onBack);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 px-0!'
-      onClick={onBack}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
-    </Button>
-  );
-}
 
 interface MealDrawerProps {
   uid: string;

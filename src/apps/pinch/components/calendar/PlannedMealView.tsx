@@ -10,20 +10,14 @@ import { createPortal } from 'react-dom';
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import {
-  BookmarkPlus,
-  ChevronLeft,
-  CookingPot,
-  Ellipsis,
-  Trash2,
-} from 'lucide-react';
+import { BookmarkPlus, CookingPot, Ellipsis, Trash2 } from 'lucide-react';
 
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import FormSection from '@/components/FormSection';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
@@ -88,26 +82,6 @@ import {
 
 const BACK_HEAD_CLASS =
   'space-y-1 [@media(max-height:599px)]:flex [@media(max-height:599px)]:items-center [@media(max-height:599px)]:gap-3 [@media(max-height:599px)]:space-y-0';
-
-interface BackLinkProps {
-  onBack: () => void;
-}
-
-function BackLink({ onBack }: BackLinkProps) {
-  useBackStep(true, onBack);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 shrink-0 gap-1 px-0!'
-      onClick={onBack}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
-    </Button>
-  );
-}
 
 interface MoreRow {
   key: string;

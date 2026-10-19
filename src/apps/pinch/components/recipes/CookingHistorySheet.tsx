@@ -3,11 +3,11 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronLeft, ChevronRight, NotebookPen } from 'lucide-react';
+import { ChevronRight, NotebookPen } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
@@ -72,11 +72,6 @@ function CookingHistorySheet({
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
   const lastToken = useRef(0);
-  useBackStep(view.kind === 'note', () =>
-    setView((current) =>
-      current.kind === 'note' ? { kind: 'list' } : current,
-    ),
-  );
 
   const stockByCook = useAppSelector(selectContainersByCookId);
   const recipeContainers = useQuery(
@@ -145,15 +140,7 @@ function CookingHistorySheet({
       const closeNote = () => closeView(noteView.token);
       return (
         <div className='space-y-4'>
-          <Button
-            type='button'
-            variant='tertiary'
-            className='h-10 gap-1 px-0!'
-            onClick={closeNote}
-          >
-            <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-            Back
-          </Button>
+          <BackLink onBack={closeNote} />
           <div className='space-y-0.5'>
             <p className='font-medium wrap-break-word'>
               {recipe?.title ?? 'This recipe'}
