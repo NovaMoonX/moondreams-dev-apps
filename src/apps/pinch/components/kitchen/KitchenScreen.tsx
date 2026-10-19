@@ -116,14 +116,6 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   );
   const hasRecipes = useAppSelector(selectRecipes).length > 0;
   const hasStoresOrPrices = storeCount > 0 || productCount > 0;
-  const getSubtitle = () => {
-    if (hasPantry && hasPrepared) {
-      return 'Ingredients, pantry, fridge and freezer, and prices.';
-    }
-    if (hasPantry) return 'Ingredients, pantry and prices.';
-    if (hasPrepared) return 'Ingredients, fridge and freezer, and prices.';
-    return 'Ingredients and prices.';
-  };
   const trimmed = query.trim();
   const yours = useMemo(
     () =>
@@ -175,6 +167,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
 
   const hasFilters = activeFilters.length > 0;
   const isFirstRun = view === 'yours' && yours.length === 0 && !hasFilters;
+  const hasDoors = (hasPrepared || hasPantry) && !hasFilters && trimmed === '';
   const isPriceFiltered = filters.price !== 'any';
   const totalCount = isPriceFiltered ? yours.length : scoped.length;
   const noun = (count: number) => (count === 1 ? 'ingredient' : 'ingredients');
@@ -263,7 +256,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   };
 
   return (
-    <div className='space-y-4'>
+    <div className='space-y-4 [@media(max-height:599px)]:space-y-3'>
       <div>
         <SectionHeader
           title='Kitchen'
@@ -296,9 +289,11 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
             </div>
           }
         />
-        <p className='text-muted-foreground -mt-1 text-sm [@media(max-height:699px)]:hidden'>
-          {getSubtitle()}
-        </p>
+        {!hasPrepared && !hasPantry && (
+          <p className='text-muted-foreground -mt-1 text-sm [@media(max-height:699px)]:hidden'>
+            Ingredients and prices.
+          </p>
+        )}
       </div>
       {isFirstRun ? (
         <SearchInput
@@ -380,7 +375,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           )}
         </FilterBar>
       )}
-      {(hasPrepared || hasPantry) && !hasFilters && trimmed === '' && (
+      {hasDoors && (
         <nav
           aria-label='Also in Kitchen'
           className='grid grid-cols-2 gap-2 lg:gap-x-8 [&>:last-child:nth-child(odd)]:col-span-2 lg:[&>:last-child:nth-child(odd)]:col-span-1'
