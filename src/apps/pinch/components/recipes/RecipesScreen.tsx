@@ -8,6 +8,7 @@ import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import LazyMount from '@/components/LazyMount';
+import EmptyCard from '@/components/EmptyCard';
 import SectionHeader from '@/components/SectionHeader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
@@ -591,10 +592,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     }
     if (recipes.length === 0) {
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
+        <EmptyCard icon='🍳'>
           Add the recipes you cook, from text, a file, a link or by hand, and
           they'll be here, ready to plan.
-        </p>
+        </EmptyCard>
       );
     }
     if (shown.length === 0 && activeFilters.length > 0) {

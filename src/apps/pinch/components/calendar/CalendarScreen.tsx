@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Plus } from 'lucide-react';
 
+import EmptyCard from '@/components/EmptyCard';
 import PeriodSwitcher from '@/components/PeriodSwitcher';
 import SectionHeader from '@/components/SectionHeader';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
@@ -150,6 +151,7 @@ function CalendarScreen({
     0,
   );
   const isFirstRun = !hasPlannedMeals && !isPlannedLoadFailed;
+  const hasAnythingToMoveThrough = hasRecipes || hasPlannedMeals;
   const isStatsShown = viewOptions.options.showStats;
 
   const getSummaryLabel = () => {
@@ -228,18 +230,20 @@ function CalendarScreen({
           ) : undefined
         }
       />
-      <PeriodSwitcher
-        title={periodTitle}
-        unitLabel={view}
-        views={VIEW_OPTIONS}
-        view={view}
-        viewsLabel='Calendar view'
-        onViewChange={changeView}
-        onPrevious={() => goTo(shiftAnchor(view, anchorKey, -1))}
-        onNext={() => goTo(shiftAnchor(view, anchorKey, 1))}
-        canJumpToToday={!isTodayShown}
-        onToday={() => goTo(todayKey)}
-      />
+      {hasAnythingToMoveThrough && (
+        <PeriodSwitcher
+          title={periodTitle}
+          unitLabel={view}
+          views={VIEW_OPTIONS}
+          view={view}
+          viewsLabel='Calendar view'
+          onViewChange={changeView}
+          onPrevious={() => goTo(shiftAnchor(view, anchorKey, -1))}
+          onNext={() => goTo(shiftAnchor(view, anchorKey, 1))}
+          canJumpToToday={!isTodayShown}
+          onToday={() => goTo(todayKey)}
+        />
+      )}
       {stats.plannedCount > 0 && (
         <div className='space-y-2'>
           <SummaryLine
@@ -265,34 +269,37 @@ function CalendarScreen({
         </p>
       )}
       {isFirstRun && (
-        <div className='bg-secondary/50 space-y-3 rounded-2xl p-4 text-center'>
-          <p className='text-sm'>
-            {hasRecipes
-              ? 'Nothing planned yet. Tap Plan to put a recipe on a day.'
-              : 'Bring in a recipe from a chat, a photo or a link, plan your week, and get the shopping list.'}
-          </p>
-          {!hasRecipes && (
-            <Button
-              type='button'
-              size='sm'
-              variant='secondary'
-              rounded='full'
-              onClick={() =>
-                isPhone
-                  ? setIsStartOpen(true, true)
-                  : openSubview({
-                      kind: 'recipe',
-                      id: null,
-                      fromCalendar: true,
-                    })
-              }
-            >
-              Add your first recipe
-            </Button>
-          )}
-        </div>
+        <EmptyCard
+          icon='📅'
+          action={
+            !hasRecipes && (
+              <Button
+                type='button'
+                size='sm'
+                variant='secondary'
+                rounded='full'
+                className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+                onClick={() =>
+                  isPhone
+                    ? setIsStartOpen(true, true)
+                    : openSubview({
+                        kind: 'recipe',
+                        id: null,
+                        fromCalendar: true,
+                      })
+                }
+              >
+                Add your first recipe
+              </Button>
+            )
+          }
+        >
+          {hasRecipes
+            ? 'Nothing planned yet. Tap Plan to put a recipe on a day.'
+            : 'Bring in a recipe from a chat, a photo or a link, plan your week, and get the shopping list.'}
+        </EmptyCard>
       )}
-      {view === 'month' && (
+      {view === 'month' && hasAnythingToMoveThrough && (
         <MonthView
           monthKey={anchorKey.slice(0, 7)}
           plannedByDay={plannedByDay}
