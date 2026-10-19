@@ -41,7 +41,7 @@ function EntryTile({
         <span className='w-full min-w-0 @min-[15rem]:flex-1'>
           <span className='block truncate text-sm font-medium'>{label}</span>
           {status && (
-            <span className='text-muted-foreground block text-xs text-balance wrap-break-word'>
+            <span className='text-muted-foreground line-clamp-2 text-xs text-balance wrap-break-word'>
               {status}
             </span>
           )}
