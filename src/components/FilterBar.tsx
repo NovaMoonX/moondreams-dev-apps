@@ -38,6 +38,7 @@ export function FilterSection({ title, action, children }: FilterSectionProps) {
 }
 
 interface FilterBarProps {
+  className?: string;
   query: string;
   onQueryChange: (query: string) => void;
   searchPlaceholder: string;
@@ -64,6 +65,7 @@ interface FilterBarProps {
  * so turning a filter on never adds a row of controls above the list.
  */
 function FilterBar({
+  className,
   query,
   onQueryChange,
   searchPlaceholder,
@@ -160,7 +162,7 @@ function FilterBar({
   ) : null;
 
   return (
-    <div className='space-y-2'>
+    <div className={join('space-y-2', className)}>
       <div className='flex items-center gap-2'>
         <div className='min-w-0 flex-1'>
           <SearchInput
