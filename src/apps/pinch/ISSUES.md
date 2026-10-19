@@ -646,7 +646,7 @@ Deleting a recipe, ingredient, product, store or family that something still use
 
 ## Next Steps
 
-### Issue 19: Track what you have: stock, with "not tracked" kept separate from "out" (packages, with their dates, are Issue 44)
+### Issue 19: Track what you have: stock, with "not tracked" kept separate from "out" (packages, with their dates, are Issue 46)
 
 **Prerequisites:** MVP complete
 **Target PR Size:** ~450 lines
@@ -673,7 +673,7 @@ A person can say how much of an ingredient they have. An ingredient they haven't
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
-### Issue 20: Mark a meal as made: stock comes out (batches became prepared containers, Issue 41; cooking mode's take-out is Issue 44)
+### Issue 20: Mark a meal as made: stock comes out (batches became prepared containers, Issue 41; cooking mode's take-out is Issue 46)
 
 **Prerequisites:** Issue 19
 **Target PR Size:** ~500 lines
