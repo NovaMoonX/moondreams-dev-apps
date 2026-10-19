@@ -143,6 +143,7 @@ function RecipeDrawer({
   const [markError, setMarkError] = useState<string | null>(null);
   const [isMarking, setIsMarking] = useState(false);
   const [view, setView] = useState<DrawerView>('recipe');
+  const [shareFooter, setShareFooter] = useState<HTMLElement | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const [todayKey] = useState(() => getCellDayKey(new Date()));
   const tonight = useAppSelector((state) => {
@@ -327,7 +328,11 @@ function RecipeDrawer({
             <BackLink onBack={backToMore} />
             <p className='font-medium'>Share this recipe</p>
           </div>
-          <ShareView kind='RECIPE' sourceId={recipe.id} />
+          <ShareView
+            kind='RECIPE'
+            sourceId={recipe.id}
+            footerNode={shareFooter}
+          />
         </div>
       );
     }
@@ -444,7 +449,9 @@ function RecipeDrawer({
         </>
       }
       footer={
-        shownView === 'share' ? undefined : (
+        shownView === 'share' ? (
+          <div ref={setShareFooter} className='px-4 pb-4 empty:hidden' />
+        ) : (
           <div className='flex gap-2 px-4 pb-4'>
             <Button
               type='button'

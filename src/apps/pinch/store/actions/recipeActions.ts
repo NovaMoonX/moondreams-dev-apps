@@ -408,7 +408,7 @@ interface RemoveRecipeInput {
   id: string;
 }
 
-/** Deletes the recipe, its cover, its cooks, its notes and its shared link, or archives it (cover, cooks, notes and link kept) when a planned day or saved meal still uses it. */
+/** Deletes the recipe, its cover, its cooks, its notes and its shared link, or archives it (cover, cooks, notes and link kept) when a planned day or saved meal still uses it. An archive leaves `updatedAt` alone: a shared link compares it, and nothing it shows changed. */
 export const removeRecipe = createAsyncThunk<
   string,
   RemoveRecipeInput,
@@ -423,10 +423,7 @@ export const removeRecipe = createAsyncThunk<
     try {
       await freezeBeforeEdit(uid, getState());
       if (isInUse(await readUsage(uid, getState(), 'RECIPE', id))) {
-        await updateDoc(recipeDoc(uid, id), {
-          isArchived: true,
-          updatedAt: Date.now(),
-        });
+        await updateDoc(recipeDoc(uid, id), { isArchived: true });
         return id;
       }
 
