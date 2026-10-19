@@ -42,8 +42,11 @@ function SelectionBar({ actions, primary, note }: SelectionBarProps) {
 
   return (
     <>
-      <div className='h-24' aria-hidden='true' />
-      <div className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur [&_.form-footer]:mx-auto [&_.form-footer]:max-w-2xl [&_.form-footer]:px-4 [&_.form-footer]:pt-3 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]'>
+      <div
+        className='h-24 [@media(max-height:699px)]:h-20'
+        aria-hidden='true'
+      />
+      <div className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur [&_.form-footer]:mx-auto [&_.form-footer]:max-w-2xl [&_.form-footer]:px-4 [&_.form-footer]:pt-3 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))] [@media(max-height:699px)]:[&_.form-footer]:pt-2 [@media(max-height:699px)]:[&_.form-footer]:pb-[calc(0.5rem+env(safe-area-inset-bottom))]'>
         <ModalFooterActions
           note={note}
           leftActions={actions.map((action) => (
@@ -52,7 +55,7 @@ function SelectionBar({ actions, primary, note }: SelectionBarProps) {
               type='button'
               variant='secondary'
               className={join(
-                'h-11 gap-1.5 px-3 max-sm:px-3.5',
+                'h-11 gap-1.5 px-3 max-sm:px-3.5 [@media(max-height:699px)]:h-10',
                 action.isDestructive &&
                   'border-destructive/60 text-destructive! hover:bg-destructive/10',
               )}
@@ -67,7 +70,7 @@ function SelectionBar({ actions, primary, note }: SelectionBarProps) {
           rightActions={
             <Button
               type='button'
-              className='h-11 gap-1.5 px-5'
+              className='h-11 gap-1.5 px-5 [@media(max-height:699px)]:h-10'
               aria-label={primary.label}
               loading={primary.isLoading}
               disabled={primary.isDisabled}

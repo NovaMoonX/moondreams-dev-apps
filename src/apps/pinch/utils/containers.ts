@@ -504,6 +504,8 @@ export interface BulkAction {
   from: ContainerPlace;
   /** Leaves a box alone once its date is no longer in the past, for acting on what the screen called past its date. */
   isPastOnly?: boolean;
+  /** A toss or an eat that acts on a ticked box in either place, so `from` is no check on where it is. */
+  isEitherPlace?: boolean;
   /** A move's care by recipe id, so each box gets the date a single move would suggest. */
   cares?: Record<string, RecipeCare | null>;
 }
@@ -555,7 +557,9 @@ const planBulkOne = (
 ): { write: BulkWrite } | { skip: SkipReason } => {
   if (container === null) return { skip: 'GONE' };
   if (container.status !== 'IN_STOCK') return { skip: 'FINISHED' };
-  if (container.place !== action.from) return { skip: 'MOVED' };
+  if (action.isEitherPlace !== true && container.place !== action.from) {
+    return { skip: 'MOVED' };
+  }
   if (
     action.isPastOnly === true &&
     getEatByState(container.eatBy, now) !== 'PAST'
@@ -682,8 +686,57 @@ export const getSelectionTitle = (count: number) =>
   count === 0 ? 'Select boxes' : `${count} selected`;
 
 /** Why the selection's actions are off, in the footer beside them; null while they are on. */
-export const getSelectionNote = (count: number) =>
-  count === 0 ? 'Tap the boxes you want to act on.' : null;
+export const getSelectionNote = (
+  count: number,
+  places: { fridge: number; freezer: number } | null = null,
+) => {
+  if (count === 0) return 'Tap the boxes you want to act on.';
+  if (places === null || places.fridge === 0 || places.freezer === 0) {
+    return null;
+  }
+  return `${places.fridge} in the fridge, ${places.freezer} in the freezer. Moving needs one place.`;
+};
+
+/** The one place every box is in, or null when they are in both (or there are none). */
+export const getSharedPlace = (containers: Pick<Container, 'place'>[]) => {
+  const places = new Set(containers.map(({ place }) => place));
+  return places.size === 1 ? [...places][0] : null;
+};
+
+/** The place to open on: the one holding more of the boxes that want a look (past their date or due soon), then the one with more past their date, then the fridge. */
+export const getLandingPlace = (
+  containers: Container[],
+  now = Date.now(),
+): ContainerPlace => {
+  const empty = { look: 0, past: 0 };
+  const counts = containers.reduce<
+    Record<ContainerPlace, { look: number; past: number }>
+  >(
+    (acc, container) => {
+      const state = getEatByState(container.eatBy, now);
+      if (container.status !== 'IN_STOCK' || state === 'LATER') return acc;
+
+      const { look, past } = acc[container.place];
+      return {
+        ...acc,
+        [container.place]: {
+          look: look + 1,
+          past: past + (state === 'PAST' ? 1 : 0),
+        },
+      };
+    },
+    { FRIDGE: empty, FREEZER: empty },
+  );
+  const { FRIDGE: fridge, FREEZER: freezer } = counts;
+  if (freezer.look !== fridge.look) {
+    return freezer.look > fridge.look ? 'FREEZER' : 'FRIDGE';
+  }
+  return freezer.past > fridge.past ? 'FREEZER' : 'FRIDGE';
+};
+
+/** A row's name with its place, for a confirm over boxes in both places ("Chicken stock · freezer"). */
+export const getPlacedTitle = (title: string, place: ContainerPlace) =>
+  `${title} · ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`;
 
 const MAX_BULK_NAMES = 3;
 
