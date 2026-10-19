@@ -19,6 +19,8 @@ interface ImageChoiceGridProps {
   selectedKey: string | null;
   checkingKey?: string | null;
   fallback: ReactNode;
+  /** Extra classes for every tile, for a screen that has to reshape them (a shorter tile on a short landscape phone). */
+  tileClassName?: string;
   onPick: (key: string) => void;
 }
 
@@ -29,6 +31,7 @@ function ImageChoiceGrid({
   selectedKey,
   checkingKey = null,
   fallback,
+  tileClassName,
   onPick,
 }: ImageChoiceGridProps) {
   return (
@@ -54,6 +57,7 @@ function ImageChoiceGrid({
               'bg-accent relative block aspect-4/3 h-auto w-full overflow-hidden rounded-xl border p-0 transition-none',
               isSelected ? 'border-primary' : 'border-border',
               choice.isUnavailable && 'opacity-40',
+              tileClassName,
             )}
           >
             <FallbackImage
