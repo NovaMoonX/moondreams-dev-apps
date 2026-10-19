@@ -25,6 +25,7 @@ import {
   type CookingResumePlan,
   type CookingSnapshot,
 } from '@apps/pinch/utils/cookSession';
+import { getMonthWindow } from '@apps/pinch/utils/dayKeys';
 
 interface CookingResumeRowProps {
   uid: string;
@@ -39,16 +40,22 @@ function CookingResumeRow({ uid }: CookingResumeRowProps) {
   );
   const [notLiveFor, setNotLiveFor] = useState<string | null>(null);
   const sessionId = snapshot?.sessionId ?? null;
-  const plannedMealIds = useMemo(
-    () => new Set(plannedMeals.map((meal) => meal.id)),
-    [plannedMeals],
+  const windowKey = useAppSelector(
+    (state) => state.pinch.plannedMeals.windowKey,
+  );
+  const loadedMeals = useMemo(
+    () => ({
+      ids: new Set(plannedMeals.map((meal) => meal.id)),
+      window: windowKey === null ? null : getMonthWindow(windowKey),
+    }),
+    [plannedMeals, windowKey],
   );
   const plan = useMemo(
     () =>
       snapshot === null
         ? null
-        : resolveCookingResume(snapshot, recipesById, plannedMealIds),
-    [snapshot, recipesById, plannedMealIds],
+        : resolveCookingResume(snapshot, recipesById, loadedMeals),
+    [snapshot, recipesById, loadedMeals],
   );
 
   useEffect(() => {

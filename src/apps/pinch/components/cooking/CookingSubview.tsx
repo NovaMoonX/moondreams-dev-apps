@@ -261,6 +261,8 @@ interface CookingSessionProps {
   /** The recipe the screen was opened with, which a late close checks it is still showing. */
   openedRecipeId: string;
   plannedMealId: string | null;
+  /** The planned meal's day, kept in the saved copy; null when it isn't loaded. */
+  plannedMealDate: number | null;
   /** The header: the recipe's name, or the plate's when there are several. */
   title: string;
   /** A saved session to pick up where it was left; null for a fresh start. */
@@ -272,6 +274,7 @@ function CookingSession({
   entries,
   openedRecipeId,
   plannedMealId,
+  plannedMealDate,
   title,
   resume,
 }: CookingSessionProps) {
@@ -669,6 +672,7 @@ function CookingSession({
           recipeId: openedRecipeId,
           servings: entries.length === 1 ? entries[0].plannedServings : null,
           plannedMealId,
+          plannedMealDate,
           plate:
             entries.length > 1
               ? entries.map((entry) => ({
@@ -693,6 +697,7 @@ function CookingSession({
     entries,
     openedRecipeId,
     plannedMealId,
+    plannedMealDate,
     currentId,
     plate,
     timers.timers,
@@ -2132,6 +2137,7 @@ function CookingSubview({
       entries={entries}
       openedRecipeId={recipeId}
       plannedMealId={plannedMealId}
+      plannedMealDate={plannedMeal?.date ?? null}
       title={getTitle()}
       resume={resume ?? null}
     />

@@ -30,6 +30,7 @@ const NOW = Date.UTC(2026, 9, 16, 19, 30);
 const MIN = 60_000;
 const UID = 'alex';
 
+const MEAL_DAY = Date.UTC(2026, 9, 16);
 const running: ResumeTimer = {
   recipeId: 'adobo',
   stepNumber: 1,
@@ -66,6 +67,7 @@ const build = (overrides: { timers?: ResumeTimer[]; now?: number } = {}) =>
       recipeId: 'adobo',
       servings: 2,
       plannedMealId: 'meal-1',
+      plannedMealDate: MEAL_DAY,
       plate: [
         { recipeId: 'adobo', servings: 2 },
         { recipeId: 'rice', servings: 2 },
@@ -224,6 +226,21 @@ assert.equal(
   'a paused timer gets none',
 );
 
+const openBefore = Object.fromEntries(
+  Object.entries(snapshot.open).filter(([key]) => key !== 'plannedMealDate'),
+);
+assert.equal(
+  parse({ ...snapshot, open: openBefore })?.open.plannedMealDate,
+  null,
+  'a session saved before the meal day was kept reads with none',
+);
+assert.equal(
+  parse({ ...snapshot, open: { ...snapshot.open, plannedMealDate: 'later' } })
+    ?.open.plannedMealDate,
+  null,
+  'a meal day that is not a time reads as unknown',
+);
+
 // When a saved session is not read
 assert.equal(parseCookingSnapshot(null, UID, NOW), null);
 assert.equal(parseCookingSnapshot('not json', UID, NOW), null);
@@ -300,7 +317,12 @@ const recipes = new Map([
     { title: 'Cilantro lime rice', steps: ['a', 'b'], isArchived: false },
   ],
 ]);
-const meals = new Set(['meal-1']);
+const loadedDays = {
+  start: Date.UTC(2026, 7, 1),
+  end: Date.UTC(2026, 11, 1),
+};
+const meals = { ids: new Set(['meal-1']), window: loadedDays };
+const none = { ids: new Set<string>(), window: loadedDays };
 const plan = resolveCookingResume(snapshot, recipes, meals);
 assert.deepEqual(
   plan && [
@@ -360,9 +382,50 @@ assert.equal(
   'an archived recipe and one with no steps count as gone',
 );
 assert.equal(
-  resolveCookingResume(snapshot, recipes, new Set())?.open.plannedMealId,
+  resolveCookingResume(snapshot, recipes, none)?.open.plannedMealId,
   null,
-  'a planned meal that is gone is let go, so Finish does not mark it',
+  'a planned meal that is gone (its day is loaded and it is not there) is let go, so Finish does not mark it',
+);
+const resumeWith = (open: Partial<typeof snapshot.open>, loaded = none) =>
+  resolveCookingResume(
+    { ...snapshot, open: { ...snapshot.open, ...open } },
+    recipes,
+    loaded,
+  )?.open.plannedMealId;
+assert.equal(
+  resumeWith({ plannedMealDate: Date.UTC(2026, 11, 1) }),
+  'meal-1',
+  'a meal on the first day past the loaded days is kept: the calendar just is not showing it',
+);
+assert.equal(
+  resumeWith({ plannedMealDate: Date.UTC(2026, 6, 31) }),
+  'meal-1',
+  'a meal before the loaded days is kept',
+);
+assert.equal(
+  resumeWith({ plannedMealDate: Date.UTC(2026, 7, 1) }),
+  null,
+  'a meal on the first loaded day that is not there is gone',
+);
+assert.equal(
+  resumeWith({ plannedMealDate: Date.UTC(2026, 10, 30) }),
+  null,
+  'a meal on the last loaded day that is not there is gone',
+);
+assert.equal(
+  resumeWith({ plannedMealDate: null }),
+  'meal-1',
+  'a meal whose day was never saved is kept, since nothing says it is gone',
+);
+assert.equal(
+  resumeWith({}, { ids: new Set(), window: null }),
+  'meal-1',
+  'before any days are loaded nothing is let go',
+);
+assert.equal(
+  resumeWith({ plannedMealId: null }),
+  null,
+  'a cook that began without a plan stays without one',
 );
 const shortened = resolveCookingResume(
   snapshot,
