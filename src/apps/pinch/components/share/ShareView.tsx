@@ -1,15 +1,15 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-import { Button, CopyButton } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Link2, Link2Off, RefreshCw, Share2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import CopyTextButton from '@/components/CopyTextButton';
 import IntroCard from '@/components/IntroCard';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate } from '@/utils/formatUtils';
 import { MAX_PINCH_SHARES } from '@apps/pinch/constants';
@@ -183,21 +183,12 @@ function ShareView({
     );
   };
 
-  // The Clipboard API is missing on plain-HTTP pages, where the copy button can't work.
-  const copyWithoutClipboardApi = async (url: string) => {
-    if (navigator.clipboard && window.isSecureContext) return;
-
-    const didCopy = await copyToClipboard(url);
-    addToast(
-      didCopy
-        ? { title: 'Link copied', type: 'success' }
-        : {
-            title: "Couldn't copy the link",
-            description: 'Select the link above and copy it from there.',
-            type: 'error',
-          },
-    );
-  };
+  const handleCopyFailed = () =>
+    addToast({
+      title: "Couldn't copy the link",
+      description: 'Select the link above and copy it from there.',
+      type: 'error',
+    });
 
   const handleSend = async (url: string) => {
     try {
@@ -226,14 +217,13 @@ function ShareView({
 
   const copyAndSend = (url: string, variant: 'primary' | 'secondary') => (
     <div className='flex gap-2'>
-      <CopyButton
-        textToCopy={url}
+      <CopyTextButton
+        text={url}
+        label='Copy link'
         variant={variant}
         className='min-w-0 flex-1'
-        onClick={() => void copyWithoutClipboardApi(url)}
-      >
-        Copy link
-      </CopyButton>
+        onFailed={handleCopyFailed}
+      />
       {canSend && (
         <Button
           type='button'
