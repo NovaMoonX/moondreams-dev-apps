@@ -13,7 +13,7 @@
 | Never overlay on overlay | whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a drawer whose action opens a form or another container closes first. Only a destructive confirm may sit on top |
 | Numbers explain themselves | a cost with gaps says so in its figure ("$5.20 so far", "$0.08+") and carries a warning icon (`HelpTip variant='warning'`) that says what the total leaves out, as a small modal on a phone or any touch screen and a tooltip with a mouse; a stat that isn't self-evident carries a `HelpTip`; past days are labelled as frozen, and say when the person had one priced again |
 | Rows show what you choose | the eye (View options) on the Calendar, Recipes and Kitchen holds the four nutrition switches the whole app follows (all off to start); on Recipes and Kitchen it also turns prices or calories and macros on or off on the rows (calories and macros start off) and picks the nutrition basis of ingredient rows; on the Calendar it turns the stats tiles (off to start) and the Week's prices on or off. The rows' choices are remembered on the device, and no total or drawer changes |
-| Nothing leaves without saying what | an AI reads what the person hands it (pasted text, a photo, screenshot or PDF, or a recipe page's text and recipe data) and says so, and nothing is saved until the person saves the form; a link goes to our server, which fetches the page; a reminder is a push to the person's own devices that names dishes, and the Settings row says so; a new recipe's Photo drawer searches the web with the recipe's title, the line under its heading says so, and Settings and a Turn off chip stop it; nothing else leaves the app; an idea's link is fetched for its title, site and picture only, and says exactly that before it is pasted |
+| Nothing leaves without saying what | an AI reads what the person hands it (pasted text, a photo, screenshot or PDF, or a recipe page's text and recipe data) and says so, and nothing is saved until the person saves the form; a link goes to our server, which fetches the page; a reminder is a push to the person's own devices that names dishes, and the Settings row says so; a new recipe's Photo drawer searches the web with the recipe's title, the line under its heading says so, and Settings and a Turn off chip stop it; a recipe or saved meal leaves only as a link the person makes, and the Share view says what the copy holds and what it leaves out before the link exists; nothing else leaves the app; an idea's link is fetched for its title, site and picture only, and says exactly that before it is pasted |
 | Dreamer UI first | `Calendar` (with `renderCell`), `Form`, `Drawer`, `Popover`, `Tabs`, `Badge` — custom only where the catalog has nothing: the day cell and the store logo tile |
 | Honest AI | an AI reads a pasted recipe, photo, PDF or web link and fills the real form; it names what it couldn't read; nothing is saved until the person confirms |
 | Quiet by default | a screen volunteers only what changes the next thing the person does, once: the Calendar opens on one summary line (the period's total, average per fully priced meal and daily nutrition come back as a row of tiles when View options' "Show stats" is on, and are off to start), a total says "so far" in its figure instead of a caveat on every row, a nudge lives only where its gap is owned, and a first run shows nothing about data that doesn't exist. The counts per screen and the doors per feature are in `JOURNEYS.md` |
@@ -164,6 +164,9 @@ flowchart TD
     RMO -->|Put some away| CF
     RMO -.->|fridge and freezer row, scoped to the recipe| PL
     MD -->|⋯ More: Put some away| CF
+    RMO -->|Share| SHV["Share view · in place, ‹ Back to More, no footer · not shared: what the link shows and leaves out, Create link · shared: the link, Copy link, Send, Update the shared copy, Get a new link, Stop sharing"]
+    MD -->|⋯ More: Share| SHV
+    SHV -->|Get a new link, Stop sharing| SHC["Confirm · who loses access, and that Stop can't be undone"]
     MD -.->|⋯ More: a fridge or freezer row, scoped to the meal, on that place| PL
     CK -->|Finish, then Putting any away? or Put some away| CKP2["Box details · in place on the last screen · Skip, Save"]
     PMD -->|Eat from fridge or freezer, today or yesterday: the primary when a box is due, else in ⋯ More| EF["Eat from stock · swaps in place · one box: Ate 2 as the footer's filled button · ‹ Back"]
@@ -182,6 +185,8 @@ flowchart TD
     CK -->|Finish: Take it out of your pantry?| CKT["Take it out · a tick per ingredient it can compare · Take out, then Took 2 things out with an Undo until Done"]
     MN["Morning note, ingredients on"] -.->|opens| PNL
     RD -.->|You have it, Not in your pantry or Past its date on a line: a mark, not a door| RD
+    SET -->|Sharing: Shared links, once a link exists| SHL["Shared links subview · each link with its date and a flag · a search from 8 · ‹ Back to Settings"]
+    SHL -->|tap a link| SHS["Link sheet · the same Share view, without Create link · Stop sharing closes it"]
     K -->|gear icon beside + New ingredient, once there is a recipe, a box or a package| SET["Settings subview · Reminders: this device, food to eat soon (days ahead, hour), timers when the screen is off · How long things keep: fridge and freezer days · Photos: suggest photos for new recipes"]
     K --> KL["Ingredients list · Yours / All · search and filters"]
     KL -->|eye button| VO
@@ -202,6 +207,17 @@ flowchart TD
     SL -->|Clear what you got| SLC["Cleared · Undo toast"]
     SL -->|Meals on your list tile| SLM["Meals on your list · what the list is for, soonest first · Remove takes one meal's share off (Undo toast)"]
     SL -->|help icon by the cost line| SLH["What the cost covers · amounts only, not packages"]
+    LNK["Shared link page · /pinch/shared/:shareId · no sign-in, outside the shell · header, cover and title, one slot, the recipe, the snapshot line"]
+    LNK -->|the owner| LKO["Slot · This is your shared recipe · Open in Pinch"]
+    LNK -->|signed in| LKV["Slot · Want this in your recipes? · Add to my recipes or saved meals"]
+    LNK -->|signed out| LKS["Slot · Keep this recipe · Sign in with Google · three plain lines"]
+    LKO -->|Open in Pinch| RL
+    LKV -->|Add| LKA["Added · Undo · See it in Pinch"]
+    LKA -->|See it in Pinch| RL
+    LKS -->|Sign in, the page flips in place| LKV
+    LNK -->|a saved meal: a dish| LKD["That recipe, read in place · ‹ Back"]
+    LNK -.->|stopped, mistyped or never made| LKN["This link isn't available · one answer"]
+    LNK -.->|the lookup failed| LKF["We couldn't open this link · Try again"]
     RD -.->|price note under the Cost tile, after the steps| FI["Fill-in sheet · prices and sizes, biggest first"]
     BRK -.->|nudge| FI
 ```
@@ -884,6 +900,49 @@ block-beta
 
 
 
+**Share** (a view inside a recipe's or a saved meal's ⋯ More, and the sheet a Shared links row opens)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  H1["‹ Back   Share this recipe  (a saved meal: Share this saved meal)"]:2
+  H2["🔗 Anyone with the link can look, no account needed.<br/>It's a copy as it is today, so changes you make later aren't in it unless you update it."]:2
+  H3["In the copy<br/>The title, a photo you uploaded, ingredients, steps, times, how to keep it and links."]:2
+  H4["Left out<br/>Your name, notes, prices, favorites, cooking history and collections.  (+ A photo from a web search stays out too, only for a recipe that has one)"]:2
+  H5["Create link"]:2
+  style H1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style H5 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  L1["‹ Back   Share this recipe"]:2
+  L2["apps.moondreams.dev/pinch/shared/…  (a read-only box that selects itself)<br/>Shared on Oct 16. Anyone with the link can look."]:2
+  L3["✏️ You've changed this recipe since you shared it.<br/>The link still shows the older copy.  (only once it has changed)"]:2
+  L4["Update the shared copy  (the filled button, only once it has changed)"]:2
+  L5["Copy link"]:1
+  L6["↗ Send  (only where the browser can send a link)"]:1
+  L7["🔄 Update the shared copy · The link stays the same  (a row, only while it hasn't changed)"]:2
+  L8["🔗 Get a new link · The old one stops working"]:2
+  L9["🚫 Stop sharing · The link stops working for good  (red, last)"]:2
+  style L1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style L9 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*The door is one row in the roomy ⋯ More group of a recipe's and of a saved meal's drawer: "Share", with "A link anyone can open, no account needed" under it, and "Shared Oct 16" or "Updated Oct 19" once a link exists. It swaps the drawer's content in place for the Share view, with a "‹ Back" to More; the drawer's footer is left out while the view is open, so the view's own button is the one primary. A planned meal has no Share row ("Save to Saved meals" first). **Not shared:** two plain sentences, what the copy holds and what it leaves out (in words about the person's data, naming a web photo only for a recipe that has one), then "Create link", which is off, with its reason beside it, at 30 links ("You have 30 shared links, the most you can have at once. Stop one under Settings, Shared links.") and for a saved meal that can't be shared ("Nothing in this meal is left to share.", "A shared meal holds up to 10 recipes, and this one has more.", "This meal has too many ingredients for one link. Share its recipes one at a time."). **Shared:** the link in a read-only box, a dated line, "Copy link" (filled; where the Clipboard API is missing, a plain-HTTP page, a toast says it copied or says to press and hold the box) and "Send" only where the browser has a share sheet. When the original has changed since (`getShareStatus`) a tinted card says so, "Update the shared copy" becomes the filled button with Copy link beside it as a secondary, and its row leaves the group, so one act has one home; otherwise the row is in the group. "Get a new link" and "Stop sharing" each ask first (a destructive confirm: the current link stops working right away for everyone who has it and the person gets a new one; or everyone with the link loses access, the copy and its photo are deleted and it can't be undone; either way the recipe stays as it is). A link whose original was deleted shows "The original was deleted." and offers only Copy link and Stop sharing. The result shows inside the view ("Updated. The link now shows this recipe as it is today.", "Here's your new link. The old one has stopped working.", "Sharing stopped. The link no longer works."), never as a toast over the drawer, and a failure stays in it ("Sharing needs a connection.", "That link is already gone.", or the action's own try-again line). While one action runs all three rows are off and only the pressed one says what it is doing ("Updating…", "Making a new link…", "Stopping…"). The Delete confirms of a recipe and of a saved meal add "It's shared, so its link stops working too." when a link exists; a recipe that is only archived says its link keeps working until it is stopped under Settings, Shared links.*
+
 **Cooking history** (sheet — the recipe drawer's row; a drawer on a phone, a modal from `sm`)
 
 ```mermaid
@@ -1156,6 +1215,8 @@ block-beta
   S10["Boxes you've already put away keep their dates."]:2
   S11["PHOTOS"]:2
   S12["🖼️ Suggest photos for new recipes   ( ● )<br/>When you add a photo to a new recipe, Pinch searches the web with its title… Nothing else is sent."]:2
+  S13["SHARING  (only once a link exists)"]:2
+  S14["🔗 Shared links<br/>Copy, update or stop the links you have sent.  ›"]:2
   style S1 fill:transparent,stroke:#888888,stroke-width:1px;
   style S2 fill:transparent,stroke:#888888,stroke-width:1px;
   style S3 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -1168,8 +1229,31 @@ block-beta
   style S10 fill:transparent,stroke:#888888,stroke-width:1px;
   style S11 fill:transparent,stroke:#888888,stroke-width:1px;
   style S12 fill:transparent,stroke:#888888,stroke-width:1px;
+  style S13 fill:transparent,stroke:#888888,stroke-width:1px;
+  style S14 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Settings is a `Subview` (so its back button and the back gesture close it) that opens with a one-sentence tinted card ("Changes save as you make them.", one line and a card at every height, so the first switch starts at 32% of a 390×844 screen, 47% at 320×568, 40% at 375×667, 48% at 390×560 and 64% at 844×390; the card costs 26px against the plain line it was under 700px tall) and then three framed groups, each a small caps title over one hairline frame of flat rows with an icon chip, a title, a quiet description and a switch (`SettingsGroup`, `SettingsRow`, `AppToggle`); every change saves as it is made, so there is no Save button. The very first change a person ever makes there has to reach the server (it creates their settings), so offline it fails at once with a save-failed toast, "You're offline, so your first change can't save yet. Try again once you're back online.", and the switch stays where it was; every later change works offline. **Reminders**: the first row is the device. Pinch asks the browser for notification permission only on a tap on its switch, with the reason beside it, and the row's line says where things stand: "Allow notifications so Pinch can nudge you…", "Pinch can send this device reminders. Turn it off to stop every Moondreams reminder here." (a token belongs to the device, so turning it off stops every app's reminders on it, and the choice sticks across reloads), "This site is blocked from sending notifications. Allow them in your browser's site settings, then come back." (the switch is off and disabled; coming back to the tab re-reads it), and for a browser that can't, "On an iPhone or iPad, add this site to your Home Screen and open it from there." A failure to register says "We couldn't turn reminders on. Check your connection and try again." and a closed browser question changes nothing and says nothing. The rows under it, one per kind (`REMINDER_KINDS`), only matter once this device is on, so until then they are not drawn: while the browser has not been asked or the device is off, one line under the group says to turn the device on to choose (the page is about 390px shorter), and when the browser blocks reminders or can't show them the device row's own line is the only explanation. **Food to eat soon or past its date** is the morning note; turning it on shows how far ahead it looks (1, 2 or 3 days, a `PillGroup`) and the hour it comes (a `Select` of hours, 9:00 am to start) with the time zone it is in ("Your time zone: PDT"), the zone of the device that last set them. It says the dish names show on the lock screen. **Timers when the screen is off** sends a push when a cooking timer ends and says it can't reach a phone that is offline. **Ingredients about to expire** is the third row, off to start, dimmed with the others until the device is on: it adds the pantry's packages to the same morning note, with the same days ahead and hour, and says the ingredient names show on the lock screen too. Another kind is a row in `REMINDER_KINDS`, a key on the settings document and a source in the digest function. **How long things keep** starts "We start cooked food at 3 days in the fridge. Change it if you're comfortable with more, or less." The fridge row offers 2, 3, 4, 5 days or 1 week as pills and Other, which opens a stepper of whole days (1 to 14); the freezer offers 2 weeks, 1, 2, 3, 6 months or 1 year and Other, which opens a stepper of whole weeks (1 to 52, since a year of single days is 275 taps). The value shows on the row's title line in the same words ("5 days", "3 months"). Under the group, one line says boxes already put away keep their dates, and above 4 fridge days a second says most food-safety guidance gives three to four days for cooked leftovers. The chosen days are what a new box starts with in the put-away sheet, in "Put some away" from cooking mode and when a box moves between places (the hint then reads "Your call. Starts at your usual 5 days for the fridge; change it to what you trust."); a recipe's own days still win, and a thawed box still starts at the shorter of two days and the fridge number. At 320px the pill rows wrap to two lines and nothing runs under the switches. **Photos**, the last group, is one row, "Suggest photos for new recipes", with a switch (on to start) and a description of what is sent: the recipe's title, searched on the web when a new recipe's Photo drawer opens, and nothing else. It sits below the first screen of settings, so the page grows by one row and nothing above the first switch moves. When the settings can't be read, the card and the switches are replaced by one tinted line, "Your settings couldn't load just now.", since the defaults would otherwise read as the person's own choices.*
+*Settings is a `Subview` (so its back button and the back gesture close it) that opens with a one-sentence tinted card ("Changes save as you make them.", one line and a card at every height, so the first switch starts at 32% of a 390×844 screen, 47% at 320×568, 40% at 375×667, 48% at 390×560 and 64% at 844×390; the card costs 26px against the plain line it was under 700px tall) and then three framed groups (a fourth, **Sharing**, with the one row "Shared links" and "Copy, update or stop the links you have sent.", is drawn only once the person has a link and opens the Shared links subview below), each a small caps title over one hairline frame of flat rows with an icon chip, a title, a quiet description and a switch (`SettingsGroup`, `SettingsRow`, `AppToggle`); every change saves as it is made, so there is no Save button. The very first change a person ever makes there has to reach the server (it creates their settings), so offline it fails at once with a save-failed toast, "You're offline, so your first change can't save yet. Try again once you're back online.", and the switch stays where it was; every later change works offline. **Reminders**: the first row is the device. Pinch asks the browser for notification permission only on a tap on its switch, with the reason beside it, and the row's line says where things stand: "Allow notifications so Pinch can nudge you…", "Pinch can send this device reminders. Turn it off to stop every Moondreams reminder here." (a token belongs to the device, so turning it off stops every app's reminders on it, and the choice sticks across reloads), "This site is blocked from sending notifications. Allow them in your browser's site settings, then come back." (the switch is off and disabled; coming back to the tab re-reads it), and for a browser that can't, "On an iPhone or iPad, add this site to your Home Screen and open it from there." A failure to register says "We couldn't turn reminders on. Check your connection and try again." and a closed browser question changes nothing and says nothing. The rows under it, one per kind (`REMINDER_KINDS`), only matter once this device is on, so until then they are not drawn: while the browser has not been asked or the device is off, one line under the group says to turn the device on to choose (the page is about 390px shorter), and when the browser blocks reminders or can't show them the device row's own line is the only explanation. **Food to eat soon or past its date** is the morning note; turning it on shows how far ahead it looks (1, 2 or 3 days, a `PillGroup`) and the hour it comes (a `Select` of hours, 9:00 am to start) with the time zone it is in ("Your time zone: PDT"), the zone of the device that last set them. It says the dish names show on the lock screen. **Timers when the screen is off** sends a push when a cooking timer ends and says it can't reach a phone that is offline. **Ingredients about to expire** is the third row, off to start, dimmed with the others until the device is on: it adds the pantry's packages to the same morning note, with the same days ahead and hour, and says the ingredient names show on the lock screen too. Another kind is a row in `REMINDER_KINDS`, a key on the settings document and a source in the digest function. **How long things keep** starts "We start cooked food at 3 days in the fridge. Change it if you're comfortable with more, or less." The fridge row offers 2, 3, 4, 5 days or 1 week as pills and Other, which opens a stepper of whole days (1 to 14); the freezer offers 2 weeks, 1, 2, 3, 6 months or 1 year and Other, which opens a stepper of whole weeks (1 to 52, since a year of single days is 275 taps). The value shows on the row's title line in the same words ("5 days", "3 months"). Under the group, one line says boxes already put away keep their dates, and above 4 fridge days a second says most food-safety guidance gives three to four days for cooked leftovers. The chosen days are what a new box starts with in the put-away sheet, in "Put some away" from cooking mode and when a box moves between places (the hint then reads "Your call. Starts at your usual 5 days for the fridge; change it to what you trust."); a recipe's own days still win, and a thawed box still starts at the shorter of two days and the fridge number. At 320px the pill rows wrap to two lines and nothing runs under the switches. **Photos**, the last group, is one row, "Suggest photos for new recipes", with a switch (on to start) and a description of what is sent: the recipe's title, searched on the web when a new recipe's Photo drawer opens, and nothing else. It sits below the first screen of settings, so the page grows by one row and nothing above the first switch moves. When the settings can't be read, the card and the switches are replaced by one tinted line, "Your settings couldn't load just now.", since the defaults would otherwise read as the person's own choices.*
+
+**Shared links** (subview, from Settings once a link exists)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  K1["‹ Shared links"]:2
+  K2["🔗 The links you have shared.<br/>Tap one to copy it, update it or stop sharing.  (fewer than eight links)"]:2
+  K3["🍲 Adobo chicken<br/>Updated Oct 19  [Changed since]"]:1
+  K4["›"]:1
+  K5["🍽️ Adobo and rice<br/>Shared Oct 16"]:1
+  K6["›"]:1
+  style K1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style K6 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*The links the person has made, the latest copy first, in one hairline-framed list: an emoji chip for a recipe or a saved meal, its title, "Shared Oct 16" or "Updated Oct 19" and, only when it applies, a soft "Changed since" or "Original deleted" flag, and a chevron on the first line. A row opens a sheet (a drawer on a phone, a modal from `sm`) holding the same Share view as the drawer's, without Create link (the sheet is only for what is already shared: a link stopped in another window reads "This link is no longer shared."); stopping from it closes the sheet. The list starts at twelve rows with "Show N more" only when four or more are hidden, gets a search from eight links ("Search your shared links", with "Nothing matches" under it), says "You have 30 links, the most you can have at once. Stop one to share something else." at the cap, and with none left says "Nothing is shared right now. You can share a recipe or a saved meal from its More menu." The subview's Back returns to Settings. If the links can't load, the Share view says so ("We couldn't load your shared links just now. Try again in a moment.") and Settings draws no row.*
 
 **Shopping tab** and its **add sheet**
 
@@ -1550,6 +1634,61 @@ block-beta
 ```
 *A drawer on a phone, a modal from `sm`, titled with the period shown. First the Total tile, in the front tile's own words ("$5.05" over "Total so far", "$1,805+" over "Total" once every gap is on a day that has passed, and "No price yet" or "Not priced" under "Total" with nothing priced), with how much of it is priced while it leaves something out ("2 of 16 ingredients priced": every distinct ingredient the period's meals use, and how many have a price) and its warning icon ("Leaves out 14 ingredients with no price yet." plus "Days that have passed keep the prices they had, and a price you add now counts from today on." when the period holds one, the day drawer's Total tile carrying the same words), then, in plain lines right under it, the reference figures: Avg per fully priced meal (the cost of the meals with nothing left out over their count, from three such meals), Per g protein, fully priced (when protein is on, the same base) and the daily nutrition average (for the metrics switched on), worded by the same helper as the Calendar's stats tiles so the two never disagree and shown only while "Show stats" is off (with it on they are already on the Calendar's front, and one fact has one home), then the period's one nudge line and, when something is planned from today on, a tinted "Add to shopping list" row ("9 meals from today on") that closes the sheet and opens the shopping list sheet for those days. Under them the days that have meals, each a row with its meal count and its cost ("$0.68", "$0.68+", "No price yet", "Not priced") that closes the sheet and opens that day's drawer. (The Total tile keeps its place either way: it is the sheet's own headline, and the front tile's name, figure and warning icon.) The days are the one list that scrolls under the fixed total, reference lines, nudge and shopping row (the column is capped at the screen's 92% less about 15rem for the drawer's title and footer, so a tall phone shows five or six days; on a screen under 800px high it keeps a floor of about three rows, so a short phone's drawer may scroll a little, with the reference lines in the first screenful). Done closes it. There is no "By meal type" view.*
 
+**Shared link** (the public page, `/pinch/shared/:shareId`: no sign-in to look, outside the Pinch shell, so no tab bar and no Pinch header)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  P1["🧂 Pinch                                     SHARED RECIPE"]:2
+  P2["🍲 (a 96px cover or tile)  Adobo chicken<br/>4 servings · 45 min"]:2
+  P3["🍲 Keep this recipe<br/>Sign in to add it to your own recipes.<br/>[ G  Sign in with Google ]<br/>📖 Keep it with your own recipes · 📅 Plan it on a day and get a shopping list, with nutrition and cost · ⏲️ Cook it step by step, with timers"]:2
+  P4["Sticky, tangy chicken thighs braised in soy and vinegar. (four lines, More)"]:2
+  P5["INGREDIENTS (one framed card; a heading per group when the recipe has groups)<br/>Chicken thighs · 2 lb"]:2
+  P6["STEPS<br/>① Marinate the chicken…"]:2
+  P7["KEEPING LEFTOVERS (only when there is something to say)"]:2
+  P8["HOW TO · MORE LINKS (only when it has links)"]:2
+  P9["A snapshot from Oct 16, so it won't change if the original does."]:2
+  style P1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P8 fill:transparent,stroke:#888888,stroke-width:1px;
+  style P9 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+
+*The slot's four states, one card in the same place and size each time:*
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  A1["Owner<br/>🍲 This is your shared recipe<br/>Everyone with the link sees this page, just as you do now.<br/>[ Open in Pinch ]"]:1
+  A2["Signed in<br/>🍲 Want this in your recipes?<br/>Adds your own copy to change, plan and cook.<br/>[ Add to my recipes ]"]:1
+  A3["Added<br/>🍲 ✓ Added to your recipes<br/>[ Undo ]  [ See it in Pinch ]"]:1
+  A4["Signed out<br/>🍲 Keep this recipe<br/>Sign in to add it to your own recipes.<br/>[ Sign in with Google ] + three lines"]:1
+  style A1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style A2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style A3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style A4 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 3
+  Z1["Opening<br/>(a skeleton shaped like the page)"]:1
+  Z2["📡 We couldn't open this link<br/>Check your connection and give it another try.<br/>[ Try again ]"]:1
+  Z3["🫙 This link isn't available<br/>The person who shared it may have stopped sharing, or the address was mistyped."]:1
+  style Z1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style Z2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style Z3 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*It is one page for everyone: the header band (the Pinch mark and "Shared recipe" or "Shared saved meal"), the cover and title with one facts line, the slot, then the recipe as a friend would read it, and the snapshot line. The owner, a signed-in visitor and a signed-out visitor see the same layout; only the slot differs, and it is the same card at the same place and height, never a locked or greyed button. **The owner** is told it is theirs and gets "Open in Pinch" (to Recipes, not to the recipe), and no add button. **A signed-in visitor** gets "Add to my recipes" (a saved meal: "Add to my saved meals", which brings its recipes along); a tap writes at once, disables the button and says what is happening ("Adding it to your recipes…"), and the card then becomes its own confirmation: "Added to your recipes" or "Added the saved meal and its 3 recipes", "The photo didn't come along." when a cover couldn't be copied, "Undo" (which takes back exactly what was added and says "Taken back." or "Taken back. One ingredient you've used since stayed.", or, when the person has changed or used it since, says "You've changed or used it since, so Undo left it alone. You can remove it yourself from Recipes or Saved meals." and offers no second try) and "See it in Pinch". A failure stays in the card ("Adding needs a connection. Check yours and try again.", "Couldn't add it just now. Please try again.", "This recipe has no ingredients, so there's nothing to add.", "This saved meal is empty, so there's nothing to add.", "This is too big to add in one go."). **A signed-out visitor** gets a sign-in card of the same size with "Keep this recipe" and three plain lines on what an account gives them; signing in is a Google popup, and the page flips to the signed-in card in place, the card holding its size as a skeleton until the answer for the signed-in person arrives. A saved meal's header shows "N recipes" and "N ingredients"; its body is "On the plate", rows of cover thumbnail, title and "servings · time", where a dish opens in place with a "‹ Back" (the back gesture closes it first), and plain ingredient rows; the slot stays and still means the whole saved meal. The ingredients are one framed card under the group headings the recipe has, an amountless line shows its note ("to taste"), steps have number circles, "Keeping leftovers" is a tinted card drawn only when care has something to say, and links are the recipe drawer's how-to card and rows with no video thumbnail (the page loads nothing from another site until a link is tapped), https only. A cover that can't load leaves the tile. On a phone the cover is a 96px tile beside the title so the slot is on the first screen; from `sm` it is a wide band; from `lg` the page is two columns with the slot sticky on the right. The tab is titled "Shared on Pinch", search engines are asked not to list the page, and a link preview says "A recipe shared on Pinch" and never the title.*
+
 ## Reusable Components
 
 | Component | Used in | Purpose |
@@ -1621,6 +1760,9 @@ block-beta
 | IdeaAddSheet, IdeaWays, IdeaNoteField | New idea | one `FormSheet` for the `MethodPicker` of three ways and each way's own view (link, photo, text) with a "Back" link; an "Add a note" chip reveals the note box |
 | IdeaDrawer, IdeaFormSheet | tapping an idea; its Modify | the details drawer (picture, title, note, Open site, Made into recipe row, Modify beside the one primary) and the Idea sheet (title, link or photo, note, trash, Cancel, Save) |
 | `SectionHeader`, `Subview`, `FormSheet`, `DetailSheet`, `ModalFooterActions`, `DeleteIconButton`, `PickOrCreate`, `SearchInput`, `SectionDivider`, `MoneyInput`, `AppToggle`, `StatTile`, `MethodPicker`, `FormSection`, `Field` | everywhere | the shared pieces in `src/components` and `src/ui`; Pinch builds only what is app-specific. `Field` has an `isCompact` form for a grid of short fields (small captions, a 40px input whose typed text stays 16px) and wraps its control in a native label, so no `Select` goes inside one |
+| ShareView, ShareDoorRow | a recipe's and a saved meal's ⋯ More; a Shared links row's sheet | one component in two homes: not shared (what the copy holds and leaves out, Create link) and shared (the link, Copy link, Send, Update the shared copy, Get a new link, Stop sharing); the door row is the roomy "Share" row with its date |
+| SharedLinksSubview, SharedLinksSection | Settings, once a link exists | the list of the person's links with a flag per row, a search from eight and "Show N more"; the Settings row that opens it |
+| ShareSlot, SharedIntro, SharedCover, SharedRecipeBody, SharedMealBody, SharedStates | the public page `/pinch/shared/:shareId` | the one action card (owner, signed in, added, signed out, checking), the cover and title, the recipe and saved meal bodies, and the skeleton, failed and not-found states; a cover reads only from our own Storage |
 | Empty state | every list and the empty Calendar | an icon, one muted line, and the call to action in the header |
 
 ## User Journeys
@@ -1870,6 +2012,19 @@ flowchart LR
     G --> H[Add] --> I["Drawer shows the numbers; with a serving size set, per serving and per 100 g are one tap apart"]
 ```
 
+**Send a recipe to someone, and keep one you were sent**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
+flowchart LR
+    A["Recipe drawer: ⋯ More"] --> B["Share"] --> C["What the link shows and leaves out"] --> D["Create link"] --> E["Copy link, or Send"]
+    E --> F["Later: Update the shared copy, Get a new link or Stop sharing, here or under Settings, Shared links"]
+    E --> G["A friend opens the link: no sign-in, one page"]
+    G -->|signed in| H["Add to my recipes"] --> I["Added to your recipes · Undo · See it in Pinch"]
+    G -->|signed out| J["Keep this recipe · Sign in with Google"] --> H
+    G -->|you, the owner| K["This is your shared recipe · Open in Pinch"]
+```
+
 ## Form Field Organization
 
 *"Grouping: none" means one flat form — still Dreamer UI's `Form`, just without a `Disclosure` or steps wrapper.*
@@ -1904,3 +2059,4 @@ flowchart LR
 - **A source is a label, not a field of the recipe's story** — `Recipe.sourceId` points at a `Source` (an id and a label); it is not `Recipe.source`, which only says how a draft was made. A missing key, `null` and an id with no source all read as no source, and deleting a source clears the pointer on its recipes.
 - **One document per ingredient and unit** — a shopping item's id is `{ingredientId}__{unit}`, so adding the same thing again merges into it in one transaction, and units are never converted; the list is its own data, not a view of the calendar, so editing a meal later changes nothing on it. Each item remembers what put it there (planned meal ids, a recipe, a saved meal), so an add sheet's defaults follow what was really added instead of guessing from what is on the list.
 - **A well-known store joins "your stores" on first use** — so a product always points at a store document of the person's own.
+- **A link is a copy a Function made, not a view of the kitchen** — a share is its own record (`apps/pinch/shares`, the owner's, written only by a Function) and its own snapshot (`shareSnapshots`, read by no client), under an id the server mints; the page reads through a public callable, a cover is copied into a Storage folder named by the id, and Update, Get a new link and Stop sharing are the owner's three verbs. Nothing about a share is a field of a recipe, and a recipe that is deleted takes its link down with it (`TECHNICAL.md` §5k).
