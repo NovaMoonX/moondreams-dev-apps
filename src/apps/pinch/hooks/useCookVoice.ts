@@ -1,26 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
-import {
-  useSpeechCommands,
-  type SpeechCommandsError,
-} from '@/hooks/useSpeechCommands';
+import { useOnTabReturn } from '@/hooks/useOnTabReturn';
+import { useSpeechCommands } from '@/hooks/useSpeechCommands';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
+import { COOK_WAKE_IDLE_MS, COOK_WINDOW_MS } from '@apps/pinch/constants';
 import {
   getCookCommandKey,
-  readCookCommand,
   type CookCommand,
   type CookTimerScope,
   type CookVoiceContext,
 } from '@apps/pinch/utils/cookVoice';
+import {
+  createVoiceState,
+  getVoiceEffect,
+  planHeard,
+  reduceVoice,
+  type VoiceEvent,
+  type VoiceMode,
+  type VoiceStop,
+} from '@apps/pinch/utils/cookVoiceMode';
 
 /** The same command heard again this soon is the recognizer repeating itself, not the person. */
 const REPEAT_GUARD_MS = 1200;
-const MESSAGE_MS = { HEARD: 2500, ANSWER: 8000, PROBLEM: 5000 } as const;
+const MESSAGE_MS = {
+  HEARD: 2500,
+  ANSWER: 8000,
+  PROBLEM: 5000,
+  MISSED: 3500,
+} as const;
 /** How long the line says why voice control stopped; the unlit mic says the rest. */
-const ERROR_LINE_MS = 8000;
-/** Fifteen minutes without a command turns voice control off, so the room isn't heard after the cooking. */
-const IDLE_STOP_MS = 15 * 60_000;
+const STOP_LINE_MS = 8000;
+const MAX_QUOTE_CHARS = 22;
 
 export type CookVoiceResult =
   | { ok: true; show?: string; speak?: string }
@@ -107,9 +118,14 @@ const getListenLang = () => {
   return lang.toLowerCase().startsWith('en') ? lang : 'en-US';
 };
 
-/** Stops that a tap on the mic should explain again before it retries (a pause for quiet only needs the tap). */
-const isExplainedStop = (error: SpeechCommandsError | null) =>
-  error !== null && error !== 'idle';
+/** A stop that a tap on the mic explains again before it retries; a quiet stretch or the lock running out only needs the tap. */
+const isExplainedStop = (stop: VoiceStop | null) =>
+  stop !== null && stop !== 'wake-idle' && stop !== 'lock-ended';
+
+const quote = (text: string) =>
+  text.length > MAX_QUOTE_CHARS
+    ? `${text.slice(0, MAX_QUOTE_CHARS).trimEnd()}…`
+    : text;
 
 interface UseCookVoiceOptions {
   uid: string;
@@ -119,7 +135,7 @@ interface UseCookVoiceOptions {
   onTurnOn?: () => void;
 }
 
-/** Hands-free cooking: listens for the cooking commands while the person has the mic on, runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered per person on this device, and again after a stop it has to explain. */
+/** Hands-free cooking: listens for the cooking commands in the way the person chose (one window per tap, waiting for "Hey Pinch", or kept open for fifteen minutes), runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered per person on this device, and again after a stop it has to explain. */
 export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
   const [hasAgreed, setHasAgreed] = useLocalStoragePreference(
     `pinch:${uid}:voice:agreed`,
@@ -129,11 +145,17 @@ export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
     `pinch:${uid}:voice:read-aloud`,
     false,
   );
-  const [isExplainerOpen, setIsExplainerOpen] = useState(false);
-  const [message, setMessage] = useState<CookVoiceMessage | null>(null);
-  const [expiredError, setExpiredError] = useState<SpeechCommandsError | null>(
-    null,
+  const [isWaitingPreferred, setIsWaitingPreferred] = useLocalStoragePreference(
+    `pinch:${uid}:voice:wake`,
+    false,
   );
+  const [machine, setMachine] = useState(() =>
+    createVoiceState(isWaitingPreferred ? 'WAKE' : 'TAP'),
+  );
+  const [isExplainerOpen, setIsExplainerOpen] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [message, setMessage] = useState<CookVoiceMessage | null>(null);
+  const [expiredStop, setExpiredStop] = useState<VoiceStop | null>(null);
   const [langs] = useState(() => ({
     listen: getListenLang(),
     speak: getPageLang(),
@@ -142,11 +164,15 @@ export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
     run: (command: CookActionCommand) => CookVoiceResult;
     context: CookVoiceContext;
   } | null>(null);
+  const machineRef = useRef(machine);
   const lastHeard = useRef({ key: '', at: 0 });
   const messageCount = useRef(0);
-  const sayRef = useRef<(text: string) => void>(() => undefined);
-  const stopRef = useRef<() => void>(() => undefined);
   const readStepKey = useRef<string | null>(null);
+  const controls = useRef<{
+    begin: () => void;
+    stop: () => void;
+    say: (text: string) => void;
+  }>({ begin: () => undefined, stop: () => undefined, say: () => undefined });
 
   const connect = useCallback(
     (
@@ -163,17 +189,24 @@ export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
     setMessage({ id: messageCount.current, text, tone });
   };
 
-  const handleTranscript = (alternatives: string[]) => {
-    if (handlers.current === null) return false;
-    const { context: shown, run } = handlers.current;
-    const heard = readCookCommand(alternatives, shown);
-    if (heard === null) {
-      setMessage(null);
-      return false;
-    }
+  const send = useCallback((event: VoiceEvent) => {
+    const previous = machineRef.current;
+    const next = reduceVoice(previous, event);
+    if (next === previous) return;
+    machineRef.current = next;
+    setMachine(next);
+    const effect = getVoiceEffect(previous, next);
+    if (effect === 'START') controls.current.begin();
+    if (effect === 'STOP') controls.current.stop();
+  }, []);
+
+  const carryOut = (
+    heard: { command: CookCommand; transcript: string },
+    run: (command: CookActionCommand) => CookVoiceResult,
+  ) => {
     const { command, transcript } = heard;
     if (command.kind === 'STOP_LISTENING') {
-      stopRef.current();
+      send({ type: 'STOP' });
       setMessage(null);
       return true;
     }
@@ -189,42 +222,116 @@ export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
     }
     lastHeard.current = { key, at: now };
 
+    send({ type: 'COMMAND_HEARD' });
     const result = run(command);
     if (!result.ok) {
       show(result.reason, 'PROBLEM');
       if (isReadingAloud || result.isSpoken) {
-        sayRef.current(result.spoken ?? result.reason);
+        controls.current.say(result.spoken ?? result.reason);
       }
       return true;
     }
     if (result.show) show(result.show, 'ANSWER');
     else show(`Heard “${transcript}”`, 'HEARD');
-    if (result.speak) sayRef.current(result.speak);
+    if (result.speak) controls.current.say(result.speak);
     return true;
+  };
+
+  const handleTranscript = (alternatives: string[]) => {
+    if (handlers.current === null) return false;
+    const { context: shown, run } = handlers.current;
+    const plan = planHeard(machineRef.current.phase, alternatives, shown);
+    if (plan.kind === 'IGNORE') return false;
+    if (plan.kind === 'COMMAND') return carryOut(plan.heard, run);
+    if (plan.kind === 'CLEAR') {
+      setMessage(null);
+      return false;
+    }
+    if (plan.kind === 'WAKE') {
+      if (plan.heard?.command.kind === 'STOP_LISTENING') {
+        return carryOut(plan.heard, run);
+      }
+      if (hasDialogOnTop()) return false;
+      send({ type: 'WAKE_HEARD' });
+      setMessage(null);
+      return plan.heard === null ? true : carryOut(plan.heard, run);
+    }
+    if (hasDialogOnTop()) {
+      setMessage(null);
+      return false;
+    }
+    show(`Not a command: “${quote(alternatives[0])}”`, 'MISSED');
+    return false;
   };
 
   const speech = useSpeechCommands({
     lang: langs.listen,
     speechLang: langs.speak,
     onFinalTranscript: handleTranscript,
-    idleStopMs: IDLE_STOP_MS,
+    onHalt: (error) => {
+      if (error !== 'idle') send({ type: 'ENGINE_STOPPED', reason: error });
+    },
   });
   const { say, quiet, stop, start } = speech;
 
-  useEffect(() => {
-    sayRef.current = say;
-    stopRef.current = stop;
-  }, [say, stop]);
+  const begin = () => {
+    readStepKey.current = null;
+    setExpiredStop(null);
+    setMessage(null);
+    onTurnOn?.();
+    start();
+  };
 
   useEffect(() => {
-    if (speech.error === null) return;
-    const shownError = speech.error;
+    controls.current = { begin, stop, say };
+  });
+
+  const { phase, epoch, lockEndsAt, stopped } = machine;
+  const isListening = speech.status === 'listening';
+
+  useEffect(() => {
+    if (phase !== 'WINDOW' || !isListening) return;
     const timeoutId = window.setTimeout(
-      () => setExpiredError(shownError),
-      ERROR_LINE_MS,
+      () => send({ type: 'WINDOW_ENDED' }),
+      COOK_WINDOW_MS,
     );
     return () => window.clearTimeout(timeoutId);
-  }, [speech.error]);
+  }, [phase, epoch, isListening, send]);
+
+  useEffect(() => {
+    if (phase !== 'WAITING') return;
+    const timeoutId = window.setTimeout(
+      () => send({ type: 'WAIT_ENDED' }),
+      COOK_WAKE_IDLE_MS,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [phase, send]);
+
+  useEffect(() => {
+    if (lockEndsAt === null) return;
+    const timer = { id: 0 };
+    const settle = () => {
+      const left = lockEndsAt - Date.now();
+      if (left <= 0) send({ type: 'LOCK_ENDED' });
+      else timer.id = window.setTimeout(settle, left);
+    };
+    timer.id = window.setTimeout(settle, Math.max(0, lockEndsAt - Date.now()));
+    return () => window.clearTimeout(timer.id);
+  }, [lockEndsAt, send]);
+
+  useOnTabReturn(() => {
+    const endsAt = machineRef.current.lockEndsAt;
+    if (endsAt !== null && Date.now() >= endsAt) send({ type: 'LOCK_ENDED' });
+  });
+
+  useEffect(() => {
+    if (stopped === null) return;
+    const timeoutId = window.setTimeout(
+      () => setExpiredStop(stopped),
+      STOP_LINE_MS,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [stopped]);
 
   useEffect(() => {
     if (message === null) return;
@@ -253,32 +360,37 @@ export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
     if (stepKey !== null) quiet();
   }, [isHearing, isReadingAloud, stepKey, spoken, say, quiet]);
 
-  const begin = () => {
-    readStepKey.current = null;
-    setExpiredError(null);
-    setMessage(null);
-    onTurnOn?.();
-    start();
-  };
-
   const turnOn = () => {
     setHasAgreed(true);
     setIsExplainerOpen(false);
-    begin();
+    send({ type: 'TAP_MIC' });
   };
 
   const toggle = () => {
-    if (speech.isOn) {
-      stop();
+    if (machine.phase !== 'OFF') {
+      send({ type: 'TAP_MIC' });
       setMessage(null);
       return;
     }
-    if (!hasAgreed || isExplainedStop(speech.error)) {
+    if (!hasAgreed || isExplainedStop(machine.stopped)) {
       setIsExplainerOpen(true);
       return;
     }
-    begin();
+    send({ type: 'TAP_MIC' });
   };
+
+  const chooseMode = (mode: VoiceMode) => {
+    setIsWaitingPreferred(mode === 'WAKE');
+    send({ type: 'MODE', mode });
+  };
+
+  /** A row in the voice sheet: it changes how the mic listens now, and "Tap to talk" and "Say Hey Pinch" are remembered for next time. */
+  const choose = (choice: VoiceMode | 'LOCK') => {
+    if (choice !== 'LOCK') setIsWaitingPreferred(choice === 'WAKE');
+    send({ type: 'CHOOSE', choice, at: Date.now() });
+  };
+
+  const stopVoice = useCallback(() => send({ type: 'STOP' }), [send]);
 
   const setReadingAloud = (isOn: boolean) => {
     readStepKey.current = null;
@@ -288,18 +400,31 @@ export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
   return {
     isSupported: speech.isSupported,
     status: speech.status,
-    isOn: speech.isOn,
+    /** The mic is open, whether it waits for "Hey Pinch" or takes commands. */
+    isOn: phase !== 'OFF',
+    phase,
+    /** How the mic listens when it is on (the lock is never remembered). */
+    mode: machine.mode,
+    /** Changes with each command window that opens or is extended: keys the draining bar. */
+    windowKey: epoch,
+    /** When the fifteen minutes end, while it is kept open. */
+    lockEndsAt,
     /** Why voice control last stopped by itself, until it starts again. */
-    error: speech.error,
+    error: stopped,
     /** The stop the line still mentions: for a few seconds after it happens. */
-    shownError: speech.error === expiredError ? null : speech.error,
+    shownError: stopped === expiredStop ? null : stopped,
     message,
     isExplainerOpen,
     closeExplainer: () => setIsExplainerOpen(false),
+    isSheetOpen,
+    openSheet: () => setIsSheetOpen(true),
+    closeSheet: () => setIsSheetOpen(false),
     connect,
     turnOn,
     toggle,
-    stop,
+    stop: stopVoice,
+    chooseMode,
+    choose,
     isReadingAloud,
     setIsReadingAloud: setReadingAloud,
   };
