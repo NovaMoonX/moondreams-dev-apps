@@ -20,7 +20,9 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
-import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
+import ItemSearch, {
+  type ItemSuggestions,
+} from '@apps/pinch/components/plan/ItemSearch';
 import {
   isRowAmountValid,
   type IngredientRow,
@@ -36,6 +38,7 @@ import {
 import {
   selectIngredients,
   selectIngredientsById,
+  selectOftenUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
 import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
 import {
@@ -51,6 +54,7 @@ import {
   ungroupLines,
 } from '@apps/pinch/utils/ingredientGroups';
 import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
+import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
 
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
@@ -165,6 +169,7 @@ interface IngredientEditorProps {
   /** The drawer has a footer button and puts "remove" in its body; an inline row shows it beside the fields. */
   showRemove: boolean;
   isGroupLive: boolean;
+  suggestions: ItemSuggestions;
 }
 
 /** One ingredient's details: amount, unit and a preparation note, or the way to resolve a name the reader found that no ingredient matches. Shared by the phone drawer and the inline row. */
@@ -177,6 +182,7 @@ function IngredientEditor({
   onRemove,
   showRemove,
   isGroupLive,
+  suggestions,
 }: IngredientEditorProps) {
   const [isChoosing, setIsChoosing] = useState(false);
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
@@ -275,6 +281,7 @@ function IngredientEditor({
           <ItemSearch
             uid={uid}
             excludeIds={usedInGroup}
+            suggestions={suggestions}
             onPick={(ingredientId) => {
               setIsChoosing(false);
               onUpdate({ ingredientId, proposedName: null, newName: null });
@@ -608,6 +615,15 @@ function RecipeIngredients({
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(rows.length === 0 && !isPhone);
   const [drawer, setDrawer] = useState<DrawerMode | null>(null);
+  const oftenUsedIds = useAppSelector(selectOftenUsedIngredientIds);
+  const usedKey = rows.map((row) => row.ingredientId).join(',');
+  const suggestions = useMemo<ItemSuggestions>(
+    () => ({
+      caption: 'From your other recipes',
+      ids: takeSuggestionIds([oftenUsedIds], new Set(usedKey.split(','))),
+    }),
+    [oftenUsedIds, usedKey],
+  );
   const groups = groupIngredientLines(rows);
   const groupNames = getGroupNames(rows);
   const lastGroup = rows[rows.length - 1]?.group ?? null;
@@ -806,6 +822,7 @@ function RecipeIngredients({
                             displayName={name}
                             showRemove={false}
                             isGroupLive={false}
+                            suggestions={suggestions}
                             onUpdate={(patch) => update(row.id, patch)}
                             onRemove={() => remove(row.id)}
                           />
@@ -828,6 +845,7 @@ function RecipeIngredients({
               setIsAdding(false);
             }}
             excludeIds={getUsedInGroup(rows, lastGroup)}
+            suggestions={suggestions}
             autoFocus={rows.length > 0}
           />
           {lastGroup !== null && (
@@ -866,6 +884,7 @@ function RecipeIngredients({
           rows={rows}
           mode={drawer}
           getName={getName}
+          suggestions={suggestions}
           onAdd={addRow}
           onUpdate={update}
           onRemove={remove}
@@ -881,6 +900,7 @@ interface IngredientDrawerProps {
   rows: IngredientRow[];
   mode: DrawerMode;
   getName: (row: IngredientRow) => string;
+  suggestions: ItemSuggestions;
   onAdd: (ingredientId: string, group: string | null) => string;
   onUpdate: (id: string, patch: Partial<IngredientRow>) => void;
   onRemove: (id: string) => void;
@@ -892,6 +912,7 @@ function IngredientDrawer({
   rows,
   mode,
   getName,
+  suggestions,
   onAdd,
   onUpdate,
   onRemove,
@@ -942,6 +963,7 @@ function IngredientDrawer({
           displayName={getName(row)}
           showRemove={mode.kind === 'edit'}
           isGroupLive
+          suggestions={suggestions}
           onUpdate={(patch) => onUpdate(row.id, patch)}
           onRemove={() => {
             onRemove(row.id);
@@ -959,6 +981,7 @@ function IngredientDrawer({
             uid={uid}
             autoFocus
             excludeIds={getUsedInGroup(rows, addGroup)}
+            suggestions={suggestions}
             onPick={(ingredientId) =>
               setActiveId(onAdd(ingredientId, addGroup))
             }
