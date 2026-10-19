@@ -280,6 +280,8 @@ export interface StockView {
   packages: Package[];
   /** What is physically there, per kind, past-date packages included. */
   totals: AmountTotal[];
+  /** The same without the packages past their date. */
+  inDateTotals: AmountTotal[];
   pastCount: number;
   soonCount: number;
   /** The soonest package that has a date, past ones included. */
@@ -300,6 +302,9 @@ export const getStockView = (
     ingredientId,
     packages: sorted,
     totals: sumAmounts(sorted),
+    inDateTotals: sumAmounts(
+      sorted.filter((_, index) => states[index] !== 'PAST'),
+    ),
     pastCount: states.filter((state) => state === 'PAST').length,
     soonCount: states.filter((state) => state === 'SOON').length,
     nearest: sorted.find((pkg) => pkg.expiresAt !== null) ?? null,
@@ -345,15 +350,20 @@ export const getStockFlag = (
 };
 
 /** "3 packages · 2.4 lb in all": how many, and how much, in the order a row reads them. */
+/** How many packages and how much. Several packages with one past their date add up only the ones in date ("192 fl oz in date"), since the date's flag already names the rest; one package says its own amount. */
 export const getStockSummaryParts = (view: StockView) => {
   const count = view.packages.length;
+  const isPartlyPast = count > 1 && view.pastCount > 0;
+  const totals = isPartlyPast ? view.inDateTotals : view.totals;
   const total =
-    view.totals.length === 0
-      ? null
-      : view.totals.map(formatTotal).join(' and ');
+    totals.length === 0 ? null : totals.map(formatTotal).join(' and ');
   return [
     count > 1 ? `${count} packages` : null,
-    total === null ? null : count > 1 ? `${total} in all` : total,
+    total === null
+      ? null
+      : count > 1
+        ? `${total} ${isPartlyPast ? 'in date' : 'in all'}`
+        : total,
   ].filter((part) => part !== null);
 };
 

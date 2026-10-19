@@ -224,10 +224,11 @@ assert.deepEqual(
   [chickenView.pastCount, chickenView.soonCount, chickenView.nearest?.id],
   [1, 1, 'c1'],
 );
-assert.deepEqual(getStockSummaryParts(chickenView), [
-  '3 packages',
-  '2.4 lb in all',
-]);
+assert.deepEqual(
+  getStockSummaryParts(chickenView),
+  ['3 packages', '1.4 lb in date'],
+  'the pound past its date is left out of the total, and the row flags it',
+);
 assert.deepEqual(getStockFlag(chickenView, NOW), {
   state: 'PAST',
   label: '1 past its date',
@@ -281,6 +282,43 @@ assert.deepEqual(
   ),
   ['2 packages', '1 l and 3 each in all'],
   'a different kind is shown as its own amount',
+);
+
+const carton = (id: string, amount: number, expiresAt: number | null) =>
+  pkg({ id, amount, unit: 'FL_OZ', expiresAt });
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView(
+      'x',
+      [carton('a', 192, dayOf(25)), carton('b', 32, dayOf(10))],
+      NOW,
+    ),
+  ),
+  ['2 packages', '192 fl oz in date'],
+  'a carton past its date is not in the total, which says so instead of "in all"',
+);
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView('x', [carton('a', 96, dayOf(25)), carton('b', 96, null)], NOW),
+  ),
+  ['2 packages', '192 fl oz in all'],
+  'one with no date counts, and with nothing past the total is "in all"',
+);
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView(
+      'x',
+      [carton('a', 192, dayOf(9)), carton('b', 32, dayOf(10))],
+      NOW,
+    ),
+  ),
+  ['2 packages'],
+  'with every package past its date there is no amount in date to add up',
+);
+assert.deepEqual(
+  getStockSummaryParts(getStockView('x', [carton('a', 32, dayOf(10))], NOW)),
+  ['32 fl oz'],
+  'one package past its date still says its own amount',
 );
 
 // Grouping keeps only what is in stock
