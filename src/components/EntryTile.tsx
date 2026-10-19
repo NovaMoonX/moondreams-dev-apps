@@ -43,7 +43,7 @@ function EntryTile({
             {label}
           </span>
           {status && (
-            <span className='text-muted-foreground line-clamp-1 text-xs wrap-break-word @min-[13rem]:line-clamp-2 @min-[13rem]:text-balance @min-[13rem]:[@media(max-height:599px)]:line-clamp-1 @min-[13rem]:[@media(max-height:599px)]:min-w-0 @min-[13rem]:[@media(max-height:599px)]:flex-1'>
+            <span className='text-muted-foreground line-clamp-1 text-[11px] wrap-break-word @min-[13rem]:line-clamp-2 @min-[13rem]:text-xs @min-[13rem]:text-balance @min-[13rem]:[@media(max-height:599px)]:line-clamp-1 @min-[13rem]:[@media(max-height:599px)]:min-w-0 @min-[13rem]:[@media(max-height:599px)]:flex-1'>
               {status}
             </span>
           )}

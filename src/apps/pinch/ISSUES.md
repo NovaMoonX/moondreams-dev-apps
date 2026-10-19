@@ -1287,6 +1287,7 @@ Fridge & freezer's past-its-date row counts both places, so it says what Kitchen
 - [x] A recipe written before the star (no `isFavorite`) reads, edits, stars and joins a bulk add, checked in the browser and on the emulator; the rules matrix shows only the owner's star and a create with the key as new allows.
 - [x] Kitchen to cleared in three taps (the tile, "Toss them", the confirm) with the tile's count and the landing's row agreeing.
 - [x] The first ingredient row is visible at 320×568 on Kitchen; first-row shares printed at 390×844, 375×667, 390×560, 320×568 and 844×390 before and after.
+- [x] Third design round: Kitchen's door tiles cut their status to one line and the subtitle goes while a door exists (first ingredient 47 / 57 / 68 / 67 / 86% → 43 / 54 / 63 / 62 / 78%); View options is the shared 28px header icon on Calendar and, while Recipes has no pill row, in Recipes' header (Jamie with one recipe 22 / 28 / 33 / 32 / 48% → 17 / 22 / 26 / 25 / 37%); the toast Dismiss, thin pills, label chips, suggestion chips and 320px Month cells reach 40px (measured with `elementFromPoint`); Settings keeps its opening card at every height and draws the reminder kinds only once the device is on (390px shorter with the device off).
 - [x] `npx tsc -b --force`, `npx eslint`, `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass.
 
 ## Beyond
