@@ -143,13 +143,13 @@ function ResumeCard({ snapshot, plan, onKeep, onDismiss }: ResumeCardProps) {
             <span className='sr-only'>Keep cooking. </span>
             Pick up step {plan.stepNumber}?
           </span>
-          <span className='text-muted-foreground flex gap-1 text-xs leading-4 font-normal'>
-            <span className='min-w-0 shrink-10 truncate'>
-              {timerLine === null ? dishName : `${dishName} ·`}
-            </span>
+          <span className='text-muted-foreground flex h-4 flex-wrap gap-x-1 overflow-hidden text-xs leading-4 font-normal'>
             {timerLine !== null && (
-              <span className='max-w-full shrink-0 truncate'>{timerLine}</span>
+              <span className='max-w-full truncate'>{timerLine}</span>
             )}
+            <span className='min-w-14 flex-[1_1_3.5rem] truncate'>
+              {timerLine === null ? dishName : `· ${dishName}`}
+            </span>
           </span>
         </span>
         <ChevronRight
