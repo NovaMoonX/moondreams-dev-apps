@@ -259,7 +259,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         <SectionHeader
           title='Kitchen'
           action={
-            <div className='flex items-center gap-1'>
+            <div className='flex items-center gap-1 max-[359px]:gap-2'>
               {hasStoresOrPrices && (
                 <Button
                   type='button'

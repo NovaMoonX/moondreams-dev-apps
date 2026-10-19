@@ -810,7 +810,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     if (isIdeas && ideaCount >= SOFT_MAX_IDEAS) return undefined;
 
     return (
-      <div className='flex items-center gap-2'>
+      <div className='flex items-center gap-2 max-[359px]:gap-3'>
         {hasSourceSection && (
           <Button
             type='button'
