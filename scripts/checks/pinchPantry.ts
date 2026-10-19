@@ -1421,7 +1421,7 @@ assert.deepEqual(
     ['jar', 1, 'CUP', true, false],
     ['lb-bag', 1.25, 'LB', false, true],
   ],
-  'a jar in cups and a bag in pounds are drawn from together, the one that expires first first',
+  'a jar in cups and a bag in pounds are drawn from together, starting with the one that expires first',
 );
 const shortBridged = planTakeOut(
   [{ ingredientId: 'cat-rice', amount: 4, unit: 'CUP' }],
@@ -1436,6 +1436,43 @@ assert.deepEqual(
   ],
   [[[4, true]], [{ ingredientId: 'cat-rice', amount: 3.4, unit: 'CUP' }]],
   "what four ounces cannot cover is said in the recipe's own unit",
+);
+
+const milkCarton = (amount: number, over: Partial<Package> = {}) =>
+  pkg({ id: 'carton', unit: 'L', amount, place: 'FRIDGE', ...over });
+const cupsOfMilk = (cups: number, packages: Package[]) =>
+  planTakeOut(
+    [{ ingredientId: 'cat-milk', amount: cups, unit: 'CUP' }],
+    packages,
+    NOW,
+  );
+const twoCupsFromCarton = cupsOfMilk(2, [milkCarton(1)]);
+assert.deepEqual(
+  [
+    twoCupsFromCarton.takes.map((take) => [take.amount, take.unit, take.isAll]),
+    twoCupsFromCarton.short,
+  ],
+  [[[0.47, 'L', false]], []],
+  "two cups from a one-litre carton takes 0.47 l and reports no shortfall: what the carton's own two figures round away is not a shortage",
+);
+assert.deepEqual(
+  cupsOfMilk(2, [milkCarton(4)]).short,
+  [],
+  'a bigger carton says the same',
+);
+assert.deepEqual(
+  cupsOfMilk(2, [
+    milkCarton(0.3, { id: 'soon', expiresAt: dayOf(20) }),
+    milkCarton(1, { id: 'later', expiresAt: dayOf(30) }),
+  ]).short,
+  [],
+  'a second package that rounds the rest down is not a shortage either',
+);
+const eightCups = cupsOfMilk(8, [milkCarton(1.53)]);
+assert.deepEqual(
+  [eightCups.takes.map((take) => [take.amount, take.isAll]), eightCups.short],
+  [[[1.53, true]], [{ ingredientId: 'cat-milk', amount: 1.53, unit: 'CUP' }]],
+  'a real shortfall (eight cups against 1.53 l) is still said, in the recipe unit',
 );
 
 // The recipes type is only here so a drift in the shape is a compile error

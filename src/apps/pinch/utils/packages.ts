@@ -1045,11 +1045,14 @@ export const planTakeOut = (
           : Math.min(pkg.amount, round2(wanted ?? 0));
         if (amount <= 0) return state;
 
+        const isWhole = isAll || amount >= pkg.amount - EPSILON;
         return {
-          left: Math.max(
-            0,
-            state.left - toCommon(amount, pkg.unit, conversions).base,
-          ),
+          left: isWhole
+            ? Math.max(
+                0,
+                state.left - toCommon(amount, pkg.unit, conversions).base,
+              )
+            : 0,
           takes: [
             ...state.takes,
             {
@@ -1057,7 +1060,7 @@ export const planTakeOut = (
               ingredientId: pkg.ingredientId,
               amount,
               unit: pkg.unit,
-              isAll: isAll || amount >= pkg.amount - EPSILON,
+              isAll: isWhole,
               isConverted: need.units.some(
                 (unit) => UNIT_DIMENSION[unit] !== UNIT_DIMENSION[pkg.unit],
               ),
