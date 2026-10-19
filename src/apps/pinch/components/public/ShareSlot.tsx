@@ -20,7 +20,6 @@ interface SlotCardProps {
   emoji: ReactNode;
   lead: ReactNode;
   hint?: ReactNode;
-  className?: string;
   isBusy?: boolean;
   children: ReactNode;
 }
@@ -29,7 +28,6 @@ function SlotCard({
   emoji,
   lead,
   hint,
-  className,
   isBusy = false,
   children,
 }: SlotCardProps) {
@@ -40,10 +38,7 @@ function SlotCard({
       aria-labelledby={leadId}
       aria-busy={isBusy}
       aria-live='polite'
-      className={join(
-        'bg-accent/60 border-border rounded-2xl border p-4',
-        className,
-      )}
+      className='bg-accent/60 border-border rounded-2xl border p-3.5'
     >
       <div className='flex items-start gap-3'>
         <span
@@ -52,7 +47,7 @@ function SlotCard({
         >
           {emoji}
         </span>
-        <div className='min-w-0 flex-1 space-y-0.5 pt-0.5'>
+        <div className='min-h-17 min-w-0 flex-1 space-y-0.5 pt-0.5'>
           <div id={leadId} className='font-medium text-pretty'>
             {lead}
           </div>
@@ -70,10 +65,9 @@ function SlotCard({
 
 interface KindSlotProps {
   target: ShareTarget;
-  className?: string;
 }
 
-function OwnerSlot({ target, className }: KindSlotProps) {
+function OwnerSlot({ target }: KindSlotProps) {
   const navigate = useNavigate();
   const copy = SHARE_SLOT_COPY[target.kind];
 
@@ -82,11 +76,10 @@ function OwnerSlot({ target, className }: KindSlotProps) {
       emoji={copy.emoji}
       lead={copy.ownerLead}
       hint='Everyone with the link sees this page, just as you do now.'
-      className={className}
     >
       <Button
         type='button'
-        className='h-12 w-full'
+        className='h-11 w-full'
         onClick={() => navigate(PINCH_RECIPES_PATH)}
       >
         Open in Pinch
@@ -95,7 +88,7 @@ function OwnerSlot({ target, className }: KindSlotProps) {
   );
 }
 
-function SignedOutSlot({ target, className }: KindSlotProps) {
+function SignedOutSlot({ target }: KindSlotProps) {
   const { signInWithGoogle } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const copy = SHARE_SLOT_COPY[target.kind];
@@ -114,27 +107,16 @@ function SignedOutSlot({ target, className }: KindSlotProps) {
       emoji={copy.emoji}
       lead={copy.signedOutLead}
       hint={copy.signedOutHint}
-      className={className}
     >
       <Button
         type='button'
-        className='h-12 w-full gap-2'
+        className='h-11 w-full gap-2'
         disabled={isSigningIn}
         onClick={() => void handleSignIn()}
       >
         <Google className='size-4' />
         {isSigningIn ? 'Signing in…' : 'Sign in with Google'}
       </Button>
-      <ul className='space-y-1.5'>
-        {copy.benefits.map((benefit) => (
-          <li key={benefit.text} className='flex gap-2 text-sm'>
-            <span className='w-5 shrink-0 text-center' aria-hidden='true'>
-              {benefit.emoji}
-            </span>
-            <span className='min-w-0 text-pretty'>{benefit.text}</span>
-          </li>
-        ))}
-      </ul>
     </SlotCard>
   );
 }
@@ -144,7 +126,7 @@ interface VisitorSlotProps extends KindSlotProps {
   shareId: string;
 }
 
-function VisitorSlot({ uid, shareId, target, className }: VisitorSlotProps) {
+function VisitorSlot({ uid, shareId, target }: VisitorSlotProps) {
   const navigate = useNavigate();
   const { state, add, undo } = useShareAdd({ uid, shareId, target });
   const copy = SHARE_SLOT_COPY[target.kind];
@@ -163,9 +145,8 @@ function VisitorSlot({ uid, shareId, target, className }: VisitorSlotProps) {
         hint={
           written.missingCovers > 0
             ? `${written.missingCovers === 1 ? 'The photo' : 'Some photos'} didn't come along.`
-            : undefined
+            : copy.addedHint
         }
-        className={className}
       >
         {state.undoError && (
           <p className='text-destructive text-sm' role='alert'>
@@ -177,7 +158,7 @@ function VisitorSlot({ uid, shareId, target, className }: VisitorSlotProps) {
             <Button
               type='button'
               variant='secondary'
-              className='h-12 shrink-0'
+              className='h-11 shrink-0'
               disabled={state.isUndoing}
               onClick={() => void undo()}
             >
@@ -186,7 +167,7 @@ function VisitorSlot({ uid, shareId, target, className }: VisitorSlotProps) {
           )}
           <Button
             type='button'
-            className='h-12 min-w-0 flex-1'
+            className='h-11 min-w-0 flex-1'
             onClick={() => navigate(PINCH_RECIPES_PATH)}
           >
             See it in Pinch
@@ -202,7 +183,6 @@ function VisitorSlot({ uid, shareId, target, className }: VisitorSlotProps) {
       emoji={copy.emoji}
       lead={copy.visitorLead}
       hint={copy.visitorHint}
-      className={className}
       isBusy={isAdding}
     >
       {state.phase === 'idle' && state.error && (
@@ -215,7 +195,7 @@ function VisitorSlot({ uid, shareId, target, className }: VisitorSlotProps) {
       )}
       <Button
         type='button'
-        className='h-12 w-full'
+        className='h-11 w-full'
         disabled={isAdding}
         onClick={() => void add()}
       >
@@ -233,7 +213,22 @@ interface ShareSlotProps {
   className?: string;
 }
 
-/** The page's one action: the same card in every state, so a signed-out page reads like a signed-in one. */
+function Benefits({ target }: KindSlotProps) {
+  return (
+    <ul className='space-y-1.5'>
+      {SHARE_SLOT_COPY[target.kind].benefits.map((benefit) => (
+        <li key={benefit.text} className='flex gap-2 text-sm'>
+          <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+            {benefit.emoji}
+          </span>
+          <span className='min-w-0 text-pretty'>{benefit.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The page's one action: the same card in every state, so a signed-out page reads like a signed-in one. Only a signed-out page adds the lines about what an account gives, under the card. */
 function ShareSlot({
   shareId,
   target,
@@ -243,32 +238,37 @@ function ShareSlot({
 }: ShareSlotProps) {
   const { user } = useAuth();
 
-  if (isChecking) {
+  const getCard = () => {
+    if (isChecking) {
+      return (
+        <SlotCard
+          emoji={SHARE_SLOT_COPY[target.kind].emoji}
+          lead={<Skeleton className='h-5 w-44' />}
+          hint={<Skeleton className='mt-1.5 h-4 w-60 max-w-full' />}
+          isBusy
+        >
+          <Skeleton className='h-11 w-full' />
+        </SlotCard>
+      );
+    }
+    if (user === null) return <SignedOutSlot target={target} />;
+    if (isOwner) return <OwnerSlot target={target} />;
+
     return (
-      <SlotCard
-        emoji={SHARE_SLOT_COPY[target.kind].emoji}
-        lead={<Skeleton className='h-5 w-44' />}
-        hint={<Skeleton className='mt-1.5 h-4 w-60 max-w-full' />}
-        className={className}
-        isBusy
-      >
-        <Skeleton className='h-12 w-full' />
-      </SlotCard>
+      <VisitorSlot
+        key={`${shareId}:${user.uid}`}
+        uid={user.uid}
+        shareId={shareId}
+        target={target}
+      />
     );
-  }
-  if (user === null) {
-    return <SignedOutSlot target={target} className={className} />;
-  }
-  if (isOwner) return <OwnerSlot target={target} className={className} />;
+  };
 
   return (
-    <VisitorSlot
-      key={`${shareId}:${user.uid}`}
-      uid={user.uid}
-      shareId={shareId}
-      target={target}
-      className={className}
-    />
+    <div className={join('space-y-3', className)}>
+      {getCard()}
+      {user === null && !isChecking && <Benefits target={target} />}
+    </div>
   );
 }
 

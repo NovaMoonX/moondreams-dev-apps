@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import FallbackImage from '@/components/FallbackImage';
@@ -25,6 +25,7 @@ function SharedCover({
   const { data: url } = useQuery({
     ...sharedCoverQueryOptions(shareId, index ?? 0),
     enabled: hasCover && index !== null,
+    placeholderData: keepPreviousData,
   });
   const tile = (
     <span

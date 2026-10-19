@@ -1,3 +1,5 @@
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import FactsLine, { type Fact } from '@/components/FactsLine';
 import SharedCover from '@apps/pinch/components/public/SharedCover';
 
@@ -8,6 +10,8 @@ interface SharedIntroProps {
   emoji: string;
   title: string;
   facts: Fact[];
+  /** A short screen keeps the small tile beside the title, so the card below it stays in view. */
+  isCompact: boolean;
 }
 
 function SharedIntro({
@@ -17,16 +21,25 @@ function SharedIntro({
   emoji,
   title,
   facts,
+  isCompact,
 }: SharedIntroProps) {
   return (
-    <div className='grid grid-cols-[auto_minmax(0,1fr)] items-start gap-4 sm:grid-cols-1'>
+    <div
+      className={join(
+        'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-4',
+        !isCompact && 'sm:grid-cols-1',
+      )}
+    >
       <SharedCover
         shareId={shareId}
         index={coverIndex}
         hasCover={hasCover}
         emoji={emoji}
-        className='size-24 rounded-2xl sm:h-56 sm:w-full sm:rounded-3xl'
-        emojiClassName='text-4xl sm:text-7xl'
+        className={join(
+          'size-20 rounded-2xl',
+          !isCompact && 'sm:h-[min(14rem,26dvh)] sm:w-full sm:rounded-3xl',
+        )}
+        emojiClassName={join('text-4xl', !isCompact && 'sm:text-7xl')}
       />
       <div className='min-w-0 space-y-1.5'>
         <h1 className='text-2xl font-semibold tracking-tight wrap-break-word'>

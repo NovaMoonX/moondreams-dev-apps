@@ -1,4 +1,3 @@
-import ClampedText from '@/components/ClampedText';
 import FormSection from '@/components/FormSection';
 import SectionDivider from '@/components/SectionDivider';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
@@ -28,7 +27,9 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
   return (
     <div className='space-y-6'>
       {recipe.description && (
-        <ClampedText text={recipe.description} maxLines={4} />
+        <p className='text-sm wrap-break-word whitespace-pre-wrap'>
+          {recipe.description}
+        </p>
       )}
 
       <FormSection title='Ingredients'>

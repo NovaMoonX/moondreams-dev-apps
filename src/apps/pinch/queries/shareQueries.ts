@@ -1,8 +1,9 @@
 import { queryOptions } from '@tanstack/react-query';
+import { FirebaseError } from 'firebase/app';
 import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref } from 'firebase/storage';
 
-import { functions, storage } from '@/lib/firebase/config';
+import { auth, functions, storage } from '@/lib/firebase/config';
 import { SHARE_ID_LENGTH } from '@apps/pinch/constants';
 import type { PinchShareResult } from '@apps/pinch/types';
 import { getShareTarget } from '@apps/pinch/utils/importShare';
@@ -24,6 +25,22 @@ export const shareQueryKeys = {
     [...shareQueryKeys.all, 'cover', shareId, index] as const,
 };
 
+/** A token the server won't take answers even this public call with a 401, so the person's token is renewed and the call made once more. */
+const readShare = async (shareId: string): Promise<PinchShareResult> => {
+  try {
+    return (await getPinchShareCallable({ shareId })).data;
+  } catch (error) {
+    if (
+      !(error instanceof FirebaseError) ||
+      error.code !== 'functions/unauthenticated'
+    ) {
+      throw error;
+    }
+    await auth.currentUser?.getIdToken(true);
+    return (await getPinchShareCallable({ shareId })).data;
+  }
+};
+
 const NOT_FOUND: PinchShareResult = { status: 'not_found' };
 
 /** An answer that doesn't hold what its kind says reads as not found, so the page never draws half a recipe. */
@@ -40,8 +57,8 @@ export function sharedPinchQueryOptions(shareId: string, uid: string | null) {
     queryFn: async () => {
       if (!isShareId(shareId)) return NOT_FOUND;
 
-      const result = await getPinchShareCallable({ shareId });
-      return toShareResult(result.data);
+      const result = await readShare(shareId);
+      return toShareResult(result);
     },
     staleTime: 5 * 60_000,
     gcTime: 5 * 60_000,

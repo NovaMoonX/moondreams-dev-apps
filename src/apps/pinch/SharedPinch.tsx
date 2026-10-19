@@ -1,13 +1,14 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import type { Fact } from '@/components/FactsLine';
 import { useAuth } from '@/hooks/useAuth';
-import { useBackStep } from '@/hooks/useBackHistory';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNoIndex } from '@/hooks/useNoIndex';
 import { formatDate } from '@/utils/formatUtils';
 import ShareSlot from '@apps/pinch/components/public/ShareSlot';
@@ -30,6 +31,8 @@ import {
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
 
+const SHORT_SCREEN_MAX_HEIGHT = 599;
+
 type OkShare = Extract<PinchShareResult, { status: 'ok' }>;
 
 const getRecipeFacts = (recipe: SharedRecipe): Fact[] => {
@@ -45,26 +48,6 @@ const getRecipeFacts = (recipe: SharedRecipe): Fact[] => {
 const countOf = (count: number, one: string, many: string) =>
   `${count} ${count === 1 ? one : many}`;
 
-interface BackLinkProps {
-  onBack: () => void;
-}
-
-function BackLink({ onBack }: BackLinkProps) {
-  useBackStep(true, onBack);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 px-0!'
-      onClick={onBack}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
-    </Button>
-  );
-}
-
 interface SharedViewProps {
   shareId: string;
   share: OkShare;
@@ -76,16 +59,21 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const scrollRef = useRef(0);
   const copy = SHARE_SLOT_COPY[share.kind];
-
-  useLayoutEffect(() => {
-    window.scrollTo({ top: openIndex === null ? scrollRef.current : 0 });
-  }, [openIndex]);
+  const { isAtLeast } = useMediaQuery();
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
+  const isSplit = isAtLeast('lg') || (isAtLeast('sm') && isShort);
 
   if (target === null) return <SharedNotFound />;
 
   const openDish = (index: number) => {
     scrollRef.current = window.scrollY;
     setOpenIndex(index);
+    window.scrollTo({ top: 0 });
+  };
+
+  const closeDish = () => {
+    setOpenIndex(null);
+    requestAnimationFrame(() => window.scrollTo({ top: scrollRef.current }));
   };
 
   const getContent = () => {
@@ -99,6 +87,7 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
             emoji={copy.emoji}
             title={target.recipe.title}
             facts={getRecipeFacts(target.recipe)}
+            isCompact={isShort}
           />
         ),
         body: <SharedRecipeBody recipe={target.recipe} />,
@@ -116,6 +105,7 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
             emoji={SHARE_SLOT_COPY.RECIPE.emoji}
             title={dish.title}
             facts={getRecipeFacts(dish)}
+            isCompact={isShort}
           />
         ),
         body: <SharedRecipeBody recipe={dish} />,
@@ -134,6 +124,7 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
           hasCover={false}
           emoji={copy.emoji}
           title={target.meal.name}
+          isCompact={isShort}
           facts={[
             ...(recipeCount > 0
               ? [
@@ -170,8 +161,20 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
   const { intro, body } = getContent();
 
   return (
-    <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-x-10 lg:gap-y-6'>
-      <div className='flex items-center justify-between gap-3 lg:col-span-2'>
+    <div
+      className={join(
+        'mx-auto grid gap-4',
+        isSplit
+          ? 'max-w-5xl grid-cols-[minmax(0,1fr)_20rem] gap-x-10 gap-y-6'
+          : 'max-w-2xl',
+      )}
+    >
+      <div
+        className={join(
+          'flex items-center justify-between gap-3',
+          isSplit && 'col-span-2',
+        )}
+      >
         <span className='flex items-center gap-2.5'>
           <img
             src='/logos/by-app/logo-pinch.svg'
@@ -184,8 +187,8 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
           {copy.eyebrow}
         </span>
       </div>
-      <div className='min-w-0 space-y-1 lg:col-start-1'>
-        {openIndex !== null && <BackLink onBack={() => setOpenIndex(null)} />}
+      <div className={join('min-w-0 space-y-1', isSplit && 'col-start-1')}>
+        {openIndex !== null && <BackLink onBack={closeDish} />}
         {intro}
       </div>
       <ShareSlot
@@ -193,10 +196,19 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
         target={target}
         isOwner={share.isOwner}
         isChecking={isChecking}
-        className='lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-2 lg:self-start'
+        className={
+          isSplit
+            ? 'sticky top-6 col-start-2 row-span-2 row-start-2 self-start'
+            : undefined
+        }
       />
-      <div className='min-w-0 lg:col-start-1'>{body}</div>
-      <p className='text-muted-foreground text-center text-xs text-pretty lg:col-start-1'>
+      <div className={join('min-w-0', isSplit && 'col-start-1')}>{body}</div>
+      <p
+        className={join(
+          'text-muted-foreground text-center text-xs text-pretty',
+          isSplit && 'col-start-1',
+        )}
+      >
         A snapshot from {formatDate(share.sharedAt)}, so it won&apos;t change if
         the original does.
       </p>
@@ -236,7 +248,7 @@ function SharedPinch() {
 
   return (
     <div className='page pb-16'>
-      <div className='mx-auto max-w-2xl py-6 lg:max-w-5xl'>{getContent()}</div>
+      <div className='mx-auto max-w-5xl py-6'>{getContent()}</div>
     </div>
   );
 }

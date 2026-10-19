@@ -160,6 +160,7 @@ export const SHARE_SLOT_COPY: Record<
     visitorHint: string;
     addLabel: string;
     addingLabel: string;
+    addedHint: string;
     signedOutLead: string;
     signedOutHint: string;
     benefits: { emoji: string; text: string }[];
@@ -168,11 +169,12 @@ export const SHARE_SLOT_COPY: Record<
   RECIPE: {
     eyebrow: 'Shared recipe',
     emoji: '🍲',
-    ownerLead: 'This is your shared recipe',
+    ownerLead: 'Your shared recipe',
     visitorLead: 'Want this in your recipes?',
     visitorHint: 'Adds your own copy to change, plan and cook.',
     addLabel: 'Add to my recipes',
     addingLabel: 'Adding it to your recipes…',
+    addedHint: 'Find it under Recipes in Pinch.',
     signedOutLead: 'Keep this recipe',
     signedOutHint: 'Sign in to add it to your own recipes.',
     benefits: [
@@ -187,11 +189,12 @@ export const SHARE_SLOT_COPY: Record<
   MEAL: {
     eyebrow: 'Shared saved meal',
     emoji: '🍽️',
-    ownerLead: 'This is your shared saved meal',
+    ownerLead: 'Your shared saved meal',
     visitorLead: 'Want this saved meal?',
     visitorHint: 'Adds your own copy, with the recipes it uses.',
     addLabel: 'Add to my saved meals',
     addingLabel: 'Adding it to your saved meals…',
+    addedHint: 'Find it under Saved meals, in Recipes.',
     signedOutLead: 'Keep this saved meal',
     signedOutHint: 'Sign in to add it to your own saved meals.',
     benefits: [

@@ -5,7 +5,7 @@ import { Button, Skeleton } from '@moondreamsdev/dreamer-ui/components';
 export function SharedSkeleton() {
   return (
     <div
-      className='space-y-5'
+      className='mx-auto max-w-2xl space-y-4'
       aria-busy='true'
       aria-label='Opening the shared link'
     >
@@ -14,7 +14,7 @@ export function SharedSkeleton() {
         <Skeleton className='h-4 w-24' />
       </div>
       <div className='grid grid-cols-[auto_minmax(0,1fr)] items-start gap-4 sm:grid-cols-1'>
-        <Skeleton className='size-24 sm:h-56 sm:w-full' />
+        <Skeleton className='size-20 sm:h-56 sm:w-full' />
         <div className='space-y-2'>
           <Skeleton className='h-8 w-full' />
           <Skeleton className='h-4 w-40' />
