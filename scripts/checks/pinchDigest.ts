@@ -150,6 +150,11 @@ assert.equal(resolveZone(42), 'UTC');
 
 // Whatever the zone's offset, the half-hourly runs send exactly one note a day: two fall in the hour, and the stamp the first leaves stops the second
 const RUN_EVERY_MS = 30 * 60_000;
+assert.equal(
+  SEND_WINDOW_MS,
+  2 * RUN_EVERY_MS,
+  'the window is two runs wide, so one failed run leaves another, and no wider than an hour, so a late one never flushes a backlog',
+);
 const runsOnThe18th = Array.from(
   { length: 96 },
   (_, index) => at(18, 0, 0) + index * RUN_EVERY_MS,
