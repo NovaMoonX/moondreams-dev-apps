@@ -3,8 +3,6 @@ import { readFileSync } from 'node:fs';
 
 import {
   COLLECTION_BATCH_SIZE,
-  COLLECTION_CHIPS_QUIET_HIDDEN,
-  COLLECTION_CHIPS_SHOWN,
   COLLECTION_FILTER_ANY,
   COLLECTION_FILTER_NONE,
   HIGH_PROTEIN_GRAMS,
@@ -30,7 +28,7 @@ import {
   filterByCollection,
   findCollectionByLabel,
   getChoiceLabels,
-  getCollectionChipWindow,
+  getCollectionsPill,
   getCollectionCounts,
   getCollectionFilterOptions,
   getCollectionKey,
@@ -209,37 +207,24 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
 }
 
-// ---- A recipe drawer folds its collection chips only when more than three would hide ----
+// ---- The drawer's collections are one pill: the name when there is one, a count when there are more ----
 {
-  assert.equal(COLLECTION_CHIPS_SHOWN, 4);
-  assert.equal(COLLECTION_CHIPS_QUIET_HIDDEN, 3);
-  assert.deepEqual(getCollectionChipWindow(0, false), {
-    shown: 0,
-    canFold: false,
-  });
-  assert.deepEqual(getCollectionChipWindow(3, false), {
-    shown: 3,
-    canFold: false,
-  });
+  assert.deepEqual(getCollectionsPill([]), { kind: 'none', label: null });
   assert.deepEqual(
-    getCollectionChipWindow(7, false),
-    { shown: 7, canFold: false },
-    'seven would hide three: shown whole',
+    getCollectionsPill(['Weeknight']),
+    { kind: 'one', label: 'Weeknight' },
+    'one collection is named',
   );
   assert.deepEqual(
-    getCollectionChipWindow(8, false),
-    { shown: 4, canFold: true },
-    'eight would hide four: folded',
+    getCollectionsPill(['Bulk', 'Weeknight']),
+    { kind: 'many', label: 'In 2 collections' },
+    'two are counted, so the pill never grows with their names',
   );
-  assert.deepEqual(
-    getCollectionChipWindow(8, true),
-    { shown: 8, canFold: true },
-    'opened it shows them all and still offers to fold',
+  assert.equal(
+    getCollectionsPill(Array.from({ length: 20 }, (_, i) => `C${i}`)).label,
+    'In 20 collections',
+    'the most a recipe can name still reads in one short pill',
   );
-  assert.deepEqual(getCollectionChipWindow(20, false), {
-    shown: 4,
-    canFold: true,
-  });
 }
 
 // ---- Suggestions come from the recipe's own numbers ----

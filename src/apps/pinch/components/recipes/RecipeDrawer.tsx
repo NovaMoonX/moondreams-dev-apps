@@ -38,11 +38,7 @@ import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
-import {
-  COLLECTION_NOUN_PLURAL,
-  SECTION_COUNT_THRESHOLD,
-  UNIT_LABELS,
-} from '@apps/pinch/constants';
+import { SECTION_COUNT_THRESHOLD, UNIT_LABELS } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
@@ -71,7 +67,7 @@ import type {
   ShoppingRequest,
 } from '@apps/pinch/types';
 import {
-  getCollectionChipWindow,
+  getCollectionsPill,
   getRecipeCollections,
 } from '@apps/pinch/utils/collections';
 import {
@@ -111,7 +107,7 @@ const gapLabel = (kind: GapKind | undefined) => {
 
 const SOURCE_LABEL_KEEP_END = 14;
 
-type DrawerView = 'recipe' | 'photo' | 'history' | 'more';
+type DrawerView = 'recipe' | 'photo' | 'history' | 'more' | 'collections';
 
 interface BackLinkProps {
   onBack: () => void;
@@ -206,7 +202,6 @@ function RecipeDrawer({
   const sourceCounts = useAppSelector(selectSourceCounts).bySource;
   const collections = useAppSelector(selectCollections);
   const collectionCounts = useAppSelector(selectCollectionCounts).byCollection;
-  const [isChipsExpanded, setIsChipsExpanded] = useState(false);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
@@ -292,10 +287,14 @@ function RecipeDrawer({
     onShowSource !== undefined &&
     (sourceCounts.get(source.id) ?? 0) > 1;
   const recipeCollections = getRecipeCollections(recipe, collections);
-  const chipWindow = getCollectionChipWindow(
-    recipeCollections.length,
-    isChipsExpanded,
+  const collectionsPill = getCollectionsPill(
+    recipeCollections.map((collection) => collection.label),
   );
+  const onlyCollection = recipeCollections[0];
+  const canShowOnlyCollection =
+    onShowCollection !== undefined &&
+    onlyCollection !== undefined &&
+    (collectionCounts.get(onlyCollection.id) ?? 0) > 1;
   const getCookPlan = () => {
     if (tonight === null || recipe.steps.length === 0) return null;
     const [plannedMealId, servings] = tonight.split('|');
@@ -436,6 +435,41 @@ function RecipeDrawer({
         </div>
       );
     }
+    if (view === 'collections') {
+      return (
+        <div className='space-y-4'>
+          <div className='space-y-1'>
+            <BackLink onBack={backToRecipe} />
+            <p className='font-medium'>{collectionsPill.label}</p>
+          </div>
+          <ActionGroup>
+            {recipeCollections.map((collection) => {
+              const count = collectionCounts.get(collection.id) ?? 0;
+              const countText = `${count} ${count === 1 ? 'recipe' : 'recipes'}`;
+              return onShowCollection !== undefined && count > 1 ? (
+                <GroupRow
+                  key={collection.id}
+                  ariaLabel={`In ${collection.label}: show its recipes`}
+                  onClick={() => onShowCollection(collection.id)}
+                >
+                  {collection.label}{' '}
+                  <span className='text-muted-foreground whitespace-nowrap'>
+                    · {countText}
+                  </span>
+                </GroupRow>
+              ) : (
+                <p key={collection.id} className='px-4 py-2.5 text-sm'>
+                  {collection.label}{' '}
+                  <span className='text-muted-foreground whitespace-nowrap'>
+                    · {countText}
+                  </span>
+                </p>
+              );
+            })}
+          </ActionGroup>
+        </div>
+      );
+    }
     if (view === 'more') {
       return (
         <div className='space-y-5'>
@@ -565,41 +599,18 @@ function RecipeDrawer({
       {viewBody}
       <div className={join('space-y-5', viewBody !== null && 'hidden')}>
         {(source ||
-          recipeCollections.length > 0 ||
+          collectionsPill.kind !== 'none' ||
           hasCover(recipe) ||
           recipe.description ||
           facts.length > 0) && (
           <div className='space-y-2'>
-            {(source || recipeCollections.length > 0) && (
-              <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
-                {source &&
-                  (hasMoreFromSource ? (
-                    <LabelChip
-                      ariaLabel={`From ${source.label}: show its recipes`}
-                      keepEnd={SOURCE_LABEL_KEEP_END}
-                      icon={
-                        <ChevronRight
-                          className='h-3 w-3 shrink-0'
-                          aria-hidden='true'
-                        />
-                      }
-                      onClick={() => onShowSource(source.id)}
-                    >
-                      {`From ${source.label}`}
-                    </LabelChip>
-                  ) : (
-                    <LabelChip keepEnd={SOURCE_LABEL_KEEP_END}>
-                      {`From ${source.label}`}
-                    </LabelChip>
-                  ))}
-                {recipeCollections
-                  .slice(0, chipWindow.shown)
-                  .map((collection) =>
-                    onShowCollection !== undefined &&
-                    (collectionCounts.get(collection.id) ?? 0) > 1 ? (
+            {(source || collectionsPill.kind !== 'none') && (
+              <div className='flex items-center gap-2'>
+                {source && (
+                  <div className='min-w-0'>
+                    {hasMoreFromSource ? (
                       <LabelChip
-                        key={collection.id}
-                        ariaLabel={`In ${collection.label}: show its recipes`}
+                        ariaLabel={`From ${source.label}: show its recipes`}
                         keepEnd={SOURCE_LABEL_KEEP_END}
                         icon={
                           <ChevronRight
@@ -607,32 +618,62 @@ function RecipeDrawer({
                             aria-hidden='true'
                           />
                         }
-                        onClick={() => onShowCollection(collection.id)}
+                        onClick={() => onShowSource(source.id)}
                       >
-                        {collection.label}
+                        {`From ${source.label}`}
                       </LabelChip>
                     ) : (
-                      <LabelChip
-                        key={collection.id}
-                        keepEnd={SOURCE_LABEL_KEEP_END}
-                      >
-                        {collection.label}
+                      <LabelChip keepEnd={SOURCE_LABEL_KEEP_END}>
+                        {`From ${source.label}`}
                       </LabelChip>
-                    ),
-                  )}
-                {chipWindow.canFold && (
-                  <LabelChip
-                    ariaLabel={
-                      isChipsExpanded
-                        ? `Show fewer ${COLLECTION_NOUN_PLURAL}`
-                        : `Show all ${recipeCollections.length} ${COLLECTION_NOUN_PLURAL}`
-                    }
-                    onClick={() => setIsChipsExpanded((current) => !current)}
-                  >
-                    {isChipsExpanded
-                      ? 'Show fewer'
-                      : `+${recipeCollections.length - chipWindow.shown} more`}
-                  </LabelChip>
+                    )}
+                  </div>
+                )}
+                {collectionsPill.kind === 'one' && (
+                  <div className='min-w-0'>
+                    {canShowOnlyCollection ? (
+                      <LabelChip
+                        ariaLabel={`In ${collectionsPill.label}: show its recipes`}
+                        keepEnd={SOURCE_LABEL_KEEP_END}
+                        icon={
+                          <ChevronRight
+                            className='h-3 w-3 shrink-0'
+                            aria-hidden='true'
+                          />
+                        }
+                        onClick={() => onShowCollection(onlyCollection.id)}
+                      >
+                        {collectionsPill.label}
+                      </LabelChip>
+                    ) : (
+                      <LabelChip keepEnd={SOURCE_LABEL_KEEP_END}>
+                        {collectionsPill.label}
+                      </LabelChip>
+                    )}
+                  </div>
+                )}
+                {collectionsPill.kind === 'many' && (
+                  <div className='shrink-0'>
+                    <LabelChip
+                      ariaLabel={`${collectionsPill.label}: show which`}
+                      icon={
+                        <ChevronRight
+                          className='h-3 w-3 shrink-0'
+                          aria-hidden='true'
+                        />
+                      }
+                      onClick={() =>
+                        openView(
+                          'collections',
+                          document.activeElement instanceof HTMLElement
+                            ? document.activeElement
+                            : null,
+                        )
+                      }
+                    >
+                      {collectionsPill.label}
+                    </LabelChip>
+                  </div>
                 )}
               </div>
             )}

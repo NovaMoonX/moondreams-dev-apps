@@ -119,8 +119,6 @@ export const COLLECTION_BATCH_SIZE = 200;
 /** A collection id is a UUID, so neither can collide with one. */
 export const COLLECTION_FILTER_ANY = 'any';
 export const COLLECTION_FILTER_NONE = 'none';
-export const COLLECTION_CHIPS_SHOWN = 4;
-export const COLLECTION_CHIPS_QUIET_HIDDEN = 3;
 export const HIGH_PROTEIN_GRAMS = 25;
 export const QUICK_MAX_MINUTES = 30;
 export const COLLECTION_SUGGESTION_LABELS = {
