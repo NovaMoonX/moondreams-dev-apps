@@ -1243,7 +1243,7 @@ A person can say what they have and when it expires, and Pinch tells them what t
 
 ### CRUD & Entry-Point Requirements
 - [x] **Create / Read / Update / Delete:** add (one or several, with "Add another"), see each ingredient's packages and totals, use some or all, move, change the date, edit, toss, delete (with a confirm that says the history goes too), and act on several at once, each with an Undo that restores only what is still as the act left it.
-- [x] **Entry points:** Kitchen's Pantry tile (once a package exists), the ingredient drawer's "In your kitchen" and "Add a package", the Shopping tab's "Add to pantry", the package sheet's "Use it up", the morning note's link, and `?open=pantry`. Each is reachable from a screen a person can open; the first package can only start from the shopping list (the open decision in `TECHNICAL.md` question 27 (i)).
+- [x] **Entry points:** Kitchen's Pantry tile (once a package exists), the ingredient drawer's "In your kitchen" and "Add a package", the Shopping tab's "Add to pantry", the package sheet's "Use it up", the morning note's link, and `?open=pantry`. Each is reachable from a screen a person can open; the first package starts from the shopping list's Got it step or, for an ingredient a recipe or saved meal uses, from its drawer's dashed "Add a package" chip (6 taps from a fresh kitchen with one recipe, against 11 through the list).
 
 ### Success Criteria
 - [x] Dates: past its date, due soon (the person's window), later and no date read right, offer Toss, Use it up and neither, and a date-only value shows the same day west of UTC (driven in `America/Los_Angeles`).

@@ -18,14 +18,17 @@ const HIDDEN_WORTH_A_BUTTON = 3;
 
 interface IngredientStockProps {
   ingredientId: string;
+  /** A recipe or saved meal uses it, which is when a first package is worth offering. */
+  isUsed: boolean;
   /** Opens the pantry on this ingredient's packages. */
   onOpen: () => void;
   onAdd: () => void;
 }
 
-/** What the person has of an ingredient, on the ingredient's own drawer: each package with its amount and date, soonest first, and a way to add one. It draws for an ingredient that has packages, or for anyone who keeps a pantry; a first run sees nothing. */
+/** What the person has of an ingredient, on the ingredient's own drawer: each package with its amount and date, soonest first, and a way to add one. It draws for an ingredient that has packages, for anyone who keeps a pantry, and for an ingredient their recipes use (the way to a first package); a first run with nothing using it sees nothing. */
 function IngredientStock({
   ingredientId,
+  isUsed,
   onOpen,
   onAdd,
 }: IngredientStockProps) {
@@ -35,7 +38,7 @@ function IngredientStock({
   const soonDays = useAppSelector(selectLeadDays);
   const [isOpen, setIsOpen] = useState(false);
 
-  if (packages.length === 0 && !hasPantry) return null;
+  if (packages.length === 0 && !hasPantry && !isUsed) return null;
 
   const view = getStockView(ingredientId, packages, undefined, soonDays);
   const visible =
