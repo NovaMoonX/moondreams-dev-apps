@@ -10,6 +10,7 @@ import {
   History,
   PencilLine,
   Undo2,
+  Utensils,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -59,6 +60,8 @@ import {
   getLastPlaceEvent,
   getMoveForPlace,
   getMoveNotes,
+  getSelectionPrimary,
+  getTossAction,
   groupBatches,
   isValidEatBy,
 } from '@apps/pinch/utils/containers';
@@ -845,6 +848,22 @@ function ContainerSheet({
         'Unable to save this.',
       );
 
+    const handleToss = () =>
+      run(
+        'toss',
+        async () => {
+          const result = isBatch
+            ? await endBatch(boxes, 'TOSS', `Tossed all ${boxes.length} boxes`)
+            : await toss(container);
+          if (result !== undefined) onClose();
+        },
+        'Unable to save this.',
+      );
+    const isTossLead =
+      isInStock &&
+      getSelectionPrimary(isBatch ? boxes : [container]) === 'TOSS';
+    const eatOneLabel = isBatch && !isEachOneServing ? 'Ate a box' : 'Ate one';
+
     const lastEnd = container.history.at(-1);
 
     return (
@@ -870,15 +889,36 @@ function ContainerSheet({
         )}
         {isInStock && (
           <div className='space-y-3'>
-            <Button
-              type='button'
-              className='h-12 w-full'
-              disabled={busy === 'eat-one'}
-              onClick={() => void handleEatOne()}
-            >
-              {isBatch && !isEachOneServing ? 'Ate a box' : 'Ate one'}
-            </Button>
+            {isTossLead ? (
+              <Button
+                type='button'
+                className='h-12 w-full gap-2'
+                disabled={busy === 'toss'}
+                onClick={() => void handleToss()}
+              >
+                <Ban className='h-4 w-4' aria-hidden='true' />
+                {getTossAction(isBatch ? boxes.length : 1)}
+              </Button>
+            ) : (
+              <Button
+                type='button'
+                className='h-12 w-full'
+                disabled={busy === 'eat-one'}
+                onClick={() => void handleEatOne()}
+              >
+                {eatOneLabel}
+              </Button>
+            )}
             <ActionGroup>
+              {isTossLead && (
+                <ActionRow
+                  isGrouped
+                  icon={<Utensils className='h-4 w-4' />}
+                  label={eatOneLabel}
+                  isDisabled={busy === 'eat-one'}
+                  onClick={() => void handleEatOne()}
+                />
+              )}
               <ActionRow
                 isGrouped
                 icon={<Ban className='h-4 w-4' />}

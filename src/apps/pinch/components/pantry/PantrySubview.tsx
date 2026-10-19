@@ -5,11 +5,11 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowRightLeft,
+  Ban,
   Check,
   ChevronDown,
   ListChecks,
   Plus,
-  Trash2,
   Utensils,
 } from 'lucide-react';
 
@@ -333,7 +333,7 @@ function PantrySubview({
   const tossAction = {
     key: 'toss',
     label: 'Toss',
-    icon: <Trash2 className='h-4 w-4' aria-hidden='true' />,
+    icon: <Ban className='h-4 w-4' aria-hidden='true' />,
     isDisabled: isBlocked,
     isLoading: acting === 'TOSS',
     onClick: () => void handleAct({ kind: 'TOSS' }, selectedPackages),

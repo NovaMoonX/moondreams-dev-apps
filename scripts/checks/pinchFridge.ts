@@ -391,6 +391,15 @@ assert.deepEqual(
   'Toss is the filled act only when every ticked box is past its date: nothing ticked, a mix, or one due today keeps Ate it all',
 );
 assert.deepEqual(
+  [
+    [container({ eatBy: dayOf(15) })],
+    [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(15) })],
+    [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(19) })],
+  ].map((boxes) => getSelectionPrimary(boxes, NOON_ON_THE_18TH)),
+  ['TOSS', 'TOSS', 'EAT'],
+  'the box sheet leads with Toss for one box or a batch past its date, by the helper Select uses, and with Ate one once a box of the batch has a later date',
+);
+assert.deepEqual(
   [getSelectionTitle(0), getSelectionTitle(1), getSelectionTitle(12)],
   ['Select boxes', '1 selected', '12 selected'],
 );
