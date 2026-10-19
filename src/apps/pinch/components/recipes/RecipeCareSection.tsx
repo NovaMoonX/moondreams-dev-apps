@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import FormSection from '@/components/FormSection';
 import { CONTAINER_PLACE_EMOJIS } from '@apps/pinch/constants';
 import type { RecipeCare } from '@apps/pinch/types';
@@ -25,12 +27,25 @@ function CareLine({ emoji, children }: CareLineProps) {
 
 interface RecipeCareSectionProps {
   care: RecipeCare;
+  /** The heading; a recipe's drawer says "Keeping it". */
+  title?: string;
+  /** Draws the lines in one tinted card, for a page that is not a drawer. */
+  isCard?: boolean;
 }
 
-function RecipeCareSection({ care }: RecipeCareSectionProps) {
+function RecipeCareSection({
+  care,
+  title = 'Keeping it',
+  isCard = false,
+}: RecipeCareSectionProps) {
   return (
-    <FormSection title='Keeping it'>
-      <ul className='space-y-1.5'>
+    <FormSection title={title}>
+      <ul
+        className={join(
+          'space-y-1.5',
+          isCard && 'bg-accent/60 border-border rounded-2xl border p-4',
+        )}
+      >
         {care.fridgeDays !== null && (
           <CareLine emoji={CONTAINER_PLACE_EMOJIS.FRIDGE}>
             Keeps {formatCareDays(care.fridgeDays)} in the fridge

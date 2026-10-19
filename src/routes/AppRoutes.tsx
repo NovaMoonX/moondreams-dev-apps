@@ -80,6 +80,15 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'pinch/shared/:shareId',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: SharedPinch } =
+            await import('@apps/pinch/SharedPinch');
+          return { Component: SharedPinch };
+        },
+      },
+      {
         path: 'admin',
         HydrateFallback: Loading,
         lazy: async () => {

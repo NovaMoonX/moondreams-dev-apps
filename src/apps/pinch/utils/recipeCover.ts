@@ -9,6 +9,10 @@ import type { Recipe, WebPhoto } from '@apps/pinch/types';
 export const hasCover = (recipe: Pick<Recipe, 'coverPath' | 'coverUrl'>) =>
   Boolean(recipe.coverPath || recipe.coverUrl);
 
+/** Where a recipe's own cover lives in Storage: the only path the rules accept for it. */
+export const getRecipeCoverPath = (uid: string, recipeId: string) =>
+  `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
+
 export const isCoverUrl = (value: unknown): value is string => {
   if (typeof value !== 'string' || value.length > MAX_COVER_URL_LENGTH) {
     return false;

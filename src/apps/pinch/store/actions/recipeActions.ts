@@ -28,7 +28,11 @@ import type { CollectionChange } from '@apps/pinch/utils/collections';
 import { getRecipeChanges } from '@apps/pinch/utils/recipeChanges';
 import { getTweakReason } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
-import { getCoverFields, isCoverUrl } from '@apps/pinch/utils/recipeCover';
+import {
+  getCoverFields,
+  getRecipeCoverPath,
+  isCoverUrl,
+} from '@apps/pinch/utils/recipeCover';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
@@ -96,9 +100,6 @@ const getCollectionWrites = (
     after: null,
   };
 };
-
-export const getRecipeCoverPath = (uid: string, recipeId: string) =>
-  `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
 
 export interface RecipeDraft {
   /** The recipe being edited; null adds a new one. */

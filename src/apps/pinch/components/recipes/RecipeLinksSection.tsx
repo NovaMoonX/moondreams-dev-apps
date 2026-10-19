@@ -15,15 +15,19 @@ import {
   getYouTubeThumbnailUrl,
 } from '@apps/pinch/utils/recipeLinks';
 
+const DEFAULT_REL = 'noopener noreferrer';
+
 const ROW_CLASS =
   'hover:bg-muted text-foreground! w-full justify-start gap-3 px-3 py-2 text-left font-normal whitespace-normal';
 
 interface HowToCardProps {
   link: RecipeLink;
+  rel: string;
+  isThumbnailHidden: boolean;
 }
 
-function HowToCard({ link }: HowToCardProps) {
-  const videoId = getYouTubeId(link.url);
+function HowToCard({ link, rel, isThumbnailHidden }: HowToCardProps) {
+  const videoId = isThumbnailHidden ? null : getYouTubeId(link.url);
   const host = getLinkHost(link.url);
   const label = getLinkLabel(link);
 
@@ -32,7 +36,7 @@ function HowToCard({ link }: HowToCardProps) {
       <Button
         href={link.url}
         target='_blank'
-        rel='noopener noreferrer'
+        rel={rel}
         variant='tertiary'
         size='stripped'
         rounded='none'
@@ -71,9 +75,10 @@ function HowToCard({ link }: HowToCardProps) {
 
 interface LinkRowsProps {
   links: RecipeLink[];
+  rel: string;
 }
 
-function LinkRows({ links }: LinkRowsProps) {
+function LinkRows({ links, rel }: LinkRowsProps) {
   return (
     <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
       {links.map((link) => {
@@ -84,7 +89,7 @@ function LinkRows({ links }: LinkRowsProps) {
             <Button
               href={link.url}
               target='_blank'
-              rel='noopener noreferrer'
+              rel={rel}
               variant='tertiary'
               size='stripped'
               rounded='none'
@@ -119,10 +124,18 @@ function LinkRows({ links }: LinkRowsProps) {
 
 interface RecipeLinksSectionProps {
   links: RecipeLink[];
+  /** What the links tell the other site; a page someone else made adds `nofollow ugc`. */
+  rel?: string;
+  /** Draws no picture from another site, for a page whose visitors didn't ask to reach one. */
+  isThumbnailHidden?: boolean;
 }
 
 /** The how-to video as a card, then the other links as rows: all of them open the other site in a new tab. Nothing is drawn for a recipe with no links. */
-function RecipeLinksSection({ links }: RecipeLinksSectionProps) {
+function RecipeLinksSection({
+  links,
+  rel = DEFAULT_REL,
+  isThumbnailHidden = false,
+}: RecipeLinksSectionProps) {
   const howTo = getHowToLink(links);
   const others = getOtherLinks(links);
   if (howTo === null && others.length === 0) return null;
@@ -131,12 +144,16 @@ function RecipeLinksSection({ links }: RecipeLinksSectionProps) {
     <div className='space-y-5'>
       {howTo && (
         <FormSection title='How to'>
-          <HowToCard link={howTo} />
+          <HowToCard
+            link={howTo}
+            rel={rel}
+            isThumbnailHidden={isThumbnailHidden}
+          />
         </FormSection>
       )}
       {others.length > 0 && (
         <FormSection title={howTo ? 'More links' : 'Links'}>
-          <LinkRows links={others} />
+          <LinkRows links={others} rel={rel} />
         </FormSection>
       )}
     </div>
