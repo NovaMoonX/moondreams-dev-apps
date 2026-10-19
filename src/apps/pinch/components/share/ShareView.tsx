@@ -395,11 +395,12 @@ function ShareView({
       body: (
         <div
           className={join(
-            'grid gap-4',
+            'grid',
+            isShort ? 'gap-3' : 'gap-4',
             isLandscape && 'grid-cols-2 items-start gap-x-6',
           )}
         >
-          <div className='min-w-0 space-y-4'>
+          <div className={join('min-w-0', isShort ? 'space-y-3' : 'space-y-4')}>
             {noticeLine}
             <div className='space-y-1.5'>
               <p className='bg-muted/50 border-border rounded-xl border px-3 py-2.5 text-sm break-all select-all'>
