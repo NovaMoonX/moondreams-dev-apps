@@ -66,7 +66,7 @@ export function PillRow({
   children: ReactNode;
   isThin?: boolean;
   isScrolling?: boolean;
-  /** A scrolling row wraps onto a second line below 360px instead of scrolling sideways. */
+  /** Below 390px a scrolling row wraps onto a second line when its pills don't fit, instead of scrolling sideways. */
   wrapsNarrow?: boolean;
   /** Changes when the chosen pill does, so a scrolling row brings it into view then and not on every render. */
   scrollKey?: string;
@@ -99,7 +99,7 @@ export function PillRow({
           ? join(
               '-my-2 [scrollbar-width:none] gap-x-2 overflow-x-auto py-2 max-[359px]:gap-x-1.5 [&::-webkit-scrollbar]:hidden',
               wrapsNarrow &&
-                'max-[359px]:my-0 max-[359px]:flex-wrap max-[359px]:gap-y-4 max-[359px]:overflow-visible max-[359px]:py-0',
+                'max-[389px]:my-0 max-[389px]:flex-wrap max-[389px]:gap-y-4 max-[389px]:overflow-visible max-[389px]:py-0',
             )
           : join('flex-wrap', isThin ? 'gap-x-2 gap-y-4' : 'gap-2'),
       )}
@@ -120,7 +120,7 @@ interface PillOptionsProps<T extends string> {
   isThin?: boolean;
   /** One answer: picking collapses the list and clears its search; a chosen option that is hidden behind "Show all" takes the last visible slot, and one already visible keeps its place. */
   isSingle?: boolean;
-  /** A thin row of counts wraps below 360px instead of scrolling sideways, for counts that can outgrow 288px. */
+  /** A thin row of counts wraps below 390px when it doesn't fit, instead of scrolling sideways, for counts that can outgrow the row. */
   wrapsNarrow?: boolean;
   /** A short list keeps every option visible in its given order: no two-row collapse, no "Show all", no floating the chosen one. Past the search threshold it collapses like any other. */
   showAll?: boolean;
