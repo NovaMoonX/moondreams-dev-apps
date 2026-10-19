@@ -19,6 +19,9 @@ import { isAboveFridgeGuidance } from '@apps/pinch/utils/settings';
 
 const OTHER = 'other';
 const DAYS_PER_WEEK = 7;
+const YEAR_DAYS = 365;
+const formatKeepDays = (days: number) =>
+  days === YEAR_DAYS ? '1 year' : formatCareDays(days);
 
 interface DaysRowProps {
   place: 'FRIDGE' | 'FREEZER';
@@ -41,7 +44,6 @@ interface DaysRowProps {
 
 type DaysEditorProps = Omit<DaysRowProps, 'place' | 'position'>;
 
-/** One place's days: the common choices as pills, and "Other" opens a stepper for any number between the limits. */
 function DaysEditor({
   title,
   description,
@@ -96,7 +98,7 @@ function DaysEditor({
   );
 }
 
-/** A row of the group's frame that says what is set and opens its pills; the cell reaches the frame's edges so the chip lines up with the rows of the other groups. */
+// The cell reaches the frame's edges so its chip lines up with the other groups' rows.
 function DaysRow({ place, position, ...editor }: DaysRowProps) {
   return (
     <li className='-mx-3'>
@@ -114,10 +116,6 @@ function DaysRow({ place, position, ...editor }: DaysRowProps) {
     </li>
   );
 }
-
-const YEAR_DAYS = 365;
-const formatKeepDays = (days: number) =>
-  days === YEAR_DAYS ? '1 year' : formatCareDays(days);
 
 const FRIDGE_CHOICES = FRIDGE_DAY_CHOICES.map((days) => ({
   days,

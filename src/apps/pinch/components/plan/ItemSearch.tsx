@@ -70,16 +70,13 @@ function PickChip({ children, isCompact = false }: PickChipProps) {
 
 interface PickRowShellProps {
   chip: ReactNode;
-  /** Something said about the row's kind, at its end and level with the title. */
   trailing?: ReactNode;
-  /** A landscape phone's 40px row. */
   isCompact?: boolean;
   isDisabled: boolean;
   onClick: () => void;
   children: ReactNode;
 }
 
-/** One row of a pick list: a chip, the text beside it (a title and at most one muted line) and, at the end, a word for what kind of thing it is. */
 function PickRowShell({
   chip,
   trailing,
@@ -117,9 +114,7 @@ function PickRowShell({
 
 interface IngredientPickRowProps {
   name: string;
-  /** The part of the shop it comes from, as in the Pantry's rows. */
   emoji: string;
-  /** Its family, when it has one. */
   detail: string | null;
   trailing?: ReactNode;
   isCompact?: boolean;
