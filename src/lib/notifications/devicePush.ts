@@ -143,5 +143,5 @@ export async function turnOffDevicePush(uid: string): Promise<void> {
   await removeDeviceToken(uid, true);
 }
 
-/** Signing out hands the device on: its token leaves the person who signed out, so what names their things never reaches whoever uses it next. Resolves once the token is off their account; the browser's own copy is deleted afterwards without waiting. The choice to turn pushes off is not changed, and signing in again registers a fresh token. */
+/** Signing out hands the device on: its token leaves the person who signed out, so nothing meant for them reaches whoever uses it next. Resolves once the token is off their account; the browser's own copy is deleted afterwards without waiting. The choice to turn pushes off is not changed, and signing in again registers a fresh token. */
 export const releaseDevicePush = (uid: string) => removeDeviceToken(uid, false);

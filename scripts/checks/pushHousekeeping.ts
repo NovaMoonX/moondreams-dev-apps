@@ -33,7 +33,7 @@ assert.deepEqual(
   ['sent', 'cancelled', 'expired'],
   'sent, cancelled and expired are the finished states',
 );
-for (const status of FINISHED_STATUSES) {
+FINISHED_STATUSES.forEach((status) => {
   assert.equal(
     isPrunable({ status, scheduledFor: old }, NOW),
     true,
@@ -49,7 +49,7 @@ for (const status of FINISHED_STATUSES) {
     false,
     `a ${status} reminder from yesterday is kept, so every open page has seen it change`,
   );
-}
+});
 assert.equal(
   isPrunable({ status: 'pending', scheduledFor: old }, NOW),
   false,
@@ -218,7 +218,7 @@ const pushed = async (
   codes: (string | null)[],
 ) => {
   const updates: { path: string; data: Record<string, unknown> }[] = [];
-  let sent: string[] = [];
+  const batches: string[][] = [];
   const firestore = {
     doc: (path: string) => ({
       get: async () => ({
@@ -234,7 +234,7 @@ const pushed = async (
   };
   const messaging = {
     sendEachForMulticast: async (message: { tokens: string[] }) => {
-      sent = message.tokens;
+      batches.push(message.tokens);
       return {
         responses: codes.map((code) =>
           code === null ? { success: true } : failure(code),
@@ -248,7 +248,7 @@ const pushed = async (
     Object.keys(tokensByUid),
     { title: 't', body: 'b', url: 'https://apps.moondreams.dev/pinch' },
   );
-  return { count, sent, updates };
+  return { count, sent: batches.at(-1) ?? [], updates };
 };
 const gone = 'messaging/registration-token-not-registered';
 const run = await pushed({ alex: ['a1', 'a2'], jamie: ['j1'] }, [

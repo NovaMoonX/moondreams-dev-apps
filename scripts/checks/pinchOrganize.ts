@@ -431,10 +431,11 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
   assert.deepEqual(none.ids, [], 'the starting choice is never changed');
 
-  const makeId = (() => {
-    let n = 0;
-    return () => `new-${++n}`;
-  })();
+  const newIds = Array.from(
+    { length: 10 },
+    (_, index) => `new-${index + 1}`,
+  ).values();
+  const makeId = () => newIds.next().value as string;
   const typed = addCollectionByLabel(none, all, '  Meal prep ', makeId);
   assert.equal(typed.outcome, 'ok');
   assert.deepEqual(typed.choice.added, [{ id: 'new-1', label: 'Meal prep' }]);

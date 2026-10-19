@@ -55,7 +55,7 @@ export function getDeadTokens(
   });
 }
 
-/** Takes dead tokens off the people they were registered under, so the next push doesn't try them and a device that is no longer theirs stops receiving what names their dishes. Never throws: a failed clean-up only leaves them for the next run. */
+/** Takes dead tokens off the people they were registered under, so the next push doesn't try them and a device that is no longer theirs stops receiving the person's notifications. Never throws: a failed clean-up only leaves them for the next run. */
 async function removeDeadTokens(
   firestore: Firestore,
   dead: DeviceToken[],
