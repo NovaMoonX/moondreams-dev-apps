@@ -1203,6 +1203,72 @@ assert.deepEqual(
   [null, null, 'Past its date'],
   'and it is not counted as in the pantry',
 );
+
+// Salt, oil and water are at home in most kitchens, so a pantry without them says nothing about them
+const staple: LineStock = { kind: 'STAPLE' };
+assert.deepEqual(
+  markedTexts([have, have, none, staple, staple]),
+  [null, null, 'Not in your pantry', null, null],
+  'a staple is never flagged as missing, and the other lines still are',
+);
+assert.equal(
+  marks([have, have, none, staple, staple]).summary,
+  '2 of 3 in your pantry',
+  'the share leaves the staples out: two of the three things worth looking for, not two of five',
+);
+assert.equal(
+  marks([staple, staple]).summary,
+  null,
+  'a recipe of staples alone says nothing about the pantry',
+);
+assert.deepEqual(
+  markedTexts([have, none, none, none, staple]),
+  ['You have it', null, null, null, null],
+  'a list the pantry hardly touches still flags the one it has, and the staple stays quiet',
+);
+const lineOf = (ingredientId: string) => ({
+  ingredientId,
+  amount: 1,
+  unit: 'TBSP' as const,
+});
+const spice = { id: 'cat-salt', familyId: 'cat-fam-spices' };
+assert.deepEqual(
+  getLineStock(lineOf('cat-salt'), undefined, NOW, undefined, spice),
+  { kind: 'STAPLE' },
+  'an empty pantry lacks nothing of a spice',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-water'), [], NOW, undefined, {
+    id: 'cat-water',
+    familyId: 'cat-fam-drinks',
+  }),
+  { kind: 'STAPLE' },
+  'water is a staple by name even though its family is not spices',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-rice'), undefined, NOW, undefined, {
+    id: 'cat-rice',
+    familyId: 'cat-fam-grains',
+  }),
+  { kind: 'NONE' },
+  'rice is not a staple, so having none of it is said',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-salt'), undefined, NOW),
+  { kind: 'NONE' },
+  'without the ingredient there is no family to read, so nothing is assumed',
+);
+assert.equal(
+  getLineStock(
+    lineOf('cat-salt'),
+    [rice({ amount: 1, unit: 'TBSP' })],
+    NOW,
+    undefined,
+    spice,
+  ).kind,
+  'HAVE',
+  'a staple that is in the pantry is counted like anything else',
+);
 assert.equal(marks([have, have, past]).summary, '2 of 3 in your pantry');
 assert.deepEqual(markedTexts([]), []);
 assert.equal(marks([]).summary, null);

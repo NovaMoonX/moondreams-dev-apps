@@ -18,6 +18,7 @@ import type {
   PackageEventKind,
   PackagePlace,
   Recipe,
+  ResolvedIngredient,
   Unit,
 } from '@apps/pinch/types';
 import {
@@ -36,6 +37,7 @@ import {
 import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { bridge, toBase, type Conversions } from '@apps/pinch/utils/quantity';
+import { getShopSection, isUsuallyAtHome } from '@apps/pinch/utils/shopping';
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
@@ -1088,6 +1090,7 @@ export const planTakeOut = (
 
 export type LineStock =
   | { kind: 'NONE' }
+  | { kind: 'STAPLE' }
   | { kind: 'PAST' }
   | { kind: 'OTHER' }
   | {
@@ -1101,15 +1104,22 @@ export type LineStock =
       isConverted: boolean;
     };
 
-/** How a recipe line stands against the pantry. What counts is in-stock packages not past their date, measured in the line's own kind of unit or, where the ingredient's own weight per cup or per piece bridges them, in grams. With nothing to bridge, an amount of another kind can't prove there is enough, and a line with no amount ("to taste") is met by having any. */
+/** How a recipe line stands against the pantry. What counts is in-stock packages not past their date, measured in the line's own kind of unit or, where the ingredient's own weight per cup or per piece bridges them, in grams. With nothing to bridge, an amount of another kind can't prove there is enough, and a line with no amount ("to taste") is met by having any. Nothing in the pantry of something most kitchens keep at home (salt, oil, water) is `STAPLE`, not `NONE`: the pantry is only partly tracked, so its absence says nothing. */
 export const getLineStock = (
   line: { ingredientId?: string; amount: number | null; unit: Unit },
   packages: Package[] | undefined,
   now = Date.now(),
   conversions: Conversions = { gramsPerMl: null, gramsEach: null },
+  ingredient?: Pick<ResolvedIngredient, 'id' | 'familyId'>,
 ): LineStock => {
   const inStock = (packages ?? []).filter((pkg) => pkg.status === 'IN_STOCK');
-  if (inStock.length === 0) return { kind: 'NONE' };
+  if (inStock.length === 0) {
+    const isStaple = isUsuallyAtHome({
+      ingredientId: line.ingredientId ?? '',
+      section: getShopSection(ingredient),
+    });
+    return isStaple ? { kind: 'STAPLE' } : { kind: 'NONE' };
+  }
 
   const usable = inStock.filter(
     (pkg) => getPackageState(pkg.expiresAt, now) !== 'PAST',
@@ -1154,6 +1164,8 @@ export const getLineStockText = (stock: LineStock) => {
       return 'In your pantry';
     case 'PAST':
       return 'Past its date';
+    case 'STAPLE':
+      return 'Usually at home';
     default:
       return 'Not in your pantry';
   }
@@ -1172,10 +1184,12 @@ export const getLineMarkers = (
 ): LineMarkers => {
   const isPresent = (stock: LineStock) =>
     stock.kind === 'HAVE' || stock.kind === 'SOME' || stock.kind === 'OTHER';
-  const present = entries.filter((entry) => isPresent(entry.stock)).length;
-  const absent = entries.filter((entry) => entry.stock.kind === 'NONE').length;
+  const counted = entries.filter((entry) => entry.stock.kind !== 'STAPLE');
+  const present = counted.filter((entry) => isPresent(entry.stock)).length;
+  const absent = counted.filter((entry) => entry.stock.kind === 'NONE').length;
   const flagsAbsent = present >= absent;
   const getText = (stock: LineStock) => {
+    if (stock.kind === 'STAPLE') return null;
     if (stock.kind === 'PAST') return getLineStockText(stock);
     if (flagsAbsent)
       return stock.kind === 'NONE' ? getLineStockText(stock) : null;
@@ -1184,7 +1198,7 @@ export const getLineMarkers = (
   return {
     byId: new Map(entries.map((entry) => [entry.id, getText(entry.stock)])),
     summary:
-      present === 0 ? null : `${present} of ${entries.length} in your pantry`,
+      present === 0 ? null : `${present} of ${counted.length} in your pantry`,
   };
 };
 
