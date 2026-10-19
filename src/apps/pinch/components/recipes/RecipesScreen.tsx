@@ -862,7 +862,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             onClick={selection.start}
           />
         )}
-        {hasViewOptions && !hasPillRow && (
+        {hasViewOptions && (
           <ListViewControls
             isQuiet
             options={viewOptions.options}
@@ -912,33 +912,19 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         </div>
       )}
       {!isSelecting && hasPillRow && (
-        <div className='flex items-center justify-between gap-3'>
-          <div className='min-w-0'>
-            <PillGroup
-              label='Recipes, saved meals or ideas'
-              options={VIEW_OPTIONS.filter((option) =>
-                visibleViews.includes(option.value),
-              )}
-              value={shownView}
-              onChange={(next) => {
-                setQuery('');
-                setStockPlaces([]);
-                setView(next);
-              }}
-              isThin
-            />
-          </div>
-          {hasViewOptions && (
-            <ListViewControls
-              options={viewOptions.options}
-              customizedCount={viewOptions.customizedCount}
-              onChange={viewOptions.update}
-              onReset={viewOptions.reset}
-              hasStockLines
-              className='-my-3'
-            />
+        <PillGroup
+          label='Recipes, saved meals or ideas'
+          options={VIEW_OPTIONS.filter((option) =>
+            visibleViews.includes(option.value),
           )}
-        </div>
+          value={shownView}
+          onChange={(next) => {
+            setQuery('');
+            setStockPlaces([]);
+            setView(next);
+          }}
+          isThin
+        />
       )}
       {hasFilterBar ? (
         <FilterBar
