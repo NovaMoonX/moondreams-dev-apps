@@ -7,7 +7,7 @@ import {
   type FormCustomFieldProps,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { X } from 'lucide-react';
+import { ArrowUp, X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -870,13 +870,14 @@ function RecipeForm({
               ) : blocker?.target ? (
                 <Button
                   type='button'
-                  variant='tertiary'
-                  className="text-muted-foreground! relative h-auto min-h-0 justify-start rounded-none p-0 px-0! py-0! text-left text-xs font-normal whitespace-normal before:absolute before:inset-x-0 before:-top-4 before:-bottom-2 before:content-['']"
+                  variant='secondary'
+                  size='sm'
+                  rounded='full'
+                  className="text-foreground! relative h-7 gap-1.5 px-3 text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                   onClick={() => showBlocker(blocker.target ?? '')}
                 >
-                  <span className='decoration-muted-foreground/50 underline underline-offset-4'>
-                    {blocker.text}
-                  </span>
+                  <ArrowUp className='h-3.5 w-3.5' aria-hidden='true' />
+                  {blocker.text}
                 </Button>
               ) : (
                 blocker?.text
