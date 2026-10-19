@@ -675,6 +675,11 @@ export function addSources(
   return result;
 }
 
+/** A ticked line counts as put away only while it is as it was put away: ticking, unticking or editing it again moves its `updatedAt` on, and it is offered once more. */
+export const isPutAway = (
+  item: Pick<ShoppingItem, 'updatedAt' | 'pantryAddedAt'>,
+) => item.pantryAddedAt === item.updatedAt;
+
 export interface ShoppingFields {
   amount: number | null;
   isChecked: boolean;
@@ -1072,6 +1077,7 @@ export function planStopShopping(
             unit: 'EACH',
             isChecked: false,
             sources: mergeSources([], sources),
+            pantryAddedAt: null,
             createdAt: readById.get(twinId)?.createdAt ?? now,
             updatedAt: now,
           },

@@ -49,7 +49,6 @@ import {
   SHOPPING_VIEWS,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
-import { useShoppingPutAway } from '@apps/pinch/hooks/useShoppingPutAway';
 import {
   clearCheckedShoppingItems,
   removeShoppingItem,
@@ -82,6 +81,7 @@ import {
   getShoppingSourcesText,
   getShopRowId,
   getShownShoppingView,
+  isPutAway,
   sumShopAmounts,
   type ShoppingGroup,
   type ShoppingRowData,
@@ -336,7 +336,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const isPantryReady = useAppSelector(selectIsPackagesReady);
-  const { isPutAway, markPutAway } = useShoppingPutAway(uid);
   const [query, setQuery] = useState('');
   const [pick, setPick] = useState<{ view: ShoppingView; query: string }>({
     view: 'toBuy',
@@ -812,7 +811,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         <PantryFromShoppingSheet
           uid={uid}
           rows={overlay.rows}
-          onAdded={markPutAway}
           onClose={() => setOverlay(null)}
         />
       )}

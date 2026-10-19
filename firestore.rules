@@ -1509,9 +1509,9 @@ service cloud.firestore {
         return value is list && value.size() <= 60;
       }
 
-      // A null amount is a line with just a name ("parsley", from a recipe line with no amount), always counted in EACH.
+      // A null amount is a line with just a name ("parsley", from a recipe line with no amount), always counted in EACH. `pantryAddedAt` is the line's updatedAt as it was put in the pantry (an int, or null); a line written before it has no key.
       function isShoppingItem(data, id) {
-        return data.keys().hasOnly(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'sources', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'sources', 'pantryAddedAt', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.ingredientId, 80)
@@ -1520,6 +1520,7 @@ service cloud.firestore {
           && id == data.ingredientId + '__' + data.unit
           && data.isChecked is bool
           && isShoppingSources(data.get('sources', []))
+          && (data.get('pantryAddedAt', null) == null || data.pantryAddedAt is int)
           && data.createdAt is int && data.updatedAt is int;
       }
 

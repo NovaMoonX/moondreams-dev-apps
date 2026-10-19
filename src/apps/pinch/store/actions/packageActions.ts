@@ -5,6 +5,7 @@ import {
   doc,
   increment,
   runTransaction,
+  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -70,24 +71,40 @@ const applyPlan = (
 interface WritePackagesInput {
   uid: string;
   packages: Package[];
+  /** Shopping lines these packages put away, each with the `updatedAt` it had. */
+  putAway?: { id: string; updatedAt: number }[];
 }
 
-/** One batch, so a package added with others lands whole or not at all, and it queues where the signal drops. */
+const shoppingDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'shoppingItems', id);
+
+/** A field-scoped update on its own, never in the packages' batch: a line another device already cleared would refuse the whole batch. Its failure is logged and changes nothing the person sees. */
+const stampLine = (uid: string, id: string, pantryAddedAt: number | null) =>
+  updateDoc(shoppingDoc(uid, id), { pantryAddedAt }).catch((error: unknown) =>
+    console.error('Pinch shopping line not marked', error),
+  );
+
+/** One batch, so a package added with others lands whole or not at all, and it queues where the signal drops. The lines it put away are stamped at once, so another device stops offering them without waiting for the server, and are un-stamped if the batch is refused. */
 export const writePackages = createAsyncThunk<
   string[],
   WritePackagesInput,
   { rejectValue: string }
->('pinch/packages/write', async ({ uid, packages }, { rejectWithValue }) => {
-  try {
-    const batch = writeBatch(db);
-    packages.forEach((pkg) => batch.set(packageDoc(uid, pkg.id), pkg));
-    await batch.commit();
-  } catch (error) {
-    return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
-  }
+>(
+  'pinch/packages/write',
+  async ({ uid, packages, putAway = [] }, { rejectWithValue }) => {
+    putAway.forEach(({ id, updatedAt }) => void stampLine(uid, id, updatedAt));
+    try {
+      const batch = writeBatch(db);
+      packages.forEach((pkg) => batch.set(packageDoc(uid, pkg.id), pkg));
+      await batch.commit();
+    } catch (error) {
+      putAway.forEach(({ id }) => void stampLine(uid, id, null));
+      return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
+    }
 
-  return packages.map((pkg) => pkg.id);
-});
+    return packages.map((pkg) => pkg.id);
+  },
+);
 
 interface ChangeInput {
   uid: string;

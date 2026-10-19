@@ -189,6 +189,7 @@ import {
   getShoppingItemId,
   getShownShoppingView,
   groupShoppingItems,
+  isPutAway,
   isValidAmount,
   mergeLines,
   roundAmount,
@@ -823,6 +824,28 @@ assert.equal(
   ).leftOut[0]?.kind,
   'NOT_COMPARABLE',
   'a unit that cannot be compared with the package is left out',
+);
+
+// A ticked line put away in the pantry
+assert.equal(
+  isPutAway({ updatedAt: 2000, pantryAddedAt: 2000 }),
+  true,
+  'a line stamped with the updatedAt it had is put away',
+);
+assert.equal(
+  isPutAway({ updatedAt: 3000, pantryAddedAt: 2000 }),
+  false,
+  'a line ticked or edited since is offered again',
+);
+assert.equal(
+  isPutAway({ updatedAt: 2000, pantryAddedAt: null }),
+  false,
+  'a line never put away is offered',
+);
+assert.equal(
+  isPutAway({ updatedAt: 2000 } as Parameters<typeof isPutAway>[0]),
+  false,
+  'a line written before the key existed reads as not put away',
 );
 
 // Merging a line into an item

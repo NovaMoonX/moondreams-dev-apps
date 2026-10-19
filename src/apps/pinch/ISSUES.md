@@ -1224,7 +1224,7 @@ Opening the Photo row of a new recipe shows six pictures found by searching the 
 **Target PR Size:** ~7,000 lines (the type and its rules, the date states, the screen and its sheets, five integration points, the digest source, the seeds, the checks and the docs)
 **Files:**
 - `Package`, `PackageEvent`, `PinchSubview` (`pantry`), `ReminderKind` (`expiring`) in `types.ts`; the package constants and `REMINDER_KINDS` row in `constants.ts`; `utils/packages.ts` (date states, sums per measure, the plans and their Undo, bulk, take-out, line stock, markers, use-it-up), `utils/containers.ts` (`getEatByState` and its labels take a window and a verb), `utils/settings.ts`
-- `store/slices/packagesSlice.ts`, `store/actions/packageActions.ts`, `startPackagesListener`, `usePackageActions`, `useShoppingPutAway`, `usePantryTake`, `selectors.ts`, `usePinchSync`
+- `store/slices/packagesSlice.ts`, `store/actions/packageActions.ts`, `startPackagesListener`, `usePackageActions`, `usePantryTake`, `selectors.ts`, `usePinchSync`
 - `components/pantry/` (`PantrySubview`, `PantryRow`, `PantryEntry`, `PackageRow`, `PackageSheet`, `PackageFormSheet`, `PackageFields`, `PackageDateField`, `PantryMoveSheet`, `PantryRecipeDrawer`, `PantryFromShoppingSheet`, `IngredientStock`, `LineStockMarker`), `components/cooking/CookPantryTake`, and small changes to `KitchenScreen`, `IngredientDrawer`, `ShoppingScreen`, `AddToShoppingSheet`, `RecipeDrawer`, `CookingSubview`, `RemindersSection` and `Pinch.tsx` (`?open=pantry`)
 - `functions/src/apps/pinch/` (`eatSoonDigest`, `sendEatSoonDigest`), `functions/README.md`, `firestore.indexes.json`, `firestore.rules`
 - `scripts/seeds/pinch.ts` and `pinchScale.ts`, `scripts/checks/pinchPantry.ts` and `pinchDigest.ts`

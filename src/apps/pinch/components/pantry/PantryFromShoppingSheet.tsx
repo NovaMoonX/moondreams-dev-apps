@@ -46,8 +46,6 @@ export interface PutAwayRow {
 interface PantryFromShoppingSheetProps {
   uid: string;
   rows: PutAwayRow[];
-  /** Called with the lines that were added, so the list can stop offering them. */
-  onAdded: (items: PutAwayRow['items']) => void;
   onClose: () => void;
 }
 
@@ -55,7 +53,6 @@ interface PantryFromShoppingSheetProps {
 function PantryFromShoppingSheet({
   uid,
   rows,
-  onAdded,
   onClose,
 }: PantryFromShoppingSheetProps) {
   const { addToast } = useToast();
@@ -139,7 +136,7 @@ function PantryFromShoppingSheet({
             expiresAt: answer.expiresAt,
           },
         ],
-        { onWritten: () => onAdded(row.items) },
+        { putAway: row.items },
       );
       setAddedCount(addedCount + 1);
       advance(addedCount + 1);
