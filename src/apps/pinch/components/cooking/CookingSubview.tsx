@@ -90,6 +90,7 @@ import type {
   CookView,
   PlateCookRecipe,
   Recipe,
+  ResumeTimer,
 } from '@apps/pinch/types';
 import {
   applyResumePositions,
@@ -195,12 +196,17 @@ const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
+interface RestoredTimer {
+  timer: CookTimer;
+  reminderId: string | null;
+}
+
 const restoreTimers = (
   saved: CookingResume['timers'],
   entries: { recipe: Recipe }[],
-): CookTimer[] => {
+) => {
   const isPlate = entries.length > 1;
-  return saved.flatMap((timer): CookTimer[] => {
+  const restored = saved.flatMap((timer): RestoredTimer[] => {
     const recipe = entries.find(
       (entry) => entry.recipe.id === timer.recipeId,
     )?.recipe;
@@ -217,20 +223,28 @@ const restoreTimers = (
       durationMs: timer.durationMs,
     };
     if (timer.status === 'running') {
-      return [
-        {
-          ...base,
-          status: 'running',
-          startedAt: timer.startedAt,
-          endsAt: timer.endsAt,
-        },
-      ];
+      const running: CookTimer = {
+        ...base,
+        status: 'running',
+        startedAt: timer.startedAt,
+        endsAt: timer.endsAt,
+      };
+      return [{ timer: running, reminderId: timer.reminderId }];
     }
-    if (timer.status === 'paused') {
-      return [{ ...base, status: 'paused', remainingMs: timer.remainingMs }];
-    }
-    return [{ ...base, status: 'done', endedAt: timer.endedAt }];
+    const other: CookTimer =
+      timer.status === 'paused'
+        ? { ...base, status: 'paused', remainingMs: timer.remainingMs }
+        : { ...base, status: 'done', endedAt: timer.endedAt };
+    return [{ timer: other, reminderId: null }];
   });
+  return {
+    timers: restored.map((entry) => entry.timer),
+    reminderIds: Object.fromEntries(
+      restored.flatMap((entry) =>
+        entry.reminderId === null ? [] : [[entry.timer.id, entry.reminderId]],
+      ),
+    ),
+  };
 };
 
 interface CookEntry {
@@ -316,10 +330,11 @@ function CookingSession({
   const missedFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
-  const [initialTimers] = useState(() =>
+  const [restored] = useState(() =>
     restoreTimers(resume?.timers ?? [], entries),
   );
-  const timers = useCookTimers(initialTimers);
+  const timers = useCookTimers(restored.timers, restored.reminderIds);
+  const { getReminderId, pushRevision } = timers;
   const [sessionId] = useState(generateUuid);
   const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
@@ -664,7 +679,11 @@ function CookingSession({
         },
         currentId,
         positions: plate,
-        timers: timers.timers,
+        timers: timers.timers.map((timer): ResumeTimer =>
+          timer.status === 'running'
+            ? { ...timer, reminderId: getReminderId(timer.id) }
+            : timer,
+        ),
       }),
     );
   }, [
@@ -677,6 +696,8 @@ function CookingSession({
     currentId,
     plate,
     timers.timers,
+    getReminderId,
+    pushRevision,
   ]);
 
   const ask = async (options: Parameters<typeof confirm>[0]) => {

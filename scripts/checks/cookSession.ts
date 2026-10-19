@@ -15,9 +15,14 @@ import {
   buildCookingSnapshot,
   getCookingSessionKey,
   getResumeTimerLine,
+  getTimerReminderIds,
   parseCookingSnapshot,
   resolveCookingResume,
 } from '../../src/apps/pinch/utils/cookSession.ts';
+import {
+  getTimerPushAction,
+  needsTimerPush,
+} from '../../src/apps/pinch/utils/cooks.ts';
 import { formatClock } from '../../src/utils/durationUtils.ts';
 import { clearViewerSessions } from '../../src/utils/viewerSessionUtils.ts';
 
@@ -33,6 +38,7 @@ const running: ResumeTimer = {
   status: 'running',
   startedAt: NOW - 5 * MIN,
   endsAt: NOW + 25 * MIN,
+  reminderId: 'push-1',
 };
 const paused: ResumeTimer = {
   recipeId: 'adobo',
@@ -99,6 +105,7 @@ assert.deepEqual(
     'endsAt',
     'label',
     'recipeId',
+    'reminderId',
     'startedAt',
     'status',
     'stepNumber',
@@ -109,6 +116,112 @@ assert.deepEqual(
   Object.keys(snapshot).sort(),
   ['open', 'resume', 'savedAt', 'sessionId', 'uid', 'version'],
   'the session holds ids, steps, servings and timers and nothing else',
+);
+
+// The push a running timer has scheduled
+assert.equal(
+  snapshot.resume.timers[0].status === 'running' &&
+    snapshot.resume.timers[0].reminderId,
+  'push-1',
+  'a running timer is saved with the id of its push',
+);
+const readTimer = (timer: unknown) =>
+  parse({ ...snapshot, resume: { ...snapshot.resume, timers: [timer] } })
+    ?.resume.timers[0];
+const withoutPush = Object.fromEntries(
+  Object.entries(running).filter(([key]) => key !== 'reminderId'),
+);
+assert.deepEqual(
+  readTimer(withoutPush),
+  { ...withoutPush, reminderId: null },
+  'a timer saved before pushes were kept reads with none',
+);
+assert.equal(
+  readTimer({ ...running, reminderId: '../users/alex' }),
+  undefined,
+  'a push id that is not an id is refused',
+);
+assert.equal(
+  readTimer({ ...running, reminderId: 7 }),
+  undefined,
+  'a push id that is not text is refused',
+);
+assert.deepEqual(
+  readTimer({ ...paused, reminderId: 'push-1' }),
+  paused,
+  'only a running timer keeps a push',
+);
+assert.deepEqual(
+  getTimerReminderIds([
+    running,
+    paused,
+    done,
+    { ...running, reminderId: null },
+  ]),
+  ['push-1'],
+  'the pushes of a saved session are those of its running timers that have one',
+);
+
+// What a timer's push needs
+const push = { isOn: true, isHidden: false };
+const ahead = { status: 'running', endsAt: NOW + MIN } as const;
+assert.equal(
+  getTimerPushAction(ahead, NOW + MIN, push),
+  'keep',
+  'a running timer at the deadline it was scheduled for keeps its push',
+);
+assert.equal(
+  getTimerPushAction(ahead, NOW + 2 * MIN, push),
+  'cancel',
+  'a timer moved to another deadline drops the old push',
+);
+assert.equal(
+  getTimerPushAction(ahead, NOW + MIN, { ...push, isOn: false }),
+  'cancel',
+  'switching timer pushes off cancels it',
+);
+assert.equal(
+  getTimerPushAction({ status: 'paused' }, NOW + MIN, push),
+  'cancel',
+  'a paused timer drops its push',
+);
+assert.equal(
+  getTimerPushAction(undefined, NOW + MIN, push),
+  'cancel',
+  'a dismissed timer drops its push',
+);
+assert.equal(
+  getTimerPushAction({ status: 'done' }, NOW + MIN, push),
+  'cancel',
+  'a timer that ended while the page was open rings by itself, so its push is cancelled',
+);
+assert.equal(
+  getTimerPushAction({ status: 'done' }, NOW + MIN, {
+    ...push,
+    isHidden: true,
+  }),
+  'leave',
+  'a timer that ended while the page was hidden leaves its push to go out',
+);
+assert.equal(
+  needsTimerPush(ahead, NOW),
+  true,
+  'a timer ahead of its deadline gets a push',
+);
+assert.equal(
+  needsTimerPush({ status: 'running', endsAt: NOW }, NOW),
+  false,
+  'one picked up exactly at its end has rung already',
+);
+assert.equal(
+  needsTimerPush({ status: 'running', endsAt: NOW - MIN }, NOW),
+  false,
+  'one picked up past its end is not given a push in the past',
+);
+assert.equal(
+  needsTimerPush({ status: 'paused' }, NOW),
+  false,
+  'a paused timer gets none',
 );
 
 // When a saved session is not read

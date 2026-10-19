@@ -48,6 +48,7 @@ type Notice = 'unseen' | 'showing' | 'seen';
 
 const UNFOCUSED: TimerFocus = { isShown: false, pickedId: null };
 const NO_TIMERS: CookTimer[] = [];
+const NO_REMINDERS: Record<string, string> = {};
 
 const BEEP_OFFSETS_SECONDS = [0, 0.4, 0.8];
 const SETTLE_SLACK_MS = 20;
@@ -96,8 +97,11 @@ const playBeeps = (context: AudioContext) =>
     oscillator.stop(startAt + 0.3);
   });
 
-/** Timers kept in memory (a saved session hands in `initialTimers`), and which one the timer view shows (`focused`, null while they run in the background). Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one comes into focus, buzzes and beeps, and toasts only while the screen is hidden or covered. */
-export function useCookTimers(initialTimers: CookTimer[] = NO_TIMERS) {
+/** Timers kept in memory (a saved session hands in `initialTimers` and the pushes it had scheduled, `restoredReminderIds`, by timer id), and which one the timer view shows (`focused`, null while they run in the background). Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one comes into focus, buzzes and beeps, and toasts only while the screen is hidden or covered. */
+export function useCookTimers(
+  initialTimers: CookTimer[] = NO_TIMERS,
+  restoredReminderIds: Record<string, string> = NO_REMINDERS,
+) {
   const { addToast } = useToast();
   const [timers, setTimers] = useState<CookTimer[]>(initialTimers);
   const [notice, setNotice] = useState<Notice>(
@@ -106,7 +110,10 @@ export function useCookTimers(initialTimers: CookTimer[] = NO_TIMERS) {
   const [focus, setFocus] = useState<TimerFocus>(UNFOCUSED);
   const [finishedSlots, setFinishedSlots] = useState<string[]>([]);
   const timersRef = useRef<CookTimer[]>(initialTimers);
-  useTimerPush(timers);
+  const { getReminderId, pushRevision } = useTimerPush(
+    timers,
+    restoredReminderIds,
+  );
   const addToastRef = useRef(addToast);
   const audioRef = useRef<AudioContext | null>(null);
   const ringsRef = useRef(new Map<string, AlertRing>());
@@ -400,6 +407,10 @@ export function useCookTimers(initialTimers: CookTimer[] = NO_TIMERS) {
     /** Slots of times that finished and were dismissed, for this session only. */
     finishedSlots: finishedSlotSet,
     isFull: !canStartTimer(timers),
+    /** The id of the push backing a running timer, for the saved copy; null when there is none. */
+    getReminderId,
+    /** Changes when a push is written, so the saved copy is written again with its id. */
+    pushRevision,
     isNoticeShown: notice === 'showing',
     settle,
     start,

@@ -595,7 +595,13 @@ export type ResumeTimer = {
   label: string;
   durationMs: number;
 } & (
-  | { status: 'running'; startedAt: number; endsAt: number }
+  | {
+      status: 'running';
+      startedAt: number;
+      endsAt: number;
+      /** The push scheduled for its end, so a picked-up session keeps or cancels it instead of scheduling a second; null when it has none. */
+      reminderId: string | null;
+    }
   | { status: 'paused'; remainingMs: number }
   | { status: 'done'; endedAt: number }
 );

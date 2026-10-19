@@ -12,6 +12,7 @@ import {
   clearCookingSession,
   readCookingSession,
 } from '@apps/pinch/lib/cookingSessionStorage';
+import { cancelTimerPush } from '@apps/pinch/lib/timerPush';
 import {
   selectPlannedMeals,
   selectRecipesById,
@@ -19,7 +20,10 @@ import {
 import {
   getCookingSessionKey,
   getResumeTimerLine,
+  getTimerReminderIds,
   resolveCookingResume,
+  type CookingResumePlan,
+  type CookingSnapshot,
 } from '@apps/pinch/utils/cookSession';
 
 interface CookingResumeRowProps {
@@ -30,7 +34,6 @@ function CookingResumeRow({ uid }: CookingResumeRowProps) {
   const { openSubview } = usePinchOverlay();
   const recipesById = useAppSelector(selectRecipesById);
   const plannedMeals = useAppSelector(selectPlannedMeals);
-  const now = useNow(1000);
   const [snapshot, setSnapshot] = useState(() =>
     readCookingSession(uid, Date.now()),
   );
@@ -66,13 +69,49 @@ function CookingResumeRow({ uid }: CookingResumeRowProps) {
   }, [uid]);
 
   useEffect(() => {
-    if (snapshot !== null && plan === null) clearCookingSession(uid);
+    if (snapshot === null || plan !== null) return;
+    getTimerReminderIds(snapshot.resume.timers).forEach(cancelTimerPush);
+    clearCookingSession(uid);
   }, [snapshot, plan, uid]);
 
   if (snapshot === null || plan === null || notLiveFor !== sessionId) {
     return null;
   }
 
+  const keepCooking = () =>
+    openSubview({
+      kind: 'cook',
+      recipeId: plan.open.recipeId,
+      servings: plan.open.servings,
+      plannedMealId: plan.open.plannedMealId ?? undefined,
+      plate: plan.open.plate,
+      resume: plan.resume,
+    });
+  const dismiss = () => {
+    getTimerReminderIds(snapshot.resume.timers).forEach(cancelTimerPush);
+    clearCookingSession(uid);
+    setSnapshot(null);
+  };
+
+  return (
+    <ResumeCard
+      snapshot={snapshot}
+      plan={plan}
+      onKeep={keepCooking}
+      onDismiss={dismiss}
+    />
+  );
+}
+
+interface ResumeCardProps {
+  snapshot: CookingSnapshot;
+  plan: CookingResumePlan;
+  onKeep: () => void;
+  onDismiss: () => void;
+}
+
+function ResumeCard({ snapshot, plan, onKeep, onDismiss }: ResumeCardProps) {
+  const now = useNow(1000);
   const isPlate = plan.dishTitle !== null;
   const timerLine = getResumeTimerLine(
     snapshot.resume.timers,
@@ -85,20 +124,6 @@ function CookingResumeRow({ uid }: CookingResumeRowProps) {
   ]
     .filter(Boolean)
     .join(' · ');
-
-  const keepCooking = () =>
-    openSubview({
-      kind: 'cook',
-      recipeId: plan.open.recipeId,
-      servings: plan.open.servings,
-      plannedMealId: plan.open.plannedMealId ?? undefined,
-      plate: plan.open.plate,
-      resume: plan.resume,
-    });
-  const dismiss = () => {
-    clearCookingSession(uid);
-    setSnapshot(null);
-  };
 
   return (
     <section
@@ -119,14 +144,14 @@ function CookingResumeRow({ uid }: CookingResumeRowProps) {
         </div>
       </div>
       <div className='mt-3 flex gap-2'>
-        <Button type='button' className='h-10 flex-1' onClick={keepCooking}>
+        <Button type='button' className='h-10 flex-1' onClick={onKeep}>
           Keep cooking
         </Button>
         <Button
           type='button'
           variant='secondary'
           className='border-border h-10 border px-5'
-          onClick={dismiss}
+          onClick={onDismiss}
         >
           Not now
         </Button>

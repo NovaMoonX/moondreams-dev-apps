@@ -222,6 +222,34 @@ export const getTimerCaption = (timer: {
     ? timer.stepName
     : `${timer.recipeTitle} · ${timer.stepName}`;
 
+export type TimerPushAction = 'keep' | 'leave' | 'cancel';
+
+/** What a timer's scheduled push needs now: `keep` while the timer runs to the deadline it was scheduled for and pushes are on, `leave` when it ended while the page was hidden (the push is what reaches the person), else `cancel` (the page rings by itself, or the timer was paused, reset or changed). */
+export const getTimerPushAction = (
+  timer: { status: string; endsAt?: number } | undefined,
+  scheduledEndsAt: number,
+  context: { isOn: boolean; isHidden: boolean },
+): TimerPushAction => {
+  if (
+    context.isOn &&
+    timer?.status === 'running' &&
+    timer.endsAt === scheduledEndsAt
+  ) {
+    return 'keep';
+  }
+  return timer?.status === 'done' && context.isHidden ? 'leave' : 'cancel';
+};
+
+type PushClock =
+  { status: 'running'; endsAt: number } | { status: 'paused' | 'done' };
+
+/** Only a timer still ahead of its deadline gets a push; one picked up past its end has rung already. */
+export const needsTimerPush = (
+  timer: PushClock,
+  now: number,
+): timer is Extract<PushClock, { status: 'running' }> =>
+  timer.status === 'running' && timer.endsAt > now;
+
 /** Running and paused timers count against the session's cap; a finished one waits for Dismiss and doesn't. */
 export const countLiveTimers = (timers: { status: string }[]) =>
   timers.filter((timer) => timer.status !== 'done').length;

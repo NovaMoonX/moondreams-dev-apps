@@ -48,6 +48,7 @@ export const toResumeTimer = (timer: ResumeTimer): ResumeTimer => {
       status: 'running',
       startedAt: timer.startedAt,
       endsAt: timer.endsAt,
+      reminderId: timer.reminderId,
     };
   }
   if (timer.status === 'paused') {
@@ -55,6 +56,14 @@ export const toResumeTimer = (timer: ResumeTimer): ResumeTimer => {
   }
   return { ...base, status: 'done', endedAt: timer.endedAt };
 };
+
+/** The pushes a saved session still has scheduled, for the ones that go unused when it is let go. */
+export const getTimerReminderIds = (timers: ResumeTimer[]) =>
+  timers.flatMap((timer) =>
+    timer.status === 'running' && timer.reminderId !== null
+      ? [timer.reminderId]
+      : [],
+  );
 
 export const buildCookingSnapshot = (input: {
   uid: string;
@@ -105,6 +114,9 @@ const isCount = (value: unknown, max: number): value is number =>
   value >= 0 &&
   value <= max;
 
+const isReminderId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[\w-]{1,64}$/.test(value);
+
 const parseTimer = (value: unknown): ResumeTimer | null => {
   if (
     !isRecord(value) ||
@@ -112,7 +124,12 @@ const parseTimer = (value: unknown): ResumeTimer | null => {
     !isCount(value.stepNumber, 10_000) ||
     value.stepNumber < 1 ||
     typeof value.label !== 'string' ||
-    !isTime(value.durationMs)
+    !isTime(value.durationMs) ||
+    !(
+      value.reminderId === undefined ||
+      value.reminderId === null ||
+      isReminderId(value.reminderId)
+    )
   ) {
     return null;
   }
@@ -132,6 +149,7 @@ const parseTimer = (value: unknown): ResumeTimer | null => {
       status: 'running',
       startedAt: value.startedAt,
       endsAt: value.endsAt,
+      reminderId: isReminderId(value.reminderId) ? value.reminderId : null,
     };
   }
   if (
