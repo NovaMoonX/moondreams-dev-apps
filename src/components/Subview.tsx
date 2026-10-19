@@ -46,7 +46,9 @@ export function SubviewHeader({
       <h1
         className={join(
           'min-w-0 flex-1 text-2xl font-semibold tracking-tight',
-          isTitleWrapped ? 'line-clamp-2 wrap-break-word' : 'truncate',
+          isTitleWrapped
+            ? 'line-clamp-2 wrap-break-word [@media(max-height:700px)]:line-clamp-1'
+            : 'truncate',
         )}
       >
         {title}

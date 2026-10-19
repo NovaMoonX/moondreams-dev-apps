@@ -20,11 +20,18 @@ interface ActionChipsProps {
   actions: ActionChip[];
   /** Names the group for screen readers. */
   label?: string;
+  /** Draws each chip as its icon alone in a 40px circle; the label stays as its accessible name. */
+  isIconOnly?: boolean;
   className?: string;
 }
 
 /** A sheet's actions as one wrapped row of quiet, solid-edged buttons, so they never sit as a block between two parts of what the person reads. */
-function ActionChips({ actions, label, className }: ActionChipsProps) {
+function ActionChips({
+  actions,
+  label,
+  isIconOnly = false,
+  className,
+}: ActionChipsProps) {
   if (actions.length === 0) {
     return null;
   }
@@ -42,13 +49,16 @@ function ActionChips({ actions, label, className }: ActionChipsProps) {
           variant='tertiary'
           size='sm'
           rounded='full'
-          aria-label={action.description}
-          title={action.description}
+          aria-label={
+            action.description ?? (isIconOnly ? action.label : undefined)
+          }
+          title={action.description ?? (isIconOnly ? action.label : undefined)}
           disabled={action.isDisabled || action.isLoading}
           loading={action.isLoading}
           onClick={action.onClick}
           className={join(
             'h-auto min-h-10 max-w-full gap-1.5 border px-3 py-1.5 text-left font-medium whitespace-normal',
+            isIconOnly && 'size-10 shrink-0 justify-center px-0 py-0',
             action.isDestructive
               ? 'border-destructive/40 text-destructive! hover:bg-destructive/10'
               : 'bg-muted/50 border-border text-foreground! hover:bg-muted',
@@ -57,7 +67,7 @@ function ActionChips({ actions, label, className }: ActionChipsProps) {
           <span className='shrink-0' aria-hidden='true'>
             {action.icon}
           </span>
-          <span>{action.label}</span>
+          {!isIconOnly && <span>{action.label}</span>}
         </Button>
       ))}
     </div>

@@ -51,7 +51,9 @@ function CookStepTray({
         }
         className={join(
           'text-foreground! h-auto w-full items-start justify-between gap-3 rounded-2xl px-4 py-2.5 text-left font-normal hover:bg-transparent',
-          isOpen ? 'min-h-10' : 'min-h-14',
+          isOpen
+            ? 'min-h-10'
+            : 'min-h-14 [@media(max-height:700px)]:min-h-10 [@media(max-height:700px)]:items-center',
         )}
         onClick={() => setIsOpen((open) => !open)}
       >
@@ -60,13 +62,16 @@ function CookStepTray({
             {summary.caption}
           </span>
           {!isOpen && (
-            <span className='mt-0.5 line-clamp-2 block text-sm wrap-break-word'>
+            <span className='mt-0.5 line-clamp-2 block text-sm wrap-break-word [@media(max-height:700px)]:hidden'>
               {summary.text}
             </span>
           )}
         </span>
         <Chevron
-          className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
+          className={join(
+            'text-muted-foreground h-4 w-4 shrink-0',
+            isOpen ? 'mt-0.5' : 'mt-0.5 [@media(max-height:700px)]:mt-0',
+          )}
           aria-hidden='true'
         />
       </Button>

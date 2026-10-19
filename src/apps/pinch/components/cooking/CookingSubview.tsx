@@ -1454,14 +1454,15 @@ function CookingSession({
       <CookDishStrip dishes={dishes} value={recipe.id} onChange={showRecipe} />
     ) : null;
   const isDishStripInStep = isStepsView && hasSteps && !isWide;
-  const noteCard = isCookNoteShown(index, gotItNotes, recipe.id) ? (
-    <CookNoteCard
-      key={recipe.id}
-      recipeId={recipe.id}
-      onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
-      onApply={(noteId) => void applyNote(noteId)}
-    />
-  ) : null;
+  const noteCard =
+    !isWide && isCookNoteShown(index, gotItNotes, recipe.id) ? (
+      <CookNoteCard
+        key={recipe.id}
+        recipeId={recipe.id}
+        onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
+        onApply={(noteId) => void applyNote(noteId)}
+      />
+    ) : null;
   const notesDoor = (
     <RecipeNotes
       recipeId={recipe.id}
