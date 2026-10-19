@@ -359,7 +359,8 @@ const PLURAL_EXCEPTIONS: Record<string, string> = {
   loaves: 'loaf',
 };
 
-const toPlainText = (text: string) =>
+/** Lower case, accents and punctuation off, apostrophes dropped and spaces single: what phrases are compared as. */
+export const toPlainText = (text: string) =>
   text
     .normalize('NFD')
     .replace(/\p{M}/gu, '')

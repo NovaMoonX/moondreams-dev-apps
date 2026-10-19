@@ -628,3 +628,13 @@ export const CONTAINER_FINISHED_PAGE_SIZE = 25;
 export const CONTAINER_QUERY_LIMIT = 200;
 /** Containers one transaction of a clear-out or its Undo re-reads and writes, under Firestore's 500: the action's limit, not the rules'. */
 export const CONTAINER_CLEAR_CHUNK_SIZE = 200;
+
+/** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it, in plain text: a bare "pinch" or "a pinch" is never one, since it is an ingredient word. */
+export const COOK_WAKE_PHRASE = 'Hey Pinch';
+export const COOK_WAKE_SPELLINGS = ['hey pinch', 'hay pinch', 'heypinch'];
+/** How long a command window stays open after the last thing it understood. */
+export const COOK_WINDOW_MS = 10_000;
+/** "Hey Pinch" listening turns itself off after this long without the phrase. */
+export const COOK_WAKE_IDLE_MS = 10 * 60_000;
+/** "Keep listening" runs to a fixed deadline; commands don't extend it. */
+export const COOK_LOCK_MS = 15 * 60_000;
