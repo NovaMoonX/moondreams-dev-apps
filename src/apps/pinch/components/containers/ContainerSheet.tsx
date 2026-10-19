@@ -4,11 +4,11 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Ban,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Hash,
   History,
-  PencilLine,
   Undo2,
   Utensils,
 } from 'lucide-react';
@@ -520,10 +520,9 @@ function HistoryList({ container }: HistoryListProps) {
 interface FactsProps {
   container: Container;
   servingsText: string;
-  onChangeDate: () => void;
 }
 
-function Facts({ container, servingsText, onChangeDate }: FactsProps) {
+function Facts({ container, servingsText }: FactsProps) {
   const state = getEatByState(container.eatBy);
   const dateLabel =
     state === 'PAST'
@@ -547,23 +546,13 @@ function Facts({ container, servingsText, onChangeDate }: FactsProps) {
           <span className='whitespace-nowrap'>{getFrozenText(container)}</span>
         )}
       </p>
-      <Button
-        type='button'
-        variant='tertiary'
-        aria-label={`${dateLabel}. Change the date`}
-        className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
-        onClick={onChangeDate}
-      >
+      <p className='text-sm'>
         {state === 'LATER' ? (
           <span className='whitespace-nowrap'>{dateLabel}</span>
         ) : (
           <EatByBadge state={state} label={dateLabel} />
         )}
-        <PencilLine
-          className='text-muted-foreground h-3.5 w-3.5 shrink-0'
-          aria-hidden='true'
-        />
-      </Button>
+      </p>
       {(freezeLine || thawedAt !== null) && (
         <p className='text-muted-foreground text-sm'>
           {[
@@ -879,7 +868,6 @@ function ContainerSheet({
                 ? getBatchServingsText(boxes)
                 : `${formatServings(container.servings)} left`
             }
-            onChangeDate={() => setView({ kind: 'eatBy' })}
           />
         ) : (
           <p className='text-muted-foreground text-sm'>
@@ -940,6 +928,12 @@ function ContainerSheet({
                 label={getMoveLabel()}
                 subtitle='Sets a new eat-by date'
                 onClick={() => setView({ kind: 'move', to: otherPlace })}
+              />
+              <ActionRow
+                isGrouped
+                icon={<CalendarDays className='h-4 w-4' />}
+                label='Change the eat-by date'
+                onClick={() => setView({ kind: 'eatBy' })}
               />
               <ActionRow
                 isGrouped
