@@ -19,7 +19,9 @@ import { formatClock } from '@/utils/durationUtils';
 import {
   COOK_LOCK_MS,
   COOK_WAKE_IDLE_MS,
+  COOK_WAKE_MAX_MS,
   COOK_WAKE_PHRASE,
+  COOK_WAKE_TIMER_GRACE_MS,
   COOK_WINDOW_MS,
 } from '@apps/pinch/constants';
 import type { CookVoice } from '@apps/pinch/hooks/useCookVoice';
@@ -28,6 +30,8 @@ import type { VoiceMode, VoiceStop } from '@apps/pinch/utils/cookVoiceMode';
 const WINDOW_SECONDS = COOK_WINDOW_MS / 1000;
 const WAIT_MINUTES = COOK_WAKE_IDLE_MS / 60_000;
 const LOCK_MINUTES = COOK_LOCK_MS / 60_000;
+const TIMER_GRACE_MINUTES = COOK_WAKE_TIMER_GRACE_MS / 60_000;
+const MAX_WAIT_MINUTES = COOK_WAKE_MAX_MS / 60_000;
 
 /** Why voice control stopped by itself: one line for the footer, and the whole cause with what to do for the explainer that a tap on the mic opens (none where a tap simply starts it again). */
 const STOP_TEXT: Record<VoiceStop, { line: string; detail: string | null }> = {
@@ -164,7 +168,7 @@ export function CookVoiceButton({ voice }: CookVoiceButtonProps) {
       aria-label='Voice control'
       aria-pressed={voice.isOn}
       className={join(
-        "relative size-8 shrink-0 after:absolute after:-inset-1 after:content-['']",
+        "relative size-8 shrink-0 after:absolute after:-inset-[5px] after:content-['']",
         voice.isOn &&
           'border border-[var(--pinch-drizzle)]! bg-[var(--pinch-drizzle-soft)]! text-[var(--pinch-drizzle)]!',
       )}
@@ -511,7 +515,7 @@ function StatusChip({ voice }: { voice: CookVoice }) {
       size='sm'
       rounded='full'
       className={join(
-        "text-foreground! relative h-6! min-h-0! shrink-0 gap-1.5 px-2.5 py-0! text-xs font-normal after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']",
+        "text-foreground! relative h-6! min-h-0! shrink-0 gap-1.5 px-2.5 py-0! text-xs font-normal after:absolute after:inset-x-0 after:-inset-y-[9px] after:content-['']",
         isReady && phase !== 'WAITING'
           ? 'border border-[var(--pinch-drizzle)]! bg-[var(--pinch-drizzle-soft)]!'
           : 'border-border border',
@@ -692,8 +696,8 @@ export function CookVoiceExplainer({
           </p>
         )}
         <p>
-          Your browser will ask to use the microphone, and its speech service
-          hears what you say. Pinch keeps nothing.
+          Your browser asks first, its speech service hears you, and Pinch keeps
+          nothing.
         </p>
         <div className='space-y-2'>
           <p className='text-muted-foreground text-xs'>How should it listen?</p>
@@ -723,7 +727,9 @@ export function CookVoiceExplainer({
               “{COOK_WAKE_PHRASE}” keeps the mic on while it waits, so the
               speech service hears the room until you turn it off. Pinch acts
               only after the phrase, and the mic turns off after {WAIT_MINUTES}{' '}
-              quiet minutes.
+              quiet minutes. It waits while a timer runs and for{' '}
+              {TIMER_GRACE_MINUTES} minutes after one rings, and never past{' '}
+              {MAX_WAIT_MINUTES} minutes.
             </li>
             <li>
               Once it is on, the chip above the buttons can keep it listening

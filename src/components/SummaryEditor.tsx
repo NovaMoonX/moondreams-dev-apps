@@ -11,6 +11,10 @@ import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
+import {
+  SUMMARY_GROUP_ROUNDING,
+  type SummaryGroupPosition,
+} from '@/components/summaryGroup';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const PHONE_FOCUS_DELAY_MS = 350;
@@ -86,7 +90,9 @@ interface SummaryEditorProps {
   defaultOpen?: boolean;
   /** A roomy row in a hairline card, for a screen whose first row is what it acts on; the row's icon chip goes with it. */
   isFramed?: boolean;
-  /** An emoji or icon in a round chip before the text; only shown on a framed row. */
+  /** A row of a card that holds several (the frame is `SUMMARY_GROUP_FRAME` on the row's cell): the row is roomy, its icon chip shows, and its corners follow the card's. */
+  groupPosition?: SummaryGroupPosition;
+  /** An emoji or icon in a round chip before the text; only shown on a framed or grouped row. */
   icon?: ReactNode;
   /** A picture or tile before the text, for a field whose value is an image. */
   leading?: ReactNode;
@@ -106,6 +112,7 @@ function SummaryEditor({
   lines = 1,
   defaultOpen = false,
   isFramed = false,
+  groupPosition,
   icon,
   leading,
   shouldFocus = true,
@@ -121,6 +128,7 @@ function SummaryEditor({
   const isDrawer = isNarrow || isShort;
   const close = () => setIsOpen(false);
   const isEmpty = summary === '';
+  const isRoomy = isFramed || groupPosition !== undefined;
 
   const trigger = (
     <Button
@@ -132,12 +140,17 @@ function SummaryEditor({
       className={join(
         'h-auto w-full justify-start gap-3 text-left',
         leading === undefined ? 'items-start' : 'items-center',
-        isFramed
-          ? 'border-border hover:bg-muted text-foreground! min-h-16 rounded-2xl border px-3! py-2'
-          : 'min-h-11 px-0! py-2',
+        isFramed &&
+          'border-border hover:bg-muted text-foreground! min-h-16 rounded-2xl border px-3! py-2',
+        groupPosition !== undefined &&
+          join(
+            'hover:bg-muted text-foreground! min-h-16 px-3! py-2',
+            SUMMARY_GROUP_ROUNDING[groupPosition],
+          ),
+        !isRoomy && 'min-h-11 px-0! py-2',
       )}
     >
-      {isFramed && icon !== undefined && (
+      {isRoomy && icon !== undefined && (
         <span
           className='bg-accent text-accent-foreground mt-0.5 grid size-10 shrink-0 place-items-center rounded-full text-lg leading-none [&_svg]:size-5'
           aria-hidden='true'
@@ -153,7 +166,7 @@ function SummaryEditor({
       <span
         className={join(
           'min-w-0 flex-1',
-          isFramed && 'flex min-h-11 flex-col justify-center',
+          isRoomy && 'flex min-h-11 flex-col justify-center',
         )}
       >
         <span className='text-muted-foreground block text-xs font-normal'>
@@ -177,7 +190,7 @@ function SummaryEditor({
       <ChevronRight
         className={join(
           'text-muted-foreground shrink-0',
-          isFramed
+          isRoomy
             ? 'mt-3 -ml-1 size-5'
             : join('h-5 w-5', leading === undefined && 'mt-2.5'),
         )}

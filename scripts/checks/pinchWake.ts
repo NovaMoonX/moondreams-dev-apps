@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 
 import {
   COOK_LOCK_MS,
+  COOK_WAKE_IDLE_MS,
+  COOK_WAKE_MAX_MS,
   COOK_WAKE_PHRASE,
   COOK_WAKE_SPELLINGS,
+  COOK_WAKE_TIMER_GRACE_MS,
 } from '../../src/apps/pinch/constants.ts';
 import {
   parseCookCommand,
@@ -14,13 +17,16 @@ import {
 import {
   createVoiceState,
   getVoiceEffect,
+  getWakeWaitEnd,
   planHeard,
   readWakeWord,
+  recordWakeBusy,
   reduceVoice,
   type VoiceEvent,
   type VoicePhase,
   type VoiceState,
   type VoiceStop,
+  type WakeBusySpan,
 } from '../../src/apps/pinch/utils/cookVoiceMode.ts';
 
 const context: CookVoiceContext = {
@@ -960,5 +966,149 @@ const stops: VoiceStop[] = [
   'lock-ended',
 ];
 assert.equal(new Set(stops).size, stops.length, 'each stop reason is its own');
+
+// How long a wait for the phrase lasts when timers run
+const WAIT_MIN = 60_000;
+const WAIT_T0 = Date.UTC(2026, 9, 16, 19, 0);
+assert.equal(COOK_WAKE_IDLE_MS, 10 * WAIT_MIN, 'ten quiet minutes');
+assert.equal(
+  COOK_WAKE_TIMER_GRACE_MS,
+  2 * WAIT_MIN,
+  'two minutes after a ring',
+);
+assert.equal(COOK_WAKE_MAX_MS, 60 * WAIT_MIN, 'an hour at most');
+
+const waitCases: [string, WakeBusySpan[], number][] = [
+  ['no timer: ten minutes after it began', [], 10],
+  [
+    'a timer running from the start: the clock stands still to the cap',
+    [{ from: 0, to: null }],
+    60,
+  ],
+  [
+    'a timer started after the ten minutes had passed: the wait was over before it',
+    [{ from: 15 * WAIT_MIN, to: null }],
+    10,
+  ],
+  [
+    'a timer that ran from minute 1 to 26 and was stopped: one minute used, nine left after it',
+    [{ from: 1 * WAIT_MIN, to: 26 * WAIT_MIN }],
+    35,
+  ],
+  [
+    'the same timer ringing: nine more quiet minutes after its two minutes of grace',
+    [
+      { from: 1 * WAIT_MIN, to: 26 * WAIT_MIN },
+      { from: 26 * WAIT_MIN, to: 28 * WAIT_MIN },
+    ],
+    37,
+  ],
+  [
+    'a timer longer than the cap: the cap',
+    [{ from: 1 * WAIT_MIN, to: 80 * WAIT_MIN }],
+    60,
+  ],
+  [
+    'two overlapping timers count once',
+    [
+      { from: 1 * WAIT_MIN, to: 20 * WAIT_MIN },
+      { from: 10 * WAIT_MIN, to: 30 * WAIT_MIN },
+    ],
+    39,
+  ],
+  [
+    'two timers with quiet between them: each stretch of quiet counts',
+    [
+      { from: 3 * WAIT_MIN, to: 10 * WAIT_MIN },
+      { from: 15 * WAIT_MIN, to: 30 * WAIT_MIN },
+    ],
+    32,
+  ],
+  [
+    'stretches given out of order give the same end',
+    [
+      { from: 15 * WAIT_MIN, to: 30 * WAIT_MIN },
+      { from: 3 * WAIT_MIN, to: 10 * WAIT_MIN },
+    ],
+    32,
+  ],
+  [
+    'a stretch that began before the wait counts from the wait',
+    [{ from: -5 * WAIT_MIN, to: 4 * WAIT_MIN }],
+    14,
+  ],
+];
+waitCases.forEach(([name, spans, minutes]) =>
+  assert.equal(
+    getWakeWaitEnd(
+      WAIT_T0,
+      spans.map((span) => ({
+        from: WAIT_T0 + span.from,
+        to: span.to === null ? null : WAIT_T0 + span.to,
+      })),
+    ),
+    WAIT_T0 + minutes * WAIT_MIN,
+    name,
+  ),
+);
+
+const look = (
+  spans: WakeBusySpan[],
+  at: number,
+  runningTimers: number,
+  lastRingAt: number | null,
+) =>
+  recordWakeBusy(spans, {
+    enteredAt: WAIT_T0,
+    now: WAIT_T0 + at * WAIT_MIN,
+    runningTimers,
+    lastRingAt: lastRingAt === null ? null : WAIT_T0 + lastRingAt * WAIT_MIN,
+  });
+const waitAt = (minutes: number) => WAIT_T0 + minutes * WAIT_MIN;
+
+assert.deepEqual(look([], 0, 0, null), [], 'nothing runs: nothing is recorded');
+const started = look([], 2, 1, null);
+assert.deepEqual(
+  started,
+  [{ from: waitAt(2), to: null }],
+  'the first timer opens a stretch',
+);
+assert.deepEqual(
+  look(started, 3, 2, null),
+  started,
+  'a second timer joins the open stretch',
+);
+const stopped = look(started, 9, 0, null);
+assert.deepEqual(
+  stopped,
+  [{ from: waitAt(2), to: waitAt(9) }],
+  'none running closes it where it was seen',
+);
+const rang = look(started, 27, 0, 27);
+assert.deepEqual(
+  rang,
+  [
+    { from: waitAt(2), to: waitAt(27) },
+    { from: waitAt(27), to: waitAt(29) },
+  ],
+  'a ring closes the stretch and adds two minutes of grace',
+);
+assert.deepEqual(
+  look(rang, 28, 0, 27),
+  rang,
+  'the same ring is not added twice',
+);
+assert.deepEqual(
+  look([], 5, 0, -3),
+  [],
+  'a ring from before the wait began is not counted',
+);
+assert.equal(
+  getWakeWaitEnd(WAIT_T0, rang),
+  waitAt(29 + 8),
+  'timer from minute 2 to the ring at 27, then grace to 29: two quiet minutes used, eight left after the grace',
+);
+
+console.log('pinchWake: timer-aware wait checks passed');
 
 console.log('pinchWake: all checks passed');

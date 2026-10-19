@@ -4,10 +4,12 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
 import SummaryEditor from '@/components/SummaryEditor';
+import type { SummaryGroupPosition } from '@/components/summaryGroup';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { toWebLink } from '@/utils/urlUtils';
@@ -177,16 +179,6 @@ function LinkRow({
             aria-hidden='true'
           />
         </Button>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          aria-label={`Remove ${label}`}
-          className='size-10 shrink-0'
-          onClick={onRemove}
-        >
-          <Trash2 className='h-4 w-4' aria-hidden='true' />
-        </Button>
       </div>
       {isOpen && (
         <div className='space-y-3 pb-4'>
@@ -209,6 +201,19 @@ function LinkRow({
             isFocusedOnOpen={false}
             clearLabel='Use plain “Link”'
             onChange={setLabel}
+          />
+          <ActionChips
+            label='This link'
+            actions={[
+              {
+                key: 'remove',
+                icon: <Trash2 className='h-4 w-4' />,
+                label: 'Remove',
+                description: `Remove ${label}`,
+                isDestructive: true,
+                onClick: onRemove,
+              },
+            ]}
           />
         </div>
       )}
@@ -326,9 +331,14 @@ function LinksEditor({ value, onChange, onRemoved }: LinksEditorProps) {
 interface RecipeLinksFieldProps {
   value: LinksText;
   onChange: (value: LinksText) => void;
+  position: SummaryGroupPosition;
 }
 
-function RecipeLinksField({ value, onChange }: RecipeLinksFieldProps) {
+function RecipeLinksField({
+  value,
+  onChange,
+  position,
+}: RecipeLinksFieldProps) {
   const { pending, showUndo, undo } = useUndoRemoval();
   const summary = getLinksSummary(value);
   const isOver = isOverLinkCap(value);
@@ -337,6 +347,8 @@ function RecipeLinksField({ value, onChange }: RecipeLinksFieldProps) {
     <>
       <SummaryEditor
         label='Links'
+        groupPosition={position}
+        icon='🔗'
         title='Links'
         summary={summary}
         placeholder='Add a how-to video or a link'

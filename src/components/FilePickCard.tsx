@@ -23,6 +23,8 @@ interface FilePickCardProps {
   /** A line under the slot or the picked file: a tip, what is happening to it, or why it failed. */
   status: ReactNode;
   isDisabled?: boolean;
+  /** On a phone the empty slot grows into the height its section has left. */
+  isFilling?: boolean;
   /** Opens the file picker; the card is a target for it as well as a place to drop onto. */
   onPick: () => void;
   onDropFile: (file: File) => void;
@@ -36,6 +38,7 @@ function FilePickCard({
   picked,
   status,
   isDisabled = false,
+  isFilling = false,
   onPick,
   onDropFile,
 }: FilePickCardProps) {
@@ -54,6 +57,7 @@ function FilePickCard({
     <div
       className={join(
         'rounded-2xl border',
+        isFilling && 'max-sm:flex max-sm:flex-1 max-sm:flex-col',
         isDragging
           ? 'bg-accent/40 border-primary'
           : join('border-border', picked ? 'bg-card' : 'border-dashed'),
@@ -90,7 +94,10 @@ function FilePickCard({
           variant='tertiary'
           disabled={isDisabled}
           onClick={onPick}
-          className='h-auto min-h-40 w-full flex-col gap-2 rounded-2xl px-4! py-6 text-center font-normal whitespace-normal'
+          className={join(
+            'h-auto min-h-40 w-full flex-col gap-2 rounded-2xl px-4! py-6 text-center font-normal whitespace-normal',
+            isFilling && 'max-sm:flex-1',
+          )}
         >
           <span
             className='bg-accent text-foreground grid size-12 place-items-center rounded-xl'

@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check, ChevronDown, PenLine } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
@@ -33,6 +34,7 @@ function CookNoteCard({ recipeId, onGotIt, onApply }: CookNoteCardProps) {
     (state) =>
       state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
   );
+  const isShort = useIsShortScreen();
   const [isOpen, setIsOpen] = useState(false);
 
   const latest = notes.find((entry) => entry.kind === 'NOTE') ?? null;
@@ -44,6 +46,80 @@ function CookNoteCard({ recipeId, onGotIt, onApply }: CookNoteCardProps) {
   const isChangedSince = lastTweakAt !== null && lastTweakAt > latest.createdAt;
   const hasMore = notes.length > 1 || body.length > LONG_NOTE_CHARS;
   const date = formatDateShort(latest.createdAt);
+  const actions = [
+    {
+      key: 'got-it',
+      icon: <Check className='h-4 w-4' />,
+      label: 'Got it',
+      description: 'Got it, hide this note while you cook',
+      onClick: onGotIt,
+    },
+    ...(isOpen
+      ? []
+      : [
+          {
+            key: 'apply',
+            icon: <PenLine className='h-4 w-4' />,
+            label: 'Apply to the recipe',
+            description: `Apply the note from ${date} to the recipe`,
+            onClick: () => onApply(latest.id),
+          },
+        ]),
+  ];
+  const notesList = (
+    <RecipeNotes
+      recipeId={recipeId}
+      onAdd={null}
+      onEdit={null}
+      onApply={onApply}
+    />
+  );
+
+  if (isShort) {
+    return (
+      <section
+        data-cook='note-card'
+        aria-label='Your latest note for this recipe'
+        className='bg-accent/60 border-border rounded-2xl border pr-1.5 pl-3'
+      >
+        <div className='flex items-center gap-1'>
+          <Button
+            type='button'
+            variant='tertiary'
+            aria-expanded={isOpen}
+            className='text-foreground! h-auto min-h-12 min-w-0 flex-1 justify-start px-0! py-1 text-left font-normal hover:bg-transparent'
+            onClick={() => setIsOpen((open) => !open)}
+          >
+            <span className='min-w-0 flex-1'>
+              <span className='flex items-center gap-1.5 text-xs font-medium'>
+                <span aria-hidden='true'>📝</span>
+                Last time · {date}
+                <ChevronDown
+                  className={join(
+                    'h-3.5 w-3.5 shrink-0',
+                    isOpen && 'rotate-180',
+                  )}
+                  aria-hidden='true'
+                />
+              </span>
+              {!isOpen && (
+                <span className='mt-0.5 block truncate text-sm'>
+                  {leadWithAdvice(body)}
+                </span>
+              )}
+            </span>
+          </Button>
+          <ActionChips
+            label='Your note'
+            isIconOnly
+            className='shrink-0 flex-nowrap gap-1'
+            actions={actions}
+          />
+        </div>
+        {isOpen && <div className='pb-3'>{notesList}</div>}
+      </section>
+    );
+  }
 
   return (
     <section
@@ -75,15 +151,10 @@ function CookNoteCard({ recipeId, onGotIt, onApply }: CookNoteCardProps) {
         </p>
       )}
       {isOpen ? (
-        <RecipeNotes
-          recipeId={recipeId}
-          onAdd={null}
-          onEdit={null}
-          onApply={onApply}
-        />
+        notesList
       ) : (
         <div className='space-y-1'>
-          <p className='line-clamp-4 text-sm text-pretty wrap-break-word [@media(max-height:700px)]:line-clamp-2'>
+          <p className='line-clamp-4 text-sm text-pretty wrap-break-word'>
             {leadWithAdvice(body)}
           </p>
           {isChangedSince && (
@@ -93,30 +164,7 @@ function CookNoteCard({ recipeId, onGotIt, onApply }: CookNoteCardProps) {
           )}
         </div>
       )}
-      <ActionChips
-        label='Your note'
-        className='mt-2'
-        actions={[
-          {
-            key: 'got-it',
-            icon: <Check className='h-4 w-4' />,
-            label: 'Got it',
-            description: 'Got it, hide this note while you cook',
-            onClick: onGotIt,
-          },
-          ...(isOpen
-            ? []
-            : [
-                {
-                  key: 'apply',
-                  icon: <PenLine className='h-4 w-4' />,
-                  label: 'Apply to the recipe',
-                  description: `Apply the note from ${date} to the recipe`,
-                  onClick: () => onApply(latest.id),
-                },
-              ]),
-        ]}
-      />
+      <ActionChips label='Your note' className='mt-2' actions={actions} />
     </section>
   );
 }

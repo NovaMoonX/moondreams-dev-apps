@@ -1,6 +1,7 @@
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import type { PillOption } from '@/components/PillGroup';
 import SummaryEditor from '@/components/SummaryEditor';
+import type { SummaryGroupPosition } from '@/components/summaryGroup';
 import type { SourceChoice } from '@apps/pinch/components/recipes/recipeFormModel';
 import { MAX_SOURCE_LABEL_LENGTH } from '@apps/pinch/constants';
 
@@ -9,12 +10,14 @@ interface RecipeSourceFieldProps {
   /** The sources a recipe uses, plus the one this recipe has. */
   options: readonly PillOption<string>[];
   onChange: (value: SourceChoice) => void;
+  position: SummaryGroupPosition;
 }
 
 function RecipeSourceField({
   value,
   options,
   onChange,
+  position,
 }: RecipeSourceFieldProps) {
   const summary =
     value.choice === NEW_CHOICE
@@ -24,6 +27,8 @@ function RecipeSourceField({
   return (
     <SummaryEditor
       label="Where it's from"
+      groupPosition={position}
+      icon='📚'
       title="Where it's from"
       summary={summary}
       placeholder="Add where it's from"

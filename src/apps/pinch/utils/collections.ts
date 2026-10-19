@@ -1,9 +1,8 @@
 import {
   COLLECTION_BATCH_SIZE,
-  COLLECTION_CHIPS_QUIET_HIDDEN,
-  COLLECTION_CHIPS_SHOWN,
   COLLECTION_FILTER_ANY,
   COLLECTION_FILTER_NONE,
+  COLLECTION_NOUN_PLURAL,
   COLLECTION_SUGGESTION_LABELS,
   HIGH_PROTEIN_GRAMS,
   MAX_COLLECTIONS,
@@ -131,12 +130,14 @@ export const filterByCollection = <T extends InCollections>(
   );
 };
 
-export const getCollectionChipWindow = (total: number, isExpanded: boolean) => {
-  const canFold =
-    total - COLLECTION_CHIPS_SHOWN > COLLECTION_CHIPS_QUIET_HIDDEN;
-  const shown = canFold && !isExpanded ? COLLECTION_CHIPS_SHOWN : total;
-
-  return { shown, canFold };
+/** What a recipe's collections say on the drawer's one pill row: nothing, the name of the only one, or how many it is in (the names are one tap away). */
+export const getCollectionsPill = (labels: readonly string[]) => {
+  if (labels.length === 0) return { kind: 'none' as const, label: null };
+  if (labels.length === 1) return { kind: 'one' as const, label: labels[0] };
+  return {
+    kind: 'many' as const,
+    label: `In ${labels.length} ${COLLECTION_NOUN_PLURAL}`,
+  };
 };
 
 export interface SuggestionSource {

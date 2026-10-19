@@ -20,6 +20,7 @@ import {
   resolveCookingResume,
 } from '../../src/apps/pinch/utils/cookSession.ts';
 import {
+  getTimerBuzzOffer,
   getTimerPushAction,
   needsTimerPush,
 } from '../../src/apps/pinch/utils/cooks.ts';
@@ -606,6 +607,43 @@ assert.equal(
   await asked('session-1'),
   false,
   'once that tab is gone, nothing answers',
+);
+
+// The offer under a running timer
+assert.equal(
+  getTimerBuzzOffer(null, false),
+  'none',
+  'nothing is offered until the device state is read, so the row never flashes',
+);
+assert.equal(
+  getTimerBuzzOffer('on', true),
+  'none',
+  'a reachable device with timer pushes on is offered nothing',
+);
+assert.equal(
+  getTimerBuzzOffer('on', false),
+  'ask',
+  'a reachable device with timer pushes off is asked, and no permission is needed',
+);
+assert.equal(
+  getTimerBuzzOffer('off', false),
+  'ask',
+  'a device not registered is asked',
+);
+assert.equal(
+  getTimerBuzzOffer('off', true),
+  'ask',
+  'the setting being on does not reach a device that is not registered',
+);
+assert.equal(
+  getTimerBuzzOffer('blocked', true),
+  'blocked',
+  'a blocked site is offered the way in, which says why it cannot work',
+);
+assert.equal(
+  getTimerBuzzOffer('unsupported', false),
+  'unsupported',
+  'a browser that cannot push is offered the way in, which says why',
 );
 
 console.log('cookSession: all checks passed');

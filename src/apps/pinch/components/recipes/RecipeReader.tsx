@@ -12,7 +12,11 @@ import FormSection from '@/components/FormSection';
 import IntroCard from '@/components/IntroCard';
 import MethodPicker, { type Method } from '@/components/MethodPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import ShowMoreButton from '@/components/ShowMoreButton';
+import { useAppSelector } from '@/store';
 import { isReadableFile } from '@/utils/fileUtils';
+import { toWebLink } from '@/utils/urlUtils';
+import IdeaRow from '@apps/pinch/components/ideas/IdeaRow';
 import {
   MAX_PASTE_CHARS,
   MAX_UPLOAD_BYTES,
@@ -25,6 +29,10 @@ import {
   type ExtractedRecipe,
 } from '@apps/pinch/lib/extractRecipe';
 import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
+import {
+  selectIdeaGroups,
+  selectIdeasLoadError,
+} from '@apps/pinch/store/selectors';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
 import {
   canPasteTextInstead,
@@ -57,6 +65,9 @@ type State =
 type ReaderMethod = Exclude<RecipeStartMethod, 'manual'>;
 
 const SAVED_LINE = 'You look it over before anything is saved.';
+
+const IDEAS_SHOWN = 3;
+const IDEAS_SHOWN_MOST = 10;
 
 const failed = (message: string, canPasteInstead = false): State => ({
   status: 'failed',
@@ -157,6 +168,21 @@ function RecipeReader({
   const canPasteText = initialUrl === undefined;
   const typed = method === 'text' ? text : link;
   const copy = READER_COPY[method];
+  const [isIdeasOpen, setIsIdeasOpen] = useState(false);
+  const isIdeasLoaded = useAppSelector(
+    (state) =>
+      state.pinch.ideas.isLoaded && selectIdeasLoadError(state) === null,
+  );
+  const toTry = useAppSelector(selectIdeaGroups).toTry;
+  const linkIdeas =
+    method === 'link' && canPasteText
+      ? toTry.filter((idea) => idea.url != null && toWebLink(idea.url) !== null)
+      : [];
+  const canFoldIdeas = linkIdeas.length > IDEAS_SHOWN * 2;
+  const shownIdeas = linkIdeas.slice(
+    0,
+    canFoldIdeas && !isIdeasOpen ? IDEAS_SHOWN : IDEAS_SHOWN_MOST,
+  );
 
   useEffect(() => {
     if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
@@ -240,6 +266,15 @@ function RecipeReader({
         await queryClient.fetchQuery(recipePageQueryOptions(url)),
       ),
     );
+  };
+
+  const fillFromIdea = (ideaId: string) => {
+    const url = linkIdeas.find((idea) => idea.id === ideaId)?.url;
+    if (url == null) {
+      return;
+    }
+    setLink(url);
+    handleTyped(url);
   };
 
   const handleRetryFile = () => {
@@ -435,7 +470,7 @@ function RecipeReader({
       <IntroCard icon={getMethodEmoji(method)} lead={intro.lead}>
         {intro.rest}
       </IntroCard>
-      <FormSection title={copy.caption}>
+      <FormSection title={copy.caption} isFilling={method === 'file'}>
         {method === 'file' ? (
           <FilePickCard
             title='Tap to choose a file'
@@ -450,6 +485,7 @@ function RecipeReader({
             }
             status={getStatusLine()}
             isDisabled={isReading}
+            isFilling
             onPick={() => fileRef.current?.click()}
             onDropFile={handleFile}
           />
@@ -463,6 +499,49 @@ function RecipeReader({
         )}
       </FormSection>
       <ActionChips actions={getChips()} label='What else you can do with it' />
+      {method === 'link' && canPasteText && isIdeasLoaded && (
+        <div
+          className={join(
+            linkIdeas.length === 0 && '[@media(max-height:700px)]:hidden',
+          )}
+        >
+          <FormSection title='Links from your ideas'>
+            {linkIdeas.length > 0 ? (
+              <>
+                <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
+                  {shownIdeas.map((idea) => (
+                    <li key={idea.id}>
+                      <IdeaRow idea={idea} onOpen={fillFromIdea} />
+                    </li>
+                  ))}
+                </ul>
+                {canFoldIdeas && (
+                  <ShowMoreButton
+                    isOpen={isIdeasOpen}
+                    onClick={() => setIsIdeasOpen((open) => !open)}
+                  >
+                    {isIdeasOpen
+                      ? 'Show fewer'
+                      : `Show ${Math.min(linkIdeas.length, IDEAS_SHOWN_MOST) - IDEAS_SHOWN} more`}
+                  </ShowMoreButton>
+                )}
+              </>
+            ) : (
+              <div className='border-border flex items-center gap-3 rounded-2xl border border-dashed p-3'>
+                <span
+                  className='bg-accent grid size-10 shrink-0 place-items-center rounded-xl text-xl'
+                  aria-hidden='true'
+                >
+                  💡
+                </span>
+                <p className='text-muted-foreground min-w-0 flex-1 text-sm'>
+                  Links you keep as ideas show up here, ready to read.
+                </p>
+              </div>
+            )}
+          </FormSection>
+        </div>
+      )}
       <MethodPicker disabled={isReading} methods={getMethods()} />
       {method === 'file' && (
         <Input

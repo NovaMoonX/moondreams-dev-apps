@@ -8,6 +8,7 @@ import Pill from '@/components/Pill';
 import { PillOptions } from '@/components/PillGroup';
 import SuggestionChips from '@/components/SuggestionChips';
 import SummaryEditor from '@/components/SummaryEditor';
+import type { SummaryGroupPosition } from '@/components/summaryGroup';
 import { generateUuid } from '@/utils';
 import {
   COLLECTION_NOUN,
@@ -180,6 +181,7 @@ interface RecipeCollectionsFieldProps {
   onChange: (value: CollectionsChoice) => void;
   collections: Collection[];
   suggestions: CollectionSuggestion[];
+  position: SummaryGroupPosition;
 }
 
 function RecipeCollectionsField({
@@ -187,6 +189,7 @@ function RecipeCollectionsField({
   onChange,
   collections,
   suggestions,
+  position,
 }: RecipeCollectionsFieldProps) {
   const labels = getChoiceLabels(value, collections);
   const placeholder =
@@ -197,6 +200,8 @@ function RecipeCollectionsField({
   return (
     <SummaryEditor
       label={COLLECTIONS_TITLE}
+      groupPosition={position}
+      icon='🗂️'
       title={COLLECTIONS_TITLE}
       summary={labels.join(', ')}
       placeholder={placeholder}

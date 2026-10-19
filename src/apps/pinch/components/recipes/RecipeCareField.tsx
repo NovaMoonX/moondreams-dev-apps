@@ -3,6 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import SummaryEditor from '@/components/SummaryEditor';
+import type { SummaryGroupPosition } from '@/components/summaryGroup';
 import {
   CARE_DAYS_PER_MONTH,
   MAX_CARE_DAYS,
@@ -56,15 +57,18 @@ function DaysInput({ label, value, onChange }: DaysInputProps) {
 interface RecipeCareFieldProps {
   value: CareText;
   onChange: (value: CareText) => void;
+  position: SummaryGroupPosition;
 }
 
-function RecipeCareField({ value, onChange }: RecipeCareFieldProps) {
+function RecipeCareField({ value, onChange, position }: RecipeCareFieldProps) {
   const problem = getCareProblem(value);
   const set = (patch: Partial<CareText>) => onChange({ ...value, ...patch });
 
   return (
     <SummaryEditor
       label='Keeping it'
+      groupPosition={position}
+      icon='🧊'
       title='Keeping it'
       summary={getCareSummary(value)}
       placeholder='Add how to keep it'

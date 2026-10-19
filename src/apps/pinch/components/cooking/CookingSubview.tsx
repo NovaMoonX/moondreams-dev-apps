@@ -38,6 +38,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNoteCard from '@apps/pinch/components/cooking/CookNoteCard';
+import CookTimerBuzz from '@apps/pinch/components/cooking/CookTimerBuzz';
 import CookPantryTake from '@apps/pinch/components/cooking/CookPantryTake';
 import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookRecord, {
@@ -393,7 +394,7 @@ function CookingSession({
     () => getRows(recipe, servings),
     [getRows, recipe, servings],
   );
-  const wakeLock = useWakeLock(true);
+  useWakeLock(true);
   const {
     isReady: isCooksReady,
     markRecipeCooked,
@@ -619,6 +620,15 @@ function CookingSession({
         ? { key: `${recipe.id}:${index}`, spoken: spokenStep }
         : null,
     onTurnOn: timers.prepareSound,
+    runningTimers: timers.timers.filter((timer) => timer.status === 'running')
+      .length,
+    lastRingAt: timers.timers.reduce<number | null>(
+      (latest, timer) =>
+        timer.status === 'done' && (latest === null || timer.endedAt > latest)
+          ? timer.endedAt
+          : latest,
+      null,
+    ),
   });
 
   const updateRecipe = (recipeId: string, patch: Partial<PlateCookState>) =>
@@ -1442,9 +1452,6 @@ function CookingSession({
 
   const getTimerNote = () => {
     if (focused === null || focused.status === 'done') return null;
-    if (!wakeLock.isSupported || wakeLock.hasFailed) {
-      return 'This screen may turn off. Your timer stays right, but it can only ring while the screen is on.';
-    }
     return timers.isNoticeShown
       ? 'Keep this screen open: timers stop if you leave it.'
       : null;
@@ -1459,14 +1466,15 @@ function CookingSession({
       <CookDishStrip dishes={dishes} value={recipe.id} onChange={showRecipe} />
     ) : null;
   const isDishStripInStep = isStepsView && hasSteps && !isWide;
-  const noteCard = isCookNoteShown(index, gotItNotes, recipe.id) ? (
-    <CookNoteCard
-      key={recipe.id}
-      recipeId={recipe.id}
-      onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
-      onApply={(noteId) => void applyNote(noteId)}
-    />
-  ) : null;
+  const noteCard =
+    !isWide && isCookNoteShown(index, gotItNotes, recipe.id) ? (
+      <CookNoteCard
+        key={recipe.id}
+        recipeId={recipe.id}
+        onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
+        onApply={(noteId) => void applyNote(noteId)}
+      />
+    ) : null;
   const notesDoor = (
     <RecipeNotes
       recipeId={recipe.id}
@@ -1609,6 +1617,7 @@ function CookingSession({
               }
         }
         note={getTimerNote()}
+        buzz={focused.status === 'running' ? <CookTimerBuzz uid={uid} /> : null}
         onTick={timers.settle}
         onPause={timers.pause}
         onResume={timers.resume}
