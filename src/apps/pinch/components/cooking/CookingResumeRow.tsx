@@ -144,7 +144,12 @@ function ResumeCard({ snapshot, plan, onKeep, onDismiss }: ResumeCardProps) {
         </div>
       </div>
       <div className='mt-3 flex gap-2'>
-        <Button type='button' className='h-10 flex-1' onClick={onKeep}>
+        <Button
+          type='button'
+          variant='secondary'
+          className='border-foreground/30 bg-background! h-10 flex-1 border font-medium'
+          onClick={onKeep}
+        >
           Keep cooking
         </Button>
         <Button
