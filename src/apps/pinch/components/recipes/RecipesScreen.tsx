@@ -810,20 +810,13 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     if (isIdeas && ideaCount >= SOFT_MAX_IDEAS) return undefined;
 
     return (
-      <div className='flex items-center gap-2 max-[359px]:gap-3'>
+      <div className='flex items-center gap-3'>
         {hasSourceSection && (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='icon'
-            rounded='full'
-            aria-label='Sources'
-            title='Sources'
-            className='size-10 shrink-0 p-0'
+          <HeaderIconButton
+            icon={<BookOpen className='h-4 w-4' aria-hidden='true' />}
+            label='Sources'
             onClick={() => openSubview({ kind: 'sources' })}
-          >
-            <BookOpen className='h-5 w-5' aria-hidden='true' />
-          </Button>
+          />
         )}
         {canSelect && (
           <HeaderIconButton

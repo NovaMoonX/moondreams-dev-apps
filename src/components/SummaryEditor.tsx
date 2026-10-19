@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -15,19 +14,12 @@ import {
   SUMMARY_GROUP_ROUNDING,
   type SummaryGroupPosition,
 } from '@/components/summaryGroup';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
-const SHORT_SCREEN_QUERY = '(max-height: 599px)';
-
-const subscribeToHeight = (onChange: () => void) => {
-  const query = window.matchMedia(SHORT_SCREEN_QUERY);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-};
-
-const getIsShortScreen = () => window.matchMedia(SHORT_SCREEN_QUERY).matches;
+const SHORT_SCREEN_MAX_HEIGHT = 599;
 
 interface EditorBodyProps {
   focusDelay: number;
@@ -120,11 +112,7 @@ function SummaryEditor({
 }: SummaryEditorProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const isNarrow = useMediaQuery().isBelow('sm');
-  const isShort = useSyncExternalStore(
-    subscribeToHeight,
-    getIsShortScreen,
-    () => false,
-  );
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const isDrawer = isNarrow || isShort;
   const close = () => setIsOpen(false);
   const isEmpty = summary === '';

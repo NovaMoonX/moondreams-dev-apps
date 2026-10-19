@@ -115,7 +115,8 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
           type='button'
           variant='tertiary'
           size='sm'
-          className='h-10 shrink-0 self-center px-2 font-semibold underline'
+          rounded='full'
+          className='h-10 shrink-0 self-center border border-current/40 px-4 font-semibold text-inherit!'
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();

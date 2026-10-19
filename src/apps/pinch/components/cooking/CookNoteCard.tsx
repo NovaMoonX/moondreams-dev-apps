@@ -54,7 +54,7 @@ function CookNoteCard({ recipeId, onGotIt, onApply }: CookNoteCardProps) {
       description: 'Got it, hide this note while you cook',
       onClick: onGotIt,
     },
-    ...(isOpen
+    ...(isOpen || isShort
       ? []
       : [
           {

@@ -5,6 +5,7 @@ import { Plus, Settings, Store, Tag } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
+import HeaderIconButton from '@/components/HeaderIconButton';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
@@ -259,34 +260,20 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         <SectionHeader
           title='Kitchen'
           action={
-            <div className='flex items-center gap-1 max-[359px]:gap-2'>
+            <div className='flex items-center gap-3'>
               {hasStoresOrPrices && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='icon'
-                  rounded='full'
-                  aria-label='Stores & prices'
-                  title='Stores & prices'
-                  className='size-10 shrink-0 p-0'
+                <HeaderIconButton
+                  icon={<Store className='h-4 w-4' aria-hidden='true' />}
+                  label='Stores & prices'
                   onClick={() => openSubview({ kind: 'products' })}
-                >
-                  <Store className='h-5 w-5' aria-hidden='true' />
-                </Button>
+                />
               )}
               {(hasRecipes || hasPrepared || hasPantry) && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='icon'
-                  rounded='full'
-                  aria-label='Settings'
-                  title='Settings'
-                  className='size-10 shrink-0 p-0'
+                <HeaderIconButton
+                  icon={<Settings className='h-4 w-4' aria-hidden='true' />}
+                  label='Settings'
                   onClick={() => openSubview({ kind: 'settings' })}
-                >
-                  <Settings className='h-5 w-5' aria-hidden='true' />
-                </Button>
+                />
               )}
               <Button
                 type='button'

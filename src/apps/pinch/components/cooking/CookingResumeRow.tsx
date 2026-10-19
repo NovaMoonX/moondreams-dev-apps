@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CookingPot } from 'lucide-react';
+import { ChevronRight, CookingPot, X } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -131,43 +131,49 @@ function ResumeCard({ snapshot, plan, onKeep, onDismiss }: ResumeCardProps) {
   ]
     .filter(Boolean)
     .join(' · ');
+  const title = isPlate
+    ? `Pick up ${plan.title}?`
+    : `Pick up ${plan.title}, step ${plan.stepNumber}?`;
 
   return (
     <section
       aria-label='Pick up cooking'
-      className='bg-accent/60 border-border rounded-2xl border p-3'
+      className='bg-accent/60 border-border flex min-h-12 items-stretch rounded-2xl border'
     >
-      <div className='flex items-start gap-3'>
-        <CookingPot className='mt-0.5 h-5 w-5 shrink-0' aria-hidden='true' />
-        <div className='min-w-0 flex-1'>
-          <p className='text-sm font-medium text-pretty'>
-            {isPlate
-              ? `Pick up ${plan.title}?`
-              : `Pick up ${plan.title}, step ${plan.stepNumber}?`}
-          </p>
+      <Button
+        type='button'
+        variant='tertiary'
+        className='hover:bg-accent h-auto min-h-0 min-w-0 flex-1 justify-start gap-3 rounded-2xl px-3! py-1! text-left'
+        onClick={onKeep}
+      >
+        <CookingPot className='h-5 w-5 shrink-0' aria-hidden='true' />
+        <span className='min-w-0 flex-1'>
+          <span className='text-foreground block text-sm leading-5 font-medium text-pretty'>
+            <span className='sr-only'>Keep cooking. </span>
+            {title}
+          </span>
           {detail !== '' && (
-            <p className='text-muted-foreground text-xs'>{detail}</p>
+            <span className='text-muted-foreground line-clamp-2 text-xs leading-4 font-normal'>
+              {detail}
+            </span>
           )}
-        </div>
-      </div>
-      <div className='mt-3 flex gap-2'>
-        <Button
-          type='button'
-          variant='secondary'
-          className='border-foreground/30 bg-background! h-10 flex-1 border font-medium'
-          onClick={onKeep}
-        >
-          Keep cooking
-        </Button>
-        <Button
-          type='button'
-          variant='secondary'
-          className='border-border h-10 border px-5'
-          onClick={onDismiss}
-        >
-          Not now
-        </Button>
-      </div>
+        </span>
+        <ChevronRight
+          className='text-muted-foreground h-5 w-5 shrink-0'
+          aria-hidden='true'
+        />
+      </Button>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='icon'
+        aria-label='Not now'
+        title='Not now'
+        className='text-foreground! mr-1 size-10 min-w-10 shrink-0 self-center rounded-full p-0'
+        onClick={onDismiss}
+      >
+        <X className='h-5 w-5' aria-hidden='true' />
+      </Button>
     </section>
   );
 }

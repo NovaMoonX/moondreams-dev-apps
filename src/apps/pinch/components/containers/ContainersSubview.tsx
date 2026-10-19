@@ -33,6 +33,7 @@ import SectionHeader from '@/components/SectionHeader';
 import SelectionBar from '@/components/SelectionBar';
 import Subview from '@/components/Subview';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
@@ -80,6 +81,7 @@ import {
   getPastDueText,
   getPlacedTitle,
   getSelectionNote,
+  getSelectionPrimary,
   getSelectionTitle,
   getSharedPlace,
   getTossAction,
@@ -92,6 +94,7 @@ import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const HIDDEN_WORTH_A_BUTTON = 3;
+const VERY_SHORT_SCREEN_MAX_HEIGHT = 499;
 
 const sumServings = (containers: Container[]) =>
   containers.reduce((sum, container) => sum + container.servings, 0);
@@ -179,6 +182,7 @@ function ContainersSubview({
     useContainerActions(uid);
   const selection = useSelection();
   const { isBelow } = useMediaQuery();
+  const isVeryShort = useIsShortScreen(VERY_SHORT_SCREEN_MAX_HEIGHT);
   const containers = useAppSelector(selectContainers);
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
@@ -735,14 +739,38 @@ function ContainersSubview({
   const toggleAll = (boxes: Container[]) =>
     toggleBoxes(boxes.map(({ id }) => id));
 
+  const tossAction = {
+    key: 'toss',
+    label: 'Toss',
+    icon: <Trash2 className='h-4 w-4' aria-hidden='true' />,
+    isDisabled: isBlocked,
+    isLoading: acting === 'TOSS',
+    onClick: () => void handleAct('TOSS', selectedBoxes),
+  };
+  const eatAction = {
+    key: 'eat',
+    label: 'Ate it all',
+    icon: <Utensils className='h-4 w-4' aria-hidden='true' />,
+    isDisabled: isBlocked,
+    isLoading: acting === 'EAT',
+    onClick: () => void handleAct('EAT', selectedBoxes),
+  };
+  const isTossLead =
+    getSelectionPrimary(
+      selectedBoxes.length,
+      getPastDueBoxes(selectedBoxes).length,
+    ) === 'TOSS';
+
   const getOnBack = () => {
     if (isSelecting) return selection.exit;
     return isFinishedView ? () => switchView(false) : undefined;
   };
+  const isCompact = isBelow('sm') || isVeryShort;
+  const isShortSelect = isSelecting && isVeryShort;
+  const isActionOnTitleRow = isSelecting ? isVeryShort : !isBelow('sm');
   const getSelectAllLabel = () => {
-    const isPhone = isBelow('sm');
-    if (isNarrowed) return isPhone ? 'All shown' : 'Select all shown';
-    return isPhone
+    if (isNarrowed) return isCompact ? 'All shown' : 'Select all shown';
+    return isCompact
       ? `All in the ${placeWord}`
       : `Select all in the ${placeWord}`;
   };
@@ -766,9 +794,7 @@ function ContainersSubview({
             }
             onClick={() => toggleAll(pastBoxes)}
           >
-            {isBelow('sm')
-              ? 'All past their date'
-              : 'Select all past their date'}
+            {isCompact ? 'All past their date' : 'Select all past their date'}
           </Pill>
         )}
         {shownBoxes.length > 0 && (
@@ -797,7 +823,10 @@ function ContainersSubview({
           variant='secondary'
           size='sm'
           rounded='full'
-          className='h-7 px-3 [@media(max-height:699px)]:hidden'
+          className={join(
+            "relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']",
+            !isVeryShort && '[@media(max-height:699px)]:hidden',
+          )}
           onClick={selection.exit}
         >
           Cancel
@@ -834,7 +863,7 @@ function ContainersSubview({
           type='button'
           size='sm'
           rounded='full'
-          className='gap-1'
+          className="relative gap-1 after:absolute after:-inset-1.5 after:content-['']"
           aria-label='Add something you put away'
           disabled={!isReady}
           onClick={() => setIsAdding(true)}
@@ -847,7 +876,12 @@ function ContainersSubview({
   };
 
   return (
-    <Subview title={title} onClose={closeSubview} onBack={getOnBack()}>
+    <Subview
+      title={title}
+      onClose={closeSubview}
+      onBack={getOnBack()}
+      headerAction={isActionOnTitleRow ? getHeaderAction() : undefined}
+    >
       <div className='space-y-4'>
         {isFinishedView && (
           <IntroCard
@@ -859,22 +893,29 @@ function ContainersSubview({
         )}
         <SectionHeader
           title={title}
-          lead={selectPills || undefined}
-          action={getHeaderAction()}
+          lead={(!isShortSelect && selectPills) || undefined}
+          action={isActionOnTitleRow ? undefined : getHeaderAction()}
         />
-        {(hasSwitch || scopeName) && (
-          <div className='flex flex-wrap items-center gap-x-2 gap-y-4'>
+        {(hasSwitch || scopeName || (isShortSelect && selectPills)) && (
+          <div
+            className={join(
+              'flex items-center',
+              isShortSelect ? 'gap-x-3' : 'flex-wrap gap-x-2 gap-y-4',
+            )}
+          >
             {hasSwitch && (
-              <PillGroup
-                label='Fridge or freezer'
-                options={viewOptions}
-                value={shownPlace}
-                onChange={(next) => {
-                  setPick(next);
-                  setActNote(null);
-                }}
-                isThin
-              />
+              <div className='max-w-full min-w-0'>
+                <PillGroup
+                  label='Fridge or freezer'
+                  options={viewOptions}
+                  value={shownPlace}
+                  onChange={(next) => {
+                    setPick(next);
+                    setActNote(null);
+                  }}
+                  isThin
+                />
+              </div>
             )}
             {scopeName && (
               <LabelChip
@@ -884,6 +925,9 @@ function ContainersSubview({
               >
                 {`Only ${scopeName}`}
               </LabelChip>
+            )}
+            {isShortSelect && selectPills && (
+              <div className='shrink-0'>{selectPills}</div>
             )}
           </div>
         )}
@@ -915,15 +959,7 @@ function ContainersSubview({
         <SelectionBar
           note={getSelectionNote(selectedBoxes.length, tickedCounts)}
           actions={[
-            {
-              key: 'toss',
-              label: 'Toss',
-              icon: <Trash2 className='h-4 w-4' aria-hidden='true' />,
-              isDestructive: true,
-              isDisabled: isBlocked,
-              isLoading: acting === 'TOSS',
-              onClick: () => void handleAct('TOSS', selectedBoxes),
-            },
+            isTossLead ? eatAction : { ...tossAction, isDestructive: true },
             ...(canMove
               ? [
                   {
@@ -944,14 +980,7 @@ function ContainersSubview({
                 ]
               : []),
           ]}
-          primary={{
-            key: 'eat',
-            label: 'Ate it all',
-            icon: <Utensils className='h-4 w-4' aria-hidden='true' />,
-            isDisabled: isBlocked,
-            isLoading: acting === 'EAT',
-            onClick: () => void handleAct('EAT', selectedBoxes),
-          }}
+          primary={isTossLead ? tossAction : eatAction}
         />
       )}
       {open && (
