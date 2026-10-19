@@ -72,7 +72,7 @@ assert.equal(
   },
 );
 
-// Which run sends: the first half hour of the person's own hour, once a day
+// Which run sends: the person's own hour, once a day (two half-hourly runs fall in it)
 const at = (day: number, hour: number, minute: number) =>
   Date.UTC(2026, 9, day, hour, minute);
 const settings = {
@@ -90,10 +90,15 @@ assert.notEqual(
   null,
   '9:29 still sends',
 );
-assert.equal(
+assert.notEqual(
   getDigestRun(at(18, 16, 30), settings),
   null,
-  'at 9:30 the hour has been going for half an hour, so a late run drops the note',
+  'at 9:30 the :00 run was missed, so the :30 run still sends',
+);
+assert.notEqual(
+  getDigestRun(at(18, 16, 59), settings),
+  null,
+  'the whole hour is the window, so a run that wakes at 9:59 sends',
 );
 assert.equal(getDigestRun(at(18, 15, 59), settings), null, '8:59 is too early');
 assert.equal(
@@ -143,7 +148,12 @@ assert.equal(
 assert.equal(resolveZone('Europe/Paris'), 'Europe/Paris');
 assert.equal(resolveZone(42), 'UTC');
 
-// Whatever the zone's offset, exactly one of the half-hourly runs in a day is the one that sends
+// Whatever the zone's offset, the half-hourly runs send exactly one note a day: two fall in the hour, and the stamp the first leaves stops the second
+const RUN_EVERY_MS = 30 * 60_000;
+const runsOnThe18th = Array.from(
+  { length: 96 },
+  (_, index) => at(18, 0, 0) + index * RUN_EVERY_MS,
+);
 [
   'America/Los_Angeles',
   'Asia/Kolkata',
@@ -153,17 +163,34 @@ assert.equal(resolveZone(42), 'UTC');
   'UTC',
   'America/St_Johns',
 ].forEach((timeZone) => {
-  const runs = Array.from(
-    { length: 96 },
-    (_, index) => at(18, 0, 0) + index * SEND_WINDOW_MS,
-  );
   const day = (run: number) => getLocalMoment(run, timeZone).day;
-  const sending = runs.filter(
+  const sentOn = (skipped: number) =>
+    runsOnThe18th
+      .reduce<{ stamp: string | null; sends: string[] }>(
+        (state, run, index) => {
+          const due = getDigestRun(run, {
+            hour: 9,
+            timeZone,
+            lastDigestDay: state.stamp,
+          });
+          if (due === null || index === skipped) return state;
+          return { stamp: due.day, sends: [...state.sends, due.day] };
+        },
+        { stamp: null, sends: [] },
+      )
+      .sends.filter((sent) => sent === day(at(18, 12, 0)));
+  const eligible = runsOnThe18th.filter(
     (run) =>
       getDigestRun(run, { hour: 9, timeZone, lastDigestDay: null }) !== null &&
       day(run) === day(at(18, 12, 0)),
   );
-  assert.equal(sending.length, 1, `${timeZone}: one run a day sends`);
+  assert.equal(eligible.length, 2, `${timeZone}: two runs fall in the hour`);
+  assert.equal(sentOn(-1).length, 1, `${timeZone}: one note a day`);
+  assert.equal(
+    sentOn(runsOnThe18th.indexOf(eligible[0])).length,
+    1,
+    `${timeZone}: the first run missing still leaves the day's note to the second`,
+  );
 });
 
 // Clocks going back: the 1:00 hour happens twice, and the stamp is what keeps it to one note
