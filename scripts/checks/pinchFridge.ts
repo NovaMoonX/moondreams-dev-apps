@@ -13,6 +13,7 @@ import {
   getPastDueText,
   getPlacedTitle,
   getSelectionNote,
+  getSelectionPrimary,
   getSelectionTitle,
   getSharedPlace,
   getSkippedText,
@@ -371,6 +372,23 @@ assert.deepEqual(
     'All in the fridge',
   ],
   'the past-date row names where they are when the list shows one place, and says nothing when they are all here',
+);
+assert.deepEqual(
+  [
+    getSelectionPrimary([], NOON_ON_THE_18TH),
+    getSelectionPrimary([container({ eatBy: dayOf(15) })], NOON_ON_THE_18TH),
+    getSelectionPrimary(
+      [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(14) })],
+      NOON_ON_THE_18TH,
+    ),
+    getSelectionPrimary(
+      [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(22) })],
+      NOON_ON_THE_18TH,
+    ),
+    getSelectionPrimary([container({ eatBy: dayOf(18) })], NOON_ON_THE_18TH),
+  ],
+  ['EAT', 'TOSS', 'TOSS', 'EAT', 'EAT'],
+  'Toss is the filled act only when every ticked box is past its date: nothing ticked, a mix, or one due today keeps Ate it all',
 );
 assert.deepEqual(
   [getSelectionTitle(0), getSelectionTitle(1), getSelectionTitle(12)],

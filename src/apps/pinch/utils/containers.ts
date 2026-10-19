@@ -696,6 +696,16 @@ export const getPastDueSplitText = (
 export const getTossAction = (count: number) =>
   count === 1 ? 'Toss it' : 'Toss them';
 
+/** Which act is the filled one in the Select footer: tossing when every ticked box is past its date, since that is the answer a spoiled box has, else eating it, the usual one. */
+export const getSelectionPrimary = (
+  selected: Container[],
+  now = Date.now(),
+): 'TOSS' | 'EAT' =>
+  selected.length > 0 &&
+  selected.every((box) => getEatByState(box.eatBy, now) === 'PAST')
+    ? 'TOSS'
+    : 'EAT';
+
 export const getSelectionTitle = (count: number) =>
   count === 0 ? 'Select boxes' : `${count} selected`;
 

@@ -444,6 +444,16 @@ export const getPackageTossAction = (count: number) =>
 const countPackages = (count: number) =>
   `${count} ${count === 1 ? 'package' : 'packages'}`;
 
+/** Which act is the filled one in the Select footer: tossing when every ticked package is past its date, since that is the answer a spoiled one has, else using it up, the usual one. */
+export const getPackageSelectionPrimary = (
+  selected: Package[],
+  now = Date.now(),
+): 'TOSS' | 'USE_UP' =>
+  selected.length > 0 &&
+  selected.every((pkg) => getPackageState(pkg.expiresAt, now) === 'PAST')
+    ? 'TOSS'
+    : 'USE_UP';
+
 export const getPackageSelectionTitle = (count: number) =>
   count === 0 ? 'Select packages' : `${count} selected`;
 

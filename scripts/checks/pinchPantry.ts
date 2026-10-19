@@ -28,6 +28,7 @@ import {
   getPackageLabel,
   getPackageSeed,
   getPackageSelectionNote,
+  getPackageSelectionPrimary,
   getPackageSelectionTitle,
   getPackageSkippedText,
   getPackageState,
@@ -933,6 +934,24 @@ assert.deepEqual(
 );
 assert.deepEqual(names.lines[0].details, ['2 lb', 'Use by Oct 15']);
 assert.equal(names.more, 2);
+
+assert.deepEqual(
+  [
+    getPackageSelectionPrimary([], NOW),
+    getPackageSelectionPrimary([pkg({ expiresAt: dayOf(10) })], NOW),
+    getPackageSelectionPrimary(
+      [pkg({ expiresAt: dayOf(10) }), pkg({ expiresAt: dayOf(12) })],
+      NOW,
+    ),
+    getPackageSelectionPrimary(
+      [pkg({ expiresAt: dayOf(10) }), pkg({ expiresAt: null })],
+      NOW,
+    ),
+    getPackageSelectionPrimary([pkg({ expiresAt: dayOf(18) })], NOW),
+  ],
+  ['USE_UP', 'TOSS', 'TOSS', 'USE_UP', 'USE_UP'],
+  'Toss is the filled act only when every ticked package is past its date: nothing ticked, a mix, a package with no date, or one due today keeps Used it up',
+);
 
 // What cooking takes out of the pantry
 const rice = (over: Partial<Package>) =>
