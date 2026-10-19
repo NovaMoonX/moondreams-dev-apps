@@ -102,10 +102,8 @@ export async function turnOnDevicePush(uid: string): Promise<TurnOnResult> {
   return getPermission() === 'default' ? 'dismissed' : 'failed';
 }
 
-/** Stops pushes to this device: removes its token and remembers the choice. The choice is kept even when the token can't be reached, so a reload doesn't register it again. */
-export async function turnOffDevicePush(uid: string): Promise<void> {
-  setDevicePushOff(uid, true);
-
+/** Takes this device's token off the person and deletes it from the browser's push service, so pushes stop reaching it. Only a device the browser already allows has one, so this never asks for anything. */
+async function removeDeviceToken(uid: string) {
   if (!(await canPush()) || getPermission() !== 'granted') return;
 
   try {
@@ -115,6 +113,15 @@ export async function turnOffDevicePush(uid: string): Promise<void> {
     }
     await deleteToken(getMessaging(app));
   } catch {
-    // A token left behind only receives pushes until it expires.
+    // A token left behind only receives pushes until it expires or FCM reports it gone.
   }
 }
+
+/** Stops pushes to this device: removes its token and remembers the choice. The choice is kept even when the token can't be reached, so a reload doesn't register it again. */
+export async function turnOffDevicePush(uid: string): Promise<void> {
+  setDevicePushOff(uid, true);
+  await removeDeviceToken(uid);
+}
+
+/** Signing out hands the device on: its token leaves the person who signed out, so what names their dishes never reaches whoever uses it next. The choice to turn pushes off is not changed, and signing in again registers a fresh token. */
+export const releaseDevicePush = removeDeviceToken;

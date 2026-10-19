@@ -1,4 +1,7 @@
+import { deepEqual as sameShape } from 'node:assert';
 import assert from 'node:assert/strict';
+
+import { FieldValue } from 'firebase-admin/firestore';
 
 import {
   FINISHED_STATUSES,
@@ -8,6 +11,12 @@ import {
   isPrunable,
   pruneFinishedReminders,
 } from '../../functions/src/notifications/pruneReminders.ts';
+
+import {
+  DEAD_TOKEN_CODES,
+  getDeadTokens,
+  sendPushToUsers,
+} from '../../functions/src/notifications/sendPush.ts';
 
 const NOW = Date.UTC(2026, 9, 19, 12, 0);
 const DAY = 24 * 60 * 60 * 1000;
@@ -146,5 +155,143 @@ assert.deepEqual(
 const none = fakeFirestore([]);
 assert.equal(await pruneFinishedReminders(none.firestore, NOW), 0);
 assert.equal(none.call.commits, 0, 'nothing to prune writes nothing');
+
+// Which device tokens are dropped
+assert.deepEqual(
+  DEAD_TOKEN_CODES,
+  [
+    'messaging/registration-token-not-registered',
+    'messaging/invalid-registration-token',
+  ],
+  'a token is dropped for the two codes that mean it will never work again',
+);
+const devices = [
+  { uid: 'alex', token: 'a1' },
+  { uid: 'alex', token: 'a2' },
+  { uid: 'jamie', token: 'j1' },
+  { uid: 'jamie', token: 'j2' },
+  { uid: 'jamie', token: 'j3' },
+];
+const failure = (code: string) => ({
+  success: false,
+  error: { code } as never,
+});
+const ok = { success: true } as const;
+assert.deepEqual(
+  getDeadTokens(devices, [
+    ok,
+    failure('messaging/registration-token-not-registered'),
+    failure('messaging/invalid-registration-token'),
+    failure('messaging/internal-error'),
+    failure('messaging/server-unavailable'),
+  ]),
+  [devices[1], devices[2]],
+  'only the tokens FCM reports as gone are dropped, each with the person it belongs to',
+);
+assert.deepEqual(
+  getDeadTokens(devices, [ok, ok, ok, ok, ok]),
+  [],
+  'a push that reached every device drops none',
+);
+assert.deepEqual(
+  getDeadTokens(devices, [
+    failure('messaging/third-party-auth-error'),
+    failure('messaging/quota-exceeded'),
+    failure('messaging/invalid-argument'),
+    { success: false },
+    ok,
+  ]),
+  [],
+  'a busy or misconfigured service never costs anyone a working device',
+);
+assert.deepEqual(
+  getDeadTokens(devices, [
+    failure('messaging/registration-token-not-registered'),
+  ]),
+  [devices[0]],
+  'fewer answers than tokens never reads past them',
+);
+
+// What a send does with them
+const pushed = async (
+  tokensByUid: Record<string, string[] | undefined>,
+  codes: (string | null)[],
+) => {
+  const updates: { path: string; data: Record<string, unknown> }[] = [];
+  let sent: string[] = [];
+  const firestore = {
+    doc: (path: string) => ({
+      get: async () => ({
+        data: () => {
+          const tokens = tokensByUid[path.split('/')[1]];
+          return tokens === undefined ? undefined : { fcmTokens: tokens };
+        },
+      }),
+      update: async (data: Record<string, unknown>) => {
+        updates.push({ path, data });
+      },
+    }),
+  };
+  const messaging = {
+    sendEachForMulticast: async (message: { tokens: string[] }) => {
+      sent = message.tokens;
+      return {
+        responses: codes.map((code) =>
+          code === null ? { success: true } : failure(code),
+        ),
+      };
+    },
+  };
+  const count = await sendPushToUsers(
+    firestore as never,
+    messaging as never,
+    Object.keys(tokensByUid),
+    { title: 't', body: 'b', url: 'https://apps.moondreams.dev/pinch' },
+  );
+  return { count, sent, updates };
+};
+const gone = 'messaging/registration-token-not-registered';
+const run = await pushed({ alex: ['a1', 'a2'], jamie: ['j1'] }, [
+  null,
+  gone,
+  gone,
+]);
+assert.equal(run.count, 3, 'it still reports the devices it addressed');
+assert.deepEqual(
+  run.sent,
+  ['a1', 'a2', 'j1'],
+  'every token of every person is addressed',
+);
+assert.deepEqual(
+  run.updates.map((update) => update.path),
+  ['users/alex', 'users/jamie'],
+  'each person with a dead token is cleaned up, and only they',
+);
+sameShape(
+  run.updates[0].data.fcmTokens,
+  FieldValue.arrayRemove('a2'),
+  'the dead token is removed with arrayRemove, never by rewriting the list',
+);
+sameShape(run.updates[1].data.fcmTokens, FieldValue.arrayRemove('j1'));
+assert.throws(
+  () => sameShape(run.updates[0].data.fcmTokens, FieldValue.arrayRemove('a1')),
+  'a removal of another token does not match, so the comparison is not vacuous',
+);
+const two = await pushed({ alex: ['a1', 'a2', 'a3'] }, [gone, null, gone]);
+sameShape(
+  two.updates[0].data.fcmTokens,
+  FieldValue.arrayRemove('a1', 'a3'),
+  'two dead tokens of one person go in one removal',
+);
+assert.equal(two.updates.length, 1);
+const clean = await pushed({ alex: ['a1'] }, [null]);
+assert.deepEqual(
+  clean.updates,
+  [],
+  'a push that reached everyone writes nothing',
+);
+const nobody = await pushed({ alex: undefined }, []);
+assert.equal(nobody.count, 0, 'a person with no devices sends nothing');
+assert.deepEqual(nobody.sent, []);
 
 console.log('pushHousekeeping: all checks passed');
