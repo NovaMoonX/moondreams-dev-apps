@@ -6184,6 +6184,9 @@ assert.deepEqual(
     cookUtils.getStepName('Bake.'),
     cookUtils.getStepName('2. Rinse the rice twice'),
     cookUtils.getStepName(''),
+    cookUtils.getStepName('Simmer for 2 minutes, then stir.'),
+    cookUtils.getStepName('Bake at 350 degrees.'),
+    cookUtils.getStepName('Cook for 1½ hours'),
   ],
   [
     'Brown the beef',
@@ -6192,8 +6195,11 @@ assert.deepEqual(
     'Bake',
     '2 Rinse',
     '',
+    'Simmer',
+    'Bake',
+    'Cook',
   ],
-  "a timer is named by its step's first words, without a little word left dangling at the end",
+  "a timer is named by its step's first words, without a little word or a number left dangling at the end",
 );
 
 const trayLine = (name: string, amountText: string) => ({ name, amountText });
