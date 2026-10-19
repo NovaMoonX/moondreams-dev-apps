@@ -584,7 +584,7 @@ export function ShoppingPick({
                   <p className='text-lg font-medium wrap-break-word'>{label}</p>
                   {rows.length > 0 && (
                     <p className='text-muted-foreground truncate text-xs'>
-                      Adding {selected.length} of {rows.length} · {hintText}
+                      Adding {selected.length} of {rows.length}
                     </p>
                   )}
                 </div>
