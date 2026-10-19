@@ -191,6 +191,7 @@ const setUp = (used: (alternatives: string[]) => boolean = () => true) => {
     status: 'off' as SpeechCommandsStatus,
     error: null as SpeechCommandsError | null,
     heard: [] as string[][],
+    halts: [] as SpeechCommandsError[],
   };
   const listener = createSpeechListener(
     (status) => {
@@ -204,6 +205,9 @@ const setUp = (used: (alternatives: string[]) => boolean = () => true) => {
     lang: 'en-US',
     speechLang: 'en-US',
     idleStopMs: IDLE_MS,
+    onHalt: (error) => {
+      seen.halts = [...seen.halts, error];
+    },
     onFinalTranscript: (alternatives) => {
       seen.heard = [...seen.heard, alternatives];
       return used(alternatives);
@@ -296,9 +300,9 @@ const entries = (name: string) =>
   listener.start();
   advance(20_000);
   assert.deepEqual(
-    [entries('start').length, seen.status, seen.error],
-    [1, 'off', reason],
-    `"${browserError}" stops at once as "${reason}" and is never retried`,
+    [entries('start').length, seen.status, seen.error, seen.halts],
+    [1, 'off', reason, [reason]],
+    `"${browserError}" stops at once as "${reason}", tells the caller why once, and is never retried`,
   );
 });
 
@@ -394,6 +398,27 @@ const entries = (name: string) =>
     entries('start').length,
     1,
     'an idle stop never starts again on its own',
+  );
+  assert.deepEqual(
+    seen.halts,
+    ['idle'],
+    'the caller is told about the idle stop',
+  );
+}
+
+{
+  const { listener, seen } = setUp();
+  listener.start();
+  advance(30);
+  listener.stop();
+  advance(100);
+  listener.start();
+  advance(30);
+  listener.teardown();
+  assert.deepEqual(
+    seen.halts,
+    [],
+    'a stop the caller asked for, and a teardown, are not reported as the listener stopping by itself',
   );
 }
 
