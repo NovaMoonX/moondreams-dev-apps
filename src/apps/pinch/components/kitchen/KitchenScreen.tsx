@@ -116,6 +116,14 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   );
   const hasRecipes = useAppSelector(selectRecipes).length > 0;
   const hasStoresOrPrices = storeCount > 0 || productCount > 0;
+  const getSubtitle = () => {
+    if (hasPantry && hasPrepared) {
+      return 'Ingredients, pantry, fridge and freezer, and prices.';
+    }
+    if (hasPantry) return 'Ingredients, pantry and prices.';
+    if (hasPrepared) return 'Ingredients, fridge and freezer, and prices.';
+    return 'Ingredients and prices.';
+  };
   const trimmed = query.trim();
   const yours = useMemo(
     () =>
@@ -289,7 +297,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           }
         />
         <p className='text-muted-foreground -mt-1 text-sm [@media(max-height:699px)]:hidden'>
-          Ingredients, pantry, fridge and freezer, and prices.
+          {getSubtitle()}
         </p>
       </div>
       {isFirstRun ? (

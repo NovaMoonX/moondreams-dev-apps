@@ -756,11 +756,7 @@ function ContainersSubview({
     isLoading: acting === 'EAT',
     onClick: () => void handleAct('EAT', selectedBoxes),
   };
-  const isTossLead =
-    getSelectionPrimary(
-      selectedBoxes.length,
-      getPastDueBoxes(selectedBoxes).length,
-    ) === 'TOSS';
+  const isTossLead = getSelectionPrimary(selectedBoxes) === 'TOSS';
 
   const getOnBack = () => {
     if (isSelecting) return selection.exit;

@@ -54,11 +54,11 @@ import {
 import { getShopSection } from '@apps/pinch/utils/shopping';
 import type { Package, PackagePlace } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
-import { getSelectionPrimary } from '@apps/pinch/utils/containers';
 import {
   getPackageBulkNames,
   getPackageNamesLine,
   getPackageSelectionNote,
+  getPackageSelectionPrimary,
   getPackageSelectionTitle,
   getPackageTossAction,
   getPackageTossNote,
@@ -238,11 +238,7 @@ function PantrySubview({
   const isBlocked = isNothingTicked || acting !== null;
   const isCompact = isBelow('sm') || isVeryShort;
   const isShortSelect = isSelecting && isVeryShort;
-  const isTossLead =
-    getSelectionPrimary(
-      selectedPackages.length,
-      getPastDuePackages(selectedPackages).length,
-    ) === 'TOSS';
+  const isTossLead = getPackageSelectionPrimary(selectedPackages) === 'TOSS';
   const title = isSelecting
     ? getPackageSelectionTitle(selectedPackages.length)
     : 'Pantry';
