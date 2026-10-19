@@ -43,12 +43,7 @@ function EntryTile({
           {icon}
         </span>
         <span className='w-full min-w-0 @min-[10rem]:@max-[13rem]:contents @min-[13rem]:flex-1 @min-[19rem]:[@media(max-height:599px)]:flex @min-[19rem]:[@media(max-height:599px)]:items-baseline @min-[19rem]:[@media(max-height:599px)]:gap-1.5'>
-          <span
-            className={join(
-              'block truncate text-sm font-medium @max-[10rem]:[@media(max-height:599px)]:leading-4 @min-[19rem]:[@media(max-height:599px)]:shrink-0',
-              status && '@min-[10rem]:@max-[13rem]:col-span-2',
-            )}
-          >
+          <span className='block truncate text-sm font-medium @min-[10rem]:@max-[13rem]:col-span-2 @max-[10rem]:[@media(max-height:599px)]:leading-4 @min-[19rem]:[@media(max-height:599px)]:shrink-0'>
             {label}
           </span>
           {status && (
@@ -58,7 +53,7 @@ function EntryTile({
           )}
         </span>
         <ChevronRight
-          className='text-muted-foreground absolute top-3.5 right-3 size-4 @min-[10rem]:@max-[13rem]:static @min-[13rem]:top-1/2 @min-[13rem]:-translate-y-1/2 @max-[10rem]:[@media(max-height:599px)]:top-2.5'
+          className='text-muted-foreground absolute top-3.5 right-3 size-4 @min-[10rem]:@max-[13rem]:static @min-[10rem]:@max-[13rem]:col-start-3 @min-[13rem]:top-1/2 @min-[13rem]:-translate-y-1/2 @max-[10rem]:[@media(max-height:599px)]:top-2.5'
           aria-hidden='true'
         />
       </Button>
