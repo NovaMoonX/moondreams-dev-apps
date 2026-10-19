@@ -28,7 +28,9 @@ function SectionHeader({ title, subtitle, lead, action }: SectionHeaderProps) {
     return (
       <div className='flex items-center justify-between gap-3'>
         {lead ?? (
-          <p className='text-muted-foreground min-w-0 text-sm'>{subtitle}</p>
+          <p className='text-muted-foreground min-w-0 text-sm text-balance'>
+            {subtitle}
+          </p>
         )}
         {action && <div className={HIT_AREA}>{action}</div>}
       </div>
@@ -42,7 +44,9 @@ function SectionHeader({ title, subtitle, lead, action }: SectionHeaderProps) {
           {title}
         </h2>
         {subtitle && (
-          <p className='text-muted-foreground -mt-1 text-sm'>{subtitle}</p>
+          <p className='text-muted-foreground -mt-1 text-sm text-balance'>
+            {subtitle}
+          </p>
         )}
       </div>
       {action && (
