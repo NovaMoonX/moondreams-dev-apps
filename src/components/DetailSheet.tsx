@@ -44,9 +44,9 @@ function DetailSheet({
   actions,
   viewKey,
 }: DetailSheetProps) {
-  const isNarrow = useMediaQuery().isBelow('sm');
+  const { isBelow } = useMediaQuery();
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
-  const isDrawer = isNarrow || isShort;
+  const isDrawer = isBelow('sm') || (isShort && isBelow('lg'));
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
   const contentNode = useRef<HTMLDivElement | null>(null);
   const scrollTops = useRef(new Map<string, number>());

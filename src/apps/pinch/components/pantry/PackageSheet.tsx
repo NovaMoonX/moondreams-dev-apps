@@ -60,6 +60,7 @@ import {
   isValidPackageAmount,
   lowerFirst,
   parseAmountText,
+  round2,
   type DateAnswer,
 } from '@apps/pinch/utils/packages';
 import { formatSize } from '@apps/pinch/utils/productFormat';
@@ -186,7 +187,7 @@ function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
           >
             Half
           </RevealChip>
-          <RevealChip onClick={() => setText(String(pkg.amount))}>
+          <RevealChip onClick={() => setText(String(round2(pkg.amount)))}>
             All of it
           </RevealChip>
         </div>

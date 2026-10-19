@@ -379,9 +379,17 @@ export const takeFromPackages = createAsyncThunk<
         writes.forEach(({ id, fields }) =>
           batch.update(packageDoc(uid, id), fields),
         );
-        batch
-          .commit()
-          .catch((error) => onRefused(getWriteMessage(error, TAKE_REFUSED)));
+        batch.commit().catch((error) => {
+          const isRefusedByRules =
+            error instanceof FirebaseError &&
+            error.code === 'permission-denied';
+          onRefused(
+            getWriteMessage(
+              error,
+              isRefusedByRules ? TAKE_REFUSED : 'Unable to save this.',
+            ),
+          );
+        });
       }
 
       return {

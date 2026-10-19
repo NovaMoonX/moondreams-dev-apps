@@ -111,9 +111,9 @@ function SummaryEditor({
   children,
 }: SummaryEditorProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const isNarrow = useMediaQuery().isBelow('sm');
+  const { isBelow } = useMediaQuery();
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
-  const isDrawer = isNarrow || isShort;
+  const isDrawer = isBelow('sm') || (isShort && isBelow('lg'));
   const close = () => setIsOpen(false);
   const isEmpty = summary === '';
   const isRoomy = isFramed || groupPosition !== undefined;

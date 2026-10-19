@@ -726,6 +726,13 @@ assert.equal(
   'Nothing was changed.',
 );
 assert.equal(
+  errorOf(
+    planPackageEdit(pkg({ amount: 1.4000000000000001 }), { amount: 1.4 }, NOW),
+  ),
+  'Nothing was changed.',
+  'an amount a take-out left with float noise is not an edit when saved untouched',
+);
+assert.equal(
   errorOf(planPackageEdit(pkg(), { amount: 0 }, NOW)),
   'Say how much there is.',
 );

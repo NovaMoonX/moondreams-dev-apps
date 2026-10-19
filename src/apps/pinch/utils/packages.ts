@@ -39,7 +39,7 @@ import { formatSize } from '@apps/pinch/utils/productFormat';
 import { bridge, toBase, type Conversions } from '@apps/pinch/utils/quantity';
 import { getShopSection, isUsuallyAtHome } from '@apps/pinch/utils/shopping';
 
-const round2 = (value: number) => Math.round(value * 100) / 100;
+export const round2 = (value: number) => Math.round(value * 100) / 100;
 
 /** A cooked amount close enough to what is left counts as all of it, so a package never keeps a crumb of 0.004. */
 const EPSILON = 0.005;
@@ -238,7 +238,7 @@ export const getPackageSeed = (packages: Package[], ingredientId: string) => {
   const bought =
     first?.kind === 'ADDED' && first.amount !== null && isUnchanged
       ? first.amount
-      : newest.amount;
+      : round2(newest.amount);
   return {
     amount: bought,
     unit: newest.unit,
@@ -630,7 +630,7 @@ export const planPackageEdit = (
   if (!isValidExpiresAt(expiresAt))
     return { error: 'Pick a day for the date.' };
 
-  const isAmountChanged = amount !== pkg.amount || unit !== pkg.unit;
+  const isAmountChanged = amount !== round2(pkg.amount) || unit !== pkg.unit;
   const isDateChanged = expiresAt !== pkg.expiresAt;
   const isPlaceChanged = edit.place !== undefined && edit.place !== pkg.place;
   const productId =

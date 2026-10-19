@@ -333,6 +333,9 @@ function RecipeReader({
         ref={linkRef}
         rows={1}
         inputMode='url'
+        autoCapitalize='none'
+        autoCorrect='off'
+        spellCheck={false}
         variant='base'
         rounded='none'
         aria-label='Paste a recipe link'

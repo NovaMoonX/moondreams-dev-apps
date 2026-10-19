@@ -198,18 +198,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const logOut = useCallback(async () => {
-    if (auth.currentUser) {
-      const userStatusRef = ref(realtimeDb, `status/${auth.currentUser.uid}`);
-      await set(userStatusRef, {
-        state: 'offline',
-        currentLocation: null,
-        lastChanges: serverTimestamp(),
-      });
-    }
-
-    if (auth.currentUser) {
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      const userStatusRef = ref(realtimeDb, `status/${uid}`);
       await Promise.race([
-        releaseDevicePush(auth.currentUser.uid),
+        Promise.allSettled([
+          set(userStatusRef, {
+            state: 'offline',
+            currentLocation: null,
+            lastChanges: serverTimestamp(),
+          }),
+          releaseDevicePush(uid),
+        ]),
         new Promise((resolve) => setTimeout(resolve, RELEASE_PUSH_WAIT_MS)),
       ]);
     }

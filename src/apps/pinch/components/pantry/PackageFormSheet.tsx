@@ -41,6 +41,7 @@ import {
   isValidPackageAmount,
   lowerFirst,
   parseAmountText,
+  round2,
 } from '@apps/pinch/utils/packages';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { getShopSection } from '@apps/pinch/utils/shopping';
@@ -120,7 +121,7 @@ function PackageFormSheet({
   const [values, setValues] = useState<PackageFieldValues>(() =>
     pkg
       ? {
-          amountText: String(pkg.amount),
+          amountText: String(round2(pkg.amount)),
           unit: pkg.unit,
           place: pkg.place,
           date: getDateAnswer(pkg.expiresAt),

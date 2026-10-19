@@ -1927,7 +1927,7 @@ service cloud.firestore {
             || (data.lastDigestDay is string && data.lastDigestDay.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')));
       }
 
-      allow read, delete: if isSettingsOwner();
+      allow read: if isSettingsOwner();
       allow create: if isSettingsOwner() && isPinchSettings(request.resource.data)
         && request.resource.data.keys().hasAll(['lastDigestDay'])
         && request.resource.data.lastDigestDay == null;
