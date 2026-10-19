@@ -190,7 +190,12 @@ function MealDrawer({
               Share this saved meal
             </p>
           </div>
-          <ShareView kind='MEAL' sourceId={meal.id} footerNode={shareFooter} />
+          <ShareView
+            kind='MEAL'
+            sourceId={meal.id}
+            footerNode={shareFooter}
+            onClose={onClose}
+          />
         </div>
       )}
       {isMoreOpen && !isShareOpen && openRecipeId === null && (

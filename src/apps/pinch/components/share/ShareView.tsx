@@ -6,6 +6,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Link2, Link2Off, RefreshCw, Share2 } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
@@ -16,6 +17,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate } from '@/utils/formatUtils';
 import { MAX_PINCH_SHARES } from '@apps/pinch/constants';
+import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   renewShareLink,
   saveShare,
@@ -80,6 +82,8 @@ interface ShareViewProps {
   onStopped?: () => void;
   /** Where the primary action sits so it stays on screen: the sheet's pinned footer, which the sheet's owner draws and hands back. */
   footerNode: HTMLElement | null;
+  /** Closes the sheet this view is in. With it, the cap line gets a door to Shared links that closes the sheet first; without it the line has none. */
+  onClose?: () => void;
 }
 
 function ShareView({
@@ -88,8 +92,10 @@ function ShareView({
   canStart = true,
   onStopped,
   footerNode,
+  onClose,
 }: ShareViewProps) {
   const dispatch = useAppDispatch();
+  const { openSubview } = usePinchOverlay();
   const { isAtLeast, isBelow } = useMediaQuery();
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const isLandscape = isShort && isAtLeast('sm') && isBelow('lg');
@@ -278,6 +284,11 @@ function ShareView({
     );
   };
 
+  const openSharedLinks = () => {
+    onClose?.();
+    openSubview({ kind: 'shares', fromSheet: true });
+  };
+
   const getView = (): { body: ReactNode; footer: ReactNode } => {
     if (loadError !== null) {
       return {
@@ -310,10 +321,10 @@ function ShareView({
           footer: null,
         };
       }
-      const reason =
-        shareCount >= MAX_PINCH_SHARES
-          ? `You have ${MAX_PINCH_SHARES} shared links, the most you can have at once. Stop one under Settings, Shared links.`
-          : blockReason;
+      const isCapped = shareCount >= MAX_PINCH_SHARES;
+      const reason = isCapped
+        ? `You have ${MAX_PINCH_SHARES} shared links, the most you can have at once. Stop one under Settings, Shared links.`
+        : blockReason;
 
       return {
         body: (
@@ -341,9 +352,24 @@ function ShareView({
         footer: (
           <div className='space-y-2'>
             {reason !== null && (
-              <p className='text-muted-foreground text-sm text-pretty'>
-                {reason}
-              </p>
+              <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+                <p className='text-muted-foreground min-w-48 flex-1 text-sm text-pretty'>
+                  {reason}
+                </p>
+                {isCapped && onClose !== undefined && (
+                  <ActionChips
+                    className='shrink-0'
+                    actions={[
+                      {
+                        key: 'shared-links',
+                        icon: <Link2 className='h-4 w-4' />,
+                        label: 'Your shared links',
+                        onClick: openSharedLinks,
+                      },
+                    ]}
+                  />
+                )}
+              </div>
             )}
             {errorLine}
             <Button

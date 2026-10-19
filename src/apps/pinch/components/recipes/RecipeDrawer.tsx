@@ -334,6 +334,7 @@ function RecipeDrawer({
             kind='RECIPE'
             sourceId={recipe.id}
             footerNode={shareFooter}
+            onClose={onClose}
           />
         </div>
       );
