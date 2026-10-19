@@ -68,14 +68,16 @@ function DetailSheet({
         scroller === node
           ? 0
           : parseFloat(paddingTop) + parseFloat(paddingBottom);
+      const held = { total: 0 };
       const holdHeight = new ResizeObserver(() => {
-        const height = scroller.clientHeight - padding;
-        if (height > parseFloat(node.style.minHeight || '0')) {
-          node.style.minHeight = `${height}px`;
-        }
+        const footerHeight =
+          scroller.nextElementSibling?.getBoundingClientRect().height ?? 0;
+        held.total = Math.max(held.total, scroller.clientHeight + footerHeight);
+        node.style.minHeight = `${held.total - footerHeight - padding}px`;
       });
       scroller.addEventListener('scroll', record, { passive: true });
       holdHeight.observe(scroller);
+      if (scroller.parentElement) holdHeight.observe(scroller.parentElement);
       return () => {
         scroller.removeEventListener('scroll', record);
         holdHeight.disconnect();
@@ -92,37 +94,46 @@ function DetailSheet({
     if (scroller) scroller.scrollTop = scrollTops.current.get(viewKey) ?? 0;
   });
 
-  const heading = actions ? (
-    <div className={join('flex items-start gap-2', isDrawer && 'pt-2')}>
-      <h2
-        ref={labelDialog}
-        id={`${dialogId}-title`}
+  const isCompact = isDrawer && isShort;
+  const heading =
+    actions || isCompact ? (
+      <div
         className={join(
-          'min-w-0 flex-1 font-semibold wrap-break-word',
-          isDrawer ? 'text-2xl' : 'text-xl',
+          'flex items-start gap-2',
+          isDrawer && !isCompact && 'pt-2',
         )}
       >
-        {title}
-      </h2>
-      <div className='-my-1 -mr-2 flex shrink-0 items-center gap-1'>
-        {actions}
-        {!isDrawer && (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='icon'
-            aria-label='Close'
-            onClick={onDialogClose}
-            className='text-foreground! ml-2 size-10 min-w-10 shrink-0 p-0'
-          >
-            <X className='h-5 w-5' aria-hidden='true' />
-          </Button>
+        <h2
+          ref={labelDialog}
+          id={`${dialogId}-title`}
+          className={join(
+            'min-w-0 flex-1 font-semibold wrap-break-word',
+            isDrawer && !isCompact ? 'text-2xl' : 'text-xl',
+          )}
+        >
+          {title}
+        </h2>
+        {actions && (
+          <div className='-my-1 -mr-2 flex shrink-0 items-center gap-1'>
+            {actions}
+            {!isDrawer && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='icon'
+                aria-label='Close'
+                onClick={onDialogClose}
+                className='text-foreground! ml-2 size-10 min-w-10 shrink-0 p-0'
+              >
+                <X className='h-5 w-5' aria-hidden='true' />
+              </Button>
+            )}
+          </div>
         )}
       </div>
-    </div>
-  ) : (
-    title
-  );
+    ) : (
+      title
+    );
 
   if (isDrawer) {
     return (
@@ -132,9 +143,15 @@ function DetailSheet({
         onClose={onDialogClose}
         title={heading}
         showCloseButton
-        footer={footer}
+        footer={
+          isCompact && footer ? (
+            <div className='py-2! [&>div]:px-0! [&>div]:pb-0!'>{footer}</div>
+          ) : (
+            footer
+          )
+        }
       >
-        <div ref={attachContent} className='pb-4'>
+        <div ref={attachContent} className={join('pb-4', isCompact && '-mt-3')}>
           {children}
         </div>
       </Drawer>

@@ -1129,6 +1129,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       {openMealId && (
         <MealDrawer
           key={openMealId}
+          uid={uid}
           mealId={openMealId}
           onClose={() => setOpenMealId(null)}
           onPlan={(id) => {

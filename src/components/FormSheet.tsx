@@ -50,6 +50,7 @@ function FormSheet({
           className={join(
             STICKY_FOOTER,
             '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
+            '[@media(max-height:599px)]:-mt-3',
           )}
         >
           {children}

@@ -10,6 +10,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
+  Ban,
   Check,
   Eraser,
   History,
@@ -17,7 +18,6 @@ import {
   Plus,
   Refrigerator,
   Snowflake,
-  Trash2,
   Utensils,
   X,
 } from 'lucide-react';
@@ -743,7 +743,7 @@ function ContainersSubview({
   const tossAction = {
     key: 'toss',
     label: 'Toss',
-    icon: <Trash2 className='h-4 w-4' aria-hidden='true' />,
+    icon: <Ban className='h-4 w-4' aria-hidden='true' />,
     isDisabled: isBlocked,
     isLoading: acting === 'TOSS',
     onClick: () => void handleAct('TOSS', selectedBoxes),

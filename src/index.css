@@ -186,6 +186,22 @@ html[data-installed-app] *::-webkit-scrollbar {
   max-height: 92dvh;
 }
 
+/* On a landscape phone 92dvh leaves too little for the subject, so the strip of page shrinks to a hairline. */
+@media (max-height: 599px) {
+  [role='dialog'][data-drawer-open] > .fixed.bottom-0 {
+    max-height: calc(100dvh - 0.5rem);
+  }
+}
+
+/* The library's close X is a 23px icon; its 40px hit area is a pseudo-element, so the look and the layout stay as they were. */
+[data-drawer-close-button]::before,
+[data-modal-close-button]::before,
+[data-panel-close-button]::before {
+  content: '';
+  position: absolute;
+  inset: -8.5px;
+}
+
 /* Smooth height transitions for when keyboard appears on mobile */
 html, body {
   transition: height 0.3s ease;

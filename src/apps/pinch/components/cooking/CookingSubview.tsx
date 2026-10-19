@@ -1853,12 +1853,23 @@ function CookingSession({
             </p>
           )}
         </div>
-        <div className='form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
+        <div
+          className={join(
+            'form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!',
+            isWide &&
+              !isFinishShown &&
+              focused === null &&
+              'grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] gap-x-10',
+          )}
+        >
           <div
             className={join(
               'flex flex-col gap-2 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:gap-3',
               focused !== null &&
                 'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-xl',
+              isFinishShown &&
+                focused === null &&
+                'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-md',
             )}
           >
             {!isFinishShown && (

@@ -16,11 +16,12 @@ export type PlannedMealAction =
   | { kind: 'EAT'; place: ContainerPlace; count: number }
   | { kind: 'SAVE' };
 
-/** `from` on an eat view is where its Back returns. */
+/** `from` on an eat view is where its Back returns; a recipe view is one dish of the plate, read in place. */
 export type PlannedMealSubview =
   | { kind: 'meal' }
   | { kind: 'more' }
   | { kind: 'name' }
+  | { kind: 'recipe'; recipeId: string }
   | { kind: 'eat'; place: ContainerPlace; from: 'meal' | 'more' };
 
 export const PLANNED_MEAL_VIEW: PlannedMealSubview = { kind: 'meal' };
