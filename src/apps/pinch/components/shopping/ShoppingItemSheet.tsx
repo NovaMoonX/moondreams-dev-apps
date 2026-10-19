@@ -26,7 +26,6 @@ import {
   selectShoppingSourceLabels,
 } from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
-import { formatSize } from '@apps/pinch/utils/productFormat';
 import {
   formatShopAmount,
   getRowSourceShares,
@@ -103,7 +102,7 @@ function ShoppingItemSheet({
       const amounts = items.flatMap((rowItem) =>
         rowItem.amount === null
           ? []
-          : [formatSize(rowItem.amount, rowItem.unit)],
+          : [formatShopAmount({ amount: rowItem.amount, unit: rowItem.unit })],
       );
       if (amounts.length > 1) {
         return `On your list as ${amounts.join(' and ')}. Saving keeps one amount.`;
@@ -113,12 +112,12 @@ function ShoppingItemSheet({
     const there =
       inNewUnit.amount === null
         ? name
-        : formatSize(inNewUnit.amount, inNewUnit.unit);
+        : formatShopAmount({ amount: inNewUnit.amount, unit: inNewUnit.unit });
     if (!inNewUnit.isChecked) {
       return `You already have ${there} on your list. This adds to it.`;
     }
     return isValid
-      ? `You already got ${there}. This puts it back on your list at ${formatSize(amount, unit)}.`
+      ? `You already got ${there}. This puts it back on your list at ${formatShopAmount({ amount, unit })}.`
       : `You already got ${there}. This puts it back on your list.`;
   };
 
