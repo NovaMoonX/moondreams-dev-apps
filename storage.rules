@@ -72,6 +72,12 @@ service firebase.storage {
       allow delete: if isKitchenOwner();
     }
 
+    // A shared recipe's cover, public by an unguessable path (the link is the capability), never listable and written only by the Functions.
+    match /apps/pinch/shares/{shareId}/{fileName} {
+      allow get: if shareId.matches('^[2-9a-hj-np-z]{26}$') && fileName.matches('^cover-[0-9]{1,2}\\.webp$');
+      allow list, write: if false;
+    }
+
     // A recipe idea's photo, private to the person whose kitchen it is (mirrors apps/pinch/kitchens/{uid}/ideas/{ideaId}).
     match /apps/pinch/kitchens/{uid}/ideas/{ideaId}/{fileName} {
       function isKitchenOwner() {

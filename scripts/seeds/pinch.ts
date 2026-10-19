@@ -1,6 +1,13 @@
 import { deflateSync } from 'node:zlib';
 
 import {
+  shareCoverPath,
+  toCoveredCopy,
+  toSharedMeal,
+  toSharedRecipe,
+} from '../../functions/src/apps/pinch/pinchShareView.ts';
+import { CATALOG_INGREDIENTS } from '../../src/apps/pinch/catalog/catalogIngredients.ts';
+import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
   type SeedContext,
@@ -697,8 +704,12 @@ function makeSquarePng(
   ]);
 }
 
-/** Uploads the seeded store's image to the Storage emulator; a bucket the app isn't configured for just leaves the letter tile. */
-async function uploadSeedImage(path: string) {
+/** Uploads a seeded image to the Storage emulator; a bucket the app isn't configured for just leaves what `fallback` says. */
+async function uploadSeedImage(
+  path: string,
+  fallback: string,
+  color: [number, number, number] = [86, 140, 76],
+) {
   const bucket =
     process.env.STORAGE_BUCKET ??
     process.env.VITE_FIREBASE_STORAGE_BUCKET ??
@@ -709,14 +720,15 @@ async function uploadSeedImage(path: string) {
     {
       method: 'POST',
       headers: { 'Content-Type': 'image/png', Authorization: 'Bearer owner' },
-      body: makeSquarePng(64, [86, 140, 76]),
+      body: makeSquarePng(64, color),
     },
   ).catch(() => null);
   if (!response?.ok) {
     console.warn(
-      'Pinch seed: could not upload the store image to the Storage emulator, so Green Market shows a letter tile.',
+      `Pinch seed: could not upload an image to the Storage emulator, so ${fallback}.`,
     );
   }
+  return response?.ok === true;
 }
 
 const line = (
@@ -1021,6 +1033,135 @@ const PLANNED_BLUEPRINTS: {
   },
 ];
 
+// Fixed ids from the share alphabet, so a seeded link can be opened by hand: /pinch/shared/<id>.
+export const SEED_SHARE_IDS = {
+  recipe: 'seedsharercp23456789abcdef',
+  meal: 'seedsharemeal23456789abcde',
+};
+
+const CATALOG_NAMES = new Map(
+  CATALOG_INGREDIENTS.map((entry) => [entry.id, entry.name]),
+);
+
+interface SeedRecipeLike {
+  title: string;
+  description: string | null;
+  servings: number;
+  prepMinutes: number | null;
+  cookMinutes: number | null;
+  ingredients: {
+    ingredientId: string;
+    amount: number | null;
+    unit: string;
+    note: string | null;
+    group?: string | null;
+  }[];
+  steps: string[];
+  care?: object | null;
+  links?: { kind: string; label: string | null; url: string }[];
+}
+
+// What the app builds from a recipe: lines named the way a visitor reads them and nothing of the owner's. The share's own allowlist then rebuilds it.
+const toShareRecipe = (recipe: SeedRecipeLike) => ({
+  title: recipe.title,
+  description: recipe.description,
+  servings: recipe.servings,
+  prepMinutes: recipe.prepMinutes,
+  cookMinutes: recipe.cookMinutes,
+  ingredients: recipe.ingredients.map((entry) => ({
+    name: CATALOG_NAMES.get(entry.ingredientId) ?? entry.ingredientId,
+    catalogId: entry.ingredientId.startsWith('cat-')
+      ? entry.ingredientId
+      : null,
+    amount: entry.amount,
+    unit: entry.unit,
+    note: entry.note,
+    group: entry.group ?? null,
+  })),
+  steps: recipe.steps,
+  care: recipe.care ?? null,
+  links: (recipe.links ?? []).map(({ kind, label, url }) => ({
+    kind,
+    label,
+    url,
+  })),
+  hasCover: false,
+});
+
+const findSeedRecipe = (id: string) =>
+  SEED_RECIPES.find((recipe) => recipe.id === id) ?? SEED_RECIPES[0];
+
+/** Alex's two shares as `changePinchShare` would have written them: Adobo chicken (taken from the recipe as it is now, with a cover when `hasRecipeCover`) and "Adobo and rice" (taken before its last edit, so the owner's list reads it as changed since). */
+export function buildSeedShares(
+  ownerUid: string,
+  now: number,
+  hasRecipeCover: boolean,
+) {
+  const recipeSourceId = 'seed-pinch-recipe-adobo';
+  const meal = SEED_MEALS[0];
+  const recipeIds = Array.from(new Set(meal.items.map((entry) => entry.refId)));
+  const recipeCopy = toCoveredCopy(
+    {
+      recipe: toSharedRecipe(toShareRecipe(findSeedRecipe(recipeSourceId))),
+      meal: null,
+    },
+    new Set(hasRecipeCover ? [0] : []),
+  );
+  const mealCopy = {
+    recipe: null,
+    meal: toSharedMeal({
+      name: meal.name,
+      recipes: recipeIds.map((id) => toShareRecipe(findSeedRecipe(id))),
+      items: meal.items.map((entry) => ({
+        kind: 'RECIPE',
+        servings: entry.servings,
+        recipeIndex: recipeIds.indexOf(entry.refId),
+      })),
+    }),
+  };
+  const recipeAt = now - 3 * DAY_MS;
+  const mealAt = now - 16 * DAY_MS;
+  const sourceUpdatedAt = now - 14 * DAY_MS;
+  return [
+    {
+      share: {
+        id: SEED_SHARE_IDS.recipe,
+        ownerUid,
+        kind: 'RECIPE',
+        sourceId: recipeSourceId,
+        title: 'Adobo chicken',
+        sourceUpdatedAt,
+        createdAt: recipeAt,
+        updatedAt: recipeAt,
+      },
+      snapshot: {
+        id: SEED_SHARE_IDS.recipe,
+        kind: 'RECIPE',
+        ...recipeCopy,
+        updatedAt: recipeAt,
+      },
+    },
+    {
+      share: {
+        id: SEED_SHARE_IDS.meal,
+        ownerUid,
+        kind: 'MEAL',
+        sourceId: meal.id,
+        title: meal.name,
+        sourceUpdatedAt: mealAt,
+        createdAt: mealAt,
+        updatedAt: mealAt,
+      },
+      snapshot: {
+        id: SEED_SHARE_IDS.meal,
+        kind: 'MEAL',
+        ...mealCopy,
+        updatedAt: mealAt,
+      },
+    },
+  ];
+}
+
 // Alex's own kitchen; every other fixture account starts with an empty one.
 export async function seedPinch(context: SeedContext): Promise<SeedResult> {
   const alex = FIXTURE_USERS.partnerOne;
@@ -1033,7 +1174,13 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
   const today = Math.floor(context.now / DAY_MS) * DAY_MS;
 
   const customImagePath = `apps/pinch/kitchens/${alex.uid}/stores/${CUSTOM_STORE.id}/logo.webp`;
-  await uploadSeedImage(customImagePath);
+  await uploadSeedImage(customImagePath, 'Green Market shows a letter tile');
+  const hasShareCover = await uploadSeedImage(
+    shareCoverPath(SEED_SHARE_IDS.recipe, 0),
+    'the shared Adobo chicken has no picture',
+    [176, 108, 52],
+  );
+  const seedShares = buildSeedShares(alex.uid, context.now, hasShareCover);
 
   await Promise.all([
     // Alex already closed the nudge for the vinegar, so the adobo recipe's fill-in starts one short.
@@ -1197,6 +1344,12 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           updatedAt: createdAt + index,
         });
     }),
+    ...seedShares.flatMap(({ share, snapshot }) => [
+      context.firestore.doc(`apps/pinch/shares/${share.id}`).set(share),
+      context.firestore
+        .doc(`apps/pinch/shareSnapshots/${snapshot.id}`)
+        .set(snapshot),
+    ]),
     ...SEED_MEALS.map((meal) =>
       kitchenRef
         .collection('meals')
@@ -1246,6 +1399,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       CATALOG_STORE_SEEDS.length +
       PLANNED_BLUEPRINTS.length +
       SEED_MEALS.length +
+      seedShares.length * 2 +
       2,
   };
 }
