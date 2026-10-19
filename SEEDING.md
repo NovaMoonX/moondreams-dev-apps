@@ -35,6 +35,14 @@ The Vite app connects to local services only when `VITE_USE_FIREBASE_EMULATORS=t
 It disables the Firestore persistent cache in this mode so a reset cannot leave stale
 browser data behind. The Emulator Suite UI is available at `http://127.0.0.1:4001`.
 
+With no network, or with no `firebase login`, firebase-tools can't read the project's Admin SDK
+config and the Functions emulator's default Storage bucket becomes `moondreams-dev-apps.appspot.com`,
+while the app and the seeds use `moondreams-dev-apps.firebasestorage.app` (in production the default
+bucket is the app's, as Waypoint's `deleteTrip` also relies on). Pinch's share functions copy covers
+through the default bucket, so in that case start the suite with
+`STORAGE_BUCKET_URL=moondreams-dev-apps.firebasestorage.app npm run emulators`; without it a cover
+uploaded in the app is "not found" by the functions and the seeded share's cover can't be copied.
+
 While the emulators are in use, a thin strip pins to the top of the page: green when they're
 running and seeded, amber when they're running but empty (run `npm run seed:reset`), red when
 they can't be reached. It re-checks every few seconds while the tab is visible, and the offline
