@@ -140,6 +140,62 @@ export const MAX_PASTE_CHARS = 20_000;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
 
+/** What the slot on the page behind a share link says, by what was shared. */
+export const SHARE_SLOT_COPY: Record<
+  'RECIPE' | 'MEAL',
+  {
+    eyebrow: string;
+    emoji: string;
+    ownerLead: string;
+    visitorLead: string;
+    visitorHint: string;
+    addLabel: string;
+    addingLabel: string;
+    signedOutLead: string;
+    signedOutHint: string;
+    benefits: { emoji: string; text: string }[];
+  }
+> = {
+  RECIPE: {
+    eyebrow: 'Shared recipe',
+    emoji: '🍲',
+    ownerLead: 'This is your shared recipe',
+    visitorLead: 'Want this in your recipes?',
+    visitorHint: 'Adds your own copy to change, plan and cook.',
+    addLabel: 'Add to my recipes',
+    addingLabel: 'Adding it to your recipes…',
+    signedOutLead: 'Keep this recipe',
+    signedOutHint: 'Sign in to add it to your own recipes.',
+    benefits: [
+      { emoji: '📖', text: 'Keep it with your own recipes' },
+      {
+        emoji: '📅',
+        text: 'Plan it on a day and get a shopping list, with nutrition and cost',
+      },
+      { emoji: '⏲️', text: 'Cook it step by step, with timers' },
+    ],
+  },
+  MEAL: {
+    eyebrow: 'Shared saved meal',
+    emoji: '🍽️',
+    ownerLead: 'This is your shared saved meal',
+    visitorLead: 'Want this saved meal?',
+    visitorHint: 'Adds your own copy, with the recipes it uses.',
+    addLabel: 'Add to my saved meals',
+    addingLabel: 'Adding it to your saved meals…',
+    signedOutLead: 'Keep this saved meal',
+    signedOutHint: 'Sign in to add it to your own saved meals.',
+    benefits: [
+      { emoji: '📖', text: 'Keep it with your own saved meals' },
+      {
+        emoji: '📅',
+        text: 'Plan it on a day and get a shopping list, with nutrition and cost',
+      },
+      { emoji: '⏲️', text: 'Cook its recipes step by step, with timers' },
+    ],
+  },
+};
+
 /** The caps on lines per add and on items are not enforced by the rules. */
 export const MAX_SHOPPING_LINES_PER_ADD = 200;
 export const SOFT_MAX_SHOPPING_ITEMS = 300;
