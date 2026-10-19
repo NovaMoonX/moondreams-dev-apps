@@ -5,7 +5,6 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Ban,
   CalendarDays,
-  ChevronRight,
   Hash,
   History,
   Undo2,
@@ -45,6 +44,7 @@ import {
   getBatchKey,
   getBatchServingsText,
   getBoxCountCopy,
+  getBoxLine,
   getContainerTitle,
   getCountChangeCopy,
   getEatByDefault,
@@ -734,28 +734,24 @@ function ContainerSheet({
     }
     if (view.kind === 'boxes' && isBatch) {
       return (
-        <div className='grid gap-2'>
+        <div className='grid gap-3'>
           <BackLink onBack={backToDetails} />
-          <ul className='divide-border divide-y'>
+          <ActionGroup isRoomy>
             {boxes.map((box, index) => (
-              <li key={box.id}>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-2 text-left font-normal'
-                  onClick={() => pick(box.id)}
-                >
-                  <span className='text-foreground min-w-0 flex-1'>
-                    Box {index + 1} · {formatServings(box.servings)}
-                  </span>
-                  <ChevronRight
-                    className='text-muted-foreground h-5 w-5 shrink-0'
-                    aria-hidden='true'
-                  />
-                </Button>
-              </li>
+              <GroupRow
+                key={box.id}
+                isRoomy
+                icon={CONTAINER_PLACE_EMOJIS[box.place]}
+                ariaLabel={`Box ${index + 1}, ${getBoxLine(box)}`}
+                onClick={() => pick(box.id)}
+              >
+                <span className='block font-medium'>Box {index + 1}</span>
+                <span className='text-muted-foreground block text-sm font-normal'>
+                  {getBoxLine(box)}
+                </span>
+              </GroupRow>
             ))}
-          </ul>
+          </ActionGroup>
         </div>
       );
     }

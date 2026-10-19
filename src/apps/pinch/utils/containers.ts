@@ -1184,6 +1184,14 @@ export const getEventText = (event: ContainerEvent) => {
 export const getStartServings = (container: Container) =>
   container.history.find((event) => event.place !== null)?.servings ?? null;
 
+/** "2 servings" for a box as it went in, "1 of 2 servings left" for one that has been opened. */
+export const getBoxLine = (container: Container) => {
+  const started = getStartServings(container);
+  return started !== null && started > container.servings
+    ? `${container.servings} of ${started} servings left`
+    : formatServings(container.servings);
+};
+
 /** Counts what was eaten from the history, so a corrected count reads true; a history that may have been trimmed past the cap names no number it can't vouch for. */
 export const getFinishedKind = (container: Container) => {
   const last = container.history.at(-1)?.kind;
