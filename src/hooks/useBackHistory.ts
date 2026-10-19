@@ -125,13 +125,13 @@ const handlePop = () => {
 const OPEN_POPUP_SELECTOR =
   '[aria-haspopup][aria-expanded="true"], [role="listbox"], [role="menu"]';
 
-// Escape takes a sheet's swapped-in view back one step, like the back gesture, before the sheet
-// sees it as a close. Capture, so the sheet's own listener never gets it.
+// Escape takes a swapped-in view back one step, like the back gesture, before the sheet under it
+// (or, on a plain page, nothing) sees it as a close. Capture, so the sheet's own listener never gets it.
 const handleEscape = (event: KeyboardEvent) => {
   if (event.key !== 'Escape' || event.defaultPrevented) return;
   const top = layers[layers.length - 1];
   const holder = [...layers].reverse().find((layer) => layer.kind !== 'step');
-  if (top?.kind !== 'step' || holder?.kind !== 'dialog') return;
+  if (top?.kind !== 'step' || (holder && holder.kind !== 'dialog')) return;
   const isPopupOpen =
     (event.target instanceof Element &&
       event.target.closest(OPEN_POPUP_SELECTOR) !== null) ||
