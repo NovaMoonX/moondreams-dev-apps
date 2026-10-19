@@ -1019,7 +1019,7 @@ A big-type, one-step-at-a-time view that keeps the screen awake. As built, each 
 - `lib/extractRecipe.ts` (schema and prompt) and `utils/normalizeRecipe.ts` for the three readings
 - The seed: care on two of Alex's recipes (one full, one fridge only) and on half the scale kitchen's, the rest left in the older shape
 
-**Context:** Read `TECHNICAL.md` §5f and open question 20; `UX.md`'s Recipe, Recipe details and Cooking mode; CLAUDE.md's "A phone form shows a few inputs at a time" and "Text that leaves the app is safe to paste" (Pinch has no copy-out, so it only matters if one returns).
+**Context:** Read `TECHNICAL.md` §5f and open question 20; `UX.md`'s Recipe, Recipe details and Cooking mode; CLAUDE.md's "A phone form shows a few inputs at a time" and "Text that leaves the app is safe to paste" (Pinch has no copy to the clipboard, and a share, Issue 48, draws care as text, so it only matters if a copy returns).
 
 ### Description
 A recipe can say how many days what it makes keeps in the fridge and the freezer, how to reheat it, and carry a tip. It is a "Keeping it" row in the recipe form, a quiet section on the recipe, the keeping times on cooking mode's put-away pills ("Fridge · keeps 3 days") and something the three readings fill in for review when the source says so.
@@ -1291,6 +1291,77 @@ Fridge & freezer's past-its-date row counts both places, so it says what Kitchen
 - [x] Fourth design round: Recipes' Select mode on a landscape phone puts "Select all shown" beside Cancel and tucks the search row away while nothing is typed (full rows above the footer at 390×844 / 320×568 / 375×667 / 390×560 / 844×390: 3 / 2 / 3 / 2 / 0 → 3 / 2 / 3 / 2 / 1); Kitchen's front is shorter on short screens (first ingredient 43 / 62 / 54 / 63 / 78% → 43 / 56 / 54 / 57 / 67%) and Pantry's actions and switch share rows with the title and the search from `sm`; the fill-in nudge is a sentence over two chips ("Add prices", "Not now") with no underlined text on the Week summary and both recipe drawers; View options is the 28px header icon wherever no filter button sits beside a search field, so the Saved meals pill row stays 24px; Pantry's four pills fit one line at 320px.
 - [x] `npx tsc -b --force`, `npx eslint`, `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass.
 
+### Issue 48: Share a recipe or a saved meal with a link, and keep what you were sent
+
+**Prerequisites:** Issue 6, Issue 11, Issue 17, Issue 40, Issue 42, Issue 43, Issue 44, Issue 45
+**Target PR Size:** ~7,500 lines (the three callables with their allowlist, the rules, the owner's Share view and Shared links list, the public page and the import, three check scripts, the seeds and the docs)
+**Files:**
+- `PinchShare`, `SharedRecipe`, `SharedMeal`, `SharedMealItem`, `PinchShareResult`, `ChangePinchShareRequest` and `Result`, `CopyPinchShareCover*`, `PinchSubview` (`shares`) in `types.ts`; `MAX_PINCH_SHARES`, `SHARE_ID_LENGTH`, `MAX_SHARED_MEAL_RECIPES`, `MAX_SHARED_MEAL_LINES`, `SHARE_LINK_PATH`, `SHARE_SLOT_COPY` in `constants.ts`
+- `functions/src/apps/pinch/` (`getPinchShare`, `changePinchShare`, `copyPinchShareCover`, `pinchShareView`, `pinchShareStore`), `functions/src/index.ts`, `functions/README.md`, `firestore.rules`, `storage.rules`
+- The owner's side: `utils/sharing.ts`, `store/slices/sharesSlice.ts`, `store/actions/shareActions.ts`, `startSharesListener`, `selectors.ts`, `usePinchSync`, `components/share/` (`ShareView`, `ShareDoorRow`, `SharedLinksSubview`), `components/settings/SharedLinksSection`, and small changes to `RecipeDrawer`, `MealDrawer`, `SettingsSubview`, `RecipeForm`, `MealBuilder`, `recipeActions`, `mealActions` (`setMealFavorite` no longer writes `updatedAt`) and `Pinch.tsx`
+- The page: `SharedPinch.tsx`, `components/public/` (`ShareSlot`, `SharedIntro`, `SharedCover`, `SharedRecipeBody`, `SharedMealBody`, `SharedStates`), `queries/shareQueries.ts`, `hooks/useShareAdd.ts`, `utils/importShare.ts`, `store/actions/importShareActions.ts`, `RecipeCareSection` and `RecipeLinksSection` (a title, a `rel`, no thumbnail), `utils/recipeCover.ts` (`getRecipeCoverPath`), `src/routes/AppRoutes.tsx`, `src/hooks/useNoIndex.ts`, `src/ui/Layout.tsx`, `cloudflare-worker.js`
+- `scripts/seeds/pinch.ts` (two shares for Alex), `scripts/checks/pinchShare.ts`, `pinchShareBuild.ts`, `pinchShareImport.ts`, the `check:pinch-share` script and its CI step
+
+**Context:** Read `TECHNICAL.md` decision 27, §5k, Data Schema 10 and 11, criteria 20 and 21 and open question 29; `UX.md`'s Share, Shared links and Shared link; `JOURNEYS.md` §4.1, §4.2 and §5.10; CLAUDE.md's "Security and privacy" (every bullet), "One shared page for everyone; only its action slot changes" and "A document fills the form"; A-List's calendar share (`functions/src/apps/a-list/getCalendarShare.ts`, `src/apps/a-list/SharedCalendar.tsx`) is the reference. This is the roadmap's Issue 38, grown to saved meals and to adding what you were sent.
+
+### Description
+A person can send a recipe, or a saved meal with the recipes it uses, to anyone with a link. The friend opens it with no account and reads it as a page, and the copy is taken once: later edits to the original change nothing until the owner updates it. The owner keeps three verbs: **Update the shared copy** (the address stays), **Get a new link** (the old one stops working at once) and **Stop sharing**. The page knows who shared it without saying: the owner sees it is theirs and gets a way back into Pinch, a signed-in visitor can add it to their own recipes (or saved meals, which bring their recipes), and a signed-out visitor is invited to sign in and keep it, on the same page with the same card in the same place. Nothing about the person, their prices, notes or history goes out, search engines are asked not to list it, and the address goes nowhere else.
+
+### Possible Approach
+1. A share is a copy a Function made: `shares/{id}` (the owner's record, read by its owner) and `shareSnapshots/{id}` (read by no client), written only by `changePinchShare`, with an id of 130 bits minted on the server. Visitors read through `getPinchShare`, which answers one "not found" for every id that isn't a live link and tells the owner, and only the owner, that it is theirs.
+2. One allowlist, run when the copy is written and again when it is served, so nothing but named, capped fields is ever stored or sent; the client builds the copy by named fields too.
+3. An uploaded cover is copied by the server into a Storage folder named by the id, each file under its own download token; a web-search cover is never shared; stopping a link deletes the files before the documents.
+4. The owner's side is one `ShareView` in two homes (a recipe's and a saved meal's ⋯ More, and a Shared links sheet in Settings), with outcomes inside the view and no toast over a drawer.
+5. The page is one layout for everyone with one action slot; adding is one `writeBatch` that maps each line to the visitor's own ingredient or makes a custom one, rebuilt from the share by an allowlist, with its cover copied after the commit and an Undo that is all or none.
+6. The rules, the checks and the seeds ship with it; the share's denials are proven on the emulator against the base rules too.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read / Update / Delete:** make a link, open it (anyone), take the copy again, get a new address, stop sharing; add what a link shows to your own recipes or saved meals, and take that back with an Undo.
+- [ ] **Entry points:** "Share" in a recipe's ⋯ More and in a saved meal's ⋯ More; Settings' "Shared links" row (once a link exists) and its rows' sheet; the page `/pinch/shared/:shareId` and, on it, "Open in Pinch" (the owner), "Add to my recipes" or "Add to my saved meals", "See it in Pinch", "Undo", "Sign in with Google", a dish row with "‹ Back" and "Try again". Each is reachable from a screen a person can open; a planned meal has no Share (save it first) and a first run shows nothing about sharing.
+
+### Success Criteria
+*Ticked: covered by `check:pinch-share`, the typecheck and lint. Open: waits for the emulator and browser runs.*
+
+- [x] The copy holds only the allowlist: a recipe's title, description, servings, minutes, ingredient lines (name, `cat-` id, amount, unit, note, group), steps, care, https links and an uploaded cover, and a saved meal's name, recipes and items; no uid, name, email, photo, price, product, store, note, tweak, cook, favorite, collection, source, nutrition, id of the owner's or web cover is in the stored copy or in `getPinchShare`'s answer (a mutation of the allowlist that spreads, drops a cap, accepts `http`, trusts a client's `hasCover` or puts the uid in the answer fails a named case).
+- [x] The id is 26 characters of the 32-character alphabet drawn with `crypto.randomInt` (130 bits), no client supplies one, and its pattern is the same in the client, the Function and the Storage rule.
+- [x] A malformed, unknown and deleted id get the same `{ status: 'not_found' }` body; `update` and `renew` answer not-found alike for a missing, someone else's and a malformed share, and `delete` answers `{ shareId: null }` for those three and deletes nothing.
+- [x] A recipe or meal that can't be shared whole is refused, never cut: no title, unusable servings, neither an ingredient nor a step, an item pointing at a missing recipe, more than ten recipes or 300 ingredient lines.
+- [x] The client's builders copy by name (a recipe with extra fields shares none of them), the stamp of a saved meal includes its recipes', and a link reads as changed since, gone, or neither.
+- [x] An import maps each line to a catalog id, a match among the person's own ingredients, or one new custom ingredient per distinct name; keeps group, note, amount and unit; rebuilds every document with every key and the form's caps; plans at most 311 writes and refuses more; and the planned documents' keys equal the rules' `hasOnly` and `hasAll` lists.
+- [x] Undo is all or none: it refuses when a written recipe or the meal was edited, is on a planned day, in a box or in another saved meal, and otherwise deletes exactly what was written plus the ingredients the add made that are unchanged and unused.
+- [ ] The rules matrix (the owner, another signed-in user, signed out; both Firestore collections and the Storage path) gives the intended outcome on the new rules and the base rules differ only where intended: the owner reads their share, nobody writes a share or a snapshot, nobody reads a snapshot, a signed-out `get` of a cover is allowed and a `list`, a write and a delete are not.
+- [ ] The three callables run against the emulators: create, a second create returning the same id, update, renew (the old link and its folder dead, the new one live), delete (the folder gone), the cap at 30, `not-found` for another user, a cover copied under its own token that `getDownloadURL` opens, and `copyPinchShareCover` onto a visitor's own recipe; the response body of `getPinchShare` as the owner, another user and signed out holds no uid and no forbidden key.
+- [ ] The owner's views at 390×844, 375×667, 320×568, 390×560 and 844×390 in light and dark: not shared, shared, changed since, original deleted, busy and failed states; the link box does not overflow and Copy link and Send share a line at 320px; the drawer body does not scroll; every control is 40px; the back gesture closes one layer over More, the Share view and a sheet.
+- [ ] The page at the same sizes in light and dark as signed out, as Jamie and as Alex: the slot is the same card, place and height in all of them, in the top 40% of the screen; nothing clips at 320px; no `<body>` scroll; a saved meal's dish opens in place and the back gesture closes it; signing in on the page flips the slot in place; a stopped link and a mistyped id show the same screen.
+- [ ] The page's requests are only the callable, our Storage and the same-origin logo; the id is in the callable's body and the Storage path and nowhere else (presence is `pinch/shared`, no storage, no log); `<meta name='robots'>` and `<meta name='referrer'>` are present and gone after leaving; the worker's response carries `X-Robots-Tag: noindex` and `Referrer-Policy: no-referrer` and a generic preview.
+- [ ] Adding as Jamie writes the recipe or saved meal and its recipes with every key (a saved meal's recipes included), a double tap writes once, a cover arrives at the visitor's own path, offline says so, and Undo takes back exactly that; after editing what was added, Undo refuses and says why.
+- [ ] A recipe, a saved meal and a link written before a field existed (a legacy-shaped document) still read, edit and share; a kitchen that never shares sees no change.
+- [ ] A shared recipe's original deleted: the link stops, or, when the stop fails, stays listed as "Original deleted" and can be stopped there; archiving leaves the link up and the confirm says so.
+- [ ] Alex's two seeded links open by hand (`/pinch/shared/seedsharercp23456789abcdef` and `/pinch/shared/seedsharemeal23456789abcde`), the second reading as changed since.
+- [ ] `SITE_VERSION` bumped (minor), `npx tsc -b --force` and `npx eslint .` pass, the Functions typecheck passes, and `check:pinch-share` and `check:indexes` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] `README.md` (Build Plan, features, Under the Hood), `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `SEEDING.md`, `functions/README.md` and the Pinch rules files match what shipped; CLAUDE.md's Security and privacy section carries the lessons.
+
+### Decisions the owner may overrule
+The owner dictated this feature, so each of these is a reading of what they said, and each is cheap to change now.
+- **The three verbs.** "Refresh it, update it, or cancel it" became **Update the shared copy** (also the answer to "refresh"), **Get a new link** (for a link that went somewhere it shouldn't) and **Stop sharing**.
+- **The sharer's uid is stored on the server's record and never sent to a visitor.** The page learns only `isOwner` (the server compares uids) and, to the owner alone, the id of their own recipe or saved meal.
+- **Planned meals are not shared** ("Save to Saved meals", then share). A web-search cover is never shared (the visitor's browser would load a third-party site). There is no PIN and no expiry.
+- **The slot is inline on every size**, not a sticky phone bar (a bar would cover a quarter of a short screen and can't hold the signed-out lines); from `lg` it is sticky in a right column. On a phone a 96px cover tile sits beside the title so the slot is on the first screen.
+- **Words:** "saved meal", not "meal", on the page (the glossary: a meal is a slot on a day); "See it in Pinch" after an add; "Keeping leftovers" on the page where the drawer says "Keeping it". The owner's "Open in Pinch" opens Recipes, not the recipe: the drawer's open state is local to `RecipesScreen`, so a deep link isn't cheap.
+- **The page reuses the recipe drawer's links** (how-to card and rows) with no video thumbnail and `rel='noopener noreferrer nofollow ugc'`, so it matches the drawer and loads nothing from another site.
+- **Undo is all or none** and refuses when the person changed or used what was added; an ingredient the add made that was changed or used stays. Coming back to a link after adding offers Add again (a second copy), because no record of the add is kept: the id stays out of storage. An archived ingredient of the person's is not matched to a line, and a catalog id wins over a renamed line.
+- **The page keeps its answer five minutes** and doesn't refetch on focus, so a stopped link shows until reload (it says it is a snapshot).
+- **On the owner's side:** Back from Shared links returns to Settings and from the Share view to More, with the drawer's footer hidden there so there is one primary; archiving keeps the link up and a hard delete stops it (both confirms say so); "changed since" compares `updatedAt`, so a saved meal's star no longer writes it, while a recipe save that only changes collections, source or nutrition, and archive and unarchive, still flag falsely, and a renamed ingredient or a recipe deleted from inside a shared meal isn't detected; a stop that finds the link already gone counts as done; "Left out" names favorites and cooking history (Pinch has no ratings) and a web photo only for a recipe that has one; while one action runs all three rows are off; Copy link is Dreamer UI's `CopyButton`, with a toast fallback on plain-HTTP pages.
+- **Technical calls** (the id alphabet, care days 1 to 365, a recipe with unusable servings refused, a meal all or nothing, links kept as the parsed address, the covers copied before the documents) are listed in `TECHNICAL.md` open question 29.
+
+### What is left
+- Planned meals as a share, and a way to share a whole week.
+- A web-search cover: a "keep a copy" step that downloads the picture into Storage through a function (the cost is in open question 28 (c)), so such a recipe could carry its picture.
+- A PIN, an expiry and a way to see that a link was opened; none was asked for, and the cap and one-share-per-source races could be closed with a counter document in a transaction.
+- A deep link from the owner's button to the recipe's own drawer (`?open=recipe-<id>`), which needs the drawer's open state out of `RecipesScreen`.
+- A record of what a visitor added, so a second Add can say so, which needs a place for the id that isn't storage.
+- The emulator and browser runs listed under Success Criteria, and the production check that the invoker grant for the new callables is in place (`functions/README.md`).
+
 ## Beyond
 
 ### Issue 34: Hands-free voice navigation in cooking mode
@@ -1396,7 +1467,7 @@ Set a goal and see the plan against it, only for metrics that are on.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
-### Issue 38: Share a recipe with a link (ingredient names only)
+### Issue 38: Share a recipe with a link (ingredient names only; built as Issue 48, which also shares saved meals and lets a visitor add what they were sent)
 
 **Prerequisites:** Issue 15
 **Target PR Size:** ~450 lines
