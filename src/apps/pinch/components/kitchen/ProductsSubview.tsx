@@ -193,18 +193,16 @@ interface StoreHeadingProps {
 
 function StoreHeading({ group, onOpen }: StoreHeadingProps) {
   const { store } = group;
-  const content = (
-    <>
-      <StoreLogo
-        name={group.name}
-        domain={getStoreDomain(store)}
-        imagePath={store?.imagePath ?? null}
-        imageVersion={store?.updatedAt ?? 0}
-        size={20}
-      />
-      <span className='truncate'>{group.name}</span>
-    </>
+  const logo = (
+    <StoreLogo
+      name={group.name}
+      domain={getStoreDomain(store)}
+      imagePath={store?.imagePath ?? null}
+      imageVersion={store?.updatedAt ?? 0}
+      size={20}
+    />
   );
+  const name = <span className='truncate'>{group.name}</span>;
 
   return (
     <SectionDivider
@@ -217,7 +215,8 @@ function StoreHeading({ group, onOpen }: StoreHeadingProps) {
             onClick={() => onOpen(store.id)}
             className='h-10 max-w-[65vw] min-w-0 gap-1.5 px-2! py-0 text-sm font-medium'
           >
-            {content}
+            {logo}
+            {name}
             <ChevronRight
               className='text-muted-foreground h-3.5 w-3.5 shrink-0'
               aria-hidden='true'
@@ -225,7 +224,8 @@ function StoreHeading({ group, onOpen }: StoreHeadingProps) {
           </Button>
         ) : (
           <span className='inline-flex h-10 max-w-[65vw] min-w-0 items-center gap-1.5 px-2'>
-            {content}
+            {logo}
+            {name}
           </span>
         )
       }
