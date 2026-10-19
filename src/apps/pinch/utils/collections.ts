@@ -299,6 +299,20 @@ export const getChoiceLabels = (
   return result;
 };
 
+export interface CollectionChange {
+  add: string[];
+  remove: string[];
+}
+
+/** What a save changes against the ids the form opened with. Only this is written, so a collection another device added or took out in the meantime is left as it is, and an untouched row writes nothing. */
+export const getCollectionChange = (
+  opened: readonly string[],
+  saved: readonly string[],
+): CollectionChange => ({
+  add: saved.filter((id) => !opened.includes(id)),
+  remove: opened.filter((id) => !saved.includes(id)),
+});
+
 /** An id deleted on another device is dropped here. */
 export const getCollectionsToSave = (
   choice: CollectionsChoice,
