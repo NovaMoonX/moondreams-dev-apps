@@ -1194,7 +1194,7 @@ The recipe form's photo and source are summary rows with an editor, like its tit
 - `functions/src/apps/pinch/` (`eatSoonDigest`, `sendEatSoonDigest`), `functions/README.md`, `firestore.indexes.json`, `firestore.rules`
 - `scripts/seeds/pinch.ts` and `pinchScale.ts`, `scripts/checks/pinchPantry.ts` and `pinchDigest.ts`
 
-**Context:** Read `TECHNICAL.md` decision 25, §5i, criterion 16 and open question 26; `UX.md`'s Pantry; `JOURNEYS.md` §4.1 and §4.2; CLAUDE.md's "Date-only vs. instant", "A scheduled sender never flushes a backlog", "Design for 5 and for 50", "A door needs a moment" and "Insight budget".
+**Context:** Read `TECHNICAL.md` decision 25, §5i, criterion 16 and open question 27; `UX.md`'s Pantry; `JOURNEYS.md` §4.1 and §4.2; CLAUDE.md's "Date-only vs. instant", "A scheduled sender never flushes a backlog", "Design for 5 and for 50", "A door needs a moment" and "Insight budget".
 
 ### Description
 A person can say what they have and when it expires, and Pinch tells them what to use first and what to toss, the way the fridge does for what they cooked. Each bag, carton or jar is a package with an amount, a place and a date; two of the same thing with different dates are two packages under one ingredient, and totals add only amounts that measure alike. The pantry is part of the rest of the app: recipes mark what is in it, the shopping add sheet leaves out what is covered, a ticked shopping line can become a package, cooking can take out what it used, and the morning note can name ingredients about to expire.
@@ -1208,7 +1208,7 @@ A person can say what they have and when it expires, and Pinch tells them what t
 
 ### CRUD & Entry-Point Requirements
 - [x] **Create / Read / Update / Delete:** add (one or several, with "Add another"), see each ingredient's packages and totals, use some or all, move, change the date, edit, toss, delete (with a confirm that says the history goes too), and act on several at once, each with an Undo that restores only what is still as the act left it.
-- [x] **Entry points:** Kitchen's Pantry tile (once a package exists), the ingredient drawer's "In your kitchen" and "Add a package", the Shopping tab's "Add to pantry", the package sheet's "Use it up", the morning note's link, and `?open=pantry`. Each is reachable from a screen a person can open; the first package can only start from the shopping list (the open decision in `TECHNICAL.md` question 26 (i)).
+- [x] **Entry points:** Kitchen's Pantry tile (once a package exists), the ingredient drawer's "In your kitchen" and "Add a package", the Shopping tab's "Add to pantry", the package sheet's "Use it up", the morning note's link, and `?open=pantry`. Each is reachable from a screen a person can open; the first package can only start from the shopping list (the open decision in `TECHNICAL.md` question 27 (i)).
 
 ### Success Criteria
 - [x] Dates: past its date, due soon (the person's window), later and no date read right, offer Toss, Use it up and neither, and a date-only value shows the same day west of UTC (driven in `America/Los_Angeles`).
@@ -1222,6 +1222,37 @@ A person can say what they have and when it expires, and Pinch tells them what t
 - [ ] The production index `packages (status, expiresAt)` building and the digest finding packages with it (the emulator never enforces indexes).
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
 - [x] `README.md`, `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `SEEDING.md` and `functions/README.md` match what shipped.
+
+### Issue 45: Photo suggestions for a new recipe, and a web photo as a cover
+
+**Prerequisites:** Issue 6, Issue 44
+**Target PR Size:** ~1,900 lines (the function and its provider layer, its checks, the cover field, the drawer block, the grid, the setting, the rules and the docs)
+**Files:**
+- `functions/src/imageSearch/` (`searchImages`, `ddg`, `google`, `providers`, `optionalSecret`, `usage`, `results`, `fetchCapped`, `types`), `functions/src/apps/pinch/searchRecipeImages.ts`, the export in `functions/src/index.ts`, `functions/README.md`
+- `Recipe.coverUrl` and `WebPhoto` in `types.ts`, the caps in `constants.ts`, `utils/recipeCover.ts`, `saveRecipe`, `CoverImage` and its five callers, `RecipePhotoField`, `RecipePhotoSuggestions`, `queries/photoQueries.ts`, `src/components/ImageChoiceGrid`, `FormSection`'s `action`, `PhotoPicker`'s `isCompact`
+- `PinchSettings.suggestPhotos`, `PhotosSection` in Settings, `coverUrl` and `suggestPhotos` and the two server-only collections in `firestore.rules`, `scripts/checks/imageSearch.ts` and `pinchPhotos.ts`
+
+**Context:** Read `TECHNICAL.md` §5j and open question 28; `functions/README.md`'s `searchRecipeImages` note; CLAUDE.md's "Cloud Functions", "Every AI entry point says what happens before anything is sent" and "An image from a URL that can stop working".
+
+### Description
+Opening the Photo row of a new recipe shows six pictures found by searching the web with its title, under the upload buttons. Picking one makes it the cover, kept as its web address (no copy, no Storage); an upload and a web photo replace each other and Remove goes back to none. Which search answers is one environment switch, DuckDuckGo first and Google as the fallback.
+
+### Possible Approach
+1. A callable over a provider layer with a shared cache, daily budgets and a per-person limit, built and checked against fakes; the live services were not reachable from the sandbox.
+2. `coverUrl` beside `coverPath`, at most one set, drawn everywhere through `FallbackImage` with the pot tile as the fallback; the rules enforce https, the length and the exclusivity.
+3. The block in the Photo editor of a new recipe only, with the line that says what is sent, a Turn off chip and a Settings row.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read / Update / Delete:** pick a web photo for a new recipe, see it on the row, the list and the drawer, replace it with an upload or another photo, and remove it.
+- [ ] **Entry points:** the Photo row's editor (new recipes only), the block's Turn off chip, and Settings' "Suggest photos for new recipes".
+
+### Success Criteria
+- [ ] A recipe written before web covers (no `coverUrl`) opens, edits and saves, and the save writes `coverUrl: null`; checked in the browser over a legacy-shaped document.
+- [ ] Editing a recipe never searches; a title under three letters, the switch off, or no title draws nothing and sends nothing.
+- [ ] A result with a non-https address is dropped, an unreachable picture is not chosen, and a failed or empty search leaves the upload working.
+- [ ] The rules were proved on the emulator as the owner, another user and signed out against the base rules.
+- [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editor was measured at 390×844, 375×667, 320×568, 844×390 and 1280×900 in light and dark.
+- [ ] Nothing has to exist in production before the merge; the README says how to turn Google on.
 
 ## Beyond
 

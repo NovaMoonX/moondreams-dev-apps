@@ -5,6 +5,7 @@ import { useStorageImageUrl } from '@apps/pinch/hooks/useStorageImageUrl';
 
 interface CoverImageProps {
   coverPath: string | null;
+  coverUrl: string | null;
   /** The recipe's `updatedAt`, so a replaced cover is fetched again. */
   version: number;
   /** Edge length in pixels for a square tile, or omit and size it with `className`. */
@@ -12,9 +13,16 @@ interface CoverImageProps {
   className?: string;
 }
 
-/** A recipe's cover, or a soft-tint tile with a pot when it has none or the image can't load. */
-function CoverImage({ coverPath, version, size, className }: CoverImageProps) {
-  const url = useStorageImageUrl(coverPath, version);
+/** A recipe's cover (an upload, or a web photo hotlinked from its own site), or a soft-tint tile with a pot when it has none or the image can't load. */
+function CoverImage({
+  coverPath,
+  coverUrl,
+  version,
+  size,
+  className,
+}: CoverImageProps) {
+  const storageUrl = useStorageImageUrl(coverPath, version);
+  const url = coverPath === null ? coverUrl : storageUrl;
   const tile = (
     <span
       aria-hidden='true'

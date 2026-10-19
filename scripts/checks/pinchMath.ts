@@ -6753,6 +6753,7 @@ const r2Recipe = (
     prepMinutes: null,
     cookMinutes: null,
     coverPath: null,
+    coverUrl: null,
     ingredients: ingredientIds.map((ingredientId, index) => ({
       id: `${id}-${index}`,
       ingredientId,
@@ -8569,6 +8570,7 @@ assert.equal(
     prepMinutes: null,
     cookMinutes: null,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       {
         id: 'a',
@@ -9968,6 +9970,7 @@ assert.equal(
     {
       fridgeDays: 5,
       freezerDays: null,
+      suggestPhotos: true,
       reminders: {
         eatSoon: false,
         expiring: false,
@@ -9995,6 +9998,17 @@ assert.equal(
     "a first reminder change keeps the other reminder defaults",
   );
   assert.equal(stgDefaults.updatedAt, 0, 'the defaults are never written as they are');
+  assert.equal(stgDefaults.suggestPhotos, true, 'photo suggestions start on');
+  assert.equal(
+    stgCreate({ suggestPhotos: false }, 3).suggestPhotos,
+    false,
+    'a first change that turns suggestions off writes it',
+  );
+  assert.deepEqual(
+    stgUpdates({ suggestPhotos: false }, 9),
+    [{ path: ['suggestPhotos'], value: false }, { path: ['updatedAt'], value: 9 }],
+    'a later change to suggestions names only its own field',
+  );
   assert.deepEqual(
     stgUpdates({ fridgeDays: 6 }, 9),
     [{ path: ['fridgeDays'], value: 6 }, { path: ['updatedAt'], value: 9 }],
@@ -10045,6 +10059,11 @@ assert.equal(
     stgWithDefaults(olderDocument)?.lastDigestDay,
     null,
     'and before lastDigestDay existed as none',
+  );
+  assert.equal(
+    stgWithDefaults(olderDocument)?.suggestPhotos,
+    true,
+    'and a document written before photo suggestions reads them as on',
   );
   assert.deepEqual(
     [null, 'off', 'on', 'blocked', 'unsupported'].map((state) =>

@@ -1,6 +1,7 @@
 import IntroCard from '@/components/IntroCard';
 import Subview from '@/components/Subview';
 import KeepingSection from '@apps/pinch/components/settings/KeepingSection';
+import PhotosSection from '@apps/pinch/components/settings/PhotosSection';
 import RemindersSection from '@apps/pinch/components/settings/RemindersSection';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 
@@ -17,12 +18,13 @@ function SettingsSubview({ uid }: SettingsSubviewProps) {
       <div className='space-y-5'>
         <IntroCard
           icon='🧂'
-          lead='What Pinch reminds you about, and how long leftovers keep.'
+          lead='What Pinch reminds you about, how long leftovers keep, and photo ideas.'
         >
           Changes save as you make them.
         </IntroCard>
         <RemindersSection uid={uid} />
         <KeepingSection uid={uid} />
+        <PhotosSection uid={uid} />
       </div>
     </Subview>
   );

@@ -21,6 +21,7 @@ Server-side code for the mini-apps. Every function:
 | `rescheduleTripReminders` | Firestore update on `apps/waypoint/trips/{tripId}` | Waypoint | Re-times event reminders when a relative trip's dates or time zone change |
 | `fetchLinkMetadata` | callable | shared | Reads a link's Open Graph preview (title, description, image, site name) |
 | `fetchPageContent` | callable | shared | `{ url, include?, schemaTypes?, maxTextChars? }` → `{ url, title, …only the kinds asked for }`: reads one web page and returns its `text` (capped, 30k by default, `maxTextChars` clamped to 1k–60k), `structuredData` (its schema.org nodes, optionally only the given `schemaTypes`, whole nodes up to 30k characters; an oversized node keeps its smaller fields, each field measured once, so a node with thousands of fields is cheap), `meta` (description, image address, site name, author), `headings` (h1–h3 text, up to 40) or `images` (absolute web addresses, up to 20). Defaults to `text` and `meta`. The text skips `nav`, `footer`, `form` and scripts. App-neutral: each app turns the content into its own thing. Fetches through the same private-network guard as `fetchLinkMetadata`, stores nothing |
+| `searchRecipeImages` | callable | Pinch | `{ query }` (a recipe's title and the word "recipe", at most 80 characters) → `{ results }`: up to 6 pictures, each `{ thumbUrl, imageUrl, title, host }` with both addresses https, from DuckDuckGo images first and Google Programmable Search as the fallback, in the order `IMAGE_SEARCH_PROVIDERS` names them. Cached, budgeted and rate-limited per person; stores no one's query beyond the shared answer |
 | `sendScheduledReminders` | schedule, every minute | shared | Sends due push reminders from `reminders` through FCM |
 | `sendEatSoonDigest` | schedule, every 30 minutes | Pinch | Sends each person who turned it on one push a day, in their own hour, naming the dishes in their fridge and freezer and, if they also turned that on, the ingredients in their pantry that are past their date or due soon |
 
@@ -38,6 +39,9 @@ Every callable requires a signed-in caller, except `getCalendarShare`, which exi
 | `AMC_API_BASE` | env, optional | AMC calls | `functions/.env.local`. Points AMC calls at another server; a test aid, never set in production. |
 | `A_LIST_THEATRE_APP_DAILY_LOOKUP_CAP` / `A_LIST_THEATRE_MEMBER_DAILY_LOOKUP_CAP` | env, optional (defaults 500 and 40) | `findTheatres` | `functions/.env.local` locally |
 | `A_LIST_SHOWTIME_APP_DAILY_LOOKUP_CAP` / `A_LIST_SHOWTIME_MEMBER_DAILY_LOOKUP_CAP` | env, optional (defaults 2000 and 200) | `findShowtimes` (its own budget, counted in `lookupUsage` under `showtimes_`) | `functions/.env.local` locally |
+| `IMAGE_SEARCH_PROVIDERS` | env, optional (default `ddg,google`) | `searchRecipeImages` | `functions/.env.local` locally; in production a committed `functions/.env` line (`IMAGE_SEARCH_PROVIDERS=google`) and a deploy. Providers are tried in the order listed and the first with pictures wins; `google` alone makes Google the only one. Unknown names are ignored. |
+| `GOOGLE_CSE_KEY` / `GOOGLE_CSE_CX` | Secret Manager secrets, **optional, not bound to the function, so the deploy never needs them** | `searchRecipeImages` (the Google provider) | See "Pinch: `searchRecipeImages`" below. Absent, the Google provider is skipped. Locally, `functions/.env.local` (`GOOGLE_CSE_KEY=…`) is read first. |
+| `IMAGE_SEARCH_GOOGLE_DAILY_CAP` / `IMAGE_SEARCH_DDG_DAILY_CAP` | env, optional (defaults 90 and 1500) | `searchRecipeImages` | `functions/.env.local` locally. Google's free tier is 100 a day, counted from midnight Pacific time. |
 | `A_LIST_APP_DAILY_LOOKUP_CAP` | env, optional (default 900) | A-List lookups | `functions/.env.local` locally |
 | `A_LIST_MEMBER_DAILY_LOOKUP_CAP` | env, optional (default 100) | A-List lookups | `functions/.env.local` locally |
 
@@ -110,6 +114,30 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Server cache:** the whole day at a theater, 15 minutes, in `apps/a-list/theatreCache`; every movie asked about that day shares it.
 - **Offline fixtures:** in the emulator with no key readable, every title gets five showings (Standard, IMAX, Standard, Dolby, a sold-out Standard).
 - **Check after the key is set:** the response parsing was written from AMC's public docs and a third-party reference of live responses, and has not been run against the live API. Still unconfirmed: that `movieName` and `purchaseUrl` are present on every showtime, the Dolby and PRIME attribute codes, and the `/v2/locations` and `/v2/location-suggestions` shapes.
+
+### Pinch: `searchRecipeImages`
+
+- **What it is for.** A new recipe's Photo drawer asks it for pictures for `"<title> recipe"`. It sees only that text and the caller's sign-in (the uid is used for the rate limit and never sent on). The generic layer is `functions/src/imageSearch/` (nothing there says recipe); `functions/src/apps/pinch/searchRecipeImages.ts` is the thin wrapper with the Firestore cache and counters.
+- **What it returns.** At most six `{ thumbUrl, imageUrl, title, host }`, copied from the provider's rows by name. A row whose thumbnail or picture is not https (or is over 2,000 characters, or carries a user name) is dropped, a thumbnail never falls back to the full picture, and a picture is listed once. Anything else a provider sends is discarded.
+- **Providers and the one switch.** `ddg` (DuckDuckGo images: a request for its results page, a `vqd` token read from it, then the JSON its picture grid loads, safe search on; no key, no dependency; the pictures request is tried once more when it fails or is empty; after three failures in a row it steps aside for five minutes) and `google` (Custom Search JSON API, `searchType=image`, `num=6`, `safe=active`). `IMAGE_SEARCH_PROVIDERS` orders them (default `ddg,google`). The first provider with pictures wins; one that is skipped (not configured, paused, out of budget) costs nothing and one that fails falls through. Adding a provider (Serper, Unsplash) is one file with a factory like `createGoogleProvider` and one line in `providers.ts`; none is built.
+- **Cache.** `apps/pinch/imageSearchCache`, one document per lower-cased query and provider list: a week for pictures, ten minutes for "nothing found", never a failure (so a gap in a provider never sticks, and changing `IMAGE_SEARCH_PROVIDERS` takes effect at once).
+- **Budget and limit.** `apps/pinch/imageSearchUsage` counts, in a transaction, each call that goes out: Google by Pacific day, stopped at 90 of its 100; DuckDuckGo by UTC day at 1,500; and each person's uncached searches (10 a minute, 100 a day). A cache hit counts for nothing. The whole search gives up after 10 s, each request after 4 s and 1 MB (the token page 600 KB), and no body is scanned with a pattern over the whole text.
+- **Errors.** The caller gets one sentence ("We couldn’t look up photos just now." or "Photo search is resting for a moment. Try again soon."); the reason is logged as a short code (`http_403`, `token_missing`, `timeout`), never an address, a key or a response body.
+- **Access.** Clients can't read or write `imageSearchCache` or `imageSearchUsage`.
+- **Turning Google on** (no redeploy; the key is read at run time and remembered for ten minutes, "not there" for two): create both secrets and let the runtime account read them.
+
+  ```bash
+  printf '%s' '<API key>' | gcloud secrets create GOOGLE_CSE_KEY --project=moondreams-dev-apps --data-file=-
+  printf '%s' '<search engine id>' | gcloud secrets create GOOGLE_CSE_CX --project=moondreams-dev-apps --data-file=-
+  for name in GOOGLE_CSE_KEY GOOGLE_CSE_CX; do
+    gcloud secrets add-iam-policy-binding $name --project=moondreams-dev-apps \
+      --member="serviceAccount:<project-number>-compute@developer.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+  done
+  ```
+
+  The key comes from Google Cloud (restrict it to the Custom Search API) and the engine id from a Programmable Search Engine with "Image search" on and "Search the entire web" on. Binding them with `defineSecret` instead would make the deploy need them, so it isn't done.
+- **Before merging.** Nothing has to exist in production: no secret is bound and the one env var has a default, so CI's deploy cannot fail on this function.
+- **Not verified live.** The sandbox has no outside network. DuckDuckGo's token page and picture JSON, Google's response fields, its quota and reset time, and the metadata-server and Secret Manager calls were written from public documentation and memory and run only against fakes (`scripts/checks/imageSearch.ts`). DuckDuckGo has no public image API and its terms don't offer this use: it can change or block Google Cloud's addresses at any time, which is what the switch and the Google fallback are for. Check after the first deploy: a search for "lemon pasta recipe" from a new recipe, and the function's logs for `image search provider failed` lines and their reasons.
 
 ### `fetchLinkMetadata`
 
@@ -193,4 +221,5 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
 | A function returns an error reading its secret at runtime | The runtime (default compute) account can't read that secret. Grant it per [Service accounts](#service-accounts). |
 | A-List search shows sample movies locally | The emulator couldn't read any movie key: `.secret.local` has no value and Secret Manager access failed (not signed in to Google, or no access to the secret). Add a key to `functions/.secret.local` and restart the emulators. |
 | A scheduled or triggered function logs `FAILED_PRECONDITION: The query requires an index` | A query needs a composite index that isn't in `firestore.indexes.json`. Add it (the error's link shows the fields), run `npm run check:indexes`, and deploy with `npm run fb:indexes`. The index takes a few minutes to build; the function recovers on its own once it is READY. |
+| Photo suggestions always say "We couldn’t look up photos just now" | Every provider failed or was skipped. Read the function's logs for `image search provider failed` (the reason is a short code: `token_missing` or `http_403` for DuckDuckGo changed or blocking, `not_configured` for Google without its secrets) and `image search provider used up its day`. Turn Google on (see the Pinch note above) or set `IMAGE_SEARCH_PROVIDERS=google`. |
 | A changed `.env.local` cap or `.secret.local` key has no effect | The emulators read these files only at startup. Restart them. |

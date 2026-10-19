@@ -1348,6 +1348,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Written and read only by the photo-search Cloud Function (admin SDK): the shared answer cache and the usage counters that keep its free tier from running out.
+    match /apps/pinch/imageSearchCache/{key} {
+      allow read, write: if false;
+    }
+
+    match /apps/pinch/imageSearchUsage/{key} {
+      allow read, write: if false;
+    }
+
     // Everything in a kitchen is private to one person and nests under their uid; there is no admin or role branch.
     match /apps/pinch/kitchens/{uid} {
       function isKitchenOwner() {
@@ -1445,11 +1454,16 @@ service cloud.firestore {
         return value is list && value.size() <= 20;
       }
 
+      // A cover picked from the web search is kept as its address and hotlinked, never copied. A recipe written before web covers has no key.
+      function isCoverUrl(value) {
+        return value == null || (value is string && value.size() <= 2000 && value.matches('https://[^\\s/@?#]+([/?#][^\\s]*)?'));
+      }
+
       // Rules can't walk a list, so each ingredient line (its group included), step and link is shaped by the client: checking even one field of 60 lines
       // by index runs past the evaluator's 1,000 expressions and would refuse a long recipe. The rules cap the counts and the fields around them.
       // A recipe written before links existed has no key.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'coverUrl', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1461,6 +1475,8 @@ service cloud.firestore {
           && isRecipeCare(data.get('care', null))
           && data.get('isArchived', false) is bool
           && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
+          && isCoverUrl(data.get('coverUrl', null))
+          && (data.get('coverPath', null) == null || data.get('coverUrl', null) == null)
           && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
           && data.steps is list && data.steps.size() <= 60
           && data.get('links', []) is list && data.get('links', []).size() <= 8
@@ -1896,8 +1912,9 @@ service cloud.firestore {
       }
 
       function isPinchSettings(data) {
-        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'reminders', 'updatedAt', 'lastDigestDay'])
+        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'suggestPhotos', 'reminders', 'updatedAt', 'lastDigestDay'])
           && data.keys().hasAll(['fridgeDays', 'freezerDays', 'reminders', 'updatedAt'])
+          && data.get('suggestPhotos', true) is bool
           && isNullOrDays(data.fridgeDays, 1, 14)
           && isNullOrDays(data.freezerDays, 7, 365)
           && isReminders(data.reminders)
