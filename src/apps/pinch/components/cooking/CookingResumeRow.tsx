@@ -119,21 +119,12 @@ interface ResumeCardProps {
 
 function ResumeCard({ snapshot, plan, onKeep, onDismiss }: ResumeCardProps) {
   const now = useNow(1000);
-  const isPlate = plan.dishTitle !== null;
   const timerLine = getResumeTimerLine(
     snapshot.resume.timers,
     now,
     formatClock,
   );
-  const detail = [
-    isPlate ? `${plan.dishTitle}, step ${plan.stepNumber}` : null,
-    timerLine,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  const title = isPlate
-    ? `Pick up ${plan.title}?`
-    : `Pick up ${plan.title}, step ${plan.stepNumber}?`;
+  const dishName = plan.dishTitle ?? plan.title;
 
   return (
     <section
@@ -143,20 +134,23 @@ function ResumeCard({ snapshot, plan, onKeep, onDismiss }: ResumeCardProps) {
       <Button
         type='button'
         variant='tertiary'
-        className='hover:bg-accent h-auto min-h-0 min-w-0 flex-1 justify-start gap-3 rounded-2xl px-3! py-1! text-left'
+        className='hover:bg-accent h-auto min-h-0 min-w-0 flex-1 justify-start gap-3 rounded-2xl px-3! py-1! text-left max-[359px]:gap-2 max-[359px]:px-2!'
         onClick={onKeep}
       >
         <CookingPot className='h-5 w-5 shrink-0' aria-hidden='true' />
         <span className='min-w-0 flex-1'>
-          <span className='text-foreground block text-sm leading-5 font-medium text-pretty'>
+          <span className='text-foreground block truncate text-sm leading-5 font-medium'>
             <span className='sr-only'>Keep cooking. </span>
-            {title}
+            Pick up step {plan.stepNumber}?
           </span>
-          {detail !== '' && (
-            <span className='text-muted-foreground line-clamp-2 text-xs leading-4 font-normal'>
-              {detail}
+          <span className='text-muted-foreground flex gap-1 text-xs leading-4 font-normal'>
+            <span className='min-w-0 shrink-10 truncate'>
+              {timerLine === null ? dishName : `${dishName} ·`}
             </span>
-          )}
+            {timerLine !== null && (
+              <span className='max-w-full shrink-0 truncate'>{timerLine}</span>
+            )}
+          </span>
         </span>
         <ChevronRight
           className='text-muted-foreground h-5 w-5 shrink-0'
