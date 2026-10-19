@@ -1617,6 +1617,8 @@ service cloud.firestore {
       }
 
       // Same budget as a box's history: each event is checked by index and kept cheap. `amount` is what was added, used or tossed.
+      // The cap of ten sits at the evaluator's 1,000-expression budget: ten events of amount and place (or amount and note), or nine of all three, are denied on the emulator; an add and nine moves with 80-character notes pass.
+      // The client writes at most two of the three on an event and only the first has amount and place; a check beside its planners fails if one writes more.
       function isPackageEvent(e) {
         return e.size() == 5
           && e.kind in ['ADDED', 'USED', 'MOVED', 'TOSSED', 'EDITED']

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 
-import type { Package, Recipe } from '../../src/apps/pinch/types.ts';
+import type {
+  Package,
+  PackageEvent,
+  Recipe,
+} from '../../src/apps/pinch/types.ts';
 import {
   getEatByLabel,
   getEatByPhrase,
@@ -1547,6 +1551,94 @@ assert.equal(
   )?.amount,
   0.4,
   'one edited since falls back to what is left, since its first amount may be in another unit',
+);
+
+// The heaviest history the client can write. The rules check a package's history event by event under the evaluator's 1,000-expression budget: ten events with amount and place (or amount and note), or nine with all three, are denied on the emulator, and an add followed by nine moves with 80-character notes is allowed. So no planner may write an event with all three, and only the first (ADDED) may carry amount and place.
+const weightOf = (event: PackageEvent) =>
+  [event.amount, event.place, event.note].filter((part) => part !== null)
+    .length;
+const redated = planPackageMove(
+  pkg({ expiresAt: dayOf(20) }),
+  'FREEZER',
+  dayOf(28),
+  NOW,
+);
+const editedPackage = planPackageEdit(
+  pkg({ expiresAt: dayOf(20), amount: 2 }),
+  {
+    amount: 1.5,
+    unit: 'KG',
+    place: 'PANTRY',
+    expiresAt: dayOf(27),
+    ingredientName: 'Milk',
+  },
+  NOW,
+);
+const plannedEvents = [
+  buildPackage(
+    {
+      id: 'p',
+      ingredientId: 'cat-milk',
+      ingredientName: 'Milk',
+      productId: null,
+      amount: 1,
+      unit: 'L',
+      place: 'FRIDGE',
+      expiresAt: null,
+    },
+    NOW,
+  ).history,
+  planUse(pkg(), 0.25, NOW),
+  planUse(pkg(), 'ALL', NOW),
+  planPackageToss(pkg(), NOW),
+  redated,
+  editedPackage,
+].flatMap((planned) => {
+  const history = Array.isArray(planned)
+    ? planned
+    : 'fields' in planned
+      ? planned.fields.history
+      : [];
+  return history.slice(1);
+});
+assert.ok(plannedEvents.length >= 6, 'the planners wrote events to weigh');
+assert.deepEqual(
+  plannedEvents.filter((event) => weightOf(event) > 2),
+  [],
+  'no event the client writes carries amount, place and note',
+);
+assert.deepEqual(
+  plannedEvents.filter(
+    (event) => event.amount !== null && event.place !== null,
+  ),
+  [],
+  'after the first event, none carries amount and place together',
+);
+assert.ok(
+  plannedEvents.every((event) => (event.note?.length ?? 0) <= 80),
+  'a note is never past the 80 characters the rules allow',
+);
+assert.equal(
+  weightOf(makePackageEvent('ADDED', 1, { amount: 1, place: 'FRIDGE' })),
+  2,
+  'the first event is the one that carries amount and place',
+);
+const worn = Array.from({ length: 30 }, (_, index) => index).reduce(
+  (history, index) =>
+    appendPackageEvent(
+      history,
+      makePackageEvent(index % 2 === 0 ? 'USED' : 'MOVED', 100 + index, {
+        amount: index % 2 === 0 ? 0.1 : null,
+        place: index % 2 === 0 ? null : 'FREEZER',
+        note: index % 2 === 0 ? null : 'x'.repeat(80),
+      }),
+    ),
+  pkg().history,
+);
+assert.deepEqual(
+  [worn.length, worn[0].kind],
+  [10, 'ADDED'],
+  'thirty acts in a row keep ten events and the add at the front, which is where the heaviest event lives',
 );
 
 // The recipes type is only here so a drift in the shape is a compile error

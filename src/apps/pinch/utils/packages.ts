@@ -374,8 +374,7 @@ export const getStockFlag = (
   };
 };
 
-/** "3 packages · 2.4 lb in all": how many, and how much, in the order a row reads them. */
-/** How many packages and how much. Several packages with one past their date add up only the ones in date ("192 fl oz in date"), since the date's flag already names the rest; one package says its own amount. */
+/** How many packages and how much, in the order a row reads them ("3 packages · 2.4 lb in all"). Several packages with one past their date add up only the ones in date ("192 fl oz in date"), since the date's flag already names the rest; one package says its own amount. */
 export const getStockSummaryParts = (view: StockView) => {
   const count = view.packages.length;
   const isPartlyPast = count > 1 && view.pastCount > 0;
