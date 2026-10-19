@@ -139,9 +139,8 @@ function PantryFromShoppingSheet({
             expiresAt: answer.expiresAt,
           },
         ],
-        { onWriteFailed: setError },
+        { onWritten: () => onAdded(row.items) },
       );
-      onAdded(row.items);
       setAddedCount(addedCount + 1);
       advance(addedCount + 1);
     } catch (saveError) {

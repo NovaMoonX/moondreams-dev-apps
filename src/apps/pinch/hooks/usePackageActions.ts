@@ -54,8 +54,8 @@ const once = async <T>(key: string, run: () => Promise<T>) => {
 };
 
 interface AddOptions {
-  /** Takes a rejected write's message instead of an error toast. */
-  onWriteFailed?: (message: string) => void;
+  /** Runs once the write has settled, never when it was refused (that raises the error toast). */
+  onWritten?: () => void;
 }
 
 export function usePackageActions(uid: string) {
@@ -131,7 +131,7 @@ export function usePackageActions(uid: string) {
   /** Writes new packages in one batch and resolves to them once the write is queued: offline it still lands locally and syncs later. */
   const add = (
     inputs: Omit<NewPackageInput, 'id'>[],
-    { onWriteFailed }: AddOptions = {},
+    { onWritten }: AddOptions = {},
   ) => {
     const problem = getProblem(inputs);
     if (problem !== null) throw new Error(problem);
@@ -142,14 +142,14 @@ export function usePackageActions(uid: string) {
     );
     dispatch(writePackages({ uid, packages: created }))
       .unwrap()
-      .catch((error: string) =>
-        onWriteFailed
-          ? onWriteFailed(error)
-          : addToast({
-              title: "That didn't save",
-              description: error,
-              type: 'error',
-            }),
+      .then(
+        () => onWritten?.(),
+        (error: string) =>
+          addToast({
+            title: "That didn't save",
+            description: error,
+            type: 'error',
+          }),
       );
     return created;
   };

@@ -209,20 +209,17 @@ function PackageFormSheet({
         onClose();
         return;
       }
-      const [created] = add(
-        [
-          {
-            ingredientId,
-            ingredientName: name,
-            productId,
-            amount,
-            unit: values.unit,
-            place: values.place,
-            expiresAt: answer.expiresAt,
-          },
-        ],
-        { onWriteFailed: setError },
-      );
+      const [created] = add([
+        {
+          ingredientId,
+          ingredientName: name,
+          productId,
+          amount,
+          unit: values.unit,
+          place: values.place,
+          expiresAt: answer.expiresAt,
+        },
+      ]);
       onAdded?.(created);
       if (!isAnother) {
         onClose();
