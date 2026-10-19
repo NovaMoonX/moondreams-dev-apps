@@ -16,7 +16,7 @@ interface SubviewHeaderProps {
   title: string;
   onBack: () => void;
   className?: string;
-  /** One screen-wide switch at the end of the title row (a microphone), never a call to action. */
+  /** The end of the title row: a screen-wide switch (a microphone) or, where the row has the room, the screen's own action cluster. */
   action?: ReactNode;
   /** Wraps a long title onto a second line instead of cutting it short. */
   isTitleWrapped?: boolean;
@@ -64,7 +64,7 @@ interface SubviewProps {
   onClose: () => void;
   /** Omit when the content draws its own `SubviewHeader` because its back step changes. */
   title?: string;
-  /** One screen-wide switch at the end of the title row (a microphone), never a call to action. */
+  /** The end of the title row: a screen-wide switch (a microphone) or, where the row has the room, the screen's own action cluster. Its buttons bring their own 40px hit areas. */
   headerAction?: ReactNode;
   /** What the header's back button, the browser's back gesture and Escape do when they step back inside the subview (or confirm leaving it) instead of leaving at once. */
   onBack?: () => void;
@@ -168,14 +168,19 @@ function Subview({
 
   return (
     <div className='page max-sm:pb-4'>
-      <div className={join('mx-auto max-w-2xl py-6 max-sm:pb-0', className)}>
+      <div
+        className={join(
+          'mx-auto max-w-2xl py-6 max-sm:pb-0 [@media(max-height:499px)]:py-3',
+          className,
+        )}
+      >
         {title !== undefined && (
           <SubviewHeader
             title={title}
             onBack={goBack}
             action={headerAction}
             isTitleWrapped={isTitleWrapped}
-            className='sticky-app-bar bg-background/80 -mx-4 mb-3 min-h-14 px-4 py-2.5 backdrop-blur'
+            className='sticky-app-bar bg-background/80 -mx-4 mb-3 min-h-14 px-4 py-2.5 backdrop-blur [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
           />
         )}
         <SubviewTitleContext.Provider value={title ?? null}>

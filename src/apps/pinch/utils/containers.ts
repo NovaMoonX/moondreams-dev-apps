@@ -685,6 +685,10 @@ export const getTossAction = (count: number) =>
 export const getSelectionTitle = (count: number) =>
   count === 0 ? 'Select boxes' : `${count} selected`;
 
+/** The act that leads a pick-several bar: tossing when every ticked row is past its date (eating it would be the wrong act), the use-it act otherwise. */
+export const getSelectionPrimary = (ticked: number, past: number) =>
+  ticked > 0 && past === ticked ? 'TOSS' : 'USE';
+
 /** Why the selection's actions are off, in the footer beside them; null while they are on. */
 export const getSelectionNote = (
   count: number,

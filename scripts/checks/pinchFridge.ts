@@ -12,6 +12,7 @@ import {
   getPastDueText,
   getPlacedTitle,
   getSelectionNote,
+  getSelectionPrimary,
   getSelectionTitle,
   getSharedPlace,
   getSkippedText,
@@ -642,6 +643,18 @@ assert.deepEqual(
     'Tap the boxes you want to act on.',
   ],
   'the footer says where the ticks are only when they are in both places',
+);
+
+assert.deepEqual(
+  [
+    getSelectionPrimary(0, 0),
+    getSelectionPrimary(3, 3),
+    getSelectionPrimary(3, 2),
+    getSelectionPrimary(3, 0),
+    getSelectionPrimary(1, 1),
+  ],
+  ['USE', 'TOSS', 'USE', 'USE', 'TOSS'],
+  'tossing leads only while something is ticked and every ticked row is past its date',
 );
 
 console.log('pinchFridge: all checks passed');
