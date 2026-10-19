@@ -9,6 +9,7 @@ import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
+import { pruneFinishedReminders } from './pruneReminders.js';
 import {
   APP_ORIGIN,
   normalizeUids,
@@ -154,6 +155,15 @@ export const sendScheduledReminders = onSchedule(
     const windowEnd = now + POLL_INTERVAL_MS;
     const staleBefore = now - STALE_AFTER_MS;
 
+    // Housekeeping runs beside the sending and never holds it up or fails it.
+    const pruning = pruneFinishedReminders(firestore, now)
+      .then((count) => {
+        if (count > 0) {
+          logger.info('Pruned finished reminders', { count });
+        }
+      })
+      .catch((error) => logger.error('Pruning finished reminders failed', error));
+
     // Looks ahead to everything due within this poll window, not just what's
     // already due, then waits out each one's exact remaining delay before
     // sending — this keeps delivery accurate to the second rather than
@@ -165,6 +175,7 @@ export const sendScheduledReminders = onSchedule(
       .get();
 
     if (dueRemindersSnapshot.empty) {
+      await pruning;
       return;
     }
 
@@ -200,6 +211,7 @@ export const sendScheduledReminders = onSchedule(
 
         await deliverReminder(firestore, messaging, reminderDoc.ref, claimed);
       }),
+      pruning,
     ]);
   },
 );
