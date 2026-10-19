@@ -198,6 +198,51 @@ function RecipeFront({
     />
   );
 
+  const nudge =
+    cost && onFillIn ? (
+      <GapNudge
+        uid={uid}
+        gaps={[
+          ...cost.leftOut,
+          ...getNutritionGaps(nutrition?.missing ?? [], show),
+        ]}
+        lead={isPriced ? undefined : 'See what it costs:'}
+        onFillIn={onFillIn}
+      />
+    ) : null;
+  const macroTiles = hasMacros ? (
+    <div className='space-y-1.5'>
+      <p className='text-muted-foreground text-xs'>Per serving</p>
+      <MacroStats values={nutrition.values} show={show} variant='tiles' />
+    </div>
+  ) : null;
+  const figures =
+    isPriced || hasMacros || cost ? (
+      <div className='space-y-3 empty:hidden'>
+        {isPriced ? (
+          <>
+            <StatTile
+              label='Cost'
+              value={
+                leftOutCount > 0
+                  ? `${formatCost(cost.totalCents ?? 0)} so far`
+                  : formatCost(cost.totalCents ?? 0)
+              }
+              detail={`For ${formatServings(recipe.servings)}`}
+            />
+            {nudge}
+            {macroTiles}
+          </>
+        ) : (
+          <>
+            {macroTiles}
+            {nudge}
+          </>
+        )}
+      </div>
+    ) : null;
+  const linksSection = <RecipeLinksSection links={links} />;
+
   return (
     <div className='space-y-5'>
       {(source ||
@@ -413,44 +458,17 @@ function RecipeFront({
 
       {care && <RecipeCareSection care={care} />}
 
-      {(isPriced || hasMacros || cost) && (
-        <div className='space-y-3 empty:hidden'>
-          {isPriced && (
-            <StatTile
-              label='Cost'
-              value={
-                leftOutCount > 0
-                  ? `${formatCost(cost.totalCents ?? 0)} so far`
-                  : formatCost(cost.totalCents ?? 0)
-              }
-              detail={`For ${formatServings(recipe.servings)}`}
-            />
-          )}
-          {cost && onFillIn && (
-            <GapNudge
-              uid={uid}
-              gaps={[
-                ...cost.leftOut,
-                ...getNutritionGaps(nutrition?.missing ?? [], show),
-              ]}
-              lead={isPriced ? undefined : 'See what it costs:'}
-              onFillIn={onFillIn}
-            />
-          )}
-          {hasMacros && (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>Per serving</p>
-              <MacroStats
-                values={nutrition.values}
-                show={show}
-                variant='tiles'
-              />
-            </div>
-          )}
-        </div>
+      {isPriced ? (
+        <>
+          {figures}
+          {linksSection}
+        </>
+      ) : (
+        <>
+          {linksSection}
+          {figures}
+        </>
       )}
-
-      <RecipeLinksSection links={links} />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, X } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
@@ -179,7 +179,7 @@ function RecipeSteps({ steps, onChange, onRemoved }: RecipeStepsProps) {
                 remove(index);
               }}
             >
-              <Trash2 className='h-4 w-4' aria-hidden='true' />
+              <X className='h-4 w-4' aria-hidden='true' />
             </Button>
           </div>
           {!isPhone && openStep === index && (

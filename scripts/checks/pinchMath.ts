@@ -4031,11 +4031,15 @@ assert.equal(
 assert.deepEqual(
   [getDueText(2, 1), getDueText(1, 0), getDueText(0, 2), getDueText(0, 0)],
   [
-    '2 to eat by tomorrow, 1 past its date',
+    '1 past its date, 2 to eat by tomorrow',
     '1 to eat by tomorrow',
     '2 past their date',
     '',
   ],
+);
+assert.ok(
+  getDueText(37, 31).startsWith('31 past their date'),
+  'the count past its date leads, so Kitchen’s one-line status, cut short, still names it',
 );
 
 assert.deepEqual(

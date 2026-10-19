@@ -5,6 +5,7 @@ import type { Container, RecipeCare } from '../../src/apps/pinch/types.ts';
 import {
   NO_SKIPS,
   getBulkNames,
+  getBoxLine,
   getBulkToast,
   getLandingPlace,
   getNamesLine,
@@ -695,6 +696,33 @@ assert.deepEqual(
     'Tap the boxes you want to act on.',
   ],
   'the footer says where the ticks are only when they are in both places',
+);
+
+// Each box of a batch says how many servings it has, and when it has been opened
+assert.deepEqual(
+  [
+    getBoxLine(
+      container({
+        servings: 2,
+        history: [makeEvent('FRIDGE', 1000, { servings: 2, place: 'FRIDGE' })],
+      }),
+    ),
+    getBoxLine(
+      container({
+        servings: 1,
+        history: [makeEvent('FRIDGE', 1000, { servings: 2, place: 'FRIDGE' })],
+      }),
+    ),
+    getBoxLine(
+      container({
+        servings: 3,
+        history: [makeEvent('FRIDGE', 1000, { servings: 2, place: 'FRIDGE' })],
+      }),
+    ),
+    getBoxLine(container({ servings: 1, history: [] })),
+  ],
+  ['2 servings', '1 of 2 servings left', '3 servings', '1 serving'],
+  'a box as it went in reads its servings, an opened one reads what is left of what went in, a corrected count above it and a box with no place event say only what is there',
 );
 
 console.log('pinchFridge: all checks passed');
