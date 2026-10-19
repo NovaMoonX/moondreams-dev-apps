@@ -5,7 +5,10 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+
+const SHORT_SCREEN_MAX_HEIGHT = 599;
 
 interface DetailSheetProps {
   isOpen: boolean;
@@ -28,9 +31,9 @@ const labelDialog = (heading: HTMLHeadingElement | null) => {
 };
 
 /**
- * Read-only detail of unpredictable length (notes, a breakdown): a drawer on phones, which scrolls
- * and closes with a swipe, and a modal from `sm` up; the back gesture closes either. Short,
- * fixed-size content is a plain `Modal`.
+ * Read-only detail of unpredictable length (notes, a breakdown): a drawer on phones and on short
+ * screens (a landscape phone), which scrolls and closes with a swipe, and a modal from `sm` up; the
+ * back gesture closes either. Short, fixed-size content is a plain `Modal`.
  */
 function DetailSheet({
   isOpen,
@@ -41,7 +44,9 @@ function DetailSheet({
   actions,
   viewKey,
 }: DetailSheetProps) {
-  const isPhone = useMediaQuery().isBelow('sm');
+  const isNarrow = useMediaQuery().isBelow('sm');
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
+  const isDrawer = isNarrow || isShort;
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
   const contentNode = useRef<HTMLDivElement | null>(null);
   const scrollTops = useRef(new Map<string, number>());
@@ -51,7 +56,7 @@ function DetailSheet({
   const attachContent = useCallback(
     (node: HTMLDivElement | null) => {
       contentNode.current = node;
-      const scroller = node && (isPhone ? node.parentElement : node);
+      const scroller = node && (isDrawer ? node.parentElement : node);
       if (!hasViews || !node || !scroller) return;
       const record = () => {
         if (shownKey.current !== undefined) {
@@ -76,32 +81,32 @@ function DetailSheet({
         holdHeight.disconnect();
       };
     },
-    [isPhone, hasViews],
+    [isDrawer, hasViews],
   );
 
   useLayoutEffect(() => {
     if (viewKey === undefined || shownKey.current === viewKey) return;
     shownKey.current = viewKey;
     const node = contentNode.current;
-    const scroller = node && (isPhone ? node.parentElement : node);
+    const scroller = node && (isDrawer ? node.parentElement : node);
     if (scroller) scroller.scrollTop = scrollTops.current.get(viewKey) ?? 0;
   });
 
   const heading = actions ? (
-    <div className={join('flex items-start gap-2', isPhone && 'pt-2')}>
+    <div className={join('flex items-start gap-2', isDrawer && 'pt-2')}>
       <h2
         ref={labelDialog}
         id={`${dialogId}-title`}
         className={join(
           'min-w-0 flex-1 font-semibold wrap-break-word',
-          isPhone ? 'text-2xl' : 'text-xl',
+          isDrawer ? 'text-2xl' : 'text-xl',
         )}
       >
         {title}
       </h2>
       <div className='-my-1 -mr-2 flex shrink-0 items-center gap-1'>
         {actions}
-        {!isPhone && (
+        {!isDrawer && (
           <Button
             type='button'
             variant='tertiary'
@@ -119,7 +124,7 @@ function DetailSheet({
     title
   );
 
-  if (isPhone) {
+  if (isDrawer) {
     return (
       <Drawer
         id={dialogId}

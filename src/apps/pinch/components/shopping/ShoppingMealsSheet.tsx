@@ -243,7 +243,7 @@ function ShoppingMealsSheet({
         )
       }
     >
-      <div className='flex max-h-[max(12rem,calc(92dvh-12rem))] flex-col gap-3 sm:max-h-[calc(100dvh-21rem)]'>
+      <div className='flex max-h-[max(12rem,calc(92dvh-12rem))] flex-col gap-3 sm:[@media(min-height:600px)]:max-h-[calc(100dvh-21rem)]'>
         <div className='shrink-0 space-y-2'>
           <p className='text-muted-foreground text-sm'>
             Remove a meal and what it added comes off your list. What you've
