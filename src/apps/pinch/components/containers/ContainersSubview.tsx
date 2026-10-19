@@ -921,6 +921,7 @@ function ContainersSubview({
                     setActNote(null);
                   }}
                   isThin
+                  wrapsNarrow
                 />
               </div>
             )}
