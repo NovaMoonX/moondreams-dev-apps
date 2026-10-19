@@ -281,3 +281,10 @@ html.pinch-theme.dark {
     animation: none;
   }
 }
+
+/* A pick-several footer sits where the phone's tab bar floats, so the bar steps aside while it is up. */
+@media (max-width: 1023px) {
+  html[data-selection-bar] .pinch-nav {
+    display: none;
+  }
+}

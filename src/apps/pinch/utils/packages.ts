@@ -18,6 +18,7 @@ import type {
   PackageEventKind,
   PackagePlace,
   Recipe,
+  ResolvedIngredient,
   Unit,
 } from '@apps/pinch/types';
 import {
@@ -33,8 +34,10 @@ import {
   getLocalTodayDate,
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
+import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { bridge, toBase, type Conversions } from '@apps/pinch/utils/quantity';
+import { getShopSection, isUsuallyAtHome } from '@apps/pinch/utils/shopping';
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
@@ -260,12 +263,25 @@ export const sumAmounts = (
 export const formatTotal = (total: Pick<AmountTotal, 'amount' | 'unit'>) =>
   formatSize(total.amount, total.unit);
 
+/** An amount said the way a cook says it ("2½ cups", "about ½ lb"); a bare count keeps its "each" so it still reads as an amount, and "about" is said once. */
+export const formatKitchenTotal = (
+  total: Pick<AmountTotal, 'amount' | 'unit'>,
+  isConverted = false,
+) => {
+  const text = formatKitchenAmount(total.amount, total.unit);
+  const bare = text.replace(/^about /, '');
+  const isAbout = isConverted || bare !== text;
+  return `${isAbout ? 'about ' : ''}${total.unit === 'EACH' ? `${bare} each` : bare}`;
+};
+
 export interface StockView {
   ingredientId: string;
   /** In stock, soonest date first. */
   packages: Package[];
   /** What is physically there, per kind, past-date packages included. */
   totals: AmountTotal[];
+  /** The same without the packages past their date. */
+  inDateTotals: AmountTotal[];
   pastCount: number;
   soonCount: number;
   /** The soonest package that has a date, past ones included. */
@@ -286,6 +302,9 @@ export const getStockView = (
     ingredientId,
     packages: sorted,
     totals: sumAmounts(sorted),
+    inDateTotals: sumAmounts(
+      sorted.filter((_, index) => states[index] !== 'PAST'),
+    ),
     pastCount: states.filter((state) => state === 'PAST').length,
     soonCount: states.filter((state) => state === 'SOON').length,
     nearest: sorted.find((pkg) => pkg.expiresAt !== null) ?? null,
@@ -331,15 +350,20 @@ export const getStockFlag = (
 };
 
 /** "3 packages · 2.4 lb in all": how many, and how much, in the order a row reads them. */
+/** How many packages and how much. Several packages with one past their date add up only the ones in date ("192 fl oz in date"), since the date's flag already names the rest; one package says its own amount. */
 export const getStockSummaryParts = (view: StockView) => {
   const count = view.packages.length;
+  const isPartlyPast = count > 1 && view.pastCount > 0;
+  const totals = isPartlyPast ? view.inDateTotals : view.totals;
   const total =
-    view.totals.length === 0
-      ? null
-      : view.totals.map(formatTotal).join(' and ');
+    totals.length === 0 ? null : totals.map(formatTotal).join(' and ');
   return [
     count > 1 ? `${count} packages` : null,
-    total === null ? null : count > 1 ? `${total} in all` : total,
+    total === null
+      ? null
+      : count > 1
+        ? `${total} ${isPartlyPast ? 'in date' : 'in all'}`
+        : total,
   ].filter((part) => part !== null);
 };
 
@@ -904,7 +928,11 @@ export const getTakeGroups = (
 
 /** "2 cup", "about 0.42 lb", "1 cup and 1.25 lb". */
 export const getTakeAmountText = (group: TakeGroup) =>
-  `${group.isConverted ? 'about ' : ''}${group.totals.map(formatTotal).join(' and ')}`;
+  group.totals
+    .map((total, index) =>
+      formatKitchenTotal(total, group.isConverted && index === 0),
+    )
+    .join(' and ');
 
 /** What was taken, in one line: "Took 2 cup rice from 1 package", or a count when it was several things. */
 export const getTakenHeadline = (groups: TakeGroup[]) => {
@@ -1072,6 +1100,7 @@ export const planTakeOut = (
 
 export type LineStock =
   | { kind: 'NONE' }
+  | { kind: 'STAPLE' }
   | { kind: 'PAST' }
   | { kind: 'OTHER' }
   | {
@@ -1085,15 +1114,22 @@ export type LineStock =
       isConverted: boolean;
     };
 
-/** How a recipe line stands against the pantry. What counts is in-stock packages not past their date, measured in the line's own kind of unit or, where the ingredient's own weight per cup or per piece bridges them, in grams. With nothing to bridge, an amount of another kind can't prove there is enough, and a line with no amount ("to taste") is met by having any. */
+/** How a recipe line stands against the pantry. What counts is in-stock packages not past their date, measured in the line's own kind of unit or, where the ingredient's own weight per cup or per piece bridges them, in grams. With nothing to bridge, an amount of another kind can't prove there is enough, and a line with no amount ("to taste") is met by having any. Nothing in the pantry of something most kitchens keep at home (salt, oil, water) is `STAPLE`, not `NONE`: the pantry is only partly tracked, so its absence says nothing. */
 export const getLineStock = (
   line: { ingredientId?: string; amount: number | null; unit: Unit },
   packages: Package[] | undefined,
   now = Date.now(),
   conversions: Conversions = { gramsPerMl: null, gramsEach: null },
+  ingredient?: Pick<ResolvedIngredient, 'id' | 'familyId'>,
 ): LineStock => {
   const inStock = (packages ?? []).filter((pkg) => pkg.status === 'IN_STOCK');
-  if (inStock.length === 0) return { kind: 'NONE' };
+  if (inStock.length === 0) {
+    const isStaple = isUsuallyAtHome({
+      ingredientId: line.ingredientId ?? '',
+      section: getShopSection(ingredient),
+    });
+    return isStaple ? { kind: 'STAPLE' } : { kind: 'NONE' };
+  }
 
   const usable = inStock.filter(
     (pkg) => getPackageState(pkg.expiresAt, now) !== 'PAST',
@@ -1133,11 +1169,13 @@ export const getLineStockText = (stock: LineStock) => {
     case 'HAVE':
       return 'You have it';
     case 'SOME':
-      return `You have ${stock.isConverted ? 'about ' : ''}${formatTotal(stock.have)}`;
+      return `You have ${formatKitchenTotal(stock.have, stock.isConverted)}`;
     case 'OTHER':
       return 'In your pantry';
     case 'PAST':
       return 'Past its date';
+    case 'STAPLE':
+      return 'Usually at home';
     default:
       return 'Not in your pantry';
   }
@@ -1156,10 +1194,12 @@ export const getLineMarkers = (
 ): LineMarkers => {
   const isPresent = (stock: LineStock) =>
     stock.kind === 'HAVE' || stock.kind === 'SOME' || stock.kind === 'OTHER';
-  const present = entries.filter((entry) => isPresent(entry.stock)).length;
-  const absent = entries.filter((entry) => entry.stock.kind === 'NONE').length;
+  const counted = entries.filter((entry) => entry.stock.kind !== 'STAPLE');
+  const present = counted.filter((entry) => isPresent(entry.stock)).length;
+  const absent = counted.filter((entry) => entry.stock.kind === 'NONE').length;
   const flagsAbsent = present >= absent;
   const getText = (stock: LineStock) => {
+    if (stock.kind === 'STAPLE') return null;
     if (stock.kind === 'PAST') return getLineStockText(stock);
     if (flagsAbsent)
       return stock.kind === 'NONE' ? getLineStockText(stock) : null;
@@ -1168,7 +1208,7 @@ export const getLineMarkers = (
   return {
     byId: new Map(entries.map((entry) => [entry.id, getText(entry.stock)])),
     summary:
-      present === 0 ? null : `${present} of ${entries.length} in your pantry`,
+      present === 0 ? null : `${present} of ${counted.length} in your pantry`,
   };
 };
 

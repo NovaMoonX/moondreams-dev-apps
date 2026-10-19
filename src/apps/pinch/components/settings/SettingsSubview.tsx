@@ -16,12 +16,12 @@ function SettingsSubview({ uid }: SettingsSubviewProps) {
   return (
     <Subview title='Settings' onClose={closeSubview}>
       <div className='space-y-5'>
-        <IntroCard
-          icon='🧂'
-          lead='What Pinch reminds you about, how long leftovers keep, and photo ideas.'
-        >
+        <div className='[@media(max-height:699px)]:hidden'>
+          <IntroCard icon='🧂' lead='Changes save as you make them.' />
+        </div>
+        <p className='text-muted-foreground hidden text-sm [@media(max-height:699px)]:block'>
           Changes save as you make them.
-        </IntroCard>
+        </p>
         <RemindersSection uid={uid} />
         <KeepingSection uid={uid} />
         <PhotosSection uid={uid} />

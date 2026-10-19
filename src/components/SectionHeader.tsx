@@ -11,21 +11,25 @@ const HIT_AREA =
 interface SectionHeaderProps {
   title: string;
   subtitle?: string;
+  /** Controls in the subtitle's place, for a header whose row is better spent on them than on a sentence. */
+  lead?: ReactNode;
   action?: ReactNode;
 }
 
-function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
+function SectionHeader({ title, subtitle, lead, action }: SectionHeaderProps) {
   const subviewTitle = useContext(SubviewTitleContext);
 
   // A subview's header already shows this title, so only the subtitle and the action remain.
   if (subviewTitle === title) {
-    if (!subtitle && !action) {
+    if (!subtitle && !lead && !action) {
       return null;
     }
 
     return (
       <div className='flex items-center justify-between gap-3'>
-        <p className='text-muted-foreground min-w-0 text-sm'>{subtitle}</p>
+        {lead ?? (
+          <p className='text-muted-foreground min-w-0 text-sm'>{subtitle}</p>
+        )}
         {action && <div className={HIT_AREA}>{action}</div>}
       </div>
     );

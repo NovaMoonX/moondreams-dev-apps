@@ -1258,6 +1258,36 @@ Opening the Photo row of a new recipe shows six pictures found by searching the 
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editor was measured at 390×844, 375×667, 320×568, 844×390 and 1280×900 in light and dark.
 - [ ] Nothing has to exist in production before the merge; the README says how to turn Google on.
 
+### Issue 47: Kitchen, fridge, pantry and first runs: the review's fixes, and Recipes' bulk collections and star
+
+**Prerequisites:** Issue 26, Issue 41, Issue 46
+**Target PR Size:** ~2,600 lines (the fridge's list and header, the Kitchen front, the Recipes selection mode and its sheet, two thunks, the star, the rules key, an `EmptyCard` and a `HeaderIconButton`, checks and docs)
+**Files:**
+- `ContainersSubview.tsx`, `utils/containers.ts` (`getLandingPlace`, `getSharedPlace`, `getPlacedTitle`, `getSelectionNote`, `BulkAction.isEitherPlace`), `src/components/SelectionBar.tsx`, `SectionHeader.tsx` (`lead`), `HeaderIconButton.tsx`
+- `KitchenScreen.tsx`, `PantrySubview.tsx`, `PantryFromShoppingSheet.tsx`, `PackageFields.tsx`, `SettingsSubview.tsx`, `PillGroup.tsx`, `FilterBar.tsx`, `EmptyCard.tsx`, `CalendarScreen.tsx`, `RecipesScreen.tsx`, `ShoppingScreen.tsx`
+- `RecipeRow.tsx` (star and tick), `AddToCollectionSheet.tsx`, `useAddToCollections.ts`, `useRecipeFavorite.ts`, `collectionActions.ts` (`addRecipesToCollections`, `undoAddToCollections`), `recipeActions.ts` (`setRecipeFavorite`), `utils/collections.ts`, `Recipe.isFavorite`, `firestore.rules`
+- `utils/packages.ts` (`STAPLE` line stock, kitchen amounts, in-date totals), `usePantryTake.ts`, `CONTAINER_FRIDGE_DAYS`, the seeds, `scripts/checks/pinchFridge.ts`, `pinchPantry.ts`, `pinchOrganize.ts`
+
+**Context:** The round 8 product and design reviews of the stack's head. Read CLAUDE.md's "Design & UX" (the insight budget, one door per row, "A control added to a header row is checked at 320px") and `JOURNEYS.md` §4.1 and §4.2.
+
+### Description
+Fridge & freezer's past-its-date row counts both places, so it says what Kitchen's tile says, and the screen opens on the place holding more boxes that want a look; its header loses the subtitle and the 56px tile (a 🕘 icon instead). Kitchen's front is two tiles and header icons (Stores & prices, Settings, a shrinking "+ New ingredient"), and the first runs of Recipes, Shopping, Calendar and Kitchen are one tinted card. Recipes gets Select with "Add to a collection" and a star. The pantry step-through asks how much was bought, recipe lines leave the staples out of "Not in your pantry", cooking's Take out says at once that offline can't, and the fridge starts at 3 days.
+
+### Possible Approach
+1. Pure helpers with check cases (the landing place, the shared place, the add and remove plans, the in-date totals, the staple line stock), mutation-tested.
+2. `isFavorite` read as false when missing, written only by the star, rules additive; the bulk add re-reads each recipe in a transaction per 200, merges under the cap and undoes only what it added.
+3. Header icons with 40px tap areas from a pseudo-element, and every first run a tinted card.
+
+### CRUD & Entry-Point Requirements
+- [x] **Create / Read / Update / Delete:** star and unstar a recipe; add many recipes to existing or new collections and undo it.
+- [x] **Entry points:** the Recipes header's Select icon (from two recipes) and the row's star; Kitchen's header storefront icon; Fridge & freezer's header 🕘 icon.
+
+### Success Criteria
+- [x] A recipe written before the star (no `isFavorite`) reads, edits, stars and joins a bulk add, checked in the browser and on the emulator; the rules matrix shows only the owner's star and a create with the key as new allows.
+- [x] Kitchen to cleared in three taps (the tile, "Toss them", the confirm) with the tile's count and the landing's row agreeing.
+- [x] The first ingredient row is visible at 320×568 on Kitchen; first-row shares printed at 390×844, 375×667, 390×560, 320×568 and 844×390 before and after.
+- [x] `npx tsc -b --force`, `npx eslint`, `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass.
+
 ## Beyond
 
 ### Issue 34: Hands-free voice navigation in cooking mode

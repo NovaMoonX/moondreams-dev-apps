@@ -133,12 +133,12 @@ function FilterBar({
         onClick={() => setIsOpen(false)}
       >
         {compactDoneLabel ? (
-          <>
+          <span className='contents'>
             <span className='truncate max-[360px]:hidden'>{doneLabel}</span>
             <span className='truncate min-[361px]:hidden'>
               {compactDoneLabel}
             </span>
-          </>
+          </span>
         ) : (
           <span className='truncate'>{doneLabel}</span>
         )}

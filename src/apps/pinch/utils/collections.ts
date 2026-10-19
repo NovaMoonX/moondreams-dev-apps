@@ -1,3 +1,4 @@
+import { formatList } from '@/utils/formatUtils';
 import {
   COLLECTION_BATCH_SIZE,
   COLLECTION_FILTER_ANY,
@@ -339,3 +340,114 @@ export const withoutCollection = (ids: unknown, collectionId: string) => {
 
   return result;
 };
+
+/** What adding some collections to one recipe writes, read from the stored list (a recipe written before collections has none): `next` is null when nothing changes. Collections go in the order given until the recipe's cap, and `isAtCap` says some were left out for it. */
+export const planAddToCollections = (
+  stored: unknown,
+  ids: readonly string[],
+  cap: number = MAX_RECIPE_COLLECTIONS,
+) => {
+  const current = Array.isArray(stored)
+    ? stored.filter((id): id is string => typeof id === 'string')
+    : [];
+  const missing = [...new Set(ids)].filter((id) => !current.includes(id));
+  const added = missing.slice(0, Math.max(0, cap - current.length));
+  const result = {
+    next: added.length > 0 ? [...current, ...added] : null,
+    added,
+    isAtCap: missing.length > added.length,
+  };
+
+  return result;
+};
+
+/** What an Undo writes: only the ids the act added, taken from whatever the list is now; null when none of them is still there. */
+export const planRemoveFromCollections = (
+  stored: unknown,
+  added: readonly string[],
+) => {
+  if (!Array.isArray(stored)) return null;
+  if (!added.some((id) => stored.includes(id))) return null;
+  const result = stored.filter((id) => !added.includes(id));
+
+  return result;
+};
+
+export interface AddedToCollections {
+  /** The names of the collections the recipes went into. */
+  labels: string[];
+  changed: number;
+  /** Recipes that already had every one of them. */
+  alreadyIn: number;
+  /** Recipes that could not take one or more for being in the most a recipe can be in. */
+  atCap: number;
+  /** Recipes deleted since they were ticked. */
+  gone: number;
+}
+
+const getRecipeCount = (count: number) =>
+  `${count} ${count === 1 ? 'recipe' : 'recipes'}`;
+
+/** What the act left alone and why, as sentences; empty when it left nothing. */
+const getLeftAloneSentences = ({
+  labels,
+  alreadyIn,
+  atCap,
+  gone,
+}: AddedToCollections) =>
+  [
+    alreadyIn > 0 &&
+      `${alreadyIn === 1 ? '1 was' : `${alreadyIn} were`} already in ${labels.length === 1 ? 'it' : 'them'}.`,
+    atCap > 0 &&
+      `${atCap === 1 ? '1 is' : `${atCap} are`} in ${MAX_RECIPE_COLLECTIONS} ${COLLECTION_NOUN_PLURAL}, the most a recipe can be in.`,
+    gone > 0 && `${gone === 1 ? '1 was' : `${gone} were`} deleted.`,
+  ].filter((sentence) => sentence !== false);
+
+const getLabelsText = (labels: string[]) =>
+  labels.length <= 2
+    ? formatList(labels)
+    : `${labels[0]}, ${labels[1]} and ${labels.length - 2} more`;
+
+/** The toast over a bulk add's Undo, in the count it really wrote, with what it left alone in one line. */
+export const getAddedToCollectionsText = (result: AddedToCollections) => {
+  const sentences = getLeftAloneSentences(result);
+
+  return {
+    title: `Added ${getRecipeCount(result.changed)} to ${getLabelsText(result.labels)}`,
+    description: sentences.length > 0 ? sentences.join(' ') : null,
+  };
+};
+
+/** What the sheet says, staying open, when the act changed nothing. */
+export const getNothingAddedText = (result: AddedToCollections) => {
+  const sentences = getLeftAloneSentences(result);
+
+  return sentences.length > 0
+    ? `Nothing was added. ${sentences.join(' ')}`
+    : `Nothing was added to ${getLabelsText(result.labels)}.`;
+};
+
+export const getRecipeSelectionTitle = (count: number) =>
+  count === 0 ? 'Select recipes' : `${count} selected`;
+
+/** The word the sheet's primary button carries for how many recipes it adds. */
+export const getAddToCollectionsLabel = (count: number) =>
+  `Add ${getRecipeCount(count)}`;
+
+export const getChunks = <T>(
+  items: readonly T[],
+  size: number = COLLECTION_BATCH_SIZE,
+) =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size),
+  );
+
+/** What an Undo says when it could not take the act back from every recipe; null when it did, which needs no words. */
+export const getUndoAddText = (restored: number, total: number) =>
+  restored === total
+    ? null
+    : `Took it back from ${restored} of ${getRecipeCount(total)}; the rest changed since.`;
+
+/** Why the footer's action is off, beside it; null while something is ticked. */
+export const getRecipeSelectionNote = (count: number) =>
+  count === 0 ? 'Tap the recipes you want to add.' : null;

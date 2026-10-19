@@ -621,7 +621,7 @@ export const MAX_CONTAINER_TITLE_LENGTH = 120;
 // 2000-01-01 and 2100-01-01, UTC midnight: the bounds the rules take.
 export const MIN_EAT_BY_DATE = 946_684_800_000;
 export const MAX_EAT_BY_DATE = 4_102_444_800_000;
-export const CONTAINER_FRIDGE_DAYS = 4;
+export const CONTAINER_FRIDGE_DAYS = 3;
 export const CONTAINER_FREEZER_DAYS = 90;
 export const CONTAINER_THAWED_DAYS = 2;
 /** Due today or tomorrow: a wider window tints most of a box's life and stops meaning "eat it now". */

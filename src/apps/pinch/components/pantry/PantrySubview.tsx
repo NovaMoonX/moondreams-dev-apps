@@ -12,6 +12,7 @@ import {
   Utensils,
 } from 'lucide-react';
 
+import HeaderIconButton from '@/components/HeaderIconButton';
 import IntroCard from '@/components/IntroCard';
 import Pill from '@/components/Pill';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
@@ -506,7 +507,7 @@ function PantrySubview({
           variant='secondary'
           size='sm'
           rounded='full'
-          className="relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']"
+          className="relative h-7 px-3 after:absolute after:-inset-1.5 after:content-[''] [@media(max-height:699px)]:hidden"
           onClick={selection.exit}
         >
           Cancel
@@ -514,20 +515,13 @@ function PantrySubview({
       );
     }
     return (
-      <div className='flex items-center gap-2'>
+      <div className='flex items-center gap-3'>
         {canSelect && (
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            rounded='full'
-            className="relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
-            aria-label='Select packages'
-            title='Select packages'
+          <HeaderIconButton
+            icon={<ListChecks className='h-4 w-4' aria-hidden='true' />}
+            label='Select packages'
             onClick={selection.start}
-          >
-            <ListChecks className='h-4 w-4' aria-hidden='true' />
-          </Button>
+          />
         )}
         <Button
           type='button'
@@ -544,6 +538,50 @@ function PantrySubview({
       </div>
     );
   };
+
+  const selectPills = isSelecting &&
+    isListShown &&
+    shownPackages.length > 0 && (
+      <div
+        role='group'
+        aria-label='Select several at once'
+        className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2'
+      >
+        {pastBoxes.length > 0 && (
+          <Pill
+            isThin
+            isSelected={isEveryTicked(pastBoxes)}
+            icon={
+              isEveryTicked(pastBoxes) ? (
+                <Check className='h-3 w-3' aria-hidden='true' />
+              ) : undefined
+            }
+            onClick={() => toggleAll(pastBoxes)}
+          >
+            {isBelow('sm')
+              ? 'All past their date'
+              : 'Select all past their date'}
+          </Pill>
+        )}
+        <Pill
+          isThin
+          isSelected={isEveryTicked(shownPackages)}
+          icon={
+            isEveryTicked(shownPackages) ? (
+              <Check className='h-3 w-3' aria-hidden='true' />
+            ) : undefined
+          }
+          onClick={() => toggleAll(shownPackages)}
+        >
+          {isBelow('sm') ? 'All shown' : 'Select all shown'}
+        </Pill>
+      </div>
+    );
+  const isIntroShown =
+    isListShown &&
+    !isSelecting &&
+    packages.length > 0 &&
+    ingredientCount <= PANTRY_INTRO_MAX_INGREDIENTS;
 
   const viewOptions: PillOption<'ALL' | PackagePlace>[] = [
     {
@@ -565,22 +603,20 @@ function PantrySubview({
       onBack={isSelecting ? selection.exit : undefined}
     >
       <div className='space-y-4'>
-        {isListShown &&
-          !isSelecting &&
-          packages.length > 0 &&
-          ingredientCount <= PANTRY_INTRO_MAX_INGREDIENTS && (
-            <IntroCard icon='🥫' lead='What you have on hand.'>
-              Each package keeps its own amount and date, so two cartons of milk
-              can run out on different days.
-            </IntroCard>
-          )}
+        {isIntroShown && (
+          <IntroCard icon='🥫' lead='What you have on hand.'>
+            Each package keeps its own amount and date, so two cartons of milk
+            can run out on different days.
+          </IntroCard>
+        )}
         <SectionHeader
           title={title}
           subtitle={
-            isSelecting
-              ? 'Use up, toss or move several at once.'
+            isSelecting || isIntroShown
+              ? undefined
               : 'What is on hand, and when to use it by.'
           }
+          lead={selectPills || undefined}
           action={getHeaderAction()}
         />
         {hasSwitch && (
@@ -599,42 +635,6 @@ function PantrySubview({
           <p role='status' className='sr-only'>
             {getPackageSelectionTitle(selectedPackages.length)}
           </p>
-        )}
-        {isSelecting && isListShown && shownPackages.length > 0 && (
-          <div
-            role='group'
-            aria-label='Select several at once'
-            className='flex flex-wrap items-center gap-x-2 gap-y-4'
-          >
-            {pastBoxes.length > 0 && (
-              <Pill
-                isThin
-                isSelected={isEveryTicked(pastBoxes)}
-                icon={
-                  isEveryTicked(pastBoxes) ? (
-                    <Check className='h-3 w-3' aria-hidden='true' />
-                  ) : undefined
-                }
-                onClick={() => toggleAll(pastBoxes)}
-              >
-                {isBelow('sm')
-                  ? 'All past their date'
-                  : 'Select all past their date'}
-              </Pill>
-            )}
-            <Pill
-              isThin
-              isSelected={isEveryTicked(shownPackages)}
-              icon={
-                isEveryTicked(shownPackages) ? (
-                  <Check className='h-3 w-3' aria-hidden='true' />
-                ) : undefined
-              }
-              onClick={() => toggleAll(shownPackages)}
-            >
-              {isBelow('sm') ? 'All shown' : 'Select all shown'}
-            </Pill>
-          </div>
         )}
         {hasSearch && isListShown && (
           <SearchInput

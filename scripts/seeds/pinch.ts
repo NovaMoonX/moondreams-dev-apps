@@ -742,6 +742,8 @@ const FOR_THE_SAUCE = 'For the sauce';
 const SEED_RECIPES = [
   {
     id: 'seed-pinch-recipe-adobo',
+    // Alex starred two recipes; nachos and the chili have no `isFavorite` key, the shape from before the star.
+    isFavorite: true,
     title: 'Adobo chicken',
     description: 'Sticky, tangy chicken thighs braised in soy and vinegar.',
     servings: 4,
@@ -805,6 +807,7 @@ const SEED_RECIPES = [
   },
   {
     id: 'seed-pinch-recipe-rice',
+    isFavorite: true,
     title: 'Cilantro lime rice',
     description: null,
     servings: 4,

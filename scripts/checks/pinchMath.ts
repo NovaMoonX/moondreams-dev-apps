@@ -2991,7 +2991,7 @@ assert.deepEqual(
     preset.isFromRecipe,
   ]),
   [
-    [4, 4 * DAY, false],
+    [3, 3 * DAY, false],
     [90, 90 * DAY, false],
     [2, 2 * DAY, false],
   ],
@@ -9865,7 +9865,7 @@ assert.equal(
 {
   assert.deepEqual(
     stgUsual(null),
-    { fridge: 4, freezer: 90 },
+    { fridge: 3, freezer: 90 },
     'a person with no settings document gets the built-in days',
   );
   assert.deepEqual(
@@ -9873,7 +9873,7 @@ assert.equal(
     { fridge: 5, freezer: 90 },
     'a field the person never chose keeps the built-in number',
   );
-  assert.deepEqual(stgBuiltIn, { fridge: 4, freezer: 90 });
+  assert.deepEqual(stgBuiltIn, { fridge: 3, freezer: 90 });
 
   const usual = { fridge: 5, freezer: 120 };
   const fridge = getEatByDefault('FRIDGE', null, lateOnThe14th, null, usual);

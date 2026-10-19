@@ -47,21 +47,51 @@ const moveTo = <T,>(list: readonly T[], from: number, to: number) => {
   return result;
 };
 
-/** A row of wrapping pills — the container every pick-one or pick-several option row shares. */
+const SCROLL_PEEK_PX = 8;
+
+/** A row of wrapping pills — the container every pick-one or pick-several option row shares. A scrolling row stays one line at any width and keeps the chosen pill in view. */
 export function PillRow({
   label,
   children,
   isThin = false,
+  isScrolling = false,
+  scrollKey,
 }: {
   label: string;
   children: ReactNode;
   isThin?: boolean;
+  isScrolling?: boolean;
+  /** Changes when the chosen pill does, so a scrolling row brings it into view then and not on every render. */
+  scrollKey?: string;
 }) {
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    const chosen = row?.querySelector('[aria-pressed="true"]');
+    if (!isScrolling || !row || !chosen) {
+      return;
+    }
+    const rowBox = row.getBoundingClientRect();
+    const chosenBox = chosen.getBoundingClientRect();
+    if (chosenBox.left < rowBox.left) {
+      row.scrollLeft -= rowBox.left - chosenBox.left + SCROLL_PEEK_PX;
+    } else if (chosenBox.right > rowBox.right) {
+      row.scrollLeft += chosenBox.right - rowBox.right + SCROLL_PEEK_PX;
+    }
+  }, [isScrolling, scrollKey]);
+
   return (
     <div
+      ref={rowRef}
       role='group'
       aria-label={label}
-      className={join('flex flex-wrap', isThin ? 'gap-x-2 gap-y-4' : 'gap-2')}
+      className={join(
+        'flex',
+        isScrolling
+          ? '-my-2 [scrollbar-width:none] gap-x-2 overflow-x-auto py-2 [&::-webkit-scrollbar]:hidden'
+          : join('flex-wrap', isThin ? 'gap-x-2 gap-y-4' : 'gap-2'),
+      )}
     >
       {children}
     </div>
@@ -96,6 +126,7 @@ export function PillOptions<T extends string>({
   showAll: wantsAll = false,
 }: PillOptionsProps<T>) {
   const showAll = wantsAll && options.length <= SEARCH_THRESHOLD;
+  const isScrolling = isThin && options.some((option) => option.detail);
   const [query, setQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [fit, setFit] = useState<Fit | null>(null);
@@ -218,7 +249,14 @@ export function PillOptions<T extends string>({
         }
       >
         <div ref={contentRef}>
-          <PillRow label={label} isThin={isThin}>
+          <PillRow
+            label={label}
+            isThin={isThin}
+            isScrolling={isScrolling}
+            scrollKey={
+              visible.find((option) => isSelected(option.value))?.value
+            }
+          >
             {leading}
             {visible.map((option) => (
               <Pill
@@ -229,6 +267,7 @@ export function PillOptions<T extends string>({
                 isSelected={isSelected(option.value)}
                 className={join(
                   option.detail &&
+                    !isScrolling &&
                     'max-[359px]:h-auto! max-[359px]:min-h-8! max-[359px]:py-0.5!',
                 )}
                 onClick={() => {
@@ -240,12 +279,27 @@ export function PillOptions<T extends string>({
                 }}
               >
                 {option.detail ? (
-                  <span className='flex min-w-0 items-center gap-x-1 max-[359px]:flex-col max-[359px]:items-start max-[359px]:gap-y-0 max-[359px]:leading-tight'>
+                  <span
+                    className={join(
+                      'flex min-w-0 items-center gap-x-1',
+                      !isScrolling &&
+                        'max-[359px]:flex-col max-[359px]:items-start max-[359px]:gap-y-0 max-[359px]:leading-tight',
+                    )}
+                  >
                     <span className='truncate'>{option.label}</span>
-                    <span aria-hidden='true' className='max-[359px]:hidden'>
+                    <span
+                      aria-hidden='true'
+                      className={join(!isScrolling && 'max-[359px]:hidden')}
+                    >
                       ·
                     </span>
-                    <span className='truncate max-[359px]:text-[11px] max-[359px]:opacity-80'>
+                    <span
+                      className={join(
+                        'truncate',
+                        !isScrolling &&
+                          'max-[359px]:text-[11px] max-[359px]:opacity-80',
+                      )}
+                    >
                       {option.detail}
                     </span>
                   </span>

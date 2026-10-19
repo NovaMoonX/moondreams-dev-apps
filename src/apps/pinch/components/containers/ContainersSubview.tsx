@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 
-import EntryTile from '@/components/EntryTile';
+import HeaderIconButton from '@/components/HeaderIconButton';
 import IntroCard from '@/components/IntroCard';
 import LabelChip from '@/components/LabelChip';
 import Pill from '@/components/Pill';
@@ -72,14 +72,16 @@ import {
   getBulkNames,
   getClearOutMessage,
   getContainerTitle,
-  getEatByState,
   getFinishedDoor,
   getFinishedRead,
+  getLandingPlace,
   getNamesLine,
   getPastDueBoxes,
   getPastDueText,
+  getPlacedTitle,
   getSelectionNote,
   getSelectionTitle,
+  getSharedPlace,
   getTossAction,
   getTossConfirmNote,
   getTossConfirmTitle,
@@ -248,7 +250,18 @@ function ContainersSubview({
     () => containers.filter(isOfScope),
     [containers, isOfScope],
   );
-  const trimmed = inScope.length >= LIST_SEARCH_THRESHOLD ? query.trim() : '';
+  const landingPlace = useMemo(() => getLandingPlace(inScope), [inScope]);
+  const basePlace = pick ?? landingPlace;
+  const basePlaceRowCount = useMemo(
+    () =>
+      groupBatches(inScope.filter((container) => container.place === basePlace))
+        .length,
+    [inScope, basePlace],
+  );
+  const hasSearch =
+    !isFinishedView &&
+    (basePlaceRowCount >= LIST_SEARCH_THRESHOLD || query.trim() !== '');
+  const trimmed = hasSearch ? query.trim() : '';
 
   const shown = useMemo(
     () =>
@@ -276,26 +289,9 @@ function ContainersSubview({
     [byPlace],
   );
 
-  const dueFirstPlace = useMemo<ContainerPlace>(() => {
-    const first = inScope
-      .filter(
-        (container) =>
-          container.status === 'IN_STOCK' &&
-          getEatByState(container.eatBy) !== 'LATER',
-      )
-      .reduce<Container | null>(
-        (soonest, container) =>
-          soonest === null || container.eatBy < soonest.eatBy
-            ? container
-            : soonest,
-        null,
-      );
-    return first?.place ?? 'FRIDGE';
-  }, [inScope]);
-
-  // Until the person picks, the place holding what is due first; while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
+  // Until the person picks, the place holding more of what wants a look; while a search is typed, an empty place gives way to the other one; a place they picked stays, even empty.
   const getShownPlace = (): ContainerPlace => {
-    const preferred = pick ?? dueFirstPlace;
+    const preferred = basePlace;
     const other = preferred === 'FRIDGE' ? 'FREEZER' : 'FRIDGE';
     const isAuto = pick === null || trimmed !== '';
     if (byPlace[preferred].length > 0 || !isAuto) return preferred;
@@ -400,8 +396,8 @@ function ContainersSubview({
 
   const isSelecting = selection.isActive;
   const shownBoxes = byPlace[shownPlace];
-  const pastBoxes = useMemo(() => getPastDueBoxes(shownBoxes), [shownBoxes]);
-  const selectedBoxes = shownBoxes.filter((box) => selection.ids.has(box.id));
+  const pastBoxes = useMemo(() => getPastDueBoxes(shown), [shown]);
+  const selectedBoxes = shown.filter((box) => selection.ids.has(box.id));
   const toggleBoxes = selection.toggle;
   const handleToggle = useCallback(
     (boxes: Container[]) => toggleBoxes(boxes.map(({ id }) => id)),
@@ -411,7 +407,10 @@ function ContainersSubview({
     getContainerTitle(box, recipesById, mealsById);
 
   const confirmToss = (boxes: Container[]) => {
-    const { lines, more } = getBulkNames(groupBatches(boxes), getTitleOf);
+    const isInBoth = getSharedPlace(boxes) === null;
+    const { lines, more } = getBulkNames(groupBatches(boxes), (box) =>
+      isInBoth ? getPlacedTitle(getTitleOf(box), box.place) : getTitleOf(box),
+    );
     return confirm({
       title: getTossConfirmTitle(boxes.length),
       message: (
@@ -462,11 +461,13 @@ function ContainersSubview({
   ) => {
     if (acting !== null || boxes.length === 0) return;
 
-    const place = shownPlace;
+    const place =
+      kind === 'MOVE' ? (getSharedPlace(boxes) ?? shownPlace) : shownPlace;
     const action: BulkAction = {
       kind,
       from: place,
       isPastOnly,
+      isEitherPlace: kind !== 'MOVE',
       cares: kind === 'MOVE' ? getCares(boxes) : undefined,
     };
     if (kind === 'TOSS' && !(await confirmToss(boxes))) return;
@@ -690,7 +691,7 @@ function ContainersSubview({
   const isListShown = isReady && loadError === null;
   const isWhole = isListShown && !isScoped && trimmed === '';
   const canClear = isWhole && shownBoxes.length > 0;
-  const canSelect = isListShown && !isFinishedView && shownBoxes.length >= 2;
+  const canSelect = isListShown && !isFinishedView && shown.length >= 2;
   const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
   const hasPastDueRow =
     isWhole && !isFinishedView && !isSelecting && pastBoxes.length > 0;
@@ -706,7 +707,6 @@ function ContainersSubview({
     ),
     expectsDoor: !isScoped && hasSeen,
   });
-  const isDoorShown = !isSelecting;
   const getTitle = () => {
     if (isSelecting) return getSelectionTitle(selectedBoxes.length);
     return isFinishedView ? 'What you finished' : 'Fridge & freezer';
@@ -719,7 +719,14 @@ function ContainersSubview({
   };
 
   const placeWord = CONTAINER_PLACE_LABELS[shownPlace].toLowerCase();
-  const isToFreezer = shownPlace === 'FRIDGE';
+  const tickedPlace = getSharedPlace(selectedBoxes);
+  const movePlace = tickedPlace ?? shownPlace;
+  const isToFreezer = movePlace === 'FRIDGE';
+  const canMove = selectedBoxes.length === 0 || tickedPlace !== null;
+  const tickedCounts = {
+    fridge: selectedBoxes.filter((box) => box.place === 'FRIDGE').length,
+    freezer: selectedBoxes.filter((box) => box.place === 'FREEZER').length,
+  };
   const isNarrowed = isScoped || trimmed !== '';
   const isNothingTicked = selectedBoxes.length === 0;
   const isBlocked = isNothingTicked || acting !== null;
@@ -740,12 +747,46 @@ function ContainersSubview({
       : `Select all in the ${placeWord}`;
   };
 
-  const getSubtitle = () => {
-    if (isFinishedView) return undefined;
-    return isSelecting
-      ? 'Eat, toss or move several at once.'
-      : 'Put away, with what to eat first.';
-  };
+  const selectPills = isSelecting &&
+    isListShown &&
+    (pastBoxes.length > 0 || shownBoxes.length > 0) && (
+      <div
+        role='group'
+        aria-label='Select several at once'
+        className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2'
+      >
+        {pastBoxes.length > 0 && (
+          <Pill
+            isThin
+            isSelected={isEveryTicked(pastBoxes)}
+            icon={
+              isEveryTicked(pastBoxes) ? (
+                <Check className='h-3 w-3' aria-hidden='true' />
+              ) : undefined
+            }
+            onClick={() => toggleAll(pastBoxes)}
+          >
+            {isBelow('sm')
+              ? 'All past their date'
+              : 'Select all past their date'}
+          </Pill>
+        )}
+        {shownBoxes.length > 0 && (
+          <Pill
+            isThin
+            isSelected={isEveryTicked(shownBoxes)}
+            icon={
+              isEveryTicked(shownBoxes) ? (
+                <Check className='h-3 w-3' aria-hidden='true' />
+              ) : undefined
+            }
+            onClick={() => toggleAll(shownBoxes)}
+          >
+            {getSelectAllLabel()}
+          </Pill>
+        )}
+      </div>
+    );
 
   const getHeaderAction = () => {
     if (isFinishedView) return false;
@@ -756,7 +797,7 @@ function ContainersSubview({
           variant='secondary'
           size='sm'
           rounded='full'
-          className='h-7 px-3'
+          className='h-7 px-3 [@media(max-height:699px)]:hidden'
           onClick={selection.exit}
         >
           Cancel
@@ -764,34 +805,30 @@ function ContainersSubview({
       );
     }
     return (
-      <div className='flex items-center gap-2'>
+      <div className='flex items-center gap-3'>
+        {door === 'SHOW' && (
+          <HeaderIconButton
+            icon={<History className='h-4 w-4' aria-hidden='true' />}
+            label='What you finished'
+            onClick={() => switchView(true)}
+          />
+        )}
+        {door === 'HOLD' && <span className='size-7' aria-hidden='true' />}
         {canSelect && (
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            rounded='full'
-            className="relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
-            aria-label='Select boxes'
-            title='Select boxes'
+          <HeaderIconButton
+            icon={<ListChecks className='h-4 w-4' aria-hidden='true' />}
+            label='Select boxes'
             onClick={selection.start}
-          >
-            <ListChecks className='h-4 w-4' aria-hidden='true' />
-          </Button>
+          />
         )}
         {canClear && (
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            rounded='full'
-            className="border-destructive/60 text-destructive! hover:bg-destructive/10 relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
-            aria-label={`Clear out the ${placeWord}`}
-            loading={clearing === shownPlace}
+          <HeaderIconButton
+            icon={<Eraser className='h-4 w-4' aria-hidden='true' />}
+            label={`Clear out the ${placeWord}`}
+            isDestructive
+            isLoading={clearing === shownPlace}
             onClick={() => void handleClear(shownPlace)}
-          >
-            <Eraser className='h-4 w-4' aria-hidden='true' />
-          </Button>
+          />
         )}
         <Button
           type='button'
@@ -822,7 +859,7 @@ function ContainersSubview({
         )}
         <SectionHeader
           title={title}
-          subtitle={getSubtitle()}
+          lead={selectPills || undefined}
           action={getHeaderAction()}
         />
         {(hasSwitch || scopeName) && (
@@ -855,63 +892,12 @@ function ContainersSubview({
             {getSelectionTitle(selectedBoxes.length)}
           </p>
         )}
-        {isSelecting && isListShown && shownBoxes.length > 0 && (
-          <div
-            role='group'
-            aria-label='Select several at once'
-            className='flex flex-wrap items-center gap-x-2 gap-y-4'
-          >
-            {pastBoxes.length > 0 && (
-              <Pill
-                isThin
-                isSelected={isEveryTicked(pastBoxes)}
-                icon={
-                  isEveryTicked(pastBoxes) ? (
-                    <Check className='h-3 w-3' aria-hidden='true' />
-                  ) : undefined
-                }
-                onClick={() => toggleAll(pastBoxes)}
-              >
-                {isBelow('sm')
-                  ? 'All past their date'
-                  : 'Select all past their date'}
-              </Pill>
-            )}
-            <Pill
-              isThin
-              isSelected={isEveryTicked(shownBoxes)}
-              icon={
-                isEveryTicked(shownBoxes) ? (
-                  <Check className='h-3 w-3' aria-hidden='true' />
-                ) : undefined
-              }
-              onClick={() => toggleAll(shownBoxes)}
-            >
-              {getSelectAllLabel()}
-            </Pill>
-          </div>
-        )}
-        {!isFinishedView && inScope.length >= LIST_SEARCH_THRESHOLD && (
+        {hasSearch && (
           <SearchInput
             value={query}
             onChange={setQuery}
             placeholder='Search fridge and freezer'
           />
-        )}
-        {isDoorShown && door === 'SHOW' ? (
-          <nav
-            aria-label='Also in Fridge & freezer'
-            className='grid grid-cols-2 gap-3'
-          >
-            <EntryTile
-              icon={<History className='size-4' />}
-              label='What you finished'
-              onClick={() => switchView(true)}
-            />
-          </nav>
-        ) : (
-          isDoorShown &&
-          door === 'HOLD' && <div className='h-14' aria-hidden='true' />
         )}
         {hasPastDueRow && (
           <PromptRow
@@ -927,7 +913,7 @@ function ContainersSubview({
       </div>
       {isSelecting && (
         <SelectionBar
-          note={isNothingTicked ? getSelectionNote(0) : null}
+          note={getSelectionNote(selectedBoxes.length, tickedCounts)}
           actions={[
             {
               key: 'toss',
@@ -938,19 +924,25 @@ function ContainersSubview({
               isLoading: acting === 'TOSS',
               onClick: () => void handleAct('TOSS', selectedBoxes),
             },
-            {
-              key: 'move',
-              label: isToFreezer ? 'Put in the freezer' : 'Thaw in the fridge',
-              shortLabel: isToFreezer ? 'Freeze' : 'Thaw',
-              icon: isToFreezer ? (
-                <Snowflake className='h-4 w-4' aria-hidden='true' />
-              ) : (
-                <Refrigerator className='h-4 w-4' aria-hidden='true' />
-              ),
-              isDisabled: isBlocked,
-              isLoading: acting === 'MOVE',
-              onClick: () => void handleAct('MOVE', selectedBoxes),
-            },
+            ...(canMove
+              ? [
+                  {
+                    key: 'move',
+                    label: isToFreezer
+                      ? 'Put in the freezer'
+                      : 'Thaw in the fridge',
+                    shortLabel: isToFreezer ? 'Freeze' : 'Thaw',
+                    icon: isToFreezer ? (
+                      <Snowflake className='h-4 w-4' aria-hidden='true' />
+                    ) : (
+                      <Refrigerator className='h-4 w-4' aria-hidden='true' />
+                    ),
+                    isDisabled: isBlocked,
+                    isLoading: acting === 'MOVE',
+                    onClick: () => void handleAct('MOVE', selectedBoxes),
+                  },
+                ]
+              : []),
           ]}
           primary={{
             key: 'eat',

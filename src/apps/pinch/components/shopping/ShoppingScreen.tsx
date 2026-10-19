@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
+import EmptyCard from '@/components/EmptyCard';
 import EntryTile from '@/components/EntryTile';
 import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
@@ -568,10 +569,10 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     }
     if (itemCount === 0) {
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
+        <EmptyCard icon='🛒'>
           Nothing on your list. Add what you need from a recipe, a meal or a
           day, or add one here.
-        </p>
+        </EmptyCard>
       );
     }
     const isSearching = activeQuery !== '';
@@ -627,6 +628,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             key: 'clear-got',
             icon: <BrushCleaning className='h-4 w-4' />,
             label: 'Clear what you got',
+            isDestructive: true,
             isLoading: isClearing,
             onClick: () => void handleClear(),
           },

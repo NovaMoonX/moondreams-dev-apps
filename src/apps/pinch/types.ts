@@ -555,6 +555,8 @@ export interface Recipe {
   links: RecipeLink[];
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
+  /** Starred by the person: favorites list first. Recipes written before favorites lack the key, which reads as false; only the star writes it. */
+  isFavorite: boolean;
   createdAt: number;
   updatedAt: number;
 }

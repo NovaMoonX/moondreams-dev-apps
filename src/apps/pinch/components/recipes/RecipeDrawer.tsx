@@ -342,6 +342,7 @@ function RecipeDrawer({
                 gramsPerMl: ingredient?.gramsPerMl ?? null,
                 gramsEach: ingredient?.gramsEach ?? null,
               },
+              ingredient,
             ),
           ];
         }),

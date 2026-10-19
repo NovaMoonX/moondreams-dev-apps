@@ -3,7 +3,7 @@ import { memo, useMemo, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Plus, Settings, Store, Tag } from 'lucide-react';
 
-import EntryTile from '@/components/EntryTile';
+import EmptyCard from '@/components/EmptyCard';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -43,6 +43,7 @@ import {
   selectIngredientsById,
   selectProducts,
   selectProductsById,
+  selectRecipes,
   selectContainersLoadError,
   selectPackagesLoadError,
   selectShowNutrition,
@@ -112,6 +113,8 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
       state.pinch.packages.items.length > 0 ||
       selectPackagesLoadError(state) !== null,
   );
+  const hasRecipes = useAppSelector(selectRecipes).length > 0;
+  const hasStoresOrPrices = storeCount > 0 || productCount > 0;
   const trimmed = query.trim();
   const yours = useMemo(
     () =>
@@ -232,19 +235,21 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
       );
     }
     return (
-      <div className='space-y-2 py-6 text-center'>
-        <p className='text-muted-foreground text-sm'>
-          Ingredients you add or adjust will show up here.
-        </p>
-        <Button
-          type='button'
-          variant='secondary'
-          className='h-10'
-          onClick={() => setView('all')}
-        >
-          Browse every ingredient
-        </Button>
-      </div>
+      <EmptyCard
+        icon='🥕'
+        action={
+          <Button
+            type='button'
+            variant='secondary'
+            className='h-10'
+            onClick={() => setView('all')}
+          >
+            Browse every ingredient
+          </Button>
+        }
+      >
+        Ingredients you add or adjust will show up here.
+      </EmptyCard>
     );
   };
 
@@ -254,34 +259,50 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
         <SectionHeader
           title='Kitchen'
           action={
-            <div className='flex items-center gap-1'>
-              <Button
-                type='button'
-                variant='tertiary'
-                size='icon'
-                rounded='full'
-                aria-label='Settings'
-                title='Settings'
-                className='size-10 shrink-0 p-0'
-                onClick={() => openSubview({ kind: 'settings' })}
-              >
-                <Settings className='h-5 w-5' aria-hidden='true' />
-              </Button>
+            <div className='flex items-center gap-1 max-[359px]:gap-2'>
+              {hasStoresOrPrices && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='icon'
+                  rounded='full'
+                  aria-label='Stores & prices'
+                  title='Stores & prices'
+                  className='size-10 shrink-0 p-0'
+                  onClick={() => openSubview({ kind: 'products' })}
+                >
+                  <Store className='h-5 w-5' aria-hidden='true' />
+                </Button>
+              )}
+              {(hasRecipes || hasPrepared || hasPantry) && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='icon'
+                  rounded='full'
+                  aria-label='Settings'
+                  title='Settings'
+                  className='size-10 shrink-0 p-0'
+                  onClick={() => openSubview({ kind: 'settings' })}
+                >
+                  <Settings className='h-5 w-5' aria-hidden='true' />
+                </Button>
+              )}
               <Button
                 type='button'
                 size='sm'
                 rounded='full'
-                className='gap-1'
+                className="relative gap-1 whitespace-nowrap after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] max-[359px]:size-7 max-[359px]:gap-0 max-[359px]:p-0 max-[359px]:after:-inset-x-1.5"
                 onClick={() => setOverlay({ kind: 'form', id: null })}
               >
                 <Plus className='h-4 w-4' aria-hidden='true' />
-                New ingredient
+                <span className='max-[359px]:sr-only'>New ingredient</span>
               </Button>
             </div>
           }
         />
-        <p className='text-muted-foreground -mt-1 text-sm'>
-          Your ingredients, fridge and freezer, and prices.
+        <p className='text-muted-foreground -mt-1 text-sm [@media(max-height:699px)]:hidden'>
+          Ingredients, pantry, fridge and freezer, and prices.
         </p>
       </div>
       {isFirstRun ? (
@@ -364,24 +385,15 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           )}
         </FilterBar>
       )}
-      {(hasPrepared || hasPantry || storeCount > 0 || productCount > 0) &&
-        !hasFilters &&
-        trimmed === '' && (
-          <nav
-            aria-label='Also in Kitchen'
-            className='grid grid-cols-2 gap-2 lg:gap-x-8 [&>:last-child:nth-child(odd)]:col-span-2 lg:[&>:last-child:nth-child(odd)]:col-span-1'
-          >
-            {hasPrepared && <PreparedEntry />}
-            {hasPantry && <PantryEntry />}
-            {(storeCount > 0 || productCount > 0) && (
-              <EntryTile
-                icon={<Store className='h-4 w-4' />}
-                label='Stores & prices'
-                onClick={() => openSubview({ kind: 'products' })}
-              />
-            )}
-          </nav>
-        )}
+      {(hasPrepared || hasPantry) && !hasFilters && trimmed === '' && (
+        <nav
+          aria-label='Also in Kitchen'
+          className='grid grid-cols-2 gap-2 lg:gap-x-8 [&>:last-child:nth-child(odd)]:col-span-2 lg:[&>:last-child:nth-child(odd)]:col-span-1'
+        >
+          {hasPrepared && <PreparedEntry />}
+          {hasPantry && <PantryEntry />}
+        </nav>
+      )}
       {filters.price === 'needs' && shown.length > 0 && (
         <Button
           type='button'

@@ -1463,7 +1463,7 @@ service cloud.firestore {
       // by index runs past the evaluator's 1,000 expressions and would refuse a long recipe. The rules cap the counts and the fields around them.
       // A recipe written before links existed has no key.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'coverUrl', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'coverUrl', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'isFavorite', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1474,6 +1474,7 @@ service cloud.firestore {
           && isNutrition(data.get('nutritionOverride', null))
           && isRecipeCare(data.get('care', null))
           && data.get('isArchived', false) is bool
+          && data.get('isFavorite', false) is bool
           && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
           && isCoverUrl(data.get('coverUrl', null))
           && (data.get('coverPath', null) == null || data.get('coverUrl', null) == null)

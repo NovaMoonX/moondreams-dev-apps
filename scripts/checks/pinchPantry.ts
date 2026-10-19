@@ -14,7 +14,9 @@ import {
   getDateInDays,
   getLineMarkers,
   getLineStock,
+  formatKitchenTotal,
   getLineStockText,
+  getTakeAmountText,
   type LineStock,
   getNewPackagesProblem,
   getPackageBulkNames,
@@ -222,10 +224,11 @@ assert.deepEqual(
   [chickenView.pastCount, chickenView.soonCount, chickenView.nearest?.id],
   [1, 1, 'c1'],
 );
-assert.deepEqual(getStockSummaryParts(chickenView), [
-  '3 packages',
-  '2.4 lb in all',
-]);
+assert.deepEqual(
+  getStockSummaryParts(chickenView),
+  ['3 packages', '1.4 lb in date'],
+  'the pound past its date is left out of the total, and the row flags it',
+);
 assert.deepEqual(getStockFlag(chickenView, NOW), {
   state: 'PAST',
   label: '1 past its date',
@@ -279,6 +282,43 @@ assert.deepEqual(
   ),
   ['2 packages', '1 l and 3 each in all'],
   'a different kind is shown as its own amount',
+);
+
+const carton = (id: string, amount: number, expiresAt: number | null) =>
+  pkg({ id, amount, unit: 'FL_OZ', expiresAt });
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView(
+      'x',
+      [carton('a', 192, dayOf(25)), carton('b', 32, dayOf(10))],
+      NOW,
+    ),
+  ),
+  ['2 packages', '192 fl oz in date'],
+  'a carton past its date is not in the total, which says so instead of "in all"',
+);
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView('x', [carton('a', 96, dayOf(25)), carton('b', 96, null)], NOW),
+  ),
+  ['2 packages', '192 fl oz in all'],
+  'one with no date counts, and with nothing past the total is "in all"',
+);
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView(
+      'x',
+      [carton('a', 192, dayOf(9)), carton('b', 32, dayOf(10))],
+      NOW,
+    ),
+  ),
+  ['2 packages'],
+  'with every package past its date there is no amount in date to add up',
+);
+assert.deepEqual(
+  getStockSummaryParts(getStockView('x', [carton('a', 32, dayOf(10))], NOW)),
+  ['32 fl oz'],
+  'one package past its date still says its own amount',
 );
 
 // Grouping keeps only what is in stock
@@ -1126,12 +1166,34 @@ assert.deepEqual(
   ].map((stockState) => getLineStockText(stockState as never)),
   [
     'You have it',
-    'You have 1.5 cup',
-    'You have about 1.5 cup',
+    'You have 1½ cups',
+    'You have about 1½ cups',
     'In your pantry',
     'Past its date',
     'Not in your pantry',
   ],
+  'a pantry hint says an amount the way a cook does, not as a decimal',
+);
+assert.deepEqual(
+  [
+    formatKitchenTotal({ amount: 0.63, unit: 'CUP' }),
+    formatKitchenTotal({ amount: 0.63, unit: 'CUP' }, true),
+    formatKitchenTotal({ amount: 9, unit: 'EACH' }),
+    formatKitchenTotal({ amount: 3, unit: 'LB' }, true),
+  ],
+  ['about ⅔ cup', 'about ⅔ cup', '9 each', 'about 3 lb'],
+  '"about" is said once, and a bare count keeps its "each"',
+);
+assert.equal(
+  getTakeAmountText({
+    totals: [
+      { amount: 2.5, unit: 'CUP' },
+      { amount: 0.42, unit: 'LB' },
+    ],
+    isConverted: true,
+  } as never),
+  'about 2½ cups and about ½ lb',
+  'what a cook takes out of the pantry reads in kitchen amounts too',
 );
 
 // The marks on a recipe's lines say only the exception, and the share once
@@ -1178,6 +1240,72 @@ assert.deepEqual(
   markedTexts([have, have, past]),
   [null, null, 'Past its date'],
   'and it is not counted as in the pantry',
+);
+
+// Salt, oil and water are at home in most kitchens, so a pantry without them says nothing about them
+const staple: LineStock = { kind: 'STAPLE' };
+assert.deepEqual(
+  markedTexts([have, have, none, staple, staple]),
+  [null, null, 'Not in your pantry', null, null],
+  'a staple is never flagged as missing, and the other lines still are',
+);
+assert.equal(
+  marks([have, have, none, staple, staple]).summary,
+  '2 of 3 in your pantry',
+  'the share leaves the staples out: two of the three things worth looking for, not two of five',
+);
+assert.equal(
+  marks([staple, staple]).summary,
+  null,
+  'a recipe of staples alone says nothing about the pantry',
+);
+assert.deepEqual(
+  markedTexts([have, none, none, none, staple]),
+  ['You have it', null, null, null, null],
+  'a list the pantry hardly touches still flags the one it has, and the staple stays quiet',
+);
+const lineOf = (ingredientId: string) => ({
+  ingredientId,
+  amount: 1,
+  unit: 'TBSP' as const,
+});
+const spice = { id: 'cat-salt', familyId: 'cat-fam-spices' };
+assert.deepEqual(
+  getLineStock(lineOf('cat-salt'), undefined, NOW, undefined, spice),
+  { kind: 'STAPLE' },
+  'an empty pantry lacks nothing of a spice',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-water'), [], NOW, undefined, {
+    id: 'cat-water',
+    familyId: 'cat-fam-drinks',
+  }),
+  { kind: 'STAPLE' },
+  'water is a staple by name even though its family is not spices',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-rice'), undefined, NOW, undefined, {
+    id: 'cat-rice',
+    familyId: 'cat-fam-grains',
+  }),
+  { kind: 'NONE' },
+  'rice is not a staple, so having none of it is said',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-salt'), undefined, NOW),
+  { kind: 'NONE' },
+  'without the ingredient there is no family to read, so nothing is assumed',
+);
+assert.equal(
+  getLineStock(
+    lineOf('cat-salt'),
+    [rice({ amount: 1, unit: 'TBSP' })],
+    NOW,
+    undefined,
+    spice,
+  ).kind,
+  'HAVE',
+  'a staple that is in the pantry is counted like anything else',
 );
 assert.equal(marks([have, have, past]).summary, '2 of 3 in your pantry');
 assert.deepEqual(markedTexts([]), []);
