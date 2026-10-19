@@ -79,6 +79,7 @@ import {
   selectIsCollectionsReady,
   selectNotesByRecipe,
   selectRecipesById,
+  selectShareBySource,
   selectSourceCounts,
   selectSources,
   selectSourcesById,
@@ -678,11 +679,17 @@ function RecipeForm({
       }
       return '';
     };
+    const getShareLine = () => {
+      if (selectShareBySource('RECIPE', recipe.id)(state) === null) return '';
+      return isUsed
+        ? ' Its shared link keeps working until you stop sharing it, under Settings, Shared links.'
+        : " It's shared, so its link stops working too.";
+    };
     const confirmed = await confirm({
       title: isUsed ? 'Remove recipe' : 'Delete recipe',
       message: isUsed
-        ? `“${recipe.title}” is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.${ideaLine}`
-        : `Delete “${recipe.title}”?${getHistoryLine()}${ideaLine} This can't be undone.`,
+        ? `“${recipe.title}” is used in ${describeUsage(usage)}, so it will be taken off your lists, not erased. Everything that uses it keeps its name and numbers.${ideaLine}${getShareLine()}`
+        : `Delete “${recipe.title}”?${getHistoryLine()}${ideaLine}${getShareLine()} This can't be undone.`,
       confirmText: isUsed ? 'Remove' : 'Delete',
       destructive: true,
     });

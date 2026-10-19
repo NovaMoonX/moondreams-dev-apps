@@ -26,6 +26,7 @@ import PantrySubview from '@apps/pinch/components/pantry/PantrySubview';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
 import SettingsSubview from '@apps/pinch/components/settings/SettingsSubview';
+import SharedLinksSubview from '@apps/pinch/components/share/SharedLinksSubview';
 import ShoppingScreen from '@apps/pinch/components/shopping/ShoppingScreen';
 import MealSubview from '@apps/pinch/components/recipes/MealSubview';
 import { RecipeStartDrawer } from '@apps/pinch/components/recipes/RecipeStart';
@@ -336,6 +337,7 @@ function Pinch() {
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
       {subview?.kind === 'settings' && <SettingsSubview uid={user.uid} />}
+      {subview?.kind === 'shares' && <SharedLinksSubview />}
       {subview?.kind === 'pantry' && (
         <PantrySubview
           key={subview.ingredientId ?? ''}

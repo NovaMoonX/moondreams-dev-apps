@@ -29,6 +29,7 @@ import {
   type PinchSettingsState,
 } from './slices/pinchSettingsSlice';
 import { settingsReducer, type SettingsState } from './slices/settingsSlice';
+import { sharesReducer, type SharesState } from './slices/sharesSlice';
 import { shoppingReducer, type ShoppingState } from './slices/shoppingSlice';
 import { sourcesReducer, type SourcesState } from './slices/sourcesSlice';
 import { storesReducer, type StoresState } from './slices/storesSlice';
@@ -51,6 +52,7 @@ export interface PinchState {
   notes: NotesState;
   containers: ContainersState;
   packages: PackagesState;
+  shares: SharesState;
 }
 
 export const pinchReducer = combineReducers({
@@ -71,4 +73,5 @@ export const pinchReducer = combineReducers({
   notes: notesReducer,
   containers: containersReducer,
   packages: packagesReducer,
+  shares: sharesReducer,
 });

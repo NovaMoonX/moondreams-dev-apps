@@ -19,6 +19,7 @@ import type {
   Meal,
   Package,
   PinchSettings,
+  PinchShare,
   PlannedMeal,
   Product,
   Recipe,
@@ -265,6 +266,23 @@ export function startMealsListener(
     kitchenCollection(uid, 'meals'),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Meal)),
+    onError,
+  );
+}
+
+/** The links this person made. The shared copies sit where only the server reads them. */
+export function startSharesListener(
+  uid: string,
+  onChange: (shares: PinchShare[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(
+      collection(db, 'apps', 'pinch', 'shares'),
+      where('ownerUid', '==', uid),
+    ),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as PinchShare)),
     onError,
   );
 }

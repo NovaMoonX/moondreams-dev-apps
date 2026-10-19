@@ -19,6 +19,8 @@ import {
   PlateRows,
 } from '@apps/pinch/components/recipes/PlateRecipe';
 import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
+import ShareDoorRow from '@apps/pinch/components/share/ShareDoorRow';
+import ShareView from '@apps/pinch/components/share/ShareView';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import {
@@ -93,6 +95,7 @@ function MealDrawer({
   const isStockReady = useAppSelector(selectIsContainersReady);
   const stockError = useAppSelector(selectContainersLoadError);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
@@ -106,6 +109,7 @@ function MealDrawer({
   };
   const getViewKey = () => {
     if (openRecipeId !== null) return `recipe:${openRecipeId}`;
+    if (isShareOpen) return 'share';
     return isMoreOpen ? 'more' : 'plate';
   };
 
@@ -146,7 +150,7 @@ function MealDrawer({
         />
       }
       footer={
-        openRecipeId !== null ? undefined : (
+        openRecipeId !== null || isShareOpen ? undefined : (
           <div className='flex gap-2 px-4 pb-4'>
             <Button
               type='button'
@@ -190,7 +194,16 @@ function MealDrawer({
           onBack={() => setOpenRecipeId(null)}
         />
       )}
-      {isMoreOpen && openRecipeId === null && (
+      {isShareOpen && openRecipeId === null && (
+        <div className='space-y-4'>
+          <div className='space-y-1'>
+            <BackLink onBack={() => setIsShareOpen(false)} />
+            <p className='font-medium'>Share this saved meal</p>
+          </div>
+          <ShareView kind='MEAL' sourceId={meal.id} />
+        </div>
+      )}
+      {isMoreOpen && !isShareOpen && openRecipeId === null && (
         <div className='space-y-5'>
           <BackLink onBack={closeMore} />
           <div className='space-y-2'>
@@ -222,6 +235,11 @@ function MealDrawer({
                   onClick={() => onPutAway(meal.id)}
                 />
               )}
+              <ShareDoorRow
+                kind='MEAL'
+                sourceId={meal.id}
+                onClick={() => setIsShareOpen(true)}
+              />
             </ActionGroup>
             {stockError === null && !isStockReady && (
               <p className='text-muted-foreground text-sm'>

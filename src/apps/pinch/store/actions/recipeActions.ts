@@ -17,6 +17,7 @@ import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { deleteNotes } from '@apps/pinch/store/actions/noteActions';
+import { stopSharingDeleted } from '@apps/pinch/store/actions/shareActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import {
   selectIngredientsById,
@@ -406,7 +407,7 @@ interface RemoveRecipeInput {
   id: string;
 }
 
-/** Deletes the recipe, its cover, its cooks and its notes, or archives it (cover, cooks and notes kept) when a planned day or saved meal still uses it. */
+/** Deletes the recipe, its cover, its cooks, its notes and its shared link, or archives it (cover, cooks, notes and link kept) when a planned day or saved meal still uses it. */
 export const removeRecipe = createAsyncThunk<
   string,
   RemoveRecipeInput,
@@ -434,6 +435,8 @@ export const removeRecipe = createAsyncThunk<
         getWriteMessage(error, 'Unable to delete this recipe.'),
       );
     }
+
+    stopSharingDeleted(getState(), 'RECIPE', id);
 
     await deleteCooks(uid, id).catch((error) =>
       console.error("Pinch could not clear a deleted recipe's cooks", error),
