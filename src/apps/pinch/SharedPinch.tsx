@@ -12,6 +12,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNoIndex } from '@/hooks/useNoIndex';
 import { formatDate } from '@/utils/formatUtils';
 import ShareSlot from '@apps/pinch/components/public/ShareSlot';
+import SharedBrand from '@apps/pinch/components/public/SharedBrand';
 import SharedIntro from '@apps/pinch/components/public/SharedIntro';
 import SharedMealBody from '@apps/pinch/components/public/SharedMealBody';
 import SharedRecipeBody from '@apps/pinch/components/public/SharedRecipeBody';
@@ -169,24 +170,10 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
           : 'max-w-2xl',
       )}
     >
-      <div
-        className={join(
-          'flex items-center justify-between gap-3',
-          isSplit && 'col-span-2',
-        )}
-      >
-        <span className='flex items-center gap-2.5'>
-          <img
-            src='/logos/by-app/logo-pinch.svg'
-            alt=''
-            className='size-9 rounded-xl'
-          />
-          <span className='font-semibold'>Pinch</span>
-        </span>
-        <span className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-          {copy.eyebrow}
-        </span>
-      </div>
+      <SharedBrand
+        eyebrow={copy.eyebrow}
+        className={isSplit ? 'col-span-2' : undefined}
+      />
       <div className={join('min-w-0 space-y-1', isSplit && 'col-start-1')}>
         {openIndex !== null && <BackLink onBack={closeDish} />}
         {intro}
