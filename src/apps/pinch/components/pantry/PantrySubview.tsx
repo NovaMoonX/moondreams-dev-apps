@@ -677,7 +677,7 @@ function PantrySubview({
         <SectionHeader
           title={title}
           subtitle={
-            isSelecting || isIntroShown || isActionOnTitleRow
+            packages.length > 0 || isSelecting || isActionOnTitleRow
               ? undefined
               : 'What is on hand, and when to use it by.'
           }
