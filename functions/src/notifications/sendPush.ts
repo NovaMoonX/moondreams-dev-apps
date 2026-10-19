@@ -56,9 +56,13 @@ export function getDeadTokens(
 }
 
 /** Takes dead tokens off the people they were registered under, so the next push doesn't try them and a device that is no longer theirs stops receiving what names their dishes. Never throws: a failed clean-up only leaves them for the next run. */
-async function removeDeadTokens(firestore: Firestore, dead: DeviceToken[]): Promise<void> {
+async function removeDeadTokens(
+  firestore: Firestore,
+  dead: DeviceToken[],
+): Promise<void> {
   const byUid = dead.reduce<Map<string, string[]>>(
-    (groups, { uid, token }) => groups.set(uid, [...(groups.get(uid) ?? []), token]),
+    (groups, { uid, token }) =>
+      groups.set(uid, [...(groups.get(uid) ?? []), token]),
     new Map(),
   );
 
@@ -67,7 +71,9 @@ async function removeDeadTokens(firestore: Firestore, dead: DeviceToken[]): Prom
       firestore
         .doc(`users/${uid}`)
         .update({ fcmTokens: FieldValue.arrayRemove(...tokens) })
-        .catch((error) => logger.error('Removing dead device tokens failed', { error })),
+        .catch((error) =>
+          logger.error('Removing dead device tokens failed', { error }),
+        ),
     ),
   );
 }
@@ -98,7 +104,9 @@ export async function sendPushToUsers(
     const dead = getDeadTokens(devices, responses);
 
     if (dead.length > 0) {
-      logger.info('Removing device tokens FCM no longer accepts', { count: dead.length });
+      logger.info('Removing device tokens FCM no longer accepts', {
+        count: dead.length,
+      });
       await removeDeadTokens(firestore, dead);
     }
   }
