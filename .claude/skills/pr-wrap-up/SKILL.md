@@ -63,6 +63,7 @@ Spawn **technical, product and design** agents in parallel (`model: "sonnet"`, n
 - Merge duplicates. Fix every real, in-scope finding. Put anything bigger in the PR body under "Follow-ups" rather than widening the PR.
 - Fix on the PR the finding belongs to, then merge that branch up through every branch above it (merge, never rebase or force-push), re-running `npx tsc -b --force` and `npx eslint .` on each.
 - Re-validate what you changed in the browser, and refresh the affected screenshots (step 1) and the regression check (step 2).
+- **The last fresh design pass runs on the head that ships.** A fix round that changes `src` after the last fresh design pass is re-checked by a fresh design agent on those screens, and on every screen that draws a shared part they changed, before the PR body says "reviewed": a fix measured only by its author does not close a finding, and "left" is not an outcome (the owner's goal check, round 8: three rounds ended with the fixes unreviewed).
 - **Check third-party contract claims before building on them.** A reviewer's "AMC's date format is different" is cheap to check and expensive to ship wrong; search for the real contract, and say in the PR body what is still unverified.
 
 ## 6. Write down what the review taught, automatically
