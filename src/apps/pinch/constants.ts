@@ -753,3 +753,11 @@ export const COOK_WAKE_TIMER_GRACE_MS = 2 * 60_000;
 export const COOK_WAKE_MAX_MS = 60 * 60_000;
 /** "Keep listening" runs to a fixed deadline; commands don't extend it. */
 export const COOK_LOCK_MS = 15 * 60_000;
+
+export const SHARE_ID_LENGTH = 26;
+/** The most links one person holds at once; the server counts them. */
+export const MAX_PINCH_SHARES = 30;
+/** The most recipes a shared meal carries: a saved meal holds at most `MAX_MEAL_ITEMS`. */
+export const MAX_SHARED_MEAL_RECIPES = MAX_MEAL_ITEMS;
+/** The most ingredient lines a shared meal carries across its recipes, so adding it stays one batch of fewer than 500 writes. */
+export const MAX_SHARED_MEAL_LINES = 300;
