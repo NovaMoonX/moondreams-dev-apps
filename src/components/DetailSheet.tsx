@@ -145,7 +145,7 @@ function DetailSheet({
         showCloseButton
         footer={
           isCompact && footer ? (
-            <div className='px-2! py-2! [&>div]:pb-0!'>{footer}</div>
+            <div className='py-2! [&>div]:px-0! [&>div]:pb-0!'>{footer}</div>
           ) : (
             footer
           )
