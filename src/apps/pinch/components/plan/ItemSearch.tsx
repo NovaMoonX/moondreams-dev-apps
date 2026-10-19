@@ -29,14 +29,11 @@ const MAX_RESULTS = 8;
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 
-// A short screen shows fewer rows (three under 600px high, two under 500px) so the sheet never outgrows it,
-// and the last row left drops its bottom border because the frame draws one.
+// A landscape phone shows two rows, and the last one left drops its bottom border because the frame draws one.
 const getSuggestionRowClass = (index: number) =>
   join(
     index === 1 && '[@media(max-height:499px)]:border-b-0',
-    index === 2 &&
-      '[@media(max-height:599px)]:border-b-0 [@media(max-height:499px)]:hidden',
-    index === 3 && '[@media(max-height:599px)]:hidden',
+    index === 2 && '[@media(max-height:499px)]:hidden',
   );
 
 export interface ItemSuggestions {

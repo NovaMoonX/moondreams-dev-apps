@@ -1,13 +1,20 @@
 import assert from 'node:assert/strict';
 
+import {
+  NO_INGREDIENT_FILTERS,
+  applyIngredientFilters,
+} from '../../src/apps/pinch/components/kitchen/ingredientFilters.ts';
 import type {
   Package,
+  Product,
   Recipe,
+  ResolvedIngredient,
   ShoppingItem,
 } from '../../src/apps/pinch/types.ts';
 import {
   MAX_PICK_SUGGESTIONS,
   getPantryPickIds,
+  getPricePickIds,
   getShoppingPickIds,
   rankOftenUsedIngredients,
   takeSuggestionIds,
@@ -61,24 +68,54 @@ const pkg = (ingredientId: string, over: Partial<Package> = {}): Package => ({
   updatedAt: 1000,
   ...over,
 });
+const ingredient = (id: string): ResolvedIngredient => ({
+  id,
+  name: id,
+  familyId: null,
+  aliases: [],
+  per100g: { calories: null, protein: null, carbs: null, fat: null },
+  serving: { amount: 1, unit: 'EACH' },
+  gramsPerMl: null,
+  gramsEach: null,
+  isCustom: false,
+  isAdjusted: false,
+  isArchived: false,
+});
+const product = (ingredientId: string): Product => ({
+  id: `product-${ingredientId}`,
+  ingredientId,
+  storeId: 'store',
+  label: null,
+  priceCents: 100,
+  sizeAmount: 1,
+  sizeUnit: 'EACH',
+  url: null,
+  createdAt: 1000,
+  updatedAt: 1000,
+});
 const cooked = (entries: Record<string, number>) =>
   new Map(
     Object.entries(entries).map(([id, lastCookedAt]) => [id, { lastCookedAt }]),
   );
 
-// the cap is four rows, and a first run has nothing to offer
-assert.equal(MAX_PICK_SUGGESTIONS, 4, 'four rows at most');
+// the cap is three rows, and a first run has nothing to offer
+assert.equal(MAX_PICK_SUGGESTIONS, 3, 'three rows at most');
 assert.deepEqual(takeSuggestionIds([]), [], 'nothing to offer is nothing');
 assert.deepEqual(takeSuggestionIds([[], []]), []);
 assert.deepEqual(
   takeSuggestionIds([['a', 'b', 'c', 'd', 'e', 'f']]),
-  ['a', 'b', 'c', 'd'],
-  'a long list is cut to four',
+  ['a', 'b', 'c'],
+  'a long list is cut to three',
 );
 assert.deepEqual(
   takeSuggestionIds([['a', 'b', 'c', 'd', 'e']], new Set(), 2),
   ['a', 'b'],
   'a caller can ask for fewer',
+);
+assert.deepEqual(
+  takeSuggestionIds([['a', 'b', 'c', 'd', 'e', 'f']], new Set(), 5),
+  ['a', 'b', 'c', 'd', 'e'],
+  "and for more, so the cap is the caller's to lift and not baked in",
 );
 
 // each ingredient once, in the order first seen across the lists
@@ -87,14 +124,14 @@ assert.deepEqual(
     ['a', 'b', 'a'],
     ['c', 'b', 'd'],
   ]),
-  ['a', 'b', 'c', 'd'],
+  ['a', 'b', 'c'],
   'a repeat keeps its first place and never takes a second row',
 );
 
 // what is left out never shortens the list while more are waiting
 assert.deepEqual(
   takeSuggestionIds([['a', 'b', 'c', 'd', 'e', 'f']], new Set(['a', 'c'])),
-  ['b', 'd', 'e', 'f'],
+  ['b', 'd', 'e'],
   'an excluded id is skipped and the next one takes its row',
 );
 assert.deepEqual(
@@ -211,8 +248,8 @@ assert.equal(
     ),
     [pkg('milk')],
   ).length,
-  4,
-  'six ticked lines still offer four rows',
+  3,
+  'six ticked lines still offer three rows',
 );
 
 // shopping: what was on the list or in a recipe cooked lately, never what is still to buy
@@ -249,10 +286,10 @@ assert.deepEqual(
 assert.deepEqual(
   getShoppingPickIds(
     [item('limes', { isChecked: true, updatedAt: 3000 })],
-    [recipe('adobo', ['garlic', 'soy', 'vinegar'])],
+    [recipe('adobo', ['garlic', 'soy'])],
     cooked({ adobo: 4000 }),
   ),
-  ['garlic', 'soy', 'vinegar', 'limes'],
+  ['garlic', 'soy', 'limes'],
   'a recipe cooked more recently than a tick goes first, its lines in the recipe order',
 );
 assert.deepEqual(
@@ -297,8 +334,49 @@ assert.equal(
     [recipe('feast', ['a', 'b', 'c', 'd', 'e', 'f'])],
     cooked({ feast: 1 }),
   ).length,
-  4,
-  'a big recipe still offers four rows',
+  3,
+  'a big recipe still offers three rows',
+);
+
+// prices: the ingredients still waiting for one, the ones in the most recipes first
+assert.deepEqual(getPricePickIds([], []), [], 'a first run offers nothing');
+assert.deepEqual(
+  getPricePickIds([], ['salt', 'garlic']),
+  [],
+  'nothing waiting is nothing, whatever the recipes use',
+);
+assert.deepEqual(
+  getPricePickIds(['b', 'a', 'c', 'd'], ['c', 'priced', 'a']),
+  ['c', 'a', 'b'],
+  'the most used of the waiting ones first, then the rest in the order given, and never one that is not waiting',
+);
+assert.deepEqual(
+  getPricePickIds(['only-in-a-meal'], []),
+  ['only-in-a-meal'],
+  'one no recipe uses (a saved meal does) is still offered',
+);
+assert.deepEqual(
+  getPricePickIds(['a', 'b', 'c', 'd', 'e'], []),
+  ['a', 'b', 'c'],
+  'a long wait list is cut to three',
+);
+const kitchen = [
+  ingredient('flour'),
+  ingredient('rice'),
+  ingredient('saffron'),
+];
+const needsPrice = applyIngredientFilters(
+  kitchen,
+  { ...NO_INGREDIENT_FILTERS, price: 'needs' },
+  {
+    defaultProducts: new Map([['rice', product('rice')]]),
+    usedIds: new Set(['flour', 'rice']),
+  },
+).map((entry) => entry.id);
+assert.deepEqual(
+  getPricePickIds(needsPrice, ['rice', 'flour']),
+  ['flour'],
+  "Kitchen's Needs a price set: used and without a default product, so a priced one and one nothing uses are both left out",
 );
 
 console.log('pinch pickers checks passed');

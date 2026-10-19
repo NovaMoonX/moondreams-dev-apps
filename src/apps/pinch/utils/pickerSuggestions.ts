@@ -2,7 +2,7 @@ import type { Package, Recipe, ShoppingItem } from '@apps/pinch/types';
 import { isPutAway } from '@apps/pinch/utils/shopping';
 
 /** The most rows an ingredient picker offers while its field is empty. */
-export const MAX_PICK_SUGGESTIONS = 4;
+export const MAX_PICK_SUGGESTIONS = 3;
 
 type RecipeLines = Pick<Recipe, 'id' | 'ingredients' | 'updatedAt'>;
 
@@ -88,5 +88,18 @@ export function getShoppingPickIds(
     [newestFirst(seen, (entry) => entry.at).map((entry) => entry.id)],
     toBuy,
   );
+  return result;
+}
+
+/** What to offer when a price is added: the ingredients still waiting for one, the ones in the most recipes first, then the rest in the order given. */
+export function getPricePickIds(
+  waiting: readonly string[],
+  oftenUsed: readonly string[],
+) {
+  const isWaiting = new Set(waiting);
+  const result = takeSuggestionIds([
+    oftenUsed.filter((id) => isWaiting.has(id)),
+    waiting,
+  ]);
   return result;
 }
