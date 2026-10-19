@@ -9,6 +9,7 @@ import {
   getLandingPlace,
   getNamesLine,
   getPastDueBoxes,
+  getPastDueSplitText,
   getPastDueText,
   getPlacedTitle,
   getSelectionNote,
@@ -345,6 +346,31 @@ assert.deepEqual(
 assert.deepEqual(
   [getPastDueText(1), getPastDueText(3), getTossAction(1), getTossAction(3)],
   ['1 is past its date', '3 are past their date', 'Toss it', 'Toss them'],
+);
+const inFridge = (id: string) => container({ id, place: 'FRIDGE' });
+const inFreezer = (id: string) => container({ id, place: 'FREEZER' });
+assert.deepEqual(
+  [
+    getPastDueSplitText([inFridge('a'), inFridge('b')], 'FRIDGE'),
+    getPastDueSplitText(
+      [inFridge('a'), inFridge('b'), inFreezer('c')],
+      'FRIDGE',
+    ),
+    getPastDueSplitText(
+      [inFridge('a'), inFreezer('b'), inFreezer('c')],
+      'FREEZER',
+    ),
+    getPastDueSplitText([inFreezer('a')], 'FRIDGE'),
+    getPastDueSplitText([inFridge('a'), inFridge('b')], 'FREEZER'),
+  ],
+  [
+    null,
+    '2 here, 1 in the freezer',
+    '2 here, 1 in the fridge',
+    'In the freezer',
+    'All in the fridge',
+  ],
+  'the past-date row names where they are when the list shows one place, and says nothing when they are all here',
 );
 assert.deepEqual(
   [getSelectionTitle(0), getSelectionTitle(1), getSelectionTitle(12)],

@@ -17,6 +17,8 @@ interface PromptRowProps {
   isDisabled?: boolean;
   /** One 42px capsule with the icon inline, for a spot with little height to spare. */
   isCompact?: boolean;
+  /** Drops the icon chip below 360px, where the words beside it get about 100px and wrap word by word. */
+  isIconHiddenOnSmallest?: boolean;
 }
 
 /** A quiet tinted row above a list that says something there wants a look and puts the one action beside it, so the fix is one tap and never a banner. It draws only while there is something to say. */
@@ -29,6 +31,7 @@ function PromptRow({
   isBusy = false,
   isDisabled = false,
   isCompact = false,
+  isIconHiddenOnSmallest = false,
 }: PromptRowProps) {
   return (
     <div
@@ -42,6 +45,7 @@ function PromptRow({
       <span
         className={join(
           'shrink-0 leading-none',
+          isIconHiddenOnSmallest && 'max-[359px]:hidden',
           !isCompact &&
             'bg-background/70 border-border grid size-10 place-items-center rounded-full border text-lg',
         )}

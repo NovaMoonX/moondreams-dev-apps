@@ -679,6 +679,20 @@ export const getPastDueBoxes = (containers: Container[], now = Date.now()) =>
 export const getPastDueText = (count: number) =>
   `${count} ${count === 1 ? 'is' : 'are'} past ${count === 1 ? 'its' : 'their'} date`;
 
+/** Where the past-date boxes are while one place is shown: "2 here, 1 in the freezer", or where they all are; null when they are all in the place shown. */
+export const getPastDueSplitText = (
+  boxes: Container[],
+  shownPlace: ContainerPlace,
+) => {
+  const here = boxes.filter((box) => box.place === shownPlace).length;
+  const there = boxes.length - here;
+  if (there === 0) return null;
+
+  const other = shownPlace === 'FRIDGE' ? 'freezer' : 'fridge';
+  if (here > 0) return `${here} here, ${there} in the ${other}`;
+  return there === 1 ? `In the ${other}` : `All in the ${other}`;
+};
+
 export const getTossAction = (count: number) =>
   count === 1 ? 'Toss it' : 'Toss them';
 
