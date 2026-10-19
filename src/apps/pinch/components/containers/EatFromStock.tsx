@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronLeft } from 'lucide-react';
 
-import { useBackStep } from '@/hooks/useBackHistory';
+import BackLink from '@/components/BackLink';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort } from '@/utils/formatUtils';
@@ -58,7 +57,6 @@ export function EatFromStockView({
     }));
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useBackStep(true, onBack);
 
   const handleEat = async (container: Container, count: number) => {
     if (busyId !== null) return;
@@ -97,15 +95,7 @@ export function EatFromStockView({
 
   return (
     <div className='space-y-5'>
-      <Button
-        type='button'
-        variant='tertiary'
-        className='h-10 gap-1 px-0!'
-        onClick={onBack}
-      >
-        <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-        Back
-      </Button>
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>
           Eat from your {CONTAINER_PLACE_LABELS[place].toLowerCase()}

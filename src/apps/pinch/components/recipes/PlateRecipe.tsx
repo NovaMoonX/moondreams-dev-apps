@@ -1,11 +1,8 @@
 import type { ReactNode } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronLeft } from 'lucide-react';
-
 import ActionGroup from '@/components/ActionGroup';
+import BackLink from '@/components/BackLink';
 import GroupRow from '@/components/GroupRow';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import RecipeFront from '@apps/pinch/components/recipes/RecipeFront';
 import {
@@ -94,20 +91,11 @@ export function PlateRecipeView({
   onBack,
 }: PlateRecipeViewProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
-  useBackStep(true, onBack);
 
   return (
     <div className='space-y-4'>
       <div className='space-y-1 [@media(max-height:599px)]:flex [@media(max-height:599px)]:items-center [@media(max-height:599px)]:gap-3 [@media(max-height:599px)]:space-y-0'>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-10 shrink-0 gap-1 px-0!'
-          onClick={onBack}
-        >
-          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-          Back
-        </Button>
+        <BackLink onBack={onBack} />
         <h3 className='min-w-0 text-lg font-semibold wrap-break-word'>
           {recipe?.title ?? 'Removed recipe'}
         </h3>

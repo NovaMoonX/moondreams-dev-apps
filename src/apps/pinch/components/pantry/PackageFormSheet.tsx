@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   Button,
@@ -28,6 +28,7 @@ import {
   selectProductsByIngredient,
   selectRecipes,
   selectRecipesById,
+  selectShoppingItems,
 } from '@apps/pinch/store/selectors';
 import type { Package, Product } from '@apps/pinch/types';
 import { getIngredientUses, getPackageUnit } from '@apps/pinch/utils/gapOrder';
@@ -43,6 +44,7 @@ import {
   parseAmountText,
   round2,
 } from '@apps/pinch/utils/packages';
+import { getPantryPickIds } from '@apps/pinch/utils/pickerSuggestions';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { getShopSection } from '@apps/pinch/utils/shopping';
 
@@ -81,6 +83,10 @@ function PackageFormSheet({
   const recipesById = useAppSelector(selectRecipesById);
   const plannedMeals = useAppSelector(selectPlannedMeals);
   const packages = useAppSelector(selectPackages);
+  const shoppingItems = useAppSelector(selectShoppingItems);
+  const isShoppingLoaded = useAppSelector(
+    (state) => state.pinch.shopping.isLoaded,
+  );
   const getStart = (id: string | null) => {
     const ingredient = id === null ? undefined : ingredientsById.get(id);
     const seed = id === null ? null : getPackageSeed(packages, id);
@@ -163,6 +169,13 @@ function PackageFormSheet({
   };
   const note = getNote();
   const canSave = note === null && !isSubmitting;
+  const suggestedIds = useMemo(
+    () =>
+      pkg === null && isReady && isShoppingLoaded
+        ? getPantryPickIds(shoppingItems, packages)
+        : [],
+    [pkg, isReady, isShoppingLoaded, shoppingItems, packages],
+  );
 
   const handlePick = (id: string) => {
     const start = getStart(id);
@@ -330,7 +343,12 @@ function PackageFormSheet({
         {ingredientId === null || name === '' ? (
           <div className='space-y-3'>
             <p className='font-medium'>What did you bring home?</p>
-            <ItemSearch uid={uid} onPick={handlePick} autoFocus />
+            <ItemSearch
+              uid={uid}
+              onPick={handlePick}
+              suggestions={{ caption: 'Bought lately', ids: suggestedIds }}
+              autoFocus
+            />
           </div>
         ) : (
           <>

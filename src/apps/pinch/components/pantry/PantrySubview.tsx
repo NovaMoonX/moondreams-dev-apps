@@ -702,6 +702,7 @@ function PantrySubview({
                     setActNote(null);
                   }}
                   isThin
+                  wrapsNarrow
                 />
               </div>
             )}

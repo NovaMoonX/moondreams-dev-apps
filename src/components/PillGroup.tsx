@@ -23,6 +23,10 @@ export interface PillOption<T extends string> {
   label: string;
   /** A count or note after the label ("10 servings"); below 360px it moves to a second line inside the pill, so the row stays on one line with every word kept. */
   detail?: string;
+  /** The word after a count in `detail` ("servings"). A thin row drops it and the emoji below 360px so its counts fit one line. */
+  detailUnit?: string;
+  /** The full phrase for screen readers when the visible words are a short form of it. */
+  ariaLabel?: string;
   emoji?: string;
   /** A small image or icon in place of an emoji (a store's logo). */
   icon?: ReactNode;
@@ -55,12 +59,15 @@ export function PillRow({
   children,
   isThin = false,
   isScrolling = false,
+  wrapsNarrow = false,
   scrollKey,
 }: {
   label: string;
   children: ReactNode;
   isThin?: boolean;
   isScrolling?: boolean;
+  /** A scrolling row wraps onto a second line below 360px instead of scrolling sideways. */
+  wrapsNarrow?: boolean;
   /** Changes when the chosen pill does, so a scrolling row brings it into view then and not on every render. */
   scrollKey?: string;
 }) {
@@ -89,7 +96,11 @@ export function PillRow({
       className={join(
         'flex',
         isScrolling
-          ? '-my-2 [scrollbar-width:none] gap-x-2 overflow-x-auto py-2 max-[359px]:gap-x-1.5 [&::-webkit-scrollbar]:hidden'
+          ? join(
+              '-my-2 [scrollbar-width:none] gap-x-2 overflow-x-auto py-2 max-[359px]:gap-x-1.5 [&::-webkit-scrollbar]:hidden',
+              wrapsNarrow &&
+                'max-[359px]:my-0 max-[359px]:flex-wrap max-[359px]:gap-y-4 max-[359px]:overflow-visible max-[359px]:py-0',
+            )
           : join('flex-wrap', isThin ? 'gap-x-2 gap-y-4' : 'gap-2'),
       )}
     >
@@ -109,6 +120,8 @@ interface PillOptionsProps<T extends string> {
   isThin?: boolean;
   /** One answer: picking collapses the list and clears its search; a chosen option that is hidden behind "Show all" takes the last visible slot, and one already visible keeps its place. */
   isSingle?: boolean;
+  /** A thin row of counts wraps below 360px instead of scrolling sideways, for counts that can outgrow 288px. */
+  wrapsNarrow?: boolean;
   /** A short list keeps every option visible in its given order: no two-row collapse, no "Show all", no floating the chosen one. Past the search threshold it collapses like any other. */
   showAll?: boolean;
 }
@@ -123,6 +136,7 @@ export function PillOptions<T extends string>({
   selectedCount = 0,
   isThin = false,
   isSingle = false,
+  wrapsNarrow = false,
   showAll: wantsAll = false,
 }: PillOptionsProps<T>) {
   const showAll = wantsAll && options.length <= SEARCH_THRESHOLD;
@@ -253,6 +267,7 @@ export function PillOptions<T extends string>({
             label={label}
             isThin={isThin}
             isScrolling={isScrolling}
+            wrapsNarrow={wrapsNarrow}
             scrollKey={
               visible.find((option) => isSelected(option.value))?.value
             }
@@ -263,6 +278,7 @@ export function PillOptions<T extends string>({
                 key={option.value}
                 emoji={option.emoji}
                 icon={option.icon}
+                ariaLabel={option.ariaLabel}
                 isThin={isThin}
                 isSelected={isSelected(option.value)}
                 className={join(
@@ -270,6 +286,9 @@ export function PillOptions<T extends string>({
                     !isScrolling &&
                     'max-[359px]:h-auto! max-[359px]:min-h-8! max-[359px]:py-0.5!',
                   isScrolling && 'max-[359px]:px-2',
+                  isScrolling &&
+                    option.detailUnit &&
+                    'max-[359px]:[&_[data-pill-emoji]]:hidden',
                 )}
                 onClick={() => {
                   onToggle(option.value);
@@ -302,6 +321,13 @@ export function PillOptions<T extends string>({
                       )}
                     >
                       {option.detail}
+                      {option.detailUnit && (
+                        <span
+                          className={join(isScrolling && 'max-[359px]:hidden')}
+                        >
+                          {` ${option.detailUnit}`}
+                        </span>
+                      )}
                     </span>
                   </span>
                 ) : (
@@ -343,6 +369,7 @@ interface PillGroupProps<T extends string> {
   onChange: (value: T) => void;
   leading?: ReactNode;
   isThin?: boolean;
+  wrapsNarrow?: boolean;
 }
 
 /** Pick exactly one of a few options. */
@@ -353,6 +380,7 @@ export function PillGroup<T extends string>({
   onChange,
   leading,
   isThin,
+  wrapsNarrow,
 }: PillGroupProps<T>) {
   return (
     <PillOptions
@@ -360,6 +388,7 @@ export function PillGroup<T extends string>({
       options={options}
       leading={leading}
       isThin={isThin}
+      wrapsNarrow={wrapsNarrow}
       isSingle
       isSelected={(optionValue) => value === optionValue}
       onToggle={onChange}

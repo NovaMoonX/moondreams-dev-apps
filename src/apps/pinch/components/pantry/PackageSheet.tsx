@@ -6,7 +6,6 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Ban,
   ChefHat,
-  ChevronLeft,
   ChevronRight,
   History,
   PencilLine,
@@ -16,6 +15,7 @@ import {
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
 import FormSheet from '@/components/FormSheet';
@@ -24,7 +24,6 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
@@ -73,27 +72,6 @@ type SheetView =
   | { kind: 'move' }
   | { kind: 'history' }
   | { kind: 'recipes' };
-
-interface BackLinkProps {
-  onClick: () => void;
-  label?: string;
-}
-
-function BackLink({ onClick, label = 'Back' }: BackLinkProps) {
-  useBackStep(true, onClick);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 justify-self-start px-0!'
-      onClick={onClick}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      {label}
-    </Button>
-  );
-}
 
 function ErrorLine({ error }: { error: string | null }) {
   if (error === null) return null;
@@ -155,7 +133,7 @@ function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>How much did you use?</p>
         <p className='text-muted-foreground text-sm'>
@@ -247,7 +225,7 @@ function MoveView({ uid, pkg, name, onBack, onDone }: ViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>Move it</p>
         <p className='text-muted-foreground text-sm'>
@@ -347,7 +325,7 @@ function RecipesView({
 
   return (
     <div className='grid gap-3'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>Cook with {name}</p>
         <p className='text-muted-foreground text-sm'>
@@ -577,7 +555,7 @@ function PackageSheet({
     if (view.kind === 'history') {
       return (
         <div className='grid gap-4'>
-          <BackLink onClick={backToPackage} />
+          <BackLink onBack={backToPackage} />
           <FormSection title='History'>
             <ul className='divide-border divide-y'>
               {[...pkg.history].reverse().map((event, index) => (
@@ -669,7 +647,7 @@ function PackageSheet({
     return (
       <div className='grid gap-4'>
         {packages.length > 1 && (
-          <BackLink onClick={backToList} label='All the packages' />
+          <BackLink onBack={backToList} label='All the packages' />
         )}
         <Facts pkg={pkg} soonDays={soonDays} />
         <ActionGroup>

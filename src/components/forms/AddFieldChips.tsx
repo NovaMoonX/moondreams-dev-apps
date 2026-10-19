@@ -71,7 +71,7 @@ export function RemovableField({
           variant='tertiary'
           size='icon'
           aria-label={removeLabel}
-          className='h-7 w-7'
+          className="relative h-7 w-7 before:absolute before:-inset-x-2 before:-inset-y-1.5 before:content-['']"
           onClick={onRemove}
         >
           <X className='h-4 w-4' />

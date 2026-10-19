@@ -4,7 +4,6 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   CalendarPlus,
-  ChevronLeft,
   CircleCheck,
   CookingPot,
   Ellipsis,
@@ -14,11 +13,11 @@ import {
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import GroupRow from '@/components/GroupRow';
 import StarButton from '@/components/StarButton';
 import TickMark from '@/components/TickMark';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -60,26 +59,6 @@ import { isStarred } from '@apps/pinch/utils/favorites';
 
 type DrawerView =
   'recipe' | 'photo' | 'history' | 'more' | 'collections' | 'share';
-
-interface BackLinkProps {
-  onBack: () => void;
-}
-
-function BackLink({ onBack }: BackLinkProps) {
-  useBackStep(true, onBack);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 px-0!'
-      onClick={onBack}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
-    </Button>
-  );
-}
 
 interface DoorButtonProps {
   label: string;

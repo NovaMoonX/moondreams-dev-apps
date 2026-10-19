@@ -140,11 +140,7 @@ function NutritionReview({
   );
 
   if (shownCells.length === 0) {
-    return (
-      <p className='text-muted-foreground text-sm'>
-        Calories and macros are off.
-      </p>
-    );
+    return null;
   }
 
   return (

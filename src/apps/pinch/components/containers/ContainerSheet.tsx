@@ -5,7 +5,6 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Ban,
   CalendarDays,
-  ChevronLeft,
   ChevronRight,
   Hash,
   History,
@@ -15,13 +14,13 @@ import {
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
 import FormSheet from '@/components/FormSheet';
 import GroupRow from '@/components/GroupRow';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -77,27 +76,6 @@ type SheetView =
   | { kind: 'history' }
   | { kind: 'boxes' };
 
-interface BackLinkProps {
-  onClick: () => void;
-  label?: string;
-}
-
-function BackLink({ onClick, label = 'Back' }: BackLinkProps) {
-  useBackStep(true, onClick);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 justify-self-start px-0!'
-      onClick={onClick}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      {label}
-    </Button>
-  );
-}
-
 interface ErrorLineProps {
   error: string | null;
 }
@@ -139,7 +117,7 @@ function GoneView({ isBatch, onAnswer, onBack, onDone }: GoneViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <p className='font-medium'>
         {isBatch ? 'What happened to them?' : 'What happened to it?'}
       </p>
@@ -230,7 +208,7 @@ function MoveView({
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>{label}</p>
         <p className='text-muted-foreground text-sm'>
@@ -304,7 +282,7 @@ function EatByView({ eatBy: current, onSave, onBack }: EatByViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <p className='font-medium'>Change the eat-by date</p>
       <EatByField
         value={typedEatBy}
@@ -385,7 +363,7 @@ function CountView({ uid, container, onBack, onDone }: CountViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <p className='font-medium'>How many are left?</p>
       <Stepper
         value={count}
@@ -456,7 +434,7 @@ function BoxCountView({ boxes, onEat, onBack, onDone }: BoxCountViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <p className='font-medium'>How many boxes are left?</p>
       <Stepper
         value={count}
@@ -749,7 +727,7 @@ function ContainerSheet({
     if (view.kind === 'history') {
       return (
         <div className='grid gap-4'>
-          <BackLink onClick={backToDetails} />
+          <BackLink onBack={backToDetails} />
           <HistoryList container={container} />
         </div>
       );
@@ -757,7 +735,7 @@ function ContainerSheet({
     if (view.kind === 'boxes' && isBatch) {
       return (
         <div className='grid gap-2'>
-          <BackLink onClick={backToDetails} />
+          <BackLink onBack={backToDetails} />
           <ul className='divide-border divide-y'>
             {boxes.map((box, index) => (
               <li key={box.id}>
@@ -858,7 +836,7 @@ function ContainerSheet({
     return (
       <div className='grid gap-4'>
         {picked !== undefined && boxes.length > 0 && (
-          <BackLink onClick={() => pick(null)} label='All the boxes' />
+          <BackLink onBack={() => pick(null)} label='All the boxes' />
         )}
         {isInStock ? (
           <Facts

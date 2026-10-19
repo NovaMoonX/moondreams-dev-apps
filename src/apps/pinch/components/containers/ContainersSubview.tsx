@@ -26,7 +26,7 @@ import HeaderIconButton from '@/components/HeaderIconButton';
 import IntroCard from '@/components/IntroCard';
 import LabelChip from '@/components/LabelChip';
 import Pill from '@/components/Pill';
-import { PillGroup } from '@/components/PillGroup';
+import { PillGroup, type PillOption } from '@/components/PillGroup';
 import PromptRow from '@/components/PromptRow';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
@@ -303,17 +303,25 @@ function ContainersSubview({
     return byPlace[other].length > 0 ? other : preferred;
   };
   const shownPlace = getShownPlace();
-  const viewOptions = [
-    ...CONTAINER_PLACES.map((place) => ({
-      value: place,
-      emoji: CONTAINER_PLACE_EMOJIS[place],
-      label: CONTAINER_PLACE_LABELS[place],
-      detail:
-        byPlace[place].length > 0
-          ? formatServings(sumServings(byPlace[place]))
-          : undefined,
-    })),
-  ];
+  const viewOptions: PillOption<ContainerPlace>[] = CONTAINER_PLACES.map(
+    (place) => {
+      const label = CONTAINER_PLACE_LABELS[place];
+      const base = {
+        value: place,
+        emoji: CONTAINER_PLACE_EMOJIS[place],
+        label,
+      };
+      if (byPlace[place].length === 0) return base;
+      const servings = formatServings(sumServings(byPlace[place]));
+      const [count, unit] = servings.split(' ');
+      return {
+        ...base,
+        detail: count,
+        detailUnit: unit,
+        ariaLabel: `${label}, ${servings}`,
+      };
+    },
+  );
 
   const handleOpen = useCallback((boxes: Container[]) => {
     const [first] = boxes;
