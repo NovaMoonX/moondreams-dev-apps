@@ -7,7 +7,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ListChecks, ListX } from 'lucide-react';
+import { ChevronDown, ListChecks, ListX } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
 import FormSheet from '@/components/FormSheet';
@@ -15,6 +15,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
 import SummaryRow from '@/components/SummaryRow';
 import { useBackStep } from '@/hooks/useBackHistory';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
   toDateInputValue,
@@ -169,6 +170,7 @@ export function ShoppingPick({
   const [draft, setDraft] = useState<DraftRange | null>(null);
   useBackStep(draft !== null, () => setDraft(null));
   const [choices, setChoices] = useState<Record<string, boolean>>({});
+  const isCompact = useIsShortScreen();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -442,6 +444,38 @@ export function ShoppingPick({
     }
   };
 
+  const hintText = startsTicked
+    ? 'Untick what you already have.'
+    : 'Tick what you need.';
+  const tickAll = rows.length > 0 && (
+    <ActionChips
+      className='shrink-0'
+      actions={[
+        {
+          key: 'tick-all',
+          icon: isAllTicked ? (
+            <ListX className='h-4 w-4' />
+          ) : (
+            <ListChecks className='h-4 w-4' />
+          ),
+          label: isAllTicked ? 'Untick all' : 'Tick all',
+          isDisabled: !isReady,
+          onClick: () =>
+            setChoices(
+              Object.fromEntries(rows.map((row) => [row.id, !isAllTicked])),
+            ),
+        },
+      ]}
+    />
+  );
+  const stepper = recipe && (
+    <div className='flex flex-wrap items-center gap-3'>
+      <span className='text-sm'>For</span>
+      <Stepper label='Servings' value={servings} onChange={setServings} />
+      <span className='text-sm'>{servings === 1 ? 'serving' : 'servings'}</span>
+    </div>
+  );
+
   if (draft) {
     const isDraftDone = draft.startKey !== '' && draft.endKey !== '';
     return (
@@ -533,99 +567,90 @@ export function ShoppingPick({
   }
 
   return (
-    <div className='grid gap-4'>
+    <div className='grid grid-cols-1 gap-4'>
       <div
         className={join(
           'flex flex-col gap-3 [@media(max-height:500px)]:max-h-none',
           columnClassName,
         )}
       >
-        <div className='shrink-0 space-y-3'>
-          {isRange ? (
-            <SummaryRow
-              label='Days'
-              ariaLabel='Change the days'
-              onClick={
-                isPlanLoaded
-                  ? () =>
-                      setDraft({
-                        startKey: span.startKey,
-                        endKey: span.startKey > span.endKey ? '' : span.endKey,
-                      })
-                  : undefined
-              }
-            >
-              <span className='flex flex-wrap items-baseline gap-x-2'>
-                <span>
-                  {span.startKey > span.endKey ? (
-                    'These days have passed'
-                  ) : (
-                    <SpanText {...span} />
+        <div
+          className={join('shrink-0', isCompact ? 'space-y-2' : 'space-y-3')}
+        >
+          {isCompact && !isRange ? (
+            <>
+              <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+                <div className='order-1 min-w-0 flex-1'>
+                  <p className='text-lg font-medium wrap-break-word'>{label}</p>
+                  {rows.length > 0 && (
+                    <p className='text-muted-foreground truncate text-xs'>
+                      Adding {selected.length} of {rows.length} · {hintText}
+                    </p>
                   )}
-                </span>
-                {isPlanLoaded && span.startKey <= span.endKey && (
-                  <span className='text-muted-foreground text-sm whitespace-nowrap'>
-                    {formatMealCount(span.meals.length)}
-                    {span.isClamped && ' from today on'}
-                  </span>
+                </div>
+                {stepper && (
+                  <div className='order-3 basis-full sm:order-2 sm:basis-auto'>
+                    {stepper}
+                  </div>
                 )}
-              </span>
-            </SummaryRow>
-          ) : (
-            <p className='text-lg font-medium wrap-break-word'>{label}</p>
-          )}
-          {recipe && (
-            <div className='flex flex-wrap items-center gap-3'>
-              <span className='text-sm'>For</span>
-              <Stepper
-                label='Servings'
-                value={servings}
-                onChange={setServings}
-              />
-              <span className='text-sm'>
-                {servings === 1 ? 'serving' : 'servings'}
-              </span>
-            </div>
-          )}
-          {stockLine && (
-            <p className='text-muted-foreground text-sm [@media(max-height:500px)]:hidden'>
-              {stockLine}
-            </p>
-          )}
-          {rows.length > 0 && (
-            <div className='flex items-center justify-between gap-3'>
-              <div className='text-muted-foreground min-w-0 text-sm'>
-                <p>
-                  Adding {selected.length} of {rows.length}
-                </p>
-                <p className='text-xs'>
-                  {startsTicked
-                    ? 'Untick what you already have.'
-                    : 'Tick what you need.'}
-                </p>
+                <div className='order-2 sm:order-3'>{tickAll}</div>
               </div>
-              <ActionChips
-                className='shrink-0'
-                actions={[
-                  {
-                    key: 'tick-all',
-                    icon: isAllTicked ? (
-                      <ListX className='h-4 w-4' />
-                    ) : (
-                      <ListChecks className='h-4 w-4' />
-                    ),
-                    label: isAllTicked ? 'Untick all' : 'Tick all',
-                    isDisabled: !isReady,
-                    onClick: () =>
-                      setChoices(
-                        Object.fromEntries(
-                          rows.map((row) => [row.id, !isAllTicked]),
-                        ),
-                      ),
-                  },
-                ]}
-              />
-            </div>
+              {stockLine && <StockNote text={stockLine} />}
+            </>
+          ) : (
+            <>
+              {isRange ? (
+                <SummaryRow
+                  label='Days'
+                  ariaLabel='Change the days'
+                  onClick={
+                    isPlanLoaded
+                      ? () =>
+                          setDraft({
+                            startKey: span.startKey,
+                            endKey:
+                              span.startKey > span.endKey ? '' : span.endKey,
+                          })
+                      : undefined
+                  }
+                >
+                  <span className='flex flex-wrap items-baseline gap-x-2'>
+                    <span>
+                      {span.startKey > span.endKey ? (
+                        'These days have passed'
+                      ) : (
+                        <SpanText {...span} />
+                      )}
+                    </span>
+                    {isPlanLoaded && span.startKey <= span.endKey && (
+                      <span className='text-muted-foreground text-sm whitespace-nowrap'>
+                        {formatMealCount(span.meals.length)}
+                        {span.isClamped && ' from today on'}
+                      </span>
+                    )}
+                  </span>
+                </SummaryRow>
+              ) : (
+                <p className='text-lg font-medium wrap-break-word'>{label}</p>
+              )}
+              {stepper}
+              {stockLine && (
+                <p className='text-muted-foreground text-sm [@media(max-height:500px)]:hidden'>
+                  {stockLine}
+                </p>
+              )}
+              {rows.length > 0 && (
+                <div className='flex items-center justify-between gap-3'>
+                  <div className='text-muted-foreground min-w-0 text-sm'>
+                    <p>
+                      Adding {selected.length} of {rows.length}
+                    </p>
+                    <p className='text-xs'>{hintText}</p>
+                  </div>
+                  {tickAll}
+                </div>
+              )}
+            </>
           )}
         </div>
         {rows.length === 0 ? (
@@ -667,18 +692,22 @@ export function ShoppingPick({
                       />
                     </span>
                     <span className='min-w-0 flex-1'>
-                      <span className='block wrap-break-word'>{row.name}</span>
+                      <span className='flex items-baseline justify-between gap-3'>
+                        <span className='min-w-0 wrap-break-word'>
+                          {row.name}
+                        </span>
+                        {amountText && (
+                          <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                            {amountText}
+                          </span>
+                        )}
+                      </span>
                       {hint && (
                         <span className='text-muted-foreground block text-xs'>
                           {hint}
                         </span>
                       )}
                     </span>
-                    {amountText && (
-                      <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                        {amountText}
-                      </span>
-                    )}
                   </label>
                 </li>
               );
@@ -711,6 +740,32 @@ export function ShoppingPick({
         }
       />
     </div>
+  );
+}
+
+interface StockNoteProps {
+  text: string;
+}
+
+function StockNote({ text }: StockNoteProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      aria-expanded={isOpen}
+      onClick={() => setIsOpen((open) => !open)}
+      className="border-border bg-muted/50 text-muted-foreground! relative h-auto min-h-8 w-full justify-start gap-2 rounded-xl border px-3 py-1 text-left text-sm font-normal whitespace-normal before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] [@media(max-height:500px)]:hidden"
+    >
+      <span className={join('min-w-0 flex-1', !isOpen && 'truncate')}>
+        {text}
+      </span>
+      <ChevronDown
+        className={join('h-4 w-4 shrink-0', isOpen && 'rotate-180')}
+        aria-hidden='true'
+      />
+    </Button>
   );
 }
 
