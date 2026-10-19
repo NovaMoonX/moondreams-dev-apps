@@ -326,12 +326,15 @@ function RecipeDrawer({
         <div className='space-y-4'>
           <div className='space-y-1'>
             <BackLink onBack={backToMore} />
-            <p className='font-medium'>Share this recipe</p>
+            <p className='font-medium [@media(max-height:599px)]:hidden'>
+              Share this recipe
+            </p>
           </div>
           <ShareView
             kind='RECIPE'
             sourceId={recipe.id}
             footerNode={shareFooter}
+            onClose={onClose}
           />
         </div>
       );

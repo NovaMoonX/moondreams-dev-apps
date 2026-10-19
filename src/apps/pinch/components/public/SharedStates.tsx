@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { Button, Skeleton } from '@moondreamsdev/dreamer-ui/components';
+
+import SharedBrand from '@apps/pinch/components/public/SharedBrand';
+import SlotCard from '@apps/pinch/components/public/SlotCard';
+
+const PINCH_PATH = '/pinch';
 
 export function SharedSkeleton() {
   return (
@@ -31,29 +37,47 @@ interface MessageProps {
   emoji: string;
   title: string;
   children: string;
-  action?: ReactNode;
+  actions: ReactNode;
 }
 
-function Message({ emoji, title, children, action }: MessageProps) {
+function Message({ emoji, title, children, actions }: MessageProps) {
   return (
-    <div className='mx-auto max-w-sm space-y-3 py-16 text-center'>
-      <span
-        aria-hidden='true'
-        className='bg-accent text-accent-foreground mx-auto grid size-16 place-items-center rounded-full text-3xl'
-      >
-        {emoji}
-      </span>
-      <h1 className='text-xl font-semibold'>{title}</h1>
-      <p className='text-muted-foreground text-sm text-pretty'>{children}</p>
-      {action}
+    <div className='mx-auto max-w-md space-y-4'>
+      <SharedBrand />
+      <SlotCard emoji={emoji} lead={<h1>{title}</h1>} hint={children}>
+        <div className='flex gap-2'>{actions}</div>
+      </SlotCard>
     </div>
+  );
+}
+
+interface OpenPinchButtonProps {
+  variant: 'primary' | 'secondary';
+}
+
+function OpenPinchButton({ variant }: OpenPinchButtonProps) {
+  const navigate = useNavigate();
+
+  return (
+    <Button
+      type='button'
+      variant={variant}
+      className='h-11 min-w-0 flex-1'
+      onClick={() => navigate(PINCH_PATH)}
+    >
+      Open Pinch
+    </Button>
   );
 }
 
 /** One answer for a link that was stopped, never existed or was mistyped, so nothing says which. */
 export function SharedNotFound() {
   return (
-    <Message emoji='🫙' title="This link isn't available">
+    <Message
+      emoji='🫙'
+      title="This link isn't available"
+      actions={<OpenPinchButton variant='primary' />}
+    >
       The person who shared it may have stopped sharing, or the address was
       mistyped.
     </Message>
@@ -70,10 +94,17 @@ export function SharedFailed({ onRetry }: SharedFailedProps) {
     <Message
       emoji='📡'
       title="We couldn't open this link"
-      action={
-        <Button type='button' className='h-12 px-6' onClick={onRetry}>
-          Try again
-        </Button>
+      actions={
+        <>
+          <Button
+            type='button'
+            className='h-11 min-w-0 flex-1'
+            onClick={onRetry}
+          >
+            Try again
+          </Button>
+          <OpenPinchButton variant='secondary' />
+        </>
       }
     >
       Check your connection and give it another try.
