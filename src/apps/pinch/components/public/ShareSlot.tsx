@@ -110,7 +110,7 @@ function SignedOutSlot({ target }: KindSlotProps) {
     >
       <Button
         type='button'
-        className='h-11 w-full gap-2'
+        className='disabled:bg-primary! disabled:text-primary-foreground! h-11 w-full gap-2 disabled:opacity-90!'
         disabled={isSigningIn}
         onClick={() => void handleSignIn()}
       >
@@ -195,7 +195,7 @@ function VisitorSlot({ uid, shareId, target }: VisitorSlotProps) {
       )}
       <Button
         type='button'
-        className='h-11 w-full'
+        className='disabled:bg-primary! disabled:text-primary-foreground! h-11 w-full disabled:opacity-90!'
         disabled={isAdding}
         onClick={() => void add()}
       >
