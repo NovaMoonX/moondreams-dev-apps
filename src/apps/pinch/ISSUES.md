@@ -1148,6 +1148,9 @@ A person can choose what Pinch reminds them about and how long a new fridge or f
 - [x] The rules matrix (owner, another user, signed out; out-of-bounds days, hour and lead time, a non-bool switch, an extra key, a pre-stamped `lastDigestDay`, a legacy document) gives the intended outcome on the new rules and denies on the previous ones; every pre-existing rule on the touched collections and the reminders rules answer the same.
 - [x] The note: nothing due sends nothing; past only, due only and both read right for 1, 2, 3 and 12 dishes; the hour boundary, other zones, an already-sent day and a person with the switch off are checked, and the handler was run against Taylor's boxes with a stub sender.
 - [x] A timer's push is scheduled when it starts, cancelled by pause, reset, finishing in view and leaving, and left to go out when it ends while the page is hidden.
+- [x] A timer's push reaches the person by one path: marked `inAppToast: false` so the in-app toast skips it, kept or cancelled (never doubled) by a picked-up cook, not scheduled for a timer already past its end, and cancelled by "Not now".
+- [x] The sender deletes finished reminders after 14 days (200 a run), a device's push token leaves the person on sign-out, and tokens FCM reports as gone are dropped.
+- [x] Settings' first change is a transaction that reads the server, so a device that was offline while another created the document never replaces it.
 - [ ] A real push reaching a real phone, locked, and the installed iPhone case: not checkable from the sandbox.
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
 - [x] `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `functions/README.md` and the README match what shipped.
