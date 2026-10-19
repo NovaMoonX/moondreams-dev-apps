@@ -93,7 +93,7 @@ function PickRowShell({
       onClick={onClick}
       className={join(
         'h-auto w-full justify-start gap-3 px-3! text-left focus-visible:outline-2 focus-visible:-outline-offset-2',
-        isCompact ? 'min-h-10 items-center py-0' : 'items-start py-1.5',
+        isCompact ? 'min-h-10 items-center py-0!' : 'items-start py-1.5!',
       )}
     >
       {chip}
