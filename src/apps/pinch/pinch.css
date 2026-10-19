@@ -249,3 +249,35 @@ html.pinch-theme.dark {
     var(--color-background)
   );
 }
+
+/* A voice command window empties from full to nothing over its length, and the lock's ring over its fifteen minutes; with reduced motion they stay full and the times say the rest. */
+@keyframes pinch-voice-bar {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes pinch-voice-ring {
+  to {
+    stroke-dashoffset: 100;
+  }
+}
+
+.pinch-voice-bar {
+  transform-origin: left;
+  animation: pinch-voice-bar var(--pinch-window-ms) linear forwards;
+}
+
+.pinch-voice-ring {
+  stroke-dasharray: 100;
+  animation-name: pinch-voice-ring;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pinch-voice-bar,
+  .pinch-voice-ring {
+    animation: none;
+  }
+}

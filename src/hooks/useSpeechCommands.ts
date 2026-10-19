@@ -48,6 +48,8 @@ interface ListenerOptions {
   onFinalTranscript: (alternatives: string[]) => boolean | void;
   /** Stops listening after this long with no phrase used; never when left out. */
   idleStopMs?: number;
+  /** Runs when listening stops by itself (never for a `stop` the caller asked for), with why. */
+  onHalt?: (error: SpeechCommandsError) => void;
 }
 
 const getRecognitionConstructor = (): RecognitionConstructor | null => {
@@ -125,6 +127,7 @@ export const createSpeechListener = (
     stopReading();
     setStatus('off');
     setError(error);
+    state.options?.onHalt?.(error);
   }
 
   const handleResult = (event: SpeechRecognitionEvent) => {
@@ -352,7 +355,7 @@ export function canUseSpeechCommands() {
  * from a tap, which also readies the browser's voice. It restarts after the browser ends a session, backing off and
  * giving up after repeated failures, pauses while `say` reads something aloud (so it never hears itself; `quiet` cuts a
  * reading short; a voice that never starts is given up for the session) and while the page is hidden, and stops for
- * good on a refused or missing microphone or after `idleStopMs` with nothing used. Phrase matching is the caller's.
+ * good on a refused or missing microphone or after `idleStopMs` with nothing used (`onHalt` says so). Phrase matching is the caller's.
  * Secure pages only.
  */
 export function useSpeechCommands({
@@ -360,6 +363,7 @@ export function useSpeechCommands({
   speechLang,
   onFinalTranscript,
   idleStopMs,
+  onHalt,
 }: ListenerOptions) {
   const [isSupported] = useState(canUseSpeechCommands);
   const [status, setStatus] = useState<SpeechCommandsStatus>('off');
@@ -367,7 +371,13 @@ export function useSpeechCommands({
   const [listener] = useState(() => createSpeechListener(setStatus, setError));
 
   useEffect(() => {
-    listener.setOptions({ lang, speechLang, onFinalTranscript, idleStopMs });
+    listener.setOptions({
+      lang,
+      speechLang,
+      onFinalTranscript,
+      idleStopMs,
+      onHalt,
+    });
   });
 
   useEffect(() => {
