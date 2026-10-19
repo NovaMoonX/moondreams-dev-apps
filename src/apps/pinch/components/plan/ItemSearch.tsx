@@ -29,9 +29,10 @@ const MAX_RESULTS = 8;
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 
-// A landscape phone shows two rows, and the last one left drops its bottom border because the frame draws one.
+// A landscape phone shows two shorter rows, and the last one left drops its bottom border because the frame draws one.
 const getSuggestionRowClass = (index: number) =>
   join(
+    '[@media(max-height:499px)]:[&>button]:min-h-10',
     index === 1 && '[@media(max-height:499px)]:border-b-0',
     index === 2 && '[@media(max-height:499px)]:hidden',
   );
@@ -62,7 +63,7 @@ function IngredientPickRow({
       variant='tertiary'
       disabled={isDisabled}
       onClick={onClick}
-      className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
+      className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2'
     >
       <span className='min-w-0 flex-1 truncate font-medium'>{name}</span>
       {trailing}

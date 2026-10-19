@@ -168,7 +168,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
             hasViewAction={false}
           />
         ) : (
-          <div className='space-y-3 pb-4'>
+          <div className='space-y-3 pb-4 [@media(max-height:499px)]:pb-0'>
             <p className='text-muted-foreground text-sm'>
               What do you need? It goes on the list at a typical serving, and
               the arrow beside it on the list changes how much.
