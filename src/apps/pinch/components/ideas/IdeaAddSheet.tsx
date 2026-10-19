@@ -1,12 +1,10 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import MethodPicker from '@/components/MethodPicker';
-import { useBackStep } from '@/hooks/useBackHistory';
 import {
   IdeaLinkWay,
   IdeaPhotoWay,
@@ -46,7 +44,6 @@ function IdeaAddSheet({
     }
     onClose();
   };
-  useBackStep(stage !== 'pick', () => setStage('pick'));
 
   return (
     <FormSheet
@@ -69,15 +66,7 @@ function IdeaAddSheet({
         </div>
       ) : (
         <div className='space-y-3'>
-          <Button
-            type='button'
-            variant='tertiary'
-            className='h-10 gap-1 px-0!'
-            onClick={() => setStage('pick')}
-          >
-            <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-            Back
-          </Button>
+          <BackLink onBack={() => setStage('pick')} />
           {stage === 'link' && (
             <IdeaLinkWay
               uid={uid}

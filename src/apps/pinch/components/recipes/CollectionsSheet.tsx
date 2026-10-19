@@ -7,15 +7,15 @@ import {
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import Field from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import IntroCard from '@/components/IntroCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -78,7 +78,6 @@ function CollectionEditView({
   const [label, setLabel] = useState(collection.label);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useBackStep(true, onBack);
 
   const trimmed = label.trim();
   const duplicate = findCollectionByLabel(collections, trimmed, collection.id);
@@ -143,15 +142,7 @@ function CollectionEditView({
 
   return (
     <div className='space-y-4'>
-      <Button
-        type='button'
-        variant='tertiary'
-        className='h-10 gap-1 px-0!'
-        onClick={onBack}
-      >
-        <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-        Back
-      </Button>
+      <BackLink onBack={onBack} />
       <Form
         id='pinch-collection'
         form={[

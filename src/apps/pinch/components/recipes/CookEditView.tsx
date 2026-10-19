@@ -9,14 +9,14 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronLeft, NotebookPen } from 'lucide-react';
+import { NotebookPen } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch } from '@/store';
 import {
@@ -72,7 +72,6 @@ function CookEditView({
   const [servings, setServings] = useState(cook?.servings ?? defaultServings);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useBackStep(true, onBack);
 
   const isTimeUntouched =
     cook !== null && date === start.date && time === start.time;
@@ -206,15 +205,7 @@ function CookEditView({
 
   return (
     <div className='space-y-4'>
-      <Button
-        type='button'
-        variant='tertiary'
-        className='h-10 gap-1 px-0!'
-        onClick={onBack}
-      >
-        <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-        Back
-      </Button>
+      <BackLink onBack={onBack} />
       <div className='space-y-0.5'>
         <p className='font-medium wrap-break-word'>{recipeTitle}</p>
         <p className='text-muted-foreground text-sm'>

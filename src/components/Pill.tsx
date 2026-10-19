@@ -14,6 +14,8 @@ interface PillProps {
   isThin?: boolean;
   /** Shown but can't be chosen, like a sold-out showing. */
   isDisabled?: boolean;
+  /** The full phrase when the visible words are a short form of it. */
+  ariaLabel?: string;
   className?: string;
 }
 
@@ -26,6 +28,7 @@ function Pill({
   icon,
   isThin = false,
   isDisabled = false,
+  ariaLabel,
   className,
 }: PillProps) {
   return (
@@ -35,6 +38,7 @@ function Pill({
       rounded='full'
       variant={isSelected ? 'primary' : 'secondary'}
       aria-pressed={isSelected}
+      aria-label={ariaLabel}
       data-pill=''
       disabled={isDisabled}
       onClick={onClick}
@@ -45,7 +49,11 @@ function Pill({
         className,
       )}
     >
-      {emoji && <span aria-hidden='true'>{emoji}</span>}
+      {emoji && (
+        <span aria-hidden='true' data-pill-emoji=''>
+          {emoji}
+        </span>
+      )}
       {icon}
       {typeof children === 'string' ? (
         <span className='truncate'>{children}</span>

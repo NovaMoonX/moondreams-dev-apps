@@ -244,7 +244,7 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
     if (servingGrams !== null) return null;
     return extras.serving.enabled
       ? 'To type it per serving, set one serving in grams or ounces above.'
-      : 'To type it per serving, set the serving size in grams or ounces first.';
+      : 'To type it per serving, set the serving size in grams or ounces first, with Serving size below.';
   };
   const servingHint = getServingHint();
   const getProblem = () => {
@@ -376,23 +376,7 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
               </PillRow>
             </div>
             {servingHint && (
-              <p className='text-muted-foreground text-xs'>
-                {servingHint}
-                {!extras.serving.enabled && (
-                  <>
-                    {' '}
-                    <Button
-                      type='button'
-                      variant='link'
-                      size='sm'
-                      className='h-auto min-h-0 p-0 align-baseline text-xs'
-                      onClick={() => reveal('serving')}
-                    >
-                      Add serving size
-                    </Button>
-                  </>
-                )}
-              </p>
+              <p className='text-muted-foreground text-xs'>{servingHint}</p>
             )}
             <div className='grid grid-cols-2 gap-3'>
               {NUTRITION_FIELDS.map((field) => (

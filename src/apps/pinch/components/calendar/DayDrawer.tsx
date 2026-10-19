@@ -1,14 +1,14 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChartColumn, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChartColumn, ChevronRight } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import GroupRow from '@/components/GroupRow';
 import StatTile from '@/components/StatTile';
 import TickMark from '@/components/TickMark';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useAppSelector } from '@/store';
 import PeriodLeftOutHelp from '@apps/pinch/components/calendar/PeriodLeftOutHelp';
@@ -97,26 +97,6 @@ const getMealDetail = (
   }
   return names.length === 1 ? formatServings(meal.items[0].servings) : null;
 };
-
-interface BackLinkProps {
-  onBack: () => void;
-}
-
-function BackLink({ onBack }: BackLinkProps) {
-  useBackStep(true, onBack);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 px-0!'
-      onClick={onBack}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
-    </Button>
-  );
-}
 
 interface DayDrawerProps {
   uid: string;

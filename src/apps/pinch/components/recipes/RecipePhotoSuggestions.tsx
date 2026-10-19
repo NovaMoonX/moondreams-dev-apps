@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 
 import FormSection from '@/components/FormSection';
@@ -18,6 +19,9 @@ import type { WebPhoto } from '@apps/pinch/types';
 import { getPhotoQuery, getPhotoQueryKey } from '@apps/pinch/utils/recipeCover';
 
 const POT = '🍲';
+
+const SHORT_TILE_CLASS =
+  '[@media(max-height:500px)]:aspect-auto [@media(max-height:500px)]:h-14';
 
 // A hotlinked photo is often gone or refuses to be shown elsewhere, so the person hears it at the tap, not after saving.
 
@@ -137,7 +141,10 @@ function RecipePhotoSuggestions({
             {SKELETON_TILES.map((tile) => (
               <div
                 key={tile}
-                className='bg-accent aspect-4/3 animate-pulse rounded-xl'
+                className={join(
+                  'bg-accent aspect-4/3 animate-pulse rounded-xl',
+                  SHORT_TILE_CLASS,
+                )}
               />
             ))}
           </div>
@@ -176,6 +183,7 @@ function RecipePhotoSuggestions({
           selectedKey={selectedUrl}
           checkingKey={checkingUrl}
           fallback={POT}
+          tileClassName={SHORT_TILE_CLASS}
           onPick={(key) => {
             const photo = data.find((entry) => entry.imageUrl === key);
             if (photo) void handlePick(photo);

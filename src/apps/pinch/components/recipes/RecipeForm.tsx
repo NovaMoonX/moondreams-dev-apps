@@ -58,6 +58,7 @@ import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_TITLE_LENGTH,
+  NUTRITION_METRICS,
   SECTION_COUNT_THRESHOLD,
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
@@ -79,6 +80,7 @@ import {
   selectIsCollectionsReady,
   selectNotesByRecipe,
   selectRecipesById,
+  selectShowNutrition,
   selectSourceCounts,
   selectSources,
   selectSourcesById,
@@ -163,6 +165,10 @@ function RecipeForm({
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
+  const showNutrition = useAppSelector(selectShowNutrition);
+  const isNutritionShown = NUTRITION_METRICS.some(
+    (metric) => showNutrition[metric],
+  );
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
   const collections = useAppSelector(selectCollections);
   const isCollectionsReady = useAppSelector(selectIsCollectionsReady);
@@ -581,20 +587,24 @@ function RecipeForm({
           </FormSection>
         ),
       }),
-      custom({
-        name: 'nutrition',
-        label: '',
-        renderComponent: (props) => (
-          <FormSection title='Nutrition'>
-            <NutritionReview
-              calculated={calculation.values}
-              leftOut={calculation.leftOut}
-              typed={props.value as Record<NutritionMetric, string>}
-              onChange={props.onValueChange}
-            />
-          </FormSection>
-        ),
-      }),
+      ...(isNutritionShown
+        ? [
+            custom({
+              name: 'nutrition',
+              label: '',
+              renderComponent: (props) => (
+                <FormSection title='Nutrition'>
+                  <NutritionReview
+                    calculated={calculation.values}
+                    leftOut={calculation.leftOut}
+                    typed={props.value as Record<NutritionMetric, string>}
+                    onChange={props.onValueChange}
+                  />
+                </FormSection>
+              ),
+            }),
+          ]
+        : []),
       ...groupFields,
       ...(tracking === 'full'
         ? [
@@ -622,6 +632,7 @@ function RecipeForm({
     calculation,
     isDirtyRef,
     hasSourcesFailed,
+    isNutritionShown,
     sourceOptions,
     ownsCollections,
     collections,

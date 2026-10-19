@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
-  ChevronLeft,
   ChevronRight,
   Plus,
   Star,
@@ -12,6 +11,7 @@ import {
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import FormSheet from '@/components/FormSheet';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -504,15 +504,7 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
     if (adding === 'price') {
       return (
         <div className='space-y-3 pb-4'>
-          <Button
-            type='button'
-            variant='tertiary'
-            className='h-10 gap-1 px-0!'
-            onClick={() => setAdding('choose')}
-          >
-            <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-            Back
-          </Button>
+          <BackLink onBack={() => setAdding('choose')} />
           <p className='text-muted-foreground text-sm'>
             Which ingredient is it for?
           </p>
