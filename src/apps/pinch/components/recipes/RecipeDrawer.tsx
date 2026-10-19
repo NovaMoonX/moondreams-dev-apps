@@ -23,6 +23,7 @@ import GroupRow from '@/components/GroupRow';
 import LabelChip from '@/components/LabelChip';
 import MacroStats from '@/components/MacroStats';
 import SectionDivider from '@/components/SectionDivider';
+import StarButton from '@/components/StarButton';
 import StatTile from '@/components/StatTile';
 import TickMark from '@/components/TickMark';
 import { useBackStep } from '@/hooks/useBackHistory';
@@ -40,6 +41,7 @@ import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import { SECTION_COUNT_THRESHOLD, UNIT_LABELS } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
+import { useRecipeFavorite } from '@apps/pinch/hooks/useRecipeFavorite';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectCollectionCounts,
@@ -97,6 +99,7 @@ import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { hasCover } from '@apps/pinch/utils/recipeCover';
 import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
+import { isStarred } from '@apps/pinch/utils/favorites';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -208,6 +211,7 @@ function RecipeDrawer({
   const show = useAppSelector(selectShowNutrition);
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
   const { openSubview } = usePinchOverlay();
+  const toggleFavorite = useRecipeFavorite(uid);
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
   const hasPantry = useAppSelector(selectHasPackages);
   const packagesByIngredient = useAppSelector(selectPackagesByIngredient);
@@ -563,12 +567,20 @@ function RecipeDrawer({
       title={recipe.title}
       viewKey={shownView}
       actions={
-        <DoorButton
-          label='Notes and history'
-          icon={<History className='h-5 w-5' aria-hidden='true' />}
-          isOpen={shownView === 'history'}
-          onClick={(opener) => openView('history', opener)}
-        />
+        <>
+          <StarButton
+            isOn={isStarred(recipe)}
+            label={`Favorite ${recipe.title}`}
+            onClassName='text-[var(--pinch-drizzle)]'
+            onClick={() => toggleFavorite(recipe)}
+          />
+          <DoorButton
+            label='Notes and history'
+            icon={<History className='h-5 w-5' aria-hidden='true' />}
+            isOpen={shownView === 'history'}
+            onClick={(opener) => openView('history', opener)}
+          />
+        </>
       }
       footer={
         <div className='flex gap-2 px-4 pb-4'>
