@@ -528,7 +528,7 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
   const getAddBody = () => {
     if (adding === 'price') {
       return (
-        <div className='space-y-3 pb-4'>
+        <div className='space-y-3 pb-4 [@media(max-height:499px)]:pb-0'>
           <BackLink onBack={() => setAdding('choose')} />
           <p className='text-muted-foreground text-sm'>
             Which ingredient is it for?

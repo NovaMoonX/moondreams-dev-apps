@@ -169,7 +169,6 @@ interface IngredientEditorProps {
   /** The drawer has a footer button and puts "remove" in its body; an inline row shows it beside the fields. */
   showRemove: boolean;
   isGroupLive: boolean;
-  suggestions: ItemSuggestions;
 }
 
 /** One ingredient's details: amount, unit and a preparation note, or the way to resolve a name the reader found that no ingredient matches. Shared by the phone drawer and the inline row. */
@@ -182,7 +181,6 @@ function IngredientEditor({
   onRemove,
   showRemove,
   isGroupLive,
-  suggestions,
 }: IngredientEditorProps) {
   const [isChoosing, setIsChoosing] = useState(false);
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
@@ -281,7 +279,6 @@ function IngredientEditor({
           <ItemSearch
             uid={uid}
             excludeIds={usedInGroup}
-            suggestions={suggestions}
             onPick={(ingredientId) => {
               setIsChoosing(false);
               onUpdate({ ingredientId, proposedName: null, newName: null });
@@ -822,7 +819,6 @@ function RecipeIngredients({
                             displayName={name}
                             showRemove={false}
                             isGroupLive={false}
-                            suggestions={suggestions}
                             onUpdate={(patch) => update(row.id, patch)}
                             onRemove={() => remove(row.id)}
                           />
@@ -963,7 +959,6 @@ function IngredientDrawer({
           displayName={getName(row)}
           showRemove={mode.kind === 'edit'}
           isGroupLive
-          suggestions={suggestions}
           onUpdate={(patch) => onUpdate(row.id, patch)}
           onRemove={() => {
             onRemove(row.id);
