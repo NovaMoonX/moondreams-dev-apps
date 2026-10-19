@@ -310,6 +310,7 @@ export const saveRecipe = createAsyncThunk<
           source: draft.source,
           collectionIds: draft.collectionIds ?? [],
           isArchived: false,
+          isFavorite: false,
           createdAt: now,
         };
         batch.set(recipeDoc(uid, recipeId), recipe);
@@ -343,6 +344,30 @@ export const saveRecipe = createAsyncThunk<
       ));
 
     return { recipeId, linkedIdea };
+  },
+);
+
+interface SetRecipeFavoriteInput {
+  uid: string;
+  id: string;
+  isFavorite: boolean;
+}
+
+/** Writes the value asked for, never a toggle read from a cache, and nothing else: an edit never writes `isFavorite`, and the star leaves `updatedAt` alone because it versions the cover. */
+export const setRecipeFavorite = createAsyncThunk<
+  void,
+  SetRecipeFavoriteInput,
+  { rejectValue: string }
+>(
+  'pinch/recipes/setFavorite',
+  async ({ uid, id, isFavorite }, { rejectWithValue }) => {
+    try {
+      await updateDoc(recipeDoc(uid, id), { isFavorite });
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to change this star.'),
+      );
+    }
   },
 );
 

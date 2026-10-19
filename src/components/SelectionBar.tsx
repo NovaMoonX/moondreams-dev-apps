@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -33,6 +33,10 @@ interface SelectionBarProps {
 function SelectionBar({ actions, primary, note }: SelectionBarProps) {
   const { isBelow } = useMediaQuery();
   const isPhone = isBelow('sm');
+  useEffect(() => {
+    document.documentElement.setAttribute('data-selection-bar', '');
+    return () => document.documentElement.removeAttribute('data-selection-bar');
+  }, []);
   const renderLabel = (action: SelectionBarAction) => (
     <span className='inline-flex items-center gap-1.5'>
       {!isPhone && action.icon}

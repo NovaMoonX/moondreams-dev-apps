@@ -240,6 +240,7 @@ function RecipeForm({
         sourceId: null,
         collectionIds: [],
         isArchived: false,
+        isFavorite: false,
         createdAt: 0,
         updatedAt: 0,
       },

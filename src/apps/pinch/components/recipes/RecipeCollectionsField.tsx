@@ -45,7 +45,7 @@ interface CollectionsEditorProps {
   suggestions: CollectionSuggestion[];
 }
 
-function CollectionsEditor({
+export function CollectionsEditor({
   value,
   onChange,
   collections,
