@@ -8,10 +8,12 @@ export const SEND_WINDOW_MS = 30 * 60_000;
 const MAX_NAME_LENGTH = 40;
 const NAMES_SHOWN = 2;
 
-/** One thing to act on: a dish (later an ingredient) and how many days it is from its date. Negative is past. */
+/** One thing to act on: a dish or an ingredient, and how many days it is from its date. Negative is past. */
 export interface DigestItem {
   name: string;
   daysLeft: number;
+  /** Set for an ingredient in the pantry; a dish leaves it out. */
+  kind?: 'ingredient';
 }
 
 export interface DigestMessage {
@@ -124,6 +126,61 @@ export const toDigestItems = (
   );
 };
 
+/** One item per ingredient, however many packages of it there are, at its nearest date; nearest first. A package with no usable name or date is skipped. */
+export const toPackageDigestItems = (
+  packages: { ingredientName: unknown; expiresAt: unknown }[],
+  today: number,
+): DigestItem[] => {
+  const byName = packages.reduce((acc, pkg) => {
+    if (
+      typeof pkg.ingredientName !== 'string' ||
+      typeof pkg.expiresAt !== 'number'
+    ) {
+      return acc;
+    }
+    const name = cleanName(pkg.ingredientName);
+    if (name === '') return acc;
+    const key = name.toLowerCase();
+    const daysLeft = getDaysLeft(pkg.expiresAt, today);
+    const known = acc.get(key);
+    return known && known.daysLeft <= daysLeft
+      ? acc
+      : acc.set(key, { name, daysLeft, kind: 'ingredient' });
+  }, new Map<string, DigestItem>());
+
+  return Array.from(byName.values()).sort(
+    (a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name),
+  );
+};
+
+/** Every source's items as one list, nearest first; a dish and an ingredient with the same name are one thing to look at, at the nearer date, and the dish keeps it. */
+export const mergeDigestItems = (lists: DigestItem[][]): DigestItem[] => {
+  const byName = lists.flat().reduce((acc, entry) => {
+    const key = entry.name.toLowerCase();
+    const known = acc.get(key);
+    const isNearer =
+      known === undefined ||
+      entry.daysLeft < known.daysLeft ||
+      (entry.daysLeft === known.daysLeft &&
+        known.kind === 'ingredient' &&
+        entry.kind === undefined);
+    return isNearer ? acc.set(key, entry) : acc;
+  }, new Map<string, DigestItem>());
+
+  return Array.from(byName.values()).sort(
+    (a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name),
+  );
+};
+
+export const DIGEST_LINK_FRIDGE = '/pinch?tab=kitchen&open=fridge';
+export const DIGEST_LINK_PANTRY = '/pinch?tab=kitchen&open=pantry';
+
+/** The note opens the fridge while it names a dish, and the pantry when it is only ingredients. */
+export const getDigestLink = (items: DigestItem[]) =>
+  items.some((entry) => entry.kind !== 'ingredient')
+    ? DIGEST_LINK_FRIDGE
+    : DIGEST_LINK_PANTRY;
+
 /** "A", "A and B", "A, B and 3 more": two names at most. */
 export const formatNames = (items: DigestItem[]) => {
   const names = items.slice(0, NAMES_SHOWN).map((item) => item.name);
@@ -145,6 +202,14 @@ export const getDigestMessage = (items: DigestItem[]): DigestMessage | null => {
   const past = items.filter((item) => item.daysLeft < 0);
   const due = items.filter((item) => item.daysLeft >= 0);
   if (past.length === 0 && due.length === 0) return null;
+
+  // An ingredient in the list makes it a note about the kitchen, which says what needs a look, not which of its words fit a dish.
+  if (items.some((item) => item.kind === 'ingredient')) {
+    return {
+      title: 'Check your kitchen',
+      body: `${formatNames(items)} ${items.length === 1 ? 'needs' : 'need'} a look`,
+    };
+  }
 
   const be = (list: DigestItem[]) => (list.length === 1 ? 'is' : 'are');
   const its = (list: DigestItem[]) => (list.length === 1 ? 'its' : 'their');

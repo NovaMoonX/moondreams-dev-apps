@@ -22,6 +22,8 @@ import {
 } from '@apps/pinch/components/kitchen/ingredientFilters';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
 import PreparedEntry from '@apps/pinch/components/containers/PreparedEntry';
+import PackageFormSheet from '@apps/pinch/components/pantry/PackageFormSheet';
+import PantryEntry from '@apps/pinch/components/pantry/PantryEntry';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import {
@@ -42,6 +44,7 @@ import {
   selectProducts,
   selectProductsById,
   selectContainersLoadError,
+  selectPackagesLoadError,
   selectShowNutrition,
   selectStores,
   selectUsedIngredientIds,
@@ -67,6 +70,7 @@ type Overlay =
   | { kind: 'details'; id: string }
   | { kind: 'form'; id: string | null }
   | { kind: 'product'; ingredientId: string; productId: string | null }
+  | { kind: 'package'; ingredientId: string }
   | { kind: 'fillIn'; gaps: Gap[] };
 
 interface KitchenScreenProps {
@@ -102,6 +106,11 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     (state) =>
       state.pinch.containers.items.length > 0 ||
       selectContainersLoadError(state) !== null,
+  );
+  const hasPantry = useAppSelector(
+    (state) =>
+      state.pinch.packages.items.length > 0 ||
+      selectPackagesLoadError(state) !== null,
   );
   const trimmed = query.trim();
   const yours = useMemo(
@@ -355,14 +364,15 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           )}
         </FilterBar>
       )}
-      {(hasPrepared || storeCount > 0 || productCount > 0) &&
+      {(hasPrepared || hasPantry || storeCount > 0 || productCount > 0) &&
         !hasFilters &&
         trimmed === '' && (
           <nav
             aria-label='Also in Kitchen'
-            className='grid grid-cols-2 gap-2 lg:gap-x-8'
+            className='grid grid-cols-2 gap-2 lg:gap-x-8 [&>:last-child:nth-child(odd)]:col-span-2 lg:[&>:last-child:nth-child(odd)]:col-span-1'
           >
             {hasPrepared && <PreparedEntry />}
+            {hasPantry && <PantryEntry />}
             {(storeCount > 0 || productCount > 0) && (
               <EntryTile
                 icon={<Store className='h-4 w-4' />}
@@ -420,6 +430,24 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
           }
           onEditProduct={(ingredientId, productId) =>
             setOverlay({ kind: 'product', ingredientId, productId })
+          }
+          onOpenPantry={(ingredientId) => {
+            setOverlay(null);
+            openSubview({ kind: 'pantry', ingredientId });
+          }}
+          onAddPackage={(ingredientId) =>
+            setOverlay({ kind: 'package', ingredientId })
+          }
+        />
+      )}
+      {overlay?.kind === 'package' && (
+        <PackageFormSheet
+          key={overlay.ingredientId}
+          uid={uid}
+          pkg={null}
+          ingredientId={overlay.ingredientId}
+          onClose={() =>
+            setOverlay({ kind: 'details', id: overlay.ingredientId })
           }
         />
       )}

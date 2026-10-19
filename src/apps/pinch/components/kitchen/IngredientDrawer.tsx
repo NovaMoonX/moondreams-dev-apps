@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
+import IngredientStock from '@apps/pinch/components/pantry/IngredientStock';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { setDefaultProduct } from '@apps/pinch/store/actions/productActions';
@@ -43,6 +44,9 @@ interface IngredientDrawerProps {
   onModify: (id: string) => void;
   onAddProduct: (ingredientId: string) => void;
   onEditProduct: (ingredientId: string, productId: string) => void;
+  /** Closes the drawer and opens the pantry on this ingredient's packages. */
+  onOpenPantry: (ingredientId: string) => void;
+  onAddPackage: (ingredientId: string) => void;
 }
 
 function IngredientDrawer({
@@ -52,6 +56,8 @@ function IngredientDrawer({
   onModify,
   onAddProduct,
   onEditProduct,
+  onOpenPantry,
+  onAddPackage,
 }: IngredientDrawerProps) {
   const dispatch = useAppDispatch();
   const products =
@@ -214,6 +220,12 @@ function IngredientDrawer({
             />
           </section>
         )}
+
+        <IngredientStock
+          ingredientId={ingredient.id}
+          onOpen={() => onOpenPantry(ingredient.id)}
+          onAdd={() => onAddPackage(ingredient.id)}
+        />
 
         <section aria-label='Where you buy it' className='space-y-2'>
           <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>

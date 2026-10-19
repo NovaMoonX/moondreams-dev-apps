@@ -7,9 +7,12 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { sendPushToUsers, toAppUrl } from '../../notifications/sendPush.js';
 import {
   getDigestBounds,
+  getDigestLink,
   getDigestMessage,
   getDigestRun,
+  mergeDigestItems,
   toDigestItems,
+  toPackageDigestItems,
   type DigestItem,
   type DigestMessage,
 } from './eatSoonDigest.js';
@@ -19,8 +22,8 @@ if (getApps().length === 0) {
 }
 
 const SETTINGS_PATH = 'apps/pinch/settings';
-const LINK_PATH = '/pinch?tab=kitchen&open=fridge';
 const BOX_LIMIT = 100;
+const PACKAGE_LIMIT = 100;
 const DEFAULT_LEAD_DAYS = 1;
 
 interface DigestContext {
@@ -28,7 +31,7 @@ interface DigestContext {
   leadDays: number;
 }
 
-/** One place a note draws its things-to-act-on from. `flag` is the switch under `reminders` in the person's settings; a new source (ingredients about to expire) is one more entry here, and one push still goes out. */
+/** One place a note draws its things-to-act-on from. `flag` is the switch under `reminders` in the person's settings; a new source is one more entry here, and one push still goes out. */
 interface DigestSource {
   flag: string;
   collect: (
@@ -61,8 +64,32 @@ const collectBoxes: DigestSource['collect'] = async (
   );
 };
 
+const collectPackages: DigestSource['collect'] = async (
+  firestore,
+  uid,
+  { today, leadDays },
+) => {
+  const { from, to } = getDigestBounds(today, leadDays);
+  const snapshot = await firestore
+    .collection(`apps/pinch/kitchens/${uid}/packages`)
+    .where('status', '==', 'IN_STOCK')
+    .where('expiresAt', '>=', from)
+    .where('expiresAt', '<=', to)
+    .orderBy('expiresAt')
+    .limit(PACKAGE_LIMIT)
+    .get();
+  return toPackageDigestItems(
+    snapshot.docs.map((pkg) => ({
+      ingredientName: pkg.get('ingredientName'),
+      expiresAt: pkg.get('expiresAt'),
+    })),
+    today,
+  );
+};
+
 export const DIGEST_SOURCES: DigestSource[] = [
   { flag: 'eatSoon', collect: collectBoxes },
+  { flag: 'expiring', collect: collectPackages },
 ];
 
 export interface DigestSent {
@@ -152,25 +179,22 @@ export async function runEatSoonDigest(
         });
         if (due === null) return;
 
-        const items = (
+        const items = mergeDigestItems(
           await Promise.all(
             DIGEST_SOURCES.filter(
               (source) => reminders[source.flag] === true,
             ).map((source) =>
               source.collect(firestore, uid, { today: due.today, leadDays }),
             ),
-          )
-        )
-          .flat()
-          .sort(
-            (a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name),
-          );
+          ),
+        );
         const message = getDigestMessage(items);
         if (message === null) return;
 
         if (!(await claimDay(firestore, uid, due.day))) return;
 
-        const link = toAppUrl(LINK_PATH) ?? LINK_PATH;
+        const linkPath = getDigestLink(items);
+        const link = toAppUrl(linkPath) ?? linkPath;
         const sent = { uid, day: due.day, message, link };
         await send(sent);
         run.sent.push(sent);

@@ -12,7 +12,12 @@ import {
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { BrushCleaning, Plus, UtensilsCrossed } from 'lucide-react';
+import {
+  BrushCleaning,
+  Package as PackageIcon,
+  Plus,
+  UtensilsCrossed,
+} from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
 import EntryTile from '@/components/EntryTile';
@@ -27,6 +32,9 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import PantryFromShoppingSheet, {
+  type PutAwayRow,
+} from '@apps/pinch/components/pantry/PantryFromShoppingSheet';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
 import ShoppingMealsSheet from '@apps/pinch/components/shopping/ShoppingMealsSheet';
@@ -40,6 +48,7 @@ import {
   SHOPPING_VIEWS,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
+import { useShoppingPutAway } from '@apps/pinch/hooks/useShoppingPutAway';
 import {
   clearCheckedShoppingItems,
   removeShoppingItem,
@@ -48,6 +57,7 @@ import {
 } from '@apps/pinch/store/actions/shoppingActions';
 import {
   selectIngredientsById,
+  selectIsPackagesReady,
   selectShoppingById,
   selectShoppingCost,
   selectShoppingItems,
@@ -71,6 +81,7 @@ import {
   getShoppingSourcesText,
   getShopRowId,
   getShownShoppingView,
+  sumShopAmounts,
   type ShoppingGroup,
   type ShoppingRowData,
   type ShoppingSourceLabel,
@@ -288,7 +299,10 @@ function useHeldRows() {
 }
 
 type Overlay =
-  { kind: 'add' } | { kind: 'item'; id: string } | { kind: 'meals' };
+  | { kind: 'add' }
+  | { kind: 'item'; id: string }
+  | { kind: 'meals' }
+  | { kind: 'pantry'; rows: PutAwayRow[] };
 
 interface ShoppingScreenProps {
   uid: string;
@@ -320,6 +334,8 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const isPantryReady = useAppSelector(selectIsPackagesReady);
+  const { isPutAway, markPutAway } = useShoppingPutAway(uid);
   const [query, setQuery] = useState('');
   const [pick, setPick] = useState<{ view: ShoppingView; query: string }>({
     view: 'toBuy',
@@ -346,6 +362,28 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     const item = itemsById.get(id);
     return item ? [item] : [];
   });
+  // What came home and has not been offered to the pantry yet, one line per ingredient.
+  const putAwayRows = rows.got
+    .flatMap((group) => group.rows)
+    .flatMap((row): PutAwayRow[] => {
+      const rowItems = row.itemIds.flatMap((id) => {
+        const item = itemsById.get(id);
+        return item ? [item] : [];
+      });
+      if (rowItems.length === 0 || rowItems.every(isPutAway)) return [];
+
+      const total = sumShopAmounts(rowItems);
+      return [
+        {
+          id: row.id,
+          ingredientId: rowItems[0].ingredientId,
+          name: row.name,
+          items: rowItems.map(({ id, updatedAt }) => ({ id, updatedAt })),
+          amount: total?.amount ?? null,
+          unit: total?.unit ?? 'EACH',
+        },
+      ];
+    });
   const hasSearch = itemCount >= LIST_SEARCH_THRESHOLD;
   const activeQuery = hasSearch ? query.trim() : '';
   const found = useMemo(
@@ -569,9 +607,22 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         </div>
       );
     };
+    const hasPantryChip = !isSearching && putAwayRows.length > 0;
     const clearButton = !isSearching && gotCount > 0 && (
       <ActionChips
         actions={[
+          ...(hasPantryChip
+            ? [
+                {
+                  key: 'to-pantry',
+                  icon: <PackageIcon className='h-4 w-4' />,
+                  label: 'Add to pantry',
+                  isDisabled: !isPantryReady,
+                  onClick: () =>
+                    setOverlay({ kind: 'pantry', rows: putAwayRows }),
+                },
+              ]
+            : []),
           {
             key: 'clear-got',
             icon: <BrushCleaning className='h-4 w-4' />,
@@ -622,7 +673,13 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
               )}
           {matches.got > 0 && (
             <section aria-label='Got it' className='space-y-1'>
-              <SectionDivider label='Got it' trailing={clearButton} />
+              <SectionDivider
+                label='Got it'
+                trailing={hasPantryChip ? undefined : clearButton}
+              />
+              {hasPantryChip && (
+                <div className='flex justify-end'>{clearButton}</div>
+              )}
               <ShoppingRows
                 key='all-got'
                 rows={found.got.flatMap((group) => group.rows)}
@@ -746,6 +803,14 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         <ShoppingMealsSheet
           uid={uid}
           todayKey={todayKey}
+          onClose={() => setOverlay(null)}
+        />
+      )}
+      {overlay?.kind === 'pantry' && (
+        <PantryFromShoppingSheet
+          uid={uid}
+          rows={overlay.rows}
+          onAdded={markPutAway}
           onClose={() => setOverlay(null)}
         />
       )}

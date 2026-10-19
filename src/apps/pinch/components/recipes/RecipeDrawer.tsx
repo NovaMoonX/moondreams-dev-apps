@@ -31,6 +31,7 @@ import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
+import LineStockMarker from '@apps/pinch/components/pantry/LineStockMarker';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSection';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
@@ -52,6 +53,8 @@ import {
   selectCooksById,
   selectIngredientsById,
   selectIsContainersReady,
+  selectHasPackages,
+  selectPackagesByIngredient,
   selectPlannedByDay,
   selectRecipeCosts,
   selectRecipeNutrition,
@@ -79,6 +82,11 @@ import {
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { isBulkMeal } from '@apps/pinch/utils/containers';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
+import {
+  getLineMarkers,
+  getLineStock,
+  type LineStock,
+} from '@apps/pinch/utils/packages';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getNutritionGaps,
@@ -166,10 +174,10 @@ interface RecipeDrawerProps {
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
-  /** Closes the drawer and shows the Recipes list narrowed to this source. */
-  onShowSource: (sourceId: string) => void;
-  /** Closes the drawer and shows the Recipes list narrowed to this collection. */
-  onShowCollection: (collectionId: string) => void;
+  /** Closes the drawer and shows the Recipes list narrowed to this source; a drawer opened from somewhere with no recipe list leaves it out, and the source is then only a label. */
+  onShowSource?: (sourceId: string) => void;
+  /** Closes the drawer and shows the Recipes list narrowed to this collection; a drawer opened from somewhere with no recipe list leaves it out, and the collection is then only a label. */
+  onShowCollection?: (collectionId: string) => void;
   onOpenHistory: (id: string) => void;
   onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
@@ -205,6 +213,8 @@ function RecipeDrawer({
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
   const { openSubview } = usePinchOverlay();
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
+  const hasPantry = useAppSelector(selectHasPackages);
+  const packagesByIngredient = useAppSelector(selectPackagesByIngredient);
   const isStockReady = useAppSelector(selectIsContainersReady);
   const stockError = useAppSelector(selectContainersLoadError);
   const hasStock = useAppSelector((state) =>
@@ -277,7 +287,9 @@ function RecipeDrawer({
   const links = getRecipeLinks(recipe);
   const source = getRecipeSource(recipe, sourcesById);
   const hasMoreFromSource =
-    source !== null && (sourceCounts.get(source.id) ?? 0) > 1;
+    source !== null &&
+    onShowSource !== undefined &&
+    (sourceCounts.get(source.id) ?? 0) > 1;
   const recipeCollections = getRecipeCollections(recipe, collections);
   const chipWindow = getCollectionChipWindow(
     recipeCollections.length,
@@ -315,6 +327,32 @@ function RecipeDrawer({
         }
       />
     ) : undefined;
+
+  const pantryStocks = hasPantry
+    ? new Map<string, LineStock>(
+        recipe.ingredients.map((line) => {
+          const ingredient = ingredientsById.get(line.ingredientId);
+          return [
+            line.id,
+            getLineStock(
+              line,
+              packagesByIngredient.get(line.ingredientId),
+              undefined,
+              {
+                gramsPerMl: ingredient?.gramsPerMl ?? null,
+                gramsEach: ingredient?.gramsEach ?? null,
+              },
+            ),
+          ];
+        }),
+      )
+    : null;
+  const pantryMarkers =
+    pantryStocks === null
+      ? null
+      : getLineMarkers(
+          Array.from(pantryStocks, ([id, stock]) => ({ id, stock })),
+        );
 
   const totalMinutes = getTotalMinutes(recipe);
   const facts: Fact[] = [
@@ -555,6 +593,7 @@ function RecipeDrawer({
                 {recipeCollections
                   .slice(0, chipWindow.shown)
                   .map((collection) =>
+                    onShowCollection !== undefined &&
                     (collectionCounts.get(collection.id) ?? 0) > 1 ? (
                       <LabelChip
                         key={collection.id}
@@ -630,9 +669,14 @@ function RecipeDrawer({
         <FormSection
           title='Ingredients'
           detail={
-            recipe.ingredients.length > SECTION_COUNT_THRESHOLD
+            (pantryMarkers?.summary == null ? undefined : (
+              <span className='tracking-normal normal-case'>
+                {pantryMarkers.summary}
+              </span>
+            )) ??
+            (recipe.ingredients.length > SECTION_COUNT_THRESHOLD
               ? recipe.ingredients.length
-              : undefined
+              : undefined)
           }
         >
           {groupIngredientLines(recipe.ingredients).map((group) => (
@@ -645,6 +689,8 @@ function RecipeDrawer({
                   const gap = isPriced
                     ? gapLabel(cost.lines.get(line.id)?.gap?.kind)
                     : null;
+                  const pantryText = pantryMarkers?.byId.get(line.id) ?? null;
+                  const pantry = pantryStocks?.get(line.id) ?? null;
                   return (
                     <li
                       key={line.id}
@@ -664,18 +710,23 @@ function RecipeDrawer({
                           </span>
                         )}
                       </span>
-                      {line.amount === null ? (
-                        line.note && (
-                          <span className='text-muted-foreground max-w-[50%] text-right text-sm wrap-break-word'>
-                            {line.note}
+                      <span className='flex max-w-[55%] shrink-0 flex-col items-end gap-0.5 text-right'>
+                        {line.amount === null ? (
+                          line.note && (
+                            <span className='text-muted-foreground text-sm wrap-break-word'>
+                              {line.note}
+                            </span>
+                          )
+                        ) : (
+                          <span className='text-muted-foreground text-sm whitespace-nowrap'>
+                            {Math.round(line.amount * 100) / 100}{' '}
+                            {UNIT_LABELS[line.unit]}
                           </span>
-                        )
-                      ) : (
-                        <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                          {Math.round(line.amount * 100) / 100}{' '}
-                          {UNIT_LABELS[line.unit]}
-                        </span>
-                      )}
+                        )}
+                        {pantry !== null && pantryText !== null && (
+                          <LineStockMarker stock={pantry} text={pantryText} />
+                        )}
+                      </span>
                     </li>
                   );
                 })}
