@@ -354,7 +354,11 @@ assert.deepEqual(
   ),
   { packageCount: 5, ingredientCount: 2, soonCount: 1, pastCount: 1 },
 );
-assert.equal(getPantryDueText(2, 1), '2 to use soon, 1 past its date');
+assert.equal(getPantryDueText(2, 1), '1 past its date, 2 to use soon');
+assert.ok(
+  getPantryDueText(37, 31).startsWith('31 past their date'),
+  'the count past its date leads, so the tile’s one-line status, cut short, still names it',
+);
 assert.equal(getPantryDueText(0, 3), '3 past their date');
 assert.equal(getPantryDueText(1, 0), '1 to use soon');
 assert.equal(getPantryDueText(0, 0), '');

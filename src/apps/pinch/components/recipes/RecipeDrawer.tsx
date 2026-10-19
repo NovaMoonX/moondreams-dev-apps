@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -32,17 +32,22 @@ import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { useRecipeFavorite } from '@apps/pinch/hooks/useRecipeFavorite';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
-  selectCollectionCounts,
   selectCollections,
   selectContainersLoadError,
   selectCookSummaries,
   selectCooksById,
   selectIsContainersReady,
   selectPlannedByDay,
+  selectRecipes,
   selectRecipesById,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
-import type { ContainerPlace, Gap, ShoppingRequest } from '@apps/pinch/types';
+import type {
+  Collection,
+  ContainerPlace,
+  Gap,
+  ShoppingRequest,
+} from '@apps/pinch/types';
 import {
   getCollectionsPill,
   getRecipeCollections,
@@ -56,6 +61,7 @@ import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { isBulkMeal } from '@apps/pinch/utils/containers';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { isStarred } from '@apps/pinch/utils/favorites';
+import { joinSourceNames } from '@apps/pinch/utils/shopping';
 
 type DrawerView =
   'recipe' | 'photo' | 'history' | 'more' | 'collections' | 'share';
@@ -91,6 +97,65 @@ function DoorButton({
     >
       {icon}
     </Button>
+  );
+}
+
+const COLLECTION_NAMES_SHOWN = 2;
+
+interface CollectionRowsProps {
+  recipeId: string;
+  collections: Collection[];
+  /** Where no recipe list sits under the drawer there is nothing to open, so each row only says what its collection holds. */
+  onShow?: (collectionId: string) => void;
+}
+
+function CollectionRows({
+  recipeId,
+  collections,
+  onShow,
+}: CollectionRowsProps) {
+  const recipes = useAppSelector(selectRecipes);
+  const othersByCollection = useMemo(
+    () =>
+      recipes.reduce(
+        (acc, entry) =>
+          entry.id === recipeId
+            ? acc
+            : (entry.collectionIds ?? []).reduce(
+                (inner, id) =>
+                  inner.set(id, [...(inner.get(id) ?? []), entry.title]),
+                acc,
+              ),
+        new Map<string, string[]>(),
+      ),
+    [recipes, recipeId],
+  );
+  const getLine = (collectionId: string) => {
+    const others = othersByCollection.get(collectionId) ?? [];
+    return others.length === 0
+      ? 'Only this recipe'
+      : `With ${joinSourceNames(others, COLLECTION_NAMES_SHOWN)}`;
+  };
+
+  return (
+    <ActionGroup isRoomy>
+      {collections.map((collection) => (
+        <GroupRow
+          key={collection.id}
+          isRoomy
+          icon='🗂️'
+          ariaLabel={`In ${collection.label}: show its recipes`}
+          onClick={onShow && (() => onShow(collection.id))}
+        >
+          <span className='block font-medium wrap-break-word'>
+            {collection.label}
+          </span>
+          <span className='text-muted-foreground line-clamp-2 text-sm font-normal'>
+            {getLine(collection.id)}
+          </span>
+        </GroupRow>
+      ))}
+    </ActionGroup>
   );
 }
 
@@ -130,7 +195,6 @@ function RecipeDrawer({
 }: RecipeDrawerProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const collections = useAppSelector(selectCollections);
-  const collectionCounts = useAppSelector(selectCollectionCounts).byCollection;
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
   const { openSubview } = usePinchOverlay();
   const toggleFavorite = useRecipeFavorite(uid);
@@ -293,31 +357,11 @@ function RecipeDrawer({
             <BackLink onBack={backToRecipe} />
             <p className='font-medium'>{collectionsPill.label}</p>
           </div>
-          <ActionGroup>
-            {recipeCollections.map((collection) => {
-              const count = collectionCounts.get(collection.id) ?? 0;
-              const countText = `${count} ${count === 1 ? 'recipe' : 'recipes'}`;
-              return onShowCollection !== undefined && count > 1 ? (
-                <GroupRow
-                  key={collection.id}
-                  ariaLabel={`In ${collection.label}: show its recipes`}
-                  onClick={() => onShowCollection(collection.id)}
-                >
-                  {collection.label}{' '}
-                  <span className='text-muted-foreground whitespace-nowrap'>
-                    · {countText}
-                  </span>
-                </GroupRow>
-              ) : (
-                <p key={collection.id} className='px-4 py-2.5 text-sm'>
-                  {collection.label}{' '}
-                  <span className='text-muted-foreground whitespace-nowrap'>
-                    · {countText}
-                  </span>
-                </p>
-              );
-            })}
-          </ActionGroup>
+          <CollectionRows
+            recipeId={recipe.id}
+            collections={recipeCollections}
+            onShow={onShowCollection}
+          />
         </div>
       );
     }
