@@ -39,6 +39,7 @@ function SharedLinksSubview() {
   const [limit, setLimit] = useState(SHARES_FIRST_PAGE);
   const [opened, setOpened] = useState<OpenedShare | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
+  const [footerNode, setFooterNode] = useState<HTMLElement | null>(null);
 
   const matches = useMemo(
     () =>
@@ -159,12 +160,20 @@ function SharedLinksSubview() {
         )}
       </div>
       {opened !== null && (
-        <DetailSheet isOpen onClose={closeSheet} title={opened.title}>
+        <DetailSheet
+          isOpen
+          onClose={closeSheet}
+          title={opened.title}
+          footer={
+            <div ref={setFooterNode} className='px-4 pb-4 empty:hidden' />
+          }
+        >
           <ShareView
             kind={opened.kind}
             sourceId={opened.sourceId}
             canStart={false}
             onStopped={closeSheet}
+            footerNode={footerNode}
           />
         </DetailSheet>
       )}

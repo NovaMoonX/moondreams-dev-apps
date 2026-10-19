@@ -96,6 +96,7 @@ function MealDrawer({
   const stockError = useAppSelector(selectContainersLoadError);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareFooter, setShareFooter] = useState<HTMLElement | null>(null);
   const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
@@ -135,6 +136,49 @@ function MealDrawer({
     return 'Add prices from the recipes on this plate, or in Kitchen.';
   };
 
+  const getFooter = () => {
+    if (openRecipeId !== null) return undefined;
+    if (isShareOpen) {
+      return <div ref={setShareFooter} className='px-4 pb-4 empty:hidden' />;
+    }
+
+    return (
+      <div className='flex gap-2 px-4 pb-4'>
+        <Button
+          type='button'
+          variant='secondary'
+          className='shrink-0 max-sm:px-3'
+          onClick={() => onModify(meal.id)}
+        >
+          Modify
+        </Button>
+        <Button
+          ref={moreRef}
+          type='button'
+          variant='secondary'
+          size='icon'
+          aria-label='More for this saved meal'
+          title='More for this saved meal'
+          aria-expanded={isMoreOpen}
+          onClick={() => setIsMoreOpen((open) => !open)}
+          className={join(
+            'text-foreground! size-10 min-w-10 shrink-0 p-0',
+            isMoreOpen && 'bg-accent!',
+          )}
+        >
+          <Ellipsis className='h-5 w-5' aria-hidden='true' />
+        </Button>
+        <Button
+          type='button'
+          className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
+          onClick={() => onPlan(meal.id)}
+        >
+          Plan it
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <DetailSheet
       isOpen
@@ -149,43 +193,7 @@ function MealDrawer({
           onClick={() => onToggleFavorite(meal)}
         />
       }
-      footer={
-        openRecipeId !== null || isShareOpen ? undefined : (
-          <div className='flex gap-2 px-4 pb-4'>
-            <Button
-              type='button'
-              variant='secondary'
-              className='shrink-0 max-sm:px-3'
-              onClick={() => onModify(meal.id)}
-            >
-              Modify
-            </Button>
-            <Button
-              ref={moreRef}
-              type='button'
-              variant='secondary'
-              size='icon'
-              aria-label='More for this saved meal'
-              title='More for this saved meal'
-              aria-expanded={isMoreOpen}
-              onClick={() => setIsMoreOpen((open) => !open)}
-              className={join(
-                'text-foreground! size-10 min-w-10 shrink-0 p-0',
-                isMoreOpen && 'bg-accent!',
-              )}
-            >
-              <Ellipsis className='h-5 w-5' aria-hidden='true' />
-            </Button>
-            <Button
-              type='button'
-              className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
-              onClick={() => onPlan(meal.id)}
-            >
-              Plan it
-            </Button>
-          </div>
-        )
-      }
+      footer={getFooter()}
     >
       {openRecipeId !== null && (
         <PlateRecipeView
@@ -200,7 +208,7 @@ function MealDrawer({
             <BackLink onBack={() => setIsShareOpen(false)} />
             <p className='font-medium'>Share this saved meal</p>
           </div>
-          <ShareView kind='MEAL' sourceId={meal.id} />
+          <ShareView kind='MEAL' sourceId={meal.id} footerNode={shareFooter} />
         </div>
       )}
       {isMoreOpen && !isShareOpen && openRecipeId === null && (
