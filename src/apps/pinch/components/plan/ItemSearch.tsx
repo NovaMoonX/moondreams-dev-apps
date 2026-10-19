@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
 import SearchInput from '@/components/SearchInput';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -13,6 +14,7 @@ import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import {
   selectIngredients,
+  selectIngredientsById,
   selectMeals,
   selectRecipes,
   selectStockByRecipe,
@@ -21,10 +23,52 @@ import {
   searchByName,
   searchIngredients,
 } from '@apps/pinch/utils/catalogSearch';
+import { MAX_PICK_SUGGESTIONS } from '@apps/pinch/utils/pickerSuggestions';
 
 const MAX_RESULTS = 8;
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
+
+// A landscape phone shows two rows, and the last one left drops its bottom border because the frame draws one.
+const getSuggestionRowClass = (index: number) =>
+  join(
+    index === 1 && '[@media(max-height:499px)]:border-b-0',
+    index === 2 && '[@media(max-height:499px)]:hidden',
+  );
+
+export interface ItemSuggestions {
+  /** What the rows are, in a few words. */
+  caption: string;
+  /** Ingredient ids to offer while the field is empty, already ordered and capped by the caller. */
+  ids: readonly string[];
+}
+
+interface IngredientPickRowProps {
+  name: string;
+  trailing?: ReactNode;
+  isDisabled: boolean;
+  onClick: () => void;
+}
+
+function IngredientPickRow({
+  name,
+  trailing,
+  isDisabled,
+  onClick,
+}: IngredientPickRowProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      disabled={isDisabled}
+      onClick={onClick}
+      className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
+    >
+      <span className='min-w-0 flex-1 truncate font-medium'>{name}</span>
+      {trailing}
+    </Button>
+  );
+}
 
 interface ItemSearchProps {
   uid: string;
@@ -38,6 +82,8 @@ interface ItemSearchProps {
   onTypingChange?: (isTyping: boolean) => void;
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
+  /** Rows of the person's own ingredients drawn under the field while it is empty; nothing is drawn when there are none. */
+  suggestions?: ItemSuggestions;
   autoFocus?: boolean;
   resultsClassName?: string;
   /** The field still takes typing, but no result can be picked. */
@@ -52,6 +98,7 @@ function ItemSearch({
   onPickMeal,
   onTypingChange,
   excludeIds = [],
+  suggestions,
   autoFocus = false,
   resultsClassName,
   isDisabled = false,
@@ -62,6 +109,7 @@ function ItemSearch({
   const meals = useAppSelector(selectMeals);
   const isPhone = useMediaQuery().isBelow('sm');
   const stockByRecipe = useAppSelector(selectStockByRecipe);
+  const ingredientsById = useAppSelector(selectIngredientsById);
   const [query, setTypedQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +161,14 @@ function ItemSearch({
         : [],
     [onPickMeal, meals, trimmed],
   );
+  const suggested = (suggestions?.ids ?? [])
+    .flatMap((id) => {
+      const ingredient = ingredientsById.get(id);
+      return ingredient && !ingredient.isArchived && !excludeIds.includes(id)
+        ? [ingredient]
+        : [];
+    })
+    .slice(0, MAX_PICK_SUGGESTIONS);
   const hasExactName = ingredients.some(
     (ingredient) =>
       ingredient.name.trim().toLowerCase() === trimmed.toLowerCase(),
@@ -186,6 +242,21 @@ function ItemSearch({
           placeholder={getPlaceholder()}
         />
       </div>
+      {trimmed === '' && suggestions && suggested.length > 0 && (
+        <div className='pt-1'>
+          <ActionGroup isRoomy caption={suggestions.caption}>
+            {suggested.map((ingredient, index) => (
+              <div key={ingredient.id} className={getSuggestionRowClass(index)}>
+                <IngredientPickRow
+                  name={ingredient.name}
+                  isDisabled={isDisabled}
+                  onClick={() => onPick(ingredient.id)}
+                />
+              </div>
+            ))}
+          </ActionGroup>
+        </div>
+      )}
       {trimmed !== '' && (
         <div className='border-border overflow-hidden rounded-2xl border'>
           {noMatchLine && (
@@ -253,25 +324,21 @@ function ItemSearch({
             ))}
             {matches.map((ingredient) => (
               <li key={ingredient.id}>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  disabled={isDisabled}
+                <IngredientPickRow
+                  name={ingredient.name}
+                  isDisabled={isDisabled}
                   onClick={() => {
                     setQuery('');
                     onPick(ingredient.id);
                   }}
-                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
-                >
-                  <span className='min-w-0 flex-1 truncate font-medium'>
-                    {ingredient.name}
-                  </span>
-                  {onPickRecipe && (
-                    <span className='text-muted-foreground text-xs font-normal'>
-                      Ingredient
-                    </span>
-                  )}
-                </Button>
+                  trailing={
+                    onPickRecipe && (
+                      <span className='text-muted-foreground text-xs font-normal'>
+                        Ingredient
+                      </span>
+                    )
+                  }
+                />
               </li>
             ))}
             {canCreate && (

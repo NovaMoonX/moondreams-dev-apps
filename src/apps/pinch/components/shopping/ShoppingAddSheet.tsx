@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Check } from 'lucide-react';
@@ -20,12 +20,16 @@ import {
 } from '@apps/pinch/constants';
 import { addToShoppingList } from '@apps/pinch/store/actions/shoppingActions';
 import {
+  selectCookSummaries,
   selectIngredientsById,
   selectPlannedByDay,
+  selectRecipes,
   selectShoppingById,
+  selectShoppingItems,
   selectShoppingLoadError,
 } from '@apps/pinch/store/selectors';
 import { addDaysToKey } from '@apps/pinch/utils/dayKeys';
+import { getShoppingPickIds } from '@apps/pinch/utils/pickerSuggestions';
 import { getShoppingItemId } from '@apps/pinch/utils/shopping';
 
 const PLAN_DAYS = 7;
@@ -42,6 +46,9 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
   const loadError = useAppSelector(selectShoppingLoadError);
   const isLoaded = useAppSelector((state) => state.pinch.shopping.isLoaded);
   const plannedByDay = useAppSelector(selectPlannedByDay);
+  const items = useAppSelector(selectShoppingItems);
+  const recipes = useAppSelector(selectRecipes);
+  const cookSummaries = useAppSelector(selectCookSummaries);
   const [todayKey] = useState(() => toLocalDateInputValue(Date.now()));
   const [mode, setMode] = useState<ShoppingAddMode>('one');
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +67,13 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
     return isAdding ? 'Adding…' : null;
   };
   const note = getNote();
+  const suggestedIds = useMemo(
+    () =>
+      shownMode === 'one' && isReady
+        ? getShoppingPickIds(items, recipes, cookSummaries)
+        : [],
+    [shownMode, isReady, items, recipes, cookSummaries],
+  );
 
   // The drawer takes focus itself while it slides in, so the field is focused once that settles.
   useEffect(() => {
@@ -164,6 +178,10 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                 key={searchKey}
                 uid={uid}
                 isDisabled={isAdding || !isReady}
+                suggestions={{
+                  caption: 'From your list and your cooking',
+                  ids: suggestedIds,
+                }}
                 resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto'
                 onPick={(ingredientId) => void handlePick(ingredientId)}
               />

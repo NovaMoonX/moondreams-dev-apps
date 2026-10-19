@@ -25,6 +25,7 @@ import {
 } from '@apps/pinch/utils/notes';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getPeriodStats } from '@apps/pinch/utils/stats';
+import { rankOftenUsedIngredients } from '@apps/pinch/utils/pickerSuggestions';
 import { getRecipeCost } from '@apps/pinch/utils/recipeMath';
 import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 import {
@@ -199,6 +200,12 @@ export const selectRecipes = createSelector([selectAllRecipes], (recipes) =>
 export const selectRecipesById = createSelector(
   [selectAllRecipes],
   (recipes) => new Map(recipes.map((recipe) => [recipe.id, recipe])),
+);
+
+/** Ingredient ids ranked by how many of the person's recipes use them, worked out once per change of recipes. */
+export const selectOftenUsedIngredientIds = createSelector(
+  [selectRecipes],
+  rankOftenUsedIngredients,
 );
 
 const selectSourceItems = (state: RootState) => state.pinch.sources.items;
