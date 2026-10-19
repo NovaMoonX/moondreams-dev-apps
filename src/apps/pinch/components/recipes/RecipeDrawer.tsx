@@ -25,6 +25,8 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
 import RecipeFront from '@apps/pinch/components/recipes/RecipeFront';
+import ShareDoorRow from '@apps/pinch/components/share/ShareDoorRow';
+import ShareView from '@apps/pinch/components/share/ShareView';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
@@ -56,7 +58,8 @@ import { isBulkMeal } from '@apps/pinch/utils/containers';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { isStarred } from '@apps/pinch/utils/favorites';
 
-type DrawerView = 'recipe' | 'photo' | 'history' | 'more' | 'collections';
+type DrawerView =
+  'recipe' | 'photo' | 'history' | 'more' | 'collections' | 'share';
 
 interface BackLinkProps {
   onBack: () => void;
@@ -192,6 +195,7 @@ function RecipeDrawer({
       if (openerRef.current?.isConnected) openerRef.current.focus();
     });
   };
+  const backToMore = () => setView('more');
 
   const isHistoryFull = isCookHistoryFull(cookSummary?.count ?? 0);
   const getMarkReason = () => {
@@ -337,6 +341,17 @@ function RecipeDrawer({
         </div>
       );
     }
+    if (view === 'share') {
+      return (
+        <div className='space-y-4'>
+          <div className='space-y-1'>
+            <BackLink onBack={backToMore} />
+            <p className='font-medium'>Share this recipe</p>
+          </div>
+          <ShareView kind='RECIPE' sourceId={recipe.id} />
+        </div>
+      );
+    }
     if (view === 'more') {
       return (
         <div className='space-y-5'>
@@ -398,6 +413,11 @@ function RecipeDrawer({
                   onClick={() => onPutAway(recipe.id)}
                 />
               )}
+              <ShareDoorRow
+                kind='RECIPE'
+                sourceId={recipe.id}
+                onClick={() => setView('share')}
+              />
             </ActionGroup>
             {reasons.map((reason) => (
               <p key={reason} className='text-muted-foreground text-sm'>
@@ -445,30 +465,32 @@ function RecipeDrawer({
         </>
       }
       footer={
-        <div className='flex gap-2 px-4 pb-4'>
-          <Button
-            type='button'
-            variant='secondary'
-            className='shrink-0 max-sm:px-3'
-            onClick={() => onModify(recipe.id)}
-          >
-            Modify
-          </Button>
-          <DoorButton
-            label='More for this recipe'
-            icon={<Ellipsis className='h-5 w-5' aria-hidden='true' />}
-            isOpen={shownView === 'more'}
-            variant='secondary'
-            onClick={(opener) => openView('more', opener)}
-          />
-          <Button
-            type='button'
-            className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
-            onClick={cookPlan ? startCooking : () => onPlan(recipe.id)}
-          >
-            {cookPlan ? 'Start cooking' : 'Plan it'}
-          </Button>
-        </div>
+        shownView === 'share' ? undefined : (
+          <div className='flex gap-2 px-4 pb-4'>
+            <Button
+              type='button'
+              variant='secondary'
+              className='shrink-0 max-sm:px-3'
+              onClick={() => onModify(recipe.id)}
+            >
+              Modify
+            </Button>
+            <DoorButton
+              label='More for this recipe'
+              icon={<Ellipsis className='h-5 w-5' aria-hidden='true' />}
+              isOpen={shownView === 'more'}
+              variant='secondary'
+              onClick={(opener) => openView('more', opener)}
+            />
+            <Button
+              type='button'
+              className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
+              onClick={cookPlan ? startCooking : () => onPlan(recipe.id)}
+            >
+              {cookPlan ? 'Start cooking' : 'Plan it'}
+            </Button>
+          </div>
+        )
       }
     >
       {viewBody}

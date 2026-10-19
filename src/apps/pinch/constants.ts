@@ -13,6 +13,7 @@ import type {
   RecipeLinkKind,
   RecipesView,
   RecipeStartMethod,
+  ShareKind,
   ShoppingView,
   Unit,
 } from '@apps/pinch/types';
@@ -60,6 +61,14 @@ export const NUTRITION_METRICS = NUTRITION_CELLS.map((cell) => cell.key);
 export const LIST_SEARCH_THRESHOLD = 8;
 /** A section's heading counts its rows only past this many; fewer are counted at a glance. */
 export const SECTION_COUNT_THRESHOLD = 10;
+/** Shared links shown before "Show N more". */
+export const SHARES_FIRST_PAGE = 12;
+/** A shared link's address is this path plus the share's id. */
+export const SHARE_LINK_PATH = '/pinch/shared/';
+export const SHARE_KIND_EMOJIS: Record<ShareKind, string> = {
+  RECIPE: '🍲',
+  MEAL: '🍽️',
+};
 
 export const UNITS: Unit[] = [
   'G',
