@@ -1394,11 +1394,12 @@ export const getPlacesText = (summary: {
     .join(', ');
 };
 
+/** The count past its date leads, so a status cut to one line keeps the urgent part. */
 export const getDueText = (soonCount: number, pastCount: number) =>
   [
-    soonCount > 0 && `${soonCount} to eat by tomorrow`,
     pastCount > 0 &&
       `${pastCount} past ${pastCount === 1 ? 'its' : 'their'} date`,
+    soonCount > 0 && `${soonCount} to eat by tomorrow`,
   ]
     .filter((part) => part !== false)
     .join(', ');
