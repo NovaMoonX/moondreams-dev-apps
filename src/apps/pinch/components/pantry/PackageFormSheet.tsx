@@ -23,6 +23,7 @@ import { usePackageActions } from '@apps/pinch/hooks/usePackageActions';
 import {
   selectDefaultProducts,
   selectIngredientsById,
+  selectPackages,
   selectPlannedMeals,
   selectProductsByIngredient,
   selectRecipes,
@@ -36,6 +37,7 @@ import {
   getDateAnswer,
   getDefaultPlace,
   getPackageLabel,
+  getPackageSeed,
   isValidPackageAmount,
   lowerFirst,
   parseAmountText,
@@ -77,51 +79,54 @@ function PackageFormSheet({
   const recipes = useAppSelector(selectRecipes);
   const recipesById = useAppSelector(selectRecipesById);
   const plannedMeals = useAppSelector(selectPlannedMeals);
+  const packages = useAppSelector(selectPackages);
+  const getStart = (id: string | null) => {
+    const ingredient = id === null ? undefined : ingredientsById.get(id);
+    const seed = id === null ? null : getPackageSeed(packages, id);
+    const product = id === null ? undefined : defaultProducts.get(id);
+    const seededProduct = (
+      id === null ? [] : (productsByIngredient.get(id) ?? [])
+    ).find((known) => known.id === seed?.productId);
+    return {
+      productId:
+        seed === null ? (product?.id ?? null) : (seededProduct?.id ?? null),
+      values: {
+        amountText: String(seed?.amount ?? product?.sizeAmount ?? ''),
+        unit:
+          seed?.unit ??
+          product?.sizeUnit ??
+          getPackageUnit(
+            id === null
+              ? undefined
+              : getIngredientUses(
+                  recipes,
+                  plannedMeals,
+                  recipesById,
+                  ingredientsById,
+                ).get(id),
+            ingredient,
+          ),
+        place: seed?.place ?? getDefaultPlace(getShopSection(ingredient)),
+        date: NO_DATE_ANSWER,
+      } satisfies PackageFieldValues,
+    };
+  };
   const [ingredientId, setIngredientId] = useState<string | null>(
     pkg?.ingredientId ?? startIngredientId,
   );
   const [productId, setProductId] = useState<string | null>(
-    pkg?.productId ??
-      (startIngredientId === null
-        ? null
-        : (defaultProducts.get(startIngredientId)?.id ?? null)),
+    pkg ? pkg.productId : getStart(startIngredientId).productId,
   );
-  const [values, setValues] = useState<PackageFieldValues>(() => {
-    if (pkg) {
-      return {
-        amountText: String(pkg.amount),
-        unit: pkg.unit,
-        place: pkg.place,
-        date: getDateAnswer(pkg.expiresAt),
-      };
-    }
-    const product =
-      startIngredientId === null
-        ? undefined
-        : defaultProducts.get(startIngredientId);
-    const ingredient =
-      startIngredientId === null
-        ? undefined
-        : ingredientsById.get(startIngredientId);
-    return {
-      amountText: product ? String(product.sizeAmount) : '',
-      unit:
-        product?.sizeUnit ??
-        getPackageUnit(
-          startIngredientId === null
-            ? undefined
-            : getIngredientUses(
-                recipes,
-                plannedMeals,
-                recipesById,
-                ingredientsById,
-              ).get(startIngredientId),
-          ingredient,
-        ),
-      place: getDefaultPlace(getShopSection(ingredient)),
-      date: NO_DATE_ANSWER,
-    };
-  });
+  const [values, setValues] = useState<PackageFieldValues>(() =>
+    pkg
+      ? {
+          amountText: String(pkg.amount),
+          unit: pkg.unit,
+          place: pkg.place,
+          date: getDateAnswer(pkg.expiresAt),
+        }
+      : getStart(startIngredientId).values,
+  );
   const [justAdded, setJustAdded] = useState<JustAdded | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,24 +164,12 @@ function PackageFormSheet({
   const canSave = note === null && !isSubmitting;
 
   const handlePick = (id: string) => {
-    const picked = ingredientsById.get(id);
-    const product = defaultProducts.get(id);
-    const uses = getIngredientUses(
-      recipes,
-      plannedMeals,
-      recipesById,
-      ingredientsById,
-    );
+    const start = getStart(id);
     setIngredientId(id);
-    setProductId(product?.id ?? null);
+    setProductId(start.productId);
     setJustAdded(null);
     setError(null);
-    setValues((current) => ({
-      amountText: product ? String(product.sizeAmount) : '',
-      unit: product?.sizeUnit ?? getPackageUnit(uses.get(id), picked),
-      place: getDefaultPlace(getShopSection(picked)),
-      date: current.date,
-    }));
+    setValues((current) => ({ ...start.values, date: current.date }));
   };
 
   const handlePack = (id: string) => {

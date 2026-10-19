@@ -222,6 +222,31 @@ export const getDefaultPlace = (section: ShopSection): PackagePlace => {
     : 'PANTRY';
 };
 
+/** What a new package of an ingredient starts from, taken from the newest one in stock: what it was bought as (its first amount, or what is left if it was edited since, since the first amount may be in another unit), where it went and which pack it came from. The date stays a question. Null when there is none. */
+export const getPackageSeed = (packages: Package[], ingredientId: string) => {
+  const newest = packages
+    .filter((pkg) => pkg.ingredientId === ingredientId)
+    .reduce<Package | null>(
+      (best, pkg) =>
+        best === null || pkg.createdAt > best.createdAt ? pkg : best,
+      null,
+    );
+  if (newest === null) return null;
+
+  const first = newest.history[0];
+  const isUnchanged = !newest.history.some((event) => event.kind === 'EDITED');
+  const bought =
+    first?.kind === 'ADDED' && first.amount !== null && isUnchanged
+      ? first.amount
+      : newest.amount;
+  return {
+    amount: bought,
+    unit: newest.unit,
+    place: newest.place,
+    productId: newest.productId,
+  };
+};
+
 /** The typed amount as a number; NaN while it is blank or not a number. */
 export const parseAmountText = (text: string) =>
   text.trim() === '' ? Number.NaN : Number(text);

@@ -22,6 +22,7 @@ import {
   getPackageBulkNames,
   getPackageBulkToast,
   getPackageLabel,
+  getPackageSeed,
   getPackageSelectionNote,
   getPackageSelectionTitle,
   getPackageSkippedText,
@@ -1483,6 +1484,69 @@ assert.deepEqual(
   [eightCups.takes.map((take) => [take.amount, take.isAll]), eightCups.short],
   [[[1.53, true]], [{ ingredientId: 'cat-milk', amount: 1.53, unit: 'CUP' }]],
   'a real shortfall (eight cups against 1.53 l) is still said, in the recipe unit',
+);
+
+// What a new package of an ingredient starts from
+const seedMilk = (over: Partial<Package>) =>
+  pkg({ ingredientId: 'cat-milk', place: 'FRIDGE', unit: 'L', ...over });
+assert.equal(
+  getPackageSeed([], 'cat-milk'),
+  null,
+  'with none in stock there is no seed',
+);
+assert.equal(
+  getPackageSeed([seedMilk({ ingredientId: 'cat-rice' })], 'cat-milk'),
+  null,
+  'another ingredient is not a seed',
+);
+assert.deepEqual(
+  getPackageSeed(
+    [
+      seedMilk({ id: 'old', amount: 2, unit: 'L', createdAt: 100 }),
+      seedMilk({
+        id: 'new',
+        amount: 500,
+        unit: 'ML',
+        place: 'FREEZER',
+        productId: 'p-small',
+        createdAt: 900,
+        history: [
+          makePackageEvent('ADDED', 900, { amount: 500, place: 'FREEZER' }),
+        ],
+      }),
+    ],
+    'cat-milk',
+  ),
+  { amount: 500, unit: 'ML', place: 'FREEZER', productId: 'p-small' },
+  'the newest package by when it was added, not by its date',
+);
+const opened = seedMilk({
+  amount: 0.4,
+  history: [
+    makePackageEvent('ADDED', 1, { amount: 1, place: 'FRIDGE' }),
+    makePackageEvent('USED', 2, { amount: 0.6 }),
+  ],
+});
+assert.equal(
+  getPackageSeed([opened], 'cat-milk')?.amount,
+  1,
+  'an opened carton seeds what it was bought as, not what is left',
+);
+assert.equal(
+  getPackageSeed(
+    [
+      {
+        ...opened,
+        history: [
+          ...opened.history,
+          makePackageEvent('EDITED', 3, { note: 'Unit ml → l' }),
+        ],
+      },
+    ],
+    'cat-milk',
+  )?.amount,
+  0.4,
+  'one edited since falls back to what is left, since its first amount may be in another unit',
 );
 
 // The recipes type is only here so a drift in the shape is a compile error
