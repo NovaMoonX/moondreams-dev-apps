@@ -3,12 +3,15 @@ import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Link2, Link2Off, RefreshCw, Share2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import CopyTextButton from '@/components/CopyTextButton';
 import IntroCard from '@/components/IntroCard';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate } from '@/utils/formatUtils';
@@ -34,6 +37,8 @@ import {
   getShareSource,
   getShareUrl,
 } from '@apps/pinch/utils/sharing';
+
+const SHORT_SCREEN_MAX_HEIGHT = 599;
 
 type BusyAction = 'create' | 'update' | 'renew' | 'stop';
 type Notice = 'updated' | 'renewed' | 'stopped';
@@ -85,6 +90,9 @@ function ShareView({
   footerNode,
 }: ShareViewProps) {
   const dispatch = useAppDispatch();
+  const { isAtLeast, isBelow } = useMediaQuery();
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
+  const isLandscape = isShort && isAtLeast('sm') && isBelow('lg');
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const share = useAppSelector(selectShareBySource(kind, sourceId));
@@ -215,13 +223,17 @@ function ShareView({
     </p>
   );
 
-  const copyAndSend = (url: string, variant: 'primary' | 'secondary') => (
-    <div className='flex gap-2'>
+  const copyActions = (
+    url: string,
+    variant: 'primary' | 'secondary',
+    copyClassName: string,
+  ) => (
+    <>
       <CopyTextButton
         text={url}
         label='Copy link'
         variant={variant}
-        className='min-w-0 flex-1'
+        className={copyClassName}
         onFailed={handleCopyFailed}
       />
       {canSend && (
@@ -235,8 +247,36 @@ function ShareView({
           Send
         </Button>
       )}
-    </div>
+    </>
   );
+
+  const getFooterAction = (url: string, isStale: boolean) => {
+    if (!isStale) {
+      return (
+        <div className='flex gap-2'>
+          {copyActions(url, 'primary', 'min-w-0 flex-1')}
+        </div>
+      );
+    }
+    const updateButton = (
+      <Button
+        type='button'
+        className={join('min-w-0', isLandscape ? 'flex-1' : 'w-full')}
+        loading={busy === 'update'}
+        disabled={blockReason !== null || isBusy}
+        onClick={() => void save('update')}
+      >
+        Update the shared copy
+      </Button>
+    );
+    if (!isLandscape) return updateButton;
+    return (
+      <div className='flex gap-2'>
+        {copyActions(url, 'secondary', 'shrink-0')}
+        {updateButton}
+      </div>
+    );
+  };
 
   const getView = (): { body: ReactNode; footer: ReactNode } => {
     if (loadError !== null) {
@@ -327,30 +367,43 @@ function ShareView({
 
     return {
       body: (
-        <div className='space-y-4'>
-          {noticeLine}
-          <div className='space-y-1.5'>
-            <p className='bg-muted/50 border-border rounded-xl border px-3 py-2.5 text-sm break-all select-all'>
-              {url}
-            </p>
-            <p className='text-muted-foreground text-sm text-pretty'>
-              {verb} on {formatDate(share.updatedAt)}. Anyone with the link can
-              look.
-            </p>
-          </div>
-          {isGone && (
-            <IntroCard icon='🗑️' lead='The original was deleted.'>
-              The link still shows the copy you shared until you stop sharing.
-            </IntroCard>
+        <div
+          className={join(
+            'grid gap-4',
+            isLandscape && 'grid-cols-2 items-start gap-x-6',
           )}
-          {isStale && (
-            <>
-              <IntroCard icon='✏️' lead={changed}>
-                The link still shows the older copy.
+        >
+          <div className='min-w-0 space-y-4'>
+            {noticeLine}
+            <div className='space-y-1.5'>
+              <p className='bg-muted/50 border-border rounded-xl border px-3 py-2.5 text-sm break-all select-all'>
+                {url}
+              </p>
+              {!isShort && (
+                <p className='text-muted-foreground text-sm text-pretty'>
+                  {verb} on {formatDate(share.updatedAt)}. Anyone with the link
+                  can look.
+                </p>
+              )}
+            </div>
+            {isGone && (
+              <IntroCard icon='🗑️' lead='The original was deleted.'>
+                The link still shows the copy you shared until you stop sharing.
               </IntroCard>
-              {copyAndSend(url, 'secondary')}
-            </>
-          )}
+            )}
+            {isStale && (
+              <>
+                <IntroCard icon='✏️' lead={changed}>
+                  The link still shows the older copy.
+                </IntroCard>
+                {!isLandscape && (
+                  <div className='flex gap-2'>
+                    {copyActions(url, 'secondary', 'min-w-0 flex-1')}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
           <ActionGroup>
             {!isGone && !isStale && (
               <ActionRow
@@ -403,19 +456,7 @@ function ShareView({
             </p>
           )}
           {errorLine}
-          {isStale ? (
-            <Button
-              type='button'
-              className='w-full'
-              loading={busy === 'update'}
-              disabled={blockReason !== null || isBusy}
-              onClick={() => void save('update')}
-            >
-              Update the shared copy
-            </Button>
-          ) : (
-            copyAndSend(url, 'primary')
-          )}
+          {getFooterAction(url, isStale)}
         </div>
       ),
     };

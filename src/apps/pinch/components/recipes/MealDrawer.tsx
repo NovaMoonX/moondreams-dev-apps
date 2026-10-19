@@ -186,7 +186,9 @@ function MealDrawer({
         <div className='space-y-4'>
           <div className='space-y-1'>
             <BackLink onBack={() => setIsShareOpen(false)} />
-            <p className='font-medium'>Share this saved meal</p>
+            <p className='font-medium [@media(max-height:599px)]:hidden'>
+              Share this saved meal
+            </p>
           </div>
           <ShareView kind='MEAL' sourceId={meal.id} footerNode={shareFooter} />
         </div>
