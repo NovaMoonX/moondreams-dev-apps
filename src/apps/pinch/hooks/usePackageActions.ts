@@ -240,10 +240,23 @@ export function usePackageActions(uid: string) {
       return { count: changed.length, error, skippedText };
     });
 
-  /** What cooking takes out: resolves to what was really taken, for the card that says so and holds the Undo. */
-  const takeOut = (takes: PackageTake[]) =>
+  /** What cooking takes out: resolves to what was queued, for the card that says so and holds the Undo, and calls `onRefused` if the server turns the batch down later. */
+  const takeOut = (takes: PackageTake[], onRefused: () => void) =>
     once(`take:${takes.map((take) => take.packageId).join(',')}`, () =>
-      dispatch(takeFromPackages({ uid, takes })).unwrap(),
+      dispatch(
+        takeFromPackages({
+          uid,
+          takes,
+          onRefused: (message) => {
+            onRefused();
+            addToast({
+              title: "That didn't save",
+              description: message,
+              type: 'error',
+            });
+          },
+        }),
+      ).unwrap(),
     );
 
   return {

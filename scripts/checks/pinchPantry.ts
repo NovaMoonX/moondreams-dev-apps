@@ -1468,6 +1468,16 @@ assert.deepEqual(
   [],
   'a second package that rounds the rest down is not a shortage either',
 );
+assert.deepEqual(
+  planTakeOut(
+    [{ ingredientId: 'cat-milk', amount: 2, unit: 'CUP' }],
+    [milkCarton(1)],
+    NOW,
+    () => ({ gramsPerMl: 1.03, gramsEach: null }),
+  ).short,
+  [],
+  'it holds when the cup and the litre meet in grams',
+);
 const eightCups = cupsOfMilk(8, [milkCarton(1.53)]);
 assert.deepEqual(
   [eightCups.takes.map((take) => [take.amount, take.isAll]), eightCups.short],
