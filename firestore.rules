@@ -1357,6 +1357,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // A share is a flat collection addressed by an unguessable id, so `ownerUid` stands in for the uid nesting. Only `changePinchShare` writes it (admin SDK);
+    // visitors never read it, `getPinchShare` does.
+    match /apps/pinch/shares/{shareId} {
+      allow read: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // The shared copy: only the Functions read and write it.
+    match /apps/pinch/shareSnapshots/{shareId} {
+      allow read, write: if false;
+    }
+
     // Everything in a kitchen is private to one person and nests under their uid; there is no admin or role branch.
     match /apps/pinch/kitchens/{uid} {
       function isKitchenOwner() {
