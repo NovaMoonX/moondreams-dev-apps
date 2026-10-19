@@ -635,6 +635,10 @@ export const selectPinchSettings = createSelector(
   getSettingsWithDefaults,
 );
 
+/** Set when the settings document couldn't be read; the defaults then stand in for choices the person made, so Settings draws nothing to change. */
+export const selectPinchSettingsLoadError = (state: RootState) =>
+  state.pinch.pinchSettings.loadError;
+
 /** Whether a document exists, so the first change writes the whole thing and later ones only their fields. */
 export const selectHasPinchSettings = (state: RootState) =>
   state.pinch.pinchSettings.settings !== null;

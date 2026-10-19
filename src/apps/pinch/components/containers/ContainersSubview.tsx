@@ -78,6 +78,7 @@ import {
   getLandingPlace,
   getNamesLine,
   getPastDueBoxes,
+  getPastDueSplitText,
   getPastDueText,
   getPlacedTitle,
   getSelectionNote,
@@ -947,6 +948,8 @@ function ContainersSubview({
           <PromptRow
             icon='⏳'
             title={getPastDueText(pastBoxes.length)}
+            detail={getPastDueSplitText(pastBoxes, shownPlace) ?? undefined}
+            isIconHiddenOnSmallest
             actionLabel={getTossAction(pastBoxes.length)}
             isBusy={acting === 'TOSS'}
             isDisabled={acting !== null}

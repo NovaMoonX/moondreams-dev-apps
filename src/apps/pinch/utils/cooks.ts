@@ -548,7 +548,7 @@ export const getFirstSentence = (text: string) => {
   return result;
 };
 
-/** A step's first few words ("Brown the beef"), so two timers are told apart by what is cooking. */
+/** A step's first few words ("Brown the beef"), so two timers are told apart by what is cooking, cut before a little word or a number left at the end ("Simmer for 2 minutes" is "Simmer"). */
 export const getStepName = (step: string) => {
   const words = step
     .replace(/[^\p{L}\p{N}'\s-]/gu, ' ')
@@ -557,7 +557,8 @@ export const getStepName = (step: string) => {
     .slice(0, 3);
   const kept = words.reduceRight<string[]>(
     (acc, word) =>
-      acc.length === 0 && TRAILING_LITTLE_WORDS.has(word.toLowerCase())
+      acc.length === 0 &&
+      (TRAILING_LITTLE_WORDS.has(word.toLowerCase()) || /^\p{N}+$/u.test(word))
         ? acc
         : [word, ...acc],
     [],

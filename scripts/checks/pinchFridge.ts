@@ -9,6 +9,7 @@ import {
   getLandingPlace,
   getNamesLine,
   getPastDueBoxes,
+  getPastDueSplitText,
   getPastDueText,
   getPlacedTitle,
   getSelectionNote,
@@ -346,6 +347,48 @@ assert.deepEqual(
 assert.deepEqual(
   [getPastDueText(1), getPastDueText(3), getTossAction(1), getTossAction(3)],
   ['1 is past its date', '3 are past their date', 'Toss it', 'Toss them'],
+);
+const inFridge = (id: string) => container({ id, place: 'FRIDGE' });
+const inFreezer = (id: string) => container({ id, place: 'FREEZER' });
+assert.deepEqual(
+  [
+    getPastDueSplitText([inFridge('a'), inFridge('b')], 'FRIDGE'),
+    getPastDueSplitText(
+      [inFridge('a'), inFridge('b'), inFreezer('c')],
+      'FRIDGE',
+    ),
+    getPastDueSplitText(
+      [inFridge('a'), inFreezer('b'), inFreezer('c')],
+      'FREEZER',
+    ),
+    getPastDueSplitText([inFreezer('a')], 'FRIDGE'),
+    getPastDueSplitText([inFridge('a'), inFridge('b')], 'FREEZER'),
+  ],
+  [
+    null,
+    '2 here, 1 in the freezer',
+    '2 here, 1 in the fridge',
+    'In the freezer',
+    'All in the fridge',
+  ],
+  'the past-date row names where they are when the list shows one place, and says nothing when they are all here',
+);
+assert.deepEqual(
+  [
+    getSelectionPrimary([], NOON_ON_THE_18TH),
+    getSelectionPrimary([container({ eatBy: dayOf(15) })], NOON_ON_THE_18TH),
+    getSelectionPrimary(
+      [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(14) })],
+      NOON_ON_THE_18TH,
+    ),
+    getSelectionPrimary(
+      [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(22) })],
+      NOON_ON_THE_18TH,
+    ),
+    getSelectionPrimary([container({ eatBy: dayOf(18) })], NOON_ON_THE_18TH),
+  ],
+  ['EAT', 'TOSS', 'TOSS', 'EAT', 'EAT'],
+  'Toss is the filled act only when every ticked box is past its date: nothing ticked, a mix, or one due today keeps Ate it all',
 );
 assert.deepEqual(
   [getSelectionTitle(0), getSelectionTitle(1), getSelectionTitle(12)],

@@ -1,6 +1,13 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import {
+  arrayRemove,
+  arrayUnion,
+  deleteDoc,
+  doc,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
@@ -16,6 +23,7 @@ import {
   selectSourcesById,
   selectTweakTracking,
 } from '@apps/pinch/store/selectors';
+import type { CollectionChange } from '@apps/pinch/utils/collections';
 import { getRecipeChanges } from '@apps/pinch/utils/recipeChanges';
 import { getTweakReason } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
@@ -64,13 +72,28 @@ const getWriteMessage = (error: unknown, fallback: string) => {
     : fallback;
 };
 
-/** A form that couldn't offer collections leaves the stored list alone, but an older recipe still gains the key. */
-const getCollectionFields = (
+/** A recipe saved by a form that couldn't offer collections, or whose row was left alone, leaves the stored list as it is, but an older recipe still gains the key. Only a change is written, as `arrayRemove` and `arrayUnion` (two writes of one batch when a save does both), so a collection another device changed in between stays. */
+const getCollectionWrites = (
   existing: Recipe,
-  collectionIds: string[] | null,
+  change: CollectionChange | null,
 ) => {
-  if (collectionIds !== null) return { collectionIds };
-  return 'collectionIds' in existing ? {} : { collectionIds: [] };
+  const { add, remove } = change ?? { add: [], remove: [] };
+  if (!('collectionIds' in existing)) {
+    return {
+      fields: { collectionIds: add.length > 0 ? arrayUnion(...add) : [] },
+      after: null,
+    };
+  }
+  if (remove.length > 0) {
+    return {
+      fields: { collectionIds: arrayRemove(...remove) },
+      after: add.length > 0 ? { collectionIds: arrayUnion(...add) } : null,
+    };
+  }
+  return {
+    fields: add.length > 0 ? { collectionIds: arrayUnion(...add) } : {},
+    after: null,
+  };
 };
 
 export const getRecipeCoverPath = (uid: string, recipeId: string) =>
@@ -96,8 +119,8 @@ export interface RecipeDraft {
   source: RecipeSource;
   /** The `Source` it came from, or null; written on every save, so older recipes gain the key. */
   sourceId: string | null;
-  /** The collections it is in; null when the form couldn't offer them (they hadn't loaded), which leaves the stored list as it is. */
-  collectionIds: string[] | null;
+  /** What the form added to and took out of the collections it opened with; null when it couldn't offer them (they hadn't loaded), which leaves the stored list as it is. */
+  collectionChange: CollectionChange | null;
   /** Collections typed with the recipe, created in the same batch so a failed save leaves no orphan and an offline one is queued whole. */
   newCollections: { id: string; label: string }[];
   /** Custom ingredients the reader proposed and the person kept: created with the recipe, in one batch. */
@@ -297,18 +320,25 @@ export const saveRecipe = createAsyncThunk<
         );
       });
       if (existing) {
+        const collectionWrites = getCollectionWrites(
+          existing,
+          draft.collectionChange,
+        );
         batch.update(recipeDoc(uid, recipeId), {
           ...fields,
           ...('isArchived' in existing ? {} : { isArchived: false }),
-          ...getCollectionFields(existing, draft.collectionIds),
+          ...collectionWrites.fields,
         });
+        if (collectionWrites.after) {
+          batch.update(recipeDoc(uid, recipeId), collectionWrites.after);
+        }
         if (tweak) batch.set(noteDoc(uid, tweak.id), tweak);
       } else {
         const recipe: Recipe = {
           id: recipeId,
           ...fields,
           source: draft.source,
-          collectionIds: draft.collectionIds ?? [],
+          collectionIds: draft.collectionChange?.add ?? [],
           isArchived: false,
           isFavorite: false,
           createdAt: now,

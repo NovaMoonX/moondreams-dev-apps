@@ -138,7 +138,7 @@ function GroupText({ group }: { group: TakeGroup }) {
       <span className='text-muted-foreground block text-xs'>
         {group.packageCount === 1
           ? 'From 1 package'
-          : `From ${group.packageCount} packages, the one that expires first first`}
+          : `From ${group.packageCount} packages, starting with the one that expires first`}
         {group.short !== null &&
           `. ${formatSize(group.short.amount, group.short.unit)} more than you had`}
       </span>

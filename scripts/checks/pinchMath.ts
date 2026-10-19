@@ -189,6 +189,7 @@ import {
   getShoppingItemId,
   getShownShoppingView,
   groupShoppingItems,
+  isPutAway,
   isValidAmount,
   mergeLines,
   roundAmount,
@@ -692,8 +693,8 @@ assert.deepEqual(
 );
 assert.deepEqual(
   grouped.toBuy[0].rows.map((row) => [row.itemIds, row.amountText]),
-  [[['chicken__LB', 'chicken__OZ'], '2.25 lb']],
-  'one ingredient in two weights is one row that stands for both items, largest first, summed in its unit',
+  [[['chicken__LB', 'chicken__OZ'], '2.3 lb']],
+  'one ingredient in two weights is one row that stands for both items, largest first, summed in its unit (2 lb and 4 oz, shown to two figures)',
 );
 assert.deepEqual(
   grouped.got.map((group) => [
@@ -823,6 +824,28 @@ assert.equal(
   ).leftOut[0]?.kind,
   'NOT_COMPARABLE',
   'a unit that cannot be compared with the package is left out',
+);
+
+// A ticked line put away in the pantry
+assert.equal(
+  isPutAway({ updatedAt: 2000, pantryAddedAt: 2000 }),
+  true,
+  'a line stamped with the updatedAt it had is put away',
+);
+assert.equal(
+  isPutAway({ updatedAt: 3000, pantryAddedAt: 2000 }),
+  false,
+  'a line ticked or edited since is offered again',
+);
+assert.equal(
+  isPutAway({ updatedAt: 2000, pantryAddedAt: null }),
+  false,
+  'a line never put away is offered',
+);
+assert.equal(
+  isPutAway({ updatedAt: 2000 } as Parameters<typeof isPutAway>[0]),
+  false,
+  'a line written before the key existed reads as not put away',
 );
 
 // Merging a line into an item
@@ -6161,6 +6184,9 @@ assert.deepEqual(
     cookUtils.getStepName('Bake.'),
     cookUtils.getStepName('2. Rinse the rice twice'),
     cookUtils.getStepName(''),
+    cookUtils.getStepName('Simmer for 2 minutes, then stir.'),
+    cookUtils.getStepName('Bake at 350 degrees.'),
+    cookUtils.getStepName('Cook for 1½ hours'),
   ],
   [
     'Brown the beef',
@@ -6169,8 +6195,11 @@ assert.deepEqual(
     'Bake',
     '2 Rinse',
     '',
+    'Simmer',
+    'Bake',
+    'Cook',
   ],
-  "a timer is named by its step's first words, without a little word left dangling at the end",
+  "a timer is named by its step's first words, without a little word or a number left dangling at the end",
 );
 
 const trayLine = (name: string, amountText: string) => ({ name, amountText });
@@ -6506,12 +6535,40 @@ assert.deepEqual(
     row.section,
   ]),
   [
-    ['Doritos', 2, '5.49 oz', 'snacks'],
+    ['Doritos', 2, '5.5 oz', 'snacks'],
     ['Garlic', 1, '6 each', 'produce'],
     ['Garlic', 1, '2 tsp', 'produce'],
     ['Salt', 1, null, 'spices'],
   ],
   'an add sheet shows one row per ingredient and kind of unit (a tick takes both lines), in the order they came',
+);
+
+assert.deepEqual(
+  [
+    { amount: 0.38, unit: 'CUP' },
+    { amount: 0.5, unit: 'CUP' },
+    { amount: 1.5, unit: 'TBSP' },
+    { amount: 2056.35, unit: 'G' },
+    { amount: 0.37, unit: 'LB' },
+    { amount: 12.46, unit: 'LB' },
+    { amount: 1.53, unit: 'L' },
+    { amount: 3, unit: 'EACH' },
+    null,
+  ].map((amount) =>
+    stopAmountText(amount as Parameters<typeof stopAmountText>[0]),
+  ),
+  [
+    '6 tbsp',
+    '½ cup',
+    '1½ tbsp',
+    '2100 g',
+    '0.37 lb',
+    '12 lb',
+    '1.5 l',
+    '3 each',
+    null,
+  ],
+  'a list reads cups and spoons the way a recipe does and weights and volumes to two figures, so a decimal never stands in for a measure',
 );
 
 const shopSplitRows = shopGroupItems(
@@ -8937,7 +8994,7 @@ assert.equal(
     ]),
     [
       ['Thu dinner', 'Rice pot', '1 cup'],
-      ['Fri dinner', 'Rice pot & Rice', '1.5 cup'],
+      ['Fri dinner', 'Rice pot & Rice', '1½ cups'],
       ['Rice pot', null, '1 cup'],
     ],
     'a line’s sheet lists every meal behind it with the dish and what each asks of it now (the plate’s rice pot and its own half cup of rice together), leaving out one that is gone',

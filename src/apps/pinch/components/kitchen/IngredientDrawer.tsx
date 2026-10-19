@@ -223,6 +223,7 @@ function IngredientDrawer({
 
         <IngredientStock
           ingredientId={ingredient.id}
+          isUsed={usedIn !== null}
           onOpen={() => onOpenPantry(ingredient.id)}
           onAdd={() => onAddPackage(ingredient.id)}
         />

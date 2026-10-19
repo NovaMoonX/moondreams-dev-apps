@@ -94,6 +94,7 @@ import type {
   WebPhoto,
 } from '@apps/pinch/types';
 import {
+  getCollectionChange,
   getCollectionsToSave,
   getSuggestedCollections,
   getTrustedProtein,
@@ -742,7 +743,13 @@ function RecipeForm({
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
             sourceId,
             newSource,
-            collectionIds,
+            collectionChange:
+              collectionIds === null
+                ? null
+                : getCollectionChange(
+                    initialData.collections.ids,
+                    collectionIds,
+                  ),
             newCollections,
             newIngredients: [
               ...new Map(

@@ -54,8 +54,8 @@ const once = async <T>(key: string, run: () => Promise<T>) => {
 };
 
 interface AddOptions {
-  /** Runs once the write has settled, never when it was refused (that raises the error toast). */
-  onWritten?: () => void;
+  /** Shopping lines these packages put away, so the list stops offering them on every device. */
+  putAway?: { id: string; updatedAt: number }[];
 }
 
 export function usePackageActions(uid: string) {
@@ -128,10 +128,10 @@ export function usePackageActions(uid: string) {
     return getNewPackagesProblem(inputs, inStockCount);
   };
 
-  /** Writes new packages in one batch and resolves to them once the write is queued: offline it still lands locally and syncs later. */
+  /** Writes new packages in one batch and resolves to them once the write is queued: offline it still lands locally and syncs later. A refused write raises the error toast. */
   const add = (
     inputs: Omit<NewPackageInput, 'id'>[],
-    { onWritten }: AddOptions = {},
+    { putAway }: AddOptions = {},
   ) => {
     const problem = getProblem(inputs);
     if (problem !== null) throw new Error(problem);
@@ -140,16 +140,14 @@ export function usePackageActions(uid: string) {
     const created = inputs.map((input) =>
       buildPackage({ ...input, id: generateUuid() }, now),
     );
-    dispatch(writePackages({ uid, packages: created }))
+    dispatch(writePackages({ uid, packages: created, putAway }))
       .unwrap()
-      .then(
-        () => onWritten?.(),
-        (error: string) =>
-          addToast({
-            title: "That didn't save",
-            description: error,
-            type: 'error',
-          }),
+      .catch((error: string) =>
+        addToast({
+          title: "That didn't save",
+          description: error,
+          type: 'error',
+        }),
       );
     return created;
   };
@@ -240,10 +238,23 @@ export function usePackageActions(uid: string) {
       return { count: changed.length, error, skippedText };
     });
 
-  /** What cooking takes out: resolves to what was really taken, for the card that says so and holds the Undo. */
-  const takeOut = (takes: PackageTake[]) =>
+  /** What cooking takes out: resolves to what was queued, for the card that says so and holds the Undo, and calls `onRefused` if the server turns the batch down later. */
+  const takeOut = (takes: PackageTake[], onRefused: () => void) =>
     once(`take:${takes.map((take) => take.packageId).join(',')}`, () =>
-      dispatch(takeFromPackages({ uid, takes })).unwrap(),
+      dispatch(
+        takeFromPackages({
+          uid,
+          takes,
+          onRefused: (message) => {
+            onRefused();
+            addToast({
+              title: "That didn't save",
+              description: message,
+              type: 'error',
+            });
+          },
+        }),
+      ).unwrap(),
     );
 
   return {

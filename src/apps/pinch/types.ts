@@ -343,6 +343,8 @@ export interface ShoppingItem {
   isChecked: boolean;
   /** What put it on the list: planned meal ids, `recipe:<id>` and `meal:<id>`, oldest first, at most 60; empty for something added on the list itself. Documents written before sources lack the key, which reads as empty. */
   sources: string[];
+  /** An instant: the line's `updatedAt` as it was put in the pantry. It counts as put away only while `updatedAt` still equals this, so ticking, unticking or editing it again offers it once more. Documents written before this lack the key, which reads as null. */
+  pantryAddedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }

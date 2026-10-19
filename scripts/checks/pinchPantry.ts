@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 
-import type { Package, Recipe } from '../../src/apps/pinch/types.ts';
+import type {
+  Package,
+  PackageEvent,
+  Recipe,
+} from '../../src/apps/pinch/types.ts';
 import {
   getEatByLabel,
   getEatByPhrase,
@@ -22,7 +26,9 @@ import {
   getPackageBulkNames,
   getPackageBulkToast,
   getPackageLabel,
+  getPackageSeed,
   getPackageSelectionNote,
+  getPackageSelectionPrimary,
   getPackageSelectionTitle,
   getPackageSkippedText,
   getPackageState,
@@ -929,6 +935,24 @@ assert.deepEqual(
 assert.deepEqual(names.lines[0].details, ['2 lb', 'Use by Oct 15']);
 assert.equal(names.more, 2);
 
+assert.deepEqual(
+  [
+    getPackageSelectionPrimary([], NOW),
+    getPackageSelectionPrimary([pkg({ expiresAt: dayOf(10) })], NOW),
+    getPackageSelectionPrimary(
+      [pkg({ expiresAt: dayOf(10) }), pkg({ expiresAt: dayOf(12) })],
+      NOW,
+    ),
+    getPackageSelectionPrimary(
+      [pkg({ expiresAt: dayOf(10) }), pkg({ expiresAt: null })],
+      NOW,
+    ),
+    getPackageSelectionPrimary([pkg({ expiresAt: dayOf(18) })], NOW),
+  ],
+  ['USE_UP', 'TOSS', 'TOSS', 'USE_UP', 'USE_UP'],
+  'Toss is the filled act only when every ticked package is past its date: nothing ticked, a mix, a package with no date, or one due today keeps Used it up',
+);
+
 // What cooking takes out of the pantry
 const rice = (over: Partial<Package>) =>
   pkg({
@@ -1421,7 +1445,7 @@ assert.deepEqual(
     ['jar', 1, 'CUP', true, false],
     ['lb-bag', 1.25, 'LB', false, true],
   ],
-  'a jar in cups and a bag in pounds are drawn from together, the one that expires first first',
+  'a jar in cups and a bag in pounds are drawn from together, starting with the one that expires first',
 );
 const shortBridged = planTakeOut(
   [{ ingredientId: 'cat-rice', amount: 4, unit: 'CUP' }],
@@ -1436,6 +1460,204 @@ assert.deepEqual(
   ],
   [[[4, true]], [{ ingredientId: 'cat-rice', amount: 3.4, unit: 'CUP' }]],
   "what four ounces cannot cover is said in the recipe's own unit",
+);
+
+const milkCarton = (amount: number, over: Partial<Package> = {}) =>
+  pkg({ id: 'carton', unit: 'L', amount, place: 'FRIDGE', ...over });
+const cupsOfMilk = (cups: number, packages: Package[]) =>
+  planTakeOut(
+    [{ ingredientId: 'cat-milk', amount: cups, unit: 'CUP' }],
+    packages,
+    NOW,
+  );
+const twoCupsFromCarton = cupsOfMilk(2, [milkCarton(1)]);
+assert.deepEqual(
+  [
+    twoCupsFromCarton.takes.map((take) => [take.amount, take.unit, take.isAll]),
+    twoCupsFromCarton.short,
+  ],
+  [[[0.47, 'L', false]], []],
+  "two cups from a one-litre carton takes 0.47 l and reports no shortfall: what the carton's own two figures round away is not a shortage",
+);
+assert.deepEqual(
+  cupsOfMilk(2, [milkCarton(4)]).short,
+  [],
+  'a bigger carton says the same',
+);
+assert.deepEqual(
+  cupsOfMilk(2, [
+    milkCarton(0.3, { id: 'soon', expiresAt: dayOf(20) }),
+    milkCarton(1, { id: 'later', expiresAt: dayOf(30) }),
+  ]).short,
+  [],
+  'a second package that rounds the rest down is not a shortage either',
+);
+assert.deepEqual(
+  planTakeOut(
+    [{ ingredientId: 'cat-milk', amount: 2, unit: 'CUP' }],
+    [milkCarton(1)],
+    NOW,
+    () => ({ gramsPerMl: 1.03, gramsEach: null }),
+  ).short,
+  [],
+  'it holds when the cup and the litre meet in grams',
+);
+const eightCups = cupsOfMilk(8, [milkCarton(1.53)]);
+assert.deepEqual(
+  [eightCups.takes.map((take) => [take.amount, take.isAll]), eightCups.short],
+  [[[1.53, true]], [{ ingredientId: 'cat-milk', amount: 1.53, unit: 'CUP' }]],
+  'a real shortfall (eight cups against 1.53 l) is still said, in the recipe unit',
+);
+
+// What a new package of an ingredient starts from
+const seedMilk = (over: Partial<Package>) =>
+  pkg({ ingredientId: 'cat-milk', place: 'FRIDGE', unit: 'L', ...over });
+assert.equal(
+  getPackageSeed([], 'cat-milk'),
+  null,
+  'with none in stock there is no seed',
+);
+assert.equal(
+  getPackageSeed([seedMilk({ ingredientId: 'cat-rice' })], 'cat-milk'),
+  null,
+  'another ingredient is not a seed',
+);
+assert.deepEqual(
+  getPackageSeed(
+    [
+      seedMilk({ id: 'old', amount: 2, unit: 'L', createdAt: 100 }),
+      seedMilk({
+        id: 'new',
+        amount: 500,
+        unit: 'ML',
+        place: 'FREEZER',
+        productId: 'p-small',
+        createdAt: 900,
+        history: [
+          makePackageEvent('ADDED', 900, { amount: 500, place: 'FREEZER' }),
+        ],
+      }),
+    ],
+    'cat-milk',
+  ),
+  { amount: 500, unit: 'ML', place: 'FREEZER', productId: 'p-small' },
+  'the newest package by when it was added, not by its date',
+);
+const opened = seedMilk({
+  amount: 0.4,
+  history: [
+    makePackageEvent('ADDED', 1, { amount: 1, place: 'FRIDGE' }),
+    makePackageEvent('USED', 2, { amount: 0.6 }),
+  ],
+});
+assert.equal(
+  getPackageSeed([opened], 'cat-milk')?.amount,
+  1,
+  'an opened carton seeds what it was bought as, not what is left',
+);
+assert.equal(
+  getPackageSeed(
+    [
+      {
+        ...opened,
+        history: [
+          ...opened.history,
+          makePackageEvent('EDITED', 3, { note: 'Unit ml → l' }),
+        ],
+      },
+    ],
+    'cat-milk',
+  )?.amount,
+  0.4,
+  'one edited since falls back to what is left, since its first amount may be in another unit',
+);
+
+// The heaviest history the client can write. The rules check a package's history event by event under the evaluator's 1,000-expression budget: ten events with amount and place (or amount and note), or nine with all three, are denied on the emulator, and an add followed by nine moves with 80-character notes is allowed. So no planner may write an event with all three, and only the first (ADDED) may carry amount and place.
+const weightOf = (event: PackageEvent) =>
+  [event.amount, event.place, event.note].filter((part) => part !== null)
+    .length;
+const redated = planPackageMove(
+  pkg({ expiresAt: dayOf(20) }),
+  'FREEZER',
+  dayOf(28),
+  NOW,
+);
+const editedPackage = planPackageEdit(
+  pkg({ expiresAt: dayOf(20), amount: 2 }),
+  {
+    amount: 1.5,
+    unit: 'KG',
+    place: 'PANTRY',
+    expiresAt: dayOf(27),
+    ingredientName: 'Milk',
+  },
+  NOW,
+);
+const plannedEvents = [
+  buildPackage(
+    {
+      id: 'p',
+      ingredientId: 'cat-milk',
+      ingredientName: 'Milk',
+      productId: null,
+      amount: 1,
+      unit: 'L',
+      place: 'FRIDGE',
+      expiresAt: null,
+    },
+    NOW,
+  ).history,
+  planUse(pkg(), 0.25, NOW),
+  planUse(pkg(), 'ALL', NOW),
+  planPackageToss(pkg(), NOW),
+  redated,
+  editedPackage,
+].flatMap((planned) => {
+  const history = Array.isArray(planned)
+    ? planned
+    : 'fields' in planned
+      ? planned.fields.history
+      : [];
+  return history.slice(1);
+});
+assert.ok(plannedEvents.length >= 6, 'the planners wrote events to weigh');
+assert.deepEqual(
+  plannedEvents.filter((event) => weightOf(event) > 2),
+  [],
+  'no event the client writes carries amount, place and note',
+);
+assert.deepEqual(
+  plannedEvents.filter(
+    (event) => event.amount !== null && event.place !== null,
+  ),
+  [],
+  'after the first event, none carries amount and place together',
+);
+assert.ok(
+  plannedEvents.every((event) => (event.note?.length ?? 0) <= 80),
+  'a note is never past the 80 characters the rules allow',
+);
+assert.equal(
+  weightOf(makePackageEvent('ADDED', 1, { amount: 1, place: 'FRIDGE' })),
+  2,
+  'the first event is the one that carries amount and place',
+);
+const worn = Array.from({ length: 30 }, (_, index) => index).reduce(
+  (history, index) =>
+    appendPackageEvent(
+      history,
+      makePackageEvent(index % 2 === 0 ? 'USED' : 'MOVED', 100 + index, {
+        amount: index % 2 === 0 ? 0.1 : null,
+        place: index % 2 === 0 ? null : 'FREEZER',
+        note: index % 2 === 0 ? null : 'x'.repeat(80),
+      }),
+    ),
+  pkg().history,
+);
+assert.deepEqual(
+  [worn.length, worn[0].kind],
+  [10, 'ADDED'],
+  'thirty acts in a row keep ten events and the add at the front, which is where the heaviest event lives',
 );
 
 // The recipes type is only here so a drift in the shape is a compile error

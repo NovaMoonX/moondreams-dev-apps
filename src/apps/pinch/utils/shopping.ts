@@ -37,6 +37,7 @@ import {
   getItemTitle,
   getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
+import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
@@ -202,8 +203,22 @@ export function getShopAmount(
   return isPinch ? null : sum;
 }
 
-export const formatShopAmount = (amount: ShopAmount | null) =>
-  amount ? formatSize(amount.amount, amount.unit) : null;
+const SPOON_UNITS: Unit[] = ['CUP', 'TBSP', 'TSP'];
+const TWO_FIGURE_UNITS: Unit[] = ['G', 'KG', 'OZ', 'LB', 'ML', 'L', 'FL_OZ'];
+
+/** An amount on the list the way a person shops and measures: cups and spoons as in a recipe ("¼ cup", "6 tbsp"), weights and volumes to two figures ("2100 g", not "2056.35 g"). Display only: the item keeps its exact amount, which its own sheet edits. */
+export const formatShopAmount = (amount: ShopAmount | null) => {
+  if (!amount) return null;
+  if (SPOON_UNITS.includes(amount.unit)) {
+    return formatKitchenAmount(amount.amount, amount.unit);
+  }
+  return formatSize(
+    TWO_FIGURE_UNITS.includes(amount.unit)
+      ? Number(amount.amount.toPrecision(2))
+      : amount.amount,
+    amount.unit,
+  );
+};
 
 /** Spices, oils, vinegar, salt and water: what an add sheet leaves unticked, since most kitchens have them. */
 export const isUsuallyAtHome = (
@@ -675,6 +690,11 @@ export function addSources(
   return result;
 }
 
+/** A ticked line counts as put away only while it is as it was put away: ticking, unticking or editing it again moves its `updatedAt` on, and it is offered once more. */
+export const isPutAway = (
+  item: Pick<ShoppingItem, 'updatedAt' | 'pantryAddedAt'>,
+) => item.pantryAddedAt === item.updatedAt;
+
 export interface ShoppingFields {
   amount: number | null;
   isChecked: boolean;
@@ -1072,6 +1092,7 @@ export function planStopShopping(
             unit: 'EACH',
             isChecked: false,
             sources: mergeSources([], sources),
+            pantryAddedAt: null,
             createdAt: readById.get(twinId)?.createdAt ?? now,
             updatedAt: now,
           },

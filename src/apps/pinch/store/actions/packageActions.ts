@@ -1,10 +1,19 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { deleteDoc, doc, runTransaction, writeBatch } from 'firebase/firestore';
+import {
+  deleteDoc,
+  doc,
+  increment,
+  runTransaction,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import type { RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { runInChunks } from '@apps/pinch/store/actions/containerActions';
+import { selectPackagesById } from '@apps/pinch/store/selectors';
 import type { Package, PackagePlace } from '@apps/pinch/types';
 import {
   NO_PACKAGE_SKIPS,
@@ -28,6 +37,8 @@ const packageDoc = (uid: string, id: string) =>
 
 const OFFLINE_MESSAGE = 'Check your connection and try again.';
 const GONE = 'This package is gone, so nothing was changed.';
+export const TAKE_REFUSED =
+  'They were used or finished somewhere else, so nothing was taken.';
 
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (error instanceof FirebaseError) {
@@ -60,24 +71,40 @@ const applyPlan = (
 interface WritePackagesInput {
   uid: string;
   packages: Package[];
+  /** Shopping lines these packages put away, each with the `updatedAt` it had. */
+  putAway?: { id: string; updatedAt: number }[];
 }
 
-/** One batch, so a package added with others lands whole or not at all, and it queues where the signal drops. */
+const shoppingDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'shoppingItems', id);
+
+/** A field-scoped update on its own, never in the packages' batch: a line another device already cleared would refuse the whole batch. Its failure is logged and changes nothing the person sees. */
+const stampLine = (uid: string, id: string, pantryAddedAt: number | null) =>
+  updateDoc(shoppingDoc(uid, id), { pantryAddedAt }).catch((error: unknown) =>
+    console.error('Pinch shopping line not marked', error),
+  );
+
+/** One batch, so a package added with others lands whole or not at all, and it queues where the signal drops. The lines it put away are stamped at once, so another device stops offering them without waiting for the server, and are un-stamped if the batch is refused. */
 export const writePackages = createAsyncThunk<
   string[],
   WritePackagesInput,
   { rejectValue: string }
->('pinch/packages/write', async ({ uid, packages }, { rejectWithValue }) => {
-  try {
-    const batch = writeBatch(db);
-    packages.forEach((pkg) => batch.set(packageDoc(uid, pkg.id), pkg));
-    await batch.commit();
-  } catch (error) {
-    return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
-  }
+>(
+  'pinch/packages/write',
+  async ({ uid, packages, putAway = [] }, { rejectWithValue }) => {
+    putAway.forEach(({ id, updatedAt }) => void stampLine(uid, id, updatedAt));
+    try {
+      const batch = writeBatch(db);
+      packages.forEach((pkg) => batch.set(packageDoc(uid, pkg.id), pkg));
+      await batch.commit();
+    } catch (error) {
+      putAway.forEach(({ id }) => void stampLine(uid, id, null));
+      return rejectWithValue(getWriteMessage(error, 'Unable to save this.'));
+    }
 
-  return packages.map((pkg) => pkg.id);
-});
+    return packages.map((pkg) => pkg.id);
+  },
+);
 
 interface ChangeInput {
   uid: string;
@@ -305,69 +332,71 @@ export const changePackagesInPlace = createAsyncThunk<
 interface TakeFromInput {
   uid: string;
   takes: PackageTake[];
+  /** Runs when the server refuses the batch, which offline can be long after the thunk resolved. */
+  onRefused: (message: string) => void;
 }
 
 interface TakeFromResult {
   changed: ChangedPackage[];
-  /** Takes whose package was gone, finished or had less left than planned by the time it was read. */
+  /** Takes whose package was no longer in the loaded pantry or was finished. */
   skipped: number;
-  error: string | null;
 }
 
-/** What cooking takes out of the pantry: each planned take re-read inside its chunk's transaction and applied as a use of what is still there (never more than is left); a package that is gone or finished by then is left alone. */
+/** What cooking takes out of the pantry, written as one local-first batch from the loaded packages: a partial take is an `increment`, so another device's use of the same package is kept, and the history is this device's copy plus the new event. A package that is gone or finished here is left alone. Resolves once the batch is queued, not when the server answers. */
 export const takeFromPackages = createAsyncThunk<
   TakeFromResult,
   TakeFromInput,
   { rejectValue: string }
->('pinch/packages/take', async ({ uid, takes }, { rejectWithValue }) => {
-  const { done, error } = await runInChunks(
-    takes,
-    (chunk): Promise<{ changed: ChangedPackage[]; skipped: number }[]> =>
-      runTransaction(db, async (transaction) => {
-        const snapshots = await Promise.all(
-          chunk.map((take) => transaction.get(packageDoc(uid, take.packageId))),
-        );
-        const now = Date.now();
-        const writes = chunk.flatMap((take, index) => {
-          const snapshot = snapshots[index];
-          if (!snapshot.exists()) return [];
+>(
+  'pinch/packages/take',
+  async ({ uid, takes, onRefused }, { getState, rejectWithValue }) => {
+    try {
+      const loaded = selectPackagesById(getState() as RootState);
+      const now = Date.now();
+      const writes = takes.flatMap((take) => {
+        const pkg = loaded.get(take.packageId);
+        if (!pkg) return [];
 
-          const pkg = snapshot.data() as Package;
-          const plan = planUse(
-            pkg,
-            take.isAll ? 'ALL' : Math.min(take.amount, pkg.amount),
-            now,
-          );
-          return 'fields' in plan
-            ? [{ ref: snapshot.ref, fields: plan.fields }]
-            : [];
-        });
-        writes.forEach(({ ref, fields }) => transaction.update(ref, fields));
+        const used = take.isAll
+          ? pkg.amount
+          : Math.min(take.amount, pkg.amount);
+        const plan = planUse(pkg, take.isAll ? 'ALL' : used, now);
+        if (!('fields' in plan)) return [];
+
+        const { amount, ...rest } = plan.fields;
         return [
           {
-            changed: writes.map(({ ref, fields }) => ({
-              id: ref.id,
-              at: fields.updatedAt,
-              before: null,
-            })),
-            skipped: chunk.length - writes.length,
+            id: pkg.id,
+            fields:
+              amount === undefined
+                ? rest
+                : { ...rest, amount: increment(-used) },
           },
         ];
-      }),
-  );
-  const changed = done.flatMap((entry) => entry.changed);
-  const skipped = done.reduce((sum, entry) => sum + entry.skipped, 0);
-  if (error === null) return { changed, skipped, error: null };
-  if (changed.length === 0) {
-    return rejectWithValue(getWriteMessage(error, "Couldn't take that out."));
-  }
+      });
+      if (writes.length > 0) {
+        const batch = writeBatch(db);
+        writes.forEach(({ id, fields }) =>
+          batch.update(packageDoc(uid, id), fields),
+        );
+        batch
+          .commit()
+          .catch((error) => onRefused(getWriteMessage(error, TAKE_REFUSED)));
+      }
 
-  return {
-    changed,
-    skipped,
-    error: `${changed.length} taken out before it stopped. ${getWriteMessage(error, 'The rest are as they were.')}`,
-  };
-});
+      return {
+        changed: writes.map(({ id, fields }) => ({
+          id,
+          at: fields.updatedAt,
+          before: null,
+        })),
+        skipped: takes.length - writes.length,
+      };
+    } catch (error) {
+      return rejectWithValue(getWriteMessage(error, "Couldn't take that out."));
+    }
+  },
+);
 
 interface UndoChangesInput {
   uid: string;

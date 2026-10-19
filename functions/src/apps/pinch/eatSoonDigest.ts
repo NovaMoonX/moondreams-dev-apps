@@ -3,8 +3,8 @@
 export const DAY_MS = 86_400_000;
 /** A box this many days past its date still counts, so a note about it goes out the morning after and then stops. */
 export const DIGEST_PAST_DAYS = 1;
-/** A note goes out only in the first half hour of the chosen hour, so a late run drops it instead of sending it hours after. */
-export const SEND_WINDOW_MS = 30 * 60_000;
+/** A note goes out only within the chosen hour: two runs of the half-hourly schedule fall in it, so one failed or late run still leaves the other, the day's stamp makes it one note, and a run that wakes after the hour drops it instead of sending it hours late. */
+export const SEND_WINDOW_MS = 60 * 60_000;
 const MAX_NAME_LENGTH = 40;
 const NAMES_SHOWN = 2;
 
@@ -77,7 +77,7 @@ export interface DigestSettings {
   lastDigestDay: string | null;
 }
 
-/** The local day and its UTC midnight when this run is the one that sends the person's note: their hour has begun (within the last half hour) and today's has not gone out. Null otherwise. */
+/** The local day and its UTC midnight when this run is the one that sends the person's note: their hour is on (within `SEND_WINDOW_MS` of its start) and today's has not gone out. Null otherwise. */
 export const getDigestRun = (now: number, settings: DigestSettings) => {
   const moment = getLocalMoment(now, resolveZone(settings.timeZone));
   const isInWindow =

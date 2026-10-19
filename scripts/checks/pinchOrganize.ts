@@ -35,6 +35,7 @@ import {
   getAddedToCollectionsText,
   getAddToCollectionsLabel,
   getChunks,
+  getCollectionChange,
   getCollectionsToSave,
   getInitialCollectionsChoice,
   getNothingAddedText,
@@ -430,10 +431,11 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
   assert.deepEqual(none.ids, [], 'the starting choice is never changed');
 
-  const makeId = (() => {
-    let n = 0;
-    return () => `new-${++n}`;
-  })();
+  const newIds = Array.from(
+    { length: 10 },
+    (_, index) => `new-${index + 1}`,
+  ).values();
+  const makeId = () => newIds.next().value as string;
   const typed = addCollectionByLabel(none, all, '  Meal prep ', makeId);
   assert.equal(typed.outcome, 'ok');
   assert.deepEqual(typed.choice.added, [{ id: 'new-1', label: 'Meal prep' }]);
@@ -520,6 +522,22 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
       newCollections: [{ id: 'new-1', label: 'Meal prep' }],
     },
     'a save drops an id deleted elsewhere and writes only the new collections still picked',
+  );
+
+  assert.deepEqual(
+    getCollectionChange(['c-hp', 'c-week'], ['c-hp', 'c-week']),
+    { add: [], remove: [] },
+    'an untouched row writes nothing, so a collection another device added stays',
+  );
+  assert.deepEqual(
+    getCollectionChange(['c-hp', 'c-week'], ['c-week', 'new-1', 'c-brunch']),
+    { add: ['new-1', 'c-brunch'], remove: ['c-hp'] },
+    'a save writes only what it added and took out, in the order picked',
+  );
+  assert.deepEqual(
+    getCollectionChange([], ['c-hp']),
+    { add: ['c-hp'], remove: [] },
+    'a new recipe adds every one it was given',
   );
 
   assert.deepEqual(

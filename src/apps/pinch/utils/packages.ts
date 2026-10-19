@@ -222,6 +222,31 @@ export const getDefaultPlace = (section: ShopSection): PackagePlace => {
     : 'PANTRY';
 };
 
+/** What a new package of an ingredient starts from, taken from the newest one in stock: what it was bought as (its first amount, or what is left if it was edited since, since the first amount may be in another unit), where it went and which pack it came from. The date stays a question. Null when there is none. */
+export const getPackageSeed = (packages: Package[], ingredientId: string) => {
+  const newest = packages
+    .filter((pkg) => pkg.ingredientId === ingredientId)
+    .reduce<Package | null>(
+      (best, pkg) =>
+        best === null || pkg.createdAt > best.createdAt ? pkg : best,
+      null,
+    );
+  if (newest === null) return null;
+
+  const first = newest.history[0];
+  const isUnchanged = !newest.history.some((event) => event.kind === 'EDITED');
+  const bought =
+    first?.kind === 'ADDED' && first.amount !== null && isUnchanged
+      ? first.amount
+      : newest.amount;
+  return {
+    amount: bought,
+    unit: newest.unit,
+    place: newest.place,
+    productId: newest.productId,
+  };
+};
+
 /** The typed amount as a number; NaN while it is blank or not a number. */
 export const parseAmountText = (text: string) =>
   text.trim() === '' ? Number.NaN : Number(text);
@@ -349,8 +374,7 @@ export const getStockFlag = (
   };
 };
 
-/** "3 packages · 2.4 lb in all": how many, and how much, in the order a row reads them. */
-/** How many packages and how much. Several packages with one past their date add up only the ones in date ("192 fl oz in date"), since the date's flag already names the rest; one package says its own amount. */
+/** How many packages and how much, in the order a row reads them ("3 packages · 2.4 lb in all"). Several packages with one past their date add up only the ones in date ("192 fl oz in date"), since the date's flag already names the rest; one package says its own amount. */
 export const getStockSummaryParts = (view: StockView) => {
   const count = view.packages.length;
   const isPartlyPast = count > 1 && view.pastCount > 0;
@@ -419,6 +443,16 @@ export const getPackageTossAction = (count: number) =>
 
 const countPackages = (count: number) =>
   `${count} ${count === 1 ? 'package' : 'packages'}`;
+
+/** Which act is the filled one in the Select footer: tossing when every ticked package is past its date, since that is the answer a spoiled one has, else using it up, the usual one. */
+export const getPackageSelectionPrimary = (
+  selected: Package[],
+  now = Date.now(),
+): 'TOSS' | 'USE_UP' =>
+  selected.length > 0 &&
+  selected.every((pkg) => getPackageState(pkg.expiresAt, now) === 'PAST')
+    ? 'TOSS'
+    : 'USE_UP';
 
 export const getPackageSelectionTitle = (count: number) =>
   count === 0 ? 'Select packages' : `${count} selected`;
@@ -1045,11 +1079,14 @@ export const planTakeOut = (
           : Math.min(pkg.amount, round2(wanted ?? 0));
         if (amount <= 0) return state;
 
+        const isWhole = isAll || amount >= pkg.amount - EPSILON;
         return {
-          left: Math.max(
-            0,
-            state.left - toCommon(amount, pkg.unit, conversions).base,
-          ),
+          left: isWhole
+            ? Math.max(
+                0,
+                state.left - toCommon(amount, pkg.unit, conversions).base,
+              )
+            : 0,
           takes: [
             ...state.takes,
             {
@@ -1057,7 +1094,7 @@ export const planTakeOut = (
               ingredientId: pkg.ingredientId,
               amount,
               unit: pkg.unit,
-              isAll: isAll || amount >= pkg.amount - EPSILON,
+              isAll: isWhole,
               isConverted: need.units.some(
                 (unit) => UNIT_DIMENSION[unit] !== UNIT_DIMENSION[pkg.unit],
               ),
