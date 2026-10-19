@@ -256,7 +256,7 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   };
 
   return (
-    <div className='space-y-4 [@media(max-height:599px)]:space-y-3'>
+    <div className='space-y-4 [@media(max-height:599px)]:space-y-2'>
       <div>
         <SectionHeader
           title='Kitchen'

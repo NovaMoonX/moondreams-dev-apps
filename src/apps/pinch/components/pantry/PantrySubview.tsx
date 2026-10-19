@@ -238,6 +238,9 @@ function PantrySubview({
   const isBlocked = isNothingTicked || acting !== null;
   const isCompact = isBelow('sm') || isVeryShort;
   const isShortSelect = isSelecting && isVeryShort;
+  const isActionOnTitleRow = isSelecting ? isVeryShort : !isBelow('sm');
+  const isInlineSearch =
+    hasSwitch && hasSearch && !isSelecting && !isBelow('sm');
   const isTossLead = getPackageSelectionPrimary(selectedPackages) === 'TOSS';
   const title = isSelecting
     ? getPackageSelectionTitle(selectedPackages.length)
@@ -662,7 +665,7 @@ function PantrySubview({
       title={title}
       onClose={closeSubview}
       onBack={isSelecting ? selection.exit : undefined}
-      headerAction={isShortSelect ? getHeaderAction() : undefined}
+      headerAction={isActionOnTitleRow ? getHeaderAction() : undefined}
     >
       <div className='space-y-4'>
         {isIntroShown && (
@@ -674,15 +677,20 @@ function PantrySubview({
         <SectionHeader
           title={title}
           subtitle={
-            isSelecting || isIntroShown
+            isSelecting || isIntroShown || isActionOnTitleRow
               ? undefined
               : 'What is on hand, and when to use it by.'
           }
           lead={(!isShortSelect && selectPills) || undefined}
-          action={isShortSelect ? undefined : getHeaderAction()}
+          action={isActionOnTitleRow ? undefined : getHeaderAction()}
         />
         {(hasSwitch || (isShortSelect && selectPills)) && (
-          <div className='flex items-center gap-x-3'>
+          <div
+            className={join(
+              'flex items-center gap-x-3',
+              isInlineSearch && 'flex-wrap gap-y-4',
+            )}
+          >
             {hasSwitch && (
               <div className='min-w-0'>
                 <PillGroup
@@ -700,6 +708,15 @@ function PantrySubview({
             {isShortSelect && selectPills && (
               <div className='shrink-0'>{selectPills}</div>
             )}
+            {isInlineSearch && (
+              <div className='min-w-48 flex-1'>
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder='Search your pantry'
+                />
+              </div>
+            )}
           </div>
         )}
         {isSelecting && (
@@ -707,7 +724,7 @@ function PantrySubview({
             {getPackageSelectionTitle(selectedPackages.length)}
           </p>
         )}
-        {hasSearch && isListShown && (
+        {hasSearch && isListShown && !isInlineSearch && (
           <SearchInput
             value={query}
             onChange={setQuery}

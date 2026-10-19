@@ -30,26 +30,26 @@ function EntryTile({
         rounded='lg'
         aria-label={ariaLabel}
         onClick={onClick}
-        className='bg-card border-border text-foreground! hover:bg-muted relative flex h-full min-h-14 w-full flex-col items-start justify-start gap-1 border px-3 py-2 text-left font-normal whitespace-normal @min-[13rem]:flex-row @min-[13rem]:items-center @min-[13rem]:gap-3 @min-[13rem]:py-2.5 @min-[13rem]:pr-9 @min-[24rem]:[@media(max-height:599px)]:min-h-10 @min-[24rem]:[@media(max-height:599px)]:gap-2 @min-[24rem]:[@media(max-height:599px)]:py-1.5 @min-[24rem]:[@media(max-height:599px)]:pr-7'
+        className='bg-card border-border text-foreground! hover:bg-muted relative flex h-full min-h-14 w-full flex-col items-start justify-start gap-1 border px-3 py-2 text-left font-normal whitespace-normal @min-[13rem]:flex-row @min-[13rem]:items-center @min-[13rem]:gap-3 @min-[13rem]:py-2.5 @min-[13rem]:pr-9 @max-[13rem]:[@media(max-height:599px)]:gap-0.5 @max-[13rem]:[@media(max-height:599px)]:py-1 @min-[19rem]:[@media(max-height:599px)]:min-h-10 @min-[19rem]:[@media(max-height:599px)]:gap-2 @min-[19rem]:[@media(max-height:599px)]:py-1.5 @min-[19rem]:[@media(max-height:599px)]:pr-7'
       >
         <span
-          className='bg-accent text-accent-foreground flex size-7 shrink-0 items-center justify-center rounded-full @min-[13rem]:size-8 @min-[24rem]:[@media(max-height:599px)]:size-7'
+          className='bg-accent text-accent-foreground flex size-7 shrink-0 items-center justify-center rounded-full @min-[13rem]:size-8 @max-[13rem]:[@media(max-height:599px)]:size-6 @min-[19rem]:[@media(max-height:599px)]:size-7'
           aria-hidden='true'
         >
           {icon}
         </span>
-        <span className='w-full min-w-0 @min-[13rem]:flex-1 @min-[24rem]:[@media(max-height:599px)]:flex @min-[24rem]:[@media(max-height:599px)]:items-baseline @min-[24rem]:[@media(max-height:599px)]:gap-1.5'>
-          <span className='block truncate text-sm font-medium @min-[24rem]:[@media(max-height:599px)]:shrink-0'>
+        <span className='w-full min-w-0 @min-[13rem]:flex-1 @min-[19rem]:[@media(max-height:599px)]:flex @min-[19rem]:[@media(max-height:599px)]:items-baseline @min-[19rem]:[@media(max-height:599px)]:gap-1.5'>
+          <span className='block truncate text-sm font-medium @max-[13rem]:[@media(max-height:599px)]:leading-4 @min-[19rem]:[@media(max-height:599px)]:shrink-0'>
             {label}
           </span>
           {status && (
-            <span className='text-muted-foreground line-clamp-1 text-[11px] wrap-break-word @min-[13rem]:line-clamp-2 @min-[13rem]:text-xs @min-[13rem]:text-balance @min-[24rem]:[@media(max-height:599px)]:line-clamp-1 @min-[24rem]:[@media(max-height:599px)]:min-w-0 @min-[24rem]:[@media(max-height:599px)]:flex-1'>
+            <span className='text-muted-foreground line-clamp-1 text-[11px] wrap-break-word @min-[13rem]:line-clamp-2 @min-[13rem]:text-xs @min-[13rem]:text-balance @max-[13rem]:[@media(max-height:599px)]:leading-3.5 @min-[19rem]:[@media(max-height:599px)]:line-clamp-1 @min-[19rem]:[@media(max-height:599px)]:min-w-0 @min-[19rem]:[@media(max-height:599px)]:flex-1'>
               {status}
             </span>
           )}
         </span>
         <ChevronRight
-          className='text-muted-foreground absolute top-3.5 right-3 size-4 @min-[13rem]:top-1/2 @min-[13rem]:-translate-y-1/2'
+          className='text-muted-foreground absolute top-3.5 right-3 size-4 @min-[13rem]:top-1/2 @min-[13rem]:-translate-y-1/2 @max-[13rem]:[@media(max-height:599px)]:top-2.5'
           aria-hidden='true'
         />
       </Button>
