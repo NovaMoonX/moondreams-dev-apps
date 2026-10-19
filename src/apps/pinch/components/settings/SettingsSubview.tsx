@@ -22,12 +22,7 @@ function SettingsSubview({ uid }: SettingsSubviewProps) {
         <IntroCard icon='🧂' lead="Your settings couldn't load just now." />
       ) : (
         <div className='space-y-5'>
-          <div className='[@media(max-height:699px)]:hidden'>
-            <IntroCard icon='🧂' lead='Changes save as you make them.' />
-          </div>
-          <p className='text-muted-foreground hidden text-sm [@media(max-height:699px)]:block'>
-            Changes save as you make them.
-          </p>
+          <IntroCard icon='🧂' lead='Changes save as you make them.' />
           <RemindersSection uid={uid} />
           <KeepingSection uid={uid} />
           <PhotosSection uid={uid} />
