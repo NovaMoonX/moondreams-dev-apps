@@ -394,7 +394,7 @@ function CookingSession({
     () => getRows(recipe, servings),
     [getRows, recipe, servings],
   );
-  useWakeLock(true);
+  const wakeLock = useWakeLock(true);
   const {
     isReady: isCooksReady,
     markRecipeCooked,
@@ -1452,9 +1452,16 @@ function CookingSession({
 
   const getTimerNote = () => {
     if (focused === null || focused.status === 'done') return null;
-    return timers.isNoticeShown
-      ? 'Keep this screen open: timers stop if you leave it.'
-      : null;
+
+    const parts = [
+      timers.isNoticeShown
+        ? 'Keep this screen open: timers stop if you leave it.'
+        : null,
+      !wakeLock.isSupported || wakeLock.hasFailed
+        ? 'This browser can’t keep the screen awake, so it may dim.'
+        : null,
+    ].filter((part) => part !== null);
+    return parts.length === 0 ? null : parts.join(' ');
   };
   const isChanged =
     isRemoved ||
