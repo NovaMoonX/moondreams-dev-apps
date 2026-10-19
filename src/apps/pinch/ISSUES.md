@@ -658,7 +658,7 @@ Deleting a recipe, ingredient, product, store or family that something still use
 **Context:** TDD Logic §7 (reserved stock design); README Next Steps.
 
 ### Description
-A person can say how much of an ingredient they have. An ingredient they haven't counted is "not tracked", which is different from "out". The ingredient copy carries what's on hand and what's running low. **Issue 44 delivered what a person has as packages (an amount, a place and a date each) with sums per kind of measure; what is left here is the "not tracked" against "out" distinction for an ingredient nobody added a package for, a low-stock threshold and the ingredient copy.** The `stock` collection below is no longer the plan: a count would be a package with no date.
+A person can say how much of an ingredient they have. An ingredient they haven't counted is "not tracked", which is different from "out". The ingredient copy carries what's on hand and what's running low. **Issue 46 delivered what a person has as packages (an amount, a place and a date each) with sums per kind of measure; what is left here is the "not tracked" against "out" distinction for an ingredient nobody added a package for, a low-stock threshold and the ingredient copy.** The `stock` collection below is no longer the plan: a count would be a package with no date.
 
 ### Possible Approach
 1. Add `stock/{ingredientId}` (`amount`, `unit`, `lastCountedAt`, `isTracked`), where a missing document means not tracked.
@@ -684,7 +684,7 @@ A person can say how much of an ingredient they have. An ingredient they haven't
 **Context:** TDD Logic §7; the agreed rule: stock deducts on "mark as made", and prepared servings are consumed separately so nothing deducts twice.
 
 ### Description
-Marking a meal made takes its ingredients out of stock. Prepared servings are already built, as containers (Issue 41), and eating from one never touches ingredient stock; this issue is the ingredient side that is left. **Issue 44 delivered the take-out for cooking mode's Finish panel (an explicit "Take out" with a tick per ingredient and an Undo); what is left is the same from a drawer's or the plan's "Mark as cooked", where nothing comes out today.**
+Marking a meal made takes its ingredients out of stock. Prepared servings are already built, as containers (Issue 41), and eating from one never touches ingredient stock; this issue is the ingredient side that is left. **Issue 46 delivered the take-out for cooking mode's Finish panel (an explicit "Take out" with a tick per ingredient and an Undo); what is left is the same from a drawer's or the plan's "Mark as cooked", where nothing comes out today.**
 
 ### Possible Approach
 1. A transaction on made: deduct tracked stock only (untracked is untouched), set `madeAt`.
@@ -708,7 +708,7 @@ Marking a meal made takes its ingredients out of stock. Prepared servings are al
 **Context:** README Next Steps; UX Shopping list.
 
 ### Description
-Subtract tracked stock from what the list asks for, add a section for low-stock ingredients, and offer grouping by the default product's store with totals from the person's own products. **Issue 44 delivered the first part where it is safe: an add sheet starts a line unticked when the pantry already covers it (never removing the line, and the list's own lines are untouched).**
+Subtract tracked stock from what the list asks for, add a section for low-stock ingredients, and offer grouping by the default product's store with totals from the person's own products. **Issue 46 delivered the first part where it is safe: an add sheet starts a line unticked when the pantry already covers it (never removing the line, and the list's own lines are untouched).**
 
 ### Possible Approach
 1. When adding, subtract tracked stock per ingredient and unit; an untracked ingredient is listed in full.
