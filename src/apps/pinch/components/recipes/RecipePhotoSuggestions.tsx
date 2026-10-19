@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import FormSection from '@/components/FormSection';
 import ImageChoiceGrid from '@/components/ImageChoiceGrid';
 import { DEBOUNCE_MS, useDebouncedCallback } from '@/hooks/useDebounce';
+import { generateUuid } from '@/utils';
 import {
   PHOTO_PROBE_TIMEOUT_MS,
   PHOTO_RESULT_COUNT,
@@ -53,7 +54,7 @@ function RecipePhotoSuggestions({
   onPick,
 }: RecipePhotoSuggestionsProps) {
   const { settings, save } = usePinchSettings(uid);
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
   const query = getPhotoQuery(title);
   const [searched, setSearched] = useState<string | null>(null);
   const [checkingUrl, setCheckingUrl] = useState<string | null>(null);
@@ -112,15 +113,19 @@ function RecipePhotoSuggestions({
     setHasFailedPick(true);
   };
 
-  const handleTurnOff = async () => {
-    if (!(await save({ suggestPhotos: false }))) return;
+  const handleTurnOff = () => {
+    const id = generateUuid();
     addToast({
+      id,
       title: 'Photo suggestions are off',
       type: 'info',
       action: {
         label: 'Undo',
         onClick: () => void save({ suggestPhotos: true }),
       },
+    });
+    void save({ suggestPhotos: false }).then((isSaved) => {
+      if (!isSaved) removeToast(id);
     });
   };
 
@@ -195,7 +200,7 @@ function RecipePhotoSuggestions({
           size='sm'
           rounded='full'
           className='border-border text-foreground! h-10 border px-3 font-normal'
-          onClick={() => void handleTurnOff()}
+          onClick={handleTurnOff}
         >
           Turn off
         </Button>
