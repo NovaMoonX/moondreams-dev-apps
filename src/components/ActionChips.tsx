@@ -14,6 +14,8 @@ export interface ActionChip {
   isDestructive?: boolean;
   /** The full phrase, for screen readers and the hover title, when the label is a short form of it. */
   description?: string;
+  /** No fill and muted text, for a dismissal beside the chip it dismisses. */
+  isQuiet?: boolean;
 }
 
 interface ActionChipsProps {
@@ -61,7 +63,9 @@ function ActionChips({
             isIconOnly && 'size-10 shrink-0 justify-center px-0 py-0',
             action.isDestructive
               ? 'border-destructive/40 text-destructive! hover:bg-destructive/10'
-              : 'bg-muted/50 border-border text-foreground! hover:bg-muted',
+              : action.isQuiet
+                ? 'border-border/70 text-muted-foreground! hover:bg-muted/50 bg-transparent'
+                : 'bg-muted/50 border-border text-foreground! hover:bg-muted',
           )}
         >
           <span className='shrink-0' aria-hidden='true'>

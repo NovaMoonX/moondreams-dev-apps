@@ -114,6 +114,10 @@ const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
   label: RECIPES_VIEW_LABELS[value],
 }));
 
+const SHORT_WIDE_SHOWN =
+  '[@media(max-height:500px)_and_(min-width:420px)]:inline-flex';
+const SHORT_WIDE_HIDDEN =
+  '[@media(max-height:500px)_and_(min-width:420px)]:hidden';
 const RECIPE_CHUNK = 20;
 const EAGER_RECIPE_CHUNKS = 1;
 const COVER_SIZE = 56;
@@ -794,19 +798,51 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     openSubview({ kind: 'recipe', id: null });
   };
 
+  const allShownPill = (
+    <Pill
+      isThin
+      isSelected={isEveryShownTicked}
+      icon={
+        isEveryShownTicked ? (
+          <Check className='h-3 w-3' aria-hidden='true' />
+        ) : undefined
+      }
+      onClick={() => selection.toggle(shown.map((recipe) => recipe.id))}
+    >
+      {isPhone ? 'All shown' : 'Select all shown'}
+    </Pill>
+  );
+  const searchClassName = join(
+    isSelecting &&
+      trimmed === '' &&
+      activeFilters.length === 0 &&
+      '[@media(max-height:500px)]:hidden',
+  );
+
   const getHeaderAction = () => {
     if (isSelecting) {
       return (
-        <Button
-          type='button'
-          variant='secondary'
-          size='sm'
-          rounded='full'
-          className="relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']"
-          onClick={selection.exit}
-        >
-          Cancel
-        </Button>
+        <div className='flex items-center gap-3'>
+          {/* The header's own hit-area rule would leave a thin pill 36px tall. */}
+          <span
+            className={join(
+              'hidden [&_button]:before:-inset-y-2!',
+              SHORT_WIDE_SHOWN,
+            )}
+          >
+            {allShownPill}
+          </span>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className="relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']"
+            onClick={selection.exit}
+          >
+            Cancel
+          </Button>
+        </div>
       );
     }
     if (isIdeas && ideaCount >= SOFT_MAX_IDEAS) return undefined;
@@ -827,7 +863,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             onClick={selection.start}
           />
         )}
-        {hasViewOptions && !hasPillRow && (
+        {hasViewOptions && (
           <ListViewControls
             isQuiet
             options={viewOptions.options}
@@ -868,53 +904,32 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
         <div
           role='group'
           aria-label='Select several at once'
-          className='flex flex-wrap items-center gap-x-2 gap-y-2'
+          className={join(
+            'flex flex-wrap items-center gap-x-2 gap-y-2',
+            SHORT_WIDE_HIDDEN,
+          )}
         >
-          <Pill
-            isThin
-            isSelected={isEveryShownTicked}
-            icon={
-              isEveryShownTicked ? (
-                <Check className='h-3 w-3' aria-hidden='true' />
-              ) : undefined
-            }
-            onClick={() => selection.toggle(shown.map((recipe) => recipe.id))}
-          >
-            {isPhone ? 'All shown' : 'Select all shown'}
-          </Pill>
+          {allShownPill}
         </div>
       )}
       {!isSelecting && hasPillRow && (
-        <div className='flex items-center justify-between gap-3'>
-          <div className='min-w-0'>
-            <PillGroup
-              label='Recipes, saved meals or ideas'
-              options={VIEW_OPTIONS.filter((option) =>
-                visibleViews.includes(option.value),
-              )}
-              value={shownView}
-              onChange={(next) => {
-                setQuery('');
-                setStockPlaces([]);
-                setView(next);
-              }}
-              isThin
-            />
-          </div>
-          {hasViewOptions && (
-            <ListViewControls
-              options={viewOptions.options}
-              customizedCount={viewOptions.customizedCount}
-              onChange={viewOptions.update}
-              onReset={viewOptions.reset}
-              hasStockLines
-              className='-my-3'
-            />
+        <PillGroup
+          label='Recipes, saved meals or ideas'
+          options={VIEW_OPTIONS.filter((option) =>
+            visibleViews.includes(option.value),
           )}
-        </div>
+          value={shownView}
+          onChange={(next) => {
+            setQuery('');
+            setStockPlaces([]);
+            setView(next);
+          }}
+          isThin
+        />
       )}
       {hasFilterBar ? (
         <FilterBar
+          className={searchClassName}
           query={query}
           onQueryChange={setQuery}
           searchPlaceholder={
@@ -1036,6 +1051,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       ) : (
         hasSearch && (
           <SearchInput
+            className={searchClassName}
             value={query}
             onChange={setQuery}
             placeholder={

@@ -89,7 +89,7 @@ export function PillRow({
       className={join(
         'flex',
         isScrolling
-          ? '-my-2 [scrollbar-width:none] gap-x-2 overflow-x-auto py-2 [&::-webkit-scrollbar]:hidden'
+          ? '-my-2 [scrollbar-width:none] gap-x-2 overflow-x-auto py-2 max-[359px]:gap-x-1.5 [&::-webkit-scrollbar]:hidden'
           : join('flex-wrap', isThin ? 'gap-x-2 gap-y-4' : 'gap-2'),
       )}
     >
@@ -269,6 +269,7 @@ export function PillOptions<T extends string>({
                   option.detail &&
                     !isScrolling &&
                     'max-[359px]:h-auto! max-[359px]:min-h-8! max-[359px]:py-0.5!',
+                  isScrolling && 'max-[359px]:px-2',
                 )}
                 onClick={() => {
                   onToggle(option.value);

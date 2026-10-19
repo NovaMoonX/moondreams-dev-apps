@@ -698,6 +698,8 @@ function ContainersSubview({
   const canClear = isWhole && shownBoxes.length > 0;
   const canSelect = isListShown && !isFinishedView && shown.length >= 2;
   const hasSwitch = !isFinishedView && isListShown && inScope.length > 0;
+  const isInlineSearch =
+    hasSwitch && hasSearch && !isSelecting && !scopeName && !isBelow('sm');
   const hasPastDueRow =
     isWhole && !isFinishedView && !isSelecting && pastBoxes.length > 0;
   // The cast makes it a plain boolean: passed as it is, React Compiler treats the call as able to mutate the scope it came from.
@@ -926,6 +928,15 @@ function ContainersSubview({
             {isShortSelect && selectPills && (
               <div className='shrink-0'>{selectPills}</div>
             )}
+            {isInlineSearch && (
+              <div className='min-w-48 flex-1'>
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder='Search fridge and freezer'
+                />
+              </div>
+            )}
           </div>
         )}
         {isSelecting && (
@@ -933,7 +944,7 @@ function ContainersSubview({
             {getSelectionTitle(selectedBoxes.length)}
           </p>
         )}
-        {hasSearch && (
+        {hasSearch && !isInlineSearch && (
           <SearchInput
             value={query}
             onChange={setQuery}

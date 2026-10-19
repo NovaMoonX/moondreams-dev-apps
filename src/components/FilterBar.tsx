@@ -38,6 +38,7 @@ export function FilterSection({ title, action, children }: FilterSectionProps) {
 }
 
 interface FilterBarProps {
+  className?: string;
   query: string;
   onQueryChange: (query: string) => void;
   searchPlaceholder: string;
@@ -46,7 +47,7 @@ interface FilterBarProps {
   activeFilters: ActiveFilter[];
   onRemoveFilter: (key: string) => void;
   onClearFilters: () => void;
-  /** Sits first in the chips row, so a view switch (Yours / All) and the filters share one line. */
+  /** A view switch (Yours / All): first in the chips row on a phone, so it and the filters share one line, and beside the search field from `sm` up, where that field has room to spare. */
   leading?: ReactNode;
   /** Another icon button beside the filter button, such as a `SortControl`. */
   trailing?: ReactNode;
@@ -64,6 +65,7 @@ interface FilterBarProps {
  * so turning a filter on never adds a row of controls above the list.
  */
 function FilterBar({
+  className,
   query,
   onQueryChange,
   searchPlaceholder,
@@ -160,7 +162,7 @@ function FilterBar({
   ) : null;
 
   return (
-    <div className='space-y-2'>
+    <div className={join('space-y-2', className)}>
       <div className='flex items-center gap-2'>
         <div className='min-w-0 flex-1'>
           <SearchInput
@@ -169,6 +171,9 @@ function FilterBar({
             placeholder={searchPlaceholder}
           />
         </div>
+        {!isPhone && leading && (
+          <div className='flex shrink-0 items-center gap-2'>{leading}</div>
+        )}
         {isPhone ? (
           trigger
         ) : (
@@ -195,9 +200,9 @@ function FilterBar({
         {trailing}
       </div>
       {panel}
-      {(leading || hasActive) && (
+      {((isPhone && leading) || hasActive) && (
         <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
-          {leading}
+          {isPhone && leading}
           {activeFilters.map((filter) => (
             <LabelChip
               key={filter.key}
