@@ -429,7 +429,7 @@ function CookTimerView({
           <p className='text-muted-foreground text-xs font-medium'>
             {upNext.caption}
           </p>
-          <p className='mt-1 line-clamp-6 text-lg leading-snug wrap-break-word [@media(max-height:600px)_and_(min-height:501px)]:line-clamp-1 [@media(max-height:640px)]:line-clamp-3'>
+          <p className='mt-1 line-clamp-6 text-lg leading-snug wrap-break-word [@media(max-height:600px)_and_(min-height:501px)]:line-clamp-1! [@media(max-height:640px)]:line-clamp-3'>
             {upNext.text}
           </p>
         </section>
