@@ -1,6 +1,6 @@
 # Pinch — Technical Design Document
 
-Built against this app's `README.md` and `UX.md`, and against the conventions in `.github/copilot-instructions.md` and `CLAUDE.md`. A-List's `TECHNICAL.md` is the format reference. Like A-List, **a person's Pinch data is private to them** (the one thing that leaves it is a link they choose to make, decision 27), so there is no invite flow, no roles and no cross-user concurrency. The design weight sits on four things instead: a static ingredient catalog merged with the person's own records, the quantity and cost math, the calendar read model, and an AI reader that fills recipe forms from text, a file or a web page.
+Built against this app's `README.md` and `UX.md`, and against the conventions in `.github/copilot-instructions.md` and `CLAUDE.md`. A-List's `TECHNICAL.md` is the format reference. Like A-List, **a person's Pinch data is private to them** (the one thing that becomes public is a link they choose to make, decision 27), so there is no invite flow, no roles and no cross-user concurrency. The design weight sits on four things instead: a static ingredient catalog merged with the person's own records, the quantity and cost math, the calendar read model, and an AI reader that fills recipe forms from text, a file or a web page.
 
 ## Decisions made in this document
 
