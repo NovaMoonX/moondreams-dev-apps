@@ -33,6 +33,7 @@ import {
   getLocalTodayDate,
   getPlannedDayKey,
 } from '@apps/pinch/utils/dayKeys';
+import { formatKitchenAmount } from '@apps/pinch/utils/kitchenMeasure';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import { bridge, toBase, type Conversions } from '@apps/pinch/utils/quantity';
 
@@ -259,6 +260,17 @@ export const sumAmounts = (
 
 export const formatTotal = (total: Pick<AmountTotal, 'amount' | 'unit'>) =>
   formatSize(total.amount, total.unit);
+
+/** An amount said the way a cook says it ("2½ cups", "about ½ lb"); a bare count keeps its "each" so it still reads as an amount, and "about" is said once. */
+export const formatKitchenTotal = (
+  total: Pick<AmountTotal, 'amount' | 'unit'>,
+  isConverted = false,
+) => {
+  const text = formatKitchenAmount(total.amount, total.unit);
+  const bare = text.replace(/^about /, '');
+  const isAbout = isConverted || bare !== text;
+  return `${isAbout ? 'about ' : ''}${total.unit === 'EACH' ? `${bare} each` : bare}`;
+};
 
 export interface StockView {
   ingredientId: string;
@@ -904,7 +916,11 @@ export const getTakeGroups = (
 
 /** "2 cup", "about 0.42 lb", "1 cup and 1.25 lb". */
 export const getTakeAmountText = (group: TakeGroup) =>
-  `${group.isConverted ? 'about ' : ''}${group.totals.map(formatTotal).join(' and ')}`;
+  group.totals
+    .map((total, index) =>
+      formatKitchenTotal(total, group.isConverted && index === 0),
+    )
+    .join(' and ');
 
 /** What was taken, in one line: "Took 2 cup rice from 1 package", or a count when it was several things. */
 export const getTakenHeadline = (groups: TakeGroup[]) => {
@@ -1133,7 +1149,7 @@ export const getLineStockText = (stock: LineStock) => {
     case 'HAVE':
       return 'You have it';
     case 'SOME':
-      return `You have ${stock.isConverted ? 'about ' : ''}${formatTotal(stock.have)}`;
+      return `You have ${formatKitchenTotal(stock.have, stock.isConverted)}`;
     case 'OTHER':
       return 'In your pantry';
     case 'PAST':

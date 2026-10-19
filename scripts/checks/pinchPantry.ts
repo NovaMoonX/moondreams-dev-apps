@@ -14,7 +14,9 @@ import {
   getDateInDays,
   getLineMarkers,
   getLineStock,
+  formatKitchenTotal,
   getLineStockText,
+  getTakeAmountText,
   type LineStock,
   getNewPackagesProblem,
   getPackageBulkNames,
@@ -1126,12 +1128,34 @@ assert.deepEqual(
   ].map((stockState) => getLineStockText(stockState as never)),
   [
     'You have it',
-    'You have 1.5 cup',
-    'You have about 1.5 cup',
+    'You have 1½ cups',
+    'You have about 1½ cups',
     'In your pantry',
     'Past its date',
     'Not in your pantry',
   ],
+  'a pantry hint says an amount the way a cook does, not as a decimal',
+);
+assert.deepEqual(
+  [
+    formatKitchenTotal({ amount: 0.63, unit: 'CUP' }),
+    formatKitchenTotal({ amount: 0.63, unit: 'CUP' }, true),
+    formatKitchenTotal({ amount: 9, unit: 'EACH' }),
+    formatKitchenTotal({ amount: 3, unit: 'LB' }, true),
+  ],
+  ['about ⅔ cup', 'about ⅔ cup', '9 each', 'about 3 lb'],
+  '"about" is said once, and a bare count keeps its "each"',
+);
+assert.equal(
+  getTakeAmountText({
+    totals: [
+      { amount: 2.5, unit: 'CUP' },
+      { amount: 0.42, unit: 'LB' },
+    ],
+    isConverted: true,
+  } as never),
+  'about 2½ cups and about ½ lb',
+  'what a cook takes out of the pantry reads in kitchen amounts too',
 );
 
 // The marks on a recipe's lines say only the exception, and the share once

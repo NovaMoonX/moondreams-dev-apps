@@ -22,6 +22,7 @@ import {
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import {
   NO_DATE_ANSWER,
+  formatKitchenTotal,
   getAnswerDate,
   getDefaultPlace,
   getStockSummaryParts,
@@ -29,7 +30,6 @@ import {
   isValidPackageAmount,
   parseAmountText,
 } from '@apps/pinch/utils/packages';
-import { formatSize } from '@apps/pinch/utils/productFormat';
 import { getShopSection } from '@apps/pinch/utils/shopping';
 
 /** One thing from the ticked part of the shopping list: its ingredient, and what the list said of it. */
@@ -76,7 +76,7 @@ function PantryFromShoppingSheet({
   const product = defaultProducts.get(row.ingredientId);
   const isLast = index + 1 >= rows.length;
   const current: PackageFieldValues = values[row.id] ?? {
-    amountText: String(product?.sizeAmount ?? row.amount ?? ''),
+    amountText: String(product?.sizeAmount ?? ''),
     unit: product?.sizeUnit ?? row.unit,
     place: getDefaultPlace(getShopSection(ingredient)),
     date: NO_DATE_ANSWER,
@@ -167,7 +167,7 @@ function PantryFromShoppingSheet({
             {[
               row.amount === null
                 ? 'On your list'
-                : `On your list: ${formatSize(row.amount, row.unit)}`,
+                : `On your list: ${formatKitchenTotal({ amount: row.amount, unit: row.unit })}`,
               stock.length > 0
                 ? `Already in your pantry: ${getStockSummaryParts(getStockView(row.ingredientId, stock, undefined, soonDays)).join(', ')}`
                 : null,
@@ -182,6 +182,7 @@ function PantryFromShoppingSheet({
             setValues((known) => ({ ...known, [row.id]: next }))
           }
           name={row.name}
+          amountLabel='How much did you buy?'
         />
         {error && (
           <p className='text-destructive text-sm' role='alert'>
