@@ -41,7 +41,7 @@ function Pill({
       className={join(
         'max-w-full shrink-0 gap-1.5 whitespace-nowrap !transition-none',
         isThin &&
-          "relative h-6! min-h-0! px-2.5 py-0! text-xs before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']",
+          "relative h-6! min-h-0! px-2.5 py-0! text-xs before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']",
         className,
       )}
     >

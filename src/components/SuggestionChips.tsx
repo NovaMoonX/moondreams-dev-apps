@@ -19,7 +19,7 @@ function SuggestionChips({ label, suggestions, onPick, isDisabled = false }: Sug
             type='button'
             variant='tertiary'
             size='sm'
-            className="border-border text-foreground! relative h-auto w-auto max-w-full rounded-full border border-dashed px-3 py-1 text-xs font-medium whitespace-normal after:absolute after:-inset-y-2 after:inset-x-0 after:content-['']"
+            className="border-border text-foreground! relative h-auto min-h-8 w-auto max-w-full rounded-full border border-dashed px-3 py-1 text-xs font-medium whitespace-normal after:absolute after:-inset-y-2.5 after:inset-x-0 after:content-['']"
             disabled={isDisabled}
             onClick={() => onPick(suggestion)}
           >

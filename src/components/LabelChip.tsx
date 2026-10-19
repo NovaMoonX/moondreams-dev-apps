@@ -27,7 +27,7 @@ const splitForMiddleCut = (text: string, keepEnd: number) => {
   return { head: text.slice(0, tailStart), tail: text.slice(tailStart) };
 };
 
-/** A small soft-tinted tag, as tall as its text, so it labels a thing without out-weighing what is beside it. Given an `onClick` it is a button with a 40px hit area from a pseudo-element. */
+/** A small soft-tinted tag, as tall as its text, so it labels a thing without out-weighing what is beside it. Given an `onClick` it is a button with a 40px hit area from a pseudo-element, reaching further below than above because a chip at the top of a scrolling sheet has its upper edge clipped. */
 function LabelChip({
   children,
   onClick,
@@ -59,7 +59,7 @@ function LabelChip({
       size='sm'
       rounded='full'
       aria-label={ariaLabel}
-      className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+      className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-top-2 before:-bottom-4 before:content-['']"
       onClick={onClick}
     >
       <span className='inline-flex max-w-full min-w-0 items-center gap-1'>
