@@ -986,6 +986,41 @@ const refusedWith = async (promise: Promise<unknown>, code: string) => {
     2,
     'a broken cache never fails a search',
   );
+  assert.deepEqual(
+    h.logs,
+    [
+      'image search cache read failed {"reason":"unexpected"}',
+      'image search cache write failed {"reason":"unexpected"}',
+    ],
+    'a broken cache is logged once each way, so it is not silent',
+  );
+}
+{
+  const h = harness([['ddg', 'results']]);
+  const denied = Object.assign(new Error('7 PERMISSION_DENIED: apple pie'), {
+    code: 7,
+  });
+  h.deps.cache.get = async () => {
+    throw denied;
+  };
+  h.deps.cache.set = async () => {
+    throw Object.assign(new Error('3 INVALID_ARGUMENT: apple pie'), {
+      code: 3,
+    });
+  };
+  await searchImages('apple pie', h.deps);
+  assert.deepEqual(
+    h.logs,
+    [
+      'image search cache read failed {"reason":"7"}',
+      'image search cache write failed {"reason":"3"}',
+    ],
+    'the log carries the error code, so a rules or size problem can be told apart',
+  );
+  assert.ok(
+    !h.logs.join('\n').toLowerCase().includes('apple pie'),
+    'and never the words searched for or the error text',
+  );
 }
 {
   const a = harness([

@@ -57,6 +57,12 @@ export interface SearchDeps {
 
 type Attempt = 'skipped' | 'failed' | ImageResult[];
 
+/** A short code for why the cache failed (a rules or size problem shows as its code), never the query or the error's text. */
+export const getCacheFailureCode = (error: unknown) =>
+  typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code).slice(0, 40)
+    : 'unexpected';
+
 const tryProvider = async (
   provider: ImageProvider,
   query: string,
@@ -117,7 +123,12 @@ export async function searchImages(
     query,
     deps.providers.map((provider) => provider.id),
   );
-  const cached = await deps.cache.get(cacheId).catch(() => null);
+  const cached = await deps.cache.get(cacheId).catch((error) => {
+    deps.log('image search cache read failed', {
+      reason: getCacheFailureCode(error),
+    });
+    return null;
+  });
   if (cached && isCacheFresh(cached, deps.now())) return cached.results;
 
   if (!(await deps.takeTurn())) throw new ImageSearchError('rate_limited');
@@ -137,7 +148,11 @@ export async function searchImages(
     if (results === null) throw new ImageSearchError('unavailable');
     await deps.cache
       .set(cacheId, { results, cachedAt: deps.now() })
-      .catch(() => undefined);
+      .catch((error) =>
+        deps.log('image search cache write failed', {
+          reason: getCacheFailureCode(error),
+        }),
+      );
     return results;
   } finally {
     clearTimeout(timer);
