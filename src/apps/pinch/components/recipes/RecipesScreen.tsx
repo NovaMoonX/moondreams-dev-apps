@@ -346,6 +346,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       hasCollectionSection ||
       hasFavoritesFilter ||
       hasStockFilter);
+  const hasPillRow = visibleViews.length > 1;
+  const hasViewOptions = total > 0 && !hasFilterBar;
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
 
@@ -825,6 +827,16 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             onClick={selection.start}
           />
         )}
+        {hasViewOptions && !hasPillRow && (
+          <ListViewControls
+            isQuiet
+            options={viewOptions.options}
+            customizedCount={viewOptions.customizedCount}
+            onChange={viewOptions.update}
+            onReset={viewOptions.reset}
+            hasStockLines
+          />
+        )}
         <Button
           type='button'
           size='sm'
@@ -872,38 +884,35 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           </Pill>
         </div>
       )}
-      {!isSelecting &&
-        (visibleViews.length > 1 || (total > 0 && !hasFilterBar)) && (
-          <div className='flex items-center justify-between gap-3'>
-            <div className='min-w-0'>
-              {visibleViews.length > 1 && (
-                <PillGroup
-                  label='Recipes, saved meals or ideas'
-                  options={VIEW_OPTIONS.filter((option) =>
-                    visibleViews.includes(option.value),
-                  )}
-                  value={shownView}
-                  onChange={(next) => {
-                    setQuery('');
-                    setStockPlaces([]);
-                    setView(next);
-                  }}
-                  isThin
-                />
+      {!isSelecting && hasPillRow && (
+        <div className='flex items-center justify-between gap-3'>
+          <div className='min-w-0'>
+            <PillGroup
+              label='Recipes, saved meals or ideas'
+              options={VIEW_OPTIONS.filter((option) =>
+                visibleViews.includes(option.value),
               )}
-            </div>
-            {total > 0 && !hasFilterBar && (
-              <ListViewControls
-                options={viewOptions.options}
-                customizedCount={viewOptions.customizedCount}
-                onChange={viewOptions.update}
-                onReset={viewOptions.reset}
-                hasStockLines
-                className='-my-3'
-              />
-            )}
+              value={shownView}
+              onChange={(next) => {
+                setQuery('');
+                setStockPlaces([]);
+                setView(next);
+              }}
+              isThin
+            />
           </div>
-        )}
+          {hasViewOptions && (
+            <ListViewControls
+              options={viewOptions.options}
+              customizedCount={viewOptions.customizedCount}
+              onChange={viewOptions.update}
+              onReset={viewOptions.reset}
+              hasStockLines
+              className='-my-3'
+            />
+          )}
+        </div>
+      )}
       {hasFilterBar ? (
         <FilterBar
           query={query}

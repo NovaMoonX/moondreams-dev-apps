@@ -209,7 +209,7 @@ function CalendarScreen({
         title='Calendar'
         action={
           hasRecipes || hasSavedMeals ? (
-            <div className='flex items-center gap-1'>
+            <div className='flex items-center gap-3'>
               <NutritionViewOptions
                 options={viewOptions.options}
                 customizedCount={viewOptions.customizedCount}

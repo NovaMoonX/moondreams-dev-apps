@@ -12,6 +12,10 @@ interface HeaderIconButtonProps {
   isDestructive?: boolean;
   isLoading?: boolean;
   isDisabled?: boolean;
+  /** A tint for a control whose choice differs from its default. */
+  isHighlighted?: boolean;
+  /** Set on a control that opens a panel, so a screen reader hears whether it is open. */
+  isExpanded?: boolean;
 }
 
 /** A quiet 28px round icon in a header's action cluster with a 40×40 tap area. Its neighbours sit `gap-3` apart, so the areas meet without overlapping. */
@@ -22,6 +26,8 @@ function HeaderIconButton({
   isDestructive = false,
   isLoading = false,
   isDisabled = false,
+  isHighlighted = false,
+  isExpanded,
 }: HeaderIconButtonProps) {
   return (
     <Button
@@ -33,8 +39,10 @@ function HeaderIconButton({
         "relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']",
         isDestructive &&
           'border-destructive/60 text-destructive! hover:bg-destructive/10',
+        isHighlighted && 'bg-accent!',
       )}
       aria-label={label}
+      aria-expanded={isExpanded}
       title={label}
       loading={isLoading}
       disabled={isDisabled}
