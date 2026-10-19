@@ -2,8 +2,9 @@ import { useState, type ReactNode } from 'react';
 
 import { PillGroup } from '@/components/PillGroup';
 import SettingsGroup from '@/components/SettingsGroup';
-import SettingsRow from '@/components/SettingsRow';
 import Stepper from '@/components/Stepper';
+import SummaryEditor from '@/components/SummaryEditor';
+import type { SummaryGroupPosition } from '@/components/summaryGroup';
 import {
   CONTAINER_FRIDGE_DAYS,
   CONTAINER_PLACE_EMOJIS,
@@ -24,6 +25,7 @@ interface DaysRowProps {
   title: string;
   description: string;
   days: number;
+  position: SummaryGroupPosition;
   choices: { days: number; label: string }[];
   /** The stepper for a number the pills don't have: whole days in the fridge, whole weeks in the freezer. */
   stepper: {
@@ -37,16 +39,17 @@ interface DaysRowProps {
   onChange: (days: number) => void;
 }
 
+type DaysEditorProps = Omit<DaysRowProps, 'place' | 'position'>;
+
 /** One place's days: the common choices as pills, and "Other" opens a stepper for any number between the limits. */
-function DaysRow({
-  place,
+function DaysEditor({
   title,
   description,
   days,
   choices,
   stepper,
   onChange,
-}: DaysRowProps) {
+}: DaysEditorProps) {
   const [isOtherOpen, setIsOtherOpen] = useState(false);
   const isCustom = !choices.some((choice) => choice.days === days);
   const isStepperShown = isCustom || isOtherOpen;
@@ -68,16 +71,8 @@ function DaysRow({
   };
 
   return (
-    <SettingsRow
-      icon={CONTAINER_PLACE_EMOJIS[place]}
-      title={title}
-      description={description}
-      control={
-        <span className='text-foreground text-sm font-semibold whitespace-nowrap tabular-nums'>
-          {formatCareDays(days)}
-        </span>
-      }
-    >
+    <>
+      <p className='text-muted-foreground text-sm text-pretty'>{description}</p>
       <PillGroup
         label={`${title}: how many days a new box starts with`}
         options={options}
@@ -97,17 +92,40 @@ function DaysRow({
           <span className='text-muted-foreground text-sm'>{stepper.unit}</span>
         </div>
       )}
-    </SettingsRow>
+    </>
   );
 }
 
+/** A row of the group's frame that says what is set and opens its pills; the cell reaches the frame's edges so the chip lines up with the rows of the other groups. */
+function DaysRow({ place, position, ...editor }: DaysRowProps) {
+  return (
+    <li className='-mx-3'>
+      <SummaryEditor
+        label={editor.title}
+        title={editor.title}
+        groupPosition={position}
+        icon={CONTAINER_PLACE_EMOJIS[place]}
+        summary={formatKeepDays(editor.days)}
+        placeholder=''
+        shouldFocus={false}
+      >
+        <DaysEditor {...editor} />
+      </SummaryEditor>
+    </li>
+  );
+}
+
+const YEAR_DAYS = 365;
+const formatKeepDays = (days: number) =>
+  days === YEAR_DAYS ? '1 year' : formatCareDays(days);
+
 const FRIDGE_CHOICES = FRIDGE_DAY_CHOICES.map((days) => ({
   days,
-  label: formatCareDays(days),
+  label: formatKeepDays(days),
 }));
 const FREEZER_CHOICES = FREEZER_DAY_CHOICES.map((days) => ({
   days,
-  label: days === 365 ? '1 year' : formatCareDays(days),
+  label: formatKeepDays(days),
 }));
 
 interface KeepingSectionProps {
@@ -140,6 +158,7 @@ function KeepingSection({ uid }: KeepingSectionProps) {
         place='FRIDGE'
         title='Fridge'
         description='A new box starts with this many days.'
+        position='first'
         days={usualDays.fridge}
         choices={FRIDGE_CHOICES}
         stepper={{
@@ -156,6 +175,7 @@ function KeepingSection({ uid }: KeepingSectionProps) {
         place='FREEZER'
         title='Freezer'
         description='A new box starts with this long.'
+        position='last'
         days={usualDays.freezer}
         choices={FREEZER_CHOICES}
         stepper={{

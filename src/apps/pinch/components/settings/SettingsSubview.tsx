@@ -22,7 +22,6 @@ function SettingsSubview({ uid }: SettingsSubviewProps) {
         <IntroCard icon='🧂' lead="Your settings couldn't load just now." />
       ) : (
         <div className='space-y-5'>
-          <IntroCard icon='🧂' lead='Changes save as you make them.' />
           <RemindersSection uid={uid} />
           <KeepingSection uid={uid} />
           <PhotosSection uid={uid} />
