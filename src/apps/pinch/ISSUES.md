@@ -824,7 +824,7 @@ A recipe can use another (a house sauce in a dish), with cost and nutrition flow
 - `RecipeCollectionsField.tsx` (the form's row and editor), `CollectionsSheet.tsx`, the Recipes filter's Collections and Favorites questions, `RecipeDrawer`'s pills, `StarButton` on `MealRow` and `MealDrawer`
 - `firestore.rules` (`collections`, `collectionIds`, `isFavorite`), the seeds (Alex's two collections and a starred meal, Taylor's twelve), `scripts/checks/pinchOrganize.ts`
 
-**Context:** The owner asked for recipes in several groups ("Bulk", "High-protein"), suggested ones, and starred meals. Modeled on Sources (a record per person, an id on the recipe); read `TECHNICAL.md` §6a.2 and §5a.2, Security Rules criterion 15 and open question 25, and CLAUDE.md's "A record created only because another record names it", "A filter lists only values that are present" and "A toggled icon-button state is shown by filling the icon".
+**Context:** The owner asked for recipes in several groups ("Bulk", "High-protein"), suggested ones, and starred meals. Modeled on Sources (a record per person, an id on the recipe); read `TECHNICAL.md` §6a.2 and §5a.2, Security Rules criterion 15 and open question 26, and CLAUDE.md's "A record created only because another record names it", "A filter lists only values that are present" and "A toggled icon-button state is shown by filling the icon".
 
 ### Description
 A recipe can be in many collections the person names. They are made in the recipe form (where the recipe's own numbers suggest High-protein, Quick and Freezer-friendly, never added on their own), listed in a Collections question in the Recipes filter with the ones that hold a recipe and their counts, shown on the recipe's drawer beside its source, and renamed or deleted from a sheet behind the filter. A saved meal can be starred: favorites list first, the plan builder's recents lead with them, and a long list's filter gets a Favorites pill.
@@ -1128,7 +1128,7 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 - `functions/src/apps/pinch/` (`sendEatSoonDigest`, `eatSoonDigest`), `functions/src/notifications/sendPush.ts` and `sendScheduledReminders.ts`, `functions/README.md`, `firestore.indexes.json`
 - `firestore.rules` (`apps/pinch/settings/{uid}`), `scripts/seeds/pinchScale.ts`, `scripts/checks/pinchMath.ts` and `pinchDigest.ts`, `scripts/checkFirestoreIndexes.ts`
 
-**Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 15 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
+**Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 16 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
 
 ### Description
 A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. A gear in Kitchen's header opens Settings: this device's notifications (asked for on a tap), a switch per kind of reminder (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
@@ -1187,46 +1187,6 @@ The recipe form's photo and source are summary rows with an editor, like its tit
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editors were measured at 390×844 and 320×568 in light and dark and at 1280.
 - [ ] The README Build Plan lines are checked off; `UX.md` and `TECHNICAL.md` still match what shipped.
 
-### Issue 46: Pantry: packages with dates, and what expiring means for the rest of the app
-
-**Prerequisites:** Issue 3, Issue 18, Issue 33, Issue 41, Issue 43 (and the Shopping tab, which has shipped)
-**Target PR Size:** ~7,000 lines (the type and its rules, the date states, the screen and its sheets, five integration points, the digest source, the seeds, the checks and the docs)
-**Files:**
-- `Package`, `PackageEvent`, `PinchSubview` (`pantry`), `ReminderKind` (`expiring`) in `types.ts`; the package constants and `REMINDER_KINDS` row in `constants.ts`; `utils/packages.ts` (date states, sums per measure, the plans and their Undo, bulk, take-out, line stock, markers, use-it-up), `utils/containers.ts` (`getEatByState` and its labels take a window and a verb), `utils/settings.ts`
-- `store/slices/packagesSlice.ts`, `store/actions/packageActions.ts`, `startPackagesListener`, `usePackageActions`, `useShoppingPutAway`, `usePantryTake`, `selectors.ts`, `usePinchSync`
-- `components/pantry/` (`PantrySubview`, `PantryRow`, `PantryEntry`, `PackageRow`, `PackageSheet`, `PackageFormSheet`, `PackageFields`, `PackageDateField`, `PantryMoveSheet`, `PantryRecipeDrawer`, `PantryFromShoppingSheet`, `IngredientStock`, `LineStockMarker`), `components/cooking/CookPantryTake`, and small changes to `KitchenScreen`, `IngredientDrawer`, `ShoppingScreen`, `AddToShoppingSheet`, `RecipeDrawer`, `CookingSubview`, `RemindersSection` and `Pinch.tsx` (`?open=pantry`)
-- `functions/src/apps/pinch/` (`eatSoonDigest`, `sendEatSoonDigest`), `functions/README.md`, `firestore.indexes.json`, `firestore.rules`
-- `scripts/seeds/pinch.ts` and `pinchScale.ts`, `scripts/checks/pinchPantry.ts` and `pinchDigest.ts`
-
-**Context:** Read `TECHNICAL.md` decision 25, §5i, criterion 16 and open question 27; `UX.md`'s Pantry; `JOURNEYS.md` §4.1 and §4.2; CLAUDE.md's "Date-only vs. instant", "A scheduled sender never flushes a backlog", "Design for 5 and for 50", "A door needs a moment" and "Insight budget".
-
-### Description
-A person can say what they have and when it expires, and Pinch tells them what to use first and what to toss, the way the fridge does for what they cooked. Each bag, carton or jar is a package with an amount, a place and a date; two of the same thing with different dates are two packages under one ingredient, and totals add only amounts that measure alike. The pantry is part of the rest of the app: recipes mark what is in it, the shopping add sheet leaves out what is covered, a ticked shopping line can become a package, cooking can take out what it used, and the morning note can name ingredients about to expire.
-
-### Possible Approach
-1. One document per package under the kitchen, owner-only, a history of ten events like a box's, the date a date-only UTC value; the date states and labels are the fridge's, with the person's lead days as the "soon" window.
-2. Pure plans for every change, applied in a transaction that re-reads the package (so a second device's change is never written over), the same plans reused by the bulk acts and their Undo.
-3. A subview from a Kitchen tile that appears with the first package: one row per ingredient, soonest first, Select and a past-its-date row as in Fridge & freezer.
-4. The pantry's presence elsewhere kept to what changes a decision: a mark only for the exception on a recipe's lines, a hint on a row the pantry covers, one block on the ingredient's drawer, one chip on the shopping list, one card on cooking mode's last screen.
-5. The morning note gains a source, not a function; the rules, index, seeds and checks ship with it.
-
-### CRUD & Entry-Point Requirements
-- [x] **Create / Read / Update / Delete:** add (one or several, with "Add another"), see each ingredient's packages and totals, use some or all, move, change the date, edit, toss, delete (with a confirm that says the history goes too), and act on several at once, each with an Undo that restores only what is still as the act left it.
-- [x] **Entry points:** Kitchen's Pantry tile (once a package exists), the ingredient drawer's "In your kitchen" and "Add a package", the Shopping tab's "Add to pantry", the package sheet's "Use it up", the morning note's link, and `?open=pantry`. Each is reachable from a screen a person can open; the first package can only start from the shopping list (the open decision in `TECHNICAL.md` question 27 (i)).
-
-### Success Criteria
-- [x] Dates: past its date, due soon (the person's window), later and no date read right, offer Toss, Use it up and neither, and a date-only value shows the same day west of UTC (driven in `America/Los_Angeles`).
-- [x] Several packages: totals add per kind of measure only; a mix of weight and volume shows both; a recipe line against a package of another kind is compared only through the ingredient's own grams per cup or each and says "about"; "to taste" never takes anything out.
-- [x] Bulk acts re-read every package inside a transaction per chunk, touch only those still in stock and as shown, report the number really changed and why they left any alone, and their Undo skips a package that changed since.
-- [x] The rules matrix (owner, another signed-in user, signed out; every field's bounds, a date off UTC midnight, an extra key, ten events and the budget case, the immutable fields, a legacy reminders document) gives the intended outcome on the new rules and denies on the base ones; every pre-existing rule answers the same (72 cases each, no mismatch).
-- [x] The morning note: ingredient-only, dish-only and mixed notes read right, a dish and an ingredient with one name are one thing, the pantry switch alone sends a pantry note, an already-sent day and a person with both off send nothing; the handler was run against the emulator with a stub sender.
-- [x] A first run volunteers nothing: no tile, no markers, no hint, no drawer block, no chip, no card; Jamie's empty kitchen and a kitchen with no packages are unchanged (`JOURNEYS.md` §4.2).
-- [x] Alex's and Taylor's seeds show every state (8 packages over 5 ingredients; 120 over 60 for the scale kitchen); the pantry at scale is checked at 390×844 with the dev build at 4× CPU.
-- [ ] A real push reaching a real phone, offline behaviour on a device and touch use: not checkable from the sandbox.
-- [ ] The production index `packages (status, expiresAt)` building and the digest finding packages with it (the emulator never enforces indexes).
-- [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
-- [x] `README.md`, `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `SEEDING.md` and `functions/README.md` match what shipped.
-
 ### Issue 45: Photo suggestions for a new recipe, and a web photo as a cover
 
 **Prerequisites:** Issue 6, Issue 44
@@ -1257,6 +1217,46 @@ Opening the Photo row of a new recipe shows six pictures found by searching the 
 - [ ] The rules were proved on the emulator as the owner, another user and signed out against the base rules.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editor was measured at 390×844, 375×667, 320×568, 844×390 and 1280×900 in light and dark.
 - [ ] Nothing has to exist in production before the merge; the README says how to turn Google on.
+
+### Issue 46: Pantry: packages with dates, and what expiring means for the rest of the app
+
+**Prerequisites:** Issue 3, Issue 18, Issue 33, Issue 41, Issue 43 (and the Shopping tab, which has shipped)
+**Target PR Size:** ~7,000 lines (the type and its rules, the date states, the screen and its sheets, five integration points, the digest source, the seeds, the checks and the docs)
+**Files:**
+- `Package`, `PackageEvent`, `PinchSubview` (`pantry`), `ReminderKind` (`expiring`) in `types.ts`; the package constants and `REMINDER_KINDS` row in `constants.ts`; `utils/packages.ts` (date states, sums per measure, the plans and their Undo, bulk, take-out, line stock, markers, use-it-up), `utils/containers.ts` (`getEatByState` and its labels take a window and a verb), `utils/settings.ts`
+- `store/slices/packagesSlice.ts`, `store/actions/packageActions.ts`, `startPackagesListener`, `usePackageActions`, `useShoppingPutAway`, `usePantryTake`, `selectors.ts`, `usePinchSync`
+- `components/pantry/` (`PantrySubview`, `PantryRow`, `PantryEntry`, `PackageRow`, `PackageSheet`, `PackageFormSheet`, `PackageFields`, `PackageDateField`, `PantryMoveSheet`, `PantryRecipeDrawer`, `PantryFromShoppingSheet`, `IngredientStock`, `LineStockMarker`), `components/cooking/CookPantryTake`, and small changes to `KitchenScreen`, `IngredientDrawer`, `ShoppingScreen`, `AddToShoppingSheet`, `RecipeDrawer`, `CookingSubview`, `RemindersSection` and `Pinch.tsx` (`?open=pantry`)
+- `functions/src/apps/pinch/` (`eatSoonDigest`, `sendEatSoonDigest`), `functions/README.md`, `firestore.indexes.json`, `firestore.rules`
+- `scripts/seeds/pinch.ts` and `pinchScale.ts`, `scripts/checks/pinchPantry.ts` and `pinchDigest.ts`
+
+**Context:** Read `TECHNICAL.md` decision 25, §5i, criterion 17 and open question 27; `UX.md`'s Pantry; `JOURNEYS.md` §4.1 and §4.2; CLAUDE.md's "Date-only vs. instant", "A scheduled sender never flushes a backlog", "Design for 5 and for 50", "A door needs a moment" and "Insight budget".
+
+### Description
+A person can say what they have and when it expires, and Pinch tells them what to use first and what to toss, the way the fridge does for what they cooked. Each bag, carton or jar is a package with an amount, a place and a date; two of the same thing with different dates are two packages under one ingredient, and totals add only amounts that measure alike. The pantry is part of the rest of the app: recipes mark what is in it, the shopping add sheet leaves out what is covered, a ticked shopping line can become a package, cooking can take out what it used, and the morning note can name ingredients about to expire.
+
+### Possible Approach
+1. One document per package under the kitchen, owner-only, a history of ten events like a box's, the date a date-only UTC value; the date states and labels are the fridge's, with the person's lead days as the "soon" window.
+2. Pure plans for every change, applied in a transaction that re-reads the package (so a second device's change is never written over), the same plans reused by the bulk acts and their Undo.
+3. A subview from a Kitchen tile that appears with the first package: one row per ingredient, soonest first, Select and a past-its-date row as in Fridge & freezer.
+4. The pantry's presence elsewhere kept to what changes a decision: a mark only for the exception on a recipe's lines, a hint on a row the pantry covers, one block on the ingredient's drawer, one chip on the shopping list, one card on cooking mode's last screen.
+5. The morning note gains a source, not a function; the rules, index, seeds and checks ship with it.
+
+### CRUD & Entry-Point Requirements
+- [x] **Create / Read / Update / Delete:** add (one or several, with "Add another"), see each ingredient's packages and totals, use some or all, move, change the date, edit, toss, delete (with a confirm that says the history goes too), and act on several at once, each with an Undo that restores only what is still as the act left it.
+- [x] **Entry points:** Kitchen's Pantry tile (once a package exists), the ingredient drawer's "In your kitchen" and "Add a package", the Shopping tab's "Add to pantry", the package sheet's "Use it up", the morning note's link, and `?open=pantry`. Each is reachable from a screen a person can open; the first package can only start from the shopping list (the open decision in `TECHNICAL.md` question 27 (i)).
+
+### Success Criteria
+- [x] Dates: past its date, due soon (the person's window), later and no date read right, offer Toss, Use it up and neither, and a date-only value shows the same day west of UTC (driven in `America/Los_Angeles`).
+- [x] Several packages: totals add per kind of measure only; a mix of weight and volume shows both; a recipe line against a package of another kind is compared only through the ingredient's own grams per cup or each and says "about"; "to taste" never takes anything out.
+- [x] Bulk acts re-read every package inside a transaction per chunk, touch only those still in stock and as shown, report the number really changed and why they left any alone, and their Undo skips a package that changed since.
+- [x] The rules matrix (owner, another signed-in user, signed out; every field's bounds, a date off UTC midnight, an extra key, ten events and the budget case, the immutable fields, a legacy reminders document) gives the intended outcome on the new rules and denies on the base ones; every pre-existing rule answers the same (72 cases each, no mismatch).
+- [x] The morning note: ingredient-only, dish-only and mixed notes read right, a dish and an ingredient with one name are one thing, the pantry switch alone sends a pantry note, an already-sent day and a person with both off send nothing; the handler was run against the emulator with a stub sender.
+- [x] A first run volunteers nothing: no tile, no markers, no hint, no drawer block, no chip, no card; Jamie's empty kitchen and a kitchen with no packages are unchanged (`JOURNEYS.md` §4.2).
+- [x] Alex's and Taylor's seeds show every state (8 packages over 5 ingredients; 120 over 60 for the scale kitchen); the pantry at scale is checked at 390×844 with the dev build at 4× CPU.
+- [ ] A real push reaching a real phone, offline behaviour on a device and touch use: not checkable from the sandbox.
+- [ ] The production index `packages (status, expiresAt)` building and the digest finding packages with it (the emulator never enforces indexes).
+- [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
+- [x] `README.md`, `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `SEEDING.md` and `functions/README.md` match what shipped.
 
 ### Issue 47: Kitchen, fridge, pantry and first runs: the review's fixes, and Recipes' bulk collections and star
 
