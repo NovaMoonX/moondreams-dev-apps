@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 interface FormSectionProps {
   title: string;
   /** A count or a short status beside the title ("8", "Edited"). */
   detail?: ReactNode;
   action?: ReactNode;
+  /** The heading stays for screen readers but is not drawn, where a short screen needs the room. */
+  isTitleHidden?: boolean;
   /** On a phone the section takes the height its screen has left, for a single child that grows into it (a drop zone). */
   isFilling?: boolean;
   children: ReactNode;
@@ -15,11 +19,17 @@ function FormSection({
   title,
   detail,
   action,
+  isTitleHidden = false,
   isFilling = false,
   children,
 }: FormSectionProps) {
   const heading = (
-    <h3 className='text-muted-foreground flex items-baseline gap-2 text-xs font-semibold tracking-wide uppercase'>
+    <h3
+      className={join(
+        'text-muted-foreground flex items-baseline gap-2 text-xs font-semibold tracking-wide uppercase',
+        isTitleHidden && 'sr-only',
+      )}
+    >
       {title}
       {detail !== undefined && (
         <span className='font-normal tabular-nums'>{detail}</span>

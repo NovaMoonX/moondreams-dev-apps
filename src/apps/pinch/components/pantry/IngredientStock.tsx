@@ -48,20 +48,23 @@ function IngredientStock({
 
   return (
     <section aria-label='In your kitchen' className='space-y-2'>
-      <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-        In your kitchen
-      </h3>
-      {packages.length === 0 ? (
-        <p className='text-muted-foreground text-sm'>
-          None in your pantry, fridge or freezer.
-        </p>
-      ) : (
+      <div className='space-y-2 [@media(max-height:599px)]:flex [@media(max-height:599px)]:items-baseline [@media(max-height:599px)]:gap-3 [@media(max-height:599px)]:space-y-0'>
+        <h3 className='text-muted-foreground shrink-0 text-xs font-semibold tracking-wide uppercase'>
+          In your kitchen
+        </h3>
+        {packages.length === 0 && (
+          <p className='text-muted-foreground text-sm'>
+            None in your pantry, fridge or freezer.
+          </p>
+        )}
+        {packages.length > 1 && (
+          <p className='text-muted-foreground text-sm'>
+            {getStockSummaryParts(view).join(' · ')}
+          </p>
+        )}
+      </div>
+      {packages.length > 0 && (
         <>
-          {packages.length > 1 && (
-            <p className='text-muted-foreground text-sm'>
-              {getStockSummaryParts(view).join(' · ')}
-            </p>
-          )}
           <ul className='divide-border divide-y'>
             {visible.map((pkg) => (
               <li key={pkg.id}>
