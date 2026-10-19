@@ -15,6 +15,9 @@ import {
   type TakeLine,
 } from '@apps/pinch/utils/packages';
 
+const OFFLINE_MESSAGE =
+  "You're offline. Taking it out of your pantry needs a connection.";
+
 interface Taken {
   groups: TakeGroup[];
   changed: ChangedPackage[];
@@ -55,6 +58,10 @@ export function usePantryTake(uid: string, lines: TakeLine[]) {
   const take = async () => {
     if (busy !== null || chosen.length === 0) return;
 
+    if (!navigator.onLine) {
+      setError(OFFLINE_MESSAGE);
+      return;
+    }
     setError(null);
     setBusy('TAKE');
     try {
@@ -79,7 +86,9 @@ export function usePantryTake(uid: string, lines: TakeLine[]) {
       if (result.error !== null) setError(result.error);
     } catch (takeError) {
       setError(
-        `${getErrorMessage(takeError, "Couldn't take it out.")} You can do it from Pantry.`,
+        navigator.onLine
+          ? `${getErrorMessage(takeError, "Couldn't take it out.")} You can do it from Pantry.`
+          : OFFLINE_MESSAGE,
       );
     } finally {
       setBusy(null);
