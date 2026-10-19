@@ -1,3 +1,4 @@
+import type { DevicePushState } from '@/lib/notifications/devicePush';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
   ALERT_REPEAT_MS,
@@ -249,6 +250,17 @@ export const needsTimerPush = (
   now: number,
 ): timer is Extract<PushClock, { status: 'running' }> =>
   timer.status === 'running' && timer.endsAt > now;
+
+export type TimerBuzzOffer = 'none' | 'ask' | 'blocked' | 'unsupported';
+
+/** What the timer view offers about a push for when the screen is off: nothing while this device's state is unread or once it can be reached with timer pushes on, else a way in, whose sheet says what stands in the way when the browser can't do it. */
+export const getTimerBuzzOffer = (
+  device: DevicePushState | null,
+  isTimersOn: boolean,
+): TimerBuzzOffer => {
+  if (device === null || (device === 'on' && isTimersOn)) return 'none';
+  return device === 'blocked' || device === 'unsupported' ? device : 'ask';
+};
 
 /** Running and paused timers count against the session's cap; a finished one waits for Dismiss and doesn't. */
 export const countLiveTimers = (timers: { status: string }[]) =>

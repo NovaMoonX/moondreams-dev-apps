@@ -747,7 +747,11 @@ export const COOK_WAKE_PHRASE = 'Hey Pinch';
 export const COOK_WAKE_SPELLINGS = ['hey pinch', 'hay pinch', 'heypinch'];
 /** How long a command window stays open after the last thing it understood. */
 export const COOK_WINDOW_MS = 10_000;
-/** "Hey Pinch" listening turns itself off after this long without the phrase. */
+/** "Hey Pinch" listening turns itself off after this long without the phrase, not counting the time a timer runs or the grace after one rings. */
 export const COOK_WAKE_IDLE_MS = 10 * 60_000;
+/** The wait stays paused this long after a timer rings, so the person tending it is not cut off. */
+export const COOK_WAKE_TIMER_GRACE_MS = 2 * 60_000;
+/** Waiting for the phrase never lasts longer than this, whatever the timers do. */
+export const COOK_WAKE_MAX_MS = 60 * 60_000;
 /** "Keep listening" runs to a fixed deadline; commands don't extend it. */
 export const COOK_LOCK_MS = 15 * 60_000;
