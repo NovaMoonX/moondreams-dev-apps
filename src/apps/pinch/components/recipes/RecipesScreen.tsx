@@ -823,6 +823,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     if (isSelecting) {
       return (
         <div className='flex items-center gap-3'>
+          {/* The header's own hit-area rule would leave a thin pill 36px tall. */}
           <span
             className={join(
               'hidden [&_button]:before:-inset-y-2!',
