@@ -86,7 +86,7 @@ export function useListViewOptions(uid: string, list: ListViewList) {
     options,
     customizedCount,
     update: (patch: Partial<ListViewOptions>) =>
-      setOptions({ ...options, ...patch }),
+      setOptions((current) => ({ ...current, ...patch })),
     reset: () => setOptions(DEFAULT_LIST_VIEW_OPTIONS),
   };
 }

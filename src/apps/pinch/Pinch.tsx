@@ -13,6 +13,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
@@ -114,7 +115,9 @@ function Pinch() {
     if (subviewRef.current !== null) {
       return;
     }
-    showTab('settings');
+    afterBackLayersClose(() => {
+      if (subviewRef.current === null) showTab('settings');
+    });
   }, [showTab]);
   const openSubviewFromToast = useCallback((next: PinchSubview) => {
     if (subviewRef.current !== null || hasDialogOnTop()) {

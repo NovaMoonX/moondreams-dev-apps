@@ -33,7 +33,7 @@ interface NutritionTilesProps {
   caption: string;
 }
 
-/** The nutrition switched on in View options, as the tiles every Calendar view shows, under a caption that says what they average or total; nothing when none of them is known. */
+/** The nutrition switched on in Settings, as the tiles every Calendar view shows, under a caption that says what they average or total; nothing when none of them is known. */
 export function NutritionTiles({ values, caption }: NutritionTilesProps) {
   const show = useAppSelector(selectShowNutrition);
   const isPhone = useMediaQuery().isBelow('sm');

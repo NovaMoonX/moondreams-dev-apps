@@ -648,6 +648,14 @@ export const selectPinchSettings = createSelector(
 export const selectPinchSettingsLoadError = (state: RootState) =>
   state.pinch.pinchSettings.loadError;
 
+/** Set when the kitchen document (the four nutrition switches) couldn't be read; the all-off defaults then stand in for choices the person made. */
+export const selectNutritionLoadError = (state: RootState) =>
+  state.pinch.settings.loadError;
+
+/** Whether the kitchen document exists, so the first nutrition change creates it and later ones write only their own fields. */
+export const selectHasKitchenSettings = (state: RootState) =>
+  state.pinch.settings.settings !== null;
+
 /** Whether a document exists, so the first change writes the whole thing and later ones only their fields. */
 export const selectHasPinchSettings = (state: RootState) =>
   state.pinch.pinchSettings.settings !== null;

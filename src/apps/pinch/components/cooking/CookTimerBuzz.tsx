@@ -114,8 +114,8 @@ function CookTimerBuzz({ uid }: CookTimerBuzzProps) {
                 apps.
               </p>
               <p className='text-muted-foreground text-xs'>
-                Your browser will ask first. Turn it off any time in Settings, the
-                last tab.
+                Your browser will ask first. Turn it off any time in Settings,
+                after you leave cooking mode.
               </p>
             </>
           )}

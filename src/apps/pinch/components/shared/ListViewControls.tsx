@@ -9,7 +9,10 @@ import {
   type ListViewOptions,
 } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import { selectShowNutrition } from '@apps/pinch/store/selectors';
+import {
+  selectNutritionLoadError,
+  selectShowNutrition,
+} from '@apps/pinch/store/selectors';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 
 const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
@@ -40,7 +43,7 @@ export function CalendarViewOptions({
         <div className='divide-border divide-y'>
           <ViewOptionSwitch
             label='Show prices'
-            description='On each meal in the week'
+            description='On each meal in the Week view'
             checked={options.showPrices}
             onCheckedChange={(showPrices) => onChange({ showPrices })}
           />
@@ -48,7 +51,7 @@ export function CalendarViewOptions({
       </FilterSection>
       <ActionRow
         icon='📊'
-        label='Stats, calories and macros'
+        label='Stats and numbers'
         subtitle='Choose them in Settings'
         hasChevron
         onClick={showSettingsTab}
@@ -71,7 +74,7 @@ interface ListViewControlsProps {
   className?: string;
 }
 
-/** The "View options" button of a Pinch list: which lines this list's rows show. Which numbers exist at all is chosen in Settings, so until one is on the calories switch is the way there. */
+/** The "View options" button of a Pinch list: which lines this list's rows show. Which numbers exist at all is chosen in Settings, so a door to them closes the sheet, and until one is on it stands in the calories switch's place (when the numbers couldn't load, neither is drawn). */
 function ListViewControls({
   options,
   customizedCount,
@@ -84,6 +87,7 @@ function ListViewControls({
 }: ListViewControlsProps) {
   const { showSettingsTab } = usePinchOverlay();
   const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
+  const hasNumbersLoadError = useAppSelector(selectNutritionLoadError) !== null;
 
   return (
     <ViewOptions
@@ -116,15 +120,6 @@ function ListViewControls({
           )}
         </div>
       </FilterSection>
-      {!isAnyMetricOn && (
-        <ActionRow
-          icon='🔥'
-          label='Show calories and macros'
-          subtitle='Choose your numbers in Settings first'
-          hasChevron
-          onClick={showSettingsTab}
-        />
-      )}
       {hasBasis && isAnyMetricOn && (
         <FilterSection title='Nutrition numbers'>
           <PillGroup
@@ -134,6 +129,19 @@ function ListViewControls({
             onChange={(basis) => onChange({ basis })}
           />
         </FilterSection>
+      )}
+      {!hasNumbersLoadError && (
+        <ActionRow
+          icon='🔥'
+          label={isAnyMetricOn ? 'Your numbers' : 'Calories and macros'}
+          subtitle={
+            isAnyMetricOn
+              ? 'Choose which in Settings'
+              : 'Switch them on in Settings'
+          }
+          hasChevron
+          onClick={showSettingsTab}
+        />
       )}
     </ViewOptions>
   );
