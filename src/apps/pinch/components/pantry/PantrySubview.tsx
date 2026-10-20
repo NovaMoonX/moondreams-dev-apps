@@ -13,6 +13,7 @@ import {
   Utensils,
 } from 'lucide-react';
 
+import EmptyCard from '@/components/EmptyCard';
 import HeaderIconButton from '@/components/HeaderIconButton';
 import IntroCard from '@/components/IntroCard';
 import Pill from '@/components/Pill';
@@ -484,10 +485,10 @@ function PantrySubview({
     }
     if (packages.length === 0) {
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
+        <EmptyCard icon='🥫'>
           Nothing in your pantry yet. When you bring something home, add it here
           with the date on its package.
-        </p>
+        </EmptyCard>
       );
     }
     if (rows.length === 0) {
@@ -677,7 +678,10 @@ function PantrySubview({
         <SectionHeader
           title={title}
           subtitle={
-            packages.length > 0 || isSelecting || isActionOnTitleRow
+            packages.length > 0 ||
+            isListShown ||
+            isSelecting ||
+            isActionOnTitleRow
               ? undefined
               : 'What is on hand, and when to use it by.'
           }
