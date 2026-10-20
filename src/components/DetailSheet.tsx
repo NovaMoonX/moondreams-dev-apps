@@ -116,7 +116,7 @@ function DetailSheet({
           {title}
         </h2>
         {actions && (
-          <div className='-my-1 -mr-2 flex shrink-0 items-center gap-1'>
+          <div className='relative z-10 -my-1 -mr-2 flex shrink-0 items-center gap-1'>
             {actions}
             {!isDrawer && (
               <Button
