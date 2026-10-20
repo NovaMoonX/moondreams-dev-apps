@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import MacroStats from '@/components/MacroStats';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useAppSelector } from '@/store';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import { selectShowNutrition } from '@apps/pinch/store/selectors';
@@ -36,6 +37,7 @@ function NutritionSummarySheet({
   onFillIn,
 }: NutritionSummarySheetProps) {
   const show = useAppSelector(selectShowNutrition);
+  const isShort = useIsShortScreen();
   const tomorrowKey = addDaysToKey(todayKey, 1);
   const gaps = getNutritionGaps(stats.openNutritionMissing, show);
   const days = stats.byDay.filter((day) => day.count > 0);
@@ -67,6 +69,7 @@ function NutritionSummarySheet({
             </p>
             <MacroStats
               variant='tiles'
+              isCompact={isShort}
               values={withWholeCalories(stats.dailyNutrition)}
               show={show}
             />
@@ -85,7 +88,7 @@ function NutritionSummarySheet({
                     variant='tertiary'
                     aria-label={`Open ${formatDayTitle(day.dayKey)}`}
                     onClick={() => onOpenDay(day.dayKey)}
-                    className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
+                    className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal focus-visible:-outline-offset-2'
                   >
                     <span className='min-w-0 flex-1'>
                       <span className='text-foreground block text-sm font-medium'>
