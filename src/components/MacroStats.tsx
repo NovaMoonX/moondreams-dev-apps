@@ -69,7 +69,7 @@ function MacroStats({
         {shown.map((macro) => {
           const figure = formatMacro(macro.key, values[macro.key] as number);
           const content = (
-            <>
+            <span className='contents'>
               <span
                 aria-hidden='true'
                 className={isCompact ? 'text-sm' : 'text-base leading-none'}
@@ -98,7 +98,7 @@ function MacroStats({
               >
                 {macro.label}
               </span>
-            </>
+            </span>
           );
           const tileClass = join(
             'bg-secondary flex items-center rounded-xl text-center',
