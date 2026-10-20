@@ -169,7 +169,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
           />
         ) : (
           <div className='space-y-3 pb-4 [@media(max-height:499px)]:pb-0'>
-            <p className='text-muted-foreground text-sm'>
+            <p className='text-muted-foreground text-sm [@media(max-height:499px)]:hidden'>
               What do you need? It goes on the list at a typical serving, and
               the arrow beside it on the list changes how much.
             </p>
@@ -182,7 +182,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                   caption: 'From your list and your cooking',
                   ids: suggestedIds,
                 }}
-                resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto [@media(max-height:499px)]:max-h-40'
+                resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto [@media(max-height:499px)]:max-h-32'
                 onPick={(ingredientId) => void handlePick(ingredientId)}
               />
             </div>

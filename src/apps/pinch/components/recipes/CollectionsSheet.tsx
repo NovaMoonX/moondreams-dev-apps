@@ -266,10 +266,15 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
           <div className='flex max-h-[max(12rem,calc(92dvh-17rem))] flex-col gap-3'>
             {collections.length > 0 &&
               collections.length < LIST_SEARCH_THRESHOLD && (
-                <IntroCard icon='🗂️' lead='Sets of recipes you make yourself.'>
-                  Rename one and every recipe in it follows. Deleting one never
-                  deletes a recipe.
-                </IntroCard>
+                <div className='[@media(max-height:700px)]:hidden'>
+                  <IntroCard
+                    icon='🗂️'
+                    lead='Sets of recipes you make yourself.'
+                  >
+                    Rename one and every recipe in it follows. Deleting one
+                    never deletes a recipe.
+                  </IntroCard>
+                </div>
               )}
             {collections.length >= LIST_SEARCH_THRESHOLD && (
               <div className='shrink-0'>
@@ -289,7 +294,7 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
                 Nothing matches “{query.trim()}”.
               </p>
             ) : (
-              <ul className='border-border divide-border min-h-0 flex-1 divide-y overflow-y-auto rounded-2xl border px-3'>
+              <ul className='border-border divide-border min-h-0 flex-1 divide-y overflow-y-auto rounded-2xl border px-3 [@media(max-height:800px)]:min-h-36'>
                 {shown.map((collection) => (
                   <li key={collection.id}>
                     <Button
@@ -309,7 +314,7 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
                         <span className='text-foreground block font-medium wrap-break-word'>
                           {collection.label}
                         </span>
-                        <span className='text-muted-foreground line-clamp-2 block text-sm font-normal'>
+                        <span className='text-muted-foreground line-clamp-2 text-sm font-normal'>
                           {getRecipesLine(
                             counts.get(collection.id) ?? 0,
                             titlesByCollection.get(collection.id) ?? [],
@@ -317,7 +322,7 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
                         </span>
                       </span>
                       <ChevronRight
-                        className='text-muted-foreground mt-3 mr-2.5 h-5 w-5 shrink-0'
+                        className='text-muted-foreground mt-3 h-5 w-5 shrink-0'
                         aria-hidden='true'
                       />
                     </Button>
