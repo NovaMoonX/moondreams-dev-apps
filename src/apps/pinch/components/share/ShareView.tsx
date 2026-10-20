@@ -337,16 +337,22 @@ function ShareView({
               It's a copy as it is today, so changes you make later aren't in it
               unless you update it.
             </IntroCard>
-            <dl className='space-y-3 text-sm'>
-              <div>
-                <dt className='font-medium'>In the copy</dt>
-                <dd className='text-muted-foreground text-pretty'>{inCopy}</dd>
-              </div>
-              <div>
-                <dt className='font-medium'>Left out</dt>
-                <dd className='text-muted-foreground text-pretty'>{leftOut}</dd>
-              </div>
-            </dl>
+            {!isCapped && (
+              <dl className='space-y-3 text-sm'>
+                <div>
+                  <dt className='font-medium'>In the copy</dt>
+                  <dd className='text-muted-foreground text-pretty'>
+                    {inCopy}
+                  </dd>
+                </div>
+                <div>
+                  <dt className='font-medium'>Left out</dt>
+                  <dd className='text-muted-foreground text-pretty'>
+                    {leftOut}
+                  </dd>
+                </div>
+              </dl>
+            )}
           </div>
         ),
         footer: (
