@@ -178,7 +178,6 @@ export const SHARE_SLOT_COPY: Record<
     signedOutLead: 'Keep this recipe',
     signedOutHint: 'Sign in to add it to your own recipes.',
     benefits: [
-      { emoji: '📖', text: 'Keep it with your own recipes' },
       {
         emoji: '📅',
         text: 'Plan it on a day and get a shopping list, with nutrition and cost',
@@ -198,7 +197,6 @@ export const SHARE_SLOT_COPY: Record<
     signedOutLead: 'Keep this saved meal',
     signedOutHint: 'Sign in to add it to your own saved meals.',
     benefits: [
-      { emoji: '📖', text: 'Keep it with your own saved meals' },
       {
         emoji: '📅',
         text: 'Plan it on a day and get a shopping list, with nutrition and cost',

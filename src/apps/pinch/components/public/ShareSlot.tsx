@@ -132,21 +132,24 @@ function VisitorSlot({ uid, shareId, target }: VisitorSlotProps) {
   }
 
   const isAdding = state.phase === 'adding';
+  const getHint = () => {
+    if (state.phase !== 'idle') return copy.visitorHint;
+    if (state.error) {
+      return (
+        <span className='text-destructive' role='alert'>
+          {state.error}
+        </span>
+      );
+    }
+    return state.notice ?? copy.visitorHint;
+  };
   return (
     <SlotCard
       emoji={copy.emoji}
       lead={copy.visitorLead}
-      hint={copy.visitorHint}
+      hint={getHint()}
       isBusy={isAdding}
     >
-      {state.phase === 'idle' && state.error && (
-        <p className='text-destructive text-sm' role='alert'>
-          {state.error}
-        </p>
-      )}
-      {state.phase === 'idle' && state.notice && (
-        <p className='text-muted-foreground text-sm'>{state.notice}</p>
-      )}
       <Button
         type='button'
         className='disabled:bg-primary! disabled:text-primary-foreground! h-11 w-full disabled:opacity-90!'

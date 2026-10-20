@@ -195,7 +195,9 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
       />
       <div className={join('min-w-0', isSplit && 'col-start-1')}>{body}</div>
       {!isSplit && user === null && !isChecking && (
-        <ShareBenefits target={target} />
+        <div className='border-border border-t pt-4'>
+          <ShareBenefits target={target} />
+        </div>
       )}
       <p
         className={join(
