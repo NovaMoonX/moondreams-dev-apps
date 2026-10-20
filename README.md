@@ -144,6 +144,14 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 
 Problems we've hit before, so we don't hit them again.
 
+### A recipe from a link always says "We couldn't read a recipe from that page"
+
+- **Symptom:** Pinch's "From a link" fails every time with that sentence, although the network panel shows `fetchPageContent` answering 200. The console shows `Reading the recipe failed Error: Data cannot be decoded from JSON: [object Object]`, with no `AIError` and no call to the AI.
+- **Cause:** the response holds the page's schema.org Recipe data, whose nodes have `"@type": "Recipe"`. The client of a Firebase callable reads an object with an `@type` key as its own type marker (`type.googleapis.com/...`) and throws on any other value, so the call fails after the server succeeded. A page with no Recipe data (and so no `@type`) read fine, which made it look like a bad page. The reader sorted every error it did not recognise as "unread".
+- **Fix:** `functions/src/linkMetadata/wireNodes.ts` writes every key's leading `@` as `_` before the function returns (`@type` becomes `_type`); `scripts/checks/pageContentWire.ts` runs a response through the real callable client, once raw (refused) and once rewritten (read).
+- **Telling it apart:** an `AIError` in the same console line, or no `fetchPageContent` request at all, is the reader or the connection, not this.
+- **Not verified:** the live AI answer for a real page (the sandbox cannot fetch pages), only the decode and the flow up to the AI call.
+
 ### Google sign-in fails in a browser that has visited the site before
 
 - **Symptom:** the sign-in popup opens as a page showing the app's "Page not found" (the URL is `apps.moondreams.dev/__/auth/handler?...`), then the console logs `auth/cancelled-popup-request`. Works in a fresh Incognito window or a profile that never loaded the site. Visiting `/__/auth/handler` directly in Incognito shows "missing initial state", which is normal.
