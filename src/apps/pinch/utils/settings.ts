@@ -15,15 +15,16 @@ export interface UsualDays {
   freezer: number;
 }
 
-/** What a person with no settings document gets: every reminder off, the built-in days. */
+/** What a person with no settings document gets: every reminder on (they still reach this device only once it is allowed), the built-in days, no Calendar stat tiles. */
 export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   fridgeDays: null,
   freezerDays: null,
   suggestPhotos: true,
+  calendarStats: false,
   reminders: {
-    eatSoon: false,
-    expiring: false,
-    timers: false,
+    eatSoon: true,
+    expiring: true,
+    timers: true,
     leadDays: DEFAULT_LEAD_DAYS,
     hour: DEFAULT_REMINDER_HOUR,
     timeZone: null,
@@ -32,7 +33,10 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   lastDigestDay: null,
 };
 
-/** A stored document with any key it predates filled from the defaults, or the defaults themselves when there is none. */
+/** What a reminder kind a stored document predates reads as: off, since the morning note's query finds a person only by a stored `true`, so a switch drawn on there would promise a note that never comes. */
+const PREDATING_REMINDERS = { eatSoon: false, expiring: false, timers: false };
+
+/** A stored document with any key it predates filled in, or the defaults themselves when there is none. */
 export const getSettingsWithDefaults = (
   document: PinchSettings | null,
 ): PinchSettings =>
@@ -43,6 +47,7 @@ export const getSettingsWithDefaults = (
         ...document,
         reminders: {
           ...DEFAULT_PINCH_SETTINGS.reminders,
+          ...PREDATING_REMINDERS,
           ...document.reminders,
         },
       };
@@ -80,6 +85,7 @@ export interface PinchSettingsPatch {
   fridgeDays?: number;
   freezerDays?: number;
   suggestPhotos?: boolean;
+  calendarStats?: boolean;
   reminders?: Partial<PinchReminderSettings>;
 }
 
@@ -92,6 +98,7 @@ export const createSettings = (
   fridgeDays: patch.fridgeDays ?? DEFAULT_PINCH_SETTINGS.fridgeDays,
   freezerDays: patch.freezerDays ?? DEFAULT_PINCH_SETTINGS.freezerDays,
   suggestPhotos: patch.suggestPhotos ?? DEFAULT_PINCH_SETTINGS.suggestPhotos,
+  calendarStats: patch.calendarStats ?? DEFAULT_PINCH_SETTINGS.calendarStats,
   reminders: { ...DEFAULT_PINCH_SETTINGS.reminders, ...patch.reminders },
   updatedAt: now,
 });
@@ -110,6 +117,9 @@ export const getSettingsUpdates = (
   ...(patch.suggestPhotos === undefined
     ? []
     : [{ path: ['suggestPhotos'], value: patch.suggestPhotos }]),
+  ...(patch.calendarStats === undefined
+    ? []
+    : [{ path: ['calendarStats'], value: patch.calendarStats }]),
   ...Object.entries(patch.reminders ?? {}).flatMap(([key, value]) =>
     value === undefined ? [] : [{ path: ['reminders', key], value }],
   ),
