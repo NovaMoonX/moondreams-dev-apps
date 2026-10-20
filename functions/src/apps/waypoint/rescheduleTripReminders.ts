@@ -98,7 +98,10 @@ export const rescheduleTripReminders = onDocumentUpdated(
             return cancelPending();
           }
           if (isPending && reminderRef) {
-            return [(batch: FirebaseFirestore.WriteBatch) => batch.update(reminderRef, { scheduledFor })];
+            return [
+              (batch: FirebaseFirestore.WriteBatch) =>
+                batch.update(reminderRef, { scheduledFor, link: `/waypoint?trip=${encodeURIComponent(tripRef.id)}` }),
+            ];
           }
 
           // Triggers can be delivered more than once; a fixed id per event means a repeat rewrites
@@ -118,6 +121,7 @@ export const rescheduleTripReminders = onDocumentUpdated(
                 status: 'pending',
                 channels: ['push'],
                 relatedEntityPath: `apps/waypoint/trips/${tripRef.id}/events/${eventDoc.id}`,
+                link: `/waypoint?trip=${encodeURIComponent(tripRef.id)}`,
                 recurrence: 'none',
                 createdBy: event.createdBy,
                 createdAt: now,
