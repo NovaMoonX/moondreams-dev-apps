@@ -355,12 +355,13 @@ function ItemSearch({
             {mealMatches.map((meal) => (
               <li key={meal.id}>
                 <PickRowShell
-                  chip={<PickChip>🍽️</PickChip>}
+                  chip={<PickChip isCompact={isLandscape}>🍽️</PickChip>}
                   trailing={
                     <span className='text-muted-foreground text-xs font-normal whitespace-nowrap'>
                       Saved meal
                     </span>
                   }
+                  isCompact={isLandscape}
                   isDisabled={isDisabled}
                   onClick={() => {
                     setQuery('');
@@ -396,6 +397,7 @@ function ItemSearch({
                 <IngredientPickRow
                   name={ingredient.name}
                   {...getRowLook(ingredient)}
+                  isCompact={isLandscape}
                   isDisabled={isDisabled}
                   onClick={() => {
                     setQuery('');
@@ -416,12 +418,16 @@ function ItemSearch({
                 <PickRowShell
                   chip={
                     <span
-                      className='bg-secondary text-secondary-foreground flex size-10 shrink-0 items-center justify-center rounded-full'
+                      className={join(
+                        'bg-secondary text-secondary-foreground flex shrink-0 items-center justify-center rounded-full',
+                        isLandscape ? 'size-8' : 'size-10',
+                      )}
                       aria-hidden='true'
                     >
-                      <Plus className='size-5' />
+                      <Plus className={isLandscape ? 'size-4' : 'size-5'} />
                     </span>
                   }
+                  isCompact={isLandscape}
                   isDisabled={isCreating || isDisabled}
                   onClick={() => void createFromName()}
                 >
