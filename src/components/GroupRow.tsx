@@ -46,33 +46,27 @@ function GroupRow({
     'flex w-full items-start justify-start gap-3 text-left font-normal whitespace-normal',
     isRoomy ? 'min-h-16 px-3 py-3 text-base' : 'min-h-10 px-4 py-2.5 text-sm',
   );
-  const body = (
-    <>
-      {iconSlot}
-      <span
-        className={join(
-          'min-w-0 flex-1',
-          isRoomy && 'flex min-h-11 flex-col justify-center',
-        )}
-      >
-        {children}
-      </span>
-      {onClick !== undefined && (
-        <ChevronRight
-          className={join(
-            'text-muted-foreground shrink-0',
-            isRoomy ? 'mt-3 -ml-1 size-5' : 'mt-0.5 size-4',
-          )}
-          aria-hidden='true'
-        />
+  const content = (
+    <span
+      className={join(
+        'min-w-0 flex-1',
+        isRoomy && 'flex min-h-11 flex-col justify-center',
       )}
-    </>
+    >
+      {children}
+    </span>
   );
 
   if (onClick === undefined) {
-    return <div className={join(layout, 'text-foreground')}>{body}</div>;
+    return (
+      <div className={join(layout, 'text-foreground')}>
+        {iconSlot}
+        {content}
+      </div>
+    );
   }
 
+  // Button clones each child with a className, which a Fragment rejects, so none wraps these.
   return (
     <Button
       type='button'
@@ -86,7 +80,15 @@ function GroupRow({
         layout,
       )}
     >
-      {body}
+      {iconSlot}
+      {content}
+      <ChevronRight
+        className={join(
+          'text-muted-foreground shrink-0',
+          isRoomy ? 'mt-3 -ml-1 size-5' : 'mt-0.5 size-4',
+        )}
+        aria-hidden='true'
+      />
     </Button>
   );
 }
