@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import AppToggle from '@/components/AppToggle';
@@ -109,36 +109,43 @@ const getAskFailureText = (result: TurnOnResult) => {
   return getTurnOnFailureText(result);
 };
 
-/** One switch per reminder this app sends. Switching one on asks the browser for notifications on that tap when this device isn't set up (the device's own switch is the site's, in the profile), and a refusal leaves the switch off and says why: under the row, or once under the group when the browser blocks notifications or can't show them (its switches are then off and disabled). */
+type AskKey = ReminderKind | 'device';
+
+/** One switch per reminder this app sends. Switching one on asks the browser for notifications on that tap when this device isn't set up (the device's own switch is the site's, in the profile), and a refusal leaves the switch off and says why: under the row, or once under the group when the browser blocks notifications or can't show them (its switches are then off and disabled). A reminder that is on while this device is off says so under the group, with the same ask beside it. */
 function RemindersSection({ uid }: RemindersSectionProps) {
   const queryClient = useQueryClient();
   const { settings, save } = usePinchSettings(uid);
   const device = useQuery(devicePushQueryOptions(uid)).data ?? null;
-  const [askingKey, setAskingKey] = useState<ReminderKind | null>(null);
+  const [askingKey, setAskingKey] = useState<AskKey | null>(null);
   const [failure, setFailure] = useState<{
-    key: ReminderKind;
+    key: AskKey;
     text: string;
   } | null>(null);
   const isStuck = device === 'blocked' || device === 'unsupported';
+  const isOffWithReminders =
+    device === 'off' &&
+    REMINDER_KINDS.some((kind) => settings.reminders[kind.key]);
+
+  const askDevice = async (key: AskKey) => {
+    setAskingKey(key);
+    try {
+      const result = await turnOnDevicePush(uid);
+      if (result !== 'on') {
+        const text = getAskFailureText(result);
+        if (text !== null) setFailure({ key, text });
+      }
+      return result === 'on';
+    } finally {
+      setAskingKey(null);
+      await queryClient.invalidateQueries({
+        queryKey: notificationsQueryKeys.device(uid),
+      });
+    }
+  };
 
   const handleKindChange = async (kind: ReminderKind, isChecked: boolean) => {
     setFailure(null);
-    if (isChecked && device !== 'on') {
-      setAskingKey(kind);
-      try {
-        const result = await turnOnDevicePush(uid);
-        if (result !== 'on') {
-          const text = getAskFailureText(result);
-          if (text !== null) setFailure({ key: kind, text });
-          return;
-        }
-      } finally {
-        setAskingKey(null);
-        await queryClient.invalidateQueries({
-          queryKey: notificationsQueryKeys.device(uid),
-        });
-      }
-    }
+    if (isChecked && device !== 'on' && !(await askDevice(kind))) return;
     await save({
       reminders: {
         [kind]: isChecked,
@@ -152,7 +159,34 @@ function RemindersSection({ uid }: RemindersSectionProps) {
   return (
     <SettingsGroup
       title='Reminders'
-      footer={isStuck && <p>{getDeviceNotificationsText(device)}</p>}
+      footer={
+        isStuck ? (
+          <p>{getDeviceNotificationsText(device)}</p>
+        ) : (
+          isOffWithReminders && (
+            <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+              <p className='min-w-0 flex-1 basis-48'>
+                Notifications are off on this device, so these reminders won’t
+                reach it.
+              </p>
+              <Button
+                variant='secondary'
+                rounded='full'
+                disabled={askingKey !== null}
+                onClick={() => {
+                  setFailure(null);
+                  void askDevice('device');
+                }}
+              >
+                Allow on this device
+              </Button>
+              {failure?.key === 'device' && (
+                <p className='text-destructive basis-full'>{failure.text}</p>
+              )}
+            </div>
+          )
+        )
+      }
     >
       {REMINDER_KINDS.map((kind) => (
         <SettingsRow

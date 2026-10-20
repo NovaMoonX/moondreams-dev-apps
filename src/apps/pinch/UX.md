@@ -191,7 +191,7 @@ flowchart TD
     RD -.->|You have it, Not in your pantry or Past its date on a line: a mark, not a door| RD
     SET -->|Sharing: Shared links, once a link exists| SHL["Shared links subview · each link with its date and a flag · a search from 8 · ‹ Back to Settings, or to the screen it was opened from"]
     SHL -->|tap a link| SHS["Link sheet · the same Share view, without Create link · Stop sharing closes it"]
-    ST --> SET["Settings · Numbers: calories, protein, carbs, fat, Calendar stats · Reminders: this device, food to eat soon (days ahead, hour), timers when the screen is off · How long things keep: fridge and freezer days · Photos: suggest photos for new recipes · Sharing: Shared links, once a link exists · About the numbers, the last line"]
+    ST --> SET["Settings · Numbers: calories, protein, carbs, fat, Calendar stats · Reminders: food to eat soon and ingredients about to expire (days ahead, hour), timers when the screen is off (a switch on asks the browser for notifications on that tap; the device's own switch is in the site's profile) · How long things keep: fridge and freezer days · Photos: suggest photos for new recipes · Sharing: Shared links, once a link exists · About the numbers, the last line"]
     K --> KL["Ingredients list · Yours / All · search and filters"]
     KL -->|eye button| VO
     KL -->|+ New| IF["Ingredient form sheet · nutrition typed as the label prints it"]

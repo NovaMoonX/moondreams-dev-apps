@@ -1131,7 +1131,7 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 **Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 16 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
 
 ### Description
-A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. The Settings tab, the right-most in the bar, holds this device's notifications (asked for on a tap), a switch per kind of reminder (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
+A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. The Settings tab, the right-most in the bar, holds a switch per kind of reminder (each asks for the browser's notifications on its tap; the device's own switch is the site's, in the profile) (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
 
 ### Possible Approach
 1. One small document per person, written by their first change, owner-only, with its own rules block; readers default, later changes are dotted paths.
