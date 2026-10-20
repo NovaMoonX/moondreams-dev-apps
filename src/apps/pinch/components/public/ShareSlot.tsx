@@ -5,10 +5,11 @@ import { Button, Skeleton } from '@moondreamsdev/dreamer-ui/components';
 import { Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import FormSection from '@/components/FormSection';
 import TickMark from '@/components/TickMark';
 import { useAuth } from '@/hooks/useAuth';
 import SlotCard from '@apps/pinch/components/public/SlotCard';
-import { SHARE_SLOT_COPY } from '@apps/pinch/constants';
+import { SHARE_BENEFITS_TITLE, SHARE_SLOT_COPY } from '@apps/pinch/constants';
 import { useShareAdd } from '@apps/pinch/hooks/useShareAdd';
 import {
   getAddedMessage,
@@ -167,33 +168,36 @@ interface ShareSlotProps {
   target: ShareTarget;
   isOwner: boolean;
   isChecking: boolean;
-  hasBenefits: boolean;
   className?: string;
 }
 
-/** What an account gives, as three quiet lines; the page puts them under the card on a wide screen and under the recipe on a phone, so a signed-out phone sees the recipe as high as a signed-in one. */
-export function ShareBenefits({ target }: KindSlotProps) {
+/** What an account gives, in a framed list under the sign-in card with a caption that says what it is about, drawn like the page's other sections. */
+function Benefits({ target }: KindSlotProps) {
   return (
-    <ul className='space-y-1.5'>
-      {SHARE_SLOT_COPY[target.kind].benefits.map((benefit) => (
-        <li key={benefit.text} className='flex gap-2 text-sm'>
-          <span className='w-5 shrink-0 text-center' aria-hidden='true'>
-            {benefit.emoji}
-          </span>
-          <span className='min-w-0 text-pretty'>{benefit.text}</span>
-        </li>
-      ))}
-    </ul>
+    <FormSection title={SHARE_BENEFITS_TITLE}>
+      <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
+        {SHARE_SLOT_COPY[target.kind].benefits.map((benefit) => (
+          <li
+            key={benefit.text}
+            className='flex items-start gap-3 px-4 py-2.5 text-sm'
+          >
+            <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+              {benefit.emoji}
+            </span>
+            <span className='min-w-0 text-pretty'>{benefit.text}</span>
+          </li>
+        ))}
+      </ul>
+    </FormSection>
   );
 }
 
-/** The page's one action: the same card in every state, so a signed-out page reads like a signed-in one. `hasBenefits` adds a signed-out page's lines about what an account gives under the card. */
+/** The page's one action: the same card in every state, so a signed-out page reads like a signed-in one. Only a signed-out page adds the list of what an account gives, under the card. */
 function ShareSlot({
   shareId,
   target,
   isOwner,
   isChecking,
-  hasBenefits,
   className,
 }: ShareSlotProps) {
   const { user } = useAuth();
@@ -225,11 +229,9 @@ function ShareSlot({
   };
 
   return (
-    <div className={join('space-y-3', className)}>
+    <div className={join('space-y-5', className)}>
       {getCard()}
-      {hasBenefits && user === null && !isChecking && (
-        <ShareBenefits target={target} />
-      )}
+      {user === null && !isChecking && <Benefits target={target} />}
     </div>
   );
 }

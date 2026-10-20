@@ -128,7 +128,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Covers.** For each `{ index, recipeId }` the request names, the source file is built on the server from the caller's own uid (`apps/pinch/kitchens/{uid}/recipes/{recipeId}/cover.webp`); a client never names a path. Each copy gets its own download token, so the shared file never shares an address with the owner's private one. A web-search cover is never shared. A copy that fails is logged (a short code and the first 4 characters of the id, nothing else) and leaves that recipe without a cover; it never fails the share. The bucket is the project's default (`getStorage().bucket()`, as `deleteTrip` uses): in production that is the one the app uploads to, but an offline Emulator Suite falls back to `moondreams-dev-apps.appspot.com`, where the app's uploads are not found, so start it with `STORAGE_BUCKET_URL=moondreams-dev-apps.firebasestorage.app` (`SEEDING.md`).
 - **`copyPinchShareCover`.** Signed in only. Copies a shared recipe's cover onto the caller's own recipe, and only when the share has a cover at that index and the caller's recipe exists with no cover of its own. It never writes the recipe: the client stores the returned `coverPath`. A share with no cover, an unknown share and a recipe that already has a picture all answer `{ coverPath: null }`.
 - **No logging of ids, titles or copies.** No secrets, env vars or indexes: every query is equality-only (`ownerUid`, `sourceId`).
-- **Deploying.** A new `onCall` may need the one-time invoker fix in the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access); the signed-out `getPinchShare` fails with a CORS error until it has it. Nothing has to exist in production before the merge.
+- **Deploying.** A new `onCall` may need the one-time invoker fix, `npm run fb:invoker -- getPinchShare changePinchShare copyPinchShareCover` (root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access)); the signed-out `getPinchShare` fails with a CORS error until it has it. Nothing has to exist in production before the merge.
 - **Not verified live.** The Storage `copy` and `setMetadata` calls and the download token a copied cover gets were written from the Admin SDK's documentation and run only against the emulator (with the bucket above, every copy, token, renew and delete case passed); check a shared cover (open a link whose recipe has an uploaded cover) on the first deploy.
 
 ### Pinch: `searchRecipeImages`
@@ -224,7 +224,7 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
   - a "Secrets and config" row for any new secret or env var;
   - a note if it caches, budgets, or fetches on a user's behalf.
 - **New secret:** create it in production *before* the PR merges, or the CI functions deploy fails and nothing ships. If the first deploy then fails on a Secret Manager permission, see [Service accounts](#service-accounts).
-- **New callable:** if the browser reports a CORS error after its first deploy, run the invoker fix in the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
+- **New callable:** if the browser reports a CORS error after its first deploy, run `npm run fb:invoker -- <function>` (several names are fine); see the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
 - **Query with an equality plus a range or `orderBy`:** add its composite index to `firestore.indexes.json` in the same PR and run `npm run check:indexes`. The emulator doesn't enforce indexes, so a missing one only fails in production.
 - **Server-only collection:** give it a deny-all block in `firestore.rules`.
 
@@ -233,7 +233,7 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
 | Symptom | Cause and fix |
 | --- | --- |
 | Emulator says a function isn't found, or `lib/index.js` doesn't exist | `functions/lib/` wasn't built. Start through `npm run emulators` (it builds first), or run `npm --prefix functions run build`. |
-| Browser CORS error on a callable in production | Missing public-invoker grant. See the root README's invoker section. |
+| Browser CORS error on a callable in production | Missing public-invoker grant. `npm run fb:invoker -- <function>`; see the root README's invoker section. |
 | CI deploy fails on functions with a secret error | The secret doesn't exist in production yet. Set it with `firebase functions:secrets:set`. |
 | CI deploy fails with `secretmanager.secrets.getIamPolicy` or `setIamPolicy` | The deployer account can't manage that secret. Grant it per [Service accounts](#service-accounts). |
 | A function returns an error reading its secret at runtime | The runtime (default compute) account can't read that secret. Grant it per [Service accounts](#service-accounts). |

@@ -118,16 +118,16 @@ Firebase's 2nd-gen `onCall` functions get their public "allow unauthenticated in
 
 **Symptom:** a browser console CORS error on the callable (e.g. "No 'Access-Control-Allow-Origin' header is present"), even though its `cors`/`region` config looks correct and matches a working function. Checking GCP Cloud Run request logs for that service shows the real cause: a `403` on the `OPTIONS` preflight with `"The request was not authenticated. Either allow unauthenticated invocations or set the proper Authorization header."`
 
-**Fix:** run this against the affected function's Cloud Run service (service name = the function name, lowercased — Cloud Run rejects mixed-case names):
+**Fix:** run the script with the function names, one or several (any case; it lowercases them for Cloud Run, which rejects mixed-case names):
 
 ```bash
-gcloud run services update <lowercase-function-name> \
-  --no-invoker-iam-check \
-  --region="us-central1" \
-  --project="moondreams-dev-apps"
+npm run fb:invoker -- getPinchShare changePinchShare copyPinchShareCover
+npm run fb:invoker -- getPinchShare --dry   # prints the gcloud command without running it
 ```
 
-This is a one-time, per-function operational step — run it after first deploying a new callable function if you hit this symptom, not as part of every deploy. It's not part of the automated deploy workflow.
+It runs `gcloud run services update <lowercase-name> --no-invoker-iam-check --region=us-central1 --project=<.firebaserc default>` for each name and carries on if one fails. It takes only `onCall` functions (it reads `functions/src/index.ts`): a scheduled or trigger function keeps its IAM check, so it refuses those and lists the callable names.
+
+This is a one-time, per-function operational step — run it after first deploying a new callable function if you hit this symptom, not as part of every deploy. It's not part of the automated deploy workflow, and it needs `gcloud` signed in with a role that can update Cloud Run services.
 
 ## PWAs & push notifications
 

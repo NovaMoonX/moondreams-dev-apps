@@ -11,9 +11,7 @@ import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNoIndex } from '@/hooks/useNoIndex';
 import { formatDate } from '@/utils/formatUtils';
-import ShareSlot, {
-  ShareBenefits,
-} from '@apps/pinch/components/public/ShareSlot';
+import ShareSlot from '@apps/pinch/components/public/ShareSlot';
 import SharedBrand from '@apps/pinch/components/public/SharedBrand';
 import SharedIntro from '@apps/pinch/components/public/SharedIntro';
 import SharedMealBody from '@apps/pinch/components/public/SharedMealBody';
@@ -63,7 +61,6 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
   const scrollRef = useRef(0);
   const copy = SHARE_SLOT_COPY[share.kind];
   const { isAtLeast } = useMediaQuery();
-  const { user } = useAuth();
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const isSplit = isAtLeast('lg') || (isAtLeast('sm') && isShort);
 
@@ -186,7 +183,6 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
         target={target}
         isOwner={share.isOwner}
         isChecking={isChecking}
-        hasBenefits={isSplit}
         className={
           isSplit
             ? 'sticky top-6 col-start-2 row-span-2 row-start-2 self-start'
@@ -194,11 +190,6 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
         }
       />
       <div className={join('min-w-0', isSplit && 'col-start-1')}>{body}</div>
-      {!isSplit && user === null && !isChecking && (
-        <div className='border-border border-t pt-4'>
-          <ShareBenefits target={target} />
-        </div>
-      )}
       <p
         className={join(
           'text-muted-foreground text-center text-xs text-pretty',

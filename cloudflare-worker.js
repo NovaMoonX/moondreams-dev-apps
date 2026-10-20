@@ -100,9 +100,9 @@ const APP_REGISTRY = [
 
 // Tells search engines not to list the page in their results, and browsers not to send its address as a referrer, even for those that never run its JS (where the same two meta tags are added).
 // The copy is needed because a fetched response's headers are read-only.
-function withNoIndexNoReferrer(response) {
+function withUnlistedPageHeaders(response) {
   const result = new Response(response.body, response);
-  result.headers.set('X-Robots-Tag', 'noindex');
+  result.headers.set('X-Robots-Tag', 'noindex, nofollow');
   result.headers.set('Referrer-Policy', 'no-referrer');
   return result;
 }
@@ -147,7 +147,7 @@ export default {
     const isUnlisted = APP_REGISTRY.some((app) =>
       (app.pages ?? []).some(({ prefix }) => url.pathname.startsWith(prefix)),
     );
-    const response = isUnlisted ? withNoIndexNoReferrer(fetched) : fetched;
+    const response = isUnlisted ? withUnlistedPageHeaders(fetched) : fetched;
 
     const appMeta = getAppMeta(url);
 
