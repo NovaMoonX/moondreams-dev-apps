@@ -211,7 +211,7 @@ flowchart TD
     LNK["Shared link page · /pinch/shared/:shareId · no sign-in, outside the shell · header, cover and title, one slot, the recipe, the snapshot line"]
     LNK -->|the owner| LKO["Slot · Your shared recipe · Open in Pinch"]
     LNK -->|signed in| LKV["Slot · Want this in your recipes? · Add to my recipes or saved meals"]
-    LNK -->|signed out| LKS["Slot · Keep this recipe · Sign in with Google · three plain lines under it"]
+    LNK -->|signed out| LKS["Slot · Keep this recipe · Sign in with Google · three plain lines under it on a wide screen, under the recipe on a phone"]
     LKO -->|Open in Pinch| RL
     LKV -->|Add| LKA["Added · Undo · See it in Pinch"]
     LKA -->|See it in Pinch| RL
@@ -1644,7 +1644,7 @@ block-beta
   P1["🧂 Pinch                                     SHARED RECIPE"]:2
   P2["🍲 (an 80px cover or tile)  Adobo chicken<br/>4 servings · 45 min"]:2
   P3["🍲 Keep this recipe<br/>Sign in to add it to your own recipes.<br/>[ G  Sign in with Google ]"]:2
-  P3b["📖 Keep it with your own recipes · 📅 Plan it on a day and get a shopping list, with nutrition and cost · ⏲️ Cook it step by step, with timers  (under the card, only when signed out)"]:2
+  P3b["📖 Keep it with your own recipes · 📅 Plan it on a day and get a shopping list, with nutrition and cost · ⏲️ Cook it step by step, with timers  (only when signed out: under the card on a wide screen, under the recipe on a phone)"]:2
   P4["Sticky, tangy chicken thighs braised in soy and vinegar. (drawn in full)"]:2
   P5["INGREDIENTS (one framed card; a heading per group when the recipe has groups)<br/>Chicken thighs · 2 lb"]:2
   P6["STEPS<br/>① Marinate the chicken…"]:2
@@ -1672,7 +1672,7 @@ block-beta
   A1["Owner<br/>🍲 Your shared recipe<br/>Everyone with the link sees this page, just as you do now.<br/>[ Open in Pinch ]"]:1
   A2["Signed in<br/>🍲 Want this in your recipes?<br/>Adds your own copy to change, plan and cook.<br/>[ Add to my recipes ]"]:1
   A3["Added<br/>🍲 ✓ Added to your recipes<br/>Find it under Recipes in Pinch.<br/>[ Undo ]  [ See it in Pinch ]"]:1
-  A4["Signed out<br/>🍲 Keep this recipe<br/>Sign in to add it to your own recipes.<br/>[ Sign in with Google ]  (three lines under the card)"]:1
+  A4["Signed out<br/>🍲 Keep this recipe<br/>Sign in to add it to your own recipes.<br/>[ Sign in with Google ]  (three lines: under the card on a wide screen, under the recipe on a phone)"]:1
   style A1 fill:transparent,stroke:#888888,stroke-width:1px;
   style A2 fill:transparent,stroke:#888888,stroke-width:1px;
   style A3 fill:transparent,stroke:#888888,stroke-width:1px;

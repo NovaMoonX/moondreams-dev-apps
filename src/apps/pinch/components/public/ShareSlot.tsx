@@ -164,10 +164,12 @@ interface ShareSlotProps {
   target: ShareTarget;
   isOwner: boolean;
   isChecking: boolean;
+  hasBenefits: boolean;
   className?: string;
 }
 
-function Benefits({ target }: KindSlotProps) {
+/** What an account gives, as three quiet lines; the page puts them under the card on a wide screen and under the recipe on a phone, so a signed-out phone sees the recipe as high as a signed-in one. */
+export function ShareBenefits({ target }: KindSlotProps) {
   return (
     <ul className='space-y-1.5'>
       {SHARE_SLOT_COPY[target.kind].benefits.map((benefit) => (
@@ -182,12 +184,13 @@ function Benefits({ target }: KindSlotProps) {
   );
 }
 
-/** The page's one action: the same card in every state, so a signed-out page reads like a signed-in one. Only a signed-out page adds the lines about what an account gives, under the card. */
+/** The page's one action: the same card in every state, so a signed-out page reads like a signed-in one. `hasBenefits` adds a signed-out page's lines about what an account gives under the card. */
 function ShareSlot({
   shareId,
   target,
   isOwner,
   isChecking,
+  hasBenefits,
   className,
 }: ShareSlotProps) {
   const { user } = useAuth();
@@ -221,7 +224,9 @@ function ShareSlot({
   return (
     <div className={join('space-y-3', className)}>
       {getCard()}
-      {user === null && !isChecking && <Benefits target={target} />}
+      {hasBenefits && user === null && !isChecking && (
+        <ShareBenefits target={target} />
+      )}
     </div>
   );
 }
