@@ -168,7 +168,7 @@ function DetailSheet({
     >
       <div
         ref={attachContent}
-        className='max-h-[calc(100dvh-16rem)] overflow-y-auto'
+        className='max-h-[calc(100dvh-16rem)] overflow-y-auto [@media(max-height:599px)]:max-h-[calc(100dvh-11.5rem)]'
       >
         {children}
       </div>
