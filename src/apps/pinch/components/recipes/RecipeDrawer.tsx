@@ -102,7 +102,7 @@ const COLLECTION_NAMES_SHOWN = 2;
 interface CollectionRowsProps {
   recipeId: string;
   collections: Collection[];
-  /** Where no recipe list sits under the drawer there is nothing to open, so each row only says what its collection holds. */
+  /** A row opens its collection only while the collection holds other recipes and a recipe list sits under the drawer; otherwise it only says what the collection holds. */
   onShow?: (collectionId: string) => void;
 }
 
@@ -142,7 +142,11 @@ function CollectionRows({
           isRoomy
           icon='🗂️'
           ariaLabel={`In ${collection.label}: show its recipes`}
-          onClick={onShow && (() => onShow(collection.id))}
+          onClick={
+            onShow && othersByCollection.has(collection.id)
+              ? () => onShow(collection.id)
+              : undefined
+          }
         >
           <span className='block font-medium wrap-break-word'>
             {collection.label}
