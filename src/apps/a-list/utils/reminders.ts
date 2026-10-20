@@ -43,6 +43,7 @@ export async function scheduleTrailerReminder({
       scheduledFor: showtimeAt + TRAILER_REMINDER_DELAY_MINUTES * 60_000,
       createdBy: uid,
       relatedEntityPath: `apps/a-list/memberships/${uid}/viewings/${viewingId}`,
+      link: '/a-list?tab=watchlist',
     });
   } catch {
     // Stored id then points at nothing, and cancelling it later is just as quiet.
