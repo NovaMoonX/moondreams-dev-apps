@@ -13,6 +13,7 @@ interface ActionAnimationModalProps {
 }
 
 const RAFFLE_TICK_MS = 300;
+const RAFFLE_REVEAL_TICK_MS = 40;
 
 // function getActionPhase(action: ActiveAction, now: number) {
 //   if (action.status === 'completed') {
@@ -68,12 +69,17 @@ function ActionAnimationModal({ boxes }: ActionAnimationModalProps) {
       return;
     }
 
-    const intervalId = window.setInterval(() => {
-      setNow(Date.now());
-    }, RAFFLE_TICK_MS);
+    const intervalId = window.setInterval(
+      () => {
+        setNow(Date.now());
+      },
+      presentedAction.status === 'completed'
+        ? RAFFLE_REVEAL_TICK_MS
+        : RAFFLE_TICK_MS,
+    );
 
     return () => clearInterval(intervalId);
-  }, [presentedAction?.method]);
+  }, [presentedAction?.method, presentedAction?.status]);
 
   const targetBox = useMemo(
     () => boxes.find((box) => box.id === presentedAction?.boxId) ?? null,
