@@ -57,10 +57,10 @@ function PickRow({ emoji, name, note, onPick }: PickRowProps) {
         type='button'
         variant='tertiary'
         onClick={onPick}
-        className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-1.5 text-left'
+        className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-1.5 text-left [@media(max-height:499px)]:min-h-10 [@media(max-height:499px)]:py-0!'
       >
         <span
-          className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)] text-xl'
+          className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)] text-xl [@media(max-height:499px)]:size-8 [@media(max-height:499px)]:text-base'
           aria-hidden='true'
         >
           {emoji}
@@ -181,7 +181,7 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
           </p>
         </div>
       ) : (
-        <ul className='divide-border divide-y'>
+        <ul className='divide-border max-h-[max(12rem,calc(92dvh-22rem))] divide-y overflow-y-auto [@media(max-height:499px)]:max-h-32'>
           {shown.map((match) => (
             <PickRow
               key={`${match.kind}-${match.id}`}
@@ -203,7 +203,7 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
                 type='button'
                 variant='tertiary'
                 onClick={() => onPick({ kind: 'typed', name: trimmed })}
-                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
+                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left [@media(max-height:499px)]:min-h-10 [@media(max-height:499px)]:py-0!'
               >
                 <span className='bg-secondary text-secondary-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-full'>
                   <Plus className='h-4 w-4' aria-hidden='true' />

@@ -182,7 +182,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
                   caption: 'From your list and your cooking',
                   ids: suggestedIds,
                 }}
-                resultsClassName='max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto [@media(max-height:499px)]:max-h-32'
+                isCapped
                 onPick={(ingredientId) => void handlePick(ingredientId)}
               />
             </div>
