@@ -112,6 +112,8 @@ const getStagedId = (rows: IngredientRow[], name: string) =>
 
 interface NewNameFieldProps {
   name: string;
+  /** Shown under the field until a name the person already has is offered in its place, so the field never moves as they type. */
+  hint: string;
   usedIds: readonly string[];
   onRename: (name: string) => void;
   onUseExisting?: (ingredientId: string) => void;
@@ -120,6 +122,7 @@ interface NewNameFieldProps {
 /** The name of an ingredient being made in this form: editable until the recipe is saved, cased like the app's own names when the field is left, and never empty. */
 function NewNameField({
   name,
+  hint,
   usedIds,
   onRename,
   onUseExisting,
@@ -162,8 +165,8 @@ function NewNameField({
           />
         )}
       </Field>
-      <div className='flex min-h-7 flex-wrap items-center gap-x-2 gap-y-3'>
-        {existing && onUseExisting && !usedIds.includes(existing.id) && (
+      <div className='flex min-h-10 flex-wrap items-center gap-x-2 gap-y-3'>
+        {existing && onUseExisting && !usedIds.includes(existing.id) ? (
           <>
             <span className='text-muted-foreground text-xs'>
               Already in your ingredients
@@ -179,6 +182,8 @@ function NewNameField({
               Use {existing.name}
             </Button>
           </>
+        ) : (
+          <p className='text-muted-foreground text-xs'>{hint}</p>
         )}
       </div>
     </div>
@@ -318,12 +323,10 @@ function IngredientEditor({
         <NewNameField
           key='proposed'
           name={proposedName}
+          hint='Not in your ingredients yet. Pick one you have, or add it as new.'
           usedIds={usedInGroup}
           onRename={(name) => onUpdate({ proposedName: name })}
         />
-        <p className='text-muted-foreground text-xs'>
-          Not in your ingredients yet. Pick one you have, or add it as new.
-        </p>
         {nearMatches.length > 0 && (
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs'>
@@ -401,19 +404,14 @@ function IngredientEditor({
   return (
     <div className='space-y-3' onKeyDown={blockEnterSubmit}>
       {row.newName !== null && (
-        <>
-          <NewNameField
-            key={row.ingredientId}
-            name={row.newName}
-            usedIds={usedInGroup}
-            onRename={(name) => onRename(row.ingredientId, name)}
-            onUseExisting={(toId) => onUseExisting(row.ingredientId, toId)}
-          />
-          <p className='text-muted-foreground text-xs'>
-            New ingredient. It’s added when you save the recipe, and you can
-            rename it until then.
-          </p>
-        </>
+        <NewNameField
+          key={row.ingredientId}
+          name={row.newName}
+          hint='New ingredient. It’s added when you save the recipe, and you can rename it until then.'
+          usedIds={usedInGroup}
+          onRename={(name) => onRename(row.ingredientId, name)}
+          onUseExisting={(toId) => onUseExisting(row.ingredientId, toId)}
+        />
       )}
       {row.isAmountless ? (
         <div className='space-y-1.5'>
