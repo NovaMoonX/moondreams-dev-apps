@@ -1586,6 +1586,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     status: 'pending',
     channels: ['push'],
     relatedEntityPath: `apps/waypoint/trips/${ACTIVE_TRIP_ID}/events/active-trip-lunch`,
+    link: `/waypoint?trip=${ACTIVE_TRIP_ID}`,
     recurrence: 'none',
     createdBy: alex.uid,
     createdAt: context.now,
