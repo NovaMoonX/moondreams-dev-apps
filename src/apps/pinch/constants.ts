@@ -150,7 +150,7 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
 
 /** What the slot on the page behind a share link says, by what was shared. */
-export const SHARE_BENEFITS_TITLE = 'With a Pinch account';
+export const SHARE_BENEFITS_TITLE = 'With an account';
 
 export const SHARE_SLOT_COPY: Record<
   'RECIPE' | 'MEAL',
