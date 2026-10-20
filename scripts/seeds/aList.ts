@@ -496,6 +496,7 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
         status: 'pending',
         channels: ['push'],
         relatedEntityPath: `apps/a-list/memberships/${alex.uid}/viewings/${PREVIEWS_VIEWING_ID}`,
+        link: '/a-list?tab=watchlist',
         recurrence: 'none',
         createdBy: alex.uid,
         createdAt: context.now,
