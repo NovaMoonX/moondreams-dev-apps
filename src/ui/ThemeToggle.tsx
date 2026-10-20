@@ -12,6 +12,7 @@ function ThemeToggle({ className }: { className?: string }) {
     <div className={join('flex items-center gap-2', className)}>
       <AppToggle
         size='sm'
+        aria-label='Dark mode'
         checked={isDarkMode}
         onCheckedChange={toggleTheme}
         className="after:absolute after:-inset-x-2.5 after:-inset-y-2.5 after:content-['']"
