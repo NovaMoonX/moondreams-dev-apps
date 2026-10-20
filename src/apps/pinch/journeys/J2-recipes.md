@@ -49,7 +49,7 @@ Taps were counted in the browser at 390×844. "+type" means a field the person t
 | 2 | header **New** → drawer "New recipe", 4 ways (`16-new-recipe-drawer.png`) | New | 2 | "Start from something you already have… You'll look it over before anything is saved." | Nothing to keep it for later from here |
 | 3 | "From text" screen (`17-from-text.png`) | From text, paste | 3 +paste | "An AI reads it and fills in the form. It isn't saved." | — |
 | 4 | reading → Recipe form (subview) | Fill in the recipe | 4 | "Filled in from your text. Take a look before you save." 2.2–5.2 s | The form opens on Title, Servings, Prep, Photo, Description and **Where it's from**. Ingredients start at y≈723, below the fold (`44-from-text-form.png`) |
-| 5 | fix the blocker | scroll, tap "grated ginger" row → "Choose another" → search → "Fresh ginger" → Done | 9 +type | footer "Add or choose the ingredient marked 'Not in your ingredients yet' to save." | The note doesn't take you to the row. "grated ginger" isn't matched to "Fresh ginger" (`45-unmatched-drawer.png`, `46-ginger-search.png`) (J1-S11 reproduced) |
+| 5 | fix the blocker | scroll, tap "grated ginger" row → "Choose another" → search → "Fresh ginger" → Done | 9 +type | footer "Add or choose the “New” ingredient to save." | The note doesn't take you to the row. "grated ginger" isn't matched to "Fresh ginger" (`45-unmatched-drawer.png`, `46-ginger-search.png`) (J1-S11 reproduced) |
 | 6 | Form footer | Add | **10** | back on the list, the row is the confirmation | — |
 
 The reading also filled "Keeping it" from "keeps 4 days in the fridge and freezes for 3 months". That's good. Source: none for text, as designed.

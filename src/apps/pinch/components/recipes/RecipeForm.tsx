@@ -329,7 +329,7 @@ function RecipeForm({
     }
     if (unresolvedCount > 0) {
       return {
-        text: `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “New” to save.`,
+        text: `Add or choose ${unresolvedCount === 1 ? 'the “New” ingredient' : `the ${unresolvedCount} “New” ingredients`} to save.`,
         target: '[data-ingredient-unresolved]',
       };
     }
@@ -898,7 +898,7 @@ function RecipeForm({
                   variant='secondary'
                   size='sm'
                   rounded='full'
-                  className="text-foreground! relative h-7 gap-1.5 px-3 text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                  className="text-foreground! relative h-auto min-h-7 gap-1.5 px-3 py-1 text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                   onClick={() => showBlocker(blocker.target ?? '')}
                 >
                   <ArrowUp className='h-3.5 w-3.5' aria-hidden='true' />
