@@ -1,20 +1,21 @@
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { getRegistryAppForPath, SITE_VERSION } from '@/lib/app';
+import { getRegistryAppForPath, rememberAppLocation, SITE_VERSION } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
 import { useHideOnScroll } from '@hooks/useHideOnScroll';
 import { useNetworkStatus } from '@hooks/useNetworkStatus';
 import { useReminderToasts } from '@hooks/useReminderToasts';
+import { useSwipeRight } from '@hooks/useSwipeRight';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
+import AppNavPanel from '@ui/AppNavPanel';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
-import ThemeToggle from '@ui/ThemeToggle';
 
 function LocationSync() {
   const navigate = useNavigate();
@@ -52,6 +53,12 @@ function LocationSync() {
     handleSetCurrentLocation(location.pathname);
   }, [navigate, location.pathname, setCurrentLocation, user]);
 
+  useEffect(() => {
+    if (user) {
+      rememberAppLocation(user.uid, location.pathname, location.search);
+    }
+  }, [user, location.pathname, location.search]);
+
   // The hub's manifest (index.html) is the only one, so the site installs as a single app; each mini-app only gets its own tab icon and title.
   useEffect(() => {
     const app = getRegistryAppForPath(location.pathname);
@@ -79,6 +86,11 @@ function Layout() {
   const isUpdateReady = useUpdateReady();
   const isBannerVisible = networkStatus !== null || isUpdateReady;
   const isHeaderHidden = useHideOnScroll();
+  const { key: locationKey } = useLocation();
+  const [navOpenKey, setNavOpenKey] = useState<string | null>(null);
+  // Tied to the location it was opened on, so Back or any navigation closes it.
+  const isNavOpen = navOpenKey === locationKey;
+  const swipeToOpen = useSwipeRight(() => setNavOpenKey(locationKey));
 
   useLayoutEffect(() => {
     document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
@@ -101,20 +113,24 @@ function Layout() {
       {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
       <div
         className={join(
-          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 max-md:h-16 max-md:py-2 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
+          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 max-[380px]:gap-2 py-4 max-md:h-16 max-md:py-2 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
           isBannerVisible ? 'top-9' : 'top-0',
           isHeaderHidden && (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
         )}
+        {...swipeToOpen}
       >
-        <div className='pointer-events-auto flex flex-1 items-center justify-start'>
-          <ThemeToggle className='flex items-center' />
+        <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
+          <AppNavPanel
+            isOpen={isNavOpen}
+            onOpenChange={(isOpen) => setNavOpenKey(isOpen ? locationKey : null)}
+          />
         </div>
 
-        <div className='pointer-events-auto flex flex-1 items-center justify-center'>
+        <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>
           <DevAccountSwitcher />
         </div>
 
-        <div className='pointer-events-auto flex flex-1 items-center justify-end'>
+        <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-end'>
           <AuthAvatar />
         </div>
       </div>
