@@ -537,7 +537,7 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
             uid={uid}
             autoFocus
             suggestions={{ caption: 'Still needs a price', ids: suggestedIds }}
-            resultsClassName='[@media(max-height:499px)]:max-h-32 [@media(max-height:499px)]:overflow-y-auto'
+            isCapped
             onPick={(ingredientId) => {
               setAdding(null);
               setNewIngredientId(ingredientId);

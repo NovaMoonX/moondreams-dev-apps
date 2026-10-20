@@ -181,7 +181,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             size='sm'
             aria-label='Home'
             title='Home'
-            className='max-sm:hidden'
+            className="relative max-sm:hidden after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
             onClick={() => navigate('/')}
           >
             <House className='h-4 w-4' />

@@ -165,7 +165,8 @@ interface ItemSearchProps {
   /** Rows of the person's own ingredients drawn under the field while it is empty; nothing is drawn when there are none. */
   suggestions?: ItemSuggestions;
   autoFocus?: boolean;
-  resultsClassName?: string;
+  /** Typed results scroll inside the room a sheet leaves under the field, so the field and the footer stay on screen. */
+  isCapped?: boolean;
   /** The field still takes typing, but no result can be picked. */
   isDisabled?: boolean;
 }
@@ -180,7 +181,7 @@ function ItemSearch({
   excludeIds = [],
   suggestions,
   autoFocus = false,
-  resultsClassName,
+  isCapped = false,
   isDisabled = false,
 }: ItemSearchProps) {
   const dispatch = useAppDispatch();
@@ -352,7 +353,13 @@ function ItemSearch({
               {noMatchLine}
             </p>
           )}
-          <ul className={join('divide-border divide-y', resultsClassName)}>
+          <ul
+            className={join(
+              'divide-border divide-y',
+              isCapped &&
+                'max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto [@media(max-height:499px)]:max-h-32',
+            )}
+          >
             {mealMatches.map((meal) => (
               <li key={meal.id}>
                 <PickRowShell
