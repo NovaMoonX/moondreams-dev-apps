@@ -228,3 +228,27 @@ button[class*='underline-offset-4'] {
 button[class*='transition-all'] {
   transition: none;
 }
+
+/* A `SideSheet` slides in from the left; the exit is a transition driven by the component. */
+@keyframes side-sheet-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes side-sheet-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.side-sheet-panel {
+  animation: side-sheet-in 200ms ease-out;
+}
+.side-sheet-scrim {
+  animation: side-sheet-fade-in 200ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-sheet-panel,
+  .side-sheet-scrim {
+    animation: none;
+  }
+}
