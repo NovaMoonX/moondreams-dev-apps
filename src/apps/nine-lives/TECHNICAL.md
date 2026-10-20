@@ -690,7 +690,7 @@ Path: `reminders/{reminderId}` — deliberately **not** under `apps/nine-lives`.
 
 ```typescript
 type NotificationChannel = 'push' | 'email'; // only 'push' implemented in MVP
-type ReminderStatus = 'pending' | 'sent' | 'cancelled';
+type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'expired';
 
 interface Reminder {
   id: string;
@@ -702,6 +702,7 @@ interface Reminder {
   status: ReminderStatus;
   channels: NotificationChannel[];
   relatedEntityPath?: string;
+  link: string | null; // where tapping the notification goes (`/nine-lives` for every Nine Lives reminder); older reminders lack the key
   createdBy: string;
   createdAt: number;
 }
