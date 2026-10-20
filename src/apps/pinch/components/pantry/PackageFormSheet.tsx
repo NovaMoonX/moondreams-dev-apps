@@ -347,6 +347,7 @@ function PackageFormSheet({
               uid={uid}
               onPick={handlePick}
               suggestions={{ caption: 'Bought lately', ids: suggestedIds }}
+              resultsClassName='[@media(max-height:499px)]:max-h-40 [@media(max-height:499px)]:overflow-y-auto'
               autoFocus
             />
           </div>
