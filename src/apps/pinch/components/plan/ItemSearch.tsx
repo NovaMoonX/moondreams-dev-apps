@@ -26,6 +26,7 @@ import {
   searchByName,
   searchIngredients,
 } from '@apps/pinch/utils/catalogSearch';
+import { getStockParts } from '@apps/pinch/utils/containers';
 import { MAX_PICK_SUGGESTIONS } from '@apps/pinch/utils/pickerSuggestions';
 import { getShopSection } from '@apps/pinch/utils/shopping';
 
@@ -372,26 +373,32 @@ function ItemSearch({
                 </PickRowShell>
               </li>
             ))}
-            {recipeMatches.map((recipe) => (
-              <li key={recipe.id}>
-                <PickRowShell
-                  chip={<PickChip>🍲</PickChip>}
-                  trailing={
-                    <span className='text-muted-foreground text-xs font-normal'>
-                      Recipe
-                    </span>
-                  }
-                  isDisabled={isDisabled}
-                  onClick={() => {
-                    setQuery('');
-                    onPickRecipe?.(recipe.id);
-                  }}
-                >
-                  <span className='truncate font-medium'>{recipe.title}</span>
-                  <StockLine summary={stockByRecipe.get(recipe.id)} />
-                </PickRowShell>
-              </li>
-            ))}
+            {recipeMatches.map((recipe) => {
+              const stock = stockByRecipe.get(recipe.id);
+              const isCompactRow =
+                isLandscape && (!stock || getStockParts(stock).length === 0);
+              return (
+                <li key={recipe.id}>
+                  <PickRowShell
+                    chip={<PickChip isCompact={isCompactRow}>🍲</PickChip>}
+                    trailing={
+                      <span className='text-muted-foreground text-xs font-normal'>
+                        Recipe
+                      </span>
+                    }
+                    isCompact={isCompactRow}
+                    isDisabled={isDisabled}
+                    onClick={() => {
+                      setQuery('');
+                      onPickRecipe?.(recipe.id);
+                    }}
+                  >
+                    <span className='truncate font-medium'>{recipe.title}</span>
+                    <StockLine summary={stock} />
+                  </PickRowShell>
+                </li>
+              );
+            })}
             {matches.map((ingredient) => (
               <li key={ingredient.id}>
                 <IngredientPickRow
