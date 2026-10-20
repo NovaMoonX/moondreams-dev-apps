@@ -18,17 +18,9 @@ if (self.__FIREBASE_CONFIG__?.projectId) {
   try {
     firebase.initializeApp(self.__FIREBASE_CONFIG__);
 
-    const messaging = firebase.messaging();
-
-    messaging.onBackgroundMessage((payload) => {
-      const { title, body } = payload.notification ?? {};
-
-      if (!title) {
-        return;
-      }
-
-      self.registration.showNotification(title, { body });
-    });
+    // Creating the instance is what registers the push listener. It shows a notification payload
+    // itself and opens its link on tap; showing it here too made two, and a hand-made one has no link.
+    firebase.messaging();
   } catch (error) {
     console.error('Firebase Messaging setup failed; push notifications disabled.', error);
   }
