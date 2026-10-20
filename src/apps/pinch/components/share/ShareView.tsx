@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -41,6 +41,13 @@ import {
 } from '@apps/pinch/utils/sharing';
 
 const SHORT_SCREEN_MAX_HEIGHT = 599;
+const LANDSCAPE_MIN_WIDTH_QUERY = '(min-width: 520px)';
+
+const subscribeToWidth = (onChange: () => void) => {
+  const list = window.matchMedia(LANDSCAPE_MIN_WIDTH_QUERY);
+  list.addEventListener('change', onChange);
+  return () => list.removeEventListener('change', onChange);
+};
 
 type BusyAction = 'create' | 'update' | 'renew' | 'stop';
 type Notice = 'updated' | 'renewed' | 'stopped';
@@ -96,9 +103,14 @@ function ShareView({
 }: ShareViewProps) {
   const dispatch = useAppDispatch();
   const { openSubview } = usePinchOverlay();
-  const { isAtLeast, isBelow } = useMediaQuery();
+  const isBelowLg = useMediaQuery().isBelow('lg');
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
-  const isLandscape = isShort && isAtLeast('sm') && isBelow('lg');
+  const isWideEnough = useSyncExternalStore(
+    subscribeToWidth,
+    () => window.matchMedia(LANDSCAPE_MIN_WIDTH_QUERY).matches,
+    () => false,
+  );
+  const isLandscape = isShort && isWideEnough && isBelowLg;
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const share = useAppSelector(selectShareBySource(kind, sourceId));
