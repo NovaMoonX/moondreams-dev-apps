@@ -43,6 +43,11 @@ through the default bucket, so in that case start the suite with
 `STORAGE_BUCKET_URL=moondreams-dev-apps.firebasestorage.app npm run emulators`; without it a cover
 uploaded in the app is "not found" by the functions and the seeded share's cover can't be copied.
 
+In a sandbox that sets `HTTPS_PROXY`, start the suite with the proxy variables unset
+(`env -u HTTPS_PROXY -u https_proxy npm run emulators`): firebase-tools sends its own localhost
+calls through the proxy and ignores `NO_PROXY`, so the suite stops at startup with `Error adding
+firestore function … request blocked`.
+
 While the emulators are in use, a thin strip pins to the top of the page: green when they're
 running and seeded, amber when they're running but empty (run `npm run seed:reset`), red when
 they can't be reached. It re-checks every few seconds while the tab is visible, and the offline
