@@ -47,6 +47,7 @@ export async function scheduleEntityReminders(
           scheduledFor: spec.scheduledFor,
           createdBy: uid,
           relatedEntityPath: spec.relatedEntityPath,
+          link: '/nine-lives',
           recurrence: spec.recurrence,
         });
 

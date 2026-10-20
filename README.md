@@ -13,6 +13,8 @@ A collection of mini-apps built to fit whatever felt useful, fun, or simply inte
 - 🎟️ **A-List Tracker** — a personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.
 - 🧂 **Pinch** — a calm, personal kitchen planner that keeps your ingredients, recipes, and meals on a calendar, with what everything costs and, whenever you want it, the nutrition.
 
+The header's menu (the hamburger, top left) slides in every app you can open, and apps that keep their place in the URL (A-List's tabs, Waypoint's trips) reopen where you last left them. Swipe right on the header to open it and left to close.
+
 ## Quick start
 
 ```bash
@@ -126,7 +128,7 @@ This is a one-time, per-function operational step — run it after first deployi
 
 ## PWAs & push notifications
 
-The site installs as **one** Progressive Web App: `index.html` links `public/manifest-main.json` (`id`/`start_url`/`scope` `/`; its installed icon is `public/logos/logo-pwa.svg`, with PNG copies `pwa-icon-192.png`, `pwa-icon-512.png` and a padded `pwa-icon-maskable-512.png` for Android and `apple-touch-icon.png` for iOS, because phones don't take an SVG icon when installing; regenerate the PNGs from the SVG if it changes), and every route, mini-apps included, uses it. Mini-apps are not installable on their own: several PWAs on one origin with nested scopes aren't supported by Chrome on Android, and a root app's scope covers every mini-app URL anyway, so people reach a mini-app from the installed hub. Don't add per-app manifests or `scope_extensions`. Because the hub is installed, its ways home (header icon, avatar menu "Home", entry and error screens) stay visible everywhere. An installed window (`IS_INSTALLED_APP` in `src/utils/pwaUtils.ts`: `display-mode` standalone, minimal-ui or window-controls-overlay, or iOS `navigator.standalone`) shows no scrollbar anywhere, at any width (`data-installed-app` on `<html>`, set in `main.tsx`, hides them with `!important` in `src/index.css`); scrolling itself is unchanged. `src/ui/Layout.tsx` swaps only the tab icon and title to the current mini-app's `public/logos/by-app/logo-<app-id>.svg` (the hub keeps its light/dark logos from `index.html`).
+The site installs as **one** Progressive Web App: `index.html` links `public/manifest-main.json` (`id`/`start_url`/`scope` `/`; its installed icon is `public/logos/logo-pwa.svg`, with PNG copies `pwa-icon-192.png`, `pwa-icon-512.png` and a padded `pwa-icon-maskable-512.png` for Android and `apple-touch-icon.png` for iOS, because phones don't take an SVG icon when installing; regenerate the PNGs from the SVG if it changes), and every route, mini-apps included, uses it. Mini-apps are not installable on their own: several PWAs on one origin with nested scopes aren't supported by Chrome on Android, and a root app's scope covers every mini-app URL anyway, so people reach a mini-app from the installed hub. Don't add per-app manifests or `scope_extensions`. Because the hub is installed, its ways home (the menu's Home row, header icon, entry and error screens) stay visible everywhere. An installed window (`IS_INSTALLED_APP` in `src/utils/pwaUtils.ts`: `display-mode` standalone, minimal-ui or window-controls-overlay, or iOS `navigator.standalone`) shows no scrollbar anywhere, at any width (`data-installed-app` on `<html>`, set in `main.tsx`, hides them with `!important` in `src/index.css`); scrolling itself is unchanged. `src/ui/Layout.tsx` swaps only the tab icon and title to the current mini-app's `public/logos/by-app/logo-<app-id>.svg` (the hub keeps its light/dark logos from `index.html`).
 
 Despite that, there is only **one Workbox service worker** for the whole origin (registered once in `src/main.tsx`, `scope: "/"`), shared by the whole site, which is a single installed app. This matters for anything that touches the service worker:
 
@@ -153,6 +155,13 @@ Problems we've hit before, so we don't hit them again.
 - **Cause:** the function queries `reminders` for `status == 'pending'` and `scheduledFor <= now + 5 min`. Equality on one field plus a range on another needs a composite index, and `firestore.indexes.json` was empty. The emulator never enforces indexes, so nothing failed locally.
 - **Fix:** the index is in `firestore.indexes.json` and deploys with `npm run fb:deploy:smart` on merge. It builds for a few minutes after deploy (Firebase console → Firestore → Indexes shows Building, then Enabled); the next 5-minute run after that succeeds. `npm run check:indexes` now fails any PR with a query that needs an index the file doesn't have.
 - **Tell it apart:** an index error names `requires an index` with a console link; a missing-secret or permission error does not.
+
+### Old reminders arrive all at once, and their in-app toasts come back after every reload
+
+- **Symptom:** right after the missing-index fix, phones got push reminders for events from a week earlier, and in-app reminder toasts reappeared on every page reload even after being swiped away.
+- **Cause:** two things. While the index was missing nothing was sent, so every reminder since stayed `pending` and the first working run sent them all. And the toast hook only skipped reminders that were already `sent` when it mounted, but the first Firestore snapshot arrives after mount, so every `sent` reminder looked newly sent on each reload. Swiping a toast away only removes it from the page; it never changes the reminder.
+- **Fix:** `sendScheduledReminders` marks a reminder more than 30 minutes overdue `expired` instead of sending it (a yearly one rolls forward), and `useReminderToasts` only toasts a reminder it saw as not yet sent.
+- **Tell it apart:** a late push for something old is the function; a toast that returns after reload is the hook. Neither touches a reminder that is still ahead.
 
 ### An app shows empty or first-run screens for an existing account on one device
 
