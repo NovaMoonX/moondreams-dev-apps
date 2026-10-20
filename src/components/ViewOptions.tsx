@@ -146,7 +146,16 @@ function ViewOptions({
             </div>
           }
         >
-          <div className='space-y-4 pb-4'>{children}</div>
+          <div
+            className={join(
+              'pb-4',
+              isBelow('sm')
+                ? 'space-y-4'
+                : 'grid grid-cols-2 items-start gap-x-8 gap-y-4',
+            )}
+          >
+            {children}
+          </div>
         </Drawer>
       </>
     );

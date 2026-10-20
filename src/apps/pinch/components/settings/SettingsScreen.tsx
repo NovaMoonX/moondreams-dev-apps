@@ -31,7 +31,7 @@ function SettingsScreen({ uid }: SettingsScreenProps) {
       className='space-y-4 outline-none'
     >
       <SectionHeader title='Settings' />
-      <div className='space-y-5 lg:grid lg:grid-cols-2 lg:items-start lg:space-y-0 lg:gap-x-6'>
+      <div className='space-y-5 md:grid md:grid-cols-2 md:items-start md:space-y-0 md:gap-x-6'>
         <div className='space-y-5'>
           <NutritionSection uid={uid} />
           {loadError !== null ? (
