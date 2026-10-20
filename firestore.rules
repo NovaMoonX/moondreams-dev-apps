@@ -3251,11 +3251,18 @@ service cloud.firestore {
     // own reminders. Only the scheduled Cloud Function (Admin SDK, bypasses
     // rules) may mark one `sent` or roll a recurring one to its next date.
     match /reminders/{reminderId} {
+      // A path inside the app, never another site: a notification opens it on tap.
+      function isReminderLinkValid(link) {
+        return link == null
+          || (link is string && link.size() <= 300 && link.matches('/[a-z0-9].*'));
+      }
+
       allow read: if request.auth != null
         && request.auth.uid in resource.data.targetUids;
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy
-        && request.auth.uid in request.resource.data.targetUids;
+        && request.auth.uid in request.resource.data.targetUids
+        && isReminderLinkValid(request.resource.data.get('link', null));
       allow update: if request.auth != null
         && request.auth.uid in resource.data.targetUids
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
