@@ -4,7 +4,7 @@ import type { DevicePushState, TurnOnResult } from './devicePush';
 export const getDeviceNotificationsText = (state: DevicePushState | null) => {
   if (state === null) return '';
   if (state === 'on') {
-    return 'This device can get reminders from Moondreams apps. Turn it off to stop them all here.';
+    return 'Moondreams apps can send reminders here. Turn it off to stop them all.';
   }
   if (state === 'blocked') {
     return 'This site is blocked from sending notifications. Allow them in your browser’s site settings, then come back.';
@@ -12,7 +12,7 @@ export const getDeviceNotificationsText = (state: DevicePushState | null) => {
   if (state === 'unsupported') {
     return 'This browser can’t show reminders. On an iPhone or iPad, add this site to your Home Screen and open it from there.';
   }
-  return 'Allow notifications so Moondreams apps can nudge you when something needs you, even with the app closed.';
+  return 'So Moondreams apps can nudge you, even when they are closed.';
 };
 
 /** The note under a failed attempt to turn notifications on; nothing for a closed question, which changed nothing. */

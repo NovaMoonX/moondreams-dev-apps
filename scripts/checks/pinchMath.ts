@@ -10137,7 +10137,7 @@ assert.equal(
   );
   assert.match(
     stgDeviceText('off'),
-    /^Allow notifications so Moondreams apps can nudge you/,
+    /^So Moondreams apps can nudge you/,
     'the reason to allow comes with the switch, in the site’s words and not one app’s',
   );
   assert.match(

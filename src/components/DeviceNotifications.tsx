@@ -3,8 +3,6 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import AppToggle from '@/components/AppToggle';
-import SettingsGroup from '@/components/SettingsGroup';
-import SettingsRow from '@/components/SettingsRow';
 import {
   turnOffDevicePush,
   turnOnDevicePush,
@@ -49,28 +47,25 @@ function DeviceNotifications({ uid }: DeviceNotificationsProps) {
   };
 
   return (
-    <SettingsGroup title='Notifications'>
-      <SettingsRow
-        icon='🔔'
-        title='Notifications on this device'
-        description={
-          <>
-            {getDeviceNotificationsText(device)}
-            {failure && (
-              <span className='text-destructive mt-1 block'>{failure}</span>
-            )}
-          </>
-        }
-        control={
-          <AppToggle
-            aria-label='Notifications on this device'
-            checked={isOn}
-            disabled={!canToggle}
-            onCheckedChange={(isChecked) => void handleChange(isChecked)}
-          />
-        }
+    <div className='border-border flex items-start gap-3 border-t pt-3'>
+      <div className='min-w-0 flex-1'>
+        <p className='text-foreground text-sm font-medium'>
+          Notifications on this device
+        </p>
+        <p className='text-muted-foreground text-xs text-pretty'>
+          {getDeviceNotificationsText(device)}
+          {failure && (
+            <span className='text-destructive mt-1 block'>{failure}</span>
+          )}
+        </p>
+      </div>
+      <AppToggle
+        aria-label='Notifications on this device'
+        checked={isOn}
+        disabled={!canToggle}
+        onCheckedChange={(isChecked) => void handleChange(isChecked)}
       />
-    </SettingsGroup>
+    </div>
   );
 }
 
