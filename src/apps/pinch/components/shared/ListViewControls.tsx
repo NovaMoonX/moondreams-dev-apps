@@ -9,38 +9,78 @@ import {
   type ListViewOptions,
 } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
 import {
   selectNutritionLoadError,
+  selectPinchSettingsLoadError,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 
 const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
 
+interface NumbersDoorProps {
+  isAnyMetricOn: boolean;
+}
+
+/** The way from a View options sheet to the numbers Pinch shows, which are chosen once in Settings; until one is on it stands where the screen's own macros switch would be. */
+function NumbersDoor({ isAnyMetricOn }: NumbersDoorProps) {
+  const { showSettingsTab } = usePinchOverlay();
+
+  return (
+    <ActionRow
+      icon='🔥'
+      label={isAnyMetricOn ? 'Your numbers' : 'Calories and macros'}
+      subtitle={
+        isAnyMetricOn
+          ? 'Choose which in Settings'
+          : 'Switch them on in Settings'
+      }
+      hasChevron
+      onClick={showSettingsTab}
+    />
+  );
+}
+
 interface CalendarViewOptionsProps {
+  uid: string;
   options: ListViewOptions;
   customizedCount: number;
   onChange: (patch: Partial<ListViewOptions>) => void;
 }
 
-/** The Calendar's "View options": its one row switch, and the way to the stat tiles and numbers, which are chosen in Settings. */
+/** The Calendar's "View options": its stat tiles (saved with the account), its prices (kept on this device), and the door to the numbers, which are chosen in Settings. */
 export function CalendarViewOptions({
+  uid,
   options,
   customizedCount,
   onChange,
 }: CalendarViewOptionsProps) {
-  const { showSettingsTab } = usePinchOverlay();
+  const { settings, save } = usePinchSettings(uid);
+  const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
+  const hasNumbersLoadError = useAppSelector(selectNutritionLoadError) !== null;
+  const hasSettingsLoadError =
+    useAppSelector(selectPinchSettingsLoadError) !== null;
 
   return (
     <ViewOptions
       isQuiet
-      customizedCount={customizedCount}
-      onReset={() =>
-        onChange({ showPrices: DEFAULT_LIST_VIEW_OPTIONS.showPrices })
-      }
+      customizedCount={customizedCount + (settings.calendarStats ? 1 : 0)}
+      onReset={() => {
+        onChange({ showPrices: DEFAULT_LIST_VIEW_OPTIONS.showPrices });
+        if (!hasSettingsLoadError) void save({ calendarStats: false });
+      }}
     >
       <FilterSection title='On the calendar'>
         <div className='divide-border divide-y'>
+          {!hasSettingsLoadError && (
+            <ViewOptionSwitch
+              label='Show stats'
+              description='The total, averages and daily nutrition, as tiles'
+              checked={settings.calendarStats}
+              onCheckedChange={(calendarStats) => void save({ calendarStats })}
+            />
+          )}
           <ViewOptionSwitch
             label='Show prices'
             description='On each meal in the Week view'
@@ -49,13 +89,7 @@ export function CalendarViewOptions({
           />
         </div>
       </FilterSection>
-      <ActionRow
-        icon='📊'
-        label='Stats and numbers'
-        subtitle='Choose them in Settings'
-        hasChevron
-        onClick={showSettingsTab}
-      />
+      {!hasNumbersLoadError && <NumbersDoor isAnyMetricOn={isAnyMetricOn} />}
     </ViewOptions>
   );
 }
@@ -85,7 +119,6 @@ function ListViewControls({
   isQuiet = false,
   className,
 }: ListViewControlsProps) {
-  const { showSettingsTab } = usePinchOverlay();
   const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
   const hasNumbersLoadError = useAppSelector(selectNutritionLoadError) !== null;
 
@@ -130,19 +163,7 @@ function ListViewControls({
           />
         </FilterSection>
       )}
-      {!hasNumbersLoadError && (
-        <ActionRow
-          icon='🔥'
-          label={isAnyMetricOn ? 'Your numbers' : 'Calories and macros'}
-          subtitle={
-            isAnyMetricOn
-              ? 'Choose which in Settings'
-              : 'Switch them on in Settings'
-          }
-          hasChevron
-          onClick={showSettingsTab}
-        />
-      )}
+      {!hasNumbersLoadError && <NumbersDoor isAnyMetricOn={isAnyMetricOn} />}
     </ViewOptions>
   );
 }

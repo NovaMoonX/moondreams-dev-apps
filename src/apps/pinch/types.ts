@@ -141,7 +141,7 @@ export interface PinchReminderSettings {
   timeZone: string | null;
 }
 
-/** The person's own choices, at `apps/pinch/settings/{uid}`: reminders and how long a new box keeps. Created by their first change; until then the defaults apply and nothing is stored. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
+/** The person's own choices, at `apps/pinch/settings/{uid}`: reminders, how long a new box keeps and whether the Calendar draws its stat tiles. Created the first time Pinch opens with the defaults, or by their first change. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
 export interface PinchSettings {
   /** Days a box starts with in the fridge; null is the built-in number. */
   fridgeDays: number | null;
@@ -149,6 +149,8 @@ export interface PinchSettings {
   freezerDays: number | null;
   /** Whether a new recipe's Photo drawer searches the web with its title for pictures to pick. A document written before this key lacks it, which reads as true. */
   suggestPhotos: boolean;
+  /** Whether the Calendar draws its stat tiles (the total, the averages and the daily nutrition) above the week or month. Saved with the account, so it follows the person to another device. A document written before this key lacks it, which reads as false. */
+  calendarStats: boolean;
   reminders: PinchReminderSettings;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */

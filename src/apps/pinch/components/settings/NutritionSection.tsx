@@ -20,7 +20,7 @@ interface NutritionSectionProps {
   uid: string;
 }
 
-/** Which numbers Pinch shows and whether the Calendar draws its stat tiles. */
+/** Which numbers Pinch shows on every screen that has them. */
 function NutritionSection({ uid }: NutritionSectionProps) {
   const dispatch = useAppDispatch();
   const store = useStore<RootState>();
@@ -29,7 +29,6 @@ function NutritionSection({ uid }: NutritionSectionProps) {
   const loadError = useAppSelector(selectNutritionLoadError);
   const recipes = useListViewOptions(uid, 'recipes');
   const ingredients = useListViewOptions(uid, 'ingredients');
-  const calendar = useListViewOptions(uid, 'calendar');
 
   const handleToggle = async (metric: NutritionMetric, isOn: boolean) => {
     const isFirst =
@@ -79,18 +78,6 @@ function NutritionSection({ uid }: NutritionSectionProps) {
           />
         ))
       )}
-      <SettingsRow
-        icon='📊'
-        title='Calendar stats'
-        description='Total, average per fully priced meal and daily nutrition, as tiles. Kept on this device.'
-        control={
-          <AppToggle
-            aria-label='Show stats on the Calendar'
-            checked={calendar.options.showStats}
-            onCheckedChange={(showStats) => calendar.update({ showStats })}
-          />
-        }
-      />
     </SettingsGroup>
   );
 }

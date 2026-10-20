@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 import { useAppDispatch } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { ensurePinchSettings } from '@apps/pinch/store/actions/pinchSettingsActions';
 import {
   startCollectionsListener,
   startContainersListener,
@@ -311,9 +312,16 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
         ),
     );
 
+    let hasAskedForSettings = false;
     const unsubscribePinchSettings = startPinchSettingsListener(
       uid,
-      (settings) => dispatch(setPinchSettings(settings)),
+      (settings) => {
+        dispatch(setPinchSettings(settings));
+        if (settings === null && !hasAskedForSettings) {
+          hasAskedForSettings = true;
+          void dispatch(ensurePinchSettings(uid));
+        }
+      },
       (error) => {
         console.error('Pinch settings listener failed', error);
         dispatch(
