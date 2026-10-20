@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChefHat,
   Refrigerator,
+  Settings,
   ShoppingBasket,
 } from 'lucide-react';
 
@@ -23,9 +24,10 @@ const TAB_ICONS: Record<PinchTab, ReactNode> = {
   recipes: <ChefHat className='h-5 w-5' />,
   kitchen: <Refrigerator className='h-5 w-5' />,
   shopping: <ShoppingBasket className='h-5 w-5' />,
+  settings: <Settings className='h-5 w-5' />,
 };
 
-/** A floating pill at the bottom of a phone, as wide as its four tabs; from `lg` up the same tabs stand in a rail on the left edge. */
+/** A floating pill at the bottom of a phone, as wide as its five tabs; from `lg` up the same tabs stand in a rail on the left edge. */
 function PinchNav({ value, onChange }: PinchNavProps) {
   return (
     <nav
@@ -45,7 +47,7 @@ function PinchNav({ value, onChange }: PinchNavProps) {
                 aria-current={isSelected ? 'page' : undefined}
                 onClick={() => onChange(tab)}
                 className={join(
-                  'h-auto min-w-16 flex-col gap-0.5 rounded-full! px-2.5! py-2 text-[11px] font-medium focus:outline-transparent! sm:min-w-20 sm:px-4! lg:min-w-16 lg:rounded-2xl!',
+                  'h-auto min-w-[3.2rem] flex-col gap-0.5 rounded-full! px-1! py-2 text-[11px] font-medium focus:outline-transparent! sm:min-w-20 sm:px-4! lg:min-w-16 lg:rounded-2xl!',
                   isSelected
                     ? 'bg-accent text-foreground! font-semibold'
                     : 'text-muted-foreground!',

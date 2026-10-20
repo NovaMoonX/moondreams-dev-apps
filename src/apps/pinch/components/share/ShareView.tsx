@@ -298,7 +298,7 @@ function ShareView({
 
   const openSharedLinks = () => {
     onClose?.();
-    openSubview({ kind: 'shares', fromSheet: true });
+    openSubview({ kind: 'shares' });
   };
 
   const getView = (): { body: ReactNode; footer: ReactNode } => {

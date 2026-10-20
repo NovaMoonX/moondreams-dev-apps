@@ -4265,8 +4265,8 @@ assert.deepEqual(
       'recipes',
     ),
   ],
-  [false, false, true, false, false, true, false, 0, 1, 0],
-  "the Calendar's stats start off, a choice stored before the switch existed or a non-boolean reads as off, the old averages choice neither turns them on nor survives a write, and turning them on counts as a change on the Calendar only",
+  [false, false, true, false, false, true, false, 0, 0, 0],
+  "the Calendar's stats start off, a choice stored before the switch existed or a non-boolean reads as off, the old averages choice neither turns them on nor survives a write, and turning them on counts as a change on no View options sheet, since Settings owns that switch",
 );
 assert.deepEqual(
   [

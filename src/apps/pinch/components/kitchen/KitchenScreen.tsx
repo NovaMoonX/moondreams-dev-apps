@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Plus, Settings, Store, Tag } from 'lucide-react';
+import { Plus, Store, Tag } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
@@ -44,7 +44,6 @@ import {
   selectIngredientsById,
   selectProducts,
   selectProductsById,
-  selectRecipes,
   selectContainersLoadError,
   selectPackagesLoadError,
   selectShowNutrition,
@@ -114,7 +113,6 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
       state.pinch.packages.items.length > 0 ||
       selectPackagesLoadError(state) !== null,
   );
-  const hasRecipes = useAppSelector(selectRecipes).length > 0;
   const hasStoresOrPrices = storeCount > 0 || productCount > 0;
   const trimmed = query.trim();
   const yours = useMemo(
@@ -267,13 +265,6 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
                   icon={<Store className='h-4 w-4' aria-hidden='true' />}
                   label='Stores & prices'
                   onClick={() => openSubview({ kind: 'products' })}
-                />
-              )}
-              {(hasRecipes || hasPrepared || hasPantry) && (
-                <HeaderIconButton
-                  icon={<Settings className='h-4 w-4' aria-hidden='true' />}
-                  label='Settings'
-                  onClick={() => openSubview({ kind: 'settings' })}
                 />
               )}
               <Button

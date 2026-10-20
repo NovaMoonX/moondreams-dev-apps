@@ -20,7 +20,7 @@ import WeekView from '@apps/pinch/components/calendar/WeekView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
-import { NutritionViewOptions } from '@apps/pinch/components/shared/ListViewControls';
+import { CalendarViewOptions } from '@apps/pinch/components/shared/ListViewControls';
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import {
   CALENDAR_VIEW_LABELS,
@@ -210,11 +210,10 @@ function CalendarScreen({
         action={
           hasRecipes || hasSavedMeals ? (
             <div className='flex items-center gap-3'>
-              <NutritionViewOptions
+              <CalendarViewOptions
                 options={viewOptions.options}
                 customizedCount={viewOptions.customizedCount}
                 onChange={viewOptions.update}
-                onReset={viewOptions.reset}
               />
               <Button
                 type='button'

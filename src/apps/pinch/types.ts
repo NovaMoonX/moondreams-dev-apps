@@ -1,4 +1,9 @@
-export type PinchTab = 'calendar' | 'recipes' | 'kitchen' | 'shopping';
+export type PinchTab =
+  | 'calendar'
+  | 'recipes'
+  | 'kitchen'
+  | 'shopping'
+  | 'settings';
 
 export type Unit =
   | 'G'
@@ -222,10 +227,8 @@ export type PinchSubview =
   /** Stores & prices: every price grouped under the store it is at, and the stores themselves. */
   | { kind: 'products' }
   | { kind: 'sources' }
-  /** Reminders and how long a new box keeps. */
-  | { kind: 'settings' }
-  /** Every link the person shared, to copy, update or stop; `fromSheet` when a Share view's cap line opened it, so back returns to the screen under it and not to Settings. */
-  | { kind: 'shares'; fromSheet?: boolean }
+  /** Every link the person shared, to copy, update or stop; back returns to the screen it was opened from. */
+  | { kind: 'shares' }
   /** The ingredients the person has on hand, grouped, each package with its own amount and date; `ingredientId` opens that ingredient's packages first. */
   | { kind: 'pantry'; ingredientId?: string }
   /** Fridge & freezer; `place` is the one a door named, shown first. */

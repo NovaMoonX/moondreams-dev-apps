@@ -9,7 +9,7 @@ export interface ListViewOptions {
   basis: NutritionBasis;
   /** The fridge and freezer line on recipe and meal rows; ingredient rows ignore it. */
   showStock: boolean;
-  /** The Calendar's tile row of the period's total, averages and daily nutrition; the lists ignore it. */
+  /** The Calendar's tile row of the period's total, averages and daily nutrition; the lists ignore it. Settings switches it, so it never counts as a customized view option. */
   showStats: boolean;
 }
 
@@ -70,8 +70,6 @@ export const countCustomizedViewOptions = (
     list === 'ingredients' && options.basis !== DEFAULT_LIST_VIEW_OPTIONS.basis,
     list === 'recipes' &&
       options.showStock !== DEFAULT_LIST_VIEW_OPTIONS.showStock,
-    list === 'calendar' &&
-      options.showStats !== DEFAULT_LIST_VIEW_OPTIONS.showStats,
   ].filter(Boolean).length;
 
 /** How a list's rows look, remembered per person and per list in this browser. */
