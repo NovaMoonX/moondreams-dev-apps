@@ -3,10 +3,12 @@ import { getWordSimilarity } from '@/utils/stringUtils';
 const MIN_SIMILARITY = 0.82;
 const MIN_TYPO_WORD_LENGTH = 6;
 const ACRONYM = /^[A-Z]{2,4}$/;
+const INNER_CAPITAL = /\p{Ll}\p{Lu}/u;
 const LETTERS = /^\p{L}+$/u;
 
 const toSingular = (word: string) => {
   if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+  if (word.length > 4 && word.endsWith('ie')) return `${word.slice(0, -2)}y`;
   if (word.length > 4 && /(ches|shes|oes|ses|xes)$/.test(word))
     return word.slice(0, -2);
   if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss'))
@@ -14,13 +16,14 @@ const toSingular = (word: string) => {
   return word;
 };
 
-/** The form two names are compared in: accents, case and punctuation off, one space between words, English plurals folded only when asked. */
+/** The form two names are compared in: accents on Latin letters, case and punctuation off, one space between words, English plurals folded only when asked. Marks on other scripts (a dakuten, a vowel sign) tell words apart and stay. */
 export const toComparable = (text: string, foldPlurals = false) =>
   text
     .normalize('NFD')
-    .replace(/\p{M}/gu, '')
+    .replace(/(?<=\p{Script=Latin})\p{M}+/gu, '')
+    .normalize('NFC')
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter(Boolean)
     .map((word) => (foldPlurals ? toSingular(word) : word))
@@ -31,7 +34,7 @@ export interface DisplayCaseOptions {
   style?: 'sentence' | 'title';
   /** Keeps a short all-capitals word such as BBQ as written, when the rest of the text has lowercase letters (a name typed in capitals is recased whole). */
   keepAcronyms?: boolean;
-  /** Leaves text that mixes upper and lower case as written ("KitKat bar"): only text in one case is recased. */
+  /** Leaves a word with a capital inside it as written ("KitKat", "iPhone"); every other word is recased. */
   keepMixedCase?: boolean;
 }
 
@@ -49,16 +52,24 @@ export const toDisplayCase = (
 ) => {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const hasLower = /\p{Ll}/u.test(text);
-  const hasUpper = /\p{Lu}/u.test(text);
-  if (keepMixedCase && hasLower && hasUpper) return words.join(' ');
+  const isKept = (word: string) => keepMixedCase && INNER_CAPITAL.test(word);
 
   const recased = words.map((word) =>
-    keepAcronyms && hasLower && ACRONYM.test(word) ? word : word.toLowerCase(),
+    isKept(word) || (keepAcronyms && hasLower && ACRONYM.test(word))
+      ? word
+      : word.toLowerCase(),
   );
-  const cased = style === 'title' ? recased.map(capitalize) : recased;
+  const cased =
+    style === 'title'
+      ? recased.map((word, index) =>
+          isKept(words[index]) ? word : capitalize(word),
+        )
+      : recased;
   const joined = cased.join(' ');
 
-  return style === 'title' ? joined : capitalize(joined);
+  if (style === 'title' || isKept(words[0])) return joined;
+
+  return capitalize(joined);
 };
 
 const sortedWords = (text: string) => text.split(' ').sort().join(' ');
@@ -102,8 +113,10 @@ const isTypoOf = (known: string, target: string) => {
 export interface OptionMatcherConfig<T> {
   /** The names an option answers to, its label first and then any aliases; a list of plain strings needs none. */
   names?: (option: T) => readonly string[];
-  /** Words that describe an option without changing which one it is ("fresh", "large"), dropped from both sides before comparing. A word that makes another option ("ground", "whole") is not one. */
+  /** Words that describe an option without changing which one it is, dropped from both the typed value and the options' names before comparing. */
   ignoreWords?: ReadonlySet<string>;
+  /** Words a typed or read value may carry that the option it means does not ("fresh" in "fresh basil"), dropped from the typed value only, so an option whose own name has the word ("Ground pork", "Canned diced tomatoes") is never reached by a value without it. Prefer this to `ignoreWords`. */
+  ignoreTypedWords?: ReadonlySet<string>;
   /** Runs on every name before it is compared, for what only this list needs removed ("bone-in" from a food). */
   prepare?: (text: string) => string;
   /** English plurals compare as one word. Off by default, since a person's, pet's or place's name is not a plural. */
@@ -126,13 +139,14 @@ interface KnownName {
   core: string;
 }
 
-/** Turns a typed or read value into one of a list's known options, or a custom option written like the rest. Earlier options win a tie and option objects are cached by identity. Not for search boxes or ids. */
+/** Turns a typed or read value into one of a list's known options, or a custom option written like the rest. Two options that fit a value equally well are ambiguous, so neither is picked unless `prefer` names one; option objects are cached by identity. Not for search boxes or ids. */
 export function createOptionMatcher<T = string>(
   config: OptionMatcherConfig<T> = {},
 ) {
   const {
     names = (option: T) => [String(option)],
     ignoreWords,
+    ignoreTypedWords,
     prefer,
     prepare = (text: string) => text,
     foldPlurals = false,
@@ -142,23 +156,29 @@ export function createOptionMatcher<T = string>(
   } = config;
   const namesByOption = new WeakMap<object, KnownName[]>();
 
-  const analyze = (text: string): KnownName => {
+  const analyze = (text: string, isTyped = false): KnownName => {
     const words = toComparable(prepare(text), foldPlurals)
       .split(' ')
       .filter(Boolean);
 
     return {
       full: words.join(' '),
-      core: words.filter((word) => !ignoreWords?.has(word)).join(' '),
+      core: words
+        .filter(
+          (word) =>
+            !ignoreWords?.has(word) &&
+            !(isTyped && ignoreTypedWords?.has(word)),
+        )
+        .join(' '),
     };
   };
 
-  const comparable = (text: string) => analyze(text).core;
+  const comparable = (text: string) => analyze(text, true).core;
 
   const getKnownNames = (option: T) => {
     const compute = () =>
       names(option)
-        .map(analyze)
+        .map((name) => analyze(name))
         .filter(({ full }) => full !== '');
     if (typeof option !== 'object' || option === null) return compute();
     const cached = namesByOption.get(option);
@@ -169,7 +189,7 @@ export function createOptionMatcher<T = string>(
   };
 
   const match = (value: string, options: readonly T[]): T | null => {
-    const target = analyze(value);
+    const target = analyze(value, true);
     if (target.full === '') return null;
 
     const known = options.map((option) => ({
@@ -180,8 +200,6 @@ export function createOptionMatcher<T = string>(
       known
         .filter((entry) => entry.names.some(isSame))
         .map((entry) => entry.option);
-    const pickPreferred = (candidates: T[]) =>
-      candidates.find((option) => prefer?.(option)) ?? candidates[0];
     const pickSure = (candidates: T[]) => {
       if (candidates.length === 1) return candidates[0];
       const preferred = prefer ? candidates.filter(prefer) : [];
@@ -190,7 +208,7 @@ export function createOptionMatcher<T = string>(
     };
 
     const exact = fits((name) => name.full === target.full);
-    if (exact.length > 0) return pickPreferred(exact);
+    if (exact.length > 0) return pickSure(exact);
     if (target.core === '') return null;
 
     const sameCore = fits((name) => name.core === target.core);

@@ -33,6 +33,33 @@ assert.equal(
   '日本 ねこ',
   'letters of any script are kept',
 );
+assert.notEqual(
+  toComparable('ゴロ'),
+  toComparable('コロ'),
+  'a Japanese dakuten tells two names apart, so it is not folded like an accent',
+);
+assert.notEqual(
+  toComparable('कामल'),
+  toComparable('कमल'),
+  'a Devanagari vowel sign tells two names apart',
+);
+assert.equal(
+  toComparable('Mochí') === toComparable('Mochi') &&
+    toComparable('Léo') === toComparable('Leo') &&
+    toComparable('jalapeño') === 'jalapeno',
+  true,
+  'accents on Latin letters still fold',
+);
+assert.equal(
+  toComparable('cookies', true),
+  toComparable('cookie', true),
+  'a plural that ends in -ies folds to the same word as its -ie singular',
+);
+assert.equal(
+  toComparable('berries', true),
+  toComparable('berry', true),
+  'and to its -y singular',
+);
 
 assert.equal(toDisplayCase('chicken THIGH'), 'Chicken thigh');
 assert.equal(toDisplayCase('maine   coon', { style: 'title' }), 'Maine Coon');
@@ -43,6 +70,26 @@ assert.equal(
   'a short all-capitals word is kept on request',
 );
 assert.equal(toDisplayCase('   '), '');
+assert.equal(
+  toDisplayCase('Olive Oil', { keepMixedCase: true }),
+  'Olive oil',
+  'a word with no capital inside it is recased even when the text mixes cases',
+);
+assert.equal(
+  toDisplayCase('KitKat bar', { keepMixedCase: true }),
+  'KitKat bar',
+  'a word with a capital inside it is kept as written',
+);
+assert.equal(
+  toDisplayCase('iPhone CASE', { keepMixedCase: true }),
+  'iPhone case',
+  'and the first word is not capitalized over it',
+);
+assert.equal(
+  toDisplayCase('pickled GINGER', { keepMixedCase: true, keepAcronyms: true }),
+  'Pickled ginger',
+  'a long all-capitals word is recased',
+);
 
 const list = named(
   'Chicken thigh',
@@ -93,8 +140,24 @@ assert.equal(
 const twice = named('Cat food', 'Cat food');
 assert.equal(
   idOf('cat food', twice),
-  'id0',
-  'the earlier option wins an exact tie',
+  null,
+  'two options with the same name are ambiguous, so neither is picked',
+);
+const bothLuna = createOptionMatcher<{
+  id: string;
+  name: string;
+  mine: boolean;
+}>({
+  names: (option) => [option.name],
+  prefer: (option) => option.mine,
+});
+assert.equal(
+  bothLuna.match('luna', [
+    { id: 'a', name: 'Luna', mine: false },
+    { id: 'b', name: 'Luna', mine: true },
+  ])?.id,
+  'b',
+  'a preferred option settles an exact tie',
 );
 
 const foods = createOptionMatcher<{
@@ -228,6 +291,31 @@ const spice = (id: string, name: string, isCustom = false) => ({
   name,
   isCustom,
 });
+
+const typedOnly = createOptionMatcher<string>({
+  ignoreTypedWords: new Set(['fresh']),
+});
+const pantry = ['Ground pork', 'Basil', 'Canned diced tomatoes'];
+assert.equal(
+  typedOnly.match('fresh basil', pantry),
+  'Basil',
+  'a word the typed value carries and the option does not is dropped',
+);
+assert.equal(
+  typedOnly.match('pork', pantry),
+  null,
+  'a word in an option’s own name is never dropped, so “pork” is not “Ground pork”',
+);
+assert.equal(
+  typedOnly.match('canned tomatoes', pantry),
+  null,
+  'nor is “diced”: another can of tomatoes is another thing',
+);
+assert.equal(
+  typedOnly.match('Ground Pork', pantry),
+  'Ground pork',
+  'the full name still matches',
+);
 assert.equal(
   spices.match('fresh ginger', [
     spice('g', 'Ground ginger'),
@@ -275,6 +363,17 @@ assert.equal(catId('Mia'), 'id3', 'Mia is not Mila');
 assert.equal(catId('Mary Jane'), null, 'a name is not reordered');
 assert.equal(catId('Mr Whiskers'), 'id5', 'punctuation does not matter');
 assert.equal(catId(null), null);
+const japaneseCats = named('ゴロ', 'コロ');
+assert.equal(
+  matchExistingCat('コロ', japaneseCats as never),
+  'id1',
+  'a cat whose name differs by a dakuten is its own cat',
+);
+assert.equal(
+  matchExistingCat('Luna', named('Luna', 'Luna') as never),
+  null,
+  'two cats with one name are ambiguous, so a read “Luna” is no one of them',
+);
 assert.equal(
   catId('Olivers'),
   'id7',

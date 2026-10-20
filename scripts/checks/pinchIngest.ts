@@ -119,6 +119,39 @@ assert.equal(
   null,
   'peeled tomatoes are a product, so peeled stays in the name',
 );
+// a bare word never reaches the ingredient whose own name adds a product word
+[
+  'pork',
+  'turkey',
+  'lamb',
+  'beef',
+  'tuna',
+  'canned tomatoes',
+  'wheat flour',
+  'whole cloves',
+  'toasted sesame seeds',
+].forEach((name) =>
+  assert.equal(
+    nameOf(name),
+    null,
+    `“${name}” is not linked to an ingredient that is also ground, whole, canned diced or toasted`,
+  ),
+);
+assert.equal(
+  nameOf('ground beef'),
+  null,
+  'two grinds of beef are not one, so the person picks (or the line stays New)',
+);
+assert.equal(
+  nameOf('ground pork'),
+  'Ground pork',
+  'the exact name still matches',
+);
+assert.equal(
+  nameOf('fresh basil'),
+  'Basil',
+  'a descriptive word the line carries drops from the line, not from the ingredient',
+);
 // look-alike products a one-letter or reordered match would merge
 assert.equal(nameOf('goat milk'), null, 'goat is not oat');
 assert.equal(nameOf('1% milk'), null, 'one percent is not two percent');
@@ -145,12 +178,18 @@ assert.equal(nameOf('spagetti'), 'Spaghetti');
 assert.equal(nameOf('parmisan'), 'Parmesan');
 // a person's own ingredient beats the catalog's, and two equally good catalog names match neither
 assert.equal(
-  matchIngredient(
-    'minced garlic',
-    resolveIngredients([custom('c-garlic', 'Chopped garlic')]),
-  )?.id,
+  matchIngredient('garlic', resolveIngredients([custom('c-garlic', 'Garlic')]))
+    ?.id,
   'c-garlic',
-  "the person's own ingredient wins a tie with the catalog",
+  "the person's own ingredient wins a tie with the catalog of the same name",
+);
+assert.equal(
+  matchIngredient(
+    'garlic',
+    resolveIngredients([custom('c-garlic', 'Chopped garlic')]),
+  )?.id ?? null,
+  'cat-garlic',
+  "a prep word in the person's own name is part of that name, so a bare garlic stays the catalog's",
 );
 assert.equal(
   nameOf('ginger'),

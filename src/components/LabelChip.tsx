@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 interface LabelChipProps {
   /** Truncates with an ellipsis before it widens the chip's container. */
@@ -11,6 +12,8 @@ interface LabelChipProps {
   ariaLabel?: string;
   /** After the label: a ✕ for a chip that clears something, a chevron for one that opens something. */
   icon?: ReactNode;
+  /** A dashed edge, for a chip that asks for an answer where its neighbours only say something. */
+  isDashed?: boolean;
   /** About how many characters at the end of a label too long to fit stay visible: the cut falls in the middle, not at the end. */
   keepEnd?: number;
 }
@@ -33,6 +36,7 @@ function LabelChip({
   onClick,
   ariaLabel,
   icon,
+  isDashed = false,
   keepEnd = 0,
 }: LabelChipProps) {
   const { head, tail } = splitForMiddleCut(children, keepEnd);
@@ -46,7 +50,12 @@ function LabelChip({
 
   if (!onClick) {
     return (
-      <span className='bg-accent text-accent-foreground inline-flex h-6 max-w-full items-center justify-center gap-1 rounded-full px-2.5 text-xs'>
+      <span
+        className={join(
+          'bg-accent text-accent-foreground inline-flex h-6 max-w-full items-center justify-center gap-1 rounded-full px-2.5 text-xs',
+          isDashed && 'border-foreground/50 border border-dashed',
+        )}
+      >
         {label}
       </span>
     );
@@ -59,7 +68,10 @@ function LabelChip({
       size='sm'
       rounded='full'
       aria-label={ariaLabel}
-      className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-top-2 before:-bottom-4 before:content-['']"
+      className={join(
+        "bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-top-2 before:-bottom-4 before:content-['']",
+        isDashed && 'border-foreground/50 border border-dashed',
+      )}
       onClick={onClick}
     >
       <span className='inline-flex max-w-full min-w-0 items-center gap-1'>

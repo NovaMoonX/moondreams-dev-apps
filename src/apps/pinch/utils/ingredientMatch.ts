@@ -2,7 +2,7 @@ import { createOptionMatcher, toComparable } from '@/utils/optionMatchUtils';
 import type { ResolvedIngredient } from '@apps/pinch/types';
 import { splitPrep } from '@apps/pinch/utils/ingredientNames';
 
-/** Words that rarely change which ingredient a line means. Where they do (ground ginger, whole chicken) the catalog has the exact name, which is matched before this list is read, and a name two ingredients share once these words drop is left for the person to pick. The preparation words in `splitPrep` leave the name first. */
+/** Words a recipe line carries that never say which ingredient it is. They drop from the line only, never from an ingredient's own name, so "pork" never reaches "Ground pork" and "canned tomatoes" never "Canned diced tomatoes"; a word that makes a different product (ground, whole, minced, toasted) is not here at all. The preparation words in `splitPrep` leave the name first. */
 const FILLER = new Set([
   'fresh',
   'freshly',
@@ -12,11 +12,7 @@ const FILLER = new Set([
   'chopped',
   'diced',
   'frozen',
-  'ground',
-  'whole',
-  'minced',
   'sliced',
-  'toasted',
   'cubed',
   'halved',
   'quartered',
@@ -38,7 +34,7 @@ const FILLER = new Set([
 
 const matcher = createOptionMatcher<ResolvedIngredient>({
   names: (ingredient) => [ingredient.name, ...ingredient.aliases],
-  ignoreWords: FILLER,
+  ignoreTypedWords: FILLER,
   prepare: (text) => splitPrep(text).name,
   prefer: (ingredient) => ingredient.isCustom,
   foldPlurals: true,

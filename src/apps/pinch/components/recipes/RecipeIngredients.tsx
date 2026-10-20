@@ -115,7 +115,8 @@ interface NewNameFieldProps {
   /** Shown under the field until a name the person already has is offered in its place, so the field never moves as they type. */
   hint: string;
   usedIds: readonly string[];
-  onRename: (name: string) => void;
+  /** `isFinal` is false while the person is still typing, when the name must not merge with another staged one. */
+  onRename: (name: string, isFinal: boolean) => void;
   onUseExisting?: (ingredientId: string) => void;
 }
 
@@ -129,6 +130,7 @@ function NewNameField({
 }: NewNameFieldProps) {
   const ingredients = useAppSelector(selectIngredients);
   const [draft, setDraft] = useState(name);
+  const openedName = useRef(name);
   const existing = useMemo(
     () => (onUseExisting ? matchIngredient(draft, ingredients) : null),
     [onUseExisting, draft, ingredients],
@@ -146,12 +148,15 @@ function NewNameField({
             onChange={(event) => {
               setDraft(event.target.value);
               if (event.target.value.trim() !== '')
-                onRename(event.target.value);
+                onRename(event.target.value, false);
             }}
             onBlur={() => {
               const next = toTypedIngredientName(draft);
-              setDraft(next === '' ? name : next);
-              if (next === '') return;
+              setDraft(next === '' ? openedName.current : next);
+              if (next === '') {
+                onRename(openedName.current, true);
+                return;
+              }
               const same = ingredients.find(
                 (ingredient) =>
                   normalizeName(ingredient.name) === normalizeName(next),
@@ -160,7 +165,7 @@ function NewNameField({
                 onUseExisting(same.id);
                 return;
               }
-              onRename(next);
+              onRename(next, true);
             }}
           />
         )}
@@ -275,7 +280,7 @@ interface IngredientEditorProps {
   /** The drawer has a footer button and puts "remove" in its body; an inline row shows it beside the fields. */
   showRemove: boolean;
   isGroupLive: boolean;
-  onRename: (ingredientId: string, name: string) => void;
+  onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
   onUseExisting: (fromId: string, toId: string) => void;
 }
 
@@ -409,7 +414,9 @@ function IngredientEditor({
           name={row.newName}
           hint='New ingredient. It’s added when you save the recipe, and you can rename it until then.'
           usedIds={usedInGroup}
-          onRename={(name) => onRename(row.ingredientId, name)}
+          onRename={(name, isFinal) =>
+            onRename(row.ingredientId, name, isFinal)
+          }
           onUseExisting={(toId) => onUseExisting(row.ingredientId, toId)}
         />
       )}
@@ -850,13 +857,15 @@ function RecipeIngredients({
 
     return sameLine ? sameLine.id : addRow(ingredientId, group, name);
   };
-  const renameNew = (ingredientId: string, name: string) => {
-    const other = rows.find(
-      (row) =>
-        row.newName !== null &&
-        row.ingredientId !== ingredientId &&
-        normalizeName(row.newName) === normalizeName(name),
-    );
+  const renameNew = (ingredientId: string, name: string, isFinal: boolean) => {
+    const other = isFinal
+      ? rows.find(
+          (row) =>
+            row.newName !== null &&
+            row.ingredientId !== ingredientId &&
+            normalizeName(row.newName) === normalizeName(name),
+        )
+      : undefined;
     onChange(
       rows.map((row) =>
         row.ingredientId === ingredientId && row.newName !== null
@@ -946,7 +955,7 @@ function RecipeIngredients({
                                 {name}
                               </span>
                               {(isUnresolved || row.newName !== null) && (
-                                <LabelChip>
+                                <LabelChip isDashed={isUnresolved}>
                                   {isUnresolved ? 'Choose' : 'New'}
                                 </LabelChip>
                               )}
@@ -1083,7 +1092,7 @@ interface IngredientDrawerProps {
   onStageNew: (name: string, group: string | null) => string;
   onUpdate: (id: string, patch: Partial<IngredientRow>) => void;
   onRemove: (id: string) => void;
-  onRename: (ingredientId: string, name: string) => void;
+  onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
   onUseExisting: (fromId: string, toId: string) => void;
   onClose: () => void;
 }
