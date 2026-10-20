@@ -98,7 +98,7 @@ const APP_REGISTRY = [
   },
 ];
 
-// Tells search engines not to list the page in their results, and browsers not to send its address as a referrer, even for those that never run its JS (where the same two meta tags are added).
+// Tells search engines not to list the page or follow its links, and browsers not to send its address as a referrer, even for those that never run its JS (where the same meta tags are added).
 // The copy is needed because a fetched response's headers are read-only.
 function withUnlistedPageHeaders(response) {
   const result = new Response(response.body, response);
