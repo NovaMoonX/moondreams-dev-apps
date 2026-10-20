@@ -100,15 +100,21 @@ function MacroStats({
               </span>
             </span>
           );
-          const tileClass = join(
-            'bg-secondary flex items-center rounded-xl text-center',
+          const layoutClass = join(
+            'flex items-center text-center',
             isCompact
               ? 'justify-center gap-1 px-1 py-1.5'
               : 'flex-col px-1 py-2',
           );
 
           return (
-            <li key={macro.key} className={onOpen ? undefined : tileClass}>
+            <li
+              key={macro.key}
+              className={join(
+                'bg-secondary rounded-xl',
+                !onOpen && layoutClass,
+              )}
+            >
               {onOpen ? (
                 <Button
                   type='button'
@@ -116,8 +122,8 @@ function MacroStats({
                   aria-label={`${macro.label} ${figure}${macro.unit}. ${onOpen.label}`}
                   onClick={onOpen.onClick}
                   className={join(
-                    tileClass,
-                    'text-foreground! h-auto w-full font-normal',
+                    layoutClass,
+                    'text-foreground! hover:bg-foreground/5 active:bg-foreground/5 h-auto w-full gap-0! rounded-[inherit] font-normal',
                   )}
                 >
                   {content}

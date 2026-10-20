@@ -184,7 +184,7 @@ function WeekSummarySheet({
                       variant='tertiary'
                       aria-label={`Open ${formatDayTitle(day.dayKey)}: ${pluralize(day.count, 'meal')}, ${costText}`}
                       onClick={() => onOpenDay(day.dayKey)}
-                      className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal'
+                      className='h-auto min-h-11 w-full items-start justify-start gap-3 px-0! py-2 text-left font-normal focus-visible:-outline-offset-2'
                     >
                       <span className='min-w-0 flex-1'>
                         <span className='text-foreground block text-sm font-medium'>

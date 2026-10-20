@@ -54,7 +54,7 @@ function StatTile({
         isStacked ? 'flex-col items-center text-center' : 'items-center',
         isGoalMet && 'border-success/40 bg-success/10',
         prompt && 'border-dashed bg-transparent',
-        onOpen && 'hover:bg-muted/50',
+        onOpen && 'hover:bg-muted/50 active:bg-muted/50',
         className,
       )}
     >
@@ -64,7 +64,7 @@ function StatTile({
           variant='tertiary'
           aria-label={onOpen.label}
           onClick={onOpen.onClick}
-          className='absolute inset-0 h-full w-full rounded-2xl'
+          className='absolute inset-0 h-full w-full rounded-2xl!'
         />
       )}
       {icon && (
