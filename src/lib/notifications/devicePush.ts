@@ -12,7 +12,7 @@ import {
   getDeviceToken,
 } from './requestPushPermission';
 
-/** `blocked`: the browser refused notifications for this site and only its settings can change that. `off`: allowed or not yet asked, and not registered on this device. */
+/** `blocked`: the browser refused notifications for this site and only its settings can change that. `off`: not asked yet on this device. */
 export type DevicePushState = 'unsupported' | 'blocked' | 'off' | 'on';
 
 /** `dismissed`: the person closed the browser's question without answering, so nothing changed. `failed`: allowed, but the device could not be registered (no connection, or the browser's push service did not answer). */
@@ -22,38 +22,11 @@ export type TurnOnResult =
 /** The browser's push setup after a person has allowed notifications waits on a service worker that a dev server never registers, and a token write waits on the server; a person is never left waiting on either. */
 const SETUP_TIMEOUT_MS = 10_000;
 
-const offKey = (uid: string) => `push-device-off:${uid}`;
-
-/** Whether the person turned reminders off on this device, which the on-load registration then respects. */
-export function isDevicePushOff(uid: string): boolean {
-  try {
-    return localStorage.getItem(offKey(uid)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function setDevicePushOff(uid: string, isOff: boolean) {
-  try {
-    if (isOff) {
-      localStorage.setItem(offKey(uid), '1');
-    } else {
-      localStorage.removeItem(offKey(uid));
-    }
-  } catch {
-    // Without storage the choice lasts until the next reload.
-  }
-}
-
 const getPermission = () => Notification.permission;
 
-/** Whether this device can be reached right now, checked at once: allowed by the browser and not turned off here. */
-export function isDevicePushOn(uid: string): boolean {
-  return (
-    typeof Notification !== 'undefined' &&
-    getPermission() === 'granted' &&
-    !isDevicePushOff(uid)
-  );
+/** Whether this device can be reached right now, checked at once: allowed by the browser. */
+export function isDevicePushOn(): boolean {
+  return typeof Notification !== 'undefined' && getPermission() === 'granted';
 }
 
 async function canPush(): Promise<boolean> {
@@ -69,12 +42,10 @@ async function canPush(): Promise<boolean> {
 }
 
 /** This device's state, read without asking for anything. */
-export async function readDevicePushState(
-  uid: string,
-): Promise<DevicePushState> {
+export async function readDevicePushState(): Promise<DevicePushState> {
   if (!(await canPush())) return 'unsupported';
   if (getPermission() === 'denied') return 'blocked';
-  if (getPermission() === 'granted' && !isDevicePushOff(uid)) return 'on';
+  if (getPermission() === 'granted') return 'on';
   return 'off';
 }
 
@@ -100,7 +71,6 @@ export async function turnOnDevicePush(uid: string): Promise<TurnOnResult> {
     if (token === null) return 'failed';
 
     await withTimeout(registerDeviceToken(uid, token));
-    setDevicePushOff(uid, false);
     return 'on';
   } catch {
     return 'failed';
@@ -125,8 +95,8 @@ const deleteBrowserToken = async () => {
   }
 };
 
-/** Takes this device's token off the person's account first (the step that stops their pushes), then deletes it from the browser's push service, awaited only when `isBrowserTokenAwaited`. */
-async function removeDeviceToken(uid: string, isBrowserTokenAwaited: boolean) {
+/** Signing out hands the device on: its token leaves the person who signed out, so nothing meant for them reaches whoever uses it next. Resolves once the token is off their account; the browser's own copy is deleted afterwards without waiting. Signing in again registers a fresh token. */
+export async function releaseDevicePush(uid: string): Promise<void> {
   try {
     const token = await findToken(uid);
     if (token) await unregisterDeviceToken(uid, token);
@@ -134,18 +104,5 @@ async function removeDeviceToken(uid: string, isBrowserTokenAwaited: boolean) {
     console.error('Push token not taken off the account', error);
   }
 
-  if (isBrowserTokenAwaited) {
-    await deleteBrowserToken();
-    return;
-  }
   void deleteBrowserToken();
 }
-
-/** Stops pushes to this device: removes its token and remembers the choice. The choice is kept even when the token can't be reached, so a reload doesn't register it again. */
-export async function turnOffDevicePush(uid: string): Promise<void> {
-  setDevicePushOff(uid, true);
-  await removeDeviceToken(uid, true);
-}
-
-/** Signing out hands the device on: its token leaves the person who signed out, so nothing meant for them reaches whoever uses it next. Resolves once the token is off their account; the browser's own copy is deleted afterwards without waiting. The choice to turn pushes off is not changed, and signing in again registers a fresh token. */
-export const releaseDevicePush = (uid: string) => removeDeviceToken(uid, false);

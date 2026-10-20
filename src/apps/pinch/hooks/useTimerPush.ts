@@ -61,7 +61,7 @@ export function useTimerPush(
       if (action === 'cancel') cancelTimerPush(entry.reminderId);
     });
 
-    if (uid === null || !isOn || !isDevicePushOn(uid)) return;
+    if (uid === null || !isOn || !isDevicePushOn()) return;
 
     const now = Date.now();
     timers.forEach((timer) => {

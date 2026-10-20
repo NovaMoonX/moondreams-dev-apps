@@ -111,7 +111,7 @@ const getAskFailureText = (result: TurnOnResult) => {
 
 type AskKey = ReminderKind | 'device';
 
-/** One switch per reminder this app sends. Switching one on asks the browser for notifications on that tap when this device isn't set up (the device's own switch is the site's, in the profile), and a refusal leaves the switch off and says why: under the row, or once under the group when the browser blocks notifications or can't show them (its switches are then off and disabled). A reminder that is on while this device is off says so under the group, with the same ask beside it. */
+/** One switch per reminder this app sends. Switching one on asks the browser for notifications on that tap when this device isn't set up, and a refusal leaves the switch off and says why: under the row, or once under the group when the browser blocks notifications or can't show them (its switches are then off and disabled). A reminder that is on while this device is off says so under the group, with the same ask beside it. */
 function RemindersSection({ uid }: RemindersSectionProps) {
   const queryClient = useQueryClient();
   const { settings, save } = usePinchSettings(uid);
@@ -121,7 +121,8 @@ function RemindersSection({ uid }: RemindersSectionProps) {
     key: AskKey;
     text: string;
   } | null>(null);
-  const isStuck = device === 'blocked' || device === 'unsupported';
+  const stuckState =
+    device === 'blocked' || device === 'unsupported' ? device : null;
   const isOffWithReminders =
     device === 'off' &&
     REMINDER_KINDS.some((kind) => settings.reminders[kind.key]);
@@ -159,7 +160,9 @@ function RemindersSection({ uid }: RemindersSectionProps) {
   return (
     <SettingsGroup
       title='Reminders'
-      description={isStuck && getDeviceNotificationsText(device)}
+      description={
+        stuckState !== null && getDeviceNotificationsText(stuckState)
+      }
       footer={
         isOffWithReminders && (
           <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
@@ -205,7 +208,8 @@ function RemindersSection({ uid }: RemindersSectionProps) {
               aria-label={kind.title}
               checked={settings.reminders[kind.key]}
               disabled={
-                askingKey !== null || (isStuck && !settings.reminders[kind.key])
+                askingKey !== null ||
+                (stuckState !== null && !settings.reminders[kind.key])
               }
               onCheckedChange={(isChecked) =>
                 void handleKindChange(kind.key, isChecked)

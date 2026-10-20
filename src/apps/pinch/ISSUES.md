@@ -1131,7 +1131,7 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 **Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 16 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
 
 ### Description
-A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. The Settings tab, the right-most in the bar, holds a switch per kind of reminder (each asks for the browser's notifications on its tap; the device's own switch is the site's, in the profile) (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
+A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. The Settings tab, the right-most in the bar, holds a switch per kind of reminder (each starts on and asks for the browser's notifications on its tap) (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
 
 ### Possible Approach
 1. One small document per person, written by their first change, owner-only, with its own rules block; readers default, later changes are dotted paths.
@@ -1144,7 +1144,7 @@ A person can choose what Pinch reminds them about and how long a new fridge or f
 - [x] **Entry points:** the Settings tab (the one place; it was the gear in Kitchen's header until round 10), the put-away form, cooking mode's Finish panel and a box's move view for the days, a notification's link for Fridge & freezer.
 
 ### Success Criteria
-- [x] Nothing is written until the first change; a person with no document sees the defaults and a new box starts at 4 and 90 days as before.
+- [x] The document is created the first time Pinch opens without one, or by the first change; until then a person sees the defaults and a new box starts at 4 and 90 days as before.
 - [x] The rules matrix (owner, another user, signed out; out-of-bounds days, hour and lead time, a non-bool switch, an extra key, a pre-stamped `lastDigestDay`, a legacy document) gives the intended outcome on the new rules and denies on the previous ones; every pre-existing rule on the touched collections and the reminders rules answer the same.
 - [x] The note: nothing due sends nothing; past only, due only and both read right for 1, 2, 3 and 12 dishes; the hour boundary, other zones, an already-sent day and a person with the switch off are checked, and the handler was run against Taylor's boxes with a stub sender.
 - [x] A timer's push is scheduled when it starts, cancelled by pause, reset, finishing in view and leaving, and left to go out when it ends while the page is hidden.

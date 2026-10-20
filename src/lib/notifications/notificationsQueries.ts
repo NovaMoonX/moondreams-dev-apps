@@ -12,7 +12,7 @@ export const notificationsQueryKeys = {
 export function devicePushQueryOptions(uid: string) {
   return queryOptions({
     queryKey: notificationsQueryKeys.device(uid),
-    queryFn: () => readDevicePushState(uid),
+    queryFn: readDevicePushState,
     staleTime: 0,
     refetchOnWindowFocus: true,
   });
