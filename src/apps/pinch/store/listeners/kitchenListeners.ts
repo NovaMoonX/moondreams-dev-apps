@@ -224,7 +224,7 @@ export function startSettingsListener(
   );
 }
 
-/** The person's reminders and keeping days: one document at their own uid, absent until their first change. */
+/** The person's reminders and keeping days: one document at their own uid, absent until Pinch first opens for them or they change something. */
 export function startPinchSettingsListener(
   uid: string,
   onChange: (settings: PinchSettings | null) => void,

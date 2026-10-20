@@ -10,7 +10,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { PinchSettingsPatch } from '@apps/pinch/utils/settings';
 
-/** The person's settings (the defaults until their first change) and one way to change them. A change shows right away from the local write; a refusal says so in a toast. */
+/** The person's settings (the defaults until a document exists) and one way to change them. A change shows right away from the local write; a refusal says so in a toast. */
 export function usePinchSettings(uid: string) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();

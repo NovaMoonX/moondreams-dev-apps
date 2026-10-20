@@ -65,11 +65,10 @@ export function CalendarViewOptions({
   return (
     <ViewOptions
       isQuiet
-      customizedCount={customizedCount + (settings.calendarStats ? 1 : 0)}
-      onReset={() => {
-        onChange({ showPrices: DEFAULT_LIST_VIEW_OPTIONS.showPrices });
-        if (!hasSettingsLoadError) void save({ calendarStats: false });
-      }}
+      customizedCount={customizedCount}
+      onReset={() =>
+        onChange({ showPrices: DEFAULT_LIST_VIEW_OPTIONS.showPrices })
+      }
     >
       <FilterSection title='On the calendar'>
         <div className='divide-border divide-y'>
@@ -83,7 +82,7 @@ export function CalendarViewOptions({
           )}
           <ViewOptionSwitch
             label='Show prices'
-            description='On each meal in the Week view'
+            description='On each meal in the Week view. Kept on this device.'
             checked={options.showPrices}
             onCheckedChange={(showPrices) => onChange({ showPrices })}
           />

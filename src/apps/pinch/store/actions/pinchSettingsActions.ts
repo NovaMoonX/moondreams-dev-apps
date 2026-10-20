@@ -56,7 +56,7 @@ export const savePinchSettings = createAsyncThunk<
       await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) {
-          transaction.set(ref, createSettings(patch, now));
+          transaction.set(ref, createSettings(patch, now, getDeviceTimeZone()));
           return;
         }
         const [field, value, ...more] = getUpdateArgs(patch, now);
@@ -88,10 +88,7 @@ export const ensurePinchSettings = createAsyncThunk<void, string>(
         if (snapshot.exists()) return;
         transaction.set(
           ref,
-          createSettings(
-            { reminders: { timeZone: getDeviceTimeZone() } },
-            Date.now(),
-          ),
+          createSettings({}, Date.now(), getDeviceTimeZone()),
         );
       });
     } catch (error) {

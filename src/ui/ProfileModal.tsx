@@ -1,7 +1,6 @@
 import { Modal } from '@moondreamsdev/dreamer-ui/components';
 import type { User } from 'firebase/auth';
 
-import DeviceNotifications from '@/components/DeviceNotifications';
 import UserAvatar from '@/ui/UserAvatar';
 import { formatDate } from '@/utils/formatUtils';
 
@@ -23,7 +22,7 @@ function ProfileModal({ user, onClose }: ProfileModalProps) {
       title='Profile'
       actions={[{ label: 'Close', variant: 'secondary', onClick: onClose }]}
     >
-      <div className='max-h-[calc(100dvh-10rem)] space-y-3 overflow-y-auto'>
+      <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
           This is your profile information.
         </p>
@@ -42,7 +41,6 @@ function ProfileModal({ user, onClose }: ProfileModalProps) {
           Account created at:{' '}
           <span className='text-foreground font-medium'>{formattedDate}</span>
         </div>
-        <DeviceNotifications uid={user.uid} />
       </div>
     </Modal>
   );
