@@ -73,7 +73,9 @@ function DetailSheet({
         const footerHeight =
           scroller.nextElementSibling?.getBoundingClientRect().height ?? 0;
         held.total = Math.max(held.total, scroller.clientHeight + footerHeight);
-        node.style.minHeight = `${held.total - footerHeight - padding}px`;
+        const { marginTop, marginBottom } = getComputedStyle(node);
+        const margin = parseFloat(marginTop) + parseFloat(marginBottom);
+        node.style.minHeight = `${held.total - footerHeight - padding - margin}px`;
       });
       scroller.addEventListener('scroll', record, { passive: true });
       holdHeight.observe(scroller);
