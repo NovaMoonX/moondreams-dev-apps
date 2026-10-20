@@ -68,9 +68,13 @@ assert.equal(
 assert.equal(
   idOf('chiken thigh'),
   'cat-chicken-thigh',
-  'one wrong letter in a long enough name',
+  'one wrong letter in a name',
 );
-assert.equal(idOf('chiken'), null, 'a short name gets no typo allowance');
+assert.equal(
+  idOf('chiken'),
+  null,
+  'a misspelled part of a name is not the whole ingredient',
+);
 assert.equal(
   idOf('coconut milk') === 'cat-whole-milk',
   false,

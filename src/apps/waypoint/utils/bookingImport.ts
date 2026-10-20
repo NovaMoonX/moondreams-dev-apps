@@ -2,6 +2,7 @@ import type { AirlineOption } from '@/lib/airlines/airlinesQueries';
 import type { AirportOption } from '@/lib/airports/airportsQueries';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
+import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import type { EventPrefill } from '@apps/waypoint/components/EventFormModal';
@@ -63,11 +64,15 @@ function findAirport(airports: AirportOption[], code: string | null) {
   return normalized ? (airports.find((airport) => airport.iataCode === normalized) ?? null) : null;
 }
 
+const airlineMatcher = createOptionMatcher<AirlineOption>({
+  names: (airline) => [airline.name],
+  reorder: false,
+  typos: false,
+});
+
 function matchAirline(airlines: AirlineOption[], carrier: string | null, flightNumber: string | null) {
   const prefix = /^([A-Za-z0-9]{2})\s?\d/.exec(flightNumber?.trim() ?? '')?.[1]?.toUpperCase();
-  const byName = carrier
-    ? airlines.find((airline) => airline.name.toLowerCase() === carrier.trim().toLowerCase())
-    : undefined;
+  const byName = carrier ? airlineMatcher.match(carrier, airlines) : null;
   const result = byName ?? airlines.find((airline) => airline.iataCode === prefix) ?? null;
   return result;
 }

@@ -2,10 +2,7 @@ export function normalizeString(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-/**
- * Levenshtein-based word similarity used by ingestion matching for cats,
- * clinics, and condition-library entries.
- */
+/** Levenshtein similarity between two strings, from 0 (nothing alike) to 1 (equal). */
 export function getWordSimilarity(left: string, right: string): number {
   if (left === right) {
     return 1;

@@ -18,12 +18,8 @@ import {
   getInitialCollectionsChoice,
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
-import {
-  addPrepToNote,
-  splitPrep,
-  toIngredientName,
-} from '@apps/pinch/utils/ingredientNames';
-import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
+import { addPrepToNote, splitPrep } from '@apps/pinch/utils/ingredientNames';
+import { resolveIngredient } from '@apps/pinch/utils/ingredientMatch';
 import {
   EMPTY_CARE_TEXT,
   getCareText,
@@ -141,8 +137,9 @@ export const getDataFromExtracted = (
 ): RecipeFormData => {
   const blank = getInitialData(null);
   const rows = extracted.ingredients.reduce<IngredientRow[]>((acc, line) => {
-    const match = matchIngredient(line.name, ingredients);
-    const { name: readName, prep } = splitPrep(line.name);
+    const resolution = resolveIngredient(line.name, ingredients);
+    const match = resolution.kind === 'match' ? resolution.option : null;
+    const { prep } = splitPrep(line.name);
     const unit = line.unit ?? match?.serving.unit ?? 'EACH';
     const { amount } = line;
     const group = cleanGroupName(line.group);
@@ -173,7 +170,7 @@ export const getDataFromExtracted = (
         unit,
         isAmountless: amount === null,
         note: addPrepToNote(line.note, prep),
-        proposedName: match ? null : toIngredientName(readName),
+        proposedName: resolution.kind === 'custom' ? resolution.label : null,
         newName: null,
         group,
       },

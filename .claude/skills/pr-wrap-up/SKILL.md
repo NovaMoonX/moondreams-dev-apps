@@ -61,7 +61,7 @@ A `## Regression check` section in the PR body shows that what the PR adds does 
 
 Spawn **technical, product and design** agents in parallel (`model: "sonnet"`, never an Opus- or Fable-class model, `run_in_background: true`), all **read-only**, using `references/review-agents.md`. They report; you make every fix.
 
-- **Technical:** the PR's diff against `CLAUDE.md` and `.github/copilot-instructions.md`, for defects with a concrete production state and for gaps (rules, indexes, atomic writes, derived state, legacy and day-one data, listeners, notifications, scale, back and offline, docs, seeds).
+- **Technical:** the PR's diff against `CLAUDE.md` and `.github/copilot-instructions.md`, for defects with a concrete production state and for gaps (rules, indexes, atomic writes, derived state, legacy and day-one data, listeners, notifications, scale, back and offline, docs, seeds, a procedure built for one app that others have or will need).
 - **Product:** drives the real app and judges the whole, not the diff: journeys and the weekly loop with taps before and after, every phase of a record, buried or promoted details, doors and the insight budget, numbers and copy, scale and bulk ends, docs that no longer match.
 - **Design:** drives the real app, phone first then desktop, light and dark, and measures: container and layers, reach (nothing under a pinned layer), what a surface carries and in what order, look-alike controls and siblings, alignment and wrapping, state and feedback, colour and tone.
 - **The checklists live only in `references/review-agents.md`** (and `polish-agents.md` points there): do not copy a check into this file, a prompt or `CLAUDE.md`.

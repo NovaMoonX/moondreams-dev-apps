@@ -1,6 +1,5 @@
-import { normalizeString } from '@/utils/stringUtils';
+import { toDisplayCase } from '@/utils/optionMatchUtils';
 
 export function normalizeCustomLabelCasing(label: string): string {
-  const normalized = normalizeString(label);
-  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : '';
+  return toDisplayCase(label);
 }

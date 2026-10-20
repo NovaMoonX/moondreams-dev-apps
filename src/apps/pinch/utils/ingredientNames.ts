@@ -1,3 +1,5 @@
+import { toDisplayCase } from '@/utils/optionMatchUtils';
+
 /** Words that say how an ingredient is cut or kept, never which one it is, so a read name hands them to the line's note. A word that can make a different product (diced, crushed, shredded) stays in the name. */
 const PREP_PATTERN =
   /\b(?:bone[\s-]?in|skin[\s-]?on|boneless|skinless|trimmed|peeled|deveined|pitted|cored|seeded|rinsed|drained|softened|melted)\b/gi;
@@ -26,17 +28,9 @@ export const splitPrep = (name: string): SplitName => {
     : { name: cleaned, prep };
 };
 
-const ACRONYM = /^[A-Z]{2,4}$/;
-
-/** An ingredient's name the way the app writes them: the first letter capital and the rest lowercase ("Chicken thigh"), a short all-capitals word such as BBQ kept as it is. */
-export const toIngredientName = (name: string) => {
-  const text = tidy(name)
-    .split(' ')
-    .map((word) => (ACRONYM.test(word) ? word : word.toLowerCase()))
-    .join(' ');
-
-  return text.charAt(0).toUpperCase() + text.slice(1);
-};
+/** An ingredient's name the way the app writes them: "Chicken thigh", a short all-capitals word such as BBQ kept as it is. */
+export const toIngredientName = (name: string) =>
+  toDisplayCase(tidy(name), { keepAcronyms: true });
 
 export const addPrepToNote = (note: string | null, prep: string[]) => {
   const have = (note ?? '').toLowerCase();
