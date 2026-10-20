@@ -10,7 +10,7 @@ function ThemeToggle({ className }: { className?: string }) {
 
   return (
     <div className={join('flex items-center gap-2', className)}>
-      <AppToggle size='sm' checked={isDarkMode} onCheckedChange={toggleTheme} />
+      <AppToggle size='sm' aria-label='Dark mode' checked={isDarkMode} onCheckedChange={toggleTheme} />
       <Icon className='text-foreground size-4' />
     </div>
   );
