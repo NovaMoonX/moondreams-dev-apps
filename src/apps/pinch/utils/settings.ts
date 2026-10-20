@@ -89,17 +89,22 @@ export interface PinchSettingsPatch {
   reminders?: Partial<PinchReminderSettings>;
 }
 
-/** The whole document for a person's first change: the defaults with their change on top. */
+/** The whole document for a person's first change: the defaults with their change on top, and the morning note in the zone of the device that made it (a note with no zone goes out at UTC). */
 export const createSettings = (
   patch: PinchSettingsPatch,
   now: number,
+  timeZone: string | null,
 ): PinchSettings => ({
   ...DEFAULT_PINCH_SETTINGS,
   fridgeDays: patch.fridgeDays ?? DEFAULT_PINCH_SETTINGS.fridgeDays,
   freezerDays: patch.freezerDays ?? DEFAULT_PINCH_SETTINGS.freezerDays,
   suggestPhotos: patch.suggestPhotos ?? DEFAULT_PINCH_SETTINGS.suggestPhotos,
   calendarStats: patch.calendarStats ?? DEFAULT_PINCH_SETTINGS.calendarStats,
-  reminders: { ...DEFAULT_PINCH_SETTINGS.reminders, ...patch.reminders },
+  reminders: {
+    ...DEFAULT_PINCH_SETTINGS.reminders,
+    timeZone,
+    ...patch.reminders,
+  },
   updatedAt: now,
 });
 

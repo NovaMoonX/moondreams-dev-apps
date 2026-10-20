@@ -10016,7 +10016,7 @@ assert.equal(
   );
 
   assert.deepEqual(
-    stgCreate({ fridgeDays: 5 }, 1000),
+    stgCreate({ fridgeDays: 5 }, 1000, null),
     {
       fridgeDays: 5,
       freezerDays: null,
@@ -10036,8 +10036,11 @@ assert.equal(
     'a first change writes the whole document, the defaults under it',
   );
   assert.deepEqual(
-    stgCreate({ reminders: { eatSoon: false, timeZone: 'America/Denver' } }, 7)
-      .reminders,
+    stgCreate(
+      { reminders: { eatSoon: false, timeZone: 'America/Denver' } },
+      7,
+      'Asia/Tokyo',
+    ).reminders,
     {
       eatSoon: false,
       expiring: true,
@@ -10047,6 +10050,11 @@ assert.equal(
       timeZone: 'America/Denver',
     },
     "a first reminder change keeps the other reminder defaults",
+  );
+  assert.equal(
+    stgCreate({ fridgeDays: 5 }, 7, 'Asia/Tokyo').reminders.timeZone,
+    'Asia/Tokyo',
+    'a first change made before the zone was written still sends the note in the device’s zone, never at UTC',
   );
   assert.equal(stgDefaults.updatedAt, 0, 'the defaults are never written as they are');
   assert.equal(stgDefaults.suggestPhotos, true, 'photo suggestions start on');
@@ -10062,7 +10070,7 @@ assert.equal(
   );
   assert.deepEqual(
     [
-      stgCreate({ calendarStats: true }, 3).calendarStats,
+      stgCreate({ calendarStats: true }, 3, null).calendarStats,
       stgUpdates({ calendarStats: true }, 9),
       stgWithDefaults(null).calendarStats,
     ],
@@ -10074,7 +10082,7 @@ assert.equal(
     'the Calendar stats choice is written on its own path and starts off',
   );
   assert.equal(
-    stgCreate({ suggestPhotos: false }, 3).suggestPhotos,
+    stgCreate({ suggestPhotos: false }, 3, null).suggestPhotos,
     false,
     'a first change that turns suggestions off writes it',
   );

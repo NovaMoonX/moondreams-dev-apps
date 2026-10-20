@@ -7,6 +7,7 @@ import AppToggle from '@/components/AppToggle';
 import { PillGroup } from '@/components/PillGroup';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
+import SummaryEditor from '@/components/SummaryEditor';
 import { useNow } from '@/hooks/useNow';
 import {
   turnOnDevicePush,
@@ -43,17 +44,24 @@ const LEAD_OPTIONS = LEAD_DAYS_CHOICES.map((days) => ({
 const isDigestKind = (kind: ReminderKind) =>
   kind === 'eatSoon' || kind === 'expiring';
 
-/** The options sit once, under the first of the note's kinds that is on. */
-const getOptionsHost = (reminders: PinchSettings['reminders']) =>
-  reminders.eatSoon ? 'eatSoon' : reminders.expiring ? 'expiring' : null;
+const isNoteOn = (reminders: PinchSettings['reminders']) =>
+  reminders.eatSoon || reminders.expiring;
 
-interface EatSoonOptionsProps {
+const getLookAheadSummary = (reminders: PinchSettings['reminders']) => {
+  const daysAhead = `${reminders.leadDays} ${reminders.leadDays === 1 ? 'day' : 'days'} ahead`;
+  return isNoteOn(reminders)
+    ? `${daysAhead} · note at ${formatReminderHour(reminders.hour)}`
+    : daysAhead;
+};
+
+interface LookAheadEditorProps {
   uid: string;
   reminders: PinchSettings['reminders'];
+  isNoteOn: boolean;
 }
 
-/** How far ahead the morning note looks and when it comes, shown only while it is on. */
-function EatSoonOptions({ uid, reminders }: EatSoonOptionsProps) {
+/** How far ahead "due soon" looks, which the pantry's own screens use too, and (while a morning note is on) when the note comes. */
+function LookAheadEditor({ uid, reminders, isNoteOn }: LookAheadEditorProps) {
   const { save } = usePinchSettings(uid);
   const zone = reminders.timeZone ?? getDeviceTimeZone();
   const now = useNow(HOUR_MS);
@@ -74,24 +82,29 @@ function EatSoonOptions({ uid, reminders }: EatSoonOptionsProps) {
           }
         />
       </div>
-      <div className='space-y-2'>
-        <p className='text-muted-foreground text-xs'>Send it at</p>
-        <Select
-          className='sm:max-w-60'
-          options={HOUR_OPTIONS}
-          value={String(reminders.hour)}
-          onChange={(hour) =>
-            void save({
-              reminders: { hour: Number(hour), timeZone: getDeviceTimeZone() },
-            })
-          }
-        />
-        {zoneName !== '' && (
-          <p className='text-muted-foreground text-xs'>
-            Your time zone: {zoneName}
-          </p>
-        )}
-      </div>
+      {isNoteOn && (
+        <div className='space-y-2'>
+          <p className='text-muted-foreground text-xs'>Send the note at</p>
+          <Select
+            className='sm:max-w-60'
+            options={HOUR_OPTIONS}
+            value={String(reminders.hour)}
+            onChange={(hour) =>
+              void save({
+                reminders: {
+                  hour: Number(hour),
+                  timeZone: getDeviceTimeZone(),
+                },
+              })
+            }
+          />
+          {zoneName !== '' && (
+            <p className='text-muted-foreground text-xs'>
+              Your time zone: {zoneName}
+            </p>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -100,16 +113,16 @@ interface RemindersSectionProps {
   uid: string;
 }
 
+type AskKey = ReminderKind | 'device';
+
 /** What to say under the row after a refused ask. A blocked or unsupported browser says so once under the group, so its rows add nothing. */
-const getAskFailureText = (result: TurnOnResult) => {
+const getAskFailureText = (result: TurnOnResult, key: AskKey) => {
   if (result === 'blocked' || result === 'unsupported') return null;
   if (result === 'dismissed') {
-    return 'Nothing changed. Allow notifications when your browser asks, then switch this on again.';
+    return `Nothing changed. Allow notifications when your browser asks, then ${key === 'device' ? 'tap Allow on this device' : 'switch this on'} again.`;
   }
   return getTurnOnFailureText(result);
 };
-
-type AskKey = ReminderKind | 'device';
 
 /** One switch per reminder this app sends. Switching one on asks the browser for notifications on that tap when this device isn't set up, and a refusal leaves the switch off and says why: under the row, or once under the group when the browser blocks notifications or can't show them (its switches are then off and disabled). A reminder that is on while this device is off says so under the group, with the same ask beside it. */
 function RemindersSection({ uid }: RemindersSectionProps) {
@@ -132,7 +145,7 @@ function RemindersSection({ uid }: RemindersSectionProps) {
     try {
       const result = await turnOnDevicePush(uid);
       if (result !== 'on') {
-        const text = getAskFailureText(result);
+        const text = getAskFailureText(result, key);
         if (text !== null) setFailure({ key, text });
       }
       return result === 'on';
@@ -216,12 +229,26 @@ function RemindersSection({ uid }: RemindersSectionProps) {
               }
             />
           }
-        >
-          {getOptionsHost(settings.reminders) === kind.key && (
-            <EatSoonOptions uid={uid} reminders={settings.reminders} />
-          )}
-        </SettingsRow>
+        />
       ))}
+      <li className='-mx-3'>
+        <SummaryEditor
+          label='What counts as due soon'
+          title='What counts as due soon'
+          groupPosition='last'
+          icon='📅'
+          lines={2}
+          summary={getLookAheadSummary(settings.reminders)}
+          placeholder=''
+          shouldFocus={false}
+        >
+          <LookAheadEditor
+            uid={uid}
+            reminders={settings.reminders}
+            isNoteOn={isNoteOn(settings.reminders)}
+          />
+        </SummaryEditor>
+      </li>
     </SettingsGroup>
   );
 }

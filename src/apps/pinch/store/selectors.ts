@@ -638,7 +638,7 @@ export const selectShowNutrition = (state: RootState) =>
 const selectPinchSettingsDocument = (state: RootState) =>
   state.pinch.pinchSettings.settings;
 
-/** The person's reminders and keeping days; the defaults until their first change, and under a document written before a key existed, that key's default. */
+/** The person's reminders and keeping days; the defaults until a document exists, and under a document written before a key existed, that key's default (a reminder kind it predates reads off). */
 export const selectPinchSettings = createSelector(
   [selectPinchSettingsDocument],
   getSettingsWithDefaults,
