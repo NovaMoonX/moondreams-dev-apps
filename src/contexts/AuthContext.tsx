@@ -24,7 +24,7 @@ import {
 
 import { AuthContext, AuthContextValue } from '@/hooks/useAuth';
 import { clearUserInfoStore } from '@/hooks/useUserInfo';
-import { ADMIN_EMAIL, APP_REGISTRY } from '@/lib/app';
+import { ADMIN_EMAIL, APP_REGISTRY, clearAppResume } from '@/lib/app';
 import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
 import { ensureDocExists } from '@/lib/firebase';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
@@ -58,6 +58,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         queryClient.clear();
         clearUserInfoStore();
         if (previousUserId) clearViewerSessions(previousUserId);
+        clearAppResume();
       }
 
       previousUserIdRef.current = nextUserId;
@@ -206,6 +207,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     currentLocationRef.current = 'home';
     if (auth.currentUser) clearViewerSessions(auth.currentUser.uid);
+    clearAppResume();
     window.location.href = '/';
     await signOut(auth);
   }, []);

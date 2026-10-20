@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { ActiveAction } from '../types';
 
 const REVEAL_STEP_MS = 160;
+const MAX_REVEAL_MS = 8000;
 const HERE_WE_GO_MS = 1000;
 
 function getRevealOrder(content: string, seedValue: number) {
@@ -65,9 +66,13 @@ export function useRaffleReveal({
 
     const revealStartAt = (completedAt ?? now) + HERE_WE_GO_MS;
     const revealElapsedMs = Math.max(0, now - revealStartAt);
+    const revealStepMs = Math.min(
+      REVEAL_STEP_MS,
+      MAX_REVEAL_MS / Math.max(1, revealOrder.length),
+    );
     const revealedLetterCount = Math.min(
       revealOrder.length,
-      Math.max(0, Math.floor(revealElapsedMs / REVEAL_STEP_MS)),
+      Math.max(0, Math.floor(revealElapsedMs / revealStepMs)),
     );
     const revealedIndices = new Set(revealOrder.slice(0, revealedLetterCount));
 
