@@ -16,6 +16,7 @@ import Field from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
 import SectionDivider from '@/components/SectionDivider';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -58,6 +59,7 @@ import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
 
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
+const SHORT_SCREEN_MAX_HEIGHT = 599;
 
 /** A rename remounts the heading under its new name, so focus finds it by its key. */
 const focusGroupHeading = (group: string) =>
@@ -609,6 +611,8 @@ function RecipeIngredients({
   });
   const ingredientsById = useAppSelector(selectIngredientsById);
   const isPhone = useMediaQuery().isBelow('sm');
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(rows.length === 0 && !isPhone);
   const [drawer, setDrawer] = useState<DrawerMode | null>(null);
@@ -638,6 +642,14 @@ function RecipeIngredients({
       button?.focus({ preventScroll: true });
       button?.scrollIntoView({ block: 'nearest' });
     });
+  const openPicker = () => {
+    setIsAdding(true);
+    if (isShort) {
+      window.requestAnimationFrame(() =>
+        pickerRef.current?.scrollIntoView({ block: 'start' }),
+      );
+    }
+  };
   const update = (id: string, patch: Partial<IngredientRow>) => {
     const row = rows.find((candidate) => candidate.id === id);
     if (!row) return;
@@ -833,7 +845,7 @@ function RecipeIngredients({
         </div>
       )}
       {!isPhone && isAdding ? (
-        <div className='space-y-1.5'>
+        <div ref={pickerRef} className='scroll-mt-16 space-y-1.5'>
           <ItemSearch
             uid={uid}
             onPick={(ingredientId) => {
@@ -860,7 +872,7 @@ function RecipeIngredients({
             onClick={() =>
               isPhone
                 ? setDrawer({ kind: 'add', group: lastGroup })
-                : setIsAdding(true)
+                : openPicker()
             }
           >
             <Plus className='h-4 w-4' aria-hidden='true' />
