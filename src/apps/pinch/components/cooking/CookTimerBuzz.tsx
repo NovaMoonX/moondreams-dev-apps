@@ -8,15 +8,15 @@ import PromptRow from '@/components/PromptRow';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { turnOnDevicePush } from '@/lib/notifications/devicePush';
 import {
+  getDeviceNotificationsText,
+  getTurnOnFailureText,
+} from '@/lib/notifications/deviceText';
+import {
   devicePushQueryOptions,
   notificationsQueryKeys,
 } from '@/lib/notifications/notificationsQueries';
 import { REMINDER_KINDS } from '@apps/pinch/constants';
 import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
-import {
-  getDeviceReminderText,
-  getTurnOnFailureText,
-} from '@apps/pinch/utils/settings';
 import {
   getTimerBuzzOffer,
   type TimerBuzzOffer,
@@ -27,9 +27,9 @@ const TIMERS_KIND = REMINDER_KINDS.find((kind) => kind.key === 'timers');
 const BLOCKED_STATES: TimerBuzzOffer[] = ['blocked', 'unsupported'];
 
 const getStateNote = (offer: TimerBuzzOffer) => {
-  if (offer === 'blocked') return getDeviceReminderText('blocked');
+  if (offer === 'blocked') return getDeviceNotificationsText('blocked');
   if (offer === 'unsupported') {
-    return `${getDeviceReminderText('unsupported')} Your timer stays right, but it can only ring while the screen is on.`;
+    return `${getDeviceNotificationsText('unsupported')} Your timer stays right, but it can only ring while the screen is on.`;
   }
   return null;
 };

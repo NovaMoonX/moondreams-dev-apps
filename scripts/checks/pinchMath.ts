@@ -310,8 +310,6 @@ import {
   getSettingsUpdates as stgUpdates,
   getUsualDays as stgUsual,
   getSettingsWithDefaults as stgWithDefaults,
-  getDeviceReminderText as stgDeviceText,
-  getTurnOnFailureText as stgFailureText,
   isAboveFridgeGuidance as stgAbove,
   getZoneAbbreviation as stgZone,
   isValidFreezerDays as stgFreezer,
@@ -319,6 +317,10 @@ import {
   isValidLeadDays as stgLead,
   isValidReminderHour as stgValidHour,
 } from '../../src/apps/pinch/utils/settings.ts';
+import {
+  getDeviceNotificationsText as stgDeviceText,
+  getTurnOnFailureText as stgFailureText,
+} from '../../src/lib/notifications/deviceText.ts';
 
 const ingredient = (
   id: string,
@@ -10131,12 +10133,12 @@ assert.equal(
       stgDeviceText(state as Parameters<typeof stgDeviceText>[0]) === '',
     ),
     [true, false, false, false, false],
-    'every state of the device row says something, except while it is still being read',
+    'every state of the site’s device switch says something, except while it is still being read',
   );
   assert.match(
     stgDeviceText('off'),
-    /^Allow notifications so Pinch can nudge you/,
-    'the reason to allow comes with the switch',
+    /^Allow notifications so Moondreams apps can nudge you/,
+    'the reason to allow comes with the switch, in the site’s words and not one app’s',
   );
   assert.match(
     stgDeviceText('blocked'),

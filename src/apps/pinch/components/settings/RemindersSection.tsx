@@ -9,9 +9,13 @@ import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
 import { useNow } from '@/hooks/useNow';
 import {
-  turnOffDevicePush,
   turnOnDevicePush,
+  type TurnOnResult,
 } from '@/lib/notifications/devicePush';
+import {
+  getDeviceNotificationsText,
+  getTurnOnFailureText,
+} from '@/lib/notifications/deviceText';
 import {
   devicePushQueryOptions,
   notificationsQueryKeys,
@@ -21,9 +25,7 @@ import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
 import type { PinchSettings, ReminderKind } from '@apps/pinch/types';
 import {
   formatReminderHour,
-  getDeviceReminderText,
   getDeviceTimeZone,
-  getTurnOnFailureText,
   getZoneAbbreviation,
 } from '@apps/pinch/utils/settings';
 
@@ -98,35 +100,46 @@ interface RemindersSectionProps {
   uid: string;
 }
 
-/** Reminders on this device, then one switch per kind of reminder. The kinds only matter once this device can receive them, so they appear when it is on; until then one quiet line says why they aren't there. */
+/** What to say under the row after a refused ask. A blocked or unsupported browser says so once under the group, so its rows add nothing. */
+const getAskFailureText = (result: TurnOnResult) => {
+  if (result === 'blocked' || result === 'unsupported') return null;
+  if (result === 'dismissed') {
+    return 'Nothing changed. Allow notifications when your browser asks, then switch this on again.';
+  }
+  return getTurnOnFailureText(result);
+};
+
+/** One switch per reminder this app sends. Switching one on asks the browser for notifications on that tap when this device isn't set up (the device's own switch is the site's, in the profile), and a refusal leaves the switch off and says why: under the row, or once under the group when the browser blocks notifications or can't show them (its switches are then off and disabled). */
 function RemindersSection({ uid }: RemindersSectionProps) {
   const queryClient = useQueryClient();
   const { settings, save } = usePinchSettings(uid);
   const device = useQuery(devicePushQueryOptions(uid)).data ?? null;
-  const [isAsking, setIsAsking] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const isOn = device === 'on';
-  const canToggle = !isAsking && (device === 'off' || device === 'on');
+  const [askingKey, setAskingKey] = useState<ReminderKind | null>(null);
+  const [failure, setFailure] = useState<{
+    key: ReminderKind;
+    text: string;
+  } | null>(null);
+  const isStuck = device === 'blocked' || device === 'unsupported';
 
-  const handleDeviceChange = async (turnOn: boolean) => {
+  const handleKindChange = async (kind: ReminderKind, isChecked: boolean) => {
     setFailure(null);
-    setIsAsking(true);
-    try {
-      if (turnOn) {
-        setFailure(getTurnOnFailureText(await turnOnDevicePush(uid)));
-      } else {
-        await turnOffDevicePush(uid);
+    if (isChecked && device !== 'on') {
+      setAskingKey(kind);
+      try {
+        const result = await turnOnDevicePush(uid);
+        if (result !== 'on') {
+          const text = getAskFailureText(result);
+          if (text !== null) setFailure({ key: kind, text });
+          return;
+        }
+      } finally {
+        setAskingKey(null);
+        await queryClient.invalidateQueries({
+          queryKey: notificationsQueryKeys.device(uid),
+        });
       }
-    } finally {
-      setIsAsking(false);
-      await queryClient.invalidateQueries({
-        queryKey: notificationsQueryKeys.device(uid),
-      });
     }
-  };
-
-  const handleKindChange = (kind: ReminderKind, isChecked: boolean) =>
-    save({
+    await save({
       reminders: {
         [kind]: isChecked,
         ...(isDigestKind(kind) && isChecked
@@ -134,58 +147,46 @@ function RemindersSection({ uid }: RemindersSectionProps) {
           : {}),
       },
     });
+  };
 
   return (
     <SettingsGroup
       title='Reminders'
-      footer={
-        device === 'off' && (
-          <p>Turn on reminders for this device to choose what you get.</p>
-        )
-      }
+      footer={isStuck && <p>{getDeviceNotificationsText(device)}</p>}
     >
-      <SettingsRow
-        icon='🔔'
-        title='Reminders on this device'
-        description={
-          <>
-            {getDeviceReminderText(device)}
-            {failure && (
-              <span className='text-destructive mt-1 block'>{failure}</span>
-            )}
-          </>
-        }
-        control={
-          <AppToggle
-            aria-label='Reminders on this device'
-            checked={isOn}
-            disabled={!canToggle}
-            onCheckedChange={(isChecked) => void handleDeviceChange(isChecked)}
-          />
-        }
-      />
-      {isOn &&
-        REMINDER_KINDS.map((kind) => (
-          <SettingsRow
-            key={kind.key}
-            icon={kind.emoji}
-            title={kind.title}
-            description={kind.description}
-            control={
-              <AppToggle
-                aria-label={kind.title}
-                checked={settings.reminders[kind.key]}
-                onCheckedChange={(isChecked) =>
-                  void handleKindChange(kind.key, isChecked)
-                }
-              />
-            }
-          >
-            {getOptionsHost(settings.reminders) === kind.key && (
-              <EatSoonOptions uid={uid} reminders={settings.reminders} />
-            )}
-          </SettingsRow>
-        ))}
+      {REMINDER_KINDS.map((kind) => (
+        <SettingsRow
+          key={kind.key}
+          icon={kind.emoji}
+          title={kind.title}
+          description={
+            <>
+              {kind.description}
+              {failure?.key === kind.key && (
+                <span className='text-destructive mt-1 block'>
+                  {failure.text}
+                </span>
+              )}
+            </>
+          }
+          control={
+            <AppToggle
+              aria-label={kind.title}
+              checked={settings.reminders[kind.key]}
+              disabled={
+                askingKey !== null || (isStuck && !settings.reminders[kind.key])
+              }
+              onCheckedChange={(isChecked) =>
+                void handleKindChange(kind.key, isChecked)
+              }
+            />
+          }
+        >
+          {getOptionsHost(settings.reminders) === kind.key && (
+            <EatSoonOptions uid={uid} reminders={settings.reminders} />
+          )}
+        </SettingsRow>
+      ))}
     </SettingsGroup>
   );
 }

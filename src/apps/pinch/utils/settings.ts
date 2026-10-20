@@ -1,4 +1,3 @@
-import type { DevicePushState } from '@/lib/notifications/devicePush';
 import {
   CONTAINER_FREEZER_DAYS,
   CONTAINER_FRIDGE_DAYS,
@@ -150,29 +149,6 @@ export const getZoneAbbreviation = (timeZone: string | null, at: number) => {
     return '';
   }
 };
-
-/** The line under "Reminders on this device": the reason to turn it on while it is off, and how to get unstuck when the browser won't let it. Empty while the device is still being read. */
-export const getDeviceReminderText = (state: DevicePushState | null) => {
-  if (state === null) return '';
-  if (state === 'on') {
-    return 'Pinch can send this device reminders. Turn it off to stop every Moondreams reminder here.';
-  }
-  if (state === 'blocked') {
-    return 'This site is blocked from sending notifications. Allow them in your browser’s site settings, then come back.';
-  }
-  if (state === 'unsupported') {
-    return 'This browser can’t show reminders. On an iPhone or iPad, add this site to your Home Screen and open it from there.';
-  }
-  return 'Allow notifications so Pinch can nudge you when something needs you, even with the app closed.';
-};
-
-/** The note under a failed attempt to turn reminders on; nothing for a closed question, which changed nothing. */
-export const getTurnOnFailureText = (
-  result: 'on' | 'blocked' | 'unsupported' | 'dismissed' | 'failed',
-) =>
-  result === 'failed'
-    ? 'We couldn’t turn reminders on. Check your connection and try again.'
-    : null;
 
 /** Whether the fridge number is past what most food-safety guidance gives for cooked leftovers, so the screen says so quietly. */
 export const isAboveFridgeGuidance = (fridgeDays: number) =>

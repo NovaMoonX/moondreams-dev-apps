@@ -1,6 +1,7 @@
 import { Modal } from '@moondreamsdev/dreamer-ui/components';
 import type { User } from 'firebase/auth';
 
+import DeviceNotifications from '@/components/DeviceNotifications';
 import UserAvatar from '@/ui/UserAvatar';
 import { formatDate } from '@/utils/formatUtils';
 
@@ -41,6 +42,7 @@ function ProfileModal({ user, onClose }: ProfileModalProps) {
           Account created at:{' '}
           <span className='text-foreground font-medium'>{formattedDate}</span>
         </div>
+        <DeviceNotifications uid={user.uid} />
       </div>
     </Modal>
   );
