@@ -7,7 +7,10 @@ import {
   registerDeviceToken,
   unregisterDeviceToken,
 } from './registerDeviceToken';
-import { requestPushPermission } from './requestPushPermission';
+import {
+  askNotificationPermission,
+  getDeviceToken,
+} from './requestPushPermission';
 
 /** `blocked`: the browser refused notifications for this site and only its settings can change that. `off`: allowed or not yet asked, and not registered on this device. */
 export type DevicePushState = 'unsupported' | 'blocked' | 'off' | 'on';
@@ -16,7 +19,7 @@ export type DevicePushState = 'unsupported' | 'blocked' | 'off' | 'on';
 export type TurnOnResult =
   'on' | 'blocked' | 'unsupported' | 'dismissed' | 'failed';
 
-/** The browser's push setup waits on a service worker that a dev server never registers; a person is never left waiting on it. */
+/** The browser's push setup after a person has allowed notifications waits on a service worker that a dev server never registers, and a token write waits on the server; a person is never left waiting on either. */
 const SETUP_TIMEOUT_MS = 10_000;
 
 const offKey = (uid: string) => `push-device-off:${uid}`;
@@ -83,24 +86,25 @@ const withTimeout = <T>(work: Promise<T>) =>
     ),
   ]);
 
-/** Asks the browser for permission (only when it has not been asked) and registers this device. Call it from a tap. */
+/** Asks the browser for permission (only when it has not been asked) and registers this device. Call it from a tap. The browser's question is never timed out, so a slow Allow still counts. */
 export async function turnOnDevicePush(uid: string): Promise<TurnOnResult> {
   if (!(await canPush())) return 'unsupported';
   if (getPermission() === 'denied') return 'blocked';
 
   try {
-    const token = await withTimeout(requestPushPermission());
-    if (token) {
-      await registerDeviceToken(uid, token);
-      setDevicePushOff(uid, false);
-      return 'on';
-    }
+    const permission = await askNotificationPermission();
+    if (permission === 'denied') return 'blocked';
+    if (permission !== 'granted') return 'dismissed';
+
+    const token = await withTimeout(getDeviceToken());
+    if (token === null) return 'failed';
+
+    await withTimeout(registerDeviceToken(uid, token));
+    setDevicePushOff(uid, false);
+    return 'on';
   } catch {
     return 'failed';
   }
-
-  if (getPermission() === 'denied') return 'blocked';
-  return getPermission() === 'default' ? 'dismissed' : 'failed';
 }
 
 /** The token to take off the person: the one remembered at registration, else (a device registered before that was kept) the browser's own, which it only gives to a device it already allows, so this never asks for anything. */
@@ -109,7 +113,7 @@ const findToken = async (uid: string) => {
   if (remembered !== null) return remembered;
   if (!(await canPush()) || getPermission() !== 'granted') return null;
 
-  return withTimeout(requestPushPermission());
+  return withTimeout(getDeviceToken());
 };
 
 /** Deletes the token from the browser's push service. It can wait on that service, so it is never what a person is held up by. */

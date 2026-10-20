@@ -10155,7 +10155,7 @@ assert.equal(
       stgFailureText,
     ),
     [null, null, null, null, 'We couldn’t turn reminders on. Check your connection and try again.'],
-    'only a failure that a retry can fix is worded, and it says so',
+    'a closed question and a refused one say nothing here; a failed setup is worded with a retry hint',
   );
   assert.deepEqual(
     [3, 4, 5, 14].map(stgAbove),
