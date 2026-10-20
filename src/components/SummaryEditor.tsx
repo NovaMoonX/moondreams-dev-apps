@@ -14,6 +14,7 @@ import {
   SUMMARY_GROUP_ROUNDING,
   type SummaryGroupPosition,
 } from '@/components/summaryGroup';
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -115,6 +116,10 @@ function SummaryEditor({
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const isDrawer = isBelow('sm') || (isShort && isBelow('lg'));
   const close = () => setIsOpen(false);
+  const { dialogId, onDialogClose } = useSheetHistory(
+    isOpen && isDrawer,
+    close,
+  );
   const isEmpty = summary === '';
   const isRoomy = isFramed || groupPosition !== undefined;
 
@@ -200,7 +205,8 @@ function SummaryEditor({
         {isOpen && (
           <Drawer
             isOpen
-            onClose={close}
+            id={dialogId}
+            onClose={onDialogClose}
             title={title}
             showCloseButton
             footer={<div className='form-footer px-4 pb-4'>{doneButton}</div>}
