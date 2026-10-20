@@ -13,6 +13,7 @@ import { Pencil, Plus, Trash2, Ungroup, X } from 'lucide-react';
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
+import LabelChip from '@/components/LabelChip';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
 import SectionDivider from '@/components/SectionDivider';
@@ -32,6 +33,7 @@ import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   DEFAULT_SERVING,
   MAX_INGREDIENT_GROUP_LENGTH,
+  MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   UNIT_LABELS,
@@ -54,7 +56,11 @@ import {
   restoreLineGroup,
   ungroupLines,
 } from '@apps/pinch/utils/ingredientGroups';
-import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
+import {
+  matchIngredient,
+  normalizeName,
+} from '@apps/pinch/utils/ingredientMatch';
+import { toIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
 
 const PHONE_FOCUS_DELAY_MS = 350;
@@ -84,6 +90,78 @@ const getAmountLabel = (row: IngredientRow) => {
   }
   return row.amount.trim() === '' ? 'Add an amount' : 'Check the amount';
 };
+
+/** The id a new ingredient already has in this form when a line names it, else a fresh one, so two lines naming it share one ingredient. */
+const getStagedId = (rows: IngredientRow[], name: string) =>
+  rows.find(
+    (row) =>
+      row.newName !== null &&
+      normalizeName(row.newName) === normalizeName(name),
+  )?.ingredientId ?? generateUuid();
+
+interface NewNameFieldProps {
+  name: string;
+  usedIds: readonly string[];
+  onRename: (name: string) => void;
+  onUseExisting?: (ingredientId: string) => void;
+}
+
+/** The name of an ingredient being made in this form: editable until the recipe is saved, cased like the app's own names when the field is left, and never empty. */
+function NewNameField({
+  name,
+  usedIds,
+  onRename,
+  onUseExisting,
+}: NewNameFieldProps) {
+  const ingredients = useAppSelector(selectIngredients);
+  const [draft, setDraft] = useState(name);
+  const existing = useMemo(
+    () => (onUseExisting ? matchIngredient(draft, ingredients) : null),
+    [onUseExisting, draft, ingredients],
+  );
+
+  return (
+    <div className='space-y-2'>
+      <Field label='Name'>
+        {(id) => (
+          <Input
+            id={id}
+            variant='outline'
+            value={draft}
+            maxLength={MAX_NAME_LENGTH}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              if (event.target.value.trim() !== '')
+                onRename(event.target.value);
+            }}
+            onBlur={() => {
+              const next = toIngredientName(draft);
+              setDraft(next === '' ? name : next);
+              if (next !== '') onRename(next);
+            }}
+          />
+        )}
+      </Field>
+      {existing && onUseExisting && !usedIds.includes(existing.id) && (
+        <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
+          <span className='text-muted-foreground text-xs'>
+            Already in your ingredients
+          </span>
+          <Button
+            type='button'
+            size='sm'
+            rounded='full'
+            variant='secondary'
+            className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+            onClick={() => onUseExisting(existing.id)}
+          >
+            Use {existing.name}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface GroupFieldProps {
   group: string | null;
@@ -165,12 +243,13 @@ interface IngredientEditorProps {
   uid: string;
   row: IngredientRow;
   rows: IngredientRow[];
-  displayName: string;
   onUpdate: (patch: Partial<IngredientRow>) => void;
   onRemove: () => void;
   /** The drawer has a footer button and puts "remove" in its body; an inline row shows it beside the fields. */
   showRemove: boolean;
   isGroupLive: boolean;
+  onRename: (ingredientId: string, name: string) => void;
+  onUseExisting: (fromId: string, toId: string) => void;
 }
 
 /** One ingredient's details: amount, unit and a preparation note, or the way to resolve a name the reader found that no ingredient matches. Shared by the phone drawer and the inline row. */
@@ -178,11 +257,12 @@ function IngredientEditor({
   uid,
   row,
   rows,
-  displayName,
   onUpdate,
   onRemove,
   showRemove,
   isGroupLive,
+  onRename,
+  onUseExisting,
 }: IngredientEditorProps) {
   const [isChoosing, setIsChoosing] = useState(false);
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
@@ -211,10 +291,14 @@ function IngredientEditor({
 
   if (isUnresolved) {
     return (
-      <div className='space-y-3'>
-        <p className='text-muted-foreground text-sm'>
-          <span className='text-foreground font-medium'>{displayName}</span>{' '}
-          isn’t in your ingredients yet.
+      <div className='space-y-3' onKeyDown={blockEnterSubmit}>
+        <NewNameField
+          name={proposedName}
+          usedIds={usedInGroup}
+          onRename={(name) => onUpdate({ proposedName: name })}
+        />
+        <p className='text-muted-foreground text-xs'>
+          Not in your ingredients yet. Pick one you have, or add it as new.
         </p>
         {nearMatches.length > 0 && (
           <div className='space-y-1.5'>
@@ -251,18 +335,13 @@ function IngredientEditor({
             rounded='full'
             variant='secondary'
             className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
-            onClick={() =>
+            onClick={() => {
+              const name = toIngredientName(proposedName);
               onUpdate({
-                ingredientId:
-                  rows.find(
-                    (other) =>
-                      other.newName !== null &&
-                      normalizeName(other.newName) ===
-                        normalizeName(row.proposedName ?? ''),
-                  )?.ingredientId ?? generateUuid(),
-                newName: row.proposedName,
-              })
-            }
+                ingredientId: getStagedId(rows, name),
+                newName: name,
+              });
+            }}
           >
             Add as new ingredient
           </Button>
@@ -285,6 +364,14 @@ function IngredientEditor({
               setIsChoosing(false);
               onUpdate({ ingredientId, proposedName: null, newName: null });
             }}
+            onStageNew={(name) => {
+              setIsChoosing(false);
+              onUpdate({
+                ingredientId: getStagedId(rows, name),
+                newName: name,
+                proposedName: null,
+              });
+            }}
           />
         )}
         {showRemove && (
@@ -301,6 +388,14 @@ function IngredientEditor({
 
   return (
     <div className='space-y-3' onKeyDown={blockEnterSubmit}>
+      {row.newName !== null && (
+        <NewNameField
+          name={row.newName}
+          usedIds={usedInGroup}
+          onRename={(name) => onRename(row.ingredientId, name)}
+          onUseExisting={(toId) => onUseExisting(row.ingredientId, toId)}
+        />
+      )}
       {row.isAmountless ? (
         <div className='space-y-1.5'>
           <p className='font-medium'>Amount</p>
@@ -695,7 +790,11 @@ function RecipeIngredients({
     );
   };
 
-  const addRow = (ingredientId: string, group: string | null) => {
+  const addRow = (
+    ingredientId: string,
+    group: string | null,
+    newName: string | null = null,
+  ) => {
     const serving =
       ingredientsById.get(ingredientId)?.serving ?? DEFAULT_SERVING;
     const id = generateUuid();
@@ -708,12 +807,30 @@ function RecipeIngredients({
         isAmountless: false,
         note: null,
         proposedName: null,
-        newName: null,
+        newName,
         group: resolveGroupName(group, rows),
       }),
     );
     return id;
   };
+  const stageNew = (name: string, group: string | null) =>
+    addRow(getStagedId(rows, name), group, name);
+  const renameNew = (ingredientId: string, name: string) =>
+    onChange(
+      rows.map((row) =>
+        row.ingredientId === ingredientId && row.newName !== null
+          ? { ...row, newName: name }
+          : row,
+      ),
+    );
+  const useExisting = (fromId: string, toId: string) =>
+    onChange(
+      rows.map((row) =>
+        row.ingredientId === fromId && row.newName !== null
+          ? { ...row, ingredientId: toId, newName: null, proposedName: null }
+          : row,
+      ),
+    );
 
   return (
     <div className='space-y-3' data-recipe-ingredients>
@@ -778,19 +895,19 @@ function RecipeIngredients({
                           className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
                         >
                           <span className='min-w-0 flex-1'>
-                            <span className='block truncate font-medium'>
-                              {name}
-                              {row.newName && (
-                                <span className='text-muted-foreground ml-1.5 text-xs font-normal'>
-                                  new
-                                </span>
+                            <span className='flex min-w-0 items-center gap-2'>
+                              <span className='truncate font-medium'>
+                                {name}
+                              </span>
+                              {(isUnresolved || row.newName !== null) && (
+                                <LabelChip>New</LabelChip>
                               )}
                             </span>
                             {((row.note && !row.isAmountless) ||
                               isUnresolved) && (
                               <span className='text-muted-foreground block truncate text-xs font-normal'>
                                 {isUnresolved
-                                  ? 'Not in your ingredients yet · tap to add or choose'
+                                  ? 'Tap to add it or choose one you have'
                                   : row.note}
                               </span>
                             )}
@@ -828,11 +945,12 @@ function RecipeIngredients({
                             uid={uid}
                             row={row}
                             rows={rows}
-                            displayName={name}
                             showRemove={false}
                             isGroupLive={false}
                             onUpdate={(patch) => update(row.id, patch)}
                             onRemove={() => remove(row.id)}
+                            onRename={renameNew}
+                            onUseExisting={useExisting}
                           />
                         </div>
                       )}
@@ -850,6 +968,10 @@ function RecipeIngredients({
             uid={uid}
             onPick={(ingredientId) => {
               setOpenId(addRow(ingredientId, lastGroup));
+              setIsAdding(false);
+            }}
+            onStageNew={(name) => {
+              setOpenId(stageNew(name, lastGroup));
               setIsAdding(false);
             }}
             excludeIds={getUsedInGroup(rows, lastGroup)}
@@ -894,8 +1016,11 @@ function RecipeIngredients({
           getName={getName}
           suggestions={suggestions}
           onAdd={addRow}
+          onStageNew={stageNew}
           onUpdate={update}
           onRemove={remove}
+          onRename={renameNew}
+          onUseExisting={useExisting}
           onClose={() => setDrawer(null)}
         />
       )}
@@ -910,8 +1035,11 @@ interface IngredientDrawerProps {
   getName: (row: IngredientRow) => string;
   suggestions: ItemSuggestions;
   onAdd: (ingredientId: string, group: string | null) => string;
+  onStageNew: (name: string, group: string | null) => string;
   onUpdate: (id: string, patch: Partial<IngredientRow>) => void;
   onRemove: (id: string) => void;
+  onRename: (ingredientId: string, name: string) => void;
+  onUseExisting: (fromId: string, toId: string) => void;
   onClose: () => void;
 }
 
@@ -922,8 +1050,11 @@ function IngredientDrawer({
   getName,
   suggestions,
   onAdd,
+  onStageNew,
   onUpdate,
   onRemove,
+  onRename,
+  onUseExisting,
   onClose,
 }: IngredientDrawerProps) {
   const [activeId, setActiveId] = useState<string | null>(
@@ -968,7 +1099,6 @@ function IngredientDrawer({
           uid={uid}
           row={row}
           rows={rows}
-          displayName={getName(row)}
           showRemove={mode.kind === 'edit'}
           isGroupLive
           onUpdate={(patch) => onUpdate(row.id, patch)}
@@ -976,6 +1106,8 @@ function IngredientDrawer({
             onRemove(row.id);
             onClose();
           }}
+          onRename={onRename}
+          onUseExisting={onUseExisting}
         />
       ) : (
         <div className='space-y-3'>
@@ -992,6 +1124,7 @@ function IngredientDrawer({
             onPick={(ingredientId) =>
               setActiveId(onAdd(ingredientId, addGroup))
             }
+            onStageNew={(name) => setActiveId(onStageNew(name, addGroup))}
           />
         </div>
       )}

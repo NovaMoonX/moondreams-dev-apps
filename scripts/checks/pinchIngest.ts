@@ -5,6 +5,11 @@ import { formatFileSize, isReadableFile } from '../../src/utils/fileUtils.ts';
 import type { IngredientRecord } from '../../src/apps/pinch/types.ts';
 import { matchIngredient } from '../../src/apps/pinch/utils/ingredientMatch.ts';
 import {
+  addPrepToNote,
+  splitPrep,
+  toIngredientName,
+} from '../../src/apps/pinch/utils/ingredientNames.ts';
+import {
   canPasteTextInstead,
   classifyReadFailure,
   getReadFailureLine,
@@ -48,6 +53,75 @@ assert.equal(idOf('house spice blend'), 'c-spice');
 assert.equal(idOf('chicken schmaltz'), null);
 assert.equal(idOf('rice vinegar') === 'cat-jasmine-rice', false);
 assert.equal(idOf('   '), null);
+
+assert.equal(
+  idOf('bone-in, skinless chicken thighs'),
+  'cat-chicken-thigh',
+  'bone-in and skinless are prep, not another ingredient',
+);
+assert.equal(idOf('Chicken thighs, skin-on'), 'cat-chicken-thigh');
+assert.equal(
+  idOf('thigh chicken'),
+  'cat-chicken-thigh',
+  'the same words in another order',
+);
+assert.equal(
+  idOf('chiken thigh'),
+  'cat-chicken-thigh',
+  'one wrong letter in a long enough name',
+);
+assert.equal(idOf('chiken'), null, 'a short name gets no typo allowance');
+assert.equal(
+  idOf('coconut milk') === 'cat-whole-milk',
+  false,
+  'a name with another ingredient word is not the plain one',
+);
+assert.equal(
+  matchIngredient(
+    'tomato pastx',
+    resolveIngredients([
+      custom('c-a', 'Tomato paste'),
+      custom('c-b', 'Tomato pasta'),
+    ]),
+  )?.id ?? null,
+  null,
+  'two ingredients one letter away is not sure, so neither is picked',
+);
+
+assert.deepEqual(splitPrep('bone-in, skinless chicken thighs'), {
+  name: 'chicken thighs',
+  prep: ['bone-in', 'skinless'],
+});
+assert.deepEqual(splitPrep('Skin on salmon fillet'), {
+  name: 'salmon fillet',
+  prep: ['skin-on'],
+});
+assert.deepEqual(
+  splitPrep('skinless'),
+  { name: 'skinless', prep: [] },
+  'a name is never left empty',
+);
+assert.deepEqual(
+  splitPrep('diced tomatoes'),
+  { name: 'diced tomatoes', prep: [] },
+  'a word that makes a product stays',
+);
+assert.equal(toIngredientName('chicken THIGHS'), 'Chicken thighs');
+assert.equal(toIngredientName('  gochujang  paste, '), 'Gochujang paste');
+assert.equal(toIngredientName('bbq sauce'), 'Bbq sauce');
+assert.equal(
+  toIngredientName('BBQ sauce'),
+  'BBQ sauce',
+  'a short all-capitals word is kept',
+);
+assert.equal(toIngredientName('2% milk'), '2% milk');
+assert.equal(addPrepToNote(null, ['bone-in', 'skinless']), 'bone-in, skinless');
+assert.equal(
+  addPrepToNote('skinless, diced', ['bone-in', 'skinless']),
+  'skinless, diced, bone-in',
+  'a word the note already says is not repeated',
+);
+assert.equal(addPrepToNote(null, []), null);
 
 // whatever the model returns is cut down to the form's fields and types
 const hostile = normalizeExtractedRecipe({

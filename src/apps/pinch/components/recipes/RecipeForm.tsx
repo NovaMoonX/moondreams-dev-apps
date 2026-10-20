@@ -329,7 +329,7 @@ function RecipeForm({
     }
     if (unresolvedCount > 0) {
       return {
-        text: `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`,
+        text: `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “New” to save.`,
         target: '[data-ingredient-unresolved]',
       };
     }
@@ -775,7 +775,7 @@ function RecipeForm({
                   .filter((row) => row.newName !== null)
                   .map((row) => [
                     row.ingredientId,
-                    { id: row.ingredientId, name: row.newName ?? '' },
+                    { id: row.ingredientId, name: (row.newName ?? '').trim() },
                   ]),
               ).values(),
             ],
