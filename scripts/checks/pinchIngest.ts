@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 
+import { getDataFromExtracted } from '../../src/apps/pinch/components/recipes/recipeFormModel.ts';
+import { mapIngredients } from '../../src/apps/pinch/utils/importShare.ts';
 import { normalizeExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import { formatFileSize, isReadableFile } from '../../src/utils/fileUtils.ts';
 import type { IngredientRecord } from '../../src/apps/pinch/types.ts';
@@ -8,6 +10,7 @@ import {
   addPrepToNote,
   splitPrep,
   toIngredientName,
+  toTypedIngredientName,
 } from '../../src/apps/pinch/utils/ingredientNames.ts';
 import {
   canPasteTextInstead,
@@ -62,8 +65,8 @@ assert.equal(
 assert.equal(idOf('Chicken thighs, skin-on'), 'cat-chicken-thigh');
 assert.equal(
   idOf('thigh chicken'),
-  'cat-chicken-thigh',
-  'the same words in another order',
+  null,
+  'words in another order are not assumed to be the same product',
 );
 assert.equal(
   idOf('chiken thigh'),
@@ -90,6 +93,69 @@ assert.equal(
   )?.id ?? null,
   null,
   'two ingredients one letter away is not sure, so neither is picked',
+);
+
+const nameOf = (name: string) =>
+  matchIngredient(name, ingredients)?.name ?? null;
+assert.equal(
+  nameOf('Fresh ginger'),
+  'Fresh ginger',
+  'an exact name wins over a name that only matches once filler drops',
+);
+assert.equal(nameOf('Ground ginger'), 'Ground ginger');
+assert.equal(nameOf('whole chicken'), 'Whole chicken');
+assert.equal(
+  nameOf('diced tomatoes'),
+  'Canned diced tomatoes',
+  'an alias is an exact name',
+);
+assert.equal(
+  nameOf('ground cinnamon'),
+  'Cinnamon',
+  'a filler word drops when only one ingredient is left',
+);
+assert.equal(
+  nameOf('whole peeled tomatoes'),
+  null,
+  'peeled tomatoes are a product, so peeled stays in the name',
+);
+// look-alike products a one-letter or reordered match would merge
+assert.equal(nameOf('goat milk'), null, 'goat is not oat');
+assert.equal(nameOf('1% milk'), null, 'one percent is not two percent');
+assert.equal(nameOf('0% milk'), null);
+assert.equal(nameOf('green tea'), null, 'tea is not peas');
+assert.equal(
+  nameOf('grapeseed oil'),
+  null,
+  'a different first letter is a different word',
+);
+assert.equal(
+  nameOf('lemon juiced'),
+  null,
+  'a final d is another word, not a typo',
+);
+assert.equal(nameOf('beef stick'), null, 'stick is not stock');
+assert.equal(nameOf('white egg'), null, 'egg white is not white egg');
+assert.equal(
+  nameOf('chiken thigh'),
+  'Chicken thigh',
+  'one wrong letter in a long word is a typo',
+);
+assert.equal(nameOf('spagetti'), 'Spaghetti');
+assert.equal(nameOf('parmisan'), 'Parmesan');
+// a person's own ingredient beats the catalog's, and two equally good catalog names match neither
+assert.equal(
+  matchIngredient(
+    'minced garlic',
+    resolveIngredients([custom('c-garlic', 'Chopped garlic')]),
+  )?.id,
+  'c-garlic',
+  "the person's own ingredient wins a tie with the catalog",
+);
+assert.equal(
+  nameOf('ginger'),
+  null,
+  'fresh and ground ginger are both just ginger, so a bare ginger is for the person to pick',
 );
 
 assert.deepEqual(splitPrep('bone-in, skinless chicken thighs'), {
@@ -119,6 +185,53 @@ assert.equal(
   'a short all-capitals word is kept',
 );
 assert.equal(toIngredientName('2% milk'), '2% milk');
+assert.equal(
+  toIngredientName('OLIVE OIL'),
+  'Olive oil',
+  'a name in capitals is recased whole, even its short words',
+);
+assert.equal(toIngredientName('LOW-SODIUM SOY SAUCE'), 'Low-sodium soy sauce');
+assert.equal(
+  toTypedIngredientName('KitKat bar'),
+  'KitKat bar',
+  'a name that mixes cases was written on purpose',
+);
+assert.equal(toTypedIngredientName("Frank's RedHot"), "Frank's RedHot");
+assert.equal(toTypedIngredientName('gochujang bar'), 'Gochujang bar');
+assert.deepEqual(splitPrep('peeled and deveined shrimp'), {
+  name: 'peeled shrimp',
+  prep: ['deveined'],
+});
+assert.deepEqual(splitPrep('boneless and skinless chicken breasts'), {
+  name: 'chicken breasts',
+  prep: ['boneless', 'skinless'],
+});
+assert.deepEqual(splitPrep('boneless or skinless chicken'), {
+  name: 'chicken',
+  prep: ['boneless', 'skinless'],
+});
+assert.deepEqual(splitPrep('chicken (bone-in)'), {
+  name: 'chicken',
+  prep: ['bone-in'],
+});
+assert.deepEqual(splitPrep('bone  in ribs'), {
+  name: 'ribs',
+  prep: ['bone-in'],
+});
+assert.deepEqual(splitPrep('large shrimp, deveined and'), {
+  name: 'large shrimp',
+  prep: ['deveined'],
+});
+assert.equal(
+  addPrepToNote('bone in', ['bone-in']),
+  'bone in',
+  'the note already says it in other spelling',
+);
+assert.equal(
+  addPrepToNote('unseeded', ['seeded']),
+  'unseeded, seeded',
+  'a longer word is not the same word',
+);
 assert.equal(addPrepToNote(null, ['bone-in', 'skinless']), 'bone-in, skinless');
 assert.equal(
   addPrepToNote('skinless, diced', ['bone-in', 'skinless']),
@@ -126,6 +239,70 @@ assert.equal(
   'a word the note already says is not repeated',
 );
 assert.equal(addPrepToNote(null, []), null);
+
+// a reading becomes form rows: matched lines link, new names are staged, near misses wait for a choice
+const read = getDataFromExtracted(
+  normalizeExtractedRecipe({
+    title: 'Bowls',
+    ingredients: [
+      {
+        name: 'bone-in, skinless chicken thighs',
+        amount: 2,
+        unit: 'LB',
+        note: null,
+      },
+      { name: 'GOCHUJANG', amount: 1, unit: 'TBSP', note: null },
+      { name: 'gochujang', amount: 2, unit: 'TBSP', note: null },
+      { name: 'chicken schmaltz', amount: 1, unit: 'TBSP', note: null },
+      { name: 'salt', amount: null, unit: null, note: 'to taste' },
+    ],
+    steps: ['Cook.'],
+  }),
+  ingredients,
+);
+const thigh = read.ingredients.find(
+  (row) => row.ingredientId === 'cat-chicken-thigh',
+);
+assert.equal(
+  thigh?.note,
+  'bone-in, skinless',
+  'prep words go to the note of a matched line',
+);
+assert.equal(thigh?.proposedName, null);
+const staged = read.ingredients.filter((row) => row.newName !== null);
+assert.deepEqual(
+  staged.map((row) => row.newName),
+  ['Gochujang', 'Gochujang'],
+  'a new name with nothing close is staged, cased like the catalog',
+);
+assert.equal(
+  staged[0]?.ingredientId,
+  staged[1]?.ingredientId,
+  'two lines naming one new ingredient share it',
+);
+assert.notEqual(staged[0]?.ingredientId, '');
+const waiting = read.ingredients.filter((row) => row.ingredientId === '');
+assert.deepEqual(
+  waiting.map((row) => row.proposedName),
+  ['Chicken schmaltz'],
+  'a name with close ingredients waits for the person to choose',
+);
+
+// the share importer links by the same matcher and must not turn a look-alike into another product
+const idCounter = { n: 0 };
+const shared = mapIngredients(
+  ['Goat milk', 'Green tea', 'Grapeseed oil', '1% milk', 'Chicken thighs'].map(
+    (name) => ({ name, catalogId: null }),
+  ),
+  [],
+  1,
+  () => `new-${(idCounter.n += 1)}`,
+);
+assert.deepEqual(
+  shared.created.map((record) => record.name),
+  ['Goat milk', 'Green tea', 'Grapeseed oil', '1% milk'],
+  'shared names that only look like a catalog name are made, never linked to it',
+);
 
 // whatever the model returns is cut down to the form's fields and types
 const hostile = normalizeExtractedRecipe({

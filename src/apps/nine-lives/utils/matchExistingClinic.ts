@@ -1,7 +1,10 @@
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import type { VetClinic } from '../types';
 
-const clinicMatcher = createOptionMatcher<VetClinic>({ names: (clinic) => [clinic.name] });
+const clinicMatcher = createOptionMatcher<VetClinic>({
+  names: (clinic) => [clinic.name],
+  typos: 'loose',
+});
 
 export function matchExistingClinic(
   name: string | null | undefined,

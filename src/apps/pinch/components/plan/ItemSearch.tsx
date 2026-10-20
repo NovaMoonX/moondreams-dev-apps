@@ -27,7 +27,7 @@ import {
   searchIngredients,
 } from '@apps/pinch/utils/catalogSearch';
 import { getStockParts } from '@apps/pinch/utils/containers';
-import { toIngredientName } from '@apps/pinch/utils/ingredientNames';
+import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { MAX_PICK_SUGGESTIONS } from '@apps/pinch/utils/pickerSuggestions';
 import { getShopSection } from '@apps/pinch/utils/shopping';
 
@@ -281,7 +281,7 @@ function ItemSearch({
 
   const createFromName = async () => {
     if (onStageNew) {
-      onStageNew(toIngredientName(trimmed));
+      onStageNew(toTypedIngredientName(trimmed));
       setQuery('');
       return;
     }
@@ -294,7 +294,7 @@ function ItemSearch({
           draft: {
             id: null,
             catalogId: null,
-            name: trimmed,
+            name: toTypedIngredientName(trimmed),
             familyId: null,
             newFamilyName: null,
             nutrition: null,

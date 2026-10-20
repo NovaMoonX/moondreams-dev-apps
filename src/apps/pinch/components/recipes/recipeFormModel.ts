@@ -19,7 +19,11 @@ import {
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
 import { addPrepToNote, splitPrep } from '@apps/pinch/utils/ingredientNames';
-import { resolveIngredient } from '@apps/pinch/utils/ingredientMatch';
+import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
+import {
+  normalizeName,
+  resolveIngredient,
+} from '@apps/pinch/utils/ingredientMatch';
 import {
   EMPTY_CARE_TEXT,
   getCareText,
@@ -140,6 +144,19 @@ export const getDataFromExtracted = (
     const resolution = resolveIngredient(line.name, ingredients);
     const match = resolution.kind === 'match' ? resolution.option : null;
     const { prep } = splitPrep(line.name);
+    const newName =
+      resolution.kind === 'custom' &&
+      findNearMatches(ingredients, resolution.label).length === 0
+        ? resolution.label
+        : null;
+    const stagedId =
+      newName === null
+        ? null
+        : (acc.find(
+            (row) =>
+              row.newName !== null &&
+              normalizeName(row.newName) === normalizeName(newName),
+          )?.ingredientId ?? generateUuid());
     const unit = line.unit ?? match?.serving.unit ?? 'EACH';
     const { amount } = line;
     const group = cleanGroupName(line.group);
@@ -165,13 +182,16 @@ export const getDataFromExtracted = (
       ...acc,
       {
         id: generateUuid(),
-        ingredientId: match?.id ?? '',
+        ingredientId: match?.id ?? stagedId ?? '',
         amount: amount === null ? '' : String(amount),
         unit,
         isAmountless: amount === null,
         note: addPrepToNote(line.note, prep),
-        proposedName: resolution.kind === 'custom' ? resolution.label : null,
-        newName: null,
+        proposedName:
+          resolution.kind === 'custom' && newName === null
+            ? resolution.label
+            : null,
+        newName,
         group,
       },
     ];

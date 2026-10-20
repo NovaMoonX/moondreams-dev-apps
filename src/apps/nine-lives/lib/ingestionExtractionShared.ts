@@ -222,7 +222,7 @@ export const responseSchema = {
   },
 };
 
-const breedMatcher = createOptionMatcher({ casing: { style: 'title' } });
+const breedMatcher = createOptionMatcher({ typos: 'loose', casing: { style: 'title' } });
 
 /** The app's own breed list's spelling when the model's answer is that breed, else the breed as stated in Title Case. */
 function normalizeBreed(breed: string | null | undefined): string | null {

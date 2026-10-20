@@ -104,6 +104,7 @@ import {
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
+import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { getShownCover } from '@apps/pinch/utils/recipeCover';
@@ -329,7 +330,7 @@ function RecipeForm({
     }
     if (unresolvedCount > 0) {
       return {
-        text: `Add or choose ${unresolvedCount === 1 ? 'the “New” ingredient' : `the ${unresolvedCount} “New” ingredients`} to save.`,
+        text: `Choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Choose” to save.`,
         target: '[data-ingredient-unresolved]',
       };
     }
@@ -775,7 +776,10 @@ function RecipeForm({
                   .filter((row) => row.newName !== null)
                   .map((row) => [
                     row.ingredientId,
-                    { id: row.ingredientId, name: (row.newName ?? '').trim() },
+                    {
+                      id: row.ingredientId,
+                      name: toTypedIngredientName(row.newName ?? ''),
+                    },
                   ]),
               ).values(),
             ],

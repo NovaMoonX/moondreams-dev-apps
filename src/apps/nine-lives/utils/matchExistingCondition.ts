@@ -4,6 +4,7 @@ import { createOptionMatcher } from '@/utils/optionMatchUtils';
 
 const conditionMatcher = createOptionMatcher<{ id: string; name: string }>({
   names: (condition) => [condition.name],
+  typos: 'loose',
 });
 
 function bestMatch<T extends { id: string; name: string }>(name: string, values: T[]): string | null {
