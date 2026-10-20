@@ -37,6 +37,7 @@ import {
 import type { Collection } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { findCollectionByLabel } from '@apps/pinch/utils/collections';
+import { joinSourceNames } from '@apps/pinch/utils/shopping';
 
 const { custom } = FormFactories;
 
@@ -45,12 +46,7 @@ const TITLES_SHOWN = 2;
 const getRecipesLine = (count: number, titles: string[]) => {
   if (count === 0) return 'Not on any recipe';
   const noun = count === 1 ? 'recipe' : 'recipes';
-  const rest = count - TITLES_SHOWN;
-  const names =
-    rest > 0
-      ? `${titles.slice(0, TITLES_SHOWN).join(', ')} and ${rest} more`
-      : titles.join(', ');
-  return `${count} ${noun} · ${names}`;
+  return `${count} ${noun} · ${joinSourceNames(titles, TITLES_SHOWN)}`;
 };
 
 const getRemovedText = (label: string, count: number) => {
@@ -301,19 +297,19 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
                       variant='tertiary'
                       aria-label={`Change ${collection.label}`}
                       onClick={() => setEditingId(collection.id)}
-                      className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+                      className='h-auto min-h-16 w-full items-start justify-start gap-3 px-0! py-3 text-left'
                     >
                       <span
-                        className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)]'
+                        className='mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)]'
                         aria-hidden='true'
                       >
                         🗂️
                       </span>
-                      <span className='min-w-0 flex-1'>
+                      <span className='flex min-h-11 min-w-0 flex-1 flex-col justify-center'>
                         <span className='text-foreground block font-medium wrap-break-word'>
                           {collection.label}
                         </span>
-                        <span className='text-muted-foreground block truncate text-xs font-normal'>
+                        <span className='text-muted-foreground line-clamp-2 block text-sm font-normal'>
                           {getRecipesLine(
                             counts.get(collection.id) ?? 0,
                             titlesByCollection.get(collection.id) ?? [],
@@ -321,7 +317,7 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
                         </span>
                       </span>
                       <ChevronRight
-                        className='text-muted-foreground mt-2.5 mr-2.5 h-5 w-5 shrink-0'
+                        className='text-muted-foreground mt-3 mr-2.5 h-5 w-5 shrink-0'
                         aria-hidden='true'
                       />
                     </Button>
