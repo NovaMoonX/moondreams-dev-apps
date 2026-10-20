@@ -159,32 +159,29 @@ function RemindersSection({ uid }: RemindersSectionProps) {
   return (
     <SettingsGroup
       title='Reminders'
+      description={isStuck && getDeviceNotificationsText(device)}
       footer={
-        isStuck ? (
-          <p>{getDeviceNotificationsText(device)}</p>
-        ) : (
-          isOffWithReminders && (
-            <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
-              <p className='min-w-0 flex-1 basis-48'>
-                Notifications are off on this device, so these reminders won’t
-                reach it.
-              </p>
-              <Button
-                variant='secondary'
-                rounded='full'
-                disabled={askingKey !== null}
-                onClick={() => {
-                  setFailure(null);
-                  void askDevice('device');
-                }}
-              >
-                Allow on this device
-              </Button>
-              {failure?.key === 'device' && (
-                <p className='text-destructive basis-full'>{failure.text}</p>
-              )}
-            </div>
-          )
+        isOffWithReminders && (
+          <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+            <p className='min-w-0 flex-1 basis-48'>
+              Notifications are off on this device, so these reminders won’t
+              reach it.
+            </p>
+            <Button
+              variant='secondary'
+              rounded='full'
+              disabled={askingKey !== null}
+              onClick={() => {
+                setFailure(null);
+                void askDevice('device');
+              }}
+            >
+              Allow on this device
+            </Button>
+            {failure?.key === 'device' && (
+              <p className='text-destructive basis-full'>{failure.text}</p>
+            )}
+          </div>
         )
       }
     >

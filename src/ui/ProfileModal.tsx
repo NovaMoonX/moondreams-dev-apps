@@ -23,7 +23,7 @@ function ProfileModal({ user, onClose }: ProfileModalProps) {
       title='Profile'
       actions={[{ label: 'Close', variant: 'secondary', onClick: onClose }]}
     >
-      <div className='space-y-3'>
+      <div className='max-h-[calc(100dvh-10rem)] space-y-3 overflow-y-auto'>
         <p className='text-muted-foreground text-sm'>
           This is your profile information.
         </p>
