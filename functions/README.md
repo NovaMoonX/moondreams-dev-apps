@@ -79,7 +79,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Public by design, so it is strict about what it returns.** It reads `apps/a-list/calendarShares/{shareId}` with the admin SDK (clients can't read that collection unless they own the document), and copies only allowlisted fields into the response (`calendarShareView.ts`). The owner's uid, the PIN and any extra field on the document never leave it.
 - **PIN:** an open share (`pin: null`) is returned as is. A locked one answers `pin_required` until a PIN arrives, then `wrong_pin` or the calendar. The PIN is trimmed, uppercased and compared in constant time. There is **no attempt limit**.
 - **Ids:** anything that isn't 26 characters of the share alphabet, any unknown id and a deleted share all return `not_found`, so a caller can't tell which ids exist.
-- **No secrets, no cache, no logging of ids or PINs.** Deploying a new callable may need the one-time invoker fix in the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
+- **No secrets, no cache, no logging of ids or PINs.** A new callable is opened to the browser by the deploy itself (root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access)).
 
 ### A-List Tracker: `searchMovies` and `getMovie`
 
@@ -208,7 +208,7 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
   - a "Secrets and config" row for any new secret or env var;
   - a note if it caches, budgets, or fetches on a user's behalf.
 - **New secret:** create it in production *before* the PR merges, or the CI functions deploy fails and nothing ships. If the first deploy then fails on a Secret Manager permission, see [Service accounts](#service-accounts).
-- **New callable:** if the browser reports a CORS error after its first deploy, run the invoker fix in the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
+- **New callable:** nothing to run. The deploy opens it to the browser and says so in its log (root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access)). It is then reachable by anyone with its address, so it checks `request.auth` itself unless it exists for signed-out visitors, and this README says which.
 - **Query with an equality plus a range or `orderBy`:** add its composite index to `firestore.indexes.json` in the same PR and run `npm run check:indexes`. The emulator doesn't enforce indexes, so a missing one only fails in production.
 - **Server-only collection:** give it a deny-all block in `firestore.rules`.
 
@@ -217,7 +217,8 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
 | Symptom | Cause and fix |
 | --- | --- |
 | Emulator says a function isn't found, or `lib/index.js` doesn't exist | `functions/lib/` wasn't built. Start through `npm run emulators` (it builds first), or run `npm --prefix functions run build`. |
-| Browser CORS error on a callable in production | Missing public-invoker grant. See the root README's invoker section. |
+| Browser CORS error on a callable in production | The callable is still private. `npm run fb:invoker -- <function>` (or `--all`); see the root README's invoker section. |
+| CI deploy log says `Unable to set the invoker for the IAM policy`, then opens every callable and deploys again | Expected on a new callable: the organization policy refuses the CLI's public grant, so the deploy applies it another way. If the run still fails after that, the deploy account can't update Cloud Run services: grant it `roles/run.admin`. |
 | CI deploy fails on functions with a secret error | The secret doesn't exist in production yet. Set it with `firebase functions:secrets:set`. |
 | CI deploy fails with `secretmanager.secrets.getIamPolicy` or `setIamPolicy` | The deployer account can't manage that secret. Grant it per [Service accounts](#service-accounts). |
 | A function returns an error reading its secret at runtime | The runtime (default compute) account can't read that secret. Grant it per [Service accounts](#service-accounts). |
