@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronDown } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
 
@@ -9,12 +11,30 @@ interface DayHeaderProps {
   trailing?: ReactNode;
   /** On a phone the header rides under the app bar while its day is on screen. */
   isSticky: boolean;
+  /** With `canOpen`, the label is a button that opens the day's details. */
+  canOpen?: boolean;
+  onOpen?: () => void;
 }
 
 /** A day's divider; on a phone it sticks under the app bar until the next day and turns into a compact bar. */
-function DayHeader({ label, trailing, isSticky }: DayHeaderProps) {
+function DayHeader({ label, trailing, isSticky, canOpen, onOpen }: DayHeaderProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
+  const labelNode = canOpen ? (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      aria-label={`${label}, details and add`}
+      className="relative h-auto gap-1 px-1 font-medium text-inherit! before:absolute before:-inset-y-2 before:-inset-x-1 before:content-['']"
+      onClick={onOpen}
+    >
+      {label}
+      <ChevronDown className='h-3.5 w-3.5' aria-hidden='true' />
+    </Button>
+  ) : (
+    label
+  );
 
   useEffect(() => {
     const element = ref.current;
@@ -52,7 +72,7 @@ function DayHeader({ label, trailing, isSticky }: DayHeaderProps) {
   }, [isSticky]);
 
   if (!isSticky) {
-    return <SectionDivider label={label} trailing={trailing} />;
+    return <SectionDivider label={labelNode} trailing={trailing} />;
   }
 
   return (
@@ -65,11 +85,11 @@ function DayHeader({ label, trailing, isSticky }: DayHeaderProps) {
     >
       {isStuck ? (
         <div className='flex w-full min-w-0 items-center justify-center gap-2'>
-          <span className='text-foreground truncate text-sm font-semibold'>{label}</span>
+          <span className='text-foreground truncate text-sm font-semibold'>{labelNode}</span>
           {trailing}
         </div>
       ) : (
-        <SectionDivider label={label} trailing={trailing} className='w-full' />
+        <SectionDivider label={labelNode} trailing={trailing} className='w-full' />
       )}
     </div>
   );
