@@ -41,6 +41,17 @@ const getStatus = (line: FirebaseUsageLine) => {
   return 'within';
 };
 
+/** Names why the read failed, so a missing grant isn't mistaken for a lost connection. */
+const getFailureText = (error: unknown) => {
+  const { code = '', message = '' } = (error ?? {}) as { code?: string; message?: string };
+  if (message.includes(MONITORING_ROLE_MISSING)) {
+    return "Google isn't letting the functions read usage yet. In Google Cloud, give the Cloud Functions service account the Monitoring Viewer role, then refresh.";
+  }
+  if (code.endsWith('permission-denied')) return "This account isn't the admin, so usage stays hidden.";
+  if (code.endsWith('internal')) return "Google's usage service didn't answer. Refresh in a moment.";
+  return "We couldn't load usage just now. Refresh to try again.";
+};
+
 function UsageRow({ line }: { line: FirebaseUsageLine }) {
   const hasFreeAmount = line.freeAmount > 0;
   const fraction = hasFreeAmount ? line.used / line.freeAmount : 0;
@@ -189,12 +200,9 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
   }
 
   if (!query.data) {
-    const needsRole = query.error instanceof Error && query.error.message.includes(MONITORING_ROLE_MISSING);
     return (
       <p className='bg-muted/50 border-border text-foreground rounded-2xl border p-4 text-sm'>
-        {needsRole
-          ? "Google isn't letting the functions read usage yet. In Google Cloud, give the Cloud Functions service account the Monitoring Viewer role, then refresh."
-          : "We couldn't load usage just now. Refresh to try again."}
+        {getFailureText(query.error)}
       </p>
     );
   }
@@ -226,6 +234,11 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
           : `${overCount} of ${usage.lines.length} limits are over the free amount or on pace to be.`}{' '}
         Updated {formatDateTime(usage.generatedAt)}.
       </p>
+      {usage.isSample ? (
+        <p className='bg-muted/50 border-border text-muted-foreground rounded-2xl border p-3 text-xs'>
+          Sample numbers: the emulator can&apos;t read Google&apos;s usage. Stored data is counted from your seeded data.
+        </p>
+      ) : null}
       {query.isError ? (
         <p className='text-muted-foreground text-xs'>Couldn&apos;t refresh just now; showing the last numbers.</p>
       ) : null}

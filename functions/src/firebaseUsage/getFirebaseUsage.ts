@@ -4,6 +4,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { getFootprints, type Footprints } from './attribution.js';
 import { getMonthStart, MonitoringAccessError, readMetric } from './monitoring.js';
 import { priceMetric, PRICING_LAST_CHECKED, USAGE_METRICS, type UsageLine } from './pricing.js';
+import { readSampleMetric } from './sampleUsage.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -19,6 +20,8 @@ export interface FirebaseUsageResponse {
   pricingCheckedOn: string;
   /** Null when only the per-app measurement failed; the totals above still stand. */
   footprints: Footprints | null;
+  /** True when the totals are made up because the emulator can't reach Cloud Monitoring. */
+  isSample: boolean;
   generatedAt: number;
 }
 
@@ -35,8 +38,10 @@ export const getFirebaseUsage = onCall(
   },
   async (request) => {
     const email = request.auth?.token.email?.trim().toLowerCase() ?? null;
+    const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
     const isAdminEmail = email === ADMIN_EMAIL && request.auth?.token.email_verified === true;
-    if (!request.auth || (!isAdminEmail && request.auth.token.admin !== true)) {
+    const isEmulatorDev = isEmulator && request.auth?.token.dev === true;
+    if (!request.auth || (!isAdminEmail && !isEmulatorDev && request.auth.token.admin !== true)) {
       throw new HttpsError('permission-denied', 'Only the admin can read usage.');
     }
 
@@ -57,7 +62,9 @@ export const getFirebaseUsage = onCall(
       const [lines, footprints] = await Promise.all([
         Promise.all(
           USAGE_METRICS.map(async (spec) => {
-            const daily = await readMetric(projectId, spec, now);
+            const daily = isEmulator
+              ? readSampleMetric(spec, daysElapsed, daysInMonth)
+              : await readMetric(projectId, spec, now);
             return priceMetric({ spec, daily, daysElapsed, daysInMonth });
           }),
         ),
@@ -73,6 +80,7 @@ export const getFirebaseUsage = onCall(
         projectedCostUsd: lines.reduce((sum, line) => sum + line.projectedCostUsd, 0),
         pricingCheckedOn: PRICING_LAST_CHECKED,
         footprints,
+        isSample: isEmulator,
         generatedAt: now,
       };
       return response;

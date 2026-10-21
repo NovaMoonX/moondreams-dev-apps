@@ -33,6 +33,7 @@ export interface FirebaseUsage {
   projectedCostUsd: number;
   pricingCheckedOn: string;
   footprints: FirebaseFootprints | null;
+  isSample: boolean;
   generatedAt: number;
 }
 
