@@ -1,4 +1,5 @@
 import {
+  MAX_RECIPE_NOTE_LENGTH,
   MAX_TWEAK_CHANGE_LENGTH,
   MAX_TWEAK_CHANGES,
   NUTRITION_CELLS,
@@ -29,6 +30,8 @@ export type RecipeContent = Pick<
   | 'sourceId'
 >;
 
+const INGREDIENTS_REORDERED = 'Ingredients reordered';
+const STEPS_REORDERED = 'Steps reordered';
 const STEP_QUOTE_LENGTH = 80;
 const TITLE_QUOTE_LENGTH = 80;
 const METRIC_KEYS = NUTRITION_CELLS.map((cell) => cell.key);
@@ -177,9 +180,7 @@ const getIngredientChanges = (
     .filter((line) => isStill(line.id))
     .map((line) => line.id);
   const reordered =
-    inGroups(keptBefore) === inGroups(keptAfter)
-      ? []
-      : ['Ingredients reordered'];
+    inGroups(keptBefore) === inGroups(keptAfter) ? [] : [INGREDIENTS_REORDERED];
 
   return [...changed, ...added, ...removed, ...reordered];
 };
@@ -190,7 +191,7 @@ const getStepChanges = (before: string[], after: string[]) => {
   const isSameSet =
     before.length === after.length &&
     [...before].sort().join('\u0000') === [...after].sort().join('\u0000');
-  if (isSameSet) return ['Steps reordered'];
+  if (isSameSet) return [STEPS_REORDERED];
 
   const shared = Math.min(before.length, after.length);
   const prefix = Array.from({ length: shared }, (_, index) => index).findIndex(
@@ -314,4 +315,99 @@ export const getRecipeChanges = (
   const result = capLines(hasMissedChange ? ['The recipe changed'] : lines);
 
   return result;
+};
+
+/** What an edit touched that is worth asking the person about: the ingredients (an amount, a swap, a line added or taken out) or the steps. Moving lines or steps around is not asked about. */
+export interface ChangeTopics {
+  hasIngredients: boolean;
+  hasSteps: boolean;
+}
+
+export const getChangeTopics = (
+  before: RecipeContent,
+  after: RecipeContent,
+): ChangeTopics => {
+  const ingredientLines = getIngredientChanges(
+    before.ingredients,
+    after.ingredients,
+    () => '',
+  );
+  const stepLines = getStepChanges(
+    normalize(before).steps,
+    normalize(after).steps,
+  );
+  const result = {
+    hasIngredients: ingredientLines.some(
+      (line) => line !== INGREDIENTS_REORDERED,
+    ),
+    hasSteps: stepLines.some((line) => line !== STEPS_REORDERED),
+  };
+
+  return result;
+};
+
+type DraftContent = RecipeContent & {
+  newIngredients: { id: string; name: string }[];
+  newSource: { id: string; label: string } | null;
+};
+
+/** The lines and topics of a form's draft against the recipe it edits, naming an ingredient and a source the draft is about to create. */
+export const getDraftChanges = (
+  existing: RecipeContent,
+  draft: DraftContent,
+  ingredientsById: ReadonlyMap<string, { name: string }>,
+  sourcesById: ReadonlyMap<string, { label: string }>,
+) => {
+  const ingredientNames = new Map([
+    ...ingredientsById,
+    ...draft.newIngredients.map(
+      (ingredient) =>
+        [ingredient.id, { name: ingredient.name.trim() }] as const,
+    ),
+  ]);
+  const sourceLabels = new Map([
+    ...sourcesById,
+    ...(draft.newSource
+      ? [[draft.newSource.id, draft.newSource] as const]
+      : []),
+  ]);
+  const result = {
+    changes: getRecipeChanges(existing, draft, ingredientNames, sourceLabels),
+    topics: getChangeTopics(existing, draft),
+  };
+
+  return result;
+};
+
+/** Whether saving this edit stops to ask why: only when an ingredient or a step changed. */
+export const isWhyAsked = (topics: ChangeTopics) =>
+  topics.hasIngredients || topics.hasSteps;
+
+/** Four quick reasons that fit what changed, to start the sentence the person finishes or leaves as it is. */
+export const getWhyChoices = (topics: ChangeTopics) => {
+  if (topics.hasIngredients && topics.hasSteps) {
+    return [
+      'Tasted better',
+      'Easier this way',
+      'Ran out of something',
+      'Fixing a mistake',
+    ];
+  }
+  if (topics.hasSteps) {
+    return ['Easier this way', 'Faster', 'Tasted better', 'Fixing a mistake'];
+  }
+  return ['Tasted better', 'Ran out of it', 'Too much', 'Not enough'];
+};
+
+/** What the reason box reads after a chip is tapped: the chip's words when the box is empty or holds only another chip, otherwise added after what was typed, and never past the note's length or twice. */
+export const applyWhyChoice = (
+  current: string,
+  choice: string,
+  choices: readonly string[],
+) => {
+  const typed = current.trim();
+  if (typed === '' || choices.includes(typed)) return choice;
+  if (typed.toLowerCase().includes(choice.toLowerCase())) return current;
+  const joined = `${typed.replace(/[.!?]+$/, '')}. ${choice}`;
+  return joined.length > MAX_RECIPE_NOTE_LENGTH ? current : joined;
 };

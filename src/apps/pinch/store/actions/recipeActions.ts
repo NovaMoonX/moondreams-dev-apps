@@ -25,7 +25,7 @@ import {
   selectTweakTracking,
 } from '@apps/pinch/store/selectors';
 import type { CollectionChange } from '@apps/pinch/utils/collections';
-import { getRecipeChanges } from '@apps/pinch/utils/recipeChanges';
+import { getDraftChanges } from '@apps/pinch/utils/recipeChanges';
 import { getTweakReason } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import {
@@ -161,34 +161,11 @@ const getTweak = (
     return null;
   }
 
-  const ingredientNames = new Map([
-    ...selectIngredientsById(state),
-    ...draft.newIngredients.map(
-      (ingredient) =>
-        [ingredient.id, { name: ingredient.name.trim() }] as const,
-    ),
-  ]);
-  const sourceLabels = new Map([
-    ...selectSourcesById(state),
-    ...(draft.newSource
-      ? [[draft.newSource.id, draft.newSource] as const]
-      : []),
-  ]);
-  const changes = getRecipeChanges(
+  const { changes } = getDraftChanges(
     existing,
-    {
-      title: draft.title,
-      description: draft.description,
-      servings: draft.servings,
-      prepMinutes: draft.prepMinutes,
-      cookMinutes: draft.cookMinutes,
-      ingredients: draft.ingredients,
-      steps: draft.steps,
-      nutritionOverride: draft.nutritionOverride,
-      sourceId: draft.sourceId,
-    },
-    ingredientNames,
-    sourceLabels,
+    draft,
+    selectIngredientsById(state),
+    selectSourcesById(state),
   );
   if (changes.length === 0) return null;
 
