@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { Fragment, useState, type KeyboardEvent } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -370,9 +370,9 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
       )}
       {canEdit && (
         <>
-          {eventEditor.editor}
-          {stayEditor.editor}
-          {rentalEditor.editor}
+          <Fragment key='event-editor'>{eventEditor.editor}</Fragment>
+          <Fragment key='stay-editor'>{stayEditor.editor}</Fragment>
+          <Fragment key='rental-editor'>{rentalEditor.editor}</Fragment>
         </>
       )}
     </div>
