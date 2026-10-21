@@ -19,7 +19,7 @@ export interface UsageMetricSpec {
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
 
-/** Free amounts are from firebase.google.com/pricing. Firestore, Cloud Storage and Functions-compute prices there say only "Google Cloud pricing"; the figures here are for multi-region Firestore (nam5) and still need checking against it. */
+/** Free amounts and the Storage, Functions-request and Realtime Database prices are from firebase.google.com/pricing and the Cloud Storage and Cloud Run pricing pages (checked 2026-10-21). The Firestore prices are for the multi-region nam5 and were not on the pages checked, which list only Iowa (us-central1: $0.03 reads, $0.09 writes, $0.01 deletes per 100,000). */
 export const PRICING_LAST_CHECKED = '2026-10-21';
 
 export const USAGE_METRICS: UsageMetricSpec[] = [
@@ -111,9 +111,12 @@ export function getStorageDownloadSpec(bucketName: string): UsageMetricSpec {
 
 /** Every limit the page tracks, with the storage download limit chosen for this project's bucket. */
 export function getUsageMetrics(bucketName: string) {
-  const result = USAGE_METRICS.flatMap((spec) =>
-    spec.id === 'storage-stored' ? [spec, getStorageDownloadSpec(bucketName)] : [spec],
-  );
+  const isLegacy = bucketName.endsWith('.appspot.com');
+  const result = USAGE_METRICS.flatMap((spec) => {
+    if (spec.id !== 'storage-stored') return [spec];
+    // Legacy buckets are billed $0.026/GB; newer ones at Cloud Storage's Standard rate in us-central1, $0.020 per GiB-month.
+    return [{ ...spec, pricePerUnit: (isLegacy ? 0.026 : 0.02) / GB }, getStorageDownloadSpec(bucketName)];
+  });
   return result;
 }
 
