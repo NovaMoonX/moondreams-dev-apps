@@ -34,8 +34,12 @@ export const getPopularMovies = onCall(
     }
 
     const results = await provider.popular(provider.getKey());
-    // An empty answer is not cached, so a parsing gap or a provider without a list doesn't stick for a day.
-    if (results.length > 0) {
+    // Not cached when empty, or when every film lacks genres or trailers (their lookups failed): that would stick for a day.
+    const isDegraded =
+      results.length === 0 ||
+      results.every((movie) => movie.genres.length === 0) ||
+      results.every((movie) => movie.trailerUrl === null);
+    if (!isDegraded) {
       await writeCache('searchCache', cacheId, results);
     }
     return { results };

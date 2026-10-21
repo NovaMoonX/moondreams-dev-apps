@@ -141,7 +141,10 @@ function toOverview(value: string | undefined) {
 async function getGenreNames(apiKey: string): Promise<Map<number, string>> {
   const data = await callTmdb<{ genres?: Array<{ id?: number; name?: string }> }>(apiKey, '/genre/movie/list', {
     language: 'en-US',
-  }).catch(() => null);
+  }).catch(() => {
+    console.warn('TMDB genre list failed');
+    return null;
+  });
   const result = new Map(
     (data?.genres ?? [])
       .filter((genre): genre is { id: number; name: string } => Number.isInteger(genre.id) && !!genre.name)
