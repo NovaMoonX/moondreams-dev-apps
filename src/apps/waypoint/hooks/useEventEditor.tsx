@@ -41,6 +41,7 @@ export function useEventEditor(trip: TripSpace, currentUserId: string, events: T
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [legSeed, setLegSeed] = useState<NextLegSeed | undefined>();
   const [legCount, setLegCount] = useState(0);
+  const [newDayIndex, setNewDayIndex] = useState<number | undefined>();
   // The mobile details drawer's own close, threaded through from whichever card opened the edit
   // form — invoked only once that edit actually succeeds, never on cancel.
   const editSuccessRef = useRef<(() => void) | undefined>(undefined);
@@ -147,8 +148,9 @@ export function useEventEditor(trip: TripSpace, currentUserId: string, events: T
     editSuccessRef.current = onSuccess;
   };
 
-  const openNew = () => {
+  const openNew = (dayIndex?: number) => {
     setEditingEvent(undefined);
+    setNewDayIndex(dayIndex);
     setIsOpen(true);
   };
 
@@ -162,6 +164,7 @@ export function useEventEditor(trip: TripSpace, currentUserId: string, events: T
       memberOptions={memberOptions}
       event={editingEvent}
       events={events}
+      initialDayIndex={newDayIndex}
       placeBias={placeBias}
       isSubmitting={isSubmitting}
       onSubmit={handleSubmit}

@@ -32,6 +32,8 @@ html.waypoint-theme {
 }
 
 html.waypoint-theme.dark {
+  --subview-backdrop-dark: oklch(0.09 0.01 255);
+  --subview-border: oklch(0.36 0.02 255);
   --color-popover: color-mix(in oklab, var(--color-background) 86%, white);
   --color-popover-foreground: var(--color-foreground);
   --color-tooltip: var(--color-popover);

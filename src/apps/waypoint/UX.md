@@ -174,6 +174,8 @@ block-beta
 ```
 *One central "+ Add Event" right under the day tabs, not appended after the list — since the event's own day/time field is what determines where it lands, a single always-visible button reads better than implying "this only adds to the end," without the real complexity of buttons wedged between every pair of events.*
 
+*Update: a day's header label opens a drawer (a modal from `sm` up) with that day's plans and a primary "Add to this day", the Timeline's central Add opens on the selected day tab, and the form says what comes before and after the start time on that day, so it is always clear which day's plans a new or edited event joins. There are still no buttons between events.*
+
 New elements, all flagged for the TDD reconciliation pass — and note the tiering, since this whole group is **not** MVP:
 - **"All" tab** alongside the day tabs — a linear, unfiltered view of the whole trip, for whenever a specific day isn't what's needed.
 - **Stay banner**: a persistent, thin strip at the top of each day naming that day's stay(s) — plural because a travel day can genuinely involve checking out of one place and into another, so it needs to support stacking two banners, not just one.
