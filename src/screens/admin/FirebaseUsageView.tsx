@@ -26,29 +26,40 @@ const formatAmount = (line: FirebaseUsageLine, value: number) =>
   line.unit === 'bytes' ? formatBytes(value) : COUNT_FORMAT.format(Math.round(value));
 const formatCost = (usd: number) => (usd >= 0.01 ? USD_FORMAT.format(usd) : usd > 0 ? '< $0.01' : '$0.00');
 
-const PERIOD_WORDS = { day: 'a day', month: 'this month', stock: 'stored' } as const;
-const USED_WORDS = { day: 'Today so far', month: 'So far this month', stock: 'Now' } as const;
+const PERIOD_WORDS = { day: 'a day (UTC)', month: 'this month', stock: 'stored' } as const;
+const USED_WORDS = { day: 'Today so far', month: 'So far this month', stock: 'Stored now' } as const;
+
+/** Over now, on pace to go over by month end, or inside the free amount. */
+const getStatus = (line: FirebaseUsageLine) => {
+  if (line.isOver) return 'over';
+  if (line.projectedCostUsd > 0) return 'on-pace';
+  return 'within';
+};
 
 function UsageRow({ line }: { line: FirebaseUsageLine }) {
   const fraction = line.freeAmount > 0 ? line.used / line.freeAmount : 0;
   const percent = Math.min(100, Math.round(fraction * 100));
-  const detail =
+  const status = getStatus(line);
+  const overBy = line.period === 'day' ? 0 : Math.max(0, line.used - line.freeAmount);
+  const detail = [
     line.daysOver !== null && line.daysOver > 0
       ? `Over the free amount on ${line.daysOver} ${line.daysOver === 1 ? 'day' : 'days'} this month`
-      : null;
+      : null,
+    overBy > 0 ? `Over by ${formatAmount(line, overBy)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const getStatusText = () => {
+    if (status === 'over') return `About ${formatCost(line.projectedCostUsd)} this month`;
+    if (status === 'on-pace') return `On pace for about ${formatCost(line.projectedCostUsd)}`;
+    return 'Within the free amount';
+  };
 
   return (
     <li className='space-y-1.5 py-3'>
       <div className='flex items-baseline justify-between gap-3'>
         <span className='text-foreground min-w-0 text-sm'>{line.label}</span>
-        <span
-          className={join(
-            'shrink-0 text-xs whitespace-nowrap',
-            line.isOver ? 'text-destructive font-medium' : 'text-muted-foreground',
-          )}
-        >
-          {line.isOver ? `About ${formatCost(line.projectedCostUsd)} this month` : 'Within the free amount'}
-        </span>
+        <span className='text-muted-foreground shrink-0 text-right text-xs'>{getStatusText()}</span>
       </div>
       <div
         role='progressbar'
@@ -59,7 +70,7 @@ function UsageRow({ line }: { line: FirebaseUsageLine }) {
         className='bg-muted h-2 overflow-hidden rounded-full'
       >
         <div
-          className={join('h-full rounded-full', line.isOver ? 'bg-destructive' : 'bg-primary')}
+          className={join('h-full rounded-full', status === 'within' ? 'bg-primary' : 'bg-warning')}
           style={{ width: `${percent}%` }}
         />
       </div>
@@ -67,7 +78,7 @@ function UsageRow({ line }: { line: FirebaseUsageLine }) {
         {USED_WORDS[line.period]}: {formatAmount(line, line.used)} of {formatAmount(line, line.freeAmount)}{' '}
         {PERIOD_WORDS[line.period]}
       </p>
-      {detail ? <p className='text-muted-foreground text-xs'>{detail}</p> : null}
+      {detail ? <p className='text-foreground text-xs'>{detail}</p> : null}
     </li>
   );
 }
@@ -86,7 +97,7 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
   if (!query.data) {
     const needsRole = query.error instanceof Error && query.error.message.includes(MONITORING_ROLE_MISSING);
     return (
-      <p className='text-muted-foreground text-sm'>
+      <p className='bg-muted/50 border-border text-foreground rounded-2xl border p-4 text-sm'>
         {needsRole
           ? "Google isn't letting the functions read usage yet. In Google Cloud, give the Cloud Functions service account the Monitoring Viewer role, then refresh."
           : "We couldn't load usage just now. Refresh to try again."}
@@ -96,7 +107,7 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
 
   const usage = query.data;
   const products = [...new Set(usage.lines.map((line) => line.product))];
-  const overCount = usage.lines.filter((line) => line.isOver).length;
+  const overCount = usage.lines.filter((line) => getStatus(line) !== 'within').length;
   const appNames = new Map(apps.map((app) => [app.id, app.name || app.id]));
 
   return (
@@ -107,8 +118,9 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
           value={formatCost(usage.projectedCostUsd)}
           help={
             <HelpTip title='Estimated this month'>
-              The Blaze charge above the free amounts if the rest of the month looks like the days so far.
-              It&apos;s an estimate from list prices, not your bill.
+              The Blaze charge above the free amounts if the rest of the month looks like the days so far. The
+              free amounts are the same ones Spark gives you, but Spark stops at them instead of charging, and
+              Storage and Functions need Blaze anyway. It&apos;s an estimate from list prices, not your bill.
             </HelpTip>
           }
         />
@@ -117,11 +129,12 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
       <p className='text-muted-foreground text-xs'>
         {overCount === 0
           ? 'Everything is within the free amounts.'
-          : `${overCount} of ${usage.lines.length} limits are over the free amount.`}{' '}
-        Spark&apos;s free amounts are also what Blaze gives you before it charges. Days are UTC, so a daily
-        limit that resets at another hour can differ a little. Updated{' '}
-        {formatDateTime(usage.generatedAt)}.
+          : `${overCount} of ${usage.lines.length} limits are over the free amount or on pace to be.`}{' '}
+        Updated {formatDateTime(usage.generatedAt)}.
       </p>
+      {query.isError ? (
+        <p className='text-muted-foreground text-xs'>Couldn&apos;t refresh just now; showing the last numbers.</p>
+      ) : null}
 
       {products.map((product) => (
         <section key={product} className='space-y-1'>
@@ -168,9 +181,6 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
         )}
       </section>
 
-      {query.isError ? (
-        <p className='text-muted-foreground text-xs'>Couldn&apos;t refresh just now; showing the last numbers.</p>
-      ) : null}
       <p className='text-muted-foreground text-xs'>Prices last checked {usage.pricingCheckedOn}.</p>
     </div>
   );
