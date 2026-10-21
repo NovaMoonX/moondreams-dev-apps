@@ -547,9 +547,9 @@ No cached document is ever written back whole. There is no cross-person concurre
 
 ## Theming
 
-- `src/apps/pinch/pinch.css` overrides Dreamer UI's semantic tokens on `html.pinch-theme`: a warm orange `--color-primary` on a slate base for background, card, muted and border, in light and dark; `--radius-md` and up raised for a rounded counter feel; field text inset; a soft-tint selected pill; tertiary buttons use the normal text colour. `usePinchTheme()` adds the class to `<html>` only while the app is mounted.
+- `src/apps/pinch/pinch.css` overrides Dreamer UI's semantic tokens on `html.pinch-theme`: clean white-on-white (black-on-black in dark) surfaces with hairline borders, an ink `--color-primary` for the one filled action, see-through secondary buttons, and a single warm `--pinch-drizzle` used only as a small accent; `--radius-md` and up raised for a rounded counter feel; field text inset; hairline option pills with a drizzle outline when selected; tertiary buttons use the normal text colour. `usePinchTheme()` adds the class to `<html>` only while the app is mounted.
 - Meal-type colours are tokens, not raw palette classes (`--pinch-meal-breakfast … --pinch-meal-drink`), checked on a thin bar in light and dark.
-- The Pinch rules file is written in the same PR as the shell: `.github/instructions/pinch.instructions.md` with an identical `.claude/rules/pinch.md` (metaphor: a home cook's counter; palette roles; shape language; what the emoji mean; calendar bar anatomy; nudge wording; missing details appear only as in-context nudge lines).
+- The Pinch rules file is written in the same PR as the shell: `.github/instructions/pinch.instructions.md` with an identical `.claude/rules/pinch.md` (metaphor: a chef's apron; palette roles; shape language; what the emoji mean; calendar bar anatomy; nudge wording; missing details appear only as in-context nudge lines).
 
 ---
 
@@ -601,7 +601,7 @@ src/apps/pinch/
 │   ├── ingredientMatch.ts  catalogSearch.ts  weeks.ts
 │   └── markdown/   recipeMarkdown.ts  dayMarkdown.ts  weekMarkdown.ts  ingredientsMarkdown.ts
 └── components/
-    ├── shell/       BottomNav.tsx  LoadingSkeleton.tsx
+    ├── shell/       PinchNav.tsx  LoadingSkeleton.tsx
     ├── calendar/    CalendarScreen.tsx  MealBarCell.tsx  StatsRow.tsx  DayDrawer.tsx  DayPeek.tsx
     │                PlannedMealView.tsx  BreakdownDrawer.tsx
     ├── plan/        PlanMealSubview.tsx  MealBuilder.tsx  ItemSearch.tsx  ServingStepper.tsx

@@ -40,7 +40,8 @@ function IconPicker({ value, onChange }: IconPickerProps) {
             onClick={() => onChange(choice.key)}
             className={join(
               'size-10 p-0',
-              value === choice.key && 'bg-secondary ring-primary ring-2',
+              value === choice.key &&
+                'bg-accent ring-2 ring-[var(--pinch-drizzle)]',
             )}
           >
             <IngredientIcon iconKey={choice.key} size={28} />
