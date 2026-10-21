@@ -94,13 +94,15 @@ const generate = async (
   return normalizeExtractedRecipe(JSON.parse(result.response.text()));
 };
 
+const MARKDOWN_ESCAPE = /\\([\\`*_{}[\]<>()#+!|~@.-])/g;
+
 /** Reads a recipe pasted as text. Not cached: every reading is a fresh call. */
 export async function extractRecipeFromText(
   text: string,
 ): Promise<ExtractedRecipe> {
   return generate([
     {
-      text: `${PROMPT}\n\n--- BEGIN RECIPE ---\n${text.trim()}\n--- END RECIPE ---`,
+      text: `${PROMPT}\n\n--- BEGIN RECIPE ---\n${text.trim().replace(MARKDOWN_ESCAPE, '$1')}\n--- END RECIPE ---`,
     },
   ]);
 }

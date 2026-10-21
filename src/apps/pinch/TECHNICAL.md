@@ -400,11 +400,14 @@ idle → reading(source) → draft(recipe, unread[]) → (person edits) → save
 | Copy | Included | Never included |
 |---|---|---|
 | Recipe | title, servings, times, ingredients with amounts, steps | prices, stores, products, nutrition overrides, cover |
+| Meal, planned meal | the heading, items with servings, the recipes' ingredient lists as nested bullets | prices, stores |
 | Day | the date, each meal type heading, items with servings, the recipes' ingredient lists as nested bullets | prices, stores |
 | Week | seven day blocks, Monday to Sunday, in the same shape as a day | prices, stores |
-| Ingredients | names grouped by family, for "your ingredients" (custom + with a product + used in a recipe), capped at `MAX_COPIED_INGREDIENTS` ("and N more") | prices, stores, products, nutrition |
+| Ingredients | names grouped by family, for "your ingredients" (custom + adjusted + with a product + used in a recipe), capped at `MAX_COPIED_INGREDIENTS` ("and N more") | prices, stores, products, nutrition |
 
-User text (titles, notes, store-less names) is escaped for Markdown, and a name that contains `@` is treated as a plain string and not linkified. The recipe format is also the one the AI reader reads back, so a copy-then-paste round trip fills the form.
+The preview and Copy button are the shared `src/components/CopyPanel` (a generic text-plus-note component, so central from its first use), which copies through `copyToClipboard` so plain-HTTP pages still work and says so when the browser refuses. `npm run check:pinch-markdown` checks the builders (no `$`, cover or typed nutrition; `*`, `#`, `@` escaped; Monday-to-Sunday weeks; the "and N more" cap).
+
+User text (titles, descriptions, notes, steps, names) is collapsed to one line and escaped for Markdown: punctuation such as `*`, `#` and `@` gets a backslash (so a name that contains `@` is never linkified), and a leading `-` or `1.` is escaped so a typed step never becomes a list. The recipe format is also the one the AI reader reads back; the paste reader strips those backslashes before it reads, so a copy-then-paste round trip fills the form with the original words.
 
 ### 7. Stock tracking (reserved for Next Steps)
 

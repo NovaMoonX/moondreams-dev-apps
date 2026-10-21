@@ -68,3 +68,14 @@ export const getMonthWindow = (monthKey: string) => {
     end: Date.UTC(year, month + MONTH_WINDOW_PADDING, 1),
   };
 };
+
+/** The day key `days` after (or before, if negative) another. */
+export const addDaysToKey = (dayKey: string, days: number) =>
+  toDateInputValue(getDateOfDayKey(dayKey) + days * DAY_MS);
+
+/** The Monday of the week that holds a day. */
+export const getWeekStartKey = (dayKey: string) =>
+  addDaysToKey(
+    dayKey,
+    -((new Date(getDateOfDayKey(dayKey)).getUTCDay() + 6) % 7),
+  );
