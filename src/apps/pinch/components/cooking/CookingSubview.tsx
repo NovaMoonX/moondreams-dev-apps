@@ -10,6 +10,7 @@ import Subview from '@/components/Subview';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useAppSelector, type RootState } from '@/store';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
+import { getErrorMessage } from '@/utils/errorUtils';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookStepView from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
@@ -18,10 +19,17 @@ import {
   MAX_COOK_SERVINGS,
   MIN_COOK_SERVINGS,
 } from '@apps/pinch/constants';
+import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { useCookTimers } from '@apps/pinch/hooks/useCookTimers';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import { selectRecipesById } from '@apps/pinch/store/selectors';
+import {
+  selectCooksById,
+  selectCookSummaries,
+  selectRecipesById,
+} from '@apps/pinch/store/selectors';
 import type { CookView, Recipe } from '@apps/pinch/types';
+import { getPlannedCookId, isCookHistoryFull } from '@apps/pinch/utils/cooks';
+import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const getStartServings = (recipe: Recipe, servings: number | undefined) => {
   const wanted = servings ?? (recipe.servings > 0 ? recipe.servings : 1);
@@ -33,17 +41,21 @@ const isTyping = (target: EventTarget | null) =>
   target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
 interface CookingSessionProps {
+  uid: string;
   recipe: Recipe;
   isRemoved: boolean;
   initialServings: number | undefined;
+  plannedMealId: string | null;
 }
 
 function CookingSession({
+  uid,
   recipe,
   isRemoved,
   initialServings,
+  plannedMealId,
 }: CookingSessionProps) {
-  const { closeSubview } = usePinchOverlay();
+  const { closeSubview, closeSubviewIf } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
   const [stepIndex, setStepIndex] = useState(0);
@@ -51,18 +63,37 @@ function CookingSession({
     getStartServings(recipe, initialServings),
   );
   const [gotOut, setGotOut] = useState<Record<string, boolean>>({});
+  const [isFinished, setIsFinished] = useState(false);
+  const [isMarking, setIsMarking] = useState(false);
+  const [markError, setMarkError] = useState<string | null>(null);
   const [openedUpdatedAt] = useState(recipe.updatedAt);
   const rootRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLUListElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const timers = useCookTimers();
   const wakeLock = useWakeLock(true);
+  const {
+    isReady: isCooksReady,
+    markRecipeCooked,
+    markPlannedRecipeCooked,
+  } = useCookActions(uid);
+  const isHistoryFull = useAppSelector((state) =>
+    isCookHistoryFull(selectCookSummaries(state).get(recipe.id)?.count ?? 0),
+  );
+  const plannedCookId = getPlannedCookId(plannedMealId, recipe.id);
+  const hasPlannedCook = useAppSelector(
+    (state) =>
+      plannedCookId !== null && selectCooksById(state).has(plannedCookId),
+  );
 
   const lastIndex = recipe.steps.length - 1;
   const index = Math.min(stepIndex, lastIndex);
   const isLast = index >= lastIndex;
   const hasSteps = recipe.steps.length > 0;
   const isStepsView = view === 'steps';
+  const isFinishShown = isFinished && isStepsView && hasSteps;
+  const canMark = isCooksReady && !isRemoved;
+  const isAlreadyMarked = hasPlannedCook && !isMarking;
 
   const scrollToTop = () =>
     rootRef.current
@@ -70,6 +101,10 @@ function CookingSession({
       ?.scrollTo({ top: 0 });
 
   const goBy = (direction: 1 | -1) => {
+    if (isFinished) {
+      if (direction === -1) setIsFinished(false);
+      return;
+    }
     const next = index + direction;
     if (next < 0 || next > lastIndex) {
       return;
@@ -78,22 +113,70 @@ function CookingSession({
     scrollToTop();
   };
 
-  const leave = async () => {
-    if (timers.liveCount > 0) {
-      const count = timers.liveCount;
-      const isConfirmed = await confirm({
-        title: 'Stop timers and leave?',
-        message: `${count} ${count === 1 ? 'timer is' : 'timers are'} still going. Timers only run while this screen is open, so leaving stops ${count === 1 ? 'it' : 'them'}.`,
-        confirmText: 'Leave',
-        cancelText: 'Stay',
-        destructive: true,
-      });
-      if (!isConfirmed) return;
-    }
-    closeSubview();
+  const confirmLeave = async () => {
+    if (timers.liveCount === 0) return true;
+
+    const count = timers.liveCount;
+    const isConfirmed = await confirm({
+      title: 'Stop timers and leave?',
+      message: `${count} ${count === 1 ? 'timer is' : 'timers are'} still going. Timers only run while this screen is open, so leaving stops ${count === 1 ? 'it' : 'them'}.`,
+      confirmText: 'Leave',
+      cancelText: 'Stay',
+      destructive: true,
+    });
+    return isConfirmed;
   };
 
-  const handleNext = () => (isLast ? void leave() : goBy(1));
+  const leave = async () => {
+    if (await confirmLeave()) closeSubview();
+  };
+
+  const handleNext = () => {
+    if (!isLast) {
+      goBy(1);
+      return;
+    }
+    if (!canMark) {
+      void leave();
+      return;
+    }
+    setIsFinished(true);
+    scrollToTop();
+    window.requestAnimationFrame(() =>
+      primaryRef.current?.focus({ preventScroll: true }),
+    );
+  };
+
+  const handleMarkCooked = async () => {
+    setMarkError(null);
+    setIsMarking(true);
+    try {
+      if (!(await confirmLeave())) {
+        setIsMarking(false);
+        return;
+      }
+      if (plannedMealId === null) {
+        await markRecipeCooked(recipe, servings);
+      } else {
+        await markPlannedRecipeCooked({
+          plannedMealId,
+          recipe,
+          servings,
+          cookedAt: Date.now(),
+          isToasted: true,
+        });
+      }
+      closeSubviewIf(
+        (current) =>
+          current?.kind === 'cook' &&
+          current.recipeId === recipe.id &&
+          (current.plannedMealId ?? null) === plannedMealId,
+      );
+    } catch (error) {
+      setMarkError(getErrorMessage(error, 'Unable to mark this as cooked.'));
+      setIsMarking(false);
+    }
+  };
 
   const toggleGotOut = useCallback(
     (id: string, isOut: boolean) =>
@@ -166,14 +249,52 @@ function CookingSession({
       onBack={() => void leave()}
     >
       <div ref={rootRef} className='flex flex-1 flex-col gap-4'>
-        <PillGroup
-          label='Show'
-          options={COOK_VIEW_OPTIONS}
-          value={view}
-          onChange={showView}
-          isThin
-        />
-        {isStepsView ? (
+        {!isFinishShown && (
+          <PillGroup
+            label='Show'
+            options={COOK_VIEW_OPTIONS}
+            value={view}
+            onChange={showView}
+            isThin
+          />
+        )}
+        {isFinishShown ? (
+          <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
+            <p className='text-2xl leading-snug font-medium'>
+              {isAlreadyMarked
+                ? 'Already marked as cooked'
+                : 'Nice work. Mark it as cooked?'}
+            </p>
+            <div className='space-y-0.5'>
+              {!isAlreadyMarked && (
+                <p className='font-medium'>{formatServings(servings)}</p>
+              )}
+              <p className='text-muted-foreground text-sm'>
+                {isAlreadyMarked
+                  ? "It's in your cooking history, so nothing more is saved."
+                  : 'Keeps a record. You can change the date later.'}
+              </p>
+            </div>
+            {isHistoryFull && !isAlreadyMarked && (
+              <p className='text-muted-foreground text-sm'>
+                This recipe's history is full. Delete an older cook to add more.
+              </p>
+            )}
+            {markError && !isAlreadyMarked && (
+              <p className='text-destructive text-sm' role='alert'>
+                {markError}
+              </p>
+            )}
+            <Button
+              type='button'
+              variant='tertiary'
+              className='h-10 underline'
+              onClick={() => setIsFinished(false)}
+            >
+              Back to the last step
+            </Button>
+          </div>
+        ) : isStepsView ? (
           hasSteps ? (
             <CookStepView
               steps={recipe.steps}
@@ -206,15 +327,16 @@ function CookingSession({
           )}
           {showLockNote && (
             <p className='text-muted-foreground text-xs'>
-              Your screen may turn off while you cook.
+              This phone may turn the screen off; timers keep running only while
+              this screen is open.
             </p>
           )}
         </div>
         <div className='form-footer space-y-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
           <div role='status' className='empty:hidden'>
-            {timers.isNoticeShown && (
+            {timers.isNoticeShown && !showLockNote && (
               <p className='text-muted-foreground text-xs'>
-                Timers only run while this screen is open.
+                Keep this screen open: timers stop if you leave it.
               </p>
             )}
           </div>
@@ -227,7 +349,46 @@ function CookingSession({
             onDismiss={handleDismissTimer}
           />
           <div className='flex gap-3'>
-            {isStepsView ? (
+            {isFinishShown && isAlreadyMarked ? (
+              <Button
+                ref={primaryRef}
+                type='button'
+                className={join(
+                  'h-14 min-w-0 flex-1 text-lg',
+                  '[@media(max-height:500px)]:h-11',
+                )}
+                onClick={() => void leave()}
+              >
+                Done
+              </Button>
+            ) : isFinishShown ? (
+              <>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  className={join(
+                    'h-14 shrink-0 px-6 text-base',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  onClick={() => void leave()}
+                >
+                  Not now
+                </Button>
+                <Button
+                  ref={primaryRef}
+                  type='button'
+                  className={join(
+                    'h-14 min-w-0 flex-1 text-lg',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  loading={isMarking}
+                  disabled={isMarking || isHistoryFull || !canMark}
+                  onClick={() => void handleMarkCooked()}
+                >
+                  I cooked this
+                </Button>
+              </>
+            ) : isStepsView ? (
               <>
                 <Button
                   type='button'
@@ -276,11 +437,18 @@ function CookingSession({
 }
 
 interface CookingSubviewProps {
+  uid: string;
   recipeId: string;
   servings?: number;
+  plannedMealId: string | null;
 }
 
-function CookingSubview({ recipeId, servings }: CookingSubviewProps) {
+function CookingSubview({
+  uid,
+  recipeId,
+  servings,
+  plannedMealId,
+}: CookingSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const store = useStore<RootState>();
   const live = useAppSelector(selectRecipesById).get(recipeId);
@@ -309,9 +477,11 @@ function CookingSubview({ recipeId, servings }: CookingSubviewProps) {
 
   return (
     <CookingSession
+      uid={uid}
       recipe={recipe}
       isRemoved={live === undefined}
       initialServings={servings}
+      plannedMealId={plannedMealId}
     />
   );
 }

@@ -354,3 +354,11 @@ export const COOK_VIEW_OPTIONS = [
 ] as const;
 
 export const MAX_STEP_DOTS = 12;
+
+export const MAX_COOKED_SERVINGS = 1000;
+/** The most cooks one recipe's history takes before asking to delete one: the action and the screens, not the rules. */
+export const SOFT_MAX_COOKS_PER_RECIPE = 500;
+/** Under Firestore's 500 writes per batch. */
+export const COOK_BATCH_SIZE = 400;
+export const COOK_HISTORY_FIRST_PAGE = 8;
+export const COOK_HISTORY_PAGE_SIZE = 50;

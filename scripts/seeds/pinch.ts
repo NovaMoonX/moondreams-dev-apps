@@ -98,6 +98,51 @@ const SEED_IDEAS = [
   }),
 ];
 
+// Adobo three times over the past weeks at different servings and rice once, all marked from the recipe, plus the dinner
+// Alex marked from his plan three days ago (the deterministic id of `seed-pinch-planned-1`). Nachos and the chili have none.
+const SEED_COOKS = [
+  {
+    id: 'seed-pinch-cook-1',
+    recipeId: 'seed-pinch-recipe-adobo',
+    plannedMealId: null,
+    daysAgo: 24,
+    hour: 18,
+    servings: 4,
+  },
+  {
+    id: 'seed-pinch-cook-2',
+    recipeId: 'seed-pinch-recipe-adobo',
+    plannedMealId: null,
+    daysAgo: 17,
+    hour: 18,
+    servings: 6,
+  },
+  {
+    id: 'seed-pinch-cook-3',
+    recipeId: 'seed-pinch-recipe-adobo',
+    plannedMealId: null,
+    daysAgo: 9,
+    hour: 18,
+    servings: 2,
+  },
+  {
+    id: 'seed-pinch-cook-4',
+    recipeId: 'seed-pinch-recipe-rice',
+    plannedMealId: null,
+    daysAgo: 6,
+    hour: 18,
+    servings: 4,
+  },
+  {
+    id: 'seed-pinch-planned-1__seed-pinch-recipe-adobo',
+    recipeId: 'seed-pinch-recipe-adobo',
+    plannedMealId: 'seed-pinch-planned-1',
+    daysAgo: 3,
+    hour: 12,
+    servings: 4,
+  },
+];
+
 const nutrition = (
   calories: number,
   protein: number,
@@ -565,6 +610,13 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           updatedAt: createdAt + index,
         }),
     ),
+    ...SEED_COOKS.map(({ daysAgo, hour, ...cook }) => {
+      const cookedAt = today - daysAgo * DAY_MS + hour * 3_600_000;
+      return kitchenRef
+        .collection('cooks')
+        .doc(cook.id)
+        .set({ ...cook, cookedAt, createdAt: cookedAt, updatedAt: cookedAt });
+    }),
     ...SEED_SHOPPING.map((entry, index) =>
       kitchenRef
         .collection('shoppingItems')
@@ -633,6 +685,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_FAMILIES.length +
       SEED_SOURCES.length +
       SEED_SHOPPING.length +
+      SEED_COOKS.length +
       SEED_IDEAS.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +

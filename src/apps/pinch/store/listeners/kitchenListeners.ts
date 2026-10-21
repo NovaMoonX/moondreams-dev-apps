@@ -9,6 +9,7 @@ import {
 
 import { db } from '@/lib/firebase/config';
 import type {
+  Cook,
   Family,
   Idea,
   IngredientRecord,
@@ -129,6 +130,19 @@ export function startIdeasListener(
     kitchenCollection(uid, 'ideas'),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Idea)),
+    onError,
+  );
+}
+
+export function startCooksListener(
+  uid: string,
+  onChange: (cooks: Cook[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    kitchenCollection(uid, 'cooks'),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as Cook)),
     onError,
   );
 }

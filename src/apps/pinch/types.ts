@@ -195,8 +195,13 @@ export type PinchSubview =
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
-  /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. */
-  | { kind: 'cook'; recipeId: string; servings?: number }
+  /** Cooking one recipe step by step; it starts at the recipe's own servings unless `servings` says otherwise. A `plannedMealId` makes Finish mark that planned meal's cook. */
+  | {
+      kind: 'cook';
+      recipeId: string;
+      servings?: number;
+      plannedMealId?: string;
+    }
   | {
       kind: 'plan';
       dayKey: string;
@@ -289,6 +294,23 @@ export interface Idea {
   photoPath: string | null;
   /** The recipe this became. A missing key, an id no recipe has, or an archived recipe reads as not made yet. */
   recipeId: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A record that a recipe was made: when, and at how many servings. */
+export interface Cook {
+  /** Immutable. `{plannedMealId}__{recipeId}` for a cook marked from a planned meal, a UUID otherwise. */
+  id: string;
+  /** Immutable. A recipe that no longer exists reads as none: its cooks are ignored. */
+  recipeId: string;
+  /** Immutable. The planned meal it was marked from, else null. */
+  plannedMealId: string | null;
+  /** Above zero, at most 1,000. */
+  servings: number;
+  /** An instant, shown in local time. */
+  cookedAt: number;
+  /** Immutable. */
   createdAt: number;
   updatedAt: number;
 }

@@ -1,5 +1,6 @@
 import { combineReducers } from '@reduxjs/toolkit';
 
+import { cooksReducer, type CooksState } from './slices/cooksSlice';
 import { familiesReducer, type FamiliesState } from './slices/familiesSlice';
 import { ideasReducer, type IdeasState } from './slices/ideasSlice';
 import {
@@ -30,6 +31,7 @@ export interface PinchState {
   sources: SourcesState;
   shopping: ShoppingState;
   ideas: IdeasState;
+  cooks: CooksState;
 }
 
 export const pinchReducer = combineReducers({
@@ -44,4 +46,5 @@ export const pinchReducer = combineReducers({
   sources: sourcesReducer,
   shopping: shoppingReducer,
   ideas: ideasReducer,
+  cooks: cooksReducer,
 });
