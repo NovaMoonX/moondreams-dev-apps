@@ -1,13 +1,18 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
-import { MEAL_TYPE_EMOJIS, MEAL_TYPE_LABELS } from '@apps/pinch/constants';
+import {
+  MAX_NAME_LENGTH,
+  MEAL_TYPE_EMOJIS,
+  MEAL_TYPE_LABELS,
+} from '@apps/pinch/constants';
+import { savePlannedAsMeal } from '@apps/pinch/store/actions/mealActions';
 import { removePlannedMeal } from '@apps/pinch/store/actions/plannedMealActions';
 import {
   selectCostContext,
@@ -38,6 +43,7 @@ function PlannedMealView({
 }: PlannedMealViewProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const meal = useAppSelector(selectPlannedMeals).find(
     (candidate) => candidate.id === plannedMealId,
   );
@@ -45,6 +51,9 @@ function PlannedMealView({
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [error, setError] = useState<string | null>(null);
+  const [isNaming, setIsNaming] = useState(false);
+  const [mealName, setMealName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   if (!meal) {
     return null;
@@ -52,6 +61,26 @@ function PlannedMealView({
 
   const cost = getMealCost(meal.items, costContext);
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
+
+  const handleSaveAsMeal = async () => {
+    setError(null);
+    setIsSaving(true);
+    try {
+      await dispatch(
+        savePlannedAsMeal({ uid, plannedMealId: meal.id, name: mealName }),
+      ).unwrap();
+      addToast({
+        title: `Saved ${mealName.trim()} to your meals`,
+        type: 'success',
+      });
+      setIsNaming(false);
+      setMealName('');
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, 'Unable to save this meal.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleRemove = async () => {
     const confirmed = await confirm({
@@ -71,6 +100,48 @@ function PlannedMealView({
       setError(getErrorMessage(removeError, 'Unable to remove this meal.'));
     }
   };
+
+  if (isNaming) {
+    return (
+      <div className='space-y-5'>
+        <Button
+          type='button'
+          variant='tertiary'
+          className='h-10 gap-1 px-0!'
+          onClick={() => setIsNaming(false)}
+        >
+          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
+          Back
+        </Button>
+        <div className='space-y-1.5'>
+          <Label>Name this meal</Label>
+          <Input
+            variant='outline'
+            autoFocus
+            aria-label='Name for the saved meal'
+            placeholder='Taco night'
+            maxLength={MAX_NAME_LENGTH}
+            value={mealName}
+            onChange={(event) => setMealName(event.target.value)}
+          />
+          <p className='text-muted-foreground text-sm'>
+            Saves these items so you can plan them again. This day stays as it
+            is.
+          </p>
+        </div>
+        {error && <p className='text-destructive text-sm'>{error}</p>}
+        <Button
+          type='button'
+          className='w-full'
+          loading={isSaving}
+          disabled={isSaving || mealName.trim() === ''}
+          onClick={() => void handleSaveAsMeal()}
+        >
+          Save
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className='space-y-5'>
@@ -139,6 +210,14 @@ function PlannedMealView({
         onClick={() => onEdit(meal.id, meal.mealType)}
       >
         Change items or servings
+      </Button>
+      <Button
+        type='button'
+        variant='secondary'
+        className='h-11 w-full'
+        onClick={() => setIsNaming(true)}
+      >
+        Save as a meal
       </Button>
       <Button
         type='button'

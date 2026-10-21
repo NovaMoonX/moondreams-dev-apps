@@ -294,7 +294,7 @@ block-beta
   style M17 fill:transparent,stroke:#888888,stroke-width:1px;
   style M18 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Opens on the day and meal type it came from (pills under "Change"). "Start from a saved meal" is a `PickOrCreate` row: a dashed "New" pill first, then saved meals, nothing preselected; picking one copies its items onto the day. The search finds recipes, saved meals and ingredients in one list with a small kind label on each result; a picked recipe or ingredient joins the plate with one serving, and a picked saved meal adds its items. Each row has its own serving stepper (halves allowed) and a remove control. When the meal has two or more items a "Save as a meal" switch appears above the footer and reveals a name field. Adding a one-item meal is the same screen with one row.*
+*Opens on the day and meal type it came from (pills under "Change"). "Start from a saved meal" is a row of pills shown while the plate is empty (nothing preselected); picking one copies its items onto the day. The search finds recipes and ingredients in one list with a small kind label on each result; a picked one joins the plate with one serving. Each row has its own serving stepper (halves allowed) and a remove control. When the meal has two or more items a "Save as a meal" switch appears above the footer and reveals a name field. Adding a one-item meal is the same screen with one row.*
 
 **Recipes tab**
 
@@ -689,7 +689,7 @@ block-beta
 | FillInSheet | behind every nudge | a `FormSheet` with one row per ingredient and only the fields that gap needs |
 | DayDrawer / DayPeek | Calendar | the same content as a `DetailSheet` on phones and a hover `Popover` from `sm` up (`max-sm:hidden`) |
 | PlannedMealView | Day drawer | items with servings, totals, grouped actions, swapped in place |
-| MealBuilder | Plan a meal, Meal subview | day and type pills, `PickOrCreate` of saved meals, one item search, per-item serving steppers, cost line with nudge, Save-as-meal switch |
+| MealBuilder | Plan a meal, Meal subview | day and type pills, a pill row of saved meals while the plate is empty, one item search, per-item serving steppers, cost line with nudge, Save-as-meal switch |
 | ItemSearch | MealBuilder, Recipe form | one search over recipes, meals and ingredients with kind labels; also offers "New ingredient" |
 | ServingStepper | MealBuilder, Recipe form | half-step stepper, 40px targets |
 | RecipeForm | Recipe subview | title, servings, ingredient rows, chips; hosts `RecipeAutofill` |

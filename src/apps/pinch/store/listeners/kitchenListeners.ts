@@ -12,6 +12,7 @@ import type {
   Family,
   IngredientRecord,
   KitchenSettings,
+  Meal,
   PlannedMeal,
   Product,
   Recipe,
@@ -116,6 +117,19 @@ export function startPlannedMealsListener(
     ),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as PlannedMeal)),
+    onError,
+  );
+}
+
+export function startMealsListener(
+  uid: string,
+  onChange: (meals: Meal[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    kitchenCollection(uid, 'meals'),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as Meal)),
     onError,
   );
 }

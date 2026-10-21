@@ -14,6 +14,7 @@ const selectFamilyItems = (state: RootState) => state.pinch.families.items;
 export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.settings.isLoaded &&
   state.pinch.plannedMeals.isLoaded &&
+  state.pinch.meals.isLoaded &&
   state.pinch.ingredients.isLoaded &&
   state.pinch.families.isLoaded &&
   state.pinch.stores.isLoaded &&
@@ -206,4 +207,16 @@ export const selectCostContext = createSelector(
     ingredientsById,
     defaultProducts,
   }),
+);
+
+const selectMealItems = (state: RootState) => state.pinch.meals.items;
+
+/** The saved meals, newest first. */
+export const selectMeals = createSelector([selectMealItems], (meals) =>
+  [...meals].sort((a, b) => b.createdAt - a.createdAt),
+);
+
+export const selectMealsById = createSelector(
+  [selectMeals],
+  (meals) => new Map(meals.map((meal) => [meal.id, meal])),
 );

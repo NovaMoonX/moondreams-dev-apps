@@ -224,8 +224,7 @@ interface MealItem {
 interface Meal {
   id: string;
   name: string;
-  items: MealItem[];                           // 1 … MAX_MEAL_ITEMS
-  isArchived: boolean;
+  items: MealItem[];                           // 1 … MAX_MEAL_ITEMS (no isArchived: a saved meal is always deletable)
   createdAt: number;
   updatedAt: number;
 }
@@ -539,7 +538,7 @@ No cached document is ever written back whole. There is no cross-person concurre
 
 - Forms: `FormSheet` for the ingredient, product, store and settings forms; `Subview` for the recipe and meal builders and the stores and products lists; `DetailSheet` for day, planned meal, recipe, meal and ingredient details; `ModalFooterActions` with Cancel left, a `DeleteIconButton` beside it on edit, the primary alone on the right.
 - Titles are plain nouns ("Recipe", "Product", "Store", "Meal", "Settings"); the verb is on the primary button and the destructive confirm.
-- `PickOrCreate` for family, store and saved meal; `PillGroup` for meal type and the Recipes / Meals and Yours / All switches (`isThin`); `AppToggle` for the four nutrition switches; `SuggestionChips` is not used.
+- `PickOrCreate` for family and store; `PillGroup` for meal type, "Start from a saved meal" and the Recipes / Meals and Yours / All switches (`isThin`); `AppToggle` for the four nutrition switches; `SuggestionChips` is not used.
 - Lists search from `LIST_SEARCH_THRESHOLD` rows; Kitchen groups by family with `SectionDivider` and mounts a family group only near the viewport (`LazyMount`).
 - Images from URLs (a recipe cover, a store logo) are `FallbackImage` with a themed fallback (a tinted emoji tile, a letter tile).
 - Delete confirmations go through `useActionModal().confirm` with `destructive: true` and say what archiving means when something is in use.

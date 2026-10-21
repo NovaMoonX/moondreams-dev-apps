@@ -65,7 +65,14 @@ function CalendarScreen({
     dayKey: string,
     mealType: MealType | null,
     plannedMealId: string | null = null,
-  ) => openSubview({ kind: 'plan', dayKey, mealType, plannedMealId });
+  ) =>
+    openSubview({
+      kind: 'plan',
+      dayKey,
+      mealType,
+      plannedMealId,
+      fromMealId: null,
+    });
 
   const goToMonth = (monthKey: string) => {
     setSelectedKey(null);
