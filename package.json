@@ -76,9 +76,12 @@
     "nuqs": "^2.10.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-player": "^3.4.0",
     "react-redux": "^9.3.0",
     "react-router-dom": "^7.18.2",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "vimeo-video-element": "^1.7.4",
+    "youtube-video-element": "^1.9.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

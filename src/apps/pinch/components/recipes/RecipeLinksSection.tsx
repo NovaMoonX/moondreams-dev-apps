@@ -1,18 +1,18 @@
+import { lazy, Suspense } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ExternalLink, Play } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 
-import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
 import { RECIPE_LINK_EMOJIS } from '@apps/pinch/constants';
 import type { RecipeLink } from '@apps/pinch/types';
 import {
   getHowToLink,
+  getInlineVideo,
   getLinkHost,
   getLinkLabel,
   getOtherLinks,
-  getYouTubeId,
-  getYouTubeThumbnailUrl,
+  type InlineVideo,
 } from '@apps/pinch/utils/recipeLinks';
 
 const DEFAULT_REL = 'noopener noreferrer';
@@ -20,55 +20,34 @@ const DEFAULT_REL = 'noopener noreferrer';
 const ROW_CLASS =
   'hover:bg-muted text-foreground! w-full justify-start gap-3 px-3 py-2 text-left font-normal whitespace-normal';
 
-interface HowToCardProps {
+const HowToVideo = lazy(
+  () => import('@apps/pinch/components/recipes/HowToVideo'),
+);
+
+const VIDEO_FRAME_CLASS =
+  'bg-accent border-border aspect-video rounded-2xl border';
+
+interface HowToPlayerProps {
   link: RecipeLink;
-  rel: string;
-  isThumbnailHidden: boolean;
+  video: InlineVideo;
 }
 
-function HowToCard({ link, rel, isThumbnailHidden }: HowToCardProps) {
-  const videoId = isThumbnailHidden ? null : getYouTubeId(link.url);
+function HowToPlayer({ link, video }: HowToPlayerProps) {
   const host = getLinkHost(link.url);
-  const label = getLinkLabel(link);
 
   return (
-    <div className='border-border overflow-hidden rounded-2xl border'>
-      <Button
-        href={link.url}
-        target='_blank'
-        rel={rel}
-        variant='tertiary'
-        size='stripped'
-        rounded='none'
-        aria-label={`${label} on ${host}: watch it, opens in a new tab`}
-        className={join(ROW_CLASS, 'h-auto items-center')}
-      >
-        <span
-          className='bg-accent relative grid aspect-video w-28 shrink-0 place-items-center overflow-hidden rounded-xl'
-          aria-hidden='true'
-        >
-          {videoId && (
-            <FallbackImage
-              src={getYouTubeThumbnailUrl(videoId)}
-              alt=''
-              className='absolute inset-0 size-full object-cover'
-            />
-          )}
-          <span className='bg-background/90 text-foreground relative grid size-8 place-items-center rounded-full shadow-sm'>
-            <Play className='size-4 fill-current' />
-          </span>
-        </span>
-        <span className='min-w-0 flex-1 space-y-0.5'>
-          <span className='block font-medium wrap-break-word'>{label}</span>
-          <span className='text-muted-foreground block truncate text-xs'>
-            {host}
-          </span>
-          <span className='bg-accent text-accent-foreground inline-flex h-7 items-center gap-1 rounded-full px-3 text-sm font-medium'>
-            Watch
-            <ExternalLink className='size-3.5' aria-hidden='true' />
-          </span>
-        </span>
-      </Button>
+    <div className='space-y-2'>
+      <Suspense fallback={<div className={VIDEO_FRAME_CLASS} />}>
+        <HowToVideo
+          video={video}
+          ariaLabel={`Play ${getLinkLabel(link)} from ${host}`}
+        />
+      </Suspense>
+      {link.label !== null && (
+        <p className='text-muted-foreground text-sm wrap-break-word'>
+          {link.label}
+        </p>
+      )}
     </div>
   );
 }
@@ -126,34 +105,28 @@ interface RecipeLinksSectionProps {
   links: RecipeLink[];
   /** What the links tell the other site; a page someone else made adds `nofollow ugc`. */
   rel?: string;
-  /** Draws no picture from another site, for a page whose visitors didn't ask to reach one. */
-  isThumbnailHidden?: boolean;
+  /** Plays nothing and draws no picture from another site, for a page whose visitors didn't ask to reach one: the how-to video is a link row there. */
+  isPlayerHidden?: boolean;
 }
 
-/** The how-to video as a card, then the other links as rows: all of them open the other site in a new tab. Nothing is drawn for a recipe with no links. */
+/** The how-to video plays in place (the host's player loads on the tap); every other link, and the video when it can't play here, is a row that opens the other site in a new tab. Nothing is drawn for a recipe with no links. */
 function RecipeLinksSection({
   links,
   rel = DEFAULT_REL,
-  isThumbnailHidden = false,
+  isPlayerHidden = false,
 }: RecipeLinksSectionProps) {
   const howTo = getHowToLink(links);
-  const others = getOtherLinks(links);
-  if (howTo === null && others.length === 0) return null;
+  const video =
+    howTo === null || isPlayerHidden ? null : getInlineVideo(howTo.url);
+  const rows = video === null ? links : getOtherLinks(links);
+  if (howTo === null && rows.length === 0) return null;
 
   return (
     <div className='space-y-5'>
-      {howTo && (
-        <FormSection title='How to'>
-          <HowToCard
-            link={howTo}
-            rel={rel}
-            isThumbnailHidden={isThumbnailHidden}
-          />
-        </FormSection>
-      )}
-      {others.length > 0 && (
-        <FormSection title={howTo ? 'More links' : 'Links'}>
-          <LinkRows links={others} rel={rel} />
+      {howTo && video && <HowToPlayer link={howTo} video={video} />}
+      {rows.length > 0 && (
+        <FormSection title='Links'>
+          <LinkRows links={rows} rel={rel} />
         </FormSection>
       )}
     </div>
