@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -12,16 +13,8 @@ import { useStore } from 'react-redux';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import {
-  ChevronLeft,
-  ListChecks,
-  NotebookPen,
-  Pause,
-  Play,
-} from 'lucide-react';
+import { ChevronLeft, ListChecks, Pause, Play } from 'lucide-react';
 
-import ActionGroup from '@/components/ActionGroup';
-import ActionRow from '@/components/ActionRow';
 import NoteTextField from '@/components/NoteTextField';
 import Subview from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -36,6 +29,9 @@ import {
 } from '@/utils/durationUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
+import CookFollowUp, {
+  type CookFollowUpChoice,
+} from '@apps/pinch/components/cooking/CookFollowUp';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNoteCard from '@apps/pinch/components/cooking/CookNoteCard';
 import CookTimerBuzz from '@apps/pinch/components/cooking/CookTimerBuzz';
@@ -47,6 +43,7 @@ import CookRecord, {
 import CookStepView, {
   type StepTimerSlot,
 } from '@apps/pinch/components/cooking/CookStepView';
+import CookRecipeEdit from '@apps/pinch/components/cooking/CookRecipeEdit';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
 import CookTimerView from '@apps/pinch/components/cooking/CookTimerView';
 import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
@@ -281,7 +278,7 @@ function CookingSession({
 }: CookingSessionProps) {
   const dispatch = useAppDispatch();
   const store = useStore<RootState>();
-  const { closeSubview, closeSubviewIf, openSubview } = usePinchOverlay();
+  const { closeSubview, closeSubviewIf } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
   const [currentId, setCurrentId] = useState(() =>
@@ -310,6 +307,22 @@ function CookingSession({
         entries.map((entry) => [entry.recipe.id, entry.recipe.updatedAt]),
       ),
   );
+  const [edit, setEdit] = useState<{
+    recipeId: string;
+    noteId: string | null;
+    token: string;
+    isFromFinish: boolean;
+  } | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editedIds, setEditedIds] = useState<string[]>([]);
+  const [followUps, setFollowUps] = useState<
+    Record<string, 'NOTHING' | 'CHANGED'>
+  >({});
+  const editDirtyRef = useRef(false);
+  const editBackStepRef = useRef<(() => boolean) | null>(null);
+  const isAskingToLeaveEdit = useRef(false);
+  const scrollBeforeEdit = useRef(0);
+  const isEditing = edit !== null;
   const entry =
     entries.find((candidate) => candidate.recipe.id === currentId) ??
     entries[0];
@@ -521,7 +534,7 @@ function CookingSession({
           ?.recipe ?? null)
       : null;
   const isStepsView = view === 'steps' || isWide;
-  const isFinishShown = isFinished && isStepsView && hasSteps;
+  const isFinishShown = isFinished && isStepsView && (hasSteps || isRecorded);
   const canMark =
     isCooksReady && entries.some((candidate) => !candidate.isRemoved);
   const isScaled = recipe.servings > 0 && servings !== recipe.servings;
@@ -567,7 +580,7 @@ function CookingSession({
     index + 1,
   );
   const isDraftOpen = isFinishShown && (note.isOpen || putAway.isOpen);
-  const focused = isDraftOpen ? null : timers.focused;
+  const focused = isDraftOpen || isEditing ? null : timers.focused;
   const focusedEntry =
     focused === null
       ? null
@@ -616,7 +629,11 @@ function CookingSession({
   const voice = useCookVoice({
     uid,
     step:
-      isStepsView && hasSteps && !isFinishShown && focused === null
+      isStepsView &&
+      hasSteps &&
+      !isFinishShown &&
+      !isEditing &&
+      focused === null
         ? { key: `${recipe.id}:${index}`, spoken: spokenStep }
         : null,
     onTurnOn: timers.prepareSound,
@@ -769,11 +786,78 @@ function CookingSession({
     closeIfStillOpen();
   };
 
-  const applyNote = async (noteId: string) => {
-    if (!(await confirmDiscard()) || !(await confirmLeave())) return;
-    clearCookingSession(uid);
-    openSubview({ kind: 'recipe', id: recipe.id, fromNoteId: noteId });
+  const getOverlay = () =>
+    rootRef.current?.closest<HTMLElement>('[data-subview-overlay]') ?? null;
+
+  const startEdit = async (recipeId: string, noteId: string | null) => {
+    if (isEditing || !(await confirmDiscard())) return;
+    const target = entries.find(
+      (candidate) => candidate.recipe.id === recipeId,
+    );
+    if (!target) return;
+    voice.stop();
+    scrollBeforeEdit.current = getOverlay()?.scrollTop ?? 0;
+    editDirtyRef.current = false;
+    setEditTitle(target.recipe.title);
+    setEdit({
+      recipeId,
+      noteId,
+      token: generateUuid(),
+      isFromFinish: isFinished,
+    });
   };
+
+  const applyNote = (noteId: string) => startEdit(recipe.id, noteId);
+
+  const leaveEdit = async () => {
+    if (editBackStepRef.current?.()) return;
+    if (isAskingToLeaveEdit.current) return;
+    if (editDirtyRef.current) {
+      isAskingToLeaveEdit.current = true;
+      const isConfirmed = await ask({
+        title: 'Discard your changes?',
+        message: "They aren't saved yet. Going back to cooking loses them.",
+        confirmText: 'Discard',
+        cancelText: 'Keep editing',
+        destructive: true,
+      }).finally(() => {
+        isAskingToLeaveEdit.current = false;
+      });
+      if (!isConfirmed) return;
+    }
+    setEdit(null);
+  };
+
+  const finishEdit = (saved: NonNullable<typeof edit>) => {
+    setEditedIds((current) =>
+      current.includes(saved.recipeId) ? current : [...current, saved.recipeId],
+    );
+    if (saved.isFromFinish) {
+      setFollowUps((current) => ({ ...current, [saved.recipeId]: 'CHANGED' }));
+    }
+    setEdit((current) => (current?.token === saved.token ? null : current));
+  };
+
+  const chooseFollowUp = async (
+    recipeId: string,
+    choice: CookFollowUpChoice,
+  ) => {
+    if (choice === 'CHANGE') {
+      await startEdit(recipeId, null);
+      return;
+    }
+    if (choice === 'NOTE') {
+      note.open(recipeId);
+      return;
+    }
+    setFollowUps((current) => ({ ...current, [recipeId]: 'NOTHING' }));
+  };
+
+  useLayoutEffect(() => {
+    if (edit === null) {
+      getOverlay()?.scrollTo({ top: scrollBeforeEdit.current });
+    }
+  }, [edit]);
 
   const cancelNote = async () => {
     if (!(await confirmDiscard())) return;
@@ -867,6 +951,7 @@ function CookingSession({
     try {
       await undoCooks(ids);
       note.reset();
+      setFollowUps({});
       setCookedIds((current) =>
         Object.fromEntries(
           Object.entries(current).filter(([, id]) => !ids.includes(id)),
@@ -1049,7 +1134,7 @@ function CookingSession({
   };
 
   useEffect(() => {
-    if (focused === null && (!isStepsView || !hasSteps)) {
+    if (isEditing || (focused === null && (!isStepsView || !hasSteps))) {
       return;
     }
 
@@ -1432,20 +1517,22 @@ function CookingSession({
       record.recordedCookId !== null &&
       (!isPlate || putAway.getEntry(record.recipeId)?.isBulk === true),
   );
-  const noteRecipes = records.filter(
-    (record) =>
-      record.recordedCookId !== null &&
-      note.isAvailable(record.recipeId) &&
-      !note.isSaved(record.recipeId),
+  const followUpRecords = records.filter(
+    (record) => record.recordedCookId !== null,
   );
   const hasFollowUps = records.some(
     (record) =>
       note.isSaved(record.recipeId) ||
+      followUps[record.recipeId] === 'CHANGED' ||
       (putAway.getEntry(record.recipeId)?.saved.length ?? 0) > 0,
   );
-  const savedNoteTitles = records
-    .filter((record) => note.isSaved(record.recipeId))
-    .map((record) => record.entry.recipe.title);
+  const getFollowUpDone = (recipeId: string) => {
+    const lines = [
+      note.isSaved(recipeId) && 'Note saved.',
+      followUps[recipeId] === 'CHANGED' && 'Recipe changed.',
+    ].filter((line) => line !== false);
+    return lines.length === 0 ? null : lines.join(' ');
+  };
   const openNoteTitle =
     records.find((record) => record.recipeId === note.openRecipeId)?.entry
       .recipe.title ?? null;
@@ -1463,10 +1550,11 @@ function CookingSession({
     ].filter((part) => part !== null);
     return parts.length === 0 ? null : parts.join(' ');
   };
+  const isEditedHere = editedIds.includes(recipe.id);
   const isChanged =
     isRemoved ||
     recipe.isArchived === true ||
-    recipe.updatedAt !== openedUpdatedAt.get(recipe.id);
+    (!isEditedHere && recipe.updatedAt !== openedUpdatedAt.get(recipe.id));
 
   const dishStrip =
     isPlate && !isFinishShown && focused === null ? (
@@ -1704,25 +1792,36 @@ function CookingSession({
     <Subview
       overlay
       isTitleWrapped
-      className='lg:max-w-5xl [@media(max-height:500px)]:max-w-4xl'
-      title={title}
+      className={
+        isEditing
+          ? undefined
+          : 'lg:max-w-5xl [@media(max-height:500px)]:max-w-4xl'
+      }
+      title={isEditing ? editTitle : title}
       headerAction={
-        voice.isSupported && !isFinishShown ? (
+        voice.isSupported && !isFinishShown && !isEditing ? (
           <CookVoiceButton voice={voice} />
         ) : null
       }
       onClose={closeSubview}
-      onBack={() =>
-        focused !== null
-          ? backToStep()
-          : isStepsView
-            ? void leave()
-            : showView('steps')
-      }
+      onBack={() => {
+        if (isEditing) {
+          void leaveEdit();
+        } else if (focused !== null) {
+          backToStep();
+        } else if (isStepsView) {
+          void leave();
+        } else {
+          showView('steps');
+        }
+      }}
     >
       <div
         ref={rootRef}
-        className='flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2'
+        className={join(
+          'flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2',
+          isEditing && 'hidden!',
+        )}
       >
         {!isDishStripInStep && dishStrip}
         {focused !== null ? (
@@ -1793,31 +1892,30 @@ function CookingSession({
                 )}
               </div>
             )}
-            {isRecorded && savedNoteTitles.length > 0 && !putAway.isOpen && (
-              <p className='text-muted-foreground text-center text-sm text-balance'>
-                {isPlate
-                  ? `${savedNoteTitles.length === 1 ? 'Note' : 'Notes'} saved for ${LIST_FORMAT.format(savedNoteTitles)}.`
-                  : 'Note saved.'}
-              </p>
-            )}
-            {noteRecipes.length > 0 && !note.isOpen && !putAway.isOpen && (
-              <ActionGroup>
-                {noteRecipes.map((record) => (
-                  <ActionRow
+            {!note.isOpen &&
+              !putAway.isOpen &&
+              followUpRecords.map((record) => {
+                const doneText = getFollowUpDone(record.recipeId);
+                const savedNoteId = note.getSavedNoteId(record.recipeId);
+                return (
+                  <CookFollowUp
                     key={record.recipeId}
-                    icon={<NotebookPen className='h-4 w-4' />}
-                    label='Add a note'
-                    subtitle={
-                      isPlate
-                        ? record.entry.recipe.title
-                        : 'Shown the next time you cook it'
+                    caption={isPlate ? record.entry.recipe.title : null}
+                    isNothingChosen={followUps[record.recipeId] === 'NOTHING'}
+                    isNoteAvailable={note.isAvailable(record.recipeId)}
+                    doneText={doneText}
+                    onApply={
+                      savedNoteId !== null &&
+                      followUps[record.recipeId] !== 'CHANGED'
+                        ? () => void startEdit(record.recipeId, savedNoteId)
+                        : null
                     }
-                    onClick={() => note.open(record.recipeId)}
-                    isGrouped
+                    onChoose={(choice) =>
+                      void chooseFollowUp(record.recipeId, choice)
+                    }
                   />
-                ))}
-              </ActionGroup>
-            )}
+                );
+              })}
             {!note.isOpen && !putAway.isOpen && (
               <Button
                 type='button'
@@ -1850,6 +1948,11 @@ function CookingSession({
           {isChanged && focused === null && (
             <p className='text-muted-foreground text-xs'>
               This recipe was changed or removed elsewhere.
+            </p>
+          )}
+          {isEditedHere && !isChanged && focused === null && !isFinishShown && (
+            <p className='text-muted-foreground text-xs'>
+              Cooking now follows your changes.
             </p>
           )}
         </div>
@@ -2044,6 +2147,19 @@ function CookingSession({
           </div>
         </div>
       </div>
+      {edit !== null && (
+        <CookRecipeEdit
+          key={edit.token}
+          uid={uid}
+          recipeId={edit.recipeId}
+          noteId={edit.noteId}
+          isDirtyRef={editDirtyRef}
+          backStepRef={editBackStepRef}
+          onTitleChange={setEditTitle}
+          onLeave={() => void leaveEdit()}
+          onSaved={() => finishEdit(edit)}
+        />
+      )}
       <CookVoiceExplainer voice={voice} ingredientExample={ingredientExample} />
     </Subview>
   );
