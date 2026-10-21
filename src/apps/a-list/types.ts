@@ -49,6 +49,17 @@ export interface MovieSearchResult {
   posterUrl: string | null;
 }
 
+export interface PopularMovie extends MovieSearchResult {
+  /** Date-only (UTC midnight) when the film opens in the future; null once it is in theaters. */
+  opensOn: number | null;
+  /** https link to the film's trailer on YouTube; null when the provider has none. */
+  trailerUrl: string | null;
+  /** The film's synopsis, trimmed; null when the provider has none. */
+  overview: string | null;
+  /** Up to three genre names, most prominent first. */
+  genres: string[];
+}
+
 export type AListOverlay =
   /** `quick` is the trailers loop: one tap saves a result with the default priority and the search stays open. */
   | { kind: 'add'; destination: 'watchlist'; mode?: 'quick' }

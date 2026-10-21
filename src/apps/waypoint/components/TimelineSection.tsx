@@ -23,17 +23,8 @@ import EventGroupCard from '@apps/waypoint/components/EventGroupCard';
 import EventGroupModal from '@apps/waypoint/components/EventGroupModal';
 import EventStackCard from '@apps/waypoint/components/EventStackCard';
 import EventStackModal from '@apps/waypoint/components/EventStackModal';
-import { deleteChecklistItem } from '@apps/waypoint/store/actions/checklistActions';
-import { deleteExpense } from '@apps/waypoint/store/actions/expenseActions';
-import { useSyncBookings } from '@apps/waypoint/hooks/useSyncBookings';
-import { getEventSubject, getExpenseLinkKey, isWorthFollowUp } from '@apps/waypoint/utils/relatedSubjects';
-import { useRelatedFlow } from '@apps/waypoint/hooks/useRelatedFlow';
-import EventFormModal, {
-  type DeleteLinked,
-  type EventFormValues,
-  type NextLegSeed,
-  type SubmitOptions,
-} from '@apps/waypoint/components/EventFormModal';
+import { useEventEditor } from '@apps/waypoint/hooks/useEventEditor';
+import { getExpenseLinkKey } from '@apps/waypoint/utils/relatedSubjects';
 import EventSuggestionHost, { type EventSuggestionHandle } from '@apps/waypoint/components/EventSuggestionHost';
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import LazyMount from '@/components/LazyMount';
@@ -50,17 +41,13 @@ import { getWeatherDayIndexes } from '@apps/waypoint/utils/weather';
 import WeatherDayStrip from '@apps/waypoint/components/WeatherDayStrip';
 import WeatherDetailSheet from '@apps/waypoint/components/WeatherDetailSheet';
 import {
-  createEvent,
-  deleteEvent,
   setEventArchived,
   setEventsGroup,
   setEventsStack,
-  updateEvent,
   updateEventNotes,
 } from '@apps/waypoint/store/actions/eventActions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { store, useAppDispatch, useAppSelector } from '@/store';
-import { useUserInfo } from '@/hooks/useUserInfo';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useNow } from '@/hooks/useNow';
 import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
@@ -87,7 +74,6 @@ import {
 import { buildTimelineItems, getGroupMembers, getStackMembers, type TimelineItem } from '@apps/waypoint/utils/eventGroups';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getDisplayImage } from '@/utils/enrichmentUtils';
-import { getPlaceBiasFromItems } from '@/lib/places/placesApi';
 import {
   selectActiveStaysForDay,
   selectExpenseLinkKeys,
@@ -123,14 +109,6 @@ export function TimelineSection({
   onCopyTimeline,
 }: TimelineSectionProps) {
   const dispatch = useAppDispatch();
-  const { startFollowUp } = useRelatedFlow();
-  const syncBookings = useSyncBookings(trip.id);
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<TimelineEvent | undefined>();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  // The mobile details drawer's own close, threaded through from whichever EventCard
-  // opened the edit form — invoked only once that edit actually succeeds, never on cancel.
-  const editSuccessRef = useRef<(() => void) | undefined>(undefined);
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const dayCount = getDayCount(trip.startDate, trip.endDate);
@@ -176,13 +154,9 @@ export function TimelineSection({
   const selectedTab = isMissingTab(activeDayTab) ? 'all' : activeDayTab;
   const activeDayIndex = selectedTab === 'all' || selectedTab === OUTSIDE_TAB ? 0 : Number(selectedTab);
   const activeStays = useAppSelector(selectActiveStaysForDay(activeDayIndex), shallowEqual);
-  const members = useUserInfo(memberIds)?.map ?? {};
-  const memberOptions = memberIds.map((uid) => ({
-    label: members[uid]?.displayName?.trim() || members[uid]?.email || 'Trip member',
-    value: uid,
-  }));
   const canEdit = canEditExistingItem(trip, currentUserId);
   const canAddEvents = canCreateItem(trip, currentUserId);
+  const { openEditor, openNew, editor } = useEventEditor(trip, currentUserId, events);
   const queryClient = useQueryClient();
 
   // The flight form's airline and airport pickers read these, so have them cached before it opens.
@@ -203,7 +177,6 @@ export function TimelineSection({
   const [compactSingleDayWeather, setCompactSingleDayWeather] = useLocalStoragePreference('waypoint:compactSingleDayWeather', false);
   const now = useNow(60_000);
   const weather = useTripWeather(trip, events, now);
-  const placeBias = getPlaceBiasFromItems([...stays, ...events]);
 
   const attendanceFilteredEvents = events
     .filter((event) => showArchived || !event.isArchived)
@@ -363,11 +336,7 @@ export function TimelineSection({
           stackSuccessRef.current = onSuccess;
         }}
         showArchiveToggle={hasTripStarted(trip)}
-        onEdit={(selectedEvent, onSuccess) => {
-          setEditingEvent(selectedEvent);
-          setIsFormOpen(true);
-          editSuccessRef.current = onSuccess;
-        }}
+        onEdit={openEditor}
         onSaveNotes={async (selectedEvent, notes) => {
           await dispatch(
             updateEventNotes({ uid: currentUserId, trip, event: selectedEvent, notes }),
@@ -558,106 +527,6 @@ export function TimelineSection({
     );
   };
 
-  const resolveEditSuccess = () => {
-    editSuccessRef.current?.();
-    editSuccessRef.current = undefined;
-  };
-
-  const [legSeed, setLegSeed] = useState<NextLegSeed | undefined>();
-  const [legCount, setLegCount] = useState(0);
-
-  const handleSubmit = async (event: EventFormValues, options?: SubmitOptions) => {
-    setIsSubmitting(true);
-    try {
-      if (editingEvent) {
-        await dispatch(
-          updateEvent({
-            uid: currentUserId,
-            trip,
-            eventId: editingEvent.id,
-            event: { ...editingEvent, ...event },
-            previousEvent: editingEvent,
-          }),
-        ).unwrap();
-        await syncBookings(editingEvent.id, options?.bookings);
-      } else {
-        const created = await dispatch(createEvent({ uid: currentUserId, trip, event })).unwrap();
-        const hasBookings = await syncBookings(created.id, options?.bookings);
-        if (!options?.addLeg && isWorthFollowUp(created)) {
-          startFollowUp(getEventSubject(trip, created), { hasBookings });
-        }
-      }
-      setEditingEvent(undefined);
-      if (options?.addLeg) {
-        setLegSeed({ previous: event, arrivalPlace: options.arrivalPlace ?? null });
-        setLegCount((count) => count + 1);
-      } else {
-        setLegSeed(undefined);
-        setIsFormOpen(false);
-      }
-      resolveEditSuccess();
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const describeRemoved = ({ checklistItemIds, expenseIds }: DeleteLinked) => {
-    const parts = [
-      checklistItemIds.length > 0 ? `${checklistItemIds.length} ${checklistItemIds.length === 1 ? 'to-do' : 'to-dos'}` : null,
-      expenseIds.length > 0 ? `${expenseIds.length} ${expenseIds.length === 1 ? 'expense' : 'expenses'}` : null,
-    ].filter((part): part is string => part !== null);
-    return parts.length > 0 ? ` and its ${parts.join(' and ')}` : '';
-  };
-
-  /** Deletes what the person ticked in the confirm, after the event itself; returns what could not be deleted. */
-  const deleteLinked = async ({ checklistItemIds, expenseIds }: DeleteLinked) => {
-    const { expenses } = store.getState().waypoint;
-    const results = await Promise.allSettled([
-      ...checklistItemIds.map((itemId) =>
-        dispatch(deleteChecklistItem({ trip, uid: currentUserId, itemId, isPrivate: false })).unwrap(),
-      ),
-      ...expenseIds.flatMap((expenseId) => {
-        const expense = expenses.items.find((candidate) => candidate.id === expenseId && candidate.tripId === trip.id);
-        return expense ? [dispatch(deleteExpense(expense)).unwrap()] : [];
-      }),
-    ]);
-    return results.filter((result) => result.status === 'rejected').length;
-  };
-
-  const handleDelete = async (event: TimelineEvent, linked: DeleteLinked) => {
-    setIsSubmitting(true);
-    try {
-      await dispatch(deleteEvent({ uid: currentUserId, trip, eventId: event.id })).unwrap();
-      setIsFormOpen(false);
-      setEditingEvent(undefined);
-      resolveEditSuccess();
-      const removedCount = linked.checklistItemIds.length + linked.expenseIds.length;
-      if (removedCount > 0) {
-        const failedCount = await deleteLinked(linked);
-        addToast(
-          failedCount > 0
-            ? {
-                title: `Deleted ${event.title}`,
-                description: `${failedCount === 1 ? '1 linked item' : `${failedCount} linked items`} could not be deleted. You can remove ${failedCount === 1 ? 'it' : 'them'} from the checklist or Expenses.`,
-                type: 'error',
-              }
-            : {
-                title: `Deleted ${event.title}${describeRemoved(linked)}`,
-                type: 'success',
-              },
-        );
-      }
-    } catch (error) {
-      addToast({
-        title: 'Unable to delete event',
-        description: getErrorMessage(error, 'Please try again.'),
-        type: 'error',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const weatherDays = dayIndexes
     .map((dayIndex) => ({
       dayIndex,
@@ -748,13 +617,7 @@ export function TimelineSection({
           action={
             canAddEvents && (
               <div className='flex items-center gap-2'>
-                <Button
-                  type='button'
-                  onClick={() => {
-                    setEditingEvent(undefined);
-                    setIsFormOpen(true);
-                  }}
-                >
+                <Button type='button' onClick={openNew}>
                   Add
                 </Button>
               </div>
@@ -881,27 +744,7 @@ export function TimelineSection({
           onClose={() => setGroupingEvent(undefined)}
         />
       )}
-      <EventFormModal
-        key={`${editingEvent?.id ?? 'new'}-${isFormOpen ? 'open' : 'closed'}-${legCount}`}
-        isOpen={isFormOpen}
-        legFrom={legSeed}
-        trip={trip}
-        currentUserId={currentUserId}
-        memberOptions={memberOptions}
-        event={editingEvent}
-        events={events}
-        placeBias={placeBias}
-        isSubmitting={isSubmitting}
-        onSubmit={handleSubmit}
-        onDelete={editingEvent ? (linked) => handleDelete(editingEvent, linked) : undefined}
-        onClose={() => {
-          setIsFormOpen(false);
-          setEditingEvent(undefined);
-          setLegSeed(undefined);
-          // Canceling leaves the mobile drawer open, if it's the one that opened this modal.
-          editSuccessRef.current = undefined;
-        }}
-      />
+      {editor}
     </>
   );
 }

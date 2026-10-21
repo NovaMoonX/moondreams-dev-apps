@@ -62,6 +62,14 @@ html.waypoint-theme button[class*='justify-between'][class*='w-full'][class*='bo
   padding-inline: 1rem;
 }
 
+/* Free-text areas (notes, messages) read small from `sm` up; phones keep the 16px that stops iOS zooming into a focused field. */
+@media (min-width: 40rem) {
+  html.waypoint-theme textarea {
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+  }
+}
+
 /* A compact select (a role beside a member, `py-1`) sits tight to its text; the full 1rem inset is for full-size fields. */
 html.waypoint-theme button[class*='justify-between'][class*='w-full'][class*='border'][class*='py-1']:not([class*='pl-']) {
   padding-inline: 0.75rem;

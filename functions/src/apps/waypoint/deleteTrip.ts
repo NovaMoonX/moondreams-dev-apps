@@ -84,6 +84,7 @@ export const deleteTrip = onCall(
 
       const looseRefs = [
         ...reminderRefs,
+        firestore.doc(`apps/waypoint/pushState/${tripId}`),
         ...requestsSnapshot.docs.map((d) => d.ref),
         ...invitesSnapshot.docs.map((d) => d.ref),
         ...personalSnapshots.flatMap((snapshot) => snapshot.docs.map((d) => d.ref)),

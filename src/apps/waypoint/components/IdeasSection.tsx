@@ -42,7 +42,7 @@ function IdeasSection({ trip, currentUserId, canAdd, onAdd }: IdeasSectionProps)
         subtitle={
           canAdd
             ? "Drop a spot you're excited about — the group votes on favorites."
-            : 'New ideas close once the trip starts, but voting stays open.'
+            : 'Only members of this trip can add ideas.'
         }
         action={
           canAdd && (
@@ -64,7 +64,7 @@ function IdeasSection({ trip, currentUserId, canAdd, onAdd }: IdeasSectionProps)
       </Tabs>
       {visibleIdeas.length === 0 && (
         <p className='text-muted-foreground text-sm'>
-          {canAdd ? 'No ideas yet — be the first to add one.' : 'No ideas were added before the trip.'}
+          {canAdd ? 'No ideas yet — be the first to add one.' : 'No ideas yet.'}
         </p>
       )}
       {undecided.length > 0 && renderCards(undecided)}

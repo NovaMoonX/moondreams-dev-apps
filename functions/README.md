@@ -10,6 +10,7 @@ Server-side code for the mini-apps. Every function:
 
 | Function | Trigger | App | What it does |
 | --- | --- | --- | --- |
+| `getPopularMovies` | callable | A-List Tracker | `{}` → `{ results }` (up to 30, most popular first, each with `opensOn` for a film not yet open, a YouTube `trailerUrl`, a trimmed `overview` and up to three `genres`): what is in US theaters now plus what opens soon, from TMDB; empty on OMDb |
 | `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
 | `getCalendarShare` | callable, **no sign-in** | A-List Tracker | `{ shareId, pin? }` → `{ status: 'ok', calendar }`, or `pin_required`, `wrong_pin`, `not_found`. Serves a calendar share to anyone with its link |
@@ -19,6 +20,9 @@ Server-side code for the mini-apps. Every function:
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, email invitations, members' personal expenses, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every event, stay, rental and expense on its calendar day ("keep original dates"); checklist due days stay relative to the trip's start and are left alone |
 | `rescheduleTripReminders` | Firestore update on `apps/waypoint/trips/{tripId}` | Waypoint | Re-times event reminders when a relative trip's dates or time zone change |
+| `notifyTripAnnouncement` | Firestore create on `apps/waypoint/trips/{tripId}/announcements/{id}` | Waypoint | Pushes a new announcement to everyone on the trip except its author |
+| `notifyTripIdea` | Firestore create on `apps/waypoint/trips/{tripId}/ideas/{id}` | Waypoint | Pushes a new idea to everyone on the trip except whoever added it |
+| `sendExpenseWrapUp` | scheduled, every 30 minutes | Waypoint | At 9 PM trip time, asks the trip's Admins to mark that day's still-expected expenses as paid |
 | `registerAppUsage` | callable | shared | `{ appId }` → the caller's `apps/{appId}/usage/{uid}` record (`startedAt`, `lastActiveAt`). Creates it the first time a member opens an app, dating `startedAt` at the oldest data that app already holds for them |
 | `fetchLinkMetadata` | callable | shared | Reads a link's Open Graph preview (title, description, image, site name) |
 | `fetchPageContent` | callable | shared | `{ url, include?, schemaTypes?, maxTextChars? }` → `{ url, title, …only the kinds asked for }`: reads one web page and returns its `text` (capped, 30k by default, `maxTextChars` clamped to 1k–60k), `structuredData` (its schema.org nodes, optionally only the given `schemaTypes`, whole nodes up to 30k characters, with every key's leading `@` written as `_`: `@type` is `_type`, because a callable's client refuses any response that holds an `@type` key; an oversized node keeps its smaller fields, each field measured once, so a node with thousands of fields is cheap), `meta` (description, image address, site name, author), `headings` (h1–h3 text, up to 40) or `images` (absolute web addresses, up to 20). Defaults to `text` and `meta`. The text skips `nav`, `footer`, `form` and scripts. App-neutral: each app turns the content into its own thing. Fetches through the same private-network guard as `fetchLinkMetadata`, stores nothing |
@@ -35,8 +39,8 @@ Every callable requires a signed-in caller, except `getCalendarShare` and `getPi
 
 | Name | Kind | Used by | Set it with |
 | --- | --- | --- | --- |
-| `TMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getMovie` | `firebase functions:secrets:set TMDB_API_KEY --project moondreams-dev-apps` (paste the TMDB "API Read Access Token" or the v3 API key) |
-| `OMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getMovie` | `firebase functions:secrets:set OMDB_API_KEY --project moondreams-dev-apps` |
+| `TMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getPopularMovies`, `getMovie` | `firebase functions:secrets:set TMDB_API_KEY --project moondreams-dev-apps` (paste the TMDB "API Read Access Token" or the v3 API key) |
+| `OMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getPopularMovies`, `getMovie` | `firebase functions:secrets:set OMDB_API_KEY --project moondreams-dev-apps` |
 | `AMC_API_KEY` | Functions secret, **required to deploy** | `findTheatres`, `findShowtimes` | `firebase functions:secrets:set AMC_API_KEY --project moondreams-dev-apps` (the vendor key from [developers.amctheatres.com](https://developers.amctheatres.com), sent as `X-AMC-Vendor-Key`) |
 | `MOVIE_PROVIDER` | env, optional (`tmdb` or `omdb`) | `searchMovies` | `functions/.env.local` locally. Forces a provider; unset, TMDB is used whenever its key is set. |
 | `TMDB_API_BASE` | env, optional | TMDB calls | `functions/.env.local`. Points TMDB calls at another server; a test aid, never set in production. |
@@ -85,7 +89,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Ids:** anything that isn't 26 characters of the share alphabet, any unknown id and a deleted share all return `not_found`, so a caller can't tell which ids exist.
 - **No secrets, no cache, no logging of ids or PINs.** A new callable is opened to the browser by the deploy itself (root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access)).
 
-### A-List Tracker: `searchMovies` and `getMovie`
+### A-List Tracker: `searchMovies`, `getPopularMovies` and `getMovie`
 
 - **Full flow:** the end-to-end outline (search, caching, provider choice, budget, details, refresh) is in `src/apps/a-list/TECHNICAL.md` under "Movie Data Service" → "How a lookup works, end to end".
 - **Providers:** [TMDB](https://www.themoviedb.org/) is used whenever `TMDB_API_KEY` is set, otherwise [OMDb](https://www.omdbapi.com/) (free tier, about 1,000 lookups a day for the whole app). `MOVIE_PROVIDER` forces one. TMDB lists unreleased films; OMDb mostly does not.
@@ -93,8 +97,9 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
   - **TMDB credential:** either the v4 "API Read Access Token" (sent as a Bearer header) or the v3 API key (sent as `api_key`); it is detected from the value.
   - **Search:** up to 20 results, newest release first (a second page is fetched when there is one). **Details:** US theatrical date, US rating, runtime, poster.
   - **Terms:** TMDB is free for non-commercial use only and requires its credit line and logo (shown in Membership settings); cached data must be under 6 months old (ours is 7 days or less).
+- **Popular in theaters:** `getPopularMovies` (signed-in callers only) merges TMDB's US now-playing and upcoming lists by popularity. OMDb has no such list, so it answers empty (only the emulator fixtures answer offline). Building the list makes one extra TMDB `/videos` call per film (a failed one just leaves that film without a trailer link). An empty answer is never cached.
 - **Server cache:**
-  - `apps/a-list/searchCache`: 7 days.
+  - `apps/a-list/searchCache`: 7 days for searches, 1 day for the popular list.
   - `apps/a-list/movieCache`: 30 days once a movie is released, 1 day before that (unreleased dates move).
 - **Budget:** for OMDb only, `lookupBudget.ts` counts every upstream call in `apps/a-list/lookupUsage`. It refuses with `resource-exhausted` at 900 a day app-wide or 100 per member. TMDB has no practical daily limit, so it is not budgeted (the cache still applies).
 - **Access:** clients can't read or write `searchCache`, `movieCache` or `lookupUsage`.
@@ -190,6 +195,12 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **One notification, not two:** the service worker doesn't show the notification itself. Firebase shows a push that carries a `notification` and opens its link on tap; showing it by hand as well made a second copy with no link.
 - **Pruning:** reminders are written by people and the rules never let a client delete one, so each run also deletes finished ones (`sent`, `cancelled`, `expired`) that were due more than 14 days ago, at most 200 a run (`notifications/pruneReminders.ts`, through the Admin SDK), so a backlog is worked off over a few runs. A pending one is never touched, and neither is a yearly one rolled forward. It runs beside the sending and a failure is only logged. Fourteen days is long enough for every open page to have seen a reminder change; the client's listener still reads every reminder that is left. Its query (`status in [...]` and `scheduledFor <`) uses the same `reminders (status, scheduledFor)` index below.
 - **Index:** the `status == pending` + `scheduledFor <=` query on `reminders` needs the composite index in `firestore.indexes.json`. Without it every run fails with `FAILED_PRECONDITION` and no reminder is sent.
+
+### Waypoint: trip pushes
+
+- **`notifyTripAnnouncement` and `notifyTripIdea`:** a Firestore create trigger reads the trip's `members` and sends one push through `sendPushToUsers` to every member but the author. An expired announcement sends nothing. The push names the announcement's title and a clipped body, or the idea's title and who suggested it (a profile name that is an email reads "Someone"); a tap opens the trip (`?trip=`, plus `&tab=ideas` for an idea). Triggers are delivered at least once, so a retried delivery can repeat a push; nothing is stored. People with no registered device get nothing, and there is no per-kind switch: both follow the browser's notification permission like every other push.
+- **`sendExpenseWrapUp`:** every 30 minutes it reads trips whose `endDate` is within the last two days, and for each one that is not archived and whose local clock (its `timezone`, UTC when it has none) is in the 9 PM hour on a day inside its dates, reads that day's expenses (`status == 'EXPECTED'` and `dayIndex ==` today, at most 50) and pushes the trip's Admins one note naming up to two of them. A day with none sends nothing and writes nothing; the two runs in the hour mean one late run still leaves the other, and a run after the hour drops the note instead of sending it late. `apps/waypoint/pushState/{tripId}.lastWrapUpDay` is written in a transaction before the push, so overlapping runs send one and a failed send skips the day. Only this function reads or writes `pushState` (no rule matches it, so clients are denied), and `deleteTrip` removes it. Equality filters only, so no composite index; the trips read is a single range on `endDate`.
+- **Not verified live:** the sandbox has no FCM or Eventarc. The day arithmetic and copy are checked by `npm run check:waypoint-pushes`; the triggers and the push itself run only after deploy.
 
 ### Pinch: `sendEatSoonDigest`
 

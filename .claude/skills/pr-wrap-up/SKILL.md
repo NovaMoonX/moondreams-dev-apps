@@ -9,6 +9,10 @@ Every piece of work in this repo ends with a **draft PR**, opened automatically 
 
 **Skip it** only for a PR that changes no app behaviour or UI (docs, CI config, skills): say so in the PR body in one line.
 
+**What triggers each part (decide from the diff, not from cost).** Screenshots: any visible change (a new or changed section, row, control, copy or colour). Review agents: a visible change, a new or changed callable, rule, index, write path or third-party contract, or anything non-obvious in the logic; a pure docs or config diff needs neither. Cost, length of the session and "the change is small" are never reasons to skip a part whose trigger is met; if the diff meets a trigger, do the part, and if you judge it does not, say which trigger you checked in the PR body.
+
+**An environment failure is not a reason to skip.** If the emulators or the app won't start (in the cloud sandbox the emulators fail with `Unable to parse JSON … "request bl…"`), fall back before reporting anything: mount the changed component in a throwaway Vite page (`harness.html` plus `src/__harness.tsx` in the repo root, never committed) with the real store, a seeded `QueryClient` (`setQueryData` with the query's key) and fixture data for each state (empty, filled, filtered out, error), serve it with `npx vite`, and drive it with Playwright (`$(npm root -g)/playwright`, Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`). Give the design and product agents the harness URLs, and say in the PR body what the harness could not show (the app shell, footers, real data). Only when no fallback exists, put it first in the report to the user ("I could not do X because Y") and ask; never list it as a sandbox limit under "not done" and move on. Delete the harness files before committing.
+
 ## The body's shape (the reviewer reads this first)
 
 The person reviewing wants to know what they are looking at, what they must do and how it works before they see any evidence. Write the body in this order:

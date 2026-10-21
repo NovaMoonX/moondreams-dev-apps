@@ -1,6 +1,6 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 
-import type { MovieSearchResult, MovieSnapshot } from './types.js';
+import type { MovieSearchResult, MovieSnapshot, PopularMovie } from './types.js';
 
 const OMDB_URL = 'https://www.omdbapi.com/';
 const FETCH_TIMEOUT_MS = 6000;
@@ -190,6 +190,24 @@ export async function searchOmdb(
     .map(toSearchResult)
     .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
     .slice(0, MAX_SEARCH_RESULTS);
+  return result;
+}
+
+/** OMDb has no list of what is in theaters, so only the offline fixtures answer. */
+export async function popularOmdb(apiKey: string): Promise<PopularMovie[]> {
+  if (!isFixtureMode(apiKey)) {
+    return [];
+  }
+
+  const result = getFixtures()
+    .filter((movie) => movie.imdbID.startsWith('tt990'))
+    .map(({ Title, Year, imdbID, Poster, Released }) => ({
+      ...toSearchResult({ Title, Year, imdbID, Type: 'movie', Poster }),
+      opensOn: (parseReleased(Released) ?? 0) > Date.now() ? parseReleased(Released) : null,
+      trailerUrl: null,
+      overview: null,
+      genres: [],
+    }));
   return result;
 }
 
