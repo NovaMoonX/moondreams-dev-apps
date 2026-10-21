@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
+import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
 import { useNaturalVoice } from '@/hooks/useNaturalVoice';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { useSpeechCommands } from '@/hooks/useSpeechCommands';
@@ -147,7 +148,7 @@ interface UseCookVoiceOptions {
   isAlarmRinging: boolean;
 }
 
-/** Hands-free cooking: listens for the cooking commands in the way the person chose (one window per tap, waiting for the wake phrase, or kept open for fifteen minutes), runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered per person on this device, and again after a stop it has to explain. When the wake phrase was chosen on this device and the browser already holds the microphone permission, waiting starts by itself as cooking opens (quietly, with no chime), since the person chose it. */
+/** Hands-free cooking: listens for the cooking commands in the way the person chose (one window per tap, waiting for the wake phrase, or kept open for fifteen minutes), runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered with the person's account (their choices here, in `PinchSettings.voice`, follow them to another device; an older choice kept on this device stands until they choose again), and again after a stop it has to explain. When the wake phrase was chosen on this device and the browser already holds the microphone permission, waiting starts by itself as cooking opens (quietly, with no chime), since the person chose it. */
 export function useCookVoice({
   uid,
   step,
@@ -156,18 +157,34 @@ export function useCookVoice({
   lastRingAt,
   isAlarmRinging,
 }: UseCookVoiceOptions) {
-  const [hasAgreed, setHasAgreed] = useLocalStoragePreference(
+  const { settings, save: saveSettings } = usePinchSettings(uid);
+  const [localAgreed, setLocalAgreed] = useLocalStoragePreference(
     `pinch:${uid}:voice:agreed`,
     false,
   );
-  const [isReadingAloud, setIsReadingAloud] = useLocalStoragePreference(
+  const [localReadingAloud, setLocalReadingAloud] = useLocalStoragePreference(
     `pinch:${uid}:voice:read-aloud`,
     false,
   );
-  const [isWaitingPreferred, setIsWaitingPreferred] = useLocalStoragePreference(
+  const [localWaiting, setLocalWaiting] = useLocalStoragePreference(
     `pinch:${uid}:voice:wake`,
     false,
   );
+  const hasAgreed = settings.voice.hasAgreed ?? localAgreed;
+  const isReadingAloud = settings.voice.isReadingAloud ?? localReadingAloud;
+  const isWaitingPreferred = settings.voice.isWaiting ?? localWaiting;
+  const setHasAgreed = (next: boolean) => {
+    setLocalAgreed(next);
+    void saveSettings({ voice: { hasAgreed: next } });
+  };
+  const setIsReadingAloud = (next: boolean) => {
+    setLocalReadingAloud(next);
+    void saveSettings({ voice: { isReadingAloud: next } });
+  };
+  const setIsWaitingPreferred = (next: boolean) => {
+    setLocalWaiting(next);
+    void saveSettings({ voice: { isWaiting: next } });
+  };
   const natural = useNaturalVoice(`pinch:${uid}:voice:natural`);
   const [machine, setMachine] = useState(() =>
     createVoiceState(isWaitingPreferred ? 'WAKE' : 'TAP'),

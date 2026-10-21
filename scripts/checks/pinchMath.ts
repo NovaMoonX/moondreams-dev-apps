@@ -10128,6 +10128,7 @@ assert.equal(
       freezerDays: null,
       suggestPhotos: true,
       calendarStats: false,
+      voice: { hasAgreed: null, isReadingAloud: null, isWaiting: null },
       reminders: {
         eatSoon: true,
         expiring: true,
@@ -10257,6 +10258,22 @@ assert.equal(
     stgWithDefaults(olderDocument)?.calendarStats,
     false,
     'and one written before the Calendar stats choice reads it as off',
+  );
+  assert.deepEqual(
+    stgWithDefaults(olderDocument)?.voice,
+    { hasAgreed: null, isReadingAloud: null, isWaiting: null },
+    'and one written before the voice choices reads each as not chosen yet, so this device\'s own earlier choice still stands',
+  );
+  assert.deepEqual(
+    [
+      stgCreate({ voice: { isWaiting: true } }, 3, null).voice,
+      stgUpdates({ voice: { hasAgreed: true } }, 9),
+    ],
+    [
+      { hasAgreed: null, isReadingAloud: null, isWaiting: true },
+      [{ path: ['voice', 'hasAgreed'], value: true }, { path: ['updatedAt'], value: 9 }],
+    ],
+    'a voice choice is written on its own path and leaves the others unchosen',
   );
   assert.match(
     stgDeviceText('blocked'),

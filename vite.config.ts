@@ -114,6 +114,10 @@ export default defineConfig({
       '@utils': path.resolve(import.meta.dirname, './src/utils'),
     },
   },
+  optimizeDeps: {
+    // Reached only from a lazy worker: left out, the dev server finds them on first use, re-optimizes and reloads the page.
+    include: ['onnxruntime-web/wasm', '@diffusionstudio/piper-wasm/build/piper_phonemize.js'],
+  },
   build: {
     chunkSizeWarningLimit: 1000, // in KB. 1000 - 1500 is good for most apps.
   },

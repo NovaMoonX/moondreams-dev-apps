@@ -141,6 +141,16 @@ export interface PinchReminderSettings {
   timeZone: string | null;
 }
 
+/** What a person chose for hands-free cooking, saved with the account so it follows them to another device. A key is null until they have chosen on any device, and then this device's own earlier choice (kept in localStorage before these were saved) still stands. The natural voice's switch is not here: its download is per device. */
+export interface PinchVoiceSettings {
+  /** Said yes to the voice explainer (who hears the audio, that nothing is kept). The browser still asks for the microphone on each device. */
+  hasAgreed: boolean | null;
+  /** Read each step aloud while the microphone is on. */
+  isReadingAloud: boolean | null;
+  /** Wait for the wake phrase instead of listening for one window per tap. */
+  isWaiting: boolean | null;
+}
+
 /** The person's own choices, at `apps/pinch/settings/{uid}`: reminders, how long a new box keeps and whether the Calendar draws its stat tiles. Created the first time Pinch opens with the defaults, or by their first change. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
 export interface PinchSettings {
   /** Days a box starts with in the fridge; null is the built-in number. */
@@ -151,6 +161,8 @@ export interface PinchSettings {
   suggestPhotos: boolean;
   /** Whether the Calendar draws its stat tiles (the total, the averages and the daily nutrition) above the week or month. Saved with the account, so it follows the person to another device. A document written before this key lacks it, which reads as false. */
   calendarStats: boolean;
+  /** Hands-free cooking choices. A document written before this key lacks it, which reads as every choice not made yet. */
+  voice: PinchVoiceSettings;
   reminders: PinchReminderSettings;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */

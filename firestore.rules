@@ -1936,11 +1936,26 @@ service cloud.firestore {
           && (value.timeZone == null || (value.timeZone is string && value.timeZone.size() >= 1 && value.timeZone.size() <= 64));
       }
 
+      function isNullOrBool(value) {
+        return value == null || value is bool;
+      }
+
+      // Each key is read with get(key, null) so a choice added later, or a map written by one dotted path, stays valid.
+      function isVoice(value) {
+        return value == null
+          || (value is map
+            && value.keys().hasOnly(['hasAgreed', 'isReadingAloud', 'isWaiting'])
+            && isNullOrBool(value.get('hasAgreed', null))
+            && isNullOrBool(value.get('isReadingAloud', null))
+            && isNullOrBool(value.get('isWaiting', null)));
+      }
+
       function isPinchSettings(data) {
-        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'suggestPhotos', 'calendarStats', 'reminders', 'updatedAt', 'lastDigestDay'])
+        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'suggestPhotos', 'calendarStats', 'voice', 'reminders', 'updatedAt', 'lastDigestDay'])
           && data.keys().hasAll(['fridgeDays', 'freezerDays', 'reminders', 'updatedAt'])
           && data.get('suggestPhotos', true) is bool
           && data.get('calendarStats', false) is bool
+          && isVoice(data.get('voice', null))
           && isNullOrDays(data.fridgeDays, 1, 14)
           && isNullOrDays(data.freezerDays, 7, 365)
           && isReminders(data.reminders)
