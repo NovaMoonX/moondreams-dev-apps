@@ -9,6 +9,7 @@ import {
   startFamiliesListener,
   startMealsListener,
   startNotesListener,
+  startPinchSettingsListener,
   startPlannedMealsListener,
   startIdeasListener,
   startIngredientsListener,
@@ -59,6 +60,11 @@ import {
   setNotes,
   setNotesLoadError,
 } from '@apps/pinch/store/slices/notesSlice';
+import {
+  clearPinchSettings,
+  setPinchSettings,
+  setPinchSettingsLoadError,
+} from '@apps/pinch/store/slices/pinchSettingsSlice';
 import {
   clearPlannedMeals,
   setPlannedMeals,
@@ -116,6 +122,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearNotes());
       dispatch(clearContainers());
       dispatch(clearSettings());
+      dispatch(clearPinchSettings());
       dispatch(clearPlannedMeals());
       dispatch(clearMeals());
       return;
@@ -277,6 +284,19 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
         ),
     );
 
+    const unsubscribePinchSettings = startPinchSettingsListener(
+      uid,
+      (settings) => dispatch(setPinchSettings(settings)),
+      (error) => {
+        console.error('Pinch settings listener failed', error);
+        dispatch(
+          setPinchSettingsLoadError(
+            getErrorMessage(error, 'Unable to load your settings.'),
+          ),
+        );
+      },
+    );
+
     const unsubscribeMeals = startMealsListener(
       uid,
       (meals) => dispatch(setMeals(meals)),
@@ -290,6 +310,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
 
     return () => {
       unsubscribeMeals();
+      unsubscribePinchSettings();
       unsubscribeSettings();
       unsubscribeContainers();
       unsubscribeNotes();

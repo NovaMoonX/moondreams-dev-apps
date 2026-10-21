@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
+import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
+import { selectUsualDays } from '@apps/pinch/store/selectors';
 import type { ContainerPlace, RecipeCare } from '@apps/pinch/types';
 import {
   getContainerCountMax,
@@ -29,11 +31,12 @@ export function useContainerDraft({
   const [servings, setServings] = useState(initialServings);
   const [typedEatBy, setTypedEatBy] = useState<string | null>(null);
   const [wantedContainers, setContainers] = useState(1);
+  const usualDays = useAppSelector(selectUsualDays);
 
   const maxContainers = getContainerCountMax(servings);
   const containers = Math.min(wantedContainers, maxContainers);
   const move = getMoveForPlace(place, null);
-  const preset = getEatByDefault(move, care);
+  const preset = getEatByDefault(move, care, undefined, null, usualDays);
   const eatByText = typedEatBy ?? toDateInputValue(preset.eatBy);
   const eatBy = fromDateInputValue(eatByText) ?? null;
   const isValid =

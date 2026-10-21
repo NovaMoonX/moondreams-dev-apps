@@ -10,7 +10,7 @@ import {
 import {
   changeContainerEatBy,
   changeContainersEatBy,
-  clearOutPlace,
+  changeContainersInPlace,
   correctContainerCount,
   eatContainer,
   endContainers,
@@ -32,11 +32,14 @@ import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
   buildContainer,
   canPutBack,
-  getNewContainersProblem,
+  getBulkToast,
   getEatByPhrase,
+  getNewContainersProblem,
+  getSkippedText,
   getPutBackText,
   getSavedText,
   isContainerListFull,
+  type BulkAction,
   type NewContainerInput,
 } from '@apps/pinch/utils/containers';
 
@@ -282,21 +285,34 @@ export function useContainerActions(uid: string) {
       ).unwrap(),
     );
 
+  /** One act on many boxes: resolves to how many it really changed, a sentence when it stopped partway, and one on why it left some alone. */
+  const changeInPlace = (
+    action: BulkAction,
+    ids: string[],
+    getNames: (changedIds: string[]) => string | null,
+  ) =>
+    once(`bulk:${action.from}`, async () => {
+      const { changed, skipped, error } = await dispatch(
+        changeContainersInPlace({ uid, ids, action }),
+      ).unwrap();
+      const skippedText = getSkippedText(skipped);
+      if (changed.length === 0) return { count: 0, error, skippedText };
+
+      const { title, description } = getBulkToast({
+        action,
+        requested: ids.length,
+        changed: changed.length,
+        skipped,
+        eatBys: changed.flatMap((entry) => entry.eatBy ?? []),
+        names: getNames(changed.map((entry) => entry.id)),
+      });
+      addUndoToast(title, description, () => undoClear(changed));
+      return { count: changed.length, error, skippedText };
+    });
+
   /** Resolves to how many it really cleared, and a sentence when it stopped partway. */
   const clearOut = (place: ContainerPlace, ids: string[]) =>
-    once(`clear:${place}`, async () => {
-      const { cleared, error } = await dispatch(
-        clearOutPlace({ uid, place, ids }),
-      ).unwrap();
-      if (cleared.length > 0) {
-        addUndoToast(
-          `Cleared out the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
-          `${cleared.length} ${cleared.length === 1 ? 'box' : 'boxes'}`,
-          () => undoClear(cleared),
-        );
-      }
-      return { count: cleared.length, error };
-    });
+    changeInPlace({ kind: 'CLEAR', from: place }, ids, () => null);
 
   /** A finished box back in stock as it was before what ended it, for a mis-tap the toast's Undo no longer covers. */
   const putBack = (container: Container) =>
@@ -335,6 +351,7 @@ export function useContainerActions(uid: string) {
     changeBatchEatBy,
     removeBatch,
     clearOut,
+    changeInPlace,
     putBack,
   };
 }

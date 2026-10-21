@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import SwipeArea from '@/components/SwipeArea';
+import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { formatClock } from '@/utils/durationUtils';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookStepAmounts from '@apps/pinch/components/cooking/CookStepAmounts';
@@ -88,6 +89,8 @@ function CookTimerView({
   const endedAt = timer.status === 'done' ? timer.endedAt : null;
   const rangMinutes =
     endedAt === null ? 0 : Math.floor(Math.max(0, now - endedAt) / MINUTE_MS);
+
+  useOnTabReturn(() => setNow(Date.now()));
 
   useEffect(() => {
     if (!isTicking) {

@@ -292,6 +292,24 @@ export async function seedPinchScale(
     },
   });
 
+  // Alex is left with no settings document, which is the default path.
+  writes.push({
+    path: `apps/pinch/settings/${owner.uid}`,
+    data: {
+      fridgeDays: 5,
+      freezerDays: null,
+      reminders: {
+        eatSoon: true,
+        timers: false,
+        leadDays: 1,
+        hour: 9,
+        timeZone: 'America/Los_Angeles',
+      },
+      updatedAt: createdAt,
+      lastDigestDay: null,
+    },
+  });
+
   const families = Array.from({ length: FAMILY_COUNT }, (_, index) => ({
     id: `scale-family-${index}`,
     name: `${FAMILY_WORDS[index % FAMILY_WORDS.length]}${index >= FAMILY_WORDS.length ? ` ${Math.floor(index / FAMILY_WORDS.length) + 1}` : ''}`,

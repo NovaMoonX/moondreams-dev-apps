@@ -1,7 +1,13 @@
+import { isDevicePushOff } from './devicePush';
 import { registerDeviceToken } from './registerDeviceToken';
 import { requestPushPermission } from './requestPushPermission';
 
 export async function enablePushNotifications(uid: string): Promise<void> {
+  // A person who turned reminders off on this device stays off after a reload.
+  if (isDevicePushOff(uid)) {
+    return;
+  }
+
   try {
     const token = await requestPushPermission();
 

@@ -6,30 +6,28 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 interface CookDish {
   id: string;
   title: string;
-  /** Where that recipe was left ("Step 2 of 4"); the dish on screen says it under its step instead. */
   status: string;
 }
 
-interface CookDishSwitchProps {
+interface CookDishStripProps {
   dishes: CookDish[];
   value: string;
   onChange: (id: string) => void;
 }
 
-/** The plate's recipes as small cards that say where each one is, so switching dishes never reads as a filter. */
-function CookDishSwitch({ dishes, value, onChange }: CookDishSwitchProps) {
+function CookDishStrip({ dishes, value, onChange }: CookDishStripProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const list = listRef.current;
-    const card = list?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (!list || !card) {
+    const button = list?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!list || !button) {
       return;
     }
-    const left = card.offsetLeft - list.offsetLeft;
+    const left = button.offsetLeft - list.offsetLeft;
     const isHidden =
       left < list.scrollLeft ||
-      left + card.offsetWidth > list.scrollLeft + list.clientWidth;
+      left + button.offsetWidth > list.scrollLeft + list.clientWidth;
     if (isHidden) {
       list.scrollTo({ left: left - 16 });
     }
@@ -52,23 +50,27 @@ function CookDishSwitch({ dishes, value, onChange }: CookDishSwitchProps) {
             aria-pressed={isShown}
             aria-label={isShown ? dish.title : `${dish.title}, ${dish.status}`}
             className={join(
-              'text-foreground! h-auto min-h-13 snap-start flex-col items-start justify-center gap-0 rounded-2xl border px-3 py-1.5 text-left font-normal',
+              'text-foreground! h-10 min-w-0 snap-start gap-2 rounded-xl border px-3 text-left font-normal',
               dishes.length > 2
-                ? 'w-[42%] flex-none sm:w-auto sm:max-w-72 sm:min-w-40 sm:flex-1 sm:basis-0'
-                : 'min-w-0 flex-1 basis-0 sm:max-w-72',
-              '[@media(max-height:500px)]:min-h-10 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:items-center [@media(max-height:500px)]:justify-start [@media(max-height:500px)]:gap-2',
+                ? 'max-w-[70%] flex-none sm:max-w-72'
+                : 'flex-1 basis-0 justify-start sm:max-w-72',
               isShown
                 ? 'bg-background border-[var(--pinch-drizzle)] shadow-[inset_0_0_0_0.5px_var(--pinch-drizzle)]'
                 : 'border-border bg-muted/50 hover:bg-muted',
             )}
             onClick={() => onChange(dish.id)}
           >
-            <span className='line-clamp-2 w-full min-w-0 text-sm font-medium wrap-break-word [@media(max-height:500px)]:w-auto'>
+            <span
+              className={join(
+                'min-w-0 truncate text-sm',
+                isShown && 'font-medium',
+              )}
+            >
               {dish.title}
             </span>
             {!isShown && (
-              <span className='text-muted-foreground block text-xs whitespace-nowrap'>
-                {dish.status}
+              <span className='text-muted-foreground shrink-0 text-xs whitespace-nowrap'>
+                {dish.status.replace('Step ', '')}
               </span>
             )}
           </Button>
@@ -78,4 +80,4 @@ function CookDishSwitch({ dishes, value, onChange }: CookDishSwitchProps) {
   );
 }
 
-export default CookDishSwitch;
+export default CookDishStrip;

@@ -27,6 +27,7 @@ import Subview from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useAppDispatch, useAppSelector, type RootState } from '@/store';
+import { generateUuid } from '@/utils';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import {
   findDurations,
@@ -34,9 +35,9 @@ import {
   formatDuration,
 } from '@/utils/durationUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import CookDishSwitch from '@apps/pinch/components/cooking/CookDishSwitch';
+import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
-import CookNotes from '@apps/pinch/components/cooking/CookNotes';
+import CookNoteCard from '@apps/pinch/components/cooking/CookNoteCard';
 import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookRecord, {
   type CookRecordStatus,
@@ -46,6 +47,7 @@ import CookStepView, {
 } from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
 import CookTimerView from '@apps/pinch/components/cooking/CookTimerView';
+import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
 import {
   CookVoiceButton,
   CookVoiceExplainer,
@@ -76,7 +78,21 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import { updateCook } from '@apps/pinch/store/actions/cookActions';
-import type { CookView, PlateCookRecipe, Recipe } from '@apps/pinch/types';
+import { announceCookingSession } from '@apps/pinch/lib/cookingSessionPresence';
+import {
+  clearCookingSession,
+  writeCookingSession,
+} from '@apps/pinch/lib/cookingSessionStorage';
+import type {
+  CookingResume,
+  CookView,
+  PlateCookRecipe,
+  Recipe,
+} from '@apps/pinch/types';
+import {
+  applyResumePositions,
+  buildCookingSnapshot,
+} from '@apps/pinch/utils/cookSession';
 import {
   getCookStartServings,
   getFirstSentence,
@@ -91,6 +107,7 @@ import {
   getTimerSecondary,
   getTimerSlotKey,
   isCookHistoryFull,
+  isCookNoteShown,
   type PlateCookState,
 } from '@apps/pinch/utils/cooks';
 import {
@@ -175,6 +192,44 @@ const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
+const restoreTimers = (
+  saved: CookingResume['timers'],
+  entries: { recipe: Recipe }[],
+): CookTimer[] => {
+  const isPlate = entries.length > 1;
+  return saved.flatMap((timer): CookTimer[] => {
+    const recipe = entries.find(
+      (entry) => entry.recipe.id === timer.recipeId,
+    )?.recipe;
+    if (!recipe) return [];
+    const base = {
+      id: generateUuid(),
+      recipeId: recipe.id,
+      recipeTitle: isPlate ? recipe.title : null,
+      stepNumber: timer.stepNumber,
+      stepName:
+        getStepName(recipe.steps[timer.stepNumber - 1] ?? '') ||
+        `Step ${timer.stepNumber}`,
+      label: timer.label,
+      durationMs: timer.durationMs,
+    };
+    if (timer.status === 'running') {
+      return [
+        {
+          ...base,
+          status: 'running',
+          startedAt: timer.startedAt,
+          endsAt: timer.endsAt,
+        },
+      ];
+    }
+    if (timer.status === 'paused') {
+      return [{ ...base, status: 'paused', remainingMs: timer.remainingMs }];
+    }
+    return [{ ...base, status: 'done', endedAt: timer.endedAt }];
+  });
+};
+
 interface CookEntry {
   recipe: Recipe;
   isRemoved: boolean;
@@ -191,6 +246,8 @@ interface CookingSessionProps {
   plannedMealId: string | null;
   /** The header: the recipe's name, or the plate's when there are several. */
   title: string;
+  /** A saved session to pick up where it was left; null for a fresh start. */
+  resume: CookingResume | null;
 }
 
 function CookingSession({
@@ -199,20 +256,31 @@ function CookingSession({
   openedRecipeId,
   plannedMealId,
   title,
+  resume,
 }: CookingSessionProps) {
   const dispatch = useAppDispatch();
   const store = useStore<RootState>();
   const { closeSubview, closeSubviewIf, openSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
-  const [currentId, setCurrentId] = useState(entries[0].recipe.id);
+  const [currentId, setCurrentId] = useState(() =>
+    resume && entries.some((entry) => entry.recipe.id === resume.currentId)
+      ? resume.currentId
+      : entries[0].recipe.id,
+  );
   const [plate, setPlate] = useState(() =>
-    getPlateStart(
-      entries.map((entry) => ({
-        recipeId: entry.recipe.id,
-        recipeServings: entry.recipe.servings,
-        plannedServings: entry.plannedServings,
-      })),
+    applyResumePositions(
+      getPlateStart(
+        entries.map((entry) => ({
+          recipeId: entry.recipe.id,
+          recipeServings: entry.recipe.servings,
+          plannedServings: entry.plannedServings,
+        })),
+      ),
+      resume?.positions ?? {},
+      Object.fromEntries(
+        entries.map((entry) => [entry.recipe.id, entry.recipe.steps.length]),
+      ),
     ),
   );
   const [openedUpdatedAt] = useState(
@@ -232,6 +300,7 @@ function CookingSession({
   };
   const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
+  const [gotItNotes, setGotItNotes] = useState<string[]>([]);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -244,7 +313,11 @@ function CookingSession({
   const missedFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
-  const timers = useCookTimers();
+  const [initialTimers] = useState(() =>
+    restoreTimers(resume?.timers ?? [], entries),
+  );
+  const timers = useCookTimers(initialTimers);
+  const [sessionId] = useState(generateUuid);
   const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -535,6 +608,47 @@ function CookingSession({
     [goingCount, timers.liveCount],
   );
 
+  useEffect(() => announceCookingSession(sessionId), [sessionId]);
+
+  useEffect(() => {
+    if (isFinished) {
+      clearCookingSession(uid);
+      return;
+    }
+    writeCookingSession(
+      buildCookingSnapshot({
+        uid,
+        sessionId,
+        now: Date.now(),
+        open: {
+          recipeId: openedRecipeId,
+          servings: entries.length === 1 ? entries[0].plannedServings : null,
+          plannedMealId,
+          plate:
+            entries.length > 1
+              ? entries.map((entry) => ({
+                  recipeId: entry.recipe.id,
+                  servings: entry.plannedServings ?? entry.recipe.servings,
+                }))
+              : null,
+        },
+        currentId,
+        positions: plate,
+        timers: timers.timers,
+      }),
+    );
+  }, [
+    uid,
+    sessionId,
+    isFinished,
+    entries,
+    openedRecipeId,
+    plannedMealId,
+    currentId,
+    plate,
+    timers.timers,
+  ]);
+
   const ask = async (options: Parameters<typeof confirm>[0]) => {
     const isConfirmed = await confirm(options);
     if (missedFocus.current) {
@@ -584,11 +698,14 @@ function CookingSession({
 
   const leave = async () => {
     if (!(await confirmDiscard())) return;
-    if (await confirmLeave()) closeIfStillOpen();
+    if (!(await confirmLeave())) return;
+    clearCookingSession(uid);
+    closeIfStillOpen();
   };
 
   const applyNote = async (noteId: string) => {
     if (!(await confirmDiscard()) || !(await confirmLeave())) return;
+    clearCookingSession(uid);
     openSubview({ kind: 'recipe', id: recipe.id, fromNoteId: noteId });
   };
 
@@ -1270,7 +1387,7 @@ function CookingSession({
   const getTimerNote = () => {
     if (focused === null || focused.status === 'done') return null;
     if (!wakeLock.isSupported || wakeLock.hasFailed) {
-      return 'This device may turn the screen off; timers keep running only while this screen is open.';
+      return 'This screen may turn off. Your timer stays right, but it can only ring while the screen is on.';
     }
     return timers.isNoticeShown
       ? 'Keep this screen open: timers stop if you leave it.'
@@ -1281,10 +1398,24 @@ function CookingSession({
     recipe.isArchived === true ||
     recipe.updatedAt !== openedUpdatedAt.get(recipe.id);
 
-  const notesBlock = (
-    <CookNotes
+  const dishStrip =
+    isPlate && !isFinishShown && focused === null ? (
+      <CookDishStrip dishes={dishes} value={recipe.id} onChange={showRecipe} />
+    ) : null;
+  const isDishStripInStep = isStepsView && hasSteps && !isWide;
+  const noteCard = isCookNoteShown(index, gotItNotes, recipe.id) ? (
+    <CookNoteCard
       key={recipe.id}
       recipeId={recipe.id}
+      onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
+      onApply={(noteId) => void applyNote(noteId)}
+    />
+  ) : null;
+  const notesDoor = (
+    <RecipeNotes
+      recipeId={recipe.id}
+      onAdd={null}
+      onEdit={null}
       onApply={(noteId) => void applyNote(noteId)}
     />
   );
@@ -1311,6 +1442,8 @@ function CookingSession({
       timerSlots={readySlots}
       isTimersFull={timers.isFull}
       action={ingredientsButton}
+      aside={noteCard}
+      dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)
       }
@@ -1499,7 +1632,7 @@ function CookingSession({
     <Subview
       overlay
       isTitleWrapped
-      className='lg:max-w-5xl'
+      className='lg:max-w-5xl [@media(max-height:500px)]:max-w-4xl'
       title={title}
       headerAction={
         voice.isSupported && !isFinishShown ? (
@@ -1519,14 +1652,7 @@ function CookingSession({
         ref={rootRef}
         className='flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2'
       >
-        {isPlate && !isFinishShown && focused === null && (
-          <CookDishSwitch
-            dishes={dishes}
-            value={recipe.id}
-            onChange={showRecipe}
-          />
-        )}
-        {!isFinishShown && !isWide && focused === null && notesBlock}
+        {!isDishStripInStep && dishStrip}
         {focused !== null ? (
           getTimerContent()
         ) : isFinishShown ? (
@@ -1631,18 +1757,19 @@ function CookingSession({
           </div>
         ) : isWide ? (
           <div className='grid flex-1 grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-10'>
-            <div className='flex flex-col gap-4'>
-              {notesBlock}
-              {stepContent}
-            </div>
-            <div className='border-border border-l pl-8'>
+            <div className='flex flex-col gap-4'>{stepContent}</div>
+            <div className='border-border space-y-6 border-l pl-8'>
               {ingredientsContent}
+              {notesDoor}
             </div>
           </div>
         ) : isStepsView ? (
           stepContent
         ) : (
-          ingredientsContent
+          <div className='space-y-6'>
+            {ingredientsContent}
+            {notesDoor}
+          </div>
         )}
         <div role='status' className='space-y-1 empty:hidden'>
           {isChanged && focused === null && (
@@ -1842,6 +1969,7 @@ interface CookingSubviewProps {
   servings?: number;
   plannedMealId: string | null;
   plate?: PlateCookRecipe[];
+  resume?: CookingResume;
 }
 
 const pickRecipes = (
@@ -1862,6 +1990,7 @@ function CookingSubview({
   servings,
   plannedMealId,
   plate,
+  resume,
 }: CookingSubviewProps) {
   const { closeSubview } = usePinchOverlay();
   const store = useStore<RootState>();
@@ -1950,6 +2079,7 @@ function CookingSubview({
       openedRecipeId={recipeId}
       plannedMealId={plannedMealId}
       title={getTitle()}
+      resume={resume ?? null}
     />
   );
 }

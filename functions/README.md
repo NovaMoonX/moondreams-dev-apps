@@ -21,7 +21,8 @@ Server-side code for the mini-apps. Every function:
 | `rescheduleTripReminders` | Firestore update on `apps/waypoint/trips/{tripId}` | Waypoint | Re-times event reminders when a relative trip's dates or time zone change |
 | `fetchLinkMetadata` | callable | shared | Reads a link's Open Graph preview (title, description, image, site name) |
 | `fetchPageContent` | callable | shared | `{ url, include?, schemaTypes?, maxTextChars? }` → `{ url, title, …only the kinds asked for }`: reads one web page and returns its `text` (capped, 30k by default, `maxTextChars` clamped to 1k–60k), `structuredData` (its schema.org nodes, optionally only the given `schemaTypes`, whole nodes up to 30k characters; an oversized node keeps its smaller fields, each field measured once, so a node with thousands of fields is cheap), `meta` (description, image address, site name, author), `headings` (h1–h3 text, up to 40) or `images` (absolute web addresses, up to 20). Defaults to `text` and `meta`. The text skips `nav`, `footer`, `form` and scripts. App-neutral: each app turns the content into its own thing. Fetches through the same private-network guard as `fetchLinkMetadata`, stores nothing |
-| `sendScheduledReminders` | schedule, every 5 minutes | shared | Sends due push reminders from `reminders` through FCM |
+| `sendScheduledReminders` | schedule, every minute | shared | Sends due push reminders from `reminders` through FCM |
+| `sendEatSoonDigest` | schedule, every 30 minutes | Pinch | Sends each person who turned it on one push a day, in their own hour, naming the dishes in their fridge and freezer that are past their date or due soon |
 
 Every callable requires a signed-in caller, except `getCalendarShare`, which exists to serve people who have no account.
 
@@ -121,12 +122,23 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 
 ### `sendScheduledReminders`
 
-- **Schedule:** polls every 5 minutes.
-- **Timing:** it looks ahead over the whole window and waits out each reminder's exact delay, so delivery is accurate to the second without a task queue.
+- **Schedule:** polls every minute (it was five; a cooking timer of a minute or more is then picked up before it ends and goes out on time).
+- **Timing:** it looks ahead over the whole window and waits out each reminder's exact delay, so delivery is accurate to the second without a task queue. After the wait it reads the reminder again and drops one that was cancelled meanwhile, so pausing a timer stops its push even once the sender has claimed it.
 - **Overdue reminders are dropped, not sent:** one more than 30 minutes past its time is marked `expired` (a yearly one just rolls to its next date), so an outage or a missing index never flushes its backlog to phones. A reminder up to 30 minutes late still sends.
-- **Where a tap goes:** each reminder carries a `link`, a path and query inside the app that the scheduling app sets (`/waypoint?trip=<id>`, `/nine-lives`, `/a-list?tab=watchlist`). The function turns it into an absolute `https://apps.moondreams.dev` URL and sends it as the push's link, so tapping opens the installed app there. A link that is missing (reminders saved before links existed), or that points anywhere but the app, falls back to the trip for a Waypoint reminder (read from `relatedEntityPath`) or else the app's own page, and never leaves the app's origin. `firestore.rules` also refuses a `link` that isn't a path inside the app. A new app that schedules reminders adds its page to `APP_PATHS` in `sendScheduledReminders.ts`.
+- **Where a tap goes:** each reminder carries a `link`, a path and query inside the app that the scheduling app sets (`/waypoint?trip=<id>`, `/nine-lives`, `/a-list?tab=watchlist`). The function turns it into an absolute `https://apps.moondreams.dev` URL and sends it as the push's link, so tapping opens the installed app there. A link that is missing (reminders saved before links existed), or that points anywhere but the app, falls back to the trip for a Waypoint reminder (read from `relatedEntityPath`) or else the app's own page, and never leaves the app's origin. `firestore.rules` also refuses a `link` that isn't a path inside the app. A new app that schedules reminders adds its page to `APP_PATHS` in `sendScheduledReminders.ts` (Pinch's timer pushes link to `/pinch`).
+- **Sending:** the token lookup and `sendEachForMulticast` live in `notifications/sendPush.ts` (`sendPushToUsers`), which `sendEatSoonDigest` uses too: one FCM sender, not two.
 - **One notification, not two:** the service worker doesn't show the notification itself. Firebase shows a push that carries a `notification` and opens its link on tap; showing it by hand as well made a second copy with no link.
 - **Index:** the `status == pending` + `scheduledFor <=` query on `reminders` needs the composite index in `firestore.indexes.json`. Without it every run fails with `FAILED_PRECONDITION` and no reminder is sent.
+
+### Pinch: `sendEatSoonDigest`
+
+- **Schedule:** every 30 minutes. A person's note goes out on the run that falls in the first 30 minutes of the hour they chose (`reminders.hour` in their `reminders.timeZone`; UTC when none), so every time zone, quarter-hour offsets included, has exactly one sending run a day. A run that wakes later drops the note instead of sending it late.
+- **Reads:** `apps/pinch/settings` where `reminders.eatSoon == true`; for a person whose run it is, that person's `apps/pinch/kitchens/{uid}/containers` where `status == 'IN_STOCK'` and `eatBy` is between yesterday and `reminders.leadDays` ahead (at most 100, ordered by `eatBy`). It needs the composite index `containers (status, eatBy)` in `firestore.indexes.json`; a new index takes a few minutes to build after deploy, and until it reports READY every run logs a failure per person and sends nothing.
+- **What it sends:** one push per person per day with a title ("Eat soon" or "Check your fridge and freezer") and a body that names at most two dishes and then "and N more" ("Adobo chicken is due tomorrow", "Chicken stock is past its date, and 2 more are due soon"). Nothing but dish names, from the box's stored title; never an address, price or note. Nothing due sends nothing and writes nothing. The link is `/pinch?tab=kitchen&open=fridge`.
+- **Idempotent:** `lastDigestDay` (the person's local day) is written in a transaction before the push is sent, so overlapping runs send one and a failed send is a skipped day. Only this function writes that field (`firestore.rules` refuses a client change to it).
+- **More sources:** `DIGEST_SOURCES` in `sendEatSoonDigest.ts` lists where things to act on come from, each with its own `reminders.<flag>`; a new source is one more entry and the person still gets one push.
+- **Secrets and config:** none. The Admin SDK reads Firestore and sends through FCM with the project's own credentials, so nothing needs creating in production before this deploys; the index file deploys with it (`npm run fb:deploy:smart` includes it).
+- **Testing:** `scripts/checks/pinchDigest.ts` (run by `npm run check:pinch-math`) covers which run sends and what it says. `runEatSoonDigest(firestore, send, now)` takes the sender and the time, so a run can be rehearsed against the emulator without FCM.
 
 ## Local development
 

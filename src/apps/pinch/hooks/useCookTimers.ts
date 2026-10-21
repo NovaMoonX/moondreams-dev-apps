@@ -6,6 +6,7 @@ import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { generateUuid } from '@/utils';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
+import { useTimerPush } from '@apps/pinch/hooks/useTimerPush';
 import {
   canStartTimer,
   countLiveTimers,
@@ -46,6 +47,7 @@ export type CookTimer = TimerBase &
 type Notice = 'unseen' | 'showing' | 'seen';
 
 const UNFOCUSED: TimerFocus = { isShown: false, pickedId: null };
+const NO_TIMERS: CookTimer[] = [];
 
 const BEEP_OFFSETS_SECONDS = [0, 0.4, 0.8];
 const SETTLE_SLACK_MS = 20;
@@ -94,14 +96,17 @@ const playBeeps = (context: AudioContext) =>
     oscillator.stop(startAt + 0.3);
   });
 
-/** Timers kept in memory only, and which one the timer view shows (`focused`, null while they run in the background). Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one comes into focus, buzzes and beeps, and toasts only while the screen is hidden or covered. */
-export function useCookTimers() {
+/** Timers kept in memory (a saved session hands in `initialTimers`), and which one the timer view shows (`focused`, null while they run in the background). Each runs to a clock deadline, so a throttled or hidden tab doesn't stretch it; a finished one comes into focus, buzzes and beeps, and toasts only while the screen is hidden or covered. */
+export function useCookTimers(initialTimers: CookTimer[] = NO_TIMERS) {
   const { addToast } = useToast();
-  const [timers, setTimers] = useState<CookTimer[]>([]);
-  const [notice, setNotice] = useState<Notice>('unseen');
+  const [timers, setTimers] = useState<CookTimer[]>(initialTimers);
+  const [notice, setNotice] = useState<Notice>(
+    initialTimers.some(isLive) ? 'showing' : 'unseen',
+  );
   const [focus, setFocus] = useState<TimerFocus>(UNFOCUSED);
   const [finishedSlots, setFinishedSlots] = useState<string[]>([]);
-  const timersRef = useRef<CookTimer[]>([]);
+  const timersRef = useRef<CookTimer[]>(initialTimers);
+  useTimerPush(timers);
   const addToastRef = useRef(addToast);
   const audioRef = useRef<AudioContext | null>(null);
   const ringsRef = useRef(new Map<string, AlertRing>());

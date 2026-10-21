@@ -990,12 +990,12 @@ Paste a link and a recipe form fills in for review.
 **Prerequisites:** Issue 6
 **Target PR Size:** ~300 lines (as built it also carries the timers and the ingredients view)
 **Files:**
-- `CookingSubview` (an overlay `Subview`) with `CookDishSwitch`, `CookStepView`, `CookStepTimer`, `CookStepAmounts`, `CookTimerView`, `CookIngredientsView` and `CookTimerStrip`, the `useCookTimers` hook, and general `useWakeLock` and `SwipeArea` pieces
+- `CookingSubview` (an overlay `Subview`) with `CookDishStrip`, `CookStepView`, `CookStepTray`, `CookNoteCard`, `CookStepTimer`, `CookStepAmounts`, `CookTimerView`, `CookIngredientsView` and `CookTimerStrip`, the `useCookTimers` hook, and general `useWakeLock` and `SwipeArea` pieces
 
 **Context:** UX Recipe details.
 
 ### Description
-A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step leads in large type with a ready timer card for each time it mentions (its digits a size below the step); one tap starts it and the timer becomes the screen while the person waits (the time left large, a progress bar, the other timers as rows, Up next with the next step's first sentence and Next, and on a plate a Meanwhile line to the other dish; Pause is its only control while it runs, Resume and Reset when paused, Dismiss when it's done, and a finished timer comes to the front by itself, says how long ago it rang and rings again about once a minute until dismissed), and back or Next leaves it running as a pill above the buttons and, set apart below, a quieter block of the ingredients it names with their amounts in kitchen measures; an Ingredients button beside the step counter opens the full list (beside the steps from `lg`), which scales and ticks them, cooking opens at the recipe's own servings, leaving while a timer is going asks first, the recipe's latest note shows above the steps, a planned dinner of several recipes opens as one session (dish cards that say each recipe's step, one slim row of pills for the timers in the background, up to four timers for all of them; a step's own timer card is reached by scrolling and the dish switch stays on screen), and Finish records the cook, one per recipe, in one panel with one Undo, put-away and a note.
+A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step leads in large type with a ready timer card for each time it mentions (its digits a size below the step); one tap starts it and the timer becomes the screen while the person waits (the time left large, a progress bar, the other timers as rows, Up next with the next step's first sentence and Next, and on a plate a Meanwhile line to the other dish; Pause is its only control while it runs, Resume and Reset when paused, Dismiss when it's done, and a finished timer comes to the front by itself, says how long ago it rang and rings again about once a minute until dismissed), and back or Next leaves it running as a pill above the buttons and, set apart below, a quieter block of the ingredients it names with their amounts in kitchen measures; an Ingredients button beside the step counter opens the full list (beside the steps from `lg`), which scales and ticks them, cooking opens at the recipe's own servings, leaving while a timer is going asks first, the recipe's latest note shows above the steps, a planned dinner of several recipes opens as one session (dish cards that say each recipe's step, one slim row of pills for the timers in the background, up to four timers for all of them; a step's own timer card is reached by scrolling and the dish switch stays on screen), and Finish records the cook, one per recipe, in one panel with one Undo, put-away and a note. Round 8 gave the step room (a slim dish line, what the step uses in a tray above Back and Next, the note from last time as a card on the first step with Got it and Apply, 32px above and below the instruction), and made a timer that rang while the screen was off say how long ago it rang. A reload or a discarded tab no longer ends a cook: a small per-device copy (recipes, servings, step in view, timers as clock deadlines, 12 hours) is offered back as a quiet "Pick up" row on the next screen.
 
 ### Possible Approach
 1. Wake Lock API with a graceful fallback; step navigation by buttons, swipe and arrow keys; an Ingredients view that scales amounts with the shopping list's own `scaleAmount`; timers that run to a clock deadline.
@@ -1051,7 +1051,8 @@ A recipe can say how many days what it makes keeps in the fridge and the freezer
 - `store/slices/containersSlice.ts`, `startContainersListener`, `store/actions/containerActions.ts`, `queries/containerQueries.ts`, the container selectors, `hooks/useContainerActions.ts`, `useContainerDraft.ts`, `usePutAway.ts`
 - `components/containers/` (`PreparedEntry`, `ContainersSubview`, `ContainerRow`, `ContainerSheet`, `ContainerFormSheet`, `ContainerFields`, `EatByField`, `EatByBadge`, `StockLine`, `StockRows`, `EatFromStock`), `components/cooking/CookPutAway.tsx`
 - Changed: Kitchen (the row), `EntryTile` (the Fridge & freezer door, which began as `EntryChip`), Recipes and Meals (rows, filter, drawers), the plate builder's search, the planned meal view, the shopping sheet, the cooking history sheet, `CookingSubview`
-- The seeds: ten containers in every state for Alex, about 300 in stock and 260 finished for the scale kitchen
+- The seeds: thirteen containers in every state for Alex (three of them past their date in the fridge), about 300 in stock and 260 finished for the scale kitchen
+- Bulk acts (round 8): `changeContainersInPlace`, `planBulk` and `planUndoMove` (one planner for the clear-out, a toss, "Ate it all" and a move), `src/hooks/useSelection.ts`, `src/components/SelectionBar.tsx`, `src/components/PromptRow.tsx`, `scripts/checks/pinchFridge.ts`
 
 **Context:** Read `TECHNICAL.md` decision 23, §5g, criterion 13 and open question 22; `UX.md`'s Fridge & freezer; CLAUDE.md's "Pick the atomic write that fits", "Know which of the two kinds of time value a field is" and the Firestore rules section on indexes and the evaluator.
 
@@ -1067,6 +1068,7 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read / Update / Delete:** put some away (as one container or several), see what is in stock and finished, eat some or all, correct the count, move between fridge and freezer, change the eat-by date, throw it out, delete it.
 - [ ] **Entry points:** Kitchen's row, a recipe's and a saved meal's drawer, cooking mode's last screen, the Fridge & freezer list's "Add", a planned meal's "Eat from your fridge or freezer".
+- [ ] **Bulk (round 8):** a row above the list tosses what is past its date, and Select ticks several boxes to eat, toss or move together; those are the only two doors (a box's sheet is still the way to act on one, the eraser empties a whole place).
 
 ### Success Criteria
 - [ ] Eat soon and past its date read right in the viewer's own time zone, west and east of UTC (`npm run check:pinch-math` under `America/Los_Angeles` and `Pacific/Auckland`), and an eat-by is never shown in local time.
@@ -1074,6 +1076,8 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 - [ ] A failed or denied containers listener degrades only its own UI; checked by loading the previous rules into the emulator.
 - [ ] Two quick taps eat one portion and save one container, and Enter then Enter on a list row eats nothing; Escape and the back gesture close one thing at a time; leaving the put-away details after a change asks first, and a save that isn't confirmed yet never holds the screen.
 - [ ] A thaw or move of a container already past its date keeps that date and says so; a recipe whose only use is food in the fridge or freezer is archived, not erased.
+- [ ] Every bulk act (toss what is past its date, Ate it all, Toss, move, clear out) re-reads each box in a `runTransaction` per 200, touches only boxes still in stock and still in the place the screen showed, reports what it really did ("Tossed 3 of 4 boxes · One was already finished."), takes a second tap once, and its Undo puts back only what is still as the act left it; a bulk toss and a bulk move are proven against the emulator as the owner (allowed), another user and a signed-out visitor (denied), with no change to the rules.
+- [ ] Select mode on the scale kitchen at 4× CPU: entering it, a tick and "select all past their date" each under a second with no render storm; the footer and the first row both reachable at 390×844, 320×568, 375×667, 390×560 and 844×390 in light and dark; Space ticks a row and Escape, Cancel, the back button and the back gesture each end the mode one layer at a time without moving the list.
 - [ ] Driven on the scale kitchen at 4× CPU: tab switches, the stock list with about 300 containers, a recipe drawer and the Recipes list with stock lines, against the base build.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and every sheet was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
@@ -1110,6 +1114,43 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 - [x] The rules matrix (owner, another user, signed out; with groups, null and a legacy document) gives the same outcome on the new rules as on the previous ones.
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math` and `check:pinch-ingest` cover the order, the moves, the step sharing and the reader's groups; driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 1, 5 and 30 lines and 1, 3 and 8 groups.
 - [x] `UX.md`, `TECHNICAL.md` and the README match what shipped.
+
+### Issue 43: Settings: reminders, the morning note, timer pushes and how long new boxes keep
+
+**Prerequisites:** Issue 33, Issue 41
+**Target PR Size:** ~2,000 lines (the document and its rules, the listener and helpers, the screen, the device push helpers, the Function and its checks, the timer hook, the seed and docs)
+**Files:**
+- `PinchSettings`, `ReminderKind` in `types.ts`; `REMINDER_KINDS`, the day ranges and choices in `constants.ts`; `utils/settings.ts`; `getEatByDefault`'s `usual` argument in `utils/containers.ts`
+- `store/slices/pinchSettingsSlice.ts`, `store/actions/pinchSettingsActions.ts`, `startPinchSettingsListener`, `usePinchSettings`, `usePinchSync`
+- `components/settings/` (`SettingsSubview`, `RemindersSection`, `KeepingSection`), `src/components/SettingsGroup.tsx` and `SettingsRow.tsx`, the gear in `KitchenScreen`, `?open=fridge` in `Pinch.tsx`
+- `src/lib/notifications/devicePush.ts`, `notificationsQueries.ts`, `registerDeviceToken.ts`, `enablePushNotifications.ts`
+- `hooks/useTimerPush.ts` and one call in `useCookTimers`
+- `functions/src/apps/pinch/` (`sendEatSoonDigest`, `eatSoonDigest`), `functions/src/notifications/sendPush.ts` and `sendScheduledReminders.ts`, `functions/README.md`, `firestore.indexes.json`
+- `firestore.rules` (`apps/pinch/settings/{uid}`), `scripts/seeds/pinchScale.ts`, `scripts/checks/pinchMath.ts` and `pinchDigest.ts`, `scripts/checkFirestoreIndexes.ts`
+
+**Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 15 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
+
+### Description
+A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. A gear in Kitchen's header opens Settings: this device's notifications (asked for on a tap), a switch per kind of reminder (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
+
+### Possible Approach
+1. One small document per person, written by their first change, owner-only, with its own rules block; readers default, later changes are dotted paths.
+2. `getEatByDefault` takes the person's usual days; the three places a default is made pass them.
+3. The device's push is read from the browser and turned on only from a tap; the choice to turn it off sticks across reloads.
+4. A scheduled function, one push a day per person in their own hour, through the one FCM sender; a timer hook that schedules and cancels a reminder per running timer.
+
+### CRUD & Entry-Point Requirements
+- [x] **Create / Read / Update / Delete:** the first change creates the document, every switch and pill updates it, reading shows the defaults before it exists; there is no delete in the screen (the rules allow the owner one).
+- [x] **Entry points:** the gear in Kitchen's header (the one door), the put-away form, cooking mode's Finish panel and a box's move view for the days, a notification's link for Fridge & freezer.
+
+### Success Criteria
+- [x] Nothing is written until the first change; a person with no document sees the defaults and a new box starts at 4 and 90 days as before.
+- [x] The rules matrix (owner, another user, signed out; out-of-bounds days, hour and lead time, a non-bool switch, an extra key, a pre-stamped `lastDigestDay`, a legacy document) gives the intended outcome on the new rules and denies on the previous ones; every pre-existing rule on the touched collections and the reminders rules answer the same.
+- [x] The note: nothing due sends nothing; past only, due only and both read right for 1, 2, 3 and 12 dishes; the hour boundary, other zones, an already-sent day and a person with the switch off are checked, and the handler was run against Taylor's boxes with a stub sender.
+- [x] A timer's push is scheduled when it starts, cancelled by pause, reset, finishing in view and leaving, and left to go out when it ends while the page is hidden.
+- [ ] A real push reaching a real phone, locked, and the installed iPhone case: not checkable from the sandbox.
+- [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
+- [x] `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `functions/README.md` and the README match what shipped.
 
 ### Issue 44: Recipe form editors, Sources rows that open, and recipe links
 

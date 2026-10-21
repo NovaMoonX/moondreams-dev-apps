@@ -9,6 +9,13 @@ import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
+import {
+  APP_ORIGIN,
+  normalizeUids,
+  sendPushToUsers,
+  toAppUrl,
+} from './sendPush.js';
+
 if (getApps().length === 0) {
   initializeApp();
 }
@@ -18,8 +25,9 @@ if (getApps().length === 0) {
 // app family's scale — a handful of households, not a high-volume queue.
 // Cloud Tasks (or an equivalent delayed-task queue) is the standard way to
 // get exact-time delivery at real scale; at this scale it's not worth the
-// extra infrastructure.
-const POLL_INTERVAL_MINUTES = 5;
+// extra infrastructure. One minute, so a cooking timer of a minute or more
+// is picked up before it ends and goes out on time.
+const POLL_INTERVAL_MINUTES = 1;
 const POLL_INTERVAL_MS = POLL_INTERVAL_MINUTES * 60 * 1000;
 
 // A reminder this far overdue is no longer useful ("starting in 20 minutes"
@@ -27,27 +35,13 @@ const POLL_INTERVAL_MS = POLL_INTERVAL_MINUTES * 60 * 1000;
 // otherwise flush its whole backlog to people's phones at once.
 const STALE_AFTER_MS = 30 * 60 * 1000;
 
-const APP_ORIGIN = 'https://apps.moondreams.dev';
-
 const APP_PATHS: Record<string, string> = {
   'worth-the-wait': '/worth-the-wait',
   'nine-lives': '/nine-lives',
   waypoint: '/waypoint',
   'a-list': '/a-list',
+  pinch: '/pinch',
 };
-
-function toAppUrl(path: unknown): string | null {
-  if (typeof path !== 'string' || !path.startsWith('/')) {
-    return null;
-  }
-
-  try {
-    const url = new URL(path, APP_ORIGIN);
-    return url.origin === APP_ORIGIN ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * The absolute URL a tapped reminder opens: its own `link`, else the trip or app it belongs
@@ -66,14 +60,6 @@ export function resolveReminderLink(reminder: DocumentData): string {
     : toAppUrl(APP_PATHS[reminder.appId as string] ?? '/');
 
   return fallback ?? APP_ORIGIN;
-}
-
-function normalizeUids(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter((uid): uid is string => typeof uid === 'string');
 }
 
 /**
@@ -134,24 +120,11 @@ async function deliverReminder(
   ref: DocumentReference<DocumentData>,
   reminder: DocumentData,
 ): Promise<void> {
-  const targetUids = normalizeUids(reminder.targetUids);
-  const userSnapshots = await Promise.all(
-    targetUids.map((uid) => firestore.doc(`users/${uid}`).get()),
-  );
-  const tokens = userSnapshots.flatMap((userSnapshot) =>
-    normalizeUids(userSnapshot.data()?.fcmTokens),
-  );
-
-  if (tokens.length > 0) {
-    await messaging.sendEachForMulticast({
-      tokens,
-      notification: {
-        title: reminder.title,
-        body: reminder.body,
-      },
-      webpush: { fcmOptions: { link: resolveReminderLink(reminder) } },
-    });
-  }
+  await sendPushToUsers(firestore, messaging, normalizeUids(reminder.targetUids), {
+    title: reminder.title,
+    body: reminder.body,
+    url: resolveReminderLink(reminder),
+  });
 
   if (reminder.recurrence === 'yearly') {
     const nextOccurrence = new Date(reminder.scheduledFor as number);
@@ -171,7 +144,7 @@ async function deliverReminder(
 
 export const sendScheduledReminders = onSchedule(
   {
-    schedule: `every ${POLL_INTERVAL_MINUTES} minutes`,
+    schedule: '* * * * *',
     timeoutSeconds: POLL_INTERVAL_MS / 1000 + 60,
   },
   async () => {
@@ -219,6 +192,10 @@ export const sendScheduledReminders = onSchedule(
 
         if (delayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
+          // A reminder cancelled while this run waited for its time must not go out.
+          if ((await reminderDoc.ref.get()).get('status') !== 'pending') {
+            return;
+          }
         }
 
         await deliverReminder(firestore, messaging, reminderDoc.ref, claimed);
