@@ -38,6 +38,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNoteCard from '@apps/pinch/components/cooking/CookNoteCard';
+import CookTimerBuzz from '@apps/pinch/components/cooking/CookTimerBuzz';
 import CookPantryTake from '@apps/pinch/components/cooking/CookPantryTake';
 import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookRecord, {
@@ -90,6 +91,7 @@ import type {
   CookView,
   PlateCookRecipe,
   Recipe,
+  ResumeTimer,
 } from '@apps/pinch/types';
 import {
   applyResumePositions,
@@ -195,12 +197,17 @@ const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   target.closest('input, textarea, select, [contenteditable="true"]') !== null;
 
+interface RestoredTimer {
+  timer: CookTimer;
+  reminderId: string | null;
+}
+
 const restoreTimers = (
   saved: CookingResume['timers'],
   entries: { recipe: Recipe }[],
-): CookTimer[] => {
+) => {
   const isPlate = entries.length > 1;
-  return saved.flatMap((timer): CookTimer[] => {
+  const restored = saved.flatMap((timer): RestoredTimer[] => {
     const recipe = entries.find(
       (entry) => entry.recipe.id === timer.recipeId,
     )?.recipe;
@@ -217,20 +224,28 @@ const restoreTimers = (
       durationMs: timer.durationMs,
     };
     if (timer.status === 'running') {
-      return [
-        {
-          ...base,
-          status: 'running',
-          startedAt: timer.startedAt,
-          endsAt: timer.endsAt,
-        },
-      ];
+      const running: CookTimer = {
+        ...base,
+        status: 'running',
+        startedAt: timer.startedAt,
+        endsAt: timer.endsAt,
+      };
+      return [{ timer: running, reminderId: timer.reminderId }];
     }
-    if (timer.status === 'paused') {
-      return [{ ...base, status: 'paused', remainingMs: timer.remainingMs }];
-    }
-    return [{ ...base, status: 'done', endedAt: timer.endedAt }];
+    const other: CookTimer =
+      timer.status === 'paused'
+        ? { ...base, status: 'paused', remainingMs: timer.remainingMs }
+        : { ...base, status: 'done', endedAt: timer.endedAt };
+    return [{ timer: other, reminderId: null }];
   });
+  return {
+    timers: restored.map((entry) => entry.timer),
+    reminderIds: Object.fromEntries(
+      restored.flatMap((entry) =>
+        entry.reminderId === null ? [] : [[entry.timer.id, entry.reminderId]],
+      ),
+    ),
+  };
 };
 
 interface CookEntry {
@@ -247,6 +262,8 @@ interface CookingSessionProps {
   /** The recipe the screen was opened with, which a late close checks it is still showing. */
   openedRecipeId: string;
   plannedMealId: string | null;
+  /** The planned meal's day, kept in the saved copy; null when it isn't loaded. */
+  plannedMealDate: number | null;
   /** The header: the recipe's name, or the plate's when there are several. */
   title: string;
   /** A saved session to pick up where it was left; null for a fresh start. */
@@ -258,6 +275,7 @@ function CookingSession({
   entries,
   openedRecipeId,
   plannedMealId,
+  plannedMealDate,
   title,
   resume,
 }: CookingSessionProps) {
@@ -316,10 +334,11 @@ function CookingSession({
   const missedFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
-  const [initialTimers] = useState(() =>
+  const [restored] = useState(() =>
     restoreTimers(resume?.timers ?? [], entries),
   );
-  const timers = useCookTimers(initialTimers);
+  const timers = useCookTimers(restored.timers, restored.reminderIds);
+  const { getReminderId, pushRevision } = timers;
   const [sessionId] = useState(generateUuid);
   const [goingCount] = useState(createLiveCount);
   const isWide = useMediaQuery().isAtLeast('lg');
@@ -601,6 +620,15 @@ function CookingSession({
         ? { key: `${recipe.id}:${index}`, spoken: spokenStep }
         : null,
     onTurnOn: timers.prepareSound,
+    runningTimers: timers.timers.filter((timer) => timer.status === 'running')
+      .length,
+    lastRingAt: timers.timers.reduce<number | null>(
+      (latest, timer) =>
+        timer.status === 'done' && (latest === null || timer.endedAt > latest)
+          ? timer.endedAt
+          : latest,
+      null,
+    ),
   });
 
   const updateRecipe = (recipeId: string, patch: Partial<PlateCookState>) =>
@@ -654,6 +682,7 @@ function CookingSession({
           recipeId: openedRecipeId,
           servings: entries.length === 1 ? entries[0].plannedServings : null,
           plannedMealId,
+          plannedMealDate,
           plate:
             entries.length > 1
               ? entries.map((entry) => ({
@@ -664,7 +693,11 @@ function CookingSession({
         },
         currentId,
         positions: plate,
-        timers: timers.timers,
+        timers: timers.timers.map((timer): ResumeTimer =>
+          timer.status === 'running'
+            ? { ...timer, reminderId: getReminderId(timer.id) }
+            : timer,
+        ),
       }),
     );
   }, [
@@ -674,9 +707,12 @@ function CookingSession({
     entries,
     openedRecipeId,
     plannedMealId,
+    plannedMealDate,
     currentId,
     plate,
     timers.timers,
+    getReminderId,
+    pushRevision,
   ]);
 
   const ask = async (options: Parameters<typeof confirm>[0]) => {
@@ -1416,12 +1452,16 @@ function CookingSession({
 
   const getTimerNote = () => {
     if (focused === null || focused.status === 'done') return null;
-    if (!wakeLock.isSupported || wakeLock.hasFailed) {
-      return 'This screen may turn off. Your timer stays right, but it can only ring while the screen is on.';
-    }
-    return timers.isNoticeShown
-      ? 'Keep this screen open: timers stop if you leave it.'
-      : null;
+
+    const parts = [
+      timers.isNoticeShown
+        ? 'Keep this screen open: timers stop if you leave it.'
+        : null,
+      !wakeLock.isSupported || wakeLock.hasFailed
+        ? 'This browser can’t keep the screen awake, so it may dim.'
+        : null,
+    ].filter((part) => part !== null);
+    return parts.length === 0 ? null : parts.join(' ');
   };
   const isChanged =
     isRemoved ||
@@ -1433,14 +1473,15 @@ function CookingSession({
       <CookDishStrip dishes={dishes} value={recipe.id} onChange={showRecipe} />
     ) : null;
   const isDishStripInStep = isStepsView && hasSteps && !isWide;
-  const noteCard = isCookNoteShown(index, gotItNotes, recipe.id) ? (
-    <CookNoteCard
-      key={recipe.id}
-      recipeId={recipe.id}
-      onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
-      onApply={(noteId) => void applyNote(noteId)}
-    />
-  ) : null;
+  const noteCard =
+    !isWide && isCookNoteShown(index, gotItNotes, recipe.id) ? (
+      <CookNoteCard
+        key={recipe.id}
+        recipeId={recipe.id}
+        onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
+        onApply={(noteId) => void applyNote(noteId)}
+      />
+    ) : null;
   const notesDoor = (
     <RecipeNotes
       recipeId={recipe.id}
@@ -1583,6 +1624,7 @@ function CookingSession({
               }
         }
         note={getTimerNote()}
+        buzz={focused.status === 'running' ? <CookTimerBuzz uid={uid} /> : null}
         onTick={timers.settle}
         onPause={timers.pause}
         onResume={timers.resume}
@@ -1811,12 +1853,23 @@ function CookingSession({
             </p>
           )}
         </div>
-        <div className='form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!'>
+        <div
+          className={join(
+            'form-footer pb-[calc(0.75rem+env(safe-area-inset-bottom))]!',
+            isWide &&
+              !isFinishShown &&
+              focused === null &&
+              'grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] gap-x-10',
+          )}
+        >
           <div
             className={join(
               'flex flex-col gap-2 [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:gap-3',
               focused !== null &&
                 'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-xl',
+              isFinishShown &&
+                focused === null &&
+                'lg:[@media(min-height:501px)]:mx-auto lg:[@media(min-height:501px)]:max-w-md',
             )}
           >
             {!isFinishShown && (
@@ -2111,6 +2164,7 @@ function CookingSubview({
       entries={entries}
       openedRecipeId={recipeId}
       plannedMealId={plannedMealId}
+      plannedMealDate={plannedMeal?.date ?? null}
       title={getTitle()}
       resume={resume ?? null}
     />

@@ -2,6 +2,7 @@ import { Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 
 import Field from '@/components/forms/Field';
 import SummaryEditor from '@/components/SummaryEditor';
+import type { SummaryGroupPosition } from '@/components/summaryGroup';
 import {
   isValidMinutes,
   parseMinutes,
@@ -182,12 +183,15 @@ export function RecipeTimesField({ prep, cook, onChange }: TimesFieldProps) {
 interface WhyFieldProps {
   value: string;
   onChange: (value: string) => void;
+  position: SummaryGroupPosition;
 }
 
-export function RecipeWhyField({ value, onChange }: WhyFieldProps) {
+export function RecipeWhyField({ value, onChange, position }: WhyFieldProps) {
   return (
     <SummaryEditor
       label='What changed and why?'
+      groupPosition={position}
+      icon='📝'
       title='What changed and why?'
       summary={value.trim()}
       placeholder='Add a reason'

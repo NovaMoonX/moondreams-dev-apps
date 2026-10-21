@@ -1,3 +1,4 @@
+import type { DevicePushState } from '@/lib/notifications/devicePush';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
   ALERT_REPEAT_MS,
@@ -221,6 +222,45 @@ export const getTimerCaption = (timer: {
   timer.recipeTitle === null
     ? timer.stepName
     : `${timer.recipeTitle} · ${timer.stepName}`;
+
+export type TimerPushAction = 'keep' | 'leave' | 'cancel';
+
+/** What a timer's scheduled push needs now: `keep` while the timer runs to the deadline it was scheduled for and pushes are on, `leave` when it ended while the page was hidden (the push is what reaches the person), else `cancel` (the page rings by itself, or the timer was paused, reset or changed). */
+export const getTimerPushAction = (
+  timer: { status: string; endsAt?: number } | undefined,
+  scheduledEndsAt: number,
+  context: { isOn: boolean; isHidden: boolean },
+): TimerPushAction => {
+  if (
+    context.isOn &&
+    timer?.status === 'running' &&
+    timer.endsAt === scheduledEndsAt
+  ) {
+    return 'keep';
+  }
+  return timer?.status === 'done' && context.isHidden ? 'leave' : 'cancel';
+};
+
+type PushClock =
+  { status: 'running'; endsAt: number } | { status: 'paused' | 'done' };
+
+/** Only a timer still ahead of its deadline gets a push; one picked up past its end has rung already. */
+export const needsTimerPush = (
+  timer: PushClock,
+  now: number,
+): timer is Extract<PushClock, { status: 'running' }> =>
+  timer.status === 'running' && timer.endsAt > now;
+
+export type TimerBuzzOffer = 'none' | 'ask' | 'blocked' | 'unsupported';
+
+/** What the timer view offers about a push for when the screen is off: nothing while this device's state is unread or once it can be reached with timer pushes on, else a way in, whose sheet says what stands in the way when the browser can't do it. */
+export const getTimerBuzzOffer = (
+  device: DevicePushState | null,
+  isTimersOn: boolean,
+): TimerBuzzOffer => {
+  if (device === null || (device === 'on' && isTimersOn)) return 'none';
+  return device === 'blocked' || device === 'unsupported' ? device : 'ask';
+};
 
 /** Running and paused timers count against the session's cap; a finished one waits for Dismiss and doesn't. */
 export const countLiveTimers = (timers: { status: string }[]) =>
@@ -508,7 +548,7 @@ export const getFirstSentence = (text: string) => {
   return result;
 };
 
-/** A step's first few words ("Brown the beef"), so two timers are told apart by what is cooking. */
+/** A step's first few words ("Brown the beef"), so two timers are told apart by what is cooking, cut before a little word or a number left at the end ("Simmer for 2 minutes" is "Simmer"). */
 export const getStepName = (step: string) => {
   const words = step
     .replace(/[^\p{L}\p{N}'\s-]/gu, ' ')
@@ -517,7 +557,8 @@ export const getStepName = (step: string) => {
     .slice(0, 3);
   const kept = words.reduceRight<string[]>(
     (acc, word) =>
-      acc.length === 0 && TRAILING_LITTLE_WORDS.has(word.toLowerCase())
+      acc.length === 0 &&
+      (TRAILING_LITTLE_WORDS.has(word.toLowerCase()) || /^\p{N}+$/u.test(word))
         ? acc
         : [word, ...acc],
     [],

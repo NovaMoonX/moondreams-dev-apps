@@ -119,8 +119,6 @@ export const COLLECTION_BATCH_SIZE = 200;
 /** A collection id is a UUID, so neither can collide with one. */
 export const COLLECTION_FILTER_ANY = 'any';
 export const COLLECTION_FILTER_NONE = 'none';
-export const COLLECTION_CHIPS_SHOWN = 4;
-export const COLLECTION_CHIPS_QUIET_HIDDEN = 3;
 export const HIGH_PROTEIN_GRAMS = 25;
 export const QUICK_MAX_MINUTES = 30;
 export const COLLECTION_SUGGESTION_LABELS = {
@@ -394,6 +392,14 @@ export const MAX_CARE_REHEAT_LENGTH = 300;
 export const MAX_CARE_TIP_LENGTH = 300;
 /** The longest edge of a recipe cover: it shows in a list row and a drawer header. */
 export const RECIPE_COVER_MAX_DIMENSION = 1280;
+/** A web cover is kept as an address; the rules refuse a longer one. */
+export const MAX_COVER_URL_LENGTH = 2000;
+export const PHOTO_QUERY_MIN_TITLE_LENGTH = 3;
+export const PHOTO_QUERY_MAX_TITLE_LENGTH = 70;
+export const PHOTO_RESULT_COUNT = 6;
+/** The callable gives up at 10 seconds; the app waits a little longer than that for its answer. */
+export const PHOTO_LOOKUP_TIMEOUT_MS = 14_000;
+export const PHOTO_PROBE_TIMEOUT_MS = 8000;
 
 /** The most links one recipe holds, the how-to video included: the rules check the count, the client shapes each link. */
 export const MAX_RECIPE_LINKS = 8;
@@ -615,7 +621,7 @@ export const MAX_CONTAINER_TITLE_LENGTH = 120;
 // 2000-01-01 and 2100-01-01, UTC midnight: the bounds the rules take.
 export const MIN_EAT_BY_DATE = 946_684_800_000;
 export const MAX_EAT_BY_DATE = 4_102_444_800_000;
-export const CONTAINER_FRIDGE_DAYS = 4;
+export const CONTAINER_FRIDGE_DAYS = 3;
 export const CONTAINER_FREEZER_DAYS = 90;
 export const CONTAINER_THAWED_DAYS = 2;
 /** Due today or tomorrow: a wider window tints most of a box's life and stops meaning "eat it now". */
@@ -739,7 +745,11 @@ export const COOK_WAKE_PHRASE = 'Hey Pinch';
 export const COOK_WAKE_SPELLINGS = ['hey pinch', 'hay pinch', 'heypinch'];
 /** How long a command window stays open after the last thing it understood. */
 export const COOK_WINDOW_MS = 10_000;
-/** "Hey Pinch" listening turns itself off after this long without the phrase. */
+/** "Hey Pinch" listening turns itself off after this long without the phrase, not counting the time a timer runs or the grace after one rings. */
 export const COOK_WAKE_IDLE_MS = 10 * 60_000;
+/** The wait stays paused this long after a timer rings, so the person tending it is not cut off. */
+export const COOK_WAKE_TIMER_GRACE_MS = 2 * 60_000;
+/** Waiting for the phrase never lasts longer than this, whatever the timers do. */
+export const COOK_WAKE_MAX_MS = 60 * 60_000;
 /** "Keep listening" runs to a fixed deadline; commands don't extend it. */
 export const COOK_LOCK_MS = 15 * 60_000;

@@ -4,7 +4,7 @@ import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { useSpeechCommands } from '@/hooks/useSpeechCommands';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
-import { COOK_WAKE_IDLE_MS, COOK_WINDOW_MS } from '@apps/pinch/constants';
+import { COOK_WINDOW_MS } from '@apps/pinch/constants';
 import {
   getCookCommandKey,
   type CookCommand,
@@ -14,9 +14,12 @@ import {
 import {
   createVoiceState,
   getVoiceEffect,
+  getWakeWaitEnd,
   planHeard,
+  recordWakeBusy,
   reduceVoice,
   type VoiceEvent,
+  type WakeBusySpan,
   type VoiceMode,
   type VoiceStop,
 } from '@apps/pinch/utils/cookVoiceMode';
@@ -133,10 +136,19 @@ interface UseCookVoiceOptions {
   step: { key: string; spoken: string } | null;
   /** Runs inside the tap that turns voice control on, for browser features that need a tap (the timer's sound). */
   onTurnOn?: () => void;
+  /** How many timers run now, and when the latest one rang: the wait for "Hey Pinch" does not count the time a timer runs or the two minutes after one rings. */
+  runningTimers: number;
+  lastRingAt: number | null;
 }
 
 /** Hands-free cooking: listens for the cooking commands in the way the person chose (one window per tap, waiting for "Hey Pinch", or kept open for fifteen minutes), runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered per person on this device, and again after a stop it has to explain. */
-export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
+export function useCookVoice({
+  uid,
+  step,
+  onTurnOn,
+  runningTimers,
+  lastRingAt,
+}: UseCookVoiceOptions) {
   const [hasAgreed, setHasAgreed] = useLocalStoragePreference(
     `pinch:${uid}:voice:agreed`,
     false,
@@ -168,6 +180,9 @@ export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
   const lastHeard = useRef({ key: '', at: 0 });
   const messageCount = useRef(0);
   const readStepKey = useRef<string | null>(null);
+  const waitRef = useRef<{ enteredAt: number; spans: WakeBusySpan[] } | null>(
+    null,
+  );
   const controls = useRef<{
     begin: () => void;
     stop: () => void;
@@ -299,13 +314,25 @@ export function useCookVoice({ uid, step, onTurnOn }: UseCookVoiceOptions) {
   }, [phase, epoch, isListening, send]);
 
   useEffect(() => {
-    if (phase !== 'WAITING') return;
+    if (phase !== 'WAITING') {
+      waitRef.current = null;
+      return;
+    }
+    const now = Date.now();
+    const enteredAt = waitRef.current?.enteredAt ?? now;
+    const spans = recordWakeBusy(waitRef.current?.spans ?? [], {
+      enteredAt,
+      now,
+      runningTimers,
+      lastRingAt,
+    });
+    waitRef.current = { enteredAt, spans };
     const timeoutId = window.setTimeout(
       () => send({ type: 'WAIT_ENDED' }),
-      COOK_WAKE_IDLE_MS,
+      Math.max(0, getWakeWaitEnd(enteredAt, spans) - now),
     );
     return () => window.clearTimeout(timeoutId);
-  }, [phase, send]);
+  }, [phase, runningTimers, lastRingAt, send]);
 
   useEffect(() => {
     if (lockEndsAt === null) return;

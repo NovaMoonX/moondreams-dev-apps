@@ -3,6 +3,7 @@ import { deleteToken, getMessaging, isSupported } from 'firebase/messaging';
 import { app } from '@/lib/firebase/config';
 
 import {
+  readRememberedToken,
   registerDeviceToken,
   unregisterDeviceToken,
 } from './registerDeviceToken';
@@ -102,19 +103,45 @@ export async function turnOnDevicePush(uid: string): Promise<TurnOnResult> {
   return getPermission() === 'default' ? 'dismissed' : 'failed';
 }
 
+/** The token to take off the person: the one remembered at registration, else (a device registered before that was kept) the browser's own, which it only gives to a device it already allows, so this never asks for anything. */
+const findToken = async (uid: string) => {
+  const remembered = readRememberedToken(uid);
+  if (remembered !== null) return remembered;
+  if (!(await canPush()) || getPermission() !== 'granted') return null;
+
+  return withTimeout(requestPushPermission());
+};
+
+/** Deletes the token from the browser's push service. It can wait on that service, so it is never what a person is held up by. */
+const deleteBrowserToken = async () => {
+  try {
+    if (await canPush()) await deleteToken(getMessaging(app));
+  } catch {
+    // A token left in the browser is already off the person's account, and FCM drops it once it expires or is reported gone.
+  }
+};
+
+/** Takes this device's token off the person's account first (the step that stops their pushes), then deletes it from the browser's push service, awaited only when `isBrowserTokenAwaited`. */
+async function removeDeviceToken(uid: string, isBrowserTokenAwaited: boolean) {
+  try {
+    const token = await findToken(uid);
+    if (token) await unregisterDeviceToken(uid, token);
+  } catch (error) {
+    console.error('Push token not taken off the account', error);
+  }
+
+  if (isBrowserTokenAwaited) {
+    await deleteBrowserToken();
+    return;
+  }
+  void deleteBrowserToken();
+}
+
 /** Stops pushes to this device: removes its token and remembers the choice. The choice is kept even when the token can't be reached, so a reload doesn't register it again. */
 export async function turnOffDevicePush(uid: string): Promise<void> {
   setDevicePushOff(uid, true);
-
-  if (!(await canPush()) || getPermission() !== 'granted') return;
-
-  try {
-    const token = await withTimeout(requestPushPermission());
-    if (token) {
-      await unregisterDeviceToken(uid, token);
-    }
-    await deleteToken(getMessaging(app));
-  } catch {
-    // A token left behind only receives pushes until it expires.
-  }
+  await removeDeviceToken(uid, true);
 }
+
+/** Signing out hands the device on: its token leaves the person who signed out, so nothing meant for them reaches whoever uses it next. Resolves once the token is off their account; the browser's own copy is deleted afterwards without waiting. The choice to turn pushes off is not changed, and signing in again registers a fresh token. */
+export const releaseDevicePush = (uid: string) => removeDeviceToken(uid, false);

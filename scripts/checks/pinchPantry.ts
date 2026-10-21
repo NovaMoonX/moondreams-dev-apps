@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 
-import type { Package, Recipe } from '../../src/apps/pinch/types.ts';
+import type {
+  Package,
+  PackageEvent,
+  Recipe,
+} from '../../src/apps/pinch/types.ts';
 import {
   getEatByLabel,
   getEatByPhrase,
@@ -14,13 +18,17 @@ import {
   getDateInDays,
   getLineMarkers,
   getLineStock,
+  formatKitchenTotal,
   getLineStockText,
+  getTakeAmountText,
   type LineStock,
   getNewPackagesProblem,
   getPackageBulkNames,
   getPackageBulkToast,
   getPackageLabel,
+  getPackageSeed,
   getPackageSelectionNote,
+  getPackageSelectionPrimary,
   getPackageSelectionTitle,
   getPackageSkippedText,
   getPackageState,
@@ -222,10 +230,11 @@ assert.deepEqual(
   [chickenView.pastCount, chickenView.soonCount, chickenView.nearest?.id],
   [1, 1, 'c1'],
 );
-assert.deepEqual(getStockSummaryParts(chickenView), [
-  '3 packages',
-  '2.4 lb in all',
-]);
+assert.deepEqual(
+  getStockSummaryParts(chickenView),
+  ['3 packages', '1.4 lb in date'],
+  'the pound past its date is left out of the total, and the row flags it',
+);
 assert.deepEqual(getStockFlag(chickenView, NOW), {
   state: 'PAST',
   label: '1 past its date',
@@ -281,6 +290,43 @@ assert.deepEqual(
   'a different kind is shown as its own amount',
 );
 
+const carton = (id: string, amount: number, expiresAt: number | null) =>
+  pkg({ id, amount, unit: 'FL_OZ', expiresAt });
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView(
+      'x',
+      [carton('a', 192, dayOf(25)), carton('b', 32, dayOf(10))],
+      NOW,
+    ),
+  ),
+  ['2 packages', '192 fl oz in date'],
+  'a carton past its date is not in the total, which says so instead of "in all"',
+);
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView('x', [carton('a', 96, dayOf(25)), carton('b', 96, null)], NOW),
+  ),
+  ['2 packages', '192 fl oz in all'],
+  'one with no date counts, and with nothing past the total is "in all"',
+);
+assert.deepEqual(
+  getStockSummaryParts(
+    getStockView(
+      'x',
+      [carton('a', 192, dayOf(9)), carton('b', 32, dayOf(10))],
+      NOW,
+    ),
+  ),
+  ['2 packages'],
+  'with every package past its date there is no amount in date to add up',
+);
+assert.deepEqual(
+  getStockSummaryParts(getStockView('x', [carton('a', 32, dayOf(10))], NOW)),
+  ['32 fl oz'],
+  'one package past its date still says its own amount',
+);
+
 // Grouping keeps only what is in stock
 const grouped = groupPackagesByIngredient([
   ...chicken,
@@ -308,7 +354,11 @@ assert.deepEqual(
   ),
   { packageCount: 5, ingredientCount: 2, soonCount: 1, pastCount: 1 },
 );
-assert.equal(getPantryDueText(2, 1), '2 to use soon, 1 past its date');
+assert.equal(getPantryDueText(2, 1), '1 past its date, 2 to use soon');
+assert.ok(
+  getPantryDueText(37, 31).startsWith('31 past their date'),
+  'the count past its date leads, so the tile’s one-line status, cut short, still names it',
+);
 assert.equal(getPantryDueText(0, 3), '3 past their date');
 assert.equal(getPantryDueText(1, 0), '1 to use soon');
 assert.equal(getPantryDueText(0, 0), '');
@@ -680,6 +730,13 @@ assert.equal(
   'Nothing was changed.',
 );
 assert.equal(
+  errorOf(
+    planPackageEdit(pkg({ amount: 1.4000000000000001 }), { amount: 1.4 }, NOW),
+  ),
+  'Nothing was changed.',
+  'an amount a take-out left with float noise is not an edit when saved untouched',
+);
+assert.equal(
   errorOf(planPackageEdit(pkg(), { amount: 0 }, NOW)),
   'Say how much there is.',
 );
@@ -888,6 +945,24 @@ assert.deepEqual(
 );
 assert.deepEqual(names.lines[0].details, ['2 lb', 'Use by Oct 15']);
 assert.equal(names.more, 2);
+
+assert.deepEqual(
+  [
+    getPackageSelectionPrimary([], NOW),
+    getPackageSelectionPrimary([pkg({ expiresAt: dayOf(10) })], NOW),
+    getPackageSelectionPrimary(
+      [pkg({ expiresAt: dayOf(10) }), pkg({ expiresAt: dayOf(12) })],
+      NOW,
+    ),
+    getPackageSelectionPrimary(
+      [pkg({ expiresAt: dayOf(10) }), pkg({ expiresAt: null })],
+      NOW,
+    ),
+    getPackageSelectionPrimary([pkg({ expiresAt: dayOf(18) })], NOW),
+  ],
+  ['USE_UP', 'TOSS', 'TOSS', 'USE_UP', 'USE_UP'],
+  'Toss is the filled act only when every ticked package is past its date: nothing ticked, a mix, a package with no date, or one due today keeps Used it up',
+);
 
 // What cooking takes out of the pantry
 const rice = (over: Partial<Package>) =>
@@ -1126,12 +1201,34 @@ assert.deepEqual(
   ].map((stockState) => getLineStockText(stockState as never)),
   [
     'You have it',
-    'You have 1.5 cup',
-    'You have about 1.5 cup',
+    'You have 1½ cups',
+    'You have about 1½ cups',
     'In your pantry',
     'Past its date',
     'Not in your pantry',
   ],
+  'a pantry hint says an amount the way a cook does, not as a decimal',
+);
+assert.deepEqual(
+  [
+    formatKitchenTotal({ amount: 0.63, unit: 'CUP' }),
+    formatKitchenTotal({ amount: 0.63, unit: 'CUP' }, true),
+    formatKitchenTotal({ amount: 9, unit: 'EACH' }),
+    formatKitchenTotal({ amount: 3, unit: 'LB' }, true),
+  ],
+  ['about ⅔ cup', 'about ⅔ cup', '9 each', 'about 3 lb'],
+  '"about" is said once, and a bare count keeps its "each"',
+);
+assert.equal(
+  getTakeAmountText({
+    totals: [
+      { amount: 2.5, unit: 'CUP' },
+      { amount: 0.42, unit: 'LB' },
+    ],
+    isConverted: true,
+  } as never),
+  'about 2½ cups and about ½ lb',
+  'what a cook takes out of the pantry reads in kitchen amounts too',
 );
 
 // The marks on a recipe's lines say only the exception, and the share once
@@ -1178,6 +1275,72 @@ assert.deepEqual(
   markedTexts([have, have, past]),
   [null, null, 'Past its date'],
   'and it is not counted as in the pantry',
+);
+
+// Salt, oil and water are at home in most kitchens, so a pantry without them says nothing about them
+const staple: LineStock = { kind: 'STAPLE' };
+assert.deepEqual(
+  markedTexts([have, have, none, staple, staple]),
+  [null, null, 'Not in your pantry', null, null],
+  'a staple is never flagged as missing, and the other lines still are',
+);
+assert.equal(
+  marks([have, have, none, staple, staple]).summary,
+  '2 of 3 in your pantry',
+  'the share leaves the staples out: two of the three things worth looking for, not two of five',
+);
+assert.equal(
+  marks([staple, staple]).summary,
+  null,
+  'a recipe of staples alone says nothing about the pantry',
+);
+assert.deepEqual(
+  markedTexts([have, none, none, none, staple]),
+  ['You have it', null, null, null, null],
+  'a list the pantry hardly touches still flags the one it has, and the staple stays quiet',
+);
+const lineOf = (ingredientId: string) => ({
+  ingredientId,
+  amount: 1,
+  unit: 'TBSP' as const,
+});
+const spice = { id: 'cat-salt', familyId: 'cat-fam-spices' };
+assert.deepEqual(
+  getLineStock(lineOf('cat-salt'), undefined, NOW, undefined, spice),
+  { kind: 'STAPLE' },
+  'an empty pantry lacks nothing of a spice',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-water'), [], NOW, undefined, {
+    id: 'cat-water',
+    familyId: 'cat-fam-drinks',
+  }),
+  { kind: 'STAPLE' },
+  'water is a staple by name even though its family is not spices',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-rice'), undefined, NOW, undefined, {
+    id: 'cat-rice',
+    familyId: 'cat-fam-grains',
+  }),
+  { kind: 'NONE' },
+  'rice is not a staple, so having none of it is said',
+);
+assert.deepEqual(
+  getLineStock(lineOf('cat-salt'), undefined, NOW),
+  { kind: 'NONE' },
+  'without the ingredient there is no family to read, so nothing is assumed',
+);
+assert.equal(
+  getLineStock(
+    lineOf('cat-salt'),
+    [rice({ amount: 1, unit: 'TBSP' })],
+    NOW,
+    undefined,
+    spice,
+  ).kind,
+  'HAVE',
+  'a staple that is in the pantry is counted like anything else',
 );
 assert.equal(marks([have, have, past]).summary, '2 of 3 in your pantry');
 assert.deepEqual(markedTexts([]), []);
@@ -1293,7 +1456,7 @@ assert.deepEqual(
     ['jar', 1, 'CUP', true, false],
     ['lb-bag', 1.25, 'LB', false, true],
   ],
-  'a jar in cups and a bag in pounds are drawn from together, the one that expires first first',
+  'a jar in cups and a bag in pounds are drawn from together, starting with the one that expires first',
 );
 const shortBridged = planTakeOut(
   [{ ingredientId: 'cat-rice', amount: 4, unit: 'CUP' }],
@@ -1308,6 +1471,204 @@ assert.deepEqual(
   ],
   [[[4, true]], [{ ingredientId: 'cat-rice', amount: 3.4, unit: 'CUP' }]],
   "what four ounces cannot cover is said in the recipe's own unit",
+);
+
+const milkCarton = (amount: number, over: Partial<Package> = {}) =>
+  pkg({ id: 'carton', unit: 'L', amount, place: 'FRIDGE', ...over });
+const cupsOfMilk = (cups: number, packages: Package[]) =>
+  planTakeOut(
+    [{ ingredientId: 'cat-milk', amount: cups, unit: 'CUP' }],
+    packages,
+    NOW,
+  );
+const twoCupsFromCarton = cupsOfMilk(2, [milkCarton(1)]);
+assert.deepEqual(
+  [
+    twoCupsFromCarton.takes.map((take) => [take.amount, take.unit, take.isAll]),
+    twoCupsFromCarton.short,
+  ],
+  [[[0.47, 'L', false]], []],
+  "two cups from a one-litre carton takes 0.47 l and reports no shortfall: what the carton's own two figures round away is not a shortage",
+);
+assert.deepEqual(
+  cupsOfMilk(2, [milkCarton(4)]).short,
+  [],
+  'a bigger carton says the same',
+);
+assert.deepEqual(
+  cupsOfMilk(2, [
+    milkCarton(0.3, { id: 'soon', expiresAt: dayOf(20) }),
+    milkCarton(1, { id: 'later', expiresAt: dayOf(30) }),
+  ]).short,
+  [],
+  'a second package that rounds the rest down is not a shortage either',
+);
+assert.deepEqual(
+  planTakeOut(
+    [{ ingredientId: 'cat-milk', amount: 2, unit: 'CUP' }],
+    [milkCarton(1)],
+    NOW,
+    () => ({ gramsPerMl: 1.03, gramsEach: null }),
+  ).short,
+  [],
+  'it holds when the cup and the litre meet in grams',
+);
+const eightCups = cupsOfMilk(8, [milkCarton(1.53)]);
+assert.deepEqual(
+  [eightCups.takes.map((take) => [take.amount, take.isAll]), eightCups.short],
+  [[[1.53, true]], [{ ingredientId: 'cat-milk', amount: 1.53, unit: 'CUP' }]],
+  'a real shortfall (eight cups against 1.53 l) is still said, in the recipe unit',
+);
+
+// What a new package of an ingredient starts from
+const seedMilk = (over: Partial<Package>) =>
+  pkg({ ingredientId: 'cat-milk', place: 'FRIDGE', unit: 'L', ...over });
+assert.equal(
+  getPackageSeed([], 'cat-milk'),
+  null,
+  'with none in stock there is no seed',
+);
+assert.equal(
+  getPackageSeed([seedMilk({ ingredientId: 'cat-rice' })], 'cat-milk'),
+  null,
+  'another ingredient is not a seed',
+);
+assert.deepEqual(
+  getPackageSeed(
+    [
+      seedMilk({ id: 'old', amount: 2, unit: 'L', createdAt: 100 }),
+      seedMilk({
+        id: 'new',
+        amount: 500,
+        unit: 'ML',
+        place: 'FREEZER',
+        productId: 'p-small',
+        createdAt: 900,
+        history: [
+          makePackageEvent('ADDED', 900, { amount: 500, place: 'FREEZER' }),
+        ],
+      }),
+    ],
+    'cat-milk',
+  ),
+  { amount: 500, unit: 'ML', place: 'FREEZER', productId: 'p-small' },
+  'the newest package by when it was added, not by its date',
+);
+const opened = seedMilk({
+  amount: 0.4,
+  history: [
+    makePackageEvent('ADDED', 1, { amount: 1, place: 'FRIDGE' }),
+    makePackageEvent('USED', 2, { amount: 0.6 }),
+  ],
+});
+assert.equal(
+  getPackageSeed([opened], 'cat-milk')?.amount,
+  1,
+  'an opened carton seeds what it was bought as, not what is left',
+);
+assert.equal(
+  getPackageSeed(
+    [
+      {
+        ...opened,
+        history: [
+          ...opened.history,
+          makePackageEvent('EDITED', 3, { note: 'Unit ml → l' }),
+        ],
+      },
+    ],
+    'cat-milk',
+  )?.amount,
+  0.4,
+  'one edited since falls back to what is left, since its first amount may be in another unit',
+);
+
+// The heaviest history the client can write. The rules check a package's history event by event under the evaluator's 1,000-expression budget: ten events with amount and place (or amount and note), or nine with all three, are denied on the emulator, and an add followed by nine moves with 80-character notes is allowed. So no planner may write an event with all three, and only the first (ADDED) may carry amount and place.
+const weightOf = (event: PackageEvent) =>
+  [event.amount, event.place, event.note].filter((part) => part !== null)
+    .length;
+const redated = planPackageMove(
+  pkg({ expiresAt: dayOf(20) }),
+  'FREEZER',
+  dayOf(28),
+  NOW,
+);
+const editedPackage = planPackageEdit(
+  pkg({ expiresAt: dayOf(20), amount: 2 }),
+  {
+    amount: 1.5,
+    unit: 'KG',
+    place: 'PANTRY',
+    expiresAt: dayOf(27),
+    ingredientName: 'Milk',
+  },
+  NOW,
+);
+const plannedEvents = [
+  buildPackage(
+    {
+      id: 'p',
+      ingredientId: 'cat-milk',
+      ingredientName: 'Milk',
+      productId: null,
+      amount: 1,
+      unit: 'L',
+      place: 'FRIDGE',
+      expiresAt: null,
+    },
+    NOW,
+  ).history,
+  planUse(pkg(), 0.25, NOW),
+  planUse(pkg(), 'ALL', NOW),
+  planPackageToss(pkg(), NOW),
+  redated,
+  editedPackage,
+].flatMap((planned) => {
+  const history = Array.isArray(planned)
+    ? planned
+    : 'fields' in planned
+      ? planned.fields.history
+      : [];
+  return history.slice(1);
+});
+assert.ok(plannedEvents.length >= 6, 'the planners wrote events to weigh');
+assert.deepEqual(
+  plannedEvents.filter((event) => weightOf(event) > 2),
+  [],
+  'no event the client writes carries amount, place and note',
+);
+assert.deepEqual(
+  plannedEvents.filter(
+    (event) => event.amount !== null && event.place !== null,
+  ),
+  [],
+  'after the first event, none carries amount and place together',
+);
+assert.ok(
+  plannedEvents.every((event) => (event.note?.length ?? 0) <= 80),
+  'a note is never past the 80 characters the rules allow',
+);
+assert.equal(
+  weightOf(makePackageEvent('ADDED', 1, { amount: 1, place: 'FRIDGE' })),
+  2,
+  'the first event is the one that carries amount and place',
+);
+const worn = Array.from({ length: 30 }, (_, index) => index).reduce(
+  (history, index) =>
+    appendPackageEvent(
+      history,
+      makePackageEvent(index % 2 === 0 ? 'USED' : 'MOVED', 100 + index, {
+        amount: index % 2 === 0 ? 0.1 : null,
+        place: index % 2 === 0 ? null : 'FREEZER',
+        note: index % 2 === 0 ? null : 'x'.repeat(80),
+      }),
+    ),
+  pkg().history,
+);
+assert.deepEqual(
+  [worn.length, worn[0].kind],
+  [10, 'ADDED'],
+  'thirty acts in a row keep ten events and the add at the front, which is where the heaviest event lives',
 );
 
 // The recipes type is only here so a drift in the shape is a compile error

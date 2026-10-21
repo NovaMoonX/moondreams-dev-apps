@@ -132,6 +132,8 @@ interface ListViewControlsProps {
   hasBasis?: boolean;
   /** A recipe or meal list can hide its fridge and freezer lines. */
   hasStockLines?: boolean;
+  /** Draws it as the shared header icon, for a header's action cluster. */
+  isQuiet?: boolean;
   className?: string;
 }
 
@@ -143,6 +145,7 @@ function ListViewControls({
   onReset,
   hasBasis = false,
   hasStockLines = false,
+  isQuiet = false,
   className,
 }: ListViewControlsProps) {
   const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
@@ -151,6 +154,7 @@ function ListViewControls({
     <ViewOptions
       customizedCount={customizedCount}
       onReset={onReset}
+      isQuiet={isQuiet}
       className={className}
     >
       <NutritionEverywhere

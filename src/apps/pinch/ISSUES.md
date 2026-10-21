@@ -646,7 +646,7 @@ Deleting a recipe, ingredient, product, store or family that something still use
 
 ## Next Steps
 
-### Issue 19: Track what you have: stock, with "not tracked" kept separate from "out" (packages, with their dates, are Issue 44)
+### Issue 19: Track what you have: stock, with "not tracked" kept separate from "out" (packages, with their dates, are Issue 46)
 
 **Prerequisites:** MVP complete
 **Target PR Size:** ~450 lines
@@ -658,7 +658,7 @@ Deleting a recipe, ingredient, product, store or family that something still use
 **Context:** TDD Logic §7 (reserved stock design); README Next Steps.
 
 ### Description
-A person can say how much of an ingredient they have. An ingredient they haven't counted is "not tracked", which is different from "out". The ingredient copy carries what's on hand and what's running low. **Issue 44 delivered what a person has as packages (an amount, a place and a date each) with sums per kind of measure; what is left here is the "not tracked" against "out" distinction for an ingredient nobody added a package for, a low-stock threshold and the ingredient copy.** The `stock` collection below is no longer the plan: a count would be a package with no date.
+A person can say how much of an ingredient they have. An ingredient they haven't counted is "not tracked", which is different from "out". The ingredient copy carries what's on hand and what's running low. **Issue 46 delivered what a person has as packages (an amount, a place and a date each) with sums per kind of measure; what is left here is the "not tracked" against "out" distinction for an ingredient nobody added a package for, a low-stock threshold and the ingredient copy.** The `stock` collection below is no longer the plan: a count would be a package with no date.
 
 ### Possible Approach
 1. Add `stock/{ingredientId}` (`amount`, `unit`, `lastCountedAt`, `isTracked`), where a missing document means not tracked.
@@ -673,7 +673,7 @@ A person can say how much of an ingredient they have. An ingredient they haven't
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
-### Issue 20: Mark a meal as made: stock comes out (batches became prepared containers, Issue 41; cooking mode's take-out is Issue 44)
+### Issue 20: Mark a meal as made: stock comes out (batches became prepared containers, Issue 41; cooking mode's take-out is Issue 46)
 
 **Prerequisites:** Issue 19
 **Target PR Size:** ~500 lines
@@ -684,7 +684,7 @@ A person can say how much of an ingredient they have. An ingredient they haven't
 **Context:** TDD Logic §7; the agreed rule: stock deducts on "mark as made", and prepared servings are consumed separately so nothing deducts twice.
 
 ### Description
-Marking a meal made takes its ingredients out of stock. Prepared servings are already built, as containers (Issue 41), and eating from one never touches ingredient stock; this issue is the ingredient side that is left. **Issue 44 delivered the take-out for cooking mode's Finish panel (an explicit "Take out" with a tick per ingredient and an Undo); what is left is the same from a drawer's or the plan's "Mark as cooked", where nothing comes out today.**
+Marking a meal made takes its ingredients out of stock. Prepared servings are already built, as containers (Issue 41), and eating from one never touches ingredient stock; this issue is the ingredient side that is left. **Issue 46 delivered the take-out for cooking mode's Finish panel (an explicit "Take out" with a tick per ingredient and an Undo); what is left is the same from a drawer's or the plan's "Mark as cooked", where nothing comes out today.**
 
 ### Possible Approach
 1. A transaction on made: deduct tracked stock only (untracked is untouched), set `madeAt`.
@@ -708,7 +708,7 @@ Marking a meal made takes its ingredients out of stock. Prepared servings are al
 **Context:** README Next Steps; UX Shopping list.
 
 ### Description
-Subtract tracked stock from what the list asks for, add a section for low-stock ingredients, and offer grouping by the default product's store with totals from the person's own products. **Issue 44 delivered the first part where it is safe: an add sheet starts a line unticked when the pantry already covers it (never removing the line, and the list's own lines are untouched).**
+Subtract tracked stock from what the list asks for, add a section for low-stock ingredients, and offer grouping by the default product's store with totals from the person's own products. **Issue 46 delivered the first part where it is safe: an add sheet starts a line unticked when the pantry already covers it (never removing the line, and the list's own lines are untouched).**
 
 ### Possible Approach
 1. When adding, subtract tracked stock per ingredient and unit; an untracked ingredient is listed in full.
@@ -824,7 +824,7 @@ A recipe can use another (a house sauce in a dish), with cost and nutrition flow
 - `RecipeCollectionsField.tsx` (the form's row and editor), `CollectionsSheet.tsx`, the Recipes filter's Collections and Favorites questions, `RecipeDrawer`'s pills, `StarButton` on `MealRow` and `MealDrawer`
 - `firestore.rules` (`collections`, `collectionIds`, `isFavorite`), the seeds (Alex's two collections and a starred meal, Taylor's twelve), `scripts/checks/pinchOrganize.ts`
 
-**Context:** The owner asked for recipes in several groups ("Bulk", "High-protein"), suggested ones, and starred meals. Modeled on Sources (a record per person, an id on the recipe); read `TECHNICAL.md` §6a.2 and §5a.2, Security Rules criterion 15 and open question 25, and CLAUDE.md's "A record created only because another record names it", "A filter lists only values that are present" and "A toggled icon-button state is shown by filling the icon".
+**Context:** The owner asked for recipes in several groups ("Bulk", "High-protein"), suggested ones, and starred meals. Modeled on Sources (a record per person, an id on the recipe); read `TECHNICAL.md` §6a.2 and §5a.2, Security Rules criterion 15 and open question 26, and CLAUDE.md's "A record created only because another record names it", "A filter lists only values that are present" and "A toggled icon-button state is shown by filling the icon".
 
 ### Description
 A recipe can be in many collections the person names. They are made in the recipe form (where the recipe's own numbers suggest High-protein, Quick and Freezer-friendly, never added on their own), listed in a Collections question in the Recipes filter with the ones that hold a recipe and their counts, shown on the recipe's drawer beside its source, and renamed or deleted from a sheet behind the filter. A saved meal can be starred: favorites list first, the plan builder's recents lead with them, and a long list's filter gets a Favorites pill.
@@ -1128,7 +1128,7 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 - `functions/src/apps/pinch/` (`sendEatSoonDigest`, `eatSoonDigest`), `functions/src/notifications/sendPush.ts` and `sendScheduledReminders.ts`, `functions/README.md`, `firestore.indexes.json`
 - `firestore.rules` (`apps/pinch/settings/{uid}`), `scripts/seeds/pinchScale.ts`, `scripts/checks/pinchMath.ts` and `pinchDigest.ts`, `scripts/checkFirestoreIndexes.ts`
 
-**Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 15 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
+**Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 16 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
 
 ### Description
 A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. A gear in Kitchen's header opens Settings: this device's notifications (asked for on a tap), a switch per kind of reminder (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
@@ -1148,6 +1148,10 @@ A person can choose what Pinch reminds them about and how long a new fridge or f
 - [x] The rules matrix (owner, another user, signed out; out-of-bounds days, hour and lead time, a non-bool switch, an extra key, a pre-stamped `lastDigestDay`, a legacy document) gives the intended outcome on the new rules and denies on the previous ones; every pre-existing rule on the touched collections and the reminders rules answer the same.
 - [x] The note: nothing due sends nothing; past only, due only and both read right for 1, 2, 3 and 12 dishes; the hour boundary, other zones, an already-sent day and a person with the switch off are checked, and the handler was run against Taylor's boxes with a stub sender.
 - [x] A timer's push is scheduled when it starts, cancelled by pause, reset, finishing in view and leaving, and left to go out when it ends while the page is hidden.
+- [x] A timer's push reaches the person by one path: marked `inAppToast: false` so the in-app toast skips it, kept or cancelled (never doubled) by a picked-up cook, not scheduled for a timer already past its end, and cancelled by "Not now".
+- [x] The sender deletes finished reminders after 14 days (200 a run), a device's push token leaves the person on sign-out, and tokens FCM reports as gone are dropped.
+- [x] Settings' first change is a transaction that reads the server, so a device that was offline while another created the document never replaces it.
+- [x] A running timer offers the same switch where the person is: a quiet "Buzz me if the screen is off" row under it, whose modal asks the browser on its own Turn on tap and switches both the device and the Timers reminder on, and says plainly when the browser is blocked or can't push; nothing is drawn once it is on (round 8 fix; `getTimerBuzzOffer` in `npm run check:pinch-math`).
 - [ ] A real push reaching a real phone, locked, and the installed iPhone case: not checkable from the sandbox.
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
 - [x] `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `functions/README.md` and the README match what shipped.
@@ -1183,18 +1187,49 @@ The recipe form's photo and source are summary rows with an editor, like its tit
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editors were measured at 390×844 and 320×568 in light and dark and at 1280.
 - [ ] The README Build Plan lines are checked off; `UX.md` and `TECHNICAL.md` still match what shipped.
 
+### Issue 45: Photo suggestions for a new recipe, and a web photo as a cover
+
+**Prerequisites:** Issue 6, Issue 44
+**Target PR Size:** ~1,900 lines (the function and its provider layer, its checks, the cover field, the drawer block, the grid, the setting, the rules and the docs)
+**Files:**
+- `functions/src/imageSearch/` (`searchImages`, `ddg`, `google`, `providers`, `optionalSecret`, `usage`, `results`, `fetchCapped`, `types`), `functions/src/apps/pinch/searchRecipeImages.ts`, the export in `functions/src/index.ts`, `functions/README.md`
+- `Recipe.coverUrl` and `WebPhoto` in `types.ts`, the caps in `constants.ts`, `utils/recipeCover.ts`, `saveRecipe`, `CoverImage` and its five callers, `RecipePhotoField`, `RecipePhotoSuggestions`, `queries/photoQueries.ts`, `src/components/ImageChoiceGrid`, `FormSection`'s `action`, `PhotoPicker`'s `isCompact`
+- `PinchSettings.suggestPhotos`, `PhotosSection` in Settings, `coverUrl` and `suggestPhotos` and the two server-only collections in `firestore.rules`, `scripts/checks/imageSearch.ts` and `pinchPhotos.ts`
+
+**Context:** Read `TECHNICAL.md` §5j and open question 28; `functions/README.md`'s `searchRecipeImages` note; CLAUDE.md's "Cloud Functions", "Every AI entry point says what happens before anything is sent" and "An image from a URL that can stop working".
+
+### Description
+Opening the Photo row of a new recipe shows six pictures found by searching the web with its title, under the upload buttons. Picking one makes it the cover, kept as its web address (no copy, no Storage); an upload and a web photo replace each other and Remove goes back to none. Which search answers is one environment switch, DuckDuckGo first and Google as the fallback.
+
+### Possible Approach
+1. A callable over a provider layer with a shared cache, daily budgets and a per-person limit, built and checked against fakes; the live services were not reachable from the sandbox.
+2. `coverUrl` beside `coverPath`, at most one set, drawn everywhere through `FallbackImage` with the pot tile as the fallback; the rules enforce https, the length and the exclusivity.
+3. The block in the Photo editor of a new recipe only, with the line that says what is sent, a Turn off chip and a Settings row.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read / Update / Delete:** pick a web photo for a new recipe, see it on the row, the list and the drawer, replace it with an upload or another photo, and remove it.
+- [ ] **Entry points:** the Photo row's editor (new recipes only), the block's Turn off chip, and Settings' "Suggest photos for new recipes".
+
+### Success Criteria
+- [ ] A recipe written before web covers (no `coverUrl`) opens, edits and saves, and the save writes `coverUrl: null`; checked in the browser over a legacy-shaped document.
+- [ ] Editing a recipe never searches; a title under three letters, the switch off, or no title draws nothing and sends nothing.
+- [ ] A result with a non-https address is dropped, an unreachable picture is not chosen, and a failed or empty search leaves the upload working.
+- [ ] The rules were proved on the emulator as the owner, another user and signed out against the base rules.
+- [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the editor was measured at 390×844, 375×667, 320×568, 844×390 and 1280×900 in light and dark.
+- [ ] Nothing has to exist in production before the merge; the README says how to turn Google on.
+
 ### Issue 46: Pantry: packages with dates, and what expiring means for the rest of the app
 
 **Prerequisites:** Issue 3, Issue 18, Issue 33, Issue 41, Issue 43 (and the Shopping tab, which has shipped)
 **Target PR Size:** ~7,000 lines (the type and its rules, the date states, the screen and its sheets, five integration points, the digest source, the seeds, the checks and the docs)
 **Files:**
 - `Package`, `PackageEvent`, `PinchSubview` (`pantry`), `ReminderKind` (`expiring`) in `types.ts`; the package constants and `REMINDER_KINDS` row in `constants.ts`; `utils/packages.ts` (date states, sums per measure, the plans and their Undo, bulk, take-out, line stock, markers, use-it-up), `utils/containers.ts` (`getEatByState` and its labels take a window and a verb), `utils/settings.ts`
-- `store/slices/packagesSlice.ts`, `store/actions/packageActions.ts`, `startPackagesListener`, `usePackageActions`, `useShoppingPutAway`, `usePantryTake`, `selectors.ts`, `usePinchSync`
+- `store/slices/packagesSlice.ts`, `store/actions/packageActions.ts`, `startPackagesListener`, `usePackageActions`, `usePantryTake`, `selectors.ts`, `usePinchSync`
 - `components/pantry/` (`PantrySubview`, `PantryRow`, `PantryEntry`, `PackageRow`, `PackageSheet`, `PackageFormSheet`, `PackageFields`, `PackageDateField`, `PantryMoveSheet`, `PantryRecipeDrawer`, `PantryFromShoppingSheet`, `IngredientStock`, `LineStockMarker`), `components/cooking/CookPantryTake`, and small changes to `KitchenScreen`, `IngredientDrawer`, `ShoppingScreen`, `AddToShoppingSheet`, `RecipeDrawer`, `CookingSubview`, `RemindersSection` and `Pinch.tsx` (`?open=pantry`)
 - `functions/src/apps/pinch/` (`eatSoonDigest`, `sendEatSoonDigest`), `functions/README.md`, `firestore.indexes.json`, `firestore.rules`
 - `scripts/seeds/pinch.ts` and `pinchScale.ts`, `scripts/checks/pinchPantry.ts` and `pinchDigest.ts`
 
-**Context:** Read `TECHNICAL.md` decision 25, §5i, criterion 16 and open question 26; `UX.md`'s Pantry; `JOURNEYS.md` §4.1 and §4.2; CLAUDE.md's "Date-only vs. instant", "A scheduled sender never flushes a backlog", "Design for 5 and for 50", "A door needs a moment" and "Insight budget".
+**Context:** Read `TECHNICAL.md` decision 25, §5i, criterion 17 and open question 27; `UX.md`'s Pantry; `JOURNEYS.md` §4.1 and §4.2; CLAUDE.md's "Date-only vs. instant", "A scheduled sender never flushes a backlog", "Design for 5 and for 50", "A door needs a moment" and "Insight budget".
 
 ### Description
 A person can say what they have and when it expires, and Pinch tells them what to use first and what to toss, the way the fridge does for what they cooked. Each bag, carton or jar is a package with an amount, a place and a date; two of the same thing with different dates are two packages under one ingredient, and totals add only amounts that measure alike. The pantry is part of the rest of the app: recipes mark what is in it, the shopping add sheet leaves out what is covered, a ticked shopping line can become a package, cooking can take out what it used, and the morning note can name ingredients about to expire.
@@ -1208,7 +1243,7 @@ A person can say what they have and when it expires, and Pinch tells them what t
 
 ### CRUD & Entry-Point Requirements
 - [x] **Create / Read / Update / Delete:** add (one or several, with "Add another"), see each ingredient's packages and totals, use some or all, move, change the date, edit, toss, delete (with a confirm that says the history goes too), and act on several at once, each with an Undo that restores only what is still as the act left it.
-- [x] **Entry points:** Kitchen's Pantry tile (once a package exists), the ingredient drawer's "In your kitchen" and "Add a package", the Shopping tab's "Add to pantry", the package sheet's "Use it up", the morning note's link, and `?open=pantry`. Each is reachable from a screen a person can open; the first package can only start from the shopping list (the open decision in `TECHNICAL.md` question 26 (i)).
+- [x] **Entry points:** Kitchen's Pantry tile (once a package exists), the ingredient drawer's "In your kitchen" and "Add a package", the Shopping tab's "Add to pantry", the package sheet's "Use it up", the morning note's link, and `?open=pantry`. Each is reachable from a screen a person can open; the first package starts from the shopping list's Got it step or, for an ingredient a recipe or saved meal uses, from its drawer's dashed "Add a package" chip (6 taps from a fresh kitchen with one recipe, against 11 through the list).
 
 ### Success Criteria
 - [x] Dates: past its date, due soon (the person's window), later and no date read right, offer Toss, Use it up and neither, and a date-only value shows the same day west of UTC (driven in `America/Los_Angeles`).
@@ -1218,10 +1253,49 @@ A person can say what they have and when it expires, and Pinch tells them what t
 - [x] The morning note: ingredient-only, dish-only and mixed notes read right, a dish and an ingredient with one name are one thing, the pantry switch alone sends a pantry note, an already-sent day and a person with both off send nothing; the handler was run against the emulator with a stub sender.
 - [x] A first run volunteers nothing: no tile, no markers, no hint, no drawer block, no chip, no card; Jamie's empty kitchen and a kitchen with no packages are unchanged (`JOURNEYS.md` §4.2).
 - [x] Alex's and Taylor's seeds show every state (8 packages over 5 ingredients; 120 over 60 for the scale kitchen); the pantry at scale is checked at 390×844 with the dev build at 4× CPU.
+- [x] Second review's fixes: Take out on Finish is one local-first batch (it works with the network cut and a refusal is told when it syncs), a cup of milk from a litre carton is no shortfall, "Add a package" starts from the newest package of that ingredient, a recipe's edit writes only the collections it changed, the "Add to pantry" mark is the shopping line's own `pantryAddedAt` (so a second device does not offer it again), the past-its-date row says where the boxes are, and sign-out takes the push token off the account first.
 - [ ] A real push reaching a real phone, offline behaviour on a device and touch use: not checkable from the sandbox.
 - [ ] The production index `packages (status, expiresAt)` building and the digest finding packages with it (the emulator never enforces indexes).
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass; driven in a real browser at 390×844, 320×568, 375×667, 844×390 and 1280 in light and dark.
 - [x] `README.md`, `UX.md`, `TECHNICAL.md`, `JOURNEYS.md`, `SEEDING.md` and `functions/README.md` match what shipped.
+
+### Issue 47: Kitchen, fridge, pantry and first runs: the review's fixes, and Recipes' bulk collections and star
+
+**Prerequisites:** Issue 26, Issue 41, Issue 46
+**Target PR Size:** ~2,600 lines (the fridge's list and header, the Kitchen front, the Recipes selection mode and its sheet, two thunks, the star, the rules key, an `EmptyCard` and a `HeaderIconButton`, checks and docs)
+**Files:**
+- `ContainersSubview.tsx`, `utils/containers.ts` (`getLandingPlace`, `getSharedPlace`, `getPlacedTitle`, `getSelectionNote`, `BulkAction.isEitherPlace`), `src/components/SelectionBar.tsx`, `SectionHeader.tsx` (`lead`), `HeaderIconButton.tsx`
+- `KitchenScreen.tsx`, `PantrySubview.tsx`, `PantryFromShoppingSheet.tsx`, `PackageFields.tsx`, `SettingsSubview.tsx`, `PillGroup.tsx`, `FilterBar.tsx`, `EmptyCard.tsx`, `CalendarScreen.tsx`, `RecipesScreen.tsx`, `ShoppingScreen.tsx`
+- `RecipeRow.tsx` (star and tick), `AddToCollectionSheet.tsx`, `useAddToCollections.ts`, `useRecipeFavorite.ts`, `collectionActions.ts` (`addRecipesToCollections`, `undoAddToCollections`), `recipeActions.ts` (`setRecipeFavorite`), `utils/collections.ts`, `Recipe.isFavorite`, `firestore.rules`
+- `utils/packages.ts` (`STAPLE` line stock, kitchen amounts, in-date totals), `usePantryTake.ts`, `CONTAINER_FRIDGE_DAYS`, the seeds, `scripts/checks/pinchFridge.ts`, `pinchPantry.ts`, `pinchOrganize.ts`
+- Fifth design round: `src/components/BackLink.tsx`, `EntryTile.tsx`, `PillGroup.tsx`, `Pill.tsx`, `SectionHeader.tsx`, `forms/AddFieldChips.tsx`, `ImageChoiceGrid.tsx`, `plan/ItemSearch.tsx`, `utils/pickerSuggestions.ts`, `notes/NoteEntry.tsx`, `RecipeForm.tsx`, `NutritionReview.tsx`, `scripts/checks/pinchPickers.ts`
+- Sixth design pass: `settings/KeepingSection.tsx`, `SettingsSubview.tsx`, `RecipeDrawer.tsx`, `ContainerSheet.tsx`, `src/components/GroupRow.tsx`, `RecipeFront.tsx`, `plan/ItemSearch.tsx`, `RecipeSteps.tsx`, `PantrySubview.tsx`, `utils/containers.ts` (`getBoxLine`, `getDueText`), `utils/packages.ts` (`getPantryDueText`), `src/ui/ThemeToggle.tsx`
+- Seventh design pass: `RecipeDrawer.tsx` (`CollectionRows`), `src/components/DetailSheet.tsx`, `src/components/GroupRow.tsx`, `plan/ItemSearch.tsx`, `PackageFormSheet.tsx`, `ShoppingAddSheet.tsx`, `ProductsSubview.tsx`, `RecipeIngredients.tsx`, `PantrySubview.tsx`, `CollectionsSheet.tsx`, `src/ui/AuthAvatar.tsx`
+
+**Context:** The round 8 product and design reviews of the stack's head. Read CLAUDE.md's "Design & UX" (the insight budget, one door per row, "A control added to a header row is checked at 320px") and `JOURNEYS.md` §4.1 and §4.2.
+
+### Description
+Fridge & freezer's past-its-date row counts both places, so it says what Kitchen's tile says, and the screen opens on the place holding more boxes that want a look; its header loses the subtitle and the 56px tile (a 🕘 icon instead). Kitchen's front is two tiles and header icons (Stores & prices, Settings, a shrinking "+ New ingredient"), and the first runs of Recipes, Shopping, Calendar and Kitchen are one tinted card. Recipes gets Select with "Add to a collection" and a star. The pantry step-through asks how much was bought, recipe lines leave the staples out of "Not in your pantry", cooking's Take out says at once that offline can't, and the fridge starts at 3 days.
+
+### Possible Approach
+1. Pure helpers with check cases (the landing place, the shared place, the add and remove plans, the in-date totals, the staple line stock), mutation-tested.
+2. `isFavorite` read as false when missing, written only by the star, rules additive; the bulk add re-reads each recipe in a transaction per 200, merges under the cap and undoes only what it added.
+3. Header icons with 40px tap areas from a pseudo-element, and every first run a tinted card.
+
+### CRUD & Entry-Point Requirements
+- [x] **Create / Read / Update / Delete:** star and unstar a recipe; add many recipes to existing or new collections and undo it.
+- [x] **Entry points:** the Recipes header's Select icon (from two recipes) and the row's star; Kitchen's header storefront icon; Fridge & freezer's header 🕘 icon.
+
+### Success Criteria
+- [x] A recipe written before the star (no `isFavorite`) reads, edits, stars and joins a bulk add, checked in the browser and on the emulator; the rules matrix shows only the owner's star and a create with the key as new allows.
+- [x] Kitchen to cleared in three taps (the tile, "Toss them", the confirm) with the tile's count and the landing's row agreeing.
+- [x] The first ingredient row is visible at 320×568 on Kitchen; first-row shares printed at 390×844, 375×667, 390×560, 320×568 and 844×390 before and after.
+- [x] Third design round: Kitchen's door tiles cut their status to one line and the subtitle goes while a door exists (first ingredient 47 / 57 / 68 / 67 / 86% → 43 / 54 / 63 / 62 / 78%); View options is the shared 28px header icon on Calendar and, while Recipes has no pill row, in Recipes' header (Jamie with one recipe 22 / 28 / 33 / 32 / 48% → 17 / 22 / 26 / 25 / 37%); the toast Dismiss, thin pills, label chips, suggestion chips and 320px Month cells reach 40px (measured with `elementFromPoint`); Settings keeps its opening card at every height and draws the reminder kinds only once the device is on (390px shorter with the device off).
+- [x] Fourth design round: Recipes' Select mode on a landscape phone puts "Select all shown" beside Cancel and tucks the search row away while nothing is typed (full rows above the footer at 390×844 / 320×568 / 375×667 / 390×560 / 844×390: 3 / 2 / 3 / 2 / 0 → 3 / 2 / 3 / 2 / 1); Kitchen's front is shorter on short screens (first ingredient 43 / 62 / 54 / 63 / 78% → 43 / 56 / 54 / 57 / 67%) and Pantry's actions and switch share rows with the title and the search from `sm`; the fill-in nudge is a sentence over two chips ("Add prices", "Not now") with no underlined text on the Week summary and both recipe drawers; View options is the 28px header icon wherever no filter button sits beside a search field, so the Saved meals pill row stays 24px; Pantry's four pills fit one line at 320px.
+- [x] Fifth design round (the owner's note that some subviews read as bare and that the link-style button and its place were wrong): the four ingredient pickers (Pantry's add, Shopping's one thing, the recipe form's Ingredient, Stores & prices' price) open on up to three of the person's own ingredients under a caption, none on a first run or in an unresolved ingredient's drawer (Pantry's add 207 → 395px at 390×844, the Fridge add sheet being 408; two 40px rows at 844×390); one hairline `BackLink` replaces six local copies and eight inline text Backs, a note's Edit is a chip beside Apply to the recipe, and a remove ✕ has a 44×40 hit area; Fridge & freezer's and Pantry's switches fit at 320 with the scale kitchen's counts (they wrap below 390 only when their pills do not fit); the recipe form draws no Nutrition section while every metric is off and the ingredient form's serving hint points at its chip; Kitchen's door tiles are shallower (63 / 63 / 57 / 66 / 42px, first ingredient 43 / 54 / 57 / 56 / 67% → 40 / 51 / 55 / 56 / 67% at 390×844 / 375×667 / 390×560 / 320×568 / 844×390); the photo suggestions' tiles clear the footer at 844×390; Stores & prices' headings no longer log a `React.Fragment` warning; Escape takes a swapped-in view back on a plain page too.
+- [x] Sixth design pass (the last fresh review: no screen reads bare, a few rough ones left): Settings' Fridge and Freezer are two summary rows whose editors hold the pills, and the "Changes save as you make them." card is gone (first switch 32 / 40 / 48 / 47 / 64% → 24 / 30 / 36 / 36 / 47% at 390×844 / 375×667 / 390×560 / 320×568 / 844×390; Photos, the last section, 887 → 573px at 390×844); a recipe's collections and a batch's "Each box" are roomy chip rows that all open (69px rows); the Kitchen and Pantry door statuses lead with the count past its date; with no Cost tile the "See what it costs" note ends the recipe drawer; the ingredient pickers' rows carry a chip and the family (53px rows; Pantry's add 395 → 407px at 390×844, the Fridge add sheet being 408); a step is removed with the same ✕ as an ingredient; the site header's theme switch has a 56×40 hit box in every app; Pantry drops its subtitle once it holds a package.
+- [x] Seventh design pass (verifying the sixth): a collection holding only the open recipe is a quiet state row with no chevron; a 1024px-wide window under 600px tall keeps the detail modal with a taller body (1280×400: 144 → up to 216px, two ingredient rows above the footer); typed results in the ingredient pickers are compact and capped at four rows on a landscape phone (typing "c" at 844×390: Pantry add 694 → 390px, Stores & prices 730 → 414, Shopping add 466 → 434); the recipe form's in-place picker scrolls its field up on a short screen (175 → 64px); an emptied Pantry is the shared first-run card and its subtitle shows only while loading or on an error; the signed-out header's Home and Sign in have 40px hit areas; the Collections sheet's rows say whole names on two lines (56 → 88px); a held sheet is the same height in every view to the pixel (a 12px gap at 320×568 closed; the collections view's blank space is accepted); `GroupRow` no longer hands Dreamer UI's `Button` a Fragment, which the saved-meal More and Share views logged.
+- [x] `npx tsc -b --force`, `npx eslint`, `check:pinch-math`, `check:pinch-ingest` and `check:indexes` pass.
 
 ## Beyond
 
@@ -1254,7 +1328,7 @@ Say "next", "back", "repeat", "start the timer" or "how much garlic" with floury
 - [x] Only the listed commands count: everyday words ("go on", "again", "cook the chicken") and a one-word command among the recognizer's lower-ranked guesses never act; "how many cups of rice" looks past the unit, and a question with nothing found names the words searched.
 - [x] Listening pauses while it reads aloud and starts again after; a run of failed starts stops with a line; the timer's beep and the browser's voice are unlocked in the tap that turns it on; driven with a fake recognizer and speech engine (142 checks, including the timer view: "start the timer" makes the timer the screen, "next" is the footer's Next, or "Back to step 2" from a pill, and over a later step's Time's up it says to dismiss first, pause and resume act on the timer in focus, stop dismisses the Time's up in front (the one that rang first), else pauses then resets, time left tells the timer in front and the next to end, "next" and "dismiss" within 2 s of a Time's up are held back, amounts follow the dish in front), the grammar and the listening machine (restarts, back-off, guards, the idle stop) by `npm run check:pinch-voice`.
 - [x] With voice listening, the step's Start, Back, Next, Ingredients, the timer view's Pause, Resume, Reset, Dismiss, Next and "Back to step 2" (and the Meanwhile line on a plate), and the background pills are each the element at their own centre at 320×568, 390×560, 375×667, 390×844, 844×390 and 1280×900, for a single recipe and a plate (84 rows), at scroll 0 or, where the screen already hides it with voice off (a plate's step-2 Start behind the pill row at 320×568, 390×560 and 844×390, the Meanwhile line at 320×568 and 390×560), after scrolling it clear; every state of the voice line (hint, heard, answer, refusal, reading, a stop, the idle pause) keeps the footer at the listening height (113px on a phone, 69px held sideways), and the explainer and "What to say" lead with what matters (two sentences; five commands) and fold the rest under one line each, fitting every size without scrolling while folded and scrolling in the modal's own overlay, buttons pinned, when opened.
-- [x] Listening is short and deliberate by default: a tap opens a ten-second command window (restarted by each command, ended by a tap) and nothing stays open; **Say “Hey Pinch”** (remembered per person) keeps the mic on and waiting, says so in the first-use sheet and in the voice sheet, wakes only on the phrase at the start of what was heard (never "add a pinch of salt", "a pinch" or "hey, pinch of salt"), does a command said in the same breath, and turns itself off after ten quiet minutes; **Keep listening 15 min** (never remembered) counts down on the chip and the mic to a fixed deadline that commands do not extend; each limit says so for 8 s when it ends; every event from every state of the listening machine, 200 random walks, the matcher's near-misses and recipe sentences are in `npm run check:pinch-voice`, and 78 checks were driven in the browser with a fake recognizer and Playwright's clock (wake, command, stop; a window that times out and one that is extended; a session that ends by itself and restarts quietly; the lock counting down; a refused microphone; no recognizer; leaving while waiting and while locked; a Time's up with voice waiting; Read steps aloud with the phrase; a hidden tab; a plate).
+- [x] Listening is short and deliberate by default: a tap opens a ten-second command window (restarted by each command, ended by a tap) and nothing stays open; **Say “Hey Pinch”** (remembered per person) keeps the mic on and waiting, says so in the first-use sheet and in the voice sheet, wakes only on the phrase at the start of what was heard (never "add a pinch of salt", "a pinch" or "hey, pinch of salt"), does a command said in the same breath, and turns itself off after ten quiet minutes (not counted while a timer runs or for two minutes after one rings, an hour at most); **Keep listening 15 min** (never remembered) counts down on the chip and the mic to a fixed deadline that commands do not extend; each limit says so for 8 s when it ends; every event from every state of the listening machine, 200 random walks, the matcher's near-misses and recipe sentences are in `npm run check:pinch-voice`, and 78 checks were driven in the browser with a fake recognizer and Playwright's clock (wake, command, stop; a window that times out and one that is extended; a session that ends by itself and restarts quietly; the lock counting down; a refused microphone; no recognizer; leaving while waiting and while locked; a Time's up with voice waiting; Read steps aloud with the phrase; a hidden tab; a plate).
 - [ ] Checked on real devices with a real microphone (Chrome on Android and desktop, Safari on iOS and macOS) and in a noisy kitchen, including how a real recognizer writes "Hey Pinch", false and missed wakes, and ten minutes of continuous recognition on a phone's battery.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.

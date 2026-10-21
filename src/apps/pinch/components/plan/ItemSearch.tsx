@@ -1,30 +1,154 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
 import SearchInput from '@/components/SearchInput';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
+import { MAX_NAME_LENGTH, PANTRY_SECTION_EMOJIS } from '@apps/pinch/constants';
 import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import {
+  selectIngredientFamiliesById,
   selectIngredients,
+  selectIngredientsById,
   selectMeals,
   selectRecipes,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
+import type { ResolvedIngredient } from '@apps/pinch/types';
 import {
   searchByName,
   searchIngredients,
 } from '@apps/pinch/utils/catalogSearch';
+import { getStockParts } from '@apps/pinch/utils/containers';
+import { MAX_PICK_SUGGESTIONS } from '@apps/pinch/utils/pickerSuggestions';
+import { getShopSection } from '@apps/pinch/utils/shopping';
 
 const MAX_RESULTS = 8;
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
+
+const LANDSCAPE_MAX_HEIGHT = 499;
+
+// A landscape phone shows two shorter rows, and the last one left drops its bottom border because the frame draws one.
+const getSuggestionRowClass = (index: number) =>
+  join(
+    index === 1 && '[@media(max-height:499px)]:border-b-0',
+    index === 2 && '[@media(max-height:499px)]:hidden',
+  );
+
+export interface ItemSuggestions {
+  /** What the rows are, in a few words. */
+  caption: string;
+  /** Ingredient ids to offer while the field is empty, already ordered and capped by the caller. */
+  ids: readonly string[];
+}
+
+interface PickChipProps {
+  children: ReactNode;
+  isCompact?: boolean;
+}
+
+function PickChip({ children, isCompact = false }: PickChipProps) {
+  return (
+    <span
+      className={join(
+        'bg-accent text-accent-foreground flex shrink-0 items-center justify-center rounded-full',
+        isCompact ? 'size-8 text-base' : 'size-10 text-lg',
+      )}
+      aria-hidden='true'
+    >
+      {children}
+    </span>
+  );
+}
+
+interface PickRowShellProps {
+  chip: ReactNode;
+  trailing?: ReactNode;
+  isCompact?: boolean;
+  isDisabled: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}
+
+function PickRowShell({
+  chip,
+  trailing,
+  isCompact = false,
+  isDisabled,
+  onClick,
+  children,
+}: PickRowShellProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      disabled={isDisabled}
+      onClick={onClick}
+      className={join(
+        'h-auto w-full justify-start gap-3 px-3! text-left focus-visible:outline-2 focus-visible:-outline-offset-2',
+        isCompact ? 'min-h-10 items-center py-0!' : 'items-start py-1.5!',
+      )}
+    >
+      {chip}
+      <span
+        className={join(
+          'flex min-w-0 flex-1 flex-col justify-center',
+          isCompact ? 'min-h-8' : 'min-h-10',
+        )}
+      >
+        {children}
+      </span>
+      {trailing && (
+        <span className='flex h-10 shrink-0 items-center'>{trailing}</span>
+      )}
+    </Button>
+  );
+}
+
+interface IngredientPickRowProps {
+  name: string;
+  emoji: string;
+  detail: string | null;
+  trailing?: ReactNode;
+  isCompact?: boolean;
+  isDisabled: boolean;
+  onClick: () => void;
+}
+
+function IngredientPickRow({
+  name,
+  emoji,
+  detail,
+  trailing,
+  isCompact = false,
+  isDisabled,
+  onClick,
+}: IngredientPickRowProps) {
+  return (
+    <PickRowShell
+      chip={<PickChip isCompact={isCompact}>{emoji}</PickChip>}
+      trailing={trailing}
+      isCompact={isCompact}
+      isDisabled={isDisabled}
+      onClick={onClick}
+    >
+      <span className='truncate font-medium'>{name}</span>
+      {!isCompact && detail && (
+        <span className='text-muted-foreground truncate text-xs font-normal'>
+          {detail}
+        </span>
+      )}
+    </PickRowShell>
+  );
+}
 
 interface ItemSearchProps {
   uid: string;
@@ -38,8 +162,11 @@ interface ItemSearchProps {
   onTypingChange?: (isTyping: boolean) => void;
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
+  /** Rows of the person's own ingredients drawn under the field while it is empty; nothing is drawn when there are none. */
+  suggestions?: ItemSuggestions;
   autoFocus?: boolean;
-  resultsClassName?: string;
+  /** Typed results scroll inside the room a sheet leaves under the field, so the field and the footer stay on screen. */
+  isCapped?: boolean;
   /** The field still takes typing, but no result can be picked. */
   isDisabled?: boolean;
 }
@@ -52,8 +179,9 @@ function ItemSearch({
   onPickMeal,
   onTypingChange,
   excludeIds = [],
+  suggestions,
   autoFocus = false,
-  resultsClassName,
+  isCapped = false,
   isDisabled = false,
 }: ItemSearchProps) {
   const dispatch = useAppDispatch();
@@ -62,6 +190,9 @@ function ItemSearch({
   const meals = useAppSelector(selectMeals);
   const isPhone = useMediaQuery().isBelow('sm');
   const stockByRecipe = useAppSelector(selectStockByRecipe);
+  const ingredientsById = useAppSelector(selectIngredientsById);
+  const familiesById = useAppSelector(selectIngredientFamiliesById);
+  const isLandscape = useIsShortScreen(LANDSCAPE_MAX_HEIGHT);
   const [query, setTypedQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +244,14 @@ function ItemSearch({
         : [],
     [onPickMeal, meals, trimmed],
   );
+  const suggested = (suggestions?.ids ?? [])
+    .flatMap((id) => {
+      const ingredient = ingredientsById.get(id);
+      return ingredient && !ingredient.isArchived && !excludeIds.includes(id)
+        ? [ingredient]
+        : [];
+    })
+    .slice(0, MAX_PICK_SUGGESTIONS);
   const hasExactName = ingredients.some(
     (ingredient) =>
       ingredient.name.trim().toLowerCase() === trimmed.toLowerCase(),
@@ -131,6 +270,10 @@ function ItemSearch({
       : `Keep the name to ${MAX_NAME_LENGTH} characters or fewer.`;
   };
   const noMatchLine = getNoMatchLine();
+  const getRowLook = (ingredient: ResolvedIngredient) => ({
+    emoji: PANTRY_SECTION_EMOJIS[getShopSection(ingredient)],
+    detail: familiesById.get(ingredient.familyId ?? '')?.name ?? null,
+  });
 
   const createFromName = async () => {
     setError(null);
@@ -186,6 +329,23 @@ function ItemSearch({
           placeholder={getPlaceholder()}
         />
       </div>
+      {trimmed === '' && suggestions && suggested.length > 0 && (
+        <div className='pt-1'>
+          <ActionGroup isRoomy caption={suggestions.caption}>
+            {suggested.map((ingredient, index) => (
+              <div key={ingredient.id} className={getSuggestionRowClass(index)}>
+                <IngredientPickRow
+                  name={ingredient.name}
+                  {...getRowLook(ingredient)}
+                  isCompact={isLandscape}
+                  isDisabled={isDisabled}
+                  onClick={() => onPick(ingredient.id)}
+                />
+              </div>
+            ))}
+          </ActionGroup>
+        </div>
+      )}
       {trimmed !== '' && (
         <div className='border-border overflow-hidden rounded-2xl border'>
           {noMatchLine && (
@@ -193,103 +353,102 @@ function ItemSearch({
               {noMatchLine}
             </p>
           )}
-          <ul className={join('divide-border divide-y', resultsClassName)}>
+          <ul
+            className={join(
+              'divide-border divide-y',
+              isCapped &&
+                'max-h-[max(12rem,calc(92dvh-22rem))] overflow-y-auto [@media(max-height:499px)]:max-h-32',
+            )}
+          >
             {mealMatches.map((meal) => (
               <li key={meal.id}>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  disabled={isDisabled}
+                <PickRowShell
+                  chip={<PickChip isCompact={isLandscape}>🍽️</PickChip>}
+                  trailing={
+                    <span className='text-muted-foreground text-xs font-normal whitespace-nowrap'>
+                      Saved meal
+                    </span>
+                  }
+                  isCompact={isLandscape}
+                  isDisabled={isDisabled}
                   onClick={() => {
                     setQuery('');
                     onPickMeal?.(meal.id);
                   }}
-                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
                 >
-                  <span
-                    className='flex w-7 shrink-0 justify-center text-xl'
-                    aria-hidden='true'
-                  >
-                    🍽️
-                  </span>
-                  <span className='min-w-0 flex-1 truncate font-medium'>
-                    {meal.name}
-                  </span>
-                  <span className='text-muted-foreground shrink-0 text-xs font-normal whitespace-nowrap'>
-                    Saved meal
-                  </span>
-                </Button>
+                  <span className='truncate font-medium'>{meal.name}</span>
+                </PickRowShell>
               </li>
             ))}
-            {recipeMatches.map((recipe) => (
-              <li key={recipe.id}>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  disabled={isDisabled}
-                  onClick={() => {
-                    setQuery('');
-                    onPickRecipe?.(recipe.id);
-                  }}
-                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
-                >
-                  <span
-                    className='flex w-7 shrink-0 justify-center text-xl'
-                    aria-hidden='true'
+            {recipeMatches.map((recipe) => {
+              const stock = stockByRecipe.get(recipe.id);
+              const isCompactRow =
+                isLandscape && (!stock || getStockParts(stock).length === 0);
+              return (
+                <li key={recipe.id}>
+                  <PickRowShell
+                    chip={<PickChip isCompact={isCompactRow}>🍲</PickChip>}
+                    trailing={
+                      <span className='text-muted-foreground text-xs font-normal'>
+                        Recipe
+                      </span>
+                    }
+                    isCompact={isCompactRow}
+                    isDisabled={isDisabled}
+                    onClick={() => {
+                      setQuery('');
+                      onPickRecipe?.(recipe.id);
+                    }}
                   >
-                    🍲
-                  </span>
-                  <span className='min-w-0 flex-1'>
-                    <span className='block truncate font-medium'>
-                      {recipe.title}
-                    </span>
-                    <StockLine summary={stockByRecipe.get(recipe.id)} />
-                  </span>
-                  <span className='text-muted-foreground text-xs font-normal'>
-                    Recipe
-                  </span>
-                </Button>
-              </li>
-            ))}
+                    <span className='truncate font-medium'>{recipe.title}</span>
+                    <StockLine summary={stock} />
+                  </PickRowShell>
+                </li>
+              );
+            })}
             {matches.map((ingredient) => (
               <li key={ingredient.id}>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  disabled={isDisabled}
+                <IngredientPickRow
+                  name={ingredient.name}
+                  {...getRowLook(ingredient)}
+                  isCompact={isLandscape}
+                  isDisabled={isDisabled}
                   onClick={() => {
                     setQuery('');
                     onPick(ingredient.id);
                   }}
-                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
-                >
-                  <span className='min-w-0 flex-1 truncate font-medium'>
-                    {ingredient.name}
-                  </span>
-                  {onPickRecipe && (
-                    <span className='text-muted-foreground text-xs font-normal'>
-                      Ingredient
-                    </span>
-                  )}
-                </Button>
+                  trailing={
+                    onPickRecipe && (
+                      <span className='text-muted-foreground text-xs font-normal'>
+                        Ingredient
+                      </span>
+                    )
+                  }
+                />
               </li>
             ))}
             {canCreate && (
               <li>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  disabled={isCreating || isDisabled}
+                <PickRowShell
+                  chip={
+                    <span
+                      className={join(
+                        'bg-secondary text-secondary-foreground flex shrink-0 items-center justify-center rounded-full',
+                        isLandscape ? 'size-8' : 'size-10',
+                      )}
+                      aria-hidden='true'
+                    >
+                      <Plus className={isLandscape ? 'size-4' : 'size-5'} />
+                    </span>
+                  }
+                  isCompact={isLandscape}
+                  isDisabled={isCreating || isDisabled}
                   onClick={() => void createFromName()}
-                  className='h-auto min-h-12 w-full justify-start gap-3 px-3! py-1.5 text-left'
                 >
-                  <span className='bg-secondary text-secondary-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-full'>
-                    <Plus className='h-4 w-4' aria-hidden='true' />
-                  </span>
-                  <span className='min-w-0 flex-1 truncate font-medium'>
+                  <span className='truncate font-medium'>
                     New ingredient “{trimmed}”
                   </span>
-                </Button>
+                </PickRowShell>
               </li>
             )}
           </ul>

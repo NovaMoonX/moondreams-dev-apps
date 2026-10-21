@@ -42,6 +42,8 @@ interface PhotoPickerProps {
   placeholder?: ReactNode;
   /** Cover variant only: what can be chosen, as a line under the buttons. */
   note?: string;
+  /** Cover variant only: a shorter preview, hidden on a short screen, for an editor that has more under it (suggestions to pick from). */
+  isCompact?: boolean;
   onSelect: (file: File | null) => void;
   /** Without it there is no Remove button, for a photo that is required. */
   onRemove?: () => void;
@@ -60,6 +62,7 @@ function PhotoPicker({
   changeLabel = 'Change photo',
   placeholder = null,
   note,
+  isCompact = false,
   onSelect,
   onRemove,
 }: PhotoPickerProps) {
@@ -104,7 +107,12 @@ function PhotoPicker({
       <div className='space-y-3'>
         {fileInput}
         <div
-          className='bg-accent text-accent-foreground grid aspect-video max-h-44 w-full place-items-center overflow-hidden rounded-2xl text-6xl [@media(max-height:600px)]:max-h-20'
+          className={join(
+            'bg-accent text-accent-foreground grid aspect-video w-full place-items-center overflow-hidden rounded-2xl text-6xl',
+            isCompact
+              ? 'max-h-36 [@media(max-height:600px)]:hidden [@media(max-height:700px)]:max-h-24'
+              : 'max-h-44 [@media(max-height:600px)]:max-h-20',
+          )}
           aria-hidden='true'
         >
           {photoUrl ? (

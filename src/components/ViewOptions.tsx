@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Eye } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
+import HeaderIconButton from '@/components/HeaderIconButton';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -58,7 +59,7 @@ interface ViewOptionsProps {
   customizedCount?: number;
   onReset?: () => void;
   className?: string;
-  /** A plain 40px icon for a header row, instead of the round button that sits beside a search field. */
+  /** The shared 28px header icon (`HeaderIconButton`, a 40px tap area) for a header's action cluster, instead of the round button that sits beside a search field. */
   isQuiet?: boolean;
   /** The options: `ViewOptionSwitch` rows and the like. */
   children: ReactNode;
@@ -80,17 +81,23 @@ function ViewOptions({
     setIsOpen(false),
   );
 
-  const trigger = (
+  const trigger = isQuiet ? (
+    <HeaderIconButton
+      icon={<Eye className='h-4 w-4' aria-hidden='true' />}
+      label={label}
+      isHighlighted={isCustomized}
+      isExpanded={isOpen}
+      onClick={() => setIsOpen((open) => !open)}
+    />
+  ) : (
     <Button
       type='button'
-      variant={isQuiet ? 'tertiary' : 'secondary'}
-      size={isQuiet ? 'icon' : undefined}
+      variant='secondary'
       rounded='full'
       aria-label={label}
       aria-expanded={isOpen}
       className={join(
-        'shrink-0 p-0',
-        isQuiet ? 'size-10' : 'h-12 w-12',
+        'h-12 w-12 shrink-0 p-0',
         isCustomized && 'bg-accent!',
         className,
       )}

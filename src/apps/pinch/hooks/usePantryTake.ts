@@ -3,7 +3,10 @@ import { useCallback, useState } from 'react';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { usePackageActions } from '@apps/pinch/hooks/usePackageActions';
-import type { ChangedPackage } from '@apps/pinch/store/actions/packageActions';
+import {
+  TAKE_REFUSED,
+  type ChangedPackage,
+} from '@apps/pinch/store/actions/packageActions';
 import {
   selectIngredientsById,
   selectPackages,
@@ -58,25 +61,24 @@ export function usePantryTake(uid: string, lines: TakeLine[]) {
     setError(null);
     setBusy('TAKE');
     try {
-      const result = await takeOut(chosen);
+      const result = await takeOut(chosen, () => setTaken(null));
       if (result === undefined) return;
 
-      const takenIds = new Set(result.changed.map((entry) => entry.id));
-      const takenGroups = getTakeGroups(
-        {
-          takes: chosen.filter((entry) => takenIds.has(entry.packageId)),
-          short: plan.short,
-        },
-        getName,
-      );
       if (result.changed.length === 0) {
-        setError(
-          'They were used or finished somewhere else, so nothing was taken.',
-        );
+        setError(TAKE_REFUSED);
         return;
       }
-      setTaken({ groups: takenGroups, changed: result.changed });
-      if (result.error !== null) setError(result.error);
+      const takenIds = new Set(result.changed.map((entry) => entry.id));
+      setTaken({
+        groups: getTakeGroups(
+          {
+            takes: chosen.filter((entry) => takenIds.has(entry.packageId)),
+            short: plan.short,
+          },
+          getName,
+        ),
+        changed: result.changed,
+      });
     } catch (takeError) {
       setError(
         `${getErrorMessage(takeError, "Couldn't take it out.")} You can do it from Pantry.`,

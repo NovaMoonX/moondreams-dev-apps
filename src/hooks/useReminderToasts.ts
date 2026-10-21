@@ -17,7 +17,8 @@ const FORCE_TOAST_ENABLED =
 /** Bridges the global `reminders` slice into in-app toasts: a reminder this page
  * has seen as not yet sent that flips to `sent` pops a toast. One that first
  * appears already `sent` (the first snapshot after a reload, another device's
- * history) never does, so reloading doesn't replay old ones. */
+ * history) never does, so reloading doesn't replay old ones. One marked
+ * `inAppToast: false` never does either. */
 export function useReminderToasts() {
   const reminders = useAppSelector((state) => state.reminders.items);
   const { addToast } = useToast();
@@ -30,7 +31,10 @@ export function useReminderToasts() {
 
   const showReminderToast = useCallback(
     (reminder: Reminder, duration = REMINDER_TOAST_DURATION_MS) => {
-      if (shownIdsRef.current.has(reminder.id)) {
+      if (
+        reminder.inAppToast === false ||
+        shownIdsRef.current.has(reminder.id)
+      ) {
         return;
       }
       shownIdsRef.current.add(reminder.id);
@@ -85,6 +89,7 @@ export function useReminderToasts() {
         relatedEntityPath: null,
         link: '/waypoint',
         recurrence: 'none',
+        inAppToast: null,
         createdBy: '',
         createdAt: Date.now(),
       },

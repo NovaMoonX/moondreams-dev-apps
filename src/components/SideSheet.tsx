@@ -11,6 +11,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
+import { useSheetHistory } from '@/hooks/useBackHistory';
 
 const CLOSE_MS = 200;
 const SWIPE_CLOSE_PX = 72;
@@ -41,6 +42,7 @@ function SideSheetPanel({ onClose, title, children, footer }: Omit<SideSheetProp
   const [opener] = useState(() => document.activeElement as HTMLElement | null);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const { dialogId } = useSheetHistory(true, onClose);
 
   const close = () => {
     if (isClosing) {
@@ -164,6 +166,7 @@ function SideSheetPanel({ onClose, title, children, footer }: Omit<SideSheetProp
       />
       <div
         ref={panelRef}
+        id={dialogId}
         role='dialog'
         aria-modal='true'
         aria-label={title}

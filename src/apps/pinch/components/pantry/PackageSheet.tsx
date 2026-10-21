@@ -4,18 +4,18 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
+  Ban,
   ChefHat,
-  ChevronLeft,
   ChevronRight,
   History,
   PencilLine,
   Plus,
   Scale,
-  Trash2,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
 import FormSheet from '@/components/FormSheet';
@@ -24,7 +24,6 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
@@ -60,6 +59,7 @@ import {
   isValidPackageAmount,
   lowerFirst,
   parseAmountText,
+  round2,
   type DateAnswer,
 } from '@apps/pinch/utils/packages';
 import { formatSize } from '@apps/pinch/utils/productFormat';
@@ -70,30 +70,8 @@ type SheetView =
   | { kind: 'package' }
   | { kind: 'use' }
   | { kind: 'move' }
-  | { kind: 'date' }
   | { kind: 'history' }
   | { kind: 'recipes' };
-
-interface BackLinkProps {
-  onClick: () => void;
-  label?: string;
-}
-
-function BackLink({ onClick, label = 'Back' }: BackLinkProps) {
-  useBackStep(true, onClick);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 justify-self-start px-0!'
-      onClick={onClick}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      {label}
-    </Button>
-  );
-}
 
 function ErrorLine({ error }: { error: string | null }) {
   if (error === null) return null;
@@ -155,7 +133,7 @@ function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>How much did you use?</p>
         <p className='text-muted-foreground text-sm'>
@@ -186,7 +164,7 @@ function UseView({ uid, pkg, name, onBack, onDone }: ViewProps) {
           >
             Half
           </RevealChip>
-          <RevealChip onClick={() => setText(String(pkg.amount))}>
+          <RevealChip onClick={() => setText(String(round2(pkg.amount)))}>
             All of it
           </RevealChip>
         </div>
@@ -247,7 +225,7 @@ function MoveView({ uid, pkg, name, onBack, onDone }: ViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>Move it</p>
         <p className='text-muted-foreground text-sm'>
@@ -318,63 +296,6 @@ function MoveView({ uid, pkg, name, onBack, onDone }: ViewProps) {
   );
 }
 
-function DateView({ uid, pkg, name, onBack }: ViewProps) {
-  const { edit } = usePackageActions(uid);
-  const [date, setDate] = useState<DateAnswer>(() =>
-    getDateAnswer(pkg.expiresAt),
-  );
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const answer = getAnswerDate(date);
-  const canSave =
-    answer.isAnswered && answer.expiresAt !== pkg.expiresAt && !isSaving;
-
-  const handleSave = async () => {
-    if (!canSave) return;
-
-    setError(null);
-    setIsSaving(true);
-    try {
-      await edit(pkg, { expiresAt: answer.expiresAt, ingredientName: name });
-      onBack();
-    } catch (saveError) {
-      setError(getErrorMessage(saveError, 'Unable to save this.'));
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
-      <p className='font-medium'>Change the date</p>
-      <PackageDateField value={date} onChange={setDate} />
-      <ErrorLine error={error} />
-      <ModalFooterActions
-        cancelAction={
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={onBack}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-        }
-        rightActions={
-          <Button
-            type='button'
-            loading={isSaving}
-            disabled={!canSave}
-            onClick={() => void handleSave()}
-          >
-            Save
-          </Button>
-        }
-      />
-    </div>
-  );
-}
-
 interface RecipesViewProps {
   ingredientId: string;
   name: string;
@@ -404,7 +325,7 @@ function RecipesView({
 
   return (
     <div className='grid gap-3'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>Cook with {name}</p>
         <p className='text-muted-foreground text-sm'>
@@ -461,10 +382,9 @@ function RecipesView({
 interface FactsProps {
   pkg: Package;
   soonDays: number;
-  onChangeDate: () => void;
 }
 
-function Facts({ pkg, soonDays, onChangeDate }: FactsProps) {
+function Facts({ pkg, soonDays }: FactsProps) {
   const state = getPackageState(pkg.expiresAt, undefined, soonDays);
   const label = getPackageLabel(pkg.expiresAt) ?? 'No date';
   const openedDays = getOpenedDays(pkg);
@@ -487,23 +407,13 @@ function Facts({ pkg, soonDays, onChangeDate }: FactsProps) {
         </span>
         {opened !== null && <span className='whitespace-nowrap'>{opened}</span>}
       </p>
-      <Button
-        type='button'
-        variant='tertiary'
-        aria-label={`${label}. Change the date`}
-        className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
-        onClick={onChangeDate}
-      >
+      <p className='text-sm'>
         {state === 'PAST' || state === 'SOON' ? (
           <EatByBadge state={state} label={label} />
         ) : (
           <span className='whitespace-nowrap'>{label}</span>
         )}
-        <PencilLine
-          className='text-muted-foreground h-3.5 w-3.5 shrink-0'
-          aria-hidden='true'
-        />
-      </Button>
+      </p>
     </div>
   );
 }
@@ -642,11 +552,10 @@ function PackageSheet({
     };
     if (view.kind === 'use') return <UseView {...viewProps} />;
     if (view.kind === 'move') return <MoveView {...viewProps} />;
-    if (view.kind === 'date') return <DateView {...viewProps} />;
     if (view.kind === 'history') {
       return (
         <div className='grid gap-4'>
-          <BackLink onClick={backToPackage} />
+          <BackLink onBack={backToPackage} />
           <FormSection title='History'>
             <ul className='divide-border divide-y'>
               {[...pkg.history].reverse().map((event, index) => (
@@ -711,7 +620,7 @@ function PackageSheet({
       if (state === 'PAST') {
         return {
           label: 'Toss it',
-          icon: <Trash2 className='h-4 w-4' aria-hidden='true' />,
+          icon: <Ban className='h-4 w-4' aria-hidden='true' />,
           onClick: () => void handleToss(),
           isBusy: busy === 'toss',
         };
@@ -738,13 +647,9 @@ function PackageSheet({
     return (
       <div className='grid gap-4'>
         {packages.length > 1 && (
-          <BackLink onClick={backToList} label='All the packages' />
+          <BackLink onBack={backToList} label='All the packages' />
         )}
-        <Facts
-          pkg={pkg}
-          soonDays={soonDays}
-          onChangeDate={() => setView({ kind: 'date' })}
-        />
+        <Facts pkg={pkg} soonDays={soonDays} />
         <ActionGroup>
           {!isPrimary('Used some or all') && (
             <ActionRow
@@ -770,7 +675,7 @@ function PackageSheet({
             <ActionRow
               isGrouped
               isDestructive
-              icon={<Trash2 className='h-4 w-4' />}
+              icon={<Ban className='h-4 w-4' />}
               label='Toss it'
               subtitle='You can undo it right after'
               isDisabled={busy === 'toss'}

@@ -1,4 +1,10 @@
-import { COOK_LOCK_MS, COOK_WAKE_SPELLINGS } from '@apps/pinch/constants';
+import {
+  COOK_LOCK_MS,
+  COOK_WAKE_IDLE_MS,
+  COOK_WAKE_MAX_MS,
+  COOK_WAKE_SPELLINGS,
+  COOK_WAKE_TIMER_GRACE_MS,
+} from '@apps/pinch/constants';
 import {
   readCookCommand,
   toPlainText,
@@ -140,6 +146,79 @@ export const reduceVoice = (
     case 'ENGINE_STOPPED':
       return state.phase === 'OFF' ? state : turnOff(state, event.reason);
   }
+};
+
+/** A stretch of a wait for the phrase when the idle clock stands still: a timer running (`to` null while it does) or the grace after one rang. */
+export interface WakeBusySpan {
+  from: number;
+  to: number | null;
+}
+
+/** When a wait for the phrase ends: after `COOK_WAKE_IDLE_MS` of quiet counted from `enteredAt` but not through busy stretches, and never later than `COOK_WAKE_MAX_MS` after it began. */
+export const getWakeWaitEnd = (enteredAt: number, busy: WakeBusySpan[]) => {
+  const ordered = busy
+    .map((span) => ({
+      from: Math.max(span.from, enteredAt),
+      to: span.to ?? Infinity,
+    }))
+    .sort((a, b) => a.from - b.from);
+  const counted = ordered.reduce<{
+    cursor: number;
+    left: number;
+    end: number | null;
+  }>(
+    (acc, span) => {
+      if (acc.end !== null) return acc;
+      const quiet = Math.max(0, span.from - acc.cursor);
+      return quiet >= acc.left
+        ? { ...acc, end: acc.cursor + acc.left }
+        : {
+            cursor: Math.max(acc.cursor, span.to),
+            left: acc.left - quiet,
+            end: null,
+          };
+    },
+    { cursor: enteredAt, left: COOK_WAKE_IDLE_MS, end: null },
+  );
+  const end = counted.end ?? counted.cursor + counted.left;
+  const result = Math.min(end, enteredAt + COOK_WAKE_MAX_MS);
+  return result;
+};
+
+/** The busy stretches of a wait after a look at its timers: a stretch opens when the first one runs and closes when none does, and each ring adds its grace once. */
+export const recordWakeBusy = (
+  spans: WakeBusySpan[],
+  seen: {
+    enteredAt: number;
+    now: number;
+    runningTimers: number;
+    lastRingAt: number | null;
+  },
+) => {
+  const hasOpen = spans.some((span) => span.to === null);
+  const afterRunning =
+    seen.runningTimers > 0
+      ? hasOpen
+        ? spans
+        : [...spans, { from: seen.now, to: null }]
+      : spans.map((span) =>
+          span.to === null ? { ...span, to: seen.now } : span,
+        );
+  const isNewRing =
+    seen.lastRingAt !== null &&
+    seen.lastRingAt >= seen.enteredAt &&
+    !afterRunning.some((span) => span.from === seen.lastRingAt);
+  const result =
+    isNewRing && seen.lastRingAt !== null
+      ? [
+          ...afterRunning,
+          {
+            from: seen.lastRingAt,
+            to: seen.lastRingAt + COOK_WAKE_TIMER_GRACE_MS,
+          },
+        ]
+      : afterRunning;
+  return result;
 };
 
 /** START when the mic opens, STOP when it closes. */

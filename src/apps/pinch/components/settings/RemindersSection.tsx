@@ -98,7 +98,7 @@ interface RemindersSectionProps {
   uid: string;
 }
 
-/** Reminders on this device, then one switch per kind of reminder. The kinds only matter once this device can receive them, so they wait (dimmed, with their stored choice) until it is on. */
+/** Reminders on this device, then one switch per kind of reminder. The kinds only matter once this device can receive them, so they appear when it is on; until then one quiet line says why they aren't there. */
 function RemindersSection({ uid }: RemindersSectionProps) {
   const queryClient = useQueryClient();
   const { settings, save } = usePinchSettings(uid);
@@ -164,29 +164,28 @@ function RemindersSection({ uid }: RemindersSectionProps) {
           />
         }
       />
-      {REMINDER_KINDS.map((kind) => (
-        <SettingsRow
-          key={kind.key}
-          icon={kind.emoji}
-          title={kind.title}
-          description={kind.description}
-          isDimmed={!isOn}
-          control={
-            <AppToggle
-              aria-label={kind.title}
-              checked={settings.reminders[kind.key]}
-              disabled={!isOn}
-              onCheckedChange={(isChecked) =>
-                void handleKindChange(kind.key, isChecked)
-              }
-            />
-          }
-        >
-          {isOn && getOptionsHost(settings.reminders) === kind.key && (
-            <EatSoonOptions uid={uid} reminders={settings.reminders} />
-          )}
-        </SettingsRow>
-      ))}
+      {isOn &&
+        REMINDER_KINDS.map((kind) => (
+          <SettingsRow
+            key={kind.key}
+            icon={kind.emoji}
+            title={kind.title}
+            description={kind.description}
+            control={
+              <AppToggle
+                aria-label={kind.title}
+                checked={settings.reminders[kind.key]}
+                onCheckedChange={(isChecked) =>
+                  void handleKindChange(kind.key, isChecked)
+                }
+              />
+            }
+          >
+            {getOptionsHost(settings.reminders) === kind.key && (
+              <EatSoonOptions uid={uid} reminders={settings.reminders} />
+            )}
+          </SettingsRow>
+        ))}
     </SettingsGroup>
   );
 }

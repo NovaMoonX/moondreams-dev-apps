@@ -21,6 +21,8 @@ interface PackageFieldsProps {
   onChange: (value: PackageFieldValues) => void;
   /** What the amount is of, for screen readers ("Milk"). */
   name: string;
+  /** What the amount question says; "How much" unless the form knows more ("How much did you buy?"). */
+  amountLabel?: string;
   /** Leaves the date question out, for a form that asks it somewhere else. */
   isDateHidden?: boolean;
   className?: string;
@@ -31,13 +33,14 @@ function PackageFields({
   value,
   onChange,
   name,
+  amountLabel = 'How much',
   isDateHidden = false,
   className,
 }: PackageFieldsProps) {
   return (
     <div className={join('space-y-4', className)}>
       <div className='space-y-1'>
-        <Label className='text-muted-foreground text-xs'>How much</Label>
+        <Label className='text-muted-foreground text-xs'>{amountLabel}</Label>
         <div className='flex items-center gap-2'>
           <Input
             type='number'

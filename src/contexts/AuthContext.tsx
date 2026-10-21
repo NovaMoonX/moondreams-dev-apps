@@ -27,6 +27,7 @@ import { clearUserInfoStore } from '@/hooks/useUserInfo';
 import { ADMIN_EMAIL, APP_REGISTRY, clearAppResume } from '@/lib/app';
 import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
 import { ensureDocExists } from '@/lib/firebase';
+import { releaseDevicePush } from '@/lib/notifications/devicePush';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
 import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
@@ -34,6 +35,8 @@ import { setCurrentUser } from '@/store/slices/userSlice';
 import { auth, db, googleProvider, realtimeDb } from '@lib/firebase/config';
 import { getProviderPhotoURL } from '@/utils/accountUtils';
 import { queryClient } from '@lib/query/queryClient';
+
+const RELEASE_PUSH_WAIT_MS = 3000;
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const dispatch = useAppDispatch();
@@ -196,13 +199,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const logOut = useCallback(async () => {
-    if (auth.currentUser) {
-      const userStatusRef = ref(realtimeDb, `status/${auth.currentUser.uid}`);
-      await set(userStatusRef, {
-        state: 'offline',
-        currentLocation: null,
-        lastChanges: serverTimestamp(),
-      });
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      const userStatusRef = ref(realtimeDb, `status/${uid}`);
+      await Promise.race([
+        Promise.allSettled([
+          set(userStatusRef, {
+            state: 'offline',
+            currentLocation: null,
+            lastChanges: serverTimestamp(),
+          }),
+          releaseDevicePush(uid),
+        ]),
+        new Promise((resolve) => setTimeout(resolve, RELEASE_PUSH_WAIT_MS)),
+      ]);
     }
 
     currentLocationRef.current = 'home';

@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChartColumn, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChartColumn, ChevronRight } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import GroupRow from '@/components/GroupRow';
 import StatTile from '@/components/StatTile';
 import TickMark from '@/components/TickMark';
-import { useBackStep } from '@/hooks/useBackHistory';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useAppSelector } from '@/store';
 import PeriodLeftOutHelp from '@apps/pinch/components/calendar/PeriodLeftOutHelp';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
@@ -64,6 +65,8 @@ import { getDayOnList, type DayOnList } from '@apps/pinch/utils/shopping';
 
 const NO_MEALS: PlannedMeal[] = [];
 
+const SHORT_SCREEN_MAX_HEIGHT = 599;
+
 const getShoppingRow = ({ isListed, coveredCount, rowCount }: DayOnList) => {
   if (isListed) {
     return { label: 'On your list ✓', subtitle: "Add anything that's missing" };
@@ -95,26 +98,6 @@ const getMealDetail = (
   return names.length === 1 ? formatServings(meal.items[0].servings) : null;
 };
 
-interface BackLinkProps {
-  onBack: () => void;
-}
-
-function BackLink({ onBack }: BackLinkProps) {
-  useBackStep(true, onBack);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 px-0!'
-      onClick={onBack}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
-    </Button>
-  );
-}
-
 interface DayDrawerProps {
   uid: string;
   dayKey: string;
@@ -142,6 +125,7 @@ function DayDrawer({
   onAddToShopping,
 }: DayDrawerProps) {
   const { openSubview } = usePinchOverlay();
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const mealsByDay = useAppSelector(selectPlannedByDay);
   const meals = mealsByDay.get(dayKey) ?? NO_MEALS;
   const costContext = useAppSelector(selectCostContext);
@@ -170,6 +154,7 @@ function DayDrawer({
       plannedMealId,
       mealView.kind,
       mealView.kind === 'eat' ? mealView.place : '',
+      mealView.kind === 'recipe' ? mealView.recipeId : '',
     ].join(':');
   };
   const viewKey = getViewKey();
@@ -214,6 +199,46 @@ function DayDrawer({
     getDayOnList(meals, shoppingItems, recipesById, ingredientsById),
   );
 
+  const summary = (
+    <div className='space-y-3'>
+      {isStatsShown ? (
+        <StatsTiles stats={stats} todayKey={todayKey} day={{ isPast }} />
+      ) : (
+        <StatTile
+          label={total.label}
+          value={total.value}
+          detail={frozenNote ?? undefined}
+          help={
+            isPartial ? (
+              <PeriodLeftOutHelp stats={stats} todayKey={todayKey} />
+            ) : undefined
+          }
+        />
+      )}
+      {isStatsShown && frozenNote && (
+        <p className='text-muted-foreground text-xs'>{frozenNote}</p>
+      )}
+      {!isStatsShown && (
+        <NutritionTiles values={stats.dailyNutrition} caption='That day' />
+      )}
+      {statsOffer && (
+        <div ref={statsRowNode}>
+          <ActionGroup>
+            <GroupRow
+              icon={<ChartColumn className='h-4 w-4' />}
+              onClick={openStats}
+            >
+              <span className='block'>Stats for this day</span>
+              <span className='text-muted-foreground block text-xs'>
+                {statsOffer.subtitle}
+              </span>
+            </GroupRow>
+          </ActionGroup>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <DetailSheet
       isOpen
@@ -231,7 +256,7 @@ function DayDrawer({
               Plan on this day
             </Button>
           </div>
-        ) : (
+        ) : mealView.kind === 'recipe' ? undefined : (
           <div ref={setFooterEl} className='px-4 pb-4' />
         )
       }
@@ -288,50 +313,7 @@ function DayDrawer({
             </p>
           ) : (
             <>
-              <div className='space-y-3'>
-                {isStatsShown ? (
-                  <StatsTiles
-                    stats={stats}
-                    todayKey={todayKey}
-                    day={{ isPast }}
-                  />
-                ) : (
-                  <StatTile
-                    label={total.label}
-                    value={total.value}
-                    detail={frozenNote ?? undefined}
-                    help={
-                      isPartial ? (
-                        <PeriodLeftOutHelp stats={stats} todayKey={todayKey} />
-                      ) : undefined
-                    }
-                  />
-                )}
-                {isStatsShown && frozenNote && (
-                  <p className='text-muted-foreground text-xs'>{frozenNote}</p>
-                )}
-                {!isStatsShown && (
-                  <NutritionTiles
-                    values={stats.dailyNutrition}
-                    caption='That day'
-                  />
-                )}
-                {statsOffer && (
-                  <div ref={statsRowNode}>
-                    <ActionGroup>
-                      <GroupRow
-                        icon={<ChartColumn className='h-4 w-4' />}
-                        onClick={openStats}
-                      >
-                        <span className='block'>Stats for this day</span>
-                        <span className='text-muted-foreground block text-xs'>
-                          {statsOffer.subtitle}
-                        </span>
-                      </GroupRow>
-                    </ActionGroup>
-                  </div>
-                )}
-              </div>
+              {!isShort && summary}
               {MEAL_TYPES.map((type) => {
                 const ofType = meals.filter((meal) => meal.mealType === type);
                 return ofType.length === 0 ? null : (
@@ -421,6 +403,7 @@ function DayDrawer({
                   </section>
                 );
               })}
+              {isShort && summary}
               <RepriceDayRow uid={uid} dayKey={dayKey} />
               {getDateOfDayKey(dayKey) >= getLocalTodayDate() && (
                 <AddToShoppingRow

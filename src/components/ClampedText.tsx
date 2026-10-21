@@ -4,10 +4,16 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ShowMoreButton from '@/components/ShowMoreButton';
 
+const CLAMP_CLASSES = {
+  1: 'line-clamp-1',
+  2: 'line-clamp-2',
+  4: 'line-clamp-4',
+};
+
 interface ClampedTextProps {
   text: string;
   /** How many lines show before "Show more". */
-  maxLines?: 2 | 4;
+  maxLines?: 1 | 2 | 4;
 }
 
 function ClampedText({ text, maxLines = 4 }: ClampedTextProps) {
@@ -33,7 +39,7 @@ function ClampedText({ text, maxLines = 4 }: ClampedTextProps) {
         ref={measure}
         className={join(
           'text-sm wrap-break-word whitespace-pre-wrap',
-          !isOpen && (maxLines === 2 ? 'line-clamp-2' : 'line-clamp-4'),
+          !isOpen && CLAMP_CLASSES[maxLines],
         )}
       >
         {text}

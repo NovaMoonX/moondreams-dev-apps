@@ -202,7 +202,9 @@ const BIG_TWEAK = [
 const CONTAINERS_PER_RECIPE = [0, 1, 2, 0, 3, 1, 2, 0, 2, 3];
 const MEAL_CONTAINER_COUNT = 10;
 const FINISHED_CONTAINER_COUNT = 260;
-/** 120 packages over the first 60 ingredients: one ingredient holds eight, 53 hold two and six hold one. */
+/** A handful of recipes Taylor has starred. */
+const STARRED_RECIPE_INDEXES = [3, 40, 77, 120, 160];
+/** 120 packages over the first 60 ingredients: one ingredient holds eight, 53 hold two and six hold one; an ingredient's packages share a place except for every sixth one, so the places' counts are close to a third of the list each. */
 const PACKAGE_INGREDIENT_COUNT = 60;
 const PACKAGES_ON_BUSIEST_INGREDIENT = 8;
 const INGREDIENTS_WITH_ONE_PACKAGE = 6;
@@ -482,6 +484,7 @@ export async function seedPinchScale(
       prepMinutes: 5 + Math.floor(random() * 25),
       cookMinutes: index % 4 === 0 ? null : 10 + Math.floor(random() * 50),
       coverPath: null,
+      coverUrl: null,
       ingredients: Array.from({ length: lineCount }, (_, lineIndex) => ({
         id: `scale-recipe-${index}-line-${lineIndex}`,
         ingredientId: pick(ingredients).id,
@@ -495,6 +498,8 @@ export async function seedPinchScale(
       source: 'MANUAL',
       sourceId: getSourceId(index),
       ...getCollectionFields(index),
+      // Most recipes keep the older shape (no key) so the legacy path stays exercised.
+      ...(STARRED_RECIPE_INDEXES.includes(index) ? { isFavorite: true } : {}),
       isArchived: false,
     };
   });
@@ -898,7 +903,10 @@ export async function seedPinchScale(
             : 2;
       Array.from({ length: count }, (_, copy) => {
         const unit = PACKAGE_UNITS[(index + copy) % PACKAGE_UNITS.length];
-        const place = PACKAGE_PLACES[(index + copy) % PACKAGE_PLACES.length];
+        const place =
+          PACKAGE_PLACES[
+            (index + (index % 6 === 0 ? copy : 0)) % PACKAGE_PLACES.length
+          ];
         const amount =
           unit === 'EACH' ? packageInt(1, 12) : packageInt(1, 40) / 4;
         const addedAt = today - packageInt(1, 30) * DAY_MS + 10 * 3_600_000;

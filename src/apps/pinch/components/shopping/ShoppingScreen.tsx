@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
+import EmptyCard from '@/components/EmptyCard';
 import EntryTile from '@/components/EntryTile';
 import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
@@ -48,7 +49,6 @@ import {
   SHOPPING_VIEWS,
   SOFT_MAX_SHOPPING_ITEMS,
 } from '@apps/pinch/constants';
-import { useShoppingPutAway } from '@apps/pinch/hooks/useShoppingPutAway';
 import {
   clearCheckedShoppingItems,
   removeShoppingItem,
@@ -81,6 +81,7 @@ import {
   getShoppingSourcesText,
   getShopRowId,
   getShownShoppingView,
+  isPutAway,
   sumShopAmounts,
   type ShoppingGroup,
   type ShoppingRowData,
@@ -335,7 +336,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const isPantryReady = useAppSelector(selectIsPackagesReady);
-  const { isPutAway, markPutAway } = useShoppingPutAway(uid);
   const [query, setQuery] = useState('');
   const [pick, setPick] = useState<{ view: ShoppingView; query: string }>({
     view: 'toBuy',
@@ -568,10 +568,10 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     }
     if (itemCount === 0) {
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
+        <EmptyCard icon='🛒'>
           Nothing on your list. Add what you need from a recipe, a meal or a
           day, or add one here.
-        </p>
+        </EmptyCard>
       );
     }
     const isSearching = activeQuery !== '';
@@ -627,6 +627,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
             key: 'clear-got',
             icon: <BrushCleaning className='h-4 w-4' />,
             label: 'Clear what you got',
+            isDestructive: true,
             isLoading: isClearing,
             onClick: () => void handleClear(),
           },
@@ -810,7 +811,6 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
         <PantryFromShoppingSheet
           uid={uid}
           rows={overlay.rows}
-          onAdded={markPutAway}
           onClose={() => setOverlay(null)}
         />
       )}

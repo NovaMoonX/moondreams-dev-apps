@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Plus, X } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import { useAppSelector } from '@/store';
 import {
   selectDismissedNudges,
@@ -116,30 +117,28 @@ function GapNudge({ uid, gaps, lead, onFillIn }: GapNudgeProps) {
   };
 
   return (
-    <div className='flex items-start gap-2'>
-      <p className='text-muted-foreground min-w-0 flex-1 py-2.5 text-sm'>
+    <div className='space-y-2'>
+      <p className='text-muted-foreground text-sm'>
         {lead ? `${lead} ` : null}
-        {text}{' '}
-        <span className='whitespace-nowrap'>
-          <Button
-            type='button'
-            variant='link'
-            onClick={() => onFillIn(open)}
-            className='relative h-auto p-0 align-baseline text-sm leading-[inherit] font-medium after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
-          >
-            {action}
-          </Button>
-        </span>
+        {text}
       </p>
-      <Button
-        type='button'
-        variant='tertiary'
-        size='sm'
-        onClick={handleNotNow}
-        className='text-muted-foreground! h-10 shrink-0 px-2! text-sm font-normal'
-      >
-        Not now
-      </Button>
+      <ActionChips
+        actions={[
+          {
+            key: 'fill-in',
+            icon: <Plus className='h-4 w-4' />,
+            label: action,
+            onClick: () => onFillIn(open),
+          },
+          {
+            key: 'not-now',
+            icon: <X className='h-4 w-4' />,
+            label: 'Not now',
+            onClick: handleNotNow,
+            isQuiet: true,
+          },
+        ]}
+      />
     </div>
   );
 }

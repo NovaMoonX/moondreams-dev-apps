@@ -33,6 +33,7 @@ import {
   isValidAmount,
   mergeSourcedLines,
   mergeSources,
+  isPutAway,
   planStopShopping,
   roundAmount,
   type ListLine,
@@ -95,6 +96,7 @@ function writeLine(
     createdAt: now,
     ...fields,
     sources,
+    pantryAddedAt: null,
   };
   transaction.set(snapshot.ref, item);
 }
@@ -513,6 +515,7 @@ export const restoreShoppingItems = createAsyncThunk<
               unit: item.unit,
               isChecked: item.isChecked,
               sources: item.sources ?? [],
+              pantryAddedAt: isPutAway(item) ? now : null,
               createdAt: item.createdAt,
               updatedAt: now,
             } satisfies ShoppingItem),

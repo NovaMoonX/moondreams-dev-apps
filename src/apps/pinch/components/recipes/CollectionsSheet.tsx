@@ -7,15 +7,15 @@ import {
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import Field from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import IntroCard from '@/components/IntroCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -37,6 +37,7 @@ import {
 import type { Collection } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { findCollectionByLabel } from '@apps/pinch/utils/collections';
+import { joinSourceNames } from '@apps/pinch/utils/shopping';
 
 const { custom } = FormFactories;
 
@@ -45,12 +46,7 @@ const TITLES_SHOWN = 2;
 const getRecipesLine = (count: number, titles: string[]) => {
   if (count === 0) return 'Not on any recipe';
   const noun = count === 1 ? 'recipe' : 'recipes';
-  const rest = count - TITLES_SHOWN;
-  const names =
-    rest > 0
-      ? `${titles.slice(0, TITLES_SHOWN).join(', ')} and ${rest} more`
-      : titles.join(', ');
-  return `${count} ${noun} · ${names}`;
+  return `${count} ${noun} · ${joinSourceNames(titles, TITLES_SHOWN)}`;
 };
 
 const getRemovedText = (label: string, count: number) => {
@@ -78,7 +74,6 @@ function CollectionEditView({
   const [label, setLabel] = useState(collection.label);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useBackStep(true, onBack);
 
   const trimmed = label.trim();
   const duplicate = findCollectionByLabel(collections, trimmed, collection.id);
@@ -143,15 +138,7 @@ function CollectionEditView({
 
   return (
     <div className='space-y-4'>
-      <Button
-        type='button'
-        variant='tertiary'
-        className='h-10 gap-1 px-0!'
-        onClick={onBack}
-      >
-        <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-        Back
-      </Button>
+      <BackLink onBack={onBack} />
       <Form
         id='pinch-collection'
         form={[
@@ -279,10 +266,15 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
           <div className='flex max-h-[max(12rem,calc(92dvh-17rem))] flex-col gap-3'>
             {collections.length > 0 &&
               collections.length < LIST_SEARCH_THRESHOLD && (
-                <IntroCard icon='🗂️' lead='Sets of recipes you make yourself.'>
-                  Rename one and every recipe in it follows. Deleting one never
-                  deletes a recipe.
-                </IntroCard>
+                <div className='[@media(max-height:700px)]:hidden'>
+                  <IntroCard
+                    icon='🗂️'
+                    lead='Sets of recipes you make yourself.'
+                  >
+                    Rename one and every recipe in it follows. Deleting one
+                    never deletes a recipe.
+                  </IntroCard>
+                </div>
               )}
             {collections.length >= LIST_SEARCH_THRESHOLD && (
               <div className='shrink-0'>
@@ -302,7 +294,7 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
                 Nothing matches “{query.trim()}”.
               </p>
             ) : (
-              <ul className='border-border divide-border min-h-0 flex-1 divide-y overflow-y-auto rounded-2xl border px-3'>
+              <ul className='border-border divide-border min-h-0 flex-1 divide-y overflow-y-auto rounded-2xl border px-3 [@media(max-height:800px)]:min-h-36'>
                 {shown.map((collection) => (
                   <li key={collection.id}>
                     <Button
@@ -310,19 +302,19 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
                       variant='tertiary'
                       aria-label={`Change ${collection.label}`}
                       onClick={() => setEditingId(collection.id)}
-                      className='h-auto min-h-14 w-full items-start justify-start gap-3 px-0! py-2 text-left'
+                      className='h-auto min-h-16 w-full items-start justify-start gap-3 px-0! py-3 text-left'
                     >
                       <span
-                        className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)]'
+                        className='mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)]'
                         aria-hidden='true'
                       >
                         🗂️
                       </span>
-                      <span className='min-w-0 flex-1'>
+                      <span className='flex min-h-11 min-w-0 flex-1 flex-col justify-center'>
                         <span className='text-foreground block font-medium wrap-break-word'>
                           {collection.label}
                         </span>
-                        <span className='text-muted-foreground block truncate text-xs font-normal'>
+                        <span className='text-muted-foreground line-clamp-2 text-sm font-normal'>
                           {getRecipesLine(
                             counts.get(collection.id) ?? 0,
                             titlesByCollection.get(collection.id) ?? [],
@@ -330,7 +322,7 @@ function CollectionsSheet({ uid, onClose }: CollectionsSheetProps) {
                         </span>
                       </span>
                       <ChevronRight
-                        className='text-muted-foreground mt-2.5 mr-2.5 h-5 w-5 shrink-0'
+                        className='text-muted-foreground mt-3 h-5 w-5 shrink-0'
                         aria-hidden='true'
                       />
                     </Button>

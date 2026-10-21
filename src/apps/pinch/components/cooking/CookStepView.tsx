@@ -86,7 +86,12 @@ function CookStepView({
 
   return (
     <SwipeArea className='flex flex-1 flex-col' onSwipe={onSwipe}>
-      <div className={join('flex flex-col gap-4', SIDE_BY_SIDE.top)}>
+      <div
+        className={join(
+          'flex flex-col gap-4 [@media(max-height:640px)_and_(max-width:639px)]:gap-2',
+          SIDE_BY_SIDE.top,
+        )}
+      >
         {dishes && <div className={SIDE_BY_SIDE.dishes}>{dishes}</div>}
         <div
           className={join(
@@ -159,7 +164,10 @@ function CookStepView({
         </div>
         <div
           className={join(
-            'mt-auto space-y-3 pt-8 empty:hidden [@media(max-height:640px)]:pt-5',
+            'mt-auto space-y-3 pt-8 empty:hidden',
+            timerSlots.length > 0
+              ? '[@media(max-height:640px)]:pt-3'
+              : '[@media(max-height:640px)]:pt-5',
             SIDE_BY_SIDE.column,
           )}
         >

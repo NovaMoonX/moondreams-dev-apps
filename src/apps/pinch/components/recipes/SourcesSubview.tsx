@@ -136,7 +136,7 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
                     </span>
                   </span>
                   <ChevronRight
-                    className='text-muted-foreground mt-2.5 mr-2.5 h-5 w-5 shrink-0'
+                    className='text-muted-foreground mt-2.5 h-5 w-5 shrink-0'
                     aria-hidden='true'
                   />
                 </Button>

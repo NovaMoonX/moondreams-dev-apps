@@ -143,7 +143,7 @@ const claimDay = (firestore: Firestore, uid: string, day: string) =>
   });
 
 /**
- * Sends each person who turned the note on at most one push a day, in the first half hour of the hour they chose in their own time zone, naming the dishes past their date or due soon. Nothing due sends nothing and writes nothing. The sender is injected so a run can be rehearsed without Firebase Messaging.
+ * Sends each person who turned the note on at most one push a day, in the hour they chose in their own time zone (the first of the two runs in it that finds it due), naming the dishes past their date or due soon. Nothing due sends nothing and writes nothing. The sender is injected so a run can be rehearsed without Firebase Messaging.
  */
 export async function runEatSoonDigest(
   firestore: Firestore,
@@ -179,15 +179,34 @@ export async function runEatSoonDigest(
         });
         if (due === null) return;
 
-        const items = mergeDigestItems(
-          await Promise.all(
-            DIGEST_SOURCES.filter(
-              (source) => reminders[source.flag] === true,
-            ).map((source) =>
-              source.collect(firestore, uid, { today: due.today, leadDays }),
-            ),
+        const sources = DIGEST_SOURCES.filter(
+          (source) => reminders[source.flag] === true,
+        );
+        const collected = await Promise.allSettled(
+          sources.map((source) =>
+            source.collect(firestore, uid, { today: due.today, leadDays }),
           ),
         );
+        collected.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            logger.error('Pinch eat-soon note: one source failed', {
+              uid,
+              source: sources[index].flag,
+              error:
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : String(result.reason),
+            });
+          }
+        });
+        const fulfilled = collected.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        );
+        if (sources.length > 0 && fulfilled.length === 0) {
+          throw new Error('Every source of the note failed');
+        }
+
+        const items = mergeDigestItems(fulfilled);
         const message = getDigestMessage(items);
         if (message === null) return;
 

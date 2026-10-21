@@ -22,6 +22,7 @@ import {
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import {
   NO_DATE_ANSWER,
+  formatKitchenTotal,
   getAnswerDate,
   getDefaultPlace,
   getStockSummaryParts,
@@ -29,7 +30,6 @@ import {
   isValidPackageAmount,
   parseAmountText,
 } from '@apps/pinch/utils/packages';
-import { formatSize } from '@apps/pinch/utils/productFormat';
 import { getShopSection } from '@apps/pinch/utils/shopping';
 
 /** One thing from the ticked part of the shopping list: its ingredient, and what the list said of it. */
@@ -46,8 +46,6 @@ export interface PutAwayRow {
 interface PantryFromShoppingSheetProps {
   uid: string;
   rows: PutAwayRow[];
-  /** Called with the lines that were added, so the list can stop offering them. */
-  onAdded: (items: PutAwayRow['items']) => void;
   onClose: () => void;
 }
 
@@ -55,7 +53,6 @@ interface PantryFromShoppingSheetProps {
 function PantryFromShoppingSheet({
   uid,
   rows,
-  onAdded,
   onClose,
 }: PantryFromShoppingSheetProps) {
   const { addToast } = useToast();
@@ -76,7 +73,7 @@ function PantryFromShoppingSheet({
   const product = defaultProducts.get(row.ingredientId);
   const isLast = index + 1 >= rows.length;
   const current: PackageFieldValues = values[row.id] ?? {
-    amountText: String(product?.sizeAmount ?? row.amount ?? ''),
+    amountText: String(product?.sizeAmount ?? ''),
     unit: product?.sizeUnit ?? row.unit,
     place: getDefaultPlace(getShopSection(ingredient)),
     date: NO_DATE_ANSWER,
@@ -139,9 +136,8 @@ function PantryFromShoppingSheet({
             expiresAt: answer.expiresAt,
           },
         ],
-        { onWriteFailed: setError },
+        { putAway: row.items },
       );
-      onAdded(row.items);
       setAddedCount(addedCount + 1);
       advance(addedCount + 1);
     } catch (saveError) {
@@ -167,7 +163,7 @@ function PantryFromShoppingSheet({
             {[
               row.amount === null
                 ? 'On your list'
-                : `On your list: ${formatSize(row.amount, row.unit)}`,
+                : `On your list: ${formatKitchenTotal({ amount: row.amount, unit: row.unit })}`,
               stock.length > 0
                 ? `Already in your pantry: ${getStockSummaryParts(getStockView(row.ingredientId, stock, undefined, soonDays)).join(', ')}`
                 : null,
@@ -182,6 +178,7 @@ function PantryFromShoppingSheet({
             setValues((known) => ({ ...known, [row.id]: next }))
           }
           name={row.name}
+          amountLabel='How much did you buy?'
         />
         {error && (
           <p className='text-destructive text-sm' role='alert'>

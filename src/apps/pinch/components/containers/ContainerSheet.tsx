@@ -4,23 +4,22 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Ban,
-  ChevronLeft,
-  ChevronRight,
+  CalendarDays,
   Hash,
   History,
-  PencilLine,
   Undo2,
+  Utensils,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
 import FormSheet from '@/components/FormSheet';
 import GroupRow from '@/components/GroupRow';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -45,6 +44,7 @@ import {
   getBatchKey,
   getBatchServingsText,
   getBoxCountCopy,
+  getBoxLine,
   getContainerTitle,
   getCountChangeCopy,
   getEatByDefault,
@@ -59,6 +59,8 @@ import {
   getLastPlaceEvent,
   getMoveForPlace,
   getMoveNotes,
+  getSelectionPrimary,
+  getTossAction,
   groupBatches,
   isValidEatBy,
 } from '@apps/pinch/utils/containers';
@@ -73,27 +75,6 @@ type SheetView =
   | { kind: 'count' }
   | { kind: 'history' }
   | { kind: 'boxes' };
-
-interface BackLinkProps {
-  onClick: () => void;
-  label?: string;
-}
-
-function BackLink({ onClick, label = 'Back' }: BackLinkProps) {
-  useBackStep(true, onClick);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 justify-self-start px-0!'
-      onClick={onClick}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      {label}
-    </Button>
-  );
-}
 
 interface ErrorLineProps {
   error: string | null;
@@ -136,7 +117,7 @@ function GoneView({ isBatch, onAnswer, onBack, onDone }: GoneViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <p className='font-medium'>
         {isBatch ? 'What happened to them?' : 'What happened to it?'}
       </p>
@@ -227,7 +208,7 @@ function MoveView({
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <p className='font-medium'>{label}</p>
         <p className='text-muted-foreground text-sm'>
@@ -301,7 +282,7 @@ function EatByView({ eatBy: current, onSave, onBack }: EatByViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <p className='font-medium'>Change the eat-by date</p>
       <EatByField
         value={typedEatBy}
@@ -382,7 +363,7 @@ function CountView({ uid, container, onBack, onDone }: CountViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <p className='font-medium'>How many are left?</p>
       <Stepper
         value={count}
@@ -453,7 +434,7 @@ function BoxCountView({ boxes, onEat, onBack, onDone }: BoxCountViewProps) {
 
   return (
     <div className='grid gap-4'>
-      <BackLink onClick={onBack} />
+      <BackLink onBack={onBack} />
       <p className='font-medium'>How many boxes are left?</p>
       <Stepper
         value={count}
@@ -517,10 +498,9 @@ function HistoryList({ container }: HistoryListProps) {
 interface FactsProps {
   container: Container;
   servingsText: string;
-  onChangeDate: () => void;
 }
 
-function Facts({ container, servingsText, onChangeDate }: FactsProps) {
+function Facts({ container, servingsText }: FactsProps) {
   const state = getEatByState(container.eatBy);
   const dateLabel =
     state === 'PAST'
@@ -544,23 +524,13 @@ function Facts({ container, servingsText, onChangeDate }: FactsProps) {
           <span className='whitespace-nowrap'>{getFrozenText(container)}</span>
         )}
       </p>
-      <Button
-        type='button'
-        variant='tertiary'
-        aria-label={`${dateLabel}. Change the date`}
-        className="text-foreground! relative h-auto min-h-0 flex-wrap justify-start gap-x-2 gap-y-1 px-0! py-0! text-left text-sm font-normal before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
-        onClick={onChangeDate}
-      >
+      <p className='text-sm'>
         {state === 'LATER' ? (
           <span className='whitespace-nowrap'>{dateLabel}</span>
         ) : (
           <EatByBadge state={state} label={dateLabel} />
         )}
-        <PencilLine
-          className='text-muted-foreground h-3.5 w-3.5 shrink-0'
-          aria-hidden='true'
-        />
-      </Button>
+      </p>
       {(freezeLine || thawedAt !== null) && (
         <p className='text-muted-foreground text-sm'>
           {[
@@ -757,35 +727,31 @@ function ContainerSheet({
     if (view.kind === 'history') {
       return (
         <div className='grid gap-4'>
-          <BackLink onClick={backToDetails} />
+          <BackLink onBack={backToDetails} />
           <HistoryList container={container} />
         </div>
       );
     }
     if (view.kind === 'boxes' && isBatch) {
       return (
-        <div className='grid gap-2'>
-          <BackLink onClick={backToDetails} />
-          <ul className='divide-border divide-y'>
+        <div className='grid gap-3'>
+          <BackLink onBack={backToDetails} />
+          <ActionGroup isRoomy>
             {boxes.map((box, index) => (
-              <li key={box.id}>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-2 text-left font-normal'
-                  onClick={() => pick(box.id)}
-                >
-                  <span className='text-foreground min-w-0 flex-1'>
-                    Box {index + 1} · {formatServings(box.servings)}
-                  </span>
-                  <ChevronRight
-                    className='text-muted-foreground h-5 w-5 shrink-0'
-                    aria-hidden='true'
-                  />
-                </Button>
-              </li>
+              <GroupRow
+                key={box.id}
+                isRoomy
+                icon={CONTAINER_PLACE_EMOJIS[box.place]}
+                ariaLabel={`Box ${index + 1}, ${getBoxLine(box)}`}
+                onClick={() => pick(box.id)}
+              >
+                <span className='block font-medium'>Box {index + 1}</span>
+                <span className='text-muted-foreground block text-sm font-normal'>
+                  {getBoxLine(box)}
+                </span>
+              </GroupRow>
             ))}
-          </ul>
+          </ActionGroup>
         </div>
       );
     }
@@ -845,12 +811,28 @@ function ContainerSheet({
         'Unable to save this.',
       );
 
+    const handleToss = () =>
+      run(
+        'toss',
+        async () => {
+          const result = isBatch
+            ? await endBatch(boxes, 'TOSS', `Tossed all ${boxes.length} boxes`)
+            : await toss(container);
+          if (result !== undefined) onClose();
+        },
+        'Unable to save this.',
+      );
+    const isTossLead =
+      isInStock &&
+      getSelectionPrimary(isBatch ? boxes : [container]) === 'TOSS';
+    const eatOneLabel = isBatch && !isEachOneServing ? 'Ate a box' : 'Ate one';
+
     const lastEnd = container.history.at(-1);
 
     return (
       <div className='grid gap-4'>
         {picked !== undefined && boxes.length > 0 && (
-          <BackLink onClick={() => pick(null)} label='All the boxes' />
+          <BackLink onBack={() => pick(null)} label='All the boxes' />
         )}
         {isInStock ? (
           <Facts
@@ -860,7 +842,6 @@ function ContainerSheet({
                 ? getBatchServingsText(boxes)
                 : `${formatServings(container.servings)} left`
             }
-            onChangeDate={() => setView({ kind: 'eatBy' })}
           />
         ) : (
           <p className='text-muted-foreground text-sm'>
@@ -870,15 +851,36 @@ function ContainerSheet({
         )}
         {isInStock && (
           <div className='space-y-3'>
-            <Button
-              type='button'
-              className='h-12 w-full'
-              disabled={busy === 'eat-one'}
-              onClick={() => void handleEatOne()}
-            >
-              {isBatch && !isEachOneServing ? 'Ate a box' : 'Ate one'}
-            </Button>
+            {isTossLead ? (
+              <Button
+                type='button'
+                className='h-12 w-full gap-2'
+                disabled={busy === 'toss'}
+                onClick={() => void handleToss()}
+              >
+                <Ban className='h-4 w-4' aria-hidden='true' />
+                {getTossAction(isBatch ? boxes.length : 1)}
+              </Button>
+            ) : (
+              <Button
+                type='button'
+                className='h-12 w-full'
+                disabled={busy === 'eat-one'}
+                onClick={() => void handleEatOne()}
+              >
+                {eatOneLabel}
+              </Button>
+            )}
             <ActionGroup>
+              {isTossLead && (
+                <ActionRow
+                  isGrouped
+                  icon={<Utensils className='h-4 w-4' />}
+                  label={eatOneLabel}
+                  isDisabled={busy === 'eat-one'}
+                  onClick={() => void handleEatOne()}
+                />
+              )}
               <ActionRow
                 isGrouped
                 icon={<Ban className='h-4 w-4' />}
@@ -900,6 +902,12 @@ function ContainerSheet({
                 label={getMoveLabel()}
                 subtitle='Sets a new eat-by date'
                 onClick={() => setView({ kind: 'move', to: otherPlace })}
+              />
+              <ActionRow
+                isGrouped
+                icon={<CalendarDays className='h-4 w-4' />}
+                label='Change the eat-by date'
+                onClick={() => setView({ kind: 'eatBy' })}
               />
               <ActionRow
                 isGrouped

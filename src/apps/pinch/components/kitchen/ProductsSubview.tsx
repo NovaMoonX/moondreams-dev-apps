@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
-  ChevronLeft,
   ChevronRight,
   Plus,
   Star,
@@ -12,6 +11,7 @@ import {
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import FormSheet from '@/components/FormSheet';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -22,6 +22,10 @@ import Subview from '@/components/Subview';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
+import {
+  NO_INGREDIENT_FILTERS,
+  applyIngredientFilters,
+} from '@apps/pinch/components/kitchen/ingredientFilters';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
 import StoreFormSheet from '@apps/pinch/components/kitchen/StoreFormSheet';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
@@ -39,14 +43,18 @@ import {
   selectAllStores,
   selectDefaultProducts,
   selectIngredientFamilies,
+  selectIngredients,
   selectIngredientsById,
+  selectOftenUsedIngredientIds,
   selectProducts,
   selectProductsById,
   selectProductsByIngredient,
   selectStores,
   selectStoresById,
+  selectUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
+import { getPricePickIds } from '@apps/pinch/utils/pickerSuggestions';
 import { formatSize, formatUnitPrice } from '@apps/pinch/utils/productFormat';
 import type { Product, Store } from '@apps/pinch/types';
 
@@ -185,18 +193,16 @@ interface StoreHeadingProps {
 
 function StoreHeading({ group, onOpen }: StoreHeadingProps) {
   const { store } = group;
-  const content = (
-    <>
-      <StoreLogo
-        name={group.name}
-        domain={getStoreDomain(store)}
-        imagePath={store?.imagePath ?? null}
-        imageVersion={store?.updatedAt ?? 0}
-        size={20}
-      />
-      <span className='truncate'>{group.name}</span>
-    </>
+  const logo = (
+    <StoreLogo
+      name={group.name}
+      domain={getStoreDomain(store)}
+      imagePath={store?.imagePath ?? null}
+      imageVersion={store?.updatedAt ?? 0}
+      size={20}
+    />
   );
+  const name = <span className='truncate'>{group.name}</span>;
 
   return (
     <SectionDivider
@@ -209,7 +215,8 @@ function StoreHeading({ group, onOpen }: StoreHeadingProps) {
             onClick={() => onOpen(store.id)}
             className='h-10 max-w-[65vw] min-w-0 gap-1.5 px-2! py-0 text-sm font-medium'
           >
-            {content}
+            {logo}
+            {name}
             <ChevronRight
               className='text-muted-foreground h-3.5 w-3.5 shrink-0'
               aria-hidden='true'
@@ -217,7 +224,8 @@ function StoreHeading({ group, onOpen }: StoreHeadingProps) {
           </Button>
         ) : (
           <span className='inline-flex h-10 max-w-[65vw] min-w-0 items-center gap-1.5 px-2'>
-            {content}
+            {logo}
+            {name}
           </span>
         )
       }
@@ -236,6 +244,9 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
   const productsByIngredient = useAppSelector(selectProductsByIngredient);
   const defaultProducts = useAppSelector(selectDefaultProducts);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const ingredients = useAppSelector(selectIngredients);
+  const usedIds = useAppSelector(selectUsedIngredientIds);
+  const oftenUsedIds = useAppSelector(selectOftenUsedIngredientIds);
   const storesById = useAppSelector(selectStoresById);
   const allStores = useAppSelector(selectAllStores);
   const stores = useAppSelector(selectStores);
@@ -256,6 +267,20 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
     const priced = new Set(products.map((product) => product.storeId));
     return stores.filter((store) => !priced.has(store.id));
   }, [products, stores]);
+  const suggestedIds = useMemo(
+    () =>
+      adding === 'price'
+        ? getPricePickIds(
+            applyIngredientFilters(
+              ingredients,
+              { ...NO_INGREDIENT_FILTERS, price: 'needs' },
+              { defaultProducts, usedIds },
+            ).map((ingredient) => ingredient.id),
+            oftenUsedIds,
+          )
+        : [],
+    [adding, ingredients, defaultProducts, usedIds, oftenUsedIds],
+  );
   const hasControls =
     products.length + storesWithoutPrices.length >= LIST_SEARCH_THRESHOLD;
   const query = hasControls ? typedQuery : '';
@@ -503,22 +528,16 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
   const getAddBody = () => {
     if (adding === 'price') {
       return (
-        <div className='space-y-3 pb-4'>
-          <Button
-            type='button'
-            variant='tertiary'
-            className='h-10 gap-1 px-0!'
-            onClick={() => setAdding('choose')}
-          >
-            <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-            Back
-          </Button>
+        <div className='space-y-3 pb-4 [@media(max-height:499px)]:pb-0'>
+          <BackLink onBack={() => setAdding('choose')} />
           <p className='text-muted-foreground text-sm'>
             Which ingredient is it for?
           </p>
           <ItemSearch
             uid={uid}
             autoFocus
+            suggestions={{ caption: 'Still needs a price', ids: suggestedIds }}
+            isCapped
             onPick={(ingredientId) => {
               setAdding(null);
               setNewIngredientId(ingredientId);

@@ -1,6 +1,13 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
-import { deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import {
+  arrayRemove,
+  arrayUnion,
+  deleteDoc,
+  doc,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
@@ -16,9 +23,11 @@ import {
   selectSourcesById,
   selectTweakTracking,
 } from '@apps/pinch/store/selectors';
+import type { CollectionChange } from '@apps/pinch/utils/collections';
 import { getRecipeChanges } from '@apps/pinch/utils/recipeChanges';
 import { getTweakReason } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
+import { getCoverFields, isCoverUrl } from '@apps/pinch/utils/recipeCover';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
@@ -63,13 +72,28 @@ const getWriteMessage = (error: unknown, fallback: string) => {
     : fallback;
 };
 
-/** A form that couldn't offer collections leaves the stored list alone, but an older recipe still gains the key. */
-const getCollectionFields = (
+/** A recipe saved by a form that couldn't offer collections, or whose row was left alone, leaves the stored list as it is, but an older recipe still gains the key. Only a change is written, as `arrayRemove` and `arrayUnion` (two writes of one batch when a save does both), so a collection another device changed in between stays. */
+const getCollectionWrites = (
   existing: Recipe,
-  collectionIds: string[] | null,
+  change: CollectionChange | null,
 ) => {
-  if (collectionIds !== null) return { collectionIds };
-  return 'collectionIds' in existing ? {} : { collectionIds: [] };
+  const { add, remove } = change ?? { add: [], remove: [] };
+  if (!('collectionIds' in existing)) {
+    return {
+      fields: { collectionIds: add.length > 0 ? arrayUnion(...add) : [] },
+      after: null,
+    };
+  }
+  if (remove.length > 0) {
+    return {
+      fields: { collectionIds: arrayRemove(...remove) },
+      after: add.length > 0 ? { collectionIds: arrayUnion(...add) } : null,
+    };
+  }
+  return {
+    fields: add.length > 0 ? { collectionIds: arrayUnion(...add) } : {},
+    after: null,
+  };
 };
 
 export const getRecipeCoverPath = (uid: string, recipeId: string) =>
@@ -95,8 +119,8 @@ export interface RecipeDraft {
   source: RecipeSource;
   /** The `Source` it came from, or null; written on every save, so older recipes gain the key. */
   sourceId: string | null;
-  /** The collections it is in; null when the form couldn't offer them (they hadn't loaded), which leaves the stored list as it is. */
-  collectionIds: string[] | null;
+  /** What the form added to and took out of the collections it opened with; null when it couldn't offer them (they hadn't loaded), which leaves the stored list as it is. */
+  collectionChange: CollectionChange | null;
   /** Collections typed with the recipe, created in the same batch so a failed save leaves no orphan and an offline one is queued whole. */
   newCollections: { id: string; label: string }[];
   /** Custom ingredients the reader proposed and the person kept: created with the recipe, in one batch. */
@@ -105,6 +129,8 @@ export interface RecipeDraft {
   newSource: { id: string; label: string } | null;
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
+  /** The web photo picked for the cover, as its https address, or null. It and `coverFile` are never both set: the draft passes the one chosen last. */
+  coverUrl: string | null;
   removeCover: boolean;
   /** Set on its own after the recipe has committed, and only if the idea is still there. */
   fromIdeaId: string | null;
@@ -178,7 +204,7 @@ const getTweak = (
   return tweak;
 };
 
-/** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). A cooked recipe's edit also records a tweak note in the same batch, so the note exists exactly when the recipe changed. The cover goes to Storage first and is cleaned up if the write fails. */
+/** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). A cooked recipe's edit also records a tweak note in the same batch, so the note exists exactly when the recipe changed. An uploaded cover goes to Storage first and is cleaned up if the write fails; a web cover is only its address, and the upload it replaces is deleted once the write has committed. */
 export const saveRecipe = createAsyncThunk<
   SaveRecipeResult,
   SaveRecipeInput,
@@ -204,8 +230,20 @@ export const saveRecipe = createAsyncThunk<
             (entry) => entry.id === draft.fromIdeaId,
           ) ?? null)
         : null;
+    if (draft.coverUrl !== null && !isCoverUrl(draft.coverUrl)) {
+      return rejectWithValue(
+        'That photo’s web address can’t be saved. Pick another one.',
+      );
+    }
     const path = getRecipeCoverPath(uid, recipeId);
     const tweak = getTweak(getState(), existing, draft, now);
+    const cover = getCoverFields({
+      uploadPath: path,
+      hasFile: draft.coverFile !== null,
+      webUrl: draft.coverUrl,
+      removeCover: draft.removeCover,
+      existing,
+    });
 
     try {
       await freezeBeforeEdit(uid, getState());
@@ -216,18 +254,13 @@ export const saveRecipe = createAsyncThunk<
         );
       }
 
-      const coverPath = draft.coverFile
-        ? path
-        : draft.removeCover
-          ? null
-          : (existing?.coverPath ?? null);
       const fields = {
         title: draft.title.trim(),
         description: draft.description,
         servings: draft.servings,
         prepMinutes: draft.prepMinutes,
         cookMinutes: draft.cookMinutes,
-        coverPath,
+        ...cover,
         ingredients: draft.ingredients,
         steps: draft.steps,
         care: draft.care,
@@ -287,19 +320,27 @@ export const saveRecipe = createAsyncThunk<
         );
       });
       if (existing) {
+        const collectionWrites = getCollectionWrites(
+          existing,
+          draft.collectionChange,
+        );
         batch.update(recipeDoc(uid, recipeId), {
           ...fields,
           ...('isArchived' in existing ? {} : { isArchived: false }),
-          ...getCollectionFields(existing, draft.collectionIds),
+          ...collectionWrites.fields,
         });
+        if (collectionWrites.after) {
+          batch.update(recipeDoc(uid, recipeId), collectionWrites.after);
+        }
         if (tweak) batch.set(noteDoc(uid, tweak.id), tweak);
       } else {
         const recipe: Recipe = {
           id: recipeId,
           ...fields,
           source: draft.source,
-          collectionIds: draft.collectionIds ?? [],
+          collectionIds: draft.collectionChange?.add ?? [],
           isArchived: false,
+          isFavorite: false,
           createdAt: now,
         };
         batch.set(recipeDoc(uid, recipeId), recipe);
@@ -314,7 +355,7 @@ export const saveRecipe = createAsyncThunk<
       );
     }
 
-    if (draft.removeCover && !draft.coverFile && existing?.coverPath) {
+    if (existing?.coverPath && cover.coverPath !== existing.coverPath) {
       await deleteFile(existing.coverPath).catch(() => undefined);
     }
 
@@ -333,6 +374,30 @@ export const saveRecipe = createAsyncThunk<
       ));
 
     return { recipeId, linkedIdea };
+  },
+);
+
+interface SetRecipeFavoriteInput {
+  uid: string;
+  id: string;
+  isFavorite: boolean;
+}
+
+/** Writes the value asked for, never a toggle read from a cache, and nothing else: an edit never writes `isFavorite`, and the star leaves `updatedAt` alone because it versions the cover. */
+export const setRecipeFavorite = createAsyncThunk<
+  void,
+  SetRecipeFavoriteInput,
+  { rejectValue: string }
+>(
+  'pinch/recipes/setFavorite',
+  async ({ uid, id, isFavorite }, { rejectWithValue }) => {
+    try {
+      await updateDoc(recipeDoc(uid, id), { isFavorite });
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to change this star.'),
+      );
+    }
   },
 );
 

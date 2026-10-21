@@ -504,6 +504,8 @@ export interface BulkAction {
   from: ContainerPlace;
   /** Leaves a box alone once its date is no longer in the past, for acting on what the screen called past its date. */
   isPastOnly?: boolean;
+  /** A toss or an eat that acts on a ticked box in either place, so `from` is no check on where it is. */
+  isEitherPlace?: boolean;
   /** A move's care by recipe id, so each box gets the date a single move would suggest. */
   cares?: Record<string, RecipeCare | null>;
 }
@@ -555,7 +557,9 @@ const planBulkOne = (
 ): { write: BulkWrite } | { skip: SkipReason } => {
   if (container === null) return { skip: 'GONE' };
   if (container.status !== 'IN_STOCK') return { skip: 'FINISHED' };
-  if (container.place !== action.from) return { skip: 'MOVED' };
+  if (action.isEitherPlace !== true && container.place !== action.from) {
+    return { skip: 'MOVED' };
+  }
   if (
     action.isPastOnly === true &&
     getEatByState(container.eatBy, now) !== 'PAST'
@@ -675,15 +679,88 @@ export const getPastDueBoxes = (containers: Container[], now = Date.now()) =>
 export const getPastDueText = (count: number) =>
   `${count} ${count === 1 ? 'is' : 'are'} past ${count === 1 ? 'its' : 'their'} date`;
 
+/** Where the past-date boxes are while one place is shown: "2 here, 1 in the freezer", or where they all are; null when they are all in the place shown. */
+export const getPastDueSplitText = (
+  boxes: Container[],
+  shownPlace: ContainerPlace,
+) => {
+  const here = boxes.filter((box) => box.place === shownPlace).length;
+  const there = boxes.length - here;
+  if (there === 0) return null;
+
+  const other = shownPlace === 'FRIDGE' ? 'freezer' : 'fridge';
+  if (here > 0) return `${here} here, ${there} in the ${other}`;
+  return there === 1 ? `In the ${other}` : `All in the ${other}`;
+};
+
 export const getTossAction = (count: number) =>
   count === 1 ? 'Toss it' : 'Toss them';
+
+/** Which act is the filled one in the Select footer: tossing when every ticked box is past its date, since that is the answer a spoiled box has, else eating it, the usual one. */
+export const getSelectionPrimary = (
+  selected: Container[],
+  now = Date.now(),
+): 'TOSS' | 'EAT' =>
+  selected.length > 0 &&
+  selected.every((box) => getEatByState(box.eatBy, now) === 'PAST')
+    ? 'TOSS'
+    : 'EAT';
 
 export const getSelectionTitle = (count: number) =>
   count === 0 ? 'Select boxes' : `${count} selected`;
 
 /** Why the selection's actions are off, in the footer beside them; null while they are on. */
-export const getSelectionNote = (count: number) =>
-  count === 0 ? 'Tap the boxes you want to act on.' : null;
+export const getSelectionNote = (
+  count: number,
+  places: { fridge: number; freezer: number } | null = null,
+) => {
+  if (count === 0) return 'Tap the boxes you want to act on.';
+  if (places === null || places.fridge === 0 || places.freezer === 0) {
+    return null;
+  }
+  return `${places.fridge} in the fridge, ${places.freezer} in the freezer. Moving needs one place.`;
+};
+
+/** The one place every box is in, or null when they are in both (or there are none). */
+export const getSharedPlace = (containers: Pick<Container, 'place'>[]) => {
+  const places = new Set(containers.map(({ place }) => place));
+  return places.size === 1 ? [...places][0] : null;
+};
+
+/** The place to open on: the one holding more of the boxes that want a look (past their date or due soon), then the one with more past their date, then the fridge. */
+export const getLandingPlace = (
+  containers: Container[],
+  now = Date.now(),
+): ContainerPlace => {
+  const empty = { look: 0, past: 0 };
+  const counts = containers.reduce<
+    Record<ContainerPlace, { look: number; past: number }>
+  >(
+    (acc, container) => {
+      const state = getEatByState(container.eatBy, now);
+      if (container.status !== 'IN_STOCK' || state === 'LATER') return acc;
+
+      const { look, past } = acc[container.place];
+      return {
+        ...acc,
+        [container.place]: {
+          look: look + 1,
+          past: past + (state === 'PAST' ? 1 : 0),
+        },
+      };
+    },
+    { FRIDGE: empty, FREEZER: empty },
+  );
+  const { FRIDGE: fridge, FREEZER: freezer } = counts;
+  if (freezer.look !== fridge.look) {
+    return freezer.look > fridge.look ? 'FREEZER' : 'FRIDGE';
+  }
+  return freezer.past > fridge.past ? 'FREEZER' : 'FRIDGE';
+};
+
+/** A row's name with its place, for a confirm over boxes in both places ("Chicken stock · freezer"). */
+export const getPlacedTitle = (title: string, place: ContainerPlace) =>
+  `${title} · ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`;
 
 const MAX_BULK_NAMES = 3;
 
@@ -1107,6 +1184,14 @@ export const getEventText = (event: ContainerEvent) => {
 export const getStartServings = (container: Container) =>
   container.history.find((event) => event.place !== null)?.servings ?? null;
 
+/** "2 servings" for a box as it went in, "1 of 2 servings left" for one that has been opened. */
+export const getBoxLine = (container: Container) => {
+  const started = getStartServings(container);
+  return started !== null && started > container.servings
+    ? `${container.servings} of ${started} servings left`
+    : formatServings(container.servings);
+};
+
 /** Counts what was eaten from the history, so a corrected count reads true; a history that may have been trimmed past the cap names no number it can't vouch for. */
 export const getFinishedKind = (container: Container) => {
   const last = container.history.at(-1)?.kind;
@@ -1309,11 +1394,12 @@ export const getPlacesText = (summary: {
     .join(', ');
 };
 
+/** The count past its date leads, so a status cut to one line keeps the urgent part. */
 export const getDueText = (soonCount: number, pastCount: number) =>
   [
-    soonCount > 0 && `${soonCount} to eat by tomorrow`,
     pastCount > 0 &&
       `${pastCount} past ${pastCount === 1 ? 'its' : 'their'} date`,
+    soonCount > 0 && `${soonCount} to eat by tomorrow`,
   ]
     .filter((part) => part !== false)
     .join(', ');

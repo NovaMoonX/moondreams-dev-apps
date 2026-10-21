@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { fetchPublicPage, MAX_URL_LENGTH } from './safeFetch.js';
+import { toWireNodes } from './wireNodes.js';
 
 /** Reads one web page a signed-in person pasted and returns only the kinds of content the caller asks for, so any app can hand a page to its own reader. */
 
@@ -461,7 +462,9 @@ export const fetchPageContent = onCall(
         title: page.title,
         ...(has('text') && { text: page.text.slice(0, textLimit) }),
         ...(has('structuredData') && {
-          structuredData: pickStructuredData(page.jsonBlocks, schemaTypes),
+          structuredData: toWireNodes(
+            pickStructuredData(page.jsonBlocks, schemaTypes),
+          ),
         }),
         ...(has('meta') && {
           meta: {

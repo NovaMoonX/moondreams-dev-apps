@@ -3,8 +3,6 @@ import { readFileSync } from 'node:fs';
 
 import {
   COLLECTION_BATCH_SIZE,
-  COLLECTION_CHIPS_QUIET_HIDDEN,
-  COLLECTION_CHIPS_SHOWN,
   COLLECTION_FILTER_ANY,
   COLLECTION_FILTER_NONE,
   HIGH_PROTEIN_GRAMS,
@@ -30,16 +28,26 @@ import {
   filterByCollection,
   findCollectionByLabel,
   getChoiceLabels,
-  getCollectionChipWindow,
+  getCollectionsPill,
   getCollectionCounts,
   getCollectionFilterOptions,
   getCollectionKey,
+  getAddedToCollectionsText,
+  getAddToCollectionsLabel,
+  getChunks,
+  getCollectionChange,
   getCollectionsToSave,
   getInitialCollectionsChoice,
+  getNothingAddedText,
   getRecipeCollections,
+  getRecipeSelectionNote,
+  getRecipeSelectionTitle,
   getRemovalChunks,
   getSuggestedCollections,
   getTrustedProtein,
+  getUndoAddText,
+  planAddToCollections,
+  planRemoveFromCollections,
   toggleCollection,
   withoutCollection,
   type CollectionsChoice,
@@ -209,37 +217,24 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
 }
 
-// ---- A recipe drawer folds its collection chips only when more than three would hide ----
+// ---- The drawer's collections are one pill: the name when there is one, a count when there are more ----
 {
-  assert.equal(COLLECTION_CHIPS_SHOWN, 4);
-  assert.equal(COLLECTION_CHIPS_QUIET_HIDDEN, 3);
-  assert.deepEqual(getCollectionChipWindow(0, false), {
-    shown: 0,
-    canFold: false,
-  });
-  assert.deepEqual(getCollectionChipWindow(3, false), {
-    shown: 3,
-    canFold: false,
-  });
+  assert.deepEqual(getCollectionsPill([]), { kind: 'none', label: null });
   assert.deepEqual(
-    getCollectionChipWindow(7, false),
-    { shown: 7, canFold: false },
-    'seven would hide three: shown whole',
+    getCollectionsPill(['Weeknight']),
+    { kind: 'one', label: 'Weeknight' },
+    'one collection is named',
   );
   assert.deepEqual(
-    getCollectionChipWindow(8, false),
-    { shown: 4, canFold: true },
-    'eight would hide four: folded',
+    getCollectionsPill(['Bulk', 'Weeknight']),
+    { kind: 'many', label: 'In 2 collections' },
+    'two are counted, so the pill never grows with their names',
   );
-  assert.deepEqual(
-    getCollectionChipWindow(8, true),
-    { shown: 8, canFold: true },
-    'opened it shows them all and still offers to fold',
+  assert.equal(
+    getCollectionsPill(Array.from({ length: 20 }, (_, i) => `C${i}`)).label,
+    'In 20 collections',
+    'the most a recipe can name still reads in one short pill',
   );
-  assert.deepEqual(getCollectionChipWindow(20, false), {
-    shown: 4,
-    canFold: true,
-  });
 }
 
 // ---- Suggestions come from the recipe's own numbers ----
@@ -436,10 +431,11 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
   assert.deepEqual(none.ids, [], 'the starting choice is never changed');
 
-  const makeId = (() => {
-    let n = 0;
-    return () => `new-${++n}`;
-  })();
+  const newIds = Array.from(
+    { length: 10 },
+    (_, index) => `new-${index + 1}`,
+  ).values();
+  const makeId = () => newIds.next().value as string;
   const typed = addCollectionByLabel(none, all, '  Meal prep ', makeId);
   assert.equal(typed.outcome, 'ok');
   assert.deepEqual(typed.choice.added, [{ id: 'new-1', label: 'Meal prep' }]);
@@ -526,6 +522,22 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
       newCollections: [{ id: 'new-1', label: 'Meal prep' }],
     },
     'a save drops an id deleted elsewhere and writes only the new collections still picked',
+  );
+
+  assert.deepEqual(
+    getCollectionChange(['c-hp', 'c-week'], ['c-hp', 'c-week']),
+    { add: [], remove: [] },
+    'an untouched row writes nothing, so a collection another device added stays',
+  );
+  assert.deepEqual(
+    getCollectionChange(['c-hp', 'c-week'], ['c-week', 'new-1', 'c-brunch']),
+    { add: ['new-1', 'c-brunch'], remove: ['c-hp'] },
+    'a save writes only what it added and took out, in the order picked',
+  );
+  assert.deepEqual(
+    getCollectionChange([], ['c-hp']),
+    { add: ['c-hp'], remove: [] },
+    'a new recipe adds every one it was given',
   );
 
   assert.deepEqual(
@@ -805,8 +817,206 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
   assert.match(
     rules,
+    /function isRecipe\(data, id\) \{\s*return data\.keys\(\)\.hasOnly\(\[[^\]]*'isFavorite'[^\]]*\]\)\s*&& data\.keys\(\)\.hasAll\(\[(?![^\]]*'isFavorite')[^\]]*\]\)/,
+    'a recipe may carry isFavorite but is not required to (older ones have none)',
+  );
+  assert.match(
+    rules,
+    /data\.get\('isFavorite', false\) is bool/,
+    'and the key is read with a default',
+  );
+  assert.match(
+    rules,
     /function isCollection\(data, id\) \{\s*return data\.keys\(\)\.hasOnly\(\['id', 'label', 'createdAt', 'updatedAt'\]\)\s*&& data\.keys\(\)\.hasAll\(\['id', 'label', 'createdAt', 'updatedAt'\]\)/,
     'a new collection lists every key it has',
+  );
+}
+
+// ---- Adding many recipes to collections at once ----
+{
+  assert.deepEqual(
+    planAddToCollections(undefined, ['a', 'b']),
+    { next: ['a', 'b'], added: ['a', 'b'], isAtCap: false },
+    'a recipe written before collections gains the key with what was added',
+  );
+  assert.deepEqual(
+    planAddToCollections(['a', 'x'], ['a']),
+    { next: null, added: [], isAtCap: false },
+    'a recipe already in it is not written',
+  );
+  assert.deepEqual(
+    planAddToCollections(['x'], ['a', 'x', 'b', 'a']),
+    { next: ['x', 'a', 'b'], added: ['a', 'b'], isAtCap: false },
+    'what it has stays, the rest follows in the order given, once each',
+  );
+  const nineteen = Array.from(
+    { length: MAX_RECIPE_COLLECTIONS - 1 },
+    (_, i) => `c${i}`,
+  );
+  assert.deepEqual(
+    planAddToCollections(nineteen, ['a', 'b']),
+    { next: [...nineteen, 'a'], added: ['a'], isAtCap: true },
+    'a recipe one short of the cap takes the first and says the other was left out for it',
+  );
+  const twenty = [...nineteen, 'last'];
+  assert.deepEqual(
+    planAddToCollections(twenty, ['a']),
+    { next: null, added: [], isAtCap: true },
+    'a recipe at the cap takes nothing and is counted as at the cap, not as already in it',
+  );
+  assert.deepEqual(
+    planAddToCollections(twenty, ['last']),
+    { next: null, added: [], isAtCap: false },
+    'but one that is already in the collection is only already in it',
+  );
+  assert.deepEqual(
+    planAddToCollections('not a list', ['a']),
+    { next: ['a'], added: ['a'], isAtCap: false },
+    'a stored value that is no list reads as none',
+  );
+  assert.deepEqual(
+    planAddToCollections(['a'], ['b', 'c', 'd'], 2),
+    { next: ['a', 'b'], added: ['b'], isAtCap: true },
+    'the cap is a parameter',
+  );
+
+  assert.deepEqual(
+    planRemoveFromCollections(['x', 'a', 'b', 'later'], ['a', 'b']),
+    ['x', 'later'],
+    'an Undo takes off only what the act added and keeps what came after',
+  );
+  assert.equal(
+    planRemoveFromCollections(['x'], ['a']),
+    null,
+    'a recipe that no longer has what the act added is not written',
+  );
+  assert.equal(planRemoveFromCollections(undefined, ['a']), null);
+  assert.deepEqual(
+    planRemoveFromCollections(['a'], ['a']),
+    [],
+    'the last one leaves an empty list, never a missing key',
+  );
+
+  const labels = ['Bulk', 'Weeknight'];
+  assert.deepEqual(
+    getAddedToCollectionsText({
+      labels: ['Bulk'],
+      changed: 12,
+      alreadyIn: 0,
+      atCap: 0,
+      gone: 0,
+    }),
+    { title: 'Added 12 recipes to Bulk', description: null },
+    'a clean add says the count it wrote and nothing else',
+  );
+  assert.deepEqual(
+    getAddedToCollectionsText({
+      labels,
+      changed: 1,
+      alreadyIn: 0,
+      atCap: 0,
+      gone: 0,
+    }),
+    { title: 'Added 1 recipe to Bulk and Weeknight', description: null },
+  );
+  assert.equal(
+    getAddedToCollectionsText({
+      labels: ['A', 'B', 'C', 'D'],
+      changed: 2,
+      alreadyIn: 0,
+      atCap: 0,
+      gone: 0,
+    }).title,
+    'Added 2 recipes to A, B and 2 more',
+    'more than two names are capped',
+  );
+  assert.equal(
+    getAddedToCollectionsText({
+      labels: ['Bulk'],
+      changed: 9,
+      alreadyIn: 3,
+      atCap: 2,
+      gone: 1,
+    }).description,
+    '3 were already in it. 2 are in 20 collections, the most a recipe can be in. 1 was deleted.',
+    'what it left alone is said once, by why',
+  );
+  assert.equal(
+    getAddedToCollectionsText({
+      labels,
+      changed: 1,
+      alreadyIn: 1,
+      atCap: 0,
+      gone: 0,
+    }).description,
+    '1 was already in them.',
+  );
+  assert.equal(
+    getNothingAddedText({
+      labels: ['Bulk'],
+      changed: 0,
+      alreadyIn: 4,
+      atCap: 0,
+      gone: 0,
+    }),
+    'Nothing was added. 4 were already in it.',
+    'an act that changed nothing says why in the sheet instead of a toast',
+  );
+  assert.equal(
+    getNothingAddedText({
+      labels: ['Bulk'],
+      changed: 0,
+      alreadyIn: 0,
+      atCap: 0,
+      gone: 0,
+    }),
+    'Nothing was added to Bulk.',
+  );
+  assert.deepEqual(
+    [getUndoAddText(5, 5), getUndoAddText(3, 5), getUndoAddText(0, 1)],
+    [
+      null,
+      'Took it back from 3 of 5 recipes; the rest changed since.',
+      'Took it back from 0 of 1 recipe; the rest changed since.',
+    ],
+    'an Undo that took everything back is silent and one that could not says how many',
+  );
+  assert.deepEqual(
+    [
+      getRecipeSelectionTitle(0),
+      getRecipeSelectionTitle(1),
+      getRecipeSelectionTitle(30),
+    ],
+    ['Select recipes', '1 selected', '30 selected'],
+  );
+  assert.deepEqual(
+    [getRecipeSelectionNote(0), getRecipeSelectionNote(2)],
+    ['Tap the recipes you want to add.', null],
+  );
+  assert.deepEqual(
+    [getAddToCollectionsLabel(1), getAddToCollectionsLabel(12)],
+    ['Add 1 recipe', 'Add 12 recipes'],
+  );
+  assert.deepEqual(
+    getChunks(Array.from({ length: 450 }, (_, i) => i)).map(
+      (chunk) => chunk.length,
+    ),
+    [200, 200, 50],
+    '450 recipes are three transactions, each well under 500 writes',
+  );
+  assert.deepEqual(getChunks([]), [], 'nothing ticked is no transaction');
+  assert.deepEqual(getChunks([1, 2, 3], 2), [[1, 2], [3]]);
+  assert.equal(
+    sortFavoritesFirst([
+      { id: 'a', isFavorite: false },
+      { id: 'b' },
+      { id: 'c', isFavorite: true },
+      { id: 'd', isFavorite: true },
+    ])
+      .map((recipe) => recipe.id)
+      .join(''),
+    'cdab',
+    'starred recipes lead and each group keeps the order it came in (a recipe with no key is not starred)',
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -47,6 +47,8 @@ interface CookTimerViewProps {
   meanwhile: { title: string; stepNumber: number; stepCount: number } | null;
   /** The keep-the-screen-open line, only while the timer runs. */
   note: string | null;
+  /** What sits under the timer card: the offer to buzz this device when the screen is off. */
+  buzz: ReactNode;
   onTick: () => void;
   onPause: (id: string) => void;
   onResume: (id: string) => void;
@@ -71,6 +73,7 @@ function CookTimerView({
   upNext,
   meanwhile,
   note,
+  buzz,
   onTick,
   onPause,
   onResume,
@@ -272,6 +275,11 @@ function CookTimerView({
             </span>
           </section>
         </div>
+        {buzz && (
+          <div className='min-w-0 [@media(max-height:500px)]:col-start-2'>
+            {buzz}
+          </div>
+        )}
         {isStepShown && (
           <div className='min-w-0 space-y-3 [@media(max-height:500px)]:col-start-2'>
             <p className='text-xl leading-snug font-medium wrap-break-word whitespace-pre-wrap'>
@@ -421,7 +429,7 @@ function CookTimerView({
           <p className='text-muted-foreground text-xs font-medium'>
             {upNext.caption}
           </p>
-          <p className='mt-1 line-clamp-6 text-lg leading-snug wrap-break-word [@media(max-height:640px)]:line-clamp-3'>
+          <p className='mt-1 line-clamp-6 text-lg leading-snug wrap-break-word [@media(max-height:600px)_and_(min-height:501px)]:line-clamp-1! [@media(max-height:640px)]:line-clamp-3'>
             {upNext.text}
           </p>
         </section>

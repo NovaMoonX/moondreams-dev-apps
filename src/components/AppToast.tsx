@@ -93,7 +93,7 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
         'relative flex touch-none items-start gap-3 rounded-lg border p-4 shadow-lg select-none max-sm:gap-2.5 max-sm:p-3',
         !isDragging && 'transition-transform duration-200 ease-out',
         isReminder && 'cursor-pointer',
-        !isSmallScreen && 'pr-8',
+        !isSmallScreen && 'pr-10',
         style.className,
       )}
       style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
@@ -115,7 +115,8 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
           type='button'
           variant='tertiary'
           size='sm'
-          className='h-10 shrink-0 self-center px-2 font-semibold underline'
+          rounded='full'
+          className='h-10 shrink-0 self-center border border-current/40 px-4 font-semibold text-inherit!'
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
@@ -132,7 +133,7 @@ function AppToast({ id, title, description, type, action, onRemove }: AppToastPr
           variant='tertiary'
           size='icon'
           aria-label='Dismiss'
-          className='absolute top-1.5 right-1.5 h-6 w-6 bg-transparent! opacity-60 hover:opacity-100'
+          className="absolute top-2 right-2 h-6 w-6 bg-transparent! opacity-60 after:absolute after:-inset-2 after:content-[''] hover:opacity-100"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();

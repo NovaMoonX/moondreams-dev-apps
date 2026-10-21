@@ -19,6 +19,8 @@ export interface CookingOpen {
   recipeId: string;
   servings: number | null;
   plannedMealId: string | null;
+  /** The day of the planned meal (a stored date), so a later pick-up can tell a meal that is gone from one outside the days loaded; null when it wasn't known. */
+  plannedMealDate: number | null;
   plate: PlateCookRecipe[] | null;
 }
 
@@ -48,6 +50,7 @@ export const toResumeTimer = (timer: ResumeTimer): ResumeTimer => {
       status: 'running',
       startedAt: timer.startedAt,
       endsAt: timer.endsAt,
+      reminderId: timer.reminderId,
     };
   }
   if (timer.status === 'paused') {
@@ -55,6 +58,14 @@ export const toResumeTimer = (timer: ResumeTimer): ResumeTimer => {
   }
   return { ...base, status: 'done', endedAt: timer.endedAt };
 };
+
+/** The pushes a saved session still has scheduled, for the ones that go unused when it is let go. */
+export const getTimerReminderIds = (timers: ResumeTimer[]) =>
+  timers.flatMap((timer) =>
+    timer.status === 'running' && timer.reminderId !== null
+      ? [timer.reminderId]
+      : [],
+  );
 
 export const buildCookingSnapshot = (input: {
   uid: string;
@@ -73,6 +84,7 @@ export const buildCookingSnapshot = (input: {
     recipeId: input.open.recipeId,
     servings: input.open.servings,
     plannedMealId: input.open.plannedMealId,
+    plannedMealDate: input.open.plannedMealDate,
     plate:
       input.open.plate === null
         ? null
@@ -105,6 +117,9 @@ const isCount = (value: unknown, max: number): value is number =>
   value >= 0 &&
   value <= max;
 
+const isReminderId = (value: unknown): value is string =>
+  typeof value === 'string' && /^[\w-]{1,64}$/.test(value);
+
 const parseTimer = (value: unknown): ResumeTimer | null => {
   if (
     !isRecord(value) ||
@@ -112,7 +127,12 @@ const parseTimer = (value: unknown): ResumeTimer | null => {
     !isCount(value.stepNumber, 10_000) ||
     value.stepNumber < 1 ||
     typeof value.label !== 'string' ||
-    !isTime(value.durationMs)
+    !isTime(value.durationMs) ||
+    !(
+      value.reminderId === undefined ||
+      value.reminderId === null ||
+      isReminderId(value.reminderId)
+    )
   ) {
     return null;
   }
@@ -132,6 +152,7 @@ const parseTimer = (value: unknown): ResumeTimer | null => {
       status: 'running',
       startedAt: value.startedAt,
       endsAt: value.endsAt,
+      reminderId: isReminderId(value.reminderId) ? value.reminderId : null,
     };
   }
   if (
@@ -208,6 +229,9 @@ const parseOpen = (value: unknown): CookingOpen | null => {
     recipeId: value.recipeId,
     servings: servings,
     plannedMealId: plannedMealId,
+    plannedMealDate: isTime(value.plannedMealDate)
+      ? value.plannedMealDate
+      : null,
     plate,
   };
 };
@@ -273,11 +297,29 @@ export interface CookingResumePlan {
   stepCount: number;
 }
 
+/** The planned meals the screen has loaded: their ids, and the days the calendar's listener covers (null before it has). */
+export interface LoadedPlannedMeals {
+  ids: Set<string>;
+  window: { start: number; end: number } | null;
+}
+
+/** A planned meal is let go only when it is provably gone: its day is inside the days loaded and it isn't there. One outside them, or of an unknown day, is kept, and Finish writes its cooks without needing the meal. */
+export const isPlannedMealGone = (
+  plannedMealId: string,
+  plannedMealDate: number | null,
+  loaded: LoadedPlannedMeals,
+) =>
+  !loaded.ids.has(plannedMealId) &&
+  loaded.window !== null &&
+  plannedMealDate !== null &&
+  plannedMealDate >= loaded.window.start &&
+  plannedMealDate < loaded.window.end;
+
 /** The session as it can be opened now: recipes that are gone, archived or have no steps are dropped (nothing left means nothing to pick up), a planned meal that is gone is let go, and every step and timer is held to what the recipes have. */
 export const resolveCookingResume = (
   snapshot: CookingSnapshot,
   recipesById: Map<string, Pick<Recipe, 'title' | 'steps' | 'isArchived'>>,
-  plannedMealIds: Set<string>,
+  planned: LoadedPlannedMeals,
 ): CookingResumePlan | null => {
   const listed = snapshot.open.plate ?? [
     { recipeId: snapshot.open.recipeId, servings: snapshot.open.servings ?? 0 },
@@ -301,7 +343,11 @@ export const resolveCookingResume = (
   const first = kept[0];
   const plannedMealId =
     snapshot.open.plannedMealId !== null &&
-    plannedMealIds.has(snapshot.open.plannedMealId)
+    !isPlannedMealGone(
+      snapshot.open.plannedMealId,
+      snapshot.open.plannedMealDate,
+      planned,
+    )
       ? snapshot.open.plannedMealId
       : null;
   const currentId = stepCounts.has(snapshot.resume.currentId)

@@ -1,18 +1,23 @@
-import { useMemo, useState, type RefObject } from 'react';
+import { useMemo, useState, type ReactNode, type RefObject } from 'react';
 
 import {
   Button,
   Form,
   FormFactories,
+  type FormCustomFieldProps,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { X } from 'lucide-react';
+import { ArrowUp, X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import {
+  SUMMARY_GROUP_FRAME,
+  type SummaryGroupPosition,
+} from '@/components/summaryGroup';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
@@ -53,6 +58,7 @@ import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_TITLE_LENGTH,
+  NUTRITION_METRICS,
   SECTION_COUNT_THRESHOLD,
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
@@ -74,6 +80,7 @@ import {
   selectIsCollectionsReady,
   selectNotesByRecipe,
   selectRecipesById,
+  selectShowNutrition,
   selectSourceCounts,
   selectSources,
   selectSourcesById,
@@ -86,8 +93,10 @@ import type {
   Recipe,
   RecipeNote,
   RecipeSource,
+  WebPhoto,
 } from '@apps/pinch/types';
 import {
+  getCollectionChange,
   getCollectionsToSave,
   getSuggestedCollections,
   getTrustedProtein,
@@ -96,6 +105,7 @@ import {
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
+import { getShownCover } from '@apps/pinch/utils/recipeCover';
 import {
   hasLinksProblem,
   isOverLinkCap,
@@ -155,6 +165,10 @@ function RecipeForm({
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
+  const showNutrition = useAppSelector(selectShowNutrition);
+  const isNutritionShown = NUTRITION_METRICS.some(
+    (metric) => showNutrition[metric],
+  );
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
   const collections = useAppSelector(selectCollections);
   const isCollectionsReady = useAppSelector(selectIsCollectionsReady);
@@ -169,6 +183,7 @@ function RecipeForm({
   const upload = useImageUpload(null);
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
   const [isCoverRemoved, setIsCoverRemoved] = useState(false);
+  const [webCover, setWebCover] = useState<WebPhoto | null>(null);
   const [initialData] = useState(() =>
     initialRead
       ? {
@@ -192,8 +207,13 @@ function RecipeForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const coverUrl =
-    upload.previewUrl ?? (isCoverRemoved ? null : existingCoverUrl);
+  const cover = getShownCover({
+    uploadUrl: upload.previewUrl,
+    web: webCover,
+    isRemoved: isCoverRemoved,
+    savedWebUrl: recipe?.coverUrl ?? null,
+    storageUrl: existingCoverUrl,
+  });
   const prep = parseMinutes(formData.basics.prep);
   const cook = parseMinutes(formData.basics.cook);
   const isFormComplete =
@@ -222,6 +242,7 @@ function RecipeForm({
         prepMinutes: null,
         cookMinutes: null,
         coverPath: null,
+        coverUrl: null,
         ingredients: lines.map(toRecipeLine),
         steps: [],
         care: null,
@@ -231,6 +252,7 @@ function RecipeForm({
         sourceId: null,
         collectionIds: [],
         isArchived: false,
+        isFavorite: false,
         createdAt: 0,
         updatedAt: 0,
       },
@@ -355,8 +377,105 @@ function RecipeForm({
     [sources, sourceCounts, initialData.sourceChoice.choice],
   );
 
-  const fields = useMemo(
-    () => [
+  const fields = useMemo(() => {
+    const groupRows: {
+      name: string;
+      render: (
+        props: FormCustomFieldProps,
+        position: SummaryGroupPosition,
+      ) => ReactNode;
+    }[] = [
+      ...(hasSourcesFailed
+        ? []
+        : [
+            {
+              name: 'sourceChoice',
+              render: (
+                props: FormCustomFieldProps,
+                position: SummaryGroupPosition,
+              ) => (
+                <RecipeSourceField
+                  value={props.value as RecipeFormData['sourceChoice']}
+                  options={sourceOptions}
+                  onChange={props.onValueChange}
+                  position={position}
+                />
+              ),
+            },
+          ]),
+      ...(ownsCollections
+        ? [
+            {
+              name: 'collections',
+              render: (
+                props: FormCustomFieldProps,
+                position: SummaryGroupPosition,
+              ) => (
+                <RecipeCollectionsField
+                  value={props.value as CollectionsChoice}
+                  onChange={props.onValueChange}
+                  collections={collections}
+                  suggestions={suggestions}
+                  position={position}
+                />
+              ),
+            },
+          ]
+        : []),
+      {
+        name: 'care',
+        render: (props, position) => (
+          <RecipeCareField
+            value={props.value as RecipeFormData['care']}
+            onChange={props.onValueChange}
+            position={position}
+          />
+        ),
+      },
+      {
+        name: 'links',
+        render: (props, position) => (
+          <RecipeLinksField
+            value={props.value as RecipeFormData['links']}
+            onChange={props.onValueChange}
+            position={position}
+          />
+        ),
+      },
+      ...(tracking === 'on'
+        ? [
+            {
+              name: 'why',
+              render: (
+                props: FormCustomFieldProps,
+                position: SummaryGroupPosition,
+              ) => (
+                <RecipeWhyField
+                  value={String(props.value)}
+                  onChange={props.onValueChange}
+                  position={position}
+                />
+              ),
+            },
+          ]
+        : []),
+    ];
+    const getPosition = (index: number): SummaryGroupPosition => {
+      if (groupRows.length === 1) return 'only';
+      if (index === 0) return 'first';
+      return index === groupRows.length - 1 ? 'last' : 'middle';
+    };
+    const groupFields = groupRows.map((row, index) => {
+      const position = getPosition(index);
+      return custom({
+        name: row.name,
+        label: '',
+        className: SUMMARY_GROUP_FRAME[position],
+        renderComponent: (props) => row.render(props, position),
+      });
+    });
+
+    return [
       custom({
         name: 'title',
         label: '',
@@ -409,15 +528,25 @@ function RecipeForm({
         label: '',
         renderComponent: () => (
           <RecipePhotoField
-            photoUrl={coverUrl}
+            uid={uid}
+            cover={cover}
             error={coverError}
+            canSuggest={recipe === null}
+            title={formData.title}
             onSelect={(file) => {
               pickCover(file);
               setIsCoverRemoved(false);
               isDirtyRef.current = true;
             }}
+            onPickWeb={(photo) => {
+              clearCover();
+              setWebCover(photo);
+              setIsCoverRemoved(false);
+              isDirtyRef.current = true;
+            }}
             onRemove={() => {
               clearCover();
+              setWebCover(null);
               setIsCoverRemoved(true);
               isDirtyRef.current = true;
             }}
@@ -458,85 +587,25 @@ function RecipeForm({
           </FormSection>
         ),
       }),
-      ...(hasSourcesFailed
-        ? []
-        : [
-            custom({
-              name: 'sourceChoice',
-              label: '',
-              renderComponent: (props) => (
-                <RecipeSourceField
-                  value={props.value as RecipeFormData['sourceChoice']}
-                  options={sourceOptions}
-                  onChange={props.onValueChange}
-                />
-              ),
-            }),
-          ]),
-      ...(ownsCollections
+      ...(isNutritionShown
         ? [
             custom({
-              name: 'collections',
+              name: 'nutrition',
               label: '',
               renderComponent: (props) => (
-                <RecipeCollectionsField
-                  value={props.value as CollectionsChoice}
-                  onChange={props.onValueChange}
-                  collections={collections}
-                  suggestions={suggestions}
-                />
+                <FormSection title='Nutrition'>
+                  <NutritionReview
+                    calculated={calculation.values}
+                    leftOut={calculation.leftOut}
+                    typed={props.value as Record<NutritionMetric, string>}
+                    onChange={props.onValueChange}
+                  />
+                </FormSection>
               ),
             }),
           ]
         : []),
-      custom({
-        name: 'care',
-        label: '',
-        renderComponent: (props) => (
-          <RecipeCareField
-            value={props.value as RecipeFormData['care']}
-            onChange={props.onValueChange}
-          />
-        ),
-      }),
-      custom({
-        name: 'links',
-        label: '',
-        renderComponent: (props) => (
-          <RecipeLinksField
-            value={props.value as RecipeFormData['links']}
-            onChange={props.onValueChange}
-          />
-        ),
-      }),
-      custom({
-        name: 'nutrition',
-        label: '',
-        renderComponent: (props) => (
-          <FormSection title='Nutrition'>
-            <NutritionReview
-              calculated={calculation.values}
-              leftOut={calculation.leftOut}
-              typed={props.value as Record<NutritionMetric, string>}
-              onChange={props.onValueChange}
-            />
-          </FormSection>
-        ),
-      }),
-      ...(tracking === 'on'
-        ? [
-            custom({
-              name: 'why',
-              label: '',
-              renderComponent: (props) => (
-                <RecipeWhyField
-                  value={String(props.value)}
-                  onChange={props.onValueChange}
-                />
-              ),
-            }),
-          ]
-        : []),
+      ...groupFields,
       ...(tracking === 'full'
         ? [
             custom({
@@ -551,25 +620,27 @@ function RecipeForm({
             }),
           ]
         : []),
-    ],
-    [
-      uid,
-      coverUrl,
-      coverError,
-      pickCover,
-      clearCover,
-      calculation,
-      isDirtyRef,
-      hasSourcesFailed,
-      sourceOptions,
-      ownsCollections,
-      collections,
-      suggestions,
-      isBlankByHand,
-      showUndo,
-      tracking,
-    ],
-  );
+    ];
+  }, [
+    uid,
+    cover,
+    recipe,
+    formData.title,
+    coverError,
+    pickCover,
+    clearCover,
+    calculation,
+    isDirtyRef,
+    hasSourcesFailed,
+    isNutritionShown,
+    sourceOptions,
+    ownsCollections,
+    collections,
+    suggestions,
+    isBlankByHand,
+    showUndo,
+    tracking,
+  ]);
 
   const handleDelete = async () => {
     if (!recipe) {
@@ -683,7 +754,13 @@ function RecipeForm({
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
             sourceId,
             newSource,
-            collectionIds,
+            collectionChange:
+              collectionIds === null
+                ? null
+                : getCollectionChange(
+                    initialData.collections.ids,
+                    collectionIds,
+                  ),
             newCollections,
             newIngredients: [
               ...new Map(
@@ -700,6 +777,7 @@ function RecipeForm({
             links: toRecipeLinks(data.links),
             steps: data.steps.map((step) => step.trim()).filter(Boolean),
             coverFile: upload.file,
+            coverUrl: upload.file ? null : (webCover?.imageUrl ?? null),
             removeCover: isCoverRemoved,
             fromIdeaId: initialIdea?.id ?? null,
             tweakReason: data.why,
@@ -810,13 +888,14 @@ function RecipeForm({
               ) : blocker?.target ? (
                 <Button
                   type='button'
-                  variant='tertiary'
-                  className="text-muted-foreground! relative h-auto min-h-0 justify-start rounded-none p-0 px-0! py-0! text-left text-xs font-normal whitespace-normal before:absolute before:inset-x-0 before:-top-4 before:-bottom-2 before:content-['']"
+                  variant='secondary'
+                  size='sm'
+                  rounded='full'
+                  className="text-foreground! relative h-7 gap-1.5 px-3 text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                   onClick={() => showBlocker(blocker.target ?? '')}
                 >
-                  <span className='decoration-muted-foreground/50 underline underline-offset-4'>
-                    {blocker.text}
-                  </span>
+                  <ArrowUp className='h-3.5 w-3.5' aria-hidden='true' />
+                  {blocker.text}
                 </Button>
               ) : (
                 blocker?.text

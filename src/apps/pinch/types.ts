@@ -142,6 +142,8 @@ export interface PinchSettings {
   fridgeDays: number | null;
   /** Days a box starts with in the freezer; null is the built-in number. */
   freezerDays: number | null;
+  /** Whether a new recipe's Photo drawer searches the web with its title for pictures to pick. A document written before this key lacks it, which reads as true. */
+  suggestPhotos: boolean;
   reminders: PinchReminderSettings;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */
@@ -341,6 +343,8 @@ export interface ShoppingItem {
   isChecked: boolean;
   /** What put it on the list: planned meal ids, `recipe:<id>` and `meal:<id>`, oldest first, at most 60; empty for something added on the list itself. Documents written before sources lack the key, which reads as empty. */
   sources: string[];
+  /** An instant: the line's `updatedAt` as it was put in the pantry. It counts as put away only while `updatedAt` still equals this, so ticking, unticking or editing it again offers it once more. Documents written before this lack the key, which reads as null. */
+  pantryAddedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -518,6 +522,15 @@ export interface RecipeLink {
   url: string;
 }
 
+/** One picture the photo search found: both addresses are https. The thumbnail is what the grid loads; the full picture is loaded only once the person picks it. */
+export interface WebPhoto {
+  thumbUrl: string;
+  imageUrl: string;
+  title: string;
+  /** The site the picture was found on, without `www.`. */
+  host: string;
+}
+
 export interface Recipe {
   id: string;
   title: string;
@@ -525,8 +538,10 @@ export interface Recipe {
   servings: number;
   prepMinutes: number | null;
   cookMinutes: number | null;
-  /** Storage path of the cover image. */
+  /** Storage path of the cover image the person uploaded. A recipe has at most one of `coverPath` and `coverUrl`. */
   coverPath: string | null;
+  /** The https address of a cover picked from the web search: the picture stays on its own site and may stop loading. A recipe written before web covers lacks the key, which reads as null. */
+  coverUrl: string | null;
   ingredients: RecipeIngredient[];
   steps: string[];
   /** Per serving; a null metric falls back to the value added up from the ingredients. */
@@ -542,6 +557,8 @@ export interface Recipe {
   links: RecipeLink[];
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
   isArchived: boolean;
+  /** Starred by the person: favorites list first. Recipes written before favorites lack the key, which reads as false; only the star writes it. */
+  isFavorite: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -582,7 +599,13 @@ export type ResumeTimer = {
   label: string;
   durationMs: number;
 } & (
-  | { status: 'running'; startedAt: number; endsAt: number }
+  | {
+      status: 'running';
+      startedAt: number;
+      endsAt: number;
+      /** The push scheduled for its end, so a picked-up session keeps or cancels it instead of scheduling a second; null when it has none. */
+      reminderId: string | null;
+    }
   | { status: 'paused'; remainingMs: number }
   | { status: 'done'; endedAt: number }
 );

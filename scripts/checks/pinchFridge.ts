@@ -5,12 +5,18 @@ import type { Container, RecipeCare } from '../../src/apps/pinch/types.ts';
 import {
   NO_SKIPS,
   getBulkNames,
+  getBoxLine,
   getBulkToast,
+  getLandingPlace,
   getNamesLine,
   getPastDueBoxes,
+  getPastDueSplitText,
   getPastDueText,
+  getPlacedTitle,
   getSelectionNote,
+  getSelectionPrimary,
   getSelectionTitle,
+  getSharedPlace,
   getSkippedText,
   getTossAction,
   getTossConfirmNote,
@@ -343,6 +349,57 @@ assert.deepEqual(
   [getPastDueText(1), getPastDueText(3), getTossAction(1), getTossAction(3)],
   ['1 is past its date', '3 are past their date', 'Toss it', 'Toss them'],
 );
+const inFridge = (id: string) => container({ id, place: 'FRIDGE' });
+const inFreezer = (id: string) => container({ id, place: 'FREEZER' });
+assert.deepEqual(
+  [
+    getPastDueSplitText([inFridge('a'), inFridge('b')], 'FRIDGE'),
+    getPastDueSplitText(
+      [inFridge('a'), inFridge('b'), inFreezer('c')],
+      'FRIDGE',
+    ),
+    getPastDueSplitText(
+      [inFridge('a'), inFreezer('b'), inFreezer('c')],
+      'FREEZER',
+    ),
+    getPastDueSplitText([inFreezer('a')], 'FRIDGE'),
+    getPastDueSplitText([inFridge('a'), inFridge('b')], 'FREEZER'),
+  ],
+  [
+    null,
+    '2 here, 1 in the freezer',
+    '2 here, 1 in the fridge',
+    'In the freezer',
+    'All in the fridge',
+  ],
+  'the past-date row names where they are when the list shows one place, and says nothing when they are all here',
+);
+assert.deepEqual(
+  [
+    getSelectionPrimary([], NOON_ON_THE_18TH),
+    getSelectionPrimary([container({ eatBy: dayOf(15) })], NOON_ON_THE_18TH),
+    getSelectionPrimary(
+      [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(14) })],
+      NOON_ON_THE_18TH,
+    ),
+    getSelectionPrimary(
+      [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(22) })],
+      NOON_ON_THE_18TH,
+    ),
+    getSelectionPrimary([container({ eatBy: dayOf(18) })], NOON_ON_THE_18TH),
+  ],
+  ['EAT', 'TOSS', 'TOSS', 'EAT', 'EAT'],
+  'Toss is the filled act only when every ticked box is past its date: nothing ticked, a mix, or one due today keeps Ate it all',
+);
+assert.deepEqual(
+  [
+    [container({ eatBy: dayOf(15) })],
+    [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(15) })],
+    [container({ eatBy: dayOf(15) }), container({ eatBy: dayOf(19) })],
+  ].map((boxes) => getSelectionPrimary(boxes, NOON_ON_THE_18TH)),
+  ['TOSS', 'TOSS', 'EAT'],
+  'the box sheet leads with Toss for one box or a batch past its date, by the helper Select uses, and with Ate one once a box of the batch has a later date',
+);
 assert.deepEqual(
   [getSelectionTitle(0), getSelectionTitle(1), getSelectionTitle(12)],
   ['Select boxes', '1 selected', '12 selected'],
@@ -486,5 +543,186 @@ assert.deepEqual(
   'a row with only some boxes ticked ticks the rest',
 );
 assert.deepEqual(given([], ['a']), ['a'], 'ticking nothing changes nothing');
+
+// One list, two places: the past-its-date row, the landing place and the acts over both
+const alexBoxes = [
+  container({ id: 'soup1', title: 'Pumpkin soup', eatBy: dayOf(15) }),
+  container({ id: 'soup2', title: 'Pumpkin soup', eatBy: dayOf(15) }),
+  container({ id: 'chili', title: 'Turkey chili', eatBy: dayOf(18) }),
+  container({ id: 'rice', title: 'Rice', eatBy: dayOf(22) }),
+  container({
+    id: 'stock',
+    title: 'Chicken stock',
+    place: 'FREEZER',
+    eatBy: dayOf(10),
+  }),
+  container({
+    id: 'curry',
+    title: 'Curry',
+    place: 'FREEZER',
+    eatBy: dayOf(19),
+  }),
+  container({
+    id: 'later',
+    title: 'Beans',
+    place: 'FREEZER',
+    eatBy: dayOf(60),
+  }),
+];
+assert.deepEqual(
+  getPastDueBoxes(alexBoxes, NOW).map(({ id }) => id),
+  ['soup1', 'soup2', 'stock'],
+  'the past-its-date row counts both places, so it says what the Kitchen tile says',
+);
+assert.equal(
+  getLandingPlace(alexBoxes, NOW),
+  'FRIDGE',
+  'the screen opens on the fridge: it holds three boxes that want a look (two past, one due today) against two in the freezer, even though the freezer holds the oldest date',
+);
+assert.equal(
+  getLandingPlace(
+    [
+      container({ id: 'a', eatBy: dayOf(10) }),
+      container({ id: 'b', place: 'FREEZER', eatBy: dayOf(18) }),
+      container({ id: 'c', place: 'FREEZER', eatBy: dayOf(19) }),
+    ],
+    NOW,
+  ),
+  'FREEZER',
+  'the place with more boxes that want a look wins over one old box',
+);
+assert.equal(
+  getLandingPlace(
+    [
+      container({ id: 'a', eatBy: dayOf(19) }),
+      container({ id: 'b', place: 'FREEZER', eatBy: dayOf(10) }),
+    ],
+    NOW,
+  ),
+  'FREEZER',
+  'a tie in boxes that want a look goes to the place with more past their date',
+);
+assert.equal(
+  getLandingPlace(
+    [
+      container({ id: 'a', eatBy: dayOf(40) }),
+      container({ id: 'b', place: 'FREEZER', eatBy: dayOf(90) }),
+      container({
+        id: 'c',
+        place: 'FREEZER',
+        eatBy: dayOf(5),
+        status: 'DONE',
+      }),
+    ],
+    NOW,
+  ),
+  'FRIDGE',
+  'with nothing wanting a look (a finished box is not counted) it opens on the fridge',
+);
+assert.equal(getLandingPlace([], NOW), 'FRIDGE');
+
+const jamieBoxes = [
+  ...['a', 'b', 'c'].map((id) =>
+    container({ id, title: `Soup ${id}`, eatBy: dayOf(12) }),
+  ),
+  container({ id: 'd', title: 'Stock', place: 'FREEZER', eatBy: dayOf(11) }),
+  container({ id: 'e', title: 'Curry', place: 'FREEZER', eatBy: dayOf(80) }),
+];
+assert.deepEqual(
+  [
+    getPastDueBoxes(jamieBoxes, NOW).length,
+    getPastDueBoxes(
+      jamieBoxes.filter(({ place }) => place === 'FREEZER'),
+      NOW,
+    ).length,
+    getPastDueBoxes(
+      jamieBoxes.filter(({ place }) => place === 'FRIDGE'),
+      NOW,
+    ).length,
+    getLandingPlace(jamieBoxes, NOW),
+  ],
+  [4, 1, 3, 'FRIDGE'],
+  'four past their date, one in the freezer and three in the fridge: the row says four and the screen opens on the fridge',
+);
+
+const bothPlaces = planBulk(
+  jamieBoxes.slice(0, 4),
+  { kind: 'TOSS', from: 'FRIDGE', isPastOnly: true, isEitherPlace: true },
+  NOW,
+);
+assert.deepEqual(
+  [bothPlaces.writes.map(({ id }) => id), bothPlaces.skipped.MOVED],
+  [['a', 'b', 'c', 'd'], 0],
+  'a toss of the past-its-date boxes reaches the freezer one as well',
+);
+assert.deepEqual(
+  planBulk(jamieBoxes.slice(0, 4), { ...toss, isPastOnly: true }, NOW).skipped,
+  { GONE: 0, FINISHED: 0, MOVED: 1, REDATED: 0 },
+  'without the either-place flag a box in the other place is still left alone',
+);
+assert.equal(
+  planBulk(
+    [container({ id: 'f', place: 'FREEZER' })],
+    { kind: 'MOVE', from: 'FRIDGE', isEitherPlace: true },
+    NOW,
+  ).writes.length,
+  0,
+  'a move never takes the flag: a box already in the place it would go to is left alone',
+);
+
+assert.equal(getSharedPlace([]), null);
+assert.equal(
+  getSharedPlace([{ place: 'FRIDGE' }, { place: 'FRIDGE' }]),
+  'FRIDGE',
+);
+assert.equal(
+  getSharedPlace([{ place: 'FRIDGE' }, { place: 'FREEZER' }]),
+  null,
+  'boxes in both places share none, so a move is not offered',
+);
+assert.equal(
+  getPlacedTitle('Chicken stock', 'FREEZER'),
+  'Chicken stock · freezer',
+);
+assert.deepEqual(
+  [
+    getSelectionNote(3, { fridge: 2, freezer: 1 }),
+    getSelectionNote(3, { fridge: 3, freezer: 0 }),
+    getSelectionNote(0, { fridge: 0, freezer: 0 }),
+  ],
+  [
+    '2 in the fridge, 1 in the freezer. Moving needs one place.',
+    null,
+    'Tap the boxes you want to act on.',
+  ],
+  'the footer says where the ticks are only when they are in both places',
+);
+
+// Each box of a batch says how many servings it has, and when it has been opened
+assert.deepEqual(
+  [
+    getBoxLine(
+      container({
+        servings: 2,
+        history: [makeEvent('FRIDGE', 1000, { servings: 2, place: 'FRIDGE' })],
+      }),
+    ),
+    getBoxLine(
+      container({
+        servings: 1,
+        history: [makeEvent('FRIDGE', 1000, { servings: 2, place: 'FRIDGE' })],
+      }),
+    ),
+    getBoxLine(
+      container({
+        servings: 3,
+        history: [makeEvent('FRIDGE', 1000, { servings: 2, place: 'FRIDGE' })],
+      }),
+    ),
+    getBoxLine(container({ servings: 1, history: [] })),
+  ],
+  ['2 servings', '1 of 2 servings left', '3 servings', '1 serving'],
+  'a box as it went in reads its servings, an opened one reads what is left of what went in, a corrected count above it and a box with no place event say only what is there',
+);
 
 console.log('pinchFridge: all checks passed');

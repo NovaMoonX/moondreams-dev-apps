@@ -130,6 +130,7 @@ function RecentPickRows({
         lead={
           <CoverImage
             coverPath={recipe.coverPath ?? null}
+            coverUrl={recipe.coverUrl ?? null}
             version={recipe.updatedAt}
             size={48}
           />

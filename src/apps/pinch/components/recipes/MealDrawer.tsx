@@ -2,28 +2,30 @@ import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronLeft, Ellipsis, PackagePlus } from 'lucide-react';
+import { Ellipsis, PackagePlus } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
 import MacroStats from '@/components/MacroStats';
 import StarButton from '@/components/StarButton';
 import StatTile from '@/components/StatTile';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
+import {
+  PlateRecipeView,
+  PlateRows,
+} from '@apps/pinch/components/recipes/PlateRecipe';
 import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import {
   selectContainersLoadError,
   selectCostContext,
-  selectIngredientsById,
   selectIsContainersReady,
   selectMealsById,
-  selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type {
@@ -34,40 +36,16 @@ import type {
 } from '@apps/pinch/types';
 import { isStarred } from '@apps/pinch/utils/favorites';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
-import {
-  formatCostTile,
-  formatRowPrice,
-  getItemTitle,
-} from '@apps/pinch/utils/mealFormat';
+import { formatCostTile } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
-import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 
-interface BackLinkProps {
-  onBack: () => void;
-}
-
-function BackLink({ onBack }: BackLinkProps) {
-  useBackStep(true, onBack);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 px-0!'
-      onClick={onBack}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
-    </Button>
-  );
-}
-
 interface MealDrawerProps {
+  uid: string;
   mealId: string;
   onClose: () => void;
   onPlan: (id: string) => void;
@@ -79,6 +57,7 @@ interface MealDrawerProps {
 }
 
 function MealDrawer({
+  uid,
   mealId,
   onClose,
   onPlan,
@@ -91,11 +70,10 @@ function MealDrawer({
   const meal = useAppSelector(selectMealsById).get(mealId);
   const costContext = useAppSelector(selectCostContext);
   const show = useAppSelector(selectShowNutrition);
-  const recipesById = useAppSelector(selectRecipesById);
-  const ingredientsById = useAppSelector(selectIngredientsById);
   const isStockReady = useAppSelector(selectIsContainersReady);
   const stockError = useAppSelector(selectContainersLoadError);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
   if (!meal) {
@@ -105,6 +83,10 @@ function MealDrawer({
   const closeMore = () => {
     setIsMoreOpen(false);
     window.requestAnimationFrame(() => moreRef.current?.focus());
+  };
+  const getViewKey = () => {
+    if (openRecipeId !== null) return `recipe:${openRecipeId}`;
+    return isMoreOpen ? 'more' : 'plate';
   };
 
   const cost = getMealCost(meal.items, costContext);
@@ -134,7 +116,7 @@ function MealDrawer({
       isOpen
       onClose={onClose}
       title={meal.name}
-      viewKey={isMoreOpen ? 'more' : 'plate'}
+      viewKey={getViewKey()}
       actions={
         <StarButton
           isOn={isStarred(meal)}
@@ -144,42 +126,51 @@ function MealDrawer({
         />
       }
       footer={
-        <div className='flex gap-2 px-4 pb-4'>
-          <Button
-            type='button'
-            variant='secondary'
-            className='shrink-0 max-sm:px-3'
-            onClick={() => onModify(meal.id)}
-          >
-            Modify
-          </Button>
-          <Button
-            ref={moreRef}
-            type='button'
-            variant='secondary'
-            size='icon'
-            aria-label='More for this saved meal'
-            title='More for this saved meal'
-            aria-expanded={isMoreOpen}
-            onClick={() => setIsMoreOpen((open) => !open)}
-            className={join(
-              'text-foreground! size-10 min-w-10 shrink-0 p-0',
-              isMoreOpen && 'bg-accent!',
-            )}
-          >
-            <Ellipsis className='h-5 w-5' aria-hidden='true' />
-          </Button>
-          <Button
-            type='button'
-            className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
-            onClick={() => onPlan(meal.id)}
-          >
-            Plan it
-          </Button>
-        </div>
+        openRecipeId !== null ? undefined : (
+          <div className='flex gap-2 px-4 pb-4'>
+            <Button
+              type='button'
+              variant='secondary'
+              className='shrink-0 max-sm:px-3'
+              onClick={() => onModify(meal.id)}
+            >
+              Modify
+            </Button>
+            <Button
+              ref={moreRef}
+              type='button'
+              variant='secondary'
+              size='icon'
+              aria-label='More for this saved meal'
+              title='More for this saved meal'
+              aria-expanded={isMoreOpen}
+              onClick={() => setIsMoreOpen((open) => !open)}
+              className={join(
+                'text-foreground! size-10 min-w-10 shrink-0 p-0',
+                isMoreOpen && 'bg-accent!',
+              )}
+            >
+              <Ellipsis className='h-5 w-5' aria-hidden='true' />
+            </Button>
+            <Button
+              type='button'
+              className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
+              onClick={() => onPlan(meal.id)}
+            >
+              Plan it
+            </Button>
+          </div>
+        )
       }
     >
-      {isMoreOpen && (
+      {openRecipeId !== null && (
+        <PlateRecipeView
+          uid={uid}
+          recipeId={openRecipeId}
+          onBack={() => setOpenRecipeId(null)}
+        />
+      )}
+      {isMoreOpen && openRecipeId === null && (
         <div className='space-y-5'>
           <BackLink onBack={closeMore} />
           <div className='space-y-2'>
@@ -224,7 +215,12 @@ function MealDrawer({
           />
         </div>
       )}
-      <div className={join('space-y-5', isMoreOpen && 'hidden')}>
+      <div
+        className={join(
+          'space-y-5',
+          (isMoreOpen || openRecipeId !== null) && 'hidden',
+        )}
+      >
         <FormSection
           title='On the plate'
           detail={
@@ -233,29 +229,11 @@ function MealDrawer({
               : undefined
           }
         >
-          <ul className='divide-border divide-y'>
-            {meal.items.map((item) => {
-              const itemCost = cost.items.get(item.id);
-              return (
-                <li key={item.id} className='flex items-start gap-3 py-2.5'>
-                  <span className='min-w-0 flex-1'>
-                    <span className='block'>
-                      {getItemTitle(item, recipesById, ingredientsById)}
-                    </span>
-                    <span className='text-muted-foreground block text-xs'>
-                      {formatServings(item.servings)}
-                    </span>
-                  </span>
-                  <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                    {formatRowPrice(
-                      itemCost?.cents,
-                      (itemCost?.gaps.length ?? 0) > 0,
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <PlateRows
+            items={meal.items}
+            cost={cost}
+            onOpenRecipe={setOpenRecipeId}
+          />
         </FormSection>
         <div className='space-y-3'>
           <StatTile

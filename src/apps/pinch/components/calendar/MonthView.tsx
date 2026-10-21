@@ -9,14 +9,14 @@ import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 
 const NO_MEALS: PlannedMeal[] = [];
 
-// The calendar's own cell padding, border and square size are cleared so a day can hold its meals;
-// DayCell fills the cell absolutely and clips itself.
+// The calendar's own cell padding, border and square size are cleared so a day can hold its meals.
+// Under 360px the grid's padding and gap become a transparent cell border, so the seven columns stay 41px wide to tap.
 const CALENDAR_STYLES = {
   containerClassName: 'border-0 bg-transparent p-0 shadow-none',
   headerClassName: 'hidden',
-  monthGridClassName: 'gap-1',
+  monthGridClassName: 'gap-1 max-[359px]:gap-0 max-[359px]:p-0',
   cellClassName:
-    'group relative h-[5.5rem] min-h-0 w-full lg:h-[7.5rem] rounded-lg border-0 p-0 bg-muted hover:bg-muted/70 focus:bg-muted',
+    'group relative h-[5.5rem] min-h-0 w-full lg:h-[7.5rem] rounded-lg border-0 p-0 bg-muted hover:bg-muted/70 focus:bg-muted max-[359px]:border-2 max-[359px]:border-transparent max-[359px]:bg-clip-padding',
   selectedCellClassName: 'bg-muted text-foreground',
   todayCellClassName: 'border-0',
 };

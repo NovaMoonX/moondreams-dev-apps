@@ -6,13 +6,13 @@ import {
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronLeft, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
@@ -57,10 +57,10 @@ function PickRow({ emoji, name, note, onPick }: PickRowProps) {
         type='button'
         variant='tertiary'
         onClick={onPick}
-        className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-1.5 text-left'
+        className='h-auto min-h-14 w-full justify-start gap-3 px-0! py-1.5 text-left [@media(max-height:499px)]:min-h-10 [@media(max-height:499px)]:py-0!'
       >
         <span
-          className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)] text-xl'
+          className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)] text-xl [@media(max-height:499px)]:size-8 [@media(max-height:499px)]:text-base'
           aria-hidden='true'
         >
           {emoji}
@@ -88,7 +88,6 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const isPhone = useMediaQuery().isBelow('sm');
   const trimmed = query.trim();
-  useBackStep(onBack !== undefined, () => onBack?.());
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -150,17 +149,7 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
         event.preventDefault()
       }
     >
-      {onBack && (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-10 gap-1 justify-self-start px-0!'
-          onClick={onBack}
-        >
-          <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-          Back
-        </Button>
-      )}
+      {onBack && <BackLink onBack={onBack} />}
       <p className='font-medium'>What are you putting away?</p>
       <SearchInput
         value={query}
@@ -192,7 +181,7 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
           </p>
         </div>
       ) : (
-        <ul className='divide-border divide-y'>
+        <ul className='divide-border max-h-[max(12rem,calc(92dvh-22rem))] divide-y overflow-y-auto [@media(max-height:499px)]:max-h-32'>
           {shown.map((match) => (
             <PickRow
               key={`${match.kind}-${match.id}`}
@@ -214,7 +203,7 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
                 type='button'
                 variant='tertiary'
                 onClick={() => onPick({ kind: 'typed', name: trimmed })}
-                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
+                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left [@media(max-height:499px)]:min-h-10 [@media(max-height:499px)]:py-0!'
               >
                 <span className='bg-secondary text-secondary-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-full'>
                   <Plus className='h-4 w-4' aria-hidden='true' />

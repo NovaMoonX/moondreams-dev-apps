@@ -18,14 +18,17 @@ const HIDDEN_WORTH_A_BUTTON = 3;
 
 interface IngredientStockProps {
   ingredientId: string;
+  /** A recipe or saved meal uses it, which is when a first package is worth offering. */
+  isUsed: boolean;
   /** Opens the pantry on this ingredient's packages. */
   onOpen: () => void;
   onAdd: () => void;
 }
 
-/** What the person has of an ingredient, on the ingredient's own drawer: each package with its amount and date, soonest first, and a way to add one. It draws for an ingredient that has packages, or for anyone who keeps a pantry; a first run sees nothing. */
+/** What the person has of an ingredient, on the ingredient's own drawer: each package with its amount and date, soonest first, and a way to add one. It draws for an ingredient that has packages, for anyone who keeps a pantry, and for an ingredient their recipes use (the way to a first package); a first run with nothing using it sees nothing. */
 function IngredientStock({
   ingredientId,
+  isUsed,
   onOpen,
   onAdd,
 }: IngredientStockProps) {
@@ -35,7 +38,7 @@ function IngredientStock({
   const soonDays = useAppSelector(selectLeadDays);
   const [isOpen, setIsOpen] = useState(false);
 
-  if (packages.length === 0 && !hasPantry) return null;
+  if (packages.length === 0 && !hasPantry && !isUsed) return null;
 
   const view = getStockView(ingredientId, packages, undefined, soonDays);
   const visible =
@@ -45,20 +48,23 @@ function IngredientStock({
 
   return (
     <section aria-label='In your kitchen' className='space-y-2'>
-      <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-        In your kitchen
-      </h3>
-      {packages.length === 0 ? (
-        <p className='text-muted-foreground text-sm'>
-          None in your pantry, fridge or freezer.
-        </p>
-      ) : (
+      <div className='space-y-2 [@media(max-height:599px)]:flex [@media(max-height:599px)]:items-baseline [@media(max-height:599px)]:gap-3 [@media(max-height:599px)]:space-y-0'>
+        <h3 className='text-muted-foreground shrink-0 text-xs font-semibold tracking-wide uppercase'>
+          In your kitchen
+        </h3>
+        {packages.length === 0 && (
+          <p className='text-muted-foreground text-sm'>
+            None in your pantry, fridge or freezer.
+          </p>
+        )}
+        {packages.length > 1 && (
+          <p className='text-muted-foreground text-sm'>
+            {getStockSummaryParts(view).join(' · ')}
+          </p>
+        )}
+      </div>
+      {packages.length > 0 && (
         <>
-          {packages.length > 1 && (
-            <p className='text-muted-foreground text-sm'>
-              {getStockSummaryParts(view).join(' · ')}
-            </p>
-          )}
           <ul className='divide-border divide-y'>
             {visible.map((pkg) => (
               <li key={pkg.id}>

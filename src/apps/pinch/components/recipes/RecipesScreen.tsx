@@ -1,15 +1,28 @@
-import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { BookOpen, Pencil, Plus, Star } from 'lucide-react';
+import { BookOpen, Check, ListChecks, Pencil, Plus, Star } from 'lucide-react';
 
+import EmptyCard from '@/components/EmptyCard';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
+import HeaderIconButton from '@/components/HeaderIconButton';
+import LazyMount from '@/components/LazyMount';
+import Pill from '@/components/Pill';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
-import LazyMount from '@/components/LazyMount';
 import SectionHeader from '@/components/SectionHeader';
+import SelectionBar from '@/components/SelectionBar';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
 import ContainerFormSheet, {
   type ContainerSubject,
@@ -18,6 +31,7 @@ import IdeasView from '@apps/pinch/components/ideas/IdeasView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
+import AddToCollectionSheet from '@apps/pinch/components/recipes/AddToCollectionSheet';
 import CollectionsSheet from '@apps/pinch/components/recipes/CollectionsSheet';
 import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
 import NoteSheet from '@apps/pinch/components/notes/NoteSheet';
@@ -46,6 +60,7 @@ import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { useMealFavorite } from '@apps/pinch/hooks/useMealFavorite';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { useOnRecipeAdded } from '@apps/pinch/hooks/useRecipeAdded';
+import { useRecipeFavorite } from '@apps/pinch/hooks/useRecipeFavorite';
 import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
 import { useOnSourceShown } from '@apps/pinch/hooks/useSourceShown';
 import {
@@ -85,9 +100,11 @@ import {
 import {
   filterByCollection,
   getCollectionFilterOptions,
+  getRecipeSelectionNote,
+  getRecipeSelectionTitle,
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
-import { isStarred } from '@apps/pinch/utils/favorites';
+import { isStarred, sortFavoritesFirst } from '@apps/pinch/utils/favorites';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 import { getIdeaSearchText } from '@apps/pinch/utils/ideas';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
@@ -97,6 +114,10 @@ const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
   label: RECIPES_VIEW_LABELS[value],
 }));
 
+const SHORT_WIDE_SHOWN =
+  '[@media(max-height:500px)_and_(min-width:420px)]:inline-flex';
+const SHORT_WIDE_HIDDEN =
+  '[@media(max-height:500px)_and_(min-width:420px)]:hidden';
 const RECIPE_CHUNK = 20;
 const EAGER_RECIPE_CHUNKS = 1;
 const COVER_SIZE = 56;
@@ -181,6 +202,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const collectionsById = useAppSelector(selectCollectionsById);
   const collectionCounts = useAppSelector(selectCollectionCounts);
   const toggleFavorite = useMealFavorite(uid);
+  const toggleRecipeFavorite = useRecipeFavorite(uid);
+  const selection = useSelection();
   const stockByRecipe = useAppSelector(selectStockByRecipe);
   const stockByMeal = useAppSelector(selectStockByMealWithRecipes);
   const ingredientsById = useAppSelector(selectIngredientsById);
@@ -218,6 +241,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     noteId: string | null;
   } | null>(null);
   const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
+  const [isPickingCollections, setIsPickingCollections] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
@@ -280,11 +304,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     shownView === 'recipes' && collections.length > 0;
   const hasCollectionFilter =
     hasCollectionSection && collectionCounts.byCollection.size > 0;
-  const favoriteCount = meals.filter(isStarred).length;
+  const favoriteSource = shownView === 'meals' ? meals : recipes;
+  const favoriteCount = favoriteSource.filter(isStarred).length;
   const hasFavoritesFilter =
-    shownView === 'meals' &&
+    (shownView === 'meals' || shownView === 'recipes') &&
     favoriteCount > 0 &&
-    meals.length >= LIST_SEARCH_THRESHOLD;
+    favoriteSource.length >= LIST_SEARCH_THRESHOLD;
   const isFavoritesOn = hasFavoritesFilter && pickedFavorites;
   const stockMap = shownView === 'meals' ? stockByMeal : stockByRecipe;
   const stockCounts = useMemo(
@@ -325,6 +350,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       hasCollectionSection ||
       hasFavoritesFilter ||
       hasStockFilter);
+  const hasPillRow = visibleViews.length > 1;
+  const hasViewOptions = total > 0 && !hasFilterBar;
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
 
@@ -396,7 +423,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               hasStockIn(stockByRecipe.get(recipe.id), place),
             ),
           );
-    return inStock;
+    const starred = isFavoritesOn ? inStock.filter(isStarred) : inStock;
+    return sortFavoritesFirst(starred);
   }, [
     searched,
     sourcesById,
@@ -405,6 +433,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     collections,
     stockPlaces,
     stockByRecipe,
+    isFavoritesOn,
   ]);
 
   const sourceOptions = useMemo(
@@ -501,6 +530,20 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     [meals, stockPlaces, stockByMeal, trimmed, isFavoritesOn],
   );
 
+  const isSelecting = selection.isActive && shownView === 'recipes';
+  const canSelect = shownView === 'recipes' && shown.length >= 2;
+  const selectedRecipes = shown.filter((recipe) =>
+    selection.ids.has(recipe.id),
+  );
+  const isEveryShownTicked =
+    shown.length > 0 && selectedRecipes.length === shown.length;
+  const toggleSelection = selection.toggle;
+  const toggleOne = useCallback(
+    (id: string) => toggleSelection([id]),
+    [toggleSelection],
+  );
+  useBackStep(isSelecting, selection.exit);
+
   const getBody = () => {
     if (isIdeas) {
       return (
@@ -591,14 +634,15 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     }
     if (recipes.length === 0) {
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
+        <EmptyCard icon='🍳'>
           Add the recipes you cook, from text, a file, a link or by hand, and
           they'll be here, ready to plan.
-        </p>
+        </EmptyCard>
       );
     }
     if (shown.length === 0 && activeFilters.length > 0) {
       const scope = [
+        isFavoritesOn ? 'that you starred' : null,
         sourceFilter === SOURCE_FILTER_NONE
           ? 'without a source'
           : sourceFilter !== SOURCE_FILTER_ANY
@@ -721,6 +765,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                           showMacros={viewOptions.options.showMacros}
                           showStock={viewOptions.options.showStock}
                           onOpen={setOpenId}
+                          onToggleFavorite={toggleRecipeFavorite}
+                          isSelecting={isSelecting}
+                          isSelected={selection.ids.has(recipe.id)}
+                          onToggle={toggleOne}
                         />
                       </li>
                     ))}
@@ -750,75 +798,138 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     openSubview({ kind: 'recipe', id: null });
   };
 
+  const allShownPill = (
+    <Pill
+      isThin
+      isSelected={isEveryShownTicked}
+      icon={
+        isEveryShownTicked ? (
+          <Check className='h-3 w-3' aria-hidden='true' />
+        ) : undefined
+      }
+      onClick={() => selection.toggle(shown.map((recipe) => recipe.id))}
+    >
+      {isPhone ? 'All shown' : 'Select all shown'}
+    </Pill>
+  );
+  const searchClassName = join(
+    isSelecting &&
+      trimmed === '' &&
+      activeFilters.length === 0 &&
+      '[@media(max-height:500px)]:hidden',
+  );
+
+  const getHeaderAction = () => {
+    if (isSelecting) {
+      return (
+        <div className='flex items-center gap-3'>
+          {/* The header's own hit-area rule would leave a thin pill 36px tall. */}
+          <span
+            className={join(
+              'hidden [&_button]:before:-inset-y-2!',
+              SHORT_WIDE_SHOWN,
+            )}
+          >
+            {allShownPill}
+          </span>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className="relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']"
+            onClick={selection.exit}
+          >
+            Cancel
+          </Button>
+        </div>
+      );
+    }
+    if (isIdeas && ideaCount >= SOFT_MAX_IDEAS) return undefined;
+
+    return (
+      <div className='flex items-center gap-3'>
+        {hasSourceSection && (
+          <HeaderIconButton
+            icon={<BookOpen className='h-4 w-4' aria-hidden='true' />}
+            label='Sources'
+            onClick={() => openSubview({ kind: 'sources' })}
+          />
+        )}
+        {canSelect && (
+          <HeaderIconButton
+            icon={<ListChecks className='h-4 w-4' aria-hidden='true' />}
+            label='Select recipes'
+            onClick={selection.start}
+          />
+        )}
+        {hasViewOptions && (
+          <ListViewControls
+            isQuiet
+            options={viewOptions.options}
+            customizedCount={viewOptions.customizedCount}
+            onChange={viewOptions.update}
+            onReset={viewOptions.reset}
+            hasStockLines
+          />
+        )}
+        <Button
+          type='button'
+          size='sm'
+          rounded='full'
+          className="relative gap-1 whitespace-nowrap after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] max-[359px]:size-7 max-[359px]:gap-0 max-[359px]:p-0 max-[359px]:after:-inset-x-1.5"
+          disabled={isIdeas && !canAddIdea}
+          onClick={handleNew}
+        >
+          <Plus className='h-4 w-4' aria-hidden='true' />
+          <span className='max-[359px]:sr-only'>
+            {RECIPES_VIEW_NEW_LABELS[shownView]}
+          </span>
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title='Recipes'
-        action={
-          (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
-            <div className='flex items-center gap-1'>
-              {hasSourceSection && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='icon'
-                  rounded='full'
-                  aria-label='Sources'
-                  title='Sources'
-                  className='size-10 shrink-0 p-0'
-                  onClick={() => openSubview({ kind: 'sources' })}
-                >
-                  <BookOpen className='h-5 w-5' aria-hidden='true' />
-                </Button>
-              )}
-              <Button
-                type='button'
-                size='sm'
-                rounded='full'
-                className="relative gap-1 whitespace-nowrap after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
-                disabled={isIdeas && !canAddIdea}
-                onClick={handleNew}
-              >
-                <Plus className='h-4 w-4' aria-hidden='true' />
-                {RECIPES_VIEW_NEW_LABELS[shownView]}
-              </Button>
-            </div>
-          )
+        title={
+          isSelecting
+            ? getRecipeSelectionTitle(selectedRecipes.length)
+            : 'Recipes'
         }
+        action={getHeaderAction()}
       />
-      {(visibleViews.length > 1 || (total > 0 && !hasFilterBar)) && (
-        <div className='flex items-center justify-between gap-3'>
-          <div className='min-w-0'>
-            {visibleViews.length > 1 && (
-              <PillGroup
-                label='Recipes, saved meals or ideas'
-                options={VIEW_OPTIONS.filter((option) =>
-                  visibleViews.includes(option.value),
-                )}
-                value={shownView}
-                onChange={(next) => {
-                  setQuery('');
-                  setStockPlaces([]);
-                  setView(next);
-                }}
-                isThin
-              />
-            )}
-          </div>
-          {total > 0 && !hasFilterBar && (
-            <ListViewControls
-              options={viewOptions.options}
-              customizedCount={viewOptions.customizedCount}
-              onChange={viewOptions.update}
-              onReset={viewOptions.reset}
-              hasStockLines
-              className='-my-3'
-            />
+      {isSelecting && (
+        <div
+          role='group'
+          aria-label='Select several at once'
+          className={join(
+            'flex flex-wrap items-center gap-x-2 gap-y-2',
+            SHORT_WIDE_HIDDEN,
           )}
+        >
+          {allShownPill}
         </div>
+      )}
+      {!isSelecting && hasPillRow && (
+        <PillGroup
+          label='Recipes, saved meals or ideas'
+          options={VIEW_OPTIONS.filter((option) =>
+            visibleViews.includes(option.value),
+          )}
+          value={shownView}
+          onChange={(next) => {
+            setQuery('');
+            setStockPlaces([]);
+            setView(next);
+          }}
+          isThin
+        />
       )}
       {hasFilterBar ? (
         <FilterBar
+          className={searchClassName}
           query={query}
           onQueryChange={setQuery}
           searchPlaceholder={
@@ -940,6 +1051,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       ) : (
         hasSearch && (
           <SearchInput
+            className={searchClassName}
             value={query}
             onChange={setQuery}
             placeholder={
@@ -1033,6 +1145,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       {openMealId && (
         <MealDrawer
           key={openMealId}
+          uid={uid}
           mealId={openMealId}
           onClose={() => setOpenMealId(null)}
           onPlan={(id) => {
@@ -1063,6 +1176,30 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setPutAway({ kind: 'meal', id });
           }}
           onToggleFavorite={toggleFavorite}
+        />
+      )}
+      {isSelecting && (
+        <SelectionBar
+          note={getRecipeSelectionNote(selectedRecipes.length)}
+          actions={[]}
+          primary={{
+            key: 'add-to-collection',
+            label: `Add to a ${COLLECTION_NOUN}`,
+            shortLabel: `Add to a ${COLLECTION_NOUN}`,
+            isDisabled: selectedRecipes.length === 0,
+            onClick: () => setIsPickingCollections(true),
+          }}
+        />
+      )}
+      {isPickingCollections && (
+        <AddToCollectionSheet
+          uid={uid}
+          recipeIds={selectedRecipes.map((recipe) => recipe.id)}
+          onClose={() => setIsPickingCollections(false)}
+          onDone={() => {
+            setIsPickingCollections(false);
+            selection.exit();
+          }}
         />
       )}
       {isCollectionsOpen && (

@@ -15,9 +15,15 @@ import {
   buildCookingSnapshot,
   getCookingSessionKey,
   getResumeTimerLine,
+  getTimerReminderIds,
   parseCookingSnapshot,
   resolveCookingResume,
 } from '../../src/apps/pinch/utils/cookSession.ts';
+import {
+  getTimerBuzzOffer,
+  getTimerPushAction,
+  needsTimerPush,
+} from '../../src/apps/pinch/utils/cooks.ts';
 import { formatClock } from '../../src/utils/durationUtils.ts';
 import { clearViewerSessions } from '../../src/utils/viewerSessionUtils.ts';
 
@@ -25,6 +31,7 @@ const NOW = Date.UTC(2026, 9, 16, 19, 30);
 const MIN = 60_000;
 const UID = 'alex';
 
+const MEAL_DAY = Date.UTC(2026, 9, 16);
 const running: ResumeTimer = {
   recipeId: 'adobo',
   stepNumber: 1,
@@ -33,6 +40,7 @@ const running: ResumeTimer = {
   status: 'running',
   startedAt: NOW - 5 * MIN,
   endsAt: NOW + 25 * MIN,
+  reminderId: 'push-1',
 };
 const paused: ResumeTimer = {
   recipeId: 'adobo',
@@ -60,6 +68,7 @@ const build = (overrides: { timers?: ResumeTimer[]; now?: number } = {}) =>
       recipeId: 'adobo',
       servings: 2,
       plannedMealId: 'meal-1',
+      plannedMealDate: MEAL_DAY,
       plate: [
         { recipeId: 'adobo', servings: 2 },
         { recipeId: 'rice', servings: 2 },
@@ -99,6 +108,7 @@ assert.deepEqual(
     'endsAt',
     'label',
     'recipeId',
+    'reminderId',
     'startedAt',
     'status',
     'stepNumber',
@@ -109,6 +119,127 @@ assert.deepEqual(
   Object.keys(snapshot).sort(),
   ['open', 'resume', 'savedAt', 'sessionId', 'uid', 'version'],
   'the session holds ids, steps, servings and timers and nothing else',
+);
+
+// The push a running timer has scheduled
+assert.equal(
+  snapshot.resume.timers[0].status === 'running' &&
+    snapshot.resume.timers[0].reminderId,
+  'push-1',
+  'a running timer is saved with the id of its push',
+);
+const readTimer = (timer: unknown) =>
+  parse({ ...snapshot, resume: { ...snapshot.resume, timers: [timer] } })
+    ?.resume.timers[0];
+const withoutPush = Object.fromEntries(
+  Object.entries(running).filter(([key]) => key !== 'reminderId'),
+);
+assert.deepEqual(
+  readTimer(withoutPush),
+  { ...withoutPush, reminderId: null },
+  'a timer saved before pushes were kept reads with none',
+);
+assert.equal(
+  readTimer({ ...running, reminderId: '../users/alex' }),
+  undefined,
+  'a push id that is not an id is refused',
+);
+assert.equal(
+  readTimer({ ...running, reminderId: 7 }),
+  undefined,
+  'a push id that is not text is refused',
+);
+assert.deepEqual(
+  readTimer({ ...paused, reminderId: 'push-1' }),
+  paused,
+  'only a running timer keeps a push',
+);
+assert.deepEqual(
+  getTimerReminderIds([
+    running,
+    paused,
+    done,
+    { ...running, reminderId: null },
+  ]),
+  ['push-1'],
+  'the pushes of a saved session are those of its running timers that have one',
+);
+
+// What a timer's push needs
+const push = { isOn: true, isHidden: false };
+const ahead = { status: 'running', endsAt: NOW + MIN } as const;
+assert.equal(
+  getTimerPushAction(ahead, NOW + MIN, push),
+  'keep',
+  'a running timer at the deadline it was scheduled for keeps its push',
+);
+assert.equal(
+  getTimerPushAction(ahead, NOW + 2 * MIN, push),
+  'cancel',
+  'a timer moved to another deadline drops the old push',
+);
+assert.equal(
+  getTimerPushAction(ahead, NOW + MIN, { ...push, isOn: false }),
+  'cancel',
+  'switching timer pushes off cancels it',
+);
+assert.equal(
+  getTimerPushAction({ status: 'paused' }, NOW + MIN, push),
+  'cancel',
+  'a paused timer drops its push',
+);
+assert.equal(
+  getTimerPushAction(undefined, NOW + MIN, push),
+  'cancel',
+  'a dismissed timer drops its push',
+);
+assert.equal(
+  getTimerPushAction({ status: 'done' }, NOW + MIN, push),
+  'cancel',
+  'a timer that ended while the page was open rings by itself, so its push is cancelled',
+);
+assert.equal(
+  getTimerPushAction({ status: 'done' }, NOW + MIN, {
+    ...push,
+    isHidden: true,
+  }),
+  'leave',
+  'a timer that ended while the page was hidden leaves its push to go out',
+);
+assert.equal(
+  needsTimerPush(ahead, NOW),
+  true,
+  'a timer ahead of its deadline gets a push',
+);
+assert.equal(
+  needsTimerPush({ status: 'running', endsAt: NOW }, NOW),
+  false,
+  'one picked up exactly at its end has rung already',
+);
+assert.equal(
+  needsTimerPush({ status: 'running', endsAt: NOW - MIN }, NOW),
+  false,
+  'one picked up past its end is not given a push in the past',
+);
+assert.equal(
+  needsTimerPush({ status: 'paused' }, NOW),
+  false,
+  'a paused timer gets none',
+);
+
+const openBefore = Object.fromEntries(
+  Object.entries(snapshot.open).filter(([key]) => key !== 'plannedMealDate'),
+);
+assert.equal(
+  parse({ ...snapshot, open: openBefore })?.open.plannedMealDate,
+  null,
+  'a session saved before the meal day was kept reads with none',
+);
+assert.equal(
+  parse({ ...snapshot, open: { ...snapshot.open, plannedMealDate: 'later' } })
+    ?.open.plannedMealDate,
+  null,
+  'a meal day that is not a time reads as unknown',
 );
 
 // When a saved session is not read
@@ -187,7 +318,12 @@ const recipes = new Map([
     { title: 'Cilantro lime rice', steps: ['a', 'b'], isArchived: false },
   ],
 ]);
-const meals = new Set(['meal-1']);
+const loadedDays = {
+  start: Date.UTC(2026, 7, 1),
+  end: Date.UTC(2026, 11, 1),
+};
+const meals = { ids: new Set(['meal-1']), window: loadedDays };
+const none = { ids: new Set<string>(), window: loadedDays };
 const plan = resolveCookingResume(snapshot, recipes, meals);
 assert.deepEqual(
   plan && [
@@ -247,9 +383,50 @@ assert.equal(
   'an archived recipe and one with no steps count as gone',
 );
 assert.equal(
-  resolveCookingResume(snapshot, recipes, new Set())?.open.plannedMealId,
+  resolveCookingResume(snapshot, recipes, none)?.open.plannedMealId,
   null,
-  'a planned meal that is gone is let go, so Finish does not mark it',
+  'a planned meal that is gone (its day is loaded and it is not there) is let go, so Finish does not mark it',
+);
+const resumeWith = (open: Partial<typeof snapshot.open>, loaded = none) =>
+  resolveCookingResume(
+    { ...snapshot, open: { ...snapshot.open, ...open } },
+    recipes,
+    loaded,
+  )?.open.plannedMealId;
+assert.equal(
+  resumeWith({ plannedMealDate: Date.UTC(2026, 11, 1) }),
+  'meal-1',
+  'a meal on the first day past the loaded days is kept: the calendar just is not showing it',
+);
+assert.equal(
+  resumeWith({ plannedMealDate: Date.UTC(2026, 6, 31) }),
+  'meal-1',
+  'a meal before the loaded days is kept',
+);
+assert.equal(
+  resumeWith({ plannedMealDate: Date.UTC(2026, 7, 1) }),
+  null,
+  'a meal on the first loaded day that is not there is gone',
+);
+assert.equal(
+  resumeWith({ plannedMealDate: Date.UTC(2026, 10, 30) }),
+  null,
+  'a meal on the last loaded day that is not there is gone',
+);
+assert.equal(
+  resumeWith({ plannedMealDate: null }),
+  'meal-1',
+  'a meal whose day was never saved is kept, since nothing says it is gone',
+);
+assert.equal(
+  resumeWith({}, { ids: new Set(), window: null }),
+  'meal-1',
+  'before any days are loaded nothing is let go',
+);
+assert.equal(
+  resumeWith({ plannedMealId: null }),
+  null,
+  'a cook that began without a plan stays without one',
 );
 const shortened = resolveCookingResume(
   snapshot,
@@ -430,6 +607,43 @@ assert.equal(
   await asked('session-1'),
   false,
   'once that tab is gone, nothing answers',
+);
+
+// The offer under a running timer
+assert.equal(
+  getTimerBuzzOffer(null, false),
+  'none',
+  'nothing is offered until the device state is read, so the row never flashes',
+);
+assert.equal(
+  getTimerBuzzOffer('on', true),
+  'none',
+  'a reachable device with timer pushes on is offered nothing',
+);
+assert.equal(
+  getTimerBuzzOffer('on', false),
+  'ask',
+  'a reachable device with timer pushes off is asked, and no permission is needed',
+);
+assert.equal(
+  getTimerBuzzOffer('off', false),
+  'ask',
+  'a device not registered is asked',
+);
+assert.equal(
+  getTimerBuzzOffer('off', true),
+  'ask',
+  'the setting being on does not reach a device that is not registered',
+);
+assert.equal(
+  getTimerBuzzOffer('blocked', true),
+  'blocked',
+  'a blocked site is offered the way in, which says why it cannot work',
+);
+assert.equal(
+  getTimerBuzzOffer('unsupported', false),
+  'unsupported',
+  'a browser that cannot push is offered the way in, which says why',
 );
 
 console.log('cookSession: all checks passed');

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 interface PromptRowProps {
   /** An emoji or a small icon for the chip at the left. */
@@ -14,6 +15,10 @@ interface PromptRowProps {
   onAction: () => void;
   isBusy?: boolean;
   isDisabled?: boolean;
+  /** One 42px capsule with the icon inline, for a spot with little height to spare. */
+  isCompact?: boolean;
+  /** Drops the icon chip below 360px, where the words beside it get about 100px and wrap word by word. */
+  isIconHiddenOnSmallest?: boolean;
 }
 
 /** A quiet tinted row above a list that says something there wants a look and puts the one action beside it, so the fix is one tap and never a banner. It draws only while there is something to say. */
@@ -25,11 +30,25 @@ function PromptRow({
   onAction,
   isBusy = false,
   isDisabled = false,
+  isCompact = false,
+  isIconHiddenOnSmallest = false,
 }: PromptRowProps) {
   return (
-    <div className='bg-accent/60 border-border flex items-center gap-3 rounded-2xl border py-2.5 pr-2.5 pl-3'>
+    <div
+      className={join(
+        'bg-accent/60 border-border flex items-center border',
+        isCompact
+          ? 'gap-2 rounded-full py-1 pr-1 pl-3'
+          : 'gap-3 rounded-2xl py-2.5 pr-2.5 pl-3',
+      )}
+    >
       <span
-        className='bg-background/70 border-border grid size-10 shrink-0 place-items-center rounded-full border text-lg leading-none'
+        className={join(
+          'shrink-0 leading-none',
+          isIconHiddenOnSmallest && 'max-[359px]:hidden',
+          !isCompact &&
+            'bg-background/70 border-border grid size-10 place-items-center rounded-full border text-lg',
+        )}
         aria-hidden='true'
       >
         {icon}
@@ -47,7 +66,12 @@ function PromptRow({
         variant='secondary'
         size='sm'
         rounded='full'
-        className='border-foreground/30 bg-background h-10 shrink-0 px-4 font-medium'
+        className={join(
+          'border-foreground/30 bg-background shrink-0 font-medium',
+          isCompact
+            ? "relative h-8 px-3 after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']"
+            : 'h-10 px-4',
+        )}
         loading={isBusy}
         disabled={isDisabled}
         onClick={onAction}

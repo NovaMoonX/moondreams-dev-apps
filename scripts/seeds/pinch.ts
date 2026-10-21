@@ -742,12 +742,15 @@ const FOR_THE_SAUCE = 'For the sauce';
 const SEED_RECIPES = [
   {
     id: 'seed-pinch-recipe-adobo',
+    // Alex starred two recipes; nachos and the chili have no `isFavorite` key, the shape from before the star.
+    isFavorite: true,
     title: 'Adobo chicken',
     description: 'Sticky, tangy chicken thighs braised in soy and vinegar.',
     servings: 4,
     prepMinutes: 10,
     cookMinutes: 35,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       line('adobo-1', 'cat-chicken-thigh', 2, 'LB', FOR_THE_CHICKEN),
       line('adobo-2', 'cat-soy-sauce', 0.25, 'CUP', FOR_THE_CHICKEN),
@@ -804,12 +807,14 @@ const SEED_RECIPES = [
   },
   {
     id: 'seed-pinch-recipe-rice',
+    isFavorite: true,
     title: 'Cilantro lime rice',
     description: null,
     servings: 4,
     prepMinutes: 5,
     cookMinutes: 20,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       line('rice-1', 'cat-jasmine-rice', 1, 'CUP'),
       line('rice-2', 'cat-cilantro', 0.25, 'CUP'),
@@ -835,6 +840,7 @@ const SEED_RECIPES = [
     prepMinutes: null,
     cookMinutes: 10,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       legacyLine('nachos-1', 'seed-pinch-ingredient-doritos', 9, 'OZ'),
       legacyLine('nachos-2', 'cat-cheddar', 8, 'OZ'),
@@ -857,6 +863,7 @@ const SEED_RECIPES = [
     prepMinutes: null,
     cookMinutes: 40,
     coverPath: null,
+    coverUrl: null,
     ingredients: [
       line('chili-1', 'cat-jasmine-rice', 1, 'CUP'),
       line('chili-2', 'cat-salt', 1, 'TSP'),

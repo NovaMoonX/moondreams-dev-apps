@@ -5,13 +5,16 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowRightLeft,
+  Ban,
   Check,
+  ChevronDown,
   ListChecks,
   Plus,
-  Trash2,
   Utensils,
 } from 'lucide-react';
 
+import EmptyCard from '@/components/EmptyCard';
+import HeaderIconButton from '@/components/HeaderIconButton';
 import IntroCard from '@/components/IntroCard';
 import Pill from '@/components/Pill';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
@@ -22,6 +25,7 @@ import SectionHeader from '@/components/SectionHeader';
 import SelectionBar from '@/components/SelectionBar';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import Subview from '@/components/Subview';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
@@ -55,6 +59,7 @@ import {
   getPackageBulkNames,
   getPackageNamesLine,
   getPackageSelectionNote,
+  getPackageSelectionPrimary,
   getPackageSelectionTitle,
   getPackageTossAction,
   getPackageTossNote,
@@ -67,6 +72,8 @@ import {
   type PackageBulkAction,
   type StockView,
 } from '@apps/pinch/utils/packages';
+
+const VERY_SHORT_SCREEN_MAX_HEIGHT = 499;
 
 interface ActNote {
   text: string;
@@ -104,6 +111,7 @@ function PantrySubview({
   const { isReady, loadError, changeInPlace } = usePackageActions(uid);
   const selection = useSelection();
   const { isBelow } = useMediaQuery();
+  const isVeryShort = useIsShortScreen(VERY_SHORT_SCREEN_MAX_HEIGHT);
   const packages = useAppSelector(selectPackages);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const soonDays = useAppSelector(selectLeadDays);
@@ -128,6 +136,7 @@ function PantrySubview({
   const [isMoving, setIsMoving] = useState(false);
   const [acting, setActing] = useState<PackageBulkAction['kind'] | null>(null);
   const [actNote, setActNote] = useState<ActNote | null>(null);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
 
   const getName = useCallback(
     (ingredientId: string, fallback: string) =>
@@ -228,6 +237,12 @@ function PantrySubview({
   );
   const isNothingTicked = selectedPackages.length === 0;
   const isBlocked = isNothingTicked || acting !== null;
+  const isCompact = isBelow('sm') || isVeryShort;
+  const isShortSelect = isSelecting && isVeryShort;
+  const isActionOnTitleRow = isSelecting ? isVeryShort : !isBelow('sm');
+  const isInlineSearch =
+    hasSwitch && hasSearch && !isSelecting && !isBelow('sm');
+  const isTossLead = getPackageSelectionPrimary(selectedPackages) === 'TOSS';
   const title = isSelecting
     ? getPackageSelectionTitle(selectedPackages.length)
     : 'Pantry';
@@ -319,6 +334,30 @@ function PantrySubview({
     }
   };
 
+  const tossAction = {
+    key: 'toss',
+    label: 'Toss',
+    icon: <Ban className='h-4 w-4' aria-hidden='true' />,
+    isDisabled: isBlocked,
+    isLoading: acting === 'TOSS',
+    onClick: () => void handleAct({ kind: 'TOSS' }, selectedPackages),
+  };
+  const useUpAction = {
+    key: 'use-up',
+    label: 'Used it up',
+    icon: <Utensils className='h-4 w-4' aria-hidden='true' />,
+    isDisabled: isBlocked,
+    isLoading: acting === 'USE_UP',
+    onClick: () => void handleAct({ kind: 'USE_UP' }, selectedPackages),
+  };
+
+  const toggleExpanded = (ingredientId: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(ingredientId)) next.add(ingredientId);
+      return next;
+    });
+
   const handleOpenRow = useCallback(
     (ingredientId: string) => {
       const row = rows.find(
@@ -351,45 +390,68 @@ function PantrySubview({
         </li>
       );
     }
+    const isListOpen = expanded.has(row.view.ingredientId);
+    const tickedCount = list.filter((pkg) => selection.ids.has(pkg.id)).length;
     return (
       <li key={row.view.ingredientId}>
-        <label className='flex min-h-14 w-full cursor-pointer items-start gap-3 py-2 select-none'>
-          <span className='mt-0.5 inline-flex shrink-0'>
-            <Checkbox
-              aria-label={`All ${list.length} packages of ${row.name}`}
-              checked={isEveryTicked(list)}
-              onCheckedChange={() => toggleAll(list)}
-            />
-          </span>
-          <span
-            className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
-            aria-hidden='true'
-          >
-            {row.emoji}
-          </span>
-          <span className='min-w-0 flex-1'>
-            <span className='block font-medium wrap-break-word'>
-              {row.name}
-            </span>
-            <span className='text-muted-foreground block text-xs'>
-              {list.length} packages
-            </span>
-          </span>
-        </label>
-        <ul>
-          {list.map((pkg) => (
-            <li key={pkg.id}>
-              <PackageRow
-                pkg={pkg}
-                soonDays={soonDays}
-                isSelecting
-                isNested
-                isSelected={selection.ids.has(pkg.id)}
-                onToggle={togglePackage}
+        <div className='flex items-start gap-1'>
+          <label className='flex min-h-14 min-w-0 flex-1 cursor-pointer items-start gap-3 py-2 select-none'>
+            <span className='mt-0.5 inline-flex shrink-0'>
+              <Checkbox
+                aria-label={`All ${list.length} packages of ${row.name}`}
+                checked={isEveryTicked(list)}
+                onCheckedChange={() => toggleAll(list)}
               />
-            </li>
-          ))}
-        </ul>
+            </span>
+            <span
+              className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
+              aria-hidden='true'
+            >
+              {row.emoji}
+            </span>
+            <span className='min-w-0 flex-1'>
+              <span className='block font-medium wrap-break-word'>
+                {row.name}
+              </span>
+              <span className='text-muted-foreground block text-xs'>
+                {list.length} packages
+                {tickedCount > 0 &&
+                  tickedCount < list.length &&
+                  ` · ${tickedCount} ticked`}
+              </span>
+            </span>
+          </label>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            aria-expanded={isListOpen}
+            aria-label={`${isListOpen ? 'Hide' : 'Show'} the ${list.length} packages of ${row.name}`}
+            className='text-muted-foreground! mt-2 size-10 min-w-10 shrink-0 p-0'
+            onClick={() => toggleExpanded(row.view.ingredientId)}
+          >
+            <ChevronDown
+              className={join('h-5 w-5', isListOpen && 'rotate-180')}
+              aria-hidden='true'
+            />
+          </Button>
+        </div>
+        {isListOpen && (
+          <ul>
+            {list.map((pkg) => (
+              <li key={pkg.id}>
+                <PackageRow
+                  pkg={pkg}
+                  soonDays={soonDays}
+                  isSelecting
+                  isNested
+                  isSelected={selection.ids.has(pkg.id)}
+                  onToggle={togglePackage}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
       </li>
     );
   };
@@ -423,10 +485,10 @@ function PantrySubview({
     }
     if (packages.length === 0) {
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
+        <EmptyCard icon='🥫'>
           Nothing in your pantry yet. When you bring something home, add it here
           with the date on its package.
-        </p>
+        </EmptyCard>
       );
     }
     if (rows.length === 0) {
@@ -506,7 +568,10 @@ function PantrySubview({
           variant='secondary'
           size='sm'
           rounded='full'
-          className="relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']"
+          className={join(
+            "relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']",
+            !isVeryShort && '[@media(max-height:699px)]:hidden',
+          )}
           onClick={selection.exit}
         >
           Cancel
@@ -514,20 +579,16 @@ function PantrySubview({
       );
     }
     return (
-      <div className='flex items-center gap-2'>
+      <div className='flex items-center gap-3'>
         {canSelect && (
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            rounded='full'
-            className="relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
-            aria-label='Select packages'
-            title='Select packages'
-            onClick={selection.start}
-          >
-            <ListChecks className='h-4 w-4' aria-hidden='true' />
-          </Button>
+          <HeaderIconButton
+            icon={<ListChecks className='h-4 w-4' aria-hidden='true' />}
+            label='Select packages'
+            onClick={() => {
+              setExpanded(new Set());
+              selection.start();
+            }}
+          />
         )}
         <Button
           type='button'
@@ -544,6 +605,48 @@ function PantrySubview({
       </div>
     );
   };
+
+  const selectPills = isSelecting &&
+    isListShown &&
+    shownPackages.length > 0 && (
+      <div
+        role='group'
+        aria-label='Select several at once'
+        className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2'
+      >
+        {pastBoxes.length > 0 && (
+          <Pill
+            isThin
+            isSelected={isEveryTicked(pastBoxes)}
+            icon={
+              isEveryTicked(pastBoxes) ? (
+                <Check className='h-3 w-3' aria-hidden='true' />
+              ) : undefined
+            }
+            onClick={() => toggleAll(pastBoxes)}
+          >
+            {isCompact ? 'All past their date' : 'Select all past their date'}
+          </Pill>
+        )}
+        <Pill
+          isThin
+          isSelected={isEveryTicked(shownPackages)}
+          icon={
+            isEveryTicked(shownPackages) ? (
+              <Check className='h-3 w-3' aria-hidden='true' />
+            ) : undefined
+          }
+          onClick={() => toggleAll(shownPackages)}
+        >
+          {isCompact ? 'All shown' : 'Select all shown'}
+        </Pill>
+      </div>
+    );
+  const isIntroShown =
+    isListShown &&
+    !isSelecting &&
+    packages.length > 0 &&
+    ingredientCount <= PANTRY_INTRO_MAX_INGREDIENTS;
 
   const viewOptions: PillOption<'ALL' | PackagePlace>[] = [
     {
@@ -563,80 +666,70 @@ function PantrySubview({
       title={title}
       onClose={closeSubview}
       onBack={isSelecting ? selection.exit : undefined}
+      headerAction={isActionOnTitleRow ? getHeaderAction() : undefined}
     >
       <div className='space-y-4'>
-        {isListShown &&
-          !isSelecting &&
-          packages.length > 0 &&
-          ingredientCount <= PANTRY_INTRO_MAX_INGREDIENTS && (
-            <IntroCard icon='🥫' lead='What you have on hand.'>
-              Each package keeps its own amount and date, so two cartons of milk
-              can run out on different days.
-            </IntroCard>
-          )}
+        {isIntroShown && (
+          <IntroCard icon='🥫' lead='What you have on hand.'>
+            Each package keeps its own amount and date, so two cartons of milk
+            can run out on different days.
+          </IntroCard>
+        )}
         <SectionHeader
           title={title}
           subtitle={
-            isSelecting
-              ? 'Use up, toss or move several at once.'
+            packages.length > 0 ||
+            isListShown ||
+            isSelecting ||
+            isActionOnTitleRow
+              ? undefined
               : 'What is on hand, and when to use it by.'
           }
-          action={getHeaderAction()}
+          lead={(!isShortSelect && selectPills) || undefined}
+          action={isActionOnTitleRow ? undefined : getHeaderAction()}
         />
-        {hasSwitch && (
-          <PillGroup
-            label='Which part of the pantry'
-            options={viewOptions}
-            value={shownPick ?? 'ALL'}
-            onChange={(next) => {
-              setPick(next === 'ALL' ? null : next);
-              setActNote(null);
-            }}
-            isThin
-          />
+        {(hasSwitch || (isShortSelect && selectPills)) && (
+          <div
+            className={join(
+              'flex items-center gap-x-3',
+              isInlineSearch && 'flex-wrap gap-y-4',
+            )}
+          >
+            {hasSwitch && (
+              <div className='min-w-0'>
+                <PillGroup
+                  label='Which part of the pantry'
+                  options={viewOptions}
+                  value={shownPick ?? 'ALL'}
+                  onChange={(next) => {
+                    setPick(next === 'ALL' ? null : next);
+                    setActNote(null);
+                  }}
+                  isThin
+                  wrapsNarrow
+                />
+              </div>
+            )}
+            {isShortSelect && selectPills && (
+              <div className='shrink-0'>{selectPills}</div>
+            )}
+            {isInlineSearch && (
+              <div className='min-w-48 flex-1'>
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder='Search your pantry'
+                />
+              </div>
+            )}
+          </div>
         )}
         {isSelecting && (
           <p role='status' className='sr-only'>
             {getPackageSelectionTitle(selectedPackages.length)}
           </p>
         )}
-        {isSelecting && isListShown && shownPackages.length > 0 && (
-          <div
-            role='group'
-            aria-label='Select several at once'
-            className='flex flex-wrap items-center gap-x-2 gap-y-4'
-          >
-            {pastBoxes.length > 0 && (
-              <Pill
-                isThin
-                isSelected={isEveryTicked(pastBoxes)}
-                icon={
-                  isEveryTicked(pastBoxes) ? (
-                    <Check className='h-3 w-3' aria-hidden='true' />
-                  ) : undefined
-                }
-                onClick={() => toggleAll(pastBoxes)}
-              >
-                {isBelow('sm')
-                  ? 'All past their date'
-                  : 'Select all past their date'}
-              </Pill>
-            )}
-            <Pill
-              isThin
-              isSelected={isEveryTicked(shownPackages)}
-              icon={
-                isEveryTicked(shownPackages) ? (
-                  <Check className='h-3 w-3' aria-hidden='true' />
-                ) : undefined
-              }
-              onClick={() => toggleAll(shownPackages)}
-            >
-              {isBelow('sm') ? 'All shown' : 'Select all shown'}
-            </Pill>
-          </div>
-        )}
-        {hasSearch && isListShown && (
+        {hasSearch && isListShown && !isInlineSearch && (
           <SearchInput
             value={query}
             onChange={setQuery}
@@ -661,15 +754,7 @@ function PantrySubview({
         <SelectionBar
           note={isNothingTicked ? getPackageSelectionNote(0) : null}
           actions={[
-            {
-              key: 'toss',
-              label: 'Toss',
-              icon: <Trash2 className='h-4 w-4' aria-hidden='true' />,
-              isDestructive: true,
-              isDisabled: isBlocked,
-              isLoading: acting === 'TOSS',
-              onClick: () => void handleAct({ kind: 'TOSS' }, selectedPackages),
-            },
+            isTossLead ? useUpAction : { ...tossAction, isDestructive: true },
             {
               key: 'move',
               label: 'Move',
@@ -679,14 +764,7 @@ function PantrySubview({
               onClick: () => setIsMoving(true),
             },
           ]}
-          primary={{
-            key: 'use-up',
-            label: 'Used it up',
-            icon: <Utensils className='h-4 w-4' aria-hidden='true' />,
-            isDisabled: isBlocked,
-            isLoading: acting === 'USE_UP',
-            onClick: () => void handleAct({ kind: 'USE_UP' }, selectedPackages),
-          }}
+          primary={isTossLead ? tossAction : useUpAction}
         />
       )}
       {open && (

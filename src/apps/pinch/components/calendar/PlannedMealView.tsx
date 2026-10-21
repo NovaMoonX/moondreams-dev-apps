@@ -10,25 +10,23 @@ import { createPortal } from 'react-dom';
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import {
-  BookmarkPlus,
-  ChevronLeft,
-  CookingPot,
-  Ellipsis,
-  Trash2,
-} from 'lucide-react';
+import { BookmarkPlus, CookingPot, Ellipsis, Trash2 } from 'lucide-react';
 
-import { useBackStep } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import FormSection from '@/components/FormSection';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import PlannedCookRow from '@apps/pinch/components/calendar/PlannedCookRow';
+import {
+  PlateRecipeView,
+  PlateRows,
+} from '@apps/pinch/components/recipes/PlateRecipe';
 import {
   getPlannedMealOffer,
   PLANNED_MEAL_VIEW,
@@ -72,12 +70,9 @@ import {
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCostTile,
-  formatRowPrice,
   getFixedNote,
-  getItemTitle,
   getPlannedMealTitle,
 } from '@apps/pinch/utils/mealFormat';
-import { formatServings } from '@apps/pinch/utils/recipeFormat';
 import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import {
@@ -85,25 +80,8 @@ import {
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 
-interface BackLinkProps {
-  onBack: () => void;
-}
-
-function BackLink({ onBack }: BackLinkProps) {
-  useBackStep(true, onBack);
-
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      className='h-10 gap-1 px-0!'
-      onClick={onBack}
-    >
-      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
-      Back
-    </Button>
-  );
-}
+const BACK_HEAD_CLASS =
+  'space-y-1 [@media(max-height:599px)]:flex [@media(max-height:599px)]:items-center [@media(max-height:599px)]:gap-3 [@media(max-height:599px)]:space-y-0';
 
 interface MoreRow {
   key: string;
@@ -379,7 +357,7 @@ function PlannedMealView({
   };
 
   const getFooter = () => {
-    if (view.kind === 'eat') return null;
+    if (view.kind === 'eat' || view.kind === 'recipe') return null;
     if (view.kind === 'name') {
       return (
         <div className='flex gap-2'>
@@ -479,6 +457,15 @@ function PlannedMealView({
         />
       );
     }
+    if (view.kind === 'recipe') {
+      return (
+        <PlateRecipeView
+          uid={uid}
+          recipeId={view.recipeId}
+          onBack={() => showView(PLANNED_MEAL_VIEW)}
+        />
+      );
+    }
     if (view.kind === 'name') {
       return (
         <div className='space-y-5'>
@@ -506,7 +493,7 @@ function PlannedMealView({
     if (view.kind === 'more') {
       return (
         <div ref={moreViewRef} className='space-y-5'>
-          <div className='space-y-1'>
+          <div className={BACK_HEAD_CLASS}>
             <BackLink onBack={closeMore} />
             <h3 className='text-lg font-semibold wrap-break-word'>
               {mealLabel}
@@ -550,9 +537,11 @@ function PlannedMealView({
     <>
       {viewBody}
       <div className={join('space-y-5', viewBody !== null && 'hidden')}>
-        <div className='space-y-1'>
+        <div className={BACK_HEAD_CLASS}>
           <BackLink onBack={onBack} />
-          <h3 className='text-lg font-semibold wrap-break-word'>{mealLabel}</h3>
+          <h3 className='min-w-0 text-lg font-semibold wrap-break-word'>
+            {mealLabel}
+          </h3>
         </div>
         <FormSection
           title='On the plate'
@@ -562,43 +551,26 @@ function PlannedMealView({
               : undefined
           }
         >
-          <ul className='divide-border divide-y'>
-            {meal.items.map((item) => {
-              const itemCost = cost.items.get(item.id);
+          <PlateRows
+            items={meal.items}
+            cost={cost}
+            onOpenRecipe={(recipeId) => showView({ kind: 'recipe', recipeId })}
+            renderExtra={(item) => {
               const markEntry = markableByItemId.get(item.id);
               return (
-                <li key={item.id} className='flex items-start gap-3 py-2.5'>
-                  <div className='min-w-0 flex-1'>
-                    <span className='block'>
-                      {getItemTitle(item, recipesById, ingredientsById)}
-                    </span>
-                    <span className='text-muted-foreground block text-xs'>
-                      {formatServings(item.servings)}
-                    </span>
-                    {markEntry && (
-                      <PlannedCookRow
-                        uid={uid}
-                        plannedMealId={meal.id}
-                        plannedDate={meal.date}
-                        markable={markEntry}
-                      />
-                    )}
+                markEntry && (
+                  <div className='px-4 pb-2.5'>
+                    <PlannedCookRow
+                      uid={uid}
+                      plannedMealId={meal.id}
+                      plannedDate={meal.date}
+                      markable={markEntry}
+                    />
                   </div>
-                  <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                    <span aria-hidden={itemCost?.cents == null}>
-                      {formatRowPrice(
-                        itemCost?.cents,
-                        (itemCost?.gaps.length ?? 0) > 0,
-                      )}
-                    </span>
-                    {itemCost?.cents == null && (
-                      <span className='sr-only'>No price</span>
-                    )}
-                  </span>
-                </li>
+                )
               );
-            })}
-          </ul>
+            }}
+          />
         </FormSection>
         <div className='space-y-3'>
           <StatTile

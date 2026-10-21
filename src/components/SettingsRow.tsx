@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
 
-import { join } from '@moondreamsdev/dreamer-ui/utils';
-
 interface SettingsRowProps {
   /** An emoji or icon for the round chip at the start. */
   icon: ReactNode;
@@ -12,8 +10,6 @@ interface SettingsRowProps {
   control?: ReactNode;
   /** Fields that belong to this row, under its text. */
   children?: ReactNode;
-  /** Dims the row for a control that can't be used yet; its stored value still shows. */
-  isDimmed?: boolean;
 }
 
 /** One line of a `SettingsGroup`: an icon chip, a title with its description and a control at the end, with the row's own fields beneath. */
@@ -23,13 +19,10 @@ function SettingsRow({
   description,
   control,
   children,
-  isDimmed = false,
 }: SettingsRowProps) {
   return (
     <li className='py-3'>
-      <label
-        className={join('flex items-start gap-3', isDimmed && 'opacity-60')}
-      >
+      <label className='flex items-start gap-3'>
         <span
           className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-lg leading-none'
           aria-hidden='true'

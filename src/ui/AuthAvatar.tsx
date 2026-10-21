@@ -64,6 +64,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             size='sm'
             aria-label='Home'
             title='Home'
+            className="relative after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
             onClick={() => navigate('/')}
           >
             <House className='h-4 w-4' />
@@ -71,7 +72,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         )}
         <Button
           onClick={signInWithGoogle}
-          className={join('gap-2', className)}
+          className={join(
+            "relative gap-2 after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']",
+            className,
+          )}
           aria-label='Sign in with Google'
         >
           <Google className='size-4' />
@@ -177,7 +181,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             size='sm'
             aria-label='Home'
             title='Home'
-            className='max-sm:hidden'
+            className="relative max-sm:hidden after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
             onClick={() => navigate('/')}
           >
             <House className='h-4 w-4' />
