@@ -416,9 +416,7 @@ function ItemSearch({
                 >
                   <span className='flex min-w-0 items-center gap-2 font-medium'>
                     <Plus className='size-4 shrink-0' aria-hidden='true' />
-                    <span className='truncate'>
-                      New ingredient “{trimmed}”
-                    </span>
+                    <span className='truncate'>New ingredient “{trimmed}”</span>
                   </span>
                 </PickRowShell>
               </li>

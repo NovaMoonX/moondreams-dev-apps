@@ -173,7 +173,9 @@ function IngredientDrawer({
               key: 'adjusted',
               content: (
                 <HelpTip badgeLabel='Adjusted' title='What you adjusted'>
-                  <p>This ingredient is built in, with a few values of yours.</p>
+                  <p>
+                    This ingredient is built in, with a few values of yours.
+                  </p>
                   {adjustments.length === 0 ? (
                     <p>Its values match the built-in ones now.</p>
                   ) : (
