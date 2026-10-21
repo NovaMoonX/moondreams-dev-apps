@@ -21,8 +21,9 @@ import ChecklistItemFormModal from '@apps/waypoint/components/ChecklistItemFormM
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SearchInput from '@/components/SearchInput';
+import { PillGroup, type PillOption } from '@/components/PillGroup';
 import { Link2, Lock, Users } from 'lucide-react';
-import { CHECKLIST_CATEGORY_EMOJIS, CHECKLIST_CATEGORY_LABELS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
+import { CHECKLIST_CATEGORIES, CHECKLIST_CATEGORY_EMOJIS, CHECKLIST_CATEGORY_LABELS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import type {
   ChecklistCategory,
   ChecklistItem,
@@ -43,6 +44,9 @@ import {
 interface ChecklistSectionProps {
   trip: TripSpace;
   currentUserId: string;
+  /** Held by the page, so the overview can open the list already filtered. */
+  categoryPick: ChecklistCategory | 'ALL';
+  onCategoryPickChange: (category: ChecklistCategory | 'ALL') => void;
 }
 
 function getChecklistCategoryLabel(item: ChecklistItem): string {
@@ -54,6 +58,8 @@ function getChecklistCategoryLabel(item: ChecklistItem): string {
 export default function ChecklistSection({
   trip,
   currentUserId,
+  categoryPick,
+  onCategoryPickChange,
 }: ChecklistSectionProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
@@ -88,7 +94,7 @@ export default function ChecklistSection({
 
   const showSearch = items.length >= LIST_SEARCH_THRESHOLD;
   const needle = showSearch ? query.trim().toLowerCase() : '';
-  const visibleItems = useMemo(
+  const searchedItems = useMemo(
     () =>
       items.filter(
         (item) =>
@@ -99,6 +105,31 @@ export default function ChecklistSection({
             )),
       ),
     [assignedToMeOnly, currentUserId, items, needle, privateIds],
+  );
+  const categoryCounts = useMemo(
+    () =>
+      searchedItems.reduce<Partial<Record<ChecklistCategory, number>>>(
+        (counts, item) => ({ ...counts, [item.category]: (counts[item.category] ?? 0) + (item.isCompleted ? 0 : 1) }),
+        {},
+      ),
+    [searchedItems],
+  );
+  const presentCategories = CHECKLIST_CATEGORIES.filter((category) => searchedItems.some((item) => item.category === category));
+  const usedCategories = new Set(items.map((item) => item.category));
+  const showCategoryFilter = usedCategories.size > 1;
+  const categoryFilter = categoryPick !== 'ALL' && presentCategories.includes(categoryPick) ? categoryPick : 'ALL';
+  const categoryOptions: PillOption<ChecklistCategory | 'ALL'>[] = [
+    { value: 'ALL', label: 'All', detail: String(searchedItems.filter((item) => !item.isCompleted).length) },
+    ...presentCategories.map((category) => ({
+      value: category,
+      label: CHECKLIST_CATEGORY_LABELS[category],
+      emoji: CHECKLIST_CATEGORY_EMOJIS[category],
+      detail: String(categoryCounts[category] ?? 0),
+    })),
+  ];
+  const visibleItems = useMemo(
+    () => (categoryFilter === 'ALL' ? searchedItems : searchedItems.filter((item) => item.category === categoryFilter)),
+    [categoryFilter, searchedItems],
   );
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const dayGroups = useMemo(
@@ -222,6 +253,16 @@ export default function ChecklistSection({
         />
       </div>
       {showSearch && <SearchInput value={query} onChange={setQuery} placeholder='Search the checklist' />}
+      {showCategoryFilter && (
+        <PillGroup
+          label='Filter by category'
+          isThin
+          wrapsNarrow
+          options={categoryOptions}
+          value={categoryFilter}
+          onChange={onCategoryPickChange}
+        />
+      )}
       <label className='text-muted-foreground flex items-center gap-2 text-sm'>
         <AppToggle
           size='sm'

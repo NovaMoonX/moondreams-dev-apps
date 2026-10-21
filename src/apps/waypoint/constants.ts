@@ -350,6 +350,15 @@ export const CHECKLIST_CATEGORY_EMOJIS: Record<ChecklistCategory, string> = {
   OTHER: '📌',
 };
 
+/** The overview's row for a category's open to-dos: "Book 2 things", "Pack 5 things". */
+export const CHECKLIST_CATEGORY_VERBS: Record<ChecklistCategory, string> = {
+  DOCUMENTS: 'Sort out',
+  PACKING: 'Pack',
+  BOOKINGS: 'Book',
+  LOGISTICS: 'Arrange',
+  OTHER: 'Finish',
+};
+
 export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
   DOCUMENTS: 'Documents',
   PACKING: 'Packing',
