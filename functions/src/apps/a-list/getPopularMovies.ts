@@ -11,7 +11,7 @@ if (getApps().length === 0) {
 
 const POPULAR_CACHE_MS = 86_400_000;
 // Bump when the shape or order of results changes, so older cached lists are not served.
-const POPULAR_CACHE_VERSION = 3;
+const POPULAR_CACHE_VERSION = 4;
 
 export const getPopularMovies = onCall(
   {

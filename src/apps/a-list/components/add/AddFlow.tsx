@@ -172,6 +172,8 @@ export function AddFlow({
   >(undefined);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
+  // A film picked from the suggestions is only browsed until the person says they want it.
+  const [wantsPickedFilm, setWantsPickedFilm] = useState(false);
   const [manualDraft, setManualDraft] =
     useState<ManualMovieDraft>(EMPTY_MANUAL_DRAFT);
   const [selection, setSelection] = useState<AddSelection | null>(
@@ -202,6 +204,10 @@ export function AddFlow({
     selection?.kind === 'search' ? selection.result.title : '';
   const fallbackPoster =
     selection?.kind === 'search' ? selection.result.posterUrl : null;
+  const popularPick =
+    selection?.kind === 'search' && 'overview' in selection.result
+      ? selection.result
+      : null;
   const trailerUrl =
     selection?.kind === 'search' && 'trailerUrl' in selection.result
       ? selection.result.trailerUrl
@@ -256,6 +262,9 @@ export function AddFlow({
     movie !== undefined &&
     movieKey !== null &&
     (!isCalendar || (showtimeAt !== undefined && showtimeValues.time !== ''));
+
+  const isDeciding =
+    popularPick !== null && overlay.destination === 'watchlist' && !wantsPickedFilm;
 
   const getDetailsLine = () => {
     if (selection?.kind === 'search' && details.isPending)
@@ -462,6 +471,7 @@ export function AddFlow({
       return;
     }
     setSelection(null);
+    setWantsPickedFilm(false);
     setWatchlistValues(INITIAL_WATCHLIST_DETAILS);
     setError(null);
   };
@@ -567,10 +577,15 @@ export function AddFlow({
           <div className='min-w-0 space-y-1'>
             <p className='font-semibold'>{movie?.title ?? fallbackTitle}</p>
             <p className='text-muted-foreground text-sm'>{getDetailsLine()}</p>
+            {isDeciding && popularPick.genres.length > 0 && (
+              <p className='text-muted-foreground text-sm'>
+                {popularPick.genres.join(' · ')}
+              </p>
+            )}
             {rewatchNote && (
               <p className='text-primary text-sm'>{rewatchNote}</p>
             )}
-            {trailerUrl && (
+            {trailerUrl && (isCalendar || isDeciding) && (
               <Button
                 href={trailerUrl}
                 target='_blank'
@@ -588,6 +603,9 @@ export function AddFlow({
             )}
           </div>
         </div>
+        {isDeciding && popularPick.overview && (
+          <p className='text-sm'>{popularPick.overview}</p>
+        )}
         {isCalendar ? (
           <Form
             key={`pick-${pickCount}`}
@@ -599,10 +617,12 @@ export function AddFlow({
             onDataChange={(data) => setShowtimeValues(data as ShowtimeValues)}
           />
         ) : (
-          <WatchlistDetailsFields
-            values={watchlistValues}
-            onChange={setWatchlistValues}
-          />
+          !isDeciding && (
+            <WatchlistDetailsFields
+              values={watchlistValues}
+              onChange={setWatchlistValues}
+            />
+          )
         )}
         {isCalendar && (
           <TheaterPills
@@ -732,10 +752,14 @@ export function AddFlow({
                   type='button'
                   rounded='full'
                   loading={isSaving}
-                  disabled={!canSave || isSaving}
-                  onClick={() => void handleAdd(false)}
+                  disabled={isDeciding ? false : !canSave || isSaving}
+                  onClick={() =>
+                    isDeciding
+                      ? setWantsPickedFilm(true)
+                      : void handleAdd(false)
+                  }
                 >
-                  Add
+                  {isDeciding ? 'Add to watchlist' : 'Add'}
                 </Button>
               </>
             )
