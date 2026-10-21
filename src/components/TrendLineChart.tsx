@@ -6,6 +6,7 @@ import {
   Line,
   ReferenceDot,
   ReferenceLine,
+  usePlotArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -34,8 +35,8 @@ interface TrendLineChartProps {
   yTicks?: number[];
   /** A faint vertical guide, such as where the past ends. */
   divider?: { x: number; label: string };
-  /** A ring on the line, such as where it crosses a guide. */
-  marker?: { x: number; y: number };
+  /** A small dot on the line with a callout and arrow, always visible, such as where it crosses a guide. */
+  marker?: { x: number; y: number; label: string };
   /** A horizontal guide, such as break even at 0. */
   referenceY?: { value: number; label: string };
   /** Short names for the compact readout (it must fit a 320px plot); default to the full labels. */
@@ -50,6 +51,75 @@ interface TrendLineChartProps {
   className?: string;
   /** Dots on every point; off for a dense series. */
   hasDots?: boolean;
+}
+
+const CALLOUT_HEIGHT = 22;
+const CALLOUT_ARROW = 6;
+
+/** A small dot with a label above it and an arrow pointing down at the dot, kept inside the plot. */
+function MarkerCallout({
+  cx,
+  cy,
+  label,
+}: {
+  cx?: number;
+  cy?: number;
+  label: string;
+}) {
+  const plot = usePlotArea();
+  if (cx === undefined || cy === undefined) return null;
+
+  const width = label.length * 6 + 20;
+  const minX = (plot?.x ?? 0) + 2;
+  const maxX = (plot?.x ?? 0) + (plot?.width ?? width + 4) - width - 2;
+  // The callout sits up and to the left of the dot, where a rising line leaves room, with the arrow near its right end.
+  const boxX = Math.max(minX, Math.min(cx - width + 16, maxX));
+  const boxY = cy - CALLOUT_ARROW - 4 - CALLOUT_HEIGHT;
+  const arrowX = Math.max(boxX + 10, Math.min(cx, boxX + width - 10));
+  return (
+    <g pointerEvents='none'>
+      <rect
+        x={boxX}
+        y={boxY}
+        width={width}
+        height={CALLOUT_HEIGHT}
+        rx={CALLOUT_HEIGHT / 2}
+        fill='var(--color-popover)'
+        stroke='var(--color-border)'
+      />
+      <path
+        d={`M${arrowX - 5},${boxY + CALLOUT_HEIGHT - 0.5} L${arrowX},${boxY + CALLOUT_HEIGHT + CALLOUT_ARROW} L${arrowX + 5},${boxY + CALLOUT_HEIGHT - 0.5} Z`}
+        fill='var(--color-popover)'
+        stroke='var(--color-border)'
+        strokeLinejoin='round'
+      />
+      <rect
+        x={arrowX - 5.5}
+        y={boxY + CALLOUT_HEIGHT - 2}
+        width={11}
+        height={2.5}
+        fill='var(--color-popover)'
+      />
+      <text
+        x={boxX + width / 2}
+        y={boxY + CALLOUT_HEIGHT / 2 + 4}
+        textAnchor='middle'
+        fontSize={11}
+        fontWeight={500}
+        fill='var(--color-popover-foreground)'
+      >
+        {label}
+      </text>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={4.5}
+        fill='var(--color-primary)'
+        stroke='var(--color-popover)'
+        strokeWidth={2}
+      />
+    </g>
+  );
 }
 
 function TrendLineChart({
@@ -297,10 +367,7 @@ function TrendLineChart({
             <ReferenceDot
               x={marker.x}
               y={marker.y}
-              r={7}
-              fill='var(--color-card)'
-              stroke='var(--color-foreground)'
-              strokeWidth={2}
+              shape={<MarkerCallout label={marker.label} />}
             />
           )}
           {isSoft && (
@@ -309,7 +376,7 @@ function TrendLineChart({
               y={last.y}
               r={6}
               fill='var(--color-primary)'
-              stroke='var(--color-card)'
+              stroke='var(--color-popover)'
               strokeWidth={3}
             />
           )}

@@ -82,6 +82,13 @@ function LegendLine({
   );
 }
 
+const formatShortDate = (value: number) =>
+  new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+
 function pluralize(count: number, word: string) {
   const result = count === 1 ? `${count} ${word}` : `${count} ${word}s`;
   return result;
@@ -451,15 +458,15 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                     : undefined
                 }
                 marker={
-                  breakEvenPoint ? { x: breakEvenPoint.x, y: 0 } : undefined
+                  breakEvenPoint
+                    ? {
+                        x: breakEvenPoint.x,
+                        y: 0,
+                        label: `${breakEvenPoint.x > todayDay ? 'Break even' : 'Broke even'} ${formatShortDate(breakEvenPoint.x)}`,
+                      }
+                    : undefined
                 }
-                formatX={(value) =>
-                  new Date(value).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    timeZone: 'UTC',
-                  })
-                }
+                formatX={formatShortDate}
                 formatValue={formatCents}
                 formatY={(value) =>
                   formatCents(Math.round(value / 100) * 100).replace('.00', '')
@@ -480,15 +487,6 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   />
                   Break even ($0)
                 </span>
-                {breakEvenPoint && (
-                  <span className='flex items-center gap-1.5'>
-                    <span
-                      className='border-foreground bg-card size-2.5 rounded-full border-2'
-                      aria-hidden='true'
-                    />
-                    You break even
-                  </span>
-                )}
                 {scenario !== 'none' && (
                   <span className='flex items-center gap-1.5'>
                     <LegendLine
