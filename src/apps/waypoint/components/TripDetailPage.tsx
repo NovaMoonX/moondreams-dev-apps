@@ -724,7 +724,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         )}
         {isIdeaBoardProminent && ideasOverview}
         {(hasAppNav ? sectionTab === '' : true) && (
-          <PackingSuggestionsEntry trip={trip} currentUserId={currentUserId} />
+          <PackingSuggestionsEntry key={`${currentUserId}:${trip.id}`} trip={trip} currentUserId={currentUserId} />
         )}
         {(hasAppNav ? sectionTab === '' : true) && (
           <ChecklistOverview

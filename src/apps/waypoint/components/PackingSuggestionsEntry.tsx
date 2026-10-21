@@ -34,7 +34,11 @@ const readChoices = (key: string): PackingChoices => {
   try {
     const stored = JSON.parse(localStorage.getItem(key) ?? 'null');
     return stored && Array.isArray(stored.skipped) && Array.isArray(stored.added)
-      ? { isDismissed: stored.isDismissed === true, skipped: stored.skipped, added: stored.added }
+      ? {
+          isDismissed: stored.isDismissed === true,
+          skipped: stored.skipped.filter((title: unknown) => typeof title === 'string'),
+          added: stored.added.filter((title: unknown) => typeof title === 'string'),
+        }
       : NO_CHOICES;
   } catch {
     return NO_CHOICES;
@@ -47,6 +51,7 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
   const { addToast } = useToast();
   const storageKey = `waypoint:${currentUserId}:packing:${trip.id}`;
   const [choices, setChoices] = useState(() => readChoices(storageKey));
+  const latestChoices = useRef(choices);
   const [isOpen, setIsOpen] = useState(false);
   const [showSkipped, setShowSkipped] = useState(false);
   const [pending, setPending] = useState<string[]>([]);
@@ -54,10 +59,14 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
   const events = useAppSelector(selectSortedTimelineEvents);
   const sharedItems = useAppSelector((state) => state.waypoint.checklist.items);
   const personalItems = useAppSelector(selectPersonalChecklistItems);
+  const isLoaded = useAppSelector(
+    (state) => state.waypoint.checklist.tripId === trip.id && state.waypoint.personalChecklist.tripId === trip.id,
+  );
   const weather = useTripWeather(trip, events, now);
 
   const updateChoices = (change: (current: PackingChoices) => PackingChoices) => {
-    const next = change(choices);
+    const next = change(latestChoices.current);
+    latestChoices.current = next;
     setChoices(next);
     try {
       localStorage.setItem(storageKey, JSON.stringify(next));
@@ -87,9 +96,9 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
   );
   const isListed = (title: string) => listed.has(title.toLowerCase());
   const isPending = (title: string) => pending.includes(title);
-  // An item the person added and later took off their list is a "no" too.
+  // An item the person added and later took off their list is a "no" too, once both lists have loaded.
   const isSkipped = (title: string) =>
-    choices.skipped.includes(title) || (choices.added.includes(title) && !isListed(title) && !isPending(title));
+    choices.skipped.includes(title) || (isLoaded && choices.added.includes(title) && !isListed(title) && !isPending(title));
 
   const groups = suggestions.map((suggestion) => ({
     ...suggestion,
@@ -102,7 +111,12 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
   );
   const activeTotal = groups.reduce((sum, { active }) => sum + active.length, 0);
 
-  if (trip.isArchived || (missing.length === 0 && !isOpen) || getLocalDayIndex(trip.startDate, now) >= 0) {
+  if (
+    trip.isArchived ||
+    !isLoaded ||
+    (missing.length === 0 && skippedAll.length === 0 && !isOpen) ||
+    getLocalDayIndex(trip.startDate, now) >= 0
+  ) {
     return null;
   }
 
@@ -136,10 +150,10 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
         ).unwrap(),
       ),
     );
-    entries.forEach(({ title }) => inFlight.current.delete(title));
-    setPending((current) => current.filter((title) => !entries.some((entry) => entry.title === title)));
     const added = entries.filter((_, index) => results[index].status === 'fulfilled').map(({ title }) => title);
     updateChoices((current) => ({ ...current, added: [...new Set([...current.added, ...added])] }));
+    entries.forEach(({ title }) => inFlight.current.delete(title));
+    setPending((current) => current.filter((title) => !entries.some((entry) => entry.title === title)));
     const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
     if (failures.length > 0) {
       addToast({
@@ -161,7 +175,20 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
 
   return (
     <div className='mt-5'>
-      {choices.isDismissed ? (
+      {missing.length === 0 ? (
+        skippedAll.length > 0 && (
+          <SectionEntryRow
+            heading='Pack for the weather'
+            icon={<Luggage className='h-5 w-5' />}
+            title={`${skippedAll.length} you skipped`}
+            summary='Bring any of them back'
+            onOpen={() => {
+              setShowSkipped(true);
+              setIsOpen(true);
+            }}
+          />
+        )
+      ) : choices.isDismissed ? (
         <SectionEntryRow
           heading='Pack for the weather'
           icon={<Luggage className='h-5 w-5' />}
@@ -169,7 +196,7 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
           summary={kinds}
           onOpen={() => setIsOpen(true)}
         />
-      ) : missing.length > 0 && (
+      ) : (
         <section className='bg-accent/40 border-accent space-y-3 rounded-2xl border p-4'>
           <div className='flex items-start gap-3'>
             <span className='bg-accent text-accent-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full'>
@@ -272,7 +299,7 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
                 type='button'
                 variant='tertiary'
                 size='sm'
-                className='relative h-auto px-0! before:absolute before:-inset-y-2 before:inset-x-0 before:content-[""]'
+                className='relative h-auto px-0! before:absolute before:-inset-y-2.5 before:inset-x-0 before:content-[""]'
                 onClick={() => setShowSkipped((current) => !current)}
               >
                 {skippedAll.length} you skipped · {showSkipped ? 'Hide' : 'Show'}
