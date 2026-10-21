@@ -92,6 +92,7 @@ import {
   buildEventTimeFields,
   getEventTime,
   isRelativeTrip,
+  toTripMoment,
 } from '@apps/waypoint/utils/tripTime';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -150,7 +151,6 @@ interface EventFormModalProps {
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
   prefill?: EventPrefill;
-  /** The day a new event starts on, when it is added from that day's header. */
   initialDayIndex?: number;
   events?: TimelineEvent[];
   /** A rough center point (from an existing trip event/stay) to bias place search
@@ -296,24 +296,44 @@ function getDayChoices(trip: TripSpace, current: number | null, allowNoDay: bool
   return [...none, ...days];
 }
 
-/** The plans on either side of a start time on one day, so the person can see what they are fitting into. */
 function getDayNeighbors(
   trip: TripSpace,
   events: TimelineEvent[],
   ownId: string | undefined,
   dayIndex: number | null,
   time: string,
+  timezone: string | null,
 ) {
   if (dayIndex === null || !time) return null;
+  const draftMs = toTripMoment(trip, dayIndex, time, timezone);
+  const dayStartMs = toTripMoment(trip, dayIndex, '00:00', timezone);
+  const dayEndMs = toTripMoment(trip, dayIndex + 1, '00:00', timezone);
+  if (draftMs === null || dayStartMs === null || dayEndMs === null) return null;
   const sameDay = events
     .filter((other) => other.id !== ownId && !other.isArchived)
     .map((other) => ({ title: other.title, ...getEventTime(trip, other) }))
-    .filter((other) => other.dayIndex === dayIndex && other.startTime)
-    .sort((first, second) => (first.startTime ?? '').localeCompare(second.startTime ?? ''));
-  const before = sameDay.filter((other) => (other.startTime ?? '') < time).at(-1) ?? null;
-  const after = sameDay.find((other) => (other.startTime ?? '') >= time) ?? null;
+    .filter(
+      (other) =>
+        other.startMs !== null &&
+        other.startTime !== null &&
+        other.startMs < dayEndMs &&
+        (other.impliedEndMs ?? other.startMs) > dayStartMs,
+    )
+    .sort((first, second) => (first.startMs ?? 0) - (second.startMs ?? 0));
+  const before = sameDay.filter((other) => (other.startMs ?? 0) < draftMs).at(-1) ?? null;
+  const after = sameDay.find((other) => (other.startMs ?? 0) >= draftMs) ?? null;
   const result = { before, after, isEmpty: sameDay.length === 0 };
   return result;
+}
+
+function describeNeighbor(trip: TripSpace, dayIndex: number, other: NonNullable<ReturnType<typeof getDayNeighbors>>['before']) {
+  if (!other?.startTime) return null;
+  const otherDay = other.dayIndex !== null && other.dayIndex !== dayIndex ? `Day ${other.dayIndex + 1} ` : '';
+  const zone =
+    other.timezone && other.timezone !== trip.timezone
+      ? ` ${formatTimezoneAbbreviation(other.timezone, other.startMs ?? undefined)}`
+      : '';
+  return `${otherDay}${formatClockTime(other.startTime)}${zone} ${other.title}`;
 }
 
 function getDerivedTitle(draft: EventDraft): string {
@@ -607,10 +627,6 @@ function EventFormModal({
         ),
     [events, draft.eventType],
   );
-  const dayNeighbors = useMemo(
-    () => getDayNeighbors(trip, events, event?.id, draft.dayIndex, draft.time),
-    [trip, events, event?.id, draft.dayIndex, draft.time],
-  );
   const isTravel = draft.eventType === 'TRAVEL';
   const canArriveEarly =
     isRelative && ARRIVE_BY_EVENT_TYPES.includes(draft.eventType) && draft.dayIndex !== null && draft.time !== '';
@@ -619,6 +635,10 @@ function EventFormModal({
   const lastDayWithBuffer = dayCount + MAX_DAYS_OUTSIDE_TRIP - 1;
   const startZone = draft.timezone ?? trip.timezone;
   const endZone = draft.endTimezone ?? startZone;
+  const dayNeighbors = useMemo(
+    () => getDayNeighbors(trip, events, event?.id, draft.dayIndex, draft.time, draft.timezone),
+    [trip, events, event?.id, draft.dayIndex, draft.time, draft.timezone],
+  );
   const startDayAt = trip.startDate + (draft.dayIndex ?? 0) * 86_400_000;
   const endDayAt = trip.startDate + (draft.endDayIndex ?? draft.dayIndex ?? 0) * 86_400_000;
 
@@ -1290,10 +1310,10 @@ function EventFormModal({
               ) : (
                 <>
                   <p className='truncate'>
-                    Before: {dayNeighbors.before ? `${formatClockTime(dayNeighbors.before.startTime ?? '')} ${dayNeighbors.before.title}` : 'nothing earlier'}
+                    Before: {describeNeighbor(trip, draft.dayIndex ?? 0, dayNeighbors.before) ?? 'nothing earlier'}
                   </p>
                   <p className='truncate'>
-                    After: {dayNeighbors.after ? `${formatClockTime(dayNeighbors.after.startTime ?? '')} ${dayNeighbors.after.title}` : 'nothing later'}
+                    After: {describeNeighbor(trip, draft.dayIndex ?? 0, dayNeighbors.after) ?? 'nothing later'}
                   </p>
                 </>
               )}
