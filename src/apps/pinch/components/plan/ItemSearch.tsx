@@ -9,8 +9,11 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
 import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
-import { selectIngredients } from '@apps/pinch/store/selectors';
-import { searchIngredients } from '@apps/pinch/utils/catalogSearch';
+import { selectIngredients, selectRecipes } from '@apps/pinch/store/selectors';
+import {
+  searchByName,
+  searchIngredients,
+} from '@apps/pinch/utils/catalogSearch';
 
 const MAX_RESULTS = 8;
 
@@ -18,6 +21,8 @@ interface ItemSearchProps {
   uid: string;
   /** Called with the picked ingredient's id, including one just made from the typed name. */
   onPick: (ingredientId: string) => void;
+  /** When given, the person's recipes are searched too and picking one calls this instead. */
+  onPickRecipe?: (recipeId: string) => void;
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
   autoFocus?: boolean;
@@ -27,11 +32,13 @@ interface ItemSearchProps {
 function ItemSearch({
   uid,
   onPick,
+  onPickRecipe,
   excludeIds = [],
   autoFocus = false,
 }: ItemSearchProps) {
   const dispatch = useAppDispatch();
   const ingredients = useAppSelector(selectIngredients);
+  const recipes = useAppSelector(selectRecipes);
   const [query, setQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +50,18 @@ function ItemSearch({
         .filter((ingredient) => !excludeIds.includes(ingredient.id))
         .slice(0, MAX_RESULTS),
     [ingredients, trimmed, excludeIds],
+  );
+  const recipeMatches = useMemo(
+    () =>
+      onPickRecipe && trimmed !== ''
+        ? searchByName(
+            recipes.map((recipe) => ({ name: recipe.title, recipe })),
+            trimmed,
+          )
+            .map(({ recipe }) => recipe)
+            .slice(0, MAX_RESULTS)
+        : [],
+    [onPickRecipe, recipes, trimmed],
   );
   const hasExactName = ingredients.some(
     (ingredient) =>
@@ -89,7 +108,9 @@ function ItemSearch({
       <SearchInput
         value={query}
         onChange={setQuery}
-        placeholder='Search ingredients'
+        placeholder={
+          onPickRecipe ? 'Search recipes and ingredients' : 'Search ingredients'
+        }
         autoFocus={autoFocus}
       />
       {trimmed === '' ? (
@@ -98,6 +119,29 @@ function ItemSearch({
         </p>
       ) : (
         <ul className='divide-border divide-y'>
+          {recipeMatches.map((recipe) => (
+            <li key={recipe.id}>
+              <Button
+                type='button'
+                variant='tertiary'
+                onClick={() => onPickRecipe?.(recipe.id)}
+                className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
+              >
+                <span
+                  className='flex w-7 shrink-0 justify-center text-xl'
+                  aria-hidden='true'
+                >
+                  🍲
+                </span>
+                <span className='min-w-0 flex-1 truncate font-medium'>
+                  {recipe.title}
+                </span>
+                <span className='text-muted-foreground text-xs font-normal'>
+                  Recipe
+                </span>
+              </Button>
+            </li>
+          ))}
           {matches.map((ingredient) => (
             <li key={ingredient.id}>
               <Button
@@ -110,6 +154,11 @@ function ItemSearch({
                 <span className='min-w-0 flex-1 truncate font-medium'>
                   {ingredient.name}
                 </span>
+                {onPickRecipe && (
+                  <span className='text-muted-foreground text-xs font-normal'>
+                    Ingredient
+                  </span>
+                )}
               </Button>
             </li>
           ))}

@@ -2,6 +2,8 @@ import {
   collection,
   doc,
   onSnapshot,
+  query,
+  where,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -10,6 +12,7 @@ import type {
   Family,
   IngredientRecord,
   KitchenSettings,
+  PlannedMeal,
   Product,
   Recipe,
   Store,
@@ -94,6 +97,25 @@ export function startSettingsListener(
     doc(db, 'apps', 'pinch', 'kitchens', uid),
     (snapshot) =>
       onChange(snapshot.exists() ? (snapshot.data() as KitchenSettings) : null),
+    onError,
+  );
+}
+
+/** The planned meals whose day falls in `[start, end)`, both stored dates (UTC midnight). */
+export function startPlannedMealsListener(
+  uid: string,
+  window: { start: number; end: number },
+  onChange: (plannedMeals: PlannedMeal[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(
+      kitchenCollection(uid, 'plannedMeals'),
+      where('date', '>=', window.start),
+      where('date', '<', window.end),
+    ),
+    (snapshot) =>
+      onChange(snapshot.docs.map((document) => document.data() as PlannedMeal)),
     onError,
   );
 }
