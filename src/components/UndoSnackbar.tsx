@@ -6,7 +6,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import type { PendingUndo } from '@/hooks/useUndoRemoval';
 
-const FOOTER_GAP_PX = 12;
+const FOOTER_GAP_PX = 16;
 const DEFAULT_BOTTOM = 'calc(1rem + env(safe-area-inset-bottom))';
 
 const getFooter = () =>
@@ -51,7 +51,7 @@ function SnackbarBar({ pending, onUndo, isOverSheet }: SnackbarBarProps) {
   return (
     <div
       className={join(
-        'bg-foreground text-background fixed inset-x-4 mx-auto flex max-w-md items-center gap-1 rounded-2xl py-1 pr-1 pl-4 shadow-lg motion-safe:animate-[snackbar-in_160ms_ease-out]',
+        'bg-foreground text-background fixed inset-x-4 mx-auto flex max-w-md items-center gap-3 rounded-xl p-2 pl-4 shadow-lg motion-safe:animate-[snackbar-in_160ms_ease-out]',
         isOverSheet ? 'z-[105]' : 'z-50',
       )}
       style={{ bottom }}
@@ -66,7 +66,7 @@ function SnackbarBar({ pending, onUndo, isOverSheet }: SnackbarBarProps) {
         type='button'
         variant='tertiary'
         size='sm'
-        className='text-background! bg-background/15 hover:bg-background/25 h-10 shrink-0 px-3! font-semibold whitespace-nowrap tabular-nums'
+        className='text-background! bg-background/15 hover:bg-background/25 h-10 shrink-0 rounded-lg! px-3! font-semibold whitespace-nowrap tabular-nums'
         onClick={onUndo}
       >
         Undo · {pending.secondsLeft}

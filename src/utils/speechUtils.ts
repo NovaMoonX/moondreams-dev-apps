@@ -22,7 +22,20 @@ export function getSpeechSynthesis(): SpeechSynthesis | null {
   return window.speechSynthesis ?? null;
 }
 
-/** A voice for `lang`: the exact language first, then the same language from another region, preferring one on the device. */
+const VOICE_QUALITY_HINTS: [RegExp, number][] = [
+  [/espeak|\bcompact\b/i, -2],
+  [/\b(natural|neural)\b|premium|enhanced|siri/i, 3],
+  [/^google\b/i, 2],
+];
+
+/** How natural a voice sounds, guessed from its name (browsers expose no quality field): Edge's "Natural" voices, Apple's Premium, Enhanced and Siri voices and Google's voices rank above a plain system voice, and eSpeak or an Apple "compact" voice below it. */
+export function getVoiceQuality(voice: SpeechSynthesisVoice): number {
+  const result =
+    VOICE_QUALITY_HINTS.find(([hint]) => hint.test(voice.name))?.[1] ?? 0;
+  return result;
+}
+
+/** A voice for `lang`: the exact language first, then the same language from another region; within that the most natural-sounding by name, then one on the device (a network voice sends what it reads to its vendor), then the browser's default. */
 export function pickVoice(
   voices: SpeechSynthesisVoice[],
   lang: string,
@@ -36,11 +49,14 @@ export function pickVoice(
       : voices.filter(
           (voice) => normalizeLang(voice.lang).split('-')[0] === primary,
         );
-  const result =
-    pool.find((voice) => voice.localService) ??
-    pool.find((voice) => voice.default) ??
-    pool[0] ??
-    null;
+  const rank = (voice: SpeechSynthesisVoice) =>
+    getVoiceQuality(voice) * 4 +
+    (voice.localService ? 2 : 0) +
+    (voice.default ? 1 : 0);
+  const result = pool.reduce<SpeechSynthesisVoice | null>(
+    (best, voice) => (best === null || rank(voice) > rank(best) ? voice : best),
+    null,
+  );
   return result;
 }
 

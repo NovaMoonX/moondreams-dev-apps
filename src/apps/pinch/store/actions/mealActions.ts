@@ -6,7 +6,7 @@ import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { stopSharingDeleted } from '@apps/pinch/store/actions/shareActions';
-import type { ItemKind, Meal } from '@apps/pinch/types';
+import type { DishCategory, ItemKind, Meal } from '@apps/pinch/types';
 
 const mealDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'meals', id);
@@ -32,6 +32,7 @@ interface SaveMealInput {
   /** The meal being changed; null saves a new one. */
   id: string | null;
   name: string;
+  categories: DishCategory[];
   items: DraftItem[];
 }
 
@@ -40,34 +41,41 @@ export const saveMeal = createAsyncThunk<
   string,
   SaveMealInput,
   { rejectValue: string }
->('pinch/meals/save', async ({ uid, id, name, items }, { rejectWithValue }) => {
-  const now = Date.now();
-  const mealId = id ?? generateUuid();
+>(
+  'pinch/meals/save',
+  async ({ uid, id, name, categories, items }, { rejectWithValue }) => {
+    const now = Date.now();
+    const mealId = id ?? generateUuid();
 
-  try {
-    if (id) {
-      await updateDoc(mealDoc(uid, id), {
-        name: name.trim(),
-        items: toItems(items),
-        updatedAt: now,
-      });
-    } else {
-      const meal: Meal = {
-        id: mealId,
-        name: name.trim(),
-        items: toItems(items),
-        isFavorite: false,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await setDoc(mealDoc(uid, mealId), meal);
+    try {
+      if (id) {
+        await updateDoc(mealDoc(uid, id), {
+          name: name.trim(),
+          categories,
+          items: toItems(items),
+          updatedAt: now,
+        });
+      } else {
+        const meal: Meal = {
+          id: mealId,
+          name: name.trim(),
+          categories,
+          items: toItems(items),
+          isFavorite: false,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await setDoc(mealDoc(uid, mealId), meal);
+      }
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to save this meal.'),
+      );
     }
-  } catch (error) {
-    return rejectWithValue(getErrorMessage(error, 'Unable to save this meal.'));
-  }
 
-  return mealId;
-});
+    return mealId;
+  },
+);
 
 interface SetMealFavoriteInput {
   uid: string;
@@ -150,6 +158,7 @@ export const savePlannedAsMeal = createAsyncThunk<
           servings: item.servings,
         })),
       ),
+      categories: [],
       isFavorite: false,
       createdAt: now,
       updatedAt: now,

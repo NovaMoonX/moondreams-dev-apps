@@ -4,6 +4,8 @@ import { getDataFromExtracted } from '../../src/apps/pinch/components/recipes/re
 import { mapIngredients } from '../../src/apps/pinch/utils/importShare.ts';
 import { normalizeExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import { formatFileSize, isReadableFile } from '../../src/utils/fileUtils.ts';
+import { clipAtWord } from '../../src/utils/stringUtils.ts';
+import { shortenGroupName } from '../../src/apps/pinch/utils/ingredientGroups.ts';
 import type { IngredientRecord } from '../../src/apps/pinch/types.ts';
 import { matchIngredient } from '../../src/apps/pinch/utils/ingredientMatch.ts';
 import {
@@ -588,6 +590,293 @@ assert.deepEqual(
     ['scallions', 2, 'Garnish Garnish Garnish Garnish Garnish'],
   ],
   'a heading loses its colon, markdown and extra spaces; the same ingredient under two headings stays two lines; a split line keeps its heading; no heading, the "Ingredients" title or a heading that is not text is no group; a long one is cut to 40 characters',
+);
+
+// PARENTHESES: what follows an ingredient in parentheses describes or renames it, and is never the quantity.
+const readLine = (line: Record<string, unknown>) =>
+  normalizeExtractedRecipe({ ingredients: [line] }).ingredients;
+const rice = readLine({
+  name: 'White rice (medium or short grain, if you can)',
+  amount: 2,
+  unit: 'CUP',
+  note: null,
+  group: null,
+});
+assert.deepEqual(
+  rice.map((line) => [line.name, line.amount, line.unit, line.note]),
+  [['White rice', 2, 'CUP', 'medium or short grain, if you can']],
+  'a description left in the name goes to the note; the amount stays the one measured',
+);
+assert.deepEqual(
+  readLine({
+    name: 'White rice',
+    amount: 2,
+    unit: 'CUP',
+    note: 'medium or short grain, if you can',
+    alsoCalled: null,
+  }).map((line) => [line.name, line.amount, line.note, line.alsoCalled]),
+  [['White rice', 2, 'medium or short grain, if you can', null]],
+  'the model keeping the name clean reads the same',
+);
+assert.deepEqual(
+  readLine({
+    name: 'Whole milk (240 ml)',
+    amount: 1,
+    unit: 'CUP',
+    note: null,
+  }).map((line) => [line.name, line.amount, line.unit, line.note]),
+  [['Whole milk', 1, 'CUP', null]],
+  'a second measure in parentheses is dropped, not noted',
+);
+assert.deepEqual(
+  readLine({ name: 'Oil (olive)', amount: 2, unit: 'TBSP', note: null }).map(
+    (line) => [line.name, line.alsoCalled, line.note],
+  ),
+  [['Oil', null, 'olive']],
+  'a one-word aside is a note: it may be a variety, so it is never matched as a second name',
+);
+assert.deepEqual(
+  readLine({
+    name: 'Butter (optional)',
+    amount: 1,
+    unit: 'TBSP',
+    note: null,
+  }).map((line) => [line.name, line.alsoCalled, line.note]),
+  [['Butter', null, 'optional']],
+);
+assert.deepEqual(
+  readLine({
+    name: 'salt and pepper (to taste)',
+    amount: null,
+    unit: null,
+    note: null,
+    alsoCalled: 'seasoning',
+  }).map((line) => [line.name, line.alsoCalled]),
+  [
+    ['salt', null],
+    ['pepper', null],
+  ],
+  'a split line gives each half no second name',
+);
+
+// SYNONYMS: "beef mince (ground beef)" is one ingredient, matched through whichever name the kitchen knows
+const mince = readLine({
+  name: 'Beef mince (ground beef)',
+  amount: 500,
+  unit: 'G',
+  note: 'any fat % you like',
+});
+assert.deepEqual(
+  mince.map((line) => [line.name, line.alsoCalled, line.note]),
+  [['Beef mince', 'ground beef', 'any fat % you like']],
+  'a second name left in the name is split off',
+);
+const withGroundBeef = resolveIngredients([
+  custom('c-ground-beef', 'Ground beef'),
+]);
+const catalogOnly = resolveIngredients([]);
+const draftRow = (line: Record<string, unknown>, known = withGroundBeef) =>
+  getDataFromExtracted(normalizeExtractedRecipe({ ingredients: [line] }), known)
+    .ingredients[0];
+const minceLine = {
+  name: 'Beef mince',
+  alsoCalled: 'Ground beef',
+  amount: 500,
+  unit: 'G',
+  note: 'any fat % you like',
+};
+assert.deepEqual(
+  [
+    draftRow(minceLine).ingredientId,
+    draftRow(minceLine).amount,
+    draftRow(minceLine).unit,
+    draftRow(minceLine).note,
+    draftRow(minceLine).newName,
+  ],
+  ['c-ground-beef', '500', 'G', 'any fat % you like', null],
+  'the model giving both names links the one the person has, with no second name in the note',
+);
+assert.equal(
+  draftRow({ ...minceLine, name: 'Beef mince (ground beef)', alsoCalled: null })
+    .ingredientId,
+  'c-ground-beef',
+  'the same when the second name was left in the name',
+);
+assert.equal(
+  draftRow({ ...minceLine, alsoCalled: null }, catalogOnly).ingredientId,
+  'cat-ground-beef-80',
+  'beef mince alone is an alias of the catalog ground beef',
+);
+assert.deepEqual(
+  [
+    draftRow(minceLine, catalogOnly).ingredientId,
+    draftRow(minceLine, catalogOnly).note,
+  ],
+  ['cat-ground-beef-80', 'any fat % you like'],
+  'with only the catalog, beef mince is its alias, and the second name is not repeated in the note',
+);
+assert.equal(
+  draftRow(minceLine, resolveIngredients([custom('c-mince', 'Beef mince')]))
+    .ingredientId,
+  'c-mince',
+  "an ingredient the person named exactly wins over the catalog's alias",
+);
+const unknownBoth = draftRow(
+  { name: 'Chuck mince (ground chuck)', amount: 1, unit: 'LB', note: null },
+  catalogOnly,
+);
+assert.deepEqual(
+  [unknownBoth.ingredientId === '', unknownBoth.note],
+  [unknownBoth.newName === null, 'ground chuck'],
+  'two names nothing matches: the first is the new ingredient and the second is kept in the note',
+);
+// a second name is matched by the same rules as the first, so a look-alike or a one-word aside never links
+assert.equal(
+  draftRow({ name: 'Goat milk (oat)', amount: 1, unit: 'CUP' }, catalogOnly)
+    .ingredientId === 'cat-oat-milk',
+  false,
+  'goat is not oat, and a one-word aside is a note, not a second name',
+);
+assert.equal(
+  draftRow({ name: 'Oil (olive)', amount: 1, unit: 'TBSP' }, catalogOnly).note,
+  'olive',
+);
+
+// DUAL MEASURE: one amount written twice ("500g / 1 lb") is one line with the first measure
+const dual = normalizeExtractedRecipe({
+  ingredients: [
+    { name: 'Beef mince', amount: 500, unit: 'G', note: null },
+    { name: 'Beef mince', amount: 1, unit: 'LB', note: 'any fat % you like' },
+    { name: 'Flour', amount: 1, unit: 'CUP', note: null },
+    { name: 'Flour', amount: 1, unit: 'TBSP', note: 'for dusting' },
+    { name: 'Butter', amount: 2, unit: 'TBSP', note: null },
+    { name: 'Butter', amount: 2, unit: 'TBSP', note: null },
+    { name: 'Sugar', amount: 1, unit: 'CUP', note: null },
+    { name: 'Sugar', amount: 200, unit: 'G', note: null, group: 'Topping' },
+    { name: 'Milk', amount: 1, unit: 'CUP', note: null },
+    { name: 'Milk', amount: 240, unit: 'ML', note: null },
+    { name: 'Water', amount: 2, unit: 'CUP', note: null },
+    { name: 'Water', amount: 100, unit: 'ML', note: null },
+    { name: 'Cream', amount: 1, unit: 'CUP', note: 'to whip' },
+    { name: 'Cream', amount: 250, unit: 'ML', note: 'for the sauce' },
+  ],
+});
+assert.deepEqual(
+  dual.ingredients.map((line) => [
+    line.name,
+    line.amount,
+    line.unit,
+    line.note,
+    line.group,
+  ]),
+  [
+    ['Beef mince', 500, 'G', 'any fat % you like', null],
+    ['Flour', 1, 'CUP', null, null],
+    ['Flour', 1, 'TBSP', 'for dusting', null],
+    ['Butter', 2, 'TBSP', null, null],
+    ['Butter', 2, 'TBSP', null, null],
+    ['Sugar', 1, 'CUP', null, null],
+    ['Sugar', 200, 'G', null, 'Topping'],
+    ['Milk', 1, 'CUP', null, null],
+    ['Water', 2, 'CUP', null, null],
+    ['Water', 100, 'ML', null, null],
+    ['Cream', 1, 'CUP', 'to whip', null],
+    ['Cream', 250, 'ML', 'for the sauce', null],
+  ],
+  '500 g then 1 lb and 1 cup then 240 ml are one amount each (the first measure stays, a note only the second carried is kept); different amounts, the same unit twice, another heading, a different kind of unit or two different notes (two uses of one ingredient) are separate lines',
+);
+const draft = getDataFromExtracted(
+  normalizeExtractedRecipe({
+    ingredients: [
+      { name: 'Beef mince', amount: 500, unit: 'G', note: null },
+      { name: 'Beef mince', amount: 1, unit: 'LB', note: null },
+    ],
+  }),
+  withGroundBeef,
+).ingredients;
+assert.equal(draft.length, 1, 'a dual measure is one row in the form');
+
+// GROUP NAMES: a heading is a short plain name that fits the cap, never a clipped sentence
+const heading = (text: string | null) => shortenGroupName(text);
+assert.deepEqual(
+  [
+    'Bulgogi sauce (don’t skip the onion & apple!):',
+    "Bulgogi sauce (don't skip the onion & apple!)",
+    'Bulgogi sauce (don’t skip the onion & ap',
+    '**For the chicken:**',
+    'Marinade: mix well and set aside',
+    'Sauce (see note) (optional)',
+    'FOR THE SAUCE!',
+    '(just a note)',
+  ].map(heading),
+  [
+    'Bulgogi sauce',
+    'Bulgogi sauce',
+    'Bulgogi sauce',
+    'For the chicken',
+    'Marinade',
+    'Sauce',
+    'FOR THE SAUCE',
+    null,
+  ],
+  'the colon, markdown, parenthetical asides (closed or cut off) and closing punctuation go; nothing left is no group',
+);
+assert.equal(
+  heading('Sauce for the marinade and the glaze and the dipping bowls'),
+  'Sauce for the marinade and the glaze',
+  'a long heading is cut at a word, not in the middle of one',
+);
+assert.equal(
+  heading('A'.repeat(60))?.length,
+  40,
+  'one long word is cut where it stands',
+);
+assert.equal(
+  heading('Sauce (' + 'x'.repeat(300)),
+  'Sauce',
+  'an aside cut off by the model goes with its bracket',
+);
+const bulgogi = normalizeExtractedRecipe({
+  ingredients: [
+    {
+      name: 'soy sauce',
+      amount: 4,
+      unit: 'TBSP',
+      note: null,
+      group: 'Bulgogi sauce (don’t skip the onion & apple!):',
+    },
+    {
+      name: 'pear',
+      amount: 0.5,
+      unit: null,
+      note: null,
+      group: 'Bulgogi sauce',
+    },
+  ],
+});
+assert.deepEqual(
+  bulgogi.ingredients.map((line) => line.group),
+  ['Bulgogi sauce', 'Bulgogi sauce'],
+  'the long and the plain heading are one group',
+);
+assert.equal(clipAtWord('one two three', 7), 'one two');
+assert.equal(clipAtWord('one two three', 8), 'one two');
+assert.equal(clipAtWord('one two, three', 8), 'one two');
+assert.equal(clipAtWord('one two three', 13), 'one two three');
+assert.equal(clipAtWord('abcdefghij', 4), 'abcd');
+const longNote = readLine({
+  name: 'Salt',
+  amount: 1,
+  unit: 'TSP',
+  note: 'sprinkled thinly '.repeat(20),
+})[0].note!;
+assert.deepEqual(
+  [
+    longNote.length <= 200,
+    ['sprinkled', 'thinly'].includes(longNote.split(' ').at(-1)!),
+  ],
+  [true, true],
+  'a long note is cut at a word',
 );
 
 // a picked file's size is said in the units a person reads, with no "0 KB" and no "1024 KB" at the edge

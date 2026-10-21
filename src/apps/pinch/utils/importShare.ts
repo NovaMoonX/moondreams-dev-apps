@@ -264,6 +264,7 @@ const toRecipe = (
   sourceId: null,
   care: toCare(shared.care),
   collectionIds: [],
+  categories: [],
   links: cleanLinks(
     shared.links.map((link) => ({
       id: makeId(),
@@ -371,6 +372,7 @@ export function planMealImport(
           : getId(item),
       servings: item.servings,
     })),
+    categories: [],
     isFavorite: false,
     createdAt: now,
     updatedAt: now,

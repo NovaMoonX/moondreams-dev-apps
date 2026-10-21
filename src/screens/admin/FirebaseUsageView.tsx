@@ -44,12 +44,13 @@ const getStatus = (line: FirebaseUsageLine) => {
 /** Names why the read failed, so a missing grant isn't mistaken for a lost connection. */
 const getFailureText = (error: unknown) => {
   const { code = '', message = '' } = (error ?? {}) as { code?: string; message?: string };
-  if (message.includes(MONITORING_ROLE_MISSING)) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return "You're offline. Usage loads once you're back.";
+  if (code === 'functions/failed-precondition' && message.includes(MONITORING_ROLE_MISSING)) {
     return "Google isn't letting the functions read usage yet. In Google Cloud, give the Cloud Functions service account the Monitoring Viewer role, then refresh.";
   }
-  if (code.endsWith('permission-denied')) return "This account isn't the admin, so usage stays hidden.";
-  if (code.endsWith('internal')) return "Google's usage service didn't answer. Refresh in a moment.";
-  return "We couldn't load usage just now. Refresh to try again.";
+  if (code === 'functions/permission-denied') return "This account isn't the admin, so usage stays hidden.";
+  if (code === 'functions/deadline-exceeded') return 'Reading usage took too long. Refresh to try again.';
+  return "Usage couldn't be read just now. Refresh in a moment.";
 };
 
 function UsageRow({ line }: { line: FirebaseUsageLine }) {

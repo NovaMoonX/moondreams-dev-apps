@@ -38,7 +38,7 @@ export const getFirebaseUsage = onCall(
   },
   async (request) => {
     const email = request.auth?.token.email?.trim().toLowerCase() ?? null;
-    const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
+    const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' && !process.env.K_SERVICE;
     const isAdminEmail = email === ADMIN_EMAIL && request.auth?.token.email_verified === true;
     const isEmulatorDev = isEmulator && request.auth?.token.dev === true;
     if (!request.auth || (!isAdminEmail && !isEmulatorDev && request.auth.token.admin !== true)) {

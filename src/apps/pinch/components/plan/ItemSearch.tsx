@@ -10,7 +10,7 @@ import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { MAX_NAME_LENGTH, PANTRY_SECTION_EMOJIS } from '@apps/pinch/constants';
+import { MAX_NAME_LENGTH } from '@apps/pinch/constants';
 import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
 import StockLine from '@apps/pinch/components/containers/StockLine';
 import {
@@ -29,7 +29,6 @@ import {
 import { getStockParts } from '@apps/pinch/utils/containers';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { MAX_PICK_SUGGESTIONS } from '@apps/pinch/utils/pickerSuggestions';
-import { getShopSection } from '@apps/pinch/utils/shopping';
 
 const MAX_RESULTS = 8;
 const PHONE_FOCUS_DELAY_MS = 350;
@@ -51,27 +50,7 @@ export interface ItemSuggestions {
   ids: readonly string[];
 }
 
-interface PickChipProps {
-  children: ReactNode;
-  isCompact?: boolean;
-}
-
-function PickChip({ children, isCompact = false }: PickChipProps) {
-  return (
-    <span
-      className={join(
-        'bg-accent text-accent-foreground flex shrink-0 items-center justify-center rounded-full',
-        isCompact ? 'size-8 text-base' : 'size-10 text-lg',
-      )}
-      aria-hidden='true'
-    >
-      {children}
-    </span>
-  );
-}
-
 interface PickRowShellProps {
-  chip: ReactNode;
   trailing?: ReactNode;
   isCompact?: boolean;
   isDisabled: boolean;
@@ -80,7 +59,6 @@ interface PickRowShellProps {
 }
 
 function PickRowShell({
-  chip,
   trailing,
   isCompact = false,
   isDisabled,
@@ -98,7 +76,6 @@ function PickRowShell({
         isCompact ? 'min-h-10 items-center py-0!' : 'items-start py-1.5!',
       )}
     >
-      {chip}
       <span
         className={join(
           'flex min-w-0 flex-1 flex-col justify-center',
@@ -116,7 +93,6 @@ function PickRowShell({
 
 interface IngredientPickRowProps {
   name: string;
-  emoji: string;
   detail: string | null;
   trailing?: ReactNode;
   isCompact?: boolean;
@@ -126,7 +102,6 @@ interface IngredientPickRowProps {
 
 function IngredientPickRow({
   name,
-  emoji,
   detail,
   trailing,
   isCompact = false,
@@ -135,7 +110,6 @@ function IngredientPickRow({
 }: IngredientPickRowProps) {
   return (
     <PickRowShell
-      chip={<PickChip isCompact={isCompact}>{emoji}</PickChip>}
       trailing={trailing}
       isCompact={isCompact}
       isDisabled={isDisabled}
@@ -275,7 +249,6 @@ function ItemSearch({
   };
   const noMatchLine = getNoMatchLine();
   const getRowLook = (ingredient: ResolvedIngredient) => ({
-    emoji: PANTRY_SECTION_EMOJIS[getShopSection(ingredient)],
     detail: familiesById.get(ingredient.familyId ?? '')?.name ?? null,
   });
 
@@ -372,7 +345,6 @@ function ItemSearch({
             {mealMatches.map((meal) => (
               <li key={meal.id}>
                 <PickRowShell
-                  chip={<PickChip isCompact={isLandscape}>🍽️</PickChip>}
                   trailing={
                     <span className='text-muted-foreground text-xs font-normal whitespace-nowrap'>
                       Saved meal
@@ -396,7 +368,6 @@ function ItemSearch({
               return (
                 <li key={recipe.id}>
                   <PickRowShell
-                    chip={<PickChip isCompact={isCompactRow}>🍲</PickChip>}
                     trailing={
                       <span className='text-muted-foreground text-xs font-normal'>
                         Recipe
@@ -439,23 +410,13 @@ function ItemSearch({
             {canCreate && (
               <li>
                 <PickRowShell
-                  chip={
-                    <span
-                      className={join(
-                        'bg-secondary text-secondary-foreground flex shrink-0 items-center justify-center rounded-full',
-                        isLandscape ? 'size-8' : 'size-10',
-                      )}
-                      aria-hidden='true'
-                    >
-                      <Plus className={isLandscape ? 'size-4' : 'size-5'} />
-                    </span>
-                  }
                   isCompact={isLandscape}
                   isDisabled={isCreating || isDisabled}
                   onClick={() => void createFromName()}
                 >
-                  <span className='truncate font-medium'>
-                    New ingredient “{trimmed}”
+                  <span className='flex min-w-0 items-center gap-2 font-medium'>
+                    <Plus className='size-4 shrink-0' aria-hidden='true' />
+                    <span className='truncate'>New ingredient “{trimmed}”</span>
                   </span>
                 </PickRowShell>
               </li>

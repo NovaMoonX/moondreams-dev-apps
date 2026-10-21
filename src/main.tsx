@@ -16,6 +16,8 @@ watchForAppUpdates();
 
 // A tab opened before a deploy can't fetch the new build's lazy chunks; reload once to pick them up.
 window.addEventListener('vite:preloadError', () => {
+  // A person inside a task (cooking mode) keeps it: the feature that wanted the chunk fails alone and the next full load repairs it.
+  if (document.documentElement.hasAttribute('data-subview-open')) return;
   try {
     const lastReload = Number(sessionStorage.getItem('chunk-reload-at'));
     if (Date.now() - lastReload < 30_000) return;

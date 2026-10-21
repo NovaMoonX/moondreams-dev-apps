@@ -8,6 +8,18 @@ import {
 } from './types.ts';
 
 const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
+const CATEGORY_VALUES = [
+  'BREAKFAST',
+  'MAIN',
+  'SIDE',
+  'SOUP_SALAD',
+  'SNACK',
+  'DESSERT',
+  'BAKING',
+  'DRINK',
+  'SAUCE',
+];
 const FAMILY_COUNT = 40;
 const INGREDIENT_COUNT = 300;
 const PRODUCT_COUNT = 150;
@@ -448,6 +460,31 @@ export async function seedPinchScale(
     };
   };
 
+  // Categories over the 200 recipes: every sixth has no key (the shape from before categories), every tenth an empty list, every fourth two kinds and the rest one. Draws no random number.
+  const getCategoryFields = (index: number) => {
+    if (index % 6 === 5) return {};
+    if (index % 10 === 9) return { categories: [] };
+    const first = index % CATEGORY_VALUES.length;
+    return {
+      categories:
+        index % 4 === 0
+          ? [
+              CATEGORY_VALUES[first],
+              CATEGORY_VALUES[(first + 7) % CATEGORY_VALUES.length],
+            ]
+          : [CATEGORY_VALUES[first]],
+    };
+  };
+
+  // Hours back from the base time, so sorting by created and by edited gives orders that differ from the name order and from each other.
+  const getTimes = (index: number) => {
+    const created = createdAt - ((index * 7) % 41) * HOUR_MS;
+    return {
+      createdAt: created,
+      updatedAt: created + ((index * 3) % 11) * HOUR_MS,
+    };
+  };
+
   const getSourceId = (index: number) => {
     const slot = index % 17;
     return slot >= 15 ? null : sources[Math.max(0, slot - 3)].id;
@@ -498,13 +535,14 @@ export async function seedPinchScale(
       source: 'MANUAL',
       sourceId: getSourceId(index),
       ...getCollectionFields(index),
+      ...getCategoryFields(index),
       // Most recipes keep the older shape (no key) so the legacy path stays exercised.
       ...(STARRED_RECIPE_INDEXES.includes(index) ? { isFavorite: true } : {}),
       isArchived: false,
     };
   });
-  recipes.forEach((recipe) =>
-    add(`recipes/${recipe.id}`, { ...recipe, createdAt, updatedAt: createdAt }),
+  recipes.forEach((recipe, index) =>
+    add(`recipes/${recipe.id}`, { ...recipe, ...getTimes(index) }),
   );
 
   const shoppingItems = Array.from(
@@ -666,8 +704,8 @@ export async function seedPinchScale(
     add(`meals/${meal.id}`, {
       ...meal,
       ...getFavoriteFields(index),
-      createdAt,
-      updatedAt: createdAt,
+      ...getCategoryFields(index),
+      ...getTimes(index),
     }),
   );
 

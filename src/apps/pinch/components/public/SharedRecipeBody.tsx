@@ -93,7 +93,7 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
         <RecipeCareSection care={care} title='Keeping leftovers' isCard />
       )}
 
-      <RecipeLinksSection links={links} rel={LINK_REL} isThumbnailHidden />
+      <RecipeLinksSection links={links} rel={LINK_REL} isPlayerHidden />
     </div>
   );
 }

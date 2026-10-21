@@ -30,7 +30,7 @@ export function useCookNote({ uid, entries }: UseCookNoteInput) {
   );
   const noteSummaries = useAppSelector(selectNoteSummaries);
   const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
-  const [savedRecipeIds, setSavedRecipeIds] = useState<string[]>([]);
+  const [savedNotes, setSavedNotes] = useState<Record<string, string>>({});
   const [text, setText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +45,7 @@ export function useCookNote({ uid, entries }: UseCookNoteInput) {
 
   const reset = () => {
     close();
-    setSavedRecipeIds([]);
+    setSavedNotes({});
   };
 
   const save = async () => {
@@ -60,8 +60,10 @@ export function useCookNote({ uid, entries }: UseCookNoteInput) {
     setError(null);
     setIsSaving(true);
     try {
-      await dispatch(addNote({ uid, recipeId, text, cookId })).unwrap();
-      setSavedRecipeIds((current) => [...current, recipeId]);
+      const noteId = await dispatch(
+        addNote({ uid, recipeId, text, cookId }),
+      ).unwrap();
+      setSavedNotes((current) => ({ ...current, [recipeId]: noteId }));
       setIsSaving(false);
       close();
     } catch (saveError) {
@@ -74,8 +76,9 @@ export function useCookNote({ uid, entries }: UseCookNoteInput) {
     isAvailable: (recipeId: string) =>
       isNotesReady &&
       !isNoteHistoryFull(noteSummaries.get(recipeId)?.count ?? 0),
-    isSaved: (recipeId: string) => savedRecipeIds.includes(recipeId),
-    savedRecipeIds,
+    isSaved: (recipeId: string) => recipeId in savedNotes,
+    /** The note this panel wrote for the recipe, or null. */
+    getSavedNoteId: (recipeId: string) => savedNotes[recipeId] ?? null,
     openRecipeId: openEntry === null ? null : openEntry.recipeId,
     isOpen: openEntry !== null,
     hasDraft:

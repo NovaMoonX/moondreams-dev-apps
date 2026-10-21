@@ -302,6 +302,7 @@ const ids = (plan: ShareImportPlan) => ({
       'sourceId',
       'care',
       'collectionIds',
+      'categories',
       'links',
       'isArchived',
       'isFavorite',
@@ -357,6 +358,11 @@ const ids = (plan: ShareImportPlan) => ({
   assert.deepEqual(recipe.collectionIds, []);
   assert.equal(recipe.isArchived, false);
   assert.equal(recipe.isFavorite, false);
+  assert.deepEqual(
+    recipe.categories,
+    [],
+    'a share carries no categories, so an imported recipe starts with none',
+  );
   assert.equal(recipe.createdAt, NOW);
   assert.equal(recipe.updatedAt, NOW);
   assert.ok(
@@ -480,6 +486,7 @@ const ids = (plan: ShareImportPlan) => ({
   assert.ok(meal);
   assert.equal(meal.name, 'Sunday dinner');
   assert.equal(meal.isFavorite, false);
+  assert.deepEqual(meal.categories, [], 'and so does an imported saved meal');
   assert.equal(meal.createdAt, NOW);
   assert.deepEqual(
     plan.recipes.map((entry) => [

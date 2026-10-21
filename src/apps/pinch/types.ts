@@ -141,6 +141,16 @@ export interface PinchReminderSettings {
   timeZone: string | null;
 }
 
+/** What a person chose for hands-free cooking, saved with the account so it follows them to another device. A key is null until they have chosen on any device, and then this device's own earlier choice (kept in localStorage before these were saved) still stands. The natural voice's switch is not here: its download is per device. */
+export interface PinchVoiceSettings {
+  /** Said yes to the voice explainer (who hears the audio, that nothing is kept). The browser still asks for the microphone on each device. */
+  hasAgreed: boolean | null;
+  /** Read each step aloud while the microphone is on. */
+  isReadingAloud: boolean | null;
+  /** Wait for the wake phrase instead of listening for one window per tap. */
+  isWaiting: boolean | null;
+}
+
 /** The person's own choices, at `apps/pinch/settings/{uid}`: reminders, how long a new box keeps and whether the Calendar draws its stat tiles. Created the first time Pinch opens with the defaults, or by their first change. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
 export interface PinchSettings {
   /** Days a box starts with in the fridge; null is the built-in number. */
@@ -151,6 +161,8 @@ export interface PinchSettings {
   suggestPhotos: boolean;
   /** Whether the Calendar draws its stat tiles (the total, the averages and the daily nutrition) above the week or month. Saved with the account, so it follows the person to another device. A document written before this key lacks it, which reads as false. */
   calendarStats: boolean;
+  /** Hands-free cooking choices. A document written before this key lacks it, which reads as every choice not made yet. */
+  voice: PinchVoiceSettings;
   reminders: PinchReminderSettings;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */
@@ -160,6 +172,21 @@ export interface PinchSettings {
 export type MealType =
   'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'DESSERT' | 'DRINK';
 export type ItemKind = 'RECIPE' | 'INGREDIENT';
+
+/** What kind of dish a recipe or saved meal is. A dish can be several (a smoothie is a drink and breakfast); none is the normal start. */
+export type DishCategory =
+  | 'BREAKFAST'
+  | 'MAIN'
+  | 'SIDE'
+  | 'SOUP_SALAD'
+  | 'SNACK'
+  | 'DESSERT'
+  | 'BAKING'
+  | 'DRINK'
+  | 'SAUCE';
+
+/** The sorts a Recipes view offers; `default` keeps the view's own order. */
+export type ListSortKey = 'default' | 'created' | 'edited' | 'alpha';
 
 /** One row of a meal: a recipe or an ingredient, and how many servings of it. */
 export interface MealItem {
@@ -178,6 +205,8 @@ export interface Meal {
   items: MealItem[];
   /** Starred by the person: favorites list first. Meals written before favorites lack the key, which reads as false. */
   isFavorite: boolean;
+  /** The kinds of dish it is. Meals written before categories lack the key, which reads as empty; a value outside the list is ignored. */
+  categories: DishCategory[];
   createdAt: number;
   updatedAt: number;
 }
@@ -560,6 +589,8 @@ export interface Recipe {
   care: RecipeCare | null;
   /** The `Collection`s it is in, at most 20. A recipe written before collections lacks the key, which reads as empty; an id no collection has is ignored. */
   collectionIds: string[];
+  /** The kinds of dish it is. A recipe written before categories lacks the key, which reads as empty; a value outside the list is ignored. */
+  categories: DishCategory[];
   /** A recipe written before links lacks the key, which reads as `[]`. */
   links: RecipeLink[];
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
