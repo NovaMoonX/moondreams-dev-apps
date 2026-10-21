@@ -53,23 +53,23 @@ chicken-breast|Chicken breast|chicken|165|31|0|3.6|4 OZ|-|174|boneless skinless 
 chicken-thigh|Chicken thigh|chicken|209|26|0|10.9|4 OZ|-|116|boneless chicken thighs
 chicken-drumstick|Chicken drumstick|chicken|172|28.3|0|5.7|1 EACH|-|70|drumsticks
 chicken-wings|Chicken wings|chicken|203|30.5|0|8.1|4 OZ|-|34|wings
-ground-chicken|Ground chicken|chicken|143|17.4|0|8.1|4 OZ|-|-|minced chicken
+ground-chicken|Ground chicken|chicken|143|17.4|0|8.1|4 OZ|-|-|minced chicken,chicken mince
 whole-chicken|Whole chicken|chicken|215|18.6|0|15.1|4 OZ|-|-|roasting chicken
-ground-beef-80|Ground beef 80/20|beef|254|17.2|0|20|4 OZ|-|-|minced beef,hamburger meat
+ground-beef-80|Ground beef 80/20|beef|254|17.2|0|20|4 OZ|-|-|minced beef,beef mince,hamburger meat
 ground-beef-90|Ground beef 90/10|beef|176|20|0|10|4 OZ|-|-|lean ground beef
 beef-sirloin|Sirloin steak|beef|183|20.6|0|10.8|4 OZ|-|-|top sirloin
 beef-ribeye|Ribeye steak|beef|291|18.7|0|23.9|4 OZ|-|-|rib eye
 beef-chuck|Chuck roast|beef|220|19|0|15|4 OZ|-|-|beef stew meat,pot roast
 pork-chop|Pork chop|pork|143|21.4|0|5.7|4 OZ|-|-|pork loin,loin chop
 pork-shoulder|Pork shoulder|pork|236|16.3|0|18|4 OZ|-|-|pork butt,boston butt
-ground-pork|Ground pork|pork|263|16.9|0|21.2|4 OZ|-|-|minced pork
+ground-pork|Ground pork|pork|263|16.9|0|21.2|4 OZ|-|-|minced pork,pork mince
 bacon|Bacon|pork|417|12.6|1.4|41.8|2 OZ|-|8|streaky bacon
 ham|Ham|pork|145|21|1.5|5.5|2 OZ|-|-|deli ham
 pork-sausage|Pork sausage|pork|339|13.7|1.4|31.3|3 OZ|-|-|breakfast sausage,italian sausage
 hot-dogs|Hot dogs|pork|290|10.3|4.2|26.2|1 EACH|-|45|frankfurters
-ground-turkey|Ground turkey|turkey|148|19.9|0|7.7|4 OZ|-|-|minced turkey
+ground-turkey|Ground turkey|turkey|148|19.9|0|7.7|4 OZ|-|-|minced turkey,turkey mince
 turkey-breast|Turkey breast|turkey|114|23.7|0|1.5|4 OZ|-|-|turkey cutlets
-ground-lamb|Ground lamb|lamb|282|16.6|0|23.4|4 OZ|-|-|minced lamb
+ground-lamb|Ground lamb|lamb|282|16.6|0|23.4|4 OZ|-|-|minced lamb,lamb mince
 salmon|Salmon|fish|208|20.4|0|13.4|4 OZ|-|-|salmon fillet
 tuna-steak|Tuna steak|fish|109|24.4|0|0.5|4 OZ|-|-|fresh tuna,ahi
 canned-tuna|Canned tuna|fish|116|25.5|0|0.8|3 OZ|-|-|tuna in water
