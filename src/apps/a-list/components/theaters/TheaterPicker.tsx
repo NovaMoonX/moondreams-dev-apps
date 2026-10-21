@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
+import CantFindItButton from '@/components/CantFindItButton';
 import TheaterFinder from '@apps/a-list/components/theaters/TheaterFinder';
 import TheaterNameForm from '@apps/a-list/components/theaters/TheaterNameForm';
 import type { TheatreDraft } from '@apps/a-list/types';
@@ -40,16 +39,9 @@ function TheaterPicker({
           onAdd={onAdd}
         />
       ) : (
-        <div className='flex justify-center'>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            onClick={() => setIsTyping(true)}
-          >
-            Can't find it? Add it by name
-          </Button>
-        </div>
+        <CantFindItButton onClick={() => setIsTyping(true)}>
+          Can't find it? Add it by name
+        </CantFindItButton>
       )}
     </div>
   );
