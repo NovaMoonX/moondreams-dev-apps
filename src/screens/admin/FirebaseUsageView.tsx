@@ -27,7 +27,7 @@ const formatAmount = (line: FirebaseUsageLine, value: number) =>
 const formatCost = (usd: number) => (usd >= 0.01 ? USD_FORMAT.format(usd) : usd > 0 ? '< $0.01' : '$0.00');
 
 const PERIOD_WORDS = { day: 'a day', month: 'this month', stock: 'stored' } as const;
-const USED_WORDS = { day: 'Latest day', month: 'So far this month', stock: 'Now' } as const;
+const USED_WORDS = { day: 'Today so far', month: 'So far this month', stock: 'Now' } as const;
 
 function UsageRow({ line }: { line: FirebaseUsageLine }) {
   const fraction = line.freeAmount > 0 ? line.used / line.freeAmount : 0;
@@ -83,7 +83,7 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
     return <p className='text-muted-foreground text-sm'>Loading usage…</p>;
   }
 
-  if (query.isError || !query.data) {
+  if (!query.data) {
     const needsRole = query.error instanceof Error && query.error.message.includes(MONITORING_ROLE_MISSING);
     return (
       <p className='text-muted-foreground text-sm'>
@@ -118,7 +118,8 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
         {overCount === 0
           ? 'Everything is within the free amounts.'
           : `${overCount} of ${usage.lines.length} limits are over the free amount.`}{' '}
-        Spark&apos;s free amounts are also what Blaze gives you before it charges. Updated{' '}
+        Spark&apos;s free amounts are also what Blaze gives you before it charges. Days are UTC, so a daily
+        limit that resets at another hour can differ a little. Updated{' '}
         {formatDateTime(usage.generatedAt)}.
       </p>
 
@@ -167,6 +168,9 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
         )}
       </section>
 
+      {query.isError ? (
+        <p className='text-muted-foreground text-xs'>Couldn&apos;t refresh just now; showing the last numbers.</p>
+      ) : null}
       <p className='text-muted-foreground text-xs'>Prices last checked {usage.pricingCheckedOn}.</p>
     </div>
   );

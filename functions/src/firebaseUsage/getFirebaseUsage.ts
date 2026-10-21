@@ -35,7 +35,8 @@ export const getFirebaseUsage = onCall(
   },
   async (request) => {
     const email = request.auth?.token.email?.trim().toLowerCase() ?? null;
-    if (!request.auth || (email !== ADMIN_EMAIL && request.auth.token.admin !== true)) {
+    const isAdminEmail = email === ADMIN_EMAIL && request.auth?.token.email_verified === true;
+    if (!request.auth || (!isAdminEmail && request.auth.token.admin !== true)) {
       throw new HttpsError('permission-denied', 'Only the admin can read usage.');
     }
 
@@ -46,7 +47,8 @@ export const getFirebaseUsage = onCall(
 
     const now = Date.now();
     const monthStart = getMonthStart(now);
-    const daysElapsed = Math.floor((now - monthStart) / DAY_MS) + 1;
+    // At least one day, so the first hours of a month don't project from a sliver of data.
+    const daysElapsed = Math.max(1, (now - monthStart) / DAY_MS);
     const nextMonth = new Date(monthStart);
     nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
     const daysInMonth = Math.round((nextMonth.getTime() - monthStart) / DAY_MS);

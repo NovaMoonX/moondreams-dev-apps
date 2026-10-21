@@ -3,6 +3,7 @@ import { GoogleAuth } from 'google-auth-library';
 import type { UsageMetricSpec } from './pricing.js';
 
 const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
 
 const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/monitoring.read'] });
 
@@ -26,12 +27,15 @@ export function getMonthStart(now: number) {
 export async function readMetric(projectId: string, spec: UsageMetricSpec, now: number) {
   const monthStart = getMonthStart(now);
   const isStock = spec.period === 'stock';
+  // Hourly buckets ending on the hour are summed into UTC days below; a daily bucket would end at `now`
+  // and straddle two days. Stock series are sampled sparsely, so a day-wide bucket keeps every series in it.
+  const end = isStock ? now : Math.floor(now / HOUR_MS) * HOUR_MS;
   const start = isStock ? now - 3 * DAY_MS : monthStart;
   const params = new URLSearchParams({
     filter: `metric.type="${spec.metricType}"`,
     'interval.startTime': new Date(start).toISOString(),
-    'interval.endTime': new Date(now).toISOString(),
-    'aggregation.alignmentPeriod': isStock ? '3600s' : `${DAY_MS / 1000}s`,
+    'interval.endTime': new Date(end).toISOString(),
+    'aggregation.alignmentPeriod': isStock ? `${DAY_MS / 1000}s` : `${HOUR_MS / 1000}s`,
     'aggregation.perSeriesAligner': isStock ? 'ALIGN_MAX' : 'ALIGN_SUM',
     'aggregation.crossSeriesReducer': 'REDUCE_SUM',
   });
@@ -41,8 +45,10 @@ export async function readMetric(projectId: string, spec: UsageMetricSpec, now: 
     .request<TimeSeriesResponse>({
       url: `https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries?${params.toString()}`,
     })
-    .catch((error: { response?: { status?: number } }) => {
-      if (error.response?.status === 403) throw new MonitoringAccessError();
+    .catch((error: { response?: { status?: number; data?: { error?: { status?: string } } } }) => {
+      if (error.response?.status === 403 && error.response.data?.error?.status === 'PERMISSION_DENIED') {
+        throw new MonitoringAccessError();
+      }
       throw error;
     });
 
@@ -55,7 +61,6 @@ export async function readMetric(projectId: string, spec: UsageMetricSpec, now: 
     return result;
   }
 
-  // Alignment buckets end at `now` minus whole days, so they're keyed back to the UTC day they cover.
   const dayCount = Math.floor((now - monthStart) / DAY_MS) + 1;
   const byDay = points.reduce<number[]>((days, point) => {
     const end = Date.parse(point.interval.endTime);

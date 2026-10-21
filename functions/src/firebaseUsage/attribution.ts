@@ -14,8 +14,9 @@ const STORAGE_PREFIXES: Record<string, string[]> = {
 const SHARED_STORAGE_PREFIXES = ['users/'];
 
 const MAX_DEPTH = 3;
-const MAX_PARENTS_PER_COLLECTION = 100;
-const MAX_COUNT_CALLS = 600;
+const MAX_PARENTS_PER_COLLECTION = 20;
+// Every count call, listed parent document and listCollections call spends one unit, so a cold refresh stays well under the free daily reads.
+const MAX_WORK = 1500;
 const MAX_STORAGE_PAGES = 20;
 const CACHE_MS = 60 * 60 * 1000;
 
@@ -59,7 +60,7 @@ async function sumStoragePrefixes(prefixes: string[]) {
 
 /** Counts a collection and the subcollections under its documents, within a fixed call budget. */
 async function countTree(collection: CollectionReference, depth: number, budget: { calls: number; isPartial: boolean }): Promise<number> {
-  if (budget.calls >= MAX_COUNT_CALLS) {
+  if (budget.calls >= MAX_WORK) {
     budget.isPartial = true;
     return 0;
   }
@@ -68,21 +69,22 @@ async function countTree(collection: CollectionReference, depth: number, budget:
   if (depth >= MAX_DEPTH) return own;
 
   const parents = await collection.limit(MAX_PARENTS_PER_COLLECTION + 1).select().get();
+  budget.calls += parents.size;
   if (parents.size > MAX_PARENTS_PER_COLLECTION) budget.isPartial = true;
-  const nested = await Promise.all(
-    parents.docs.slice(0, MAX_PARENTS_PER_COLLECTION).map(async (parent) => {
-      const subcollections = await parent.ref.listCollections();
-      const counts = await Promise.all(subcollections.map((sub) => countTree(sub, depth + 1, budget)));
-      return counts.reduce((sum, count) => sum + count, 0);
-    }),
-  );
-  return own + nested.reduce((sum, count) => sum + count, 0);
+  // One parent at a time keeps the number of requests in flight small.
+  const nested = await parents.docs.slice(0, MAX_PARENTS_PER_COLLECTION).reduce(async (previous, parent) => {
+    const total = await previous;
+    budget.calls += 1;
+    const subcollections = await parent.ref.listCollections();
+    const counts = await subcollections.reduce(async (running, sub) => (await running) + (await countTree(sub, depth + 1, budget)), Promise.resolve(0));
+    return total + counts;
+  }, Promise.resolve(0));
+  return own + nested;
 }
 
 async function measureApp(appId: string, budget: { calls: number; isPartial: boolean }) {
   const collections = await getFirestore().doc(`apps/${appId}`).listCollections();
-  const counts = await Promise.all(collections.map((collection) => countTree(collection, 1, budget)));
-  const documents = counts.reduce((sum, count) => sum + count, 0);
+  const documents = await collections.reduce(async (running, collection) => (await running) + (await countTree(collection, 1, budget)), Promise.resolve(0));
   return documents;
 }
 
