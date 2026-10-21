@@ -524,8 +524,8 @@ export interface ActivityIdeaDetails extends SingleOccasionIdeaDetails {
 
 export type IdeaDetails = RestaurantIdeaDetails | ActivityIdeaDetails;
 
-/** A place or thing a member suggests for the trip — anyone can post one until the trip starts
- * and anyone can vote on it at any time. */
+/** A place or thing a member suggests for the trip — anyone on the trip can post one and
+ * vote on it at any time. */
 export interface TripIdea {
   id: string;
   tripId: string;

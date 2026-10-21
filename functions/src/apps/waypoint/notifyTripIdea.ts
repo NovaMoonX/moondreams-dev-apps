@@ -33,7 +33,7 @@ export const notifyTripIdea = onDocumentCreated(
     }
 
     try {
-      const author = typeof idea.addedByUid === 'string' ? await firestore.doc(`users/${idea.addedByUid}`).get() : null;
+      const author = typeof idea.addedByUid === 'string' ? await firestore.doc(`users/${idea.addedByUid}`).get().catch(() => null) : null;
       const content = getIdeaPush(idea, getSafeName(author?.get('displayName')), trip.title);
       const devices = await sendPushToUsers(firestore, getMessaging(), targetUids, {
         ...content,
