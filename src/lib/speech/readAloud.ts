@@ -12,6 +12,7 @@ import {
   synthesizeNaturalVoice,
 } from '@/lib/speech/naturalVoice/naturalVoiceEngine';
 import { splitSentences } from '@/lib/speech/naturalVoice/sentences';
+import { toSpokenText } from '@/lib/speech/spokenText';
 import { speakText } from '@/utils/speechUtils';
 
 export interface ReadAloudOptions {
@@ -163,20 +164,21 @@ const readNatural = (
 };
 
 /**
- * Reads `text` aloud, cancelling whatever was being read, and returns a function that stops it. With `isNatural` and the
+ * Reads `text` aloud (measures, fractions and temperatures written out first, `toSpokenText`), cancelling whatever was being read, and returns a function that stops it. With `isNatural` and the
  * natural voice ready it speaks sentence by sentence (the first is heard as soon as it is made); if that voice fails or
  * is too slow, the rest is read by the browser's voice, so a reading is never lost. Where no voice works it calls `onEnd`
  * at once.
  */
 export function readAloud(text: string, options: ReadAloudOptions): () => void {
   const context = getAudioContext();
-  const sentences = splitSentences(text);
+  const spokenText = toSpokenText(text);
+  const sentences = splitSentences(spokenText);
   const canUseNatural =
     options.isNatural === true &&
     context !== null &&
     sentences.length > 0 &&
     isNaturalVoiceLang(options.lang) &&
     getNaturalVoiceState().status === 'ready';
-  if (!canUseNatural) return speakText(text, options);
+  if (!canUseNatural) return speakText(spokenText, options);
   return readNatural(sentences, context, options);
 }

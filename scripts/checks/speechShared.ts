@@ -22,6 +22,7 @@ import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
+import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
 import { getVoiceQuality, pickVoice } from '../../src/utils/speechUtils.ts';
 
 const sharedFiles = [
@@ -372,3 +373,73 @@ assert.equal(
 );
 assert.equal(pick([], 'en-US'), null, 'no voices at all');
 console.log('speechShared: voice ranking checks passed');
+
+const SPOKEN: [string, string][] = [
+  ['1/2 tsp salt', 'half a teaspoon of salt'],
+  ['Add 1/2 tsp salt.', 'Add half a teaspoon of salt.'],
+  ['1/4 cup sugar', 'a quarter cup of sugar'],
+  ['3/4 cup milk', 'three quarters of a cup of milk'],
+  ['1/3 cup oil', 'a third of a cup of oil'],
+  ['1 1/2 tsp vanilla', '1 and a half teaspoons of vanilla'],
+  ['1½ tbsp butter', '1 and a half tablespoons of butter'],
+  ['add ½ cup of water', 'add half a cup of water'],
+  ['1 tbsp honey', '1 tablespoon of honey'],
+  ['2 tbsp. butter, melted', '2 tablespoons of butter, melted'],
+  ['Stir in 2 tbsp. Then wait.', 'Stir in 2 tablespoons. Then wait.'],
+  ['2 tbsp', '2 tablespoons'],
+  ['Season with 2 tsp of salt', 'Season with 2 teaspoons of salt'],
+  ['2 cups flour', '2 cups of flour'],
+  ['2 cups of flour', '2 cups of flour'],
+  ['1 cup. Mix well.', '1 cup. Mix well.'],
+  ['2 cloves garlic', '2 cloves of garlic'],
+  ['8 oz cream cheese', '8 ounces of cream cheese'],
+  ['1 lb beef', '1 pound of beef'],
+  ['2 lbs potatoes', '2 pounds of potatoes'],
+  ['250 g flour', '250 grams of flour'],
+  ['1 g yeast', '1 gram of yeast'],
+  ['500ml water', '500 milliliters of water'],
+  ['2l stock', '2 liters of stock'],
+  ['12 fl oz stock', '12 fluid ounces of stock'],
+  ['2 eggs', '2 eggs'],
+  ['Heat to 350°F', 'Heat to 350 degrees Fahrenheit'],
+  [
+    'Bake at 350 °F for 25 min.',
+    'Bake at 350 degrees Fahrenheit for 25 minutes.',
+  ],
+  ['bake at 180°C', 'bake at 180 degrees Celsius'],
+  ['Preheat to 350 degrees F.', 'Preheat to 350 degrees Fahrenheit.'],
+  ['Turn it 45° to the left', 'Turn it 45 degrees to the left'],
+  ['350-375°F', '350 to 375 degrees Fahrenheit'],
+  [
+    'Simmer 10-12 min, then rest 1 hr',
+    'Simmer 10 to 12 minutes, then rest 1 hour',
+  ],
+  ['Rest 5 mins.', 'Rest 5 minutes.'],
+  ['Wait 30 sec. Then stir.', 'Wait 30 seconds. Then stir.'],
+  ['Wait 2 hrs', 'Wait 2 hours'],
+  ['2-3 tbsp oil', '2 to 3 tablespoons of oil'],
+  ['1-1/2 cups flour', '1 and a half cups of flour'],
+  ['a 9x13 inch pan', 'a 9 by 13 inch pan'],
+  ['Mix salt & pepper', 'Mix salt and pepper'],
+  ['salt w/ butter', 'salt with butter'],
+  ['2% milk', '2 percent milk'],
+  ['~5 min', 'about 5 minutes'],
+  ['spices, e.g. cumin', 'spices, for example cumin'],
+  ['herbs, etc. Then stir.', 'herbs, and so on. Then stir.'],
+  ['Step 2 of 3', 'Step 2 of 3'],
+  ['Step 2 can wait', 'Step 2 can wait'],
+  ['on 1/2/2024', 'on 1/2/2024'],
+  ['5/9 of it', '5/9 of it'],
+  ['1.5 cups rice', '1.5 cups of rice'],
+  ['1 and a half tablespoons of butter', '1 and a half tablespoons of butter'],
+  ['Cut into 1/2 inch cubes', 'Cut into half inch cubes'],
+];
+SPOKEN.forEach(([written, said]) => {
+  assert.equal(
+    toSpokenText(written),
+    said,
+    `"${written}" is said as "${said}"`,
+  );
+  assert.equal(toSpokenText(said), said, `"${said}" is already as it is said`);
+});
+console.log('speechShared: spoken text checks passed');
