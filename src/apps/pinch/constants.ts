@@ -846,6 +846,12 @@ export const COOK_WAKE_SPELLINGS = [
   'hay pepper',
   'heypepper',
   'hey peper',
+  'hey paper',
+  'hay paper',
+  'heypaper',
+  'hey papper',
+  'hey peppa',
+  'hey pepa',
 ];
 /** How long a command window stays open after the last thing it understood. */
 export const COOK_WINDOW_MS = 10_000;

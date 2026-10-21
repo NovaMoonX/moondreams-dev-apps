@@ -73,6 +73,15 @@ const wakes: [string, string][] = [
   ['HeyPepper', ''],
   ['Héy Pepper', ''],
   ['hey peper', ''],
+  ['hey paper', ''],
+  ['Hey, Paper.', ''],
+  ['hay paper', ''],
+  ['heypaper', ''],
+  ['hey papper', ''],
+  ['hey peppa', ''],
+  ['hey pepa', ''],
+  ['hey paper next step', 'next step'],
+  ['hey paper how much garlic', 'how much garlic'],
   ['hey pepper next step', 'next step'],
   ['Hey Pepper, next.', 'next'],
   ['Hey Pepper, how much garlic?', 'how much garlic'],
@@ -106,13 +115,17 @@ const notWakes = [
   'okay pepper',
   'ok, pepper, next',
   'yes pepper',
-  'hey paper',
   'hey',
   'hey there',
-  'hey paper',
   'hey chap',
   'hey cheese',
   'hey peppery',
+  'hey papers',
+  'hey paperwork',
+  'paper',
+  'a sheet of paper',
+  'line it with paper',
+  'say hey paper',
   'hey peppered it',
   'hi pepper',
   'they pepper',
@@ -192,7 +205,7 @@ seedStrings.forEach((text) =>
 );
 
 assert.deepEqual(
-  rest(['hey paper next', 'hey pepper next', 'a pepper next']),
+  rest(['hey jeff next', 'hey pepper next', 'a pepper next']),
   [null, 'next', null],
   'a lower guess can wake it and keeps its rank',
 );
@@ -243,7 +256,7 @@ assert.equal(
   'words that are not a command run nothing',
 );
 assert.equal(
-  afterWake(['hey paper back', 'hey pepper back']),
+  afterWake(['hey jeff back', 'hey pepper back']),
   null,
   'a move said in a lower-ranked guess is never run, though the phrase woke it',
 );
@@ -284,7 +297,7 @@ const planCases: PlanCase[] = [
   ['WAITING', ['hey pepper stop listening'], 'WAKE', 'STOP_LISTENING'],
   ['WAITING', ['hey pepper how much garlic'], 'WAKE', 'AMOUNT'],
   ['WAITING', ['hey pepper the weather today'], 'WAKE', null],
-  ['WAITING', ['hey paper back', 'hey pepper back'], 'WAKE', null],
+  ['WAITING', ['hey jeff back', 'hey pepper back'], 'WAKE', null],
   ['WINDOW', ['next'], 'COMMAND', 'NEXT'],
   ['WINDOW', ['hey pepper next'], 'COMMAND', 'NEXT'],
   ['WINDOW', ['stop listening'], 'COMMAND', 'STOP_LISTENING'],
