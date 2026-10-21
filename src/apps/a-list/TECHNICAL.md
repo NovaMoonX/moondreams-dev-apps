@@ -250,6 +250,7 @@ interface SharedViewing {
 | Convenience-fee chips and tax-rate chips (and the default rate) | distinct `ticket.feeAvoidedCents` and `ticket.taxRate` over viewings, plus the membership's `taxRate` | `selectFeeChips`, `selectTaxRateChips` |
 | Pending Seen prompts | `PLANNED` viewings with `endsAt ≤ now` | `selectPendingSeenPrompts` |
 | Previews window | the earliest `PLANNED` viewing with `showtimeAt − 10 min ≤ now ≤ showtimeAt + 30 min` (`PREVIEWS_WINDOW_*_MINUTES`) | `selectPreviewsWindowViewing` |
+| Projection (stop now, calendar, weekly or monthly pace) | `SEEN` tickets for the average, `PLANNED` viewings ahead, the membership's start date and monthly total | `getProjectionBase`, `projectStop`, `projectCalendar`, `projectPace` in `utils/projection.ts`, read on demand by `ProjectionSubview` (not stored) |
 | Format split (count and %), activity over time, rating groups, per-format premium averages (Next Steps) | viewings | `selectDashboardBreakdowns` |
 
 ---

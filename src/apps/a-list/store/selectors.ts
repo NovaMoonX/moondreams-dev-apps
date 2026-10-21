@@ -85,7 +85,7 @@ export const selectWatchlistItems = createSelector(
   },
 );
 
-const selectViewingItems = (state: RootState) => state.aList.viewings.items;
+export const selectViewingItems = (state: RootState) => state.aList.viewings.items;
 
 export const selectShowingCountByTheatreId = createSelector(
   [selectViewingItems],
