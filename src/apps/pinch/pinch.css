@@ -69,6 +69,18 @@ html.pinch-theme.dark {
   --pinch-meal-drink: var(--color-sky-300);
 }
 
+/* The edge around a subview (see `.subview-frame` in index.css): apricot from the drizzle, a hair wider than the default and rounded like the app. */
+html.pinch-theme {
+  --subview-frame-color: color-mix(
+    in oklab,
+    var(--pinch-drizzle) 34%,
+    var(--color-background)
+  );
+  --subview-frame-width: 4px;
+  --subview-frame-radius: var(--radius-md);
+  --subview-frame-radius-wide: var(--radius-2xl);
+}
+
 /* A rounded field needs its text inset from the curve, or the first letter looks pressed against the edge. */
 html.pinch-theme
   :is(input, textarea):not(
