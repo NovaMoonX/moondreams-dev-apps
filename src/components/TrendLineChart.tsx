@@ -31,6 +31,8 @@ interface TrendLineChartProps {
   secondaryLabel?: string;
   /** A horizontal guide, such as break even at 0. */
   referenceY?: { value: number; label: string };
+  /** Short names for the compact readout (it must fit a 320px plot); default to the full labels. */
+  readoutLabels?: { main?: string; secondary?: string };
   /** Names the main line in the tooltip when the axis carries no title. */
   seriesLabel?: string;
   /** `linear` for a series that steps, where a smoothed curve would overshoot. */
@@ -58,6 +60,7 @@ function TrendLineChart({
   referenceY,
   hasDots = true,
   seriesLabel,
+  readoutLabels,
   curve = 'monotone',
   className = 'h-64',
   isSoft = false,
@@ -92,13 +95,20 @@ function TrendLineChart({
     const main = payload.find((item) => item.dataKey === 'y');
     const other = payload.find((item) => item.dataKey === 'y2');
     return (
-      <div className='border-border bg-popover text-popover-foreground rounded-full border px-3 py-1 text-xs whitespace-nowrap shadow-sm'>
+      <div className='border-border bg-popover text-popover-foreground rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap shadow-sm'>
         <span className='font-medium'>{formatX(Number(label))}</span>
-        {main && <span> · {readoutText(Number(main.value))}</span>}
+        {main && (
+          <span>
+            {' '}
+            · {readoutLabels?.main ?? seriesLabel ?? yLabel}{' '}
+            {readoutText(Number(main.value))}
+          </span>
+        )}
         {other && secondaryLabel && (
           <span className='text-muted-foreground'>
             {' '}
-            · {secondaryLabel} {readoutText(Number(other.value))}
+            · {readoutLabels?.secondary ?? secondaryLabel}{' '}
+            {readoutText(Number(other.value))}
           </span>
         )}
       </div>
@@ -175,6 +185,7 @@ function TrendLineChart({
             separator={isSoft ? ': ' : undefined}
             isAnimationActive={isSoft ? false : undefined}
             position={isSoft ? { y: 0 } : undefined}
+            wrapperStyle={isSoft ? { maxWidth: '100%' } : undefined}
             cursor={
               isSoft
                 ? {

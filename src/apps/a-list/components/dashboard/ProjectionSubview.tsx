@@ -37,7 +37,7 @@ type Scenario = 'stop' | 'calendar' | 'week' | 'month';
 
 const SCENARIO_OPTIONS: PillOption<Scenario>[] = [
   { value: 'stop', label: 'Stop now' },
-  { value: 'calendar', label: 'My calendar' },
+  { value: 'calendar', label: 'Calendar' },
   { value: 'week', label: 'Weekly' },
   { value: 'month', label: 'Monthly' },
 ];
@@ -50,10 +50,12 @@ interface ProjectionSubviewProps {
 function LegendLine({
   strokeWidth,
   dash,
+  cap = 'round',
   className,
 }: {
   strokeWidth: number;
   dash?: string;
+  cap?: 'butt' | 'round';
   className: string;
 }) {
   return (
@@ -66,7 +68,7 @@ function LegendLine({
         stroke='currentColor'
         strokeWidth={strokeWidth}
         strokeDasharray={dash}
-        strokeLinecap='round'
+        strokeLinecap={cap}
       />
     </svg>
   );
@@ -151,7 +153,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
       return 'You cancel now and pay only what the minimum requires.';
     if (scenario === 'calendar')
       return 'You watch every showing already planned, then cancel.';
-    return `You watch ${counts[scenario]} a ${scenario} and cancel before the bill on the date below.`;
+    return `You watch ${counts[scenario]} a ${scenario} then cancel before the bill on the date you pick.`;
   };
 
   const getAssumptionLine = () => {
@@ -234,9 +236,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                 )}
               >
                 <span aria-hidden='true'>{isBrokenEven ? '🎉' : '🎯'}</span>
-                {isBrokenEven
-                  ? 'Would break even'
-                  : `${formatCents(-result.netCents)} short of break even`}
+                {isBrokenEven ? 'Would break even' : 'Short of break even'}
               </p>
               <p className='text-muted-foreground mt-2 text-sm'>
                 {formatCents(base.savedCents + (result.addedCents ?? 0))} in
@@ -274,6 +274,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               <TrendLineChart
                 data={series}
                 seriesLabel='Net savings'
+                readoutLabels={{ main: 'Net', secondary: 'Stop' }}
                 curve='linear'
                 secondaryLabel={
                   scenario === 'stop' ? undefined : 'If you stop now'
@@ -310,7 +311,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   <span className='flex items-center gap-1.5'>
                     <LegendLine
                       strokeWidth={3}
-                      dash='0.1 6'
+                      dash='0.1 7'
                       className='text-foreground/85'
                     />
                     If you stop now
