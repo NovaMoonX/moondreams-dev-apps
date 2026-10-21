@@ -65,6 +65,7 @@ export interface CookVoiceActions {
     scope: CookTimerScope,
   ) => CookVoiceResult;
   extendTimer: (seconds: number, target: CookTimerTarget) => CookVoiceResult;
+  renameTimer: (target: CookTimerTarget, name: string) => CookVoiceResult;
   timeLeft: (target: CookTimerTarget) => CookVoiceResult;
   answerTimer: (answer: CookTimerAnswer) => CookVoiceResult;
   amount: (lineIds: string[], query: string) => CookVoiceResult;
@@ -117,6 +118,8 @@ export const runCookCommand = (
       return actions.stopTimer(command.target, command.scope);
     case 'EXTEND_TIMER':
       return actions.extendTimer(command.seconds, command.target);
+    case 'RENAME_TIMER':
+      return actions.renameTimer(command.target, command.name);
     case 'TIME_LEFT':
       return actions.timeLeft(command.target);
     case 'TIMER_ANSWER':

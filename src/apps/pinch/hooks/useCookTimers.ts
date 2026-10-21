@@ -383,6 +383,13 @@ export function useCookTimers(
     return true;
   };
 
+  const rename = (id: string, name: string) =>
+    commit(
+      timersRef.current.map((timer) =>
+        timer.id === id ? { ...timer, stepName: name } : timer,
+      ),
+    );
+
   const pause = (id: string) => {
     const now = Date.now();
     commit(
@@ -478,6 +485,7 @@ export function useCookTimers(
     pause,
     resume,
     extend,
+    rename,
     dismiss,
     focus: focusTimer,
     unfocus,

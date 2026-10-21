@@ -1,5 +1,6 @@
 import { toPlainText } from '@/lib/speech/speechText';
 import { findDurations, formatDuration } from '@/utils/durationUtils';
+import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import { MAX_KITCHEN_TIMER_SECONDS } from '@apps/pinch/constants';
 
 /** A spoken phrase longer than this is talk, not a command. */
@@ -84,6 +85,7 @@ export type CookCommand =
   | { kind: 'RESUME_TIMER'; target: CookTimerTarget }
   | { kind: 'STOP_TIMER'; target: CookTimerTarget; scope: CookTimerScope }
   | { kind: 'EXTEND_TIMER'; seconds: number; target: CookTimerTarget }
+  | { kind: 'RENAME_TIMER'; target: CookTimerTarget; name: string }
   | { kind: 'TIME_LEFT'; target: CookTimerTarget }
   | { kind: 'TIMER_ANSWER'; answer: CookTimerAnswer }
   | { kind: 'AMOUNT'; query: string; lineIds: string[] }
@@ -100,7 +102,9 @@ export interface CookVoiceTimer {
 
 /** A question the app asked and is waiting on: which timer, or how long a new one runs. */
 export type CookVoiceChoice =
-  { kind: 'TIMER'; timers: CookVoiceTimer[] } | { kind: 'LENGTH' };
+  /** `isConfirm`: one timer the app guessed at, waiting for a yes or a no. */
+  | { kind: 'TIMER'; timers: CookVoiceTimer[]; isConfirm?: boolean }
+  | { kind: 'LENGTH' };
 
 export interface CookVoiceContext {
   /** The recipes on screen, in plate order; one for a single recipe. */
@@ -193,6 +197,18 @@ const PHRASES: Record<PlainKind, string[]> = {
     'go to timers',
     'go to the timers',
     'my timers',
+    'show timer',
+    'show the timer',
+    'open the timer',
+    'showtime',
+    'showtimes',
+    'show time',
+    'show times',
+    'show me timers',
+    'show me the timer',
+    'show me my timers',
+    'timer list',
+    'the timer list',
   ],
   FINISH: [
     'finish',
@@ -679,6 +695,41 @@ const parseTimer = (
   };
 };
 
+const RENAME_WITH_NOUN =
+  /^(?:rename|call|name|label) (?<target>.*?\b(?:timer|alarm|countdown)|it|this|that) (?:to |as |called )?(?<name>.+)$/;
+const RENAME_BARE = /^rename (?<target>.+?) (?:to|as) (?<name>.+)$/;
+const SELF_WORDS = ['it', 'this', 'that'];
+
+const parseRename = (
+  text: string,
+  context: CookVoiceContext,
+): CookCommand | null => {
+  const groups =
+    text.match(RENAME_BARE)?.groups ?? text.match(RENAME_WITH_NOUN)?.groups;
+  if (!groups) return null;
+  const isSelf = SELF_WORDS.includes(groups.target);
+  const read = readTimerWords(isSelf ? '' : groups.target);
+  if (read === null || read.isAll) return null;
+  if (!(isSelf || read.hasNoun || isKnownTimerName(read.name, context))) {
+    return null;
+  }
+  const nameWords = groups.name
+    .split(' ')
+    .filter((word) => !['the', 'a', 'an', 'my'].includes(word));
+  if (
+    nameWords.length === 0 ||
+    nameWords.length > MAX_NAME_WORDS ||
+    nameWords.every((word) => TIMER_NOUNS.has(word))
+  ) {
+    return null;
+  }
+  return {
+    kind: 'RENAME_TIMER',
+    target: { seconds: read.seconds, name: read.name, isAll: false },
+    name: nameWords.join(' '),
+  };
+};
+
 const parseTimeLeft = (
   text: string,
   context: CookVoiceContext,
@@ -777,11 +828,35 @@ const parseLengthAnswer = (text: string): CookCommand | null => {
     : null;
 };
 
+const YES_ANSWERS = new Set([
+  'yes',
+  'yeah',
+  'yep',
+  'yup',
+  'sure',
+  'correct',
+  'right',
+  'that one',
+  'that is right',
+  'thats right',
+  'thats the one',
+  'ok',
+  'okay',
+]);
+const NO_ANSWERS = new Set(['no', 'nope', 'wrong', 'not that one']);
+
 const parseTimerAnswer = (
   text: string,
   timers: CookVoiceTimer[],
+  isConfirm: boolean,
 ): CookCommand | null => {
   const ids = timers.map((timer) => timer.id);
+  if (isConfirm) {
+    if (YES_ANSWERS.has(text)) {
+      return answer({ kind: 'PICK', ids, isAll: false });
+    }
+    if (NO_ANSWERS.has(text)) return answer({ kind: 'NEVER_MIND' });
+  }
   if (ALL_ANSWERS.has(text)) {
     return answer({ kind: 'PICK', ids, isAll: true });
   }
@@ -822,7 +897,7 @@ const parseChoiceAnswer = (
   if (CANCEL_ANSWERS.has(text)) return answer({ kind: 'NEVER_MIND' });
   return choice.kind === 'LENGTH'
     ? parseLengthAnswer(text)
-    : parseTimerAnswer(text, choice.timers);
+    : parseTimerAnswer(text, choice.timers, choice.isConfirm === true);
 };
 
 const cleanQuery = (query: string) =>
@@ -901,6 +976,8 @@ const parseOne = (
 
   const exact = EXACT.get(text);
   if (exact) return { kind: exact };
+  const renamed = parseRename(text, context);
+  if (renamed) return renamed;
   const named = parseTimeLeft(text, context);
   if (named) return named;
   if (
@@ -1167,8 +1244,15 @@ export type VoiceTimerResolution<T> =
   | { kind: 'ONE'; timer: T }
   /** Every timer the person named with "all". */
   | { kind: 'ALL'; timers: T[] }
-  /** More than one fits and nothing says which: the screen asks. */
-  | { kind: 'ASK'; timers: T[] };
+  /** More than one fits and nothing says which: the screen asks. `missed` is the name nothing had, when the question starts from that. */
+  | { kind: 'ASK'; timers: T[]; missed?: string }
+  /** No timer has the name said, but one is close: the screen asks whether that is the one. */
+  | { kind: 'GUESS'; timer: T };
+
+const timerNameMatcher = createOptionMatcher<VoiceTimerLike>({
+  names: (timer) => timer.names,
+  typos: 'loose',
+});
 
 /** The timer a spoken command means, among those in the given states. A named or timed one is found by that; with none said, the one in front on screen, a Time's up (the one that rang first), or the only one that fits; when several fit and nothing tells them apart it asks instead of guessing. */
 export const resolveVoiceTimers = <T extends VoiceTimerLike>(
@@ -1192,7 +1276,14 @@ export const resolveVoiceTimers = <T extends VoiceTimerLike>(
     label === null ? pool : pool.filter((t) => t.label === label);
   const matched =
     target.name === null ? byLength : matchByName(target.name, byLength);
-  if (matched.length === 0) return { kind: 'NONE' };
+  if (matched.length === 0) {
+    if (target.name === null || byLength.length === 0) return { kind: 'NONE' };
+    const close = timerNameMatcher.match(target.name, byLength) as T | null;
+    if (close) return { kind: 'GUESS', timer: close };
+    return byLength.length === 1
+      ? { kind: 'GUESS', timer: byLength[0] }
+      : { kind: 'ASK', timers: byLength, missed: target.name };
+  }
   if (matched.length === 1) return { kind: 'ONE', timer: matched[0] };
   const isNamed = target.seconds !== null || target.name !== null;
   const inFront = isNamed
@@ -1228,6 +1319,7 @@ export const getTimerChoiceNames = (
 export const describeTimerQuestion = (
   timers: { name: string; label: string }[],
   verb: string,
+  missed: string | null = null,
 ) => {
   const names = getTimerChoiceNames(timers);
   const shown = names.slice(
@@ -1238,11 +1330,18 @@ export const describeTimerQuestion = (
   const list = DISJUNCTION.format(
     hidden > 0 ? [...shown, `${hidden} more`] : shown,
   );
+  const lead = missed === null ? '' : `No ${missed} timer. `;
   return {
-    show: `Which timer to ${verb}: ${list}?`,
-    speak: `Which timer should I ${verb}? ${list}?`,
+    show: `${lead}Which timer to ${verb}: ${list}?`,
+    speak: `${lead}Which timer should I ${verb}? ${list}?`,
   };
 };
+
+/** The question that offers a close match: "Did you mean the checkers timer?". */
+export const describeTimerGuess = (name: string, missed: string) => ({
+  show: `No ${missed} timer. Did you mean ${name}?`,
+  speak: `I don't have a ${missed} timer. Did you mean ${name}?`,
+});
 
 /** The timers "how much time is left" answers about: the one in focus (else the one that rang first, else the soonest running, else a paused one), then the soonest other running timer, if any. */
 export const pickTimersToTell = <

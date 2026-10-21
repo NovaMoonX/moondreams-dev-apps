@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import { PillGroup } from '@/components/PillGroup';
@@ -50,6 +51,7 @@ interface CookTimersViewProps {
   /** Every live slot is taken: a Time's up can't start again, so it offers no more time. */
   isFull: boolean;
   onDraftChange: (draft: KitchenTimerDraft) => void;
+  onBack: () => void;
   onTick: () => void;
   onFocus: (id: string) => void;
   onPause: (id: string) => void;
@@ -65,6 +67,7 @@ function CookTimersView({
   draft,
   isFull,
   onDraftChange,
+  onBack,
   onTick,
   onFocus,
   onPause,
@@ -145,6 +148,7 @@ function CookTimersView({
 
   return (
     <div className='mx-auto flex w-full max-w-xl flex-1 flex-col gap-6'>
+      <BackLink label='Back to the steps' onBack={onBack} />
       <section
         aria-label='New timer'
         className='bg-muted/50 border-border space-y-4 rounded-2xl border p-4'

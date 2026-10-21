@@ -123,6 +123,7 @@ import {
 } from '@apps/pinch/utils/cooks';
 import {
   describeAmounts,
+  describeTimerGuess,
   describeTimerQuestion,
   describeTimersLeft,
   isBeforeDeadline,
@@ -148,11 +149,25 @@ const DONE_GUARD_MS = 600;
 /** A spoken command lands up to a couple of seconds after the words, so "next" or "dismiss" this soon after a Time's up was meant before it. */
 const VOICE_DONE_GUARD_MS = 2000;
 
-type PendingTimerVerb = 'PAUSE' | 'RESUME' | 'STOP' | 'EXTEND';
+type PendingTimerVerb = 'PAUSE' | 'RESUME' | 'STOP' | 'EXTEND' | 'RENAME';
+
+interface TimerArg {
+  ms: number;
+  name: string;
+}
+
+const NO_ARG: TimerArg = { ms: 0, name: '' };
 
 /** A question the voice asked and is waiting on: which of these timers, or how long a new one runs. */
 type PendingQuestion =
-  | { kind: 'TIMER'; ids: string[]; verb: PendingTimerVerb; ms: number }
+  | {
+      kind: 'TIMER';
+      ids: string[];
+      verb: PendingTimerVerb;
+      ms: number;
+      name: string;
+      isConfirm?: boolean;
+    }
   | { kind: 'LENGTH'; name: string | null };
 
 const TIMER_VERB_WORDS: Record<PendingTimerVerb, string> = {
@@ -160,6 +175,7 @@ const TIMER_VERB_WORDS: Record<PendingTimerVerb, string> = {
   RESUME: 'resume',
   STOP: 'stop',
   EXTEND: 'extend',
+  RENAME: 'rename',
 };
 
 const isNamedKitchenTimer = (timer: {
@@ -179,6 +195,16 @@ const showTimerName = (timer: {
 
 const getTimerNames = (timer: CookTimer) =>
   [timer.stepName, timer.recipeTitle ?? ''].filter((name) => name !== '');
+
+/** A timer as it is said aloud: "the pasta water timer", "the 10 minute timer". */
+const saidTimerName = (timer: {
+  recipeId: string | null;
+  stepName: string;
+  label: string;
+}) =>
+  isNamedKitchenTimer(timer)
+    ? `${timer.stepName.toLowerCase()} timer`
+    : `${toSpokenLabel(timer.label)} timer`;
 
 const toVoiceTimerRef = (timer: CookTimer): CookVoiceTimer => ({
   id: timer.id,
@@ -1350,13 +1376,14 @@ function CookingSession({
   const askWhich = (
     verb: PendingTimerVerb,
     asked: VoiceTimer[],
-    ms: number,
+    arg: TimerArg,
+    missed: string | null = null,
   ): CookVoiceResult => {
     setPending({
       kind: 'TIMER',
       ids: asked.map((timer) => timer.id),
       verb,
-      ms,
+      ...arg,
     });
     const { show, speak } = describeTimerQuestion(
       asked.map((timer) => ({
@@ -1367,7 +1394,24 @@ function CookingSession({
         label: timer.label,
       })),
       TIMER_VERB_WORDS[verb],
+      missed,
     );
+    return done(show, speak);
+  };
+  const askGuess = (
+    verb: PendingTimerVerb,
+    guess: VoiceTimer,
+    arg: TimerArg,
+    missed: string,
+  ): CookVoiceResult => {
+    setPending({
+      kind: 'TIMER',
+      ids: [guess.id],
+      verb,
+      isConfirm: true,
+      ...arg,
+    });
+    const { show, speak } = describeTimerGuess(guess.stepName, missed);
     return done(show, speak);
   };
   const askLength = (name: string | null): CookVoiceResult => {
@@ -1396,54 +1440,67 @@ function CookingSession({
   const applyToTimer = (
     verb: PendingTimerVerb,
     id: string,
-    ms: number,
+    arg: TimerArg,
   ): CookVoiceResult => {
     const timer = getVoiceTimers().find((candidate) => candidate.id === id);
     if (!timer) return refuse('That timer is gone.');
     const name = showTimerName(timer);
+    const spoken = saidTimerName(timer);
     if (verb === 'PAUSE') {
       if (timer.status !== 'running')
         return refuse(`The ${name} isn't running.`);
       timers.pause(id);
-      return done(`Paused the ${name}`);
+      return done(`Paused the ${name}`, `Paused the ${spoken}.`);
     }
     if (verb === 'RESUME') {
       if (timer.status !== 'paused') return refuse(`The ${name} isn't paused.`);
       timers.resume(id);
-      return done(`Resumed the ${name}`);
+      return done(`Resumed the ${name}`, `Resumed the ${spoken}.`);
     }
     if (verb === 'EXTEND') {
-      if (!timers.extend(id, ms)) {
+      if (!timers.extend(id, arg.ms)) {
         return timer.status === 'done' && timers.isFull
           ? capRefusal
           : refuse('A timer can run for a day at most.');
       }
-      return done(`Added ${formatDuration(ms / 1000)} to the ${name}`);
+      const added = formatDuration(arg.ms / 1000);
+      return done(
+        `Added ${added} to the ${name}`,
+        `Added ${toSpokenLabel(added)} to the ${spoken}.`,
+      );
+    }
+    if (verb === 'RENAME') {
+      const newName = toKitchenTimerName(arg.name);
+      timers.rename(id, newName);
+      return done(
+        `Renamed the ${name} to ${newName}`,
+        `Renamed the ${spoken} to ${newName}.`,
+      );
     }
     if (timer.status === 'done') {
       if (timer.id === focused?.id && isJustRung()) {
         return justRang('to dismiss it');
       }
       endTimer(id);
-      return done(`Dismissed the ${name}`);
+      return done(`Dismissed the ${name}`, `Dismissed the ${spoken}.`);
     }
     if (timer.status === 'running') {
       timers.pause(id);
       return done(
         'Paused. Say “stop” again to reset it.',
-        'Paused the timer. Say stop again to reset it.',
+        `Paused the ${spoken}. Say stop again to reset it.`,
       );
     }
     endTimer(id);
-    return done(`Reset the ${name}`);
+    return done(`Reset the ${name}`, `Reset the ${spoken}.`);
   };
   const applyToAll = (
     verb: PendingTimerVerb,
     ids: string[],
-    ms: number,
+    arg: TimerArg,
   ): CookVoiceResult => {
-    if (ids.length === 1) return applyToTimer(verb, ids[0], ms);
-    const results = ids.map((id) => applyToTimer(verb, id, ms));
+    if (ids.length === 1) return applyToTimer(verb, ids[0], arg);
+    const results = ids.map((id) => applyToTimer(verb, id, arg));
     const count = results.filter((result) => result.ok).length;
     if (count === 0) return results[0];
     const text =
@@ -1451,8 +1508,8 @@ function CookingSession({
         ? `Paused ${count} timers`
         : verb === 'RESUME'
           ? `Resumed ${count} timers`
-          : `Added ${formatDuration(ms / 1000)} to ${count} timers`;
-    return done(text);
+          : `Added ${formatDuration(arg.ms / 1000)} to ${count} timers`;
+    return done(text, `${text}.`);
   };
   /** Stop on several: ring first (dismissed), else what runs is paused, else what is paused is reset, the same two taps "stop" takes on one. */
   const stopAll = (list: VoiceTimer[]): CookVoiceResult => {
@@ -1460,37 +1517,47 @@ function CookingSession({
     const running = list.filter((timer) => timer.status === 'running');
     const act =
       ringing.length > 0 ? ringing : running.length > 0 ? running : list;
-    if (act.length === 1) return applyToTimer('STOP', act[0].id, 0);
+    if (act.length === 1) return applyToTimer('STOP', act[0].id, NO_ARG);
     if (ringing.length > 0 && isRingingInFront && isJustRung()) {
       return justRang('to dismiss them');
     }
-    act.forEach((timer) => applyToTimer('STOP', timer.id, 0));
-    if (ringing.length > 0) return done(`Dismissed ${act.length} timers`);
+    act.forEach((timer) => applyToTimer('STOP', timer.id, NO_ARG));
+    if (ringing.length > 0) {
+      return done(
+        `Dismissed ${act.length} timers`,
+        `Dismissed ${act.length} timers.`,
+      );
+    }
     return running.length > 0
       ? done(
           `Paused ${act.length} timers. Say “stop all” again to reset them.`,
           `Paused ${act.length} timers. Say stop all again to reset them.`,
         )
-      : done(`Reset ${act.length} timers`);
+      : done(`Reset ${act.length} timers`, `Reset ${act.length} timers.`);
   };
   const applyResolution = (
     verb: PendingTimerVerb,
     resolution: ReturnType<typeof resolveVoiceTimers<VoiceTimer>>,
-    ms: number,
+    arg: TimerArg,
     target: CookTimerTarget,
     state: string,
   ): CookVoiceResult => {
     if (resolution.kind === 'NONE') return noTimer(target, state);
-    if (resolution.kind === 'ASK') return askWhich(verb, resolution.timers, ms);
+    if (resolution.kind === 'GUESS') {
+      return askGuess(verb, resolution.timer, arg, target.name ?? '');
+    }
+    if (resolution.kind === 'ASK') {
+      return askWhich(verb, resolution.timers, arg, resolution.missed ?? null);
+    }
     if (resolution.kind === 'ONE') {
-      return applyToTimer(verb, resolution.timer.id, ms);
+      return applyToTimer(verb, resolution.timer.id, arg);
     }
     return verb === 'STOP'
       ? stopAll(resolution.timers)
       : applyToAll(
           verb,
           resolution.timers.map((timer) => timer.id),
-          ms,
+          arg,
         );
   };
   const resolveTimers = (
@@ -1637,7 +1704,7 @@ function CookingSession({
       return applyResolution(
         'PAUSE',
         resolveTimers(['running'], target),
-        0,
+        NO_ARG,
         target,
         'going',
       );
@@ -1647,7 +1714,7 @@ function CookingSession({
       return applyResolution(
         'RESUME',
         resolveTimers(['paused'], target),
-        0,
+        NO_ARG,
         target,
         'paused',
       );
@@ -1655,13 +1722,13 @@ function CookingSession({
     stopTimer: (target, scope) => {
       const ringing = resolveTimers(['done'], target);
       if (ringing.kind !== 'NONE') {
-        return applyResolution('STOP', ringing, 0, target, 'going');
+        return applyResolution('STOP', ringing, NO_ARG, target, 'going');
       }
       if (scope === 'RINGING') return refuse('No timer is ringing.');
       return applyResolution(
         'STOP',
         resolveTimers(['running', 'paused'], target),
-        0,
+        NO_ARG,
         target,
         'going',
       );
@@ -1670,7 +1737,15 @@ function CookingSession({
       applyResolution(
         'EXTEND',
         resolveTimers(['running', 'paused', 'done'], target),
-        seconds * 1000,
+        { ms: seconds * 1000, name: '' },
+        target,
+        'going',
+      ),
+    renameTimer: (target, name) =>
+      applyResolution(
+        'RENAME',
+        resolveTimers(['running', 'paused', 'done'], target),
+        { ms: 0, name },
         target,
         'going',
       ),
@@ -1687,7 +1762,9 @@ function CookingSession({
         });
         if (resolution.kind === 'NONE') return [];
         const list =
-          resolution.kind === 'ONE' ? [resolution.timer] : resolution.timers;
+          resolution.kind === 'ONE' || resolution.kind === 'GUESS'
+            ? [resolution.timer]
+            : resolution.timers;
         return [
           ...list.filter((timer) => timer.status === 'done'),
           ...list
@@ -1732,15 +1809,16 @@ function CookingSession({
           answer.ids.includes(timer.id) && question.ids.includes(timer.id),
       );
       if (live.length === 0) return refuse('That timer is gone.');
+      const arg = { ms: question.ms, name: question.name };
       if (live.length > 1 && !answer.isAll) {
-        return askWhich(question.verb, live, question.ms);
+        return askWhich(question.verb, live, arg);
       }
       return question.verb === 'STOP'
         ? stopAll(live)
         : applyToAll(
             question.verb,
             live.map((timer) => timer.id),
-            question.ms,
+            arg,
           );
     },
     amount: (lineIds, query) => {
@@ -1799,7 +1877,11 @@ function CookingSession({
     );
     return asked.length === 0
       ? null
-      : { kind: 'TIMER', timers: asked.map(toVoiceTimerRef) };
+      : {
+          kind: 'TIMER',
+          timers: asked.map(toVoiceTimerRef),
+          isConfirm: pending.isConfirm === true,
+        };
   };
   const voiceContext = {
     recipes: entries.map((candidate) => ({
@@ -2085,6 +2167,8 @@ function CookingSession({
         note={getTimerNote()}
         buzz={focused.status === 'running' ? <CookTimerBuzz uid={uid} /> : null}
         onTick={timers.settle}
+        backLabel={timerSecondary === 'BACK' ? secondaryLabels.text : null}
+        onBack={backToStep}
         isFull={timers.isFull}
         onPause={timers.pause}
         onResume={timers.resume}
@@ -2206,6 +2290,7 @@ function CookingSession({
             draft={timerDraft}
             isFull={timers.isFull}
             onDraftChange={setTimerDraft}
+            onBack={() => showView('steps')}
             onTick={timers.settle}
             onFocus={timers.focus}
             onPause={timers.pause}
@@ -2389,7 +2474,7 @@ function CookingSession({
             <div className='flex gap-3 [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1'>
               {focused !== null ? (
                 <>
-                  {timerSecondary !== null && (
+                  {timerSecondary === 'NEXT' && (
                     <Button
                       type='button'
                       variant='secondary'
@@ -2490,18 +2575,6 @@ function CookingSession({
                 </Button>
               ) : isTimersView ? (
                 <>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    className={join(
-                      'h-14 shrink-0 px-6 text-base',
-                      '[@media(max-height:500px)]:h-11',
-                    )}
-                    aria-label='Back to the steps'
-                    onClick={() => showView('steps')}
-                  >
-                    Back
-                  </Button>
                   <Button
                     ref={primaryRef}
                     type='button'

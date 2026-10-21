@@ -388,6 +388,7 @@ function CookVoiceSheet({
         ['dismiss', 'Silences a timer that rang'],
         ['stop the timer', 'Pauses it, then resets it'],
         ['stop all timers', 'Does the same to every timer'],
+        ['rename the pasta timer to noodles', 'Gives it a new name'],
         ['how much time is left', 'Says the time left'],
         ['what timers are running', 'Says each one'],
       ],

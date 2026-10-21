@@ -12,6 +12,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import SwipeArea from '@/components/SwipeArea';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { formatClock } from '@/utils/durationUtils';
@@ -58,6 +59,9 @@ interface CookTimerViewProps {
   note: string | null;
   /** What sits under the timer card: the offer to buzz this device when the screen is off. */
   buzz: ReactNode;
+  /** Where the timer's way back goes ("Back to step 2", "Back to timers"), shown first under the title; null while the footer's Next is the way on. */
+  backLabel: string | null;
+  onBack: () => void;
   /** The session is at its cap: a Time's up can't start again. */
   isFull: boolean;
   onTick: () => void;
@@ -83,6 +87,8 @@ function CookTimerView({
   meanwhile,
   note,
   buzz,
+  backLabel,
+  onBack,
   isFull,
   onTick,
   onPause,
@@ -181,6 +187,11 @@ function CookTimerView({
         '[@media(max-height:500px)]:grid [@media(max-height:500px)]:max-w-none [@media(max-height:500px)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [@media(max-height:500px)]:content-start [@media(max-height:500px)]:gap-x-6',
       )}
     >
+      {backLabel !== null && (
+        <div className='min-w-0 [@media(max-height:500px)]:col-start-2'>
+          <BackLink label={backLabel} onBack={onBack} />
+        </div>
+      )}
       {step !== null && (
         <div className='min-w-0 [@media(max-height:500px)]:col-start-2'>
           <Button

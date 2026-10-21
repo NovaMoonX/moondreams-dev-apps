@@ -6,6 +6,7 @@ import {
   formatSpokenTime,
   normalizeTranscript,
   parseCookCommand,
+  describeTimerGuess,
   describeTimerQuestion,
   getTimerChoiceNames,
   pickTimersToTell,
@@ -780,7 +781,7 @@ assert.deepEqual(
     idOf(resolve(['running'], { isAll: true })),
     idOf(resolve([], {})),
   ],
-  ['a', 'ASK', 'ASK', 'a', 'c', 'NONE', 'b', 'NONE', 'c', 'ALL', 'NONE'],
+  ['a', 'ASK', 'ASK', 'a', 'c', 'NONE', 'b', 'ASK', 'c', 'ALL', 'NONE'],
   'a timer is found by what is said (length, name, all) or the one in front on screen, the only one that fits is taken, and with several that fit and nothing to tell them apart it asks instead of picking',
 );
 assert.deepEqual(
@@ -1129,6 +1130,96 @@ assert.deepEqual(
     'Which timer to extend: A, B, C, or 3 more?',
   ],
   'the question names up to four timers, then how many more',
+);
+
+assert.deepEqual(
+  [
+    resolve(['running'], { name: 'pasta wter' }),
+    resolve(['running'], { name: 'chicken' }),
+    resolve(['paused'], { name: 'chicken' }),
+  ].map((resolution) => [
+    resolution.kind,
+    resolution.kind === 'GUESS' ? resolution.timer.id : null,
+    resolution.kind === 'ASK' ? (resolution.missed ?? null) : null,
+  ]),
+  [
+    ['GUESS', 'b', null],
+    ['ASK', null, 'chicken'],
+    ['GUESS', 'c', null],
+  ],
+  'a name nothing has is matched to a close one (a misspelling, a mishearing) and asked about; with no close one the timers are offered, or the only one is asked about',
+);
+assert.deepEqual(
+  [
+    describeTimerGuess('Checkers', 'chicken'),
+    describeTimerQuestion([{ name: 'A', label: '1 min' }], 'pause', 'chicken')
+      .show,
+  ],
+  [
+    {
+      show: 'No chicken timer. Did you mean Checkers?',
+      speak: "I don't have a chicken timer. Did you mean Checkers?",
+    },
+    'No chicken timer. Which timer to pause: A?',
+  ],
+  'a guess and a miss are said plainly',
+);
+assert.deepEqual(
+  [
+    'rename the pasta timer to noodles',
+    'rename the ten minute timer to rice',
+    'call the pasta timer noodles',
+    'name this timer soup',
+    'rename it to soup',
+    'rename the pasta to noodles',
+  ].map((phrase) => parseWithTimers(phrase)),
+  [
+    {
+      kind: 'RENAME_TIMER',
+      target: target({ name: 'pasta' }),
+      name: 'noodles',
+    },
+    { kind: 'RENAME_TIMER', target: target({ seconds: 600 }), name: 'rice' },
+    {
+      kind: 'RENAME_TIMER',
+      target: target({ name: 'pasta' }),
+      name: 'noodles',
+    },
+    { kind: 'RENAME_TIMER', target: target({}), name: 'soup' },
+    { kind: 'RENAME_TIMER', target: target({}), name: 'soup' },
+    {
+      kind: 'RENAME_TIMER',
+      target: target({ name: 'pasta' }),
+      name: 'noodles',
+    },
+  ],
+  'a timer is renamed by saying which one and the new name',
+);
+assert.equal(
+  parseWithTimers('rename the oven to soup'),
+  null,
+  'renaming something that is not a timer is not a command',
+);
+assert.deepEqual(
+  ['showtime', 'show time', 'show times', 'show timer', 'timer list'].map(
+    (phrase) => parseWithTimers(phrase),
+  ),
+  Array.from({ length: 5 }, () => ({ kind: 'SHOW_TIMERS' })),
+  'what a recognizer hears for "show timers" still shows them',
+);
+const guessed: CookVoiceContext = {
+  ...timerContext,
+  choice: { kind: 'TIMER', timers: [timerContext.timers[0]], isConfirm: true },
+};
+assert.deepEqual(
+  ['yes', 'yeah', 'that one'].map((phrase) => parse(phrase, guessed)),
+  Array.from({ length: 3 }, () => pick(['t1'])),
+  'yes confirms the guessed timer',
+);
+assert.deepEqual(
+  [parse('no', guessed), parse('yes', asked)],
+  [{ kind: 'TIMER_ANSWER', answer: { kind: 'NEVER_MIND' } }, null],
+  'no drops a guess, and yes means nothing when a timer is asked for by name',
 );
 
 console.log('pinchVoice: all checks passed');
