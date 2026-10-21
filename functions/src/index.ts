@@ -12,6 +12,7 @@ export { copyPinchShareCover } from './apps/pinch/copyPinchShareCover.js';
 export { deleteTrip } from './apps/waypoint/deleteTrip.js';
 export { rescheduleTripReminders } from './apps/waypoint/rescheduleTripReminders.js';
 export { shiftTripDates } from './apps/waypoint/shiftTripDates.js';
+export { registerAppUsage } from './appUsage/registerAppUsage.js';
 export { fetchLinkMetadata } from './linkMetadata/fetchLinkMetadata.js';
 export { fetchPageContent } from './linkMetadata/fetchPageContent.js';
 export { sendScheduledReminders } from './notifications/sendScheduledReminders.js';

@@ -93,6 +93,7 @@ For each MVP issue, in order:
    - Update the seed (`scripts/seeds/<id>.ts`, its document count, `SEEDING.md`) when there's new state worth seeding.
 3. **Issue 1 only:**
    - **Register the app:** `APP_REGISTRY`, route, logo and banner placeholders, the home-page tile, and the root README's "Current apps" line.
+   - **Wire the rest from the "New mini-app checklist"** in `.github/copilot-instructions.md`: the `useTrackAppUsage` hook in the app's top-level page and its `findFirstActivityAt` finder in `functions/`, the store slice, rules, seed and docs. A finished MVP has every item on that list.
    - **Design the logo icon as SVG**, in two versions, saved as temporary files (scratchpad, not committed):
      - `<id>-icon.svg`: light ticket/glyph on a transparent background, for dark backgrounds.
      - `<id>-icon-dark.svg`: the same, filled `#111111`, for light backgrounds.

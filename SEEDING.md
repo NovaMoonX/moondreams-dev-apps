@@ -130,7 +130,7 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run share`                                  | Start the LAN emulators, seed, start the dev server, and copy a Tailscale link to send a friend. |
 | `npm run lan:trust` / `lan:untrust` / `lan:list` | Name and trust the current network for the `:lan` commands, remove one, or list them.            |
 | `npm run seed`                                   | Upsert all named fixtures into an already-running emulator.                                      |
-| `npm run seed:core`                              | Upsert Auth users, profiles, app registry records, and presence.                                 |
+| `npm run seed:core`                              | Upsert Auth users, profiles, app registry records, usage records, site visits, and presence.     |
 | `npm run seed:nine-lives`                        | Upsert core data and Nine Lives household/cat fixtures.                                          |
 | `npm run seed:worth-the-wait`                    | Upsert core data and Worth the Wait fixtures.                                                    |
 | `npm run seed:waypoint`                          | Upsert core data and Waypoint trip fixtures.                                                     |
@@ -167,7 +167,8 @@ automatically, but only against the emulators.
 ## Fixture scope
 
 `core` writes global data shared by every app: Auth accounts, `users/{uid}`, app
-catalog entries, and `status/{uid}` RTDB presence. App-specific seeders build on core.
+catalog entries, each fixture's usage records (`apps/{appId}/usage/{uid}`, one lapsed member so the admin
+sees both active and quiet) and `siteVisits/{uid}`, and `status/{uid}` RTDB presence. App-specific seeders build on core.
 
 `worth-the-wait` writes a locked two-member space at
 `apps/worth-the-wait/spaces/seed-shared-space`, the production default boxes, custom
