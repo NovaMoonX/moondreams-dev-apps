@@ -31,10 +31,11 @@ interface DayDrawerProps {
   dayKey: string;
   onClose: () => void;
   onAdd: (mealType: MealType | null) => void;
+  onEdit: (plannedMealId: string, mealType: MealType) => void;
 }
 
 /** One day's meals grouped by type; picking one swaps the drawer to that meal, with a way back. */
-function DayDrawer({ uid, dayKey, onClose, onAdd }: DayDrawerProps) {
+function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
   const meals = useAppSelector(selectPlannedByDay).get(dayKey) ?? NO_MEALS;
   const costContext = useAppSelector(selectCostContext);
   const recipesById = useAppSelector(selectRecipesById);
@@ -74,6 +75,7 @@ function DayDrawer({ uid, dayKey, onClose, onAdd }: DayDrawerProps) {
           uid={uid}
           plannedMealId={plannedMealId}
           onBack={() => setPickedMealId(null)}
+          onEdit={onEdit}
         />
       ) : (
         <div className='space-y-5'>

@@ -15,6 +15,7 @@ import {
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
+import type { MealType } from '@apps/pinch/types';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
@@ -25,10 +26,16 @@ interface PlannedMealViewProps {
   uid: string;
   plannedMealId: string;
   onBack: () => void;
+  onEdit: (plannedMealId: string, mealType: MealType) => void;
 }
 
 /** A planned meal inside the day drawer: its items, servings and cost, and the way to take it off the day. */
-function PlannedMealView({ uid, plannedMealId, onBack }: PlannedMealViewProps) {
+function PlannedMealView({
+  uid,
+  plannedMealId,
+  onBack,
+  onEdit,
+}: PlannedMealViewProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
   const meal = useAppSelector(selectPlannedMeals).find(
@@ -125,6 +132,14 @@ function PlannedMealView({ uid, plannedMealId, onBack }: PlannedMealViewProps) {
         )}
       </p>
       {error && <p className='text-destructive text-sm'>{error}</p>}
+      <Button
+        type='button'
+        variant='secondary'
+        className='h-11 w-full'
+        onClick={() => onEdit(meal.id, meal.mealType)}
+      >
+        Change items or servings
+      </Button>
       <Button
         type='button'
         variant='tertiary'

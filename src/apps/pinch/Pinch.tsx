@@ -111,10 +111,11 @@ function Pinch() {
       )}
       {subview?.kind === 'plan' && (
         <PlanMealSubview
-          key={`${subview.dayKey}-${subview.mealType ?? ''}`}
+          key={`${subview.dayKey}-${subview.mealType ?? ''}-${subview.plannedMealId ?? 'new'}`}
           uid={user.uid}
           dayKey={subview.dayKey}
           mealType={subview.mealType}
+          plannedMealId={subview.plannedMealId}
         />
       )}
       {/* A subview takes over the app; the tabs stay mounted underneath so search and scroll survive. */}
