@@ -9,6 +9,7 @@ import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
 import MacroStats from '@/components/MacroStats';
+import StarButton from '@/components/StarButton';
 import StatTile from '@/components/StatTile';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
@@ -25,7 +26,13 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { ContainerPlace, Gap, ShoppingRequest } from '@apps/pinch/types';
+import type {
+  ContainerPlace,
+  Gap,
+  Meal,
+  ShoppingRequest,
+} from '@apps/pinch/types';
+import { isStarred } from '@apps/pinch/utils/favorites';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCostTile,
@@ -68,6 +75,7 @@ interface MealDrawerProps {
   onAddToShopping: (request: ShoppingRequest) => void;
   onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
+  onToggleFavorite: (meal: Meal) => void;
 }
 
 function MealDrawer({
@@ -78,6 +86,7 @@ function MealDrawer({
   onAddToShopping,
   onOpenStock,
   onPutAway,
+  onToggleFavorite,
 }: MealDrawerProps) {
   const meal = useAppSelector(selectMealsById).get(mealId);
   const costContext = useAppSelector(selectCostContext);
@@ -126,6 +135,14 @@ function MealDrawer({
       onClose={onClose}
       title={meal.name}
       viewKey={isMoreOpen ? 'more' : 'plate'}
+      actions={
+        <StarButton
+          isOn={isStarred(meal)}
+          label={`Favorite ${meal.name}`}
+          onClassName='text-[var(--pinch-drizzle)]'
+          onClick={() => onToggleFavorite(meal)}
+        />
+      }
       footer={
         <div className='flex gap-2 px-4 pb-4'>
           <Button

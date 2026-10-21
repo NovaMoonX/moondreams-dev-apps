@@ -1440,10 +1440,16 @@ service cloud.firestore {
           && (value.tip == null || isShortText(value.tip, 300)));
       }
 
-      // Rules can't walk a list, so each ingredient line (its group included) and step is shaped by the client: checking even one field of 60 lines
+      // The collections a recipe is in. Rules can't walk a list, so the client shapes the ids; a recipe written before collections has no key.
+      function isCollectionIds(value) {
+        return value is list && value.size() <= 20;
+      }
+
+      // Rules can't walk a list, so each ingredient line (its group included), step and link is shaped by the client: checking even one field of 60 lines
       // by index runs past the evaluator's 1,000 expressions and would refuse a long recipe. The rules cap the counts and the fields around them.
+      // A recipe written before links existed has no key.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'care', 'nutritionOverride', 'source', 'sourceId', 'isArchived', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1457,8 +1463,10 @@ service cloud.firestore {
           && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
           && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
           && data.steps is list && data.steps.size() <= 60
+          && data.get('links', []) is list && data.get('links', []).size() <= 8
           && data.source in ['MANUAL', 'AI_TEXT', 'AI_FILE', 'AI_LINK']
           && (data.get('sourceId', null) == null || isShortText(data.sourceId, 80))
+          && isCollectionIds(data.get('collectionIds', []))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1467,6 +1475,15 @@ service cloud.firestore {
           && data.keys().hasAll(['id', 'label', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.label, 80)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      // A person's own named set of recipes. The 50-per-person cap is the client's: rules can't count documents.
+      function isCollection(data, id) {
+        return data.keys().hasOnly(['id', 'label', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'label', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.label, 40)
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1696,12 +1713,14 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
+      // A saved meal written before favorites has no `isFavorite`, so it is not required.
       function isMeal(data, id) {
-        return data.keys().hasOnly(['id', 'name', 'items', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'name', 'items', 'isFavorite', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'items', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.name, 120)
           && isMealItems(data.items)
+          && data.get('isFavorite', false) is bool
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1742,6 +1761,13 @@ service cloud.firestore {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isSource(request.resource.data, id);
         allow update: if isKitchenOwner() && isSource(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /collections/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isCollection(request.resource.data, id);
+        allow update: if isKitchenOwner() && isCollection(request.resource.data, id)
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

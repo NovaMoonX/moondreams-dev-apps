@@ -34,6 +34,8 @@ import {
   getShoppingSourceLabels,
   groupShoppingItems,
 } from '@apps/pinch/utils/shopping';
+import { getCollectionCounts } from '@apps/pinch/utils/collections';
+import { sortFavoritesFirst } from '@apps/pinch/utils/favorites';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const selectRecords = (state: RootState) => state.pinch.ingredients.records;
@@ -50,7 +52,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded &&
   state.pinch.sources.isLoaded;
 
-/** Sources, the shopping list, ideas, cooking history, recipe notes and fridge and freezer stock are optional extras: their failures are left out so each only takes its own UI away. */
+/** Sources, collections, the shopping list, ideas, cooking history, recipe notes and fridge and freezer stock are optional extras: their failures are left out so each only takes its own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
@@ -221,6 +223,34 @@ export const selectSourceCounts = createSelector(
 
     return { bySource, withoutSource: recipes.length - sourced };
   },
+);
+
+const selectCollectionItems = (state: RootState) =>
+  state.pinch.collections.items;
+
+export const selectCollections = createSelector(
+  [selectCollectionItems],
+  (collections) =>
+    [...collections].sort((a, b) => a.label.localeCompare(b.label)),
+);
+
+export const selectCollectionsById = createSelector(
+  [selectCollections],
+  (collections) =>
+    new Map(collections.map((collection) => [collection.id, collection])),
+);
+
+export const selectCollectionsLoadError = (state: RootState) =>
+  state.pinch.collections.loadError;
+
+/** Until it has loaded, or after it failed, the form leaves a recipe's collections as they are. */
+export const selectIsCollectionsReady = (state: RootState) =>
+  state.pinch.collections.isLoaded &&
+  state.pinch.collections.loadError === null;
+
+export const selectCollectionCounts = createSelector(
+  [selectRecipes, selectCollections],
+  getCollectionCounts,
 );
 
 const selectIdeaItems = (state: RootState) => state.pinch.ideas.items;
@@ -475,9 +505,8 @@ export const selectCostContext = createSelector(
 
 const selectMealItems = (state: RootState) => state.pinch.meals.items;
 
-/** The saved meals, newest first. */
 export const selectMeals = createSelector([selectMealItems], (meals) =>
-  [...meals].sort((a, b) => b.createdAt - a.createdAt),
+  sortFavoritesFirst([...meals].sort((a, b) => b.createdAt - a.createdAt)),
 );
 
 export const selectStockByMealWithRecipes = createSelector(

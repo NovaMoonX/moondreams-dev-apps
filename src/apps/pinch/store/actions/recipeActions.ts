@@ -23,11 +23,13 @@ import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
 import type {
+  Collection,
   IngredientRecord,
   NutritionValues,
   Recipe,
   RecipeCare,
   RecipeIngredient,
+  RecipeLink,
   RecipeNote,
   RecipeSource,
   Source,
@@ -38,6 +40,9 @@ const recipeDoc = (uid: string, id: string) =>
 
 const sourceDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'sources', id);
+
+const collectionDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'collections', id);
 
 const ideaDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'ideas', id);
@@ -58,6 +63,15 @@ const getWriteMessage = (error: unknown, fallback: string) => {
     : fallback;
 };
 
+/** A form that couldn't offer collections leaves the stored list alone, but an older recipe still gains the key. */
+const getCollectionFields = (
+  existing: Recipe,
+  collectionIds: string[] | null,
+) => {
+  if (collectionIds !== null) return { collectionIds };
+  return 'collectionIds' in existing ? {} : { collectionIds: [] };
+};
+
 export const getRecipeCoverPath = (uid: string, recipeId: string) =>
   `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
 
@@ -73,12 +87,18 @@ export interface RecipeDraft {
   steps: string[];
   /** How to keep the leftovers, or null; written on every save, so older recipes gain the key. */
   care: RecipeCare | null;
+  /** The how-to video and other links; written on every save, so older recipes gain the key. */
+  links: RecipeLink[];
   /** Per serving, typed over the added-up value; null keeps every metric derived. */
   nutritionOverride: NutritionValues | null;
   /** How a new recipe came to be; an edit keeps the recipe's own. */
   source: RecipeSource;
   /** The `Source` it came from, or null; written on every save, so older recipes gain the key. */
   sourceId: string | null;
+  /** The collections it is in; null when the form couldn't offer them (they hadn't loaded), which leaves the stored list as it is. */
+  collectionIds: string[] | null;
+  /** Collections typed with the recipe, created in the same batch so a failed save leaves no orphan and an offline one is queued whole. */
+  newCollections: { id: string; label: string }[];
   /** Custom ingredients the reader proposed and the person kept: created with the recipe, in one batch. */
   newIngredients: { id: string; name: string }[];
   /** A source typed with the recipe, created in the same batch so a failed save leaves no orphan and an offline one is queued whole. */
@@ -211,12 +231,22 @@ export const saveRecipe = createAsyncThunk<
         ingredients: draft.ingredients,
         steps: draft.steps,
         care: draft.care,
+        links: draft.links,
         nutritionOverride: draft.nutritionOverride,
         sourceId: draft.sourceId,
         updatedAt: now,
       };
 
       const batch = writeBatch(db);
+      draft.newCollections.forEach((entry) => {
+        const collection: Collection = {
+          id: entry.id,
+          label: entry.label,
+          createdAt: now,
+          updatedAt: now,
+        };
+        batch.set(collectionDoc(uid, collection.id), collection);
+      });
       if (draft.newSource) {
         const source: Source = {
           id: draft.newSource.id,
@@ -260,6 +290,7 @@ export const saveRecipe = createAsyncThunk<
         batch.update(recipeDoc(uid, recipeId), {
           ...fields,
           ...('isArchived' in existing ? {} : { isArchived: false }),
+          ...getCollectionFields(existing, draft.collectionIds),
         });
         if (tweak) batch.set(noteDoc(uid, tweak.id), tweak);
       } else {
@@ -267,6 +298,7 @@ export const saveRecipe = createAsyncThunk<
           id: recipeId,
           ...fields,
           source: draft.source,
+          collectionIds: draft.collectionIds ?? [],
           isArchived: false,
           createdAt: now,
         };

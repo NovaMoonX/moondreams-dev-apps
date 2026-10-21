@@ -4,18 +4,14 @@ import {
   Button,
   Form,
   FormFactories,
-  Input,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FallbackImage from '@/components/FallbackImage';
 import FormSection from '@/components/FormSection';
-import Field from '@/components/forms/Field';
-import PhotoPicker from '@/components/forms/PhotoPicker';
-import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useImageUpload } from '@/hooks/useImageUpload';
@@ -27,12 +23,17 @@ import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
 import RecipeCareField from '@apps/pinch/components/recipes/RecipeCareField';
+import RecipeCollectionsField from '@apps/pinch/components/recipes/RecipeCollectionsField';
 import {
   RecipeDescriptionField,
   RecipeTimesField,
   RecipeTitleField,
+  RecipeWhyField,
 } from '@apps/pinch/components/recipes/RecipeBasics';
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
+import RecipeLinksField from '@apps/pinch/components/recipes/RecipeLinksField';
+import RecipePhotoField from '@apps/pinch/components/recipes/RecipePhotoField';
+import RecipeSourceField from '@apps/pinch/components/recipes/RecipeSourceField';
 import {
   getDataFromExtracted,
   getDataFromIdea,
@@ -51,9 +52,7 @@ import RecipeSteps from '@apps/pinch/components/recipes/RecipeSteps';
 import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
-  MAX_RECIPE_NOTE_LENGTH,
   MAX_RECIPE_TITLE_LENGTH,
-  MAX_SOURCE_LABEL_LENGTH,
   SECTION_COUNT_THRESHOLD,
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
@@ -67,10 +66,12 @@ import {
 } from '@apps/pinch/store/actions/recipeActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
+  selectCollections,
   selectCookSummaries,
   selectIdeas,
   selectIngredients,
   selectIngredientsById,
+  selectIsCollectionsReady,
   selectNotesByRecipe,
   selectRecipesById,
   selectSourceCounts,
@@ -86,9 +87,20 @@ import type {
   RecipeNote,
   RecipeSource,
 } from '@apps/pinch/types';
+import {
+  getCollectionsToSave,
+  getSuggestedCollections,
+  getTrustedProtein,
+  type CollectionsChoice,
+} from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
+import {
+  hasLinksProblem,
+  isOverLinkCap,
+  toRecipeLinks,
+} from '@apps/pinch/utils/recipeLinks';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
 const { custom } = FormFactories;
@@ -144,6 +156,9 @@ function RecipeForm({
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
   const hasSourcesFailed = useAppSelector(selectSourcesLoadError) !== null;
+  const collections = useAppSelector(selectCollections);
+  const isCollectionsReady = useAppSelector(selectIsCollectionsReady);
+  const [ownsCollections] = useState(isCollectionsReady);
   const tracking = useAppSelector((state) =>
     selectTweakTracking(state, recipeId),
   );
@@ -167,7 +182,7 @@ function RecipeForm({
       : initialIdea
         ? getDataFromIdea(initialIdea, sources)
         : {
-            ...getInitialData(recipe, sourcesById),
+            ...getInitialData(recipe, sourcesById, collections),
             why: initialNote?.text ?? '',
           },
   );
@@ -192,6 +207,8 @@ function RecipeForm({
     isValidMinutes(prep) &&
     isValidMinutes(cook) &&
     getCareProblem(formData.care) === null &&
+    !hasLinksProblem(formData.links) &&
+    !isOverLinkCap(formData.links) &&
     isValidNutrition(formData.nutrition);
 
   const calculation = useMemo(() => {
@@ -208,9 +225,11 @@ function RecipeForm({
         ingredients: lines.map(toRecipeLine),
         steps: [],
         care: null,
+        links: [],
         nutritionOverride: null,
         source: 'MANUAL',
         sourceId: null,
+        collectionIds: [],
         isArchived: false,
         createdAt: 0,
         updatedAt: 0,
@@ -224,6 +243,7 @@ function RecipeForm({
 
     return {
       values: result.values,
+      missing: result.missing,
       leftOut: {
         count:
           new Set(result.missing.map((entry) => entry.ingredientId)).size +
@@ -232,6 +252,30 @@ function RecipeForm({
       },
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
+
+  const typedNutrition = isValidNutrition(formData.nutrition)
+    ? parseNutrition(formData.nutrition)
+    : null;
+  const protein =
+    typedNutrition?.protein != null ||
+    (formData.ingredients.length > 0 && formData.ingredients.every(isRowValid))
+      ? getTrustedProtein(calculation, typedNutrition)
+      : null;
+  const freezerDays = parseCareText(formData.care)?.freezerDays ?? null;
+  const suggestions = useMemo(
+    () =>
+      getSuggestedCollections(
+        {
+          protein,
+          prepMinutes: isValidMinutes(prep) ? prep : null,
+          cookMinutes: isValidMinutes(cook) ? cook : null,
+          freezerDays,
+        },
+        [...collections, ...formData.collections.added],
+        formData.collections.ids,
+      ),
+    [protein, prep, cook, freezerDays, collections, formData.collections],
+  );
 
   const isBlankByHand =
     recipeId === null && initialRead === null && initialIdea === null;
@@ -281,6 +325,14 @@ function RecipeForm({
     }
     if (getCareProblem(formData.care) !== null) {
       return plain('Check the fridge and freezer days to save.');
+    }
+    if (hasLinksProblem(formData.links)) {
+      return plain(
+        'Fix or take out the link that is not a web address to save.',
+      );
+    }
+    if (isOverLinkCap(formData.links)) {
+      return plain('Take a link out to save: a recipe holds up to 8.');
     }
     return null;
   };
@@ -356,40 +408,20 @@ function RecipeForm({
         name: 'cover',
         label: '',
         renderComponent: () => (
-          <FormSection title='Photo'>
-            <div className='flex items-center gap-4'>
-              <span
-                className='bg-accent grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl text-3xl'
-                aria-hidden='true'
-              >
-                {coverUrl ? (
-                  <FallbackImage
-                    src={coverUrl}
-                    alt=''
-                    fallback='🍲'
-                    className='size-full object-cover'
-                  />
-                ) : (
-                  '🍲'
-                )}
-              </span>
-              <PhotoPicker
-                photoUrl={coverUrl}
-                showPreview={false}
-                error={coverError}
-                onSelect={(file) => {
-                  pickCover(file);
-                  setIsCoverRemoved(false);
-                  isDirtyRef.current = true;
-                }}
-                onRemove={() => {
-                  clearCover();
-                  setIsCoverRemoved(true);
-                  isDirtyRef.current = true;
-                }}
-              />
-            </div>
-          </FormSection>
+          <RecipePhotoField
+            photoUrl={coverUrl}
+            error={coverError}
+            onSelect={(file) => {
+              pickCover(file);
+              setIsCoverRemoved(false);
+              isDirtyRef.current = true;
+            }}
+            onRemove={() => {
+              clearCover();
+              setIsCoverRemoved(true);
+              isDirtyRef.current = true;
+            }}
+          />
         ),
       }),
       custom({
@@ -432,41 +464,47 @@ function RecipeForm({
             custom({
               name: 'sourceChoice',
               label: '',
-              renderComponent: (props) => {
-                const value = props.value as RecipeFormData['sourceChoice'];
-                return (
-                  <FormSection title="Where it's from">
-                    <div className='space-y-2' onKeyDown={blockEnterSubmit}>
-                      <PickOrCreate
-                        label='Sources'
-                        options={sourceOptions}
-                        choice={value.choice}
-                        newText={value.newText}
-                        newPillLabel='New source'
-                        newPlaceholder='Serious Eats'
-                        maxLength={MAX_SOURCE_LABEL_LENGTH}
-                        isFocusedOnOpen={false}
-                        clearLabel='Remove source'
-                        onChange={(choice, newText) =>
-                          props.onValueChange({ choice, newText })
-                        }
-                      />
-                      <p className='text-muted-foreground text-xs'>
-                        Optional. It shows on the recipe, and you can filter by
-                        it.
-                      </p>
-                    </div>
-                  </FormSection>
-                );
-              },
+              renderComponent: (props) => (
+                <RecipeSourceField
+                  value={props.value as RecipeFormData['sourceChoice']}
+                  options={sourceOptions}
+                  onChange={props.onValueChange}
+                />
+              ),
             }),
           ]),
+      ...(ownsCollections
+        ? [
+            custom({
+              name: 'collections',
+              label: '',
+              renderComponent: (props) => (
+                <RecipeCollectionsField
+                  value={props.value as CollectionsChoice}
+                  onChange={props.onValueChange}
+                  collections={collections}
+                  suggestions={suggestions}
+                />
+              ),
+            }),
+          ]
+        : []),
       custom({
         name: 'care',
         label: '',
         renderComponent: (props) => (
           <RecipeCareField
             value={props.value as RecipeFormData['care']}
+            onChange={props.onValueChange}
+          />
+        ),
+      }),
+      custom({
+        name: 'links',
+        label: '',
+        renderComponent: (props) => (
+          <RecipeLinksField
+            value={props.value as RecipeFormData['links']}
             onChange={props.onValueChange}
           />
         ),
@@ -491,25 +529,10 @@ function RecipeForm({
               name: 'why',
               label: '',
               renderComponent: (props) => (
-                <div className='space-y-1.5' onKeyDown={blockEnterSubmit}>
-                  <Field label='What changed and why?' isCompact>
-                    {() => (
-                      <Input
-                        variant='outline'
-                        maxLength={MAX_RECIPE_NOTE_LENGTH}
-                        placeholder='Less vinegar, it was too sharp'
-                        value={String(props.value)}
-                        onChange={(event) =>
-                          props.onValueChange(event.target.value)
-                        }
-                      />
-                    )}
-                  </Field>
-                  <p className='text-muted-foreground text-xs'>
-                    Optional. Saving adds a note to this recipe with today's
-                    date and what you changed.
-                  </p>
-                </div>
+                <RecipeWhyField
+                  value={String(props.value)}
+                  onChange={props.onValueChange}
+                />
               ),
             }),
           ]
@@ -539,6 +562,9 @@ function RecipeForm({
       isDirtyRef,
       hasSourcesFailed,
       sourceOptions,
+      ownsCollections,
+      collections,
+      suggestions,
       isBlankByHand,
       showUndo,
       tracking,
@@ -640,6 +666,9 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
+      const { collectionIds, newCollections } = ownsCollections
+        ? getCollectionsToSave(data.collections, collections)
+        : { collectionIds: null, newCollections: [] };
       const { recipeId: savedId } = await dispatch(
         saveRecipe({
           uid,
@@ -654,6 +683,8 @@ function RecipeForm({
             source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
             sourceId,
             newSource,
+            collectionIds,
+            newCollections,
             newIngredients: [
               ...new Map(
                 data.ingredients
@@ -666,6 +697,7 @@ function RecipeForm({
             ],
             nutritionOverride: parseNutrition(data.nutrition),
             care: parseCareText(data.care),
+            links: toRecipeLinks(data.links),
             steps: data.steps.map((step) => step.trim()).filter(Boolean),
             coverFile: upload.file,
             removeCover: isCoverRemoved,
@@ -760,6 +792,7 @@ function RecipeForm({
         onDataChange={(data) => {
           const next = data as RecipeFormData;
           setFormData(next);
+          setError(null);
           onTitleChange(next.title);
           isDirtyRef.current =
             initialRead !== null ||
@@ -772,7 +805,9 @@ function RecipeForm({
         submitButton={
           <ModalFooterActions
             note={
-              blocker?.target ? (
+              error ? (
+                <span className='text-destructive'>{error}</span>
+              ) : blocker?.target ? (
                 <Button
                   type='button'
                   variant='tertiary'
@@ -817,7 +852,6 @@ function RecipeForm({
           />
         }
       />
-      {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
     </>
   );
 }
