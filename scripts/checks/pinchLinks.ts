@@ -7,6 +7,7 @@ import {
   countLinkSlots,
   getLinkLabel,
   getLinksSummary,
+  getInlineVideo,
   getLinksText,
   getLinkUrlProblem,
   getRecipeLinks,
@@ -82,6 +83,46 @@ assert.equal(
   getYouTubeThumbnailUrl(ID),
   `https://i.ytimg.com/vi/${ID}/hqdefault.jpg`,
 );
+
+// the how-to video plays in place only for hosts react-player is given here, from the no-cookie host for YouTube
+assert.deepEqual(getInlineVideo(`https://youtu.be/${ID}?si=abc`), {
+  src: `https://www.youtube-nocookie.com/embed/${ID}`,
+  thumbnailUrl: getYouTubeThumbnailUrl(ID),
+});
+assert.deepEqual(
+  getInlineVideo(`https://www.youtube.com/watch?v=${ID}&t=90s`),
+  {
+    src: `https://www.youtube-nocookie.com/embed/${ID}?t=90s`,
+    thumbnailUrl: getYouTubeThumbnailUrl(ID),
+  },
+);
+assert.equal(
+  getInlineVideo(`https://www.youtube.com/watch?v=${ID}&t=x%22y`)?.src,
+  `https://www.youtube-nocookie.com/embed/${ID}`,
+  'a start time that is not digits, m and s is left out',
+);
+assert.deepEqual(getInlineVideo('https://vimeo.com/123456789'), {
+  src: 'https://vimeo.com/123456789',
+  thumbnailUrl: null,
+});
+assert.equal(
+  getInlineVideo('https://player.vimeo.com/video/123456789')?.src,
+  'https://vimeo.com/123456789',
+);
+assert.equal(
+  getInlineVideo('https://vimeo.com/123456789/abcdef1234')?.src,
+  'https://vimeo.com/123456789/abcdef1234',
+  'a private link keeps its hash',
+);
+assert.equal(getInlineVideo('https://vimeo.com/somechannel'), null);
+assert.equal(getInlineVideo('https://vimeo.com/channels/staffpicks'), null);
+assert.equal(
+  getInlineVideo('https://www.youtube.com/playlist?list=PLabc'),
+  null,
+);
+assert.equal(getInlineVideo('https://example.com/video.mp4'), null);
+assert.equal(getInlineVideo('https://evil.example/vimeo.com/123456789'), null);
+assert.equal(getInlineVideo('not a link'), null);
 
 // a pasted address becomes one http(s) link, never a glued pair
 assert.equal(
