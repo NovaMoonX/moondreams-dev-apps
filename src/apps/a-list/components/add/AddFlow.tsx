@@ -36,6 +36,7 @@ import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import ShowtimePicker from '@apps/a-list/components/viewing/ShowtimePicker';
 import TheaterPills from '@apps/a-list/components/viewing/TheaterPills';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
+import { useTicketSuggestion } from '@apps/a-list/hooks/useTicketSuggestion';
 import WatchlistDetailsFields, {
   type WatchlistDetailsValues,
 } from '@apps/a-list/components/watchlist/WatchlistDetailsFields';
@@ -62,7 +63,6 @@ import {
   selectTheatres,
   selectPreviewsWindowViewing,
   selectSeenCountByMovieKey,
-  selectFeeChips,
   selectWatchlistItems,
 } from '@apps/a-list/store/selectors';
 import type {
@@ -150,7 +150,6 @@ export function AddFlow({
   const isPhone = useMediaQuery().isBelow('sm');
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
-  const feeChips = useAppSelector(selectFeeChips);
   const theatres = useAppSelector(selectTheatres);
   const watchlist = useAppSelector(selectWatchlistItems);
   const previewsViewing = useAppSelector((state) =>
@@ -258,7 +257,13 @@ export function AddFlow({
     pickedShowtime.option.startsAt === showtimeAt
       ? pickedShowtime.option
       : null;
-  const ticketResult = ticketDraft ? evaluateTicketDraft(ticketDraft) : null;
+  const ticketSuggestion = useTicketSuggestion(
+    theatre?.theatreId ?? null,
+    ticketDraft?.format ?? 'STANDARD',
+  );
+  const ticketResult = ticketDraft
+    ? evaluateTicketDraft(ticketDraft, ticketSuggestion)
+    : null;
   const canSave =
     !isBeforeStart &&
     !isNotYetShown &&
@@ -620,7 +625,8 @@ export function AddFlow({
           <div>
             <p
               className={
-                isSynopsisOpen || popularPick.overview.length <= SYNOPSIS_FOLD_CHARS
+                isSynopsisOpen ||
+                popularPick.overview.length <= SYNOPSIS_FOLD_CHARS
                   ? 'text-sm'
                   : 'line-clamp-4 text-sm'
               }
@@ -695,10 +701,7 @@ export function AddFlow({
                 onClick={() =>
                   setTicketDraft((current) => {
                     if (current) return current;
-                    const initial = getInitialTicketDraft(
-                      null,
-                      feeChips[1] ?? 0,
-                    );
+                    const initial = getInitialTicketDraft(null);
                     return activePick
                       ? applyPurchaseToDraft(initial, activePick)
                       : initial;
@@ -727,6 +730,7 @@ export function AddFlow({
                   key={`pick-${pickCount}`}
                   draft={ticketDraft}
                   onChange={setTicketDraft}
+                  theatre={theatre}
                 />
               </div>
             )}
@@ -808,8 +812,7 @@ export function AddFlow({
     if (selection !== null)
       return {
         label:
-          (selection.kind === 'known' && selection.isManual) ||
-          wantsPickedFilm
+          (selection.kind === 'known' && selection.isManual) || wantsPickedFilm
             ? 'Back'
             : 'Back to results',
         onClick: handleBack,

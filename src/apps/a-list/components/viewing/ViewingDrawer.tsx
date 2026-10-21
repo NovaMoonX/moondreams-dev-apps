@@ -440,6 +440,7 @@ export function ViewingPanel({
           <TicketForm
             ticket={ticket}
             purchase={viewing.purchase ?? null}
+            theatre={viewing.theatre ?? null}
             isSaving={isSaving}
             onCancel={() => setView('details')}
             onSave={(nextTicket) => void handleSaveTicket(nextTicket)}
