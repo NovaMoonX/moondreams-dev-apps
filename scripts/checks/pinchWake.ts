@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   COOK_LOCK_MS,
@@ -38,7 +39,7 @@ const context: CookVoiceContext = {
   ],
 };
 
-assert.equal(COOK_WAKE_PHRASE, 'Hey Pinch', 'the phrase as it is shown');
+assert.equal(COOK_WAKE_PHRASE, 'Hey chef', 'the phrase as it is shown');
 COOK_WAKE_SPELLINGS.forEach((spelling) =>
   assert.equal(
     toPlainText(spelling),
@@ -47,40 +48,43 @@ COOK_WAKE_SPELLINGS.forEach((spelling) =>
   ),
 );
 assert.ok(
-  COOK_WAKE_SPELLINGS.every((spelling) => spelling.includes('pinch')),
-  'every spelling holds the name',
+  COOK_WAKE_SPELLINGS.includes(toPlainText(COOK_WAKE_PHRASE)),
+  'the phrase as shown is one of its spellings',
 );
 assert.ok(
   COOK_WAKE_SPELLINGS.every(
-    (spelling) => spelling !== 'pinch' && spelling !== 'a pinch',
+    (spelling) => spelling !== 'chef' && spelling !== 'hey',
   ),
-  'a bare pinch or "a pinch" is never a way to wake it',
+  'a bare "chef" or "hey" is never a way to wake it',
 );
 
 const rest = (text: string | string[]) => readWakeWord(text)?.rests ?? null;
 const restOf = (text: string) => rest(text)?.[0] ?? null;
 
 const wakes: [string, string][] = [
-  ['Hey Pinch', ''],
-  ['hey pinch', ''],
-  ['Hey, Pinch.', ''],
-  ['HEY PINCH!', ''],
-  ['  hey   pinch  ', ''],
-  ['hay pinch', ''],
-  ['Hay, Pinch', ''],
-  ['heypinch', ''],
-  ['HeyPinch', ''],
-  ['Héy Pinch', ''],
-  ['hey pinch next step', 'next step'],
-  ['Hey Pinch, next.', 'next'],
-  ['Hey Pinch, how much garlic?', 'how much garlic'],
-  ['hey pinch stop listening', 'stop listening'],
-  ['hey pinch start the ten minute timer', 'start the ten minute timer'],
-  ['okay hey pinch next', 'next'],
-  ['um hey pinch back', 'back'],
-  ['so um hey pinch', ''],
-  ['ok, hey pinch, repeat that', 'repeat that'],
-  ['hey pinch pinch', 'pinch'],
+  ['Hey chef', ''],
+  ['hey chef', ''],
+  ['Hey, Chef.', ''],
+  ['HEY CHEF!', ''],
+  ['  hey   chef  ', ''],
+  ['hay chef', ''],
+  ['Hay, Chef', ''],
+  ['heychef', ''],
+  ['HeyChef', ''],
+  ['Héy Chef', ''],
+  ['hey shef', ''],
+  ['hey chief', ''],
+  ['hey chef next step', 'next step'],
+  ['Hey Chef, next.', 'next'],
+  ['Hey Chef, how much garlic?', 'how much garlic'],
+  ['hey chef stop listening', 'stop listening'],
+  ['hey chef start the ten minute timer', 'start the ten minute timer'],
+  ['okay hey chef next', 'next'],
+  ['um hey chef back', 'back'],
+  ['so um hey chef', ''],
+  ['ok, hey chef, repeat that', 'repeat that'],
+  ['hey chef chef', 'chef'],
+  ['hey chef pinch of salt?', 'pinch of salt'],
 ];
 wakes.forEach(([heard, expected]) =>
   assert.equal(
@@ -91,37 +95,36 @@ wakes.forEach(([heard, expected]) =>
 );
 
 const notWakes = [
-  'pinch',
-  'a pinch',
-  'Pinch.',
-  'a pinch of salt',
-  'add a pinch of salt',
-  'Add a pinch of salt and a pinch of pepper',
-  'pinch of salt',
-  'pinch the edges together',
-  'Pinch off a small piece of dough',
-  'okay pinch',
-  'ok, pinch the dough',
-  'okay pinch next',
+  'chef',
+  'the chef',
+  'chef next',
+  'Chef.',
+  "chef's knife",
+  "Use a chef's knife to slice the onion",
+  'chefs',
+  'hey chefs',
+  'hey chefs knife',
+  'okay chef',
+  'ok, chef, next',
+  'yes chef',
   'hey',
   'hey there',
-  'hey pinch of salt',
-  'Hey, pinch of salt please',
-  'hey pinch of',
-  'hi pinch',
-  'hey punch',
-  'hey pitch',
-  'hey pinchy',
-  'hey pinched it',
-  'hey pinches',
-  'they pinch',
+  'hey jeff',
+  'hey chap',
+  'hey cheese',
+  'hey chefy',
+  'hey cheffed it',
+  'hi chef',
+  'they chef',
   'hay fever',
-  'say hey pinch',
-  'I said hey pinch next',
-  'next hey pinch',
-  'the kids said hey pinch',
-  'three um hey pinch',
-  'um uh well hey pinch',
+  'say hey chef',
+  'I said hey chef next',
+  'next hey chef',
+  'the kids said hey chef',
+  'three um hey chef',
+  'um uh well hey chef',
+  'add a pinch of salt',
+  'pinch the edges together',
   'next',
   'next step',
   'stop listening',
@@ -145,6 +148,10 @@ const steps = [
   'Finish with a pinch of flaky salt, then serve.',
   'Stir for 2 minutes; pinch of sugar',
   'Heat the oil. Hay is not an ingredient. Add the onion.',
+  "Slice the onion thinly with a chef's knife.",
+  'Hey, chefs know this: salt the water well.',
+  'Chef Marco finishes it with a squeeze of lemon.',
+  'Ask the chef at the counter for a sharper knife, then hey presto.',
 ];
 steps.forEach((step) => {
   assert.equal(rest(step), null, `step text never wakes it: "${step}"`);
@@ -159,26 +166,47 @@ steps.forEach((step) => {
     );
 });
 
+const seedText = readFileSync(
+  new URL('../seeds/pinch.ts', import.meta.url),
+  'utf8',
+);
+const seedStrings = Array.from(
+  seedText.matchAll(/'((?:[^'\\\n]|\\.)+)'|"((?:[^"\\\n]|\\.)+)"/g),
+  (match) => match[1] ?? match[2],
+).filter((text) => text.length > 6);
+assert.ok(
+  seedStrings.length > 100,
+  `the seed's own text is read (${seedStrings.length} strings)`,
+);
+seedStrings.forEach((text) =>
+  text
+    .split(/(?<=[.;,!?])\s+/)
+    .concat(text)
+    .forEach((piece) =>
+      assert.equal(
+        rest(piece),
+        null,
+        `the app's own seeded text never wakes it: "${piece}"`,
+      ),
+    ),
+);
+
 assert.deepEqual(
-  rest(['hey punch next', 'hey pinch next', 'a pinch next']),
+  rest(['hey jeff next', 'hey chef next', 'a chef next']),
   [null, 'next', null],
   'a lower guess can wake it and keeps its rank',
 );
 assert.deepEqual(
-  rest(['hey pinch', 'a pinch']),
+  rest(['hey chef', 'a chef']),
   ['', null],
   'a wake in the top guess with a plain one below',
 );
 assert.equal(
-  rest(['pinch', 'a pinch', 'hey inch']),
+  rest(['chef', 'a chef', 'hey chap']),
   null,
   'no guess with the phrase wakes nothing',
 );
-assert.deepEqual(
-  rest('hey pinch next'),
-  ['next'],
-  'a lone string is one guess',
-);
+assert.deepEqual(rest('hey chef next'), ['next'], 'a lone string is one guess');
 
 const afterWake = (heard: string[]) => {
   const woke = readWakeWord(heard);
@@ -190,47 +218,47 @@ const afterWake = (heard: string[]) => {
       )?.command ?? null);
 };
 assert.deepEqual(
-  afterWake(['hey pinch next step']),
+  afterWake(['hey chef next step']),
   { kind: 'NEXT' },
   'the command after the wake phrase in the same breath runs',
 );
 assert.deepEqual(
-  afterWake(['Hey Pinch, how much garlic?']),
+  afterWake(['Hey Chef, how much garlic?']),
   { kind: 'AMOUNT', query: 'garlic', lineIds: ['garlic'] },
   'a command with a question in it runs too',
 );
 assert.deepEqual(
-  afterWake(['hey pinch stop listening']),
+  afterWake(['hey chef stop listening']),
   { kind: 'STOP_LISTENING' },
   'stop listening after the wake phrase turns voice off',
 );
 assert.equal(
-  afterWake(['hey pinch']),
+  afterWake(['hey chef']),
   null,
   'the phrase alone opens the window and runs nothing',
 );
 assert.equal(
-  afterWake(['hey pinch the weather today']),
+  afterWake(['hey chef the weather today']),
   null,
   'words that are not a command run nothing',
 );
 assert.equal(
-  afterWake(['hey punch back', 'hey pinch back']),
+  afterWake(['hey jeff back', 'hey chef back']),
   null,
   'a move said in a lower-ranked guess is never run, though the phrase woke it',
 );
 assert.deepEqual(
-  afterWake(['hey pinch the next batch']),
+  afterWake(['hey chef the next batch']),
   null,
   'kitchen talk after the phrase is not a command',
 );
 assert.deepEqual(
-  parseCookCommand('hey pinch next', context),
+  parseCookCommand('hey chef next', context),
   { kind: 'NEXT' },
   'in an open window the phrase before a command is tolerated by the grammar',
 );
 assert.equal(
-  parseCookCommand('hey pinch', context),
+  parseCookCommand('hey chef', context),
   null,
   'and the phrase alone is not a command',
 );
@@ -242,7 +270,7 @@ type PlanCase = [
   command: string | null,
 ];
 const planCases: PlanCase[] = [
-  ['OFF', ['hey pinch next'], 'IGNORE', null],
+  ['OFF', ['hey chef next'], 'IGNORE', null],
   ['OFF', ['next'], 'IGNORE', null],
   ['WAITING', ['next'], 'IGNORE', null],
   ['WAITING', ['stop listening'], 'IGNORE', null],
@@ -250,22 +278,22 @@ const planCases: PlanCase[] = [
   ['WAITING', ['a pinch'], 'IGNORE', null],
   ['WAITING', ['okay pinch the edges'], 'IGNORE', null],
   ['WAITING', ['how much garlic'], 'IGNORE', null],
-  ['WAITING', ['hey pinch'], 'WAKE', null],
-  ['WAITING', ['Hey, Pinch.'], 'WAKE', null],
-  ['WAITING', ['hey pinch next step'], 'WAKE', 'NEXT'],
-  ['WAITING', ['hey pinch stop listening'], 'WAKE', 'STOP_LISTENING'],
-  ['WAITING', ['hey pinch how much garlic'], 'WAKE', 'AMOUNT'],
-  ['WAITING', ['hey pinch the weather today'], 'WAKE', null],
-  ['WAITING', ['hey punch back', 'hey pinch back'], 'WAKE', null],
+  ['WAITING', ['hey chef'], 'WAKE', null],
+  ['WAITING', ['Hey, Chef.'], 'WAKE', null],
+  ['WAITING', ['hey chef next step'], 'WAKE', 'NEXT'],
+  ['WAITING', ['hey chef stop listening'], 'WAKE', 'STOP_LISTENING'],
+  ['WAITING', ['hey chef how much garlic'], 'WAKE', 'AMOUNT'],
+  ['WAITING', ['hey chef the weather today'], 'WAKE', null],
+  ['WAITING', ['hey jeff back', 'hey chef back'], 'WAKE', null],
   ['WINDOW', ['next'], 'COMMAND', 'NEXT'],
-  ['WINDOW', ['hey pinch next'], 'COMMAND', 'NEXT'],
+  ['WINDOW', ['hey chef next'], 'COMMAND', 'NEXT'],
   ['WINDOW', ['stop listening'], 'COMMAND', 'STOP_LISTENING'],
-  ['WINDOW', ['hey pinch'], 'WAKE', null],
+  ['WINDOW', ['hey chef'], 'WAKE', null],
   ['WINDOW', ['can you pass the salt'], 'MISSED', null],
   ['WINDOW', ['a pinch of salt'], 'MISSED', null],
   ['LOCKED', ['next'], 'COMMAND', 'NEXT'],
-  ['LOCKED', ['hey pinch next'], 'COMMAND', 'NEXT'],
-  ['LOCKED', ['hey pinch'], 'CLEAR', null],
+  ['LOCKED', ['hey chef next'], 'COMMAND', 'NEXT'],
+  ['LOCKED', ['hey chef'], 'CLEAR', null],
   ['LOCKED', ['the kids are loud'], 'CLEAR', null],
   ['LOCKED', ['a pinch of salt'], 'CLEAR', null],
 ];

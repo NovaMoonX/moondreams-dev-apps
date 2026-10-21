@@ -839,12 +839,18 @@ export const REMINDER_KINDS: {
 /** A timer's push goes out this long after its end, so a page that is awake can cancel it first and ring on its own. */
 export const TIMER_PUSH_GRACE_MS = 3000;
 
-/** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it, in plain text: a bare "pinch" or "a pinch" is never one, since it is an ingredient word. */
-export const COOK_WAKE_PHRASE = 'Hey Pinch';
-export const COOK_WAKE_SPELLINGS = ['hey pinch', 'hay pinch', 'heypinch'];
+/** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it, in plain text and in one place. Matching is only at the start of what was heard, so "chef's knife" or a step mentioning a chef never wakes it. */
+export const COOK_WAKE_PHRASE = 'Hey chef';
+export const COOK_WAKE_SPELLINGS = [
+  'hey chef',
+  'hay chef',
+  'heychef',
+  'hey shef',
+  'hey chief',
+];
 /** How long a command window stays open after the last thing it understood. */
 export const COOK_WINDOW_MS = 10_000;
-/** "Hey Pinch" listening turns itself off after this long without the phrase, not counting the time a timer runs or the grace after one rings. */
+/** Waiting turns itself off after this long without the phrase, not counting the time a timer runs or the grace after one rings. */
 export const COOK_WAKE_IDLE_MS = 10 * 60_000;
 /** The wait stays paused this long after a timer rings, so the person tending it is not cut off. */
 export const COOK_WAKE_TIMER_GRACE_MS = 2 * 60_000;

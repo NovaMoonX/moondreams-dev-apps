@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
-import { primeSpeech, speakText } from '@/utils/speechUtils';
+import { unlockAudio, unlockAudioOnNextTap } from '@/lib/speech/audioContext';
+import {
+  CUE_DEAF_EXTRA_MS,
+  playListeningSound,
+  type ListeningCue,
+} from '@/lib/speech/listeningSound';
+import { readAloud } from '@/lib/speech/readAloud';
+import { primeSpeech } from '@/utils/speechUtils';
 
 interface SpeechRecognitionLike {
   lang: string;
@@ -50,6 +57,8 @@ interface ListenerOptions {
   idleStopMs?: number;
   /** Runs when listening stops by itself (never for a `stop` the caller asked for), with why. */
   onHalt?: (error: SpeechCommandsError) => void;
+  /** Read with the natural voice (see `useNaturalVoice`) whenever it is ready; the browser's voice otherwise. */
+  isNaturalVoice?: boolean;
 }
 
 const getRecognitionConstructor = (): RecognitionConstructor | null => {
@@ -85,6 +94,7 @@ export const createSpeechListener = (
     canSpeak: true,
     speechToken: 0,
     stopReading: null as (() => void) | null,
+    deafUntil: 0,
   };
 
   const clearRestart = () => {
@@ -134,6 +144,7 @@ export const createSpeechListener = (
     const session = state.session;
     if (session === null || state.isSpeaking || !state.isWanted) return;
     session.hadResult = true;
+    if (Date.now() < state.deafUntil) return;
     Array.from({ length: event.results.length }, (_, index) => index)
       .filter(
         (index) =>
@@ -259,6 +270,10 @@ export const createSpeechListener = (
     }
   }
 
+  const mute = (ms: number) => {
+    state.deafUntil = Math.max(state.deafUntil, Date.now() + ms);
+  };
+
   return {
     setOptions: (options: ListenerOptions) => {
       state.options = options;
@@ -269,6 +284,7 @@ export const createSpeechListener = (
       state.isWanted = true;
       state.failures = 0;
       state.isHidden = document.visibilityState === 'hidden';
+      unlockAudio();
       if (state.canSpeak) primeSpeech();
       setStatus('starting');
       armIdle();
@@ -287,8 +303,9 @@ export const createSpeechListener = (
       const token = state.speechToken;
       state.isSpeaking = true;
       abortSession();
-      state.stopReading = speakText(text, {
+      state.stopReading = readAloud(text, {
         lang: state.options?.speechLang ?? '',
+        isNatural: state.options?.isNaturalVoice === true,
         startTimeoutMs: SPEECH_START_TIMEOUT_MS,
         onNoStart: () => {
           state.canSpeak = false;
@@ -307,6 +324,11 @@ export const createSpeechListener = (
           beginSession();
         },
       });
+    },
+    mute,
+    cue: (kind: ListeningCue) => {
+      const lasts = playListeningSound(kind);
+      if (lasts > 0) mute(lasts + CUE_DEAF_EXTRA_MS);
     },
     quiet: () => {
       if (state.stopReading === null && !state.isSpeaking) return;
@@ -351,12 +373,18 @@ export function canUseSpeechCommands() {
 }
 
 /**
- * Listens for spoken phrases with the browser's speech recognition while the person has it on, never on its own: `start`
- * from a tap, which also readies the browser's voice. It restarts after the browser ends a session, backing off and
- * giving up after repeated failures, pauses while `say` reads something aloud (so it never hears itself; `quiet` cuts a
- * reading short; a voice that never starts is given up for the session) and while the page is hidden, and stops for
- * good on a refused or missing microphone or after `idleStopMs` with nothing used (`onHalt` says so). Phrase matching is the caller's.
- * Secure pages only.
+ * Voice for any mini-app: listens for spoken phrases with the browser's speech recognition while the person has it on,
+ * and only after `start`, which comes from a tap and readies the browser's voice and sound (an app may call it without
+ * one only when the person's earlier choice and a granted microphone permission say so). It restarts after the browser
+ * ends a session, backing off and giving up after repeated failures, pauses while `say` reads something aloud (so it
+ * never hears itself; `quiet` cuts a reading short; a voice that never starts is given up for the session) and while the
+ * page is hidden, and stops for good on a refused or missing microphone or after `idleStopMs` with nothing used (`onHalt`
+ * says so). Phrase matching is the caller's. Secure pages only.
+ *
+ * The shared pieces around it live in `@/lib/speech`: `listeningMode` (the closed / waiting for a phrase / command
+ * window / kept open machine and its clocks), `speechText` (`readWakePhrase`: a wake phrase at the start of what was
+ * heard), `cue` here (a rising chime when listening starts, a lower one when it ends, ignored by the recognizer) and
+ * `isNaturalVoice` with `@/hooks/useNaturalVoice` (an opt-in neural voice on the device, read through `readAloud`).
  */
 export function useSpeechCommands({
   lang,
@@ -364,6 +392,7 @@ export function useSpeechCommands({
   onFinalTranscript,
   idleStopMs,
   onHalt,
+  isNaturalVoice,
 }: ListenerOptions) {
   const [isSupported] = useState(canUseSpeechCommands);
   const [status, setStatus] = useState<SpeechCommandsStatus>('off');
@@ -377,8 +406,13 @@ export function useSpeechCommands({
       onFinalTranscript,
       idleStopMs,
       onHalt,
+      isNaturalVoice,
     });
   });
+
+  useEffect(() => {
+    if (isSupported) unlockAudioOnNextTap();
+  }, [isSupported]);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -402,6 +436,7 @@ export function useSpeechCommands({
     stop: listener.stop,
     say: listener.say,
     quiet: listener.quiet,
+    cue: listener.cue,
   };
 }
 

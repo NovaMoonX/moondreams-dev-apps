@@ -451,4 +451,34 @@ const entries = (name: string) =>
   );
 }
 
+{
+  const { listener, seen } = setUp();
+  listener.start();
+  advance(30);
+  listener.mute(500);
+  hear('next');
+  assert.deepEqual(
+    seen.heard,
+    [],
+    'what the recognizer returns while a cue sounds is dropped',
+  );
+  advance(500);
+  hear('next');
+  assert.deepEqual(
+    seen.heard,
+    [['next']],
+    'and it is heard again once the cue and its tail are over',
+  );
+  listener.mute(1000);
+  listener.mute(200);
+  advance(300);
+  hear('back');
+  assert.equal(
+    seen.heard.length,
+    1,
+    'a shorter mute never cuts a longer one short',
+  );
+  listener.teardown();
+}
+
 console.log('speechListener: all checks passed');

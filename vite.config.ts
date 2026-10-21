@@ -69,6 +69,8 @@ export default defineConfig({
         // Firebase Hosting serves its auth handler under /__/; the SPA fallback would swallow the sign-in popup.
         navigateFallbackDenylist: [/^\/__\//],
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Fetched only when someone turns the natural voice on.
+        globIgnores: ['**/piperWorker-*.js'],
         importScripts: [
           'firebase-messaging-sw-config.js',
           'firebase-messaging-sw-additions.js',
