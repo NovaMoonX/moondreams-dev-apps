@@ -13,9 +13,8 @@ import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PhotoPicker from '@/components/forms/PhotoPicker';
 import IntroCard from '@/components/IntroCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
-import { useLinkLookup } from '@/hooks/useLinkPreview';
 import { useImageUpload } from '@/hooks/useImageUpload';
+import { useLinkLookup } from '@/hooks/useLinkPreview';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -217,11 +216,13 @@ export function IdeaLinkWay({
 
   const link = toIdeaUrl(data.url);
   const duplicate = link === null ? null : findIdeaByUrl(ideas, link);
-  const settledText = useDebouncedValue(data.url, DEBOUNCE_MS.linkDetection);
-  const { preview, isLooking, hasFailed } = useLinkLookup(data.url, {
-    getQueryOptions: ideaPageQueryOptions,
-    isEnabled: link !== null && duplicate === null,
-  });
+  const { preview, isLooking, hasFailed, settledText } = useLinkLookup(
+    data.url,
+    {
+      getQueryOptions: ideaPageQueryOptions,
+      isEnabled: link !== null && duplicate === null,
+    },
+  );
   const host = link === null ? null : getWebLinkHost(link);
   const pageTitle = preview?.title ?? '';
   const siteName = preview?.siteName ?? host;

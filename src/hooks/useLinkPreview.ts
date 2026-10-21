@@ -20,7 +20,7 @@ export interface PageLinkPreview {
   imageUrl: string | null;
 }
 
-interface UseLinkPreviewOptions {
+interface LinkLookupOptions {
   /** The page request to read; pass the one a reading of the same link will make, so the preview and that reading share one fetch and one cache entry. */
   getQueryOptions: (url: string) => ReturnType<typeof pageContentQueryOptions>;
   /** False holds the lookup back (a link the person did not just paste). */
@@ -52,12 +52,14 @@ export interface LinkLookup {
   isLooking: boolean;
   /** The read finished without a page. */
   hasFailed: boolean;
+  /** The text once typing has paused, for a message that waits for the pause too. */
+  settledText: string;
 }
 
 /** For a form whose Save waits on the read or asks for a title when it fails; anything that only draws the page uses `useLinkPreview`. */
 export function useLinkLookup(
   text: string,
-  { getQueryOptions, isEnabled = true }: UseLinkPreviewOptions,
+  { getQueryOptions, isEnabled = true }: LinkLookupOptions,
 ): LinkLookup {
   const settledText = useDebouncedValue(text, DEBOUNCE_MS.linkDetection);
   const typedLink = toWebLink(text);
@@ -75,6 +77,7 @@ export function useLinkLookup(
     preview: url !== null && lookup.data ? toPreview(url, lookup.data) : null,
     isLooking: isActive && (url === null || lookup.isFetching),
     hasFailed: isActive && url !== null && !lookup.isFetching && lookup.isError,
+    settledText,
   };
   return result;
 }
@@ -85,7 +88,7 @@ export function useLinkLookup(
  */
 export function useLinkPreview(
   text: string,
-  options: UseLinkPreviewOptions,
+  options: LinkLookupOptions,
 ): PageLinkPreview | null {
   const { preview } = useLinkLookup(text, options);
   return preview;
