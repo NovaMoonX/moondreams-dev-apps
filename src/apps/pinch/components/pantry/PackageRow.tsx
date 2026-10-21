@@ -19,10 +19,8 @@ import { formatSize } from '@apps/pinch/utils/productFormat';
 
 interface PackageRowProps {
   pkg: Package;
-  /** The ingredient's name, for a package that stands alone in a list; a package under its ingredient's own heading leaves it out. */
+  /** The ingredient's name, for a package that stands alone in a list, where the row has no chip; a package under its ingredient's own heading leaves it out and leads with its place's emoji. */
   title?: string;
-  /** What leads the row when the package stands for its ingredient; the place's own emoji otherwise. */
-  emoji?: string;
   /** The person's window for "due soon". */
   soonDays: number;
   onOpen?: (pkg: Package) => void;
@@ -44,7 +42,6 @@ const getOpenedText = (pkg: Package) => {
 function PackageRow({
   pkg,
   title,
-  emoji,
   soonDays,
   onOpen,
   isSelecting = false,
@@ -58,12 +55,12 @@ function PackageRow({
   const amountText = formatSize(pkg.amount, pkg.unit);
   const placeText = PACKAGE_PLACE_LABELS[pkg.place];
 
-  const chip = (
+  const chip = title === undefined && (
     <span
       className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
       aria-hidden='true'
     >
-      {emoji ?? PACKAGE_PLACE_EMOJIS[pkg.place]}
+      {PACKAGE_PLACE_EMOJIS[pkg.place]}
     </span>
   );
   const text = (
