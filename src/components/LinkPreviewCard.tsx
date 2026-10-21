@@ -28,8 +28,7 @@ function LinkPreviewCard({ host, preview }: LinkPreviewCardProps) {
   return (
     <div
       className='border-border bg-card flex items-start gap-3 rounded-2xl border p-3'
-      role='status'
-      aria-label='Link preview'
+      aria-busy={preview === null}
     >
       {preview?.imageUrl ? (
         <FallbackImage

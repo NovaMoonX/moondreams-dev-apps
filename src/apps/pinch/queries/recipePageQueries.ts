@@ -19,7 +19,9 @@ export function recipePageQueryOptions(url: string) {
     queryFn: () =>
       fetchPageContent(request(url)).catch((error: unknown) => {
         // Page data a function build can't encode for the browser shouldn't cost the whole reading: the text is enough.
-        if (!/cannot be decoded/i.test(String(error))) throw error;
+        if (!/cannot be decoded/i.test(String(error))) {
+          throw error;
+        }
         console.warn('Reading the page without its published data', error);
         return fetchPageContent({ url, include: ['text', 'meta'] });
       }),

@@ -35,6 +35,11 @@ import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
 import { selectIdeaGroups } from '@apps/pinch/store/selectors';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
 import {
+  clipIdeaTitle,
+  clipSiteName,
+  toIdeaImageUrl,
+} from '@apps/pinch/utils/ideas';
+import {
   canPasteTextInstead,
   classifyReadFailure,
   getReadFailureLine,
@@ -180,26 +185,29 @@ function RecipeReader({
     canFoldIdeas && !isIdeasOpen ? IDEAS_SHOWN : IDEAS_SHOWN_MOST,
   );
 
+  const settledText = useDebouncedValue(link, DEBOUNCE_MS.linkDetection);
   const typedLink = method === 'link' ? asWebLink(link) : null;
-  const settledLink = asWebLink(useDebouncedValue(link, DEBOUNCE_MS.linkDetection));
-  const previewUrl = typedLink !== null && typedLink === settledLink ? typedLink : null;
+  const previewUrl =
+    typedLink !== null &&
+    typedLink === asWebLink(settledText) &&
+    /\.[a-z]{2,}$/i.test(new URL(typedLink).hostname)
+      ? typedLink
+      : null;
   const lookup = useQuery({
     ...ideaPageQueryOptions(previewUrl ?? ''),
     enabled: previewUrl !== null,
   });
-  const lookedUp = lookup.data?.meta;
   const getPreview = () => {
-    if (previewUrl === null || lookup.isError || isReading) {
+    if (!lookup.data) {
       return null;
     }
-    return lookup.data
-      ? {
-          title: lookup.data.title,
-          siteName: lookedUp?.siteName ?? null,
-          description: lookedUp?.description ?? null,
-          imageUrl: lookedUp?.image ?? null,
-        }
-      : null;
+    const { title, meta } = lookup.data;
+    return {
+      title: clipIdeaTitle(title ?? '') || null,
+      siteName: clipSiteName(meta?.siteName),
+      description: meta?.description?.trim().slice(0, 300) || null,
+      imageUrl: toIdeaImageUrl(meta?.image),
+    };
   };
 
   useEffect(() => {
