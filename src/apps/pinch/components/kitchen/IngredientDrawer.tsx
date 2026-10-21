@@ -5,11 +5,13 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus, Star } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
+import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { CATALOG_INGREDIENTS_BY_ID } from '@apps/pinch/catalog';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import IngredientStock from '@apps/pinch/components/pantry/IngredientStock';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
@@ -27,6 +29,7 @@ import {
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
+import { getIngredientAdjustments } from '@apps/pinch/utils/ingredientAdjustments';
 import {
   getServingGrams,
   scaleNutrition,
@@ -72,13 +75,10 @@ function IngredientDrawer({
   const { options, update } = useListViewOptions(uid, 'ingredients');
 
   const ingredient = useAppSelector(selectIngredientsById).get(ingredientId);
-  const family = useAppSelector(selectIngredientFamiliesById).get(
-    ingredient?.familyId ?? '',
-  );
-  const hasOwnServing = useAppSelector(
-    (state) =>
-      selectIngredientRecordsById(state).get(ingredientId)?.servingAmount !=
-      null,
+  const familiesById = useAppSelector(selectIngredientFamiliesById);
+  const family = familiesById.get(ingredient?.familyId ?? '');
+  const record = useAppSelector((state) =>
+    selectIngredientRecordsById(state).get(ingredientId),
   );
   const recipes = useAppSelector(selectRecipes);
   const meals = useAppSelector(selectMeals);
@@ -109,6 +109,15 @@ function IngredientDrawer({
     return null;
   }
 
+  const catalogIngredient = CATALOG_INGREDIENTS_BY_ID.get(ingredient.id);
+  const adjustments =
+    ingredient.isAdjusted && catalogIngredient && record
+      ? getIngredientAdjustments(
+          catalogIngredient,
+          record,
+          (familyId) => familiesById.get(familyId)?.name ?? null,
+        )
+      : [];
   const servingText = `${Math.round(ingredient.serving.amount * 100) / 100} ${UNIT_LABELS[ingredient.serving.unit]}`;
   const servingGrams = getServingGrams(ingredient.serving, ingredient);
   const hasServingChoice =
@@ -146,28 +155,59 @@ function IngredientDrawer({
       }
     >
       <div className='space-y-5'>
-        <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
+        <ul className='flex flex-wrap items-center gap-x-4 gap-y-1 text-sm'>
           {[
-            family && { key: 'family', text: family.name, emoji: null },
+            family && {
+              key: 'family',
+              content: <span className='font-medium'>{family.name}</span>,
+            },
             ingredient.isCustom && {
               key: 'custom',
-              text: 'One you added',
-              emoji: '✏️',
+              content: (
+                <>
+                  <span aria-hidden='true'>✏️ </span>One you added
+                </>
+              ),
             },
             ingredient.isAdjusted && {
               key: 'adjusted',
-              text: 'Adjusted by you',
-              emoji: '✏️',
-            },
-            (!ingredient.isCustom || hasOwnServing) && {
-              key: 'serving',
-              text: `1 serving = ${servingText}`,
-              emoji: '🍽️',
+              content: (
+                <HelpTip badgeLabel='Adjusted' title='What you adjusted'>
+                  <p>This ingredient is built in, with a few values of yours.</p>
+                  {adjustments.length === 0 ? (
+                    <p>Its values match the built-in ones now.</p>
+                  ) : (
+                    <ul className='border-border divide-border max-h-[40dvh] divide-y overflow-y-auto rounded-xl border'>
+                      {adjustments.map((adjustment) => (
+                        <li key={adjustment.key} className='px-3 py-2'>
+                          <p className='font-medium'>{adjustment.label}</p>
+                          <p className='text-muted-foreground flex flex-wrap gap-x-3 text-xs'>
+                            <span className='whitespace-nowrap'>
+                              Built in {adjustment.builtIn}
+                            </span>
+                            <span className='whitespace-nowrap'>
+                              Yours {adjustment.yours}
+                            </span>
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className='text-muted-foreground'>
+                    To go back to the built-in values, tap Adjust and then the
+                    trash button.
+                  </p>
+                </HelpTip>
+              ),
             },
             usedIn !== null && {
               key: 'used',
-              text: usedIn,
-              emoji: '🍲',
+              content: (
+                <>
+                  <span aria-hidden='true'>🍲 </span>
+                  {usedIn}
+                </>
+              ),
               canWrap: true,
             },
           ]
@@ -175,15 +215,13 @@ function IngredientDrawer({
             .map((fact) => (
               <li
                 key={fact.key}
-                className={join(
+                className={
                   'canWrap' in fact
                     ? 'min-w-0 wrap-break-word'
-                    : 'whitespace-nowrap',
-                  fact.emoji === null && 'font-medium',
-                )}
+                    : 'whitespace-nowrap'
+                }
               >
-                {fact.emoji && <span aria-hidden='true'>{fact.emoji} </span>}
-                {fact.text}
+                {fact.content}
               </li>
             ))}
         </ul>

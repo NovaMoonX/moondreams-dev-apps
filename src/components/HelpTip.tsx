@@ -13,6 +13,7 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CircleHelp, TriangleAlert } from 'lucide-react';
 
+import LabelChip from '@/components/LabelChip';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
@@ -49,6 +50,8 @@ interface HelpTipProps {
   children: ReactNode;
   /** Shows this text as an inline link that opens the explanation in a modal at every size, instead of the help icon. */
   linkLabel?: string;
+  /** Shows this text as a soft accent badge, the icon's place taken by a state the person can tap to learn more about; it opens the explanation in a modal at every size. */
+  badgeLabel?: string;
   /** Which side of the icon the tooltip prefers on a computer; it flips when that side has no room. */
   placement?: 'top' | 'bottom';
   /** A caution ("this number leaves something out") instead of a question mark; opens the same way. */
@@ -94,6 +97,7 @@ function HelpTip({
   title,
   children,
   linkLabel,
+  badgeLabel,
   placement = 'bottom',
   variant = 'help',
   dismissLabel = 'Got it',
@@ -106,7 +110,8 @@ function HelpTip({
     getCanHover,
     () => true,
   );
-  const usesModal = Boolean(linkLabel) || isPhone || !canHover;
+  const usesModal =
+    Boolean(linkLabel) || Boolean(badgeLabel) || isPhone || !canHover;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const arrowRef = useRef<HTMLSpanElement>(null);
@@ -193,6 +198,20 @@ function HelpTip({
         >
           {linkLabel}
         </Button>
+        {modal}
+      </>
+    );
+  }
+
+  if (badgeLabel) {
+    return (
+      <>
+        <LabelChip
+          ariaLabel={`${badgeLabel}: ${title}`}
+          onClick={() => setIsOpen(true)}
+        >
+          {badgeLabel}
+        </LabelChip>
         {modal}
       </>
     );

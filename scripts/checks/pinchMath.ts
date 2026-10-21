@@ -283,7 +283,9 @@ import {
   getShoppingSourceLabels as srcLabels,
   getShoppingSourcesText as srcText,
 } from '../../src/apps/pinch/utils/shopping.ts';
+import { getIngredientAdjustments as adjLines } from '../../src/apps/pinch/utils/ingredientAdjustments.ts';
 import {
+  getMealRows as stopMealRows,
   getShoppingMeals as stopMeals,
   getShoppingSourceLabels as stopLabels,
   getSourceLines as stopSourceLines,
@@ -8796,6 +8798,110 @@ assert.equal(
       ['oil::COUNT', 1],
     ],
     'a name-only salt joins the salt row with an amount, and a name-only line alone keeps its own row',
+  );
+}
+
+// The Meals sheet draws a meal being taken off from the snapshot taken at the tap, so its row never drops out and back in
+{
+  const meal = (source: string, name: string) =>
+    ({
+      source,
+      label: { kind: 'recipe', name, dayKey: null, mealType: null },
+      rowCount: 3,
+      openCount: 2,
+      isPast: false,
+    }) as unknown as Parameters<typeof stopMealRows>[0][number];
+  const adobo = meal('recipe:adobo', 'Adobo');
+  const rice = meal('recipe:rice', 'Rice');
+  const taken = { meal: adobo, status: 'taken' as const };
+  const rowsFor = (
+    live: ReturnType<typeof meal>[],
+    held: [string, { meal: ReturnType<typeof meal>; status: 'removing' | 'taken' | 'restored' }][],
+  ) => stopMealRows(live, new Map(held)).map((row) => [row.meal.source, row.held?.status ?? null]);
+  assert.deepEqual(
+    rowsFor([adobo, rice], []),
+    [['recipe:adobo', null], ['recipe:rice', null]],
+    'with nothing held every live meal is an ordinary row',
+  );
+  assert.deepEqual(
+    rowsFor([rice], [['recipe:adobo', taken]]),
+    [['recipe:adobo', 'taken'], ['recipe:rice', null]],
+    'a meal the listener already dropped stays in its place as a taken row',
+  );
+  assert.deepEqual(
+    rowsFor([adobo, rice], [['recipe:adobo', { meal: adobo, status: 'removing' }]]),
+    [['recipe:adobo', 'removing'], ['recipe:rice', null]],
+    'a meal still being taken off is one row, not a live and a held copy',
+  );
+  assert.deepEqual(
+    rowsFor([adobo, rice], [['recipe:adobo', { meal: adobo, status: 'restored' }]]),
+    [['recipe:adobo', null], ['recipe:rice', null]],
+    'a restored meal is an ordinary row again once the listener has it',
+  );
+  assert.deepEqual(
+    rowsFor([rice], [['recipe:adobo', { meal: adobo, status: 'restored' }]]),
+    [['recipe:adobo', null], ['recipe:rice', null]],
+    'a restored meal the listener has not caught up with stays on screen',
+  );
+}
+
+// The Adjusted badge explains what differs from the built-in values, and only what really differs
+{
+  const chicken = SHOP_CATALOG_BY_ID.get('cat-chicken-thigh') as NonNullable<
+    ReturnType<typeof SHOP_CATALOG_BY_ID.get>
+  >;
+  const record = (patch: Record<string, unknown>) =>
+    ({
+      id: chicken.id,
+      catalogId: chicken.id,
+      name: null,
+      familyId: null,
+      nutritionPer100g: null,
+      servingAmount: null,
+      servingUnit: null,
+      gramsPerMl: null,
+      gramsEach: null,
+      ...patch,
+    }) as unknown as Parameters<typeof adjLines>[1];
+  const lines = (patch: Record<string, unknown>) =>
+    adjLines(
+      chicken,
+      record(patch),
+      (id) => ({ 'cat-fam-chicken': 'Chicken', 'cat-fam-pork': 'Pork' })[id] ?? null,
+    ).map(
+      (line) => `${line.label}: ${line.builtIn} -> ${line.yours}`,
+    );
+  assert.deepEqual(lines({}), [], 'a record that only points at a product changes nothing');
+  assert.deepEqual(
+    lines({
+      name: 'Chicken thigh',
+      familyId: 'cat-fam-chicken',
+      nutritionPer100g: { calories: 209, protein: 26, carbs: null, fat: null },
+      servingAmount: 4,
+      servingUnit: 'OZ',
+      gramsEach: 116,
+    }),
+    [],
+    'values equal to the built-in ones are not listed',
+  );
+  assert.deepEqual(
+    lines({
+      name: 'Boneless thigh',
+      familyId: 'cat-fam-pork',
+      nutritionPer100g: { calories: 230.4, protein: null, carbs: null, fat: 11 },
+      servingAmount: 0.5,
+      servingUnit: 'LB',
+      gramsPerMl: 0.9,
+    }),
+    [
+      'Name: Chicken thigh -> Boneless thigh',
+      'Family: Chicken -> Pork',
+      'Calories per 100 g: 209 -> 230',
+      'Fat per 100 g: 10.9 g -> 11 g',
+      'Serving size: 4 oz -> 0.5 lb',
+      'Weight of 1 ml: Not set -> 0.9 g',
+    ],
+    'each changed value is one line with the built-in value beside the person’s',
   );
 }
 
