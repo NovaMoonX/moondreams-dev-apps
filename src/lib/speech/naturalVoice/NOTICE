@@ -1,0 +1,21 @@
+Natural voice: what it is made of, and what could and could not be checked.
+
+The code here is the repo's own. It loads the packages and the voice below only when a person turns the natural voice
+on, and none of them is part of the main bundle.
+
+Packages (npm, exact versions in package.json)
+- onnxruntime-web 1.18.0: MIT, Microsoft. Licence field read from the package. Its wasm file is served from this site.
+- @diffusionstudio/piper-wasm 1.0.0: MIT, as the package declares. A WebAssembly build of Rhasspy Piper's phonemizer
+  (piper_phonemize.js, .wasm, .data, served from this site). The build contains eSpeak NG (the strings "eSpeak-ng" and
+  the espeak-ng-data directory are in the files). Upstream publishes eSpeak NG under GPL-3.0-or-later; that was NOT
+  confirmed from the sandbox (no access to its repository). Decide whether serving it to browsers is acceptable for
+  this site's own licence before the natural voice is released.
+
+Voice (not in the repo; downloaded to the person's browser on opt-in)
+- en_US-ljspeech-medium, Rhasspy Piper, from https://huggingface.co/rhasspy/piper-voices (about 63 MB, with its
+  settings file). Piper is MIT. The voice is trained on the LJ Speech dataset, which its authors place in the public
+  domain; the voice's own model card was NOT readable from the sandbox, so confirm it at
+  https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/ljspeech/medium before release.
+- Set VITE_NATURAL_VOICE_BASE_URL to serve the two files from our own host instead; the opt-in row then names that host.
+
+Nothing the person says or reads is sent anywhere. The only request is the one-time download of the two voice files.
