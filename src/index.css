@@ -66,6 +66,34 @@ html[data-site-banner='true'] [data-subview-overlay] {
   top: 2.25rem;
 }
 
+/* The frame around every subview (`SubviewSurround`): a window with rounded corners cut out of an edge in the app's tint. It is drawn
+ * on top of the page, the site header and sticky bars (z-35) and under the overlay layer, so the edge costs no layout and never
+ * takes a tap. A mini-app restyles it from its theme class with these tokens; the defaults mix its primary into the background.
+ *   --subview-frame-color   the edge's colour (keep it opaque)
+ *   --subview-frame-width   the edge on a phone, --subview-frame-width-wide from md up
+ *   --subview-frame-radius  the window's corner radius, --subview-frame-radius-wide from md up */
+.subview-frame {
+  --subview-inset: var(--subview-frame-width, 3px);
+  position: fixed;
+  inset: var(--subview-inset);
+  z-index: 35;
+  pointer-events: none;
+  border-radius: var(--subview-frame-radius, 0.75rem);
+  box-shadow: 0 0 0 100vmax
+    var(
+      --subview-frame-color,
+      color-mix(in oklab, var(--color-primary) 24%, var(--color-background))
+    );
+}
+
+/* Not on a landscape phone, where the wide margin would take 32px of its 390. */
+@media (min-width: 768px) and (min-height: 500px) {
+  .subview-frame {
+    --subview-inset: var(--subview-frame-width-wide, 0.75rem);
+    border-radius: var(--subview-frame-radius-wide, 1.5rem);
+  }
+}
+
 /* Drawers and modals are `z-[100]`, so a toast with an action (Undo) raised from one would sit under its overlay and could not be tapped. */
 [role='region'][aria-label='Notifications'] {
   z-index: 110;

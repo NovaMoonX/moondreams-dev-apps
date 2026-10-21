@@ -5,6 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronLeft } from 'lucide-react';
 
+import { SubviewEyebrow, SubviewSurround } from '@/components/SubviewFrame';
 import { SubviewTitleContext } from '@/contexts/SubviewTitleContext';
 import { useSubviewHistory } from '@/hooks/useSubviewHistory';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
@@ -80,7 +81,8 @@ interface SubviewProps {
 
 /**
  * A nested page that takes over a mini-app: it opens at the top, brings its own way back, and
- * closes on the browser's back gesture rather than leaving the page beneath it.
+ * closes on the browser's back gesture rather than leaving the page beneath it. A tinted edge around
+ * the screen and the app's name above the header keep it reading as part of that app; see `SubviewFrame`.
  */
 function Subview({
   children,
@@ -141,21 +143,27 @@ function Subview({
         aria-label={title}
         className='bg-background fixed inset-0 z-40 overflow-y-auto overscroll-contain'
       >
+        <SubviewSurround />
         <div
           className={join(
-            'mx-auto flex min-h-full max-w-2xl flex-col px-4 pt-6 pb-4 *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0',
+            'mx-auto flex min-h-full max-w-2xl flex-col px-4 pb-4 *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0',
             '[&_.form-footer]:bg-background/95 [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-4 [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-4 [&_.form-footer]:py-3 [&_.form-footer]:backdrop-blur',
             className,
           )}
         >
-          {title !== undefined && (
-            <SubviewHeader
-              title={title}
-              onBack={goBack}
-              action={headerAction}
-              isTitleWrapped={isTitleWrapped}
-              className='bg-background sticky top-0 z-20 -mx-4 -mt-6 px-4 pt-6 pb-3'
-            />
+          {title === undefined ? (
+            <SubviewEyebrow />
+          ) : (
+            <div className='bg-background sticky top-0 z-20 -mx-4 px-4 pb-3'>
+              <SubviewEyebrow />
+              <SubviewHeader
+                title={title}
+                onBack={goBack}
+                action={headerAction}
+                isTitleWrapped={isTitleWrapped}
+                className=''
+              />
+            </div>
           )}
           <SubviewTitleContext.Provider value={title ?? null}>
             {children}
@@ -168,12 +176,14 @@ function Subview({
 
   return (
     <div className='page max-sm:pb-4'>
+      <SubviewSurround />
       <div
         className={join(
-          'mx-auto max-w-2xl py-6 max-sm:pb-0 [@media(max-height:499px)]:py-3',
+          'mx-auto max-w-2xl pb-6 max-sm:pb-0 [@media(max-height:499px)]:pb-3',
           className,
         )}
       >
+        <SubviewEyebrow />
         {title !== undefined && (
           <SubviewHeader
             title={title}
