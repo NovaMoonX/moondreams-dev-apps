@@ -31,6 +31,32 @@ const problems = APP_REGISTRY.flatMap((app) => {
   ].filter((problem): problem is string => problem !== null);
 });
 
+// A theme sets the floating-surface tokens in its light and dark blocks, or its popovers, dropdowns and tooltips keep the
+// site's white/zinc defaults; `--subview-backdrop:` tints the page behind a subview's card (its dark value has a default).
+const THEME_TOKENS = [
+  { token: '--color-popover:', inEachBlock: true },
+  { token: '--color-popover-foreground:', inEachBlock: true },
+  { token: '--color-tooltip:', inEachBlock: true },
+  { token: '--color-tooltip-foreground:', inEachBlock: true },
+  { token: '--subview-backdrop:', inEachBlock: false },
+];
+
+const themeProblems = listFiles('src/apps')
+  .filter((file) => file.endsWith('.css'))
+  .flatMap((file) => {
+    const css = readFileSync(file, 'utf8');
+    const blocks = /\.dark\s*\{/.test(css) ? 2 : 1;
+    return THEME_TOKENS.filter(
+      ({ token, inEachBlock }) =>
+        css.split(token).length - 1 < (inEachBlock ? blocks : 1),
+    ).map(
+      ({ token, inEachBlock }) =>
+        `${file}: does not set ${token}${inEachBlock && blocks === 2 ? ' in both its light and dark blocks' : ''}`,
+    );
+  });
+
+problems.push(...themeProblems);
+
 if (problems.length > 0) {
   console.error(
     `App wiring is incomplete:\n${problems.map((problem) => `  - ${problem}`).join('\n')}\nSee "New mini-app checklist" in .github/copilot-instructions.md.`,
