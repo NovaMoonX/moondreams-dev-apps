@@ -620,6 +620,7 @@ function CookingSession({
         ? { key: `${recipe.id}:${index}`, spoken: spokenStep }
         : null,
     onTurnOn: timers.prepareSound,
+    isAlarmRinging: timers.timers.some((timer) => timer.status === 'done'),
     runningTimers: timers.timers.filter((timer) => timer.status === 'running')
       .length,
     lastRingAt: timers.timers.reduce<number | null>(
