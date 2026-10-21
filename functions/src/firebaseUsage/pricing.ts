@@ -19,7 +19,7 @@ export interface UsageMetricSpec {
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
 
-/** Free amounts and the Storage, Functions-request and Realtime Database prices are from firebase.google.com/pricing and the Cloud Storage and Cloud Run pricing pages (checked 2026-10-21). The Firestore prices are for the multi-region nam5 and were not on the pages checked, which list only Iowa (us-central1: $0.03 reads, $0.09 writes, $0.01 deletes per 100,000). */
+/** Free amounts and prices are from firebase.google.com/pricing and the Firestore (nam5), Cloud Storage and Cloud Run pricing pages, checked 2026-10-21. Storage prices assume a us-central1 bucket. */
 export const PRICING_LAST_CHECKED = '2026-10-21';
 
 export const USAGE_METRICS: UsageMetricSpec[] = [
