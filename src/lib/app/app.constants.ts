@@ -4,5 +4,6 @@ export const APP_DESCRIPTION =
 
 export const ADMIN_EMAIL = 'nova@moondreams.dev';
 
-// Site-wide version, shared across every mini-app. Bump manually per release.
-export const SITE_VERSION = '1.111.1';
+// Site-wide version, shared across every mini-app. The merge workflow works it out and injects it at build time; local builds read 'dev'.
+export const SITE_VERSION =
+  typeof __SITE_VERSION__ === 'string' ? __SITE_VERSION__ : 'dev';

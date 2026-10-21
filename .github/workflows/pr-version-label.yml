@@ -1,0 +1,19 @@
+name: PR version label
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
+permissions:
+  pull-requests: read
+jobs:
+  version-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exactly one of patch or minor
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+        run: |
+          picked=$(tr ' ' '\n' <<< "$LABELS" | grep -cx -e patch -e minor || true)
+          if [ "$picked" -ne 1 ]; then
+            echo "::error::Add exactly one label: 'patch' (fix or small tweak) or 'minor' (feature). The merge workflow bumps the site version from it."
+            exit 1
+          fi

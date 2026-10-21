@@ -16,6 +16,7 @@ const compareVersions = (a: string, b: string) => {
 
 const getStatus = (remote: string | null): Status => {
   if (!remote) return 'unknown';
+  if (SITE_VERSION === 'dev') return 'ahead';
   const diff = compareVersions(SITE_VERSION, remote);
   if (diff === 0) return 'latest';
   return diff < 0 ? 'outdated' : 'ahead';

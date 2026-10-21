@@ -6,6 +6,14 @@ on:
   push:
     branches:
       - main
+# One deploy at a time, so two quick merges never work out the same version.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
@@ -13,8 +21,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Work out the version
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --tags --force
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          latest=${latest#v}
+          latest=${latest:-1.111.1}
+          labels=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '.[0].labels[].name' || true)
+          IFS=. read -r major minor patch <<< "$latest"
+          if grep -qx minor <<< "$labels"; then
+            next="$major.$((minor + 1)).0"
+          else
+            next="$major.$minor.$((patch + 1))"
+          fi
+          echo "Version $latest -> $next"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
       - run: npm ci && npm run build
         env:
+          SITE_VERSION: ${{ steps.version.outputs.version }}
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN_CUSTOM: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN_CUSTOM }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
@@ -43,6 +70,11 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp-sa.json" npm run fb:version
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
+          SITE_VERSION: ${{ steps.version.outputs.version }}
+      - name: Tag the release
+        run: |
+          git tag "v${{ steps.version.outputs.version }}" "${{ github.sha }}"
+          git push origin "v${{ steps.version.outputs.version }}"
       - name: Check for Cloudflare Worker changes
         id: worker_changes
         run: |

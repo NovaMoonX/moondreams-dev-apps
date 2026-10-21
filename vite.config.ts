@@ -51,6 +51,9 @@ function isPrivateLanUrl(url: string) {
 }
 
 export default defineConfig({
+  define: {
+    __SITE_VERSION__: JSON.stringify(process.env.SITE_VERSION ?? 'dev'),
+  },
   plugins: [
     react(),
     tailwindcss(),

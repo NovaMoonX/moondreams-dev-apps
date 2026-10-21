@@ -60,7 +60,7 @@ Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: scre
 3. Commit them on the session's designated branch, push, and open the **docs PR** against `main`. This is the bottom of the stack.
 4. Write a state file to the scratchpad, `mvp-state.md`, and keep it updated after every step:
    - the issue number map;
-   - each PR's number, branch, base and SITE_VERSION;
+   - each PR's number, branch, base and version label;
    - Copilot/subagent review status;
    - open threads and pending decisions.
 
@@ -105,7 +105,7 @@ For each MVP issue, in order:
      - Use no text in the icon.
      - Give the two files distinct mask ids.
    - **Use it** as the placeholder logo in the app, and include both SVG sources inline in the polish PR's overview comment. The user builds the final logo and banner assets from them.
-4. **Bump `SITE_VERSION`:** minor, once per PR, continuing from the previous PR's number. Check `origin/main` first. Tick this PR's line in the app README's Build Plan.
+4. **Label the PR `minor`** (never edit `SITE_VERSION`; the merge workflow numbers it). Tick this PR's line in the app README's Build Plan.
 5. **Validate** (see "Validation" below) before pushing.
 6. **Commit, push, and open the PR, non-draft:**
    - **Title:** `<App Name>: <what it does>`.
@@ -177,7 +177,7 @@ Start this once every MVP PR is merged up and reviewed.
      - Skip one-off bugs; only lasting rules belong there.
    - **Re-read after editing:** re-read each section you changed and check it's still short and easy for a person to scan. Mirror any rule that's shared with Copilot into `.github/copilot-instructions.md`, its source of truth.
 7. **Update the product README** (`src/apps/<id>/README.md`) to match what was actually built. Also update the root README and `functions/README.md` if they're affected.
-8. **Bump `SITE_VERSION`** (patch for polish), commit, push, and open the polish PR with the top MVP branch as its base. Run the same Copilot → subagent review loop.
+8. **Label the polish PR `patch`**, commit, push, and open the polish PR with the top MVP branch as its base. Run the same Copilot → subagent review loop.
 9. **Post the overview comment on the polish PR**, built from `references/overview-comment.md`. It replaces any per-PR "what's left" notes.
 
 ## Final report to the user
