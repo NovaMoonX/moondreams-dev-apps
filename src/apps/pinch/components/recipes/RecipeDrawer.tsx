@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import DetailSheet from '@/components/DetailSheet';
 import { useAppSelector } from '@/store';
+import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import CostLine from '@apps/pinch/components/shared/CostLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import { UNIT_LABELS } from '@apps/pinch/constants';
@@ -10,7 +11,7 @@ import {
   selectRecipeCosts,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { GapKind } from '@apps/pinch/types';
+import type { Gap, GapKind } from '@apps/pinch/types';
 import { formatMinutes, formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -21,12 +22,20 @@ const gapLabel = (kind: GapKind | undefined) => {
 };
 
 interface RecipeDrawerProps {
+  uid: string;
   recipeId: string;
   onClose: () => void;
   onModify: (id: string) => void;
+  onFillIn: (gaps: Gap[]) => void;
 }
 
-function RecipeDrawer({ recipeId, onClose, onModify }: RecipeDrawerProps) {
+function RecipeDrawer({
+  uid,
+  recipeId,
+  onClose,
+  onModify,
+  onFillIn,
+}: RecipeDrawerProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
@@ -69,9 +78,12 @@ function RecipeDrawer({ recipeId, onClose, onModify }: RecipeDrawerProps) {
           {[formatServings(recipe.servings), ...times].join(' · ')}
         </p>
         {cost && (
-          <p className='text-sm font-medium'>
-            <CostLine cost={cost} />
-          </p>
+          <div>
+            <p className='text-sm font-medium'>
+              <CostLine cost={cost} />
+            </p>
+            <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={onFillIn} />
+          </div>
         )}
         {recipe.description && (
           <p className='text-sm whitespace-pre-wrap'>{recipe.description}</p>

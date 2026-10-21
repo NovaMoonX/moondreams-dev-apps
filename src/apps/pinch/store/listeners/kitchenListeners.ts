@@ -1,9 +1,15 @@
-import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  type Unsubscribe,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type {
   Family,
   IngredientRecord,
+  KitchenSettings,
   Product,
   Recipe,
   Store,
@@ -75,6 +81,19 @@ export function startRecipesListener(
     kitchenCollection(uid, 'recipes'),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Recipe)),
+    onError,
+  );
+}
+
+export function startSettingsListener(
+  uid: string,
+  onChange: (settings: KitchenSettings | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'apps', 'pinch', 'kitchens', uid),
+    (snapshot) =>
+      onChange(snapshot.exists() ? (snapshot.data() as KitchenSettings) : null),
     onError,
   );
 }

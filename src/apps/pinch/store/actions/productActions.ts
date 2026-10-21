@@ -1,5 +1,12 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { deleteDoc, doc, runTransaction, writeBatch } from 'firebase/firestore';
+import {
+  deleteDoc,
+  deleteField,
+  doc,
+  FieldPath,
+  runTransaction,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
@@ -7,6 +14,7 @@ import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { Product, Unit } from '@apps/pinch/types';
 import { buildCatalogRecord } from '@apps/pinch/utils/ingredientRecord';
+import { getGapKeys } from '@apps/pinch/utils/gaps';
 
 const kitchenDoc = (uid: string, collectionName: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, collectionName, id);
@@ -29,7 +37,7 @@ interface SaveProductInput {
   draft: ProductDraft;
 }
 
-/** Writes the product and, when it becomes the ingredient's default, the ingredient's pointer to it in the same batch (a catalog ingredient gets its record on the way). */
+/** Writes the product and, when it becomes the ingredient's default, the ingredient's pointer to it in the same batch (a catalog ingredient gets its record on the way). Any closed price or size nudge for the ingredient is reopened in that batch. */
 export const saveProduct = createAsyncThunk<
   string,
   SaveProductInput,
@@ -93,6 +101,22 @@ export const saveProduct = createAsyncThunk<
             buildCatalogRecord(draft.ingredientId, productId, now),
           );
         }
+      }
+      const dismissed =
+        getState().pinch.settings.settings?.dismissedNudges ?? {};
+      const closedKeys = getGapKeys(draft.ingredientId).filter(
+        (key) => key in dismissed,
+      );
+      if (closedKeys.length > 0) {
+        batch.update(
+          doc(db, 'apps', 'pinch', 'kitchens', uid),
+          'updatedAt',
+          now,
+          ...closedKeys.flatMap((key) => [
+            new FieldPath('dismissedNudges', key),
+            deleteField(),
+          ]),
+        );
       }
       await batch.commit();
     } catch (error) {

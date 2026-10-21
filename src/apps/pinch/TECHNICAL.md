@@ -375,7 +375,7 @@ Archived items never appear in pickers, search or lists and never count as a def
 
 A gap is **hidden** when `dismissedNudges["{kind}:{ingredientId}"]` exists. Dismissing writes that key; filling the gap makes the gap disappear on its own, and a later regression (a product removed) brings it back only if the key was cleared, so dismissal clearing happens in the same write as the action that fills the gap (`saveProduct` removes the `NO_PRODUCT`/`NOT_COMPARABLE` keys for that ingredient). A nudge renders only when the filtered gap list is non-empty. A total that excludes lines always says so, whether or not its nudge is dismissed.
 
-The fill-in sheet takes the gap list and renders one row per ingredient with only the fields that gap needs: a product's store, price and size for `NO_PRODUCT`; the size for `NOT_COMPARABLE`; the metric for `NO_NUTRITION`. Saving writes through the same actions as the full forms.
+The fill-in sheet takes the gap list and renders one row per ingredient with only the fields that gap needs: a product's store, price and size for `NO_PRODUCT`; the size for `NOT_COMPARABLE`; the metric for `NO_NUTRITION`. Saving writes through the same actions as the full forms. A row left blank stays unchanged; a row that is part-filled is not saved and says what it still needs, so Save never writes half a product. A saved row asks to become the ingredient's default product, and a `NOT_COMPARABLE` row rewrites the size of the default product it is about.
 
 ### 5. Recipe ingestion (AI)
 
@@ -486,13 +486,13 @@ Every slice resets on the shared `resetAllState`, so a user switch never shows t
 1. **Signed-in user:** `startSettingsListener`, `startIngredientsListener`, `startFamiliesListener`, `startStoresListener`, `startProductsListener`, `startRecipesListener`, `startMealsListener` — `onSnapshot` of the kitchen document and each collection under `kitchens/{uid}`. One effect keyed on `uid`.
 2. **Visible window:** `startPlannedMealsListener(uid, windowKey, onChange)` — `onSnapshot` of `plannedMeals` where `date >= windowStart` and `date < windowEnd`, a single-field range covering the shown month plus `MONTH_WINDOW_PADDING` months on each side. The effect is keyed on the window key (`"2026-10"`), so paging months restarts it only when the window actually changes. The slice keeps the previous window's documents until the new snapshot lands, so the grid never blanks while paging.
 
-**Loading gate.** `Pinch.tsx` shows a skeleton until every user-tier slice `isLoaded` and the first window has landed. An empty kitchen (no settings document, no records) is a valid state that renders the empty Calendar; there is no first-run blocking modal.
+**Loading gate.** `Pinch.tsx` shows a skeleton until every user-tier slice `isLoaded` and the first window has landed. An empty kitchen (no settings document, no records) is a valid state that renders the empty Calendar; there is no first-run blocking modal. The settings listener is waited for but its failure never shows the error screen (the nudges simply stay open), since it only carries an enhancement.
 
 **Actions (thunks)** in `store/actions/`, writing only to the person's own paths:
 
 | Action | Write |
 |---|---|
-| `saveSettings(fields)` / `dismissNudge(key)` | field-scoped `setDoc`/`updateDoc` with dotted paths (`showNutrition.protein`, `dismissedNudges.<key>`); creates the kitchen document on first write |
+| `saveSettings(fields)` / `dismissNudge({ keys })` | field-scoped writes with dotted paths (`showNutrition.protein`, `dismissedNudges.<key>`, built with `FieldPath` because keys hold `:` and `-`); `dismissNudge` is one `runTransaction` that re-reads the document, refuses a 501st key and creates the document on first write |
 | `saveIngredient(draft)` | `setDoc` of the record (custom: new id; catalog: id = catalog id) with the full shape; edits are field-scoped `updateDoc` |
 | `removeIngredient(id)` | the archive-or-delete check (Logic §3a) |
 | `saveFamily` / `removeFamily` | `setDoc` / archive-or-delete |
