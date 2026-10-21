@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -28,8 +30,14 @@ function RecipeWhyStep({
   isSubmitting,
   error,
 }: RecipeWhyStepProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    rootRef.current?.scrollIntoView({ block: 'start' });
+  }, []);
+
   return (
-    <div className='flex flex-1 flex-col'>
+    <div ref={rootRef} className='flex flex-1 scroll-mt-2 flex-col'>
       <div className='space-y-4 pb-4'>
         <div className='space-y-1'>
           <h2 className='text-lg font-medium'>Why did you change it?</h2>
