@@ -1,19 +1,13 @@
 import FallbackImage from '@/components/FallbackImage';
+import type { PageLinkPreview } from '@/hooks/useLinkPreview';
 
 interface LinkPreviewCardProps {
-  /** Shown as the name when the page gave no title. */
-  host: string;
-  /** Draw the card only once the page has been read; a lookup still running or failed has no card. */
-  preview: {
-    title: string | null;
-    siteName: string | null;
-    description: string | null;
-    imageUrl: string | null;
-  };
+  preview: PageLinkPreview;
 }
 
-/** What a pasted link points at: its picture, title and site, so the person sees it was understood. */
-function LinkPreviewCard({ host, preview }: LinkPreviewCardProps) {
+/** What a pasted link points at: its picture, title and site, so the person sees it was understood. Built from `useLinkPreview`, which gives it only once the page has been read. */
+function LinkPreviewCard({ preview }: LinkPreviewCardProps) {
+  const { host } = preview;
   const title = preview.title ?? host;
   const site = preview.siteName ?? host;
   const tile = (

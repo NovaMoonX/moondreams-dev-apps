@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
 import { Lightbulb, RefreshCw, X } from 'lucide-react';
 
@@ -14,7 +14,7 @@ import LinkPreviewCard from '@/components/LinkPreviewCard';
 import MethodPicker, { type Method } from '@/components/MethodPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
-import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
+import { useLinkPreview } from '@/hooks/useLinkPreview';
 import { useAppSelector } from '@/store';
 import { isReadableFile } from '@/utils/fileUtils';
 import { toWebLink } from '@/utils/urlUtils';
@@ -34,32 +34,11 @@ import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
 import { selectIdeaGroups } from '@apps/pinch/store/selectors';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
 import {
-  clipIdeaTitle,
-  clipSiteName,
-  toIdeaImageUrl,
-} from '@apps/pinch/utils/ideas';
-import {
   canPasteTextInstead,
   classifyReadFailure,
   getReadFailureLine,
   type ReadFailure,
 } from '@apps/pinch/utils/readFailures';
-
-const asWebLink = (text: string) => {
-  const trimmed = text.trim();
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
-  try {
-    const url = new URL(withScheme);
-    return ['http:', 'https:'].includes(url.protocol) &&
-      url.hostname.includes('.')
-      ? url.toString()
-      : null;
-  } catch {
-    return null;
-  }
-};
 
 type State =
   | { status: 'idle' }
@@ -184,31 +163,11 @@ function RecipeReader({
     canFoldIdeas && !isIdeasOpen ? IDEAS_SHOWN : IDEAS_SHOWN_MOST,
   );
 
-  const settledText = useDebouncedValue(link, DEBOUNCE_MS.linkDetection);
-  const typedLink = method === 'link' ? asWebLink(link) : null;
-  const previewUrl =
-    typedLink !== null &&
-    typedLink === asWebLink(settledText) &&
-    /\.[a-z]{2,}$/i.test(new URL(typedLink).hostname)
-      ? typedLink
-      : null;
   // The reading's own request, so the preview and "Fill in the recipe" share one page fetch.
-  const lookup = useQuery({
-    ...recipePageQueryOptions(previewUrl ?? ''),
-    enabled: previewUrl !== null,
+  const preview = useLinkPreview(method === 'link' ? link : '', {
+    getQueryOptions: recipePageQueryOptions,
+    isEnabled: canPasteText,
   });
-  const getPreview = () => {
-    if (previewUrl === null || !lookup.data) {
-      return null;
-    }
-    const { title, meta } = lookup.data;
-    return {
-      title: clipIdeaTitle(title ?? '') || null,
-      siteName: clipSiteName(meta?.siteName),
-      description: meta?.description?.trim().slice(0, 300) || null,
-      imageUrl: toIdeaImageUrl(meta?.image),
-    };
-  };
 
   useEffect(() => {
     if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
@@ -279,7 +238,7 @@ function RecipeReader({
   };
 
   const handleLink = () => {
-    const url = asWebLink(link);
+    const url = toWebLink(link);
     if (url === null) {
       setState(
         failed("That doesn't look like a web link. Check it and try again."),
@@ -410,7 +369,7 @@ function RecipeReader({
     if (!canPasteText) {
       return 'The address saved with your idea.';
     }
-    return 'Copy the address from your browser. We look up its title and picture as you paste.';
+    return 'Copy the address from your browser. We open the page to find its title and picture.';
   };
 
   const getChips = (): ActionChip[] => {
@@ -426,12 +385,8 @@ function RecipeReader({
           ]
         : [];
     }
-    if (!onSaveAsIdea) {
-      return [];
-    }
-
-    return [
-      ...(method === 'text' || canPasteText
+    const clearChips: ActionChip[] =
+      method === 'text' || canPasteText
         ? [
             {
               key: 'clear',
@@ -447,7 +402,13 @@ function RecipeReader({
               },
             },
           ]
-        : []),
+        : [];
+    if (!onSaveAsIdea) {
+      return clearChips;
+    }
+
+    return [
+      ...clearChips,
       {
         key: 'idea',
         icon: <Lightbulb className='h-4 w-4' />,
@@ -513,7 +474,6 @@ function RecipeReader({
   ];
 
   const intro = getIntro();
-  const preview = getPreview();
 
   return (
     <div className='flex flex-1 flex-col gap-4 [@media(min-height:700px)]:gap-6'>
@@ -552,12 +512,7 @@ function RecipeReader({
             </div>
           </div>
         )}
-        {preview !== null && (
-          <LinkPreviewCard
-            host={new URL(previewUrl ?? '').hostname}
-            preview={preview}
-          />
-        )}
+        {preview !== null && <LinkPreviewCard preview={preview} />}
       </FormSection>
       <ActionChips actions={getChips()} label='What else you can do with it' />
       {method === 'link' && canPasteText && linkIdeas.length > 0 && (
