@@ -9,6 +9,8 @@ interface SharedAlbumLinkModalProps {
   currentUrl: string | null;
   /** Only Admins and Editors may change a link that is already set. */
   canChange: boolean;
+  /** Opens on the link field instead of the album view (the card's "Change"). */
+  startChanging?: boolean;
   isSaving: boolean;
   onSubmit: (url: string) => void;
   onClose: () => void;
@@ -19,12 +21,13 @@ function SharedAlbumLinkModal({
   tripId,
   currentUrl,
   canChange,
+  startChanging = false,
   isSaving,
   onSubmit,
   onClose,
 }: SharedAlbumLinkModalProps) {
   const [url, setUrl] = useState(currentUrl ?? '');
-  const [isChanging, setIsChanging] = useState(currentUrl === null);
+  const [isChanging, setIsChanging] = useState(currentUrl === null || startChanging);
   const isViewing = currentUrl !== null && !isChanging;
 
   if (isViewing) {

@@ -30,6 +30,11 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
   const { addToast } = useToast();
   const now = useNow();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [startChanging, setStartChanging] = useState(false);
+  const openModal = (changing = false) => {
+    setStartChanging(changing);
+    setIsModalOpen(true);
+  };
   const [isSaving, setIsSaving] = useState(false);
   const shouldShowReminder = useAppSelector((state) =>
     selectShouldShowAlbumReminder(state, trip.id, currentUserId, now),
@@ -79,7 +84,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
           type='button'
           variant='tertiary'
           className='border-border bg-background relative flex h-auto w-full items-center justify-start overflow-hidden rounded-xl border p-0 text-left'
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => openModal()}
         >
           <img
             src={ALBUM_BANNER_IMAGE}
@@ -106,6 +111,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
           tripId={trip.id}
           currentUrl={trip.sharedAlbumUrl}
           canChange={canChangeExisting}
+          startChanging={startChanging}
           isSaving={isSaving}
           onSubmit={(url) => void handleSave(url)}
           onClose={() => setIsModalOpen(false)}
@@ -124,7 +130,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
           aria-label='Shared album'
           title='Shared album'
           className='px-2'
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => openModal()}
         >
           <Images className='h-4 w-4' />
         </Button>
@@ -134,6 +140,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
           tripId={trip.id}
           currentUrl={trip.sharedAlbumUrl}
           canChange={canChangeExisting}
+          startChanging={startChanging}
           isSaving={isSaving}
           onSubmit={(url) => void handleSave(url)}
           onClose={() => setIsModalOpen(false)}
@@ -166,7 +173,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
                 variant='link'
                 size='sm'
                 className='h-auto p-0'
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => openModal(true)}
               >
                 <span className='hidden sm:inline'>Change</span>
                 <Settings2 className='h-3.5 w-3.5 sm:hidden' />
@@ -187,7 +194,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
                   type='button'
                   variant='primary'
                   size='sm'
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => openModal()}
                   className='mr-1'
                 >
                   Add link
@@ -203,6 +210,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
         tripId={trip.id}
         currentUrl={trip.sharedAlbumUrl}
         canChange={canChangeExisting}
+          startChanging={startChanging}
         isSaving={isSaving}
         onSubmit={(url) => void handleSave(url)}
         onClose={() => setIsModalOpen(false)}

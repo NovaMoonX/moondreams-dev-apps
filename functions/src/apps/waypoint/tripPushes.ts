@@ -104,11 +104,12 @@ export function getWrapUpPush(titles: string[], tripTitle: unknown) {
       : titles.length === 2
         ? `${first} and ${second}`
         : `${first}, ${second} and ${titles.length - 2} more`;
+  const place = typeof tripTitle === 'string' && tripTitle ? ` on ${clip(tripTitle, 60)}` : '';
   return {
-    title: typeof tripTitle === 'string' && tripTitle ? clip(tripTitle, 60) : 'Your trip',
+    title: 'Any expenses paid today?',
     body:
       titles.length === 1
-        ? `${named} is still marked as expected. Mark it paid if it was.`
-        : `${named} are still marked as expected. Mark any that were paid.`,
+        ? `${named} is still marked Expected${place}. Mark it paid if you've settled up.`
+        : `${named} are still marked Expected${place}. Mark any you've settled up.`,
   };
 }
