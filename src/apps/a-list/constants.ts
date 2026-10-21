@@ -170,3 +170,9 @@ export const SHARE_RANGE_OPTIONS: {
   { value: 'NEXT_WEEK', label: 'Next week', emoji: '⏭️' },
   { value: 'CUSTOM', label: 'Pick dates', emoji: '✏️' },
 ];
+
+/** A-List bills at least this many months before it can be cancelled. */
+export const MIN_CONTRACT_MONTHS = 3;
+/** A-List covers up to this many movies in a week (Friday to Thursday). */
+export const MAX_MOVIES_PER_WEEK = 4;
+export const MAX_MOVIES_PER_MONTH = 18;
