@@ -75,7 +75,7 @@ function TrendLineChart({
   };
 
   return (
-    <div className={join('w-full', className)}>
+    <div className={join('w-full', isSoft && 'touch-pan-y', className)}>
       <ResponsiveContainer width='100%' height='100%'>
         <ComposedChart
           data={sorted}
@@ -135,6 +135,19 @@ function TrendLineChart({
               formatY(Number(value)),
               name === 'y2' ? secondaryLabel : (seriesLabel ?? yLabel ?? ''),
             ]}
+            separator={isSoft ? ': ' : undefined}
+            isAnimationActive={isSoft ? false : undefined}
+            position={isSoft ? { y: 0 } : undefined}
+            cursor={
+              isSoft
+                ? {
+                    stroke: 'var(--color-primary)',
+                    strokeOpacity: 0.35,
+                    strokeWidth: 2,
+                    strokeLinecap: 'round',
+                  }
+                : undefined
+            }
             contentStyle={{
               background: 'var(--color-popover)',
               color: 'var(--color-popover-foreground)',
@@ -146,8 +159,9 @@ function TrendLineChart({
             <ReferenceLine
               y={referenceY.value}
               stroke='var(--color-muted-foreground)'
-              strokeOpacity={isSoft ? 0.5 : 1}
-              strokeDasharray='4 4'
+              strokeOpacity={isSoft ? 0.45 : 1}
+              strokeWidth={1}
+              strokeDasharray={isSoft ? undefined : '4 4'}
               ifOverflow='extendDomain'
               label={
                 isSoft
@@ -165,12 +179,16 @@ function TrendLineChart({
             <Line
               type={curve}
               dataKey='y2'
-              stroke='var(--color-muted-foreground)'
-              strokeOpacity={isSoft ? 0.6 : 1}
-              strokeWidth={2}
-              strokeDasharray='2 6'
-              isAnimationActive={!isSoft}
+              stroke={
+                isSoft
+                  ? 'var(--color-foreground)'
+                  : 'var(--color-muted-foreground)'
+              }
+              strokeOpacity={isSoft ? 0.55 : 1}
+              strokeWidth={isSoft ? 3 : 2}
+              strokeDasharray={isSoft ? '0.1 7' : '5 4'}
               strokeLinecap='round'
+              isAnimationActive={!isSoft}
               dot={false}
               activeDot={{ r: 4 }}
             />

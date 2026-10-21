@@ -37,7 +37,7 @@ type Scenario = 'stop' | 'calendar' | 'week' | 'month';
 
 const SCENARIO_OPTIONS: PillOption<Scenario>[] = [
   { value: 'stop', label: 'Stop now' },
-  { value: 'calendar', label: 'Calendar' },
+  { value: 'calendar', label: 'My calendar' },
   { value: 'week', label: 'Weekly' },
   { value: 'month', label: 'Monthly' },
 ];
@@ -121,6 +121,14 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     return `A-List has a ${MIN_CONTRACT_MONTHS}-month minimum. ${pluralize(base.minimumMonthsLeft, 'month')} to go, so ${left} more is owed even if you stop.`;
   };
 
+  const getPlanLine = () => {
+    if (scenario === 'stop')
+      return 'You cancel now and pay only what the minimum requires.';
+    if (scenario === 'calendar')
+      return 'You watch every showing already planned, then cancel.';
+    return `You watch ${counts[scenario]} a ${scenario} and cancel before the bill on the date below.`;
+  };
+
   const getAssumptionLine = () => {
     if (scenario !== 'calendar') return null;
     if (result.movies === 0)
@@ -155,13 +163,19 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             {getContractLine()}
           </p>
         )}
-        <PillGroup
-          label='What if'
-          options={SCENARIO_OPTIONS}
-          value={scenario}
-          onChange={setScenario}
-          isThin
-        />
+        <div className='space-y-2'>
+          <p className='text-muted-foreground text-xs font-medium'>
+            Pick a plan to compare
+          </p>
+          <PillGroup
+            label='Plan'
+            options={SCENARIO_OPTIONS}
+            value={scenario}
+            onChange={setScenario}
+            isThin
+          />
+          <p className='text-muted-foreground text-sm'>{getPlanLine()}</p>
+        </div>
         <div className='border-border bg-card rounded-3xl border p-4 shadow-sm'>
           <p className='text-muted-foreground flex items-center gap-2 text-sm font-medium'>
             <span
@@ -264,15 +278,15 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                 </span>
                 <span className='flex items-center gap-1.5'>
                   <span
-                    className='border-muted-foreground/50 h-0 w-4 border-t border-dashed'
+                    className='bg-muted-foreground/45 h-px w-4'
                     aria-hidden='true'
                   />
-                  Break even
+                  Break even ($0)
                 </span>
                 {scenario !== 'stop' && (
                   <span className='flex items-center gap-1.5'>
                     <span
-                      className='border-muted-foreground/60 h-0 w-4 border-t-2 border-dotted'
+                      className='border-foreground/55 h-0 w-4 border-t-[3px] border-dotted'
                       aria-hidden='true'
                     />
                     If you stop now
@@ -297,8 +311,11 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                 }
               />
             </div>
+            <p className='text-muted-foreground text-xs font-medium'>
+              Cancel before the bill on
+            </p>
             <PillGroup
-              label='Keep going until'
+              label='Cancel before the bill on'
               options={base.horizons.map((value) => ({
                 value: String(value),
                 label: formatDateUTC(getCycleDate(membership.startDate, value)),
