@@ -23,6 +23,7 @@
     "seed:nine-lives": "npm run seed -- --scope nine-lives",
     "seed:waypoint": "npm run seed -- --scope waypoint",
     "seed:a-list": "npm run seed -- --scope a-list",
+    "seed:pinch": "npm run seed -- --scope pinch",
     "seed:worth-the-wait": "npm run seed -- --scope worth-the-wait",
     "seed:reset": "npm run seed -- --scope all --reset",
     "preemulators:seed": "npm --prefix functions run build",
