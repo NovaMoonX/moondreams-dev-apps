@@ -10,11 +10,10 @@ Every issue's Success Criteria end with the same two checks, written once here a
 ### Issue 1: Register Pinch, make it reachable, and refresh the root README's app list
 
 **Prerequisites:** The approved Pinch `README.md`, `UX.md` and `TECHNICAL.md` are committed under `src/apps/pinch/` (`TECHNICAL.md` is the TDD) in an initial docs PR. That PR is not one of these issues.
-**Target PR Size:** ~250 lines (mostly the manifest, registry entries and docs)
+**Target PR Size:** ~250 lines (mostly the registry entries and docs)
 **Files:**
 - `public/banners/by-app/banner-pinch.png` (new)
 - `public/logos/by-app/logo-pinch.svg` (new)
-- `public/manifest-pinch.json` (new)
 - `src/routes/AppRoutes.tsx` (a lazy `/pinch` route)
 - `src/apps/pinch/Pinch.tsx` (new; a placeholder screen)
 - `src/lib/app/app.registry.ts` (one entry)
@@ -25,12 +24,12 @@ Every issue's Success Criteria end with the same two checks, written once here a
 **Context:** Read the registry comment at the top of `src/lib/app/app.registry.ts` (it lists what must stay in sync), `src/apps/pinch/README.md` (name, tagline, the 🧂 identity) and the root `README.md`'s "Current apps" and PWA sections. Pinch is a draft app, like the others.
 
 ### Description
-Make Pinch a real, installable mini-app that opens to a placeholder screen, so every later issue can be opened and checked in the running app. In the same PR, add Pinch to the root README's app list, in the format the list already uses (emoji, name, registry description).
+Make Pinch a real mini-app that opens to a placeholder screen, so every later issue can be opened and checked in the running app. In the same PR, add Pinch to the root README's app list, in the format the list already uses (emoji, name, registry description).
 
 ### Possible Approach
-1. Add the registry entry (`id: 'pinch'`, `name: 'Pinch'`, `path: '/pinch'`, `status: 'draft'`, a `createdAt` of today, and a one-sentence description in the same voice as the others) and widen `AppId` in `appCatalog.ts`.
+1. Add the registry entry (`id: 'pinch'`, `name: 'Pinch'`, `path: '/pinch'`, a `createdAt` of today, and a one-sentence description in the same voice as the others) and widen `AppId` in `appCatalog.ts`.
 2. Create `Pinch.tsx` as a placeholder (a title and one muted line), exported as the default, and add the lazy route in `AppRoutes.tsx` following the A-List entry exactly (including `ProtectedRoute` if it uses it).
-3. Add `manifest-pinch.json` by copying `manifest-a-list.json` and changing the name, short name, icons and `start_url`. Add the logo SVG (a salt-pinch mark in the orange accent) and the banner PNG (same dimensions as the other banners).
+3. Add no per-app manifest (the site installs as one app through `manifest-main.json`; each mini-app only gets its tab icon and title from its logo). Add the logo SVG (a salt-pinch mark in the orange accent) and the banner PNG (same dimensions as the other banners).
 4. Add exactly one entry to `cloudflare-worker.js`'s app registry, copying A-List's shape without its `params`. Change nothing else in the file.
 5. Root `README.md`: add one line for Pinch, in registry order, with its emoji and registry description.
 6. Do not touch `src/apps/pinch` data code or `SITE_VERSION` beyond the standard bump.
@@ -40,8 +39,8 @@ Make Pinch a real, installable mini-app that opens to a placeholder screen, so e
 - [ ] **Entry point:** `/pinch` opens the placeholder from the running app, and the app appears with its logo on the home screen's app list, matching how the other draft apps appear.
 
 ### Success Criteria
-- [ ] The three net-new asset files exist and the route resolves in the running app.
-- [ ] Registry and catalog entries are added; the home screen and the app's own manifest (check the "Add to Home Screen" identity in the browser) show Pinch.
+- [ ] The two net-new asset files exist and the route resolves in the running app.
+- [ ] Registry and catalog entries are added; the home screen shows Pinch, and its tab shows the Pinch logo and title.
 - [ ] `cloudflare-worker.js` gained exactly one entry and nothing else changed.
 - [ ] The root README lists Pinch with an emoji and the registry's description, in registry order.
 - [ ] No Firestore field, rule or seed is introduced (so none is required).

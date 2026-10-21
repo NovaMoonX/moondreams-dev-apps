@@ -63,6 +63,14 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'pinch',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: Pinch } = await import('@apps/pinch/Pinch');
+          return { Component: Pinch };
+        },
+      },
+      {
         path: 'a-list/shared/:shareId',
         HydrateFallback: Loading,
         lazy: async () => {

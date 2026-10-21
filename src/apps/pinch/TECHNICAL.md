@@ -623,9 +623,9 @@ No `functions/src/apps/pinch/` in the MVP.
 
 **Wiring checklist** (everything a new mini-app has to touch; each item is in the roadmap):
 
-- `src/lib/types/appCatalog.ts`: `'pinch'` in `AppId`. `src/lib/app/app.registry.ts`: a registry entry (`status: 'draft'`, `path: '/pinch'`).
+- `src/lib/types/appCatalog.ts`: `'pinch'` in `AppId`. `src/lib/app/app.registry.ts`: a registry entry (`path: '/pinch'`).
 - `src/routes/AppRoutes.tsx`: lazy route to `@apps/pinch/Pinch`.
-- `public/manifest-pinch.json`, a logo and a banner under `public/logos` and `public/banners/by-app`, the entry in `cloudflare-worker.js`, and the root `README.md` "Current apps" list (the registry's own comment lists exactly these).
+- A logo and a banner under `public/logos` and `public/banners/by-app`, the entry in `cloudflare-worker.js`, and the root `README.md` "Current apps" list (the registry's own comment lists exactly these).
 - `src/store/index.ts`: `pinch` reducer and `RootState`.
 - `firestore.rules` and `storage.rules`: the blocks above in alphabetical position, with emulator verification noted in the PR; `firestore.indexes.json` unchanged (state this in the PR).
 - `.github/instructions/pinch.instructions.md` and the identical `.claude/rules/pinch.md`.

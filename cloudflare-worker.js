@@ -79,6 +79,15 @@ const APP_REGISTRY = [
       },
     ],
   },
+  {
+    id: 'pinch',
+    name: 'Pinch',
+    title: 'Pinch - Moondreams Dev Apps',
+    path: '/pinch',
+    description:
+      'A calm, personal kitchen planner that keeps your ingredients, recipes, and meals on a calendar, with what everything costs and, whenever you want it, the nutrition.',
+    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-pinch.png',
+  },
 ];
 
 // Tells search engines not to list the page in their results, even those that never run its JS (where the noindex meta tag is added).
