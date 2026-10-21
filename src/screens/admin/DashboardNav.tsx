@@ -61,6 +61,7 @@ interface DashboardNavProps {
   unsavedAppIds: string[];
   isWide: boolean;
   onSelectMembers: () => void;
+  onSelectFirebase: () => void;
   onSelectApp: (appId: string) => void;
 }
 
@@ -75,6 +76,7 @@ function DashboardNav({
   unsavedAppIds,
   isWide,
   onSelectMembers,
+  onSelectFirebase,
   onSelectApp,
 }: DashboardNavProps) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,6 +117,14 @@ function DashboardNav({
           isSelected={selected === 'members'}
           isWide={isWide}
           onClick={onSelectMembers}
+        />
+        <NavRow
+          title='Firebase usage'
+          subtitle='Free amounts and estimated cost'
+          meta={[]}
+          isSelected={selected === 'firebase'}
+          isWide={isWide}
+          onClick={onSelectFirebase}
         />
       </div>
 

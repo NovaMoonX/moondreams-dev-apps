@@ -17,6 +17,7 @@ export { notifyTripAnnouncement } from './apps/waypoint/notifyTripAnnouncement.j
 export { notifyTripIdea } from './apps/waypoint/notifyTripIdea.js';
 export { sendExpenseWrapUp } from './apps/waypoint/sendExpenseWrapUp.js';
 export { registerAppUsage } from './appUsage/registerAppUsage.js';
+export { getFirebaseUsage } from './firebaseUsage/getFirebaseUsage.js';
 export { fetchLinkMetadata } from './linkMetadata/fetchLinkMetadata.js';
 export { fetchPageContent } from './linkMetadata/fetchPageContent.js';
 export { sendScheduledReminders } from './notifications/sendScheduledReminders.js';
