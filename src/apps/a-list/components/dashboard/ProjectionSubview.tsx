@@ -33,13 +33,17 @@ import {
   type ProjectionResult,
 } from '@apps/a-list/utils/projection';
 
-type Scenario = 'stop' | 'calendar' | 'week' | 'month';
+type Scenario = 'none' | 'planned' | 'pace';
 
 const SCENARIO_OPTIONS: PillOption<Scenario>[] = [
-  { value: 'stop', label: 'Stop now' },
-  { value: 'calendar', label: 'Calendar' },
-  { value: 'week', label: 'Weekly' },
-  { value: 'month', label: 'Monthly' },
+  { value: 'none', label: 'None' },
+  { value: 'planned', label: 'Everything planned' },
+  { value: 'pace', label: 'A set pace' },
+];
+
+const UNIT_OPTIONS: PillOption<PaceUnit>[] = [
+  { value: 'week', label: 'a week' },
+  { value: 'month', label: 'a month' },
 ];
 
 interface ProjectionSubviewProps {
@@ -96,11 +100,12 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     week: clampCount(membership.weeklyGoal, 2, getPaceMax('week')),
     month: clampCount(membership.monthlyGoal, 8, getPaceMax('month')),
   });
+  const [unit, setUnit] = useState<PaceUnit>('week');
   const [pickedMonths, setPickedMonths] = useState<number | null>(null);
   const [valueInput, setValueInput] = useState<string | null>(null);
 
   const scenario: Scenario =
-    pickedScenario ?? (calendar.movies > 0 ? 'calendar' : 'stop');
+    pickedScenario ?? (calendar.movies > 0 ? 'planned' : 'none');
   const months =
     pickedMonths !== null && base.horizons.includes(pickedMonths)
       ? pickedMonths
@@ -109,29 +114,25 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     valueInput === null
       ? base.averageTicketCents
       : parseTicketCents(valueInput);
-  const isPace = scenario === 'week' || scenario === 'month';
+  const isPace = scenario === 'pace';
 
   const getResult = (): ProjectionResult => {
-    if (scenario === 'stop') return projectStop(base, membership);
-    if (scenario === 'calendar') return calendar;
+    if (scenario === 'none') return projectStop(base, membership);
+    if (scenario === 'planned') return calendar;
     return projectPace(
       base,
       membership,
       todayDay,
-      { unit: scenario, count: counts[scenario] },
+      { unit, count: counts[unit] },
       months,
       ticketCents,
     );
   };
   const result = getResult();
   const getAddedBy = () => {
-    if (scenario === 'stop') return () => 0;
-    if (scenario === 'calendar') return getCalendarAddedBy(plan);
-    return getPaceAddedBy(
-      todayDay,
-      { unit: scenario, count: counts[scenario] },
-      ticketCents,
-    );
+    if (scenario === 'none') return () => 0;
+    if (scenario === 'planned') return getCalendarAddedBy(plan);
+    return getPaceAddedBy(todayDay, { unit, count: counts[unit] }, ticketCents);
   };
   const series =
     result.netCents === null
@@ -149,24 +150,24 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   };
 
   const getPlanLine = () => {
-    if (scenario === 'stop')
+    if (scenario === 'none')
       return 'You cancel now and pay only what the minimum requires.';
-    if (scenario === 'calendar')
-      return 'You watch every showing already planned, then cancel.';
-    return `You watch ${counts[scenario]} a ${scenario} then cancel before the bill on the date you pick.`;
+    if (scenario === 'planned')
+      return calendar.movies === 0
+        ? 'Nothing is planned on your calendar yet.'
+        : `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then cancel.`;
+    return `You watch ${counts[unit]} a ${unit}, then cancel on the date you pick below.`;
   };
 
-  const getAssumptionLine = () => {
-    if (scenario !== 'calendar') return null;
-    if (result.movies === 0)
-      return 'Nothing is planned ahead on your calendar yet.';
-    return `${pluralize(result.movies, 'showing')} ahead, assuming you watch them all.`;
+  const getEyebrow = () => {
+    if (scenario === 'none') return 'Net savings with no more movies';
+    if (scenario === 'planned') return 'Net savings with everything planned';
+    return `Net savings at ${counts[unit]} a ${unit}`;
   };
 
   const getBreakEvenLine = () => {
-    if (scenario !== 'week' && scenario !== 'month') return null;
+    if (!isPace) return null;
     if (isBrokenEven || !breakEven || breakEven.perPeriod === null) return null;
-    const unit = scenario;
     if (breakEven.perPeriod > getPaceMax(unit))
       return `Breaking even by then would take more than A-List's ${getPaceMax(unit)} a ${unit}.`;
     return `Breaking even takes about ${breakEven.perPeriod} a ${unit} (${pluralize(breakEven.movies, 'movie')} in all).`;
@@ -177,7 +178,9 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     const end = series.at(-1);
     if (!end) return '';
     const stop =
-      scenario === 'stop' ? '' : ` If you stop now, ${formatCents(end.y2)}.`;
+      scenario === 'none'
+        ? ''
+        : ` With no more movies, ${formatCents(end.y2)}.`;
     return `Net savings reach ${formatCents(end.y)} by ${until}.${stop}`;
   };
 
@@ -192,10 +195,10 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
         )}
         <div className='space-y-2'>
           <p className='text-muted-foreground text-xs font-medium'>
-            Pick a plan to compare
+            How many more movies will you watch?
           </p>
           <PillGroup
-            label='Plan'
+            label='How many more movies will you watch?'
             options={SCENARIO_OPTIONS}
             value={scenario}
             onChange={setScenario}
@@ -211,7 +214,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             >
               🔮
             </span>
-            Projected net savings
+            {getEyebrow()}
           </p>
           {result.netCents === null ? (
             <p className='mt-2 text-lg font-semibold'>
@@ -245,23 +248,18 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               </p>
             </>
           )}
-          {getAssumptionLine() && (
-            <p className='text-muted-foreground mt-1 text-sm'>
-              {getAssumptionLine()}
-            </p>
-          )}
           {breakEvenLine && (
             <p className='text-muted-foreground mt-1 text-sm'>
               {breakEvenLine}
             </p>
           )}
-          {scenario === 'calendar' && result.unpricedCount > 0 && (
+          {scenario === 'planned' && result.unpricedCount > 0 && (
             <p className='text-muted-foreground mt-1 text-sm'>
               {pluralize(result.unpricedCount, 'showing')} with no price and no
               tickets on record yet count as $0.
             </p>
           )}
-          {scenario === 'calendar' && result.unmarkedCount > 0 && (
+          {scenario === 'planned' && result.unmarkedCount > 0 && (
             <p className='text-muted-foreground mt-1 text-sm'>
               {pluralize(result.unmarkedCount, 'showing')} already over{' '}
               {result.unmarkedCount === 1 ? "isn't" : "aren't"} marked seen yet,
@@ -274,10 +272,10 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               <TrendLineChart
                 data={series}
                 seriesLabel='Net savings'
-                readoutLabels={{ main: 'Net', secondary: 'Stop' }}
+                readoutLabels={{ main: 'Net', secondary: 'None' }}
                 curve='linear'
                 secondaryLabel={
-                  scenario === 'stop' ? undefined : 'If you stop now'
+                  scenario === 'none' ? undefined : 'No more movies'
                 }
                 referenceY={{ value: 0, label: 'Break even' }}
                 formatX={(value) =>
@@ -307,14 +305,14 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   />
                   Break even ($0)
                 </span>
-                {scenario !== 'stop' && (
+                {scenario !== 'none' && (
                   <span className='flex items-center gap-1.5'>
                     <LegendLine
                       strokeWidth={3}
                       dash='0.1 7'
                       className='text-foreground/85'
                     />
-                    If you stop now
+                    No more movies
                   </span>
                 )}
               </div>
@@ -324,18 +322,25 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
         {isPace && (
           <div className='space-y-3'>
             <div className='flex flex-wrap items-center justify-between gap-3'>
-              <p className='text-sm font-medium'>Movies a {scenario}</p>
+              <p className='text-sm font-medium'>How many</p>
               <Stepper
-                label={`Movies a ${scenario}`}
-                value={counts[scenario]}
+                label={`Movies a ${unit}`}
+                value={counts[unit]}
                 min={1}
-                max={getPaceMax(scenario)}
+                max={getPaceMax(unit)}
                 step={1}
                 onChange={(count) =>
-                  setCounts((current) => ({ ...current, [scenario]: count }))
+                  setCounts((current) => ({ ...current, [unit]: count }))
                 }
               />
             </div>
+            <PillGroup
+              label='Per'
+              options={UNIT_OPTIONS}
+              value={unit}
+              onChange={setUnit}
+              isThin
+            />
             <p className='text-muted-foreground text-xs font-medium'>
               Cancel before the bill on
             </p>
