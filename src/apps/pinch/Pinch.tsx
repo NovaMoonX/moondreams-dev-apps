@@ -14,6 +14,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
+import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
@@ -196,6 +197,7 @@ function Pinch() {
   }, [searchParams, setSearchParams]);
 
   usePinchTheme();
+  useTrackAppUsage('pinch', user?.uid ?? null);
   usePinchSync(user?.uid ?? null, shownMonth);
   useFreezePastDays(user?.uid ?? null);
 
