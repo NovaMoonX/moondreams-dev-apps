@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Pause,
   Play,
+  Plus,
   RotateCcw,
 } from 'lucide-react';
 
@@ -21,7 +22,12 @@ import {
   getRemainingMs,
   type CookTimer,
 } from '@apps/pinch/hooks/useCookTimers';
-import { getRangAgo } from '@apps/pinch/utils/cooks';
+import { MAX_COOK_TIMERS, TIMER_EXTEND_MINUTES } from '@apps/pinch/constants';
+import {
+  canExtendTimer,
+  getRangAgo,
+  getVisibleOtherTimers,
+} from '@apps/pinch/utils/cooks';
 
 const TICK_MS = 250;
 const HOUR_MS = 3_600_000;
@@ -33,11 +39,14 @@ interface CookTimerViewProps {
   timer: CookTimer;
   /** The timer's recipe, named only when the session cooks several. */
   recipeTitle: string | null;
-  stepNumber: number;
-  stepCount: number;
-  stepText: string;
-  stepRows: CookRow[];
-  isAmountNoteShown: boolean;
+  /** The step the timer belongs to; null for a kitchen timer, which has none. */
+  step: {
+    number: number;
+    count: number;
+    text: string;
+    rows: CookRow[];
+    isAmountNoteShown: boolean;
+  } | null;
   /** The session's other timers, finished ones first. */
   others: CookTimer[];
   /** The timer's step's other times that have no timer yet and could start now. */
@@ -49,11 +58,15 @@ interface CookTimerViewProps {
   note: string | null;
   /** What sits under the timer card: the offer to buzz this device when the screen is off. */
   buzz: ReactNode;
+  /** The session is at its cap: a Time's up can't start again. */
+  isFull: boolean;
   onTick: () => void;
   onPause: (id: string) => void;
   onResume: (id: string) => void;
+  onExtend: (id: string, ms: number) => void;
   onReset: (id: string) => void;
   onFocus: (id: string) => void;
+  onShowAll: () => void;
   onStart: (seconds: number, label: string) => void;
   onMeanwhile: () => void;
   onSwipe: (direction: 1 | -1) => void;
@@ -63,22 +76,21 @@ interface CookTimerViewProps {
 function CookTimerView({
   timer,
   recipeTitle,
-  stepNumber,
-  stepCount,
-  stepText,
-  stepRows,
-  isAmountNoteShown,
+  step,
   others,
   readySlots,
   upNext,
   meanwhile,
   note,
   buzz,
+  isFull,
   onTick,
   onPause,
   onResume,
+  onExtend,
   onReset,
   onFocus,
+  onShowAll,
   onStart,
   onMeanwhile,
   onSwipe,
@@ -127,7 +139,10 @@ function CookTimerView({
       : Math.min(1, Math.max(0, 1 - remainingMs / timer.durationMs));
   const isDone = timer.status === 'done';
   const isPaused = timer.status === 'paused';
+  const { shown: shownOthers, hidden: hiddenOthers } =
+    getVisibleOtherTimers(others);
   const sharesStep = (candidate: CookTimer) =>
+    candidate.recipeId !== null &&
     [timer, ...others].some(
       (other) =>
         other.id !== candidate.id &&
@@ -166,27 +181,29 @@ function CookTimerView({
         '[@media(max-height:500px)]:grid [@media(max-height:500px)]:max-w-none [@media(max-height:500px)]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [@media(max-height:500px)]:content-start [@media(max-height:500px)]:gap-x-6',
       )}
     >
-      <div className='min-w-0 [@media(max-height:500px)]:col-start-2'>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='text-muted-foreground! h-10 w-full justify-between gap-2 px-0! text-left text-sm font-normal'
-          aria-expanded={isStepShown}
-          onClick={() => setIsStepShown((current) => !current)}
-        >
-          <span className='min-w-0 flex-1 truncate'>
-            Step {stepNumber} of {stepCount} ·{' '}
-            {isStepShown ? 'Hide this step' : 'Show this step'}
-          </span>
-          <ChevronDown
-            className={join(
-              'h-4 w-4 shrink-0 transition-transform',
-              isStepShown && 'rotate-180',
-            )}
-            aria-hidden='true'
-          />
-        </Button>
-      </div>
+      {step !== null && (
+        <div className='min-w-0 [@media(max-height:500px)]:col-start-2'>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='text-muted-foreground! h-10 w-full justify-between gap-2 px-0! text-left text-sm font-normal'
+            aria-expanded={isStepShown}
+            onClick={() => setIsStepShown((current) => !current)}
+          >
+            <span className='min-w-0 flex-1 truncate'>
+              Step {step.number} of {step.count} ·{' '}
+              {isStepShown ? 'Hide this step' : 'Show this step'}
+            </span>
+            <ChevronDown
+              className={join(
+                'h-4 w-4 shrink-0 transition-transform',
+                isStepShown && 'rotate-180',
+              )}
+              aria-hidden='true'
+            />
+          </Button>
+        </div>
+      )}
       <div className='my-auto flex flex-col gap-4 [@media(max-height:500px)]:contents [@media(max-height:600px)_and_(min-height:501px)]:gap-2 [@media(max-height:640px)]:gap-3'>
         <div
           className={join(
@@ -213,6 +230,9 @@ function CookTimerView({
             )}
             <p className='text-base font-medium text-balance wrap-break-word'>
               {timer.stepName} · {timer.label}
+              {isPaused && (
+                <span className='text-muted-foreground'> · Paused</span>
+              )}
             </p>
             {isDone ? (
               <p className='flex items-center justify-center gap-3 py-3 text-[clamp(2.5rem,17cqi,5rem)] leading-none font-semibold whitespace-nowrap [@media(max-height:640px)]:py-2'>
@@ -247,27 +267,49 @@ function CookTimerView({
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
-            <div className='mt-2 flex h-7 items-center justify-center gap-1.5 text-sm'>
+            <div
+              role='group'
+              aria-label={`Controls for the ${timer.label} timer`}
+              className='mt-2 flex min-h-7 flex-wrap items-center justify-center gap-1.5 text-sm'
+            >
               {isPaused && (
-                <>
-                  <span className='text-muted-foreground'>Paused</span>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    className="relative h-7 gap-1.5 rounded-full px-3 text-sm after:absolute after:-inset-1.5 after:content-['']"
-                    aria-label={`Reset the ${timer.label} timer`}
-                    onClick={() => onReset(timer.id)}
-                  >
-                    <RotateCcw className='h-4 w-4' aria-hidden='true' />
-                    Reset
-                  </Button>
-                </>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  className="relative h-7 gap-1.5 rounded-full px-3 text-sm after:absolute after:-inset-1.5 after:content-['']"
+                  aria-label={`Reset the ${timer.label} timer`}
+                  onClick={() => onReset(timer.id)}
+                >
+                  <RotateCcw className='h-4 w-4' aria-hidden='true' />
+                  Reset
+                </Button>
               )}
               {endedAt !== null && (
                 <span className='text-muted-foreground'>
                   {getRangAgo(now - endedAt)}
                 </span>
+              )}
+              {isDone && isFull ? (
+                <span className='text-muted-foreground text-xs'>
+                  {MAX_COOK_TIMERS} timers are going.
+                </span>
+              ) : (
+                TIMER_EXTEND_MINUTES.map((minutes) => (
+                  <Button
+                    key={minutes}
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className="relative h-7 gap-1 rounded-full px-3 text-sm after:absolute after:-inset-1.5 after:content-['']"
+                    aria-label={`Add ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} to the ${timer.label} timer`}
+                    disabled={!canExtendTimer(remainingMs, minutes * MINUTE_MS)}
+                    onClick={() => onExtend(timer.id, minutes * MINUTE_MS)}
+                  >
+                    <Plus className='h-4 w-4' aria-hidden='true' />
+                    {minutes} min
+                  </Button>
+                ))
               )}
             </div>
             <span role='status' className='sr-only'>
@@ -280,14 +322,14 @@ function CookTimerView({
             {buzz}
           </div>
         )}
-        {isStepShown && (
+        {isStepShown && step !== null && (
           <div className='min-w-0 space-y-3 [@media(max-height:500px)]:col-start-2'>
             <p className='text-xl leading-snug font-medium wrap-break-word whitespace-pre-wrap'>
-              {stepText}
+              {step.text}
             </p>
             <CookStepAmounts
-              rows={stepRows}
-              isAmountNoteShown={isAmountNoteShown}
+              rows={step.rows}
+              isAmountNoteShown={step.isAmountNoteShown}
             />
           </div>
         )}
@@ -300,7 +342,7 @@ function CookTimerView({
               Other timers
             </p>
             <ul className='border-border divide-border mt-1.5 divide-y rounded-2xl border'>
-              {others.map((other) => {
+              {shownOthers.map((other) => {
                 const otherStatus =
                   other.status === 'done'
                     ? ", time's up"
@@ -357,6 +399,19 @@ function CookTimerView({
                 );
               })}
             </ul>
+            {hiddenOthers > 0 && (
+              <Button
+                type='button'
+                variant='tertiary'
+                className='text-foreground! h-10 w-full justify-between gap-2 px-0! text-left text-sm font-normal'
+                onClick={onShowAll}
+              >
+                <span className='min-w-0 flex-1 truncate'>
+                  {hiddenOthers} more · All {others.length + 1} timers
+                </span>
+                <ChevronRight className='h-4 w-4 shrink-0' aria-hidden='true' />
+              </Button>
+            )}
           </section>
         )}
         {readySlots.length > 0 && !isDone && (

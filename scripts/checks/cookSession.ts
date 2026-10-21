@@ -9,6 +9,7 @@ import {
   readCookingSession,
   writeCookingSession,
 } from '../../src/apps/pinch/lib/cookingSessionStorage.ts';
+import { MAX_COOK_TIMERS } from '../../src/apps/pinch/constants.ts';
 import type { ResumeTimer } from '../../src/apps/pinch/types.ts';
 import {
   applyResumePositions,
@@ -43,6 +44,7 @@ const MEAL_DAY = Date.UTC(2026, 9, 16);
 const running: ResumeTimer = {
   recipeId: 'adobo',
   stepNumber: 1,
+  name: null,
   label: '30 min',
   durationMs: 30 * MIN,
   status: 'running',
@@ -53,6 +55,7 @@ const running: ResumeTimer = {
 const paused: ResumeTimer = {
   recipeId: 'adobo',
   stepNumber: 2,
+  name: null,
   label: '25 min',
   durationMs: 25 * MIN,
   status: 'paused',
@@ -61,6 +64,7 @@ const paused: ResumeTimer = {
 const done: ResumeTimer = {
   recipeId: 'rice',
   stepNumber: 1,
+  name: null,
   label: '20 min',
   durationMs: 20 * MIN,
   status: 'done',
@@ -115,6 +119,7 @@ assert.deepEqual(
     'durationMs',
     'endsAt',
     'label',
+    'name',
     'recipeId',
     'reminderId',
     'startedAt',
@@ -139,6 +144,59 @@ assert.equal(
 const readTimer = (timer: unknown) =>
   parse({ ...snapshot, resume: { ...snapshot.resume, timers: [timer] } })
     ?.resume.timers[0];
+const kitchen: ResumeTimer = {
+  recipeId: null,
+  stepNumber: 0,
+  name: 'Pasta water',
+  label: '10 min',
+  durationMs: 10 * MIN,
+  status: 'running',
+  startedAt: NOW - MIN,
+  endsAt: NOW + 9 * MIN,
+  reminderId: 'push-2',
+};
+assert.deepEqual(
+  [
+    readTimer(kitchen),
+    readTimer({ ...kitchen, status: 'paused', remainingMs: 4 * MIN }),
+    readTimer({ ...kitchen, name: null }),
+    readTimer({ ...kitchen, name: '' }),
+    readTimer({ ...kitchen, name: 'x'.repeat(41) }),
+    readTimer({ ...kitchen, name: 7 }),
+    readTimer({ ...kitchen, stepNumber: 2 }),
+  ],
+  [
+    kitchen,
+    {
+      recipeId: null,
+      stepNumber: 0,
+      name: 'Pasta water',
+      label: '10 min',
+      durationMs: 10 * MIN,
+      status: 'paused',
+      remainingMs: 4 * MIN,
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  ],
+  'a timer the person set is saved with its name and no dish, and one with no name, a name past the cap or a step is refused',
+);
+const withoutName = Object.fromEntries(
+  Object.entries(running).filter(([key]) => key !== 'name'),
+);
+assert.deepEqual(
+  [readTimer(withoutName), readTimer({ ...running, name: 'Pasta water' })],
+  [running, running],
+  'a timer saved before kitchen timers reads with no name, and a dish’s timer never keeps one',
+);
+assert.deepEqual(
+  getTimerReminderIds([running, kitchen]),
+  ['push-1', 'push-2'],
+  'a kitchen timer’s push is kept or let go like any other',
+);
 const withoutPush = Object.fromEntries(
   Object.entries(running).filter(([key]) => key !== 'reminderId'),
 );
@@ -292,7 +350,7 @@ assert.equal(
     ...snapshot,
     resume: {
       ...snapshot.resume,
-      timers: Array.from({ length: 9 }, () => paused),
+      timers: Array.from({ length: MAX_COOK_TIMERS * 2 + 1 }, () => paused),
     },
   }),
   null,
@@ -348,6 +406,16 @@ assert.deepEqual(
   plan?.resume.timers.length,
   3,
   'every timer of a kept recipe is kept',
+);
+const withKitchen = resolveCookingResume(
+  build({ timers: [running, kitchen, done] }),
+  new Map([['adobo', recipes.get('adobo')!]]),
+  meals,
+);
+assert.deepEqual(
+  withKitchen?.resume.timers.map((timer) => timer.recipeId),
+  ['adobo', null],
+  'a timer the person set belongs to no recipe, so it stays when a recipe is deleted',
 );
 const withoutRice = resolveCookingResume(
   snapshot,

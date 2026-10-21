@@ -1,5 +1,6 @@
 import { toPlainText } from '@/lib/speech/speechText';
-import { findDurations } from '@/utils/durationUtils';
+import { findDurations, formatDuration } from '@/utils/durationUtils';
+import { MAX_KITCHEN_TIMER_SECONDS } from '@apps/pinch/constants';
 
 /** A spoken phrase longer than this is talk, not a command. */
 const MAX_COMMAND_CHARS = 80;
@@ -51,6 +52,25 @@ const MAX_AMOUNT_MATCHES = 3;
 
 export type CookTimerScope = 'RINGING' | 'ANY';
 
+/** Which timer a spoken command means: one of that length ("the ten minute timer"), one called that ("the pasta timer"), or every one. With none of the three it means "the timer", which the screen settles (the one in front, else it asks). */
+export interface CookTimerTarget {
+  seconds: number | null;
+  name: string | null;
+  isAll: boolean;
+}
+
+export const NO_TIMER_TARGET: CookTimerTarget = {
+  seconds: null,
+  name: null,
+  isAll: false,
+};
+
+/** What the person said to a question about timers, which only a pending question can hear. */
+export type CookTimerAnswer =
+  | { kind: 'PICK'; ids: string[]; isAll: boolean }
+  | { kind: 'LENGTH'; seconds: number }
+  | { kind: 'NEVER_MIND' };
+
 export type CookCommand =
   | { kind: 'NEXT' }
   | { kind: 'BACK' }
@@ -58,15 +78,29 @@ export type CookCommand =
   | { kind: 'SHOW_INGREDIENTS' }
   | { kind: 'SHOW_STEPS' }
   | { kind: 'FINISH' }
-  | { kind: 'START_TIMER'; seconds: number | null }
-  | { kind: 'PAUSE_TIMER'; seconds: number | null }
-  | { kind: 'RESUME_TIMER'; seconds: number | null }
-  | { kind: 'STOP_TIMER'; seconds: number | null; scope: CookTimerScope }
-  | { kind: 'TIME_LEFT' }
+  | { kind: 'SHOW_TIMERS' }
+  | { kind: 'START_TIMER'; seconds: number | null; name: string | null }
+  | { kind: 'PAUSE_TIMER'; target: CookTimerTarget }
+  | { kind: 'RESUME_TIMER'; target: CookTimerTarget }
+  | { kind: 'STOP_TIMER'; target: CookTimerTarget; scope: CookTimerScope }
+  | { kind: 'EXTEND_TIMER'; seconds: number; target: CookTimerTarget }
+  | { kind: 'TIME_LEFT'; target: CookTimerTarget }
+  | { kind: 'TIMER_ANSWER'; answer: CookTimerAnswer }
   | { kind: 'AMOUNT'; query: string; lineIds: string[] }
   | { kind: 'SWITCH_RECIPE'; recipeId: string | null; candidates: string[] }
   | { kind: 'CYCLE_RECIPE'; direction: 1 | -1 }
   | { kind: 'STOP_LISTENING' };
+
+/** A timer as a spoken name can reach it: every name it goes by (its step's first words, a kitchen timer's name, its recipe) and its length as the card shows it ("10 min"). */
+export interface CookVoiceTimer {
+  id: string;
+  names: string[];
+  label: string;
+}
+
+/** A question the app asked and is waiting on: which timer, or how long a new one runs. */
+export type CookVoiceChoice =
+  { kind: 'TIMER'; timers: CookVoiceTimer[] } | { kind: 'LENGTH' };
 
 export interface CookVoiceContext {
   /** The recipes on screen, in plate order; one for a single recipe. */
@@ -74,6 +108,10 @@ export interface CookVoiceContext {
   shownRecipeId: string;
   /** The shown recipe's lines with every name each goes by; `isInStep` marks the lines the shown step names. */
   lines: { id: string; names: string[]; isInStep: boolean }[];
+  /** The session's timers, so a name said without the word "timer" ("pause the pasta") still counts. */
+  timers: CookVoiceTimer[];
+  /** The question waiting for an answer, if any; only then does a bare name, "the second one" or "ten minutes" mean something. */
+  choice: CookVoiceChoice | null;
 }
 
 type PlainKind =
@@ -82,8 +120,8 @@ type PlainKind =
   | 'REPEAT'
   | 'SHOW_INGREDIENTS'
   | 'SHOW_STEPS'
+  | 'SHOW_TIMERS'
   | 'FINISH'
-  | 'TIME_LEFT'
   | 'STOP_LISTENING';
 
 // Only what "What to say" shows and plain synonyms of it: an everyday phrase ("go on", "again") is said to people too.
@@ -143,6 +181,19 @@ const PHRASES: Record<PlainKind, string[]> = {
     'go to steps',
     'go to the steps',
   ],
+  SHOW_TIMERS: [
+    'timers',
+    'the timers',
+    'show timers',
+    'show the timers',
+    'show me the timers',
+    'show my timers',
+    'open timers',
+    'open the timers',
+    'go to timers',
+    'go to the timers',
+    'my timers',
+  ],
   FINISH: [
     'finish',
     'done',
@@ -150,24 +201,6 @@ const PHRASES: Record<PlainKind, string[]> = {
     'i am done',
     'mark as cooked',
     'mark it as cooked',
-  ],
-  TIME_LEFT: [
-    'how much time is left',
-    'how much time left',
-    'how much time is remaining',
-    'how much time remaining',
-    'time left',
-    'time remaining',
-    'how long left',
-    'how long is left',
-    'whats the time left',
-    'whats the timer at',
-    'timer check',
-    'check the timer',
-    'check timer',
-    'hows the timer',
-    'hows the timer doing',
-    'is the timer done',
   ],
   STOP_LISTENING: [
     'stop listening',
@@ -188,6 +221,37 @@ const PHRASES: Record<PlainKind, string[]> = {
     'stop the mic',
   ],
 };
+
+const TIME_LEFT_PHRASES = new Set([
+  'how much time is left',
+  'how much time left',
+  'how much time is remaining',
+  'how much time remaining',
+  'time left',
+  'time remaining',
+  'how long left',
+  'how long is left',
+  'whats the time left',
+  'whats the timer at',
+  'timer check',
+  'check the timer',
+  'check timer',
+  'hows the timer',
+  'hows the timer doing',
+  'is the timer done',
+]);
+const LISTED_TIMERS_PHRASES = new Set([
+  'what timers are running',
+  'what timers are going',
+  'what timers are set',
+  'what timers do i have',
+  'which timers are running',
+  'list timers',
+  'list the timers',
+  'list my timers',
+  'read the timers',
+  'read my timers',
+]);
 
 const CYCLE_PHRASES: Record<string, 1 | -1> = {
   'next recipe': 1,
@@ -214,7 +278,7 @@ const TAIL = /\s+(?:please|thanks|thank you|now)$/;
 const TIMER_SUFFIX =
   / (?:on|for|in|until|till) (?:the |my |this )?(?:[a-z0-9 ]+ )?(?:timer|timers|clock)$/;
 
-type TimerVerb = 'START' | 'PAUSE' | 'RESUME' | 'STOP';
+type TimerVerb = 'START' | 'PAUSE' | 'RESUME' | 'STOP' | 'EXTEND';
 
 const TIMER_VERBS: Record<string, TimerVerb> = {
   start: 'START',
@@ -237,6 +301,10 @@ const TIMER_VERBS: Record<string, TimerVerb> = {
   mute: 'STOP',
   'turn off': 'STOP',
   'shut off': 'STOP',
+  add: 'EXTEND',
+  extend: 'EXTEND',
+  give: 'EXTEND',
+  increase: 'EXTEND',
 };
 
 /** Said with no "timer" after them, these still mean the timer ("pause", "stop" for a ringing one). */
@@ -249,9 +317,52 @@ const BARE_TIMER_VERBS = new Set([
   'silence',
 ]);
 
-const TIMER_PATTERN = new RegExp(
-  String.raw`^(?<verb>${Object.keys(TIMER_VERBS).join('|')})(?: (?:the|a|my|that|this)(?= ))?(?: (?<length>.+?))??(?: (?<noun>timers?|alarms?|countdown))?(?: (?:for|of) (?<forLength>.+?))?(?: again)?$`,
+const TIMER_VERB_PATTERN = new RegExp(
+  String.raw`^(?<verb>${Object.keys(TIMER_VERBS).join('|')})(?: (?<rest>.+))?$`,
 );
+const MAX_NAME_WORDS = 4;
+const TIMER_NOUNS = new Set([
+  'timer',
+  'timers',
+  'alarm',
+  'alarms',
+  'countdown',
+  'countdowns',
+]);
+const ALL_WORDS = new Set(['all', 'every', 'everything', 'both', 'each']);
+/** Words around a timer's name that are not part of it ("the pasta timer for ten minutes" is "pasta"). */
+const NAME_NOISE = new Set([
+  'the',
+  'a',
+  'an',
+  'my',
+  'that',
+  'this',
+  'these',
+  'those',
+  'for',
+  'on',
+  'to',
+  'of',
+  'by',
+  'in',
+  'at',
+  'it',
+  'up',
+  'again',
+  'another',
+  'more',
+  'extra',
+  'and',
+  'just',
+  'one',
+  'now',
+  'please',
+  'called',
+  'named',
+  'labeled',
+  'titled',
+]);
 
 const AMOUNT_PATTERN =
   /^(?:how (?:much|many)|whats the amount of|amount of|how much of) (?<query>.+?)(?: (?:do (?:i|we) need|do (?:i|we) use|do (?:i|we) add|goes in|go in|does it need|does it take|is needed|is it|is that|is in this|is in it|goes in this|are there|in this step|for this step|in this|in it|again))?$/;
@@ -393,7 +504,7 @@ const toNameWords = (text: string) =>
   );
 
 /** The items whose name holds every word of the query: an exact name first, then the fewest words left over (or, with `keepsAll`, every one that holds them). */
-const matchByName = <T extends { id: string; names: string[] }>(
+export const matchByName = <T extends { id: string; names: string[] }>(
   query: string,
   items: T[],
   keepsAll = false,
@@ -451,29 +562,264 @@ export const readSpokenDuration = (text: string): number | null => {
   return rest === '' ? found[0].seconds : null;
 };
 
-const parseTimer = (text: string): CookCommand | null => {
-  const groups = text.match(TIMER_PATTERN)?.groups;
-  if (!groups) return null;
-  const verb = TIMER_VERBS[groups.verb];
-  const noun = groups.noun ?? null;
-  const lengthText = groups.length ?? groups.forLength ?? null;
-  if (groups.length && groups.forLength) return null;
-  if (
-    noun === null &&
-    (lengthText !== null || !BARE_TIMER_VERBS.has(groups.verb))
-  )
+const LENGTH_UNITS = '(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)';
+const MORE_TIME = new RegExp(
+  String.raw`^(?<another>another )?(?<length>\d+(?:\.\d+)? ${LENGTH_UNITS})(?: (?:on|for|to|in) (?<rest>.+))?$`,
+);
+const TIME_LEFT_QUERY =
+  /^(?:how much time|how long|how many minutes)(?: is| are| do i have)?(?: left| remaining)?(?: (?:on|for|in|of|until|till) (?<query>.+))?$/;
+
+/** "five more minutes" is "5 minutes", and what is left of the words once the length is taken out. */
+const readTimerWords = (text: string) => {
+  // "the hour and a half" is a length only once "the" is out of the way.
+  const spoken = wordsToDigits(
+    text.replace(/\b(?:the|my|that|this)\b ?/g, ''),
+  ).replace(new RegExp(String.raw`(\d) more (${LENGTH_UNITS})`, 'g'), '$1 $2');
+  const found = findDurations(spoken);
+  if (found.length > 1) return null;
+  const words = (found[0] ? spoken.replace(found[0].text, ' ') : spoken)
+    .split(' ')
+    .filter(Boolean);
+  const nouns = words.filter((word) => TIMER_NOUNS.has(word));
+  const nameWords = words.filter(
+    (word) =>
+      !NAME_NOISE.has(word) && !TIMER_NOUNS.has(word) && !ALL_WORDS.has(word),
+  );
+  if (nameWords.length > MAX_NAME_WORDS) return null;
+  const name = nameWords.length === 0 ? null : nameWords.join(' ');
+  const isPlural = nouns.some((noun) => noun.endsWith('s'));
+  return {
+    seconds: found[0]?.seconds ?? null,
+    name,
+    hasNoun: nouns.length > 0,
+    isAlarm:
+      nouns.length > 0 && nouns.every((noun) => noun.startsWith('alarm')),
+    isAll:
+      words.some((word) => ALL_WORDS.has(word)) ||
+      (isPlural && name === null && found.length === 0),
+  };
+};
+
+const isKnownTimerName = (name: string | null, context: CookVoiceContext) =>
+  name !== null && matchByName(name, context.timers).length > 0;
+
+const parseMoreTime = (
+  text: string,
+  context: CookVoiceContext,
+): CookCommand | null => {
+  const spoken = wordsToDigits(text);
+  const hasMore = new RegExp(String.raw`\d more ${LENGTH_UNITS}`).test(spoken);
+  const groups = spoken
+    .replace(new RegExp(String.raw`(\d) more (${LENGTH_UNITS})`), '$1 $2')
+    .match(MORE_TIME)?.groups;
+  if (!groups || !(hasMore || groups.another)) return null;
+  const length = readSpokenDuration(groups.length);
+  const read = readTimerWords(groups.rest ?? '');
+  if (length === null || read === null || read.seconds !== null) return null;
+  if (!(
+    read.hasNoun ||
+    read.name === null ||
+    isKnownTimerName(read.name, context)
+  )) {
     return null;
-  const seconds = lengthText === null ? null : readSpokenDuration(lengthText);
-  if (lengthText !== null && seconds === null) return null;
-  if (verb === 'START') return { kind: 'START_TIMER', seconds };
-  if (verb === 'PAUSE') return { kind: 'PAUSE_TIMER', seconds };
-  if (verb === 'RESUME') return { kind: 'RESUME_TIMER', seconds };
-  const isAlarm = noun === null || noun.startsWith('alarm');
+  }
+  return {
+    kind: 'EXTEND_TIMER',
+    seconds: length,
+    target: { seconds: null, name: read.name, isAll: read.isAll },
+  };
+};
+
+const parseTimer = (
+  text: string,
+  context: CookVoiceContext,
+): CookCommand | null => {
+  const groups = text.match(TIMER_VERB_PATTERN)?.groups;
+  if (!groups) return parseMoreTime(text, context);
+  const verb = TIMER_VERBS[groups.verb];
+  const read = readTimerWords(groups.rest ?? '');
+  if (read === null) return null;
+  const { seconds, name, hasNoun, isAll } = read;
+  const isKnown = isKnownTimerName(name, context);
+  if (verb === 'START') {
+    return hasNoun && !isAll ? { kind: 'START_TIMER', seconds, name } : null;
+  }
+  if (verb === 'EXTEND') {
+    const isTalk =
+      groups.verb === 'give' && !/\bmore\b/.test(groups.rest ?? '');
+    if (seconds === null || isTalk) return null;
+    if (!(hasNoun || name === null || isKnown)) return null;
+    return {
+      kind: 'EXTEND_TIMER',
+      seconds,
+      target: { seconds: null, name, isAll },
+    };
+  }
+  const isTimerTalk =
+    hasNoun ||
+    (seconds === null &&
+      (name === null
+        ? BARE_TIMER_VERBS.has(groups.verb) &&
+          (groups.rest === undefined || /^all(?: of them)?$/.test(groups.rest))
+        : isKnown));
+  if (!isTimerTalk) return null;
+  const target: CookTimerTarget = { seconds, name, isAll };
+  if (verb === 'PAUSE') return { kind: 'PAUSE_TIMER', target };
+  if (verb === 'RESUME') return { kind: 'RESUME_TIMER', target };
+  const isAlarm = !hasNoun || read.isAlarm;
   return {
     kind: 'STOP_TIMER',
-    seconds,
-    scope: isAlarm && seconds === null ? 'RINGING' : 'ANY',
+    target,
+    scope:
+      isAlarm && seconds === null && name === null && !isAll
+        ? 'RINGING'
+        : 'ANY',
   };
+};
+
+const parseTimeLeft = (
+  text: string,
+  context: CookVoiceContext,
+): CookCommand | null => {
+  if (LISTED_TIMERS_PHRASES.has(text)) {
+    return { kind: 'TIME_LEFT', target: { ...NO_TIMER_TARGET, isAll: true } };
+  }
+  const query = text.match(TIME_LEFT_QUERY)?.groups?.query;
+  if (query === undefined) return null;
+  const read = readTimerWords(query);
+  if (read === null) return null;
+  const isTimerTalk =
+    read.hasNoun || read.isAll || isKnownTimerName(read.name, context);
+  if (!isTimerTalk) return null;
+  return {
+    kind: 'TIME_LEFT',
+    target: { seconds: read.seconds, name: read.name, isAll: read.isAll },
+  };
+};
+
+const CANCEL_ANSWERS = new Set([
+  'never mind',
+  'nevermind',
+  'forget it',
+  'cancel',
+  'cancel that',
+  'no',
+  'nope',
+  'nothing',
+  'none',
+  'neither',
+  'skip',
+  'leave it',
+  'no thanks',
+]);
+const ALL_ANSWERS = new Set([
+  'all',
+  'all of them',
+  'both',
+  'both of them',
+  'all timers',
+  'all the timers',
+  'all of the timers',
+  'every one',
+  'every timer',
+  'everything',
+  'them',
+  'each',
+  'each one',
+]);
+const ORDINALS: Record<string, number> = {
+  first: 1,
+  '1st': 1,
+  second: 2,
+  '2nd': 2,
+  third: 3,
+  '3rd': 3,
+  fourth: 4,
+  '4th': 4,
+  fifth: 5,
+  '5th': 5,
+  sixth: 6,
+  seventh: 7,
+  eighth: 8,
+  ninth: 9,
+  tenth: 10,
+};
+const ANSWER_NOISE = new Set([
+  'the',
+  'a',
+  'an',
+  'my',
+  'that',
+  'this',
+  'one',
+  'timer',
+  'timers',
+  'please',
+  'it',
+  'for',
+  'number',
+]);
+
+const answer = (value: CookTimerAnswer): CookCommand => ({
+  kind: 'TIMER_ANSWER',
+  answer: value,
+});
+
+const parseLengthAnswer = (text: string): CookCommand | null => {
+  const spoken = wordsToDigits(text);
+  const seconds =
+    readSpokenDuration(text) ??
+    (/^\d+(?:\.\d+)?$/.test(spoken) ? Math.round(Number(spoken) * 60) : null);
+  return seconds !== null && seconds > 0 && seconds <= MAX_KITCHEN_TIMER_SECONDS
+    ? answer({ kind: 'LENGTH', seconds })
+    : null;
+};
+
+const parseTimerAnswer = (
+  text: string,
+  timers: CookVoiceTimer[],
+): CookCommand | null => {
+  const ids = timers.map((timer) => timer.id);
+  if (ALL_ANSWERS.has(text)) {
+    return answer({ kind: 'PICK', ids, isAll: true });
+  }
+  const trimmed = text
+    .split(' ')
+    .filter((word) => !ANSWER_NOISE.has(word))
+    .join(' ');
+  const ordinal =
+    trimmed === 'last'
+      ? ids.length
+      : (ORDINALS[trimmed] ?? Number(wordsToDigits(trimmed)));
+  if (Number.isInteger(ordinal) && ordinal >= 1 && ordinal <= ids.length) {
+    return answer({ kind: 'PICK', ids: [ids[ordinal - 1]], isAll: false });
+  }
+  const seconds = readSpokenDuration(trimmed);
+  const byLength =
+    seconds === null
+      ? []
+      : timers.filter((timer) => timer.label === formatDuration(seconds));
+  const matched = byLength.length > 0 ? byLength : matchByName(trimmed, timers);
+  return matched.length === 0
+    ? null
+    : answer({
+        kind: 'PICK',
+        ids: matched.map((timer) => timer.id),
+        isAll: false,
+      });
+};
+
+/** What a bare answer means while a question waits: never mind, how long, or which timer. Null for anything else, so ordinary talk is still not a command. */
+const parseChoiceAnswer = (
+  text: string,
+  context: CookVoiceContext,
+): CookCommand | null => {
+  const { choice } = context;
+  if (choice === null) return null;
+  if (CANCEL_ANSWERS.has(text)) return answer({ kind: 'NEVER_MIND' });
+  return choice.kind === 'LENGTH'
+    ? parseLengthAnswer(text)
+    : parseTimerAnswer(text, choice.timers);
 };
 
 const cleanQuery = (query: string) =>
@@ -552,15 +898,21 @@ const parseOne = (
 
   const exact = EXACT.get(text);
   if (exact) return { kind: exact };
-  if (EXACT.get(text.replace(TIMER_SUFFIX, '')) === 'TIME_LEFT') {
-    return { kind: 'TIME_LEFT' };
+  const named = parseTimeLeft(text, context);
+  if (named) return named;
+  if (
+    TIME_LEFT_PHRASES.has(text) ||
+    TIME_LEFT_PHRASES.has(text.replace(TIMER_SUFFIX, ''))
+  ) {
+    return { kind: 'TIME_LEFT', target: NO_TIMER_TARGET };
   }
   const direction = CYCLE_PHRASES[text];
   if (direction !== undefined) return { kind: 'CYCLE_RECIPE', direction };
   const result =
-    parseTimer(text) ??
+    parseTimer(text, context) ??
     parseAmount(text, context) ??
-    parseSwitch(text, context);
+    parseSwitch(text, context) ??
+    parseChoiceAnswer(text, context);
   return result;
 };
 
@@ -687,6 +1039,8 @@ export interface VoiceTimerState {
   remainingMs: number;
   /** The time left as the card shows it ("12:30"). */
   clock: string;
+  /** What the person called a timer they set themselves ("Pasta water"), so it is told by that and not by its length; null for a step's timer. */
+  callName?: string | null;
 }
 
 const SPOKEN_LABEL_UNITS: Record<string, string> = {
@@ -710,22 +1064,23 @@ export const toSpokenLabel = (label: string) => {
 };
 
 const describeOneTimer = (timer: VoiceTimerState) => {
-  const spokenLabel = toSpokenLabel(timer.label);
+  const shownName = timer.callName ?? timer.label;
+  const spokenName = timer.callName ?? toSpokenLabel(timer.label);
   if (timer.status === 'done') {
     return {
-      show: `The ${timer.label} timer is done`,
-      speak: `The ${spokenLabel} timer is done.`,
+      show: `The ${shownName} timer is done`,
+      speak: `The ${spokenName} timer is done.`,
     };
   }
   const isPaused = timer.status === 'paused';
   return {
-    show: `${timer.clock} left on the ${timer.label} timer${isPaused ? ' (paused)' : ''}`,
-    speak: `${formatSpokenTime(timer.remainingMs)} left on the ${spokenLabel} timer.${isPaused ? " It's paused." : ''}`,
+    show: `${timer.clock} left on the ${shownName} timer${isPaused ? ' (paused)' : ''}`,
+    speak: `${formatSpokenTime(timer.remainingMs)} left on the ${spokenName} timer.${isPaused ? " It's paused." : ''}`,
   };
 };
 
-/** The answer to "how much time is left": a line to show (the clocks only, since the pills name the timers) and a sentence to say, naming each timer only when there are several. */
-export const describeTimersLeft = (timers: VoiceTimerState[]) => {
+/** The answer to "how much time is left": a line to show (the clocks only, since the pills name the timers) and a sentence to say, naming each timer only when there are several; `more` is how many were left out of the list. */
+export const describeTimersLeft = (timers: VoiceTimerState[], more = 0) => {
   if (timers.length === 1) return describeOneTimer(timers[0]);
   const parts = timers.map((timer) => {
     if (timer.status === 'done') {
@@ -739,10 +1094,12 @@ export const describeTimersLeft = (timers: VoiceTimerState[]) => {
   });
   const isAllRunning = timers.every((timer) => timer.status === 'running');
   const result = {
-    show: isAllRunning
-      ? `${timers.map((timer) => timer.clock).join(' and ')} left`
-      : parts.map((part) => part.show).join(' · '),
-    speak: parts.map((part) => part.speak).join(' '),
+    show: `${
+      isAllRunning
+        ? `${timers.map((timer) => timer.clock).join(' and ')} left`
+        : parts.map((part) => part.show).join(' · ')
+    }${more > 0 ? ` · and ${more} more` : ''}`,
+    speak: `${parts.map((part) => part.speak).join(' ')}${more > 0 ? ` And ${more} more.` : ''}`,
   };
   return result;
 };
@@ -793,40 +1150,95 @@ const isSooner = (
   (timer.remainingMs === than.remainingMs &&
     (timer.endedAt ?? Infinity) < (than.endedAt ?? Infinity));
 
-/** The timer a spoken command means: the one in focus when it fits, else the one that ends soonest (with the said length, in the given states); null when none fits. */
-export const pickVoiceTimer = <
-  T extends {
-    id: string;
-    label: string;
-    status: string;
-    remainingMs: number;
-    endedAt?: number;
-  },
->(
+export interface VoiceTimerLike {
+  id: string;
+  label: string;
+  status: string;
+  remainingMs: number;
+  endedAt?: number;
+  names: string[];
+}
+
+export type VoiceTimerResolution<T> =
+  | { kind: 'NONE' }
+  | { kind: 'ONE'; timer: T }
+  /** Every timer the person named with "all". */
+  | { kind: 'ALL'; timers: T[] }
+  /** More than one fits and nothing says which: the screen asks. */
+  | { kind: 'ASK'; timers: T[] };
+
+/** The timer a spoken command means, among those in the given states. A named or timed one is found by that; with none said, the one in front on screen, a Time's up (the one that rang first), or the only one that fits; when several fit and nothing tells them apart it asks instead of guessing. */
+export const resolveVoiceTimers = <T extends VoiceTimerLike>(
   timers: T[],
   {
     statuses,
-    label,
+    target,
     focusedId,
   }: {
-    statuses: T['status'][];
-    label: string | null;
+    statuses: string[];
+    target: CookTimerTarget;
     focusedId: string | null;
   },
-): T | null => {
-  const candidates = timers.filter(
-    (timer) =>
-      statuses.includes(timer.status) &&
-      (label === null || timer.label === label),
-  );
-  const result =
-    candidates.find((timer) => timer.id === focusedId) ??
-    candidates.reduce<T | null>(
-      (soonest, timer) =>
-        soonest === null || isSooner(timer, soonest) ? timer : soonest,
+): VoiceTimerResolution<T> => {
+  const pool = timers.filter((timer) => statuses.includes(timer.status));
+  if (target.isAll) {
+    return pool.length === 0 ? { kind: 'NONE' } : { kind: 'ALL', timers: pool };
+  }
+  const label = target.seconds === null ? null : formatDuration(target.seconds);
+  const byLength =
+    label === null ? pool : pool.filter((t) => t.label === label);
+  const matched =
+    target.name === null ? byLength : matchByName(target.name, byLength);
+  if (matched.length === 0) return { kind: 'NONE' };
+  if (matched.length === 1) return { kind: 'ONE', timer: matched[0] };
+  const isNamed = target.seconds !== null || target.name !== null;
+  const inFront = isNamed
+    ? undefined
+    : matched.find((timer) => timer.id === focusedId);
+  if (inFront) return { kind: 'ONE', timer: inFront };
+  const firstRang = matched
+    .filter((timer) => timer.status === 'done')
+    .reduce<T | null>(
+      (first, timer) =>
+        first === null || isSooner(timer, first) ? timer : first,
       null,
     );
-  return result;
+  return firstRang
+    ? { kind: 'ONE', timer: firstRang }
+    : { kind: 'ASK', timers: matched };
+};
+
+const ASK_LIST_NAMES = 4;
+const DISJUNCTION = new Intl.ListFormat('en-US', { type: 'disjunction' });
+
+/** What a timer is called when several are listed side by side: its name, with its length after it when two share a name. */
+export const getTimerChoiceNames = (
+  timers: { name: string; label: string }[],
+) =>
+  timers.map((timer) =>
+    timers.filter((other) => other.name === timer.name).length > 1
+      ? `${timer.name} (${timer.label})`
+      : timer.name,
+  );
+
+/** The question that asks which timer is meant: up to four names, then "N more", in the order "the second one" counts them. */
+export const describeTimerQuestion = (
+  timers: { name: string; label: string }[],
+  verb: string,
+) => {
+  const names = getTimerChoiceNames(timers);
+  const shown = names.slice(
+    0,
+    ASK_LIST_NAMES - 1 + (names.length === ASK_LIST_NAMES ? 1 : 0),
+  );
+  const hidden = names.length - shown.length;
+  const list = DISJUNCTION.format(
+    hidden > 0 ? [...shown, `${hidden} more`] : shown,
+  );
+  return {
+    show: `Which timer to ${verb}: ${list}?`,
+    speak: `Which timer should I ${verb}? ${list}?`,
+  };
 };
 
 /** The timers "how much time is left" answers about: the one in focus (else the one that rang first, else the soonest running, else a paused one), then the soonest other running timer, if any. */

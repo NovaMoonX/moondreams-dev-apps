@@ -56,6 +56,7 @@ import {
   MAX_CONTAINER_NOTE_LENGTH,
   MAX_CONTAINER_SERVINGS,
   MAX_CONTAINER_TITLE_LENGTH,
+  MAX_COOK_TIMERS,
   MAX_EAT_BY_DATE,
   MIN_EAT_BY_DATE,
 } from '../../src/apps/pinch/constants.ts';
@@ -7592,6 +7593,8 @@ assert.deepEqual(
   'a timer is named by its step, and by its recipe first when the session cooks several',
 );
 const plateTimer = (status: string) => ({ status });
+const timersOf = (count: number, status: string) =>
+  Array.from({ length: count }, () => plateTimer(status));
 assert.deepEqual(
   [
     plateCooks.countLiveTimers([
@@ -7599,27 +7602,99 @@ assert.deepEqual(
       plateTimer('paused'),
       plateTimer('done'),
     ]),
+    plateCooks.canStartTimer(timersOf(MAX_COOK_TIMERS - 1, 'running')),
+    plateCooks.canStartTimer(timersOf(MAX_COOK_TIMERS, 'running')),
     plateCooks.canStartTimer([
-      plateTimer('running'),
-      plateTimer('paused'),
-      plateTimer('running'),
+      ...timersOf(MAX_COOK_TIMERS - 1, 'running'),
+      ...timersOf(MAX_COOK_TIMERS, 'done'),
     ]),
-    plateCooks.canStartTimer([
-      plateTimer('running'),
-      plateTimer('paused'),
-      plateTimer('running'),
-      plateTimer('running'),
-    ]),
-    plateCooks.canStartTimer([
-      plateTimer('running'),
-      plateTimer('done'),
-      plateTimer('running'),
-      plateTimer('done'),
-      plateTimer('running'),
-    ]),
+    MAX_COOK_TIMERS,
   ],
-  [2, true, false, true],
-  'a session runs up to four timers across all its recipes; a finished one waiting for Dismiss doesn’t count',
+  [2, true, false, true, 10],
+  'a session runs up to ten timers, its recipes’ and the ones the person set, together; a finished one waiting for Dismiss doesn’t count',
+);
+assert.deepEqual(
+  [
+    plateCooks.toKitchenTimerName('  pasta   water '),
+    plateCooks.toKitchenTimerName(''),
+    plateCooks.toKitchenTimerName('   '),
+    plateCooks.toKitchenTimerName('x'.repeat(60)).length,
+  ],
+  ['Pasta water', 'Timer', 'Timer', 40],
+  'a kitchen timer is named as typed or said with the spaces tidied and the first letter up, "Timer" when it has no name, and never past its cap',
+);
+const draftOf = (length: string | null, otherMinutes = '') => ({
+  ...plateCooks.EMPTY_KITCHEN_TIMER_DRAFT,
+  length,
+  otherMinutes,
+});
+assert.deepEqual(
+  [
+    plateCooks.getDraftSeconds(draftOf(null)),
+    plateCooks.getDraftSeconds(draftOf('10')),
+    plateCooks.getDraftSeconds(draftOf('OTHER')),
+    plateCooks.getDraftSeconds(draftOf('OTHER', '45')),
+    plateCooks.getDraftSeconds(draftOf('OTHER', ' 90 ')),
+    plateCooks.getDraftSeconds(draftOf('OTHER', '1440')),
+    plateCooks.getDraftSeconds(draftOf('OTHER', '1441')),
+    plateCooks.getDraftSeconds(draftOf('OTHER', '0')),
+    plateCooks.getDraftSeconds(draftOf('OTHER', '1.5')),
+    plateCooks.getDraftSeconds(draftOf('OTHER', '-5')),
+    plateCooks.getDraftSeconds(draftOf('OTHER', '1e3')),
+  ],
+  [null, 600, null, 2700, 5400, 86_400, null, null, null, null, null],
+  'a timer being set needs a length: a picked one, or whole minutes up to a day typed under Other',
+);
+assert.deepEqual(
+  [
+    plateCooks.canExtendTimer(60_000, 5 * 60_000),
+    plateCooks.canExtendTimer(23 * 3_600_000 + 55 * 60_000, 5 * 60_000),
+    plateCooks.canExtendTimer(23 * 3_600_000 + 55 * 60_000 + 1, 5 * 60_000),
+    plateCooks.canExtendTimer(0, 0),
+    plateCooks.canExtendTimer(0, -1),
+  ],
+  [true, true, false, false, false],
+  'more time fits until the timer would pass a day, and adding nothing is not an extension',
+);
+assert.deepEqual(
+  [
+    plateCooks.getVisibleOtherTimers([1, 2, 3, 4, 5, 6]),
+    plateCooks.getVisibleOtherTimers([1, 2, 3, 4, 5, 6, 7]),
+    plateCooks.getVisibleOtherTimers([1, 2]),
+    plateCooks.getVisibleOtherTimers([]),
+  ],
+  [
+    { shown: [1, 2, 3, 4, 5, 6], hidden: 0 },
+    { shown: [1, 2, 3], hidden: 4 },
+    { shown: [1, 2], hidden: 0 },
+    { shown: [], hidden: 0 },
+  ],
+  'the timer view lists every other timer until more than three would hide, then three and a count',
+);
+assert.deepEqual(
+  [
+    plateCooks.getTimerSlotKey({
+      recipeId: null,
+      stepNumber: 0,
+      label: '10 min',
+    }),
+    plateCooks.getTimerNext(
+      [{ recipeId: 'adobo', stepIndex: 0, stepCount: 4 }],
+      { recipeId: null, stepNumber: 0 },
+    ),
+    plateCooks.getMeanwhile(
+      [
+        { recipeId: 'adobo', stepIndex: 0, stepCount: 4 },
+        { recipeId: 'rice', stepIndex: 0, stepCount: 3 },
+      ],
+      null,
+      null,
+    ),
+    plateCooks.getTimerSecondary(null, 'running'),
+    plateCooks.getTimerSecondary(null, 'done'),
+  ],
+  ['null:0:10 min', null, null, 'BACK', null],
+  'a kitchen timer belongs to no step: nothing comes next, nothing else is waiting, and its footer offers the way back (nothing once it rang)',
 );
 
 const stepTimer = (

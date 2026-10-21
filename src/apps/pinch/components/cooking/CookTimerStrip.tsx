@@ -55,12 +55,14 @@ function Pills({ timers, onTick, onFocus, className }: CookTimerStripProps) {
       className={join('flex snap-x gap-2 overflow-x-auto', className)}
     >
       {timers.map((timer) => {
-        const isSharedStep = timers.some(
-          (other) =>
-            other.id !== timer.id &&
-            other.recipeId === timer.recipeId &&
-            other.stepNumber === timer.stepNumber,
-        );
+        const isSharedStep =
+          timer.recipeId !== null &&
+          timers.some(
+            (other) =>
+              other.id !== timer.id &&
+              other.recipeId === timer.recipeId &&
+              other.stepNumber === timer.stepNumber,
+          );
         const name = isSharedStep
           ? `${timer.label} · ${timer.stepName}`
           : timer.stepName;

@@ -12,7 +12,9 @@ import { COOK_WINDOW_MS } from '@apps/pinch/constants';
 import {
   getCookCommandKey,
   type CookCommand,
+  type CookTimerAnswer,
   type CookTimerScope,
+  type CookTimerTarget,
   type CookVoiceContext,
 } from '@apps/pinch/utils/cookVoice';
 import {
@@ -54,11 +56,17 @@ export interface CookVoiceActions {
   showIngredients: () => CookVoiceResult;
   showSteps: () => CookVoiceResult;
   finish: () => CookVoiceResult;
-  startTimer: (seconds: number | null) => CookVoiceResult;
-  pauseTimer: (seconds: number | null) => CookVoiceResult;
-  resumeTimer: (seconds: number | null) => CookVoiceResult;
-  stopTimer: (seconds: number | null, scope: CookTimerScope) => CookVoiceResult;
-  timeLeft: () => CookVoiceResult;
+  showTimers: () => CookVoiceResult;
+  startTimer: (seconds: number | null, name: string | null) => CookVoiceResult;
+  pauseTimer: (target: CookTimerTarget) => CookVoiceResult;
+  resumeTimer: (target: CookTimerTarget) => CookVoiceResult;
+  stopTimer: (
+    target: CookTimerTarget,
+    scope: CookTimerScope,
+  ) => CookVoiceResult;
+  extendTimer: (seconds: number, target: CookTimerTarget) => CookVoiceResult;
+  timeLeft: (target: CookTimerTarget) => CookVoiceResult;
+  answerTimer: (answer: CookTimerAnswer) => CookVoiceResult;
   amount: (lineIds: string[], query: string) => CookVoiceResult;
   switchRecipe: (
     recipeId: string | null,
@@ -97,16 +105,22 @@ export const runCookCommand = (
       return actions.showSteps();
     case 'FINISH':
       return actions.finish();
+    case 'SHOW_TIMERS':
+      return actions.showTimers();
     case 'START_TIMER':
-      return actions.startTimer(command.seconds);
+      return actions.startTimer(command.seconds, command.name);
     case 'PAUSE_TIMER':
-      return actions.pauseTimer(command.seconds);
+      return actions.pauseTimer(command.target);
     case 'RESUME_TIMER':
-      return actions.resumeTimer(command.seconds);
+      return actions.resumeTimer(command.target);
     case 'STOP_TIMER':
-      return actions.stopTimer(command.seconds, command.scope);
+      return actions.stopTimer(command.target, command.scope);
+    case 'EXTEND_TIMER':
+      return actions.extendTimer(command.seconds, command.target);
     case 'TIME_LEFT':
-      return actions.timeLeft();
+      return actions.timeLeft(command.target);
+    case 'TIMER_ANSWER':
+      return actions.answerTimer(command.answer);
     case 'AMOUNT':
       return actions.amount(command.lineIds, command.query);
     case 'SWITCH_RECIPE':

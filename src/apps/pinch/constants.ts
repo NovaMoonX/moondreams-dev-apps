@@ -664,12 +664,22 @@ export const NUTRITION_BASIS_OPTIONS = [
   { value: 'PER_100G', label: 'Per 100 g' },
 ] as const;
 
-export const MAX_COOK_TIMERS = 4;
+/** Live timers for the whole session, a dish's and a kitchen timer's together. */
+export const MAX_COOK_TIMERS = 10;
 /** An undismissed Time's up buzzes and beeps again this often, up to five more times. */
 export const ALERT_REPEAT_MS = 60_000;
 export const MAX_ALERT_REPEATS = 5;
-/** A step offers a timer card for each of the first four times it mentions, as many as can run at once. */
-export const MAX_STEP_TIMERS = MAX_COOK_TIMERS;
+/** A step offers a timer card for each of the first four times it mentions. */
+export const MAX_STEP_TIMERS = 4;
+/** A kitchen timer is a timer the person names themselves, for something no step mentions. */
+export const MAX_KITCHEN_TIMER_NAME = 40;
+export const KITCHEN_TIMER_NAME = 'Timer';
+export const MAX_KITCHEN_TIMER_SECONDS = 24 * 3600;
+export const KITCHEN_TIMER_MINUTES = [1, 3, 5, 10, 15, 30] as const;
+export const COOK_CHOICE_MS = 20_000;
+export const TIMER_EXTEND_MINUTES = [1, 5] as const;
+/** The timer view lists this many other timers and folds the rest behind one row that opens the Timers screen, once more than three would hide. */
+export const OTHER_TIMER_ROWS = 3;
 
 export const MIN_COOK_SERVINGS = 0.5;
 export const MAX_COOK_SERVINGS = 1000;

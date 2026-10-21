@@ -8,6 +8,7 @@ import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 import { useTimerPush } from '@apps/pinch/hooks/useTimerPush';
 import {
+  canExtendTimer,
   canStartTimer,
   countLiveTimers,
   getAlertRepeatsDue,
@@ -24,12 +25,13 @@ import {
 
 interface TimerBase {
   id: string;
-  recipeId: string;
+  /** null for a kitchen timer: one the person named themselves, which no dish owns. */
+  recipeId: string | null;
   /** Named on screen only when the session cooks several recipes. */
   recipeTitle: string | null;
-  /** As the person reads it, starting at 1. */
+  /** As the person reads it, starting at 1; 0 for a kitchen timer. */
   stepNumber: number;
-  /** The step's first words, what the timer is called on screen. */
+  /** What the timer is called on screen: the step's first words, or a kitchen timer's name. */
   stepName: string;
   label: string;
   /** The whole length it was started with, for the progress bar. */
@@ -289,11 +291,12 @@ export function useCookTimers(
     return () => window.clearTimeout(timeoutId);
   }, [waitingIds, playAlert]);
 
-  /** Starts a timer and brings it into focus; returns its id, or null at the cap. */
+  /** Starts a timer and, unless `shouldFocus` is off, brings it into focus; returns its id, or null at the cap. A timer the person set for something on the side runs in the background, so it never takes the screen from what they are doing. */
   const start = (
     base: Omit<TimerBase, 'id' | 'label' | 'durationMs'>,
     seconds: number,
     label: string,
+    shouldFocus = true,
   ) => {
     if (!canStartTimer(timersRef.current)) {
       return null;
@@ -319,9 +322,65 @@ export function useCookTimers(
     setFinishedSlots((current) =>
       current.filter((key) => key !== getTimerSlotKey({ ...base, label })),
     );
-    setFocus({ isShown: true, pickedId: id });
+    if (shouldFocus) setFocus({ isShown: true, pickedId: id });
     setNotice((current) => (current === 'unseen' ? 'showing' : current));
     return id;
+  };
+
+  /** Adds time to a timer: a running or paused one gets it on top of what is left, a Time's up starts again for just that long. False when it would pass a day or, for a Time's up, when the session is at its cap. */
+  const extend = (id: string, ms: number) => {
+    const now = Date.now();
+    const target = timersRef.current.find((timer) => timer.id === id);
+    if (!target || ms <= 0) {
+      return false;
+    }
+    if (!canExtendTimer(getRemainingMs(target, now), ms)) {
+      return false;
+    }
+    if (target.status === 'done') {
+      if (!canStartTimer(timersRef.current)) {
+        return false;
+      }
+      prepareSound();
+      ringsRef.current.delete(id);
+      commit(
+        timersRef.current.map((timer): CookTimer =>
+          timer.id === id
+            ? {
+                ...baseOf(timer),
+                durationMs: ms,
+                status: 'running',
+                startedAt: now,
+                endsAt: now + ms,
+              }
+            : timer,
+        ),
+      );
+      setFinishedSlots((current) =>
+        current.filter((key) => key !== getTimerSlotKey(target)),
+      );
+      setFocus({ isShown: true, pickedId: id });
+      return true;
+    }
+    commit(
+      timersRef.current.map((timer): CookTimer => {
+        if (timer.id !== id) return timer;
+        const base = { ...baseOf(timer), durationMs: timer.durationMs + ms };
+        return timer.status === 'running'
+          ? {
+              ...base,
+              status: 'running',
+              startedAt: timer.startedAt,
+              endsAt: timer.endsAt + ms,
+            }
+          : {
+              ...base,
+              status: 'paused',
+              remainingMs: getRemainingMs(timer, now) + ms,
+            };
+      }),
+    );
+    return true;
   };
 
   const pause = (id: string) => {
@@ -418,6 +477,7 @@ export function useCookTimers(
     prepareSound,
     pause,
     resume,
+    extend,
     dismiss,
     focus: focusTimer,
     unfocus,

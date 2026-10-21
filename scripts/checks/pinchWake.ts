@@ -37,6 +37,8 @@ const context: CookVoiceContext = {
     { id: 'garlic', names: ['Garlic'], isInStep: true },
     { id: 'salt', names: ['Salt'], isInStep: true },
   ],
+  timers: [],
+  choice: null,
 };
 
 assert.equal(COOK_WAKE_PHRASE, 'Hey Pepper', 'the phrase as it is shown');
