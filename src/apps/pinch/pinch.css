@@ -16,6 +16,10 @@ html.pinch-theme {
   --color-accent-foreground: oklch(0.27 0.03 50);
   --color-border: oklch(0.9 0.018 75);
   --color-card: oklch(0.998 0.004 85);
+  --color-popover: oklch(0.998 0.004 85);
+  --color-popover-foreground: oklch(0.27 0.03 50);
+  --color-tooltip: oklch(0.27 0.03 50);
+  --color-tooltip-foreground: oklch(0.99 0.008 85);
 
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
@@ -51,6 +55,10 @@ html.pinch-theme.dark {
   --color-accent-foreground: oklch(0.95 0.018 80);
   --color-border: oklch(0.32 0.012 55);
   --color-card: oklch(0.21 0.01 55);
+  --color-popover: oklch(0.21 0.01 55);
+  --color-popover-foreground: oklch(0.95 0.018 80);
+  --color-tooltip: oklch(0.95 0.018 80);
+  --color-tooltip-foreground: oklch(0.2 0.012 55);
 
   --pinch-drizzle: var(--color-orange-400);
   --pinch-drizzle-fill: var(--color-orange-400);
@@ -67,6 +75,24 @@ html.pinch-theme.dark {
   --pinch-meal-snack: var(--color-violet-300);
   --pinch-meal-dessert: var(--color-pink-300);
   --pinch-meal-drink: var(--color-sky-300);
+}
+
+/* A subview floats as a warm paper card on an apricot backdrop (see `.subview-card` in index.css). */
+html.pinch-theme {
+  --subview-backdrop: color-mix(
+    in oklab,
+    var(--pinch-drizzle) 22%,
+    var(--color-background)
+  );
+  --subview-radius: var(--radius-2xl);
+  --subview-shadow:
+    0 1px 2px color-mix(in oklab, var(--pinch-drizzle) 14%, transparent),
+    0 16px 36px -14px color-mix(in oklab, var(--pinch-drizzle) 42%, transparent);
+}
+
+html.pinch-theme.dark {
+  --subview-backdrop-dark: oklch(0.1 0.012 55);
+  --subview-border: color-mix(in oklab, var(--pinch-drizzle) 22%, var(--color-border));
 }
 
 /* A rounded field needs its text inset from the curve, or the first letter looks pressed against the edge. */

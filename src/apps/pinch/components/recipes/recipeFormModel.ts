@@ -1,8 +1,10 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { generateUuid } from '@/utils';
+import { clipAtWord } from '@/utils/stringUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import {
   MAX_MINUTES,
+  MAX_NOTE_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_SERVING_AMOUNT,
   NUTRITION_METRICS,
@@ -13,6 +15,7 @@ import {
   getGroupKey,
   orderIngredientLines,
 } from '@apps/pinch/utils/ingredientGroups';
+import { getCategories } from '@apps/pinch/utils/categories';
 import {
   EMPTY_COLLECTIONS_CHOICE,
   getInitialCollectionsChoice,
@@ -22,7 +25,7 @@ import { addPrepToNote, splitPrep } from '@apps/pinch/utils/ingredientNames';
 import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
 import {
   normalizeName,
-  resolveIngredient,
+  resolveReadName,
 } from '@apps/pinch/utils/ingredientMatch';
 import {
   EMPTY_CARE_TEXT,
@@ -38,6 +41,7 @@ import {
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
   Collection,
+  DishCategory,
   Idea,
   NutritionMetric,
   NutritionValues,
@@ -76,6 +80,7 @@ export interface IngredientRow {
 
 export interface RecipeFormData {
   title: string;
+  categories: DishCategory[];
   basics: { servings: number; prep: string; cook: string };
   description: string;
   ingredients: IngredientRow[];
@@ -86,8 +91,6 @@ export interface RecipeFormData {
   collections: CollectionsChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
   nutrition: Record<NutritionMetric, string>;
-  /** Why the recipe is being changed; becomes the tweak's note when saving records one. */
-  why: string;
 }
 
 export const getInitialData = (
@@ -96,6 +99,7 @@ export const getInitialData = (
   collections: readonly Collection[] = [],
 ): RecipeFormData => ({
   title: recipe?.title ?? '',
+  categories: getCategories(recipe ?? {}),
   basics: {
     servings: recipe?.servings ?? 4,
     prep: recipe?.prepMinutes != null ? String(recipe.prepMinutes) : '',
@@ -131,8 +135,10 @@ export const getInitialData = (
         : '',
     ]),
   ) as Record<NutritionMetric, string>,
-  why: '',
 });
+
+const clipNote = (note: string | null) =>
+  note === null ? null : clipAtWord(note, MAX_NOTE_LENGTH);
 
 /** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick, cased like the app's own names with prep words such as "bone-in" moved to the line's note. A second line for an ingredient already listed under the same heading adds to it when the units agree and stays its own line when they don't, so no amount is lost; under another heading it is always its own line. A line the recipe gives no amount ("salt to taste") keeps none. */
 export const getDataFromExtracted = (
@@ -141,7 +147,11 @@ export const getDataFromExtracted = (
 ): RecipeFormData => {
   const blank = getInitialData(null);
   const rows = extracted.ingredients.reduce<IngredientRow[]>((acc, line) => {
-    const resolution = resolveIngredient(line.name, ingredients);
+    const { resolution, leftover } = resolveReadName(
+      line.name,
+      line.alsoCalled,
+      ingredients,
+    );
     const match = resolution.kind === 'match' ? resolution.option : null;
     const { prep } = splitPrep(line.name);
     const newName =
@@ -186,7 +196,9 @@ export const getDataFromExtracted = (
         amount: amount === null ? '' : String(amount),
         unit,
         isAmountless: amount === null,
-        note: addPrepToNote(line.note, prep),
+        note: clipNote(
+          addPrepToNote(line.note, leftover ? [...prep, leftover] : prep),
+        ),
         proposedName:
           resolution.kind === 'custom' && newName === null
             ? resolution.label

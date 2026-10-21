@@ -68,7 +68,7 @@ function MealRow({
         className='size-10 rounded-xl text-xl'
       />
       <span className='min-w-0 flex-1'>
-        <span className='text-foreground line-clamp-2 block text-sm font-medium break-words whitespace-normal'>
+        <span className='text-foreground line-clamp-2 text-sm font-medium break-words whitespace-normal'>
           {title}
         </span>
         {(subtitle || isCooked) && (

@@ -66,6 +66,10 @@ export const formatMonthTitle = (monthKey: string) => {
 export const formatDayTitle = (dayKey: string) =>
   dayTitleFormatter.format(getDateOfDayKey(dayKey));
 
+/** A day's heading in its drawer and hover card: the weekday and date, led by "Today" on the clock's today. */
+export const formatDayHeading = (dayKey: string, isToday: boolean) =>
+  isToday ? `Today · ${formatDayTitle(dayKey)}` : formatDayTitle(dayKey);
+
 /** "Oct 12", with the year when it isn't the viewer's current one. */
 export const formatDayShort = (dayKey: string, now = Date.now()) =>
   (dayKey.slice(0, 4) === toLocalDateInputValue(now).slice(0, 4)

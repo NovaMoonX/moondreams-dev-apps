@@ -2,9 +2,11 @@ import type {
   ContainerEventKind,
   ContainerPlace,
   Dimension,
+  DishCategory,
   IdeaKind,
   IdeaStartMethod,
   KitchenView,
+  ListSortKey,
   MealType,
   PackageEventKind,
   PackagePlace,
@@ -443,6 +445,47 @@ export const MEAL_TYPE_EMOJIS: Record<MealType, string> = {
   DRINK: '🥤',
 };
 
+/** What kind of dish a recipe or saved meal is, in the order the pickers and the filter list them. The rules repeat the values. */
+export const DISH_CATEGORIES: readonly {
+  value: DishCategory;
+  label: string;
+  emoji: string;
+}[] = [
+  { value: 'BREAKFAST', label: 'Breakfast', emoji: '🍳' },
+  { value: 'MAIN', label: 'Main dishes', emoji: '🍗' },
+  { value: 'SIDE', label: 'Sides', emoji: '🥦' },
+  { value: 'SOUP_SALAD', label: 'Soups & salads', emoji: '🥗' },
+  { value: 'SNACK', label: 'Snacks', emoji: '🍿' },
+  { value: 'DESSERT', label: 'Desserts', emoji: '🍰' },
+  { value: 'BAKING', label: 'Baking', emoji: '🥖' },
+  { value: 'DRINK', label: 'Drinks', emoji: '🥤' },
+  { value: 'SAUCE', label: 'Sauces & dips', emoji: '🫙' },
+];
+export const CATEGORY_TITLE = 'Category';
+/** The filter's two answers that aren't a category. */
+export const CATEGORY_FILTER_ANY = 'any';
+export const CATEGORY_FILTER_NONE = 'none';
+
+export const LIST_SORT_OPTIONS: readonly {
+  value: ListSortKey;
+  label: string;
+  emoji: string;
+}[] = [
+  { value: 'default', label: 'Default', emoji: '📋' },
+  { value: 'created', label: 'Date created', emoji: '🆕' },
+  { value: 'edited', label: 'Last edited', emoji: '✏️' },
+  { value: 'alpha', label: 'Name', emoji: '🔤' },
+];
+/** Each sort's two directions, the first being the one it starts in; the default order has none. */
+export const LIST_SORT_ORDER_LABELS: Record<
+  Exclude<ListSortKey, 'default'>,
+  readonly [string, string]
+> = {
+  created: ['Newest first', 'Oldest first'],
+  edited: ['Latest first', 'Earliest first'],
+  alpha: ['A to Z', 'Z to A'],
+};
+
 export const MAX_PRICE_CENTS = 100_000_000;
 
 export const MAX_RECIPE_INGREDIENTS = 60;
@@ -659,9 +702,8 @@ export const CONTAINER_PLACE_LABELS: Record<ContainerPlace, string> = {
   FRIDGE: 'Fridge',
   FREEZER: 'Freezer',
 };
-/** Two that don't both read "frozen": an ice cube beside a snowflake said freezer twice. */
 export const CONTAINER_PLACE_EMOJIS: Record<ContainerPlace, string> = {
-  FRIDGE: '🥛',
+  FRIDGE: '🧊',
   FREEZER: '❄️',
 };
 export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({
@@ -726,7 +768,7 @@ export const PACKAGE_PLACE_LABELS: Record<PackagePlace, string> = {
 };
 export const PACKAGE_PLACE_EMOJIS: Record<PackagePlace, string> = {
   PANTRY: '🥫',
-  FRIDGE: '🥛',
+  FRIDGE: '🧊',
   FREEZER: '❄️',
 };
 export const PACKAGE_PLACE_OPTIONS = PACKAGE_PLACES.map((place) => ({
@@ -734,19 +776,6 @@ export const PACKAGE_PLACE_OPTIONS = PACKAGE_PLACES.map((place) => ({
   label: PACKAGE_PLACE_LABELS[place],
   emoji: PACKAGE_PLACE_EMOJIS[place],
 }));
-export const PACKAGE_EMOJI = '📦';
-/** The chip on an ingredient's row: what it is, by the part of the shop it comes from. */
-export const PANTRY_SECTION_EMOJIS: Record<ShopSection, string> = {
-  produce: '🥬',
-  meat: '🥩',
-  dairy: '🥛',
-  bakery: '🍞',
-  pantry: '🥫',
-  spices: '🧂',
-  snacks: '🍿',
-  frozen: '🍦',
-  other: PACKAGE_EMOJI,
-};
 export const PACKAGE_EVENT_KINDS: PackageEventKind[] = [
   'ADDED',
   'USED',
@@ -810,12 +839,23 @@ export const REMINDER_KINDS: {
 /** A timer's push goes out this long after its end, so a page that is awake can cancel it first and ring on its own. */
 export const TIMER_PUSH_GRACE_MS = 3000;
 
-/** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it, in plain text: a bare "pinch" or "a pinch" is never one, since it is an ingredient word. */
-export const COOK_WAKE_PHRASE = 'Hey Pinch';
-export const COOK_WAKE_SPELLINGS = ['hey pinch', 'hay pinch', 'heypinch'];
+/** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it, in plain text and in one place. Matching is only at the start of what was heard, so a step that says "pepper" or "a pepper mill" never wakes it. */
+export const COOK_WAKE_PHRASE = 'Hey Pepper';
+export const COOK_WAKE_SPELLINGS = [
+  'hey pepper',
+  'hay pepper',
+  'heypepper',
+  'hey peper',
+  'hey paper',
+  'hay paper',
+  'heypaper',
+  'hey papper',
+  'hey peppa',
+  'hey pepa',
+];
 /** How long a command window stays open after the last thing it understood. */
 export const COOK_WINDOW_MS = 10_000;
-/** "Hey Pinch" listening turns itself off after this long without the phrase, not counting the time a timer runs or the grace after one rings. */
+/** Waiting turns itself off after this long without the phrase, not counting the time a timer runs or the grace after one rings. */
 export const COOK_WAKE_IDLE_MS = 10 * 60_000;
 /** The wait stays paused this long after a timer rings, so the person tending it is not cut off. */
 export const COOK_WAKE_TIMER_GRACE_MS = 2 * 60_000;

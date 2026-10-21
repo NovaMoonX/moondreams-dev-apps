@@ -167,7 +167,7 @@ function NoteForm({
         label: '',
         renderComponent: (props) => (
           <NoteTextField
-            label={isTweak ? 'What changed and why?' : 'Your note'}
+            label={isTweak ? 'Why you changed it' : 'Your note'}
             placeholder={
               isTweak
                 ? 'Optional'

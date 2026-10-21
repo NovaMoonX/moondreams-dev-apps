@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
 import { useState } from 'react';
 
+import CantFindItButton from '@/components/CantFindItButton';
 import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -304,14 +305,9 @@ function MoviePicker({
             )}
           </div>
           {emptyState.offerManual && (
-            <Button
-              type='button'
-              rounded='full'
-              variant={isSearchResting ? 'primary' : 'secondary'}
-              onClick={onAddByTitle}
-            >
+            <CantFindItButton onClick={onAddByTitle}>
               Can't find it? Add it by title
-            </Button>
+            </CantFindItButton>
           )}
         </div>
       )}

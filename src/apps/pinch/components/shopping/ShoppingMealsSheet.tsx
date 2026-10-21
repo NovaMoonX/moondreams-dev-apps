@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -23,9 +23,10 @@ import {
   selectShoppingSourceLabels,
 } from '@apps/pinch/store/selectors';
 import {
-  compareSourceLabels,
   formatSourceSlot,
+  getMealRows,
   getSourceNames,
+  type HeldMeal,
   type ShoppingMeal,
   type StopEntry,
   type StopRowCounts,
@@ -33,8 +34,17 @@ import {
 
 const UNDO_TOAST_MS = 6000;
 const ROWS_SHOWN = 40;
+const UNDO_GUARD_MS = 600;
 
 const undone = new Set<string>();
+
+interface HeldRow extends HeldMeal {
+  stopId: string;
+  entries: StopEntry[];
+  note: string | undefined;
+  rowNote: string | undefined;
+  takenAt: number;
+}
 
 const KIND_WORDS = { recipe: 'Recipe', meal: 'Saved meal' } as const;
 
@@ -87,10 +97,8 @@ function ShoppingMealsSheet({
   const isPhone = useMediaQuery().isBelow('sm');
   const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));
   const labels = useAppSelector(selectShoppingSourceLabels);
-  const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
-  const [taken, setTaken] = useState<ReadonlyMap<string, ShoppingMeal>>(
-    new Map(),
-  );
+  const [held, setHeld] = useState<ReadonlyMap<string, HeldRow>>(new Map());
+  const inFlight = useRef(new Set<string>());
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(ROWS_SHOWN);
@@ -103,18 +111,13 @@ function ShoppingMealsSheet({
     meal.label.kind === 'planned'
       ? meal.label.name
       : KIND_WORDS[meal.label.kind];
-  const liveSources = new Set(meals.map((meal) => meal.source));
-  const takenMeals = [...taken.values()].filter(
-    (meal) => !liveSources.has(meal.source),
-  );
-  const takenSources = new Set(takenMeals.map((meal) => meal.source));
-  const shown = [...meals, ...takenMeals].sort(compareSourceLabels);
-  const hasSearch = shown.length >= LIST_SEARCH_THRESHOLD;
+  const rows = getMealRows(meals, held);
+  const hasSearch = rows.length >= LIST_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const found =
     needle === ''
-      ? shown
-      : shown.filter((meal) =>
+      ? rows
+      : rows.filter(({ meal }) =>
           [getTitle(meal), getWhat(meal)].some((text) =>
             text.toLowerCase().includes(needle),
           ),
@@ -122,14 +125,16 @@ function ShoppingMealsSheet({
   const visible = found.length <= limit + 3 ? found : found.slice(0, limit);
   const names = new Map(
     getSourceNames(
-      shown.map((meal) => meal.source),
+      rows.map(({ meal }) => meal.source),
       new Map([
-        ...shown.map((meal) => [meal.source, meal.label] as const),
+        ...rows.map(({ meal }) => [meal.source, meal.label] as const),
         ...labels,
       ]),
       todayKey,
     ).map(({ source, name }) => [source, name]),
   );
+  const getName = (meal: ShoppingMeal) =>
+    names.get(meal.source) ?? meal.label.name;
 
   const undo = async (entries: StopEntry[]) => {
     try {
@@ -146,18 +151,48 @@ function ShoppingMealsSheet({
           type: 'info',
         });
       }
+      return restored;
     } catch (undoError) {
       addToast({
         title: "Couldn't undo that",
         description: getErrorMessage(undoError, 'Your list is as it is now.'),
         type: 'error',
       });
+      return null;
     }
   };
 
+  const handleUndo = async (source: string, tappedAt: number) => {
+    const entry = held.get(source);
+    if (
+      !entry ||
+      entry.status !== 'taken' ||
+      undone.has(entry.stopId) ||
+      tappedAt - entry.takenAt < UNDO_GUARD_MS
+    ) {
+      return;
+    }
+    undone.add(entry.stopId);
+    const restored = await undo(entry.entries);
+    if (restored === null) {
+      undone.delete(entry.stopId);
+      return;
+    }
+    setHeld((current) => {
+      const now = current.get(source);
+      if (!now || now.stopId !== entry.stopId) return current;
+      return new Map(current).set(
+        source,
+        restored === 0
+          ? { ...now, entries: [] }
+          : { ...now, status: 'restored' },
+      );
+    });
+  };
+
   const handleStop = async (meal: ShoppingMeal) => {
-    const name = names.get(meal.source) ?? meal.label.name;
-    if (stopping.has(meal.source)) {
+    const name = getName(meal);
+    if (inFlight.current.has(meal.source)) {
       return;
     }
     if (!navigator.onLine) {
@@ -167,48 +202,85 @@ function ShoppingMealsSheet({
       return;
     }
     setError(null);
-    setStopping((current) => new Set(current).add(meal.source));
+    inFlight.current.add(meal.source);
+    const stopId = generateUuid();
+    setHeld((current) =>
+      new Map(current).set(meal.source, {
+        meal,
+        status: 'removing',
+        stopId,
+        entries: [],
+        note: undefined,
+        rowNote: undefined,
+        takenAt: 0,
+      }),
+    );
     try {
       const result: StopResult = await dispatch(
         stopShoppingFor({ uid, source: meal.source }),
       ).unwrap();
-      setTaken((current) => new Map(current).set(meal.source, meal));
-      const id = generateUuid();
-      addToast({
-        id,
-        title: `Took ${name} off your list`,
-        description: getStoppedText(result.rows, meal),
-        type: 'success',
-        duration: UNDO_TOAST_MS,
-        action:
-          result.entries.length > 0
-            ? {
-                label: 'Undo',
-                onClick: () => {
-                  removeToast(id);
-                  if (undone.has(id)) return;
-
-                  undone.add(id);
-                  void undo(result.entries);
-                },
-              }
-            : undefined,
-      });
+      setHeld((current) =>
+        new Map(current).set(meal.source, {
+          meal,
+          status: 'taken',
+          stopId,
+          entries: result.entries,
+          note: getStoppedText(result.rows, meal),
+          rowNote: getStoppedText({ ...result.rows, removed: 0 }, meal),
+          takenAt: performance.now(),
+        }),
+      );
     } catch (stopError) {
+      setHeld((current) => {
+        const next = new Map(current);
+        next.delete(meal.source);
+        return next;
+      });
       setError(
         `Couldn't take ${name} off your list. ${getErrorMessage(stopError, '')}`.trim(),
       );
     } finally {
-      setStopping((current) => {
-        const next = new Set(current);
-        next.delete(meal.source);
-        return next;
-      });
+      inFlight.current.delete(meal.source);
     }
   };
 
-  const getFacts = (meal: ShoppingMeal): Fact[] =>
-    takenSources.has(meal.source)
+  const handleClose = () => {
+    const pending = [...held.values()].filter(
+      (entry) =>
+        entry.status === 'taken' &&
+        entry.entries.length > 0 &&
+        !undone.has(entry.stopId),
+    );
+    if (pending.length > 0) {
+      const id = generateUuid();
+      addToast({
+        id,
+        title:
+          pending.length === 1
+            ? `Took ${getName(pending[0].meal)} off your list`
+            : `Took ${pending.length} meals off your list`,
+        description: pending.length === 1 ? pending[0].note : undefined,
+        type: 'success',
+        duration: UNDO_TOAST_MS,
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            removeToast(id);
+            pending
+              .filter((entry) => !undone.has(entry.stopId))
+              .forEach((entry) => {
+                undone.add(entry.stopId);
+                void undo(entry.entries);
+              });
+          },
+        },
+      });
+    }
+    onClose();
+  };
+
+  const getFacts = ({ meal, held: entry }: (typeof rows)[number]): Fact[] =>
+    entry?.status === 'taken'
       ? [{ key: 'taken', content: 'Taken off your list' }]
       : [
           ...(meal.isPast ? [{ key: 'past', content: 'Passed' }] : []),
@@ -223,10 +295,29 @@ function ShoppingMealsSheet({
           { key: 'progress', content: getProgress(meal) },
         ];
 
+  const getAction = ({ meal, held: entry }: (typeof rows)[number]) => {
+    if (entry?.status === 'taken') {
+      return entry.entries.length === 0
+        ? null
+        : {
+            label: 'Undo',
+            description: `Put ${getName(meal)} back on your list`,
+            isBusy: false,
+          };
+    }
+    return meal.openCount === 0
+      ? null
+      : {
+          label: 'Remove',
+          description: `Remove ${getName(meal)} from your list`,
+          isBusy: entry?.status === 'removing',
+        };
+  };
+
   return (
     <DetailSheet
       isOpen
-      onClose={onClose}
+      onClose={handleClose}
       title='Meals on your list'
       footer={
         isPhone ? undefined : (
@@ -235,7 +326,7 @@ function ShoppingMealsSheet({
               type='button'
               variant='secondary'
               data-modal-action='true'
-              onClick={onClose}
+              onClick={handleClose}
             >
               Done
             </Button>
@@ -262,21 +353,21 @@ function ShoppingMealsSheet({
             />
           )}
         </div>
-        {shown.length === 0 && (
+        {rows.length === 0 && (
           <p className='text-muted-foreground py-2 text-sm'>
             Your list isn't for any meal now.
           </p>
         )}
-        {shown.length > 0 && found.length === 0 && (
+        {rows.length > 0 && found.length === 0 && (
           <p className='text-muted-foreground py-2 text-sm wrap-break-word'>
             No meal on your list matches “{query.trim()}”.
           </p>
         )}
         {found.length > 0 && (
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto [@media(max-height:800px)]:min-h-36'>
-            {visible.map((meal) => {
-              const isStopping = stopping.has(meal.source);
-              const isTaken = takenSources.has(meal.source);
+            {visible.map((row) => {
+              const { meal, held: entry } = row;
+              const action = getAction(row);
               return (
                 <li
                   key={meal.source}
@@ -292,28 +383,37 @@ function ShoppingMealsSheet({
                     <p
                       className={join(
                         'font-medium wrap-break-word',
-                        isTaken && 'text-muted-foreground line-through',
+                        entry?.status === 'taken' &&
+                          'text-muted-foreground line-through',
                       )}
                     >
                       {getTitle(meal)}
                     </p>
                     <FactsLine
-                      facts={getFacts(meal)}
+                      facts={getFacts(row)}
                       className='text-muted-foreground text-xs'
                     />
+                    {entry?.status === 'taken' && entry.rowNote && (
+                      <p className='text-muted-foreground mt-0.5 text-xs wrap-break-word'>
+                        {entry.rowNote}
+                      </p>
+                    )}
                   </div>
-                  {meal.openCount > 0 && !isTaken && (
+                  {action && (
                     <Button
                       type='button'
                       variant='secondary'
                       size='sm'
-                      aria-label={`Remove ${names.get(meal.source) ?? meal.label.name} from your list`}
-                      loading={isStopping}
-                      disabled={isStopping}
+                      aria-label={action.description}
+                      aria-busy={action.isBusy}
                       className="relative -mt-0.5 shrink-0 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-                      onClick={() => void handleStop(meal)}
+                      onClick={(event) =>
+                        void (entry?.status === 'taken'
+                          ? handleUndo(meal.source, event.timeStamp)
+                          : handleStop(meal))
+                      }
                     >
-                      Remove
+                      {action.label}
                     </Button>
                   )}
                 </li>

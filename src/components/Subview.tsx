@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -11,6 +11,22 @@ import { hasDialogOnTop } from '@/utils/dialogUtils';
 
 const OPEN_POPUP_SELECTOR =
   '[aria-haspopup][aria-expanded="true"], [role="listbox"], [role="menu"]';
+
+const openSubviews = { count: 0 };
+
+function useSubviewOpenMarker() {
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    openSubviews.count += 1;
+    root.dataset.subviewOpen = '';
+    return () => {
+      openSubviews.count -= 1;
+      if (openSubviews.count === 0) {
+        delete root.dataset.subviewOpen;
+      }
+    };
+  }, []);
+}
 
 interface SubviewHeaderProps {
   title: string;
@@ -80,7 +96,9 @@ interface SubviewProps {
 
 /**
  * A nested page that takes over a mini-app: it opens at the top, brings its own way back, and
- * closes on the browser's back gesture rather than leaving the page beneath it.
+ * closes on the browser's back gesture rather than leaving the page beneath it. It floats as a card on
+ * a tint of the app's colour and hides the site header; the card's look is the `--subview-*` tokens, and its
+ * unlayered CSS beats any Tailwind surface class in `className` (use it for width only).
  */
 function Subview({
   children,
@@ -94,6 +112,7 @@ function Subview({
 }: SubviewProps) {
   const goBack = onBack ?? onClose;
   useSubviewHistory(onClose, onBack);
+  useSubviewOpenMarker();
 
   useEffect(() => {
     if (overlay) {
@@ -103,11 +122,10 @@ function Subview({
   }, [overlay]);
 
   useEffect(() => {
-    if (!overlay) {
-      return;
-    }
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (overlay) {
+      document.body.style.overflow = 'hidden';
+    }
     // Capture, so a dialog on top is still there to be seen before it closes itself on this keydown; an open
     // dropdown is found by where focus is and a tooltip by being on screen, as neither has handled it yet.
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -128,38 +146,41 @@ function Subview({
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      if (overlay) {
+        document.body.style.overflow = previousOverflow;
+      }
       window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [overlay, goBack]);
 
   if (overlay) {
     return createPortal(
-      <div
-        role='dialog'
-        data-subview-overlay=''
-        aria-label={title}
-        className='bg-background fixed inset-0 z-40 overflow-y-auto overscroll-contain'
-      >
+      <div className='subview-backdrop'>
         <div
+          role='dialog'
+          data-subview-overlay=''
+          aria-label={title}
           className={join(
-            'mx-auto flex min-h-full max-w-2xl flex-col px-4 pt-6 pb-4 *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0',
-            '[&_.form-footer]:bg-background/95 [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-4 [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-4 [&_.form-footer]:py-3 [&_.form-footer]:backdrop-blur',
+            'subview-card h-full w-full max-w-2xl overflow-y-auto overscroll-contain',
             className,
           )}
         >
-          {title !== undefined && (
-            <SubviewHeader
-              title={title}
-              onBack={goBack}
-              action={headerAction}
-              isTitleWrapped={isTitleWrapped}
-              className='bg-background sticky top-0 z-20 -mx-4 -mt-6 px-4 pt-6 pb-3'
-            />
-          )}
-          <SubviewTitleContext.Provider value={title ?? null}>
-            {children}
-          </SubviewTitleContext.Provider>
+          <div className='flex min-h-full flex-col px-(--subview-pad) pb-(--subview-pad) *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0 [&_.form-footer]:bg-background/95 [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-(--subview-pad) [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-(--subview-pad) [&_.form-footer]:py-3 [&_.form-footer]:backdrop-blur'>
+            {title !== undefined && (
+              <div className='bg-background sticky top-0 z-20 -mx-(--subview-pad) px-(--subview-pad) pt-3 pb-3 [@media(max-height:499px)]:pt-1'>
+                <SubviewHeader
+                  title={title}
+                  onBack={goBack}
+                  action={headerAction}
+                  isTitleWrapped={isTitleWrapped}
+                  className=''
+                />
+              </div>
+            )}
+            <SubviewTitleContext.Provider value={title ?? null}>
+              {children}
+            </SubviewTitleContext.Provider>
+          </div>
         </div>
       </div>,
       document.body,
@@ -167,10 +188,10 @@ function Subview({
   }
 
   return (
-    <div className='page max-sm:pb-4'>
+    <div className='subview-page'>
       <div
         className={join(
-          'mx-auto max-w-2xl py-6 max-sm:pb-0 [@media(max-height:499px)]:py-3',
+          'subview-card mx-auto w-full max-w-2xl px-(--subview-pad) pt-3 pb-4 [@media(max-height:499px)]:pt-1 [@media(max-height:499px)]:pb-3',
           className,
         )}
       >
@@ -180,7 +201,7 @@ function Subview({
             onBack={goBack}
             action={headerAction}
             isTitleWrapped={isTitleWrapped}
-            className='sticky-app-bar bg-background/80 -mx-4 mb-3 min-h-14 px-4 py-2.5 backdrop-blur [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
+            className='sticky-app-bar bg-background/80 -mx-(--subview-pad) mb-3 min-h-14 px-(--subview-pad) py-2.5 backdrop-blur [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
           />
         )}
         <SubviewTitleContext.Provider value={title ?? null}>

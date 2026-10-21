@@ -8,7 +8,11 @@ import {
   FRIDGE_GUIDANCE_DAYS,
   LEAD_DAYS_CHOICES,
 } from '@apps/pinch/constants';
-import type { PinchReminderSettings, PinchSettings } from '@apps/pinch/types';
+import type {
+  PinchReminderSettings,
+  PinchSettings,
+  PinchVoiceSettings,
+} from '@apps/pinch/types';
 
 export interface UsualDays {
   fridge: number;
@@ -21,6 +25,7 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   freezerDays: null,
   suggestPhotos: true,
   calendarStats: false,
+  voice: { hasAgreed: null, isReadingAloud: null, isWaiting: null },
   reminders: {
     eatSoon: true,
     expiring: true,
@@ -45,6 +50,7 @@ export const getSettingsWithDefaults = (
     : {
         ...DEFAULT_PINCH_SETTINGS,
         ...document,
+        voice: { ...DEFAULT_PINCH_SETTINGS.voice, ...document.voice },
         reminders: {
           ...DEFAULT_PINCH_SETTINGS.reminders,
           ...PREDATING_REMINDERS,
@@ -86,6 +92,7 @@ export interface PinchSettingsPatch {
   freezerDays?: number;
   suggestPhotos?: boolean;
   calendarStats?: boolean;
+  voice?: Partial<PinchVoiceSettings>;
   reminders?: Partial<PinchReminderSettings>;
 }
 
@@ -100,6 +107,7 @@ export const createSettings = (
   freezerDays: patch.freezerDays ?? DEFAULT_PINCH_SETTINGS.freezerDays,
   suggestPhotos: patch.suggestPhotos ?? DEFAULT_PINCH_SETTINGS.suggestPhotos,
   calendarStats: patch.calendarStats ?? DEFAULT_PINCH_SETTINGS.calendarStats,
+  voice: { ...DEFAULT_PINCH_SETTINGS.voice, ...patch.voice },
   reminders: {
     ...DEFAULT_PINCH_SETTINGS.reminders,
     timeZone,
@@ -125,6 +133,9 @@ export const getSettingsUpdates = (
   ...(patch.calendarStats === undefined
     ? []
     : [{ path: ['calendarStats'], value: patch.calendarStats }]),
+  ...Object.entries(patch.voice ?? {}).flatMap(([key, value]) =>
+    value === undefined ? [] : [{ path: ['voice', key], value }],
+  ),
   ...Object.entries(patch.reminders ?? {}).flatMap(([key, value]) =>
     value === undefined ? [] : [{ path: ['reminders', key], value }],
   ),

@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { NaturalVoiceOption } from '@/components/NaturalVoiceOption';
 import { PillGroup } from '@/components/PillGroup';
 import { ViewOptionSwitch } from '@/components/ViewOptions';
 import { useSheetHistory } from '@/hooks/useBackHistory';
@@ -88,7 +89,7 @@ const LISTEN_ROWS: ListenRow[] = [
     choice: 'WAKE',
     icon: <Ear aria-hidden='true' />,
     title: `Say “${COOK_WAKE_PHRASE}”`,
-    hint: 'The mic stays on, waiting.',
+    hint: 'Waits while this screen is open.',
   },
   {
     choice: 'LOCK',
@@ -101,7 +102,7 @@ const LISTEN_ROWS: ListenRow[] = [
 /** What a way of listening means for the mic, in one sentence under the choice: the two that keep it open say who hears the room. */
 const LISTEN_NOTES: Record<ListenChoice, string> = {
   TAP: `It closes by itself after ${WINDOW_SECONDS} quiet seconds.`,
-  WAKE: `While it waits, the mic is on and your browser’s speech service hears the room. It turns off after ${WAIT_MINUTES} quiet minutes.`,
+  WAKE: `It starts waiting when cooking opens, once your browser has allowed the microphone. While it waits, the mic is on and your browser’s speech service hears the room. It turns off after ${WAIT_MINUTES} quiet minutes.`,
   LOCK: `The mic is on and your browser’s speech service hears the room until the ${LOCK_MINUTES} minutes are up.`,
 };
 
@@ -153,7 +154,7 @@ interface CookVoiceButtonProps {
   voice: CookVoice;
 }
 
-/** The microphone at the end of the cooking screen's title row: one tap opens a command window, or ends whatever is open (a window, the wait for "Hey Pinch", the fifteen minutes). */
+/** The microphone at the end of the cooking screen's title row: one tap opens a command window, or ends whatever is open (a window, the wait for the wake phrase, the fifteen minutes). */
 export function CookVoiceButton({ voice }: CookVoiceButtonProps) {
   const { phase } = voice;
   const isWaiting = phase === 'WAITING';
@@ -334,7 +335,7 @@ interface CookVoiceSheetProps {
   dishExample: string | null;
 }
 
-/** The sheet the status chip opens: how the mic listens (tap to talk, wait for "Hey Pinch", or stay open for fifteen minutes) with Read steps aloud, and what to say folded under them. */
+/** The sheet the status chip opens: how the mic listens (tap to talk, wait for the wake phrase, or stay open for fifteen minutes) with Read steps aloud, and what to say folded under them. */
 function CookVoiceSheet({
   voice,
   ingredientExample,
@@ -422,6 +423,7 @@ function CookVoiceSheet({
             checked={voice.isReadingAloud}
             onCheckedChange={voice.setIsReadingAloud}
           />
+          <NaturalVoiceOption voice={voice.natural} />
           <DisclosureLine
             label='What to say'
             isOpen={isSayShown}
@@ -725,11 +727,12 @@ export function CookVoiceExplainer({
             <li>It hears everyone nearby, not only you.</li>
             <li>
               “{COOK_WAKE_PHRASE}” keeps the mic on while it waits, so the
-              speech service hears the room until you turn it off. Pinch acts
-              only after the phrase, and the mic turns off after {WAIT_MINUTES}{' '}
-              quiet minutes. It waits while a timer runs and for{' '}
-              {TIMER_GRACE_MINUTES} minutes after one rings, and never past{' '}
-              {MAX_WAIT_MINUTES} minutes.
+              speech service hears the room until you turn it off. It listens
+              only while this screen is open and awake. Pinch acts only after
+              the phrase, and the mic turns off after {WAIT_MINUTES} quiet
+              minutes. It waits while a timer runs and for {TIMER_GRACE_MINUTES}{' '}
+              minutes after one rings, and never past {MAX_WAIT_MINUTES}{' '}
+              minutes.
             </li>
             <li>
               Once it is on, the chip above the buttons can keep it listening

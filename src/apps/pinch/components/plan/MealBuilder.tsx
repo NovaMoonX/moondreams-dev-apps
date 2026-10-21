@@ -20,6 +20,7 @@ import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
 import RecentPickRows from '@apps/pinch/components/plan/RecentPickRows';
+import CategoryField from '@apps/pinch/components/shared/CategoryField';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import Stepper from '@/components/Stepper';
 import {
@@ -50,6 +51,7 @@ import {
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { ItemKind, MealItem, MealType } from '@apps/pinch/types';
+import { getCategories } from '@apps/pinch/utils/categories';
 import { getCellDayKey, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import {
@@ -200,6 +202,9 @@ function MealBuilder({
     starter ? { id: starter.id, name: starter.name } : null,
   );
   const [name, setName] = useState(existingMeal?.name ?? '');
+  const [categories, setCategories] = useState(() =>
+    getCategories(existingMeal ?? {}),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -265,6 +270,7 @@ function MealBuilder({
     items,
     name,
     when: existingPlanned ? `${dayKey}|${mealType}` : null,
+    categories,
   });
   const [openedWith] = useState(snapshot);
   const isDirty = snapshot !== openedWith;
@@ -388,7 +394,13 @@ function MealBuilder({
     try {
       if (mode === 'meal') {
         await dispatch(
-          saveMeal({ uid, id: existingMeal?.id ?? null, name, items: rows() }),
+          saveMeal({
+            uid,
+            id: existingMeal?.id ?? null,
+            name,
+            categories,
+            items: rows(),
+          }),
         ).unwrap();
         closeSubviewIf((current) => current === openedAs);
         addToast({ title: `Saved ${name.trim()}`, type: 'success' });
@@ -635,6 +647,9 @@ function MealBuilder({
               onChange={(event) => setName(event.target.value)}
             />
           </SummaryEditor>
+        )}
+        {mode === 'meal' && (
+          <CategoryField isFramed value={categories} onChange={setCategories} />
         )}
 
         <section aria-label="What's on the plate" className='space-y-3'>

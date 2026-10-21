@@ -239,15 +239,13 @@ function SummaryEditor({
         {isOpen && (
           <div className='space-y-3'>
             <h3 className='text-sm font-semibold'>{title}</h3>
-            <div className='-mx-1 max-h-[min(30rem,55dvh)] overflow-y-auto px-1'>
-              <EditorBody
-                focusDelay={DESKTOP_FOCUS_DELAY_MS}
-                shouldFocus={shouldFocus}
-                onDone={close}
-              >
-                {children}
-              </EditorBody>
-            </div>
+            <EditorBody
+              focusDelay={DESKTOP_FOCUS_DELAY_MS}
+              shouldFocus={shouldFocus}
+              onDone={close}
+            >
+              {children}
+            </EditorBody>
             {doneButton}
           </div>
         )}

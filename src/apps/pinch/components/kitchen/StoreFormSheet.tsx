@@ -6,8 +6,8 @@ import {
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Plus } from 'lucide-react';
 
+import CantFindItButton from '@/components/CantFindItButton';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import PhotoPicker from '@/components/forms/PhotoPicker';
 import FormSheet from '@/components/FormSheet';
@@ -340,15 +340,9 @@ function CatalogPicker({ uid, onOwn, onClose }: CatalogPickerProps) {
         </ul>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
-      <Button
-        type='button'
-        variant='tertiary'
-        className='h-10 gap-1.5 px-0!'
-        onClick={onOwn}
-      >
-        <Plus className='h-4 w-4' aria-hidden='true' />
+      <CantFindItButton onClick={onOwn}>
         Can't find it? Add your own
-      </Button>
+      </CantFindItButton>
     </div>
   );
 }

@@ -32,6 +32,20 @@ export const splitPrep = (name: string): SplitName => {
     : { name: cleaned, prep };
 };
 
+const ASIDE_PATTERN = /\s*\(([^()]*)\)/g;
+
+/** A name without its parenthetical asides, and what each said: "White rice (medium or short grain)" is "White rice" and ["medium or short grain"]. A name that is only an aside stays as it is. */
+export const splitAsides = (name: string) => {
+  const asides = Array.from(name.matchAll(ASIDE_PATTERN), ([, inner]) =>
+    inner.trim(),
+  ).filter(Boolean);
+  const bare = tidy(name.replace(ASIDE_PATTERN, ' '));
+
+  return bare === ''
+    ? { name: name.trim(), asides: [] }
+    : { name: bare, asides };
+};
+
 /** An ingredient's name the way the app writes them: "Chicken thigh", a short all-capitals word such as BBQ kept as it is. */
 export const toIngredientName = (name: string) =>
   toDisplayCase(tidy(name), { keepAcronyms: true });

@@ -68,6 +68,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const fromCalendar =
     subview?.kind === 'recipe' && subview.fromCalendar === true;
   const isDirtyRef = useRef(false);
+  const backStepRef = useRef<(() => boolean) | null>(null);
   const isTypedRef = useRef(false);
   const isAskingRef = useRef(false);
   const existing =
@@ -176,6 +177,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   };
 
   const goBack = () => {
+    if (backStepRef.current?.()) return;
     if (stage === 'idea') {
       backToReader();
       return;
@@ -250,6 +252,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           initialIdea={fromIdea}
           initialNote={fromNote}
           isDirtyRef={isDirtyRef}
+          backStepRef={backStepRef}
           onLeave={() => void leave()}
           onTitleChange={setTitle}
         />

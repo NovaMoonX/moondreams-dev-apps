@@ -30,6 +30,7 @@ import ContainerFormSheet, {
 import IdeasView from '@apps/pinch/components/ideas/IdeasView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
+import ListSortControl from '@apps/pinch/components/shared/ListSortControl';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import AddToCollectionSheet from '@apps/pinch/components/recipes/AddToCollectionSheet';
 import CollectionsSheet from '@apps/pinch/components/recipes/CollectionsSheet';
@@ -40,6 +41,9 @@ import MealRow from '@apps/pinch/components/recipes/MealRow';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import RecipeRow from '@apps/pinch/components/recipes/RecipeRow';
 import {
+  CATEGORY_FILTER_ANY,
+  CATEGORY_FILTER_NONE,
+  CATEGORY_TITLE,
   COLLECTION_FILTER_ANY,
   COLLECTION_FILTER_NONE,
   COLLECTION_NOUN,
@@ -48,6 +52,7 @@ import {
   CONTAINER_PLACE_EMOJIS,
   CONTAINER_PLACE_LABELS,
   CONTAINER_PLACES,
+  DISH_CATEGORIES,
   LIST_SEARCH_THRESHOLD,
   RECIPES_VIEW_LABELS,
   RECIPES_VIEW_NEW_LABELS,
@@ -98,6 +103,11 @@ import {
   type StockSummary,
 } from '@apps/pinch/utils/containers';
 import {
+  filterByCategory,
+  getCategoryCounts,
+  getCategoryFilterOptions,
+} from '@apps/pinch/utils/categories';
+import {
   filterByCollection,
   getCollectionFilterOptions,
   getRecipeSelectionNote,
@@ -105,6 +115,11 @@ import {
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { isStarred, sortFavoritesFirst } from '@apps/pinch/utils/favorites';
+import {
+  DEFAULT_LIST_SORT,
+  sortList,
+  type ListSort,
+} from '@apps/pinch/utils/listSort';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 import { getIdeaSearchText } from '@apps/pinch/utils/ideas';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
@@ -122,15 +137,37 @@ const RECIPE_CHUNK = 20;
 const EAGER_RECIPE_CHUNKS = 1;
 const COVER_SIZE = 56;
 const ROW_PADDING_AND_RULE = 17;
-/** A row is its title and detail, plus a price line, a macro line and a stock line when those show, and never shorter than its cover. */
+const TITLE_LINE = 24;
+const TITLE_CHARS_PER_LINE_PHONE = 26;
+const TITLE_CHARS_PER_LINE_WIDE = 46;
+
+/** A title runs to two lines at most; whether it needs both is judged from its length, so the estimate follows the row the browser will draw. */
+const getTitleLines = (title: string, isPhone: boolean) =>
+  Math.min(
+    2,
+    Math.max(
+      1,
+      Math.ceil(
+        title.length /
+          (isPhone ? TITLE_CHARS_PER_LINE_PHONE : TITLE_CHARS_PER_LINE_WIDE),
+      ),
+    ),
+  );
+
+/** A row is its title (one or two lines) and detail, plus a price line, a macro line and a stock line when those show, and never shorter than its cover. */
 const getRecipeRowHeight = (
+  titleLines: number,
   showPrices: boolean,
   showMacros: boolean,
   stockHeight: number,
 ) =>
   Math.max(
     COVER_SIZE,
-    40 + (showPrices ? 16 : 0) + (showMacros ? 22 : 0) + stockHeight,
+    TITLE_LINE * titleLines +
+      16 +
+      (showPrices ? 16 : 0) +
+      (showMacros ? 22 : 0) +
+      stockHeight,
   ) + ROW_PADDING_AND_RULE;
 
 const getStockHeight = (
@@ -224,6 +261,18 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     'recipes:collection',
     COLLECTION_FILTER_ANY,
   );
+  const [pickedCategory, setPickedCategory] = usePinchSessionState(
+    'recipes:category',
+    CATEGORY_FILTER_ANY,
+  );
+  const [recipeSort, setRecipeSort] = usePinchSessionState<ListSort>(
+    'recipes:sort:recipes',
+    DEFAULT_LIST_SORT,
+  );
+  const [mealSort, setMealSort] = usePinchSessionState<ListSort>(
+    'recipes:sort:meals',
+    DEFAULT_LIST_SORT,
+  );
   const [pickedFavorites, setPickedFavorites] = usePinchSessionState(
     'recipes:favorites',
     false,
@@ -252,6 +301,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     setQuery('');
     setPickedSource(SOURCE_FILTER_ANY);
     setPickedCollection(COLLECTION_FILTER_ANY);
+    setPickedCategory(CATEGORY_FILTER_ANY);
     setStockPlaces([]);
     setRevealId(recipeId);
   });
@@ -261,6 +311,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     setQuery('');
     setStockPlaces([]);
     setPickedCollection(COLLECTION_FILTER_ANY);
+    setPickedCategory(CATEGORY_FILTER_ANY);
     setPickedSource(sourceId);
   };
 
@@ -269,6 +320,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     setQuery('');
     setStockPlaces([]);
     setPickedSource(SOURCE_FILTER_ANY);
+    setPickedCategory(CATEGORY_FILTER_ANY);
     setPickedCollection(collectionId);
   };
 
@@ -304,6 +356,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     shownView === 'recipes' && collections.length > 0;
   const hasCollectionFilter =
     hasCollectionSection && collectionCounts.byCollection.size > 0;
+  const categorySource = shownView === 'meals' ? meals : recipes;
+  const categoryCounts = useMemo(
+    () => getCategoryCounts(categorySource),
+    [categorySource],
+  );
+  const hasCategoryFilter = !isIdeas && categoryCounts.byCategory.size > 0;
   const favoriteSource = shownView === 'meals' ? meals : recipes;
   const favoriteCount = favoriteSource.filter(isStarred).length;
   const hasFavoritesFilter =
@@ -346,7 +404,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     (shownView === 'recipes' || meals.length >= LIST_SEARCH_THRESHOLD);
   const hasFilterBar =
     !isIdeas &&
-    (hasSourceSection ||
+    (hasCategoryFilter ||
+      hasSourceSection ||
       hasCollectionSection ||
       hasFavoritesFilter ||
       hasStockFilter);
@@ -354,6 +413,29 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const hasViewOptions = total > 0 && !hasFilterBar;
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
+  const hasSort = !isIdeas && total >= 2;
+  const activeRecipeSort = hasSort ? recipeSort : DEFAULT_LIST_SORT;
+  const activeMealSort = hasSort ? mealSort : DEFAULT_LIST_SORT;
+
+  const getCategoryFilter = () => {
+    if (pickedCategory === CATEGORY_FILTER_NONE) {
+      return hasCategoryFilter && categoryCounts.withoutCategory > 0
+        ? pickedCategory
+        : CATEGORY_FILTER_ANY;
+    }
+    const isPresent = DISH_CATEGORIES.some(
+      (category) =>
+        category.value === pickedCategory &&
+        categoryCounts.byCategory.has(category.value),
+    );
+    return hasCategoryFilter && isPresent
+      ? pickedCategory
+      : CATEGORY_FILTER_ANY;
+  };
+  const categoryFilter = getCategoryFilter();
+  const categoryLabel =
+    DISH_CATEGORIES.find((category) => category.value === categoryFilter)
+      ?.label ?? '';
 
   const getSourceFilter = () => {
     if (!hasSourceFilter) return SOURCE_FILTER_ANY;
@@ -415,21 +497,26 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       collectionFilter,
       collections,
     );
+    const inCategory = filterByCategory(inCollection, categoryFilter);
     const inStock =
       stockPlaces.length === 0
-        ? inCollection
-        : inCollection.filter((recipe) =>
+        ? inCategory
+        : inCategory.filter((recipe) =>
             stockPlaces.some((place) =>
               hasStockIn(stockByRecipe.get(recipe.id), place),
             ),
           );
     const starred = isFavoritesOn ? inStock.filter(isStarred) : inStock;
-    return sortFavoritesFirst(starred);
+    return activeRecipeSort.key === 'default'
+      ? sortFavoritesFirst(starred)
+      : sortList(starred, activeRecipeSort, (recipe) => recipe.title);
   }, [
     searched,
     sourcesById,
     sourceFilter,
     collectionFilter,
+    categoryFilter,
+    activeRecipeSort,
     collections,
     stockPlaces,
     stockByRecipe,
@@ -459,6 +546,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     ],
     [sources, sourceCounts, sourceFilter],
   );
+  const categoryOptions = useMemo(
+    () => getCategoryFilterOptions(categoryCounts),
+    [categoryCounts],
+  );
   const collectionOptions = useMemo(
     () =>
       getCollectionFilterOptions(
@@ -469,6 +560,17 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     [collections, collectionCounts, collectionFilter],
   );
   const activeFilters = [
+    ...(categoryFilter === CATEGORY_FILTER_ANY
+      ? []
+      : [
+          {
+            key: 'category',
+            label:
+              categoryFilter === CATEGORY_FILTER_NONE
+                ? 'No category'
+                : categoryLabel,
+          },
+        ]),
     ...(sourceFilter === SOURCE_FILTER_ANY
       ? []
       : [
@@ -498,12 +600,14 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     })),
   ];
   const clearFilters = () => {
+    setPickedCategory(CATEGORY_FILTER_ANY);
     setPickedSource(SOURCE_FILTER_ANY);
     setPickedCollection(COLLECTION_FILTER_ANY);
     setPickedFavorites(false);
     setStockPlaces([]);
   };
   const removeFilter = (key: string) => {
+    if (key === 'category') return setPickedCategory(CATEGORY_FILTER_ANY);
     if (key === 'source') return setPickedSource(SOURCE_FILTER_ANY);
     if (key === 'collection') return setPickedCollection(COLLECTION_FILTER_ANY);
     if (key === 'favorites') return setPickedFavorites(false);
@@ -512,23 +616,31 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     );
   };
 
-  const shownMeals = useMemo(
-    () =>
-      searchByName(
-        (stockPlaces.length === 0
-          ? meals
-          : meals.filter((meal) =>
-              stockPlaces.some((place) =>
-                hasStockIn(stockByMeal.get(meal.id), place),
-              ),
-            )
-        )
-          .filter((meal) => !isFavoritesOn || isStarred(meal))
-          .map((meal) => ({ name: meal.name, meal })),
-        trimmed,
-      ).map(({ meal }) => meal),
-    [meals, stockPlaces, stockByMeal, trimmed, isFavoritesOn],
-  );
+  const shownMeals = useMemo(() => {
+    const matching = searchByName(
+      (stockPlaces.length === 0
+        ? filterByCategory(meals, categoryFilter)
+        : filterByCategory(meals, categoryFilter).filter((meal) =>
+            stockPlaces.some((place) =>
+              hasStockIn(stockByMeal.get(meal.id), place),
+            ),
+          )
+      )
+        .filter((meal) => !isFavoritesOn || isStarred(meal))
+        .map((meal) => ({ name: meal.name, meal })),
+      trimmed,
+    ).map(({ meal }) => meal);
+
+    return sortList(matching, activeMealSort, (meal) => meal.name);
+  }, [
+    meals,
+    categoryFilter,
+    stockPlaces,
+    stockByMeal,
+    trimmed,
+    isFavoritesOn,
+    activeMealSort,
+  ]);
 
   const isSelecting = selection.isActive && shownView === 'recipes';
   const canSelect = shownView === 'recipes' && shown.length >= 2;
@@ -567,7 +679,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
       }
       if (shownMeals.length === 0 && activeFilters.length > 0) {
         const scope = [
-          isFavoritesOn ? 'favorite' : null,
+          isFavoritesOn ? 'that you starred' : null,
+          categoryFilter === CATEGORY_FILTER_NONE
+            ? 'in no category'
+            : categoryFilter !== CATEGORY_FILTER_ANY
+              ? `in the ${categoryLabel} category`
+              : null,
           stockPlaces.length > 0 ? 'in stock' : null,
         ]
           .filter(Boolean)
@@ -576,8 +693,8 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           <div className='space-y-3 py-6 text-center'>
             <p className='text-muted-foreground text-sm wrap-break-word'>
               {trimmed !== ''
-                ? `No ${scope} saved meals match “${trimmed}”.`
-                : `No ${scope} saved meals there.`}
+                ? `No saved meals ${scope} match “${trimmed}”.`
+                : `No saved meals ${scope} yet.`}
             </p>
             <Button
               type='button'
@@ -643,6 +760,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     if (shown.length === 0 && activeFilters.length > 0) {
       const scope = [
         isFavoritesOn ? 'that you starred' : null,
+        categoryFilter === CATEGORY_FILTER_NONE
+          ? 'in no category'
+          : categoryFilter !== CATEGORY_FILTER_ANY
+            ? `in the ${categoryLabel} category`
+            : null,
         sourceFilter === SOURCE_FILTER_NONE
           ? 'without a source'
           : sourceFilter !== SOURCE_FILTER_ANY
@@ -665,6 +787,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           if (activeFilters.length === 1) {
             if (sourceFilter === SOURCE_FILTER_NONE) {
               return 'Every recipe has a source.';
+            }
+            if (categoryFilter === CATEGORY_FILTER_NONE) {
+              return 'Every recipe has a category.';
             }
             if (collectionFilter === COLLECTION_FILTER_NONE) {
               return `Every recipe is in a ${COLLECTION_NOUN}.`;
@@ -725,6 +850,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               (sum, recipe) =>
                 sum +
                 getRecipeRowHeight(
+                  getTitleLines(recipe.title, isPhone),
                   viewOptions.options.showPrices,
                   viewOptions.options.showMacros && isAnyMetricOn,
                   viewOptions.options.showStock
@@ -735,7 +861,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             );
             return (
               <div
-                key={`${sourceFilter}-${collectionFilter}-${stockPlaces.join(',')}-${chunk}`}
+                key={`${sourceFilter}-${collectionFilter}-${categoryFilter}-${activeRecipeSort.key}-${activeRecipeSort.order}-${stockPlaces.join(',')}-${chunk}`}
                 className={join(
                   'defer-offscreen',
                   chunk > 0 && 'border-border border-t',
@@ -811,6 +937,13 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
     >
       {isPhone ? 'All shown' : 'Select all shown'}
     </Pill>
+  );
+  const sortControl = hasSort && (
+    <ListSortControl
+      label={shownView === 'meals' ? 'Sort saved meals' : 'Sort recipes'}
+      sort={shownView === 'meals' ? mealSort : recipeSort}
+      onChange={shownView === 'meals' ? setMealSort : setRecipeSort}
+    />
   );
   const searchClassName = join(
     isSelecting &&
@@ -922,6 +1055,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           onChange={(next) => {
             setQuery('');
             setStockPlaces([]);
+            setPickedCategory(CATEGORY_FILTER_ANY);
             setView(next);
           }}
           isThin
@@ -952,17 +1086,30 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           }
           compactDoneLabel={`Show ${shownView === 'meals' ? shownMeals.length : shown.length}`}
           trailing={
-            <ListViewControls
-              options={viewOptions.options}
-              customizedCount={viewOptions.customizedCount}
-              onChange={viewOptions.update}
-              onReset={viewOptions.reset}
-              hasStockLines
-            />
+            <>
+              {sortControl}
+              <ListViewControls
+                options={viewOptions.options}
+                customizedCount={viewOptions.customizedCount}
+                onChange={viewOptions.update}
+                onReset={viewOptions.reset}
+                hasStockLines
+              />
+            </>
           }
         >
           {(closeFilters) => (
             <>
+              {hasCategoryFilter && (
+                <FilterSection title={CATEGORY_TITLE}>
+                  <PillGroup
+                    label='Categories'
+                    options={categoryOptions}
+                    value={categoryFilter}
+                    onChange={setPickedCategory}
+                  />
+                </FilterSection>
+              )}
               {hasSourceSection && (
                 <FilterSection title='Source'>
                   {hasSourceFilter ? (
@@ -1049,17 +1196,28 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           )}
         </FilterBar>
       ) : (
-        hasSearch && (
-          <SearchInput
-            className={searchClassName}
-            value={query}
-            onChange={setQuery}
-            placeholder={
-              shownView === 'meals'
-                ? 'Search saved meals'
-                : 'Search by name or ingredient'
-            }
-          />
+        (hasSearch || hasSort) && (
+          <div
+            className={join(
+              'flex items-center gap-2',
+              !hasSearch && 'justify-end',
+              searchClassName,
+            )}
+          >
+            {hasSearch && (
+              <SearchInput
+                className='min-w-0 flex-1'
+                value={query}
+                onChange={setQuery}
+                placeholder={
+                  shownView === 'meals'
+                    ? 'Search saved meals'
+                    : 'Search by name or ingredient'
+                }
+              />
+            )}
+            {sortControl}
+          </div>
         )
       )}
       {getBody()}

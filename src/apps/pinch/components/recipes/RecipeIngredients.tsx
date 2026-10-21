@@ -14,10 +14,10 @@ import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
 import LabelChip from '@/components/LabelChip';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import RevealChip from '@/components/RevealChip';
 import SectionDivider from '@/components/SectionDivider';
-import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
@@ -65,7 +65,6 @@ import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
 
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
-const SHORT_SCREEN_MAX_HEIGHT = 599;
 
 /** A rename remounts the heading under its new name, so focus finds it by its key. */
 const focusGroupHeading = (group: string) =>
@@ -182,9 +181,10 @@ function NewNameField({
               rounded='full'
               variant='secondary'
               className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+              aria-label={`Use ${existing.name}`}
               onClick={() => onUseExisting(existing.id)}
             >
-              Use {existing.name}
+              {existing.name}
             </Button>
           </>
         ) : (
@@ -199,19 +199,14 @@ interface GroupFieldProps {
   group: string | null;
   /** The recipe's group names when the editor opened, so a name being typed never becomes a pill under the field. */
   names: string[];
-  /** In a drawer the list behind is hidden, so a typed name applies as it is typed; in place it applies on Enter or on leaving the field, so the row doesn't move with every letter. */
-  isLive: boolean;
   onChange: (group: string | null) => void;
 }
 
-function GroupField({ group, names, isLive, onChange }: GroupFieldProps) {
+function GroupField({ group, names, onChange }: GroupFieldProps) {
   const [choice, setChoice] = useState(group ?? '');
   const [newText, setNewText] = useState('');
   const [isShown, setIsShown] = useState(group !== null || names.length > 0);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const commitTyped = () => {
-    if (choice === NEW_CHOICE && !isLive) onChange(newText);
-  };
 
   if (!isShown) {
     return (
@@ -230,18 +225,7 @@ function GroupField({ group, names, isLive, onChange }: GroupFieldProps) {
   }
 
   return (
-    <div
-      ref={wrapRef}
-      className='space-y-1.5'
-      onBlur={(event) => {
-        if (event.target instanceof HTMLInputElement) commitTyped();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
-          commitTyped();
-        }
-      }}
-    >
+    <div ref={wrapRef} className='space-y-1.5'>
       <p className='font-medium'>Group</p>
       <PickOrCreate
         label='Group'
@@ -257,7 +241,7 @@ function GroupField({ group, names, isLive, onChange }: GroupFieldProps) {
           setNewText(nextText);
           if (nextChoice !== NEW_CHOICE) {
             onChange(nextChoice === '' ? null : nextChoice);
-          } else if (isLive) {
+          } else {
             onChange(nextText);
           }
         }}
@@ -277,14 +261,13 @@ interface IngredientEditorProps {
   rows: IngredientRow[];
   onUpdate: (patch: Partial<IngredientRow>) => void;
   onRemove: () => void;
-  /** The drawer has a footer button and puts "remove" in its body; an inline row shows it beside the fields. */
+  /** Removing belongs to a line that exists; a line being added has nothing to remove yet. */
   showRemove: boolean;
-  isGroupLive: boolean;
   onRename: (ingredientId: string, name: string, isFinal: boolean) => void;
   onUseExisting: (fromId: string, toId: string) => void;
 }
 
-/** One ingredient's details: amount, unit and a preparation note, or the way to resolve a name the reader found that no ingredient matches. Shared by the phone drawer and the inline row. */
+/** One ingredient's details: amount, unit and a preparation note, or the way to resolve a name the reader found that no ingredient matches. */
 function IngredientEditor({
   uid,
   row,
@@ -292,7 +275,6 @@ function IngredientEditor({
   onUpdate,
   onRemove,
   showRemove,
-  isGroupLive,
   onRename,
   onUseExisting,
 }: IngredientEditorProps) {
@@ -300,6 +282,7 @@ function IngredientEditor({
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
   const [groupNames] = useState(() => getGroupNames(rows));
   const noteRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
   const ingredients = useAppSelector(selectIngredients);
   const servingUnit = useAppSelector(selectIngredientsById).get(
     row.ingredientId,
@@ -312,6 +295,19 @@ function IngredientEditor({
     row.group,
   );
   const usedIds = usedInGroup.join(',');
+  const isReadyForAmount = !isUnresolved && !row.isAmountless;
+
+  useEffect(() => {
+    if (
+      !isReadyForAmount ||
+      !window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => amountRef.current?.focus(), 250);
+    return () => window.clearTimeout(timer);
+  }, [isReadyForAmount]);
+
   const nearMatches = useMemo(() => {
     if (!isUnresolved) return [];
     const used = new Set(usedIds.split(','));
@@ -343,6 +339,7 @@ function IngredientEditor({
                   <Button
                     type='button'
                     variant='tertiary'
+                    aria-label={`Use ${ingredient.name}`}
                     className='h-auto min-h-12 w-full justify-start px-4! py-2 text-left font-normal'
                     onClick={() =>
                       onUpdate({
@@ -352,23 +349,12 @@ function IngredientEditor({
                       })
                     }
                   >
-                    Use {ingredient.name}
+                    {ingredient.name}
                   </Button>
                 </li>
               ))}
             </ul>
           </div>
-        )}
-        {!isGroupLive && (
-          <Button
-            type='button'
-            variant='secondary'
-            rounded='full'
-            disabled={toTypedIngredientName(proposedName) === ''}
-            onClick={() => onUpdate(getStagedPatch(rows, row))}
-          >
-            Add as new ingredient
-          </Button>
         )}
         <ActionRow
           icon={<Search className='h-4 w-4' />}
@@ -452,6 +438,7 @@ function IngredientEditor({
                   min={0}
                   step='any'
                   variant='outline'
+                  ref={amountRef}
                   autoFocus={isAmountJustAdded}
                   value={row.amount}
                   onChange={(event) => onUpdate({ amount: event.target.value })}
@@ -500,7 +487,6 @@ function IngredientEditor({
       <GroupField
         group={row.group}
         names={groupNames}
-        isLive={isGroupLive}
         onChange={(group) => onUpdate({ group })}
       />
       {showRemove && (
@@ -706,7 +692,7 @@ function GroupHeading({
   );
 }
 
-type DrawerMode =
+type SheetMode =
   { kind: 'add'; group: string | null } | { kind: 'edit'; id: string };
 
 interface RecipeIngredientsProps {
@@ -729,21 +715,7 @@ function RecipeIngredients({
     latest.current = { rows, onChange };
   });
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const isPhone = useMediaQuery().isBelow('sm');
-  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  useEffect(() => {
-    if (openId === null || isPhone) return;
-    const frame = window.requestAnimationFrame(() =>
-      document
-        .querySelector(`[data-ingredient-row="${CSS.escape(openId)}"]`)
-        ?.scrollIntoView({ block: 'nearest' }),
-    );
-    return () => window.cancelAnimationFrame(frame);
-  }, [openId, isPhone]);
-  const [isAdding, setIsAdding] = useState(rows.length === 0 && !isPhone);
-  const [drawer, setDrawer] = useState<DrawerMode | null>(null);
+  const [sheet, setSheet] = useState<SheetMode | null>(null);
   const oftenUsedIds = useAppSelector(selectOftenUsedIngredientIds);
   const usedKey = rows.map((row) => row.ingredientId).join(',');
   const suggestions = useMemo<ItemSuggestions>(
@@ -762,22 +734,6 @@ function RecipeIngredients({
     row.newName ??
     row.proposedName ??
     'Removed ingredient';
-  const focusRow = (id: string) =>
-    window.requestAnimationFrame(() => {
-      const button = document.querySelector<HTMLElement>(
-        `[data-ingredient-row="${id}"] button`,
-      );
-      button?.focus({ preventScroll: true });
-      button?.scrollIntoView({ block: 'nearest' });
-    });
-  const openPicker = () => {
-    setIsAdding(true);
-    if (isShort) {
-      window.requestAnimationFrame(() =>
-        pickerRef.current?.scrollIntoView({ block: 'start' }),
-      );
-    }
-  };
   const update = (id: string, patch: Partial<IngredientRow>) => {
     const row = rows.find((candidate) => candidate.id === id);
     if (!row) return;
@@ -792,9 +748,6 @@ function RecipeIngredients({
     const others = rows.filter((candidate) => candidate.id !== id);
     const group = resolveGroupName(patch.group, others);
     onChange(placeLineInGroup(rows, { ...row, ...patch, group }));
-    if (!isPhone && getGroupKey(group) !== getGroupKey(row.group)) {
-      focusRow(id);
-    }
   };
   const remove = (id: string) => {
     const index = rows.findIndex((candidate) => candidate.id === id);
@@ -934,19 +887,9 @@ function RecipeIngredients({
                         <Button
                           type='button'
                           variant='tertiary'
-                          aria-expanded={
-                            isPhone ? undefined : openId === row.id
-                          }
+                          aria-haspopup='dialog'
                           aria-label={`${name}, ${isUnresolved ? 'choose an ingredient' : row.newName !== null ? `new ingredient, ${label || 'no amount'}` : label || 'no amount'}`}
-                          onClick={() => {
-                            if (isPhone) {
-                              setDrawer({ kind: 'edit', id: row.id });
-                              return;
-                            }
-                            setOpenId((current) =>
-                              current === row.id ? null : row.id,
-                            );
-                          }}
+                          onClick={() => setSheet({ kind: 'edit', id: row.id })}
                           className='h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 px-0! py-1.5 text-left'
                         >
                           <span className='min-w-0 flex-1'>
@@ -993,21 +936,6 @@ function RecipeIngredients({
                           <X className='h-4 w-4' aria-hidden='true' />
                         </Button>
                       </div>
-                      {!isPhone && openId === row.id && (
-                        <div className='pb-3'>
-                          <IngredientEditor
-                            uid={uid}
-                            row={row}
-                            rows={rows}
-                            showRemove={false}
-                            isGroupLive={false}
-                            onUpdate={(patch) => update(row.id, patch)}
-                            onRemove={() => remove(row.id)}
-                            onRename={renameNew}
-                            onUseExisting={useExisting}
-                          />
-                        </div>
-                      )}
                     </li>
                   );
                 })}
@@ -1016,57 +944,29 @@ function RecipeIngredients({
           ))}
         </div>
       )}
-      {!isPhone && isAdding ? (
-        <div ref={pickerRef} className='scroll-mt-16 space-y-1.5'>
-          <ItemSearch
-            uid={uid}
-            onPick={(ingredientId) => {
-              setOpenId(addRow(ingredientId, lastGroup));
-              setIsAdding(false);
-            }}
-            onStageNew={(name) => {
-              setOpenId(stageNew(name, lastGroup));
-              setIsAdding(false);
-            }}
-            excludeIds={getUsedInGroup(rows, lastGroup)}
-            suggestions={suggestions}
-            autoFocus={rows.length > 0}
-          />
-          {lastGroup !== null && (
-            <p className='text-muted-foreground text-xs'>
-              It goes under “{lastGroup}”, and you can move it.
-            </p>
-          )}
-        </div>
-      ) : (
-        rows.length < MAX_RECIPE_INGREDIENTS && (
-          <Button
-            type='button'
-            variant='secondary'
-            rounded='full'
-            className='gap-1.5'
-            onClick={() =>
-              isPhone
-                ? setDrawer({ kind: 'add', group: lastGroup })
-                : openPicker()
-            }
-          >
-            <Plus className='h-4 w-4' aria-hidden='true' />
-            Add ingredient
-          </Button>
-        )
+      {rows.length < MAX_RECIPE_INGREDIENTS && (
+        <Button
+          type='button'
+          variant='secondary'
+          rounded='full'
+          className='gap-1.5'
+          onClick={() => setSheet({ kind: 'add', group: lastGroup })}
+        >
+          <Plus className='h-4 w-4' aria-hidden='true' />
+          Add ingredient
+        </Button>
       )}
       {rows.length >= MAX_RECIPE_INGREDIENTS && (
         <p className='text-muted-foreground text-sm'>
           A recipe holds up to {MAX_RECIPE_INGREDIENTS} ingredients.
         </p>
       )}
-      {isPhone && drawer && (
-        <IngredientDrawer
-          key={drawer.kind === 'edit' ? drawer.id : 'add'}
+      {sheet && (
+        <IngredientSheet
+          key={sheet.kind === 'edit' ? sheet.id : 'add'}
           uid={uid}
           rows={rows}
-          mode={drawer}
+          mode={sheet}
           getName={getName}
           suggestions={suggestions}
           onAdd={addRow}
@@ -1075,17 +975,17 @@ function RecipeIngredients({
           onRemove={remove}
           onRename={renameNew}
           onUseExisting={useExisting}
-          onClose={() => setDrawer(null)}
+          onClose={() => setSheet(null)}
         />
       )}
     </div>
   );
 }
 
-interface IngredientDrawerProps {
+interface IngredientSheetProps {
   uid: string;
   rows: IngredientRow[];
-  mode: DrawerMode;
+  mode: SheetMode;
   getName: (row: IngredientRow) => string;
   suggestions: ItemSuggestions;
   onAdd: (ingredientId: string, group: string | null) => string;
@@ -1097,7 +997,7 @@ interface IngredientDrawerProps {
   onClose: () => void;
 }
 
-function IngredientDrawer({
+function IngredientSheet({
   uid,
   rows,
   mode,
@@ -1110,7 +1010,7 @@ function IngredientDrawer({
   onRename,
   onUseExisting,
   onClose,
-}: IngredientDrawerProps) {
+}: IngredientSheetProps) {
   const [activeId, setActiveId] = useState<string | null>(
     mode.kind === 'edit' ? mode.id : null,
   );
@@ -1118,49 +1018,74 @@ function IngredientDrawer({
     mode.kind === 'add' ? mode.group : null,
   );
   const row = rows.find((candidate) => candidate.id === activeId) ?? null;
+  const isPhone = useMediaQuery().isBelow('sm');
+  const addAnother = () => {
+    if (!row) return;
+    setAddGroup(row.group);
+    setActiveId(null);
+  };
+  const getFooter = () => {
+    if (!row) return undefined;
+    const isUnresolved = row.ingredientId === '';
+    const addAsNew = isUnresolved && (
+      <Button
+        type='button'
+        className={join(isPhone && 'w-full')}
+        disabled={toTypedIngredientName(row.proposedName ?? '') === ''}
+        onClick={() => onUpdate(row.id, getStagedPatch(rows, row))}
+      >
+        Add as new ingredient
+      </Button>
+    );
+    const done = (
+      <Button
+        type='button'
+        variant={isUnresolved ? 'secondary' : 'primary'}
+        className={join(isPhone && 'w-full')}
+        onClick={onClose}
+      >
+        Done
+      </Button>
+    );
+    const another = mode.kind === 'add' && (
+      <Button
+        type='button'
+        variant='secondary'
+        className={join(isPhone && 'w-full')}
+        onClick={addAnother}
+      >
+        Add another
+      </Button>
+    );
+    return (
+      <div className='px-4 pb-4'>
+        {isPhone ? (
+          <div className='space-y-2'>
+            {addAsNew}
+            {done}
+            {another}
+          </div>
+        ) : (
+          <ModalFooterActions
+            rightActions={
+              <>
+                {another}
+                {done}
+                {addAsNew}
+              </>
+            }
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <DetailSheet
       isOpen
       onClose={onClose}
       title={row ? getName(row) : 'Ingredient'}
-      footer={
-        row && (
-          <div className='space-y-2 px-4 pb-4'>
-            {row.ingredientId === '' && (
-              <Button
-                type='button'
-                className='w-full'
-                disabled={toTypedIngredientName(row.proposedName ?? '') === ''}
-                onClick={() => onUpdate(row.id, getStagedPatch(rows, row))}
-              >
-                Add as new ingredient
-              </Button>
-            )}
-            <Button
-              type='button'
-              variant={row.ingredientId === '' ? 'secondary' : 'primary'}
-              className='w-full'
-              onClick={onClose}
-            >
-              Done
-            </Button>
-            {mode.kind === 'add' && (
-              <Button
-                type='button'
-                variant='secondary'
-                className='w-full'
-                onClick={() => {
-                  setAddGroup(row.group);
-                  setActiveId(null);
-                }}
-              >
-                Add another
-              </Button>
-            )}
-          </div>
-        )
-      }
+      footer={getFooter()}
     >
       {row ? (
         <IngredientEditor
@@ -1169,7 +1094,6 @@ function IngredientDrawer({
           row={row}
           rows={rows}
           showRemove={mode.kind === 'edit'}
-          isGroupLive
           onUpdate={(patch) => onUpdate(row.id, patch)}
           onRemove={() => {
             onRemove(row.id);
@@ -1188,6 +1112,7 @@ function IngredientDrawer({
           <ItemSearch
             uid={uid}
             autoFocus
+            isCapped
             excludeIds={getUsedInGroup(rows, addGroup)}
             suggestions={suggestions}
             onPick={(ingredientId) =>

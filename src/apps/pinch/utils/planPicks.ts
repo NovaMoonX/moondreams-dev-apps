@@ -87,6 +87,7 @@ interface BuilderSnapshotState {
   name: string;
   /** What a planned meal is moved by (its day and meal), or null where only the plate and name count. */
   when: string | null;
+  categories?: readonly string[];
 }
 
 /** What a builder holds as one string, so a screen can tell whether anything changed since it opened. */
@@ -94,11 +95,13 @@ export function getBuilderSnapshot({
   items,
   name,
   when,
+  categories = [],
 }: BuilderSnapshotState) {
   const result = JSON.stringify([
     items.map(({ kind, refId, servings }) => [kind, refId, servings]),
     name.trim(),
     when,
+    categories,
   ]);
   return result;
 }

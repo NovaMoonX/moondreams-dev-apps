@@ -108,7 +108,7 @@ function PhotoPicker({
         {fileInput}
         <div
           className={join(
-            'bg-accent text-accent-foreground grid aspect-video w-full place-items-center overflow-hidden rounded-2xl text-6xl',
+            'bg-accent text-accent-foreground relative grid aspect-video w-full place-items-center overflow-hidden rounded-2xl text-6xl',
             isCompact
               ? 'max-h-36 [@media(max-height:600px)]:hidden [@media(max-height:700px)]:max-h-24'
               : 'max-h-44 [@media(max-height:600px)]:max-h-20',
@@ -120,7 +120,7 @@ function PhotoPicker({
               src={photoUrl}
               alt=''
               fallback={placeholder}
-              className='size-full object-cover'
+              className='absolute inset-0 size-full object-cover object-center'
             />
           ) : (
             placeholder

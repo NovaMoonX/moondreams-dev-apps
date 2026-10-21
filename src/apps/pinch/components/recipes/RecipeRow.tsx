@@ -81,7 +81,7 @@ function RecipeRow({
     <span className='min-w-0 flex-1'>
       <span
         className={join(
-          'text-foreground block truncate font-medium',
+          'text-foreground line-clamp-2 font-medium wrap-break-word whitespace-normal',
           !isSelecting && 'pr-9',
         )}
       >

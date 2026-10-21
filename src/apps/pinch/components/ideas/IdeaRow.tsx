@@ -26,7 +26,7 @@ function IdeaRow({ idea, onOpen }: IdeaRowProps) {
     >
       <IdeaThumbnail idea={idea} />
       <span className='min-w-0 flex-1'>
-        <span className='text-foreground line-clamp-3 font-medium wrap-break-word whitespace-normal'>
+        <span className='text-foreground line-clamp-2 font-medium wrap-break-word whitespace-normal'>
           {idea.title}
         </span>
         {detail && (

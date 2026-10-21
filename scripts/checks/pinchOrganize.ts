@@ -807,8 +807,18 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
   assert.match(
     rules,
-    /'sourceId', 'collectionIds', 'isArchived'/,
-    'a recipe may carry collectionIds',
+    /'sourceId', 'collectionIds', 'categories', 'isArchived'/,
+    'a recipe may carry collectionIds and categories',
+  );
+  assert.doesNotMatch(
+    rules,
+    /hasAll\(\['id', 'title', 'servings', 'ingredients', 'steps', 'source', [^\]]*'categories'/,
+    'but categories are not required (older ones have none)',
+  );
+  assert.doesNotMatch(
+    rules,
+    /function isMeal\(data, id\) \{\s*return data\.keys\(\)\.hasOnly\(\[[^\]]*\]\)\s*&& data\.keys\(\)\.hasAll\(\[[^\]]*'categories'/,
+    'nor are a saved meal’s',
   );
   assert.doesNotMatch(
     rules,
