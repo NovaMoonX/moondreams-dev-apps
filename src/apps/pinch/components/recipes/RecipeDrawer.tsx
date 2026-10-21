@@ -1,25 +1,25 @@
-import { useState } from 'react';
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ClipboardCopy } from 'lucide-react';
 
-import CopyPanel from '@/components/CopyPanel';
 import DetailSheet from '@/components/DetailSheet';
+import FormSection from '@/components/FormSection';
+import HelpTip from '@/components/HelpTip';
+import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
-import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
-import GapNudge from '@apps/pinch/components/shared/GapNudge';
-import CostLine from '@apps/pinch/components/shared/CostLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
+import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import { UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectIngredientsById,
   selectRecipeCosts,
   selectRecipeNutrition,
-  selectShowNutrition,
   selectRecipesById,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { Gap, GapKind } from '@apps/pinch/types';
-import { recipeMarkdown } from '@apps/pinch/utils/markdown/recipeMarkdown';
+import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
+import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getNutritionGaps,
   hasShownValue,
@@ -54,16 +54,23 @@ function RecipeDrawer({
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
   const show = useAppSelector(selectShowNutrition);
-  const [isCopying, setIsCopying] = useState(false);
 
   if (!recipe) {
     return null;
   }
 
-  const times = [
-    recipe.prepMinutes != null && `Prep ${formatMinutes(recipe.prepMinutes)}`,
-    recipe.cookMinutes != null && `Cook ${formatMinutes(recipe.cookMinutes)}`,
-  ].filter(Boolean);
+  const facts = [
+    { emoji: '🍽️', text: formatServings(recipe.servings) },
+    recipe.prepMinutes != null && {
+      emoji: '🔪',
+      text: `Prep ${formatMinutes(recipe.prepMinutes)}`,
+    },
+    recipe.cookMinutes != null && {
+      emoji: '⏲️',
+      text: `Cook ${formatMinutes(recipe.cookMinutes)}`,
+    },
+  ].filter((fact) => fact !== false);
+  const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
 
   return (
     <DetailSheet
@@ -71,137 +78,145 @@ function RecipeDrawer({
       onClose={onClose}
       title={recipe.title}
       footer={
-        !isCopying && (
-          <div className='px-4 pb-4'>
-            <Button
-              type='button'
-              className='w-full'
-              onClick={() => onPlan(recipe.id)}
-            >
-              Add to calendar
-            </Button>
-          </div>
-        )
+        <div className='flex gap-2 px-4 pb-4'>
+          <Button
+            type='button'
+            variant='secondary'
+            className='shrink-0'
+            onClick={() => onModify(recipe.id)}
+          >
+            Modify
+          </Button>
+          <Button
+            type='button'
+            className='min-w-0 flex-1'
+            onClick={() => onPlan(recipe.id)}
+          >
+            Add to calendar
+          </Button>
+        </div>
       }
     >
-      {isCopying ? (
-        <CopyPanel
-          text={recipeMarkdown(recipe, ingredientsById)}
-          note='Title, servings, times, ingredients and steps. No prices, stores or nutrition.'
-          onBack={() => setIsCopying(false)}
-        />
-      ) : (
-        <div className='space-y-5'>
-          {recipe.coverPath && (
-            <CoverImage
-              coverPath={recipe.coverPath}
-              version={recipe.updatedAt}
-              className='h-40 w-full'
-            />
-          )}
-          <p className='text-muted-foreground text-sm'>
-            {[formatServings(recipe.servings), ...times].join(' · ')}
-          </p>
-          {cost && (
-            <div>
-              <p className='text-sm font-medium'>
-                <CostLine cost={cost} />
-              </p>
-              {nutrition && hasShownValue(nutrition.values, show) && (
-                <p className='text-muted-foreground text-sm'>
-                  <NutritionLine values={nutrition.values} show={show} /> per
-                  serving
-                </p>
-              )}
-              <GapNudge
-                uid={uid}
-                gaps={[
-                  ...cost.leftOut,
-                  ...getNutritionGaps(nutrition?.missing ?? [], show),
-                ]}
-                onFillIn={onFillIn}
-              />
-            </div>
-          )}
-          {recipe.description && (
-            <p className='text-sm whitespace-pre-wrap'>{recipe.description}</p>
-          )}
-
-          <section aria-label='Ingredients' className='space-y-2'>
-            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              Ingredients
-            </h3>
-            <ul className='divide-border divide-y'>
-              {recipe.ingredients.map((line) => {
-                const gap = gapLabel(cost?.lines.get(line.id)?.gap?.kind);
-                return (
-                  <li
-                    key={line.id}
-                    className='flex items-baseline justify-between gap-3 py-2'
+      <div className='space-y-5'>
+        {recipe.coverPath && (
+          <CoverImage
+            coverPath={recipe.coverPath}
+            version={recipe.updatedAt}
+            className='h-40 w-full'
+          />
+        )}
+        <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
+          {facts.map((fact) => (
+            <li key={fact.text} className='whitespace-nowrap'>
+              <span aria-hidden='true'>{fact.emoji}</span> {fact.text}
+            </li>
+          ))}
+        </ul>
+        {cost && (
+          <div className='space-y-3'>
+            <StatTile
+              label='Cost'
+              value={
+                cost.totalCents === null
+                  ? 'No prices yet'
+                  : formatCost(cost.totalCents)
+              }
+              detail={
+                cost.totalCents === null
+                  ? undefined
+                  : `${formatCost(cost.perServingCents ?? 0)} per serving`
+              }
+              help={
+                leftOutCount > 0 && cost.totalCents !== null ? (
+                  <HelpTip
+                    variant='warning'
+                    title="What's left out"
+                    placement='top'
                   >
-                    <span className='min-w-0'>
-                      {ingredientsById.get(line.ingredientId)?.name ??
-                        'Removed ingredient'}
-                      {line.note && (
-                        <span className='text-muted-foreground block text-xs'>
-                          {line.note}
-                        </span>
-                      )}
-                      {gap && (
-                        <span className='text-muted-foreground block text-xs'>
-                          {gap}
-                        </span>
-                      )}
-                    </span>
-                    <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-                      {Math.round(line.amount * 100) / 100}{' '}
-                      {UNIT_LABELS[line.unit]}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-
-          {recipe.steps.length > 0 && (
-            <section aria-label='Steps' className='space-y-2'>
-              <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-                Steps
-              </h3>
-              <ol className='space-y-3'>
-                {recipe.steps.map((step, index) => (
-                  <li key={index} className='flex gap-3 text-sm'>
-                    <span className='bg-secondary text-secondary-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
-                      {index + 1}
-                    </span>
-                    <span className='min-w-0 whitespace-pre-wrap'>{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-
-          <div className='bg-muted/50 rounded-2xl p-1'>
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-11 w-full'
-              onClick={() => onModify(recipe.id)}
-            >
-              Modify
-            </Button>
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-11 w-full gap-2'
-              onClick={() => setIsCopying(true)}
-            >
-              <ClipboardCopy className='h-4 w-4' aria-hidden='true' />
-              Copy for a chat
-            </Button>
+                    <p>
+                      This {formatLeftOut(cost.leftOut)} because there’s no
+                      price for {leftOutCount === 1 ? 'it' : 'them'} yet.
+                    </p>
+                    <NudgeCountNote
+                      leftOut={cost.leftOut}
+                      open={cost.leftOut}
+                    />
+                  </HelpTip>
+                ) : undefined
+              }
+            />
+            {nutrition && hasShownValue(nutrition.values, show) && (
+              <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>Per serving</p>
+                <MacroStats
+                  values={nutrition.values}
+                  show={show}
+                  variant='tiles'
+                />
+              </div>
+            )}
+            <GapNudge
+              uid={uid}
+              gaps={[
+                ...cost.leftOut,
+                ...getNutritionGaps(nutrition?.missing ?? [], show),
+              ]}
+              onFillIn={onFillIn}
+            />
           </div>
-        </div>
-      )}
+        )}
+        {recipe.description && (
+          <p className='text-sm whitespace-pre-wrap'>{recipe.description}</p>
+        )}
+
+        <FormSection title='Ingredients' detail={recipe.ingredients.length}>
+          <ul className='divide-border divide-y'>
+            {recipe.ingredients.map((line) => {
+              const gap = gapLabel(cost?.lines.get(line.id)?.gap?.kind);
+              return (
+                <li
+                  key={line.id}
+                  className='flex items-baseline justify-between gap-3 py-2'
+                >
+                  <span className='min-w-0'>
+                    {ingredientsById.get(line.ingredientId)?.name ??
+                      'Removed ingredient'}
+                    {line.note && (
+                      <span className='text-muted-foreground block text-xs'>
+                        {line.note}
+                      </span>
+                    )}
+                    {gap && (
+                      <span className='text-muted-foreground block text-xs'>
+                        {gap}
+                      </span>
+                    )}
+                  </span>
+                  <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
+                    {Math.round(line.amount * 100) / 100}{' '}
+                    {UNIT_LABELS[line.unit]}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </FormSection>
+
+        {recipe.steps.length > 0 && (
+          <FormSection title='Steps'>
+            <ol className='space-y-3'>
+              {recipe.steps.map((step, index) => (
+                <li key={index} className='flex gap-3 text-sm'>
+                  <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
+                    {index + 1}
+                  </span>
+                  <span className='min-w-0 whitespace-pre-wrap'>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </FormSection>
+        )}
+      </div>
     </DetailSheet>
   );
 }

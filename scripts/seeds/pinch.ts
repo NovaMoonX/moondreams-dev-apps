@@ -39,7 +39,7 @@ const SEED_INGREDIENTS = [
     id: 'seed-pinch-ingredient-doritos',
     name: 'Doritos nacho cheese',
     familyId: 'seed-pinch-family-chips',
-    iconKey: '1f32e',
+    iconKey: null,
     nutritionPer100g: nutrition(497, 7, 60, 25),
     servingAmount: 28,
     servingUnit: 'G',
@@ -49,7 +49,7 @@ const SEED_INGREDIENTS = [
     id: 'seed-pinch-ingredient-chicken-feet',
     name: 'Chicken feet',
     familyId: 'cat-fam-chicken',
-    iconKey: '1f357',
+    iconKey: null,
     nutritionPer100g: nutrition(215, 19.4, 0.2, 14.6),
   },
   {

@@ -40,8 +40,6 @@ export interface CatalogIngredient {
   serving: { amount: number; unit: Unit };
   gramsPerMl: number | null;
   gramsEach: number | null;
-  /** The vendored icon's file name (without `.svg`), or null for the jar glyph. */
-  iconKey: string | null;
 }
 
 /** The person's own record for an ingredient: a custom one, or a catalog one they adjusted (its id is then the catalog id). */
@@ -53,6 +51,7 @@ export interface IngredientRecord {
   name: string | null;
   /** A catalog family id (`cat-fam-…`) or a `Family` id; null leaves a catalog ingredient where it is, and puts a custom one on its own. */
   familyId: string | null;
+  /** @deprecated Icons were removed from the app. Existing documents may carry a value; new ones write null. */
   iconKey: string | null;
   nutritionPer100g: NutritionValues | null;
   servingAmount: number | null;
@@ -83,7 +82,6 @@ export interface ResolvedIngredient {
   name: string;
   familyId: string | null;
   aliases: string[];
-  iconKey: string | null;
   per100g: NutritionValues;
   serving: { amount: number; unit: Unit };
   gramsPerMl: number | null;
@@ -175,11 +173,22 @@ export type GapKind = 'NO_PRODUCT' | 'NOT_COMPARABLE' | 'NO_NUTRITION';
 export type NutritionMetric = keyof NutritionValues;
 export type RecipesView = 'recipes' | 'meals';
 
+export type RecipeStartMethod = 'text' | 'file' | 'link' | 'manual';
+
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
 export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
-  | { kind: 'recipe'; id: string | null }
+  /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
+  | {
+      kind: 'recipe';
+      id: string | null;
+      method?: RecipeStartMethod;
+      /** Opened from the phone's start drawer, which a way's back button raises again. */
+      fromDrawer?: boolean;
+      /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
+      fromCalendar?: boolean;
+    }
   | {
       kind: 'plan';
       dayKey: string;
@@ -232,7 +241,7 @@ export interface Product {
   updatedAt: number;
 }
 
-export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE';
+export type RecipeSource = 'MANUAL' | 'AI_TEXT' | 'AI_FILE' | 'AI_LINK';
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {

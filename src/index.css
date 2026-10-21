@@ -2,6 +2,13 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@keyframes snackbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
 @utility page {
 	/* Use the available layout width instead of the viewport width, which can include the scrollbar on mobile browsers. */
   @apply min-h-dvh w-full max-w-full px-4 pb-12 pt-16;

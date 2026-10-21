@@ -1,7 +1,6 @@
 /*
  * Expands scripts/catalog/catalogSource.ts into the typed catalog under src/apps/pinch/catalog.
- * Run `npm run catalog:build`. Set TWEMOJI_DIR to a checkout of @twemoji/svg's `assets/svg` folder to
- * also copy the icons the catalog names into public/vendor/ingredient-icons.
+ * Run `npm run catalog:build`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,7 +11,6 @@ import {
 } from './catalogSource.ts';
 
 const OUT_DIR = path.resolve('src/apps/pinch/catalog');
-const ICON_DIR = path.resolve('public/vendor/ingredient-icons');
 const UNITS = new Set([
   'G',
   'KG',
@@ -46,7 +44,6 @@ const ingredients = toLines(CATALOG_INGREDIENT_ROWS).map((line) => {
     slug,
     name,
     family,
-    icon,
     kcal,
     protein,
     carbs,
@@ -74,7 +71,6 @@ const ingredients = toLines(CATALOG_INGREDIENT_ROWS).map((line) => {
     serving: { amount: Number(servingAmount), unit: servingUnit },
     gramsPerMl: toNumber(gramsPerMl),
     gramsEach: toNumber(gramsEach),
-    iconKey: icon === '-' ? null : icon,
   };
   const isValid =
     familyIds.has(family) &&
@@ -120,28 +116,3 @@ fs.writeFileSync(
 console.log(
   `Wrote ${families.length} families and ${ingredients.length} ingredients.`,
 );
-
-const twemojiDir = process.env.TWEMOJI_DIR;
-if (twemojiDir) {
-  fs.mkdirSync(ICON_DIR, { recursive: true });
-  const keys = Array.from(
-    new Set(
-      ingredients
-        .map((row) => row.iconKey)
-        .filter((key): key is string => key !== null),
-    ),
-  );
-  const missing = keys.filter(
-    (key) => !fs.existsSync(path.join(twemojiDir, `${key}.svg`)),
-  );
-  if (missing.length > 0) {
-    throw new Error(`Icons missing from the set: ${missing.join(', ')}`);
-  }
-  keys.forEach((key) =>
-    fs.copyFileSync(
-      path.join(twemojiDir, `${key}.svg`),
-      path.join(ICON_DIR, `${key}.svg`),
-    ),
-  );
-  console.log(`Copied ${keys.length} icons.`);
-}

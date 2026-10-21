@@ -1,18 +1,22 @@
 import { useEffect, useRef } from 'react';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { generateUuid } from '@/utils/idUtils';
 
 /**
- * Gives a subview its own history entry, so the browser's or phone's back gesture closes the
- * subview instead of leaving the page underneath it. The entry copies the router's own state so
- * the router sees it as the same location.
+ * Gives a subview its own history entry, so the browser's or phone's back gesture steps back
+ * (`onBack`) or closes the subview instead of leaving the page underneath it, and a drawer opened
+ * over it takes the gesture first. The entry copies the router's own state so the router sees it as
+ * the same location.
  */
-export function useSubviewHistory(onClose: () => void) {
+export function useSubviewHistory(onClose: () => void, onBack?: () => void) {
   const onCloseRef = useRef(onClose);
+  const onBackRef = useRef(onBack);
   const keyRef = useRef(generateUuid());
   const isMountedRef = useRef(false);
 
   useEffect(() => {
     onCloseRef.current = onClose;
+    onBackRef.current = onBack;
   });
 
   useEffect(() => {
@@ -20,14 +24,33 @@ export function useSubviewHistory(onClose: () => void) {
     const isOurEntry = () => window.history.state?.subviewKey === key;
     isMountedRef.current = true;
 
+    const restoreEntry = () =>
+      window.history.pushState(
+        { ...window.history.state, subviewKey: key },
+        '',
+      );
+
     if (!isOurEntry()) {
-      window.history.pushState({ ...window.history.state, subviewKey: key }, '');
+      restoreEntry();
     }
 
     const handlePop = () => {
-      if (!isOurEntry()) {
-        onCloseRef.current();
+      if (isOurEntry()) {
+        return;
       }
+      if (hasDialogOnTop()) {
+        restoreEntry();
+        document.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
+        return;
+      }
+      if (onBackRef.current) {
+        restoreEntry();
+        onBackRef.current();
+        return;
+      }
+      onCloseRef.current();
     };
     window.addEventListener('popstate', handlePop);
 

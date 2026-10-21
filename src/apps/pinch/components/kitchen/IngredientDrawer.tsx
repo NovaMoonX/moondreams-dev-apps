@@ -5,14 +5,16 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus, Star } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
+import MacroStats from '@/components/MacroStats';
+import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import StoreLogo from '@apps/pinch/components/shared/StoreLogo';
+import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { setDefaultProduct } from '@apps/pinch/store/actions/productActions';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
-import { NUTRITION_CELLS, UNIT_LABELS } from '@apps/pinch/constants';
+import { NUTRITION_BASIS_OPTIONS, UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectDefaultProducts,
   selectIngredientFamiliesById,
@@ -21,8 +23,15 @@ import {
   selectShowNutrition,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
+import {
+  getServingGrams,
+  scaleNutrition,
+  type NutritionBasis,
+} from '@apps/pinch/utils/nutritionBasis';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 import { formatSize } from '@apps/pinch/utils/productFormat';
+
+const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
 
 interface IngredientDrawerProps {
   uid: string;
@@ -49,6 +58,7 @@ function IngredientDrawer({
     useAppSelector(selectDefaultProducts).get(ingredientId)?.id ?? null;
   const storesById = useAppSelector(selectStoresById);
   const [error, setError] = useState<string | null>(null);
+  const { options, update } = useListViewOptions(uid, 'ingredients');
 
   const ingredient = useAppSelector(selectIngredientsById).get(ingredientId);
   const family = useAppSelector(selectIngredientFamiliesById).get(
@@ -60,6 +70,14 @@ function IngredientDrawer({
   }
 
   const servingText = `${Math.round(ingredient.serving.amount * 100) / 100} ${UNIT_LABELS[ingredient.serving.unit]}`;
+  const servingGrams = getServingGrams(ingredient.serving, ingredient);
+  const hasServingChoice =
+    servingGrams !== null && Math.abs(servingGrams - 100) > 0.005;
+  const basis: NutritionBasis = hasServingChoice ? options.basis : 'PER_100G';
+  const isPerServing = basis === 'SERVING' && servingGrams !== null;
+  const nutritionCaption = isPerServing
+    ? `Per 1 serving (${servingText})`
+    : 'Per 100 g';
 
   return (
     <DetailSheet
@@ -67,84 +85,99 @@ function IngredientDrawer({
       onClose={onClose}
       title={ingredient.name}
       footer={
-        <div className='px-4 pb-4'>
+        <div className='flex gap-2 px-4 pb-4'>
           <Button
             type='button'
-            className='w-full'
+            variant='secondary'
+            className='shrink-0'
             onClick={() => onModify(ingredient.id)}
           >
-            {ingredient.isCustom ? 'Modify' : 'Adjust nutrition or serving'}
+            {ingredient.isCustom ? 'Modify' : 'Adjust'}
+          </Button>
+          <Button
+            type='button'
+            className='min-w-0 flex-1 gap-1'
+            onClick={() => onAddProduct(ingredient.id)}
+          >
+            <Plus className='h-4 w-4' aria-hidden='true' />
+            Add a product
           </Button>
         </div>
       }
     >
       <div className='space-y-5'>
-        <div className='flex items-center gap-3'>
-          <IngredientIcon iconKey={ingredient.iconKey} size={48} />
-          <div className='min-w-0'>
-            {family && (
-              <p className='text-muted-foreground text-sm'>{family.name}</p>
-            )}
-            {ingredient.isCustom && (
-              <p className='text-muted-foreground text-sm'>One you added</p>
-            )}
-            {ingredient.isAdjusted && (
-              <p className='text-muted-foreground text-sm'>
-                Built in · you adjusted it
-              </p>
-            )}
-            {ingredient.aliases.length > 0 && (
-              <p className='text-muted-foreground truncate text-sm'>
-                Also called {ingredient.aliases.join(', ')}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {hasAnyMetricOn(show) && (
-          <section aria-label='Nutrition per 100 g' className='space-y-2'>
-            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              Per 100 g
-            </h3>
-            <dl className='grid grid-cols-2 gap-2 text-center sm:grid-cols-4'>
-              {NUTRITION_CELLS.filter((cell) => show[cell.key]).map((cell) => {
-                const value = ingredient.per100g[cell.key];
-                return (
-                  <div key={cell.key} className='bg-muted rounded-xl px-1 py-2'>
-                    <dd className='text-foreground text-base font-semibold whitespace-nowrap'>
-                      {value === null
-                        ? '—'
-                        : `${Math.round(value * 10) / 10}${cell.unit}`}
-                    </dd>
-                    <dt className='text-muted-foreground text-xs'>
-                      {cell.label}
-                    </dt>
-                  </div>
-                );
-              })}
-            </dl>
-          </section>
+        <ul className='flex flex-wrap gap-x-4 gap-y-1 text-sm'>
+          {[
+            family && { key: 'family', text: family.name, emoji: null },
+            ingredient.isCustom && {
+              key: 'custom',
+              text: 'One you added',
+              emoji: '✏️',
+            },
+            ingredient.isAdjusted && {
+              key: 'adjusted',
+              text: 'Adjusted by you',
+              emoji: '✏️',
+            },
+            {
+              key: 'serving',
+              text: `1 serving = ${servingText}`,
+              emoji: '🍽️',
+            },
+          ]
+            .filter((fact) => fact !== false && fact !== undefined)
+            .map((fact) => (
+              <li
+                key={fact.key}
+                className={join(
+                  'whitespace-nowrap',
+                  fact.emoji === null && 'font-medium',
+                )}
+              >
+                {fact.emoji && <span aria-hidden='true'>{fact.emoji} </span>}
+                {fact.text}
+              </li>
+            ))}
+        </ul>
+        {ingredient.aliases.length > 0 && (
+          <p className='text-muted-foreground text-sm'>
+            Also called {ingredient.aliases.join(', ')}
+          </p>
         )}
 
-        <p className='text-muted-foreground text-sm'>
-          One serving is {servingText}.
-        </p>
+        {hasAnyMetricOn(show) && (
+          <section aria-label={nutritionCaption} className='space-y-2'>
+            <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2'>
+              <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+                {nutritionCaption}
+              </h3>
+              {hasServingChoice && (
+                <PillGroup
+                  label='Nutrition per'
+                  options={BASIS_CHOICES}
+                  value={basis}
+                  onChange={(next) => update({ basis: next })}
+                  isThin
+                />
+              )}
+            </div>
+            <MacroStats
+              values={
+                isPerServing
+                  ? scaleNutrition(ingredient.per100g, servingGrams / 100)
+                  : ingredient.per100g
+              }
+              show={show}
+              variant='tiles'
+            />
+          </section>
+        )}
 
         <section aria-label='Products' className='space-y-2'>
           <div className='flex items-center justify-between gap-3'>
             <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
               Products
             </h3>
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className='h-10 gap-1 px-0!'
-              onClick={() => onAddProduct(ingredient.id)}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              Add a product
-            </Button>
           </div>
           {products.length === 0 ? (
             <p className='text-muted-foreground text-sm'>

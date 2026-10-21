@@ -4,7 +4,7 @@
 
 ### The short
 
-Nine Lives is a private home base for cat owners to keep track of everything that matters about their cats — who they are, what's happened to them, what's coming up, and what it's all costing. Instead of scattered vet paperwork, phone photos of vaccine cards, and half-remembered symptom timelines, everything lives in one place, organized around your household and each individual cat in it.
+Nine Lives is a private home base for cat owners to keep track of everything that matters about their cats — who they are, what's happened to them, what's coming up, and what it's all costing. Instead of scattered vet paperwork, phone photos of vaccine cards, and half-remembered symptom timelines, everything is kept together, organized around your household and each individual cat in it.
 
 ### The story
 

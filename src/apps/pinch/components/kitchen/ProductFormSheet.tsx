@@ -9,12 +9,14 @@ import {
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Link2, Tag } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
 import AddFieldChips, {
   RemovableField,
 } from '@/components/forms/AddFieldChips';
+import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import MoneyInput from '@/components/MoneyInput';
@@ -23,7 +25,6 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
-import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   MAX_NAME_LENGTH,
@@ -42,6 +43,11 @@ import {
 import type { Product, ResolvedIngredient, Unit } from '@apps/pinch/types';
 
 const { custom } = FormFactories;
+
+// The field draws a 1px border around its input, so the input is 2px shorter to make the whole field 40px.
+const MONEY_INPUT_CLASS = 'min-h-9.5 h-9.5 placeholder:text-sm';
+
+import { formatPriceAndSize } from '@apps/pinch/utils/productFormat';
 
 interface Reveal<T> {
   enabled: boolean;
@@ -209,21 +215,24 @@ function ProductFormSheet({
         label: '',
         renderComponent: () => (
           <div className='grid items-start gap-3 min-[400px]:grid-cols-2'>
-            <div className='space-y-1.5'>
-              <Label>Price</Label>
-              <MoneyInput
-                variant='outline'
-                className='h-10'
-                ariaLabel='Price'
-                placeholder='9.48'
-                value={formData.price}
-                onChange={(price) =>
-                  setFormData((current) => ({ ...current, price }))
-                }
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Package size</Label>
+            <Field label='Price' isCompact>
+              {() => (
+                <MoneyInput
+                  variant='outline'
+                  className={MONEY_INPUT_CLASS}
+                  ariaLabel='Price'
+                  placeholder='9.48'
+                  value={formData.price}
+                  onChange={(price) =>
+                    setFormData((current) => ({ ...current, price }))
+                  }
+                />
+              )}
+            </Field>
+            <div className='space-y-1'>
+              <Label className='text-muted-foreground text-xs'>
+                Package size
+              </Label>
               <div className='flex items-center gap-2'>
                 <Input
                   type='number'
@@ -233,7 +242,7 @@ function ProductFormSheet({
                   variant='outline'
                   aria-label='Package size'
                   placeholder='3'
-                  className='h-10 min-w-0'
+                  className={join(COMPACT_INPUT_CLASS, 'min-w-0')}
                   value={formData.sizeAmount}
                   onChange={(event) =>
                     setFormData((current) => ({
@@ -244,7 +253,8 @@ function ProductFormSheet({
                 />
                 <UnitSelect
                   value={formData.sizeUnit}
-                  className='h-10 w-24 shrink-0'
+                  className='w-24 shrink-0'
+                  triggerClassName='h-10! py-0!'
                   onChange={(sizeUnit) =>
                     setFormData((current) => ({ ...current, sizeUnit }))
                   }
@@ -303,7 +313,7 @@ function ProductFormSheet({
     }
     const confirmed = await confirm({
       title: 'Delete product',
-      message: `Delete this ${ingredient.name} product? Recipes keep working: they only name the ingredient. This action cannot be undone.`,
+      message: `Delete ${ingredient.name} from ${storesById.get(product.storeId)?.name ?? 'a removed store'} (${formatPriceAndSize(product)})? Recipes keep working: they only name the ingredient. This action cannot be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });
@@ -355,15 +365,14 @@ function ProductFormSheet({
     }
   };
 
+  const title = product
+    ? [ingredient.name, product.label ?? storesById.get(product.storeId)?.name]
+        .filter(Boolean)
+        .join(' · ')
+    : `${ingredient.name} · new product`;
+
   return (
-    <FormSheet isOpen onClose={onClose} title='Product'>
-      <div className='mb-4 flex items-center gap-3'>
-        <IngredientIcon iconKey={ingredient.iconKey} size={36} />
-        <div className='min-w-0'>
-          <p className='text-muted-foreground text-xs'>For</p>
-          <p className='truncate font-medium'>{ingredient.name}</p>
-        </div>
-      </div>
+    <FormSheet isOpen onClose={onClose} title={title}>
       <Form
         id='pinch-product'
         form={fields}

@@ -35,7 +35,6 @@ export interface IngredientDraft {
   /** An existing family's id, or null for none. Ignored when `newFamilyName` is set, and for a catalog ingredient. */
   familyId: string | null;
   newFamilyName: string | null;
-  iconKey: string | null;
   nutrition: NutritionValues | null;
   servingAmount: number | null;
   servingUnit: Unit | null;
@@ -103,7 +102,6 @@ export const saveIngredient = createAsyncThunk<
         };
         const ownedFields = {
           ...missingKeys,
-          iconKey: draft.iconKey,
           nutritionPer100g: draft.nutrition,
           servingAmount: draft.servingAmount,
           servingUnit: draft.servingUnit,
@@ -121,7 +119,7 @@ export const saveIngredient = createAsyncThunk<
           catalogId: draft.catalogId,
           name: isCatalog ? null : draft.name.trim(),
           familyId,
-          iconKey: draft.iconKey,
+          iconKey: null,
           nutritionPer100g: draft.nutrition,
           servingAmount: draft.servingAmount,
           servingUnit: draft.servingUnit,
