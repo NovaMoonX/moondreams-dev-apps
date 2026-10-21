@@ -1,6 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, Settings } from 'lucide-react';
+import { ChevronRight, Settings, TrendingUp } from 'lucide-react';
 
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
@@ -16,6 +16,8 @@ import {
 } from '@apps/a-list/store/selectors';
 import type { MembershipProfile } from '@apps/a-list/types';
 import { formatCents } from '@/utils/moneyUtils';
+
+const HIT_AREA = "relative after:absolute after:-inset-1.5 after:content-['']";
 
 interface DashboardScreenProps {
   membership: MembershipProfile;
@@ -84,6 +86,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
             variant='secondary'
             size='icon'
             rounded='full'
+            className={HIT_AREA}
             aria-label='Membership settings'
             onClick={() => openOverlay({ kind: 'membership' })}
           >
@@ -94,15 +97,29 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
       {summary && (
         <div className='space-y-4'>
           <div className='border-border bg-card rounded-3xl border p-5 shadow-sm'>
-            <p className='text-muted-foreground flex items-center gap-2 text-sm font-medium'>
-              <span
-                className='bg-accent grid size-8 place-items-center rounded-full text-base'
-                aria-hidden='true'
+            <div className='flex items-center justify-between gap-3'>
+              <p className='text-muted-foreground flex items-center gap-2 text-sm font-medium'>
+                <span
+                  className='bg-accent grid size-8 place-items-center rounded-full text-base'
+                  aria-hidden='true'
+                >
+                  💰
+                </span>
+                Net savings
+              </p>
+              <Button
+                type='button'
+                variant='secondary'
+                size='icon'
+                rounded='full'
+                className={HIT_AREA}
+                aria-label='Projection: see where your net savings could land'
+                title='Projection'
+                onClick={() => openOverlay({ kind: 'projection' })}
               >
-                💰
-              </span>
-              Net savings
-            </p>
+                <TrendingUp className='h-5 w-5' />
+              </Button>
+            </div>
             <p
               className={join(
                 'mt-2 text-5xl font-bold tracking-tight tabular-nums',

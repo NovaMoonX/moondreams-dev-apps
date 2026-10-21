@@ -77,6 +77,7 @@ export type AListOverlay =
   | { kind: 'tickets'; view: 'paid' | 'unpriced' }
   | { kind: 'theaters' }
   | { kind: 'membership' }
+  | { kind: 'projection' }
   | { kind: 'share' };
 
 export interface WatchlistItem {
