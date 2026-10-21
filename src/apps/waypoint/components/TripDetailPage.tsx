@@ -57,6 +57,7 @@ import MembersSection from '@apps/waypoint/components/MembersSection';
 import NotificationsIndicator from '@apps/waypoint/components/NotificationsIndicator';
 import NowPill from '@apps/waypoint/components/NowPill';
 import OverviewSection from '@apps/waypoint/components/OverviewSection';
+import PackingSuggestionsEntry from '@apps/waypoint/components/PackingSuggestionsEntry';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import StickyAppBar from '@/components/StickyAppBar';
 import RelatedFlowProvider from '@apps/waypoint/components/RelatedFlowProvider';
@@ -713,6 +714,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         {isIdeaBoardProminent && ideasOverview}
         {(hasAppNav ? sectionTab === '' : true) && (
           <ChecklistOverview trip={trip} currentUserId={currentUserId} onOpen={() => setSectionTab('checklist')} />
+        )}
+        {(hasAppNav ? sectionTab === '' : true) && (
+          <PackingSuggestionsEntry trip={trip} currentUserId={currentUserId} />
         )}
         {hasAppNav && sectionTab === '' && !isActive && (
           <div className='mt-5 space-y-3'>
