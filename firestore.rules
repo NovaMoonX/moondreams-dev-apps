@@ -1492,6 +1492,34 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      function isNoteChangeAt(changes, i) {
+        return changes.size() <= i || isShortText(changes[i], 200);
+      }
+
+      // Rules can't loop, so each of the (at most 8) lines a tweak records is checked by index.
+      function isNoteChanges(changes) {
+        return changes is list && changes.size() <= 8
+          && isNoteChangeAt(changes, 0) && isNoteChangeAt(changes, 1)
+          && isNoteChangeAt(changes, 2) && isNoteChangeAt(changes, 3)
+          && isNoteChangeAt(changes, 4) && isNoteChangeAt(changes, 5)
+          && isNoteChangeAt(changes, 6) && isNoteChangeAt(changes, 7);
+      }
+
+      // A NOTE is the person's own words; a TWEAK records what an edit to the recipe changed, with an optional reason in `text`.
+      function isRecipeNote(data, id) {
+        return data.keys().hasOnly(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.recipeId, 80)
+          && data.kind in ['NOTE', 'TWEAK']
+          && (data.text == null || isShortText(data.text, 2000))
+          && (data.kind == 'NOTE' ? data.text is string : true)
+          && isNoteChanges(data.changes)
+          && (data.kind == 'TWEAK' || data.changes.size() == 0)
+          && (data.cookId == null || isShortText(data.cookId, 80))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
       function isStore(data, id) {
         return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
@@ -1662,6 +1690,17 @@ service cloud.firestore {
         allow update: if isKitchenOwner() && isCook(request.resource.data, id)
           && request.resource.data.recipeId == resource.data.recipeId
           && request.resource.data.plannedMealId == resource.data.get('plannedMealId', null)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /notes/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isRecipeNote(request.resource.data, id);
+        allow update: if isKitchenOwner() && isRecipeNote(request.resource.data, id)
+          && request.resource.data.recipeId == resource.data.recipeId
+          && request.resource.data.kind == resource.data.kind
+          && request.resource.data.cookId == resource.data.get('cookId', null)
+          && request.resource.data.changes == resource.data.get('changes', [])
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

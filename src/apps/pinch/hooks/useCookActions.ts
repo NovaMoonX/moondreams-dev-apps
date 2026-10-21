@@ -20,7 +20,7 @@ interface MarkPlannedInput {
   isToasted?: boolean;
 }
 
-/** Marking a recipe cooked, with its toast; each call rejects with a sentence for the caller to show. */
+/** Marking a recipe cooked, with its toast; each call rejects with a sentence for the caller to show, and marking resolves with the cook's id. */
 export function useCookActions(uid: string) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
@@ -61,6 +61,7 @@ export function useCookActions(uid: string) {
       duration: UNDO_TOAST_MS,
       action: { label: 'Undo', onClick: () => void undoFromToast(id) },
     });
+    return id;
   };
 
   const markPlannedRecipeCooked = async ({
@@ -93,6 +94,7 @@ export function useCookActions(uid: string) {
         action: { label: 'Undo', onClick: () => void undoFromToast(id) },
       });
     }
+    return id;
   };
 
   return {

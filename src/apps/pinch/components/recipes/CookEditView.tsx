@@ -9,8 +9,9 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, NotebookPen } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -44,6 +45,8 @@ interface CookEditViewProps {
   defaultServings: number;
   planNote: string | null;
   onBack: () => void;
+  /** Opens a note about this cook; null where none can be written (a cook not saved yet, or notes that didn't load). */
+  onAddNote: (() => void) | null;
 }
 
 function CookEditView({
@@ -54,6 +57,7 @@ function CookEditView({
   defaultServings,
   planNote,
   onBack,
+  onAddNote,
 }: CookEditViewProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -196,6 +200,15 @@ function CookEditView({
           {cook ? (planNote ?? 'Change when or how much.') : 'An earlier cook'}
         </p>
       </div>
+      {cook && onAddNote && (
+        <ActionRow
+          icon={<NotebookPen className='h-4 w-4' />}
+          label='Add a note'
+          subtitle={isChanged ? 'Save your changes first' : 'About this cook'}
+          isDisabled={isChanged || isSubmitting}
+          onClick={onAddNote}
+        />
+      )}
       <Form
         id='pinch-cook'
         form={fields}

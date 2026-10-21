@@ -192,6 +192,8 @@ export type PinchSubview =
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
       fromIdeaId?: string;
+      /** The note the form was opened from: shown as a quote, never changed by the save. */
+      fromNoteId?: string;
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
@@ -311,6 +313,27 @@ export interface Cook {
   /** An instant, shown in local time. */
   cookedAt: number;
   /** Immutable. */
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type NoteKind = 'NOTE' | 'TWEAK';
+
+/** One entry in a recipe's journal: something to remember after cooking, or the record of an edit to the recipe. */
+export interface RecipeNote {
+  /** Immutable. */
+  id: string;
+  /** Immutable. A recipe that no longer exists reads as none: its notes are ignored. */
+  recipeId: string;
+  /** Immutable. */
+  kind: NoteKind;
+  /** A NOTE always has it; a TWEAK's is the optional reason for the change. 1 to 2,000 characters when set. */
+  text: string | null;
+  /** A TWEAK's short summaries of what the edit changed, fixed when it was saved; empty for a NOTE. Immutable. */
+  changes: string[];
+  /** Immutable. The cook this follows up; a cook that no longer exists reads as none. */
+  cookId: string | null;
+  /** An instant, shown in local time. Immutable. */
   createdAt: number;
   updatedAt: number;
 }
