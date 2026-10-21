@@ -30,6 +30,7 @@ import {
   selectUnseenActivityStays,
 } from '@apps/waypoint/store/selectors';
 import { ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
+import { getEventNavigationLocation, getStayNavigationLocation } from '@apps/waypoint/utils/navigationLocation';
 import { getEventBadge } from '@apps/waypoint/utils/eventBadge';
 import type { Announcement, AnnouncementSeverity, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
@@ -172,7 +173,7 @@ function renderUpdateItemBody(item: UpdateItem, activity: Activity, actorName: s
         <p className='text-muted-foreground text-xs'>
           {getUpdateItemDayLabel(item, trip)} · {formatEventTimeRange(trip, event)}
         </p>
-        {locationLabel && <LocationLink {...event} label={locationLabel} className='text-xs' />}
+        {locationLabel && <LocationLink {...getEventNavigationLocation(event)} label={locationLabel} className='text-xs' />}
       </>
     );
   }
@@ -185,14 +186,7 @@ function renderUpdateItemBody(item: UpdateItem, activity: Activity, actorName: s
         {getUpdateItemDayLabel(item, trip)} · {formatStayClockRange(trip, stay)}
       </p>
       {stay.address && (
-        <LocationLink
-          locationName={stay.stayType === 'HOTEL' ? stay.name : null}
-          address={stay.address}
-          latitude={stay.latitude}
-          longitude={stay.longitude}
-          label={stay.address}
-          className='text-xs'
-        />
+        <LocationLink {...getStayNavigationLocation(stay)} label={stay.address} className='text-xs' />
       )}
     </>
   );

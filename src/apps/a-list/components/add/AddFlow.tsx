@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { Button, Form } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Play } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import Pill from '@/components/Pill';
 import { SubviewHeader } from '@/components/Subview';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -66,6 +68,7 @@ import {
 import type {
   AListOverlay,
   MovieSearchResult,
+  PopularMovie,
   MovieSnapshot,
   ShowtimeOption,
   TheatreSnapshot,
@@ -77,13 +80,15 @@ import {
 } from '@apps/a-list/utils/purchase';
 import { toTheatreSnapshot } from '@apps/a-list/utils/theatres';
 
+const SYNOPSIS_FOLD_CHARS = 200;
+
 interface ShowtimeValues {
   date: string;
   time: string;
 }
 
 export type AddSelection =
-  | { kind: 'search'; result: MovieSearchResult }
+  | { kind: 'search'; result: MovieSearchResult | PopularMovie }
   | {
       kind: 'known';
       movieKey: string;
@@ -142,6 +147,7 @@ export function AddFlow({
   const { addToast } = useToast();
   const queryClient = useQueryClient();
   const now = useNow();
+  const isPhone = useMediaQuery().isBelow('sm');
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
   const feeChips = useAppSelector(selectFeeChips);
@@ -169,6 +175,9 @@ export function AddFlow({
   >(undefined);
   const [query, setQuery] = useState('');
   const [isAddingByTitle, setIsAddingByTitle] = useState(false);
+  // A film picked from the suggestions is only browsed until the person says they want it.
+  const [wantsPickedFilm, setWantsPickedFilm] = useState(false);
+  const [isSynopsisOpen, setIsSynopsisOpen] = useState(false);
   const [manualDraft, setManualDraft] =
     useState<ManualMovieDraft>(EMPTY_MANUAL_DRAFT);
   const [selection, setSelection] = useState<AddSelection | null>(
@@ -199,6 +208,14 @@ export function AddFlow({
     selection?.kind === 'search' ? selection.result.title : '';
   const fallbackPoster =
     selection?.kind === 'search' ? selection.result.posterUrl : null;
+  const popularPick =
+    selection?.kind === 'search' && 'overview' in selection.result
+      ? selection.result
+      : null;
+  const trailerUrl =
+    selection?.kind === 'search' && 'trailerUrl' in selection.result
+      ? selection.result.trailerUrl
+      : null;
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
   const showtimeAt = fromLocalDateAndTimeInputValues(
     showtimeValues.date,
@@ -249,6 +266,14 @@ export function AddFlow({
     movie !== undefined &&
     movieKey !== null &&
     (!isCalendar || (showtimeAt !== undefined && showtimeValues.time !== ''));
+
+  const hasFacts =
+    popularPick !== null &&
+    (!!popularPick.overview ||
+      popularPick.genres.length > 0 ||
+      popularPick.trailerUrl !== null);
+  const isDeciding =
+    hasFacts && overlay.destination === 'watchlist' && !wantsPickedFilm;
 
   const getDetailsLine = () => {
     if (selection?.kind === 'search' && details.isPending)
@@ -454,7 +479,12 @@ export function AddFlow({
       onBack();
       return;
     }
+    if (wantsPickedFilm) {
+      setWantsPickedFilm(false);
+      return;
+    }
     setSelection(null);
+    setIsSynopsisOpen(false);
     setWatchlistValues(INITIAL_WATCHLIST_DETAILS);
     setError(null);
   };
@@ -484,6 +514,7 @@ export function AddFlow({
           query={query}
           onQueryChange={setQuery}
           showWatchlist={isCalendar}
+          showPopular={!isPast}
           isDisabled={isSaving}
           onPick={(result, isListed) =>
             isQuick
@@ -531,7 +562,7 @@ export function AddFlow({
     const isManual = selection.kind === 'known' && selection.isManual;
     const getBackLabel = () => {
       if (onBack) return 'Back to movie';
-      if (isManual) return 'Back';
+      if (isManual || wantsPickedFilm) return 'Back';
       return 'Back to results';
     };
 
@@ -559,11 +590,53 @@ export function AddFlow({
           <div className='min-w-0 space-y-1'>
             <p className='font-semibold'>{movie?.title ?? fallbackTitle}</p>
             <p className='text-muted-foreground text-sm'>{getDetailsLine()}</p>
+            {popularPick !== null && popularPick.genres.length > 0 && (
+              <p className='text-muted-foreground text-sm'>
+                {popularPick.genres.join(' · ')}
+              </p>
+            )}
             {rewatchNote && (
               <p className='text-primary text-sm'>{rewatchNote}</p>
             )}
+            {trailerUrl && (
+              <Button
+                href={trailerUrl}
+                target='_blank'
+                rel='noopener noreferrer'
+                variant='tertiary'
+                size='sm'
+                rounded='full'
+                aria-label='Watch trailer on YouTube'
+                className='border-border min-h-10 gap-1.5 border py-1'
+              >
+                <Play className='h-4 w-4' aria-hidden='true' />
+                {isPhone ? 'Watch trailer' : 'Watch trailer on YouTube'}
+                <ExternalLink className='h-3.5 w-3.5' aria-hidden='true' />
+              </Button>
+            )}
           </div>
         </div>
+        {popularPick?.overview && (
+          <div>
+            <p
+              className={
+                isSynopsisOpen || popularPick.overview.length <= SYNOPSIS_FOLD_CHARS
+                  ? 'text-sm'
+                  : 'line-clamp-4 text-sm'
+              }
+            >
+              {popularPick.overview}
+            </p>
+            {popularPick.overview.length > SYNOPSIS_FOLD_CHARS && (
+              <ShowMoreButton
+                isOpen={isSynopsisOpen}
+                onClick={() => setIsSynopsisOpen((current) => !current)}
+              >
+                {isSynopsisOpen ? 'Show less' : 'Read more'}
+              </ShowMoreButton>
+            )}
+          </div>
+        )}
         {isCalendar ? (
           <Form
             key={`pick-${pickCount}`}
@@ -575,10 +648,12 @@ export function AddFlow({
             onDataChange={(data) => setShowtimeValues(data as ShowtimeValues)}
           />
         ) : (
-          <WatchlistDetailsFields
-            values={watchlistValues}
-            onChange={setWatchlistValues}
-          />
+          !isDeciding && (
+            <WatchlistDetailsFields
+              values={watchlistValues}
+              onChange={setWatchlistValues}
+            />
+          )
         )}
         {isCalendar && (
           <TheaterPills
@@ -695,23 +770,31 @@ export function AddFlow({
               </>
             ) : (
               <>
-                <Button
-                  type='button'
-                  rounded='full'
-                  variant='secondary'
-                  disabled={isSaving}
-                  onClick={onClose}
-                >
-                  Cancel
-                </Button>
+                {!isDeciding && (
+                  <Button
+                    type='button'
+                    rounded='full'
+                    variant='secondary'
+                    disabled={isSaving}
+                    onClick={onClose}
+                  >
+                    Cancel
+                  </Button>
+                )}
                 <Button
                   type='button'
                   rounded='full'
                   loading={isSaving}
-                  disabled={!canSave || isSaving}
-                  onClick={() => void handleAdd(false)}
+                  disabled={
+                    isDeciding ? details.isPending : !canSave || isSaving
+                  }
+                  onClick={() =>
+                    isDeciding
+                      ? setWantsPickedFilm(true)
+                      : void handleAdd(false)
+                  }
                 >
-                  Add
+                  {isDeciding ? 'I want to see this' : 'Add'}
                 </Button>
               </>
             )
@@ -725,7 +808,8 @@ export function AddFlow({
     if (selection !== null)
       return {
         label:
-          selection.kind === 'known' && selection.isManual
+          (selection.kind === 'known' && selection.isManual) ||
+          wantsPickedFilm
             ? 'Back'
             : 'Back to results',
         onClick: handleBack,

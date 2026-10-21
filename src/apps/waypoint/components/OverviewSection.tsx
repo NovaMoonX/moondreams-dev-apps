@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { Fragment, useState, type KeyboardEvent } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -22,11 +22,15 @@ import { RentalDetailLines } from '@apps/waypoint/components/RentalCard';
 import { StayDetailLines } from '@apps/waypoint/components/StayCard';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import { getEventNavigationLocation, getStayNavigationLocation } from '@apps/waypoint/utils/navigationLocation';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import SharedAlbumSection from '@apps/waypoint/components/SharedAlbumSection';
 import NotesViewButton from '@apps/waypoint/components/NotesViewButton';
 import TodayAgenda from '@apps/waypoint/components/TodayAgenda';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
+import { useEventEditor } from '@apps/waypoint/hooks/useEventEditor';
+import { useRentalEditor } from '@apps/waypoint/hooks/useRentalEditor';
+import { useStayEditor } from '@apps/waypoint/hooks/useStayEditor';
 import { useTripWeather } from '@apps/waypoint/hooks/useTripWeather';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
@@ -38,6 +42,7 @@ import {
   selectUpNextEvent,
 } from '@apps/waypoint/store/selectors';
 import type { Rental, Stay, TimelineEvent, TripSpace } from '@apps/waypoint/types';
+import { canEditExistingItem } from '@apps/waypoint/utils/roleGuards';
 import {
   getEventTime,
   getRentalTime,
@@ -97,15 +102,6 @@ function getOpenDetailsProps(label: string, onOpenDetails: () => void) {
   };
 }
 
-function getStayLocation(stay: Stay) {
-  return {
-    locationName: stay.stayType === 'HOTEL' ? stay.name : null,
-    address: stay.address,
-    latitude: stay.latitude,
-    longitude: stay.longitude,
-  };
-}
-
 function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProps) {
   const now = useNow();
   const dispatch = useAppDispatch();
@@ -117,6 +113,10 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
   const weather = useTripWeather(trip, events, now);
   const rentals = useAppSelector(selectRentals);
   const [detail, setDetail] = useState<OverviewDetail | null>(null);
+  const canEdit = canEditExistingItem(trip, currentUserId);
+  const eventEditor = useEventEditor(trip, currentUserId, events);
+  const stayEditor = useStayEditor(trip, currentUserId);
+  const rentalEditor = useRentalEditor(trip, currentUserId);
   const [isWeatherOpen, setIsWeatherOpen] = useState(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
 
@@ -183,6 +183,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             now={now}
             isSmallScreen={isSmallScreen}
             onOpenDetails={() => openStayDrawer(stay)}
+            onEdit={canEdit ? () => stayEditor.openEditor(stay) : null}
           />
         ))}
         {rentalsToday.map(({ rental, leg }) => (
@@ -194,6 +195,7 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
             now={now}
             isSmallScreen={isSmallScreen}
             onOpenDetails={() => openRentalDrawer(rental, leg)}
+            onEdit={canEdit ? () => rentalEditor.openEditor(rental) : null}
           />
         ))}
         {todayWeather && (
@@ -281,9 +283,17 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           onClose={() => setDetail(null)}
           title={detail.event.title}
           imageUrl={getDisplayImage(detail.event)}
-          location={detail.event}
+          location={getEventNavigationLocation(detail.event)}
           linkUrl={detail.event.linkUrl}
-          onEdit={null}
+          onEdit={
+            canEdit && !detail.event.isArchived
+              ? () => {
+                  const { event } = detail;
+                  setDetail(null);
+                  eventEditor.openEditor(event);
+                }
+              : null
+          }
         >
           <EventDetailLines
             trip={trip}
@@ -305,9 +315,17 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           onClose={() => setDetail(null)}
           title={detail.stay.name}
           imageUrl={getDisplayImage(detail.stay)}
-          location={getStayLocation(detail.stay)}
+          location={getStayNavigationLocation(detail.stay)}
           linkUrl={detail.stay.linkUrl}
-          onEdit={null}
+          onEdit={
+            canEdit
+              ? () => {
+                  const { stay } = detail;
+                  setDetail(null);
+                  stayEditor.openEditor(stay);
+                }
+              : null
+          }
         >
           <StayDetailLines
             trip={trip}
@@ -329,7 +347,15 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           imageUrl={getDisplayImage({ place: detail.rental.pickupPlace, linkPreview: detail.rental.linkPreview })}
           location={getRentalLocation(detail.rental, detail.leg)}
           linkUrl={detail.rental.linkUrl}
-          onEdit={null}
+          onEdit={
+            canEdit
+              ? () => {
+                  const { rental } = detail;
+                  setDetail(null);
+                  rentalEditor.openEditor(rental);
+                }
+              : null
+          }
         >
           <RentalDetailLines
             trip={trip}
@@ -342,10 +368,16 @@ function OverviewSection({ trip, currentUserId, onViewDay }: OverviewSectionProp
           />
         </PlaceDetailsDrawer>
       )}
+      {canEdit && (
+        <>
+          <Fragment key='event-editor'>{eventEditor.editor}</Fragment>
+          <Fragment key='stay-editor'>{stayEditor.editor}</Fragment>
+          <Fragment key='rental-editor'>{rentalEditor.editor}</Fragment>
+        </>
+      )}
     </div>
   );
 }
-
 
 function CheckInStayCard({
   trip,
@@ -353,12 +385,14 @@ function CheckInStayCard({
   now,
   isSmallScreen,
   onOpenDetails,
+  onEdit,
 }: {
   trip: TripSpace;
   stay: Stay;
   now: number;
   isSmallScreen: boolean;
   onOpenDetails: () => void;
+  onEdit: (() => void) | null;
 }) {
   const imageUrl = getDisplayImage(stay);
   const clickProps = isSmallScreen ? getOpenDetailsProps(stay.name, onOpenDetails) : {};
@@ -394,24 +428,19 @@ function CheckInStayCard({
           </p>
         </div>
         {!isSmallScreen && (
-          <MapNavigationButton
-            locationName={stay.name}
-            address={stay.address}
-            latitude={stay.latitude}
-            longitude={stay.longitude}
-          />
+          <div className='flex shrink-0 gap-2'>
+            {onEdit && (
+              <Button type='button' size='sm' variant='secondary' onClick={onEdit}>
+                Modify
+              </Button>
+            )}
+            <MapNavigationButton {...getStayNavigationLocation(stay)} />
+          </div>
         )}
       </div>
       {!isSmallScreen && (
         <div className='mt-2 space-y-1'>
-          <LocationLink
-            locationName={stay.stayType === 'HOTEL' ? stay.name : null}
-            address={stay.address}
-            latitude={stay.latitude}
-            longitude={stay.longitude}
-            label={stay.address}
-            className='text-xs'
-          />
+          <LocationLink {...getStayNavigationLocation(stay)} label={stay.address} className='text-xs' />
           {stay.confirmationCode && (
             <p className='text-xs'>
               <span className='text-muted-foreground'>Confirmation · </span>
@@ -437,6 +466,7 @@ function RentalTodayCard({
   now,
   isSmallScreen,
   onOpenDetails,
+  onEdit,
 }: {
   trip: TripSpace;
   rental: Rental;
@@ -444,6 +474,7 @@ function RentalTodayCard({
   now: number;
   isSmallScreen: boolean;
   onOpenDetails: () => void;
+  onEdit: (() => void) | null;
 }) {
   const isPickup = leg === 'pickup';
   const imageUrl = getDisplayImage({ place: rental.pickupPlace, linkPreview: rental.linkPreview });
@@ -485,7 +516,16 @@ function RentalTodayCard({
             {timezoneLabel ? ` · ${timezoneLabel}` : ''}
           </p>
         </div>
-        {!isSmallScreen && <MapNavigationButton {...location} />}
+        {!isSmallScreen && (
+          <div className='flex shrink-0 gap-2'>
+            {onEdit && (
+              <Button type='button' size='sm' variant='secondary' onClick={onEdit}>
+                Modify
+              </Button>
+            )}
+            <MapNavigationButton {...location} />
+          </div>
+        )}
       </div>
       {!isSmallScreen && (
         <div className='mt-2 space-y-1'>

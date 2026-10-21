@@ -62,12 +62,12 @@ function LogisticsDetailSheet({ trip, subject, onClose }: LogisticsDetailSheetPr
   const kindLabel = stay ? STAY_TYPE_LABELS[stay.stayType] : rental ? RENTAL_TYPE_LABELS[rental.rentalType] : '';
   const lines = stay ? getStayLines(trip, stay) : rental ? getRentalLines(trip, rental) : [];
   const places = stay
-    ? [{ label: null, name: stay.name, address: stay.address, latitude: stay.latitude, longitude: stay.longitude }]
+    ? [{ label: null, name: stay.stayType === 'HOTEL' ? stay.name : null, address: stay.address, latitude: stay.latitude, longitude: stay.longitude }]
     : rental
       ? [
           {
             label: 'Pick up at',
-            name: rental.name,
+            name: null,
             address: rental.pickupAddress,
             latitude: rental.pickupLatitude,
             longitude: rental.pickupLongitude,
@@ -76,7 +76,7 @@ function LogisticsDetailSheet({ trip, subject, onClose }: LogisticsDetailSheetPr
             ? [
                 {
                   label: 'Return to',
-                  name: rental.name,
+                  name: null,
                   address: rental.returnAddress,
                   latitude: rental.returnLatitude,
                   longitude: rental.returnLongitude,

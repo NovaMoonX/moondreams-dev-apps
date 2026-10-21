@@ -12,10 +12,16 @@ interface NotesFieldProps {
   onSave: (notes: string) => Promise<void>;
   variant: 'link' | 'subtle';
   placeholder: string;
+  /** Lets a card tuck away what hangs over its corner while the editor is open. */
+  onEditingChange?: (isEditing: boolean) => void;
 }
 
-export function NotesField({ notes, canEdit, onSave, variant, placeholder }: NotesFieldProps) {
+export function NotesField({ notes, canEdit, onSave, variant, placeholder, onEditingChange }: NotesFieldProps) {
   const [draft, setDraft] = useState<string | null>(null);
+  const changeDraft = (next: string | null) => {
+    setDraft(next);
+    onEditingChange?.(next !== null);
+  };
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isEditing = draft !== null;
@@ -29,7 +35,7 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
     setError(null);
     try {
       await onSave(draft);
-      setDraft(null);
+      changeDraft(null);
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this note.'));
     } finally {
@@ -52,7 +58,7 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
             variant={isLarge ? 'outline' : 'left-line'}
             className={isLarge ? undefined : 'text-xs!'}
             placeholder={placeholder}
-            onChange={(changeEvent) => setDraft(changeEvent.target.value)}
+            onChange={(changeEvent) => changeDraft(changeEvent.target.value)}
           />
           <div className={join('gap-2', isLarge ? 'grid grid-cols-2' : 'flex justify-end')}>
             <Button
@@ -61,7 +67,7 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
               variant='secondary'
               disabled={isSaving}
               onClick={() => {
-                setDraft(null);
+                changeDraft(null);
                 setError(null);
               }}
             >
@@ -91,7 +97,7 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
               type='button'
               variant='tertiary'
               className='border-border h-10 w-full justify-start gap-3 rounded-xl border px-3 text-sm font-normal'
-              onClick={() => setDraft(notes ?? '')}
+              onClick={() => changeDraft(notes ?? '')}
             >
               <Pencil className='text-muted-foreground h-4 w-4' aria-hidden='true' />
               {notes ? 'Edit note' : 'Add a note'}
@@ -103,7 +109,7 @@ export function NotesField({ notes, canEdit, onSave, variant, placeholder }: Not
               variant='tertiary'
               size='sm'
               className='text-muted-foreground! hover:text-foreground! -ml-2 h-7 gap-1.5 px-2 text-xs'
-              onClick={() => setDraft(notes ?? '')}
+              onClick={() => changeDraft(notes ?? '')}
             >
               <Pencil className='h-3.5 w-3.5' aria-hidden='true' />
               {notes ? 'Edit note' : 'Add note'}

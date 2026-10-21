@@ -407,7 +407,7 @@ function IdeaFormModal({
       />
       {!canPost && (
         <p className='text-muted-foreground mt-3 text-sm'>
-          This trip has started, so new ideas can no longer be added.
+          Only members of this trip can add ideas.
         </p>
       )}
       {error && <p className='text-destructive mt-3 text-sm'>{error}</p>}
