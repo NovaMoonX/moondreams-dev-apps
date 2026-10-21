@@ -121,20 +121,16 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     return `A-List has a ${MIN_CONTRACT_MONTHS}-month minimum. ${pluralize(base.minimumMonthsLeft, 'month')} to go, so ${left} more is owed even if you stop.`;
   };
 
-  const getSummaryLine = () => {
-    if (scenario === 'stop') return `Covered until ${until}.`;
-    if (scenario === 'calendar') {
-      if (result.movies === 0)
-        return 'Nothing is planned ahead on your calendar yet.';
-      return `${pluralize(result.movies, 'showing')} ahead, assuming you watch them all. Covered until ${until}.`;
-    }
-    return `${pluralize(result.movies, 'movie')} by ${until}.`;
+  const getAssumptionLine = () => {
+    if (scenario !== 'calendar') return null;
+    if (result.movies === 0)
+      return 'Nothing is planned ahead on your calendar yet.';
+    return `${pluralize(result.movies, 'showing')} ahead, assuming you watch them all.`;
   };
 
   const getBreakEvenLine = () => {
     if (scenario !== 'week' && scenario !== 'month') return null;
-    if (!breakEven || breakEven.movies === 0 || breakEven.perPeriod === null)
-      return null;
+    if (isBrokenEven || !breakEven || breakEven.perPeriod === null) return null;
     const unit = scenario;
     if (breakEven.perPeriod > getPaceMax(unit))
       return `Breaking even by then would take more than A-List's ${getPaceMax(unit)} a ${unit}.`;
@@ -205,13 +201,14 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               </p>
               <p className='text-muted-foreground mt-2 text-sm'>
                 {formatCents(base.savedCents + (result.addedCents ?? 0))} in
-                tickets, after {formatCents(result.costCents)} of membership.
+                tickets, after {formatCents(result.costCents)} of membership,
+                through {until}.
               </p>
             </>
           )}
-          {result.netCents !== null && (
+          {getAssumptionLine() && (
             <p className='text-muted-foreground mt-1 text-sm'>
-              {getSummaryLine()}
+              {getAssumptionLine()}
             </p>
           )}
           {breakEvenLine && (
