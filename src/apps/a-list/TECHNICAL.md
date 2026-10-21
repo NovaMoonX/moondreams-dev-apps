@@ -260,7 +260,7 @@ interface SharedViewing {
 
 This is the one place that ties the pieces together; the sections below hold the reasoning and the provider details.
 
-**Popular in theaters** (`MoviePicker` → `getPopularMovies`): with the search field empty the picker shows "Popular in theaters" (TMDB's US now-playing and upcoming lists, most popular first, cached a day on the server and on the device). Films already on the watchlist, by key or by title and year, are left out; typing replaces the list with search results. Where the provider has no such list (OMDb) the section is simply not drawn.
+**In theaters and coming soon** (`MoviePicker` → `getPopularMovies`): with the search field empty the picker shows this group (TMDB's US now-playing and upcoming lists, the top 15 of each merged by popularity, each row carrying `opensOn` for a film not yet open; cached a day on the server and on the device; not counted by the OMDb lookup budget). It is not shown when backfilling seen movies. Bump `POPULAR_CACHE_VERSION` and the client key when the shape changes. Films already on the watchlist, by key or by title and year, are left out; typing replaces the list with search results. Where the provider has no such list (OMDb) the section is simply not drawn.
 
 **Searching** (`MoviePicker` → `searchMovies`)
 1. **Browser.** After a pause in typing (450 ms) and at least 2 characters, TanStack Query asks for the search. Its key is the normalized text under `a-list/movies/search/v2`, it is fresh for a day and persisted, so a repeat costs nothing, even offline.
@@ -304,7 +304,7 @@ Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getPopularMovies.ts`, `g
 
 **The budget is the design constraint.** About 1,000 lookups a day for *everyone using the app combined* (the key lives on the server, so it is one shared bucket, not one per member). One lookup is one upstream call, so a search with more than 10 matches costs two. Rough cost: a member adding a movie spends one or two searches (typing pauses) plus one details call, so backfilling ten movies costs on the order of thirty, and a few such sessions in a day could exhaust it. Four layers keep that from happening, cheapest first:
 
-1. **The browser** debounces typing (`useDebouncedValue` with `DEBOUNCE_MS.autocomplete`), searches only from `MOVIE_SEARCH_MIN_CHARS`, never searches an empty box (it shows the watchlist), and remembers results with TanStack Query (persisted, so a repeat is free even offline). Search results never trigger per-result details calls; details are fetched only for the movie actually picked.
+1. **The browser** debounces typing (`useDebouncedValue` with `DEBOUNCE_MS.autocomplete`), searches only from `MOVIE_SEARCH_MIN_CHARS`, never searches an empty box (it shows the unseen watchlist and the popular list), and remembers results with TanStack Query (persisted, so a repeat is free even offline). Search results never trigger per-result details calls; details are fetched only for the movie actually picked.
 2. **A shared server-side cache** (Firestore, written and read only by the functions through the admin SDK; clients have no access): `apps/a-list/searchCache/{key}` and `apps/a-list/movieCache/{movieKey}`, each `{ value, cachedAt }`. Search results live 7 days and the popular list 1 day; details live 30 days for a movie already released and 1 day when the release date is null or in the future (those are the ones that change). A cache hit costs no lookup, and the second member to search for the same movie costs nothing.
 3. **A daily budget guard** in the functions: before any upstream call, a transaction increments `apps/a-list/lookupUsage/{yyyy-mm-dd}` (the whole app) and `apps/a-list/lookupUsage/{yyyy-mm-dd}_{uid}` (that member). The call is refused with `resource-exhausted` once the app total reaches 900 (headroom under 1,000, since the provider's own day boundary isn't documented; the guard uses UTC dates) or a member reaches 100. Cache hits are never counted.
 4. **A manual path.** When the guard refuses, or a movie isn't in the database, the picker's "Add it by title" link opens `ManualMovieForm`: a title and an optional release date. It builds the snapshot on the client with `movieKey: 'manual-<uuid>'`, no poster (the cover is a title tile) and no runtime (the fallback runtime applies). The picker's message on a refusal is one warm line, not an error.
@@ -315,7 +315,7 @@ Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getPopularMovies.ts`, `g
 
 ```typescript
 // searchMovies({ query: string })  → { results: MovieSearchResult[] }   (≤ 20, newest year first)
-// getPopularMovies({})              → { results: MovieSearchResult[] }   (≤ 30, most popular first; [] on OMDb)
+// getPopularMovies({})              → { results: MovieSearchResult[] }   (≤ 30, most popular first; each with opensOn: number | null; [] on OMDb)
 interface MovieSearchResult {
   movieKey: string;                  // "imdb-tt0133093"
   title: string;

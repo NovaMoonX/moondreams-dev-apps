@@ -5,7 +5,7 @@ import { functions } from '@/lib/firebase/config';
 import { DAY_MS } from '@/lib/query/queryClient';
 import { normalizeString } from '@/utils/stringUtils';
 import { MOVIE_DETAILS_STALE_MS } from '@apps/a-list/constants';
-import type { MovieSearchResult, MovieSnapshot } from '@apps/a-list/types';
+import type { MovieSearchResult, MovieSnapshot, PopularMovie } from '@apps/a-list/types';
 
 const searchMoviesCallable = httpsCallable<
   { query: string },
@@ -13,7 +13,7 @@ const searchMoviesCallable = httpsCallable<
 >(functions, 'searchMovies');
 const getPopularMoviesCallable = httpsCallable<
   Record<string, never>,
-  { results: MovieSearchResult[] }
+  { results: PopularMovie[] }
 >(functions, 'getPopularMovies');
 const getMovieCallable = httpsCallable<{ movieKey: string }, MovieSnapshot>(
   functions,
@@ -24,7 +24,7 @@ export const movieQueryKeys = {
   all: ['a-list', 'movies'] as const,
   search: (query: string) =>
     [...movieQueryKeys.all, 'search', 'v2', normalizeString(query)] as const,
-  popular: () => [...movieQueryKeys.all, 'popular'] as const,
+  popular: () => [...movieQueryKeys.all, 'popular', 'v2'] as const,
   details: (movieKey: string) =>
     [...movieQueryKeys.all, 'details', movieKey] as const,
 };

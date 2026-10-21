@@ -1,6 +1,6 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 
-import type { MovieSearchResult, MovieSnapshot } from './types.js';
+import type { MovieSearchResult, MovieSnapshot, PopularMovie } from './types.js';
 
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_SEARCH_RESULTS = 20;
@@ -152,13 +152,16 @@ export async function searchTmdb(
 }
 
 /** Most popular first, up to 30: what is in US theaters now plus what opens soon, merged by popularity. */
-export async function popularTmdb(apiKey: string): Promise<MovieSearchResult[]> {
+export async function popularTmdb(apiKey: string): Promise<PopularMovie[]> {
   const fetchList = (path: string) =>
     callTmdb<TmdbSearchResponse>(apiKey, path, { region: 'US', language: 'en-US', page: '1' });
 
-  const nowPlaying = await fetchList('/movie/now_playing');
   // A failed upcoming list (timeout, rate limit) still returns what is playing.
-  const upcoming = await fetchList('/movie/upcoming').catch(() => null);
+  const [nowPlaying, upcoming] = await Promise.all([
+    fetchList('/movie/now_playing'),
+    fetchList('/movie/upcoming').catch(() => null),
+  ]);
+  const today = Date.now() - (Date.now() % 86_400_000);
 
   // Each list gives its most popular first, so old re-releases can't push every upcoming title out of the merge.
   const topOf = (data: TmdbSearchResponse | null) =>
@@ -168,7 +171,10 @@ export async function popularTmdb(apiKey: string): Promise<MovieSearchResult[]> 
   const result = toListItems([{ results: [...topOf(nowPlaying), ...topOf(upcoming)] }])
     .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
     .slice(0, MAX_POPULAR_RESULTS)
-    .map(toSearchResult);
+    .map((item) => {
+      const releaseDate = parseTmdbDate(item.release_date);
+      return { ...toSearchResult(item), opensOn: releaseDate !== null && releaseDate > today ? releaseDate : null };
+    });
   return result;
 }
 

@@ -2,7 +2,7 @@ import { defineSecret } from 'firebase-functions/params';
 
 import { getOmdbTitle, popularOmdb, searchOmdb } from './omdb.js';
 import { getTmdbTitle, popularTmdb, searchTmdb } from './tmdb.js';
-import type { MovieSearchResult, MovieSnapshot } from './types.js';
+import type { MovieSearchResult, MovieSnapshot, PopularMovie } from './types.js';
 
 export const OMDB_API_KEY = defineSecret('OMDB_API_KEY');
 export const TMDB_API_KEY = defineSecret('TMDB_API_KEY');
@@ -13,7 +13,7 @@ export interface MovieProvider {
   getKey: () => string;
   search: (apiKey: string, query: string, beforeUpstreamCall: () => Promise<void>) => Promise<MovieSearchResult[]>;
   /** What is in theaters or opening soon, most popular first; empty when the provider can't say. */
-  popular: (apiKey: string) => Promise<MovieSearchResult[]>;
+  popular: (apiKey: string) => Promise<PopularMovie[]>;
   getTitle: (apiKey: string, providerId: string) => Promise<MovieSnapshot>;
 }
 
