@@ -41,7 +41,7 @@ Every merge to `main` is a production deploy, and the app is visible from its fi
 - **Warn:** merge **bottom-up** only. Merging from the top down folds every PR into the branch below it, so nothing reaches `main` until the bottom PRs merge, and the history collapses into one branch.
 
 ### 4. After the first deploy
-The `gcloud run services update <lowercase-fn> --no-invoker-iam-check --region=us-central1 --project=moondreams-dev-apps` command for each new callable, in case the browser shows a CORS error.
+Nothing to run for a new callable: the deploy opens it to the browser (README's "New Cloud Functions & Cloud Run invoker access"). Only if the browser still shows a CORS error, `npm run fb:invoker -- <function>`.
 
 ### 5. Project board
 Run from the `moondreams-dev-apps` root, as two separate code blocks: a dry run, then the real run.
