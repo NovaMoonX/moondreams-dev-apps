@@ -134,7 +134,9 @@ html[data-subview-open][data-site-banner='true'] .sticky-day-bar:not([data-subvi
 
 .subview-card {
   background-color: var(--color-background);
-  border: 1px solid var(--subview-border, var(--color-border));
+  /* An outline drawn inside the box, so the hairline takes none of the 16px gutter. */
+  outline: 1px solid var(--subview-border, var(--color-border));
+  outline-offset: -1px;
   border-radius: var(--subview-radius, 1.5rem);
   box-shadow: var(
     --subview-shadow,
@@ -154,7 +156,7 @@ html.dark .subview-card {
 
 @media (max-height: 499px) {
   .subview-card {
-    border: 0;
+    outline: 0;
     border-radius: 0;
     box-shadow: none !important;
   }
