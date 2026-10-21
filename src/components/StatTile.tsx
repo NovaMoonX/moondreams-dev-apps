@@ -12,6 +12,8 @@ interface StatTileProps {
   isStacked?: boolean;
   /** A help icon for a number that needs explaining: beside the label from `sm` up, in the tile's top-right corner on a phone, where a label that wraps would strand it. */
   help?: ReactNode;
+  /** Lets a long label wrap under the number instead of running past the tile, and keeps the help icon's room to the number's line only. */
+  isLabelWrapped?: boolean;
   /** A target to show progress toward; a met one tints the whole tile. */
   goal?: { current: number; target: number };
   /** Dims the tile and invites setting something up (a goal) with a button, instead of showing progress. */
@@ -32,6 +34,7 @@ function StatTile({
   detail,
   help,
   isStacked = false,
+  isLabelWrapped = false,
   goal,
   prompt,
   className,
@@ -62,13 +65,14 @@ function StatTile({
       <div
         className={join(
           'w-full min-w-0',
-          Boolean(help) && !isStacked && 'pr-6 sm:pr-0',
+          Boolean(help) && !isStacked && !isLabelWrapped && 'pr-6 sm:pr-0',
         )}
       >
         <p
           className={join(
             'leading-tight font-semibold tabular-nums',
             isStacked ? 'text-xl' : 'text-lg sm:text-xl',
+            Boolean(help) && isLabelWrapped && 'pr-6 sm:pr-0',
             prompt && 'text-muted-foreground',
           )}
         >
@@ -80,7 +84,11 @@ function StatTile({
             isStacked && 'justify-center',
           )}
         >
-          <span className='whitespace-nowrap'>{label}</span>
+          <span
+            className={isLabelWrapped ? 'leading-tight' : 'whitespace-nowrap'}
+          >
+            {label}
+          </span>
           {help && (
             <span className='absolute top-2 right-2 sm:static'>{help}</span>
           )}

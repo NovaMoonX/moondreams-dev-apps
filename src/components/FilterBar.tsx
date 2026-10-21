@@ -2,8 +2,10 @@ import { useState, type ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
-import { SlidersHorizontal, X } from 'lucide-react';
+import { FilterX, SlidersHorizontal, X } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
+import LabelChip from '@/components/LabelChip';
 import SearchInput from '@/components/SearchInput';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -58,8 +60,8 @@ interface FilterBarProps {
 
 /**
  * A search field with a filter icon beside it: filters open in a drawer on phones and a popover from `sm` up,
- * and the ones that are on show as small dismissible chips under the field with one Clear, so turning a filter
- * on never adds a row of controls above the list.
+ * and the ones that are on show as small dismissible chips under the field (with a quiet "Clear all" chip from two),
+ * so turning a filter on never adds a row of controls above the list.
  */
 function FilterBar({
   query,
@@ -197,30 +199,27 @@ function FilterBar({
         <div className='flex flex-wrap items-center gap-x-2 gap-y-3'>
           {leading}
           {activeFilters.map((filter) => (
-            <Button
+            <LabelChip
               key={filter.key}
-              type='button'
-              variant='tertiary'
-              size='sm'
-              rounded='full'
-              aria-label={`Remove filter: ${filter.label}`}
-              className="bg-accent text-accent-foreground! relative h-6! min-h-0! max-w-full gap-1 px-2.5 py-0! text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+              ariaLabel={`Remove filter: ${filter.label}`}
+              icon={<X className='h-3 w-3 shrink-0' aria-hidden='true' />}
               onClick={() => onRemoveFilter(filter.key)}
             >
-              <span className='truncate'>{filter.label}</span>
-              <X className='h-3 w-3 shrink-0' aria-hidden='true' />
-            </Button>
+              {filter.label}
+            </LabelChip>
           ))}
-          {hasActive && (
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className="relative h-6! min-h-0! px-1! py-0! text-xs before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-              onClick={onClearFilters}
-            >
-              Clear
-            </Button>
+          {activeCount > 1 && (
+            <ActionChips
+              actions={[
+                {
+                  key: 'clear-filters',
+                  icon: <FilterX className='h-4 w-4' />,
+                  label: 'Clear all',
+                  description: 'Clear all filters',
+                  onClick: onClearFilters,
+                },
+              ]}
+            />
           )}
         </div>
       )}

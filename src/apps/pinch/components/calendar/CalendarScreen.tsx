@@ -12,6 +12,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import DayDrawer from '@apps/pinch/components/calendar/DayDrawer';
 import MonthView from '@apps/pinch/components/calendar/MonthView';
+import StatsTiles from '@apps/pinch/components/calendar/StatsTiles';
 import SummaryLine from '@apps/pinch/components/calendar/SummaryLine';
 import WeekSummarySheet from '@apps/pinch/components/calendar/WeekSummarySheet';
 import WeekView from '@apps/pinch/components/calendar/WeekView';
@@ -54,6 +55,7 @@ import {
   shiftAnchor,
 } from '@apps/pinch/utils/dayKeys';
 import { getPlannedMealTitle } from '@apps/pinch/utils/mealFormat';
+import { getPeriodCostTile } from '@apps/pinch/utils/stats';
 
 const VIEW_OPTIONS = CALENDAR_VIEWS.map((value) => ({
   value,
@@ -148,6 +150,7 @@ function CalendarScreen({
     0,
   );
   const isFirstRun = !hasPlannedMeals && !isPlannedLoadFailed;
+  const isStatsShown = viewOptions.options.showStats;
 
   const getSummaryLabel = () => {
     if (isFromToday) return 'Next 7 days';
@@ -206,12 +209,10 @@ function CalendarScreen({
           hasRecipes || hasSavedMeals ? (
             <div className='flex items-center gap-1'>
               <NutritionViewOptions
-                prices={{
-                  checked: viewOptions.options.showPrices,
-                  customizedCount: viewOptions.customizedCount,
-                  onChange: (showPrices) => viewOptions.update({ showPrices }),
-                  onReset: viewOptions.reset,
-                }}
+                options={viewOptions.options}
+                customizedCount={viewOptions.customizedCount}
+                onChange={viewOptions.update}
+                onReset={viewOptions.reset}
               />
               <Button
                 type='button'
@@ -240,12 +241,22 @@ function CalendarScreen({
         onToday={() => goTo(todayKey)}
       />
       {stats.plannedCount > 0 && (
-        <SummaryLine
-          label={getSummaryLabel()}
-          stats={stats}
-          isPast={range.endKey < todayKey}
-          onOpen={() => setIsSummaryOpen(true)}
-        />
+        <div className='space-y-2'>
+          <SummaryLine
+            label={getSummaryLabel()}
+            stats={stats}
+            isPast={range.endKey < todayKey}
+            isTotalBelow={isStatsShown && getPeriodCostTile(stats) !== null}
+            onOpen={() => setIsSummaryOpen(true)}
+          />
+          {isStatsShown && (
+            <StatsTiles
+              stats={stats}
+              todayKey={todayKey}
+              onOpen={() => setIsSummaryOpen(true)}
+            />
+          )}
+        </div>
       )}
       {isPlannedLoadFailed && (
         <p className='text-muted-foreground text-center text-sm'>
@@ -303,7 +314,6 @@ function CalendarScreen({
           showPrices={viewOptions.options.showPrices}
           onOpenDay={(dayKey) => setOpenDay({ dayKey, mealId: null })}
           onOpenMeal={(dayKey, mealId) => setOpenDay({ dayKey, mealId })}
-          onAdd={(dayKey) => openPlan(dayKey, null)}
         />
       )}
       {isSummaryOpen && (
@@ -313,6 +323,7 @@ function CalendarScreen({
           range={range}
           stats={stats}
           todayKey={todayKey}
+          isStatsOnFront={isStatsShown}
           addToShoppingSlot={
             upcomingMealCount > 0 ? (
               <AddToShoppingRow
@@ -348,6 +359,8 @@ function CalendarScreen({
           key={`${openDay.dayKey}:${openDay.mealId ?? ''}`}
           uid={uid}
           dayKey={openDay.dayKey}
+          todayKey={todayKey}
+          isStatsShown={isStatsShown}
           initialMealId={openDay.mealId}
           onClose={() => setOpenDay(null)}
           onAdd={(mealType) => {

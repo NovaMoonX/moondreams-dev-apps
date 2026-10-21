@@ -1,4 +1,5 @@
-import GroupRow, { GroupRowLines } from '@/components/GroupRow';
+import ActionGroup from '@/components/ActionGroup';
+import GroupRow from '@/components/GroupRow';
 import { useAppSelector } from '@/store';
 import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
 import {
@@ -7,26 +8,16 @@ import {
 } from '@apps/pinch/constants';
 import {
   selectContainersLoadError,
-  selectMealsById,
-  selectRecipesById,
   selectStockByMealWithRecipes,
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
-import {
-  getStockParts,
-  getStockSourcesText,
-  type MealStock,
-  type StockSummary,
-} from '@apps/pinch/utils/containers';
-import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import type { ContainerPlace } from '@apps/pinch/types';
+import { formatStockAmount, getStockParts } from '@apps/pinch/utils/containers';
 
 interface StockRowsProps {
   target: { kind: 'recipe' | 'meal'; id: string };
-  onOpenStock: () => void;
+  onOpenStock: (place: ContainerPlace) => void;
 }
-
-const isMealStock = (stock: StockSummary): stock is MealStock =>
-  'sources' in stock;
 
 function StockRows({ target, onOpenStock }: StockRowsProps) {
   const stock = useAppSelector((state) =>
@@ -34,8 +25,6 @@ function StockRows({ target, onOpenStock }: StockRowsProps) {
       ? selectStockByRecipe(state).get(target.id)
       : selectStockByMealWithRecipes(state).get(target.id),
   );
-  const recipesById = useAppSelector(selectRecipesById);
-  const mealsById = useAppSelector(selectMealsById);
   const loadError = useAppSelector(selectContainersLoadError);
 
   if (loadError !== null || !stock) {
@@ -47,50 +36,28 @@ function StockRows({ target, onOpenStock }: StockRowsProps) {
     return null;
   }
 
-  const sourcesText = isMealStock(stock)
-    ? getStockSourcesText(stock.sources, (source) =>
-        source.kind === 'recipe'
-          ? (recipesById.get(source.id)?.title ?? 'A recipe')
-          : (mealsById.get(source.id)?.name ?? 'This meal'),
-      )
-    : null;
-
-  const ariaLabel = parts
-    .map((part) =>
-      [
-        `${formatServings(part.servings)} in your ${CONTAINER_PLACE_LABELS[part.place].toLowerCase()}`,
-        part.due?.label,
-      ]
-        .filter((piece) => piece !== undefined)
-        .join(', '),
-    )
-    .join('; ');
-
   return (
-    <GroupRow ariaLabel={ariaLabel} onClick={onOpenStock}>
-      <GroupRowLines
-        lines={parts.map((part) => ({
-          key: part.place,
-          icon: CONTAINER_PLACE_EMOJIS[part.place],
-          content: (
-            <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
-              <span>
-                {formatServings(part.servings)} in the{' '}
-                {CONTAINER_PLACE_LABELS[part.place].toLowerCase()}
-              </span>
-              {part.due && (
+    <ActionGroup isRoomy caption='In your fridge and freezer'>
+      {parts.map((part) => {
+        const title = `${formatStockAmount(part.servings, target.kind)} in the ${CONTAINER_PLACE_LABELS[part.place].toLowerCase()}`;
+        return (
+          <GroupRow
+            key={part.place}
+            isRoomy
+            icon={CONTAINER_PLACE_EMOJIS[part.place]}
+            ariaLabel={part.due ? `${title}, ${part.due.label}` : undefined}
+            onClick={() => onOpenStock(part.place)}
+          >
+            <span className='block font-medium'>{title}</span>
+            {part.due && (
+              <span className='mt-1 flex'>
                 <EatByBadge state={part.due.state} label={part.due.label} />
-              )}
-            </span>
-          ),
-        }))}
-      />
-      {sourcesText && (
-        <span className='text-muted-foreground mt-1 block pl-7.5 text-xs'>
-          {sourcesText}
-        </span>
-      )}
-    </GroupRow>
+              </span>
+            )}
+          </GroupRow>
+        );
+      })}
+    </ActionGroup>
   );
 }
 

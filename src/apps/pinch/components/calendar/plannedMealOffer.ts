@@ -1,3 +1,4 @@
+import { CONTAINER_PLACES } from '@apps/pinch/constants';
 import type { Container, ContainerPlace, MealItem } from '@apps/pinch/types';
 import { getDaysLeft } from '@apps/pinch/utils/containers';
 import { getCookId } from '@apps/pinch/utils/cooks';
@@ -9,6 +10,20 @@ export type PlannedMealPhase = 'AHEAD' | 'TODAY' | 'PAST';
 
 export type PlannedMealPrimary =
   { kind: 'COOK' } | { kind: 'EAT'; place: ContainerPlace } | null;
+
+export type PlannedMealAction =
+  | { kind: 'COOK' }
+  | { kind: 'EAT'; place: ContainerPlace; count: number }
+  | { kind: 'SAVE' };
+
+/** `from` on an eat view is where its Back returns. */
+export type PlannedMealSubview =
+  | { kind: 'meal' }
+  | { kind: 'more' }
+  | { kind: 'name' }
+  | { kind: 'eat'; place: ContainerPlace; from: 'meal' | 'more' };
+
+export const PLANNED_MEAL_VIEW: PlannedMealSubview = { kind: 'meal' };
 
 export interface PlannedMealOfferInput {
   meal: { id: string; date: number; items: PlateItem[] };
@@ -32,6 +47,8 @@ export interface PlannedMealOffer {
   /** The containers it may offer to eat from, soonest eat-by first. */
   eatFrom: Container[];
   canSaveAsMeal: boolean;
+  /** What "More" offers beside taking the meal off its day, in order, never what the primary already does. */
+  more: PlannedMealAction[];
 }
 
 const getPhase = (date: number, today: number): PlannedMealPhase => {
@@ -63,7 +80,7 @@ export const isPlannedMealCooked = (
   recipeIds.length > 0 &&
   getCookedRecipeIds(meal.id, recipeIds, cookIds).length === recipeIds.length;
 
-/** What a planned meal offers in its phase: one primary, the chips that still make sense, and whether its plate is worth saving. */
+/** What a planned meal offers in its phase: one primary, the other actions that still make sense, and whether its plate is worth saving. */
 export function getPlannedMealOffer({
   meal,
   recipeIds,
@@ -112,13 +129,32 @@ export function getPlannedMealOffer({
     return cookRecipeIds.length > 0 ? { kind: 'COOK' } : null;
   };
 
+  const primary = getPrimary();
+  const eatActions = CONTAINER_PLACES.map((place) => ({
+    kind: 'EAT' as const,
+    place,
+    count: eatFrom.filter((container) => container.place === place).length,
+  })).filter(
+    (action) =>
+      action.count > 0 &&
+      !(primary?.kind === 'EAT' && primary.place === action.place),
+  );
+  const more: PlannedMealAction[] = [
+    ...(cookRecipeIds.length > 0 && primary?.kind !== 'COOK'
+      ? [{ kind: 'COOK' as const }]
+      : []),
+    ...eatActions,
+    ...(canSaveAsMeal ? [{ kind: 'SAVE' as const }] : []),
+  ];
+
   const result: PlannedMealOffer = {
     phase,
-    primary: getPrimary(),
+    primary,
     cookRecipeIds,
     canMarkCooked: phase !== 'AHEAD',
     eatFrom,
     canSaveAsMeal,
+    more,
   };
 
   return result;

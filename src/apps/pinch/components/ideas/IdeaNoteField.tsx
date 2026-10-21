@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
-import { Plus } from 'lucide-react';
+import { Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { Plus, X } from 'lucide-react';
 
 import Field from '@/components/forms/Field';
+import RevealChip from '@/components/RevealChip';
 import { MAX_IDEA_NOTE_LENGTH } from '@apps/pinch/constants';
 
 interface IdeaNoteFieldProps {
@@ -22,19 +23,15 @@ function IdeaNoteField({
 
   if (!isRevealed) {
     return (
-      <Button
-        type='button'
-        variant='link'
-        size='sm'
-        className='h-10 justify-start gap-1 px-0!'
+      <RevealChip
+        icon={<Plus className='h-4 w-4' aria-hidden='true' />}
         onClick={() => {
           setIsTapped(true);
           setIsRevealed(true);
         }}
       >
-        <Plus className='h-4 w-4' aria-hidden='true' />
         Add a note
-      </Button>
+      </RevealChip>
     );
   }
 
@@ -54,18 +51,15 @@ function IdeaNoteField({
         )}
       </Field>
       {!isOpen && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-10 px-0!'
+        <RevealChip
+          icon={<X className='h-4 w-4' aria-hidden='true' />}
           onClick={() => {
             onChange('');
             setIsRevealed(false);
           }}
         >
           Remove note
-        </Button>
+        </RevealChip>
       )}
     </div>
   );

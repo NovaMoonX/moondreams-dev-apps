@@ -54,8 +54,6 @@ function MealRow({
       found && {
         fridge: found.fridge,
         freezer: found.freezer,
-        containers: found.containers,
-        nearestEatBy: found.nearestEatBy,
         fridgeEatBy: found.fridgeEatBy,
         freezerEatBy: found.freezerEatBy,
       }
@@ -109,7 +107,7 @@ function MealRow({
             className='text-muted-foreground mt-0.5 text-xs font-normal'
           />
         )}
-        <StockLine summary={stock} />
+        <StockLine summary={stock} kind='meal' />
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {itemNames}
         </span>

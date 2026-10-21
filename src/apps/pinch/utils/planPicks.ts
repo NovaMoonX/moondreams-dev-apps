@@ -62,6 +62,101 @@ export function getDefaultMealType(
   return result;
 }
 
+const getDayText = (dayKey: string, todayKey: string) => {
+  const offset = Math.round(
+    (getDateOfDayKey(dayKey) - getDateOfDayKey(todayKey)) / DAY_MS,
+  );
+  if (offset === 0) return 'Today';
+  if (offset === 1) return 'Tomorrow';
+  return formatDayTitle(dayKey);
+};
+
+/** The builder's "When" row: "Today · 🍝 Dinner", "Tomorrow · …", else "Sat, Oct 24 · …". */
+export function getWhenSummary(
+  dayKey: string,
+  todayKey: string,
+  meal: { label: string; emoji: string },
+) {
+  const result = `${getDayText(dayKey, todayKey)} · ${meal.emoji} ${meal.label}`;
+  return result;
+}
+
+interface BuilderSnapshotState {
+  items: readonly { kind: ItemKind; refId: string; servings: number }[];
+  name: string;
+  /** What a planned meal is moved by (its day and meal), or null where only the plate and name count. */
+  when: string | null;
+}
+
+/** What a builder holds as one string, so a screen can tell whether anything changed since it opened. */
+export function getBuilderSnapshot({
+  items,
+  name,
+  when,
+}: BuilderSnapshotState) {
+  const result = JSON.stringify([
+    items.map(({ kind, refId, servings }) => [kind, refId, servings]),
+    name.trim(),
+    when,
+  ]);
+  return result;
+}
+
+interface BuilderNoteState {
+  mode: 'plan' | 'meal';
+  hasName: boolean;
+  hasDay: boolean;
+  hasItems: boolean;
+}
+
+/** What the builder's footer says while its primary is off, or null when nothing is missing. */
+export function getBuilderNote({
+  mode,
+  hasName,
+  hasDay,
+  hasItems,
+}: BuilderNoteState): string | null {
+  if (mode === 'meal') {
+    if (!hasName && !hasItems) return 'Add a name and something for the plate';
+    if (!hasName) return 'Add a name first';
+    return hasItems ? null : 'Add something for the plate';
+  }
+  if (!hasDay && !hasItems) return 'Pick a day and add something for the plate';
+  if (!hasDay) return 'Pick a day first';
+  return hasItems ? null : 'Add something for the plate';
+}
+
+/** Recent rows shown before "Show N more": six, or all of them when folding would hide only a few. */
+export const COLLAPSED_RECENT_ROWS = 6;
+const MAX_QUIET_HIDDEN_ROWS = 3;
+
+/** `openingTotal` is how many rows there were when the screen opened: a fold drawn then stays until nothing is tucked away, so a pick never makes hidden rows appear at once. */
+export function getRecentRowWindow(
+  total: number,
+  isExpanded: boolean,
+  openingTotal = total,
+) {
+  const hasToggle =
+    openingTotal > COLLAPSED_RECENT_ROWS + MAX_QUIET_HIDDEN_ROWS &&
+    total > COLLAPSED_RECENT_ROWS;
+  const shown = hasToggle && !isExpanded ? COLLAPSED_RECENT_ROWS : total;
+  return { shown, hasToggle };
+}
+
+/** The picks worth offering while a plate is built: a recipe already on it is left out, and so is a saved meal whose items all are. */
+export function getOfferablePicks(
+  picks: readonly RecentPick[],
+  plateRefIds: ReadonlySet<string>,
+  mealItemIds: ReadonlyMap<string, readonly string[]>,
+) {
+  const result = picks.filter((pick) =>
+    pick.kind === 'RECIPE'
+      ? !plateRefIds.has(pick.id)
+      : (mealItemIds.get(pick.id) ?? []).some((id) => !plateRefIds.has(id)),
+  );
+  return result;
+}
+
 export interface RecentPick {
   kind: 'RECIPE' | 'MEAL';
   id: string;
@@ -120,8 +215,14 @@ export function rankRecentPicks({
       ),
     })),
   ];
-  const result = picks.sort(
-    (a, b) => b.at - a.at || a.label.localeCompare(b.label),
-  );
+  const seen = new Set<string>();
+  const result = picks
+    .filter((pick) => {
+      const key = `${pick.kind}:${pick.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => b.at - a.at || a.label.localeCompare(b.label));
   return result;
 }

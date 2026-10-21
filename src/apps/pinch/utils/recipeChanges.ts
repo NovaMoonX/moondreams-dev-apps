@@ -9,6 +9,10 @@ import type {
   Recipe,
   RecipeIngredient,
 } from '@apps/pinch/types';
+import {
+  getGroupKey,
+  getRepeatedLineGroups,
+} from '@apps/pinch/utils/ingredientGroups';
 import { formatMinutes } from '@apps/pinch/utils/recipeFormat';
 
 /** What a tweak looks at: everything a recipe's form edits except the cover picture. */
@@ -48,7 +52,9 @@ const formatQuantity = ({
     ? 'no amount'
     : `${formatAmount(amount)} ${UNIT_LABELS[unit]}`;
 
-const normalizeLine = (line: RecipeIngredient): RecipeIngredient => ({
+type ComparedLine = Omit<RecipeIngredient, 'group'>;
+
+const normalizeLine = (line: RecipeIngredient): ComparedLine => ({
   id: line.id,
   ingredientId: line.ingredientId,
   amount: line.amount,
@@ -62,7 +68,10 @@ const normalize = (content: RecipeContent) => ({
   servings: content.servings,
   prepMinutes: content.prepMinutes ?? null,
   cookMinutes: content.cookMinutes ?? null,
-  ingredients: content.ingredients.map(normalizeLine),
+  // Order has its own check, group by group, so a line moved to another group is no change here.
+  ingredients: content.ingredients
+    .map(normalizeLine)
+    .sort((a, b) => a.id.localeCompare(b.id)),
   steps: content.steps.map((step) => step.trim()).filter(Boolean),
   nutrition: Object.fromEntries(
     METRIC_KEYS.map((key) => [key, content.nutritionOverride?.[key] ?? null]),
@@ -88,11 +97,11 @@ const getMinutesLine = (
 };
 
 const getLineChanges = (
-  before: RecipeIngredient,
-  after: RecipeIngredient,
-  getName: (ingredientId: string) => string,
+  before: ComparedLine,
+  after: ComparedLine,
+  beforeName: string,
+  name: string,
 ) => {
-  const name = getName(after.ingredientId);
   const isAmountChanged = formatQuantity(before) !== formatQuantity(after);
   const amountLine =
     before.unit === after.unit &&
@@ -100,7 +109,7 @@ const getLineChanges = (
     after.amount !== null
       ? `${name} ${formatAmount(before.amount)} → ${formatAmount(after.amount)} ${UNIT_LABELS[after.unit]}`
       : `${name} ${formatQuantity(before)} → ${formatQuantity(after)}`;
-  const swapLine = `Swapped ${getName(before.ingredientId)} for ${name}${isAmountChanged ? `, ${formatQuantity(after)}` : ''}`;
+  const swapLine = `Swapped ${beforeName} for ${name}${isAmountChanged ? `, ${formatQuantity(after)}` : ''}`;
   const noteLine = () => {
     if (before.note === after.note) return [];
     if (before.note === null) return [`Added a note to ${name}`];
@@ -114,35 +123,61 @@ const getLineChanges = (
   return [...(isAmountChanged ? [amountLine] : []), ...noteLine()];
 };
 
+/** Lines are compared without their group, and order only among lines that stayed in their group: moving a line to another heading reorganizes the list without changing the dish, so on its own it records no tweak. A line whose ingredient sits in several groups is named with its group. */
 const getIngredientChanges = (
-  before: RecipeIngredient[],
-  after: RecipeIngredient[],
+  beforeLines: RecipeIngredient[],
+  afterLines: RecipeIngredient[],
   getName: (ingredientId: string) => string,
 ) => {
+  const labelWith = (labels: Map<string, string>) => (line: ComparedLine) => {
+    const group = labels.get(line.id);
+    return group
+      ? `${getName(line.ingredientId)} (${group})`
+      : getName(line.ingredientId);
+  };
+  const beforeLabel = labelWith(getRepeatedLineGroups(beforeLines));
+  const afterLabel = labelWith(getRepeatedLineGroups(afterLines));
+  const before = beforeLines.map(normalizeLine);
+  const after = afterLines.map(normalizeLine);
   const beforeById = new Map(before.map((line) => [line.id, line]));
   const afterById = new Map(after.map((line) => [line.id, line]));
   const changed = after.flatMap((line) => {
     const was = beforeById.get(line.id);
-    return was ? getLineChanges(was, line, getName) : [];
+    return was
+      ? getLineChanges(was, line, beforeLabel(was), afterLabel(line))
+      : [];
   });
   const added = after
     .filter((line) => !beforeById.has(line.id))
     .map((line) =>
       line.amount === null
-        ? `Added ${getName(line.ingredientId)}`
-        : `Added ${getName(line.ingredientId)}, ${formatQuantity(line)}`,
+        ? `Added ${afterLabel(line)}`
+        : `Added ${afterLabel(line)}, ${formatQuantity(line)}`,
     );
   const removed = before
     .filter((line) => !afterById.has(line.id))
-    .map((line) => `Removed ${getName(line.ingredientId)}`);
+    .map((line) => `Removed ${beforeLabel(line)}`);
+  const beforeKeys = new Map(
+    beforeLines.map((line) => [line.id, getGroupKey(line.group)]),
+  );
+  const afterKeys = new Map(
+    afterLines.map((line) => [line.id, getGroupKey(line.group)]),
+  );
+  const groupKeys = [...new Set(afterKeys.values())];
+  const inGroups = (ids: string[]) =>
+    groupKeys
+      .flatMap((key) => ids.filter((id) => afterKeys.get(id) === key))
+      .join('\u0000');
+  const isStill = (id: string) =>
+    beforeKeys.has(id) && beforeKeys.get(id) === afterKeys.get(id);
   const keptBefore = before
-    .filter((line) => afterById.has(line.id))
+    .filter((line) => isStill(line.id))
     .map((line) => line.id);
   const keptAfter = after
-    .filter((line) => beforeById.has(line.id))
+    .filter((line) => isStill(line.id))
     .map((line) => line.id);
   const reordered =
-    keptBefore.join('\u0000') === keptAfter.join('\u0000')
+    inGroups(keptBefore) === inGroups(keptAfter)
       ? []
       : ['Ingredients reordered'];
 
@@ -270,7 +305,7 @@ export const getRecipeChanges = (
     ...getMinutesLine('Prep time', was.prepMinutes, now.prepMinutes),
     ...getMinutesLine('Cook time', was.cookMinutes, now.cookMinutes),
     ...getSourceLine(),
-    ...getIngredientChanges(was.ingredients, now.ingredients, getName),
+    ...getIngredientChanges(before.ingredients, after.ingredients, getName),
     ...getStepChanges(was.steps, now.steps),
     ...getNutritionChanges(was.nutrition, now.nutrition),
   ];

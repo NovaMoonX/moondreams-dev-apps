@@ -5,6 +5,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { CircleCheck } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
+import TickMark from '@/components/TickMark';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateTime } from '@/utils/formatUtils';
@@ -85,15 +86,16 @@ function PlannedCookRow({
       {cook ? (
         <p className='flex flex-wrap items-center gap-x-3 text-sm'>
           <span>
-            <span aria-hidden='true'>✅</span> Cooked
+            <TickMark /> Cooked
             {cook.servings !== servings &&
               ` · ${formatServings(cook.servings)}`}
           </span>
           <Button
             type='button'
-            variant='tertiary'
+            variant='secondary'
+            size='sm'
             aria-label={`Mark ${recipe.title} as not cooked`}
-            className="relative h-auto p-0 underline underline-offset-4 after:absolute after:-inset-x-2 after:-inset-y-2.5 after:content-['']"
+            className="relative h-8 rounded-full px-3 after:absolute after:-inset-1 after:content-['']"
             disabled={isWorking}
             onClick={() => void handleNotCooked(cook.cookedAt)}
           >

@@ -1,6 +1,12 @@
 import { useContext, type ReactNode } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import { SubviewTitleContext } from '@/contexts/SubviewTitleContext';
+
+/** Each button in the action slot is 28px tall; a pseudo-element gives it the 40px target. */
+const HIT_AREA =
+  "[&_button]:relative [&_button]:before:absolute [&_button]:before:inset-x-0 [&_button]:before:-inset-y-1.5 [&_button]:before:content-['']";
 
 interface SectionHeaderProps {
   title: string;
@@ -20,7 +26,7 @@ function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
     return (
       <div className='flex items-center justify-between gap-3'>
         <p className='text-muted-foreground min-w-0 text-sm'>{subtitle}</p>
-        {action}
+        {action && <div className={HIT_AREA}>{action}</div>}
       </div>
     );
   }
@@ -28,10 +34,18 @@ function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
   return (
     <div className='flex items-start justify-between gap-3'>
       <div className='min-w-0'>
-        <h2 className='flex h-10 items-center text-xl font-semibold'>{title}</h2>
-        {subtitle && <p className='text-muted-foreground -mt-1 text-sm'>{subtitle}</p>}
+        <h2 className='flex h-10 items-center text-xl font-semibold'>
+          {title}
+        </h2>
+        {subtitle && (
+          <p className='text-muted-foreground -mt-1 text-sm'>{subtitle}</p>
+        )}
       </div>
-      {action && <div className='flex h-10 shrink-0 items-center'>{action}</div>}
+      {action && (
+        <div className={join('flex h-10 shrink-0 items-center', HIT_AREA)}>
+          {action}
+        </div>
+      )}
     </div>
   );
 }

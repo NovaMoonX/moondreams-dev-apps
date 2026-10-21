@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -68,6 +68,8 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const fromCalendar =
     subview?.kind === 'recipe' && subview.fromCalendar === true;
   const isDirtyRef = useRef(false);
+  const isTypedRef = useRef(false);
+  const isAskingRef = useRef(false);
   const existing =
     useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ideasById = useAppSelector(selectIdeasById);
@@ -86,6 +88,12 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const [kept, setKept] = useState<Kept | null>(null);
   const [title, setTitle] = useState(existing?.title ?? fromIdea?.title ?? '');
 
+  const stageRef = useRef(stage);
+
+  useEffect(() => {
+    stageRef.current = stage;
+  }, [stage]);
+
   const isReaderStage =
     stage !== 'start' && stage !== 'form' && stage !== 'idea';
   const backToReader = () => setStage(kept && 'link' in kept ? 'link' : 'text');
@@ -100,19 +108,71 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     });
   };
 
-  const leave = async () => {
-    if (isDirtyRef.current) {
-      const confirmed = await confirm({
-        title: 'Discard this recipe?',
-        message:
-          "It isn't saved yet. If you leave now, what you typed or read in is lost.",
+  const askToDiscard = async (title: string, message: string) => {
+    if (isAskingRef.current) return false;
+    isAskingRef.current = true;
+    try {
+      return await confirm({
+        title,
+        message,
         confirmText: 'Discard',
         cancelText: 'Keep editing',
         destructive: true,
       });
+    } finally {
+      isAskingRef.current = false;
+    }
+  };
+
+  const leave = async () => {
+    if (isDirtyRef.current) {
+      const confirmed = await askToDiscard(
+        'Discard this recipe?',
+        "It isn't saved yet. If you leave now, what you typed or read in is lost.",
+      );
       if (!confirmed) return;
     }
     closeSubview();
+  };
+
+  const confirmDiscardTyped = async (action: string) => {
+    if (!isTypedRef.current) return true;
+    const startedOn = stage;
+    const what = startedOn === 'link' ? 'link' : 'text';
+    const confirmed = await askToDiscard(
+      `Discard this ${what}?`,
+      `Nothing has been read or saved yet. If you ${action}, the ${what} is lost.`,
+    );
+    if (!confirmed || stageRef.current !== startedOn) return false;
+    isTypedRef.current = false;
+    return true;
+  };
+
+  const stepBackFromReader = async () => {
+    if (!(await confirmDiscardTyped('go back now'))) return;
+    if (fromIdea) {
+      closeSubview();
+      return;
+    }
+    if (fromDrawer) {
+      closeSubview();
+      setIsStartOpen(true, fromCalendar);
+      return;
+    }
+    setStage('start');
+  };
+
+  const startBlank = async () => {
+    if (await confirmDiscardTyped('start a blank recipe now')) {
+      setStage('form');
+    }
+  };
+
+  const switchToText = async () => {
+    if (await confirmDiscardTyped('paste its text instead')) {
+      setKept(null);
+      setStage('text');
+    }
   };
 
   const goBack = () => {
@@ -120,17 +180,8 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
       backToReader();
       return;
     }
-    if (isReaderStage && fromIdea) {
-      closeSubview();
-      return;
-    }
-    if (isReaderStage && fromDrawer) {
-      closeSubview();
-      setIsStartOpen(true, fromCalendar);
-      return;
-    }
     if (isReaderStage) {
-      setStage('start');
+      void stepBackFromReader();
       return;
     }
     void leave();
@@ -205,45 +256,42 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
       );
     }
     return (
-      <>
-        {fromIdea && (
-          <p className='text-muted-foreground mb-4 text-sm wrap-break-word'>
-            From your idea:{' '}
-            <span className='text-foreground font-medium'>
-              {fromIdea.title}
-            </span>
-          </p>
-        )}
-        <RecipeReader
-          key={stage}
-          method={stage}
-          initialUrl={
-            stage === 'link' && fromIdea?.kind === 'LINK'
-              ? (fromIdea.url ?? undefined)
-              : undefined
-          }
-          initialText={kept && 'text' in kept ? kept.text : undefined}
-          initialLink={kept && 'link' in kept ? kept.link : undefined}
-          onRead={(recipe, source, label) => {
-            const reading = fromIdea
-              ? getReadingForIdea(recipe, fromIdea)
-              : recipe;
-            isDirtyRef.current = true;
-            setRead({ recipe: reading, source, label });
-            setTitle(reading.title ?? '');
-            setStage('form');
-          }}
-          onManual={() => setStage('form')}
-          onSaveAsIdea={
-            fromIdea
-              ? undefined
-              : (next) => {
-                  setKept(next);
-                  setStage('idea');
-                }
-          }
-        />
-      </>
+      <RecipeReader
+        key={stage}
+        method={stage}
+        ideaTitle={fromIdea?.title}
+        initialUrl={
+          stage === 'link' && fromIdea?.kind === 'LINK'
+            ? (fromIdea.url ?? undefined)
+            : undefined
+        }
+        initialText={kept && 'text' in kept ? kept.text : undefined}
+        initialLink={kept && 'link' in kept ? kept.link : undefined}
+        onBack={goBack}
+        onTypedChange={(isTyped) => {
+          isTypedRef.current = isTyped;
+        }}
+        onRead={(recipe, source, label) => {
+          isTypedRef.current = false;
+          const reading = fromIdea
+            ? getReadingForIdea(recipe, fromIdea)
+            : recipe;
+          isDirtyRef.current = true;
+          setRead({ recipe: reading, source, label });
+          setTitle(reading.title ?? '');
+          setStage('form');
+        }}
+        onManual={() => void startBlank()}
+        onPasteText={() => void switchToText()}
+        onSaveAsIdea={
+          fromIdea
+            ? undefined
+            : (next) => {
+                setKept(next);
+                setStage('idea');
+              }
+        }
+      />
     );
   };
 

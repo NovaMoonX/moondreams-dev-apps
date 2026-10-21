@@ -10,6 +10,8 @@ export interface ActionChip {
   onClick: () => void;
   isDisabled?: boolean;
   isLoading?: boolean;
+  /** Red, for a chip that takes something away: a red hairline and red text on no fill, so it stays quiet beside the others. */
+  isDestructive?: boolean;
   /** The full phrase, for screen readers and the hover title, when the label is a short form of it. */
   description?: string;
 }
@@ -45,7 +47,12 @@ function ActionChips({ actions, label, className }: ActionChipsProps) {
           disabled={action.isDisabled || action.isLoading}
           loading={action.isLoading}
           onClick={action.onClick}
-          className='bg-muted/50 border-border text-foreground! hover:bg-muted h-auto min-h-10 max-w-full gap-1.5 border px-3 py-1.5 text-left font-medium whitespace-normal'
+          className={join(
+            'h-auto min-h-10 max-w-full gap-1.5 border px-3 py-1.5 text-left font-medium whitespace-normal',
+            action.isDestructive
+              ? 'border-destructive/40 text-destructive! hover:bg-destructive/10'
+              : 'bg-muted/50 border-border text-foreground! hover:bg-muted',
+          )}
         >
           <span className='shrink-0' aria-hidden='true'>
             {action.icon}

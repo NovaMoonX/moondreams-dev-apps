@@ -1,15 +1,20 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { PackagePlus, ShoppingBasket } from 'lucide-react';
+import { useRef, useState } from 'react';
 
-import ActionChips, { type ActionChip } from '@/components/ActionChips';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronLeft, Ellipsis, PackagePlus } from 'lucide-react';
+
 import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
-import FactsLine from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
 import MacroStats from '@/components/MacroStats';
+import StatTile from '@/components/StatTile';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
+import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import {
   selectContainersLoadError,
@@ -20,10 +25,10 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { Gap, ShoppingRequest } from '@apps/pinch/types';
+import type { ContainerPlace, Gap, ShoppingRequest } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
-  formatCost,
+  formatCostTile,
   formatRowPrice,
   getItemTitle,
 } from '@apps/pinch/utils/mealFormat';
@@ -33,6 +38,27 @@ import {
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
+import { withWholeCalories } from '@apps/pinch/utils/stats';
+
+interface BackLinkProps {
+  onBack: () => void;
+}
+
+function BackLink({ onBack }: BackLinkProps) {
+  useBackStep(true, onBack);
+
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='h-10 gap-1 px-0!'
+      onClick={onBack}
+    >
+      <ChevronLeft className='h-4 w-4' aria-hidden='true' />
+      Back
+    </Button>
+  );
+}
 
 interface MealDrawerProps {
   mealId: string;
@@ -40,7 +66,7 @@ interface MealDrawerProps {
   onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
-  onOpenStock: (id: string) => void;
+  onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
 }
 
@@ -60,10 +86,17 @@ function MealDrawer({
   const ingredientsById = useAppSelector(selectIngredientsById);
   const isStockReady = useAppSelector(selectIsContainersReady);
   const stockError = useAppSelector(selectContainersLoadError);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
 
   if (!meal) {
     return null;
   }
+
+  const closeMore = () => {
+    setIsMoreOpen(false);
+    window.requestAnimationFrame(() => moreRef.current?.focus());
+  };
 
   const cost = getMealCost(meal.items, costContext);
   const nutrition = getMealNutrition(
@@ -72,13 +105,6 @@ function MealDrawer({
     costContext.ingredientsById,
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
-  const getCostValue = () => {
-    if (cost.totalCents === null) return 'No price yet';
-    const total = formatCost(cost.totalCents);
-    return leftOutCount > 0
-      ? `${total} so far for the plate`
-      : `${total} for the plate`;
-  };
   const isOnPlate = (gap: Gap) =>
     meal.items.some(
       (item) => item.kind === 'INGREDIENT' && item.refId === gap.ingredientId,
@@ -93,49 +119,42 @@ function MealDrawer({
     }
     return 'Add prices from the recipes on this plate, or in Kitchen.';
   };
-  const actions: ActionChip[] = [
-    {
-      key: 'shopping',
-      icon: <ShoppingBasket className='h-4 w-4' />,
-      label: 'Shopping list',
-      description: 'Add to shopping list: choose what you need for this meal',
-      onClick: () =>
-        onAddToShopping({
-          kind: 'items',
-          items: meal.items,
-          label: meal.name,
-          mealId: meal.id,
-        }),
-    },
-    stockError === null && {
-      key: 'put-away',
-      icon: <PackagePlus className='h-4 w-4' />,
-      label: 'Put away',
-      description:
-        'Put some away in the fridge or freezer, with an eat-by date',
-      isDisabled: !isStockReady,
-      onClick: () => onPutAway(meal.id),
-    },
-  ].filter((action) => action !== false);
 
   return (
     <DetailSheet
       isOpen
       onClose={onClose}
       title={meal.name}
+      viewKey={isMoreOpen ? 'more' : 'plate'}
       footer={
         <div className='flex gap-2 px-4 pb-4'>
           <Button
             type='button'
             variant='secondary'
-            className='shrink-0'
+            className='shrink-0 max-sm:px-3'
             onClick={() => onModify(meal.id)}
           >
             Modify
           </Button>
           <Button
+            ref={moreRef}
             type='button'
-            className='min-w-0 flex-1'
+            variant='secondary'
+            size='icon'
+            aria-label='More for this saved meal'
+            title='More for this saved meal'
+            aria-expanded={isMoreOpen}
+            onClick={() => setIsMoreOpen((open) => !open)}
+            className={join(
+              'text-foreground! size-10 min-w-10 shrink-0 p-0',
+              isMoreOpen && 'bg-accent!',
+            )}
+          >
+            <Ellipsis className='h-5 w-5' aria-hidden='true' />
+          </Button>
+          <Button
+            type='button'
+            className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
             onClick={() => onPlan(meal.id)}
           >
             Plan it
@@ -143,41 +162,52 @@ function MealDrawer({
         </div>
       }
     >
-      <div className='space-y-5'>
-        <div className='space-y-2.5'>
-          <FactsLine
-            className='text-muted-foreground text-sm'
-            facts={[
-              {
-                key: 'cost',
-                content: (
-                  <>
-                    {getCostValue()}
-                    {leftOutCount > 0 && (
-                      <span className='ml-1 inline-flex align-middle'>
-                        <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
-                      </span>
-                    )}
-                  </>
-                ),
-              },
-            ]}
-          />
-          <ActionGroup>
-            <StockRows
-              target={{ kind: 'meal', id: meal.id }}
-              onOpenStock={() => onOpenStock(meal.id)}
-            />
-          </ActionGroup>
-          <div className='space-y-1.5'>
-            <ActionChips label='Meal actions' actions={actions} />
+      {isMoreOpen && (
+        <div className='space-y-5'>
+          <BackLink onBack={closeMore} />
+          <div className='space-y-2'>
+            <ActionGroup isRoomy caption='What would you like to do?'>
+              <AddToShoppingRow
+                isGrouped
+                isRoomy
+                subtitle='Choose what you need for this meal'
+                onClick={() =>
+                  onAddToShopping({
+                    kind: 'items',
+                    items: meal.items,
+                    label: meal.name,
+                    mealId: meal.id,
+                  })
+                }
+              />
+              {stockError === null && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<PackagePlus />}
+                  label='Put some away'
+                  subtitle={
+                    'In the fridge or freezer, with an eat\u2011by date'
+                  }
+                  isDisabled={!isStockReady}
+                  onClick={() => onPutAway(meal.id)}
+                />
+              )}
+            </ActionGroup>
             {stockError === null && !isStockReady && (
-              <p className='text-muted-foreground text-xs'>
+              <p className='text-muted-foreground text-sm'>
                 Loading your fridge and freezer…
               </p>
             )}
           </div>
+          <StockRows
+            target={{ kind: 'meal', id: meal.id }}
+            onOpenStock={(place) => onOpenStock(meal.id, place)}
+          />
         </div>
+      )}
+      <div className={join('space-y-5', isMoreOpen && 'hidden')}>
         <FormSection
           title='On the plate'
           detail={
@@ -210,12 +240,29 @@ function MealDrawer({
             })}
           </ul>
         </FormSection>
-        {hasShownValue(nutrition.values, show) && (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>For the plate</p>
-            <MacroStats values={nutrition.values} show={show} variant='tiles' />
-          </div>
-        )}
+        <div className='space-y-3'>
+          <StatTile
+            label='Cost'
+            value={formatCostTile(cost.totalCents, leftOutCount, false)}
+            help={
+              leftOutCount > 0 && cost.totalCents !== null ? (
+                <LeftOutTip leftOut={cost.leftOut} fix={getFix()} />
+              ) : undefined
+            }
+          />
+          {hasShownValue(nutrition.values, show) && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs font-medium'>
+                For the plate
+              </p>
+              <MacroStats
+                variant='tiles'
+                values={withWholeCalories(nutrition.values)}
+                show={show}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </DetailSheet>
   );

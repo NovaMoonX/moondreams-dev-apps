@@ -235,7 +235,7 @@ A person writes a recipe by hand — a title, servings and ingredients with amou
 4. Rules for `recipes` (array caps, enum, bounds) and Storage for covers. Seed three recipes using catalog and custom ingredients.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** + New in the Recipes header opens the Recipe subview.
+- [ ] **Create:** + New recipe in the Recipes header opens the Recipe subview.
 - [ ] **Read:** the list, and the drawer on tap.
 - [ ] **Update:** Modify in the drawer opens the same subview.
 - [ ] **Delete:** the subview's trash icon with a destructive confirm (a recipe used by planned days is archived from Issue 17).
@@ -340,7 +340,7 @@ A month calendar where each planned meal is a thin meal-type bar with its emoji.
 2. `plannedMeals` slice, window listener (`date >= start && date < end` for the shown month ±1, keyed on the window key), `usePinchSync(uid, shownMonth)`; `selectPlannedByDay` builds `Map<dayKey, PlannedMeal[]>` once (`toDateInputValue` keys; the cell's `Date` is keyed with `toLocalDateInputValue`).
 3. `MealBarCell`: up to three bars in meal-type order and a "+N"; today accent, selected ring; no per-cell filtering. `DayDrawer` groups by meal type; `DayPeek` is a hover `Popover` with `max-sm:hidden` and the same content.
 4. `PlanMealSubview` opens from "+ Add" (the drawer closes first) on the chosen day and type (`PillGroup` of meal types, change day), a single `ItemSearch` over recipes and ingredients, a serving stepper, and "Add to Tuesday". `planMeal` writes a planned meal with `refIds` derived and `date` from `fromDateInputValue`.
-5. `PlannedMealView` swaps in place inside the drawer with "‹ Back" and shows items, servings and cost; "Remove from this day" is last, red, with a confirm. Calendar empty state offers "Plan your first meal" and "Add a recipe".
+5. `PlannedMealView` swaps in place inside the drawer with "‹ Back" and shows items, servings and cost; "Remove from this day" is last (since round 7, in its ⋯ More), red, with a confirm. Calendar empty state offers "Plan your first meal" and "Add a recipe".
 6. Check the day math in a timezone behind UTC (`America/Los_Angeles`): a meal planned for Oct 13 reads Oct 13 everywhere.
 
 ### CRUD & Entry-Point Requirements
@@ -375,7 +375,7 @@ A planned meal can hold any mix of recipes and ingredients, each with its own se
 
 ### Possible Approach
 1. `mealMath.ts`: item cost (`servings ×` recipe per-serving cost, or an ingredient's per-serving cost through its serving size, default 100 g for a custom ingredient) and planned-meal totals with `leftOut`.
-2. `MealBuilder`: day and type pills with "Change", the item search (recipes, ingredients, and later saved meals) with kind labels, per-row steppers and remove controls, a cost line with the `GapNudge`, footer `Cancel` / `Add to Tuesday` (or `Save` when editing).
+2. `MealBuilder`: day and type pills with "Change" (round 7: a framed "When" row that opens the day and meal editor, the header "Plan a meal"), the item search (recipes, ingredients, and later saved meals) with kind labels, per-row steppers and remove controls, a cost line with the `GapNudge`, footer `Cancel` / `Add to Tuesday` (or `Save` when editing).
 3. `updatePlannedMeal`: a field-scoped `updateDoc` of `date`, `mealType`, `items`, `refIds`, `name`. Modify in the planned meal view closes the drawer and opens the subview.
 4. Add an optional serving-size chip to the ingredient form (so a Doritos item can say what "1 serving" is).
 
@@ -411,7 +411,7 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 ### Possible Approach
 1. `Meal` slice and listener; `saveMeal` / `removeMeal`; `planMeal` accepts `sourceMealId` and `name` and copies items with new row ids.
 2. Meals pill in Recipes: `MealRow`s, `MealDrawer` (items, servings, total cost with nudge, "Plan it" primary that closes the drawer and opens Plan a meal on a chosen day, Modify / Copy / Delete in the muted block); `MealSubview` is the same builder without a day.
-3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected) and saved meals in the one search. "Save to Saved meals" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
+3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected; round 7: roomy rows with their facts and stock that stay after the first pick) and saved meals in the one search. "Save to Saved meals" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
 4. Rules for `meals` (≤ 30 items, shape); seed a few meals and a planned meal copied from one.
 
 ### CRUD & Entry-Point Requirements
@@ -435,19 +435,19 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 - `src/components/StatTile.tsx` (use as is)
 - `scripts/seeds/pinch.ts`
 
-**Context:** Read `TECHNICAL.md`'s Derived values (month stats, average per meal) and open question 6; `UX.md`'s Calendar (stats row) and Breakdown; A-List's `CounterRow` and `StatTile` use.
+**Context:** Read `TECHNICAL.md`'s Derived values (month stats, average per fully priced meal) and open question 6; `UX.md`'s Calendar (stats row) and Breakdown; A-List's `CounterRow` and `StatTile` use.
 
 ### Description
-Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown.
+Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the stats back as a choice: the Calendar's View options have "Show stats" (off to start), which draws a row of tiles under the summary line for the period shown (Total, Avg per fully priced meal, Per g protein, fully priced while protein is on, and the daily nutrition switched on) and takes the total off the line. A day's drawer carries the same stats for that day: the tiles under its title with "Show stats" on, or a "Stats for this day" row that swaps them in place while it is off and the day has more than its total.
 
 ### Possible Approach
-1. `selectMonthStats(monthKey)` in one pass over the window's planned meals: `{ spendCents, mealsPriced, avgPerMealCents, leftOut }`; the average divides by planned meals that have at least one priced item.
+1. `selectMonthStats(monthKey)` in one pass over the window's planned meals: `{ spendCents, mealsPriced, avgPerMealCents, leftOut }`; the average, as first built, divided by planned meals that have at least one priced item; round 7 replaced it with the meals that have nothing left out (`fullyPricedMeals`, `avgPerFullyPricedMealCents`), from three of them, because an average of floors read as a real price.
 2. `StatsRow` (two `StatTile`s, a `HelpTip` explaining the average, a "leaves out N items · Add prices" `GapNudge` that opens the fill-in sheet for the month's gaps). `BreakdownDrawer`: thin By day / By meal pills and one scrolling list under a fixed header.
 3. Check the row at 320px with five-figure amounts and with the nudge present (no height jump when it first appears).
 
 ### CRUD & Entry-Point Requirements
 - [ ] No entity.
-- [ ] **Read:** the stats row on the Calendar; the breakdown drawer from tapping it.
+- [ ] **Read:** the stats row on the Calendar; the breakdown drawer from tapping it; a day's own stats in its drawer (the Total and the nutrition switched on, and the "Stats for this day" row for the cost averages).
 
 ### Success Criteria
 - [ ] Numbers equal the sum of the visible days for a seeded month; an empty month reads $0.00 and "—".
@@ -700,7 +700,7 @@ Marking a meal made takes its ingredients out of stock. Prepared servings are al
 
 ### Issue 21: The shopping list with stock, low stock and stores
 
-**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal or a day or range of planned days (or one ingredient), merged by ingredient and unit, each line remembering what put it there, in shop sections, with To buy / Got it / All and an approximate cost (TECHNICAL.md §5b).
+**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal or a day or range of planned days (or one ingredient), merged by ingredient and unit, each line remembering and naming what put it there, in shop sections, with To buy / Got it / All, an approximate cost, and "Meals on your list" to see what the list is for and take one meal's share off (TECHNICAL.md §5b).
 **Target PR Size:** ~350 lines
 **Files:**
 - Shopping tab: `ShoppingScreen` (`components/shopping/`), `utils/shopping.ts`, a low-stock section and a group-by-store option
@@ -980,12 +980,12 @@ Paste a link and a recipe form fills in for review.
 **Prerequisites:** Issue 6
 **Target PR Size:** ~300 lines (as built it also carries the timers and the ingredients view)
 **Files:**
-- `CookingSubview` (an overlay `Subview`) with `CookStepView`, `CookIngredientsView` and `CookTimerStrip`, the `useCookTimers` hook, and a general `useWakeLock` hook
+- `CookingSubview` (an overlay `Subview`) with `CookDishSwitch`, `CookStepView`, `CookStepTimer`, `CookStepAmounts`, `CookTimerView`, `CookIngredientsView` and `CookTimerStrip`, the `useCookTimers` hook, and general `useWakeLock` and `SwipeArea` pieces
 
 **Context:** UX Recipe details.
 
 ### Description
-A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step lists the ingredients it names with their amounts in kitchen measures, an Ingredients view (beside the steps from `lg`) scales and ticks them, cooking opens at the recipe's own servings, a step's times become timers named for their step, leaving while a timer is going asks first, the recipe's latest note shows above the steps, a planned dinner of several recipes opens as one session (recipe pills, one timer strip, up to four timers for all of them), and Finish records the cook, one per recipe, in one panel with one Undo, put-away and a note.
+A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step leads in large type with a ready timer card for each time it mentions (its digits a size below the step); one tap starts it and the timer becomes the screen while the person waits (the time left large, a progress bar, the other timers as rows, Up next with the next step's first sentence and Next, and on a plate a Meanwhile line to the other dish; Pause is its only control while it runs, Resume and Reset when paused, Dismiss when it's done, and a finished timer comes to the front by itself, says how long ago it rang and rings again about once a minute until dismissed), and back or Next leaves it running as a pill above the buttons and, set apart below, a quieter block of the ingredients it names with their amounts in kitchen measures; an Ingredients button beside the step counter opens the full list (beside the steps from `lg`), which scales and ticks them, cooking opens at the recipe's own servings, leaving while a timer is going asks first, the recipe's latest note shows above the steps, a planned dinner of several recipes opens as one session (dish cards that say each recipe's step, one slim row of pills for the timers in the background, up to four timers for all of them; a step's own timer card is reached by scrolling and the dish switch stays on screen), and Finish records the cook, one per recipe, in one panel with one Undo, put-away and a note.
 
 ### Possible Approach
 1. Wake Lock API with a graceful fallback; step navigation by buttons, swipe and arrow keys; an Ingredients view that scales amounts with the shopping list's own `scaleAmount`; timers that run to a clock deadline.
@@ -1052,7 +1052,7 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 1. One document per container (`servings`, `status`, `place`, `eatBy` as a date-only value, `history` of at most ten events), never split; finishing keeps the document, deleting erases it. A put-away writes one to twenty containers in one batch, each with its own history.
 2. Every change that depends on the stored state is a `runTransaction` over a pure plan, so another device's change is never written over.
 3. Keep the rules' history check lean: the evaluator's 1,000-expression limit allows about ten events checked by index.
-4. One listener for what is in stock; Finished is read on demand through TanStack Query with its composite index.
+4. One listener for what is in stock; Finished is read through TanStack Query with its composite index: when its step opens and, so the "What you finished" door shows only once something is finished, once when the list opens; a read that fails still draws the door and the step says it could not load.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read / Update / Delete:** put some away (as one container or several), see what is in stock and finished, eat some or all, correct the count, move between fridge and freezer, change the eat-by date, throw it out, delete it.
@@ -1067,6 +1067,39 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 - [ ] Driven on the scale kitchen at 4× CPU: tab switches, the stock list with about 300 containers, a recipe drawer and the Recipes list with stock lines, against the base build.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and every sheet was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
+
+### Issue 42: Ingredient groups: "For the chicken", "For the sauce"
+
+**Prerequisites:** Issue 6, Issue 14, Issue 33
+**Target PR Size:** ~1,200 lines (the field, one ordering helper, the form's group field and heading editor, the drawer's and cooking's headings, the step matching, the readers, the seed, checks and docs)
+**Files:**
+- `RecipeIngredient.group` in `types.ts`, `MAX_INGREDIENT_GROUP_LENGTH` in `constants.ts`, `utils/ingredientGroups.ts` (the order every list uses, the label for a line away from its heading, and the form's moves)
+- `RecipeIngredients.tsx` (the group field, the headings and their editor), `recipeFormModel.ts`, the drawer's Ingredients, `CookIngredientsView`, the in-step rows, `utils/stepIngredients.ts`, `utils/recipeChanges.ts`
+- `lib/extractRecipe.ts` (schema and prompt) and `utils/normalizeRecipe.ts`
+- The seed: Alex's adobo under two groups, with soy sauce and garlic in both; the nachos keep lines with no `group` key
+
+**Context:** Read `TECHNICAL.md` §6 ("Ingredient groups"), criterion 14 and open question 23; `UX.md`'s Recipe, Recipe details and Cooking mode; CLAUDE.md's "Design for 5 and for 50" (`PickOrCreate`), "Labeled hairline dividers use `@/components/SectionDivider`" and "Removing a row from a form shows an undo".
+
+### Description
+A recipe's ingredient lines can sit under headings, the way recipes are written ("For the chicken", "For the sauce"), and one ingredient can be in more than one group with its own amount in each. The headings show wherever the lines are listed, in one order; a step names which line it means; a reading keeps the recipe's own headings; the shopping list adds the amounts together.
+
+### Possible Approach
+1. `group: string | null` on each line, no collection: a group is its name on the lines. Every list goes through one pure helper (no group first, then groups in the order they appear).
+2. In the form, a `PickOrCreate` in each ingredient's editor and a tappable `SectionDivider` heading that renames the group (merging with another of the same name) or removes it with an Undo, keeping its lines.
+3. Extend the readers' schema with a required, nullable `group` and say in the prompt never to invent one; a split line keeps its group.
+4. Leave the rules' lines client-shaped: measure whether a per-line check fits the 1,000-expression budget at 60 lines, and prove access is unchanged.
+
+### CRUD & Entry-Point Requirements
+- [x] **Create / Read / Update / Delete:** put a line in a group or a new one, see the headings, move a line to another group, rename or remove a group (its lines stay).
+- [x] **Entry points:** an ingredient's editor in the recipe form, a heading in the form, the recipe drawer, cooking mode's Ingredients and steps, and the three readings.
+
+### Success Criteria
+- [x] A recipe with no groups looks the same in the drawer, the form and cooking mode; a recipe written before this (no `group` key) opens, cooks, shops and saves, and its save writes `group: null`; checked in the browser over a legacy-shaped document.
+- [x] Two lines of one ingredient in two groups are never merged by the form, the reader or the save, sum on the shopping list and in cost and nutrition, and say their group where they show away from their heading.
+- [x] Moving lines between groups records no tweak on a cooked recipe.
+- [x] The rules matrix (owner, another user, signed out; with groups, null and a legacy document) gives the same outcome on the new rules as on the previous ones.
+- [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math` and `check:pinch-ingest` cover the order, the moves, the step sharing and the reader's groups; driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 1, 5 and 30 lines and 1, 3 and 8 groups.
+- [x] `UX.md`, `TECHNICAL.md` and the README match what shipped.
 
 ## Beyond
 

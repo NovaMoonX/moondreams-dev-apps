@@ -6,12 +6,16 @@ interface AddToShoppingRowProps {
   label?: string;
   subtitle: string;
   onClick: () => void;
+  isGrouped?: boolean;
+  isRoomy?: boolean;
 }
 
 function AddToShoppingRow({
   label = 'Add to shopping list',
   subtitle,
   onClick,
+  isGrouped = false,
+  isRoomy = false,
 }: AddToShoppingRowProps) {
   return (
     <ActionRow
@@ -19,6 +23,9 @@ function AddToShoppingRow({
       label={label}
       subtitle={subtitle}
       onClick={onClick}
+      isGrouped={isGrouped}
+      isRoomy={isRoomy}
+      hasChevron={isRoomy}
     />
   );
 }

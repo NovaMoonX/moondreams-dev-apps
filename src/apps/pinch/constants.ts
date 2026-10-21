@@ -302,6 +302,14 @@ export const RECIPE_START_METHODS: {
     description: 'Start with a blank recipe',
   },
 ];
+
+/** Not a way to make the recipe now, so it follows the list of ways as a quiet row. */
+export const KEEP_AS_IDEA_METHOD = {
+  id: 'idea',
+  emoji: '💡',
+  title: 'Keep it as an idea',
+  description: 'Save a link, a photo or a few words for later',
+};
 /** Months loaded on each side of the window's centre: enough that paging a month or a few weeks seldom restarts the listener. */
 export const MONTH_WINDOW_PADDING = 2;
 
@@ -347,6 +355,8 @@ export const MAX_RECIPE_TITLE_LENGTH = 200;
 export const MAX_RECIPE_DESCRIPTION_LENGTH = 2000;
 export const MAX_STEP_LENGTH = 2000;
 export const MAX_NOTE_LENGTH = 200;
+/** The client's cap on the heading a recipe line sits under ("For the sauce"); the rules don't check a line's fields. */
+export const MAX_INGREDIENT_GROUP_LENGTH = 40;
 export const MAX_MINUTES = 100_000;
 /** The cap the rules enforce. */
 export const MAX_CARE_DAYS = 365;
@@ -362,6 +372,12 @@ export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {
   recipes: 'Recipes',
   meals: 'Saved meals',
   ideas: 'Ideas',
+};
+/** The Recipes header's add button for each view: one pattern, naming what it makes. */
+export const RECIPES_VIEW_NEW_LABELS: Record<RecipesView, string> = {
+  recipes: 'New recipe',
+  meals: 'New saved meal',
+  ideas: 'New idea',
 };
 
 /** Grams for a mass unit, millilitres for a volume unit, 1 for a count. */
@@ -391,6 +407,8 @@ export const CALENDAR_VIEW_LABELS: Record<CalendarView, string> = {
   month: 'Month',
   week: 'Week',
 };
+/** Fewer fully priced meals than this say too little for an average, so the Calendar shows none. */
+export const MIN_FULLY_PRICED_MEALS = 3;
 
 /** The meal type's colour tokens from `pinch.css`: the solid for an edge or a dot, the soft tint for a chip or a pill. */
 export const MEAL_TYPE_COLORS: Record<
@@ -475,16 +493,14 @@ export const NUTRITION_BASIS_OPTIONS = [
 ] as const;
 
 export const MAX_COOK_TIMERS = 4;
+/** An undismissed Time's up buzzes and beeps again this often, up to five more times. */
+export const ALERT_REPEAT_MS = 60_000;
+export const MAX_ALERT_REPEATS = 5;
+/** A step offers a timer card for each of the first four times it mentions, as many as can run at once. */
+export const MAX_STEP_TIMERS = MAX_COOK_TIMERS;
 
 export const MIN_COOK_SERVINGS = 0.5;
 export const MAX_COOK_SERVINGS = 1000;
-
-export const COOK_VIEW_OPTIONS = [
-  { value: 'steps', label: 'Steps' },
-  { value: 'ingredients', label: 'Ingredients' },
-] as const;
-
-export const MAX_STEP_DOTS = 12;
 
 export const MAX_COOKED_SERVINGS = 1000;
 /** The most cooks one recipe's history takes before asking to delete one: the action and the screens, not the rules. */
@@ -525,6 +541,8 @@ export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({
   emoji: CONTAINER_PLACE_EMOJIS[place],
 }));
 export const CONTAINER_EMOJI = '🍱';
+export const CONTAINER_FINISH_EMOJIS: Record<'EAT' | 'TOSS' | 'CLEAR', string> =
+  { EAT: '🍽️', TOSS: '🗑️', CLEAR: '🧹' };
 export const CONTAINER_EVENT_KINDS: ContainerEventKind[] = [
   'MADE',
   'FRIDGE',

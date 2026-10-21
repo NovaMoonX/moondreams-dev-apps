@@ -12,20 +12,24 @@ import {
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Plus } from 'lucide-react';
+import { BrushCleaning, Plus, UtensilsCrossed } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
+import EntryTile from '@/components/EntryTile';
 import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ShoppingAddSheet from '@apps/pinch/components/shopping/ShoppingAddSheet';
 import ShoppingItemSheet from '@apps/pinch/components/shopping/ShoppingItemSheet';
+import ShoppingMealsSheet from '@apps/pinch/components/shopping/ShoppingMealsSheet';
 import ShoppingRow from '@apps/pinch/components/shopping/ShoppingRow';
 import {
   LIST_SEARCH_THRESHOLD,
@@ -48,6 +52,7 @@ import {
   selectShoppingCost,
   selectShoppingItems,
   selectShoppingLoadError,
+  selectShoppingMeals,
   selectShoppingOpenCount,
   selectShoppingRows,
   selectShoppingSourceLabels,
@@ -62,16 +67,20 @@ import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { formatCost } from '@apps/pinch/utils/mealFormat';
 import {
   getShoppingCostCoverage,
+  getShoppingMealsText,
   getShoppingSourcesText,
   getShopRowId,
   getShownShoppingView,
   type ShoppingGroup,
   type ShoppingRowData,
+  type ShoppingSourceLabel,
 } from '@apps/pinch/utils/shopping';
 
 const EAGER_GROUPS = 3;
 const ROW_CHUNK = 12;
 const ROW_HEIGHT = 57;
+const DETAIL_LINE_HEIGHT = 16;
+const DETAIL_LINE_CHARS = 44;
 
 const MAX_NAMES_SHOWN = 4;
 const UNDO_TOAST_MS = 6000;
@@ -98,6 +107,22 @@ const formatNames = (names: string[]) =>
 
 type GetForText = (sources: string[]) => string | null;
 
+// Rows share sources, and every render and height estimate asks again, so each set is worked out once per change of names.
+const makeForText = (
+  labels: Map<string, ShoppingSourceLabel>,
+  todayKey: string,
+): GetForText => {
+  const textBySources = new Map<string, string | null>();
+  return (sources) => {
+    const key = sources.join('|');
+    const known = textBySources.get(key);
+    if (known !== undefined) return known;
+    const text = getShoppingSourcesText(sources, labels, todayKey);
+    textBySources.set(key, text);
+    return text;
+  };
+};
+
 interface ShoppingRowsProps {
   rows: ShoppingRowData[];
   getForText: GetForText;
@@ -123,6 +148,13 @@ function ShoppingRows({
     { length: Math.ceil(visible.length / ROW_CHUNK) },
     (_, index) => visible.slice(index * ROW_CHUNK, (index + 1) * ROW_CHUNK),
   );
+  const getChunkHeight = (chunk: ShoppingRowData[]) =>
+    chunk.reduce((sum, row) => {
+      const detail = `${row.amountText ?? ''} · for ${getForText(row.sources) ?? ''}`;
+      return detail.length > DETAIL_LINE_CHARS
+        ? sum + ROW_HEIGHT + DETAIL_LINE_HEIGHT
+        : sum + ROW_HEIGHT;
+    }, 0);
 
   return (
     <>
@@ -130,14 +162,14 @@ function ShoppingRows({
         {chunks.map((chunk, index) => (
           <LazyMount
             key={index}
-            estimatedHeight={chunk.length * ROW_HEIGHT}
+            estimatedHeight={getChunkHeight(chunk)}
             eager={isEager && index === 0}
           >
             <ul
               className='divide-border defer-offscreen divide-y lg:break-inside-avoid'
               style={
                 {
-                  '--defer-size': `${chunk.length * ROW_HEIGHT}px`,
+                  '--defer-size': `${getChunkHeight(chunk)}px`,
                 } as CSSProperties
               }
             >
@@ -158,15 +190,11 @@ function ShoppingRows({
         ))}
       </div>
       {hiddenCount > 0 && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-10 px-0!'
+        <ShowMoreButton
           onClick={() => setLimit(limit + SHOPPING_GROUP_PAGE_SIZE)}
         >
           Show {Math.min(hiddenCount, SHOPPING_GROUP_PAGE_SIZE)} more
-        </Button>
+        </ShowMoreButton>
       )}
     </>
   );
@@ -259,7 +287,8 @@ function useHeldRows() {
   return { held, hold };
 }
 
-type Overlay = { kind: 'add' } | { kind: 'item'; id: string };
+type Overlay =
+  { kind: 'add' } | { kind: 'item'; id: string } | { kind: 'meals' };
 
 interface ShoppingScreenProps {
   uid: string;
@@ -284,11 +313,11 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sourceLabels = useAppSelector(selectShoppingSourceLabels);
   const [todayKey] = useState(() => toLocalDateInputValue(Date.now()));
-  const getForText = useCallback(
-    (sources: string[]) =>
-      getShoppingSourcesText(sources, sourceLabels, todayKey),
+  const getForText = useMemo(
+    () => makeForText(sourceLabels, todayKey),
     [sourceLabels, todayKey],
   );
+  const meals = useAppSelector((state) => selectShoppingMeals(state, todayKey));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [query, setQuery] = useState('');
@@ -541,17 +570,17 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       );
     };
     const clearButton = !isSearching && gotCount > 0 && (
-      <Button
-        type='button'
-        variant='link'
-        size='sm'
-        loading={isClearing}
-        disabled={isClearing}
-        className="relative h-6! min-h-0! px-0! py-0! before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-        onClick={() => void handleClear()}
-      >
-        Clear what you got
-      </Button>
+      <ActionChips
+        actions={[
+          {
+            key: 'clear-got',
+            icon: <BrushCleaning className='h-4 w-4' />,
+            label: 'Clear what you got',
+            isLoading: isClearing,
+            onClick: () => void handleClear(),
+          },
+        ]}
+      />
     );
     const renderHalf = (half: ShoppingHalf) =>
       matches[half] < SHOP_SECTION_DIVIDER_MIN_ROWS ? (
@@ -612,9 +641,7 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
     return (
       <>
         {shownView === 'got' && clearButton && (
-          <div className='flex min-h-10 items-center justify-end'>
-            {clearButton}
-          </div>
+          <div className='flex justify-end'>{clearButton}</div>
         )}
         {matches[shownView] === 0 ? getEmpty() : renderHalf(shownView)}
       </>
@@ -661,6 +688,19 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
           placeholder='Search your list'
         />
       )}
+      {loadError === null &&
+        isLoaded &&
+        meals.length > 0 &&
+        activeQuery === '' && (
+          <nav aria-label='Also in Shopping' className='grid grid-cols-2 gap-3'>
+            <EntryTile
+              icon={<UtensilsCrossed className='size-4' />}
+              label='Meals on your list'
+              status={`For ${getShoppingMealsText(meals, todayKey)}`}
+              onClick={() => setOverlay({ kind: 'meals' })}
+            />
+          </nav>
+        )}
       {openCount > 0 &&
         shownView !== 'got' &&
         (coverage === 'some' || coverage === 'all') && (
@@ -702,12 +742,19 @@ function ShoppingScreen({ uid }: ShoppingScreenProps) {
       {overlay?.kind === 'add' && (
         <ShoppingAddSheet uid={uid} onClose={() => setOverlay(null)} />
       )}
+      {overlay?.kind === 'meals' && (
+        <ShoppingMealsSheet
+          uid={uid}
+          todayKey={todayKey}
+          onClose={() => setOverlay(null)}
+        />
+      )}
       {openRow && openItems.length > 0 && (
         <ShoppingItemSheet
           key={openRow.id}
           uid={uid}
           name={openRow.name}
-          forText={getForText(openRow.sources)}
+          todayKey={todayKey}
           items={openItems}
           onClose={() => setOverlay(null)}
           onRemove={() => handleRemove(openRow.name, openItems)}

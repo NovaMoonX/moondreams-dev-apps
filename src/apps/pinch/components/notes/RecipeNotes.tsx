@@ -1,10 +1,10 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { NotebookPen } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import FormSection from '@/components/FormSection';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
 import {
@@ -106,10 +106,8 @@ function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
         })}
       </ul>
       {(hidden > HIDDEN_WORTH_A_BUTTON || isCollapsible) && (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-10 justify-start px-0!'
+        <ShowMoreButton
+          isOpen={isCollapsible}
           onClick={() =>
             setLimit(
               isCollapsible
@@ -121,7 +119,7 @@ function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
           {isCollapsible
             ? 'Show fewer'
             : `Show ${Math.min(RECIPE_NOTES_PAGE_SIZE, hidden)} more`}
-        </Button>
+        </ShowMoreButton>
       )}
     </FormSection>
   );

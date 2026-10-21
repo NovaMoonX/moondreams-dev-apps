@@ -21,7 +21,7 @@ import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
 
 interface NutritionEverywhereProps {
-  /** Called as a number is switched on, so the list it was switched on from shows it on its rows too. */
+  /** Called once a number switched on has saved, so the list it was switched on from shows it on its rows too; a failed save leaves the person's choice alone. */
   onTurnOn?: () => void;
 }
 
@@ -34,11 +34,11 @@ function NutritionEverywhere({ onTurnOn }: NutritionEverywhereProps) {
   const handleToggle = async (metric: NutritionMetric, isOn: boolean) => {
     if (uid === null) return;
     setError(null);
-    if (isOn) onTurnOn?.();
     try {
       await dispatch(
         saveSettings({ uid, showNutrition: { [metric]: isOn } }),
       ).unwrap();
+      if (isOn) onTurnOn?.();
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this.'));
     }
@@ -87,34 +87,37 @@ function AboutTheNumbers() {
 }
 
 interface NutritionViewOptionsProps {
-  /** Whether the Week's meal rows show what each costs, and how many such choices differ from the default. */
-  prices?: {
-    checked: boolean;
-    customizedCount: number;
-    onChange: (showPrices: boolean) => void;
-    onReset: () => void;
-  };
+  options: ListViewOptions;
+  customizedCount: number;
+  onChange: (patch: Partial<ListViewOptions>) => void;
+  onReset: () => void;
 }
 
-/** The Calendar's "View options": the nutrition every screen shows, whether its rows show prices, and where the numbers come from. */
-export function NutritionViewOptions({ prices }: NutritionViewOptionsProps) {
+export function NutritionViewOptions({
+  options,
+  customizedCount,
+  onChange,
+  onReset,
+}: NutritionViewOptionsProps) {
   return (
-    <ViewOptions
-      isQuiet
-      customizedCount={prices?.customizedCount}
-      onReset={prices?.onReset}
-    >
+    <ViewOptions isQuiet customizedCount={customizedCount} onReset={onReset}>
       <NutritionEverywhere />
-      {prices && (
-        <FilterSection title='On this list'>
+      <FilterSection title='On the calendar'>
+        <div className='divide-border divide-y'>
+          <ViewOptionSwitch
+            label='Show stats'
+            description='Total, average per fully priced meal and daily nutrition, as tiles'
+            checked={options.showStats}
+            onCheckedChange={(showStats) => onChange({ showStats })}
+          />
           <ViewOptionSwitch
             label='Show prices'
             description='On each meal in the week'
-            checked={prices.checked}
-            onCheckedChange={prices.onChange}
+            checked={options.showPrices}
+            onCheckedChange={(showPrices) => onChange({ showPrices })}
           />
-        </FilterSection>
-      )}
+        </div>
+      </FilterSection>
       <AboutTheNumbers />
     </ViewOptions>
   );

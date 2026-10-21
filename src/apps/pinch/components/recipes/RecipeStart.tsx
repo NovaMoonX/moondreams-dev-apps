@@ -1,8 +1,9 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import DetailSheet from '@/components/DetailSheet';
 import MethodPicker from '@/components/MethodPicker';
-import { RECIPE_START_METHODS } from '@apps/pinch/constants';
+import {
+  KEEP_AS_IDEA_METHOD,
+  RECIPE_START_METHODS,
+} from '@apps/pinch/constants';
 import type { RecipeStartMethod } from '@apps/pinch/types';
 
 interface RecipeStartProps {
@@ -20,20 +21,15 @@ function RecipeStart({ onPick, onKeepAsIdea }: RecipeStartProps) {
         it over before anything is saved.
       </p>
       <MethodPicker
-        methods={RECIPE_START_METHODS.map((method) => ({
-          ...method,
-          isQuiet: method.id === 'manual',
-          onPick: () => onPick(method.id),
-        }))}
+        methods={[
+          ...RECIPE_START_METHODS.map((method) => ({
+            ...method,
+            isQuiet: method.id === 'manual',
+            onPick: () => onPick(method.id),
+          })),
+          { ...KEEP_AS_IDEA_METHOD, isQuiet: true, onPick: onKeepAsIdea },
+        ]}
       />
-      <Button
-        type='button'
-        variant='link'
-        className="relative h-6! min-h-0! px-0! py-0! text-sm underline underline-offset-4 before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-        onClick={onKeepAsIdea}
-      >
-        Not now? Keep it as an idea
-      </Button>
     </div>
   );
 }

@@ -22,7 +22,41 @@ export function getItemTitle(
   return ingredientsById.get(item.refId)?.name ?? 'Removed ingredient';
 }
 
-/** A planned meal's name when it came from a saved meal, else its first item and how many more follow. */
+const MAX_NAMED_ITEM_LENGTH = 30;
+
+/** An unnamed plate's title from its items' names: "A & B", "A, B and C", "A, B and 2 more", or "A & 2 more" once a name runs past 30 characters, with "N more" never split across lines; `namedCount` is how many it names. */
+export function getPlateTitle(names: string[]): {
+  title: string;
+  namedCount: number;
+} {
+  const isShort = (list: string[]) =>
+    list.every((name) => name.length <= MAX_NAMED_ITEM_LENGTH);
+  const more = (count: number) => `${count}\u00a0more`;
+  if (names.length <= 1) {
+    return { title: names[0] ?? '', namedCount: names.length };
+  }
+  if (names.length === 2 && isShort(names)) {
+    return { title: `${names[0]} & ${names[1]}`, namedCount: 2 };
+  }
+  if (names.length === 3 && isShort(names)) {
+    return {
+      title: `${names[0]}, ${names[1]} and ${names[2]}`,
+      namedCount: 3,
+    };
+  }
+  if (names.length > 2 && isShort(names.slice(0, 2))) {
+    return {
+      title: `${names[0]}, ${names[1]} and\u00a0${more(names.length - 2)}`,
+      namedCount: 2,
+    };
+  }
+  return {
+    title: `${names[0]} &\u00a0${more(names.length - 1)}`,
+    namedCount: 1,
+  };
+}
+
+/** A planned meal's name when it came from a saved meal, else its plate's title from its items. */
 export function getPlannedMealTitle(
   meal: Pick<PlannedMeal, 'name' | 'items'>,
   recipesById: Map<string, Recipe>,
@@ -33,13 +67,9 @@ export function getPlannedMealTitle(
     return name;
   }
 
-  if (meal.items.length === 0) {
-    return '';
-  }
-
-  const first = getItemTitle(meal.items[0], recipesById, ingredientsById);
-  const title =
-    meal.items.length > 1 ? `${first} & ${meal.items.length - 1} more` : first;
+  const { title } = getPlateTitle(
+    meal.items.map((item) => getItemTitle(item, recipesById, ingredientsById)),
+  );
   return title;
 }
 

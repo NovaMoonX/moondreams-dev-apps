@@ -1,7 +1,10 @@
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
+  ALERT_REPEAT_MS,
+  MAX_ALERT_REPEATS,
   MAX_COOK_TIMERS,
   MAX_COOKED_SERVINGS,
+  MAX_STEP_TIMERS,
   MIN_COOK_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
@@ -226,6 +229,249 @@ export const countLiveTimers = (timers: { status: string }[]) =>
 export const canStartTimer = (timers: { status: string }[]) =>
   countLiveTimers(timers) < MAX_COOK_TIMERS;
 
+/** The times a step mentions (the first `MAX_STEP_TIMERS`) that have no timer yet, each a card with Start; a started one lives in the timer view or the pill row instead, so no timer shows in two places. */
+export const getReadyStepTimers = (
+  timers: { recipeId: string; stepNumber: number; label: string }[],
+  shown: {
+    recipeId: string;
+    stepNumber: number;
+    durations: { seconds: number; label: string }[];
+  } | null,
+) => {
+  const result = (shown?.durations.slice(0, MAX_STEP_TIMERS) ?? []).filter(
+    (duration) =>
+      !timers.some(
+        (timer) =>
+          timer.recipeId === shown?.recipeId &&
+          timer.stepNumber === shown.stepNumber &&
+          timer.label === duration.label,
+      ),
+  );
+  return result;
+};
+
+type FocusableTimer = { id: string } & (
+  | { status: 'running'; endsAt: number }
+  | { status: 'paused' }
+  | { status: 'done'; endedAt: number }
+);
+
+/** The timer the timer view shows: the Time's up that has waited longest (it stays in front until dismissed, and a later finish queues behind it whatever started first), else the one the person started or tapped, which keeps focus while paused, else the running one ending soonest. */
+export const getFocusedTimerId = (
+  timers: FocusableTimer[],
+  pickedId: string | null,
+) => {
+  const picked = timers.find((timer) => timer.id === pickedId) ?? null;
+  const getFocused = () => {
+    const firstDone = timers.reduce<FocusableTimer | null>(
+      (best, timer) =>
+        timer.status === 'done' &&
+        (best?.status !== 'done' || timer.endedAt < best.endedAt)
+          ? timer
+          : best,
+      null,
+    );
+    if (firstDone) return firstDone;
+    if (picked) return picked;
+    const soonest = timers.reduce<FocusableTimer | null>(
+      (best, timer) =>
+        timer.status === 'running' &&
+        (best?.status !== 'running' || timer.endsAt < best.endsAt)
+          ? timer
+          : best,
+      null,
+    );
+    return soonest ?? timers[0] ?? null;
+  };
+  const result = getFocused()?.id ?? null;
+  return result;
+};
+
+/** When each timer in `finished` rang, in the order they rang: its deadline, kept past `lastEndedAt` (the latest Time's up already waiting) so a clock stepped back never lets a later finish rank before one that is showing. */
+export const getEndedAts = (
+  finished: { id: string; endsAt: number }[],
+  lastEndedAt: number,
+) => {
+  const ordered = [...finished].sort((a, b) => a.endsAt - b.endsAt);
+  const result = ordered.reduce<{ last: number; ends: Map<string, number> }>(
+    (acc, timer) => {
+      const at = Math.max(timer.endsAt, acc.last + 1);
+      return { last: at, ends: new Map([...acc.ends, [timer.id, at]]) };
+    },
+    { last: lastEndedAt, ends: new Map() },
+  ).ends;
+  return result;
+};
+
+/** How long ago a Time's up rang, to the minute: "Rang just now" under one. */
+export const getRangAgo = (ageMs: number) => {
+  const minutes = Math.floor(Math.max(0, ageMs) / 60_000);
+  if (minutes < 1) return 'Rang just now';
+  if (minutes < 60) return `Rang ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `Rang ${hours} h ago` : `Rang ${hours} h ${rest} min ago`;
+};
+
+export interface AlertRing {
+  id: string;
+  lastAt: number;
+  repeats: number;
+}
+
+/** The Time's ups whose next repeat is due: a minute after each last buzzed, and never past `MAX_ALERT_REPEATS`. */
+export const getAlertRepeatsDue = (rings: AlertRing[], now: number) =>
+  rings
+    .filter(
+      (ring) =>
+        ring.repeats < MAX_ALERT_REPEATS &&
+        ring.lastAt + ALERT_REPEAT_MS <= now,
+    )
+    .map((ring) => ring.id);
+
+/** When the soonest repeat of an undismissed Time's up is due, or null once every one has used its repeats. */
+export const getNextAlertRepeatAt = (rings: AlertRing[]) => {
+  const due = rings
+    .filter((ring) => ring.repeats < MAX_ALERT_REPEATS)
+    .map((ring) => ring.lastAt + ALERT_REPEAT_MS);
+  const result = due.length === 0 ? null : Math.min(...due);
+  return result;
+};
+
+/** A timer's slot on a step: the same recipe, step and length, whichever timer ran there. */
+export const getTimerSlotKey = (timer: {
+  recipeId: string;
+  stepNumber: number;
+  label: string;
+}) => `${timer.recipeId}:${timer.stepNumber}:${timer.label}`;
+
+export interface TimerFocus {
+  /** Whether the timer view is up; false while the timers run in the background. */
+  isShown: boolean;
+  /** The timer the person started or tapped last; a finished one still comes first. */
+  pickedId: string | null;
+}
+
+/** A finish brings the timer view up over whatever shows, and keeps what the person was watching so Dismiss returns to it. */
+export const getFocusAfterFinish = (focus: TimerFocus): TimerFocus => ({
+  isShown: true,
+  pickedId: focus.isShown ? focus.pickedId : null,
+});
+
+/** Ending the timer in focus (Reset or Dismiss) shows the next finished one, else the one still picked, else closes the view; ending another timer changes nothing. */
+export const getFocusAfterDismiss = (
+  timers: FocusableTimer[],
+  focus: TimerFocus,
+  id: string,
+): TimerFocus => {
+  if (getFocusedTimerId(timers, focus.pickedId) !== id) {
+    return focus;
+  }
+  const rest = timers.filter((timer) => timer.id !== id);
+  const pickedId = focus.pickedId === id ? null : focus.pickedId;
+  const result = {
+    isShown:
+      focus.isShown &&
+      rest.some((timer) => timer.status === 'done' || timer.id === pickedId),
+    pickedId,
+  };
+  return result;
+};
+
+/** Every timer but the one in focus, finished ones first, then in the order they started, so pausing one never moves it under the finger. */
+export const getTimerRows = <T extends { id: string; status: string }>(
+  timers: T[],
+  focusedId: string | null,
+) => {
+  const others = timers.filter((timer) => timer.id !== focusedId);
+  const result = [
+    ...others.filter((timer) => timer.status === 'done'),
+    ...others.filter((timer) => timer.status !== 'done'),
+  ];
+  return result;
+};
+
+export type TimerNext =
+  | { kind: 'STEP'; recipeId: string; stepIndex: number }
+  | { kind: 'RECIPE'; recipeId: string };
+
+/** What follows a timer's step, for "Up next": its recipe's next step, or on that recipe's last step the next recipe still short of its own last; nothing once the person is already on that step or past it, or every recipe is on its last. */
+export const getTimerNext = (
+  recipes: { recipeId: string; stepIndex: number; stepCount: number }[],
+  timer: { recipeId: string; stepNumber: number },
+): TimerNext | null => {
+  const own = recipes.find((recipe) => recipe.recipeId === timer.recipeId);
+  if (!own || own.stepIndex >= timer.stepNumber) {
+    return null;
+  }
+  if (timer.stepNumber < own.stepCount) {
+    return {
+      kind: 'STEP',
+      recipeId: own.recipeId,
+      stepIndex: timer.stepNumber,
+    };
+  }
+
+  const next = getPlateNext(
+    recipes.map((recipe) =>
+      recipe.recipeId === own.recipeId
+        ? { ...recipe, stepIndex: Math.max(0, recipe.stepCount - 1) }
+        : recipe,
+    ),
+    own.recipeId,
+  );
+  const result = next.kind === 'RECIPE' ? next : null;
+  return result;
+};
+
+export type TimerSecondary = 'NEXT' | 'BACK' | null;
+
+/** The footer's secondary beside Pause, Resume or Dismiss: Next only while the timer's next step is still ahead of the person; otherwise a live timer offers a way back to the step they were on (a peek from a pill), and a Time's up over a later step offers nothing, so two buttons never end at the same screen. */
+export const getTimerSecondary = (
+  next: TimerNext | null,
+  status: 'running' | 'paused' | 'done',
+): TimerSecondary => {
+  if (next !== null) return 'NEXT';
+  return status === 'done' ? null : 'BACK';
+};
+
+/** On a plate, the other recipe still short of its last step while the timer's runs (waiting is the moment to start it), with the step it would open on; nothing on a lone recipe, when "Up next" already names that recipe or when no other recipe has a step to do. */
+export const getMeanwhile = (
+  recipes: { recipeId: string; stepIndex: number; stepCount: number }[],
+  timerRecipeId: string,
+  next: TimerNext | null,
+) => {
+  const own = recipes.find((recipe) => recipe.recipeId === timerRecipeId);
+  if (recipes.length < 2 || !own) {
+    return null;
+  }
+
+  const other = getPlateNext(
+    recipes.map((recipe) =>
+      recipe.recipeId === own.recipeId
+        ? { ...recipe, stepIndex: Math.max(0, recipe.stepCount - 1) }
+        : recipe,
+    ),
+    own.recipeId,
+  );
+  const target =
+    other.kind === 'RECIPE'
+      ? recipes.find((recipe) => recipe.recipeId === other.recipeId)
+      : undefined;
+  if (
+    !target ||
+    (next?.kind === 'RECIPE' && next.recipeId === target.recipeId)
+  ) {
+    return null;
+  }
+
+  const result = {
+    recipeId: target.recipeId,
+    stepIndex: Math.min(target.stepIndex, target.stepCount - 1),
+  };
+  return result;
+};
+
 /** A whole serving a tap, and a half only below one. */
 export const stepCookServings = (current: number, direction: 1 | -1) => {
   if (direction === 1) {
@@ -253,6 +499,14 @@ const TRAILING_LITTLE_WORDS = new Set([
   'to',
   'with',
 ]);
+
+/** A step up to its first sentence end (a stop, question or exclamation mark before a capital or a digit) or its first line break, for "Up next". */
+export const getFirstSentence = (text: string) => {
+  const trimmed = text.trim();
+  const end = trimmed.search(/[.!?](?=\s+[\p{Lu}\d])|\n/u);
+  const result = end < 0 ? trimmed : trimmed.slice(0, end + 1).trim();
+  return result;
+};
 
 /** A step's first few words ("Brown the beef"), so two timers are told apart by what is cooking. */
 export const getStepName = (step: string) => {

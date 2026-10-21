@@ -157,6 +157,12 @@ const IDEA_SITES = [
 ];
 const SHOPPING_UNITS = ['G', 'EACH', 'LB', 'CUP', 'OZ'] as const;
 const SHOPPING_ITEM_COUNT = 80;
+const SHOPPING_GRAMS: Partial<Record<string, number>> = {
+  G: 1,
+  LB: 453.592,
+  OZ: 28.3495,
+};
+const SHOPPING_SOURCE_CAP = 60;
 const IDEA_COUNT = 80;
 // Cooks per recipe by recipe index (about 330 in all); recipe 1 gets twelve, enough for the history's "Show N more".
 const COOKS_PER_RECIPE = [0, 1, 2, 3, 1, 1, 5, 0, 1, 2];
@@ -240,7 +246,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list, 80 recipe ideas, about 330 cooks, about 310 notes, about 300 containers in stock and about 260 finished ones. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list whose weighed lines say which meals they are for, 80 recipe ideas, about 330 cooks, about 310 notes, about 300 containers in stock and about 260 finished ones. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -443,13 +449,6 @@ export async function seedPinchScale(
       };
     },
   );
-  shoppingItems.forEach((entry, index) =>
-    add(`shoppingItems/${entry.id}`, {
-      ...entry,
-      createdAt: createdAt + index,
-      updatedAt: createdAt + index,
-    }),
-  );
 
   // 80 ideas: a link in two of every three (one in three with a picture address that cannot load offline) and the rest jotted,
   // every seventh with a title over 100 characters, every ninth with a long note, and every tenth already made into a recipe.
@@ -587,25 +586,129 @@ export async function seedPinchScale(
   );
 
   const totalDays = DAYS_BACK + DAYS_AHEAD + 1;
-  Array.from(
+  const planned = Array.from(
     { length: totalDays * MEALS_PER_DAY },
-    (_, index) => index,
-  ).forEach((index) => {
-    const day = Math.floor(index / MEALS_PER_DAY) - DAYS_BACK;
-    const items = mealItems(1 + (index % 3), index);
-    add(`plannedMeals/scale-planned-${index}`, {
-      id: `scale-planned-${index}`,
-      date: today + day * DAY_MS,
-      mealType: MEAL_TYPES[index % MEAL_TYPES.length],
-      name: null,
-      sourceMealId: null,
-      items,
-      refIds: Array.from(new Set(items.map((entry) => entry.refId))),
-      snapshot: null,
+    (_, index) => {
+      const day = Math.floor(index / MEALS_PER_DAY) - DAYS_BACK;
+      const items = mealItems(1 + (index % 3), index);
+      return {
+        id: `scale-planned-${index}`,
+        date: today + day * DAY_MS,
+        mealType: MEAL_TYPES[index % MEAL_TYPES.length],
+        name: null,
+        sourceMealId: null,
+        items,
+        refIds: Array.from(new Set(items.map((entry) => entry.refId))),
+        snapshot: null,
+        createdAt: createdAt + index,
+        updatedAt: createdAt + index,
+      };
+    },
+  );
+  planned.forEach((meal) => add(`plannedMeals/${meal.id}`, meal));
+
+  // The weighed lines on the list come from the next two weeks of the plan, a few saved meals and two recipes (one added at
+  // twice its servings, one from before servings were kept), so the list names many meals and a row can be taken off by meal.
+  const recipesById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+  const getGrams = (
+    items: { kind: string; refId: string; servings: number }[],
+    ingredientId: string,
+  ) =>
+    items.reduce((sum, item) => {
+      if (item.kind !== 'RECIPE') {
+        return item.refId === ingredientId ? sum + 50 * item.servings : sum;
+      }
+      const recipe = recipesById.get(item.refId);
+      return recipe
+        ? recipe.ingredients
+            .filter((line) => line.ingredientId === ingredientId)
+            .reduce(
+              (total, line) =>
+                total + (line.amount * item.servings) / recipe.servings,
+              sum,
+            )
+        : sum;
+    }, 0);
+  const soon = planned.filter(
+    (meal) => meal.date >= today && meal.date < today + 14 * DAY_MS,
+  );
+  const sourcedShopping = shoppingItems.map((entry, index) => {
+    const gramsPer = SHOPPING_GRAMS[entry.unit];
+    if (gramsPer === undefined) return { ...entry, sources: [] };
+    const plannedShares = soon.flatMap((meal) => {
+      const grams = getGrams(meal.items, entry.ingredientId);
+      return grams > 0 ? [{ source: meal.id, grams }] : [];
+    });
+    const mealShares =
+      index % 3 === 0
+        ? meals.flatMap((meal) => {
+            const grams = getGrams(meal.items, entry.ingredientId);
+            return grams > 0 ? [{ source: `meal:${meal.id}`, grams }] : [];
+          })
+        : [];
+    const recipe = recipes.find((candidate) =>
+      candidate.ingredients.some(
+        (line) => line.ingredientId === entry.ingredientId,
+      ),
+    );
+    const recipeServings = recipe && index % 6 === 0 ? recipe.servings * 2 : 0;
+    const recipeShares = recipe
+      ? [
+          ...(index % 6 === 0
+            ? [
+                {
+                  source: `recipe:${recipe.id}:${recipeServings}`,
+                  grams: getGrams(
+                    [
+                      {
+                        kind: 'RECIPE',
+                        refId: recipe.id,
+                        servings: recipeServings,
+                      },
+                    ],
+                    entry.ingredientId,
+                  ),
+                },
+              ]
+            : []),
+          ...(index % 6 === 3
+            ? [
+                {
+                  source: `recipe:${recipe.id}`,
+                  grams: getGrams(
+                    [
+                      {
+                        kind: 'RECIPE',
+                        refId: recipe.id,
+                        servings: recipe.servings,
+                      },
+                    ],
+                    entry.ingredientId,
+                  ),
+                },
+              ]
+            : []),
+        ]
+      : [];
+    const shares = [...plannedShares, ...mealShares, ...recipeShares].slice(
+      -SHOPPING_SOURCE_CAP,
+    );
+    const grams = shares.reduce((sum, share) => sum + share.grams, 0);
+    return grams > 0
+      ? {
+          ...entry,
+          amount: Math.round((grams / gramsPer) * 100) / 100,
+          sources: shares.map((share) => share.source),
+        }
+      : { ...entry, sources: [] };
+  });
+  sourcedShopping.forEach((entry, index) =>
+    add(`shoppingItems/${entry.id}`, {
+      ...entry,
       createdAt: createdAt + index,
       updatedAt: createdAt + index,
-    });
-  });
+    }),
+  );
 
   // Its own generator, so the rest of the fixture is unchanged.
   const containerRandom = makeRandom(20260404);

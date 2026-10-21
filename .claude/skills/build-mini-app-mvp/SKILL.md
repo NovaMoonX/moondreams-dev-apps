@@ -166,7 +166,7 @@ Start this once every MVP PR is merged up and reviewed.
    - Fix everything that is a real problem and in MVP scope: alignment, centring, empty space, unclear active state, a confusing path, a missing affordance, copy, an outdated README.
    - Note anything bigger as a follow-up in the overview comment instead of widening scope.
    - Re-validate as in Phase 2, including re-driving each flow you touched.
-6. **Keep `CLAUDE.md` current while you fix.** It's a working rulebook, and both agents' rule candidates feed it.
+6. **Keep `CLAUDE.md` current while you fix.** It's a working rulebook, and both agents' rule candidates feed it. When the owner says a review agent should have caught something, that agent's section of `.claude/skills/pr-wrap-up/references/review-agents.md` is audited and amended too (the procedure is at the top of that file; the polish agents use its Design and Product sections).
    - **Where rules go:**
      - Design rules go in its "Design & UX" section.
      - Product rules go in a "Product" section. Create it after "Design & UX" if it doesn't exist yet, covering user paths, problem fit, copy voice, first-run and empty states, and README upkeep.

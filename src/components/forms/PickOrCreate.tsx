@@ -1,8 +1,9 @@
 import { useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
-import { Plus } from 'lucide-react';
+import { Input } from '@moondreamsdev/dreamer-ui/components';
+import { Plus, X } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
 import Pill from '@/components/Pill';
 import { PillOptions, type PillOption } from '@/components/PillGroup';
 
@@ -93,18 +94,19 @@ function PickOrCreate({
       />
       {showCreate && newInput}
       {clearLabel && (choice !== '' || isCreating) && (
-        <Button
-          type='button'
-          variant='link'
-          size='sm'
-          className='h-10 px-0!'
-          onClick={() => {
-            setIsCreating(false);
-            onChange('', '');
-          }}
-        >
-          {clearLabel}
-        </Button>
+        <ActionChips
+          actions={[
+            {
+              key: 'clear',
+              icon: <X className='h-4 w-4' aria-hidden='true' />,
+              label: clearLabel,
+              onClick: () => {
+                setIsCreating(false);
+                onChange('', '');
+              },
+            },
+          ]}
+        />
       )}
     </div>
   );

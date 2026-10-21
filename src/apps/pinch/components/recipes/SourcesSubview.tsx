@@ -1,38 +1,52 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Pencil } from 'lucide-react';
 
-import DeleteIconButton from '@/components/DeleteIconButton';
+import IntroCard from '@/components/IntroCard';
 import SearchInput from '@/components/SearchInput';
-import SectionHeader from '@/components/SectionHeader';
 import Subview from '@/components/Subview';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
+import { useAppSelector } from '@/store';
 import SourceFormSheet from '@apps/pinch/components/recipes/SourceFormSheet';
 import { LIST_SEARCH_THRESHOLD } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import { removeSource } from '@apps/pinch/store/actions/sourceActions';
-import { selectSourceCounts, selectSources } from '@apps/pinch/store/selectors';
+import { announceSourceShown } from '@apps/pinch/hooks/useSourceShown';
+import {
+  selectRecipes,
+  selectSourceCounts,
+  selectSources,
+  selectSourcesById,
+} from '@apps/pinch/store/selectors';
 import type { Source } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
+import { getRecipeSource } from '@apps/pinch/utils/sources';
+
+const TITLES_SHOWN = 2;
+
+const getRecipesLine = (count: number, titles: string[]) => {
+  if (count === 0) return 'Not on any recipe';
+  const noun = count === 1 ? 'recipe' : 'recipes';
+  const rest = count - TITLES_SHOWN;
+  const names =
+    rest > 0
+      ? `${titles.slice(0, TITLES_SHOWN).join(', ')} and ${rest} more`
+      : titles.join(', ');
+  return `${count} ${noun} · ${names}`;
+};
 
 interface SourcesSubviewProps {
   uid: string;
 }
 
-/** Where sources are renamed and deleted; a source is made from a recipe's form, where it is used. */
+/** The sources with their recipe counts: a row shows that source's recipes, the pencil renames or deletes it. A source is made from a recipe's form, where it is used. */
 function SourcesSubview({ uid }: SourcesSubviewProps) {
-  const dispatch = useAppDispatch();
-  const { confirm } = useActionModal();
   const { closeSubview } = usePinchOverlay();
   const sources = useAppSelector(selectSources);
   const counts = useAppSelector(selectSourceCounts).bySource;
+  const recipes = useAppSelector(selectRecipes);
+  const sourcesById = useAppSelector(selectSourcesById);
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const shown = useMemo(
     () =>
@@ -42,41 +56,31 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
       ).map(({ source }) => source),
     [sources, query],
   );
+  const titlesBySource = useMemo(
+    () =>
+      recipes.reduce((acc, recipe) => {
+        const source = getRecipeSource(recipe, sourcesById);
+        return source
+          ? acc.set(source.id, [...(acc.get(source.id) ?? []), recipe.title])
+          : acc;
+      }, new Map<string, string[]>()),
+    [recipes, sourcesById],
+  );
   const editing = sources.find((source) => source.id === editingId) ?? null;
 
-  const handleDelete = async (source: Source) => {
-    const confirmed = await confirm({
-      title: 'Delete source',
-      message: `Delete “${source.label}”? It isn't on any recipe, and this can't be undone.`,
-      confirmText: 'Delete',
-      destructive: true,
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    setError(null);
-    setDeletingId(source.id);
-    try {
-      await dispatch(removeSource({ uid, id: source.id })).unwrap();
-    } catch (deleteError) {
-      setError(getErrorMessage(deleteError, 'Unable to delete this source.'));
-    } finally {
-      setDeletingId(null);
-    }
+  const showRecipes = (source: Source) => {
+    announceSourceShown(source.id);
+    closeSubview();
   };
 
   return (
     <Subview title='Sources' onClose={closeSubview}>
       <div className='space-y-4'>
-        <SectionHeader
-          title='Sources'
-          subtitle={
-            sources.length === 0
-              ? undefined
-              : `${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`
-          }
-        />
+        {sources.length > 0 && sources.length < LIST_SEARCH_THRESHOLD && (
+          <IntroCard icon='📚' lead='Where your recipes come from.'>
+            Rename one and every recipe from it follows.
+          </IntroCard>
+        )}
         {sources.length >= LIST_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
@@ -94,56 +98,67 @@ function SourcesSubview({ uid }: SourcesSubviewProps) {
             Nothing matches “{query.trim()}”.
           </p>
         ) : (
-          <ul className='divide-border divide-y'>
+          <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
             {shown.map((source) => {
               const count = counts.get(source.id) ?? 0;
+              const summary = (
+                <>
+                  <span
+                    className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)]'
+                    aria-hidden='true'
+                  >
+                    📖
+                  </span>
+                  <span className='min-w-0 flex-1'>
+                    <span className='text-foreground block font-medium wrap-break-word'>
+                      {source.label}
+                    </span>
+                    <span className='text-muted-foreground block truncate text-xs font-normal'>
+                      {getRecipesLine(
+                        count,
+                        titlesBySource.get(source.id) ?? [],
+                      )}
+                    </span>
+                  </span>
+                </>
+              );
               return (
                 <li key={source.id} className='flex items-start gap-1'>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    onClick={() => setEditingId(source.id)}
-                    className='h-auto min-h-14 min-w-0 flex-1 items-start justify-start gap-3 px-0! py-2 text-left'
-                  >
-                    <span
-                      className='flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--pinch-drizzle-soft)]'
-                      aria-hidden='true'
+                  {count === 0 ? (
+                    <div className='flex min-h-14 min-w-0 flex-1 items-start gap-3 py-2'>
+                      {summary}
+                    </div>
+                  ) : (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      aria-label={`Show the ${count} ${count === 1 ? 'recipe' : 'recipes'} from ${source.label}`}
+                      onClick={() => showRecipes(source)}
+                      className='h-auto min-h-14 min-w-0 flex-1 items-start justify-start gap-3 px-0! py-2 text-left'
                     >
-                      📖
-                    </span>
-                    <span className='min-w-0 flex-1'>
-                      <span className='text-foreground block font-medium wrap-break-word'>
-                        {source.label}
-                      </span>
-                      <span className='text-muted-foreground block text-xs font-normal'>
-                        {count === 0
-                          ? 'Not on any recipe'
-                          : `${count} ${count === 1 ? 'recipe' : 'recipes'}`}
-                      </span>
-                    </span>
-                    <ChevronRight
-                      className='text-muted-foreground mt-2.5 h-5 w-5 shrink-0'
-                      aria-hidden='true'
-                    />
-                  </Button>
-                  {count === 0 && (
-                    <span className='mt-2'>
-                      <DeleteIconButton
-                        label={`Delete ${source.label}`}
-                        disabled={deletingId !== null}
-                        onClick={() => void handleDelete(source)}
+                      {summary}
+                      <ChevronRight
+                        className='text-muted-foreground mt-2.5 mr-2.5 h-5 w-5 shrink-0'
+                        aria-hidden='true'
                       />
-                    </span>
+                    </Button>
                   )}
+                  <span className='mt-2'>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='icon'
+                      aria-label={`Rename ${source.label}`}
+                      onClick={() => setEditingId(source.id)}
+                      className='size-10 min-w-10 shrink-0 p-0'
+                    >
+                      <Pencil className='h-4 w-4' aria-hidden='true' />
+                    </Button>
+                  </span>
                 </li>
               );
             })}
           </ul>
-        )}
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
         )}
       </div>
       {editing && (

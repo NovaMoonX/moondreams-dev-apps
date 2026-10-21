@@ -13,27 +13,39 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import { updateShoppingItem } from '@apps/pinch/store/actions/shoppingActions';
-import { selectShoppingById } from '@apps/pinch/store/selectors';
+import {
+  selectShoppingById,
+  selectShoppingItems,
+  selectShoppingPlannedParts,
+  selectShoppingSourceContext,
+  selectShoppingSourceLabels,
+} from '@apps/pinch/store/selectors';
 import type { ShoppingItem, Unit } from '@apps/pinch/types';
 import { formatSize } from '@apps/pinch/utils/productFormat';
 import {
+  formatShopAmount,
+  getRowSourceShares,
   getShoppingItemId,
   isValidAmount,
   roundAmount,
   sumShopAmounts,
 } from '@apps/pinch/utils/shopping';
 
+const SHARES_SHOWN = 5;
+const SHARES_FOLD_MIN_HIDDEN = 4;
+
 const { custom } = FormFactories;
 
 interface ShoppingItemSheetProps {
   uid: string;
   name: string;
-  /** What put it on the list ("Adobo chicken (Thu)"), or null when nothing behind it still resolves. */
-  forText: string | null;
+  /** The day the screen opened on, for naming planned meals. */
+  todayKey: string;
   /** The stored items one row of the list stands for, largest first. */
   items: ShoppingItem[];
   onClose: () => void;
@@ -44,13 +56,25 @@ interface ShoppingItemSheetProps {
 function ShoppingItemSheet({
   uid,
   name,
-  forText,
+  todayKey,
   items,
   onClose,
   onRemove,
 }: ShoppingItemSheetProps) {
   const dispatch = useAppDispatch();
   const itemsById = useAppSelector(selectShoppingById);
+  const allItems = useAppSelector(selectShoppingItems);
+  const labels = useAppSelector(selectShoppingSourceLabels);
+  const context = useAppSelector(selectShoppingSourceContext);
+  const parts = useAppSelector(selectShoppingPlannedParts);
+  const [isAllShown, setIsAllShown] = useState(false);
+  const shares = useMemo(
+    () => getRowSourceShares(items, allItems, labels, context, todayKey, parts),
+    [items, allItems, labels, context, todayKey, parts],
+  );
+  const isFolded =
+    !isAllShown && shares.length - SHARES_SHOWN >= SHARES_FOLD_MIN_HIDDEN;
+  const shownShares = isFolded ? shares.slice(0, SHARES_SHOWN) : shares;
   const [item] = items;
   const [shown] = useState(
     () => sumShopAmounts(items) ?? { amount: item.amount, unit: item.unit },
@@ -74,14 +98,17 @@ function ShoppingItemSheet({
 
   const getNote = () => {
     if (!inNewUnit) {
+      if (!isValid) return 'Add an amount to save.';
+
       const amounts = items.flatMap((rowItem) =>
         rowItem.amount === null
           ? []
           : [formatSize(rowItem.amount, rowItem.unit)],
       );
-      return amounts.length > 1
-        ? `On your list as ${amounts.join(' and ')}. Saving keeps one amount.`
-        : null;
+      if (amounts.length > 1) {
+        return `On your list as ${amounts.join(' and ')}. Saving keeps one amount.`;
+      }
+      return isChanged ? null : 'Change the amount or unit to save.';
     }
     const there =
       inNewUnit.amount === null
@@ -154,10 +181,40 @@ function ShoppingItemSheet({
 
   return (
     <FormSheet isOpen onClose={onClose} title={name}>
-      {forText && (
-        <p className='text-muted-foreground mb-3 text-sm wrap-break-word'>
-          For {forText}
-        </p>
+      {shares.length > 0 && (
+        <div className='mb-4'>
+          <p className='text-muted-foreground mb-1.5 text-xs'>For</p>
+          <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
+            {shownShares.map((share) => {
+              const amountText = formatShopAmount(share.amount);
+              return (
+                <li
+                  key={share.source}
+                  className='flex items-start justify-between gap-3 py-2 text-sm'
+                >
+                  <span className='min-w-0'>
+                    <span className='block wrap-break-word'>{share.name}</span>
+                    {share.dish && (
+                      <span className='text-muted-foreground block text-xs wrap-break-word'>
+                        {share.dish}
+                      </span>
+                    )}
+                  </span>
+                  {amountText && (
+                    <span className='text-muted-foreground shrink-0 whitespace-nowrap'>
+                      {amountText}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {isFolded && (
+            <ShowMoreButton onClick={() => setIsAllShown(true)}>
+              Show {shares.length - SHARES_SHOWN} more
+            </ShowMoreButton>
+          )}
+        </div>
       )}
       <Form
         id='pinch-shopping-item'
