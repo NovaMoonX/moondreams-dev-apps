@@ -1,7 +1,10 @@
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -30,6 +33,10 @@ interface TrendLineChartProps {
   seriesLabel?: string;
   /** `linear` for a series that steps, where a smoothed curve would overshoot. */
   curve?: 'monotone' | 'linear';
+  /** A quiet, rounded look: no grid or axis lines, a soft fill under the line, few ticks and an end dot. */
+  isSoft?: boolean;
+  /** Sizes the chart box. */
+  className?: string;
   /** Dots on every point; off for a dense series. */
   hasDots?: boolean;
 }
@@ -49,6 +56,8 @@ function TrendLineChart({
   hasDots = true,
   seriesLabel,
   curve = 'monotone',
+  className = 'h-64',
+  isSoft = false,
 }: TrendLineChartProps) {
   if (data.length < 2) {
     return (
@@ -59,29 +68,56 @@ function TrendLineChart({
   }
 
   const sorted = [...data].sort((left, right) => left.x - right.x);
+  const last = sorted[sorted.length - 1];
+  const tickStyle = {
+    fill: 'var(--color-muted-foreground)',
+    fontSize: isSoft ? 11 : 12,
+  };
 
   return (
-    <div className='h-64 w-full'>
+    <div className={join('w-full', className)}>
       <ResponsiveContainer width='100%' height='100%'>
-        <LineChart
+        <ComposedChart
           data={sorted}
-          margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
+          margin={{ top: 8, right: isSoft ? 12 : 16, bottom: 0, left: 0 }}
         >
-          <CartesianGrid strokeDasharray='3 3' stroke='var(--color-border)' />
+          <defs>
+            <linearGradient id='trend-soft-fill' x1='0' y1='0' x2='0' y2='1'>
+              <stop
+                offset='0%'
+                stopColor='var(--color-primary)'
+                stopOpacity={0.28}
+              />
+              <stop
+                offset='100%'
+                stopColor='var(--color-primary)'
+                stopOpacity={0}
+              />
+            </linearGradient>
+          </defs>
+          {!isSoft && (
+            <CartesianGrid strokeDasharray='3 3' stroke='var(--color-border)' />
+          )}
           <XAxis
             dataKey='x'
             type='number'
             domain={['dataMin', 'dataMax']}
             tickFormatter={formatX}
             stroke='var(--color-muted-foreground)'
-            tick={{ fill: 'var(--color-muted-foreground)', fontSize: 12 }}
+            tick={tickStyle}
+            axisLine={!isSoft}
+            tickLine={!isSoft}
+            tickCount={isSoft ? 3 : undefined}
+            tickMargin={isSoft ? 6 : undefined}
           />
           <YAxis
-            dataKey='y'
             tickFormatter={formatY}
             stroke='var(--color-muted-foreground)'
-            tick={{ fill: 'var(--color-muted-foreground)', fontSize: 12 }}
-            width={48}
+            tick={tickStyle}
+            width={isSoft ? 40 : 48}
+            axisLine={!isSoft}
+            tickLine={!isSoft}
+            tickCount={isSoft ? 3 : undefined}
             label={
               yLabel
                 ? {
@@ -103,17 +139,19 @@ function TrendLineChart({
               background: 'var(--color-popover)',
               color: 'var(--color-popover-foreground)',
               border: '1px solid var(--color-border)',
-              borderRadius: 8,
+              borderRadius: isSoft ? 16 : 8,
             }}
           />
           {referenceY && (
             <ReferenceLine
               y={referenceY.value}
               stroke='var(--color-muted-foreground)'
+              strokeOpacity={isSoft ? 0.5 : 1}
               strokeDasharray='4 4'
+              ifOverflow='extendDomain'
               label={{
                 value: referenceY.label,
-                position: 'insideTopLeft',
+                position: 'insideTopRight',
                 fill: 'var(--color-muted-foreground)',
                 fontSize: 11,
               }}
@@ -124,21 +162,49 @@ function TrendLineChart({
               type={curve}
               dataKey='y2'
               stroke='var(--color-muted-foreground)'
+              strokeOpacity={isSoft ? 0.6 : 1}
               strokeWidth={2}
-              strokeDasharray='5 4'
+              strokeDasharray='2 6'
+              isAnimationActive={!isSoft}
+              strokeLinecap='round'
               dot={false}
               activeDot={{ r: 4 }}
             />
           )}
-          <Line
-            type={curve}
-            dataKey='y'
-            stroke='var(--color-primary)'
-            strokeWidth={2}
-            dot={hasDots ? { r: 3, fill: 'var(--color-primary)' } : false}
-            activeDot={{ r: 5 }}
-          />
-        </LineChart>
+          {isSoft ? (
+            <Area
+              type={curve}
+              dataKey='y'
+              stroke='var(--color-primary)'
+              strokeWidth={3}
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              fill='url(#trend-soft-fill)'
+              isAnimationActive={false}
+              dot={false}
+              activeDot={{ r: 5 }}
+            />
+          ) : (
+            <Line
+              type={curve}
+              dataKey='y'
+              stroke='var(--color-primary)'
+              strokeWidth={2}
+              dot={hasDots ? { r: 3, fill: 'var(--color-primary)' } : false}
+              activeDot={{ r: 5 }}
+            />
+          )}
+          {isSoft && (
+            <ReferenceDot
+              x={last.x}
+              y={last.y}
+              r={6}
+              fill='var(--color-primary)'
+              stroke='var(--color-card)'
+              strokeWidth={3}
+            />
+          )}
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

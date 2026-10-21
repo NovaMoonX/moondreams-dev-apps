@@ -176,11 +176,13 @@ function estimatePlannedCents(
 }
 
 interface CalendarPlan {
-  ahead: { at: number; cents: number | null }[];
+  /** `day` is the showing's local day as UTC midnight, comparable with the plan's other days. */
+  ahead: { day: number; cents: number | null }[];
   /** Planned showings already over that nobody has marked seen. */
   unmarkedCount: number;
 }
 
+/** The showings still ahead and what each is likely to save. */
 export function getCalendarPlan(
   base: ProjectionBase,
   membership: MembershipProfile,
@@ -191,7 +193,7 @@ export function getCalendarPlan(
   const ahead = planned.filter((viewing) => viewing.showtimeAt > now);
   const result: CalendarPlan = {
     ahead: ahead.map((viewing) => ({
-      at: viewing.showtimeAt,
+      day: fromDateInputValue(getDayKey(viewing.showtimeAt)) ?? 0,
       cents: estimatePlannedCents(viewing, membership, base),
     })),
     unmarkedCount: planned.length - ahead.length,
@@ -205,13 +207,10 @@ export function projectCalendar(
   membership: MembershipProfile,
   plan: CalendarPlan,
 ): ProjectionResult {
-  const lastShowing = plan.ahead.reduce(
-    (latest, showing) => Math.max(latest, showing.at),
+  const lastDay = plan.ahead.reduce(
+    (latest, showing) => Math.max(latest, showing.day),
     0,
   );
-  // The viewer's local day, like every other day the screen compares against.
-  const lastDay =
-    lastShowing === 0 ? 0 : (fromDateInputValue(getDayKey(lastShowing)) ?? 0);
   const result = finish(base, membership, {
     movies: plan.ahead.length,
     addedCents: plan.ahead.reduce(
@@ -293,15 +292,17 @@ export interface NetPoint {
 /** What a plan has added by a given day, in cents. */
 export type AddedBy = (day: number) => number;
 
+/** What the planned showings add by a day, each counted on its local day. */
 export const getCalendarAddedBy =
   (plan: CalendarPlan): AddedBy =>
   (day) =>
     plan.ahead.reduce(
       (total, showing) =>
-        showing.at < day + DAY_MS ? total + (showing.cents ?? 0) : total,
+        showing.day <= day ? total + (showing.cents ?? 0) : total,
       0,
     );
 
+/** What a steady pace adds by a day. */
 export const getPaceAddedBy =
   (
     todayDay: number,

@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { createDateInputField, fromDateInputValue, toDateInputValue } from '@/utils';
 import { formatDateTime } from '@/utils/formatUtils';
+import TrendLineChart from '@/components/TrendLineChart';
 import { LITTER_TYPE_OPTIONS } from '@apps/nine-lives/constants/presetOptions';
 import { useAttentionFocus } from '@apps/nine-lives/context/attentionFocusContext';
 import { createCustomLitterType } from '@apps/nine-lives/store/actions/customLitterTypesActions';
@@ -52,7 +53,6 @@ import {
 import { usePagination } from '@apps/nine-lives/utils/usePagination';
 
 import DetailsDisclosure from './DetailsDisclosure';
-import TrendLineChart from '@/components/TrendLineChart';
 import ViewToggle, { type ViewToggleValue } from './ViewToggle';
 
 const { input, select, textarea, custom } = FormFactories;

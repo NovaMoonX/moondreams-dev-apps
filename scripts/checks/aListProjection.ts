@@ -119,6 +119,15 @@ assert.equal(
   ).months,
   4,
 );
+// A 9pm showing is that day's, not the next UTC day's, in the chart too
+const eveningPlan = getCalendarPlan(
+  base,
+  m,
+  [planned(utc(2026, 12, 15, 5), 1700)],
+  now,
+);
+assert.equal(getCalendarAddedBy(eveningPlan)(utc(2026, 12, 14)), 1900);
+assert.equal(getCalendarAddedBy(eveningPlan)(utc(2026, 12, 13)), 0);
 // AMC price + tax + average avoided fee
 const taxed = membership(utc(2026, 10, 14), 0.1);
 assert.equal(

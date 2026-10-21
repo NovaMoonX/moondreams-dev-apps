@@ -132,22 +132,33 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   };
 
   const getBreakEvenLine = () => {
+    if (scenario !== 'week' && scenario !== 'month') return null;
     if (!breakEven || breakEven.movies === 0 || breakEven.perPeriod === null)
       return null;
-    const unit = scenario as PaceUnit;
+    const unit = scenario;
     if (breakEven.perPeriod > getPaceMax(unit))
       return `Breaking even by then would take more than A-List's ${getPaceMax(unit)} a ${unit}.`;
     return `Breaking even takes about ${breakEven.perPeriod} a ${unit} (${pluralize(breakEven.movies, 'movie')} in all).`;
   };
   const breakEvenLine = getBreakEvenLine();
 
+  const getChartDescription = () => {
+    const end = series.at(-1);
+    if (!end) return '';
+    const stop =
+      scenario === 'stop' ? '' : ` If you stop now, ${formatCents(end.y2)}.`;
+    return `Net savings reach ${formatCents(end.y)} by ${until}.${stop}`;
+  };
+
   return (
     <Subview title='Projection' onClose={onClose}>
       <div className='space-y-4'>
-        <p className='bg-secondary/60 border-border rounded-2xl border px-4 py-3 text-sm'>
-          <span aria-hidden='true'>🔒 </span>
-          {getContractLine()}
-        </p>
+        {base.minimumMonthsLeft > 0 && (
+          <p className='bg-secondary/60 border-border rounded-2xl border px-4 py-3 text-sm'>
+            <span aria-hidden='true'>🔒 </span>
+            {getContractLine()}
+          </p>
+        )}
         <PillGroup
           label='What if'
           options={SCENARIO_OPTIONS}
@@ -194,14 +205,13 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               </p>
               <p className='text-muted-foreground mt-2 text-sm'>
                 {formatCents(base.savedCents + (result.addedCents ?? 0))} in
-                tickets, after {formatCents(result.costCents)} of membership (
-                {pluralize(result.months, 'bill')}).
+                tickets, after {formatCents(result.costCents)} of membership.
               </p>
             </>
           )}
           {result.netCents !== null && (
             <p className='text-muted-foreground mt-1 text-sm'>
-              {getSummaryLine()} Right now it's {formatCents(base.netNowCents)}.
+              {getSummaryLine()}
             </p>
           )}
           {breakEvenLine && (
@@ -224,7 +234,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             </p>
           )}
           {series.length > 1 && (
-            <div className='mt-3'>
+            <div className='mt-3' role='img' aria-label={getChartDescription()}>
               <TrendLineChart
                 data={series}
                 seriesLabel='Net savings'
@@ -244,7 +254,27 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   formatCents(Math.round(value / 100) * 100).replace('.00', '')
                 }
                 hasDots={false}
+                isSoft
+                className='h-40 sm:h-56 [@media(max-height:500px)]:h-32'
               />
+              <div className='text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs'>
+                <span className='flex items-center gap-1.5'>
+                  <span
+                    className='bg-primary h-1 w-4 rounded-full'
+                    aria-hidden='true'
+                  />
+                  Net savings
+                </span>
+                {scenario !== 'stop' && (
+                  <span className='flex items-center gap-1.5'>
+                    <span
+                      className='border-muted-foreground/60 h-0 w-4 border-t-2 border-dotted'
+                      aria-hidden='true'
+                    />
+                    If you stop now
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>
