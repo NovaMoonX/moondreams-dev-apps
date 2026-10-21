@@ -6,6 +6,8 @@ on:
       - 'functions/src/**'
       - 'firestore.indexes.json'
       - 'scripts/checkFirestoreIndexes.ts'
+      - 'scripts/checks/**'
+      - 'scripts/seeds/**'
 jobs:
   check_indexes:
     runs-on: ubuntu-latest
@@ -17,3 +19,36 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:indexes
+  check_pinch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix functions
+      - run: npm run check:pinch-math
+      - run: npm run check:pinch-math
+        env:
+          TZ: America/Los_Angeles
+      - run: npm run check:pinch-math
+        env:
+          TZ: Pacific/Auckland
+      - run: npm run check:pinch-ingest
+      - run: npm run check:pinch-voice
+      - run: npm run check:pinch-share
+  check_shared:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check:option-match

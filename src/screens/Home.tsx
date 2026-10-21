@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@hooks/useAppCatalog';
-import { APP_DESCRIPTION, APP_TITLE } from '@lib/app';
+import { APP_DESCRIPTION, APP_TITLE, getAppResumePath } from '@lib/app';
 
 function Home() {
   const { user } = useAuth();
@@ -42,7 +42,8 @@ function Home() {
             {apps.map((app) => (
               <Link
                 key={app.id}
-                to={app.path}
+                to={getAppResumePath(user?.uid ?? null, app.id, app.path)}
+                state={{ resumed: true }}
                 aria-label={`Open ${app.name}`}
                 className='group border-border bg-card hover:border-primary/40 flex flex-col gap-4 rounded-3xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md'
               >

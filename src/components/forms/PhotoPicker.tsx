@@ -1,9 +1,29 @@
-import { useId, useRef, useState } from 'react';
+import {
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 
 import { Avatar, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Camera, ImagePlus, Trash2 } from 'lucide-react';
 
-export type PhotoPickerVariant = 'minimal' | 'enhanced';
+import ActionChips from '@/components/ActionChips';
+import FallbackImage from '@/components/FallbackImage';
+
+export type PhotoPickerVariant = 'minimal' | 'enhanced' | 'cover';
+
+const TOUCH_QUERY = '(pointer: coarse)';
+
+const subscribeToPointer = (onChange: () => void) => {
+  const query = window.matchMedia(TOUCH_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+};
+
+const getIsTouch = () => window.matchMedia(TOUCH_QUERY).matches;
 
 interface PhotoPickerProps {
   photoUrl: string | null;
@@ -12,12 +32,21 @@ interface PhotoPickerProps {
   error?: string | null;
   disabled?: boolean;
   loading?: boolean;
-  /** `minimal`: avatar + buttons. `enhanced`: large preview, drag-and-drop zone and helper text. */
+  /** `minimal`: avatar + buttons. `enhanced`: large preview, drag-and-drop zone and helper text. `cover`: a wide preview with choose, take (touch screens only) and remove, for an editor that holds only the picture. */
   variant?: PhotoPickerVariant;
   /** Minimal variant only: set false when the caller already renders its own preview bound to the same `photoUrl`. */
   showPreview?: boolean;
+  uploadLabel?: string;
+  changeLabel?: string;
+  /** Cover variant only: shown in the preview while there is no photo, or when it can't load. */
+  placeholder?: ReactNode;
+  /** Cover variant only: what can be chosen, as a line under the buttons. */
+  note?: string;
+  /** Cover variant only: a shorter preview, hidden on a short screen, for an editor that has more under it (suggestions to pick from). */
+  isCompact?: boolean;
   onSelect: (file: File | null) => void;
-  onRemove: () => void;
+  /** Without it there is no Remove button, for a photo that is required. */
+  onRemove?: () => void;
 }
 
 function PhotoPicker({
@@ -29,11 +58,21 @@ function PhotoPicker({
   loading = false,
   variant = 'minimal',
   showPreview = true,
+  uploadLabel = 'Upload photo',
+  changeLabel = 'Change photo',
+  placeholder = null,
+  note,
+  isCompact = false,
   onSelect,
   onRemove,
 }: PhotoPickerProps) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const isTouch = useSyncExternalStore(
+    subscribeToPointer,
+    getIsTouch,
+    () => false,
+  );
   const [isDragging, setIsDragging] = useState(false);
   const isBusy = disabled || loading;
   const shownUrl = photoUrl ?? fallbackUrl;
@@ -53,22 +92,112 @@ function PhotoPicker({
     />
   );
 
+  const errorText = error && <p className='text-sm text-red-500'>{error}</p>;
+
+  const openPicker = (shouldCapture: boolean) => {
+    const input = inputRef.current;
+    if (!input) return;
+    if (shouldCapture) input.setAttribute('capture', 'environment');
+    else input.removeAttribute('capture');
+    input.click();
+  };
+
+  if (variant === 'cover') {
+    return (
+      <div className='space-y-3'>
+        {fileInput}
+        <div
+          className={join(
+            'bg-accent text-accent-foreground grid aspect-video w-full place-items-center overflow-hidden rounded-2xl text-6xl',
+            isCompact
+              ? 'max-h-36 [@media(max-height:600px)]:hidden [@media(max-height:700px)]:max-h-24'
+              : 'max-h-44 [@media(max-height:600px)]:max-h-20',
+          )}
+          aria-hidden='true'
+        >
+          {photoUrl ? (
+            <FallbackImage
+              src={photoUrl}
+              alt=''
+              fallback={placeholder}
+              className='size-full object-cover'
+            />
+          ) : (
+            placeholder
+          )}
+        </div>
+        <div className={join('grid gap-2', isTouch && 'grid-cols-2')}>
+          <Button
+            type='button'
+            variant='secondary'
+            className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
+            disabled={isBusy}
+            onClick={() => openPicker(false)}
+          >
+            <ImagePlus
+              className='h-4 w-4 shrink-0 max-[380px]:hidden'
+              aria-hidden='true'
+            />
+            {photoUrl ? changeLabel : uploadLabel}
+          </Button>
+          {isTouch && (
+            <Button
+              type='button'
+              variant='secondary'
+              className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
+              disabled={isBusy}
+              onClick={() => openPicker(true)}
+            >
+              <Camera
+                className='h-4 w-4 shrink-0 max-[380px]:hidden'
+                aria-hidden='true'
+              />
+              Take a photo
+            </Button>
+          )}
+        </div>
+        {photoUrl && onRemove && (
+          <ActionChips
+            actions={[
+              {
+                key: 'remove',
+                icon: <Trash2 className='h-4 w-4' aria-hidden='true' />,
+                label: 'Remove photo',
+                isDestructive: true,
+                isDisabled: isBusy,
+                onClick: onRemove,
+              },
+            ]}
+          />
+        )}
+        {note && <p className='text-muted-foreground text-xs'>{note}</p>}
+        {error && (
+          <p className='text-destructive text-sm' role='alert'>
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   const buttons = (
     <div className='flex items-center gap-2'>
       <Button
         type='button'
         variant='secondary'
         size='sm'
+        className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
         disabled={isBusy}
         onClick={() => inputRef.current?.click()}
       >
-        {photoUrl ? 'Change photo' : 'Upload photo'}
+        {photoUrl ? changeLabel : uploadLabel}
       </Button>
-      {photoUrl && (
+      {photoUrl && onRemove && (
         <Button
           type='button'
-          variant='link'
+          variant='tertiary'
           size='sm'
+          className="border-destructive/40 hover:bg-destructive/10 text-destructive! relative border before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           disabled={isBusy}
           onClick={onRemove}
         >
@@ -77,8 +206,6 @@ function PhotoPicker({
       )}
     </div>
   );
-
-  const errorText = error && <p className='text-sm text-red-500'>{error}</p>;
 
   if (variant === 'enhanced') {
     return (

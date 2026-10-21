@@ -17,7 +17,11 @@ interface AddFieldChipsProps {
 
 /** A grid of rounded chips for optional fields that aren't on the form yet; tapping one
  * reveals its field in place and the chip goes away. */
-function AddFieldChips({ chips, onAdd, heading = 'Add more details' }: AddFieldChipsProps) {
+function AddFieldChips({
+  chips,
+  onAdd,
+  heading = 'Add more details',
+}: AddFieldChipsProps) {
   if (chips.length === 0) {
     return null;
   }
@@ -32,7 +36,7 @@ function AddFieldChips({ chips, onAdd, heading = 'Add more details' }: AddFieldC
             type='button'
             variant='tertiary'
             size='sm'
-            className='border-border h-9 justify-start gap-2 rounded-full border px-3 text-sm font-medium'
+            className="border-border relative h-auto min-h-9 justify-start gap-2 rounded-full border px-3 py-1.5 text-sm font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']"
             onClick={() => onAdd(chip.key)}
           >
             <span className='text-muted-foreground'>{chip.icon}</span>
@@ -52,7 +56,12 @@ interface RemovableFieldProps {
 }
 
 /** A revealed optional field: its label with a remove button that sends it back to the chips. */
-export function RemovableField({ label, removeLabel, onRemove, children }: RemovableFieldProps) {
+export function RemovableField({
+  label,
+  removeLabel,
+  onRemove,
+  children,
+}: RemovableFieldProps) {
   return (
     <div className='space-y-1.5'>
       <div className='flex items-center justify-between'>
@@ -62,7 +71,7 @@ export function RemovableField({ label, removeLabel, onRemove, children }: Remov
           variant='tertiary'
           size='icon'
           aria-label={removeLabel}
-          className='h-7 w-7'
+          className="relative h-7 w-7 before:absolute before:-inset-x-2 before:-inset-y-1.5 before:content-['']"
           onClick={onRemove}
         >
           <X className='h-4 w-4' />

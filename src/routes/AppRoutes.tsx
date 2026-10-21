@@ -68,12 +68,29 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'pinch',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: Pinch } = await import('@apps/pinch/Pinch');
+          return { Component: Pinch };
+        },
+      },
+      {
         path: 'a-list/shared/:shareId',
         HydrateFallback: Loading,
         lazy: async () => {
           const { default: SharedCalendar } =
             await import('@apps/a-list/SharedCalendar');
           return { Component: SharedCalendar };
+        },
+      },
+      {
+        path: 'pinch/shared/:shareId',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: SharedPinch } =
+            await import('@apps/pinch/SharedPinch');
+          return { Component: SharedPinch };
         },
       },
       {

@@ -6,6 +6,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { APP_REGISTRY_ID_MAP } from '@lib/app';
 import { TOAST_APP_LABELS } from '@components/toastTypeStyles';
 import { isUsingFirebaseEmulators } from '@/lib/firebase/config';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
 import type { Reminder, ReminderStatus } from '@/lib/notifications/types';
 import { useAppSelector } from '@/store';
 
@@ -13,20 +14,27 @@ const REMINDER_TOAST_DURATION_MS = 7000;
 const FORCE_TOAST_ENABLED =
   import.meta.env.DEV && import.meta.env.VITE_FORCE_REMINDER_TOAST === 'true';
 
-/** Bridges the global `reminders` slice into in-app toasts: a reminder that
- * transitions to `sent` while this is mounted pops a toast. Reminders already
- * `sent` at mount never toast, so reloading the page doesn't replay old ones. */
+/** Bridges the global `reminders` slice into in-app toasts: a reminder this page
+ * has seen as not yet sent that flips to `sent` pops a toast. One that first
+ * appears already `sent` (the first snapshot after a reload, another device's
+ * history) never does, so reloading doesn't replay old ones. One marked
+ * `inAppToast: false` never does either. */
 export function useReminderToasts() {
   const reminders = useAppSelector((state) => state.reminders.items);
   const { addToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const previousStatusByIdRef = useRef<Map<string, ReminderStatus> | null>(null);
+  const previousStatusByIdRef = useRef<Map<string, ReminderStatus> | null>(
+    null,
+  );
   const shownIdsRef = useRef(new Set<string>());
 
   const showReminderToast = useCallback(
     (reminder: Reminder, duration = REMINDER_TOAST_DURATION_MS) => {
-      if (shownIdsRef.current.has(reminder.id)) {
+      if (
+        reminder.inAppToast === false ||
+        shownIdsRef.current.has(reminder.id)
+      ) {
         return;
       }
       shownIdsRef.current.add(reminder.id);
@@ -45,15 +53,22 @@ export function useReminderToasts() {
         action: {
           label: 'View',
           onClick: () => {
-            const path = APP_REGISTRY_ID_MAP[reminder.appId]?.path;
-            if (path && location.pathname !== path) {
-              navigate(path);
+            if (
+              hasDialogOnTop() ||
+              document.querySelector('[data-subview-overlay]')
+            ) {
+              return;
+            }
+            const target =
+              reminder.link ?? APP_REGISTRY_ID_MAP[reminder.appId]?.path;
+            if (target && target !== `${location.pathname}${location.search}`) {
+              navigate(target);
             }
           },
         },
       });
     },
-    [addToast, navigate, location.pathname],
+    [addToast, navigate, location.pathname, location.search],
   );
 
   useEffect(() => {
@@ -72,7 +87,9 @@ export function useReminderToasts() {
         status: 'sent',
         channels: ['push'],
         relatedEntityPath: null,
+        link: '/waypoint',
         recurrence: 'none',
+        inAppToast: null,
         createdBy: '',
         createdAt: Date.now(),
       },
@@ -89,7 +106,10 @@ export function useReminderToasts() {
     const timers = reminders
       .filter((reminder) => reminder.status === 'pending')
       .map((reminder) =>
-        setTimeout(() => showReminderToast(reminder), Math.max(0, reminder.scheduledFor - Date.now())),
+        setTimeout(
+          () => showReminderToast(reminder),
+          Math.max(0, reminder.scheduledFor - Date.now()),
+        ),
       );
 
     return () => timers.forEach(clearTimeout);
@@ -106,10 +126,14 @@ export function useReminderToasts() {
     }
 
     reminders
-      .filter(
-        (reminder) =>
-          reminder.status === 'sent' && previousStatusById.get(reminder.id) !== 'sent',
-      )
+      .filter((reminder) => {
+        const previousStatus = previousStatusById.get(reminder.id);
+        return (
+          reminder.status === 'sent' &&
+          previousStatus !== undefined &&
+          previousStatus !== 'sent'
+        );
+      })
       .forEach((reminder) => showReminderToast(reminder));
   }, [reminders, showReminderToast]);
 }

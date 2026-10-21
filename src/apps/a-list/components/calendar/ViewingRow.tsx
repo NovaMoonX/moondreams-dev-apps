@@ -4,7 +4,7 @@ import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import StarRating from '@/components/StarRating';
 import ViewingStatusBadge from '@apps/a-list/components/shared/ViewingStatusBadge';
 import type { Viewing } from '@apps/a-list/types';
-import { formatCents } from '@apps/a-list/utils/money';
+import { formatCents } from '@/utils/moneyUtils';
 
 interface ViewingRowProps {
   viewing: Viewing;

@@ -16,9 +16,7 @@ import ChangePhotoModal from '@/ui/ChangePhotoModal';
 import ProfileModal from '@/ui/ProfileModal';
 import UserAvatar from '@/ui/UserAvatar';
 import { VersionLabel } from '@components/VersionLabel';
-import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
-import { useMediaQuery } from '@hooks/useMediaQuery';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 type AuthAvatarProps = {
@@ -35,7 +33,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     isAdmin,
     isDisplayNameUpdating,
   } = useAuth();
-  const { appPathMap } = useAppCatalog();
   const { option, separator, custom } = DropdownMenuFactories;
   const [nameInput, setNameInput] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -43,7 +40,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { isBelow } = useMediaQuery();
   const { confirm } = useActionModal();
   const isAwayFromHome = pathname !== '/';
 
@@ -68,6 +64,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             size='sm'
             aria-label='Home'
             title='Home'
+            className="relative after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
             onClick={() => navigate('/')}
           >
             <House className='h-4 w-4' />
@@ -75,7 +72,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         )}
         <Button
           onClick={signInWithGoogle}
-          className={join('gap-2', className)}
+          className={join(
+            "relative gap-2 after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']",
+            className,
+          )}
           aria-label='Sign in with Google'
         >
           <Google className='size-4' />
@@ -86,13 +86,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   }
 
   const displayName = user.displayName ?? user.email ?? 'User';
-  const currentApp = Object.values(appPathMap).find(
-    (app) => pathname === app.path || pathname.startsWith(`${app.path}/`),
-  );
-  const firstSegment = pathname.split('/').filter(Boolean)[0] ?? '';
-  const locationLabel =
-    currentApp?.name?.trim() ||
-    (firstSegment ? firstSegment.replace(/-/g, ' ') : 'Home');
 
   const handleNameSave = async () => {
     const nextName = nameInput.trim();
@@ -106,9 +99,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   };
 
   const navItems = [
-    ...(isAwayFromHome && isBelow('sm')
-      ? [option({ label: 'Home', value: 'home', icon: <House className='size-4' /> })]
-      : []),
     ...(isAdmin ? [option({ label: 'Admin', value: 'admin', icon: <ShieldCheck className='size-4' /> })] : []),
   ];
 
@@ -125,11 +115,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
               {user.email}
             </div>
           </div>
-        </div>
-
-        <div className='border-border bg-muted/40 text-muted-foreground mt-2 rounded-md border px-2 py-1.5 text-xs'>
-          Current location:{' '}
-          <span className='text-foreground font-medium'>{locationLabel}</span>
         </div>
       </div>
     )),
@@ -149,10 +134,6 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   ];
 
   const handleItemSelect = async (value: string) => {
-    if (value === 'home') {
-      navigate('/');
-      return;
-    }
     if (value === 'admin') {
       navigate('/admin');
       return;
@@ -200,7 +181,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
             size='sm'
             aria-label='Home'
             title='Home'
-            className='max-sm:hidden'
+            className="relative max-sm:hidden after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
             onClick={() => navigate('/')}
           >
             <House className='h-4 w-4' />

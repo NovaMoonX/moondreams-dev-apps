@@ -6,6 +6,8 @@ export type AppRegistryEntry = {
   path: string;
   description: string;
   createdAt?: string; // YYYY-MM-DD
+  /** Query params that say where you were in the app (a tab, an open trip); leaving and coming back restores them. Omit for none; never list a code or token. */
+  resumeParams?: string[];
 };
 
 /* IMPORTANT: A new app is more than an entry here: follow the "New mini-app checklist" in
@@ -14,6 +16,7 @@ export type AppRegistryEntry = {
    - in /public folder: logos and banners
    - cloudflare-worker.js
    - repo root README.md (its "Current apps" list: one line per app)
+   - `resumeParams` for an app that keeps its place in the URL
 */
 export const APP_REGISTRY: AppRegistryEntry[] = [
   {
@@ -39,6 +42,7 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     description:
       'A collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.',
     createdAt: '2026-09-15',
+    resumeParams: ['trip', 'tab'],
   },
   {
     id: 'a-list',
@@ -47,6 +51,15 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     description:
       'A personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.',
     createdAt: '2026-10-03',
+    resumeParams: ['tab'],
+  },
+  {
+    id: 'pinch',
+    name: 'Pinch',
+    path: '/pinch',
+    description:
+      'Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.',
+    createdAt: '2026-10-12',
   },
 ];
 

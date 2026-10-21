@@ -13,7 +13,7 @@ import {
   centsToInputValue,
   formatCents,
   parseMoneyToCents,
-} from '@apps/a-list/utils/money';
+} from '@/utils/moneyUtils';
 import { getItemizedTaxCents } from '@apps/a-list/utils/tax';
 import {
   evaluateTicketDraft,

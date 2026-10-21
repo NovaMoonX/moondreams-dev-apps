@@ -1,0 +1,168 @@
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import BackLink from '@/components/BackLink';
+import { useAppSelector } from '@/store';
+import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDateShort } from '@/utils/formatUtils';
+import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
+import { CONTAINER_PLACE_LABELS } from '@apps/pinch/constants';
+import { useContainerActions } from '@apps/pinch/hooks/useContainerActions';
+import {
+  selectMealsById,
+  selectRecipesById,
+} from '@apps/pinch/store/selectors';
+import type { Container, ContainerPlace, PlannedMeal } from '@apps/pinch/types';
+import {
+  getContainerTitle,
+  getEatByLabel,
+  getEatByState,
+  getLastPlaceEvent,
+  getServingsToEat,
+} from '@apps/pinch/utils/containers';
+import { formatServings } from '@apps/pinch/utils/recipeFormat';
+
+interface EatFromStockViewProps {
+  uid: string;
+  meal: PlannedMeal;
+  place: ContainerPlace;
+  /** The containers the meal may eat from, already narrowed to its day and what it hasn't cooked. */
+  containers: Container[];
+  onBack: () => void;
+  /** Where an eat lands; the view it was opened from when left out. */
+  onDone?: () => void;
+  /** The sheet's pinned footer: with one box to eat from, its "Ate N" is the footer's one filled button. */
+  footerEl?: HTMLElement | null;
+}
+
+export function EatFromStockView({
+  uid,
+  meal,
+  place,
+  containers,
+  onBack,
+  onDone = onBack,
+  footerEl = null,
+}: EatFromStockViewProps) {
+  const { eat } = useContainerActions(uid);
+  const recipesById = useAppSelector(selectRecipesById);
+  const mealsById = useAppSelector(selectMealsById);
+  const rows = containers
+    .filter((container) => container.place === place)
+    .map((container) => ({
+      container,
+      title: getContainerTitle(container, recipesById, mealsById),
+    }));
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleEat = async (container: Container, count: number) => {
+    if (busyId !== null) return;
+
+    setError(null);
+    setBusyId(container.id);
+    try {
+      if ((await eat(container, count)) !== undefined) onDone();
+    } catch (eatError) {
+      setError(getErrorMessage(eatError, 'Unable to save this.'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+  const onlyRow = rows.length === 1 && footerEl !== null ? rows[0] : null;
+  const getEatButton = (
+    container: Container,
+    title: string,
+    isOnly: boolean,
+  ) => {
+    const count = getServingsToEat(container, meal);
+    return (
+      <Button
+        type='button'
+        variant={isOnly ? 'primary' : 'secondary'}
+        className={isOnly ? 'w-full' : 'h-10 shrink-0'}
+        aria-label={`Ate ${count} of ${title}`}
+        loading={busyId === container.id}
+        disabled={busyId !== null}
+        onClick={() => void handleEat(container, count)}
+      >
+        {`Ate ${count}`}
+      </Button>
+    );
+  };
+
+  return (
+    <div className='space-y-5'>
+      <BackLink onBack={onBack} />
+      <div className='space-y-1'>
+        <p className='font-medium'>
+          Eat from your {CONTAINER_PLACE_LABELS[place].toLowerCase()}
+        </p>
+        <p className='text-muted-foreground text-sm'>
+          Takes the servings off its box. Your plan stays as it is.
+        </p>
+      </div>
+      {rows.length === 0 ? (
+        <p className='text-muted-foreground py-2 text-center text-sm'>
+          Nothing left in the {CONTAINER_PLACE_LABELS[place].toLowerCase()} for
+          this meal.
+        </p>
+      ) : (
+        <ul className='divide-border divide-y'>
+          {rows.map(({ container, title }) => {
+            const state = getEatByState(container.eatBy);
+            const tag = [
+              getLastPlaceEvent(container.history)?.kind === 'THAW' && 'Thawed',
+              rows.some(
+                (other) =>
+                  other.title === title && other.container !== container,
+              ) && `Made ${formatDateShort(container.createdAt)}`,
+            ]
+              .filter(Boolean)
+              .join(' · ');
+            return (
+              <li
+                key={container.id}
+                className='flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between'
+              >
+                <span className='min-w-0'>
+                  <span className='block wrap-break-word'>{title}</span>
+                  <span className='text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs'>
+                    <span className='whitespace-nowrap'>
+                      {formatServings(container.servings)} left
+                    </span>
+                    {state === 'LATER' ? (
+                      <span className='whitespace-nowrap'>
+                        {getEatByLabel(container.eatBy)}
+                      </span>
+                    ) : (
+                      <EatByBadge
+                        state={state}
+                        label={getEatByLabel(container.eatBy)}
+                      />
+                    )}
+                    {tag && <span className='whitespace-nowrap'>{tag}</span>}
+                  </span>
+                </span>
+                {onlyRow === null && getEatButton(container, title, false)}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {error && (
+        <p className='text-destructive text-sm' role='alert'>
+          {error}
+        </p>
+      )}
+      {onlyRow &&
+        footerEl &&
+        createPortal(
+          getEatButton(onlyRow.container, onlyRow.title, true),
+          footerEl,
+        )}
+    </div>
+  );
+}

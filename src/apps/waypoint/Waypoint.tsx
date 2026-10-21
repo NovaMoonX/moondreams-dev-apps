@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -39,6 +39,7 @@ function Waypoint() {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const isResumed = Boolean((useLocation().state as { resumed?: boolean } | null)?.resumed);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -73,6 +74,16 @@ function Waypoint() {
       setSearchParams(cleaned, { replace: true });
     }
   }, [isOnMyTrips, searchParams, setSearchParams]);
+
+  // A trip remembered from an earlier visit that no longer resolves is dropped quietly; only a link someone opened gets the "couldn't find it" note.
+  useEffect(() => {
+    if (isResumed && isOnMyTrips && isSelectedTripMissing) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('trip');
+      next.delete('tab');
+      setSearchParams(next, { replace: true });
+    }
+  }, [isResumed, isOnMyTrips, isSelectedTripMissing, searchParams, setSearchParams]);
 
   useWaypointSync(user?.uid ?? null, {
     tripId: selectedTrip?.id ?? null,
@@ -280,7 +291,7 @@ function Waypoint() {
           </div>
         </div>
 
-        {isSelectedTripMissing && (
+        {isSelectedTripMissing && !isResumed && (
           <div className='border-border flex flex-col gap-3 rounded-lg border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between'>
             <p className='text-muted-foreground text-sm'>
               We couldn't find that trip. It may have been removed, or you might not be a member yet.

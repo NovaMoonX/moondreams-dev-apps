@@ -14,8 +14,12 @@ export interface ScheduleReminderInput {
   createdBy: string;
   channels?: NotificationChannel[];
   relatedEntityPath?: string | null;
+  /** Same-origin path and query the notification opens (`/waypoint?trip=…`). Required so a new call site can't forget it. */
+  link: string;
   /** `'yearly'` re-fires this same reminder on the same month/day every year (e.g. a birthday) instead of firing once. Defaults to `'none'`. */
   recurrence?: ReminderRecurrence;
+  /** `false` when the calling page already tells the person by itself, so the in-app toast skips this one. Defaults to toasting. */
+  inAppToast?: boolean;
 }
 
 const remindersCollectionRef = () => collection(db, 'reminders');
@@ -34,7 +38,9 @@ export async function scheduleReminder(input: ScheduleReminderInput): Promise<Re
     status: 'pending',
     channels: input.channels ?? ['push'],
     relatedEntityPath: input.relatedEntityPath ?? null,
+    link: input.link,
     recurrence: input.recurrence ?? 'none',
+    inAppToast: input.inAppToast ?? null,
     createdBy: input.createdBy,
     createdAt: Date.now(),
   };

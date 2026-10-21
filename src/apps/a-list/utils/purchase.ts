@@ -4,7 +4,7 @@ import {
   getInitialTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
-import { centsToInputValue, formatCents } from '@apps/a-list/utils/money';
+import { centsToInputValue, formatCents } from '@/utils/moneyUtils';
 
 export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
   return {

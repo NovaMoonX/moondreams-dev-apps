@@ -1,5 +1,6 @@
 export type NotificationChannel = 'push' | 'email';
-export type ReminderStatus = 'pending' | 'sent' | 'cancelled';
+/** `'expired'`: it came due long after its time (an outage), so it was dropped instead of sent. */
+export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'expired';
 /** `'yearly'` reminders (a birthday, an anniversary) roll `scheduledFor` forward a year and stay `pending` after firing, instead of moving to `sent`. */
 export type ReminderRecurrence = 'none' | 'yearly';
 
@@ -13,7 +14,11 @@ export interface Reminder {
   status: ReminderStatus;
   channels: NotificationChannel[];
   relatedEntityPath: string | null;
+  /** Where tapping the notification goes: a same-origin path and query (`/waypoint?trip=…`). Missing on reminders saved before links existed. */
+  link: string | null;
   recurrence: ReminderRecurrence;
+  /** `false` when the page that scheduled it tells the person by itself (a ringing timer), so the in-app toast skips it. Null or missing: it toasts. */
+  inAppToast: boolean | null;
   createdBy: string;
   createdAt: number;
 }

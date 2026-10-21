@@ -40,45 +40,8 @@ Then add:
 
 ## Designer agent
 
-You wear the **product designer** hat. **Mobile is the priority.** Judge every flow on the phone first, then check that the web layout uses its extra width well instead of stretching the phone layout.
-
-**Phone (390px):**
-- one column;
-- thumb-reachable primary actions;
-- bottom drawers for menus and details;
-- modals only for short forms and confirmations; a form that can scroll on a phone is a drawer (a subview only for a search, a sequence or a page-sized task); selected states stay readable with emoji in light and dark; text is inset inside rounded fields.
-
-**Web (1280px):** it may differ from phone on purpose.
-- Use the width: content can sit side by side, such as a list with its details beside it.
-- Lighter overlays feel natural here: popovers and dropdown menus for small choices, and a right-side panel for opening an item's details.
-- A bottom drawer feels wrong on desktop. Flag any drawer that opens at web width; it should be a popover, a dropdown or a side panel.
-- A form that is a drawer or subview on phones is a modal at web width; destructive confirms stay modals at every size.
-
-**Problems to look for (at both widths):**
-- **Alignment:** elements not lined up, baseline mismatches, uneven gutters, and anything not centred that should be (icons in chips, empty-state text, modal titles).
-- **Space and balance:** cramped or wasted space, content that should fill its container, inconsistent padding between similar screens.
-- **State clarity:**
-  - Is the active tab, day, date or filter obviously active?
-  - Are selected, disabled and loading states distinguishable?
-  - Do counts and badges appear only when greater than zero?
-- **Buried journey steps:** a detail the app's core numbers depend on (what a ticket cost, a total, a due date) tucked behind a small "+ Add X" link, a muted text button or a collapsed section. When the user has the answer in hand, it should be a visible question with pill answers that reveals its fields in place, not an easy-to-miss extra.
-- **Hierarchy:** one emphasised surface per screen, clear primary actions, consistent type scale, labels that don't truncate at 390px, no horizontal page scroll.
-- **Repo design rules:**
-  - drawers on phone only; popovers, dropdowns or a right-side panel on web; the form container fitted to the content (a short form is a modal; one that can scroll on a phone is a drawer, never a long modal);
-  - never an overlay on an overlay;
-  - `SectionHeader` with at most one CTA;
-  - one border per card, never nested cards;
-  - destructive actions last and in red;
-  - toggled icon state shown by fill;
-  - footer actions on one row.
-- **Dark mode:** check contrast in dark mode as well as light.
+You wear the **product designer** hat. The checklist is the **Design agent** section of `.claude/skills/pr-wrap-up/references/review-agents.md` (container and layers, reach, what a surface carries, look-alike controls and siblings, alignment and wrapping, state and feedback, colour and tone, repo design rules): read it and run every group over every `UX.md` flow of the finished MVP, phone first, then web, light and dark. This file keeps no checks of its own.
 
 ## Product Manager agent
 
-You wear the **product manager** hat. Question the product as a whole:
-- **Paths:** is each path from UX.md discoverable from where a user would look? Count the taps. Are there dead ends, or an action offered that can't be completed?
-- **Journey or buried?** For every optional-looking detail, ask whether a core answer (savings, totals, what's due) depends on it and whether the user has it right now. If both, it belongs in the path as a question with a quick default and a later way to fill it in, not behind "+ Add X". Flag buried ones, and flag any truly optional extra that was promoted to a question without that dependency.
-- **Problem fit:** does each screen serve the user's actual problem as README.md states it? Is anything core missing, confusing, or answered in a way that would mislead, such as a wrong total or an ambiguous label?
-- **Copy:** warm, product-forward, concrete. Flag spec-literal or jargon text.
-- **Edge cases:** first run, no data, a lot of data, a value in the past or future, a rewatch or repeat, a deleted dependency, a slow or failed network.
-- **README accuracy:** list every claim in the product README that no longer matches the app, and anything shipped that the README omits.
+You wear the **product manager** hat. The checklist is the **Product agent** section of the same file (journeys and taps, every phase and state, buried or promoted details, doors and the insight budget, numbers and copy, scale and bulk ends, docs), applied to the whole MVP rather than a diff. In addition, list every claim in the product README that no longer matches the app and anything shipped that the README omits.

@@ -7,15 +7,29 @@ import { ChevronLeft } from 'lucide-react';
 
 import { SubviewTitleContext } from '@/contexts/SubviewTitleContext';
 import { useSubviewHistory } from '@/hooks/useSubviewHistory';
+import { hasDialogOnTop } from '@/utils/dialogUtils';
+
+const OPEN_POPUP_SELECTOR =
+  '[aria-haspopup][aria-expanded="true"], [role="listbox"], [role="menu"]';
 
 interface SubviewHeaderProps {
   title: string;
   onBack: () => void;
   className?: string;
+  /** The end of the title row: a screen-wide switch (a microphone) or, where the row has the room, the screen's own action cluster. */
+  action?: ReactNode;
+  /** Wraps a long title onto a second line instead of cutting it short. */
+  isTitleWrapped?: boolean;
 }
 
 /** The round back button and large title that open every subview; the larger type sets it apart from section subheaders. */
-export function SubviewHeader({ title, onBack, className = 'mb-3' }: SubviewHeaderProps) {
+export function SubviewHeader({
+  title,
+  onBack,
+  className = 'mb-3',
+  action,
+  isTitleWrapped = false,
+}: SubviewHeaderProps) {
   return (
     <div className={join('flex items-center gap-2', className)}>
       <Button
@@ -24,24 +38,36 @@ export function SubviewHeader({ title, onBack, className = 'mb-3' }: SubviewHead
         size='icon'
         rounded='full'
         aria-label='Back'
-        className='relative before:absolute before:-inset-1.5'
+        className="relative before:absolute before:-inset-1.5 before:content-['']"
         onClick={onBack}
       >
         <ChevronLeft className='h-5 w-5' />
       </Button>
-      <h1 className='min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight'>
+      <h1
+        className={join(
+          'min-w-0 flex-1 text-2xl font-semibold tracking-tight',
+          isTitleWrapped
+            ? 'line-clamp-2 wrap-break-word [@media(max-height:700px)]:line-clamp-1'
+            : 'truncate',
+        )}
+      >
         {title}
       </h1>
+      {action}
     </div>
   );
 }
 
 interface SubviewProps {
   children: ReactNode;
-  /** Leaves the subview; also what the browser's back gesture calls. */
+  /** Leaves the subview; what the back gesture and Escape call when there is no `onBack`. */
   onClose: () => void;
   /** Omit when the content draws its own `SubviewHeader` because its back step changes. */
   title?: string;
+  /** The end of the title row: a screen-wide switch (a microphone) or, where the row has the room, the screen's own action cluster. Its buttons bring their own 40px hit areas. */
+  headerAction?: ReactNode;
+  /** What the header's back button, the browser's back gesture and Escape do when they step back inside the subview (or confirm leaving it) instead of leaving at once. */
+  onBack?: () => void;
   className?: string;
   /**
    * Render as a full-screen layer on top of the page instead of in its place, for a subview opened
@@ -49,6 +75,7 @@ interface SubviewProps {
    * content out. The screens underneath stay mounted, and a form's `FormFooterActions` pin to the bottom.
    */
   overlay?: boolean;
+  isTitleWrapped?: boolean;
 }
 
 /**
@@ -59,10 +86,14 @@ function Subview({
   children,
   onClose,
   title,
+  headerAction,
+  onBack,
   className,
   overlay = false,
+  isTitleWrapped = false,
 }: SubviewProps) {
-  useSubviewHistory(onClose);
+  const goBack = onBack ?? onClose;
+  useSubviewHistory(onClose, onBack);
 
   useEffect(() => {
     if (overlay) {
@@ -77,26 +108,30 @@ function Subview({
     }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Capture, so a dialog on top is still there to be seen before it closes itself on this keydown; an open
+    // dropdown is found by where focus is and a tooltip by being on screen, as neither has handled it yet.
     const handleKeyDown = (event: KeyboardEvent) => {
-      const hasDialogOnTop = Array.from(
-        document.querySelectorAll(
-          '[role="dialog"]:not([inert]):not([aria-hidden="true"]), [role="alertdialog"]:not([inert]):not([aria-hidden="true"])',
-        ),
-      ).some((dialog) => !dialog.hasAttribute('data-subview-overlay'));
       if (
-        event.key === 'Escape' &&
-        !event.defaultPrevented &&
-        !hasDialogOnTop
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        hasDialogOnTop()
       ) {
-        onClose();
+        return;
+      }
+      const isPopupOpen =
+        (event.target instanceof Element &&
+          event.target.closest(OPEN_POPUP_SELECTOR) !== null) ||
+        document.querySelector('[role="tooltip"]') !== null;
+      if (!isPopupOpen) {
+        goBack();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [overlay, onClose]);
+  }, [overlay, goBack]);
 
   if (overlay) {
     return createPortal(
@@ -116,7 +151,9 @@ function Subview({
           {title !== undefined && (
             <SubviewHeader
               title={title}
-              onBack={onClose}
+              onBack={goBack}
+              action={headerAction}
+              isTitleWrapped={isTitleWrapped}
               className='bg-background sticky top-0 z-20 -mx-4 -mt-6 px-4 pt-6 pb-3'
             />
           )}
@@ -131,12 +168,19 @@ function Subview({
 
   return (
     <div className='page max-sm:pb-4'>
-      <div className={join('mx-auto max-w-2xl py-6 max-sm:pb-0', className)}>
+      <div
+        className={join(
+          'mx-auto max-w-2xl py-6 max-sm:pb-0 [@media(max-height:499px)]:py-3',
+          className,
+        )}
+      >
         {title !== undefined && (
           <SubviewHeader
             title={title}
-            onBack={onClose}
-            className='sticky-app-bar bg-background/80 -mx-4 backdrop-blur mb-3 min-h-14 px-4 py-2.5'
+            onBack={goBack}
+            action={headerAction}
+            isTitleWrapped={isTitleWrapped}
+            className='sticky-app-bar bg-background/80 -mx-4 mb-3 min-h-14 px-4 py-2.5 backdrop-blur [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
           />
         )}
         <SubviewTitleContext.Provider value={title ?? null}>

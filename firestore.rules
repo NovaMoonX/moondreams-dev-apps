@@ -1338,6 +1338,616 @@ service cloud.firestore {
       allow delete: if request.auth != null && isHouseholdMember(householdId);
     }
 
+    // --- App: pinch ---
+
+    match /apps/pinch {
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Written and read only by the photo-search Cloud Function (admin SDK): the shared answer cache and the usage counters that keep its free tier from running out.
+    match /apps/pinch/imageSearchCache/{key} {
+      allow read, write: if false;
+    }
+
+    match /apps/pinch/imageSearchUsage/{key} {
+      allow read, write: if false;
+    }
+
+    // A share is a flat collection addressed by an unguessable id, so `ownerUid` stands in for the uid nesting. Only `changePinchShare` writes it (admin SDK);
+    // visitors never read it, `getPinchShare` does.
+    match /apps/pinch/shares/{shareId} {
+      allow read: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // The shared copy: only the Functions read and write it.
+    match /apps/pinch/shareSnapshots/{shareId} {
+      allow read, write: if false;
+    }
+
+    // Everything in a kitchen is private to one person and nests under their uid; there is no admin or role branch.
+    match /apps/pinch/kitchens/{uid} {
+      function isKitchenOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function isShortText(value, max) {
+        return value is string && value.size() >= 1 && value.size() <= max;
+      }
+
+      function isPositiveAmount(value) {
+        return value is number && value > 0 && value <= 1000000;
+      }
+
+      function isNullOrMetric(value) {
+        return value == null || (value is number && value >= 0 && value <= 100000);
+      }
+
+      function isUnit(value) {
+        return value in ['G', 'KG', 'OZ', 'LB', 'ML', 'L', 'TSP', 'TBSP', 'CUP', 'FL_OZ', 'PINCH', 'EACH'];
+      }
+
+      function isNutrition(value) {
+        return value == null || (value is map
+          && value.keys().hasOnly(['calories', 'protein', 'carbs', 'fat'])
+          && value.keys().hasAll(['calories', 'protein', 'carbs', 'fat'])
+          && isNullOrMetric(value.calories) && isNullOrMetric(value.protein)
+          && isNullOrMetric(value.carbs) && isNullOrMetric(value.fat));
+      }
+
+      function isIngredient(data, id) {
+        return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'defaultProductId', 'isArchived', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && (data.catalogId == null
+            ? isShortText(data.name, 120)
+            : (data.catalogId == id && data.catalogId.matches('cat-.+') && (data.name == null || isShortText(data.name, 120))))
+          && (data.familyId == null || isShortText(data.familyId, 80))
+          && (data.iconKey == null || isShortText(data.iconKey, 40))
+          && isNutrition(data.nutritionPer100g)
+          && ((data.servingAmount == null && data.servingUnit == null) || (isPositiveAmount(data.servingAmount) && isUnit(data.servingUnit)))
+          && (data.get('gramsPerMl', null) == null || isPositiveAmount(data.gramsPerMl))
+          && (data.get('gramsEach', null) == null || isPositiveAmount(data.gramsEach))
+          && data.get('isArchived', false) is bool
+          && (data.get('defaultProductId', null) == null || isShortText(data.defaultProductId, 80))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isFamily(data, id) {
+        return data.keys().hasOnly(['id', 'name', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'name', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.name, 120)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isCents(value) {
+        return value is int && value >= 0 && value <= 100000000;
+      }
+
+      function isProduct(data, id) {
+        return data.keys().hasOnly(['id', 'ingredientId', 'storeId', 'label', 'priceCents', 'sizeAmount', 'sizeUnit', 'url', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'ingredientId', 'storeId', 'label', 'priceCents', 'sizeAmount', 'sizeUnit', 'url', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.ingredientId, 80)
+          && isShortText(data.storeId, 80)
+          && (data.label == null || isShortText(data.label, 120))
+          && isCents(data.priceCents)
+          && isPositiveAmount(data.sizeAmount)
+          && isUnit(data.sizeUnit)
+          && (data.url == null || (data.url is string && data.url.size() <= 2000 && data.url.matches('https://.+')))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isNullOrMinutes(value) {
+        return value == null || (value is int && value >= 0 && value <= 100000);
+      }
+
+      function isNullOrCareDays(value) {
+        return value == null || (value is int && value >= 1 && value <= 365);
+      }
+
+      // A recipe written before care existed has no key. A map of four nulls passes here, though the client writes null instead.
+      function isRecipeCare(value) {
+        return value == null || (value is map
+          && value.keys().hasOnly(['fridgeDays', 'freezerDays', 'reheat', 'tip'])
+          && value.keys().hasAll(['fridgeDays', 'freezerDays', 'reheat', 'tip'])
+          && isNullOrCareDays(value.fridgeDays) && isNullOrCareDays(value.freezerDays)
+          && (value.reheat == null || isShortText(value.reheat, 300))
+          && (value.tip == null || isShortText(value.tip, 300)));
+      }
+
+      // The collections a recipe is in. Rules can't walk a list, so the client shapes the ids; a recipe written before collections has no key.
+      function isCollectionIds(value) {
+        return value is list && value.size() <= 20;
+      }
+
+      // A cover picked from the web search is kept as its address and hotlinked, never copied. A recipe written before web covers has no key.
+      function isCoverUrl(value) {
+        return value == null || (value is string && value.size() <= 2000 && value.matches('https://[^\\s/@?#]+([/?#][^\\s]*)?'));
+      }
+
+      // Rules can't walk a list, so each ingredient line (its group included), step and link is shaped by the client: checking even one field of 60 lines
+      // by index runs past the evaluator's 1,000 expressions and would refuse a long recipe. The rules cap the counts and the fields around them.
+      // A recipe written before links existed has no key.
+      function isRecipe(data, id) {
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'coverUrl', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'isFavorite', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.title, 200)
+          && (data.get('description', null) == null || isShortText(data.description, 2000))
+          && isPositiveAmount(data.servings)
+          && isNullOrMinutes(data.get('prepMinutes', null))
+          && isNullOrMinutes(data.get('cookMinutes', null))
+          && isNutrition(data.get('nutritionOverride', null))
+          && isRecipeCare(data.get('care', null))
+          && data.get('isArchived', false) is bool
+          && data.get('isFavorite', false) is bool
+          && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
+          && isCoverUrl(data.get('coverUrl', null))
+          && (data.get('coverPath', null) == null || data.get('coverUrl', null) == null)
+          && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
+          && data.steps is list && data.steps.size() <= 60
+          && data.get('links', []) is list && data.get('links', []).size() <= 8
+          && data.source in ['MANUAL', 'AI_TEXT', 'AI_FILE', 'AI_LINK']
+          && (data.get('sourceId', null) == null || isShortText(data.sourceId, 80))
+          && isCollectionIds(data.get('collectionIds', []))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isSource(data, id) {
+        return data.keys().hasOnly(['id', 'label', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'label', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.label, 80)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      // A person's own named set of recipes. The 50-per-person cap is the client's: rules can't count documents.
+      function isCollection(data, id) {
+        return data.keys().hasOnly(['id', 'label', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'label', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.label, 40)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      // What put a line on the list (planned meal ids and 'recipe:<id>'). Rules can't walk a list, so the client shapes its entries; a line written before sources existed has no key.
+      function isShoppingSources(value) {
+        return value is list && value.size() <= 60;
+      }
+
+      // A null amount is a line with just a name ("parsley", from a recipe line with no amount), always counted in EACH. `pantryAddedAt` is the line's updatedAt as it was put in the pantry (an int, or null); a line written before it has no key.
+      function isShoppingItem(data, id) {
+        return data.keys().hasOnly(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'sources', 'pantryAddedAt', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.ingredientId, 80)
+          && ((data.amount == null && data.unit == 'EACH') || isPositiveAmount(data.amount))
+          && isUnit(data.unit)
+          && id == data.ingredientId + '__' + data.unit
+          && data.isChecked is bool
+          && isShoppingSources(data.get('sources', []))
+          && (data.get('pantryAddedAt', null) == null || data.pantryAddedAt is int)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isIdea(data, id) {
+        return data.keys().hasOnly(['id', 'kind', 'title', 'note', 'url', 'siteName', 'imageUrl', 'photoPath', 'recipeId', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'kind', 'title', 'note', 'url', 'siteName', 'imageUrl', 'photoPath', 'recipeId', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && data.kind in ['LINK', 'PHOTO', 'TEXT']
+          && isShortText(data.title, 120)
+          && (data.note == null || isShortText(data.note, 1000))
+          && (data.url == null || (data.url is string && data.url.size() <= 2000 && data.url.matches('https?://.+') && !data.url.matches('https?://[^/?#]*@.*')))
+          && (data.siteName == null || isShortText(data.siteName, 120))
+          && (data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 2000 && data.imageUrl.matches('https://.+') && !data.imageUrl.matches('https://[^/?#]*@.*')))
+          && (data.photoPath == null || data.photoPath == 'apps/pinch/kitchens/' + uid + '/ideas/' + id + '/photo.webp')
+          && (data.recipeId == null || isShortText(data.recipeId, 80))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isCook(data, id) {
+        return data.keys().hasOnly(['id', 'recipeId', 'plannedMealId', 'servings', 'cookedAt', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'recipeId', 'plannedMealId', 'servings', 'cookedAt', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.recipeId, 80)
+          && (data.plannedMealId == null || (isShortText(data.plannedMealId, 80) && id == data.plannedMealId + '__' + data.recipeId))
+          && data.servings is number && data.servings > 0 && data.servings <= 1000
+          && data.cookedAt is int && data.cookedAt <= request.time.toMillis() + 86400000
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isNoteChangeAt(changes, i) {
+        return changes.size() <= i || isShortText(changes[i], 200);
+      }
+
+      // Rules can't loop, so each of the (at most 8) lines a tweak records is checked by index.
+      function isNoteChanges(changes) {
+        return changes is list && changes.size() <= 8
+          && isNoteChangeAt(changes, 0) && isNoteChangeAt(changes, 1)
+          && isNoteChangeAt(changes, 2) && isNoteChangeAt(changes, 3)
+          && isNoteChangeAt(changes, 4) && isNoteChangeAt(changes, 5)
+          && isNoteChangeAt(changes, 6) && isNoteChangeAt(changes, 7);
+      }
+
+      // A NOTE is the person's own words; a TWEAK records what an edit to the recipe changed, with an optional reason in `text`.
+      function isRecipeNote(data, id) {
+        return data.keys().hasOnly(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.recipeId, 80)
+          && data.kind in ['NOTE', 'TWEAK']
+          && (data.text == null || isShortText(data.text, 2000))
+          && (data.kind == 'NOTE' ? data.text is string : true)
+          && isNoteChanges(data.changes)
+          && (data.kind == 'TWEAK' || data.changes.size() == 0)
+          && (data.cookId == null || isShortText(data.cookId, 80))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      // Rules can't loop and the evaluator stops at 1,000 expressions, so each event is checked by index and kept cheap.
+      // `matches` is a whole-string match.
+      function isContainerEvent(e) {
+        return e.size() == 5
+          && e.kind.matches('MADE|FRIDGE|FREEZE|THAW|EAT|TOSS|CLEAR|EDIT')
+          && e.at is int
+          && (e.servings == null || (e.servings is int && e.servings > 0 && e.servings < 101))
+          && (e.place == null || e.place.matches('FRIDGE|FREEZER'))
+          && (e.note == null || (e.note is string && e.note.size() <= 80));
+      }
+
+      function isContainerHistory(history) {
+        let n = history.size();
+        return history is list && n >= 1 && n <= 10
+          && (n <= 0 || isContainerEvent(history[0])) && (n <= 1 || isContainerEvent(history[1]))
+          && (n <= 2 || isContainerEvent(history[2])) && (n <= 3 || isContainerEvent(history[3]))
+          && (n <= 4 || isContainerEvent(history[4])) && (n <= 5 || isContainerEvent(history[5]))
+          && (n <= 6 || isContainerEvent(history[6])) && (n <= 7 || isContainerEvent(history[7]))
+          && (n <= 8 || isContainerEvent(history[8])) && (n <= 9 || isContainerEvent(history[9]));
+      }
+
+      function isContainer(data, id) {
+        return data.size() == 12
+          && data.keys().hasOnly(['id', 'title', 'recipeId', 'mealId', 'cookId', 'servings', 'status', 'place', 'eatBy', 'history', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.title, 120)
+          && (data.recipeId == null || isShortText(data.recipeId, 80))
+          && (data.mealId == null || isShortText(data.mealId, 80))
+          && (data.recipeId == null || data.mealId == null)
+          && (data.cookId == null || isShortText(data.cookId, 80))
+          && data.servings is int && data.servings >= 1 && data.servings <= 100
+          && data.status in ['IN_STOCK', 'DONE']
+          && data.place in ['FRIDGE', 'FREEZER']
+          && data.eatBy is int && data.eatBy % 86400000 == 0 && data.eatBy >= 946684800000 && data.eatBy <= 4102444800000
+          && isContainerHistory(data.history)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      // Same budget as a box's history: each event is checked by index and kept cheap. `amount` is what was added, used or tossed.
+      // The cap of ten sits at the evaluator's 1,000-expression budget: ten events of amount and place (or amount and note), or nine of all three, are denied on the emulator; an add and nine moves with 80-character notes pass.
+      // The client writes at most two of the three on an event and only the first has amount and place; a check beside its planners fails if one writes more.
+      function isPackageEvent(e) {
+        return e.size() == 5
+          && e.kind in ['ADDED', 'USED', 'MOVED', 'TOSSED', 'EDITED']
+          && e.at is int
+          && (e.amount == null || isPositiveAmount(e.amount))
+          && (e.place == null || e.place in ['PANTRY', 'FRIDGE', 'FREEZER'])
+          && (e.note == null || (e.note is string && e.note.size() <= 80));
+      }
+
+      function isPackageHistory(history) {
+        let n = history.size();
+        return history is list && n >= 1 && n <= 10
+          && (n <= 0 || isPackageEvent(history[0])) && (n <= 1 || isPackageEvent(history[1]))
+          && (n <= 2 || isPackageEvent(history[2])) && (n <= 3 || isPackageEvent(history[3]))
+          && (n <= 4 || isPackageEvent(history[4])) && (n <= 5 || isPackageEvent(history[5]))
+          && (n <= 6 || isPackageEvent(history[6])) && (n <= 7 || isPackageEvent(history[7]))
+          && (n <= 8 || isPackageEvent(history[8])) && (n <= 9 || isPackageEvent(history[9]));
+      }
+
+      // A package is one physical thing (a carton, a bag). `expiresAt` is a date-only value (UTC midnight, 2000 to 2100) or null for no date known.
+      function isPackage(data, id) {
+        return data.size() == 13
+          && data.keys().hasOnly(['id', 'ingredientId', 'ingredientName', 'productId', 'amount', 'unit', 'place', 'expiresAt', 'openedAt', 'status', 'history', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.ingredientId, 80)
+          && isShortText(data.ingredientName, 120)
+          && (data.productId == null || isShortText(data.productId, 80))
+          && isPositiveAmount(data.amount)
+          && isUnit(data.unit)
+          && data.place in ['PANTRY', 'FRIDGE', 'FREEZER']
+          && (data.expiresAt == null || (data.expiresAt is int && data.expiresAt % 86400000 == 0 && data.expiresAt >= 946684800000 && data.expiresAt <= 4102444800000))
+          && (data.openedAt == null || data.openedAt is int)
+          && data.status in ['IN_STOCK', 'DONE']
+          && isPackageHistory(data.history)
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isStore(data, id) {
+        return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'isArchived', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.name, 120)
+          && (data.catalogStoreId == null || (data.catalogStoreId == id && data.catalogStoreId.matches('cat-store-.+')))
+          && (data.imagePath == null || data.imagePath == 'apps/pinch/kitchens/' + uid + '/stores/' + id + '/logo.webp')
+          && data.get('isArchived', false) is bool
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isSwitch(value) {
+        return value is bool;
+      }
+
+      function isSettings(data) {
+        return data.keys().hasOnly(['uid', 'showNutrition', 'dismissedNudges', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['uid', 'showNutrition', 'dismissedNudges', 'createdAt', 'updatedAt'])
+          && data.uid == uid
+          && data.showNutrition is map
+          && data.showNutrition.keys().hasOnly(['calories', 'protein', 'carbs', 'fat'])
+          && data.showNutrition.keys().hasAll(['calories', 'protein', 'carbs', 'fat'])
+          && isSwitch(data.showNutrition.calories) && isSwitch(data.showNutrition.protein)
+          && isSwitch(data.showNutrition.carbs) && isSwitch(data.showNutrition.fat)
+          && data.dismissedNudges is map && data.dismissedNudges.size() <= 500
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isMealItemAt(items, i) {
+        return items.size() <= i || (items[i].keys().hasOnly(['id', 'kind', 'refId', 'servings'])
+          && items[i].id is string && items[i].refId is string
+          && items[i].kind in ['RECIPE', 'INGREDIENT']
+          && items[i].servings is number && items[i].servings > 0 && items[i].servings <= 1000000);
+      }
+
+      // Rules can't loop, so each of the (at most 10) items is checked by index.
+      function isMealItems(items) {
+        return items is list && items.size() >= 1 && items.size() <= 10
+          && isMealItemAt(items, 0) && isMealItemAt(items, 1) && isMealItemAt(items, 2)
+          && isMealItemAt(items, 3) && isMealItemAt(items, 4) && isMealItemAt(items, 5)
+          && isMealItemAt(items, 6) && isMealItemAt(items, 7) && isMealItemAt(items, 8)
+          && isMealItemAt(items, 9);
+      }
+
+      function isTotal(value) {
+        return value == null || (value is number && value >= 0 && value <= 1000000000);
+      }
+
+      // What a meal cost when its day passed. The client lists at most 10 lines and as many left-out ingredients as its recipes hold; rules can't loop over them, so their elements are the client's.
+      // `repricedAt` is null when the day passed and an instant once the person asked for today's prices; older snapshots lack the key.
+      function isSnapshot(value) {
+        return value is map
+          && value.keys().hasOnly(['frozenAt', 'repricedAt', 'costCents', 'leftOut', 'nutrition', 'lines'])
+          && value.keys().hasAll(['frozenAt', 'costCents', 'leftOut', 'nutrition', 'lines'])
+          && value.frozenAt is int && value.frozenAt <= request.time.toMillis() + 300000
+          && (value.get('repricedAt', null) == null
+            || (value.repricedAt is int && value.repricedAt <= request.time.toMillis() + 300000))
+          && isTotal(value.costCents)
+          && value.leftOut is list && value.leftOut.size() <= 1000
+          && value.nutrition is map
+          && value.nutrition.keys().hasOnly(['calories', 'protein', 'carbs', 'fat'])
+          && value.nutrition.keys().hasAll(['calories', 'protein', 'carbs', 'fat'])
+          && isTotal(value.nutrition.calories) && isTotal(value.nutrition.protein)
+          && isTotal(value.nutrition.carbs) && isTotal(value.nutrition.fat)
+          && value.lines is list && value.lines.size() <= 10;
+      }
+
+      // The one way a fixed snapshot changes: the person asks for today's prices. The write that fixes a day never sets an instant `repricedAt`,
+      // and the meal is otherwise untouched, so its id and whatever points at it stay.
+      function isRepricedFrom(before, after) {
+        return after.snapshot.get('repricedAt', null) is int
+          && after.snapshot.frozenAt == before.snapshot.frozenAt
+          && after.date == before.date
+          && after.mealType == before.mealType
+          && after.name == before.name
+          && after.sourceMealId == before.sourceMealId
+          && after.items == before.items
+          && after.refIds == before.refIds;
+      }
+
+      function isPlannedMeal(data, id) {
+        return data.keys().hasOnly(['id', 'date', 'mealType', 'name', 'sourceMealId', 'items', 'refIds', 'snapshot', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'date', 'mealType', 'name', 'sourceMealId', 'items', 'refIds', 'snapshot', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && data.date is int && data.date >= 0 && data.date % 86400000 == 0
+          && data.mealType in ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK', 'DESSERT', 'DRINK']
+          && (data.name == null || isShortText(data.name, 120))
+          && (data.sourceMealId == null || isShortText(data.sourceMealId, 80))
+          && isMealItems(data.items)
+          && data.refIds is list && data.refIds.size() <= 10
+          && (data.snapshot == null || isSnapshot(data.snapshot))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      // The kitchen document is the person's settings; it is created by their first change.
+      allow read, delete: if isKitchenOwner();
+      allow create: if isKitchenOwner() && isSettings(request.resource.data);
+      allow update: if isKitchenOwner() && isSettings(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      match /ingredients/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isIngredient(request.resource.data, id);
+        allow update: if isKitchenOwner() && isIngredient(request.resource.data, id)
+          && request.resource.data.catalogId == resource.data.catalogId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /recipes/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isRecipe(request.resource.data, id);
+        allow update: if isKitchenOwner() && isRecipe(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      // A saved meal written before favorites has no `isFavorite`, so it is not required.
+      function isMeal(data, id) {
+        return data.keys().hasOnly(['id', 'name', 'items', 'isFavorite', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'name', 'items', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.name, 120)
+          && isMealItems(data.items)
+          && data.get('isFavorite', false) is bool
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      match /meals/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isMeal(request.resource.data, id);
+        allow update: if isKitchenOwner() && isMeal(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /plannedMeals/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isPlannedMeal(request.resource.data, id);
+        allow update: if isKitchenOwner() && isPlannedMeal(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && (resource.data.get('snapshot', null) == null
+            || request.resource.data.snapshot == resource.data.snapshot
+            || isRepricedFrom(resource.data, request.resource.data));
+      }
+
+      match /products/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isProduct(request.resource.data, id);
+        allow update: if isKitchenOwner() && isProduct(request.resource.data, id)
+          && request.resource.data.ingredientId == resource.data.ingredientId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /stores/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isStore(request.resource.data, id);
+        allow update: if isKitchenOwner() && isStore(request.resource.data, id)
+          && request.resource.data.catalogStoreId == resource.data.catalogStoreId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /sources/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isSource(request.resource.data, id);
+        allow update: if isKitchenOwner() && isSource(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /collections/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isCollection(request.resource.data, id);
+        allow update: if isKitchenOwner() && isCollection(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /shoppingItems/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isShoppingItem(request.resource.data, id);
+        allow update: if isKitchenOwner() && isShoppingItem(request.resource.data, id)
+          && request.resource.data.ingredientId == resource.data.ingredientId
+          && request.resource.data.unit == resource.data.unit
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /ideas/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isIdea(request.resource.data, id);
+        allow update: if isKitchenOwner() && isIdea(request.resource.data, id)
+          && request.resource.data.kind == resource.data.kind
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /cooks/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isCook(request.resource.data, id);
+        allow update: if isKitchenOwner() && isCook(request.resource.data, id)
+          && request.resource.data.recipeId == resource.data.recipeId
+          && request.resource.data.plannedMealId == resource.data.get('plannedMealId', null)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /notes/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isRecipeNote(request.resource.data, id);
+        allow update: if isKitchenOwner() && isRecipeNote(request.resource.data, id)
+          && request.resource.data.recipeId == resource.data.recipeId
+          && request.resource.data.kind == resource.data.kind
+          && request.resource.data.cookId == resource.data.get('cookId', null)
+          && request.resource.data.changes == resource.data.get('changes', [])
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /containers/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isContainer(request.resource.data, id)
+          && request.resource.data.status == 'IN_STOCK';
+        allow update: if isKitchenOwner() && isContainer(request.resource.data, id)
+          && request.resource.data.recipeId == resource.data.recipeId
+          && request.resource.data.mealId == resource.data.mealId
+          && request.resource.data.cookId == resource.data.cookId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /packages/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isPackage(request.resource.data, id)
+          && request.resource.data.status == 'IN_STOCK';
+        allow update: if isKitchenOwner() && isPackage(request.resource.data, id)
+          && request.resource.data.ingredientId == resource.data.ingredientId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /families/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isFamily(request.resource.data, id);
+        allow update: if isKitchenOwner() && isFamily(request.resource.data, id)
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+    }
+
+    // What a person chose in Pinch's Settings, one document at their own uid, created by their first change. Only the scheduled morning note writes `lastDigestDay` (the Admin SDK bypasses these rules).
+    match /apps/pinch/settings/{uid} {
+      function isSettingsOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function isNullOrDays(value, min, max) {
+        return value == null || (value is int && value >= min && value <= max);
+      }
+
+      // A kind added later is read with get(key, default) and left out of hasAll, like any key added to a shape already in production.
+      function isReminders(value) {
+        return value is map
+          && value.keys().hasOnly(['eatSoon', 'expiring', 'timers', 'leadDays', 'hour', 'timeZone'])
+          && value.keys().hasAll(['eatSoon', 'timers', 'leadDays', 'hour', 'timeZone'])
+          && value.eatSoon is bool && value.get('expiring', false) is bool && value.timers is bool
+          && value.leadDays is int && value.leadDays >= 1 && value.leadDays <= 3
+          && value.hour is int && value.hour >= 0 && value.hour <= 23
+          && (value.timeZone == null || (value.timeZone is string && value.timeZone.size() >= 1 && value.timeZone.size() <= 64));
+      }
+
+      function isPinchSettings(data) {
+        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'suggestPhotos', 'calendarStats', 'reminders', 'updatedAt', 'lastDigestDay'])
+          && data.keys().hasAll(['fridgeDays', 'freezerDays', 'reminders', 'updatedAt'])
+          && data.get('suggestPhotos', true) is bool
+          && data.get('calendarStats', false) is bool
+          && isNullOrDays(data.fridgeDays, 1, 14)
+          && isNullOrDays(data.freezerDays, 7, 365)
+          && isReminders(data.reminders)
+          && data.updatedAt is int
+          && (data.get('lastDigestDay', null) == null
+            || (data.lastDigestDay is string && data.lastDigestDay.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')));
+      }
+
+      allow read: if isSettingsOwner();
+      allow create: if isSettingsOwner() && isPinchSettings(request.resource.data)
+        && request.resource.data.keys().hasAll(['lastDigestDay'])
+        && request.resource.data.lastDigestDay == null;
+      allow update: if isSettingsOwner() && isPinchSettings(request.resource.data)
+        && request.resource.data.get('lastDigestDay', null) == resource.data.get('lastDigestDay', null);
+    }
+
     // --- App: worth-the-wait ---
 
     match /apps/worth-the-wait {
@@ -3278,11 +3888,18 @@ service cloud.firestore {
     // own reminders. Only the scheduled Cloud Function (Admin SDK, bypasses
     // rules) may mark one `sent` or roll a recurring one to its next date.
     match /reminders/{reminderId} {
+      // A path inside the app, never another site: a notification opens it on tap.
+      function isReminderLinkValid(link) {
+        return link == null
+          || (link is string && link.size() <= 300 && link.matches('/[a-z0-9].*'));
+      }
+
       allow read: if request.auth != null
         && request.auth.uid in resource.data.targetUids;
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy
-        && request.auth.uid in request.resource.data.targetUids;
+        && request.auth.uid in request.resource.data.targetUids
+        && isReminderLinkValid(request.resource.data.get('link', null));
       allow update: if request.auth != null
         && request.auth.uid in resource.data.targetUids
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])

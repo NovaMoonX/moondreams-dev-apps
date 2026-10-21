@@ -1,6 +1,6 @@
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { MAX_AMOUNT_CENTS, MAX_TAX_RATE } from '@apps/a-list/constants';
-import { parseMoneyToCents } from '@apps/a-list/utils/money';
+import { parseMoneyToCents } from '@/utils/moneyUtils';
 import { getTaxRateFromBill } from '@apps/a-list/utils/tax';
 
 export interface CostStepValues {

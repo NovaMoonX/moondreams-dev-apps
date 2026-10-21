@@ -33,7 +33,7 @@ import {
   evaluateCostStep,
   type CostStepValues,
 } from '@apps/a-list/utils/costStep';
-import { centsToInputValue } from '@apps/a-list/utils/money';
+import { centsToInputValue } from '@/utils/moneyUtils';
 import { formatTaxRate } from '@apps/a-list/utils/tax';
 
 interface GoalValues {
@@ -306,7 +306,7 @@ function MembershipSettingsSubview({
             }
           />
         </div>
-        <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp noModal />} />
+        <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp />} />
         <Form
           id='a-list-settings-goals'
           form={goalFields}

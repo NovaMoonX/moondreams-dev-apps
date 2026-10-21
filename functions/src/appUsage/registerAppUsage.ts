@@ -4,6 +4,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { findFirstActivityAt as findAListStart } from '../apps/a-list/findFirstActivityAt.js';
 import { findFirstActivityAt as findNineLivesStart } from '../apps/nine-lives/findFirstActivityAt.js';
+import { findFirstActivityAt as findPinchStart } from '../apps/pinch/findFirstActivityAt.js';
 import { findFirstActivityAt as findWaypointStart } from '../apps/waypoint/findFirstActivityAt.js';
 import { findFirstActivityAt as findWorthTheWaitStart } from '../apps/worth-the-wait/findFirstActivityAt.js';
 
@@ -16,6 +17,7 @@ const ADMIN_EMAIL = 'nova@moondreams.dev';
 const FIRST_ACTIVITY_FINDERS: Record<string, (firestore: Firestore, uid: string) => Promise<number | null>> = {
   'a-list': findAListStart,
   'nine-lives': findNineLivesStart,
+  pinch: findPinchStart,
   waypoint: findWaypointStart,
   'worth-the-wait': findWorthTheWaitStart,
 };

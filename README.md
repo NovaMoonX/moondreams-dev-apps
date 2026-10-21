@@ -11,6 +11,9 @@ A collection of mini-apps built to fit whatever felt useful, fun, or simply inte
 - 🐱 **Nine Lives** — a private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.
 - 🧭 **Waypoint** — a collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.
 - 🎟️ **A-List Tracker** — a personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.
+- 🧂 **Pinch** — Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.
+
+The header's menu (the hamburger, top left) slides in every app you can open, and apps that keep their place in the URL (A-List's tabs, Waypoint's trips) reopen where you last left them. Swipe right on the header to open it and left to close.
 
 ## Quick start
 
@@ -50,6 +53,9 @@ VITE_FIREBASE_VAPID_KEY=
 
 # Places API (New) key for place search; search is hidden when unset. See "Google API keys" below.
 VITE_GOOGLE_PLACES_API_KEY=
+
+# Pinch store logos: a publishable Logo.dev token (pk_…), sent only with a store's web domain. Logos fall back to a letter tile when unset.
+VITE_STORE_LOGO_TOKEN=
 
 # App Check (required by Nine Lives' AI ingestion). Prod: reCAPTCHA v3 site key (Firebase Console > App Check).
 VITE_FIREBASE_APPCHECK_SITE_KEY=
@@ -108,24 +114,34 @@ The worker deploy step runs with `continue-on-error: true`, so if it fails, the 
 
 ### New Cloud Functions & Cloud Run invoker access
 
-Firebase's 2nd-gen `onCall` functions get their public "allow unauthenticated invocations" IAM grant applied automatically only on a function's *first* deploy — later redeploys don't touch existing IAM policy. A function can land on a first deploy where that automatic grant silently fails (observed once, cause not fully confirmed — possibly a project/org policy blocking new `allUsers` bindings without revoking already-granted ones), leaving the function otherwise working but unreachable from the browser.
+A 2nd-gen `onCall` function reaches the browser only if its Cloud Run service lets anyone invoke it. The Firebase CLI grants that (`allUsers` → `roles/run.invoker`) on a function's *first* deploy only, and this project's organization policy (domain-restricted sharing) refuses every `allUsers` grant. So the first deploy of a new callable prints `Unable to set the invoker for the IAM policy`, the function is created anyway, and the deploy step fails. A re-run then goes green with the function still private, because a callable's grant isn't tried again on an update, and the browser shows a CORS error.
 
-**Symptom:** a browser console CORS error on the callable (e.g. "No 'Access-Control-Allow-Origin' header is present"), even though its `cors`/`region` config looks correct and matches a working function. Checking GCP Cloud Run request logs for that service shows the real cause: a `403` on the `OPTIONS` preflight with `"The request was not authenticated. Either allow unauthenticated invocations or set the proper Authorization header."`
+**What the deploy does about it.** `npm run fb:deploy:smart` reads the CLI's output. When it holds that message it runs `npm run fb:invoker -- --all`, which sets `--no-invoker-iam-check` on every callable's Cloud Run service (a setting on the service, not an IAM binding, so the policy has nothing to refuse), and deploys once more: the function the first run created is now an update, and an update doesn't ask for the grant again. A new callable needs nothing by hand. A second failure, or any failure without that message, fails the step as before. If the organization ever allows `allUsers` for this project, the CLI's own grant works and that path never runs.
 
-**Fix:** run this against the affected function's Cloud Run service (service name = the function name, lowercased — Cloud Run rejects mixed-case names):
+**One-time setup:** the deploy account (the service account in the `FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS` secret) must be able to update Cloud Run services. If it can't yet, `roles/run.admin` is the simple grant:
 
 ```bash
-gcloud run services update <lowercase-function-name> \
-  --no-invoker-iam-check \
-  --region="us-central1" \
-  --project="moondreams-dev-apps"
+gcloud projects add-iam-policy-binding moondreams-dev-apps \
+  --member="serviceAccount:<the deploy account's email>" --role="roles/run.admin"
 ```
 
-This is a one-time, per-function operational step — run it after first deploying a new callable function if you hit this symptom, not as part of every deploy. It's not part of the automated deploy workflow.
+Without it the step fails on a PERMISSION_DENIED from `gcloud` and names the function; the merge workflow signs `gcloud` in as that account first. A re-run of the workflow won't fix the function after that, because it now exists and the deploy skips it without a message, so once the role is granted run `npm run fb:invoker -- --all` yourself.
+
+**What it means:** every callable is reachable by anyone who has its address, exactly as with an `allUsers` grant, so each one checks the caller itself (`request.auth`) except the readers that exist for signed-out visitors (see [functions/README.md](functions/README.md)). The setting doesn't appear in the project's IAM policy, so a scan for `allUsers` won't find it, and the organization constraint `constraints/run.requireInvokerIam`, if it is ever turned on, would block it. It is kept to `onCall` functions: a scheduled or trigger function keeps its IAM check, and the script refuses it (it also stops if it can't read `functions/src/index.ts`, rather than guess). Only `fb:deploy:smart`, which the merge workflow runs, does this: `npm run fb:functions` and `npm run fb:deploy` call the CLI directly, so follow them with `npm run fb:invoker -- --all`.
+
+**By hand** (a function that skipped the above, or a browser CORS error whose Cloud Run request log shows a `403` on the `OPTIONS` preflight with "The request was not authenticated"). Names are any case; the script lowercases them for Cloud Run, which rejects mixed-case names:
+
+```bash
+npm run fb:invoker -- getCalendarShare findShowtimes
+npm run fb:invoker -- --all
+npm run fb:invoker -- findShowtimes --dry   # prints the gcloud command without running it
+```
+
+It runs `gcloud run services update <lowercase-name> --no-invoker-iam-check --region=us-central1 --project=<.firebaserc default>` for each function and carries on if one fails. It needs `gcloud` signed in with a role that can update Cloud Run services.
 
 ## PWAs & push notifications
 
-The site installs as **one** Progressive Web App: `index.html` links `public/manifest-main.json` (`id`/`start_url`/`scope` `/`; its installed icon is `public/logos/logo-pwa.svg`, with PNG copies `pwa-icon-192.png`, `pwa-icon-512.png` and a padded `pwa-icon-maskable-512.png` for Android and `apple-touch-icon.png` for iOS, because phones don't take an SVG icon when installing; regenerate the PNGs from the SVG if it changes), and every route, mini-apps included, uses it. Mini-apps are not installable on their own: several PWAs on one origin with nested scopes aren't supported by Chrome on Android, and a root app's scope covers every mini-app URL anyway, so people reach a mini-app from the installed hub. Don't add per-app manifests or `scope_extensions`. Because the hub is installed, its ways home (header icon, avatar menu "Home", entry and error screens) stay visible everywhere. An installed window (`IS_INSTALLED_APP` in `src/utils/pwaUtils.ts`: `display-mode` standalone, minimal-ui or window-controls-overlay, or iOS `navigator.standalone`) shows no scrollbar anywhere, at any width (`data-installed-app` on `<html>`, set in `main.tsx`, hides them with `!important` in `src/index.css`); scrolling itself is unchanged. `src/ui/Layout.tsx` swaps only the tab icon and title to the current mini-app's `public/logos/by-app/logo-<app-id>.svg` (the hub keeps its light/dark logos from `index.html`).
+The site installs as **one** Progressive Web App: `index.html` links `public/manifest-main.json` (`id`/`start_url`/`scope` `/`; its installed icon is `public/logos/logo-pwa.svg`, with PNG copies `pwa-icon-192.png`, `pwa-icon-512.png` and a padded `pwa-icon-maskable-512.png` for Android and `apple-touch-icon.png` for iOS, because phones don't take an SVG icon when installing; regenerate the PNGs from the SVG if it changes), and every route, mini-apps included, uses it. Mini-apps are not installable on their own: several PWAs on one origin with nested scopes aren't supported by Chrome on Android, and a root app's scope covers every mini-app URL anyway, so people reach a mini-app from the installed hub. Don't add per-app manifests or `scope_extensions`. Because the hub is installed, its ways home (the menu's Home row, header icon, entry and error screens) stay visible everywhere. An installed window (`IS_INSTALLED_APP` in `src/utils/pwaUtils.ts`: `display-mode` standalone, minimal-ui or window-controls-overlay, or iOS `navigator.standalone`) shows no scrollbar anywhere, at any width (`data-installed-app` on `<html>`, set in `main.tsx`, hides them with `!important` in `src/index.css`); scrolling itself is unchanged. `src/ui/Layout.tsx` swaps only the tab icon and title to the current mini-app's `public/logos/by-app/logo-<app-id>.svg` (the hub keeps its light/dark logos from `index.html`).
 
 Despite that, there is only **one Workbox service worker** for the whole origin (registered once in `src/main.tsx`, `scope: "/"`), shared by the whole site, which is a single installed app. This matters for anything that touches the service worker:
 
@@ -137,6 +153,14 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 ## Troubleshooting
 
 Problems we've hit before, so we don't hit them again.
+
+### A recipe from a link always says "We couldn't read a recipe from that page"
+
+- **Symptom:** Pinch's "From a link" fails every time with that sentence, although the network panel shows `fetchPageContent` answering 200. The console shows `Reading the recipe failed Error: Data cannot be decoded from JSON: [object Object]`, with no `AIError` and no call to the AI.
+- **Cause:** the response holds the page's schema.org Recipe data, whose nodes have `"@type": "Recipe"`. The client of a Firebase callable reads an object with an `@type` key as its own type marker (`type.googleapis.com/...`) and throws on any other value, so the call fails after the server succeeded. A page with no Recipe data (and so no `@type`) read fine, which made it look like a bad page. The reader sorted every error it did not recognise as "unread".
+- **Fix:** `functions/src/linkMetadata/wireNodes.ts` writes every key's leading `@` as `_` before the function returns (`@type` becomes `_type`); `scripts/checks/pageContentWire.ts` runs a response through the real callable client, once raw (refused) and once rewritten (read).
+- **Telling it apart:** an `AIError` in the same console line, or no `fetchPageContent` request at all, is the reader or the connection, not this.
+- **Not verified:** the live AI answer for a real page (the sandbox cannot fetch pages), only the decode and the flow up to the AI call.
 
 ### Google sign-in fails in a browser that has visited the site before
 
@@ -152,6 +176,13 @@ Problems we've hit before, so we don't hit them again.
 - **Cause:** the function queries `reminders` for `status == 'pending'` and `scheduledFor <= now + 5 min`. Equality on one field plus a range on another needs a composite index, and `firestore.indexes.json` was empty. The emulator never enforces indexes, so nothing failed locally.
 - **Fix:** the index is in `firestore.indexes.json` and deploys with `npm run fb:deploy:smart` on merge. It builds for a few minutes after deploy (Firebase console → Firestore → Indexes shows Building, then Enabled); the next 5-minute run after that succeeds. `npm run check:indexes` now fails any PR with a query that needs an index the file doesn't have.
 - **Tell it apart:** an index error names `requires an index` with a console link; a missing-secret or permission error does not.
+
+### Old reminders arrive all at once, and their in-app toasts come back after every reload
+
+- **Symptom:** right after the missing-index fix, phones got push reminders for events from a week earlier, and in-app reminder toasts reappeared on every page reload even after being swiped away.
+- **Cause:** two things. While the index was missing nothing was sent, so every reminder since stayed `pending` and the first working run sent them all. And the toast hook only skipped reminders that were already `sent` when it mounted, but the first Firestore snapshot arrives after mount, so every `sent` reminder looked newly sent on each reload. Swiping a toast away only removes it from the page; it never changes the reminder.
+- **Fix:** `sendScheduledReminders` marks a reminder more than 30 minutes overdue `expired` instead of sending it (a yearly one rolls forward), and `useReminderToasts` only toasts a reminder it saw as not yet sent.
+- **Tell it apart:** a late push for something old is the function; a toast that returns after reload is the hook. Neither touches a reminder that is still ahead.
 
 ### An app shows empty or first-run screens for an existing account on one device
 

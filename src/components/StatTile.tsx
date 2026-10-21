@@ -12,6 +12,10 @@ interface StatTileProps {
   isStacked?: boolean;
   /** A help icon for a number that needs explaining: beside the label from `sm` up, in the tile's top-right corner on a phone, where a label that wraps would strand it. */
   help?: ReactNode;
+  /** Lets a long label wrap under the number instead of running past the tile, and keeps the help icon's room to the number's line only. */
+  isLabelWrapped?: boolean;
+  /** Makes the tile itself a button (and only the tile: its neighbours and the gaps between are not part of it); the help icon keeps its own tap. */
+  onOpen?: { label: string; onClick: () => void };
   /** A target to show progress toward; a met one tints the whole tile. */
   goal?: { current: number; target: number };
   /** Dims the tile and invites setting something up (a goal) with a button, instead of showing progress. */
@@ -32,6 +36,8 @@ function StatTile({
   detail,
   help,
   isStacked = false,
+  isLabelWrapped = false,
+  onOpen,
   goal,
   prompt,
   className,
@@ -48,12 +54,22 @@ function StatTile({
         isStacked ? 'flex-col items-center text-center' : 'items-center',
         isGoalMet && 'border-success/40 bg-success/10',
         prompt && 'border-dashed bg-transparent',
+        onOpen && 'hover:bg-muted/50 active:bg-muted/50',
         className,
       )}
     >
+      {onOpen && (
+        <Button
+          type='button'
+          variant='tertiary'
+          aria-label={onOpen.label}
+          onClick={onOpen.onClick}
+          className='absolute inset-0 h-full w-full rounded-2xl!'
+        />
+      )}
       {icon && (
         <span
-          className='bg-secondary text-secondary-foreground grid size-10 shrink-0 place-items-center rounded-full text-xl'
+          className='bg-secondary text-secondary-foreground pointer-events-none relative grid size-10 shrink-0 place-items-center rounded-full text-xl'
           aria-hidden='true'
         >
           {icon}
@@ -62,13 +78,16 @@ function StatTile({
       <div
         className={join(
           'w-full min-w-0',
-          Boolean(help) && !isStacked && 'pr-5 sm:pr-0',
+          onOpen &&
+            'pointer-events-none relative [&_button]:pointer-events-auto',
+          Boolean(help) && !isStacked && !isLabelWrapped && 'pr-6 sm:pr-0',
         )}
       >
         <p
           className={join(
             'leading-tight font-semibold tabular-nums',
             isStacked ? 'text-xl' : 'text-lg sm:text-xl',
+            Boolean(help) && isLabelWrapped && 'pr-6 sm:pr-0',
             prompt && 'text-muted-foreground',
           )}
         >
@@ -80,9 +99,15 @@ function StatTile({
             isStacked && 'justify-center',
           )}
         >
-          <span className='whitespace-nowrap'>{label}</span>
+          <span
+            className={isLabelWrapped ? 'leading-tight' : 'whitespace-nowrap'}
+          >
+            {label}
+          </span>
           {help && (
-            <span className='absolute top-2 right-2 sm:static'>{help}</span>
+            <span className='absolute top-2 right-2 z-10 sm:relative sm:inset-auto'>
+              {help}
+            </span>
           )}
         </div>
         {prompt && (

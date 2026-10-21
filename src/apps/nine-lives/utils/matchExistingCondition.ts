@@ -1,19 +1,14 @@
 import type { IngestionConditionProposal } from '../lib/extractProposalFromFile.types';
 import type { CatCondition, LibraryCondition } from '../types';
-import { getWordSimilarity, normalizeString } from '@/utils/stringUtils';
+import { createOptionMatcher } from '@/utils/optionMatchUtils';
 
-const MATCH_THRESHOLD = 0.82;
+const conditionMatcher = createOptionMatcher<{ id: string; name: string }>({
+  names: (condition) => [condition.name],
+  typos: 'loose',
+});
 
 function bestMatch<T extends { id: string; name: string }>(name: string, values: T[]): string | null {
-  const normalizedName = normalizeString(name);
-  const candidates = values
-    .map((value) => ({ value, score: getWordSimilarity(normalizedName, normalizeString(value.name)) }))
-    .filter(({ score }) => score >= MATCH_THRESHOLD)
-    .sort((left, right) => right.score - left.score);
-
-  return candidates.length > 0 && (candidates.length === 1 || candidates[0].score > candidates[1].score)
-    ? candidates[0].value.id
-    : null;
+  return conditionMatcher.match(name, values)?.id ?? null;
 }
 
 export function matchExistingCondition(
