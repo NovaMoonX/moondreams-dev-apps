@@ -1,6 +1,5 @@
 import { formatCents } from '@/utils/moneyUtils';
 import type { TicketSuggestion } from '@apps/a-list/utils/chips';
-import { formatTaxRate } from '@apps/a-list/utils/tax';
 import type { TicketDraft } from '@apps/a-list/utils/ticketDraft';
 
 interface SuggestionNoteProps {
@@ -19,9 +18,7 @@ function SuggestionNote({
     suggestion.isFeeLearned && !draft.isFeeEdited
       ? `${formatCents(suggestion.feeCents)} fee`
       : null,
-    suggestion.isTaxLearned && !draft.isTaxEdited && suggestion.taxRate !== null
-      ? `${formatTaxRate(suggestion.taxRate)} tax`
-      : null,
+    suggestion.isTaxLearned && !draft.isTaxEdited ? 'tax' : null,
   ].filter((part): part is string => part !== null);
 
   if (!theatreName || learned.length === 0) {
