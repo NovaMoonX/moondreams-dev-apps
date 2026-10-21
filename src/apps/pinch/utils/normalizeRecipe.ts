@@ -1,3 +1,5 @@
+import { toComparable } from '@/utils/optionMatchUtils';
+import { clipAtWord } from '@/utils/stringUtils';
 import {
   MAX_MINUTES,
   MAX_NAME_LENGTH,
@@ -11,7 +13,12 @@ import {
   UNITS,
 } from '@apps/pinch/constants';
 import type { RecipeCare, Unit } from '@apps/pinch/types';
-import { cleanGroupName } from '@apps/pinch/utils/ingredientGroups';
+import {
+  getGroupKey,
+  shortenGroupName,
+} from '@apps/pinch/utils/ingredientGroups';
+import { splitAsides, splitPrep } from '@apps/pinch/utils/ingredientNames';
+import { toBase } from '@apps/pinch/utils/quantity';
 import { toCare } from '@apps/pinch/utils/recipeCare';
 
 export interface ExtractedIngredient {
@@ -19,7 +26,9 @@ export interface ExtractedIngredient {
   amount: number | null;
   unit: Unit | null;
   note: string | null;
-  /** The heading the recipe puts it under ("For the sauce"), or null; never made up. */
+  /** Another name the line gives the same ingredient ("ground beef" in "beef mince (ground beef)"), tried when the name matches nothing. */
+  alsoCalled: string | null;
+  /** The heading the recipe puts it under ("For the sauce"), shortened to a plain name, or null; never made up. */
   group: string | null;
 }
 
@@ -59,14 +68,11 @@ const asWholeDays = (value: unknown) =>
   typeof value === 'number' ? Math.floor(value) : null;
 
 const GROUP_READ_LENGTH = 200;
-const HEADING_MARKS = /^[#*_\s]+|[#*_:\s]+$/g;
 const INGREDIENTS_TITLE = /^ingredients?$/i;
 
-/** A heading as the recipe writes it, without the colon or markdown around it; the recipe's own "Ingredients" title is no group. */
+/** A heading as the recipe writes it, shortened to the plain name that fits a group; the recipe's own "Ingredients" title is no group. */
 const asGroup = (value: unknown) => {
-  const name = cleanGroupName(
-    asString(value)?.slice(0, GROUP_READ_LENGTH).replace(HEADING_MARKS, ''),
-  );
+  const name = shortenGroupName(asString(value)?.slice(0, GROUP_READ_LENGTH));
   const result = name !== null && !INGREDIENTS_TITLE.test(name) ? name : null;
   return result;
 };
@@ -91,15 +97,57 @@ const sayHowMuch = (head: string) => {
 };
 
 const joinNotes = (notes: (string | null)[]) =>
-  [
-    ...new Map(
-      notes.flatMap((note) =>
-        note ? [[note.trim().toLowerCase(), note.trim()] as const] : [],
-      ),
-    ).values(),
-  ]
-    .join(', ')
-    .slice(0, MAX_NOTE_LENGTH) || null;
+  clipAtWord(
+    [
+      ...new Map(
+        notes.flatMap((note) =>
+          note ? [[note.trim().toLowerCase(), note.trim()] as const] : [],
+        ),
+      ).values(),
+    ].join(', '),
+    MAX_NOTE_LENGTH,
+  ) || null;
+
+const MEASURE_ASIDE =
+  /^(?:[\d\u00bc-\u00be\u2150-\u215e./\s,~-]|\b(?:about|approx|approximately|or|and|g|grams?|kg|ml|l|litres?|liters?|oz|ounces?|lbs?|pounds?|cups?|tbsp|tsp|tablespoons?|teaspoons?|fl)\b)+$/i;
+const NOTE_ASIDE_WORDS =
+  /\b(?:optional|divided|plus|extra|more|about|approx|or|and|if|to|for|such|like|any|see|use|can|you|packed|heaping|level)\b/i;
+const SYNONYM = /^\p{L}[\p{L}'\u2019-]*(?: \p{L}[\p{L}'\u2019-]*){0,2}$/u;
+
+const isMeasureAside = (text: string) =>
+  /\d/.test(text) && /[a-z]/i.test(text) && MEASURE_ASIDE.test(text);
+const isSynonymAside = (text: string) =>
+  SYNONYM.test(text) &&
+  !NOTE_ASIDE_WORDS.test(text) &&
+  splitPrep(text).prep.length === 0;
+
+/** What a line's parentheses say, sorted by the job they do: another measure of the same amount ("(1 lb)", "(240 ml)") is dropped, another name for the ingredient ("(ground beef)") becomes `alsoCalled`, and anything else ("(medium or short grain, if you can)") describes the ingredient and goes in the note, never in the quantity. The model's own `alsoCalled` counts first; a one-word aside left in the name stays a note, since "oil (olive)" is as likely a variety as a second name. */
+const readAsides = (
+  name: string,
+  alsoCalled: string | null,
+  note: string | null,
+) => {
+  const { name: bare, asides } = splitAsides(name);
+  const isOther = (aside: string) =>
+    !isMeasureAside(aside) &&
+    toComparable(aside, true) !== toComparable(bare, true);
+  const given = alsoCalled !== null && isOther(alsoCalled) ? alsoCalled : null;
+  const written = asides.filter(isOther);
+  const also =
+    given !== null && isSynonymAside(given)
+      ? given
+      : (written.find((aside) => isSynonymAside(aside) && /\s/.test(aside)) ??
+        null);
+  const described = [given, ...written].filter(
+    (aside) => aside !== null && aside !== also,
+  );
+
+  return {
+    name: bare,
+    alsoCalled: also,
+    note: joinNotes([...described, note]),
+  };
+};
 
 /** A line with no amount read the way a cook means it: "salt and pepper to taste" is two lines noted "to taste" under the same heading, and "handful of parsley" is parsley noted "a handful". A measured line is left as it was read. */
 const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
@@ -125,9 +173,58 @@ const readUnmeasured = (line: ExtractedIngredient): ExtractedIngredient[] => {
   return names.map((part) => ({
     ...line,
     name: part.trim(),
+    alsoCalled: names.length > 1 ? null : line.alsoCalled,
     unit: null,
     note,
   }));
+};
+
+const SAME_AMOUNT_RATIO = 0.8;
+
+/** Whether `next` is the same amount as `first` in another unit of the same kind ("500 g" then "1 lb" of one ingredient): a recipe that lists both measures means one amount. */
+const isOtherMeasure = (
+  first: ExtractedIngredient,
+  next: ExtractedIngredient,
+) => {
+  if (
+    first.amount === null ||
+    next.amount === null ||
+    first.unit === null ||
+    next.unit === null ||
+    first.unit === next.unit ||
+    getGroupKey(first.group) !== getGroupKey(next.group) ||
+    toComparable(first.name, true) !== toComparable(next.name, true)
+  ) {
+    return false;
+  }
+  const left = toBase(first.amount, first.unit);
+  const right = toBase(next.amount, next.unit);
+  const ratio = left.value / right.value;
+
+  return (
+    left.dimension === right.dimension &&
+    left.dimension !== 'COUNT' &&
+    ratio >= SAME_AMOUNT_RATIO &&
+    ratio <= 1 / SAME_AMOUNT_RATIO
+  );
+};
+
+/** A dual-measure line ("500 g / 1 lb beef mince") read as two lines is one: the first measure stays, the other is left out, and a note only the second carried is kept. */
+const mergeOtherMeasures = (
+  lines: ExtractedIngredient[],
+  line: ExtractedIngredient,
+) => {
+  const previous = lines.at(-1);
+  if (!previous || !isOtherMeasure(previous, line)) return [...lines, line];
+
+  return [
+    ...lines.slice(0, -1),
+    {
+      ...previous,
+      alsoCalled: previous.alsoCalled ?? line.alsoCalled,
+      note: joinNotes([previous.note, line.note]),
+    },
+  ];
 };
 
 /** Turns whatever the model returned into the safe shape the form takes: wrong types become null, lists are capped, units must be real, and a line with no amount keeps its words ("to taste") as its note. */
@@ -154,14 +251,18 @@ export function normalizeExtractedRecipe(raw: unknown): ExtractedRecipe {
         const name = asString(item.name)?.slice(0, MAX_NAME_LENGTH);
         return name
           ? readUnmeasured({
-              name,
+              ...readAsides(
+                name,
+                asString(item.alsoCalled)?.slice(0, MAX_NAME_LENGTH) ?? null,
+                asString(item.note),
+              ),
               amount: asNumber(item.amount),
               unit: UNITS.find((unit) => unit === item.unit) ?? null,
-              note: asString(item.note)?.slice(0, MAX_NOTE_LENGTH) ?? null,
               group: asGroup(item.group),
             })
           : [];
       })
+      .reduce<ExtractedIngredient[]>(mergeOtherMeasures, [])
       .slice(0, MAX_RECIPE_INGREDIENTS),
     steps: list(parsed.steps)
       .flatMap((step) =>

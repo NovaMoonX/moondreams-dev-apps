@@ -2,6 +2,23 @@ export function normalizeString(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+/** `text` cut to at most `max` characters at a word boundary, so a clipped value never ends mid-word; a single word longer than `max` is cut where it stands. */
+export function clipAtWord(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+
+  const head = trimmed.slice(0, max);
+  const boundary = /\s/.test(trimmed.charAt(max))
+    ? head.length
+    : head.search(/\s\S*$/);
+  const result = (boundary > 0 ? head.slice(0, boundary) : head).replace(
+    /[\s,;:]+$/,
+    '',
+  );
+
+  return result;
+}
+
 /** Levenshtein similarity between two strings, from 0 (nothing alike) to 1 (equal). */
 export function getWordSimilarity(left: string, right: string): number {
   if (left === right) {
