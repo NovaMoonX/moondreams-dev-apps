@@ -4,7 +4,7 @@ import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
-import { Lightbulb, RefreshCw } from 'lucide-react';
+import { Lightbulb, RefreshCw, X } from 'lucide-react';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import FilePickCard from '@/components/FilePickCard';
@@ -30,7 +30,6 @@ import {
   extractRecipeFromText,
   type ExtractedRecipe,
 } from '@apps/pinch/lib/extractRecipe';
-import { ideaPageQueryOptions } from '@apps/pinch/queries/ideaPageQueries';
 import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
 import { selectIdeaGroups } from '@apps/pinch/store/selectors';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
@@ -193,12 +192,13 @@ function RecipeReader({
     /\.[a-z]{2,}$/i.test(new URL(typedLink).hostname)
       ? typedLink
       : null;
+  // The reading's own request, so the preview and "Fill in the recipe" share one page fetch.
   const lookup = useQuery({
-    ...ideaPageQueryOptions(previewUrl ?? ''),
+    ...recipePageQueryOptions(previewUrl ?? ''),
     enabled: previewUrl !== null,
   });
   const getPreview = () => {
-    if (!lookup.data) {
+    if (previewUrl === null || !lookup.data) {
       return null;
     }
     const { title, meta } = lookup.data;
@@ -431,6 +431,23 @@ function RecipeReader({
     }
 
     return [
+      ...(method === 'text' || canPasteText
+        ? [
+            {
+              key: 'clear',
+              icon: <X className='h-4 w-4' />,
+              label: 'Clear',
+              description:
+                method === 'text' ? 'Clear the text' : 'Clear the link',
+              isDisabled: isReading || typed === '',
+              onClick: () => {
+                (method === 'text' ? setText : setLink)('');
+                handleTyped('');
+                (method === 'text' ? textRef : linkRef).current?.focus();
+              },
+            },
+          ]
+        : []),
       {
         key: 'idea',
         icon: <Lightbulb className='h-4 w-4' />,
@@ -496,6 +513,7 @@ function RecipeReader({
   ];
 
   const intro = getIntro();
+  const preview = getPreview();
 
   return (
     <div className='flex flex-1 flex-col gap-4 [@media(min-height:700px)]:gap-6'>
@@ -534,10 +552,10 @@ function RecipeReader({
             </div>
           </div>
         )}
-        {previewUrl !== null && !lookup.isError && (
+        {preview !== null && (
           <LinkPreviewCard
-            host={new URL(previewUrl).hostname}
-            preview={getPreview()}
+            host={new URL(previewUrl ?? '').hostname}
+            preview={preview}
           />
         )}
       </FormSection>
