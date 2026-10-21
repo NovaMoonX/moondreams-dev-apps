@@ -10,7 +10,7 @@ Server-side code for the mini-apps. Every function:
 
 | Function | Trigger | App | What it does |
 | --- | --- | --- | --- |
-| `getPopularMovies` | callable | A-List Tracker | `{}` → `{ results }` (up to 30, most popular first, each with `opensOn` for a film not yet open and a YouTube `trailerUrl`): what is in US theaters now plus what opens soon, from TMDB; empty on OMDb |
+| `getPopularMovies` | callable | A-List Tracker | `{}` → `{ results }` (up to 30, most popular first, each with `opensOn` for a film not yet open, a YouTube `trailerUrl`, a trimmed `overview` and up to three `genres`): what is in US theaters now plus what opens soon, from TMDB; empty on OMDb |
 | `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
 | `getCalendarShare` | callable, **no sign-in** | A-List Tracker | `{ shareId, pin? }` → `{ status: 'ok', calendar }`, or `pin_required`, `wrong_pin`, `not_found`. Serves a calendar share to anyone with its link |
