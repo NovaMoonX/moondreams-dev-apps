@@ -7,7 +7,10 @@ import { Eye } from 'lucide-react';
 import AppToggle from '@/components/AppToggle';
 import HeaderIconButton from '@/components/HeaderIconButton';
 import { useSheetHistory } from '@/hooks/useBackHistory';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+
+const SHORT_SCREEN_MAX_HEIGHT = 599;
 
 interface ViewOptionSwitchProps {
   label: string;
@@ -65,7 +68,7 @@ interface ViewOptionsProps {
   children: ReactNode;
 }
 
-/** An icon button beside a list's search field that opens how the list's rows look: a drawer on phones, a popover from `sm` up. */
+/** An icon button beside a list's search field that opens how the list's rows look: a drawer on phones and on a short landscape screen, a popover from `sm` up. */
 function ViewOptions({
   label = 'View options',
   customizedCount = 0,
@@ -75,9 +78,11 @@ function ViewOptions({
   children,
 }: ViewOptionsProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const isPhone = useMediaQuery().isBelow('sm');
+  const { isBelow } = useMediaQuery();
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
+  const isDrawer = isBelow('sm') || (isShort && isBelow('lg'));
   const isCustomized = customizedCount > 0;
-  const { dialogId, onDialogClose } = useSheetHistory(isOpen && isPhone, () =>
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen && isDrawer, () =>
     setIsOpen(false),
   );
 
@@ -118,7 +123,7 @@ function ViewOptions({
     </Button>
   );
 
-  if (isPhone) {
+  if (isDrawer) {
     return (
       <>
         {trigger}
@@ -141,7 +146,16 @@ function ViewOptions({
             </div>
           }
         >
-          <div className='space-y-4 pb-4'>{children}</div>
+          <div
+            className={join(
+              'pb-4',
+              isBelow('sm')
+                ? 'space-y-4'
+                : 'grid grid-cols-2 items-start gap-x-8 gap-y-4',
+            )}
+          >
+            {children}
+          </div>
         </Drawer>
       </>
     );

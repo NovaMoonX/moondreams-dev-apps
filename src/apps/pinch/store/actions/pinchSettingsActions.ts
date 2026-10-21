@@ -7,6 +7,7 @@ import { getStorageErrorMessage } from '@/utils/errorUtils';
 import { selectHasPinchSettings } from '@apps/pinch/store/selectors';
 import {
   createSettings,
+  getDeviceTimeZone,
   getSettingsUpdates,
   type PinchSettingsPatch,
 } from '@apps/pinch/utils/settings';
@@ -55,7 +56,7 @@ export const savePinchSettings = createAsyncThunk<
       await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) {
-          transaction.set(ref, createSettings(patch, now));
+          transaction.set(ref, createSettings(patch, now, getDeviceTimeZone()));
           return;
         }
         const [field, value, ...more] = getUpdateArgs(patch, now);
@@ -71,6 +72,27 @@ export const savePinchSettings = createAsyncThunk<
       return rejectWithValue(
         getStorageErrorMessage(error, 'Unable to save your settings.'),
       );
+    }
+  },
+);
+
+/** Writes the defaults as a person's settings the first time Pinch opens with none, so the morning note, which finds people by a stored switch, reaches them. The transaction reads the server first, so it never replaces a document another device made. Best effort: offline or refused, the defaults still stand on screen and the next open tries again. */
+export const ensurePinchSettings = createAsyncThunk<void, string>(
+  'pinch/pinchSettings/ensure',
+  async (uid) => {
+    if (!navigator.onLine) return;
+    try {
+      const ref = doc(db, 'apps', 'pinch', 'settings', uid);
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        if (snapshot.exists()) return;
+        transaction.set(
+          ref,
+          createSettings({}, Date.now(), getDeviceTimeZone()),
+        );
+      });
+    } catch (error) {
+      console.error('Pinch settings were not created', error);
     }
   },
 );

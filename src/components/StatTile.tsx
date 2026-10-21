@@ -14,6 +14,8 @@ interface StatTileProps {
   help?: ReactNode;
   /** Lets a long label wrap under the number instead of running past the tile, and keeps the help icon's room to the number's line only. */
   isLabelWrapped?: boolean;
+  /** Makes the tile itself a button (and only the tile: its neighbours and the gaps between are not part of it); the help icon keeps its own tap. */
+  onOpen?: { label: string; onClick: () => void };
   /** A target to show progress toward; a met one tints the whole tile. */
   goal?: { current: number; target: number };
   /** Dims the tile and invites setting something up (a goal) with a button, instead of showing progress. */
@@ -35,6 +37,7 @@ function StatTile({
   help,
   isStacked = false,
   isLabelWrapped = false,
+  onOpen,
   goal,
   prompt,
   className,
@@ -51,12 +54,22 @@ function StatTile({
         isStacked ? 'flex-col items-center text-center' : 'items-center',
         isGoalMet && 'border-success/40 bg-success/10',
         prompt && 'border-dashed bg-transparent',
+        onOpen && 'hover:bg-muted/50 active:bg-muted/50',
         className,
       )}
     >
+      {onOpen && (
+        <Button
+          type='button'
+          variant='tertiary'
+          aria-label={onOpen.label}
+          onClick={onOpen.onClick}
+          className='absolute inset-0 h-full w-full rounded-2xl!'
+        />
+      )}
       {icon && (
         <span
-          className='bg-secondary text-secondary-foreground grid size-10 shrink-0 place-items-center rounded-full text-xl'
+          className='bg-secondary text-secondary-foreground pointer-events-none relative grid size-10 shrink-0 place-items-center rounded-full text-xl'
           aria-hidden='true'
         >
           {icon}
@@ -65,6 +78,8 @@ function StatTile({
       <div
         className={join(
           'w-full min-w-0',
+          onOpen &&
+            'pointer-events-none relative [&_button]:pointer-events-auto',
           Boolean(help) && !isStacked && !isLabelWrapped && 'pr-6 sm:pr-0',
         )}
       >
@@ -90,7 +105,9 @@ function StatTile({
             {label}
           </span>
           {help && (
-            <span className='absolute top-2 right-2 sm:static'>{help}</span>
+            <span className='absolute top-2 right-2 z-10 sm:relative sm:inset-auto'>
+              {help}
+            </span>
           )}
         </div>
         {prompt && (

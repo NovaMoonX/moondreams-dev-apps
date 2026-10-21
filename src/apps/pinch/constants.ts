@@ -23,6 +23,7 @@ export const PINCH_TABS: PinchTab[] = [
   'recipes',
   'kitchen',
   'shopping',
+  'settings',
 ];
 export const DEFAULT_PINCH_TAB: PinchTab = 'calendar';
 
@@ -31,6 +32,7 @@ export const PINCH_TAB_LABELS: Record<PinchTab, string> = {
   recipes: 'Recipes',
   kitchen: 'Kitchen',
   shopping: 'Shopping',
+  settings: 'Settings',
 };
 
 export const UNIT_LABELS: Record<Unit, string> = {

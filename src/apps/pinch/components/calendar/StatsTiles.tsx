@@ -1,4 +1,3 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import MacroStats from '@/components/MacroStats';
@@ -20,8 +19,8 @@ import {
 interface StatsTilesProps {
   stats: PeriodStats;
   todayKey: string;
-  /** Opens the summary through a target behind the tiles; omitted where the tiles already sit in a view of their own. */
-  onOpen?: () => void;
+  /** What a tap on a cost tile opens (the period's price summary) and on a nutrition tile (its nutrition summary); omitted where the tiles already sit in a view of their own. */
+  onOpen?: { cost: () => void; nutrition: () => void };
   /** The tiles are one day's: the total is always there, in the line's words with nothing priced (no summary line says it here), and the nutrition reads "That day". */
   day?: { isPast: boolean };
   /** The nutrition is already on screen elsewhere (a day drawer's front), so this view holds the cost tiles alone. */
@@ -31,10 +30,16 @@ interface StatsTilesProps {
 interface NutritionTilesProps {
   values: NutritionValues;
   caption: string;
+  /** Makes each tile a button that opens the nutrition summary. */
+  onOpen?: () => void;
 }
 
-/** The nutrition switched on in View options, as the tiles every Calendar view shows, under a caption that says what they average or total; nothing when none of them is known. */
-export function NutritionTiles({ values, caption }: NutritionTilesProps) {
+/** The nutrition switched on in Settings, as the tiles every Calendar view shows, under a caption that says what they average or total; nothing when none of them is known. */
+export function NutritionTiles({
+  values,
+  caption,
+  onOpen,
+}: NutritionTilesProps) {
   const show = useAppSelector(selectShowNutrition);
   const isPhone = useMediaQuery().isBelow('sm');
   const whole = withWholeCalories(values);
@@ -51,6 +56,9 @@ export function NutritionTiles({ values, caption }: NutritionTilesProps) {
         isCompact={!isPhone}
         values={whole}
         show={show}
+        onOpen={
+          onOpen && { label: 'Open the nutrition summary', onClick: onOpen }
+        }
       />
     </div>
   );
@@ -140,67 +148,56 @@ function StatsTiles({
     : longest;
 
   return (
-    <div className='relative'>
-      {onOpen && (
-        // Behind the tiles, not around them, which would nest their help buttons; a keyboard reaches the summary through the line above.
-        <Button
-          type='button'
-          variant='tertiary'
-          tabIndex={-1}
-          aria-hidden='true'
-          onClick={onOpen}
-          className='absolute inset-0 h-full w-full rounded-2xl'
+    <div className='space-y-3'>
+      {tiles.length > 0 && (
+        <div
+          className={join(
+            'grid gap-2',
+            COLUMNS[tiles.length - 1],
+            isTotalFullRowOnNarrow && 'max-[360px]:grid-cols-2',
+          )}
+        >
+          {tiles.map((tile) => {
+            const isFullRow = isTotalFullRowOnNarrow && tile.key === 'total';
+            return (
+              <StatTile
+                key={tile.key}
+                label={keepSoFarTogether(tile.label)}
+                value={
+                  <span
+                    className={
+                      isFullRow
+                        ? getValueSizeClass(longest, 0)
+                        : getValueSizeClass(longest, narrowLongest)
+                    }
+                  >
+                    {tile.value}
+                  </span>
+                }
+                help={tile.help}
+                onOpen={
+                  onOpen && {
+                    label: `${tile.label}, ${tile.value}. Open the price summary`,
+                    onClick: onOpen.cost,
+                  }
+                }
+                isLabelWrapped
+                className={join(
+                  'items-start! max-sm:px-2',
+                  isFullRow && 'max-[360px]:col-span-2',
+                )}
+              />
+            );
+          })}
+        </div>
+      )}
+      {hasDaily && (
+        <NutritionTiles
+          values={stats.dailyNutrition}
+          caption={day ? 'That day' : 'Daily average'}
+          onOpen={onOpen?.nutrition}
         />
       )}
-      <div
-        className={join(
-          'relative space-y-3',
-          onOpen && 'pointer-events-none [&_button]:pointer-events-auto',
-        )}
-      >
-        {tiles.length > 0 && (
-          <div
-            className={join(
-              'grid gap-2',
-              COLUMNS[tiles.length - 1],
-              isTotalFullRowOnNarrow && 'max-[360px]:grid-cols-2',
-            )}
-          >
-            {tiles.map((tile) => {
-              const isFullRow = isTotalFullRowOnNarrow && tile.key === 'total';
-              return (
-                <StatTile
-                  key={tile.key}
-                  label={keepSoFarTogether(tile.label)}
-                  value={
-                    <span
-                      className={
-                        isFullRow
-                          ? getValueSizeClass(longest, 0)
-                          : getValueSizeClass(longest, narrowLongest)
-                      }
-                    >
-                      {tile.value}
-                    </span>
-                  }
-                  help={tile.help}
-                  isLabelWrapped
-                  className={join(
-                    'items-start! max-sm:px-2',
-                    isFullRow && 'max-[360px]:col-span-2',
-                  )}
-                />
-              );
-            })}
-          </div>
-        )}
-        {hasDaily && (
-          <NutritionTiles
-            values={stats.dailyNutrition}
-            caption={day ? 'That day' : 'Daily average'}
-          />
-        )}
-      </div>
     </div>
   );
 }

@@ -208,6 +208,34 @@ const useHistoryLayer = (
   }, [isOpen, kind, dialogId]);
 };
 
+const MAX_BACK_STEPS = 6;
+const BACK_STEP_TIMEOUT_MS = 1500;
+let isSteppingBack = false;
+
+/** Runs `action` once the history entries of every open sheet have been stepped back over (the sheets close as for a back gesture), or at once when none is open, so a route change made from inside a sheet never replaces the sheet's own entry. A call made while another is stepping is ignored, and a sheet that keeps its entry stops the stepping after a few presses. */
+export function afterBackLayersClose(action: () => void) {
+  if (isSteppingBack) return;
+  const step = (stepsLeft: number) => {
+    if (readEntry().key === null || stepsLeft === 0) {
+      isSteppingBack = false;
+      action();
+      return;
+    }
+    const onPop = () => {
+      window.clearTimeout(timer);
+      step(stepsLeft - 1);
+    };
+    const timer = window.setTimeout(() => {
+      window.removeEventListener('popstate', onPop);
+      isSteppingBack = false;
+    }, BACK_STEP_TIMEOUT_MS);
+    window.addEventListener('popstate', onPop, { once: true });
+    window.history.back();
+  };
+  isSteppingBack = true;
+  step(MAX_BACK_STEPS);
+}
+
 /** A full-page screen's own history entry, so the back gesture calls `onBack` instead of leaving the page under it. */
 export function usePageHistory(onBack: () => void) {
   useHistoryLayer(true, onBack, 'page', null);

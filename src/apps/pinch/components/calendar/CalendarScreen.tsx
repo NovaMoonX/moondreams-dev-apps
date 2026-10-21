@@ -13,6 +13,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import DayDrawer from '@apps/pinch/components/calendar/DayDrawer';
 import MonthView from '@apps/pinch/components/calendar/MonthView';
+import NutritionSummarySheet from '@apps/pinch/components/calendar/NutritionSummarySheet';
 import StatsTiles from '@apps/pinch/components/calendar/StatsTiles';
 import SummaryLine from '@apps/pinch/components/calendar/SummaryLine';
 import WeekSummarySheet from '@apps/pinch/components/calendar/WeekSummarySheet';
@@ -20,7 +21,7 @@ import WeekView from '@apps/pinch/components/calendar/WeekView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
-import { NutritionViewOptions } from '@apps/pinch/components/shared/ListViewControls';
+import { CalendarViewOptions } from '@apps/pinch/components/shared/ListViewControls';
 import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import {
   CALENDAR_VIEW_LABELS,
@@ -29,6 +30,7 @@ import {
   type CalendarView,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
 import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
 import {
   selectIngredientsById,
@@ -88,6 +90,7 @@ function CalendarScreen({
   const hasRecipes = useAppSelector(selectRecipes).length > 0;
   const hasSavedMeals = useAppSelector(selectMeals).length > 0;
   const viewOptions = useListViewOptions(uid, 'calendar');
+  const { settings } = usePinchSettings(uid);
   const isPlannedLoadFailed = useAppSelector(
     (state) => state.pinch.plannedMeals.loadError !== null,
   );
@@ -114,6 +117,7 @@ function CalendarScreen({
     mealId: string | null;
   } | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isNutritionOpen, setIsNutritionOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
   const { isBelow } = useMediaQuery();
@@ -152,7 +156,7 @@ function CalendarScreen({
   );
   const isFirstRun = !hasPlannedMeals && !isPlannedLoadFailed;
   const hasAnythingToMoveThrough = hasRecipes || hasPlannedMeals;
-  const isStatsShown = viewOptions.options.showStats;
+  const isStatsShown = settings.calendarStats;
 
   const getSummaryLabel = () => {
     if (isFromToday) return 'Next 7 days';
@@ -210,11 +214,11 @@ function CalendarScreen({
         action={
           hasRecipes || hasSavedMeals ? (
             <div className='flex items-center gap-3'>
-              <NutritionViewOptions
+              <CalendarViewOptions
+                uid={uid}
                 options={viewOptions.options}
                 customizedCount={viewOptions.customizedCount}
                 onChange={viewOptions.update}
-                onReset={viewOptions.reset}
               />
               <Button
                 type='button'
@@ -257,7 +261,10 @@ function CalendarScreen({
             <StatsTiles
               stats={stats}
               todayKey={todayKey}
-              onOpen={() => setIsSummaryOpen(true)}
+              onOpen={{
+                cost: () => setIsSummaryOpen(true),
+                nutrition: () => setIsNutritionOpen(true),
+              }}
             />
           )}
         </div>
@@ -354,6 +361,23 @@ function CalendarScreen({
           }}
           onFillIn={(gaps) => {
             setIsSummaryOpen(false);
+            setFillIn(gaps);
+          }}
+        />
+      )}
+      {isNutritionOpen && (
+        <NutritionSummarySheet
+          uid={uid}
+          title={periodTitle}
+          stats={stats}
+          todayKey={todayKey}
+          onClose={() => setIsNutritionOpen(false)}
+          onOpenDay={(dayKey) => {
+            setIsNutritionOpen(false);
+            setOpenDay({ dayKey, mealId: null });
+          }}
+          onFillIn={(gaps) => {
+            setIsNutritionOpen(false);
             setFillIn(gaps);
           }}
         />

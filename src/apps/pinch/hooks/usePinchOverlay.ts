@@ -7,6 +7,8 @@ export interface PinchOverlayContextValue {
   openSubview: (subview: PinchSubview) => void;
   /** Switches to the Shopping tab unless a subview is up when it runs, so a late tap never replaces a form holding typed work. */
   showShoppingTab: () => void;
+  /** Switches to the Settings tab unless a subview is up. Unlike the Shopping tab's, it may run from an open sheet: it closes the sheet's history entry first, then changes tab. */
+  showSettingsTab: () => void;
   /** Shows the Calendar's week on a day, under the same guard, and also not while a dialog is open over the screen. */
   showCalendarDay: (dayKey: string) => void;
   closeSubview: () => void;

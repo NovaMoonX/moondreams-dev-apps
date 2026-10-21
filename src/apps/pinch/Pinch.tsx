@@ -13,6 +13,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
@@ -25,7 +26,7 @@ import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import PantrySubview from '@apps/pinch/components/pantry/PantrySubview';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import PlanMealSubview from '@apps/pinch/components/plan/PlanMealSubview';
-import SettingsSubview from '@apps/pinch/components/settings/SettingsSubview';
+import SettingsScreen from '@apps/pinch/components/settings/SettingsScreen';
 import SharedLinksSubview from '@apps/pinch/components/share/SharedLinksSubview';
 import ShoppingScreen from '@apps/pinch/components/shopping/ShoppingScreen';
 import MealSubview from '@apps/pinch/components/recipes/MealSubview';
@@ -92,16 +93,32 @@ function Pinch() {
   const [resetCounts, setResetCounts] = useState<
     Partial<Record<PinchTab, number>>
   >({});
+  const showTab = useCallback(
+    (tab: PinchTab) => {
+      const next = new URLSearchParams(window.location.search);
+      const isFromCalendar = !next.has('tab');
+      if (isFromCalendar) calendarIndexRef.current = getHistoryIndex();
+      next.set('tab', tab);
+      startTransition(() =>
+        setSearchParams(next, { replace: !isFromCalendar }),
+      );
+    },
+    [setSearchParams],
+  );
   const showShoppingTab = useCallback(() => {
     if (subviewRef.current !== null || hasDialogOnTop()) {
       return;
     }
-    const next = new URLSearchParams(window.location.search);
-    const isFromCalendar = !next.has('tab');
-    if (isFromCalendar) calendarIndexRef.current = getHistoryIndex();
-    next.set('tab', 'shopping');
-    startTransition(() => setSearchParams(next, { replace: !isFromCalendar }));
-  }, [setSearchParams]);
+    showTab('shopping');
+  }, [showTab]);
+  const showSettingsTab = useCallback(() => {
+    if (subviewRef.current !== null) {
+      return;
+    }
+    afterBackLayersClose(() => {
+      if (subviewRef.current === null) showTab('settings');
+    });
+  }, [showTab]);
   const openSubviewFromToast = useCallback((next: PinchSubview) => {
     if (subviewRef.current !== null || hasDialogOnTop()) {
       return;
@@ -143,6 +160,7 @@ function Pinch() {
       subview,
       openSubview: setSubview,
       showShoppingTab,
+      showSettingsTab,
       showCalendarDay,
       closeSubview: () => setSubview(null),
       closeSubviewIf: (isCurrent: (current: PinchSubview | null) => boolean) =>
@@ -156,6 +174,7 @@ function Pinch() {
       subview,
       isStartOpen,
       showShoppingTab,
+      showSettingsTab,
       showCalendarDay,
       openStart,
       openSubviewFromToast,
@@ -295,6 +314,9 @@ function Pinch() {
     if (activeTab === 'shopping') {
       return <ShoppingScreen key={resetCount} uid={user.uid} />;
     }
+    if (activeTab === 'settings') {
+      return <SettingsScreen key={resetCount} uid={user.uid} />;
+    }
     return (
       <CalendarScreen
         key={`${calendarFocus?.nonce ?? 0}-${resetCount}`}
@@ -336,7 +358,6 @@ function Pinch() {
       )}
       {subview?.kind === 'products' && <ProductsSubview uid={user.uid} />}
       {subview?.kind === 'sources' && <SourcesSubview uid={user.uid} />}
-      {subview?.kind === 'settings' && <SettingsSubview uid={user.uid} />}
       {subview?.kind === 'shares' && <SharedLinksSubview />}
       {subview?.kind === 'pantry' && (
         <PantrySubview

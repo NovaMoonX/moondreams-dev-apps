@@ -102,7 +102,7 @@ interface DayDrawerProps {
   uid: string;
   dayKey: string;
   todayKey: string;
-  /** View options' "Show stats": the day's cost averages sit under its title too, instead of behind a row. */
+  /** The Calendar's "Show stats": the day's cost averages sit under its title too, instead of behind a row. */
   isStatsShown: boolean;
   /** Opens straight onto this planned meal, with the day's list one Back away. */
   initialMealId?: string | null;

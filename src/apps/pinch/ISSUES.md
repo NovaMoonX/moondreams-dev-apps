@@ -438,7 +438,7 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 **Context:** Read `TECHNICAL.md`'s Derived values (month stats, average per fully priced meal) and open question 6; `UX.md`'s Calendar (stats row) and Breakdown; A-List's `CounterRow` and `StatTile` use.
 
 ### Description
-Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the stats back as a choice: the Calendar's View options have "Show stats" (off to start), which draws a row of tiles under the summary line for the period shown (Total, Avg per fully priced meal, Per g protein, fully priced while protein is on, and the daily nutrition switched on) and takes the total off the line. A day's drawer carries the same stats for that day: the tiles under its title with "Show stats" on, or a "Stats for this day" row that swaps them in place while it is off and the day has more than its total.
+Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown. Round 7 brings the stats back as a choice: the Calendar's View options have "Show stats" (off to start, saved with the account; round 10 moved it back from the Settings tab, where it briefly sat), which draws a row of tiles under the summary line for the period shown (Total, Avg per fully priced meal, Per g protein, fully priced while protein is on, and the daily nutrition switched on) and takes the total off the line. A day's drawer carries the same stats for that day: the tiles under its title with "Show stats" on, or a "Stats for this day" row that swaps them in place while it is off and the day has more than its total.
 
 ### Possible Approach
 1. `selectMonthStats(monthKey)` in one pass over the window's planned meals: `{ spendCents, mealsPriced, avgPerMealCents, leftOut }`; the average, as first built, divided by planned meals that have at least one priced item; round 7 replaced it with the meals that have nothing left out (`fullyPricedMeals`, `avgPerFullyPricedMealCents`), from three of them, because an average of floors read as a real price.
@@ -461,7 +461,7 @@ Above the month, a stats row shows what the month cost and the average cost per 
 **Prerequisites:** Issue 12, Issue 3
 **Target PR Size:** ~500 lines
 **Files:**
-- `src/apps/pinch/components/shared/ListViewControls.tsx` ("Nutrition, everywhere" in View options), `CalendarScreen.tsx` (the eye)
+- `src/apps/pinch/components/settings/NutritionSection.tsx` (the four switches, in the Settings tab), `components/shared/ListViewControls.tsx` (each list's View options and its door to them), `CalendarScreen.tsx` (the eye)
 - `src/apps/pinch/components/shared/NutritionLine.tsx`
 - `src/apps/pinch/utils/recipeMath.ts` (nutrition), `mealMath.ts`, `stats.ts`
 - `src/apps/pinch/components/recipes/RecipeForm.tsx` ("+ My own nutrition" chip), `RecipeDrawer.tsx`, `MealDrawer.tsx`, `PlannedMealView.tsx`
@@ -471,10 +471,10 @@ Above the month, a stats row shows what the month cost and the average cost per 
 **Context:** Read `TECHNICAL.md`'s Logic §2 (nutrition) and `KitchenSettings`; `UX.md`'s View options, Calendar (summary line) and Recipe form; the README's "Cost and Nutrition".
 
 ### Description
-Nutrition is always stored and shown only when switched on. View options has four `AppToggle`s under "Nutrition, everywhere" (calories, protein, carbs, fat), all off to start. A recipe's nutrition adds up from its ingredients, and the person can type their own over it. With a metric on, it shows per serving on recipes and meals and as a daily average on the calendar's stats row; with protein on, the row adds average price per gram of protein.
+Nutrition is always stored and shown only when switched on. The Settings tab has four `AppToggle`s under "Numbers" (calories, protein, carbs, fat), all off to start, and each View options sheet points to them while none is on. A recipe's nutrition adds up from its ingredients, and the person can type their own over it. With a metric on, it shows per serving on recipes and meals and as a daily average on the calendar's stats row; with protein on, the row adds average price per gram of protein.
 
 ### Possible Approach
-1. `saveSettings({ showNutrition })` with dotted-path writes; View options (`ListViewControls`) carries a "Nutrition, everywhere" section and an "About the numbers" row for licences and attributions, reached from the eye on the Calendar, Recipes, Meals and Kitchen.
+1. `saveSettings({ showNutrition })` with dotted-path writes; the Settings tab's Numbers group (`NutritionSection`) carries the switches and an "About the numbers" line for licences and attributions, and the eye on the Calendar, Recipes, Meals and Kitchen holds a door row to it (`ListViewControls`, `CalendarViewOptions`).
 2. Nutrition math per metric as in the TDD (grams from the same bridge as cost; the override replaces a derived metric when non-null); `NO_NUTRITION` gaps only for metrics that are on.
 3. `NutritionLine` renders only the metrics that are on and renders nothing when all are off; wire it into the recipe row and drawer, meal drawer, planned meal view and the summary sheet; `selectMonthStats` adds daily averages and `proteinPriceCentsPerGram` over meals where both are known.
 4. Recipe form: "+ My own nutrition" chip (visible whether or not anything is on) with four optional per-serving fields.
@@ -1122,7 +1122,7 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 **Files:**
 - `PinchSettings`, `ReminderKind` in `types.ts`; `REMINDER_KINDS`, the day ranges and choices in `constants.ts`; `utils/settings.ts`; `getEatByDefault`'s `usual` argument in `utils/containers.ts`
 - `store/slices/pinchSettingsSlice.ts`, `store/actions/pinchSettingsActions.ts`, `startPinchSettingsListener`, `usePinchSettings`, `usePinchSync`
-- `components/settings/` (`SettingsSubview`, `RemindersSection`, `KeepingSection`), `src/components/SettingsGroup.tsx` and `SettingsRow.tsx`, the gear in `KitchenScreen`, `?open=fridge` in `Pinch.tsx`
+- `components/settings/` (`SettingsScreen`, `NutritionSection`, `RemindersSection`, `KeepingSection`), `src/components/SettingsGroup.tsx` and `SettingsRow.tsx`, the Settings tab in `PinchNav` and `Pinch.tsx` (it was a gear in `KitchenScreen`'s header opening a subview until round 10), `?open=fridge` in `Pinch.tsx`
 - `src/lib/notifications/devicePush.ts`, `notificationsQueries.ts`, `registerDeviceToken.ts`, `enablePushNotifications.ts`
 - `hooks/useTimerPush.ts` and one call in `useCookTimers`
 - `functions/src/apps/pinch/` (`sendEatSoonDigest`, `eatSoonDigest`), `functions/src/notifications/sendPush.ts` and `sendScheduledReminders.ts`, `functions/README.md`, `firestore.indexes.json`
@@ -1131,7 +1131,7 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 **Context:** Read `TECHNICAL.md` decision 24, §5h, criterion 16 and open question 25; `UX.md`'s Settings; CLAUDE.md's "Ask for a permission on a tap, with the reason beside it", "A scheduled sender never flushes a backlog" and "Per-member private data".
 
 ### Description
-A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. A gear in Kitchen's header opens Settings: this device's notifications (asked for on a tap), a switch per kind of reminder (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
+A person can choose what Pinch reminds them about and how long a new fridge or freezer box starts with. The Settings tab, the right-most in the bar, holds a switch per kind of reminder (each starts on and asks for the browser's notifications on its tap) (a morning note naming what is due or past its date, and a push when a cooking timer ends), and the days a new box starts with. Existing boxes keep their dates.
 
 ### Possible Approach
 1. One small document per person, written by their first change, owner-only, with its own rules block; readers default, later changes are dotted paths.
@@ -1141,10 +1141,10 @@ A person can choose what Pinch reminds them about and how long a new fridge or f
 
 ### CRUD & Entry-Point Requirements
 - [x] **Create / Read / Update / Delete:** the first change creates the document, every switch and pill updates it, reading shows the defaults before it exists; there is no delete in the screen (the rules allow the owner one).
-- [x] **Entry points:** the gear in Kitchen's header (the one door), the put-away form, cooking mode's Finish panel and a box's move view for the days, a notification's link for Fridge & freezer.
+- [x] **Entry points:** the Settings tab (the one place; it was the gear in Kitchen's header until round 10), the put-away form, cooking mode's Finish panel and a box's move view for the days, a notification's link for Fridge & freezer.
 
 ### Success Criteria
-- [x] Nothing is written until the first change; a person with no document sees the defaults and a new box starts at 4 and 90 days as before.
+- [x] The document is created the first time Pinch opens without one, or by the first change; until then a person sees the defaults and a new box starts at 4 and 90 days as before.
 - [x] The rules matrix (owner, another user, signed out; out-of-bounds days, hour and lead time, a non-bool switch, an extra key, a pre-stamped `lastDigestDay`, a legacy document) gives the intended outcome on the new rules and denies on the previous ones; every pre-existing rule on the touched collections and the reminders rules answer the same.
 - [x] The note: nothing due sends nothing; past only, due only and both read right for 1, 2, 3 and 12 dishes; the hour boundary, other zones, an already-sent day and a person with the switch off are checked, and the handler was run against Taylor's boxes with a stub sender.
 - [x] A timer's push is scheduled when it starts, cancelled by pause, reset, finishing in view and leaving, and left to go out when it ends while the page is hidden.
@@ -1302,7 +1302,7 @@ Fridge & freezer's past-its-date row counts both places, so it says what Kitchen
 **Prerequisites:** Issue 6, Issue 11, Issue 17, Issue 40, Issue 42, Issue 43, Issue 44, Issue 45
 **Target PR Size:** ~7,500 lines (the three callables with their allowlist, the rules, the owner's Share view and Shared links list, the public page and the import, three check scripts, the seeds and the docs)
 **Files:**
-- `PinchShare`, `SharedRecipe`, `SharedMeal`, `SharedMealItem`, `PinchShareResult`, `ChangePinchShareRequest` and `Result`, `CopyPinchShareCover*`, `PinchSubview` (`shares`, with `fromSheet`) in `types.ts`; `MAX_PINCH_SHARES`, `SHARE_ID_LENGTH`, `MAX_SHARED_MEAL_RECIPES`, `MAX_SHARED_MEAL_LINES`, `SHARE_LINK_PATH`, `SHARE_SLOT_COPY` in `constants.ts`
+- `PinchShare`, `SharedRecipe`, `SharedMeal`, `SharedMealItem`, `PinchShareResult`, `ChangePinchShareRequest` and `Result`, `CopyPinchShareCover*`, `PinchSubview` (`shares`) in `types.ts`; `MAX_PINCH_SHARES`, `SHARE_ID_LENGTH`, `MAX_SHARED_MEAL_RECIPES`, `MAX_SHARED_MEAL_LINES`, `SHARE_LINK_PATH`, `SHARE_SLOT_COPY` in `constants.ts`
 - `functions/src/apps/pinch/` (`getPinchShare`, `changePinchShare`, `copyPinchShareCover`, `pinchShareView`, `pinchShareStore`), `functions/src/index.ts`, `functions/README.md`, `firestore.rules`, `storage.rules`
 - The owner's side: `utils/sharing.ts`, `store/slices/sharesSlice.ts`, `store/actions/shareActions.ts`, `startSharesListener`, `selectors.ts`, `usePinchSync`, `components/share/` (`ShareView`, `ShareDoorRow`, `SharedLinksSubview`), `components/settings/SharedLinksSection`, and small changes to `RecipeDrawer`, `MealDrawer`, `SettingsSubview`, `RecipeForm`, `MealBuilder`, `recipeActions`, `mealActions` (`setMealFavorite` no longer writes `updatedAt`) and `Pinch.tsx`
 - The page: `SharedPinch.tsx`, `components/public/` (`ShareSlot`, `SlotCard`, `SharedBrand`, `SharedIntro`, `SharedCover`, `SharedRecipeBody`, `SharedMealBody`, `SharedStates`), `queries/shareQueries.ts`, `hooks/useShareAdd.ts`, `utils/importShare.ts`, `store/actions/importShareActions.ts`, `RecipeCareSection` and `RecipeLinksSection` (a title, a `rel`, no thumbnail), `utils/recipeCover.ts` (`getRecipeCoverPath`), `src/routes/AppRoutes.tsx`, `src/hooks/useNoIndex.ts`, `src/ui/Layout.tsx`, `cloudflare-worker.js`

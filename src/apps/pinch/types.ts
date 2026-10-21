@@ -1,4 +1,9 @@
-export type PinchTab = 'calendar' | 'recipes' | 'kitchen' | 'shopping';
+export type PinchTab =
+  | 'calendar'
+  | 'recipes'
+  | 'kitchen'
+  | 'shopping'
+  | 'settings';
 
 export type Unit =
   | 'G'
@@ -136,7 +141,7 @@ export interface PinchReminderSettings {
   timeZone: string | null;
 }
 
-/** The person's own choices, at `apps/pinch/settings/{uid}`: reminders and how long a new box keeps. Created by their first change; until then the defaults apply and nothing is stored. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
+/** The person's own choices, at `apps/pinch/settings/{uid}`: reminders, how long a new box keeps and whether the Calendar draws its stat tiles. Created the first time Pinch opens with the defaults, or by their first change. `KitchenSettings` is the older document that holds the list switches and closed nudges. */
 export interface PinchSettings {
   /** Days a box starts with in the fridge; null is the built-in number. */
   fridgeDays: number | null;
@@ -144,6 +149,8 @@ export interface PinchSettings {
   freezerDays: number | null;
   /** Whether a new recipe's Photo drawer searches the web with its title for pictures to pick. A document written before this key lacks it, which reads as true. */
   suggestPhotos: boolean;
+  /** Whether the Calendar draws its stat tiles (the total, the averages and the daily nutrition) above the week or month. Saved with the account, so it follows the person to another device. A document written before this key lacks it, which reads as false. */
+  calendarStats: boolean;
   reminders: PinchReminderSettings;
   updatedAt: number;
   /** The local day (`YYYY-MM-DD`, in `reminders.timeZone`) the morning note last went out; only the scheduled Function writes it. */
@@ -222,10 +229,8 @@ export type PinchSubview =
   /** Stores & prices: every price grouped under the store it is at, and the stores themselves. */
   | { kind: 'products' }
   | { kind: 'sources' }
-  /** Reminders and how long a new box keeps. */
-  | { kind: 'settings' }
-  /** Every link the person shared, to copy, update or stop; `fromSheet` when a Share view's cap line opened it, so back returns to the screen under it and not to Settings. */
-  | { kind: 'shares'; fromSheet?: boolean }
+  /** Every link the person shared, to copy, update or stop; back returns to the screen it was opened from. */
+  | { kind: 'shares' }
   /** The ingredients the person has on hand, grouped, each package with its own amount and date; `ingredientId` opens that ingredient's packages first. */
   | { kind: 'pantry'; ingredientId?: string }
   /** Fridge & freezer; `place` is the one a door named, shown first. */

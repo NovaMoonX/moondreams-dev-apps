@@ -8,7 +8,10 @@ import { generateUuid } from '@/utils';
 import { TIMER_PUSH_GRACE_MS } from '@apps/pinch/constants';
 import type { CookTimer } from '@apps/pinch/hooks/useCookTimers';
 import { cancelTimerPush } from '@apps/pinch/lib/timerPush';
-import { selectPinchSettings } from '@apps/pinch/store/selectors';
+import {
+  selectPinchSettings,
+  selectPinchSettingsLoadError,
+} from '@apps/pinch/store/selectors';
 import {
   getTimerCaption,
   getTimerPushAction,
@@ -44,7 +47,9 @@ export function useTimerPush(
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const isOn = useAppSelector(
-    (state) => selectPinchSettings(state).reminders.timers,
+    (state) =>
+      selectPinchSettingsLoadError(state) === null &&
+      selectPinchSettings(state).reminders.timers,
   );
   const [scheduled] = useState(() => adopt(timers, restoredIds));
   const [revision, setRevision] = useState(0);
@@ -61,7 +66,7 @@ export function useTimerPush(
       if (action === 'cancel') cancelTimerPush(entry.reminderId);
     });
 
-    if (uid === null || !isOn || !isDevicePushOn(uid)) return;
+    if (uid === null || !isOn || !isDevicePushOn()) return;
 
     const now = Date.now();
     timers.forEach((timer) => {

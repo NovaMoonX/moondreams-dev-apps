@@ -32,7 +32,7 @@ interface OpenedShare {
 }
 
 function SharedLinksSubview() {
-  const { subview, openSubview, closeSubview } = usePinchOverlay();
+  const { closeSubview } = usePinchOverlay();
   const shares = useAppSelector(selectShares);
   const statuses = useAppSelector(selectShareStatuses);
   const [query, setQuery] = useState('');
@@ -62,14 +62,7 @@ function SharedLinksSubview() {
   };
 
   return (
-    <Subview
-      title='Shared links'
-      onClose={() =>
-        subview?.kind === 'shares' && subview.fromSheet
-          ? closeSubview()
-          : openSubview({ kind: 'settings' })
-      }
-    >
+    <Subview title='Shared links' onClose={closeSubview}>
       <div className='space-y-4'>
         {shares.length > 0 && shares.length < LIST_SEARCH_THRESHOLD && (
           <IntroCard icon='🔗' lead='The links you have shared.'>

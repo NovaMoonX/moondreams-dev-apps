@@ -638,7 +638,7 @@ export const selectShowNutrition = (state: RootState) =>
 const selectPinchSettingsDocument = (state: RootState) =>
   state.pinch.pinchSettings.settings;
 
-/** The person's reminders and keeping days; the defaults until their first change, and under a document written before a key existed, that key's default. */
+/** The person's reminders and keeping days; the defaults until a document exists, and under a document written before a key existed, that key's default (a reminder kind it predates reads off). */
 export const selectPinchSettings = createSelector(
   [selectPinchSettingsDocument],
   getSettingsWithDefaults,
@@ -647,6 +647,14 @@ export const selectPinchSettings = createSelector(
 /** Set when the settings document couldn't be read; the defaults then stand in for choices the person made, so Settings draws nothing to change. */
 export const selectPinchSettingsLoadError = (state: RootState) =>
   state.pinch.pinchSettings.loadError;
+
+/** Set when the kitchen document (the four nutrition switches) couldn't be read; the all-off defaults then stand in for choices the person made. */
+export const selectNutritionLoadError = (state: RootState) =>
+  state.pinch.settings.loadError;
+
+/** Whether the kitchen document exists, so the first nutrition change creates it and later ones write only their own fields. */
+export const selectHasKitchenSettings = (state: RootState) =>
+  state.pinch.settings.settings !== null;
 
 /** Whether a document exists, so the first change writes the whole thing and later ones only their fields. */
 export const selectHasPinchSettings = (state: RootState) =>

@@ -310,8 +310,6 @@ import {
   getSettingsUpdates as stgUpdates,
   getUsualDays as stgUsual,
   getSettingsWithDefaults as stgWithDefaults,
-  getDeviceReminderText as stgDeviceText,
-  getTurnOnFailureText as stgFailureText,
   isAboveFridgeGuidance as stgAbove,
   getZoneAbbreviation as stgZone,
   isValidFreezerDays as stgFreezer,
@@ -319,6 +317,10 @@ import {
   isValidLeadDays as stgLead,
   isValidReminderHour as stgValidHour,
 } from '../../src/apps/pinch/utils/settings.ts';
+import {
+  getDeviceNotificationsText as stgDeviceText,
+  getTurnOnFailureText as stgFailureText,
+} from '../../src/lib/notifications/deviceText.ts';
 
 const ingredient = (
   id: string,
@@ -4238,7 +4240,6 @@ assert.deepEqual(
       showMacros: true,
       basis: 'PER_100G',
       showStock: true,
-      showStats: false,
     },
     false,
     true,
@@ -4248,25 +4249,13 @@ assert.deepEqual(
 );
 assert.deepEqual(
   [
-    DEFAULT_LIST_VIEW_OPTIONS.showStats,
-    parseListViewOptions({ showPrices: true })?.showStats,
-    parseListViewOptions({ showStats: true })?.showStats,
-    parseListViewOptions({ showStats: 'on' })?.showStats,
-    parseListViewOptions({ showAverages: true })?.showStats,
-    parseListViewOptions({ showAverages: true, showStats: true })?.showStats,
+    'showStats' in DEFAULT_LIST_VIEW_OPTIONS,
+    'showStats' in (parseListViewOptions({ showStats: true }) ?? {}),
     'showAverages' in (parseListViewOptions({ showAverages: true }) ?? {}),
     countCustomizedViewOptions(DEFAULT_LIST_VIEW_OPTIONS, 'calendar'),
-    countCustomizedViewOptions(
-      { ...DEFAULT_LIST_VIEW_OPTIONS, showStats: true },
-      'calendar',
-    ),
-    countCustomizedViewOptions(
-      { ...DEFAULT_LIST_VIEW_OPTIONS, showStats: true },
-      'recipes',
-    ),
   ],
-  [false, false, true, false, false, true, false, 0, 1, 0],
-  "the Calendar's stats start off, a choice stored before the switch existed or a non-boolean reads as off, the old averages choice neither turns them on nor survives a write, and turning them on counts as a change on the Calendar only",
+  [false, false, false, 0],
+  "the Calendar's stats are saved with the account, not a device option: a stored device choice of them is ignored and never written back",
 );
 assert.deepEqual(
   [
@@ -10027,15 +10016,16 @@ assert.equal(
   );
 
   assert.deepEqual(
-    stgCreate({ fridgeDays: 5 }, 1000),
+    stgCreate({ fridgeDays: 5 }, 1000, null),
     {
       fridgeDays: 5,
       freezerDays: null,
       suggestPhotos: true,
+      calendarStats: false,
       reminders: {
-        eatSoon: false,
-        expiring: false,
-        timers: false,
+        eatSoon: true,
+        expiring: true,
+        timers: true,
         leadDays: 1,
         hour: 9,
         timeZone: null,
@@ -10046,22 +10036,53 @@ assert.equal(
     'a first change writes the whole document, the defaults under it',
   );
   assert.deepEqual(
-    stgCreate({ reminders: { eatSoon: true, timeZone: 'America/Denver' } }, 7)
-      .reminders,
+    stgCreate(
+      { reminders: { eatSoon: false, timeZone: 'America/Denver' } },
+      7,
+      'Asia/Tokyo',
+    ).reminders,
     {
-      eatSoon: true,
-      expiring: false,
-      timers: false,
+      eatSoon: false,
+      expiring: true,
+      timers: true,
       leadDays: 1,
       hour: 9,
       timeZone: 'America/Denver',
     },
     "a first reminder change keeps the other reminder defaults",
   );
+  assert.equal(
+    stgCreate({ fridgeDays: 5 }, 7, 'Asia/Tokyo').reminders.timeZone,
+    'Asia/Tokyo',
+    'a first change made before the zone was written still sends the note in the device’s zone, never at UTC',
+  );
   assert.equal(stgDefaults.updatedAt, 0, 'the defaults are never written as they are');
   assert.equal(stgDefaults.suggestPhotos, true, 'photo suggestions start on');
+  assert.deepEqual(
+    [
+      stgDefaults.reminders.eatSoon,
+      stgDefaults.reminders.expiring,
+      stgDefaults.reminders.timers,
+      stgDefaults.calendarStats,
+    ],
+    [true, true, true, false],
+    'a person with no settings has every reminder on and no Calendar stat tiles',
+  );
+  assert.deepEqual(
+    [
+      stgCreate({ calendarStats: true }, 3, null).calendarStats,
+      stgUpdates({ calendarStats: true }, 9),
+      stgWithDefaults(null).calendarStats,
+    ],
+    [
+      true,
+      [{ path: ['calendarStats'], value: true }, { path: ['updatedAt'], value: 9 }],
+      false,
+    ],
+    'the Calendar stats choice is written on its own path and starts off',
+  );
   assert.equal(
-    stgCreate({ suggestPhotos: false }, 3).suggestPhotos,
+    stgCreate({ suggestPhotos: false }, 3, null).suggestPhotos,
     false,
     'a first change that turns suggestions off writes it',
   );
@@ -10114,7 +10135,7 @@ assert.equal(
       hour: 7,
       timeZone: null,
     },
-    'a document written before a reminder key existed reads that key as its default',
+    'a stored document reads a reminder it predates as off, since the morning note finds people by a stored true and a switch drawn on would promise a note that never comes',
   );
   assert.equal(
     stgWithDefaults(olderDocument)?.lastDigestDay,
@@ -10126,17 +10147,10 @@ assert.equal(
     true,
     'and a document written before photo suggestions reads them as on',
   );
-  assert.deepEqual(
-    [null, 'off', 'on', 'blocked', 'unsupported'].map((state) =>
-      stgDeviceText(state as Parameters<typeof stgDeviceText>[0]) === '',
-    ),
-    [true, false, false, false, false],
-    'every state of the device row says something, except while it is still being read',
-  );
-  assert.match(
-    stgDeviceText('off'),
-    /^Allow notifications so Pinch can nudge you/,
-    'the reason to allow comes with the switch',
+  assert.equal(
+    stgWithDefaults(olderDocument)?.calendarStats,
+    false,
+    'and one written before the Calendar stats choice reads it as off',
   );
   assert.match(
     stgDeviceText('blocked'),
@@ -10153,7 +10167,7 @@ assert.equal(
       stgFailureText,
     ),
     [null, null, null, null, 'We couldn’t turn reminders on. Check your connection and try again.'],
-    'only a failure that a retry can fix is worded, and it says so',
+    'a closed question and a refused one say nothing here; a failed setup is worded with a retry hint',
   );
   assert.deepEqual(
     [3, 4, 5, 14].map(stgAbove),

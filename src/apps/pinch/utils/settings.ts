@@ -1,4 +1,3 @@
-import type { DevicePushState } from '@/lib/notifications/devicePush';
 import {
   CONTAINER_FREEZER_DAYS,
   CONTAINER_FRIDGE_DAYS,
@@ -16,15 +15,16 @@ export interface UsualDays {
   freezer: number;
 }
 
-/** What a person with no settings document gets: every reminder off, the built-in days. */
+/** What a person with no settings document gets: every reminder on (they still reach this device only once it is allowed), the built-in days, no Calendar stat tiles. */
 export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   fridgeDays: null,
   freezerDays: null,
   suggestPhotos: true,
+  calendarStats: false,
   reminders: {
-    eatSoon: false,
-    expiring: false,
-    timers: false,
+    eatSoon: true,
+    expiring: true,
+    timers: true,
     leadDays: DEFAULT_LEAD_DAYS,
     hour: DEFAULT_REMINDER_HOUR,
     timeZone: null,
@@ -33,7 +33,10 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   lastDigestDay: null,
 };
 
-/** A stored document with any key it predates filled from the defaults, or the defaults themselves when there is none. */
+/** What a reminder kind a stored document predates reads as: off, since the morning note's query finds a person only by a stored `true`, so a switch drawn on there would promise a note that never comes. */
+const PREDATING_REMINDERS = { eatSoon: false, expiring: false, timers: false };
+
+/** A stored document with any key it predates filled in, or the defaults themselves when there is none. */
 export const getSettingsWithDefaults = (
   document: PinchSettings | null,
 ): PinchSettings =>
@@ -44,6 +47,7 @@ export const getSettingsWithDefaults = (
         ...document,
         reminders: {
           ...DEFAULT_PINCH_SETTINGS.reminders,
+          ...PREDATING_REMINDERS,
           ...document.reminders,
         },
       };
@@ -81,19 +85,26 @@ export interface PinchSettingsPatch {
   fridgeDays?: number;
   freezerDays?: number;
   suggestPhotos?: boolean;
+  calendarStats?: boolean;
   reminders?: Partial<PinchReminderSettings>;
 }
 
-/** The whole document for a person's first change: the defaults with their change on top. */
+/** The whole document for a person's first change: the defaults with their change on top, and the morning note in the zone of the device that made it (a note with no zone goes out at UTC). */
 export const createSettings = (
   patch: PinchSettingsPatch,
   now: number,
+  timeZone: string | null,
 ): PinchSettings => ({
   ...DEFAULT_PINCH_SETTINGS,
   fridgeDays: patch.fridgeDays ?? DEFAULT_PINCH_SETTINGS.fridgeDays,
   freezerDays: patch.freezerDays ?? DEFAULT_PINCH_SETTINGS.freezerDays,
   suggestPhotos: patch.suggestPhotos ?? DEFAULT_PINCH_SETTINGS.suggestPhotos,
-  reminders: { ...DEFAULT_PINCH_SETTINGS.reminders, ...patch.reminders },
+  calendarStats: patch.calendarStats ?? DEFAULT_PINCH_SETTINGS.calendarStats,
+  reminders: {
+    ...DEFAULT_PINCH_SETTINGS.reminders,
+    timeZone,
+    ...patch.reminders,
+  },
   updatedAt: now,
 });
 
@@ -111,6 +122,9 @@ export const getSettingsUpdates = (
   ...(patch.suggestPhotos === undefined
     ? []
     : [{ path: ['suggestPhotos'], value: patch.suggestPhotos }]),
+  ...(patch.calendarStats === undefined
+    ? []
+    : [{ path: ['calendarStats'], value: patch.calendarStats }]),
   ...Object.entries(patch.reminders ?? {}).flatMap(([key, value]) =>
     value === undefined ? [] : [{ path: ['reminders', key], value }],
   ),
@@ -150,29 +164,6 @@ export const getZoneAbbreviation = (timeZone: string | null, at: number) => {
     return '';
   }
 };
-
-/** The line under "Reminders on this device": the reason to turn it on while it is off, and how to get unstuck when the browser won't let it. Empty while the device is still being read. */
-export const getDeviceReminderText = (state: DevicePushState | null) => {
-  if (state === null) return '';
-  if (state === 'on') {
-    return 'Pinch can send this device reminders. Turn it off to stop every Moondreams reminder here.';
-  }
-  if (state === 'blocked') {
-    return 'This site is blocked from sending notifications. Allow them in your browser’s site settings, then come back.';
-  }
-  if (state === 'unsupported') {
-    return 'This browser can’t show reminders. On an iPhone or iPad, add this site to your Home Screen and open it from there.';
-  }
-  return 'Allow notifications so Pinch can nudge you when something needs you, even with the app closed.';
-};
-
-/** The note under a failed attempt to turn reminders on; nothing for a closed question, which changed nothing. */
-export const getTurnOnFailureText = (
-  result: 'on' | 'blocked' | 'unsupported' | 'dismissed' | 'failed',
-) =>
-  result === 'failed'
-    ? 'We couldn’t turn reminders on. Check your connection and try again.'
-    : null;
 
 /** Whether the fridge number is past what most food-safety guidance gives for cooked leftovers, so the screen says so quietly. */
 export const isAboveFridgeGuidance = (fridgeDays: number) =>

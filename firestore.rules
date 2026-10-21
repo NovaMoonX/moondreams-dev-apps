@@ -1928,9 +1928,10 @@ service cloud.firestore {
       }
 
       function isPinchSettings(data) {
-        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'suggestPhotos', 'reminders', 'updatedAt', 'lastDigestDay'])
+        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'suggestPhotos', 'calendarStats', 'reminders', 'updatedAt', 'lastDigestDay'])
           && data.keys().hasAll(['fridgeDays', 'freezerDays', 'reminders', 'updatedAt'])
           && data.get('suggestPhotos', true) is bool
+          && data.get('calendarStats', false) is bool
           && isNullOrDays(data.fridgeDays, 1, 14)
           && isNullOrDays(data.freezerDays, 7, 365)
           && isReminders(data.reminders)

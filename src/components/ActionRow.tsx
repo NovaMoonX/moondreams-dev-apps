@@ -76,7 +76,8 @@ function ActionRow({
       <span
         className={join(
           'min-w-0 text-left',
-          isRoomy && 'flex min-h-11 flex-1 flex-col justify-center',
+          hasChevron && 'flex-1',
+          isRoomy && 'flex min-h-11 flex-col justify-center',
         )}
       >
         <span className={join('block', isRoomy && 'font-medium')}>{label}</span>

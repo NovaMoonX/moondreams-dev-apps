@@ -1,124 +1,94 @@
-import { useState } from 'react';
-
-import AppToggle from '@/components/AppToggle';
+import ActionRow from '@/components/ActionRow';
 import { FilterSection } from '@/components/FilterBar';
 import { PillGroup } from '@/components/PillGroup';
 import ViewOptions, { ViewOptionSwitch } from '@/components/ViewOptions';
-import { useAuth } from '@/hooks/useAuth';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
-import { MACRO_EMOJIS } from '@/utils/macroUtils';
+import { useAppSelector } from '@/store';
+import { NUTRITION_BASIS_OPTIONS } from '@apps/pinch/constants';
 import {
-  NUTRITION_BASIS_OPTIONS,
-  NUTRITION_CELLS,
-} from '@apps/pinch/constants';
-import type { ListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
-import { saveSettings } from '@apps/pinch/store/actions/settingsActions';
-import { selectShowNutrition } from '@apps/pinch/store/selectors';
-import type { NutritionMetric } from '@apps/pinch/types';
+  DEFAULT_LIST_VIEW_OPTIONS,
+  type ListViewOptions,
+} from '@apps/pinch/hooks/useListViewOptions';
+import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
+import {
+  selectNutritionLoadError,
+  selectPinchSettingsLoadError,
+  selectShowNutrition,
+} from '@apps/pinch/store/selectors';
 import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
 
 const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
 
-interface NutritionEverywhereProps {
-  /** Called once a number switched on has saved, so the list it was switched on from shows it on its rows too; a failed save leaves the person's choice alone. */
-  onTurnOn?: () => void;
+interface NumbersDoorProps {
+  isAnyMetricOn: boolean;
 }
 
-function NutritionEverywhere({ onTurnOn }: NutritionEverywhereProps) {
-  const dispatch = useAppDispatch();
-  const uid = useAuth().user?.uid ?? null;
-  const show = useAppSelector(selectShowNutrition);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleToggle = async (metric: NutritionMetric, isOn: boolean) => {
-    if (uid === null) return;
-    setError(null);
-    try {
-      await dispatch(
-        saveSettings({ uid, showNutrition: { [metric]: isOn } }),
-      ).unwrap();
-      if (isOn) onTurnOn?.();
-    } catch (saveError) {
-      setError(getErrorMessage(saveError, 'Unable to save this.'));
-    }
-  };
+/** The way from a View options sheet to the numbers Pinch shows, which are chosen once in Settings; until one is on it stands where the screen's own macros switch would be. */
+function NumbersDoor({ isAnyMetricOn }: NumbersDoorProps) {
+  const { showSettingsTab } = usePinchOverlay();
 
   return (
-    <FilterSection title='Nutrition, everywhere'>
-      <ul className='divide-border divide-y'>
-        {NUTRITION_CELLS.map((cell) => (
-          <li key={cell.key}>
-            <label className='flex items-start gap-3 py-3'>
-              <span className='w-5 shrink-0 text-center' aria-hidden='true'>
-                {MACRO_EMOJIS[cell.key]}
-              </span>
-              <span className='min-w-0 flex-1'>
-                <span className='block text-sm font-medium'>{cell.label}</span>
-                {cell.key === 'protein' && (
-                  <span className='text-muted-foreground block text-xs'>
-                    Also shows the price per gram of protein
-                  </span>
-                )}
-              </span>
-              <AppToggle
-                aria-label={`Show ${cell.label.toLowerCase()}`}
-                checked={show[cell.key]}
-                onCheckedChange={(isOn) => void handleToggle(cell.key, isOn)}
-                className='mt-0.5 shrink-0'
-              />
-            </label>
-          </li>
-        ))}
-      </ul>
-      {error && <p className='text-destructive text-sm'>{error}</p>}
-    </FilterSection>
+    <ActionRow
+      icon='🔥'
+      label={isAnyMetricOn ? 'Your numbers' : 'Calories and macros'}
+      subtitle={
+        isAnyMetricOn
+          ? 'Choose which in Settings'
+          : 'Switch them on in Settings'
+      }
+      hasChevron
+      onClick={showSettingsTab}
+    />
   );
 }
 
-function AboutTheNumbers() {
-  return (
-    <p className='text-muted-foreground border-border border-t pt-3 text-xs'>
-      <span className='font-medium'>About the numbers:</span> nutrition values
-      are approximate, based on USDA FoodData Central. Store logos are provided
-      by Logo.dev and remain their owners' trademarks.
-    </p>
-  );
-}
-
-interface NutritionViewOptionsProps {
+interface CalendarViewOptionsProps {
+  uid: string;
   options: ListViewOptions;
   customizedCount: number;
   onChange: (patch: Partial<ListViewOptions>) => void;
-  onReset: () => void;
 }
 
-export function NutritionViewOptions({
+/** The Calendar's "View options": its stat tiles (saved with the account), its prices (kept on this device), and the door to the numbers, which are chosen in Settings. */
+export function CalendarViewOptions({
+  uid,
   options,
   customizedCount,
   onChange,
-  onReset,
-}: NutritionViewOptionsProps) {
+}: CalendarViewOptionsProps) {
+  const { settings, save } = usePinchSettings(uid);
+  const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
+  const hasNumbersLoadError = useAppSelector(selectNutritionLoadError) !== null;
+  const hasSettingsLoadError =
+    useAppSelector(selectPinchSettingsLoadError) !== null;
+
   return (
-    <ViewOptions isQuiet customizedCount={customizedCount} onReset={onReset}>
-      <NutritionEverywhere />
+    <ViewOptions
+      isQuiet
+      customizedCount={customizedCount}
+      onReset={() =>
+        onChange({ showPrices: DEFAULT_LIST_VIEW_OPTIONS.showPrices })
+      }
+    >
       <FilterSection title='On the calendar'>
         <div className='divide-border divide-y'>
-          <ViewOptionSwitch
-            label='Show stats'
-            description='Total, average per fully priced meal and daily nutrition, as tiles'
-            checked={options.showStats}
-            onCheckedChange={(showStats) => onChange({ showStats })}
-          />
+          {!hasSettingsLoadError && (
+            <ViewOptionSwitch
+              label='Show stats'
+              description='The total, averages and daily nutrition, as tiles'
+              checked={settings.calendarStats}
+              onCheckedChange={(calendarStats) => void save({ calendarStats })}
+            />
+          )}
           <ViewOptionSwitch
             label='Show prices'
-            description='On each meal in the week'
+            description='On each meal in the Week view. Kept on this device.'
             checked={options.showPrices}
             onCheckedChange={(showPrices) => onChange({ showPrices })}
           />
         </div>
       </FilterSection>
-      <AboutTheNumbers />
+      {!hasNumbersLoadError && <NumbersDoor isAnyMetricOn={isAnyMetricOn} />}
     </ViewOptions>
   );
 }
@@ -137,7 +107,7 @@ interface ListViewControlsProps {
   className?: string;
 }
 
-/** The "View options" button of a Pinch list: the nutrition every screen shows, then which lines this list's rows show. */
+/** The "View options" button of a Pinch list: which lines this list's rows show. Which numbers exist at all is chosen in Settings, so a door to them closes the sheet, and until one is on it stands in the calories switch's place (when the numbers couldn't load, neither is drawn). */
 function ListViewControls({
   options,
   customizedCount,
@@ -149,6 +119,7 @@ function ListViewControls({
   className,
 }: ListViewControlsProps) {
   const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
+  const hasNumbersLoadError = useAppSelector(selectNutritionLoadError) !== null;
 
   return (
     <ViewOptions
@@ -157,11 +128,6 @@ function ListViewControls({
       isQuiet={isQuiet}
       className={className}
     >
-      <NutritionEverywhere
-        onTurnOn={() => {
-          if (!options.showMacros) onChange({ showMacros: true });
-        }}
-      />
       <FilterSection title='On this list'>
         <div className='divide-border divide-y'>
           <ViewOptionSwitch
@@ -169,14 +135,13 @@ function ListViewControls({
             checked={options.showPrices}
             onCheckedChange={(showPrices) => onChange({ showPrices })}
           />
-          <ViewOptionSwitch
-            label='Show calories and macros'
-            description={
-              isAnyMetricOn ? undefined : 'Shows the numbers you turn on above'
-            }
-            checked={options.showMacros}
-            onCheckedChange={(showMacros) => onChange({ showMacros })}
-          />
+          {isAnyMetricOn && (
+            <ViewOptionSwitch
+              label='Show calories and macros'
+              checked={options.showMacros}
+              onCheckedChange={(showMacros) => onChange({ showMacros })}
+            />
+          )}
           {hasStockLines && (
             <ViewOptionSwitch
               label="Show what's in stock"
@@ -197,7 +162,7 @@ function ListViewControls({
           />
         </FilterSection>
       )}
-      <AboutTheNumbers />
+      {!hasNumbersLoadError && <NumbersDoor isAnyMetricOn={isAnyMetricOn} />}
     </ViewOptions>
   );
 }

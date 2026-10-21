@@ -9,8 +9,6 @@ export interface ListViewOptions {
   basis: NutritionBasis;
   /** The fridge and freezer line on recipe and meal rows; ingredient rows ignore it. */
   showStock: boolean;
-  /** The Calendar's tile row of the period's total, averages and daily nutrition; the lists ignore it. */
-  showStats: boolean;
 }
 
 export const DEFAULT_LIST_VIEW_OPTIONS: ListViewOptions = {
@@ -18,7 +16,6 @@ export const DEFAULT_LIST_VIEW_OPTIONS: ListViewOptions = {
   showMacros: false,
   basis: 'PER_100G',
   showStock: true,
-  showStats: false,
 };
 
 type ListViewList = 'recipes' | 'ingredients' | 'calendar';
@@ -32,8 +29,10 @@ export const parseListViewOptions = (
     return null;
   }
 
-  const { showPrices, showMacros, basis, showStock, showStats } =
-    stored as Record<string, unknown>;
+  const { showPrices, showMacros, basis, showStock } = stored as Record<
+    string,
+    unknown
+  >;
   const options = {
     showPrices:
       typeof showPrices === 'boolean'
@@ -51,10 +50,6 @@ export const parseListViewOptions = (
       typeof showStock === 'boolean'
         ? showStock
         : DEFAULT_LIST_VIEW_OPTIONS.showStock,
-    showStats:
-      typeof showStats === 'boolean'
-        ? showStats
-        : DEFAULT_LIST_VIEW_OPTIONS.showStats,
   };
   return options;
 };
@@ -70,8 +65,6 @@ export const countCustomizedViewOptions = (
     list === 'ingredients' && options.basis !== DEFAULT_LIST_VIEW_OPTIONS.basis,
     list === 'recipes' &&
       options.showStock !== DEFAULT_LIST_VIEW_OPTIONS.showStock,
-    list === 'calendar' &&
-      options.showStats !== DEFAULT_LIST_VIEW_OPTIONS.showStats,
   ].filter(Boolean).length;
 
 /** How a list's rows look, remembered per person and per list in this browser. */
@@ -88,7 +81,7 @@ export function useListViewOptions(uid: string, list: ListViewList) {
     options,
     customizedCount,
     update: (patch: Partial<ListViewOptions>) =>
-      setOptions({ ...options, ...patch }),
+      setOptions((current) => ({ ...current, ...patch })),
     reset: () => setOptions(DEFAULT_LIST_VIEW_OPTIONS),
   };
 }

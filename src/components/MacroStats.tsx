@@ -1,3 +1,4 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { formatMacro, MACRO_EMOJIS } from '@/utils/macroUtils';
@@ -37,6 +38,8 @@ interface MacroStatsProps {
   variant?: 'inline' | 'tiles';
   /** Tiles as one short line each (emoji and number), the caption left to a screen reader, for a summary that has to stay small. */
   isCompact?: boolean;
+  /** Makes each tile its own button (tiles only), named by its figure and this label. */
+  onOpen?: { label: string; onClick: () => void };
   className?: string;
 }
 
@@ -46,6 +49,7 @@ function MacroStats({
   show,
   variant = 'inline',
   isCompact = false,
+  onOpen,
   className,
 }: MacroStatsProps) {
   const shown = MACROS.filter(
@@ -62,46 +66,74 @@ function MacroStats({
         className={join('grid grid-cols-4 gap-2', className)}
         aria-label='Nutrition'
       >
-        {shown.map((macro) => (
-          <li
-            key={macro.key}
-            className={join(
-              'bg-secondary flex items-center rounded-xl text-center',
-              isCompact
-                ? 'justify-center gap-1 px-1 py-1.5'
-                : 'flex-col px-1 py-2',
-            )}
-          >
-            <span
-              aria-hidden='true'
-              className={isCompact ? 'text-sm' : 'text-base leading-none'}
-            >
-              {macro.emoji}
+        {shown.map((macro) => {
+          const figure = formatMacro(macro.key, values[macro.key] as number);
+          const content = (
+            <span className='contents'>
+              <span
+                aria-hidden='true'
+                className={isCompact ? 'text-sm' : 'text-base leading-none'}
+              >
+                {macro.emoji}
+              </span>
+              <span
+                className={join(
+                  'text-sm font-semibold tabular-nums',
+                  !isCompact && 'mt-1',
+                )}
+              >
+                {figure}
+                {macro.unit && (
+                  <span className='text-muted-foreground text-xs font-normal'>
+                    {macro.unit}
+                  </span>
+                )}
+              </span>
+              <span
+                className={
+                  isCompact
+                    ? 'sr-only'
+                    : 'text-muted-foreground text-[0.6875rem] leading-tight'
+                }
+              >
+                {macro.label}
+              </span>
             </span>
-            <span
+          );
+          const layoutClass = join(
+            'flex items-center text-center',
+            isCompact
+              ? 'justify-center gap-1 px-1 py-1.5'
+              : 'flex-col px-1 py-2',
+          );
+
+          return (
+            <li
+              key={macro.key}
               className={join(
-                'text-sm font-semibold tabular-nums',
-                !isCompact && 'mt-1',
+                'bg-secondary rounded-xl',
+                !onOpen && layoutClass,
               )}
             >
-              {formatMacro(macro.key, values[macro.key] as number)}
-              {macro.unit && (
-                <span className='text-muted-foreground text-xs font-normal'>
-                  {macro.unit}
-                </span>
+              {onOpen ? (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  aria-label={`${macro.label} ${figure}${macro.unit}. ${onOpen.label}`}
+                  onClick={onOpen.onClick}
+                  className={join(
+                    layoutClass,
+                    'text-foreground! hover:bg-foreground/5 active:bg-foreground/5 h-auto w-full gap-0! rounded-[inherit] font-normal',
+                  )}
+                >
+                  {content}
+                </Button>
+              ) : (
+                content
               )}
-            </span>
-            <span
-              className={
-                isCompact
-                  ? 'sr-only'
-                  : 'text-muted-foreground text-[0.6875rem] leading-tight'
-              }
-            >
-              {macro.label}
-            </span>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     );
   }
