@@ -789,7 +789,7 @@ flowchart LR
 **Flagged for the TDD** (none of these change the screens above, but each shapes the data):
 - **Copy-on-plan** — a planned meal stores its own item list and a `sourceMealId`; editing the saved meal later leaves planned days alone, and the id leaves room for a future "update N upcoming days?" prompt.
 - **Live recipes, frozen past** — planned items point at recipes, so edits reach upcoming days; once a day has passed its cost and nutrition are snapshotted so history never moves.
-- **Archive, don't delete, what is in use** — a recipe, ingredient, product or store that planned days or recipes depend on is archived and hidden from pickers, never removed.
+- **Archive, don't delete, what is in use** — a recipe, custom ingredient or store that planned days, saved meals, recipes or products depend on is archived and hidden from pickers, never removed.
 - **Comparable amounts** — a recipe's amount and a product's package size must share a dimension (mass, volume, count) or have a catalog-known conversion; anything else is excluded from the total and named in a nudge.
 - **Nudge dismissals** — "✕ hides it for those ingredients" needs a small per-gap dismissal record on the user's settings document.
 - **Unknown stock vs zero stock** — when stock tracking arrives, "not tracked" is its own state, separate from 0.

@@ -1379,7 +1379,7 @@ service cloud.firestore {
       }
 
       function isIngredient(data, id) {
-        return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'defaultProductId', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'defaultProductId', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'createdAt', 'updatedAt'])
           && data.id == id
           && (data.catalogId == null
@@ -1391,6 +1391,7 @@ service cloud.firestore {
           && ((data.servingAmount == null && data.servingUnit == null) || (isPositiveAmount(data.servingAmount) && isUnit(data.servingUnit)))
           && (data.get('gramsPerMl', null) == null || isPositiveAmount(data.gramsPerMl))
           && (data.get('gramsEach', null) == null || isPositiveAmount(data.gramsEach))
+          && data.get('isArchived', false) is bool
           && (data.get('defaultProductId', null) == null || isShortText(data.defaultProductId, 80))
           && data.createdAt is int && data.updatedAt is int;
       }
@@ -1427,7 +1428,7 @@ service cloud.firestore {
 
       // Rules can't walk a list, so each ingredient line and step is shaped by the client; the rules cap the counts and the fields around them.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'nutritionOverride', 'source', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'nutritionOverride', 'source', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1436,6 +1437,7 @@ service cloud.firestore {
           && isNullOrMinutes(data.get('prepMinutes', null))
           && isNullOrMinutes(data.get('cookMinutes', null))
           && isNutrition(data.get('nutritionOverride', null))
+          && data.get('isArchived', false) is bool
           && (data.get('coverPath', null) == null || data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp')
           && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
           && data.steps is list && data.steps.size() <= 60
@@ -1444,12 +1446,13 @@ service cloud.firestore {
       }
 
       function isStore(data, id) {
-        return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.name, 120)
           && (data.catalogStoreId == null || (data.catalogStoreId == id && data.catalogStoreId.matches('cat-store-.+')))
           && (data.imagePath == null || data.imagePath == 'apps/pinch/kitchens/' + uid + '/stores/' + id + '/logo.webp')
+          && data.get('isArchived', false) is bool
           && data.createdAt is int && data.updatedAt is int;
       }
 

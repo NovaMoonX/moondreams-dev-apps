@@ -63,6 +63,8 @@ export interface IngredientRecord {
   gramsEach: number | null;
   /** The product that prices this ingredient; a product's own document is the source of truth, so a missing or stale id reads as "the first product". Documents written before products existed lack the key. */
   defaultProductId: string | null;
+  /** Hidden from lists and pickers but still resolving for the planned days and recipes that use it; only a custom ingredient is ever archived. Documents written before archiving lack the key, which reads as false. */
+  isArchived: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -89,6 +91,8 @@ export interface ResolvedIngredient {
   isCustom: boolean;
   /** A catalog ingredient the person changed. */
   isAdjusted: boolean;
+  /** Hidden from lists and pickers, still resolved for what uses it. */
+  isArchived: boolean;
 }
 
 export interface ResolvedFamily {
@@ -203,6 +207,8 @@ export interface Store {
   catalogStoreId: string | null;
   /** Storage path of the person's own image. */
   imagePath: string | null;
+  /** Hidden from lists and pickers once products point at it, still named on them. Documents written before archiving lack the key, which reads as false. */
+  isArchived: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -250,6 +256,8 @@ export interface Recipe {
   /** Per serving; a null metric falls back to the value added up from the ingredients. */
   nutritionOverride: NutritionValues | null;
   source: RecipeSource;
+  /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */
+  isArchived: boolean;
   createdAt: number;
   updatedAt: number;
 }

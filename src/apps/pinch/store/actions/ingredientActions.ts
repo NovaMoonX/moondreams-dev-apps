@@ -12,6 +12,8 @@ import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
+import { readUsage } from '@apps/pinch/store/actions/usageActions';
+import { isInUse } from '@apps/pinch/utils/references';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
 import { getGapKey } from '@apps/pinch/utils/gaps';
 import type {
@@ -97,6 +99,7 @@ export const saveIngredient = createAsyncThunk<
           ...('gramsPerMl' in existing ? {} : { gramsPerMl: null }),
           ...('gramsEach' in existing ? {} : { gramsEach: null }),
           ...('defaultProductId' in existing ? {} : { defaultProductId: null }),
+          ...('isArchived' in existing ? {} : { isArchived: false }),
         };
         const ownedFields = {
           ...missingKeys,
@@ -125,6 +128,7 @@ export const saveIngredient = createAsyncThunk<
           gramsPerMl: null,
           gramsEach: null,
           defaultProductId: null,
+          isArchived: false,
           createdAt: now,
           updatedAt: now,
         };
@@ -168,6 +172,11 @@ export const removeIngredient = createAsyncThunk<
   async ({ uid, id }, { getState, rejectWithValue }) => {
     try {
       await freezeBeforeEdit(uid, getState());
+      const isCustom =
+        getState().pinch.ingredients.records.find((record) => record.id === id)
+          ?.catalogId === null;
+      const inUse =
+        isCustom && isInUse(await readUsage(uid, getState(), 'INGREDIENT', id));
       const recordRef = kitchenDoc(uid, 'ingredients', id);
       await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(recordRef);
@@ -176,6 +185,14 @@ export const removeIngredient = createAsyncThunk<
         }
 
         const { catalogId, defaultProductId } = snapshot.data();
+        if (catalogId == null && inUse) {
+          transaction.update(recordRef, {
+            isArchived: true,
+            updatedAt: Date.now(),
+          });
+          return;
+        }
+
         if (catalogId == null || defaultProductId == null) {
           transaction.delete(recordRef);
           return;

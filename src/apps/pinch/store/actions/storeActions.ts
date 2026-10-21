@@ -15,7 +15,9 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
 import { STORE_IMAGE_MAX_DIMENSION } from '@apps/pinch/constants';
+import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import type { Store } from '@apps/pinch/types';
+import { isInUse } from '@apps/pinch/utils/references';
 
 const storeDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'stores', id);
@@ -44,7 +46,14 @@ export const ensureCatalogStore = createAsyncThunk<
     try {
       await runTransaction(db, async (transaction) => {
         const ref = storeDoc(uid, catalogStore.id);
-        if ((await transaction.get(ref)).exists()) {
+        const current = await transaction.get(ref);
+        if (current.exists()) {
+          if (current.data().isArchived === true) {
+            transaction.update(ref, {
+              isArchived: false,
+              updatedAt: Date.now(),
+            });
+          }
           return;
         }
         const now = Date.now();
@@ -53,6 +62,7 @@ export const ensureCatalogStore = createAsyncThunk<
           name: catalogStore.name,
           catalogStoreId: catalogStore.id,
           imagePath: null,
+          isArchived: false,
           createdAt: now,
           updatedAt: now,
         };
@@ -117,6 +127,7 @@ export const saveStore = createAsyncThunk<
         await updateDoc(storeDoc(uid, storeId), {
           ...(existing.catalogStoreId === null && { name: name.trim() }),
           imagePath,
+          ...('isArchived' in existing ? {} : { isArchived: false }),
           updatedAt: now,
         });
       } else {
@@ -125,6 +136,7 @@ export const saveStore = createAsyncThunk<
           name: name.trim(),
           catalogStoreId: null,
           imagePath,
+          isArchived: false,
           createdAt: now,
           updatedAt: now,
         };
@@ -152,7 +164,7 @@ interface RemoveStoreInput {
   id: string;
 }
 
-/** Deletes the store and its image; products that point at it are kept, with their store shown as "Removed store". */
+/** Deletes the store and its image, or archives it (image kept) when products point at it, so they still name where they were bought. */
 export const removeStore = createAsyncThunk<
   string,
   RemoveStoreInput,
@@ -163,6 +175,14 @@ export const removeStore = createAsyncThunk<
   );
 
   try {
+    if (isInUse(await readUsage(uid, getState(), 'STORE', id))) {
+      await updateDoc(storeDoc(uid, id), {
+        isArchived: true,
+        updatedAt: Date.now(),
+      });
+      return id;
+    }
+
     await deleteDoc(storeDoc(uid, id));
     if (existing?.imagePath) {
       await deleteFile(existing.imagePath).catch(() => undefined);

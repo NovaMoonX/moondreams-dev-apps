@@ -55,7 +55,10 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
     () =>
       [...products]
         .sort((a, b) => b.updatedAt - a.updatedAt)
-        .find((product) => storesById.has(product.storeId))?.storeId ?? null,
+        .find((product) => {
+          const store = storesById.get(product.storeId);
+          return store !== undefined && store.isArchived !== true;
+        })?.storeId ?? null,
     [products, storesById],
   );
   const rows = useMemo(

@@ -31,8 +31,15 @@ interface StorePickerProps {
 /** Picks where something is bought: the person's own stores as logo pills, and a dashed "New store" pill that opens the well-known list and a box for one of their own. */
 function StorePicker({ uid, value, onChange }: StorePickerProps) {
   const dispatch = useAppDispatch();
-  const stores = useAppSelector(selectStores);
-  const storesById = useAppSelector(selectStoresById);
+  const visibleStores = useAppSelector(selectStores);
+  const hiddenChoice = useAppSelector(selectStoresById).get(value ?? '');
+  const stores = useMemo(
+    () =>
+      hiddenChoice?.isArchived === true
+        ? [...visibleStores, hiddenChoice]
+        : visibleStores,
+    [visibleStores, hiddenChoice],
+  );
   const [isAdding, setIsAdding] = useState(stores.length === 0);
   const [query, setQuery] = useState('');
   const [ownName, setOwnName] = useState('');
@@ -65,11 +72,12 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
     () =>
       searchByName(
         CATALOG_STORES.filter(
-          (catalogStore) => !storesById.has(catalogStore.id),
+          (catalogStore) =>
+            !visibleStores.some((store) => store.id === catalogStore.id),
         ),
         query,
       ),
-    [storesById, query],
+    [visibleStores, query],
   );
 
   const finish = (storeId: string) => {

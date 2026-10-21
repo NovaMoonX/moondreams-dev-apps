@@ -47,7 +47,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Save a meal to reuse it.** Saved meals sit with your recipes in the Recipes tab.
 - **Every day has its own copy of a meal.** Putting a meal on the calendar copies its items onto that day. Changing one day's items leaves the saved meal and every other day as they were, and editing the saved meal later leaves days already planned as they were. "Save as a new meal" turns a tweaked day into a meal of its own.
 - **Recipes are shared by everything that uses them.** Edit a recipe and every meal still ahead of today that includes it shows the change.
-- **Deleting something in use archives it.** A recipe, ingredient, or product that's part of planned days disappears from lists and pickers, and the days and totals that used it stay whole.
+- **Deleting something in use archives it.** A recipe, custom ingredient, or store that's part of planned days or saved meals disappears from lists and pickers, and the days and totals that used it stay whole.
 
 ### Ingredients, Variants, and Products, In Detail
 

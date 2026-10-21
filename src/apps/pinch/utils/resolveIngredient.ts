@@ -61,6 +61,7 @@ export function resolveCatalogIngredient(
     gramsEach: record?.gramsEach ?? catalog.gramsEach,
     isCustom: false,
     isAdjusted: record !== null && hasAdjustments(record),
+    isArchived: false,
   };
 }
 
@@ -86,6 +87,7 @@ export function resolveCustomIngredient(
     gramsEach: record.gramsEach,
     isCustom: true,
     isAdjusted: false,
+    isArchived: record.isArchived === true,
   };
 }
 
