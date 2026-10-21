@@ -56,9 +56,10 @@ function Doughnut({ segments, total, size = 160, ariaLabel, isDecorative = false
       >
         <circle cx='18' cy='18' r={RADIUS} fill='none' strokeWidth={STROKE} className='stroke-muted' />
         {arcs.map(({ segment, length, offset }) => {
-          // A round cap sticks out by half the stroke at each end, so the dash is shortened to keep the arc true to its value; a very short arc stays butt.
-          const hasRoundCaps = isSingleProgress && length > STROKE + 0.5;
-          const dash = hasRoundCaps ? length - STROKE : length;
+          // A round cap sticks out by half the stroke at each end, so the dash is shortened to keep the arc true to its value; a very short arc stays butt, and a full ring is one unbroken circle.
+          const isFull = isSingleProgress && length >= 100;
+          const hasRoundCaps = isSingleProgress && !isFull && length > STROKE + 0.5;
+          const dash = isFull ? 100 : hasRoundCaps ? length - STROKE : length;
           const start = hasRoundCaps ? offset + STROKE / 2 : offset;
           return (
             <circle
