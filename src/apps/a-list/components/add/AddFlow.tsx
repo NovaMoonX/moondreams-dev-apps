@@ -3,11 +3,12 @@ import { useState } from 'react';
 import { Button, Form } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Play } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Play } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
 import { SubviewHeader } from '@/components/Subview';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -143,6 +144,7 @@ export function AddFlow({
   const { addToast } = useToast();
   const queryClient = useQueryClient();
   const now = useNow();
+  const isPhone = useMediaQuery().isBelow('sm');
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
   const feeChips = useAppSelector(selectFeeChips);
@@ -573,13 +575,15 @@ export function AddFlow({
                 href={trailerUrl}
                 target='_blank'
                 rel='noopener noreferrer'
-                variant='secondary'
+                variant='tertiary'
                 size='sm'
                 rounded='full'
-                className='h-10 gap-1.5'
+                aria-label='Watch trailer on YouTube'
+                className='border-border min-h-10 gap-1.5 border py-1'
               >
                 <Play className='h-4 w-4' aria-hidden='true' />
-                Watch trailer on YouTube
+                {isPhone ? 'Watch trailer' : 'Watch trailer on YouTube'}
+                <ExternalLink className='h-3.5 w-3.5' aria-hidden='true' />
               </Button>
             )}
           </div>

@@ -30,6 +30,20 @@ import type {
 } from '@apps/a-list/types';
 
 const POPULAR_COLLAPSED_COUNT = 8;
+const WATCHLIST_COLLAPSED_COUNT = 5;
+const WATCHLIST_FOLD_MIN = 9;
+
+const popularHelp = (
+  <>
+    <p>
+      Movies playing in US theaters now or opening soon, most popular first.
+    </p>
+    <p>
+      <strong>Left out:</strong> anything already on your watchlist, seen or
+      not, so you won't see it twice.
+    </p>
+  </>
+);
 
 interface MoviePickerProps {
   query: string;
@@ -72,6 +86,7 @@ function MoviePicker({
     enabled: showPopular,
   });
   const [isPopularOpen, setIsPopularOpen] = useState(false);
+  const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
   const normalizedQuery = normalizeString(query);
   // An empty search shows what's still unseen; typing searches the whole list, so a rewatch can be picked.
   const isWatchlistMatch = (item: WatchlistItem) => {
@@ -124,6 +139,16 @@ function MoviePicker({
       search.error.code === 'functions/failed-precondition');
 
   const trimmedQuery = query.trim();
+  const watchlistShown =
+    isWatchlistOpen || watchlistMatches.length < WATCHLIST_FOLD_MIN
+      ? watchlistMatches
+      : watchlistMatches.slice(0, WATCHLIST_COLLAPSED_COUNT);
+  const isEverythingListed =
+    showPopular &&
+    trimmedQuery === '' &&
+    popular.isSuccess &&
+    popular.data.length > 0 &&
+    popularResults.length === 0;
   const popularShown = isPopularOpen
     ? popularResults
     : popularResults.slice(0, POPULAR_COLLAPSED_COUNT);
@@ -136,7 +161,8 @@ function MoviePicker({
   const hasItems =
     watchlistMatches.length > 0 ||
     visibleResults.length > 0 ||
-    popularResults.length > 0;
+    popularResults.length > 0 ||
+    isEverythingListed;
 
   const getEmptyState = () => {
     if (hasItems) return null;
@@ -232,7 +258,7 @@ function MoviePicker({
             On your watchlist
           </h3>
           <ul className='space-y-0.5'>
-            {watchlistMatches.map((item) =>
+            {watchlistShown.map((item) =>
               renderRow(
                 item.movieKey,
                 item.movie.title,
@@ -249,6 +275,16 @@ function MoviePicker({
               ),
             )}
           </ul>
+          {watchlistMatches.length >= WATCHLIST_FOLD_MIN && (
+            <ShowMoreButton
+              isOpen={isWatchlistOpen}
+              onClick={() => setIsWatchlistOpen((current) => !current)}
+            >
+              {isWatchlistOpen
+                ? 'Show fewer'
+                : `Show all ${watchlistMatches.length}`}
+            </ShowMoreButton>
+          )}
         </div>
       )}
       {isPopularLoading && watchlistMatches.length === 0 && (
@@ -286,15 +322,7 @@ function MoviePicker({
               In theaters and coming soon
             </h3>
             <HelpTip title='In theaters and coming soon' placement='bottom'>
-              <p>
-                Movies playing in US theaters now or opening soon, most
-                popular first.
-              </p>
-              <p>
-                <strong>Left out:</strong> anything already on your watchlist,
-                seen or not, so you won't see it twice. Search by title to find
-                those.
-              </p>
+              {popularHelp}
             </HelpTip>
           </div>
           <ul className='space-y-0.5'>
@@ -320,6 +348,21 @@ function MoviePicker({
                 : `Show all ${popularResults.length}`}
             </ShowMoreButton>
           )}
+        </div>
+      )}
+      {isEverythingListed && (
+        <div className='space-y-1'>
+          <div className='flex items-center gap-1'>
+            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+              In theaters and coming soon
+            </h3>
+            <HelpTip title='In theaters and coming soon' placement='bottom'>
+              {popularHelp}
+            </HelpTip>
+          </div>
+          <p className='text-muted-foreground px-2 py-2 text-sm'>
+            Everything playing or opening soon is already on your watchlist.
+          </p>
         </div>
       )}
       {visibleResults.length > 0 && (
