@@ -8,8 +8,10 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatDate } from '@/utils/formatUtils';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
+import SuggestionNote from '@apps/a-list/components/viewing/SuggestionNote';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import { useAppSelector } from '@/store';
+import { useTicketSuggestion } from '@apps/a-list/hooks/useTicketSuggestion';
 import {
   selectFeeChips,
   selectTaxRateChips,
@@ -28,6 +30,7 @@ import {
 import { formatShowtimeForTheatre } from '@apps/a-list/utils/theatreTime';
 import {
   evaluateTicketDraft,
+  resolveTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
 
@@ -53,14 +56,19 @@ function PurchaseReturnPrompt({
   const [isChangingPlan, setIsChangingPlan] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
   const [draft, setDraft] = useState<TicketDraft | null>(() =>
-    purchase ? getPurchaseTicketDraft(purchase, feeChips[1] ?? 0) : null,
+    purchase ? getPurchaseTicketDraft(purchase) : null,
+  );
+  const suggestion = useTicketSuggestion(
+    viewing.theatre?.theatreId ?? null,
+    draft?.format ?? 'STANDARD',
   );
 
   if (!purchase || !draft) {
     return null;
   }
 
-  const result = evaluateTicketDraft(draft);
+  const result = evaluateTicketDraft(draft, suggestion);
+  const shown = resolveTicketDraft(draft, suggestion);
   const priceCents = parseMoneyToCents(draft.price);
   const estimatedTax =
     priceCents !== null && defaultRate !== null
@@ -95,7 +103,11 @@ function PurchaseReturnPrompt({
         </div>
       </div>
       {isChangingPlan ? (
-        <TicketFields draft={draft} onChange={setDraft} />
+        <TicketFields
+          draft={draft}
+          onChange={setDraft}
+          theatre={viewing.theatre ?? null}
+        />
       ) : (
         <div className='space-y-3'>
           <p className='bg-secondary/60 flex items-center justify-between gap-2 rounded-2xl px-3 py-2 text-sm'>
@@ -118,24 +130,35 @@ function PurchaseReturnPrompt({
               Change
             </Button>
           </p>
+          <SuggestionNote
+            suggestion={suggestion}
+            draft={draft}
+            theatreName={viewing.theatre?.name ?? null}
+          />
           <p className='text-muted-foreground text-sm'>
-            Add the convenience fee and the tax from your checkout. If a line
-            wasn't there or showed $0, enter 0.
+            Check the convenience fee and the tax against your checkout. If a
+            line wasn't there or showed $0, enter 0.
           </p>
           <div className='space-y-1.5'>
             <p className='text-sm font-medium'>Convenience fee</p>
             <MoneyInput
               ariaLabel='Convenience fee'
               placeholder='1.50'
-              value={draft.fee}
+              value={shown.fee}
               errorMessage={result.errors.fee}
-              onChange={(value) => setDraft({ ...draft, fee: value })}
+              onChange={(value) =>
+                setDraft({ ...draft, fee: value, isFeeEdited: true })
+              }
             />
             <FeeChips
-              value={draft.fee}
+              value={shown.fee}
               chips={feeChips}
               onPick={(cents) =>
-                setDraft({ ...draft, fee: centsToInputValue(cents) })
+                setDraft({
+                  ...draft,
+                  fee: centsToInputValue(cents),
+                  isFeeEdited: true,
+                })
               }
             />
           </div>
@@ -144,9 +167,11 @@ function PurchaseReturnPrompt({
             <MoneyInput
               ariaLabel='Tax'
               placeholder={estimatedTax}
-              value={draft.tax}
+              value={shown.tax}
               errorMessage={result.errors.tax}
-              onChange={(value) => setDraft({ ...draft, tax: value })}
+              onChange={(value) =>
+                setDraft({ ...draft, tax: value, isTaxEdited: true })
+              }
             />
           </div>
         </div>
@@ -154,7 +179,7 @@ function PurchaseReturnPrompt({
       <div className='space-y-2'>
         {!result.isValid && (
           <p className='text-muted-foreground text-center text-sm'>
-            {draft.tax.trim() === ''
+            {shown.tax.trim() === ''
               ? 'Add the tax to save your ticket.'
               : 'Check the amounts above to save your ticket.'}
           </p>

@@ -1,5 +1,7 @@
 import { MAX_AMOUNT_CENTS, MAX_TAX_RATE } from '@apps/a-list/constants';
 import type { AmcFormat, Ticket } from '@apps/a-list/types';
+import type { TicketSuggestion } from '@apps/a-list/utils/chips';
+import { getItemizedTaxCents } from '@apps/a-list/utils/tax';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 
 /** The three amounts AMC itemizes on every ticket, in dollars as typed, plus its format. */
@@ -10,12 +12,12 @@ export interface TicketDraft {
   standardPrice: string;
   fee: string;
   tax: string;
+  /** Until the member types or picks one, the fee and tax follow the suggestion for the theater, format and price. */
+  isFeeEdited: boolean;
+  isTaxEdited: boolean;
 }
 
-export function getInitialTicketDraft(
-  ticket: Ticket | null,
-  defaultFeeCents: number,
-): TicketDraft {
+export function getInitialTicketDraft(ticket: Ticket | null): TicketDraft {
   if (ticket) {
     return {
       format: ticket.format,
@@ -23,6 +25,8 @@ export function getInitialTicketDraft(
       standardPrice: centsToInputValue(ticket.standardPriceCents),
       fee: centsToInputValue(ticket.feeAvoidedCents),
       tax: centsToInputValue(ticket.taxCents),
+      isFeeEdited: true,
+      isTaxEdited: true,
     };
   }
 
@@ -30,9 +34,47 @@ export function getInitialTicketDraft(
     format: 'STANDARD',
     price: '',
     standardPrice: '',
-    fee: centsToInputValue(defaultFeeCents),
+    fee: '',
     tax: '',
+    isFeeEdited: false,
+    isTaxEdited: false,
   };
+}
+
+/** The draft with an untouched fee and tax filled from the suggestion; the tax follows the price typed so far. */
+export function resolveTicketDraft(
+  draft: TicketDraft,
+  suggestion: TicketSuggestion | null,
+): TicketDraft {
+  if (!suggestion) return draft;
+
+  const priceCents = parseMoneyToCents(draft.price);
+  const suggestedTax =
+    priceCents !== null && suggestion.taxRate !== null
+      ? centsToInputValue(getItemizedTaxCents(priceCents, suggestion.taxRate))
+      : '';
+  const result = {
+    ...draft,
+    fee: draft.isFeeEdited ? draft.fee : centsToInputValue(suggestion.feeCents),
+    tax: draft.isTaxEdited ? draft.tax : suggestedTax,
+  };
+  return result;
+}
+
+/** Applies the form's new values, marking the fee or tax as the member's own once it differs from what was shown. */
+export function applyTicketFormChange(
+  draft: TicketDraft,
+  data: Partial<
+    Pick<TicketDraft, 'format' | 'price' | 'standardPrice' | 'fee' | 'tax'>
+  >,
+): TicketDraft {
+  const result = {
+    ...draft,
+    ...data,
+    isFeeEdited: draft.isFeeEdited || (data.fee ?? draft.fee) !== draft.fee,
+    isTaxEdited: draft.isTaxEdited || (data.tax ?? draft.tax) !== draft.tax,
+  };
+  return result;
 }
 
 export interface TicketDraftResult {
@@ -57,7 +99,11 @@ function parseAmount(value: string): { cents: number | null; error?: string } {
   return { cents };
 }
 
-export function evaluateTicketDraft(draft: TicketDraft): TicketDraftResult {
+export function evaluateTicketDraft(
+  rawDraft: TicketDraft,
+  suggestion: TicketSuggestion | null,
+): TicketDraftResult {
+  const draft = resolveTicketDraft(rawDraft, suggestion);
   const price = parseAmount(draft.price);
   const fee = parseAmount(draft.fee);
   const tax = parseAmount(draft.tax);
