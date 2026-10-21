@@ -226,6 +226,12 @@ export const MAX_RECIPE_DESCRIPTION_LENGTH = 2000;
 export const MAX_STEP_LENGTH = 2000;
 export const MAX_NOTE_LENGTH = 200;
 export const MAX_MINUTES = 100_000;
+/** The cap the rules enforce. */
+export const MAX_CARE_DAYS = 365;
+export const CARE_DAYS_PER_MONTH = 30;
+export const CARE_DAYS_PER_WEEK = 7;
+export const MAX_CARE_REHEAT_LENGTH = 300;
+export const MAX_CARE_TIP_LENGTH = 300;
 /** The longest edge of a recipe cover: it shows in a list row and a drawer header. */
 export const RECIPE_COVER_MAX_DIMENSION = 1280;
 

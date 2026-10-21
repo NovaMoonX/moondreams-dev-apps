@@ -33,6 +33,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { CookView, Recipe } from '@apps/pinch/types';
 import { getPlannedCookId, isCookHistoryFull } from '@apps/pinch/utils/cooks';
+import { getLeftoversLine, getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const getStartServings = (recipe: Recipe, servings: number | undefined) => {
@@ -116,6 +117,7 @@ function CookingSession({
   const isStepsView = view === 'steps';
   const isFinishShown = isFinished && isStepsView && hasSteps;
   const canMark = isCooksReady && !isRemoved;
+  const leftoversLine = getLeftoversLine(getRecipeCare(recipe));
   const isAlreadyMarked = hasPlannedCook && cookedId === null && !isMarking;
 
   const scrollToTop = () =>
@@ -316,6 +318,11 @@ function CookingSession({
                   Saved to your cooking history.
                 </p>
               </div>
+              {leftoversLine && (
+                <p className='text-muted-foreground text-sm text-balance'>
+                  {leftoversLine}
+                </p>
+              )}
               {note.isOpen ? (
                 <div className='w-full max-w-md space-y-2 text-left'>
                   <NoteTextField
@@ -362,6 +369,11 @@ function CookingSession({
                     : 'Keeps a record. You can change the date later.'}
                 </p>
               </div>
+              {leftoversLine && (
+                <p className='text-muted-foreground text-sm text-balance'>
+                  {leftoversLine}
+                </p>
+              )}
               {isHistoryFull && !isAlreadyMarked && (
                 <p className='text-muted-foreground text-sm'>
                   This recipe's history is full. Delete an older cook to add
