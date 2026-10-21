@@ -305,7 +305,7 @@ Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getPopularMovies.ts`, `g
 **The budget is the design constraint.** About 1,000 lookups a day for *everyone using the app combined* (the key lives on the server, so it is one shared bucket, not one per member). One lookup is one upstream call, so a search with more than 10 matches costs two. Rough cost: a member adding a movie spends one or two searches (typing pauses) plus one details call, so backfilling ten movies costs on the order of thirty, and a few such sessions in a day could exhaust it. Four layers keep that from happening, cheapest first:
 
 1. **The browser** debounces typing (`useDebouncedValue` with `DEBOUNCE_MS.autocomplete`), searches only from `MOVIE_SEARCH_MIN_CHARS`, never searches an empty box (it shows the watchlist), and remembers results with TanStack Query (persisted, so a repeat is free even offline). Search results never trigger per-result details calls; details are fetched only for the movie actually picked.
-2. **A shared server-side cache** (Firestore, written and read only by the functions through the admin SDK; clients have no access): `apps/a-list/searchCache/{key}` and `apps/a-list/movieCache/{movieKey}`, each `{ value, cachedAt }`. Search results live 7 days; details live 30 days for a movie already released and 1 day when the release date is null or in the future (those are the ones that change). A cache hit costs no lookup, and the second member to search for the same movie costs nothing.
+2. **A shared server-side cache** (Firestore, written and read only by the functions through the admin SDK; clients have no access): `apps/a-list/searchCache/{key}` and `apps/a-list/movieCache/{movieKey}`, each `{ value, cachedAt }`. Search results live 7 days and the popular list 1 day; details live 30 days for a movie already released and 1 day when the release date is null or in the future (those are the ones that change). A cache hit costs no lookup, and the second member to search for the same movie costs nothing.
 3. **A daily budget guard** in the functions: before any upstream call, a transaction increments `apps/a-list/lookupUsage/{yyyy-mm-dd}` (the whole app) and `apps/a-list/lookupUsage/{yyyy-mm-dd}_{uid}` (that member). The call is refused with `resource-exhausted` once the app total reaches 900 (headroom under 1,000, since the provider's own day boundary isn't documented; the guard uses UTC dates) or a member reaches 100. Cache hits are never counted.
 4. **A manual path.** When the guard refuses, or a movie isn't in the database, the picker's "Add it by title" link opens `ManualMovieForm`: a title and an optional release date. It builds the snapshot on the client with `movieKey: 'manual-<uuid>'`, no poster (the cover is a title tile) and no runtime (the fallback runtime applies). The picker's message on a refusal is one warm line, not an error.
 
@@ -315,6 +315,7 @@ Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getPopularMovies.ts`, `g
 
 ```typescript
 // searchMovies({ query: string })  → { results: MovieSearchResult[] }   (≤ 20, newest year first)
+// getPopularMovies({})              → { results: MovieSearchResult[] }   (≤ 30, most popular first; [] on OMDb)
 interface MovieSearchResult {
   movieKey: string;                  // "imdb-tt0133093"
   title: string;
@@ -770,7 +771,7 @@ src/apps/a-list/
     ├── dashboard/   DashboardScreen.tsx  StatTile.tsx  (Next Steps: FormatSplit.tsx  ActivityChart.tsx  RatingsSpend.tsx  PremiumInsights.tsx)
     └── shared/      PosterCover.tsx  FormatBadge.tsx  PriorityBadge.tsx  ViewingStatusBadge.tsx
 
-functions/src/apps/a-list/       searchMovies.ts  getMovie.ts  lookupBudget.ts  movieCache.ts
+functions/src/apps/a-list/       searchMovies.ts  getPopularMovies.ts  getMovie.ts  lookupBudget.ts  movieCache.ts
 scripts/seeds/aList.ts
 ```
 
@@ -783,7 +784,7 @@ Charts use `recharts` (already a dependency), following Nine Lives' `TrendLineCh
 - `public/manifest-a-list.json`, a logo and a banner under `public/logos` and `public/banners/by-app`, the entry in `cloudflare-worker.js`, and the root `README.md` (the registry's own comment lists exactly these). The root README's "Current apps" list is stale (it names only Worth the Wait), so this first PR rewrites it to list every app, each with an emoji; `CLAUDE.md` (Release hygiene) and `.github/copilot-instructions.md` (Documentation quality) each gain a rule that adding or renaming an app updates that list in the same PR.
 - `src/store/index.ts`: `aList` reducer and `RootState`.
 - `firestore.rules`: the block above (including the three server-only deny blocks), in alphabetical order, with emulator verification noted in the PR; `firestore.indexes.json` unchanged (state this in the PR).
-- `functions/src/index.ts`: export `searchMovies` and `getMovie`; set the `TMDB_API_KEY` and `OMDB_API_KEY` secrets (create `TMDB_API_KEY` in production before the PR merges); after the first deploy, confirm the invoker access (README's Deployment section) if the browser reports a CORS error.
+- `functions/src/index.ts`: export `searchMovies`, `getPopularMovies` and `getMovie`; set the `TMDB_API_KEY` and `OMDB_API_KEY` secrets (create `TMDB_API_KEY` in production before the PR merges); after the first deploy, confirm the invoker access (README's Deployment section) if the browser reports a CORS error.
 - `scripts/seeds/aList.ts`, the `'a-list'` value in `SeedScope`, an `npm run seed:a-list` script, and the app's `firestoreDocuments` count. The seed covers: a membership; a watchlist with all three priorities, a movie opening this week, and a seen one; viewings that are planned, ended-awaiting-answer, seen with a Standard ticket, seen with a premium ticket and a standard price, a rewatch, one day with four movies, and one that starts 5 minutes after the seed runs so the trailers strip shows (it leaves the window about 35 minutes later) and carries a pending trailer reminder. Seeds use `posterUrl: null` so they work offline, which also exercises the cover fallback.
 - `SITE_VERSION` bumped (minor) in `src/lib/app/app.constants.ts` in each PR; `README.md`, `UX.md`, `TECHNICAL.md` current.
 

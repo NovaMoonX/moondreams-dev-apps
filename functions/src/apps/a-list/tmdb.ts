@@ -5,6 +5,7 @@ import type { MovieSearchResult, MovieSnapshot } from './types.js';
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_SEARCH_RESULTS = 20;
 const MAX_POPULAR_RESULTS = 30;
+const POPULAR_PER_LIST = 15;
 const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/';
 const UNRATED = new Set(['NR', 'Not Rated', 'Unrated', 'NOT RATED', 'UNRATED']);
 // TMDB's two credentials: a v4 read token is a JWT sent as a header, a v3 key goes in the query.
@@ -111,6 +112,18 @@ function toSearchResult(item: TmdbSearchItem & { id: number; title: string }): M
   };
 }
 
+/** The usable, de-duplicated items across pages of a list response. */
+function toListItems(pages: Array<TmdbSearchResponse | null>) {
+  const items = pages
+    .flatMap((data) => data?.results ?? [])
+    .filter(
+      (item): item is TmdbSearchItem & { id: number; title: string } =>
+        Number.isInteger(item.id) && typeof item.title === 'string' && item.title.length > 0,
+    );
+  const result = items.filter((item, index) => items.findIndex((other) => other.id === item.id) === index);
+  return result;
+}
+
 /** Newest first, up to 20: a second page is fetched only when there is one, then merged and sorted by release date. */
 export async function searchTmdb(
   apiKey: string,
@@ -131,14 +144,7 @@ export async function searchTmdb(
   // A failed second page (timeout, rate limit) still returns the first.
   const second = (first.total_pages ?? 1) > 1 ? await fetchPage(2).catch(() => null) : null;
 
-  const items = [first, second]
-    .flatMap((data) => data?.results ?? [])
-    .filter(
-      (item): item is TmdbSearchItem & { id: number; title: string } =>
-        Number.isInteger(item.id) && typeof item.title === 'string' && item.title.length > 0,
-    );
-  const result = items
-    .filter((item, index) => items.findIndex((other) => other.id === item.id) === index)
+  const result = toListItems([first, second])
     .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
     .slice(0, MAX_SEARCH_RESULTS)
     .map(toSearchResult);
@@ -154,14 +160,12 @@ export async function popularTmdb(apiKey: string): Promise<MovieSearchResult[]> 
   // A failed upcoming list (timeout, rate limit) still returns what is playing.
   const upcoming = await fetchList('/movie/upcoming').catch(() => null);
 
-  const items = [nowPlaying, upcoming]
-    .flatMap((data) => data?.results ?? [])
-    .filter(
-      (item): item is TmdbSearchItem & { id: number; title: string } =>
-        Number.isInteger(item.id) && typeof item.title === 'string' && item.title.length > 0,
-    );
-  const result = items
-    .filter((item, index) => items.findIndex((other) => other.id === item.id) === index)
+  // Each list gives its most popular first, so old re-releases can't push every upcoming title out of the merge.
+  const topOf = (data: TmdbSearchResponse | null) =>
+    toListItems([data])
+      .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+      .slice(0, POPULAR_PER_LIST);
+  const result = toListItems([{ results: [...topOf(nowPlaying), ...topOf(upcoming)] }])
     .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
     .slice(0, MAX_POPULAR_RESULTS)
     .map(toSearchResult);

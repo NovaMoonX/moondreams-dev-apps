@@ -112,6 +112,7 @@ function MoviePicker({
 
   const getEmptyState = () => {
     if (hasItems) return null;
+    if (trimmedQuery === '' && popular.isPending) return null;
     if (trimmedQuery === '')
       return {
         emoji: '🍿',
