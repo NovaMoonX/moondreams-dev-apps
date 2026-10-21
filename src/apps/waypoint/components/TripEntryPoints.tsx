@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import { useAppSelector } from '@/store';
 
+import { selectPersonalChecklistItems } from '@apps/waypoint/store/selectors';
 import type { TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 
@@ -19,7 +20,9 @@ interface TripEntryPointsProps {
 
 function TripEntryPoints({ trip, currentUserId, onOpen, includeLogistics = false }: TripEntryPointsProps) {
   const incompleteCount = useAppSelector(
-    (state) => state.waypoint.checklist.items.filter((item) => !item.isCompleted).length,
+    (state) =>
+      state.waypoint.checklist.items.filter((item) => !item.isCompleted).length +
+      selectPersonalChecklistItems(state).filter((item) => item.tripId === trip.id && !item.isCompleted).length,
   );
   const pendingCount = useAppSelector((state) =>
     isTripAdmin(trip, currentUserId)

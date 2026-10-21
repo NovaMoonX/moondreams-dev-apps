@@ -141,6 +141,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
 
   const [checklistCategory, setChecklistCategory] = useState<ChecklistCategory | 'ALL'>('ALL');
   const setSectionTab = (value: string) => {
+    if (value === 'checklist') {
+      setChecklistCategory('ALL');
+    }
     setPendingTab(value);
     startTabTransition(() => setSelectedTab(value));
     if (hasAppNav) {
@@ -704,12 +707,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <TripEntryPoints
               trip={trip}
               currentUserId={currentUserId}
-              onOpen={(value) => {
-                if (value === 'checklist') {
-                  setChecklistCategory('ALL');
-                }
-                setSectionTab(value);
-              }}
+              onOpen={setSectionTab}
               includeLogistics={isActive}
             />
           </div>
@@ -729,8 +727,8 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
           <ChecklistOverview
             trip={trip}
             onOpen={(category) => {
-              setChecklistCategory(category);
               setSectionTab('checklist');
+              setChecklistCategory(category);
             }}
           />
         )}

@@ -4,7 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, ListChecks } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
-import { getDayCount, getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayDateLabel } from '@/utils/dateRangeUtils';
 import {
   CHECKLIST_CATEGORIES,
   CHECKLIST_CATEGORY_EMOJIS,
@@ -15,8 +15,8 @@ import type { ChecklistCategory, TripSpace } from '@apps/waypoint/types';
 
 interface ChecklistOverviewProps {
   trip: TripSpace;
-  /** A category opens the checklist already filtered to it; `ALL` opens it unfiltered. */
-  onOpen: (category: ChecklistCategory | 'ALL') => void;
+  /** A category opens the checklist already filtered to it. */
+  onOpen: (category: ChecklistCategory) => void;
 }
 
 function ChecklistOverview({ trip, onOpen }: ChecklistOverviewProps) {
@@ -26,13 +26,13 @@ function ChecklistOverview({ trip, onOpen }: ChecklistOverviewProps) {
     () => [...(sharedItems ?? []), ...personalItems.filter((item) => item.tripId === trip.id)].filter((item) => !item.isCompleted),
     [sharedItems, personalItems, trip.id],
   );
-  const dayCount = getDayCount(trip.startDate, trip.endDate);
 
   const rows = CHECKLIST_CATEGORIES.flatMap((category) => {
-    const inCategory = open.filter((item) => item.category === category);
-    const due = inCategory.flatMap((item) => (item.completeByDayIndex === null ? [] : [item.completeByDayIndex]));
-    return inCategory.length === 0 ? [] : [{ category, count: inCategory.length, nextDue: due.length > 0 ? Math.min(...due) : null }];
-  });
+    const inCategory = open
+      .filter((item) => item.category === category)
+      .sort((a, b) => (a.completeByDayIndex ?? Infinity) - (b.completeByDayIndex ?? Infinity) || a.createdAt - b.createdAt);
+    return inCategory.length === 0 ? [] : [{ category, count: inCategory.length, next: inCategory[0] }];
+  }).sort((a, b) => (a.next.completeByDayIndex ?? Infinity) - (b.next.completeByDayIndex ?? Infinity));
 
   if (rows.length === 0) {
     return null;
@@ -52,7 +52,7 @@ function ChecklistOverview({ trip, onOpen }: ChecklistOverviewProps) {
         </div>
       </div>
       <ul className='divide-border divide-y'>
-        {rows.map(({ category, count, nextDue }) => (
+        {rows.map(({ category, count, next }) => (
           <li key={category}>
             <Button
               type='button'
@@ -67,22 +67,20 @@ function ChecklistOverview({ trip, onOpen }: ChecklistOverviewProps) {
                 <span className='block text-sm font-medium'>
                   {CHECKLIST_CATEGORY_VERBS[category]} {count} {count === 1 ? 'thing' : 'things'}
                 </span>
-                {nextDue !== null && (
-                  <span className='text-muted-foreground block text-xs'>
-                    Next due {getDayLabel(trip.startDate, nextDue, dayCount)}
-                  </span>
-                )}
+                <span className='text-muted-foreground flex gap-1 text-xs'>
+                  <span className='min-w-0 truncate'>Next: {next.title}</span>
+                  {next.completeByDayIndex !== null && (
+                    <span className='shrink-0 whitespace-nowrap'>
+                      · {getDayDateLabel(trip.startDate, next.completeByDayIndex, false)}
+                    </span>
+                  )}
+                </span>
               </span>
               <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
             </Button>
           </li>
         ))}
       </ul>
-      <div className='flex items-center'>
-        <Button type='button' variant='link' size='sm' className='ml-auto h-auto p-0 text-sm' onClick={() => onOpen('ALL')}>
-          See the whole checklist <ChevronRight className='h-4 w-4' />
-        </Button>
-      </div>
     </section>
   );
 }

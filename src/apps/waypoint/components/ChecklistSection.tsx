@@ -109,22 +109,22 @@ export default function ChecklistSection({
   const categoryCounts = useMemo(
     () =>
       searchedItems.reduce<Partial<Record<ChecklistCategory, number>>>(
-        (counts, item) => ({ ...counts, [item.category]: (counts[item.category] ?? 0) + 1 }),
+        (counts, item) => ({ ...counts, [item.category]: (counts[item.category] ?? 0) + (item.isCompleted ? 0 : 1) }),
         {},
       ),
     [searchedItems],
   );
-  const presentCategories = CHECKLIST_CATEGORIES.filter((category) => (categoryCounts[category] ?? 0) > 0);
+  const presentCategories = CHECKLIST_CATEGORIES.filter((category) => searchedItems.some((item) => item.category === category));
   const usedCategories = new Set(items.map((item) => item.category));
   const showCategoryFilter = usedCategories.size > 1;
   const categoryFilter = categoryPick !== 'ALL' && presentCategories.includes(categoryPick) ? categoryPick : 'ALL';
   const categoryOptions: PillOption<ChecklistCategory | 'ALL'>[] = [
-    { value: 'ALL', label: 'All', detail: String(searchedItems.length) },
+    { value: 'ALL', label: 'All', detail: String(searchedItems.filter((item) => !item.isCompleted).length) },
     ...presentCategories.map((category) => ({
       value: category,
       label: CHECKLIST_CATEGORY_LABELS[category],
       emoji: CHECKLIST_CATEGORY_EMOJIS[category],
-      detail: String(categoryCounts[category]),
+      detail: String(categoryCounts[category] ?? 0),
     })),
   ];
   const visibleItems = useMemo(
@@ -257,6 +257,7 @@ export default function ChecklistSection({
         <PillGroup
           label='Filter by category'
           isThin
+          wrapsNarrow
           options={categoryOptions}
           value={categoryFilter}
           onChange={onCategoryPickChange}
