@@ -161,6 +161,21 @@ export type MealType =
   'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'DESSERT' | 'DRINK';
 export type ItemKind = 'RECIPE' | 'INGREDIENT';
 
+/** What kind of dish a recipe or saved meal is. A dish can be several (a smoothie is a drink and breakfast); none is the normal start. */
+export type DishCategory =
+  | 'BREAKFAST'
+  | 'MAIN'
+  | 'SIDE'
+  | 'SOUP_SALAD'
+  | 'SNACK'
+  | 'DESSERT'
+  | 'BAKING'
+  | 'DRINK'
+  | 'SAUCE';
+
+/** The sorts a Recipes view offers; `default` keeps the view's own order. */
+export type ListSortKey = 'default' | 'created' | 'edited' | 'alpha';
+
 /** One row of a meal: a recipe or an ingredient, and how many servings of it. */
 export interface MealItem {
   id: string;
@@ -178,6 +193,8 @@ export interface Meal {
   items: MealItem[];
   /** Starred by the person: favorites list first. Meals written before favorites lack the key, which reads as false. */
   isFavorite: boolean;
+  /** The kinds of dish it is. Meals written before categories lack the key, which reads as empty; a value outside the list is ignored. */
+  categories: DishCategory[];
   createdAt: number;
   updatedAt: number;
 }
@@ -560,6 +577,8 @@ export interface Recipe {
   care: RecipeCare | null;
   /** The `Collection`s it is in, at most 20. A recipe written before collections lacks the key, which reads as empty; an id no collection has is ignored. */
   collectionIds: string[];
+  /** The kinds of dish it is. A recipe written before categories lacks the key, which reads as empty; a value outside the list is ignored. */
+  categories: DishCategory[];
   /** A recipe written before links lacks the key, which reads as `[]`. */
   links: RecipeLink[];
   /** Hidden from lists and pickers once a planned day or saved meal uses it, still resolved there. Documents written before archiving lack the key, which reads as false. */

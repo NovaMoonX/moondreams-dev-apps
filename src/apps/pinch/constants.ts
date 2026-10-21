@@ -2,9 +2,11 @@ import type {
   ContainerEventKind,
   ContainerPlace,
   Dimension,
+  DishCategory,
   IdeaKind,
   IdeaStartMethod,
   KitchenView,
+  ListSortKey,
   MealType,
   PackageEventKind,
   PackagePlace,
@@ -441,6 +443,47 @@ export const MEAL_TYPE_EMOJIS: Record<MealType, string> = {
   SNACK: '🍿',
   DESSERT: '🍰',
   DRINK: '🥤',
+};
+
+/** What kind of dish a recipe or saved meal is, in the order the pickers and the filter list them. The rules repeat the values. */
+export const DISH_CATEGORIES: readonly {
+  value: DishCategory;
+  label: string;
+  emoji: string;
+}[] = [
+  { value: 'BREAKFAST', label: 'Breakfast', emoji: '🍳' },
+  { value: 'MAIN', label: 'Main dishes', emoji: '🍗' },
+  { value: 'SIDE', label: 'Sides', emoji: '🥦' },
+  { value: 'SOUP_SALAD', label: 'Soups & salads', emoji: '🥗' },
+  { value: 'SNACK', label: 'Snacks', emoji: '🍿' },
+  { value: 'DESSERT', label: 'Desserts', emoji: '🍰' },
+  { value: 'BAKING', label: 'Baking', emoji: '🥖' },
+  { value: 'DRINK', label: 'Drinks', emoji: '🥤' },
+  { value: 'SAUCE', label: 'Sauces & dips', emoji: '🫙' },
+];
+export const CATEGORY_TITLE = 'Category';
+/** The filter's two answers that aren't a category. */
+export const CATEGORY_FILTER_ANY = 'any';
+export const CATEGORY_FILTER_NONE = 'none';
+
+export const LIST_SORT_OPTIONS: readonly {
+  value: ListSortKey;
+  label: string;
+  emoji: string;
+}[] = [
+  { value: 'default', label: 'Default', emoji: '📋' },
+  { value: 'created', label: 'Date created', emoji: '🆕' },
+  { value: 'edited', label: 'Last edited', emoji: '✏️' },
+  { value: 'alpha', label: 'Name', emoji: '🔤' },
+];
+/** Each sort's two directions, the first being the one it starts in; the default order has none. */
+export const LIST_SORT_ORDER_LABELS: Record<
+  Exclude<ListSortKey, 'default'>,
+  readonly [string, string]
+> = {
+  created: ['Newest first', 'Oldest first'],
+  edited: ['Latest first', 'Earliest first'],
+  alpha: ['A to Z', 'Z to A'],
 };
 
 export const MAX_PRICE_CENTS = 100_000_000;

@@ -15,6 +15,7 @@ import {
   getGroupKey,
   orderIngredientLines,
 } from '@apps/pinch/utils/ingredientGroups';
+import { getCategories } from '@apps/pinch/utils/categories';
 import {
   EMPTY_COLLECTIONS_CHOICE,
   getInitialCollectionsChoice,
@@ -40,6 +41,7 @@ import {
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
   Collection,
+  DishCategory,
   Idea,
   NutritionMetric,
   NutritionValues,
@@ -78,6 +80,7 @@ export interface IngredientRow {
 
 export interface RecipeFormData {
   title: string;
+  categories: DishCategory[];
   basics: { servings: number; prep: string; cook: string };
   description: string;
   ingredients: IngredientRow[];
@@ -98,6 +101,7 @@ export const getInitialData = (
   collections: readonly Collection[] = [],
 ): RecipeFormData => ({
   title: recipe?.title ?? '',
+  categories: getCategories(recipe ?? {}),
   basics: {
     servings: recipe?.servings ?? 4,
     prep: recipe?.prepMinutes != null ? String(recipe.prepMinutes) : '',

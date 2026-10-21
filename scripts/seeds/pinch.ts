@@ -816,6 +816,8 @@ const SEED_RECIPES = [
       'seed-pinch-collection-high-protein',
       'seed-pinch-collection-weeknight',
     ],
+    // Nachos hold two categories and the rice none (no `categories` key, the shape from before categories), so the filter shows "No category".
+    categories: ['MAIN'],
   },
   {
     id: 'seed-pinch-recipe-rice',
@@ -865,6 +867,7 @@ const SEED_RECIPES = [
     source: 'MANUAL',
     sourceId: null,
     collectionIds: ['seed-pinch-collection-high-protein'],
+    categories: ['SNACK', 'MAIN'],
   },
   // Deleted by Alex while a planned day still used it, so it is archived: hidden from lists and pickers, still named on that day.
   {
@@ -888,6 +891,15 @@ const SEED_RECIPES = [
   },
 ];
 
+const HOUR_MS = 60 * 60 * 1000;
+
+// Hours after the seed's base time. Sorting by created, edited and name gives three different orders; the shared Adobo chicken and Adobo and rice keep the base time because a share compares the original's `updatedAt` with the copy's.
+const SEED_ORDER_HOURS: Record<string, { created: number; updated: number }> = {
+  'seed-pinch-recipe-rice': { created: 4, updated: 4 },
+  'seed-pinch-recipe-nachos': { created: 2, updated: 6 },
+  'seed-pinch-meal-snack-plate': { created: 1, updated: 3 },
+};
+
 type SeedMealType =
   'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK' | 'DESSERT' | 'DRINK';
 
@@ -904,12 +916,13 @@ const item = (
 });
 
 // Days are offsets from today (UTC midnight): an empty day, one meal, a full day, five meals and a day of ten, so the cells and drawer show every size.
-// "Adobo and rice" is starred; "Snack plate" has no `isFavorite` key, the shape from before favorites.
+// "Adobo and rice" is starred; "Snack plate" has no `isFavorite` or `categories` key, the shape from before favorites and categories.
 const SEED_MEALS = [
   {
     id: 'seed-pinch-meal-adobo-rice',
     name: 'Adobo and rice',
     isFavorite: true,
+    categories: ['MAIN'],
     items: [
       item('a', 'RECIPE', 'seed-pinch-recipe-adobo', 2),
       item('b', 'RECIPE', 'seed-pinch-recipe-rice', 2),
@@ -1354,7 +1367,13 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       kitchenRef
         .collection('meals')
         .doc(meal.id)
-        .set({ ...meal, createdAt, updatedAt: createdAt }),
+        .set({
+          ...meal,
+          createdAt:
+            createdAt + (SEED_ORDER_HOURS[meal.id]?.created ?? 0) * HOUR_MS,
+          updatedAt:
+            createdAt + (SEED_ORDER_HOURS[meal.id]?.updated ?? 0) * HOUR_MS,
+        }),
     ),
     ...SEED_RECIPES.map((recipe) =>
       kitchenRef
@@ -1363,8 +1382,10 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .set({
           isArchived: false,
           ...recipe,
-          createdAt,
-          updatedAt: createdAt,
+          createdAt:
+            createdAt + (SEED_ORDER_HOURS[recipe.id]?.created ?? 0) * HOUR_MS,
+          updatedAt:
+            createdAt + (SEED_ORDER_HOURS[recipe.id]?.updated ?? 0) * HOUR_MS,
         }),
     ),
     ...SEED_PRODUCTS.map((product) =>

@@ -27,6 +27,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import Stepper from '@/components/Stepper';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
+import CategoryField from '@apps/pinch/components/shared/CategoryField';
 import RecipeCareField from '@apps/pinch/components/recipes/RecipeCareField';
 import RecipeCollectionsField from '@apps/pinch/components/recipes/RecipeCollectionsField';
 import {
@@ -89,6 +90,7 @@ import {
   selectTweakTracking,
 } from '@apps/pinch/store/selectors';
 import type {
+  DishCategory,
   Idea,
   NutritionMetric,
   Recipe,
@@ -253,6 +255,7 @@ function RecipeForm({
         source: 'MANUAL',
         sourceId: null,
         collectionIds: [],
+        categories: [],
         isArchived: false,
         isFavorite: false,
         createdAt: 0,
@@ -486,6 +489,16 @@ function RecipeForm({
             value={String(props.value)}
             onChange={props.onValueChange}
             defaultOpen={isBlankByHand}
+          />
+        ),
+      }),
+      custom({
+        name: 'categories',
+        label: '',
+        renderComponent: (props) => (
+          <CategoryField
+            value={props.value as DishCategory[]}
+            onChange={props.onValueChange}
           />
         ),
       }),
@@ -754,6 +767,7 @@ function RecipeForm({
           draft: {
             id: recipe?.id ?? null,
             title: data.title,
+            categories: data.categories,
             description: data.description.trim() || null,
             servings: data.basics.servings,
             prepMinutes: parseMinutes(data.basics.prep),
