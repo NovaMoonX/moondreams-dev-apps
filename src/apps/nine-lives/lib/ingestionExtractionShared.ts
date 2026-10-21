@@ -1,5 +1,6 @@
 import { SchemaType } from 'firebase/ai';
 
+import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import { CAT_BREEDS } from '../constants/presetOptions';
 import { DEFAULT_EXPENSE_CATEGORIES } from '../utils/budgetCalculators';
 import type { HealthRecordType } from '../types';
@@ -221,22 +222,16 @@ export const responseSchema = {
   },
 };
 
-function toTitleCase(value: string): string {
-  return value
-    .split(' ')
-    .map((word) => (word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word))
-    .join(' ');
-}
+const breedMatcher = createOptionMatcher({ typos: 'loose', casing: { style: 'title' } });
 
-/** Prefers the app's known breed list's exact casing when the model's answer matches case-insensitively. */
+/** The app's own breed list's spelling when the model's answer is that breed, else the breed as stated in Title Case. */
 function normalizeBreed(breed: string | null | undefined): string | null {
-  if (!breed) {
+  if (!breed?.trim()) {
     return null;
   }
 
-  const trimmed = breed.trim();
-  const knownMatch = CAT_BREEDS.find((known) => known.toLowerCase() === trimmed.toLowerCase());
-  return knownMatch ?? toTitleCase(trimmed);
+  const resolution = breedMatcher.resolve(breed, CAT_BREEDS);
+  return resolution.kind === 'match' ? resolution.option : resolution.label;
 }
 
 function normalizeCat(value: Partial<IngestionCatProposal>): IngestionCatProposal {

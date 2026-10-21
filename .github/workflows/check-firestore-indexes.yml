@@ -42,3 +42,13 @@ jobs:
       - run: npm run check:pinch-ingest
       - run: npm run check:pinch-voice
       - run: npm run check:pinch-share
+  check_shared:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check:option-match

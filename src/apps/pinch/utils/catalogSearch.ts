@@ -116,7 +116,7 @@ const NOT_THE_THING = new Set([
   'cubed',
 ]);
 
-/** Up to three ingredients a name nothing matched might mean ("shredded lettuce": Iceberg lettuce, Romaine lettuce). Each word that names a thing finds the ingredients with a word of their name (then an alias) starting with it, the name that is or begins with it and the shorter name first; the words take turns from the last, usually the thing itself. */
+/** Up to three ingredients a name nothing matched might mean ("shredded lettuce": Iceberg lettuce, Romaine lettuce). Each word that names a thing finds the ingredients with a word of their name (then an alias) starting with it, the name that is or begins with it and the shorter name first; an ingredient that holds every word comes first, then the words take turns from the last, usually the thing itself. */
 export function findNearMatches(
   ingredients: ResolvedIngredient[],
   name: string,
@@ -155,14 +155,18 @@ export function findNearMatches(
       )
       .map((entry) => entry.ingredient);
   const lists = words.map(rankFor);
+  const holdsEveryWord = (lists[0] ?? []).filter((ingredient) =>
+    lists.every((list) => list.includes(ingredient)),
+  );
   const depth = Math.max(0, ...lists.map((list) => list.length));
   const result = [
     ...new Map(
-      Array.from({ length: depth }, (_, index) =>
-        lists.flatMap((list) => (list[index] ? [list[index]] : [])),
-      )
-        .flat()
-        .map((ingredient) => [ingredient.id, ingredient]),
+      [
+        ...holdsEveryWord,
+        ...Array.from({ length: depth }, (_, index) =>
+          lists.flatMap((list) => (list[index] ? [list[index]] : [])),
+        ).flat(),
+      ].map((ingredient) => [ingredient.id, ingredient]),
     ).values(),
   ].slice(0, NEAR_MATCH_LIMIT);
 

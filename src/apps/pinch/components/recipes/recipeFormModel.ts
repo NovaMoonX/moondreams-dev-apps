@@ -18,7 +18,12 @@ import {
   getInitialCollectionsChoice,
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
-import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
+import { addPrepToNote, splitPrep } from '@apps/pinch/utils/ingredientNames';
+import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
+import {
+  normalizeName,
+  resolveIngredient,
+} from '@apps/pinch/utils/ingredientMatch';
 import {
   EMPTY_CARE_TEXT,
   getCareText,
@@ -129,14 +134,29 @@ export const getInitialData = (
   why: '',
 });
 
-/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick. A second line for an ingredient already listed under the same heading adds to it when the units agree and stays its own line when they don't, so no amount is lost; under another heading it is always its own line. A line the recipe gives no amount ("salt to taste") keeps none. */
+/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick, cased like the app's own names with prep words such as "bone-in" moved to the line's note. A second line for an ingredient already listed under the same heading adds to it when the units agree and stays its own line when they don't, so no amount is lost; under another heading it is always its own line. A line the recipe gives no amount ("salt to taste") keeps none. */
 export const getDataFromExtracted = (
   extracted: ExtractedRecipe,
   ingredients: ResolvedIngredient[],
 ): RecipeFormData => {
   const blank = getInitialData(null);
   const rows = extracted.ingredients.reduce<IngredientRow[]>((acc, line) => {
-    const match = matchIngredient(line.name, ingredients);
+    const resolution = resolveIngredient(line.name, ingredients);
+    const match = resolution.kind === 'match' ? resolution.option : null;
+    const { prep } = splitPrep(line.name);
+    const newName =
+      resolution.kind === 'custom' &&
+      findNearMatches(ingredients, resolution.label).length === 0
+        ? resolution.label
+        : null;
+    const stagedId =
+      newName === null
+        ? null
+        : (acc.find(
+            (row) =>
+              row.newName !== null &&
+              normalizeName(row.newName) === normalizeName(newName),
+          )?.ingredientId ?? generateUuid());
     const unit = line.unit ?? match?.serving.unit ?? 'EACH';
     const { amount } = line;
     const group = cleanGroupName(line.group);
@@ -162,13 +182,16 @@ export const getDataFromExtracted = (
       ...acc,
       {
         id: generateUuid(),
-        ingredientId: match?.id ?? '',
+        ingredientId: match?.id ?? stagedId ?? '',
         amount: amount === null ? '' : String(amount),
         unit,
         isAmountless: amount === null,
-        note: line.note,
-        proposedName: match ? null : line.name,
-        newName: null,
+        note: addPrepToNote(line.note, prep),
+        proposedName:
+          resolution.kind === 'custom' && newName === null
+            ? resolution.label
+            : null,
+        newName,
         group,
       },
     ];

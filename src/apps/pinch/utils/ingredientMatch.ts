@@ -1,77 +1,59 @@
+import { createOptionMatcher, toComparable } from '@/utils/optionMatchUtils';
 import type { ResolvedIngredient } from '@apps/pinch/types';
+import { splitPrep } from '@apps/pinch/utils/ingredientNames';
 
+/** Words a recipe line carries that never say which ingredient it is. They drop from the line only, never from an ingredient's own name, so "pork" never reaches "Ground pork" and "canned tomatoes" never "Canned diced tomatoes"; a word that makes a different product (ground, whole, minced, toasted) is not here at all. The preparation words in `splitPrep` leave the name first. */
 const FILLER = new Set([
   'fresh',
-  'frozen',
+  'freshly',
   'large',
   'small',
   'medium',
   'chopped',
   'diced',
-  'minced',
+  'frozen',
   'sliced',
-  'ground',
-  'boneless',
-  'skinless',
+  'cubed',
+  'halved',
+  'quartered',
   'raw',
-  'whole',
   'extra',
   'virgin',
   'organic',
   'unsalted',
   'salted',
   'ripe',
+  'thinly',
+  'finely',
+  'roughly',
+  'coarsely',
   'of',
   'the',
   'a',
 ]);
 
-const singular = (word: string) => {
-  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
-  if (word.length > 4 && /(ches|shes|oes|ses|xes)$/.test(word))
-    return word.slice(0, -2);
-  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss'))
-    return word.slice(0, -1);
-  return word;
-};
+const matcher = createOptionMatcher<ResolvedIngredient>({
+  names: (ingredient) => [ingredient.name, ...ingredient.aliases],
+  ignoreTypedWords: FILLER,
+  prepare: (text) => splitPrep(text).name,
+  prefer: (ingredient) => ingredient.isCustom,
+  foldPlurals: true,
+  reorder: false,
+  casing: { style: 'sentence', keepAcronyms: true },
+});
 
-/** Lowercase, punctuation stripped, plural folded, accents removed: the form two names are compared in. */
-export const normalizeName = (name: string) =>
-  name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(singular)
-    .join(' ');
+export const normalizeName = (name: string) => toComparable(name, true);
 
-/** A name compared without the words that only describe it (fresh, chopped, boneless). */
-export const withoutFiller = (name: string) =>
-  normalizeName(name)
-    .split(' ')
-    .filter((word) => !FILLER.has(word))
-    .join(' ');
+export const withoutFiller = matcher.comparable;
 
-/** The ingredient a name from a recipe means: the person's own first, then the catalog, by exact name or alias once filler words (fresh, chopped, boneless) are dropped; null when nothing fits, so a near miss is offered as a new ingredient instead of silently becoming the wrong one. */
-export function matchIngredient(
+/** The ingredient a name from a recipe means, the person's own before the catalog's, or null so a near miss is offered as new instead of silently becoming the wrong one ("coconut milk" is not "milk"). */
+export const matchIngredient = (
   name: string,
   ingredients: ResolvedIngredient[],
-): ResolvedIngredient | null {
-  const target = withoutFiller(name);
-  if (target === '') {
-    return null;
-  }
+) => matcher.match(name, ingredients);
 
-  const ordered = [
-    ...ingredients.filter((ingredient) => ingredient.isCustom),
-    ...ingredients.filter((ingredient) => !ingredient.isCustom),
-  ];
-  const names = (ingredient: ResolvedIngredient) =>
-    [ingredient.name, ...ingredient.aliases].map(withoutFiller).filter(Boolean);
-
-  return (
-    ordered.find((ingredient) => names(ingredient).includes(target)) ?? null
-  );
-}
+/** `matchIngredient`, or the name as a new ingredient would be written: prep words dropped, cased like the catalog. */
+export const resolveIngredient = (
+  name: string,
+  ingredients: ResolvedIngredient[],
+) => matcher.resolve(name, ingredients);

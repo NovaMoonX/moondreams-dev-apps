@@ -27,6 +27,7 @@ import {
   searchIngredients,
 } from '@apps/pinch/utils/catalogSearch';
 import { getStockParts } from '@apps/pinch/utils/containers';
+import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { MAX_PICK_SUGGESTIONS } from '@apps/pinch/utils/pickerSuggestions';
 import { getShopSection } from '@apps/pinch/utils/shopping';
 
@@ -169,6 +170,8 @@ interface ItemSearchProps {
   isCapped?: boolean;
   /** The field still takes typing, but no result can be picked. */
   isDisabled?: boolean;
+  /** When given, "New ingredient" hands the typed name over instead of writing it: a picker never writes. */
+  onStageNew?: (name: string) => void;
 }
 
 /** One search over the catalog and the person's own ingredients, capped at a few rows, that ends with "add this as a new ingredient" when nothing has exactly the typed name. */
@@ -183,6 +186,7 @@ function ItemSearch({
   autoFocus = false,
   isCapped = false,
   isDisabled = false,
+  onStageNew,
 }: ItemSearchProps) {
   const dispatch = useAppDispatch();
   const ingredients = useAppSelector(selectIngredients);
@@ -276,6 +280,11 @@ function ItemSearch({
   });
 
   const createFromName = async () => {
+    if (onStageNew) {
+      onStageNew(toTypedIngredientName(trimmed));
+      setQuery('');
+      return;
+    }
     setError(null);
     setIsCreating(true);
     try {
@@ -285,7 +294,7 @@ function ItemSearch({
           draft: {
             id: null,
             catalogId: null,
-            name: trimmed,
+            name: toTypedIngredientName(trimmed),
             familyId: null,
             newFamilyName: null,
             nutrition: null,

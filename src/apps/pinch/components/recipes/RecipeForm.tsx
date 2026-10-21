@@ -104,6 +104,7 @@ import {
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
+import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { getShownCover } from '@apps/pinch/utils/recipeCover';
@@ -329,7 +330,7 @@ function RecipeForm({
     }
     if (unresolvedCount > 0) {
       return {
-        text: `Add or choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Not in your ingredients yet” to save.`,
+        text: `Choose ${unresolvedCount === 1 ? 'the ingredient' : `the ${unresolvedCount} ingredients`} marked “Choose” to save.`,
         target: '[data-ingredient-unresolved]',
       };
     }
@@ -775,7 +776,10 @@ function RecipeForm({
                   .filter((row) => row.newName !== null)
                   .map((row) => [
                     row.ingredientId,
-                    { id: row.ingredientId, name: row.newName ?? '' },
+                    {
+                      id: row.ingredientId,
+                      name: toTypedIngredientName(row.newName ?? ''),
+                    },
                   ]),
               ).values(),
             ],
@@ -898,7 +902,7 @@ function RecipeForm({
                   variant='secondary'
                   size='sm'
                   rounded='full'
-                  className="text-foreground! relative h-7 gap-1.5 px-3 text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                  className="text-foreground! relative h-auto min-h-7 gap-1.5 px-3 py-1 text-xs font-normal before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                   onClick={() => showBlocker(blocker.target ?? '')}
                 >
                   <ArrowUp className='h-3.5 w-3.5' aria-hidden='true' />
