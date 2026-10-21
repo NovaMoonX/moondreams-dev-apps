@@ -61,8 +61,147 @@
   }
 }
 
-/* The top strip (offline or update banner) is `fixed` above every page layer, so a full-screen overlay starts below it instead of being covered. */
-html[data-site-banner='true'] [data-subview-overlay] {
+/* A subview is a floating card on a tint of the app's colour. While one is mounted `Subview` sets `data-subview-open` on <html>:
+ * the site header steps aside (the card brings its own back control), the page behind turns to the backdrop colour, and the
+ * sticky bars stick to the top of the screen. A mini-app restyles the card from its theme class with these tokens:
+ *   --subview-backdrop         the tint around the card (opaque; the default mixes the primary into the background)
+ *   --subview-backdrop-dark    the same in dark, darker than the card so it still reads as raised
+ *   --subview-border           the card's hairline
+ *   --subview-radius           the card's corner radius
+ *   --subview-shadow           the card's shadow in light (dark relies on the backdrop and the hairline)
+ * `--subview-inset` is the gap between card and screen edge and `--subview-pad` the card's own padding; together they are the 16px
+ * page gutter on a phone, so content keeps its left edge and loses no width. A short landscape phone drops the card to full bleed. */
+html {
+  --subview-inset: 0.5rem;
+  --subview-pad: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  html {
+    --subview-inset: 1rem;
+    --subview-pad: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  html {
+    --subview-inset: 1.5rem;
+  }
+}
+
+@media (max-height: 499px) {
+  html {
+    --subview-inset: 0px;
+    --subview-pad: 1rem;
+  }
+}
+
+html[data-subview-open],
+html[data-subview-open] #root {
+  background-color: var(
+    --subview-backdrop,
+    color-mix(in oklab, var(--color-primary) 16%, var(--color-background))
+  );
+}
+
+html.dark[data-subview-open],
+html.dark[data-subview-open] #root {
+  background-color: var(
+    --subview-backdrop-dark,
+    color-mix(in oklab, var(--color-primary) 14%, black)
+  );
+}
+
+html[data-subview-open] [data-site-chrome] {
+  display: none;
+}
+
+html[data-subview-open] .sticky-app-bar {
+  top: 0;
+}
+
+html[data-subview-open][data-site-banner='true'] .sticky-app-bar:not([data-subview-overlay] *) {
+  top: 2.25rem;
+}
+
+html[data-subview-open] .sticky-day-bar {
+  top: calc(3.75rem - 1px);
+}
+
+html[data-subview-open][data-site-banner='true'] .sticky-day-bar:not([data-subview-overlay] *) {
+  top: calc(2.25rem + 3.75rem - 1px);
+}
+
+.subview-card {
+  background-color: var(--color-background);
+  border: 1px solid var(--subview-border, var(--color-border));
+  border-radius: var(--subview-radius, 1.5rem);
+  box-shadow: var(
+    --subview-shadow,
+    0 1px 2px color-mix(in oklab, var(--color-foreground) 8%, transparent),
+    0 12px 32px -12px color-mix(in oklab, var(--color-foreground) 28%, transparent)
+  );
+}
+
+/* `clip`, not `hidden`: it trims a sticky bar's bleed to the card's rounded edge without making the card a scroll container (an overlay's card is the scroller). */
+.subview-page > .subview-card {
+  overflow: clip;
+}
+
+html.dark .subview-card {
+  box-shadow: none;
+}
+
+@media (max-height: 499px) {
+  .subview-card {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none !important;
+  }
+}
+
+/* The page of an in-place subview: the backdrop shows around the card. */
+.subview-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  width: 100%;
+  padding: var(--subview-inset);
+  padding-top: max(var(--subview-inset), env(safe-area-inset-top));
+}
+
+html[data-site-banner='true'] .subview-page {
+  padding-top: calc(var(--subview-inset) + 2.25rem);
+}
+
+.subview-page > .subview-card {
+  flex: 1 1 auto;
+}
+
+/* The full-screen layer of an overlay subview: the backdrop with the card (the scroller) inside it. */
+.subview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  padding: var(--subview-inset);
+  padding-top: max(var(--subview-inset), env(safe-area-inset-top));
+  padding-bottom: max(var(--subview-inset), env(safe-area-inset-bottom));
+  background-color: var(
+    --subview-backdrop,
+    color-mix(in oklab, var(--color-primary) 16%, var(--color-background))
+  );
+}
+
+html.dark .subview-backdrop {
+  background-color: var(
+    --subview-backdrop-dark,
+    color-mix(in oklab, var(--color-primary) 14%, black)
+  );
+}
+
+html[data-site-banner='true'] .subview-backdrop {
   top: 2.25rem;
 }
 

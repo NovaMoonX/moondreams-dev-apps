@@ -1,3 +1,4 @@
+import { clipAtWord } from '@/utils/stringUtils';
 import { MAX_INGREDIENT_GROUP_LENGTH } from '@apps/pinch/constants';
 
 /** A line as grouping sees it: `group` is missing on lines written before groups, which reads as none. */
@@ -26,6 +27,31 @@ export const cleanGroupName = (text: string | null | undefined) => {
     .slice(0, MAX_INGREDIENT_GROUP_LENGTH)
     .trim();
   const result = cleaned === '' ? null : cleaned;
+  return result;
+};
+
+const DANGLING_WORDS = /(?:\s+(?:and|or|with|the|an?|of|for|to|in|on|&))+$/i;
+
+const dropAsides = (text: string): string => {
+  const next = text.replace(/\s*[([][^()[\]]*[)\]]/g, ' ');
+  return next === text ? text : dropAsides(next);
+};
+
+/** A heading as a recipe writes it, boiled down to the name that is stored: markdown, parenthetical asides ("(don't skip the onion!)"), anything after a colon and closing punctuation go, and a name still over the cap is cut at a word, never mid-word. */
+export const shortenGroupName = (text: string | null | undefined) => {
+  const plain = dropAsides(text ?? '')
+    .replace(/\s*[([][^)\]]*$/, '')
+    .replace(/\s+/g, ' ');
+  const [beforeColon] = plain.split(/:(?:\s|$)/);
+  const heading = (beforeColon.trim() === '' ? plain : beforeColon).replace(
+    /^[\s#*_-]+|[\s.,;:!?#*_&-]+$/g,
+    '',
+  );
+  const clipped = clipAtWord(heading, MAX_INGREDIENT_GROUP_LENGTH);
+  const result = cleanGroupName(
+    clipped === heading ? clipped : clipped.replace(DANGLING_WORDS, ''),
+  );
+
   return result;
 };
 

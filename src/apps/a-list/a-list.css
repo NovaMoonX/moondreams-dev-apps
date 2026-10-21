@@ -14,7 +14,22 @@ html.a-list-theme {
   --color-border: var(--color-stone-200);
 }
 
+/* A subview is a card with a thin gold hairline on a deep red backdrop. */
+html.a-list-theme {
+  --subview-backdrop: color-mix(in oklab, var(--color-primary) 18%, var(--color-background));
+  --subview-border: color-mix(in oklab, var(--color-amber-500) 40%, var(--color-border));
+  --color-popover: var(--color-white);
+  --color-popover-foreground: var(--color-foreground);
+  --color-tooltip: var(--color-popover);
+  --color-tooltip-foreground: var(--color-popover-foreground);
+}
+
 html.a-list-theme.dark {
+  --color-popover: color-mix(in oklab, var(--color-background) 86%, white);
+  --color-popover-foreground: var(--color-foreground);
+  --color-tooltip: var(--color-popover);
+  --color-tooltip-foreground: var(--color-popover-foreground);
+  --subview-backdrop-dark: color-mix(in oklab, var(--color-primary) 22%, black);
   --color-primary: var(--color-red-500);
   --color-primary-foreground: var(--color-white);
   --color-secondary: var(--color-rose-950);

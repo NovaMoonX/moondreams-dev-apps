@@ -39,13 +39,13 @@ function RecipePhotoField({
       problem={error}
       shouldFocus={false}
       leading={
-        <span className='bg-accent grid size-12 place-items-center overflow-hidden rounded-xl text-2xl'>
+        <span className='bg-accent relative grid size-12 place-items-center overflow-hidden rounded-xl text-2xl'>
           {cover ? (
             <FallbackImage
               src={cover.thumbUrl}
               alt=''
               fallback={PLACEHOLDER}
-              className='size-full object-cover'
+              className='absolute inset-0 size-full object-cover object-center'
             />
           ) : (
             PLACEHOLDER

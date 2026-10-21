@@ -1466,6 +1466,13 @@ service cloud.firestore {
         return value is list && value.size() <= 20;
       }
 
+      // What kind of dish a recipe or saved meal is: each kind at most once. A document written before categories has no key.
+      function isDishCategories(value) {
+        return value is list && value.size() <= 9
+          && value.hasOnly(['BREAKFAST', 'MAIN', 'SIDE', 'SOUP_SALAD', 'SNACK', 'DESSERT', 'BAKING', 'DRINK', 'SAUCE'])
+          && value.toSet().size() == value.size();
+      }
+
       // A cover picked from the web search is kept as its address and hotlinked, never copied. A recipe written before web covers has no key.
       function isCoverUrl(value) {
         return value == null || (value is string && value.size() <= 2000 && value.matches('https://[^\\s/@?#]+([/?#][^\\s]*)?'));
@@ -1475,7 +1482,7 @@ service cloud.firestore {
       // by index runs past the evaluator's 1,000 expressions and would refuse a long recipe. The rules cap the counts and the fields around them.
       // A recipe written before links existed has no key.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'coverUrl', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'isArchived', 'isFavorite', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'coverUrl', 'ingredients', 'steps', 'care', 'links', 'nutritionOverride', 'source', 'sourceId', 'collectionIds', 'categories', 'isArchived', 'isFavorite', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1496,6 +1503,7 @@ service cloud.firestore {
           && data.source in ['MANUAL', 'AI_TEXT', 'AI_FILE', 'AI_LINK']
           && (data.get('sourceId', null) == null || isShortText(data.sourceId, 80))
           && isCollectionIds(data.get('collectionIds', []))
+          && isDishCategories(data.get('categories', []))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1783,14 +1791,15 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 
-      // A saved meal written before favorites has no `isFavorite`, so it is not required.
+      // A saved meal written before favorites has no `isFavorite`, and one written before categories has no `categories`, so neither is required.
       function isMeal(data, id) {
-        return data.keys().hasOnly(['id', 'name', 'items', 'isFavorite', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'name', 'items', 'categories', 'isFavorite', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'name', 'items', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.name, 120)
           && isMealItems(data.items)
           && data.get('isFavorite', false) is bool
+          && isDishCategories(data.get('categories', []))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1927,11 +1936,26 @@ service cloud.firestore {
           && (value.timeZone == null || (value.timeZone is string && value.timeZone.size() >= 1 && value.timeZone.size() <= 64));
       }
 
+      function isNullOrBool(value) {
+        return value == null || value is bool;
+      }
+
+      // Each key is read with get(key, null) so a choice added later, or a map written by one dotted path, stays valid.
+      function isVoice(value) {
+        return value == null
+          || (value is map
+            && value.keys().hasOnly(['hasAgreed', 'isReadingAloud', 'isWaiting'])
+            && isNullOrBool(value.get('hasAgreed', null))
+            && isNullOrBool(value.get('isReadingAloud', null))
+            && isNullOrBool(value.get('isWaiting', null)));
+      }
+
       function isPinchSettings(data) {
-        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'suggestPhotos', 'calendarStats', 'reminders', 'updatedAt', 'lastDigestDay'])
+        return data.keys().hasOnly(['fridgeDays', 'freezerDays', 'suggestPhotos', 'calendarStats', 'voice', 'reminders', 'updatedAt', 'lastDigestDay'])
           && data.keys().hasAll(['fridgeDays', 'freezerDays', 'reminders', 'updatedAt'])
           && data.get('suggestPhotos', true) is bool
           && data.get('calendarStats', false) is bool
+          && isVoice(data.get('voice', null))
           && isNullOrDays(data.fridgeDays, 1, 14)
           && isNullOrDays(data.freezerDays, 7, 365)
           && isReminders(data.reminders)

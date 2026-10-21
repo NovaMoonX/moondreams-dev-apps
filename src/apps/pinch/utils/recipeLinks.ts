@@ -72,6 +72,49 @@ export const getYouTubeId = (text: string) => {
 export const getYouTubeThumbnailUrl = (id: string) =>
   `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 
+/** A how-to video the recipe drawer can play in place: the address the player loads, and the host's own picture when we can name it without asking anyone. */
+export interface InlineVideo {
+  src: string;
+  thumbnailUrl: string | null;
+}
+
+const VIMEO_HOSTS = new Set(['vimeo.com', 'player.vimeo.com']);
+
+const getVimeoSrc = (url: URL) => {
+  const host = url.hostname.replace(/^www\./i, '').toLowerCase();
+  const [, first, second, third] = url.pathname.split('/');
+  const [id, privacyHash] =
+    first === 'video' ? [second, third] : [first, second];
+  const isVideo = VIMEO_HOSTS.has(host) && /^\d{5,12}$/.test(id ?? '');
+  const hash = /^[a-z0-9]{6,20}$/i.test(privacyHash ?? '')
+    ? `/${privacyHash}`
+    : '';
+  const result = isVideo ? `https://vimeo.com/${id}${hash}` : null;
+  return result;
+};
+
+/** The video behind a YouTube or Vimeo link, or null for any other address (those stay link rows). A YouTube link plays from the no-cookie host and keeps its start time. */
+export const getInlineVideo = (text: string): InlineVideo | null => {
+  const link = normalizeLinkUrl(text);
+  if (link === null) return null;
+
+  const youTubeId = getYouTubeId(link);
+  if (youTubeId !== null) {
+    const start = new URL(link).searchParams.get('t');
+    const query =
+      start !== null && /^[\dms]+$/i.test(start) ? `?t=${start}` : '';
+    return {
+      src: `https://www.youtube-nocookie.com/embed/${youTubeId}${query}`,
+      thumbnailUrl: getYouTubeThumbnailUrl(youTubeId),
+    };
+  }
+
+  const vimeoSrc = getVimeoSrc(new URL(link));
+  const result =
+    vimeoSrc === null ? null : { src: vimeoSrc, thumbnailUrl: null };
+  return result;
+};
+
 export const getLinkHost = (url: string) => getWebLinkHost(url) ?? '';
 
 const asKind = (value: unknown): RecipeLinkKind =>

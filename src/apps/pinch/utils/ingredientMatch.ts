@@ -1,4 +1,8 @@
-import { createOptionMatcher, toComparable } from '@/utils/optionMatchUtils';
+import {
+  createOptionMatcher,
+  toComparable,
+  type OptionResolution,
+} from '@/utils/optionMatchUtils';
 import type { ResolvedIngredient } from '@apps/pinch/types';
 import { splitPrep } from '@apps/pinch/utils/ingredientNames';
 
@@ -52,8 +56,33 @@ export const matchIngredient = (
   ingredients: ResolvedIngredient[],
 ) => matcher.match(name, ingredients);
 
-/** `matchIngredient`, or the name as a new ingredient would be written: prep words dropped, cased like the catalog. */
-export const resolveIngredient = (
+export interface ReadNameResolution {
+  resolution: OptionResolution<ResolvedIngredient>;
+  /** The other name the line gave, only when the line matched no ingredient, so the new one's note keeps it. */
+  leftover: string | null;
+}
+
+const pickWinner = (
+  byName: ResolvedIngredient | null,
+  bySynonym: ResolvedIngredient | null,
+) => {
+  if (!byName || !bySynonym) return byName ?? bySynonym;
+  const result = bySynonym.isCustom && !byName.isCustom ? bySynonym : byName;
+  return result;
+};
+
+/** `matchIngredient`, or the name as a new ingredient would be written (prep words dropped, cased like the catalog), for a line that may give two names ("beef mince (ground beef)"): each is matched on its own, the person's own ingredient wins over the catalog's when they differ, and a new ingredient takes the first name. The matching rules are the same, so a look-alike is never linked through the second name either. */
+export function resolveReadName(
   name: string,
+  alsoCalled: string | null,
   ingredients: ResolvedIngredient[],
-) => matcher.resolve(name, ingredients);
+): ReadNameResolution {
+  const byName = matcher.match(name, ingredients);
+  const bySynonym = alsoCalled ? matcher.match(alsoCalled, ingredients) : null;
+  const winner = pickWinner(byName, bySynonym);
+  const resolution: OptionResolution<ResolvedIngredient> = winner
+    ? { kind: 'match', option: winner }
+    : matcher.resolve(name, ingredients);
+
+  return { resolution, leftover: winner ? null : alsoCalled };
+}

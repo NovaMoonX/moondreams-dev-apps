@@ -284,8 +284,8 @@ function LinksEditor({ value, onChange, onRemoved }: LinksEditorProps) {
           onChange={(url) => onChange({ ...value, howTo: { ...howTo, url } })}
         />
         <p className='text-muted-foreground text-xs'>
-          It shows at the bottom of the recipe. A YouTube link shows its
-          picture.
+          A YouTube or Vimeo link plays at the bottom of the recipe. Any other
+          link opens its site.
         </p>
       </div>
       <div className='space-y-2'>

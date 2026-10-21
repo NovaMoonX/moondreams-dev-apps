@@ -42,7 +42,6 @@ import {
   PACKAGE_PLACE_LABELS,
   PACKAGE_PLACES,
   PANTRY_INTRO_MAX_INGREDIENTS,
-  PANTRY_SECTION_EMOJIS,
   PANTRY_SPLIT_MIN_ROWS,
 } from '@apps/pinch/constants';
 import { usePackageActions } from '@apps/pinch/hooks/usePackageActions';
@@ -52,7 +51,6 @@ import {
   selectLeadDays,
   selectPackages,
 } from '@apps/pinch/store/selectors';
-import { getShopSection } from '@apps/pinch/utils/shopping';
 import type { Package, PackagePlace } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import {
@@ -93,7 +91,6 @@ interface FormTarget {
 interface PantryRowData {
   view: StockView;
   name: string;
-  emoji: string;
 }
 
 interface PantrySubviewProps {
@@ -191,10 +188,6 @@ function PantrySubview({
       matched
         .map((entry) => ({
           name: entry.name,
-          emoji:
-            PANTRY_SECTION_EMOJIS[
-              getShopSection(ingredientsById.get(entry.ingredientId))
-            ],
           view: getStockView(
             entry.ingredientId,
             shownPick === null
@@ -213,7 +206,7 @@ function PantrySubview({
               (b.view.packages[0].expiresAt ?? 0) ||
             a.name.localeCompare(b.name),
         ),
-    [matched, shownPick, soonDays, ingredientsById],
+    [matched, shownPick, soonDays],
   );
   const shownPackages = useMemo(
     () => rows.flatMap((row) => row.view.packages),
@@ -381,7 +374,6 @@ function PantrySubview({
           <PackageRow
             pkg={only}
             title={row.name}
-            emoji={row.emoji}
             soonDays={soonDays}
             isSelecting
             isSelected={selection.ids.has(only.id)}
@@ -402,12 +394,6 @@ function PantrySubview({
                 checked={isEveryTicked(list)}
                 onCheckedChange={() => toggleAll(list)}
               />
-            </span>
-            <span
-              className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-xl text-xl'
-              aria-hidden='true'
-            >
-              {row.emoji}
             </span>
             <span className='min-w-0 flex-1'>
               <span className='block font-medium wrap-break-word'>
@@ -461,7 +447,6 @@ function PantrySubview({
       <PantryRow
         view={row.view}
         name={row.name}
-        emoji={row.emoji}
         soonDays={soonDays}
         onOpen={handleOpenRow}
       />

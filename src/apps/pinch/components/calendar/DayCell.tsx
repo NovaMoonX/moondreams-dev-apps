@@ -152,7 +152,7 @@ function DayCell({
           offset={4}
         >
           {(isPeekOpen || hasPeeked) && (
-            <DayPeek dayKey={dayKey} meals={meals} />
+            <DayPeek dayKey={dayKey} isToday={isToday} meals={meals} />
           )}
         </Popover>
       ) : (

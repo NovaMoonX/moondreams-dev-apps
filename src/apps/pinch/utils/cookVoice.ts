@@ -1,3 +1,4 @@
+import { toPlainText } from '@/lib/speech/speechText';
 import { findDurations } from '@/utils/durationUtils';
 
 /** A spoken phrase longer than this is talk, not a command. */
@@ -208,7 +209,7 @@ const EXACT = new Map<string, PlainKind>(
 );
 
 const LEAD_IN =
-  /^(?:(?:ok|okay|hey|hi|pinch|alright|all right|so|um|uh|er|please|lets|can you|could you|would you)\s+)+/;
+  /^(?:(?:ok|okay|hey|hi|pepper|pinch|alright|all right|so|um|uh|er|please|lets|can you|could you|would you)\s+)+/;
 const TAIL = /\s+(?:please|thanks|thank you|now)$/;
 const TIMER_SUFFIX =
   / (?:on|for|in|until|till) (?:the |my |this )?(?:[a-z0-9 ]+ )?(?:timer|timers|clock)$/;
@@ -359,20 +360,9 @@ const PLURAL_EXCEPTIONS: Record<string, string> = {
   loaves: 'loaf',
 };
 
-/** Lower case, accents and punctuation off, apostrophes dropped and spaces single: what phrases are compared as. */
-export const toPlainText = (text: string) =>
-  text
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-    .replace(/['’]/g, '')
-    .replace(/(\d)\.(\d)/g, '$1#$2')
-    .replace(/[^\p{L}\p{N}#\s]/gu, ' ')
-    .replace(/#/g, '.')
-    .replace(/\s+/g, ' ')
-    .trim();
+export { toPlainText };
 
-/** Lower case, accents and punctuation off, and a leading "okay", "hey" or "pinch" and a trailing "please" dropped. */
+/** Lower case, accents and punctuation off, and a leading "okay", "hey", "pepper" or "pinch" and a trailing "please" dropped. */
 export const normalizeTranscript = (transcript: string) => {
   const result = toPlainText(transcript)
     .replace(LEAD_IN, '')

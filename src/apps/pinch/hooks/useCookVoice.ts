@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
+import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
+import { useNaturalVoice } from '@/hooks/useNaturalVoice';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { useSpeechCommands } from '@/hooks/useSpeechCommands';
+import type { ListeningCue } from '@/lib/speech/listeningSound';
+import { readMicrophonePermission } from '@/lib/speech/microphonePermission';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { COOK_WINDOW_MS } from '@apps/pinch/constants';
 import {
@@ -13,6 +17,7 @@ import {
 } from '@apps/pinch/utils/cookVoice';
 import {
   createVoiceState,
+  getVoiceCue,
   getVoiceEffect,
   getWakeWaitEnd,
   planHeard,
@@ -136,34 +141,55 @@ interface UseCookVoiceOptions {
   step: { key: string; spoken: string } | null;
   /** Runs inside the tap that turns voice control on, for browser features that need a tap (the timer's sound). */
   onTurnOn?: () => void;
-  /** How many timers run now, and when the latest one rang: the wait for "Hey Pinch" does not count the time a timer runs or the two minutes after one rings. */
+  /** How many timers run now, and when the latest one rang: the wait for the wake phrase does not count the time a timer runs or the two minutes after one rings. */
   runningTimers: number;
   lastRingAt: number | null;
+  /** A timer has rung and waits to be dismissed: the listening chime stays quiet so it never masks the alarm. */
+  isAlarmRinging: boolean;
 }
 
-/** Hands-free cooking: listens for the cooking commands in the way the person chose (one window per tap, waiting for "Hey Pinch", or kept open for fifteen minutes), runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered per person on this device, and again after a stop it has to explain. */
+/** Hands-free cooking: listens for the cooking commands in the way the person chose (one window per tap, waiting for the wake phrase, or kept open for fifteen minutes), runs them through the actions the screen hands to `connect` after each render, says what it heard and reads steps aloud when asked. Asks once before the first start, remembered with the person's account (their choices here, in `PinchSettings.voice`, follow them to another device; an older choice kept on this device stands until they choose again), and again after a stop it has to explain. When the wake phrase was chosen on this device and the browser already holds the microphone permission, waiting starts by itself as cooking opens (quietly, with no chime), since the person chose it. */
 export function useCookVoice({
   uid,
   step,
   onTurnOn,
   runningTimers,
   lastRingAt,
+  isAlarmRinging,
 }: UseCookVoiceOptions) {
-  const [hasAgreed, setHasAgreed] = useLocalStoragePreference(
+  const { settings, save: saveSettings } = usePinchSettings(uid);
+  const [localAgreed, setLocalAgreed] = useLocalStoragePreference(
     `pinch:${uid}:voice:agreed`,
     false,
   );
-  const [isReadingAloud, setIsReadingAloud] = useLocalStoragePreference(
+  const [localReadingAloud, setLocalReadingAloud] = useLocalStoragePreference(
     `pinch:${uid}:voice:read-aloud`,
     false,
   );
-  const [isWaitingPreferred, setIsWaitingPreferred] = useLocalStoragePreference(
+  const [localWaiting, setLocalWaiting] = useLocalStoragePreference(
     `pinch:${uid}:voice:wake`,
     false,
   );
+  const hasAgreed = settings.voice.hasAgreed ?? localAgreed;
+  const isReadingAloud = settings.voice.isReadingAloud ?? localReadingAloud;
+  const isWaitingPreferred = settings.voice.isWaiting ?? localWaiting;
+  const setHasAgreed = (next: boolean) => {
+    setLocalAgreed(next);
+    void saveSettings({ voice: { hasAgreed: next } });
+  };
+  const setIsReadingAloud = (next: boolean) => {
+    setLocalReadingAloud(next);
+    void saveSettings({ voice: { isReadingAloud: next } });
+  };
+  const setIsWaitingPreferred = (next: boolean) => {
+    setLocalWaiting(next);
+    void saveSettings({ voice: { isWaiting: next } });
+  };
+  const natural = useNaturalVoice(`pinch:${uid}:voice:natural`);
   const [machine, setMachine] = useState(() =>
     createVoiceState(isWaitingPreferred ? 'WAKE' : 'TAP'),
   );
+  const [shouldAutoWait] = useState(() => isWaitingPreferred && hasAgreed);
   const [isExplainerOpen, setIsExplainerOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [message, setMessage] = useState<CookVoiceMessage | null>(null);
@@ -187,7 +213,13 @@ export function useCookVoice({
     begin: () => void;
     stop: () => void;
     say: (text: string) => void;
-  }>({ begin: () => undefined, stop: () => undefined, say: () => undefined });
+    cue: (kind: ListeningCue) => void;
+  }>({
+    begin: () => undefined,
+    stop: () => undefined,
+    say: () => undefined,
+    cue: () => undefined,
+  });
 
   const connect = useCallback(
     (
@@ -204,16 +236,21 @@ export function useCookVoice({
     setMessage({ id: messageCount.current, text, tone });
   };
 
-  const send = useCallback((event: VoiceEvent) => {
-    const previous = machineRef.current;
-    const next = reduceVoice(previous, event);
-    if (next === previous) return;
-    machineRef.current = next;
-    setMachine(next);
-    const effect = getVoiceEffect(previous, next);
-    if (effect === 'START') controls.current.begin();
-    if (effect === 'STOP') controls.current.stop();
-  }, []);
+  const send = useCallback(
+    (event: VoiceEvent, options?: { isSilent?: boolean }) => {
+      const previous = machineRef.current;
+      const next = reduceVoice(previous, event);
+      if (next === previous) return;
+      machineRef.current = next;
+      setMachine(next);
+      const effect = getVoiceEffect(previous, next);
+      if (effect === 'START') controls.current.begin();
+      if (effect === 'STOP') controls.current.stop();
+      const cue = options?.isSilent ? null : getVoiceCue(previous, next);
+      if (cue !== null) controls.current.cue(cue);
+    },
+    [],
+  );
 
   const carryOut = (
     heard: { command: CookCommand; transcript: string },
@@ -267,7 +304,7 @@ export function useCookVoice({
         return carryOut(plan.heard, run);
       }
       if (hasDialogOnTop()) return false;
-      send({ type: 'WAKE_HEARD' });
+      send({ type: 'WAKE_HEARD' }, { isSilent: plan.heard !== null });
       setMessage(null);
       return plan.heard === null ? true : carryOut(plan.heard, run);
     }
@@ -283,11 +320,12 @@ export function useCookVoice({
     lang: langs.listen,
     speechLang: langs.speak,
     onFinalTranscript: handleTranscript,
+    isNaturalVoice: natural.isOn,
     onHalt: (error) => {
       if (error !== 'idle') send({ type: 'ENGINE_STOPPED', reason: error });
     },
   });
-  const { say, quiet, stop, start } = speech;
+  const { say, quiet, stop, start, cue } = speech;
 
   const begin = () => {
     readStepKey.current = null;
@@ -298,8 +336,31 @@ export function useCookVoice({
   };
 
   useEffect(() => {
-    controls.current = { begin, stop, say };
+    controls.current = {
+      begin,
+      stop,
+      say,
+      cue: (kind) => {
+        if (!isAlarmRinging) cue(kind);
+      },
+    };
   });
+
+  useEffect(() => {
+    if (!shouldAutoWait || !speech.isSupported) return;
+    const attempt = { isCancelled: false };
+    readMicrophonePermission().then((permission) => {
+      if (attempt.isCancelled || permission !== 'granted') return;
+      if (machineRef.current.phase !== 'OFF') return;
+      send(
+        { type: 'CHOOSE', choice: 'WAKE', at: Date.now() },
+        { isSilent: true },
+      );
+    });
+    return () => {
+      attempt.isCancelled = true;
+    };
+  }, [shouldAutoWait, speech.isSupported, send]);
 
   const { phase, epoch, lockEndsAt, stopped } = machine;
   const isListening = speech.status === 'listening';
@@ -411,7 +472,7 @@ export function useCookVoice({
     send({ type: 'MODE', mode });
   };
 
-  /** A row in the voice sheet: it changes how the mic listens now, and "Tap to talk" and "Say Hey Pinch" are remembered for next time. */
+  /** A row in the voice sheet: it changes how the mic listens now, and "Tap to talk" and the wake phrase are remembered for next time. */
   const choose = (choice: VoiceMode | 'LOCK') => {
     if (choice !== 'LOCK') setIsWaitingPreferred(choice === 'WAKE');
     send({ type: 'CHOOSE', choice, at: Date.now() });
@@ -427,7 +488,7 @@ export function useCookVoice({
   return {
     isSupported: speech.isSupported,
     status: speech.status,
-    /** The mic is open, whether it waits for "Hey Pinch" or takes commands. */
+    /** The mic is open, whether it waits for the wake phrase or takes commands. */
     isOn: phase !== 'OFF',
     phase,
     /** How the mic listens when it is on (the lock is never remembered). */
@@ -454,6 +515,7 @@ export function useCookVoice({
     choose,
     isReadingAloud,
     setIsReadingAloud: setReadingAloud,
+    natural,
   };
 }
 
