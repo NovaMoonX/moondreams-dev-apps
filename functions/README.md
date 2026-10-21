@@ -82,7 +82,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Public by design, so it is strict about what it returns.** It reads `apps/a-list/calendarShares/{shareId}` with the admin SDK (clients can't read that collection unless they own the document), and copies only allowlisted fields into the response (`calendarShareView.ts`). The owner's uid, the PIN and any extra field on the document never leave it.
 - **PIN:** an open share (`pin: null`) is returned as is. A locked one answers `pin_required` until a PIN arrives, then `wrong_pin` or the calendar. The PIN is trimmed, uppercased and compared in constant time. There is **no attempt limit**.
 - **Ids:** anything that isn't 26 characters of the share alphabet, any unknown id and a deleted share all return `not_found`, so a caller can't tell which ids exist.
-- **No secrets, no cache, no logging of ids or PINs.** Deploying a new callable may need the one-time invoker fix in the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
+- **No secrets, no cache, no logging of ids or PINs.** A new callable is opened to the browser by the deploy itself (root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access)).
 
 ### A-List Tracker: `searchMovies` and `getMovie`
 
@@ -128,7 +128,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Covers.** For each `{ index, recipeId }` the request names, the source file is built on the server from the caller's own uid (`apps/pinch/kitchens/{uid}/recipes/{recipeId}/cover.webp`); a client never names a path. Each copy gets its own download token, so the shared file never shares an address with the owner's private one. A web-search cover is never shared. A copy that fails is logged (a short code and the first 4 characters of the id, nothing else) and leaves that recipe without a cover; it never fails the share. The bucket is the project's default (`getStorage().bucket()`, as `deleteTrip` uses): in production that is the one the app uploads to, but an offline Emulator Suite falls back to `moondreams-dev-apps.appspot.com`, where the app's uploads are not found, so start it with `STORAGE_BUCKET_URL=moondreams-dev-apps.firebasestorage.app` (`SEEDING.md`).
 - **`copyPinchShareCover`.** Signed in only. Copies a shared recipe's cover onto the caller's own recipe, and only when the share has a cover at that index and the caller's recipe exists with no cover of its own. It never writes the recipe: the client stores the returned `coverPath`. A share with no cover, an unknown share and a recipe that already has a picture all answer `{ coverPath: null }`.
 - **No logging of ids, titles or copies.** No secrets, env vars or indexes: every query is equality-only (`ownerUid`, `sourceId`).
-- **Deploying.** A new `onCall` may need the one-time invoker fix, `npm run fb:invoker -- getPinchShare changePinchShare copyPinchShareCover` (root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access)); the signed-out `getPinchShare` fails with a CORS error until it has it. Nothing has to exist in production before the merge.
+- **Deploying.** The deploy opens the new callables to the browser itself (root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access)), the signed-out `getPinchShare` included, so nothing is run by hand. Nothing has to exist in production before the merge.
 - **Not verified live.** The Storage `copy` and `setMetadata` calls and the download token a copied cover gets were written from the Admin SDK's documentation and run only against the emulator (with the bucket above, every copy, token, renew and delete case passed); check a shared cover (open a link whose recipe has an uploaded cover) on the first deploy.
 
 ### Pinch: `searchRecipeImages`
@@ -224,7 +224,7 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
   - a "Secrets and config" row for any new secret or env var;
   - a note if it caches, budgets, or fetches on a user's behalf.
 - **New secret:** create it in production *before* the PR merges, or the CI functions deploy fails and nothing ships. If the first deploy then fails on a Secret Manager permission, see [Service accounts](#service-accounts).
-- **New callable:** if the browser reports a CORS error after its first deploy, run `npm run fb:invoker -- <function>` (several names are fine); see the root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access).
+- **New callable:** nothing to run. The deploy opens it to the browser and says so in its log (root README's [New Cloud Functions & Cloud Run invoker access](../README.md#new-cloud-functions--cloud-run-invoker-access)). It is then reachable by anyone with its address, so it checks `request.auth` itself unless it exists for signed-out visitors, and this README says which.
 - **Query with an equality plus a range or `orderBy`:** add its composite index to `firestore.indexes.json` in the same PR and run `npm run check:indexes`. The emulator doesn't enforce indexes, so a missing one only fails in production.
 - **Server-only collection:** give it a deny-all block in `firestore.rules`.
 
@@ -233,7 +233,8 @@ The emulator UI at `http://127.0.0.1:4001` shows Firestore and Realtime Database
 | Symptom | Cause and fix |
 | --- | --- |
 | Emulator says a function isn't found, or `lib/index.js` doesn't exist | `functions/lib/` wasn't built. Start through `npm run emulators` (it builds first), or run `npm --prefix functions run build`. |
-| Browser CORS error on a callable in production | Missing public-invoker grant. `npm run fb:invoker -- <function>`; see the root README's invoker section. |
+| Browser CORS error on a callable in production | The callable is still private. `npm run fb:invoker -- <function>` (or `--all`); see the root README's invoker section. |
+| CI deploy log says `Unable to set the invoker for the IAM policy`, then opens every callable and deploys again | Expected on a new callable: the organization policy refuses the CLI's public grant, so the deploy applies it another way. If the run still fails after that, the deploy account can't update Cloud Run services: grant it `roles/run.admin`. |
 | CI deploy fails on functions with a secret error | The secret doesn't exist in production yet. Set it with `firebase functions:secrets:set`. |
 | CI deploy fails with `secretmanager.secrets.getIamPolicy` or `setIamPolicy` | The deployer account can't manage that secret. Grant it per [Service accounts](#service-accounts). |
 | A function returns an error reading its secret at runtime | The runtime (default compute) account can't read that secret. Grant it per [Service accounts](#service-accounts). |
