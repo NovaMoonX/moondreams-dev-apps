@@ -33,7 +33,7 @@ import {
   evaluateCostStep,
   type CostStepValues,
 } from '@apps/a-list/utils/costStep';
-import { centsToInputValue } from '@apps/a-list/utils/money';
+import { centsToInputValue } from '@/utils/moneyUtils';
 import { formatTaxRate } from '@apps/a-list/utils/tax';
 
 interface GoalValues {

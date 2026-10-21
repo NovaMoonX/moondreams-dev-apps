@@ -8,6 +8,8 @@ interface PillProps {
   isSelected: boolean;
   onClick: () => void;
   emoji?: string;
+  /** A small image or icon shown before the label, for an option that has a picture instead of an emoji. */
+  icon?: ReactNode;
   /** A filter or view switch: as tall as its text instead of a 40px tap target, with the hit area kept by a pseudo-element. */
   isThin?: boolean;
   /** Shown but can't be chosen, like a sold-out showing. */
@@ -21,6 +23,7 @@ function Pill({
   isSelected,
   onClick,
   emoji,
+  icon,
   isThin = false,
   isDisabled = false,
   className,
@@ -43,6 +46,7 @@ function Pill({
       )}
     >
       {emoji && <span aria-hidden='true'>{emoji}</span>}
+      {icon}
       {typeof children === 'string' ? (
         <span className='truncate'>{children}</span>
       ) : (

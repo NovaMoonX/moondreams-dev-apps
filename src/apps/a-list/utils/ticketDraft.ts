@@ -1,6 +1,6 @@
 import { MAX_AMOUNT_CENTS, MAX_TAX_RATE } from '@apps/a-list/constants';
 import type { AmcFormat, Ticket } from '@apps/a-list/types';
-import { centsToInputValue, parseMoneyToCents } from '@apps/a-list/utils/money';
+import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 
 /** The three amounts AMC itemizes on every ticket, in dollars as typed, plus its format. */
 export interface TicketDraft {

@@ -61,6 +61,8 @@ export interface IngredientRecord {
   gramsPerMl: number | null;
   /** Weight of one, bridging mass and count. */
   gramsEach: number | null;
+  /** The product that prices this ingredient; a product's own document is the source of truth, so a missing or stale id reads as "the first product". Documents written before products existed lack the key. */
+  defaultProductId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -98,7 +100,7 @@ export interface ResolvedFamily {
 export type KitchenView = 'yours' | 'all';
 
 /** A full-page screen that takes over the app; the tabs stay mounted underneath. */
-export type PinchSubview = { kind: 'stores' };
+export type PinchSubview = { kind: 'stores' } | { kind: 'products' };
 
 export interface CatalogStore {
   /** `cat-store-` plus the slug; also the document id of the person's own copy. */
@@ -116,6 +118,23 @@ export interface Store {
   catalogStoreId: string | null;
   /** Storage path of the person's own image. */
   imagePath: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** What a person buys: an ingredient at a store, with a price for a package size. Recipes never name one; they only feed cost. */
+export interface Product {
+  id: string;
+  /** Immutable. */
+  ingredientId: string;
+  storeId: string;
+  /** The brand or pack name ("Great Value"). */
+  label: string | null;
+  priceCents: number;
+  sizeAmount: number;
+  sizeUnit: Unit;
+  /** https only. */
+  url: string | null;
   createdAt: number;
   updatedAt: number;
 }

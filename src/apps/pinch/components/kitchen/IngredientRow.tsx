@@ -1,9 +1,15 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import { useAppSelector } from '@/store';
 import IngredientIcon from '@apps/pinch/components/shared/IngredientIcon';
 import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
+import {
+  selectDefaultProducts,
+  selectStoresById,
+} from '@apps/pinch/store/selectors';
 import type { ResolvedIngredient } from '@apps/pinch/types';
+import { formatPriceAndSize } from '@apps/pinch/utils/productFormat';
 import { hasNutrition } from '@apps/pinch/utils/nutrition';
 
 interface IngredientRowProps {
@@ -12,6 +18,15 @@ interface IngredientRowProps {
 }
 
 function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
+  const defaultProduct = useAppSelector((state) =>
+    selectDefaultProducts(state).get(ingredient.id),
+  );
+  const storeName =
+    useAppSelector(
+      (state) =>
+        selectStoresById(state).get(defaultProduct?.storeId ?? '')?.name,
+    ) ?? 'Removed store';
+
   return (
     <Button
       type='button'
@@ -24,10 +39,16 @@ function IngredientRow({ ingredient, onOpen }: IngredientRowProps) {
         <span className='text-foreground block truncate font-medium'>
           {ingredient.name}
         </span>
-        {hasNutrition(ingredient.per100g) && (
+        {defaultProduct ? (
           <span className='text-muted-foreground block truncate text-xs font-normal'>
-            <NutritionLine values={ingredient.per100g} isCompact /> per 100 g
+            {storeName} · {formatPriceAndSize(defaultProduct)}
           </span>
+        ) : (
+          hasNutrition(ingredient.per100g) && (
+            <span className='text-muted-foreground block truncate text-xs font-normal'>
+              <NutritionLine values={ingredient.per100g} isCompact /> per 100 g
+            </span>
+          )
         )}
       </span>
       <ChevronRight

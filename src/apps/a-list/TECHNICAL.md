@@ -707,7 +707,7 @@ No cached document is ever written back whole. A transaction is used only where 
 - **`AddFlow`** (shown full-page by `AddSubview`, or inside the watchlist drawer for "Add to calendar") — owns the two-step pick-then-details state, the "added · N so far" counter for past-movies mode, and calls `addViewing`/`addWatchlistItem`. In the watchlist's `quick` mode (the trailers loop) a tap on a result saves it straight away with the default priority and no toast (only a duplicate or a failure toasts), falling back to what the search knew if the details lookup fails. `TrailerPicksList` shows the picks, derived from the watchlist (items created since the previews window opened, as of the screen opening), and its Undo calls `removeWatchlistItem`. `MoviePicker` is purely a picker: given a query it returns a chosen `MovieSearchResult` or a chosen watchlist item.
 - **`SeenPromptHost`** and **`useRefreshUnreleasedMovies`** — the two background concerns, each mounted once in `AList.tsx`. Neither renders anything except the prompt drawer.
 - **`PreviewsNudge`** (`components/shell/`) — a third, quieter one: rendered by `BottomNav` above the Calendar button (so on every tab, never as an overlay) while a showing's previews are near. It keeps its own session-local list of folded showings, like "Later".
-- **Pure utilities** (`utils/`): `money.ts` (parse/format cents), `dayKeys.ts`, `billing.ts`, `savings.ts`, `viewingState.ts`, `tax.ts` (itemized tax, all-in split, bill-derived rate), `watchlistRows.ts`, `opening.ts`, `chips.ts` (fee and tax-rate chips). All are plain functions over plain data with no React or Firebase, so the arithmetic that decides "have I broken even?" is exercised without a UI.
+- **Pure utilities** (`utils/`): `dayKeys.ts`, `billing.ts`, `savings.ts`, `viewingState.ts`, `tax.ts` (itemized tax, all-in split, bill-derived rate), `watchlistRows.ts`, `opening.ts`, `chips.ts` (fee and tax-rate chips). All are plain functions over plain data with no React or Firebase (money parsing and formatting, `parseMoneyToCents` and friends, lives in the shared `src/utils/moneyUtils.ts`), so the arithmetic that decides "have I broken even?" is exercised without a UI.
 - **Reuse, not copy:** `useDebouncedValue`/`DEBOUNCE_MS`, `useNow`, `queryClient`/`DAY_MS`, `normalizeString`, `formatDateUTC`/`formatDate`/`formatTime`/`formatDateTime`, `fromDateInputValue`/`toLocalDateInputValue`/`fromLocalDateAndTimeInputValues`, `useActionModal`, and `AppToggle` if an immediate-effect toggle ever appears. **`SectionHeader`, `ModalFooterActions` and `DeleteIconButton` currently live in Waypoint's `components/`.** A-List is the second app that needs them, so they move to central `src/components/` in the first A-List PR that uses one, with Waypoint's imports updated in the same PR. A-List never imports from `@apps/waypoint`.
 
 ---
@@ -756,7 +756,7 @@ src/apps/a-list/
 │   ├── actions/    membershipActions.ts  watchlistActions.ts  viewingActions.ts
 │   └── listeners/  membershipListeners.ts  watchlistListeners.ts  viewingListeners.ts
 ├── utils/
-│   ├── money.ts  dayKeys.ts  billing.ts  savings.ts  viewingState.ts
+│   ├── dayKeys.ts  billing.ts  savings.ts  viewingState.ts
 │   ├── tax.ts  watchlistRows.ts  opening.ts  chips.ts
 └── components/
     ├── shell/       BottomNav.tsx  LoadingSkeleton.tsx  PreviewsNudge.tsx
