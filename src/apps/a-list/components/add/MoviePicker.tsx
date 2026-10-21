@@ -1,10 +1,9 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
-import { Play } from 'lucide-react';
 import { useState } from 'react';
 
+import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
@@ -24,7 +23,11 @@ import {
   selectSeenCountByMovieKey,
   selectWatchlistItems,
 } from '@apps/a-list/store/selectors';
-import type { MovieSearchResult, WatchlistItem } from '@apps/a-list/types';
+import type {
+  MovieSearchResult,
+  PopularMovie,
+  WatchlistItem,
+} from '@apps/a-list/types';
 
 const POPULAR_COLLAPSED_COUNT = 8;
 
@@ -32,7 +35,7 @@ interface MoviePickerProps {
   query: string;
   onQueryChange: (query: string) => void;
   /** `isListed` is true when the film is already on the watchlist, by key or by title and year. */
-  onPick: (movie: MovieSearchResult, isListed: boolean) => void;
+  onPick: (movie: MovieSearchResult | PopularMovie, isListed: boolean) => void;
   onPickWatchlistItem: (item: WatchlistItem) => void;
   onAddByTitle: () => void;
   /** Calendar adds pick from the watchlist first; watchlist adds search the movie database only. */
@@ -190,19 +193,15 @@ function MoviePicker({
     posterUrl: string | null,
     detail: string | null,
     onClick: () => void,
-    trailerUrl: string | null = null,
   ) => (
-    <li key={key} className='relative'>
+    <li key={key}>
       <Button
         type='button'
         variant='tertiary'
         size='stripped'
         onClick={onClick}
         disabled={isDisabled}
-        className={join(
-          'text-foreground! hover:bg-muted h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left',
-          trailerUrl && 'pr-12',
-        )}
+        className='text-foreground! hover:bg-muted h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left'
       >
         <span className='h-14 w-10 shrink-0 overflow-hidden rounded-lg shadow-sm'>
           <PosterCover title={title} posterUrl={posterUrl} compact />
@@ -216,21 +215,6 @@ function MoviePicker({
           )}
         </span>
       </Button>
-      {trailerUrl && (
-        <Button
-          href={trailerUrl}
-          target='_blank'
-          rel='noopener noreferrer'
-          variant='tertiary'
-          size='stripped'
-          rounded='full'
-          aria-label={`Watch the trailer for ${title}`}
-          title='Watch the trailer'
-          className='text-foreground! absolute top-4 right-1 h-10 w-10 justify-center'
-        >
-          <Play className='h-4 w-4' aria-hidden='true' />
-        </Button>
-      )}
     </li>
   );
 
@@ -297,9 +281,22 @@ function MoviePicker({
       )}
       {popularResults.length > 0 && (
         <div className='space-y-1'>
-          <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-            In theaters and coming soon
-          </h3>
+          <div className='flex items-center gap-1'>
+            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+              In theaters and coming soon
+            </h3>
+            <HelpTip title='In theaters and coming soon' placement='bottom'>
+              <p>
+                Movies playing in US theaters now or opening soon, most
+                popular first.
+              </p>
+              <p>
+                <strong>Left out:</strong> anything already on your watchlist,
+                seen or not, so you won't see it twice. Search by title to find
+                those.
+              </p>
+            </HelpTip>
+          </div>
           <ul className='space-y-0.5'>
             {popularShown.map((movie) =>
               renderRow(
@@ -310,7 +307,6 @@ function MoviePicker({
                   ? 'In theaters'
                   : `Opens ${formatDateUTC(movie.opensOn)}`,
                 () => onPick(movie, false),
-                movie.trailerUrl,
               ),
             )}
           </ul>

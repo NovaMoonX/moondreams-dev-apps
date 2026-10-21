@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button, Form } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Play } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
@@ -66,6 +66,7 @@ import {
 import type {
   AListOverlay,
   MovieSearchResult,
+  PopularMovie,
   MovieSnapshot,
   ShowtimeOption,
   TheatreSnapshot,
@@ -83,7 +84,7 @@ interface ShowtimeValues {
 }
 
 export type AddSelection =
-  | { kind: 'search'; result: MovieSearchResult }
+  | { kind: 'search'; result: MovieSearchResult | PopularMovie }
   | {
       kind: 'known';
       movieKey: string;
@@ -199,6 +200,10 @@ export function AddFlow({
     selection?.kind === 'search' ? selection.result.title : '';
   const fallbackPoster =
     selection?.kind === 'search' ? selection.result.posterUrl : null;
+  const trailerUrl =
+    selection?.kind === 'search' && 'trailerUrl' in selection.result
+      ? selection.result.trailerUrl
+      : null;
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
   const showtimeAt = fromLocalDateAndTimeInputValues(
     showtimeValues.date,
@@ -562,6 +567,20 @@ export function AddFlow({
             <p className='text-muted-foreground text-sm'>{getDetailsLine()}</p>
             {rewatchNote && (
               <p className='text-primary text-sm'>{rewatchNote}</p>
+            )}
+            {trailerUrl && (
+              <Button
+                href={trailerUrl}
+                target='_blank'
+                rel='noopener noreferrer'
+                variant='secondary'
+                size='sm'
+                rounded='full'
+                className='h-10 gap-1.5'
+              >
+                <Play className='h-4 w-4' aria-hidden='true' />
+                Watch trailer on YouTube
+              </Button>
             )}
           </div>
         </div>
