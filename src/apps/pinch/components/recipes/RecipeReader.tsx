@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
 import { Lightbulb, RefreshCw } from 'lucide-react';
 
@@ -10,9 +10,11 @@ import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import FilePickCard from '@/components/FilePickCard';
 import FormSection from '@/components/FormSection';
 import IntroCard from '@/components/IntroCard';
+import LinkPreviewCard from '@/components/LinkPreviewCard';
 import MethodPicker, { type Method } from '@/components/MethodPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useAppSelector } from '@/store';
 import { isReadableFile } from '@/utils/fileUtils';
 import { toWebLink } from '@/utils/urlUtils';
@@ -28,6 +30,7 @@ import {
   extractRecipeFromText,
   type ExtractedRecipe,
 } from '@apps/pinch/lib/extractRecipe';
+import { ideaPageQueryOptions } from '@apps/pinch/queries/ideaPageQueries';
 import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
 import { selectIdeaGroups } from '@apps/pinch/store/selectors';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
@@ -176,6 +179,28 @@ function RecipeReader({
     0,
     canFoldIdeas && !isIdeasOpen ? IDEAS_SHOWN : IDEAS_SHOWN_MOST,
   );
+
+  const typedLink = method === 'link' ? asWebLink(link) : null;
+  const settledLink = asWebLink(useDebouncedValue(link, DEBOUNCE_MS.linkDetection));
+  const previewUrl = typedLink !== null && typedLink === settledLink ? typedLink : null;
+  const lookup = useQuery({
+    ...ideaPageQueryOptions(previewUrl ?? ''),
+    enabled: previewUrl !== null,
+  });
+  const lookedUp = lookup.data?.meta;
+  const getPreview = () => {
+    if (previewUrl === null || lookup.isError || isReading) {
+      return null;
+    }
+    return lookup.data
+      ? {
+          title: lookup.data.title,
+          siteName: lookedUp?.siteName ?? null,
+          description: lookedUp?.description ?? null,
+          imageUrl: lookedUp?.image ?? null,
+        }
+      : null;
+  };
 
   useEffect(() => {
     if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
@@ -377,7 +402,7 @@ function RecipeReader({
     if (!canPasteText) {
       return 'The address saved with your idea.';
     }
-    return 'Copy the address from your browser.';
+    return 'Copy the address from your browser. We look up its title and picture as you paste.';
   };
 
   const getChips = (): ActionChip[] => {
@@ -500,6 +525,12 @@ function RecipeReader({
               {getStatusLine()}
             </div>
           </div>
+        )}
+        {previewUrl !== null && !lookup.isError && (
+          <LinkPreviewCard
+            host={new URL(previewUrl).hostname}
+            preview={getPreview()}
+          />
         )}
       </FormSection>
       <ActionChips actions={getChips()} label='What else you can do with it' />
