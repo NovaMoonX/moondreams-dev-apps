@@ -1,8 +1,11 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
+import { useState } from 'react';
 
+import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -12,22 +15,47 @@ import {
   MOVIE_SEARCH_MIN_CHARS,
   WATCH_PRIORITY_LABELS,
 } from '@apps/a-list/constants';
-import { movieSearchQueryOptions } from '@apps/a-list/queries/movieQueries';
+import {
+  movieSearchQueryOptions,
+  popularMoviesQueryOptions,
+} from '@apps/a-list/queries/movieQueries';
 import {
   selectSeenCountByMovieKey,
   selectWatchlistItems,
 } from '@apps/a-list/store/selectors';
-import type { MovieSearchResult, WatchlistItem } from '@apps/a-list/types';
+import type {
+  MovieSearchResult,
+  PopularMovie,
+  WatchlistItem,
+} from '@apps/a-list/types';
+
+const POPULAR_COLLAPSED_COUNT = 8;
+const WATCHLIST_COLLAPSED_COUNT = 5;
+const WATCHLIST_FOLD_MIN = 9;
+
+const popularHelp = (
+  <>
+    <p>
+      Movies playing in US theaters now or opening soon, most popular first.
+    </p>
+    <p>
+      <strong>Left out:</strong> anything already on your watchlist, seen or
+      not, so you won't see it twice.
+    </p>
+  </>
+);
 
 interface MoviePickerProps {
   query: string;
   onQueryChange: (query: string) => void;
   /** `isListed` is true when the film is already on the watchlist, by key or by title and year. */
-  onPick: (movie: MovieSearchResult, isListed: boolean) => void;
+  onPick: (movie: MovieSearchResult | PopularMovie, isListed: boolean) => void;
   onPickWatchlistItem: (item: WatchlistItem) => void;
   onAddByTitle: () => void;
   /** Calendar adds pick from the watchlist first; watchlist adds search the movie database only. */
   showWatchlist: boolean;
+  /** What is in theaters or opening soon, offered while the field is empty; off where it is the wrong data (logging films already seen). */
+  showPopular: boolean;
   /** Blocks every row while a pick is being saved, so a double tap can't save twice. */
   isDisabled?: boolean;
 }
@@ -39,6 +67,7 @@ function MoviePicker({
   onPickWatchlistItem,
   onAddByTitle,
   showWatchlist,
+  showPopular,
   isDisabled = false,
 }: MoviePickerProps) {
   const watchlist = useAppSelector(selectWatchlistItems);
@@ -52,6 +81,12 @@ function MoviePicker({
     ...movieSearchQueryOptions(debouncedQuery),
     enabled: canSearch,
   });
+  const popular = useQuery({
+    ...popularMoviesQueryOptions(),
+    enabled: showPopular,
+  });
+  const [isPopularOpen, setIsPopularOpen] = useState(false);
+  const [isWatchlistOpen, setIsWatchlistOpen] = useState(false);
   const normalizedQuery = normalizeString(query);
   // An empty search shows what's still unseen; typing searches the whole list, so a rewatch can be picked.
   const isWatchlistMatch = (item: WatchlistItem) => {
@@ -78,28 +113,60 @@ function MoviePicker({
   const listedIdentities = getIdentities(watchlist);
   const watchlistKeys = new Set(watchlistMatches.map((item) => item.movieKey));
   const shownIdentities = getIdentities(watchlistMatches);
+  // A hand-typed film often has no date, so a list entry without a year matches on title alone.
+  const undatedTitles = new Set(
+    watchlist
+      .filter((item) => item.movie.releaseDate === null)
+      .map((item) => normalizeString(item.movie.title)),
+  );
   const isListed = (movie: MovieSearchResult) =>
     listedKeys.has(movie.movieKey) ||
-    listedIdentities.has(getIdentity(movie.title, movie.year));
+    listedIdentities.has(getIdentity(movie.title, movie.year)) ||
+    undatedTitles.has(normalizeString(movie.title));
   const results = (search.data ?? []).filter(
     (movie) =>
       !watchlistKeys.has(movie.movieKey) &&
       !shownIdentities.has(getIdentity(movie.title, movie.year)),
   );
+  // Popular films fill the empty field only; the ones already on the watchlist are left out.
+  const popularResults =
+    showPopular && query.trim() === ''
+      ? (popular.data ?? []).filter((movie) => !isListed(movie))
+      : [];
   const isSearchResting =
     search.error instanceof FirebaseError &&
     (search.error.code === 'functions/resource-exhausted' ||
       search.error.code === 'functions/failed-precondition');
 
   const trimmedQuery = query.trim();
+  const watchlistShown =
+    isWatchlistOpen || watchlistMatches.length < WATCHLIST_FOLD_MIN
+      ? watchlistMatches
+      : watchlistMatches.slice(0, WATCHLIST_COLLAPSED_COUNT);
+  const isEverythingListed =
+    showPopular &&
+    trimmedQuery === '' &&
+    popular.isSuccess &&
+    popular.data.length > 0 &&
+    popularResults.length === 0;
+  const popularShown = isPopularOpen
+    ? popularResults
+    : popularResults.slice(0, POPULAR_COLLAPSED_COUNT);
+  const isPopularLoading =
+    showPopular && trimmedQuery === '' && popular.isPending;
 
   const hasQuery = trimmedQuery.length >= MOVIE_SEARCH_MIN_CHARS;
   // Results belong to the query that fetched them, so they never outlive the text that asked for them.
   const visibleResults = hasQuery ? results : [];
-  const hasItems = watchlistMatches.length > 0 || visibleResults.length > 0;
+  const hasItems =
+    watchlistMatches.length > 0 ||
+    visibleResults.length > 0 ||
+    popularResults.length > 0 ||
+    isEverythingListed;
 
   const getEmptyState = () => {
     if (hasItems) return null;
+    if (isPopularLoading) return null;
     if (trimmedQuery === '')
       return {
         emoji: '🍿',
@@ -191,7 +258,7 @@ function MoviePicker({
             On your watchlist
           </h3>
           <ul className='space-y-0.5'>
-            {watchlistMatches.map((item) =>
+            {watchlistShown.map((item) =>
               renderRow(
                 item.movieKey,
                 item.movie.title,
@@ -208,7 +275,22 @@ function MoviePicker({
               ),
             )}
           </ul>
+          {watchlistMatches.length >= WATCHLIST_FOLD_MIN && (
+            <ShowMoreButton
+              isOpen={isWatchlistOpen}
+              onClick={() => setIsWatchlistOpen((current) => !current)}
+            >
+              {isWatchlistOpen
+                ? 'Show fewer'
+                : `Show all ${watchlistMatches.length}`}
+            </ShowMoreButton>
+          )}
         </div>
+      )}
+      {isPopularLoading && watchlistMatches.length === 0 && (
+        <p className='text-muted-foreground py-6 text-center text-sm'>
+          Looking up what's playing…
+        </p>
       )}
       {emptyState && (
         <div className='space-y-3 py-8 text-center'>
@@ -231,6 +313,56 @@ function MoviePicker({
               Can't find it? Add it by title
             </Button>
           )}
+        </div>
+      )}
+      {popularResults.length > 0 && (
+        <div className='space-y-1'>
+          <div className='flex items-center gap-1'>
+            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+              In theaters and coming soon
+            </h3>
+            <HelpTip title='In theaters and coming soon' placement='bottom'>
+              {popularHelp}
+            </HelpTip>
+          </div>
+          <ul className='space-y-0.5'>
+            {popularShown.map((movie) =>
+              renderRow(
+                movie.movieKey,
+                movie.title,
+                movie.posterUrl,
+                movie.opensOn === null
+                  ? 'In theaters'
+                  : `Opens ${formatDateUTC(movie.opensOn)}`,
+                () => onPick(movie, false),
+              ),
+            )}
+          </ul>
+          {popularResults.length > POPULAR_COLLAPSED_COUNT && (
+            <ShowMoreButton
+              isOpen={isPopularOpen}
+              onClick={() => setIsPopularOpen((current) => !current)}
+            >
+              {isPopularOpen
+                ? 'Show fewer'
+                : `Show all ${popularResults.length}`}
+            </ShowMoreButton>
+          )}
+        </div>
+      )}
+      {isEverythingListed && (
+        <div className='space-y-1'>
+          <div className='flex items-center gap-1'>
+            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+              In theaters and coming soon
+            </h3>
+            <HelpTip title='In theaters and coming soon' placement='bottom'>
+              {popularHelp}
+            </HelpTip>
+          </div>
+          <p className='text-muted-foreground px-2 py-2 text-sm'>
+            Everything playing or opening soon is already on your watchlist.
+          </p>
         </div>
       )}
       {visibleResults.length > 0 && (

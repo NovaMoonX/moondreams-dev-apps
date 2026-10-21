@@ -1,8 +1,8 @@
 import { defineSecret } from 'firebase-functions/params';
 
-import { getOmdbTitle, searchOmdb } from './omdb.js';
-import { getTmdbTitle, searchTmdb } from './tmdb.js';
-import type { MovieSearchResult, MovieSnapshot } from './types.js';
+import { getOmdbTitle, popularOmdb, searchOmdb } from './omdb.js';
+import { getTmdbTitle, popularTmdb, searchTmdb } from './tmdb.js';
+import type { MovieSearchResult, MovieSnapshot, PopularMovie } from './types.js';
 
 export const OMDB_API_KEY = defineSecret('OMDB_API_KEY');
 export const TMDB_API_KEY = defineSecret('TMDB_API_KEY');
@@ -12,12 +12,14 @@ export interface MovieProvider {
   isBudgeted: boolean;
   getKey: () => string;
   search: (apiKey: string, query: string, beforeUpstreamCall: () => Promise<void>) => Promise<MovieSearchResult[]>;
+  /** What is in theaters or opening soon, most popular first; empty when the provider can't say. */
+  popular: (apiKey: string) => Promise<PopularMovie[]>;
   getTitle: (apiKey: string, providerId: string) => Promise<MovieSnapshot>;
 }
 
 const PROVIDERS: Record<MovieProvider['id'], MovieProvider> = {
-  tmdb: { id: 'tmdb', isBudgeted: false, getKey: () => TMDB_API_KEY.value(), search: searchTmdb, getTitle: getTmdbTitle },
-  omdb: { id: 'omdb', isBudgeted: true, getKey: () => OMDB_API_KEY.value(), search: searchOmdb, getTitle: getOmdbTitle },
+  tmdb: { id: 'tmdb', isBudgeted: false, getKey: () => TMDB_API_KEY.value(), search: searchTmdb, popular: popularTmdb, getTitle: getTmdbTitle },
+  omdb: { id: 'omdb', isBudgeted: true, getKey: () => OMDB_API_KEY.value(), search: searchOmdb, popular: popularOmdb, getTitle: getOmdbTitle },
 };
 
 /** TMDB whenever its key is set, otherwise OMDb; `MOVIE_PROVIDER=omdb|tmdb` forces one. */

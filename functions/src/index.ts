@@ -2,6 +2,7 @@ export { getCalendarShare } from './apps/a-list/getCalendarShare.js';
 export { findShowtimes } from './apps/a-list/findShowtimes.js';
 export { findTheatres } from './apps/a-list/findTheatres.js';
 export { getMovie } from './apps/a-list/getMovie.js';
+export { getPopularMovies } from './apps/a-list/getPopularMovies.js';
 export { searchMovies } from './apps/a-list/searchMovies.js';
 export { triggerBoxAction } from './apps/worth-the-wait/triggerBoxAction.js';
 export { sendEatSoonDigest } from './apps/pinch/sendEatSoonDigest.js';

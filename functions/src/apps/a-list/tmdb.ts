@@ -1,9 +1,11 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 
-import type { MovieSearchResult, MovieSnapshot } from './types.js';
+import type { MovieSearchResult, MovieSnapshot, PopularMovie } from './types.js';
 
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_SEARCH_RESULTS = 20;
+const MAX_POPULAR_RESULTS = 30;
+const POPULAR_PER_LIST = 15;
 const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/';
 const UNRATED = new Set(['NR', 'Not Rated', 'Unrated', 'NOT RATED', 'UNRATED']);
 // TMDB's two credentials: a v4 read token is a JWT sent as a header, a v3 key goes in the query.
@@ -14,6 +16,15 @@ interface TmdbSearchItem {
   title?: string;
   release_date?: string;
   poster_path?: string | null;
+  popularity?: number;
+}
+
+interface TmdbVideo {
+  key?: string;
+  site?: string;
+  type?: string;
+  official?: boolean;
+  published_at?: string;
 }
 
 interface TmdbSearchResponse {
@@ -109,6 +120,37 @@ function toSearchResult(item: TmdbSearchItem & { id: number; title: string }): M
   };
 }
 
+const YOUTUBE_KEY = /^[A-Za-z0-9_-]{11}$/;
+
+/** An official YouTube trailer first, then the newest one; null when there is none. */
+async function getTrailerUrl(apiKey: string, tmdbId: number): Promise<string | null> {
+  const data = await callTmdb<{ results?: TmdbVideo[] }>(apiKey, `/movie/${tmdbId}/videos`, {
+    language: 'en-US',
+    include_video_language: 'en,null',
+  }).catch(() => null);
+  const trailer = (data?.results ?? [])
+    .filter((video) => video.site === 'YouTube' && video.type === 'Trailer' && YOUTUBE_KEY.test(video.key ?? ''))
+    .sort(
+      (a, b) =>
+        Number(b.official ?? false) - Number(a.official ?? false) ||
+        (b.published_at ?? '').localeCompare(a.published_at ?? ''),
+    )[0];
+  const result = trailer?.key ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
+  return result;
+}
+
+/** The usable, de-duplicated items across pages of a list response. */
+function toListItems(pages: Array<TmdbSearchResponse | null>) {
+  const items = pages
+    .flatMap((data) => data?.results ?? [])
+    .filter(
+      (item): item is TmdbSearchItem & { id: number; title: string } =>
+        Number.isInteger(item.id) && typeof item.title === 'string' && item.title.length > 0,
+    );
+  const result = items.filter((item, index) => items.findIndex((other) => other.id === item.id) === index);
+  return result;
+}
+
 /** Newest first, up to 20: a second page is fetched only when there is one, then merged and sorted by release date. */
 export async function searchTmdb(
   apiKey: string,
@@ -129,17 +171,44 @@ export async function searchTmdb(
   // A failed second page (timeout, rate limit) still returns the first.
   const second = (first.total_pages ?? 1) > 1 ? await fetchPage(2).catch(() => null) : null;
 
-  const items = [first, second]
-    .flatMap((data) => data?.results ?? [])
-    .filter(
-      (item): item is TmdbSearchItem & { id: number; title: string } =>
-        Number.isInteger(item.id) && typeof item.title === 'string' && item.title.length > 0,
-    );
-  const result = items
-    .filter((item, index) => items.findIndex((other) => other.id === item.id) === index)
+  const result = toListItems([first, second])
     .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
     .slice(0, MAX_SEARCH_RESULTS)
     .map(toSearchResult);
+  return result;
+}
+
+/** Most popular first, up to 30: what is in US theaters now plus what opens soon, merged by popularity. */
+export async function popularTmdb(apiKey: string): Promise<PopularMovie[]> {
+  const fetchList = (path: string) =>
+    callTmdb<TmdbSearchResponse>(apiKey, path, { region: 'US', language: 'en-US', page: '1' });
+
+  // A failed upcoming list (timeout, rate limit) still returns what is playing.
+  const [nowPlaying, upcoming] = await Promise.all([
+    fetchList('/movie/now_playing'),
+    fetchList('/movie/upcoming').catch(() => null),
+  ]);
+  const today = Date.now() - (Date.now() % 86_400_000);
+
+  // Each list gives its most popular first, so old re-releases can't push every upcoming title out of the merge.
+  const topOf = (data: TmdbSearchResponse | null) =>
+    toListItems([data])
+      .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+      .slice(0, POPULAR_PER_LIST);
+  const top = toListItems([{ results: [...topOf(nowPlaying), ...topOf(upcoming)] }])
+    .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+    .slice(0, MAX_POPULAR_RESULTS);
+  // One videos lookup per film, in parallel; a film whose lookup fails just has no trailer link.
+  const result = await Promise.all(
+    top.map(async (item) => {
+      const releaseDate = parseTmdbDate(item.release_date);
+      return {
+        ...toSearchResult(item),
+        opensOn: releaseDate !== null && releaseDate > today ? releaseDate : null,
+        trailerUrl: await getTrailerUrl(apiKey, item.id),
+      };
+    }),
+  );
   return result;
 }
 

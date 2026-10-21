@@ -3,11 +3,12 @@ import { useState } from 'react';
 import { Button, Form } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Play } from 'lucide-react';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
 import { SubviewHeader } from '@/components/Subview';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -66,6 +67,7 @@ import {
 import type {
   AListOverlay,
   MovieSearchResult,
+  PopularMovie,
   MovieSnapshot,
   ShowtimeOption,
   TheatreSnapshot,
@@ -83,7 +85,7 @@ interface ShowtimeValues {
 }
 
 export type AddSelection =
-  | { kind: 'search'; result: MovieSearchResult }
+  | { kind: 'search'; result: MovieSearchResult | PopularMovie }
   | {
       kind: 'known';
       movieKey: string;
@@ -142,6 +144,7 @@ export function AddFlow({
   const { addToast } = useToast();
   const queryClient = useQueryClient();
   const now = useNow();
+  const isPhone = useMediaQuery().isBelow('sm');
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
   const feeChips = useAppSelector(selectFeeChips);
@@ -199,6 +202,10 @@ export function AddFlow({
     selection?.kind === 'search' ? selection.result.title : '';
   const fallbackPoster =
     selection?.kind === 'search' ? selection.result.posterUrl : null;
+  const trailerUrl =
+    selection?.kind === 'search' && 'trailerUrl' in selection.result
+      ? selection.result.trailerUrl
+      : null;
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
   const showtimeAt = fromLocalDateAndTimeInputValues(
     showtimeValues.date,
@@ -484,6 +491,7 @@ export function AddFlow({
           query={query}
           onQueryChange={setQuery}
           showWatchlist={isCalendar}
+          showPopular={!isPast}
           isDisabled={isSaving}
           onPick={(result, isListed) =>
             isQuick
@@ -561,6 +569,22 @@ export function AddFlow({
             <p className='text-muted-foreground text-sm'>{getDetailsLine()}</p>
             {rewatchNote && (
               <p className='text-primary text-sm'>{rewatchNote}</p>
+            )}
+            {trailerUrl && (
+              <Button
+                href={trailerUrl}
+                target='_blank'
+                rel='noopener noreferrer'
+                variant='tertiary'
+                size='sm'
+                rounded='full'
+                aria-label='Watch trailer on YouTube'
+                className='border-border min-h-10 gap-1.5 border py-1'
+              >
+                <Play className='h-4 w-4' aria-hidden='true' />
+                {isPhone ? 'Watch trailer' : 'Watch trailer on YouTube'}
+                <ExternalLink className='h-3.5 w-3.5' aria-hidden='true' />
+              </Button>
             )}
           </div>
         </div>

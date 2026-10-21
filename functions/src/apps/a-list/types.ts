@@ -14,6 +14,13 @@ export interface MovieSearchResult {
   posterUrl: string | null;
 }
 
+export interface PopularMovie extends MovieSearchResult {
+  /** Date-only (UTC midnight) when the film opens in the future; null once it is in theaters. */
+  opensOn: number | null;
+  /** https link to the film's trailer on YouTube; null when the provider has none. */
+  trailerUrl: string | null;
+}
+
 export interface TheatreResult {
   /** AMC's theatre number, as digits. */
   theatreId: string;
