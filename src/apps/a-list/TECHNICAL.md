@@ -247,6 +247,7 @@ interface SharedViewing {
 | Billing cycles elapsed, membership cost incurred | `startDate`, `monthlyTotalCents`, today | `selectSavingsSummary` |
 | Total ticket savings, fees avoided, net savings, break-even, premium savings | `SEEN` viewings with tickets | `selectSavingsSummary` |
 | Opening tab contents and its count | watchlist release dates, local today | `selectOpeningRows` |
+| Per-theater fee and tax suggestion | `ticket.feeAvoidedCents`, `ticket.taxRate`, `ticket.taxCents`, `ticket.priceCents`, `ticket.format` and `theatre.theatreId` over viewings | `getTicketSuggestion` (`useTicketSuggestion`) |
 | Convenience-fee chips and tax-rate chips (and the default rate) | distinct `ticket.feeAvoidedCents` and `ticket.taxRate` over viewings, plus the membership's `taxRate` | `selectFeeChips`, `selectTaxRateChips` |
 | Pending Seen prompts | `PLANNED` viewings with `endsAt ≤ now` | `selectPendingSeenPrompts` |
 | Previews window | the earliest `PLANNED` viewing with `showtimeAt − 10 min ≤ now ≤ showtimeAt + 30 min` (`PREVIEWS_WINDOW_*_MINUTES`) | `selectPreviewsWindowViewing` |
@@ -526,6 +527,17 @@ label    = the rate as a percent with up to three decimals, trimmed ("7.5%", "8.
 ```
 
 So the membership's gauged rate is where it starts, and the moment the member's tickets show a different rate being used more, that one becomes the preselected default. "Other" reveals a rate input (a percent, 0 – 25).
+
+**Per-theater suggestion** (`getTicketSuggestion`, read through `useTicketSuggestion`): sales tax is local and the convenience fee depends on the format, so a new ticket does not start empty.
+
+```
+fee  = the most-used ticket.feeAvoidedCents among tickets at this theater in this format (ties: most recent)
+       none → the most recent non-zero fee entered anywhere (the old default), flagged as not learned
+tax  = the rate among this theater's tickets that reproduces the most past tax amounts (a ticket's rate is rounded from its tax amount, so they differ slightly); ties go to the most recent
+       none → no suggestion (the tax field shows only its placeholder estimate)
+```
+
+The draft keeps `isFeeEdited` / `isTaxEdited`. While a flag is false the field shows the suggestion, derived each render (`resolveTicketDraft`; the tax is `price × rate`, so it follows the price as it is typed, and the fee follows the format), and `evaluateTicketDraft` saves what is shown. Typing or picking a chip sets the flag, and the suggestion stops moving that field. An existing ticket's draft starts with both flags true. The theater key is `viewing.theatre.theatreId` (the add form's picked theater, the viewing's own theater elsewhere); a viewing without one gets no learned values. Nothing new is stored: it is derived from existing tickets, so editing or deleting one changes the next suggestion. The same suggestion prefills the welcome-back question, so after buying on AMC the common case is confirm and save.
 
 Neither has a separate collection: chips are pure functions of viewings (and, for tax, the membership), so editing or deleting a ticket updates them.
 

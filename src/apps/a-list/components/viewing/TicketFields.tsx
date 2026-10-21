@@ -1,14 +1,19 @@
+import { useRef } from 'react';
+
 import { Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 
 import MoneyInput from '@/components/MoneyInput';
-import { useAppSelector } from '@/store';
 import PremiumSavingsHelp from '@apps/a-list/components/shared/PremiumSavingsHelp';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
+import SuggestionNote from '@apps/a-list/components/viewing/SuggestionNote';
 import { AMC_FORMAT_LABELS, AMC_FORMATS } from '@apps/a-list/constants';
+import { useAppSelector } from '@/store';
+import { useTicketSuggestion } from '@apps/a-list/hooks/useTicketSuggestion';
 import {
   selectFeeChips,
   selectTaxRateChips,
 } from '@apps/a-list/store/selectors';
+import type { TheatreSnapshot } from '@apps/a-list/types';
 import {
   centsToInputValue,
   formatCents,
@@ -16,7 +21,9 @@ import {
 } from '@/utils/moneyUtils';
 import { getItemizedTaxCents } from '@apps/a-list/utils/tax';
 import {
+  applyTicketFormChange,
   evaluateTicketDraft,
+  resolveTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
 
@@ -25,13 +32,21 @@ const { custom, select } = FormFactories;
 interface TicketFieldsProps {
   draft: TicketDraft;
   onChange: (draft: TicketDraft) => void;
+  /** Where the showing is; its past tickets decide the fee and tax the form starts with. */
+  theatre: TheatreSnapshot | null;
 }
 
 /** The ticket's fields, shared by "Mark paid" and the add form's "+ Add ticket details": the same three amounts AMC itemizes. */
-function TicketFields({ draft, onChange }: TicketFieldsProps) {
+function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
   const feeChips = useAppSelector(selectFeeChips);
   const { defaultRate } = useAppSelector(selectTaxRateChips);
-  const { ticket, errors } = evaluateTicketDraft(draft);
+  const suggestion = useTicketSuggestion(
+    theatre?.theatreId ?? null,
+    draft.format,
+  );
+  const edited = useRef({ fee: false, tax: false });
+  const shown = resolveTicketDraft(draft, suggestion);
+  const { ticket, errors } = evaluateTicketDraft(draft, suggestion);
   const isPremium = draft.format !== 'STANDARD';
   const priceCents = parseMoneyToCents(draft.price);
   const standardCents = parseMoneyToCents(draft.standardPrice);
@@ -114,14 +129,20 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
           <MoneyInput
             ariaLabel='Convenience fee'
             placeholder='1.50'
-            value={(props.value as string | undefined) ?? ''}
+            value={shown.fee}
             errorMessage={errors.fee}
-            onChange={(value) => props.onValueChange(value)}
+            onChange={(value) => {
+              edited.current.fee = true;
+              props.onValueChange(value);
+            }}
           />
           <FeeChips
-            value={(props.value as string | undefined) ?? ''}
+            value={shown.fee}
             chips={feeChips}
-            onPick={(cents) => props.onValueChange(centsToInputValue(cents))}
+            onPick={(cents) => {
+              edited.current.fee = true;
+              props.onValueChange(centsToInputValue(cents));
+            }}
           />
         </div>
       ),
@@ -133,9 +154,12 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
         <MoneyInput
           ariaLabel='Tax'
           placeholder={estimatedTax}
-          value={(props.value as string | undefined) ?? ''}
+          value={shown.tax}
           errorMessage={errors.tax}
-          onChange={(value) => props.onValueChange(value)}
+          onChange={(value) => {
+            edited.current.tax = true;
+            props.onValueChange(value);
+          }}
         />
       ),
     }),
@@ -151,8 +175,20 @@ function TicketFields({ draft, onChange }: TicketFieldsProps) {
         columns={1}
         spacing='normal'
         onDataChange={(data) =>
-          onChange({ ...draft, ...(data as Partial<TicketDraft>) })
+          onChange(
+            applyTicketFormChange(
+              draft,
+              data as Partial<TicketDraft>,
+              edited.current,
+            ),
+          )
         }
+      />
+      <SuggestionNote
+        suggestion={suggestion}
+        draft={draft}
+        theatreName={theatre?.name ?? null}
+        hasTax={shown.tax.trim() !== ''}
       />
       {ticket && (
         <p className='text-muted-foreground text-sm'>
