@@ -19,6 +19,7 @@ Server-side code for the mini-apps. Every function:
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, email invitations, members' personal expenses, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every event, stay, rental and expense on its calendar day ("keep original dates"); checklist due days stay relative to the trip's start and are left alone |
 | `rescheduleTripReminders` | Firestore update on `apps/waypoint/trips/{tripId}` | Waypoint | Re-times event reminders when a relative trip's dates or time zone change |
+| `getFirebaseUsage` | callable | shared | Admin only. Returns this month's Firestore, Realtime Database, Cloud Storage and Functions usage against the free amounts, an estimated Blaze cost, and stored data per app |
 | `registerAppUsage` | callable | shared | `{ appId }` → the caller's `apps/{appId}/usage/{uid}` record (`startedAt`, `lastActiveAt`). Creates it the first time a member opens an app, dating `startedAt` at the oldest data that app already holds for them |
 | `fetchLinkMetadata` | callable | shared | Reads a link's Open Graph preview (title, description, image, site name) |
 | `fetchPageContent` | callable | shared | `{ url, include?, schemaTypes?, maxTextChars? }` → `{ url, title, …only the kinds asked for }`: reads one web page and returns its `text` (capped, 30k by default, `maxTextChars` clamped to 1k–60k), `structuredData` (its schema.org nodes, optionally only the given `schemaTypes`, whole nodes up to 30k characters, with every key's leading `@` written as `_`: `@type` is `_type`, because a callable's client refuses any response that holds an `@type` key; an oversized node keeps its smaller fields, each field measured once, so a node with thousands of fields is cheap), `meta` (description, image address, site name, author), `headings` (h1–h3 text, up to 40) or `images` (absolute web addresses, up to 20). Defaults to `text` and `meta`. The text skips `nav`, `footer`, `form` and scripts. App-neutral: each app turns the content into its own thing. Fetches through the same private-network guard as `fetchLinkMetadata`, stores nothing |
@@ -118,6 +119,15 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Server cache:** the whole day at a theater, 15 minutes, in `apps/a-list/theatreCache`; every movie asked about that day shares it.
 - **Offline fixtures:** in the emulator with no key readable, every title gets five showings (Standard, IMAX, Standard, Dolby, a sold-out Standard).
 - **Check after the key is set:** the response parsing was written from AMC's public docs and a third-party reference of live responses, and has not been run against the live API. Still unconfirmed: that `movieName` and `purchaseUrl` are present on every showtime, the Dolby and PRIME attribute codes, and the `/v2/locations` and `/v2/location-suggestions` shapes.
+
+### `getFirebaseUsage`
+
+- **Secrets:** none. It reads Cloud Monitoring as the runtime account, so that account needs `roles/monitoring.viewer` once: `gcloud projects add-iam-policy-binding moondreams-dev-apps --member="serviceAccount:<project-number>-compute@developer.gserviceaccount.com" --role="roles/monitoring.viewer"`. Without it the callable answers `failed-precondition` (`monitoring-role-missing`) and the dashboard says what to grant.
+- **Who:** signed-in admin only (`nova@moondreams.dev` or the `admin` claim); anyone else gets `permission-denied`. Like every callable it is open to the network, so the check lives in the function.
+- **Where the numbers come from:** Cloud Monitoring, the source of the Firebase console's usage tabs. Google reports reads, writes, downloads and calls for the whole project, so only stored data is split by app (`attribution.ts`).
+- **Prices and free amounts** are constants in `firebaseUsage/pricing.ts` with a last-checked date; re-check them against the Firebase pricing pages when Google changes them. Firestore prices are for the multi-region `nam5`.
+- **Stored data by app:** a document count per app (collection counts, down to three levels, capped at 100 parents a collection and 600 count calls) and file bytes by Storage folder, cached in memory for an hour because listing and counting are billed. A hit cap sets `isPartial`.
+- **Check after deploy:** the metric names and the daily bucket alignment were written from Google's docs and haven't been compared against the console yet. Compare each figure with the Firebase console usage tabs.
 
 ### `registerAppUsage`
 

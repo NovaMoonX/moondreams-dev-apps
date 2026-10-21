@@ -1,0 +1,85 @@
+import { getApps, initializeApp } from 'firebase-admin/app';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
+
+import { getFootprints, type Footprints } from './attribution.js';
+import { getMonthStart, MonitoringAccessError, readMetric } from './monitoring.js';
+import { priceMetric, PRICING_LAST_CHECKED, USAGE_METRICS, type UsageLine } from './pricing.js';
+
+if (getApps().length === 0) {
+  initializeApp();
+}
+
+const ADMIN_EMAIL = 'nova@moondreams.dev';
+const DAY_MS = 86_400_000;
+
+export interface FirebaseUsageResponse {
+  lines: UsageLine[];
+  monthToDateCostUsd: number;
+  projectedCostUsd: number;
+  pricingCheckedOn: string;
+  /** Null when only the per-app measurement failed; the totals above still stand. */
+  footprints: Footprints | null;
+  generatedAt: number;
+}
+
+// Totals come from Cloud Monitoring, the source behind the Firebase console's usage tabs.
+// Reads, writes and bandwidth are project-wide there; only stored data can be split by app.
+export const getFirebaseUsage = onCall(
+  {
+    region: 'us-central1',
+    timeoutSeconds: 120,
+    cors: [
+      'https://apps.moondreams.dev',
+      /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
+    ],
+  },
+  async (request) => {
+    const email = request.auth?.token.email?.trim().toLowerCase() ?? null;
+    if (!request.auth || (email !== ADMIN_EMAIL && request.auth.token.admin !== true)) {
+      throw new HttpsError('permission-denied', 'Only the admin can read usage.');
+    }
+
+    const projectId = process.env.GCLOUD_PROJECT;
+    if (!projectId) {
+      throw new HttpsError('failed-precondition', 'The project id is not available.');
+    }
+
+    const now = Date.now();
+    const monthStart = getMonthStart(now);
+    const daysElapsed = Math.floor((now - monthStart) / DAY_MS) + 1;
+    const nextMonth = new Date(monthStart);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    const daysInMonth = Math.round((nextMonth.getTime() - monthStart) / DAY_MS);
+
+    try {
+      const [lines, footprints] = await Promise.all([
+        Promise.all(
+          USAGE_METRICS.map(async (spec) => {
+            const daily = await readMetric(projectId, spec, now);
+            return priceMetric({ spec, daily, daysElapsed, daysInMonth });
+          }),
+        ),
+        getFootprints(now).catch((error: unknown) => {
+          console.error('firebaseUsage: footprints failed', (error as { code?: unknown }).code ?? 'unknown');
+          return null;
+        }),
+      ]);
+
+      const response: FirebaseUsageResponse = {
+        lines,
+        monthToDateCostUsd: lines.reduce((sum, line) => sum + line.monthToDateCostUsd, 0),
+        projectedCostUsd: lines.reduce((sum, line) => sum + line.projectedCostUsd, 0),
+        pricingCheckedOn: PRICING_LAST_CHECKED,
+        footprints,
+        generatedAt: now,
+      };
+      return response;
+    } catch (error) {
+      if (error instanceof MonitoringAccessError) {
+        throw new HttpsError('failed-precondition', 'monitoring-role-missing');
+      }
+      console.error('firebaseUsage: failed', (error as { code?: unknown }).code ?? 'unknown');
+      throw new HttpsError('internal', 'Could not read usage.');
+    }
+  },
+);
