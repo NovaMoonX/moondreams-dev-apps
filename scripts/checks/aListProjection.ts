@@ -11,6 +11,9 @@ import { getCycleDate } from '../../src/apps/a-list/utils/billing.ts';
 import { getNiceMoneyAxis } from '../../src/utils/chartUtils.ts';
 import {
   getBreakEven,
+  getPlannedThenPaceAddedBy,
+  getPlanEndDay,
+  projectPlannedThenPace,
   getBreakEvenPoint,
   getCalendarAddedBy,
   getCalendarPlan,
@@ -257,5 +260,60 @@ assert.equal(narrow.ticks.length <= 4, true);
 const huge = getNiceMoneyAxis(-3_000_000_000, 0);
 assert.equal(huge.ticks.length <= 4 && huge.ticks.length >= 2, true);
 assert.equal(getNiceMoneyAxis(50, 50).ticks.length >= 1, true);
+
+// History puts the day a member broke even in the past, and the comparison line only starts today
+const seenAt = (totalCents: number, at: number) =>
+  ({
+    status: 'SEEN',
+    showtimeAt: at,
+    ticket: { totalCents, feeAvoidedCents: 0 },
+  }) as Viewing;
+const hm = membership(utc(2026, 8, 1));
+const hnow = utc(2026, 10, 20);
+const hviews = [
+  seenAt(4000, utc(2026, 8, 20, 18)),
+  seenAt(4000, utc(2026, 9, 20, 18)),
+  seenAt(4000, utc(2026, 9, 25, 18)),
+];
+const hbase = getProjectionBase(hviews, hm, hnow);
+const hstop = projectStop(hbase, hm);
+const hseries = getNetSeries(hbase, hm, hnow, hstop, () => 0, hm.startDate);
+assert.equal(hseries[0].x, hm.startDate);
+assert.equal(hseries[0].y < 0, true);
+assert.equal(hseries.find((point) => point.x === hnow)?.y, hbase.netNowCents);
+assert.equal(
+  hseries.filter((point) => point.x < hnow).every((point) => point.y2 === null),
+  true,
+);
+const crossing = getBreakEvenPoint(hseries);
+assert.equal(crossing !== null && crossing.x < hnow, true);
+
+// Planned showings come first, then the pace runs only from the last planned day
+const pplan = getCalendarPlan(
+  hbase,
+  hm,
+  [planned(utc(2026, 11, 20, 18), 1700)],
+  hnow,
+);
+const pace2 = { unit: 'week' as const, count: 2 };
+const plain = projectPace(hbase, hm, hnow, pace2, 6, 2000);
+const after = projectPlannedThenPace(hbase, hm, hnow, pplan, pace2, 6, 2000);
+assert.equal(getPlanEndDay(pplan, hnow), utc(2026, 11, 20));
+assert.equal(after.periods < plain.periods, true);
+assert.equal(after.movies, 1 + Math.floor(2 * after.periods));
+assert.equal(after.coveredUntil, plain.coveredUntil);
+const afterSeries = getNetSeries(
+  hbase,
+  hm,
+  hnow,
+  after,
+  getPlannedThenPaceAddedBy(pplan, hnow, pace2, 2000),
+  hm.startDate,
+);
+assert.equal(afterSeries.at(-1)?.y, after.netCents);
+assert.equal(
+  getPlannedThenPaceAddedBy(pplan, hnow, pace2, 2000)(utc(2026, 11, 10)),
+  0,
+);
 
 console.log('A-List projection checks passed');

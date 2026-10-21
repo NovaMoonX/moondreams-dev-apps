@@ -16,7 +16,7 @@ export interface TrendPoint {
   x: number;
   y: number;
   /** A second line to compare against; drawn only when `secondaryLabel` is set. */
-  y2?: number;
+  y2?: number | null;
 }
 
 interface TrendLineChartProps {
@@ -32,6 +32,8 @@ interface TrendLineChartProps {
   /** Fixes the y-axis so a changing series visibly moves instead of re-scaling to fit; `yTicks` are its labelled values. */
   yDomain?: [number, number];
   yTicks?: number[];
+  /** A faint vertical guide, such as where the past ends. */
+  divider?: { x: number; label: string };
   /** A ring on the line, such as where it crosses a guide. */
   marker?: { x: number; y: number };
   /** A horizontal guide, such as break even at 0. */
@@ -66,6 +68,7 @@ function TrendLineChart({
   yDomain,
   yTicks,
   marker,
+  divider,
   hasDots = true,
   seriesLabel,
   readoutLabels,
@@ -112,7 +115,7 @@ function TrendLineChart({
             {readoutText(Number(main.value))}
           </span>
         )}
-        {other && secondaryLabel && (
+        {other && other.value != null && secondaryLabel && (
           <span className='text-muted-foreground'>
             {' '}
             · {readoutLabels?.secondary ?? secondaryLabel}{' '}
@@ -276,14 +279,28 @@ function TrendLineChart({
               activeDot={{ r: 5 }}
             />
           )}
+          {divider && (
+            <ReferenceLine
+              x={divider.x}
+              stroke='var(--color-muted-foreground)'
+              strokeOpacity={0.35}
+              strokeWidth={1}
+              label={{
+                value: divider.label,
+                position: 'insideTopLeft',
+                fill: 'var(--color-muted-foreground)',
+                fontSize: 10,
+              }}
+            />
+          )}
           {marker && (
             <ReferenceDot
               x={marker.x}
               y={marker.y}
-              r={6}
+              r={7}
               fill='var(--color-card)'
               stroke='var(--color-foreground)'
-              strokeWidth={2.5}
+              strokeWidth={2}
             />
           )}
           {isSoft && (

@@ -32,6 +32,8 @@ export interface ProjectionBase {
   /** Average of seen tickets (price, fee and tax); null before any is on record. */
   averageTicketCents: number | null;
   averageFeeCents: number;
+  /** Each seen ticket's local day and what it saved, so the line can start in the past. */
+  ticketHistory: { day: number; cents: number }[];
   /** Total months billed that a pace can run to. */
   horizons: number[];
 }
@@ -77,7 +79,18 @@ export function getProjectionBase(
     membership.startDate,
     todayDay,
   ).length;
+  const ticketHistory = viewings.flatMap((viewing) =>
+    viewing.status === 'SEEN' && viewing.ticket
+      ? [
+          {
+            day: fromDateInputValue(getDayKey(viewing.showtimeAt)) ?? 0,
+            cents: viewing.ticket.totalCents,
+          },
+        ]
+      : [],
+  );
   const result: ProjectionBase = {
+    ticketHistory,
     savedCents,
     cyclesBilled,
     minimumMonthsLeft: Math.max(0, MIN_CONTRACT_MONTHS - cyclesBilled),
@@ -166,7 +179,7 @@ function estimatePlannedCents(
   return result;
 }
 
-interface CalendarPlan {
+export interface CalendarPlan {
   /** `day` is the showing's local day as UTC midnight, comparable with the plan's other days. */
   ahead: { day: number; cents: number | null }[];
   /** Planned showings already over that nobody has marked seen. */
@@ -252,17 +265,74 @@ export function projectPace(
   return result;
 }
 
+/** The local day the last planned showing falls on, or today when nothing is planned. */
+export function getPlanEndDay(plan: CalendarPlan, todayDay: number) {
+  const result = plan.ahead.reduce(
+    (latest, showing) => Math.max(latest, showing.day),
+    todayDay,
+  );
+  return result;
+}
+
+/** Everything planned is watched, then a steady pace runs from the last planned day to the cancel date. */
+export function projectPlannedThenPace(
+  base: ProjectionBase,
+  membership: MembershipProfile,
+  todayDay: number,
+  plan: CalendarPlan,
+  pace: { unit: PaceUnit; count: number },
+  months: number,
+  ticketCents: number | null,
+): ProjectionResult {
+  const planned = projectCalendar(base, membership, plan);
+  const allMonths = Math.max(months, planned.months);
+  const windowMs = Math.max(
+    0,
+    getCycleDate(membership.startDate, allMonths) -
+      getPlanEndDay(plan, todayDay),
+  );
+  const periods = windowMs / (pace.unit === 'week' ? WEEK_MS : MONTH_MS);
+  const movies = Math.floor(pace.count * periods);
+  const result = finish(base, membership, {
+    movies: planned.movies + movies,
+    addedCents:
+      ticketCents === null
+        ? null
+        : (planned.addedCents ?? 0) + movies * ticketCents,
+    months: Math.max(allMonths, base.cyclesBilled),
+    unpricedCount: planned.unpricedCount,
+    unmarkedCount: planned.unmarkedCount,
+    periods,
+  });
+  return result;
+}
+
+/** What the planned showings and then a steady pace have added by a day. */
+export const getPlannedThenPaceAddedBy =
+  (
+    plan: CalendarPlan,
+    todayDay: number,
+    pace: { unit: PaceUnit; count: number },
+    ticketCents: number | null,
+  ): AddedBy =>
+  (day) =>
+    getCalendarAddedBy(plan)(day) +
+    getPaceAddedBy(getPlanEndDay(plan, todayDay), pace, ticketCents)(day);
+
 /** The movies, and the steady pace over the projection's window, that bring it to break even; null with no ticket value. */
 export function getBreakEven(
   base: ProjectionBase,
   projection: ProjectionResult,
   ticketCents: number | null,
+  alreadyCents = 0,
 ): { movies: number; perPeriod: number | null } | null {
   if (ticketCents === null || ticketCents <= 0) return null;
 
   const movies = Math.max(
     0,
-    Math.ceil((projection.costCents - base.savedCents) / ticketCents),
+    Math.ceil(
+      (projection.costCents - base.savedCents - alreadyCents) / ticketCents,
+    ),
   );
   const result = {
     movies,
@@ -276,8 +346,8 @@ export interface NetPoint {
   x: number;
   /** Net savings in cents on this day under the plan. */
   y: number;
-  /** The same day if nothing more is watched. */
-  y2: number;
+  /** The same day if nothing more is watched; null before today. */
+  y2: number | null;
 }
 
 /** What a plan has added by a given day, in cents. */
@@ -301,18 +371,22 @@ export const getPaceAddedBy =
     ticketCents: number | null,
   ): AddedBy =>
   (day) =>
-    Math.floor(
-      (pace.count * (day - todayDay)) /
-        (pace.unit === 'week' ? WEEK_MS : MONTH_MS),
+    Math.max(
+      0,
+      Math.floor(
+        (pace.count * (day - todayDay)) /
+          (pace.unit === 'week' ? WEEK_MS : MONTH_MS),
+      ),
     ) * (ticketCents ?? 0);
 
-/** Net savings by week and on each bill, from today to the day the paid months run to. */
+/** Net savings by week and on each bill, from `fromDay` (in the past, to show history) to the day the paid months run to. */
 export function getNetSeries(
   base: ProjectionBase,
   membership: MembershipProfile,
   todayDay: number,
   projection: ProjectionResult,
   addedBy: AddedBy,
+  fromDay: number = todayDay,
 ): NetPoint[] {
   const endDay = projection.coveredUntil;
   const billCosts = Array.from({ length: projection.months + 1 }, (_, count) =>
@@ -322,24 +396,31 @@ export function getNetSeries(
   );
   const billDays = Array.from({ length: projection.months }, (_, offset) =>
     getCycleDate(membership.startDate, offset),
-  ).filter((day) => day > todayDay && day < endDay);
+  ).filter((day) => day > fromDay && day < endDay);
   const weekDays = Array.from(
-    { length: Math.max(0, Math.ceil((endDay - todayDay) / WEEK_MS)) },
-    (_, week) => todayDay + week * WEEK_MS,
+    { length: Math.max(0, Math.ceil((endDay - fromDay) / WEEK_MS)) },
+    (_, week) => fromDay + week * WEEK_MS,
   ).filter((day) => day < endDay);
-  const days = [...new Set([...weekDays, ...billDays, endDay])].sort(
-    (left, right) => left - right,
-  );
+  const days = [...new Set([...weekDays, ...billDays, todayDay, endDay])]
+    .filter((day) => day >= fromDay)
+    .sort((left, right) => left - right);
   const result = days.map((day) => {
+    const isPast = day < todayDay;
     const billed = Math.min(
       projection.months,
       getBillingCycleDates(membership.startDate, day).length,
     );
     const cost = billCosts[day >= endDay ? projection.months : billed];
+    const saved = isPast
+      ? base.ticketHistory.reduce(
+          (total, ticket) => (ticket.day <= day ? total + ticket.cents : total),
+          0,
+        )
+      : base.savedCents;
     return {
       x: day,
-      y: base.savedCents + addedBy(day) - cost,
-      y2: base.savedCents - cost,
+      y: saved + (isPast ? 0 : addedBy(day)) - cost,
+      y2: isPast ? null : base.savedCents - cost,
     };
   });
   return result;

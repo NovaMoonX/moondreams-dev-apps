@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import TrendLineChart from '@/components/TrendLineChart';
+import AppToggle from '@/components/AppToggle';
 import MoneyInput from '@/components/MoneyInput';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import Stepper from '@/components/Stepper';
@@ -25,14 +26,15 @@ import {
   getCalendarPlan,
   getNetSeries,
   getPaceAddedBy,
+  getPlannedThenPaceAddedBy,
   getPaceMax,
   getProjectionBase,
   parseTicketCents,
   projectCalendar,
   projectPace,
+  projectPlannedThenPace,
   projectStop,
   type PaceUnit,
-  type ProjectionResult,
 } from '@apps/a-list/utils/projection';
 
 type Scenario = 'none' | 'planned' | 'pace';
@@ -86,6 +88,7 @@ function pluralize(count: number, word: string) {
 }
 
 const DAY_MS = 86_400_000;
+const HISTORY_DAYS = 120;
 /** A tap on the counter moves a month's pace by two so the line visibly moves. */
 const PACE_STEP: Record<PaceUnit, number> = { week: 1, month: 2 };
 
@@ -109,74 +112,114 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   const [unit, setUnit] = useState<PaceUnit>('week');
   const [pickedMonths, setPickedMonths] = useState<number | null>(null);
   const [valueInput, setValueInput] = useState<string | null>(null);
+  const [isAfterPlan, setIsAfterPlan] = useState(false);
 
   const scenario: Scenario =
     pickedScenario ?? (calendar.movies > 0 ? 'planned' : 'none');
+  const isPace = scenario === 'pace';
+  const includePlan = isPace && isAfterPlan && calendar.movies > 0;
+  const horizons = includePlan
+    ? [
+        ...new Set(
+          base.horizons.map((value) => Math.max(value, calendar.months)),
+        ),
+      ]
+    : base.horizons;
   const months =
-    pickedMonths !== null && base.horizons.includes(pickedMonths)
+    pickedMonths !== null && horizons.includes(pickedMonths)
       ? pickedMonths
-      : base.horizons[0];
+      : horizons[0];
   const ticketCents =
     valueInput === null
       ? base.averageTicketCents
       : parseTicketCents(valueInput);
-  const isPace = scenario === 'pace';
 
-  const getResult = (): ProjectionResult => {
-    if (scenario === 'none') return projectStop(base, membership);
-    if (scenario === 'planned') return calendar;
-    return projectPace(
-      base,
-      membership,
-      todayDay,
-      { unit, count: counts[unit] },
-      months,
-      ticketCents,
-    );
+  const getPaceOutcome = (count: number) => {
+    const pace = { unit, count };
+    const paceResult = includePlan
+      ? projectPlannedThenPace(
+          base,
+          membership,
+          todayDay,
+          plan,
+          pace,
+          months,
+          ticketCents,
+        )
+      : projectPace(base, membership, todayDay, pace, months, ticketCents);
+    const addedBy = includePlan
+      ? getPlannedThenPaceAddedBy(plan, todayDay, pace, ticketCents)
+      : getPaceAddedBy(todayDay, pace, ticketCents);
+    const paceSeries =
+      paceResult.netCents === null
+        ? []
+        : getNetSeries(
+            base,
+            membership,
+            todayDay,
+            paceResult,
+            addedBy,
+            fromDay,
+          );
+    return { result: paceResult, series: paceSeries };
   };
-  const result = getResult();
-  const getAddedBy = () => {
-    if (scenario === 'none') return () => 0;
-    if (scenario === 'planned') return getCalendarAddedBy(plan);
-    return getPaceAddedBy(todayDay, { unit, count: counts[unit] }, ticketCents);
+
+  const fromDay = Math.max(
+    membership.startDate,
+    todayDay - HISTORY_DAYS * DAY_MS,
+  );
+  const getOutcome = () => {
+    if (scenario === 'none') {
+      const stop = projectStop(base, membership);
+      return {
+        result: stop,
+        series: getNetSeries(
+          base,
+          membership,
+          todayDay,
+          stop,
+          () => 0,
+          fromDay,
+        ),
+      };
+    }
+    if (scenario === 'planned')
+      return {
+        result: calendar,
+        series: getNetSeries(
+          base,
+          membership,
+          todayDay,
+          calendar,
+          getCalendarAddedBy(plan),
+          fromDay,
+        ),
+      };
+    return getPaceOutcome(counts[unit]);
   };
-  const series =
-    result.netCents === null
-      ? []
-      : getNetSeries(base, membership, todayDay, result, getAddedBy());
+  const { result, series } = getOutcome();
   const isBrokenEven = result.netCents !== null && result.netCents >= 0;
   const until = formatDateUTC(result.coveredUntil);
   const breakEvenPoint = getBreakEvenPoint(series);
-  const breakEven = isPace ? getBreakEven(base, result, ticketCents) : null;
-
-  const getPaceSeries = (count: number) => {
-    const paceResult = projectPace(
-      base,
-      membership,
-      todayDay,
-      { unit, count },
-      months,
-      ticketCents,
-    );
-    const paceSeries = getNetSeries(
-      base,
-      membership,
-      todayDay,
-      paceResult,
-      getPaceAddedBy(todayDay, { unit, count }, ticketCents),
-    );
-    return { result: paceResult, series: paceSeries };
-  };
+  const futureBreakEven =
+    breakEvenPoint && breakEvenPoint.x > todayDay ? breakEvenPoint : null;
+  const breakEven = isPace
+    ? getBreakEven(
+        base,
+        result,
+        ticketCents,
+        includePlan ? (calendar.addedCents ?? 0) : 0,
+      )
+    : null;
 
   // A pace keeps the axis sized for the fastest pace, so a step on the counter moves the line instead of re-fitting the scale.
   const getAxis = () => {
     if (series.length === 0) return undefined;
 
-    const fastest = isPace ? getPaceSeries(getPaceMax(unit)).series : [];
-    const values = [...series, ...fastest].flatMap((point) => [
-      point.y,
-      point.y2,
-    ]);
+    const fastest = isPace ? getPaceOutcome(getPaceMax(unit)).series : [];
+    const values = [...series, ...fastest]
+      .flatMap((point) => [point.y, point.y2])
+      .filter((value): value is number => value !== null);
     return getNiceMoneyAxis(Math.min(0, ...values), Math.max(0, ...values));
   };
   const axis = getAxis();
@@ -187,19 +230,22 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
       return `That's the most A-List covers a ${unit}.`;
 
     const step = PACE_STEP[unit];
-    const next = getPaceSeries(Math.min(counts[unit] + step, getPaceMax(unit)));
+    const next = getPaceOutcome(
+      Math.min(counts[unit] + step, getPaceMax(unit)),
+    );
     const gain = (next.result.netCents ?? 0) - (result.netCents ?? 0);
     if (gain <= 0) return null;
 
     const nextPoint = getBreakEvenPoint(next.series);
+    const nextFuture = nextPoint && nextPoint.x > todayDay ? nextPoint : null;
     const days =
-      breakEvenPoint && nextPoint
-        ? Math.round((breakEvenPoint.x - nextPoint.x) / DAY_MS)
+      futureBreakEven && nextFuture
+        ? Math.round((futureBreakEven.x - nextFuture.x) / DAY_MS)
         : 0;
     const getTail = () => {
       if (days >= 1) return ` and breaks even ${pluralize(days, 'day')} sooner`;
-      if (!breakEvenPoint && nextPoint)
-        return ` and would break even around ${formatDateUTC(nextPoint.x)}`;
+      if (!futureBreakEven && !isBrokenEven && nextFuture)
+        return ` and would break even around ${formatDateUTC(nextFuture.x)}`;
       return '';
     };
     return `${step === 1 ? 'One more' : 'Two more'} a ${unit} adds about ${formatCents(gain)} by ${until}${getTail()}.`;
@@ -219,18 +265,22 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
       return `You cancel now and pay only what the minimum requires. Your last paid bill ends ${bill}.`;
     if (scenario === 'planned')
       return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then cancel before the ${bill} bill.`;
+    if (includePlan)
+      return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then ${counts[unit]} a ${unit}, and cancel before the ${bill} bill.`;
     return `You watch ${counts[unit]} a ${unit}, then cancel before the ${bill} bill.`;
   };
 
   const getEyebrow = () => {
     if (scenario === 'none') return 'Net savings with no more movies';
     if (scenario === 'planned') return 'Net savings with everything planned';
+    if (includePlan)
+      return `Net savings after everything planned, then ${counts[unit]} a ${unit}`;
     return `Net savings at ${counts[unit]} a ${unit}`;
   };
 
   const getBreakEvenLine = () => {
     if (breakEvenPoint)
-      return `You'd break even around ${formatDateUTC(breakEvenPoint.x)}.`;
+      return `${breakEvenPoint.x > todayDay ? "You'd break even" : 'You broke even'} around ${formatDateUTC(breakEvenPoint.x)}.`;
     if (!isPace || isBrokenEven || !breakEven || breakEven.perPeriod === null)
       return null;
     if (breakEven.perPeriod > getPaceMax(unit))
@@ -243,7 +293,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     const end = series.at(-1);
     if (!end) return '';
     const stop =
-      scenario === 'none'
+      scenario === 'none' || end.y2 === null
         ? ''
         : ` With no more movies, ${formatCents(end.y2)}.`;
     return `Net savings reach ${formatCents(end.y)} by ${until}.${stop}`;
@@ -302,6 +352,22 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             </div>
             {nextStepLine && (
               <p className='text-muted-foreground text-xs'>{nextStepLine}</p>
+            )}
+            {calendar.movies > 0 && (
+              <div className='flex items-center justify-between gap-3 pt-1'>
+                <p className='text-sm'>
+                  Start after everything planned
+                  <span className='text-muted-foreground block text-xs'>
+                    Your {pluralize(calendar.movies, 'showing')} on the calendar
+                    come first.
+                  </span>
+                </p>
+                <AppToggle
+                  aria-label='Start after everything planned'
+                  checked={isAfterPlan}
+                  onCheckedChange={setIsAfterPlan}
+                />
+              </div>
             )}
           </div>
         )}
@@ -379,6 +445,11 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                 referenceY={{ value: 0, label: 'Break even' }}
                 yDomain={axis?.domain}
                 yTicks={axis?.ticks}
+                divider={
+                  series[0] && series[0].x < todayDay
+                    ? { x: todayDay, label: 'Today' }
+                    : undefined
+                }
                 marker={
                   breakEvenPoint ? { x: breakEvenPoint.x, y: 0 } : undefined
                 }
@@ -439,7 +510,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             </p>
             <PillGroup
               label='Cancel before the bill on'
-              options={base.horizons.map((value) => ({
+              options={horizons.map((value) => ({
                 value: String(value),
                 label: formatDateUTC(getCycleDate(membership.startDate, value)),
               }))}
