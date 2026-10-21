@@ -7,6 +7,7 @@ import LocationLink from '@apps/waypoint/components/LocationLink';
 import NoExpenseBadge from '@apps/waypoint/components/NoExpenseBadge';
 import { getStaySubject } from '@apps/waypoint/utils/relatedSubjects';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import { getStayNavigationLocation } from '@apps/waypoint/utils/navigationLocation';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import NotesField from '@apps/waypoint/components/NotesField';
 import FallbackImage from '@/components/FallbackImage';
@@ -32,16 +33,6 @@ interface StayCardProps {
 }
 
 const STAY_NOTES_PLACEHOLDER = 'Gate code, host contact, parking instructions…';
-
-function getStayLocation(stay: Stay) {
-  const location = {
-    locationName: stay.stayType === 'HOTEL' ? stay.name : null,
-    address: stay.address,
-    latitude: stay.latitude,
-    longitude: stay.longitude,
-  };
-  return location;
-}
 
 export interface StayDetailLinesProps {
   trip: TripSpace;
@@ -84,7 +75,7 @@ export function StayDetailLines({
           />
         )}
       </div>
-      <LocationLink {...getStayLocation(stay)} label={stay.address} />
+      <LocationLink {...getStayNavigationLocation(stay)} label={stay.address} />
       <p className='text-muted-foreground text-sm'>
         {formatStayTimeRange(trip, stay)}
       </p>
@@ -116,6 +107,7 @@ export function StayDetailLines({
 
 export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = getDisplayImage(stay);
@@ -166,7 +158,7 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
             </div>
             {!isSmallScreen && (
               <div className='flex shrink-0 gap-2'>
-                <MapNavigationButton {...getStayLocation(stay)} />
+                <MapNavigationButton {...getStayNavigationLocation(stay)} />
                 {canEdit && (
                   <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(stay)}>
                     Modify
@@ -183,13 +175,14 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
                 canEdit={canEdit}
                 onSave={(notes) => onSaveNotes(stay, notes)}
                 variant='subtle'
+              onEditingChange={setIsEditingNotes}
                 placeholder={STAY_NOTES_PLACEHOLDER}
               />
             </div>
           )}
         </div>
         {!isSmallScreen && (
-          <div className='absolute right-4 bottom-4'>
+          <div className={join('absolute right-4 bottom-4', isEditingNotes && 'hidden')}>
             <NoExpenseBadge getSubject={() => getStaySubject(trip, stay)} />
           </div>
         )}
@@ -206,7 +199,7 @@ export function StayCard({ trip, stay, canEdit, onEdit, onSaveNotes }: StayCardP
           onClose={() => setIsDrawerOpen(false)}
           title={stay.name}
           imageUrl={imageUrl}
-          location={getStayLocation(stay)}
+          location={getStayNavigationLocation(stay)}
           linkUrl={stay.linkUrl}
           onEdit={canEdit ? () => { closeDrawer(); onEdit(stay); } : null}
           expenseTarget={{ link: { kind: 'STAY', id: stay.id }, getSubject: () => getStaySubject(trip, stay) }}

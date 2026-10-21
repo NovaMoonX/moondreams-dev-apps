@@ -395,14 +395,39 @@ export function getEventStatus(trip: TripSpace, event: TimelineEvent, now: numbe
   return 'ACTIVE';
 }
 
+/** An event with no end of its own is over once a later one has started, so it never resurfaces as
+ * live after that later event finishes. `peers` are the events competing for "now" (archived ones excluded). */
+export function getLiveEventStatus(
+  trip: TripSpace,
+  event: TimelineEvent,
+  peers: TimelineEvent[],
+  now: number,
+): EventStatus | null {
+  const status = getEventStatus(trip, event, now);
+  if (status !== 'ACTIVE') {
+    return status;
+  }
+  const { startMs, endMs } = getEventTime(trip, event);
+  if (endMs !== null) {
+    return status;
+  }
+  const isSuperseded = peers.some((peer) => {
+    const peerStartMs = getEventTime(trip, peer).startMs;
+    return peer.id !== event.id && peerStartMs !== null && peerStartMs > (startMs ?? 0) && peerStartMs <= now;
+  });
+  const result = isSuperseded ? 'COMPLETED' : status;
+  return result;
+}
+
 // Among simultaneously active events, the one that started most recently is treated as "the" active event.
 // Only events `uid` is part of count: Overview is about what's happening to them.
 export const selectActiveEvent =
   (trip: TripSpace, now: number, uid: string) => (state: RootState): TimelineEvent | null => {
     const memberIds = Object.keys(trip.members);
-    const activeEvents = state.waypoint.events.items.filter(
-      (event) => isEventForMember(event, memberIds, uid) && getEventStatus(trip, event, now) === 'ACTIVE',
+    const peers = state.waypoint.events.items.filter(
+      (event) => !event.isArchived && isEventForMember(event, memberIds, uid),
     );
+    const activeEvents = peers.filter((event) => getLiveEventStatus(trip, event, peers, now) === 'ACTIVE');
     if (activeEvents.length === 0) {
       return null;
     }

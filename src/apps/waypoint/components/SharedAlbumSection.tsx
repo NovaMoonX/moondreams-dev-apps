@@ -105,6 +105,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
           isOpen={isModalOpen}
           tripId={trip.id}
           currentUrl={trip.sharedAlbumUrl}
+          canChange={canChangeExisting}
           isSaving={isSaving}
           onSubmit={(url) => void handleSave(url)}
           onClose={() => setIsModalOpen(false)}
@@ -132,6 +133,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
           isOpen={isModalOpen}
           tripId={trip.id}
           currentUrl={trip.sharedAlbumUrl}
+          canChange={canChangeExisting}
           isSaving={isSaving}
           onSubmit={(url) => void handleSave(url)}
           onClose={() => setIsModalOpen(false)}
@@ -200,6 +202,7 @@ function SharedAlbumSection({ trip, currentUserId, variant = 'full' }: SharedAlb
         isOpen={isModalOpen}
         tripId={trip.id}
         currentUrl={trip.sharedAlbumUrl}
+        canChange={canChangeExisting}
         isSaving={isSaving}
         onSubmit={(url) => void handleSave(url)}
         onClose={() => setIsModalOpen(false)}

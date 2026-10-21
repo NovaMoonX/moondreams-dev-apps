@@ -52,3 +52,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:option-match
+      - run: npm run check:waypoint-pushes

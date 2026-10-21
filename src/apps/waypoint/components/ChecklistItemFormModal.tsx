@@ -270,7 +270,7 @@ export default function ChecklistItemFormModal({
                   variant='outline'
                   aria-label='Due date'
                   value={due.date}
-                  onChange={(event) => props.onValueChange({ ...due, date: event.target.value })}
+                  onChange={(event) => props.onValueChange({ ...due, enabled: true, date: event.target.value })}
                 />
                 {dayIndex !== null && (
                   <p className='text-muted-foreground mt-1 text-xs'>
@@ -377,7 +377,7 @@ export default function ChecklistItemFormModal({
         key={formKey}
         id='waypoint-checklist-item'
         form={fields}
-        initialData={initialData}
+        initialData={formData}
         columns={1}
         onDataChange={(data) => setFormData((current) => ({ ...current, ...(data as ChecklistFormData) }))}
         onSubmit={(data) => {

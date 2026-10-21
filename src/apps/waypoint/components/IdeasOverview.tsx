@@ -16,13 +16,15 @@ interface IdeasOverviewProps {
   trip: TripSpace;
   currentUserId: string;
   canAdd: boolean;
+  /** The big card with voting and an add button is for before the trip; during it, Ideas is a quiet row. */
+  isProminent: boolean;
   onOpen: () => void;
   onAdd: (ideaType: IdeaType) => void;
 }
 
 const PREVIEW_COUNT = 3;
 
-function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOverviewProps) {
+function IdeasOverview({ trip, currentUserId, canAdd, isProminent, onOpen, onAdd }: IdeasOverviewProps) {
   const ideas = useAppSelector((state) => selectSortedIdeas(state, trip.id));
   const [ideaType, setIdeaType] = useState<IdeaType>('ACTIVITY');
   const undecided = useMemo(
@@ -31,10 +33,10 @@ function IdeasOverview({ trip, currentUserId, canAdd, onOpen, onAdd }: IdeasOver
   );
   const onItinerary = ideas.length - undecided.length;
 
-  if (!canAdd) {
+  if (!canAdd || !isProminent) {
     const summary =
       ideas.length === 0
-        ? 'No ideas were added before the trip'
+        ? 'No ideas yet'
         : `${ideas.length} ${ideas.length === 1 ? 'idea' : 'ideas'}${
             onItinerary > 0 ? `, ${onItinerary} on the itinerary` : ''
           }`;
