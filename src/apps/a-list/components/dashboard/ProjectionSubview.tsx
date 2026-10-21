@@ -137,8 +137,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
       ]
     : base.horizons;
   const months =
-    pickedMonths !== null &&
-    [...base.horizons, ...horizons].includes(pickedMonths)
+    pickedMonths !== null && pickedMonths >= base.horizons[0]
       ? Math.max(pickedMonths, includePlan ? calendar.months : 0)
       : horizons[0];
   const ticketCents =
@@ -282,8 +281,8 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     if (scenario === 'planned')
       return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then cancel before the ${bill} bill.`;
     if (includePlan)
-      return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then ${counts[unit]} movies a ${unit}, and cancel before the ${bill} bill.`;
-    return `You watch ${counts[unit]} movies a ${unit}, then cancel before the ${bill} bill.`;
+      return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then ${pluralize(counts[unit], 'movie')} a ${unit}, and cancel before the ${bill} bill.`;
+    return `You watch ${pluralize(counts[unit], 'movie')} a ${unit}, then cancel before the ${bill} bill.`;
   };
 
   const getEyebrow = () => {
@@ -292,19 +291,6 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     if (includePlan) return `After planned, then ${counts[unit]} a ${unit}`;
     return `Net savings at ${counts[unit]} a ${unit}`;
   };
-
-  const getBreakEvenLine = () => {
-    if (breakEvenPoint)
-      return breakEvenPoint.x > todayDay
-        ? `You'd break even around ${formatDateUTC(breakEvenPoint.x)}.`
-        : null;
-    if (!isPace || isBrokenEven || !breakEven || breakEven.perPeriod === null)
-      return null;
-    if (breakEven.perPeriod > getPaceMax(unit))
-      return `Breaking even by then would take more than A-List's ${getPaceMax(unit)} a ${unit}.`;
-    return `Breaking even takes about ${breakEven.perPeriod} a ${unit} ${includePlan ? '' : `(${pluralize(breakEven.movies, 'movie')} in all)`}.`;
-  };
-  const breakEvenLine = getBreakEvenLine();
 
   const hasPlanEndMark =
     includePlan && planEnd > todayDay && planEnd < result.coveredUntil;
@@ -315,16 +301,38 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
       : 0;
   const hasRoomForBandLabel = bandShare >= 0.4;
   const planEndPoint = series.find((point) => point.x === planEnd);
+  // Two callouts close together would stack on each other; the planned end keeps its callout and the break-even day goes into words.
+  const isBreakEvenCrowded =
+    breakEvenPoint !== null &&
+    hasPlanEndMark &&
+    series[0] !== undefined &&
+    (planEnd - breakEvenPoint.x) / (result.coveredUntil - series[0].x) < 0.3;
+  const hasPlannedOnlyLine = hasPlanEndMark && bandShare >= 0.15;
   const comparisonLabel = includePlan ? 'Planned only' : 'No more movies';
+  const showComparison =
+    scenario !== 'none' && (!includePlan || hasPlannedOnlyLine);
   const lastPoint = series.at(-1);
   const afterPlanGain =
     hasPlanEndMark && lastPoint && lastPoint.y2 !== null
       ? lastPoint.y - lastPoint.y2
       : 0;
   const afterPlanLine =
-    afterPlanGain > 0
-      ? `${counts[unit]} movies a ${unit} after ${formatShortDate(planEnd)} adds about ${formatWholeCents(afterPlanGain)} of the ${formatWholeCents(lastPoint?.y ?? 0)} by ${until}.`
+    Math.round(afterPlanGain / 100) >= 1
+      ? `${pluralize(counts[unit], 'movie')} a ${unit} after ${formatShortDate(planEnd)} adds about ${formatWholeCents(afterPlanGain)} by ${until}.`
       : null;
+
+  const getBreakEvenLine = () => {
+    if (breakEvenPoint)
+      return breakEvenPoint.x > todayDay || isBreakEvenCrowded
+        ? `${breakEvenPoint.x > todayDay ? "You'd break even" : 'You broke even'} around ${formatDateUTC(breakEvenPoint.x)}.`
+        : null;
+    if (!isPace || isBrokenEven || !breakEven || breakEven.perPeriod === null)
+      return null;
+    if (breakEven.perPeriod > getPaceMax(unit))
+      return `Breaking even by then would take more than A-List's ${getPaceMax(unit)} a ${unit}.`;
+    return `Breaking even takes about ${breakEven.perPeriod} a ${unit}${includePlan ? '' : ` (${pluralize(breakEven.movies, 'movie')} in all)`}.`;
+  };
+  const breakEvenLine = getBreakEvenLine();
 
   const getChartDescription = () => {
     const end = series.at(-1);
@@ -480,8 +488,11 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   secondary: includePlan ? 'Planned' : 'No more',
                 }}
                 curve='linear'
-                secondaryLabel={
-                  scenario === 'none' ? undefined : comparisonLabel
+                secondaryLabel={showComparison ? comparisonLabel : undefined}
+                xTicks={
+                  series[0] && series[0].x < todayDay
+                    ? [series[0].x, result.coveredUntil]
+                    : undefined
                 }
                 referenceY={{ value: 0, label: 'Break even' }}
                 yDomain={axis?.domain}
@@ -510,13 +521,13 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                     : undefined
                 }
                 markers={[
-                  ...(breakEvenPoint
+                  ...(breakEvenPoint && !isBreakEvenCrowded
                     ? [
                         {
                           x: breakEvenPoint.x,
                           y: 0,
                           label: `${breakEvenPoint.x > todayDay ? 'Break even' : 'Broke even'} ${formatShortDate(breakEvenPoint.x)}`,
-                          prefer: 'above' as const,
+                          side: 'left' as const,
                         },
                       ]
                     : []),
@@ -526,7 +537,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                           x: planEnd,
                           y: planEndPoint.y,
                           label: `Planned ends ${formatShortDate(planEnd)}`,
-                          prefer: 'below' as const,
+                          side: 'left' as const,
                           isHollow: true,
                         },
                       ]
@@ -553,7 +564,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   />
                   Break even ($0)
                 </span>
-                {scenario !== 'none' && (
+                {showComparison && (
                   <span className='flex items-center gap-1.5'>
                     <LegendLine
                       strokeWidth={3}

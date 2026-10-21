@@ -7,6 +7,7 @@ import {
   ReferenceDot,
   ReferenceArea,
   ReferenceLine,
+  useIsTooltipActive,
   usePlotArea,
   ResponsiveContainer,
   Tooltip,
@@ -34,6 +35,8 @@ interface TrendLineChartProps {
   /** Fixes the y-axis so a changing series visibly moves instead of re-scaling to fit; `yTicks` are its labelled values. */
   yDomain?: [number, number];
   yTicks?: number[];
+  /** Labelled x values, when the default spacing would put one beside a divider. */
+  xTicks?: number[];
   /** Faint vertical guides, such as where the past ends; a label sits at the top or bottom of its line. */
   dividers?: { x: number; label: string; labelAt?: 'top' | 'bottom' }[];
   /** A faintly shaded stretch of the x-axis with its own label. */
@@ -60,60 +63,69 @@ export interface ChartMarker {
   x: number;
   y: number;
   label: string;
-  /** Which side of the dot the callout prefers; it flips when that side has no room. */
-  prefer?: 'above' | 'below';
+  /** Which way the callout extends from the dot (always above it); it flips when that side has no room. */
+  side?: 'left' | 'right';
   /** A hollow dot, to tell a second marker from the first. */
   isHollow?: boolean;
 }
 
 const CALLOUT_HEIGHT = 22;
 const CALLOUT_ARROW = 6;
+const ARROW_HALF = 5;
+const CALLOUT_LIFT = 24;
 
-/** A small dot with a label and an arrow pointing at it, kept inside the plot. A rising line leaves the up-left and down-right of any point clear, so the callout goes to one of those. */
+/** A small dot with a label above it and an arrow pointing down at the dot, kept inside the plot. It leans left or right so two callouts can sit side by side; a rising line leaves the up-left of a point clear, so left is the safer side. */
 function MarkerCallout({
   cx,
   cy,
   label,
-  prefer = 'above',
+  side = 'left',
   isHollow = false,
 }: {
   cx?: number;
   cy?: number;
   label: string;
-  prefer?: 'above' | 'below';
+  side?: 'left' | 'right';
   isHollow?: boolean;
 }) {
   const plot = usePlotArea();
+  const isTooltipActive = useIsTooltipActive();
   if (cx === undefined || cy === undefined) return null;
 
   const left = (plot?.x ?? 0) + 2;
   const right = (plot?.x ?? 0) + (plot?.width ?? 0) - 2;
-  const top = plot?.y ?? 0;
-  const bottom = top + (plot?.height ?? 0) + 18;
   const width = label.length * 6 + 20;
-  const options = [
-    {
-      side: 'above',
-      boxX: cx - width + 16,
-      boxY: cy - CALLOUT_ARROW - 4 - CALLOUT_HEIGHT,
-    },
-    { side: 'below', boxX: cx - 16, boxY: cy + CALLOUT_ARROW + 4 },
-  ] as const;
-  const ordered = prefer === 'above' ? options : [options[1], options[0]];
-  const fits = (option: (typeof options)[number]) =>
-    option.boxX >= left &&
-    option.boxX + width <= right &&
-    option.boxY >= top &&
-    option.boxY + CALLOUT_HEIGHT <= bottom;
-  // Neither side fits cleanly (a dot near an edge): up-left, where a rising line is lowest.
-  const pick = ordered.find(fits) ?? options[0];
-  const boxX = Math.max(left, Math.min(pick.boxX, right - width));
-  const boxY = Math.max(top, pick.boxY);
-  const isAbove = pick.side === 'above';
-  const arrowX = Math.max(boxX + 10, Math.min(cx, boxX + width - 10));
-  const baseY = isAbove ? boxY + CALLOUT_HEIGHT : boxY;
-  const tipY = isAbove ? baseY + CALLOUT_ARROW : baseY - CALLOUT_ARROW;
-  const seamY = isAbove ? baseY - 2 : baseY - 0.5;
+  const lean = ARROW_HALF + 1;
+  const leftX = cx - width + lean;
+  const rightX = cx - lean;
+  const preferred = side === 'left' ? leftX : rightX;
+  const other = side === 'left' ? rightX : leftX;
+  const fits = (x: number) => x >= left && x + width <= right;
+  const isPreferred = fits(preferred);
+  const boxX = Math.max(
+    left,
+    Math.min(
+      isPreferred ? preferred : fits(other) ? other : leftX,
+      right - width,
+    ),
+  );
+  // Off its safe side, the box rides higher on a longer pointer so a line rising beneath it stays visible.
+  const arrowLength = CALLOUT_ARROW + (isPreferred ? 0 : CALLOUT_LIFT);
+  const boxY = Math.max(plot?.y ?? 0, cy - arrowLength - 4 - CALLOUT_HEIGHT);
+  const arrowX = Math.max(boxX + 8, Math.min(cx, boxX + width - 8));
+  const dot = (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={4.5}
+      fill={isHollow ? 'var(--color-popover)' : 'var(--color-primary)'}
+      stroke={isHollow ? 'var(--color-primary)' : 'var(--color-popover)'}
+      strokeWidth={2}
+    />
+  );
+  // The readout takes the same strip while a point is being read, so the callout steps aside.
+  if (isTooltipActive) return <g pointerEvents='none'>{dot}</g>;
+
   return (
     <g pointerEvents='none'>
       <rect
@@ -126,15 +138,15 @@ function MarkerCallout({
         stroke='var(--color-border)'
       />
       <path
-        d={`M${arrowX - 5},${baseY + (isAbove ? -0.5 : 0.5)} L${arrowX},${tipY} L${arrowX + 5},${baseY + (isAbove ? -0.5 : 0.5)} Z`}
+        d={`M${arrowX - ARROW_HALF},${boxY + CALLOUT_HEIGHT - 0.5} L${arrowX},${cy - 4} L${arrowX + ARROW_HALF},${boxY + CALLOUT_HEIGHT - 0.5} Z`}
         fill='var(--color-popover)'
         stroke='var(--color-border)'
         strokeLinejoin='round'
       />
       <rect
-        x={arrowX - 5.5}
-        y={seamY}
-        width={11}
+        x={arrowX - ARROW_HALF - 0.5}
+        y={boxY + CALLOUT_HEIGHT - 2}
+        width={ARROW_HALF * 2 + 1}
         height={2.5}
         fill='var(--color-popover)'
       />
@@ -148,14 +160,7 @@ function MarkerCallout({
       >
         {label}
       </text>
-      <circle
-        cx={cx}
-        cy={cy}
-        r={4.5}
-        fill={isHollow ? 'var(--color-popover)' : 'var(--color-primary)'}
-        stroke={isHollow ? 'var(--color-primary)' : 'var(--color-popover)'}
-        strokeWidth={2}
-      />
+      {dot}
     </g>
   );
 }
@@ -175,6 +180,7 @@ function TrendLineChart({
   referenceY,
   yDomain,
   yTicks,
+  xTicks,
   markers,
   dividers,
   band,
@@ -269,6 +275,7 @@ function TrendLineChart({
             dataKey='x'
             type='number'
             domain={['dataMin', 'dataMax']}
+            ticks={xTicks}
             tickFormatter={formatX}
             stroke='var(--color-muted-foreground)'
             tick={tickStyle}
@@ -397,7 +404,7 @@ function TrendLineChart({
               stroke='none'
               label={{
                 value: band.label,
-                position: 'insideTop',
+                position: 'insideTopRight',
                 fill: 'var(--color-muted-foreground)',
                 fontSize: 10,
               }}
@@ -418,6 +425,9 @@ function TrendLineChart({
                     : 'insideTopLeft',
                 fill: 'var(--color-muted-foreground)',
                 fontSize: 10,
+                stroke: 'var(--color-popover)',
+                strokeWidth: 4,
+                paintOrder: 'stroke',
               }}
             />
           ))}
@@ -429,7 +439,7 @@ function TrendLineChart({
               shape={
                 <MarkerCallout
                   label={marker.label}
-                  prefer={marker.prefer}
+                  side={marker.side}
                   isHollow={marker.isHollow}
                 />
               }
