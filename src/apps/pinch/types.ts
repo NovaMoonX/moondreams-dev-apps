@@ -96,3 +96,26 @@ export interface ResolvedFamily {
 }
 
 export type KitchenView = 'yours' | 'all';
+
+/** A full-page screen that takes over the app; the tabs stay mounted underneath. */
+export type PinchSubview = { kind: 'stores' };
+
+export interface CatalogStore {
+  /** `cat-store-` plus the slug; also the document id of the person's own copy. */
+  id: string;
+  name: string;
+  /** The website the logo is looked up by; nothing else leaves the app. */
+  domain: string;
+}
+
+/** A shop the person buys from: a well-known one they picked (its id is the catalog id) or one they added. */
+export interface Store {
+  id: string;
+  name: string;
+  /** Immutable; null for a store the person added. */
+  catalogStoreId: string | null;
+  /** Storage path of the person's own image. */
+  imagePath: string | null;
+  createdAt: number;
+  updatedAt: number;
+}

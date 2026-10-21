@@ -1402,6 +1402,16 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      function isStore(data, id) {
+        return data.keys().hasOnly(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'name', 'catalogStoreId', 'imagePath', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.name, 120)
+          && (data.catalogStoreId == null || (data.catalogStoreId == id && data.catalogStoreId.matches('cat-store-.+')))
+          && (data.imagePath == null || data.imagePath == 'apps/pinch/kitchens/' + uid + '/stores/' + id + '/logo.webp')
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
       // The kitchen document itself (settings) gets its create and update rule with the issue that writes it.
       allow read, delete: if isKitchenOwner();
 
@@ -1410,6 +1420,14 @@ service cloud.firestore {
         allow create: if isKitchenOwner() && isIngredient(request.resource.data, id);
         allow update: if isKitchenOwner() && isIngredient(request.resource.data, id)
           && request.resource.data.catalogId == resource.data.catalogId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /stores/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isStore(request.resource.data, id);
+        allow update: if isKitchenOwner() && isStore(request.resource.data, id)
+          && request.resource.data.catalogStoreId == resource.data.catalogStoreId
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

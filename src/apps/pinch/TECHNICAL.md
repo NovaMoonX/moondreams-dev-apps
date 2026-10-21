@@ -160,7 +160,7 @@ interface Store {
 }
 ```
 
-A well-known store becomes a `Store` document the first time a product uses it, so every product points at a store the person owns. Its logo is derived from the catalog entry's domain; a person's own store shows `imagePath` (read through `useStoragePhoto`), else a letter tile.
+A well-known store becomes a `Store` document the first time a product uses it, so every product points at a store the person owns. Its logo is derived from the catalog entry's domain; a person's own store shows `imagePath` (its download URL is a TanStack query keyed by path and `updatedAt`, `storeImageQueryOptions`; `useStoragePhoto` only uploads and deletes), else a letter tile.
 
 ### 5. `Product` — `…/products/{id}`
 
@@ -496,7 +496,7 @@ Every slice resets on the shared `resetAllState`, so a user switch never shows t
 | `saveIngredient(draft)` | `setDoc` of the record (custom: new id; catalog: id = catalog id) with the full shape; edits are field-scoped `updateDoc` |
 | `removeIngredient(id)` | the archive-or-delete check (Logic §3a) |
 | `saveFamily` / `removeFamily` | `setDoc` / archive-or-delete |
-| `saveStore(draft)` | `setDoc`; a catalog store is created lazily by `ensureCatalogStore(catalogStoreId)` (create-if-absent inside a `runTransaction`, so a double tap makes one); an uploaded image goes to Storage first, then `imagePath` is written |
+| `saveStore(draft)` | `setDoc` to create, field-scoped `updateDoc` to edit; a catalog store is created lazily by `ensureCatalogStore(catalogStoreId)` (create-if-absent inside a `runTransaction`, so a double tap makes one); an uploaded image goes to Storage first, then `imagePath` is written |
 | `removeStore(id)` | archive when any product points at it, else delete + delete the image |
 | `saveProduct(draft)` | one `writeBatch`: the product document and, when it's the ingredient's first live product or "Make this the default" was chosen, the record's `defaultProductId` (an upsert for a catalog ingredient with no record); also clears the matching `dismissedNudges` keys; preceded by `freezePastMeals` |
 | `removeProduct(id)` | archive-or-delete; re-points `defaultProductId` to another live product or `null` in the same batch |
@@ -638,7 +638,7 @@ No `functions/src/apps/pinch/` in the MVP.
 
 Each has a default the design already assumes; the owner can change any of them cheaply now and expensively later.
 
-1. **Store logo source and terms are unsettled.** The design hotlinks logos by domain from a logo service in the person's browser, with a letter-tile fallback and the provider isolated in one function (`storeLogoUrl`). Brandfetch's free tier requires hotlinking with a client id and blocks caching without contact; Logo.dev's Community plan needs attribution for commercial projects and says logos remain their owners' trademarks. Gate: pick one, read its attribution rules, and confirm in the PR that ships store logos. Fallback if neither fits: letter tiles plus person-uploaded images only.
+1. **Store logo source: Logo.dev is wired, its terms are still to be confirmed.** Logos load by domain in the person's browser behind `storeLogoUrl` (enabled only when `VITE_STORE_LOGO_TOKEN` is set, with a letter-tile fallback and `no-referrer`). Logo.dev's Community plan needs attribution for commercial projects and says logos remain their owners' trademarks; the plan's terms and the attribution wording were not verified from the sandbox. Gate before launch: read them, then add the attribution row (Settings' About, Issue 13) or leave the token unset. Fallback if it doesn't fit: letter tiles plus person-uploaded images only.
 2. **USDA FoodData Central licence** is to be confirmed before the catalog ships (the page could not be read while planning). Defaults to FDC's public-domain/CC0 position; the generated catalog keeps a `source` note per row.
 3. **Ingredient icon set.** Fluent Emoji (MIT), Noto Emoji (Apache-2.0) or Twemoji (CC-BY-4.0). The design assumes one set vendored with its notice; the choice affects the About row's wording only.
 4. **The calendar grid's first weekday.** The UX shows Monday first. If Dreamer UI's `Calendar` can't start a week on Monday, the grid starts on Sunday and Monday-to-Sunday applies to week copies only. First spike of the Calendar issue.

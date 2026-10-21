@@ -44,6 +44,20 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // A store's own image, private to the person whose kitchen it is (mirrors apps/pinch/kitchens/{uid}/stores/{storeId}).
+    match /apps/pinch/kitchens/{uid}/stores/{storeId}/{fileName} {
+      function isKitchenOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      allow read: if isKitchenOwner();
+      allow create, update: if isKitchenOwner()
+        && fileName == 'logo.webp'
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isKitchenOwner();
+    }
+
     match /waypoint/trips/{tripId}/cover/{fileName} {
       function isTripMember() {
         return request.auth != null
