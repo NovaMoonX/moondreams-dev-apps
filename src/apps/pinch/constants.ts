@@ -38,6 +38,8 @@ export const NUTRITION_CELLS = [
   { key: 'fat', label: 'Fat', unit: ' g' },
 ] as const;
 
+export const NUTRITION_METRICS = NUTRITION_CELLS.map((cell) => cell.key);
+
 /** A list gets a search from this many rows. */
 export const LIST_SEARCH_THRESHOLD = 8;
 

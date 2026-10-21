@@ -8,7 +8,9 @@ import { dismissNudge } from '@apps/pinch/store/actions/settingsActions';
 import {
   selectDismissedNudges,
   selectIngredientsById,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
+import { NUTRITION_CELLS } from '@apps/pinch/constants';
 import type { Gap } from '@apps/pinch/types';
 import {
   countLeftOutIngredients,
@@ -28,6 +30,7 @@ function GapNudge({ uid, gaps, onFillIn }: GapNudgeProps) {
   const dismissed = useAppSelector(selectDismissedNudges);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const [hasFailed, setHasFailed] = useState(false);
+  const show = useAppSelector(selectShowNutrition);
   const open = withoutDismissed(gaps, dismissed);
 
   if (open.length === 0) {
@@ -37,10 +40,34 @@ function GapNudge({ uid, gaps, onFillIn }: GapNudgeProps) {
   const count = countLeftOutIngredients(open);
   const needsPrice = open.some((gap) => gap.kind === 'NO_PRODUCT');
   const needsSize = open.some((gap) => gap.kind === 'NOT_COMPARABLE');
+  const needsNutrition = open.some((gap) => gap.kind === 'NO_NUTRITION');
+  const metricsOn = NUTRITION_CELLS.filter((cell) => show[cell.key]);
+  const nutritionWhat =
+    metricsOn.length === 1
+      ? metricsOn[0].label.toLowerCase()
+      : 'nutrition values';
   const name =
     ingredientsById.get(open[0].ingredientId)?.name ?? 'An ingredient';
 
   const getWording = () => {
+    if (needsNutrition && (needsPrice || needsSize)) {
+      return {
+        text:
+          count === 1
+            ? `${name} needs details`
+            : `${count} ingredients need details`,
+        action: 'Add details',
+      };
+    }
+    if (needsNutrition) {
+      return {
+        text:
+          count === 1
+            ? `${name} has no ${nutritionWhat}`
+            : `${count} ingredients have no ${nutritionWhat}`,
+        action: 'Add values',
+      };
+    }
     if (needsPrice && needsSize) {
       return {
         text: `${count} ingredients need a price or a size`,

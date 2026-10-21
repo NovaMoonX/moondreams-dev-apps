@@ -13,6 +13,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Clock,
   FileText,
+  Flame,
   ListOrdered,
   Plus,
   Trash2,
@@ -43,6 +44,8 @@ import {
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
   MAX_STEP_LENGTH,
+  NUTRITION_CELLS,
+  NUTRITION_METRICS,
   UNIT_LABELS,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
@@ -55,7 +58,12 @@ import {
   selectIngredientsById,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { Recipe, Unit } from '@apps/pinch/types';
+import type {
+  NutritionMetric,
+  NutritionValues,
+  Recipe,
+  Unit,
+} from '@apps/pinch/types';
 
 const { custom, input } = FormFactories;
 
@@ -76,6 +84,7 @@ interface Extras {
   steps: Reveal<string[]>;
   description: Reveal<string>;
   times: Reveal<{ prep: string; cook: string }>;
+  nutrition: Reveal<Record<NutritionMetric, string>>;
   cover: Reveal<null>;
 }
 
@@ -112,9 +121,44 @@ const getInitialData = (recipe: Recipe | null): FormData => ({
         cook: recipe?.cookMinutes != null ? String(recipe.cookMinutes) : '',
       },
     },
+    nutrition: {
+      enabled: recipe?.nutritionOverride != null,
+      value: Object.fromEntries(
+        NUTRITION_METRICS.map((metric) => [
+          metric,
+          recipe?.nutritionOverride?.[metric] != null
+            ? String(recipe.nutritionOverride[metric])
+            : '',
+        ]),
+      ) as Record<NutritionMetric, string>,
+    },
     cover: { enabled: recipe?.coverPath != null, value: null },
   },
 });
+
+const EMPTY_NUTRITION = { calories: '', protein: '', carbs: '', fat: '' };
+
+/** The typed-over nutrition as per-serving values, a blank metric staying derived; null when nothing was typed. */
+const parseNutrition = (
+  values: Record<NutritionMetric, string>,
+): NutritionValues | null => {
+  const parsed = Object.fromEntries(
+    NUTRITION_METRICS.map((metric) => [
+      metric,
+      values[metric].trim() === '' ? null : Number(values[metric]),
+    ]),
+  ) as unknown as NutritionValues;
+  return Object.values(parsed).every((value) => value === null) ? null : parsed;
+};
+
+const isValidNutrition = (values: Record<NutritionMetric, string>) =>
+  NUTRITION_METRICS.every((metric) => {
+    const value = values[metric].trim() === '' ? null : Number(values[metric]);
+    return (
+      value === null ||
+      (Number.isFinite(value) && value >= 0 && value <= 100000)
+    );
+  });
 
 const parseMinutes = (text: string) =>
   text.trim() === '' ? null : Number(text);
@@ -300,6 +344,11 @@ function ExtrasFields({ extras, onChange, cover }: ExtrasFieldsProps) {
     },
     { key: 'times', label: 'Times', icon: <Clock className='h-4 w-4' /> },
     {
+      key: 'nutrition',
+      label: 'My own nutrition',
+      icon: <Flame className='h-4 w-4' />,
+    },
+    {
       key: 'cover',
       label: 'Cover photo',
       icon: <ImageIcon className='h-4 w-4' />,
@@ -466,6 +515,50 @@ function ExtrasFields({ extras, onChange, cover }: ExtrasFieldsProps) {
           </div>
         </RemovableField>
       )}
+      {extras.nutrition.enabled && (
+        <RemovableField
+          label='My own nutrition, per serving'
+          removeLabel='Remove my own nutrition'
+          onRemove={() =>
+            onChange({
+              ...extras,
+              nutrition: { enabled: false, value: EMPTY_NUTRITION },
+            })
+          }
+        >
+          <div className='grid grid-cols-2 gap-3'>
+            {NUTRITION_CELLS.map((cell) => (
+              <div key={cell.key} className='space-y-1.5'>
+                <Label>
+                  {cell.unit === '' ? cell.label : `${cell.label} (g)`}
+                </Label>
+                <Input
+                  type='number'
+                  inputMode='decimal'
+                  min={0}
+                  step='any'
+                  variant='outline'
+                  aria-label={`${cell.label} per serving`}
+                  placeholder='From the ingredients'
+                  value={extras.nutrition.value[cell.key]}
+                  onChange={(event) =>
+                    onChange({
+                      ...extras,
+                      nutrition: {
+                        enabled: true,
+                        value: {
+                          ...extras.nutrition.value,
+                          [cell.key]: event.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        </RemovableField>
+      )}
       {extras.cover.enabled && (
         <RemovableField
           label='Cover photo'
@@ -542,7 +635,8 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
     formData.ingredients.length <= MAX_RECIPE_INGREDIENTS &&
     rowsValid &&
     formData.servings > 0 &&
-    (!extras.times.enabled || (isValidMinutes(prep) && isValidMinutes(cook)));
+    (!extras.times.enabled || (isValidMinutes(prep) && isValidMinutes(cook))) &&
+    (!extras.nutrition.enabled || isValidNutrition(extras.nutrition.value));
 
   const fields = useMemo(
     () => [
@@ -651,6 +745,9 @@ function RecipeForm({ uid, recipeId }: RecipeFormProps) {
               unit: row.unit,
               note: row.note,
             })),
+            nutritionOverride: data.extras.nutrition.enabled
+              ? parseNutrition(data.extras.nutrition.value)
+              : null,
             steps: data.extras.steps.enabled
               ? data.extras.steps.value
                   .map((step) => step.trim())

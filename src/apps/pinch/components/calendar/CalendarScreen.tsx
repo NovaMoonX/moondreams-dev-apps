@@ -1,13 +1,14 @@
 import { memo, useState } from 'react';
 
 import { Button, Calendar } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Settings } from 'lucide-react';
 
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import BreakdownDrawer from '@apps/pinch/components/calendar/BreakdownDrawer';
 import StatsRow from '@apps/pinch/components/calendar/StatsRow';
+import SettingsSheet from '@apps/pinch/components/settings/SettingsSheet';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import DayDrawer from '@apps/pinch/components/calendar/DayDrawer';
 import MealBarCell from '@apps/pinch/components/calendar/MealBarCell';
@@ -62,6 +63,7 @@ function CalendarScreen({
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
   const [peekDayKey, setPeekDayKey] = useState<string | null>(null);
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const stats = useAppSelector((state) => selectMonthStats(state, shownMonth));
 
@@ -92,16 +94,28 @@ function CalendarScreen({
       <SectionHeader
         title='Calendar'
         action={
-          <Button
-            type='button'
-            size='sm'
-            rounded='full'
-            className='gap-1'
-            onClick={() => openPlan(selectedKey ?? todayKey, null)}
-          >
-            <Plus className='h-4 w-4' aria-hidden='true' />
-            Add
-          </Button>
+          <div className='flex items-center gap-1'>
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              aria-label='Settings'
+              className='size-10'
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              <Settings className='h-5 w-5' aria-hidden='true' />
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              rounded='full'
+              className='gap-1'
+              onClick={() => openPlan(selectedKey ?? todayKey, null)}
+            >
+              <Plus className='h-4 w-4' aria-hidden='true' />
+              Add
+            </Button>
+          </div>
         }
       />
       <StatsRow
@@ -109,6 +123,7 @@ function CalendarScreen({
         stats={stats}
         onOpenBreakdown={() => setIsBreakdownOpen(true)}
         onFillIn={setFillIn}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
       <div className='flex items-center justify-between gap-2'>
         <Button
@@ -217,6 +232,9 @@ function CalendarScreen({
           );
         }}
       />
+      {isSettingsOpen && (
+        <SettingsSheet uid={uid} onClose={() => setIsSettingsOpen(false)} />
+      )}
       {isBreakdownOpen && (
         <BreakdownDrawer
           monthKey={shownMonth}

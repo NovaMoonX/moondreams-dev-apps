@@ -8,7 +8,11 @@ import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
-import type { Recipe, RecipeIngredient } from '@apps/pinch/types';
+import type {
+  NutritionValues,
+  Recipe,
+  RecipeIngredient,
+} from '@apps/pinch/types';
 
 const recipeDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'recipes', id);
@@ -26,6 +30,8 @@ export interface RecipeDraft {
   cookMinutes: number | null;
   ingredients: RecipeIngredient[];
   steps: string[];
+  /** Per serving, typed over the added-up value; null keeps every metric derived. */
+  nutritionOverride: NutritionValues | null;
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
   removeCover: boolean;
@@ -80,6 +86,7 @@ export const saveRecipe = createAsyncThunk<
         coverPath,
         ingredients: draft.ingredients,
         steps: draft.steps,
+        nutritionOverride: draft.nutritionOverride,
         updatedAt: now,
       };
 

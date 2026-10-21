@@ -221,6 +221,7 @@ const SEED_RECIPES = [
       'Simmer everything with the bay leaves and pepper, covered, for 25 minutes.',
       'Uncover and reduce the sauce until it clings to the chicken.',
     ],
+    nutritionOverride: null,
     source: 'MANUAL',
   },
   {
@@ -242,6 +243,7 @@ const SEED_RECIPES = [
       'Cook the rice.',
       'Fold in the cilantro, lime juice, salt and olive oil.',
     ],
+    nutritionOverride: null,
     source: 'MANUAL',
   },
   {
@@ -259,6 +261,8 @@ const SEED_RECIPES = [
       line('nachos-4', 'cat-salsa', 0.5, 'CUP'),
     ],
     steps: [],
+    // Typed over the added-up calories; the other metrics stay derived.
+    nutritionOverride: { calories: 520, protein: null, carbs: null, fat: null },
     source: 'MANUAL',
   },
 ];

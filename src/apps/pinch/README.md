@@ -71,7 +71,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Cost appears when amounts can be compared.** A recipe's amount and a product's package size line up when they measure the same kind of thing (pounds with ounces, cups with tablespoons), or when the catalog knows the conversion (a cup of flour to grams). Anything that can't be compared is called out by name with a nudge to fix it and is left out of the totals, so every number shown is one the app can stand behind.
 - **Past days keep their numbers.** Once a day has passed, its cost and nutrition are fixed as they were that day. Updating a price or editing a recipe changes what's ahead, not last month's totals.
 - **Nutrition is yours to enter, and yours to show.** Built-in ingredients arrive with calories, protein, carbs, and fat. You can add or adjust them on any ingredient. A recipe's nutrition adds up from its ingredients, and you can type your own numbers over it, handy when a recipe comes with its own from the web.
-- **Showing nutrition is opt-in.** In settings, calories, protein, carbs, and fat are four separate switches, all off to start. Turning one on shows it per serving on recipes and meals and as a daily and period total on the calendar's stats row. With protein on, the stats row also shows your average price per gram of protein.
+- **Showing nutrition is opt-in.** In settings, calories, protein, carbs, and fat are four separate switches, all off to start. Turning one on shows it per serving on recipes and meals and as a daily average on the calendar's stats row. With protein on, the stats row also shows your average price per gram of protein.
 - **Blanks are named.** An ingredient with no nutrition entered is called out with a nudge and left out of the totals while that metric is on.
 - **A week runs Monday to Sunday.**
 
@@ -103,7 +103,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Add products to an ingredient (store, label, price, package size), choose a default, and edit or remove them
 - [x] Enter or adjust nutrition on any ingredient
 - [x] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
-- [ ] See a recipe's nutrition added up from its ingredients, or type your own over it
+- [x] See a recipe's nutrition added up from its ingredients, or type your own over it
 - [x] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
 - [ ] Create a recipe from pasted text, a photo, or a PDF, with the AI filling in the form for you to review before saving
 - [ ] Copy a recipe as Markdown
@@ -111,8 +111,8 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Meal calendar with a month view showing thin color bars and emojis per day
 - [x] Plan a saved meal, a single recipe, or a single ingredient on a day under a meal type; tweak that day's items and servings; move or remove it
 - [x] Stats row on the calendar: total spend and average cost per meal for the month, with a breakdown by day and by meal
-- [ ] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
-- [ ] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
+- [x] Quiet in-context nudges for missing prices, package sizes, and nutrition, each opening a short fill-in form and each easy to close
+- [x] Nutrition settings: switch calories, protein, carbs, and fat on or off, shown on recipes, meals, and the calendar stats row, plus average price per gram of protein when protein is on
 - [ ] Copy a day's or week's plan, and your list of ingredients, as Markdown
 
 ### Next Steps

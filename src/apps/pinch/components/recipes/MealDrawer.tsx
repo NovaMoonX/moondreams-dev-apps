@@ -3,17 +3,24 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import DetailSheet from '@/components/DetailSheet';
 import { useAppSelector } from '@/store';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
+import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   selectCostContext,
   selectIngredientsById,
   selectMealsById,
   selectRecipesById,
+  selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { Gap } from '@apps/pinch/types';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
+import {
+  getMealNutrition,
+  getNutritionGaps,
+  hasShownValue,
+} from '@apps/pinch/utils/nutritionMath';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface MealDrawerProps {
@@ -35,6 +42,7 @@ function MealDrawer({
 }: MealDrawerProps) {
   const meal = useAppSelector(selectMealsById).get(mealId);
   const costContext = useAppSelector(selectCostContext);
+  const show = useAppSelector(selectShowNutrition);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
 
@@ -43,6 +51,11 @@ function MealDrawer({
   }
 
   const cost = getMealCost(meal.items, costContext);
+  const nutrition = getMealNutrition(
+    meal.items,
+    costContext.recipeNutrition,
+    costContext.ingredientsById,
+  );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
 
   return (
@@ -107,7 +120,20 @@ function MealDrawer({
               </span>
             )}
           </p>
-          <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={onFillIn} />
+          {hasShownValue(nutrition.values, show) && (
+            <p className='text-muted-foreground text-sm'>
+              <NutritionLine values={nutrition.values} show={show} /> for the
+              plate
+            </p>
+          )}
+          <GapNudge
+            uid={uid}
+            gaps={[
+              ...cost.leftOut,
+              ...getNutritionGaps(nutrition.missing, show),
+            ]}
+            onFillIn={onFillIn}
+          />
         </div>
         <div className='bg-muted/50 rounded-2xl p-1'>
           <Button

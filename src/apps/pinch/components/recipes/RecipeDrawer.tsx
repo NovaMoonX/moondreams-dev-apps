@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import DetailSheet from '@/components/DetailSheet';
 import { useAppSelector } from '@/store';
+import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import CostLine from '@apps/pinch/components/shared/CostLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
@@ -9,9 +10,15 @@ import { UNIT_LABELS } from '@apps/pinch/constants';
 import {
   selectIngredientsById,
   selectRecipeCosts,
+  selectRecipeNutrition,
+  selectShowNutrition,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { Gap, GapKind } from '@apps/pinch/types';
+import {
+  getNutritionGaps,
+  hasShownValue,
+} from '@apps/pinch/utils/nutritionMath';
 import { formatMinutes, formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -39,6 +46,8 @@ function RecipeDrawer({
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const cost = useAppSelector(selectRecipeCosts).get(recipeId);
+  const nutrition = useAppSelector(selectRecipeNutrition).get(recipeId);
+  const show = useAppSelector(selectShowNutrition);
 
   if (!recipe) {
     return null;
@@ -82,7 +91,20 @@ function RecipeDrawer({
             <p className='text-sm font-medium'>
               <CostLine cost={cost} />
             </p>
-            <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={onFillIn} />
+            {nutrition && hasShownValue(nutrition.values, show) && (
+              <p className='text-muted-foreground text-sm'>
+                <NutritionLine values={nutrition.values} show={show} /> per
+                serving
+              </p>
+            )}
+            <GapNudge
+              uid={uid}
+              gaps={[
+                ...cost.leftOut,
+                ...getNutritionGaps(nutrition?.missing ?? [], show),
+              ]}
+              onFillIn={onFillIn}
+            />
           </div>
         )}
         {recipe.description && (
