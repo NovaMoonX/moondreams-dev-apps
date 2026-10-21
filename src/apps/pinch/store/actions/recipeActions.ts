@@ -17,10 +17,14 @@ import type {
   Recipe,
   RecipeIngredient,
   RecipeSource,
+  Source,
 } from '@apps/pinch/types';
 
 const recipeDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'recipes', id);
+
+const sourceDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'sources', id);
 
 export const getRecipeCoverPath = (uid: string, recipeId: string) =>
   `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
@@ -39,8 +43,12 @@ export interface RecipeDraft {
   nutritionOverride: NutritionValues | null;
   /** How a new recipe came to be; an edit keeps the recipe's own. */
   source: RecipeSource;
+  /** The `Source` it came from, or null; written on every save, so older recipes gain the key. */
+  sourceId: string | null;
   /** Custom ingredients the reader proposed and the person kept: created with the recipe, in one batch. */
   newIngredients: { id: string; name: string }[];
+  /** A source typed with the recipe, created in the same batch so a failed save leaves no orphan and an offline one is queued whole. */
+  newSource: { id: string; label: string } | null;
   /** A new cover to upload, if one was picked. */
   coverFile: File | null;
   removeCover: boolean;
@@ -97,10 +105,20 @@ export const saveRecipe = createAsyncThunk<
         ingredients: draft.ingredients,
         steps: draft.steps,
         nutritionOverride: draft.nutritionOverride,
+        sourceId: draft.sourceId,
         updatedAt: now,
       };
 
       const batch = writeBatch(db);
+      if (draft.newSource) {
+        const source: Source = {
+          id: draft.newSource.id,
+          label: draft.newSource.label,
+          createdAt: now,
+          updatedAt: now,
+        };
+        batch.set(sourceDoc(uid, source.id), source);
+      }
       draft.newIngredients.forEach((ingredient) => {
         const record: IngredientRecord = {
           id: ingredient.id,

@@ -1428,7 +1428,7 @@ service cloud.firestore {
 
       // Rules can't walk a list, so each ingredient line and step is shaped by the client; the rules cap the counts and the fields around them.
       function isRecipe(data, id) {
-        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'nutritionOverride', 'source', 'isArchived', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'coverPath', 'ingredients', 'steps', 'nutritionOverride', 'source', 'sourceId', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'title', 'servings', 'ingredients', 'steps', 'source', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.title, 200)
@@ -1442,6 +1442,15 @@ service cloud.firestore {
           && data.ingredients is list && data.ingredients.size() >= 1 && data.ingredients.size() <= 60
           && data.steps is list && data.steps.size() <= 60
           && data.source in ['MANUAL', 'AI_TEXT', 'AI_FILE', 'AI_LINK']
+          && (data.get('sourceId', null) == null || isShortText(data.sourceId, 80))
+          && data.createdAt is int && data.updatedAt is int;
+      }
+
+      function isSource(data, id) {
+        return data.keys().hasOnly(['id', 'label', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['id', 'label', 'createdAt', 'updatedAt'])
+          && data.id == id
+          && isShortText(data.label, 80)
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1582,6 +1591,13 @@ service cloud.firestore {
         allow create: if isKitchenOwner() && isStore(request.resource.data, id);
         allow update: if isKitchenOwner() && isStore(request.resource.data, id)
           && request.resource.data.catalogStoreId == resource.data.catalogStoreId
+          && request.resource.data.createdAt == resource.data.createdAt;
+      }
+
+      match /sources/{id} {
+        allow read, delete: if isKitchenOwner();
+        allow create: if isKitchenOwner() && isSource(request.resource.data, id);
+        allow update: if isKitchenOwner() && isSource(request.resource.data, id)
           && request.resource.data.createdAt == resource.data.createdAt;
       }
 

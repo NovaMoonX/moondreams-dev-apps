@@ -64,6 +64,9 @@ flowchart TD
     RR -->|Write it yourself instead| RF
     RS -->|write it yourself| RF
     RL -->|eye button| VO["View options · prices on, calories and macros off to start; each can be switched"]
+    RL -->|Sources entry, once one exists| SO["Sources subview · each source with its recipe count"]
+    SO -->|+ New source or tap a row| SOF["Source form sheet · name, delete"]
+    RL -->|filter button, once a recipe has a source| SFL["Source filter · Any, each source with its count, No source"]
     RL -->|tap a recipe| RD["Recipe drawer · cost, nutrition, ingredients, steps"]
     RD -->|Modify| RF
     RD -->|Add to calendar| PM
@@ -349,18 +352,20 @@ block-beta
   columns 2
   R1["Recipes"]:1
   R2["+ New"]:1
-  R3["[ Recipes ]   Meals   👁"]:2
-  R4["🔍 Search (from 8 recipes)"]:2
+  R3["[ Recipes ]   Meals   👁 (when no recipe has a source)"]:2
+  R7["📖 Sources · 3 ›  (once a source exists)"]:2
+  R4["🔍 Search · filter · 👁 (from 8 recipes, or once a recipe has a source)"]:2
   R5["🖼️ Adobo chicken<br/>4 servings · 45 min<br/>$3.20 / serving<br/>🔥 520 · 💪 38g (when on)"]:2
   R6["🖼️ Cilantro lime rice<br/>4 servings · 25 min<br/>$1.35 / serving · leaves out 1"]:2
   style R1 fill:transparent,stroke:#888888,stroke-width:1px;
   style R2 fill:transparent,stroke:#888888,stroke-width:1px;
   style R3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style R7 fill:transparent,stroke:#888888,stroke-width:1px;
   style R4 fill:transparent,stroke:#888888,stroke-width:1px;
   style R5 fill:transparent,stroke:#888888,stroke-width:1px;
   style R6 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Two thin pills switch between Recipes and Meals (saved meals), with the View options eye button at the end of that row (it appears once the shown list has something in it, so an empty Recipes or Meals list has no eye). A recipe row shows its cover (or a tinted emoji tile), its title, a muted line of servings and time, then a cost per serving line and calories and macros per serving as emoji figures, the last two only while shown (View options) and, for macros, switched on. A recipe with an unpriced ingredient shows the cost it can stand behind and says "leaves out 1" in the same line; one with no price at all says "No price yet". A meal row shows its item count, total (the same "leaves out" or "No price yet" wording), macros when shown, and its items as a comma line. In every row the cover or tile and the text share a top edge, and the chevron sits on the first line.*
+*Two thin pills switch between Recipes and Meals (saved meals). Until a recipe has a source, the View options eye button sits at the end of that row (it appears once the shown list has something in it, so an empty Recipes or Meals list has no eye) and the search field shows from 8 recipes. Once a recipe has a source, Recipes gains a search field with a filter button and the same eye beside it, and, once any source exists, a "Sources" entry row (Kitchen's entry-row look, with the count) under the pills; Meals keep the plain layout and show neither. A recipe row shows its cover (or a tinted emoji tile), its title, a muted line of servings and time, then a cost per serving line and calories and macros per serving as emoji figures, the last two only while shown (View options) and, for macros, switched on. A recipe with an unpriced ingredient shows the cost it can stand behind and says "leaves out 1" in the same line; one with no price at all says "No price yet". A meal row shows its item count, total (the same "leaves out" or "No price yet" wording), macros when shown, and its items as a comma line. In every row the cover or tile and the text share a top edge, and the chevron sits on the first line.*
 
 **View options** (the eye button: a drawer on a phone, a popover from `sm`; Kitchen's ingredient list has the same one)
 
@@ -384,6 +389,29 @@ block-beta
   style V7 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
 *The switches are `AppToggle`s and take effect at once: "Show prices" hides the cost on recipe and meal rows and the store, price and size line on ingredient rows, and "Show calories and macros" hides the emoji figures. "Show calories and macros" reads off and is disabled, with "Calories and macros are off. Turn them on from the Calendar's gear and they'll show here." under it, while no metric is on in Settings; the "Nutrition numbers" pills (Per serving / Per 100 g, for ingredient rows only) appear only when one is. Defaults are prices on, macros off and per 100 g, so a list starts short. A row is only as tall as the lines it shows: an ingredient with just its name is about 44px, with a price line about 60px, and recipe and meal rows are as tall as their cover or tile (about 72px) until a price or macro line makes them taller. Once a choice differs from its default the eye button takes a soft tint and "Reset" appears (in the phone drawer's footer beside Done, at the bottom of the popover). Each list's choice is remembered for this person on this device (`pinch:{uid}:view:{recipes|ingredients}`; Recipes and Meals share one), so it is not on another device. A hidden line is simply not drawn: a total, a drawer and a fill-in sheet are the same with or without it.*
+
+**Sources and the Source filter** (the entry row on the Recipes tab; shown only once a source exists)
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
+block-beta
+  columns 2
+  F1["‹ Sources"]:2
+  F2["3 sources"]:1
+  F3["+ New source"]:1
+  F4["📖 Mom's recipe cards<br/>1 recipe"]:2
+  F5["📖 NYT Cooking"]:2
+  F6["📖 Serious Eats<br/>2 recipes"]:2
+  F7["Filter recipes · SOURCE<br/>[ Any ]  Mom's recipe cards · 1  Serious Eats · 2  No source · 1"]:2
+  style F1 fill:transparent,stroke:#888888,stroke-width:1px;
+  style F2 fill:transparent,stroke:#888888,stroke-width:1px;
+  style F3 fill:transparent,stroke:#888888,stroke-width:1px;
+  style F4 fill:transparent,stroke:#888888,stroke-width:1px;
+  style F5 fill:transparent,stroke:#888888,stroke-width:1px;
+  style F6 fill:transparent,stroke:#888888,stroke-width:1px;
+  style F7 fill:transparent,stroke:#888888,stroke-width:1px;
+```
+*A source is just a name for where a recipe came from. The Sources subview (a `Subview`, like Stores) lists them A to Z with how many of the listed recipes each has (a source with none shows no count), a "+ New source" action beside the title and a search from 8 sources. A row opens the Source sheet (a drawer on a phone, a modal from `sm`, titled "Source"): one Name field and, for an existing source, the trash at the bottom left, Cancel, and Save (Add for a new one). A name another source already has, ignoring case, disables Save and says so in the pinned footer ("You already have a source called “Serious Eats”."). Deleting asks first, over the sheet (a destructive confirm): "Serious Eats" is on 2 recipes. They stay, and only lose this label. When no recipe has it the confirm is the plain "Delete … This action cannot be undone." The Recipes tab's filter appears once at least one recipe has a source: a filter button beside the search field opens a drawer on a phone and a popover from `sm` with one question, Source, as pills: "Any", each source that at least one recipe has with its count ("Serious Eats · 3"), and "No source · n" only when some recipe has none (a search is added past 12 pills). A picked source shows as a chip under the search field ("From Serious Eats", with its ✕ and Clear); with nothing to show the list says "No recipes from Serious Eats yet." or "Nothing from Serious Eats matches “nachos” yet." with a "Clear filter" button. The filter and its chip leave when no recipe has a source any more, and Meals are never filtered.*
 
 **New recipe — how to start** (a drawer on a phone, the recipe subview's first page from `sm`; editing a recipe skips it)
 
@@ -419,7 +447,7 @@ block-beta
   style W3 fill:transparent,stroke:#888888,stroke-width:1px;
   style W4 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Each screen has one plain line saying what will happen, above its input (the paste box, the address field, the file box) so it is read before anything is sent, and always ends with a link to "Write it yourself instead" (disabled while a reading runs). **From text** is "An AI reads it and fills in the form. It isn't saved.", a paste box (up to 20,000 characters) and a "Fill in the recipe" button. **From a link** is "We open the page and an AI reads the recipe from it.", an address field and "Fill in the recipe" (Enter does it too); an address with no `https://` gets one. **From a file** takes a photo, screenshot or PDF by "Choose a file", or dropped on the box (the "or drop it here" hint is hidden on a phone).*
+*Each screen has one plain line saying what will happen, above its input (the paste box, the address field, the file box) so it is read before anything is sent, and always ends with a link to "Write it yourself instead" (disabled while a reading runs). **From text** is "An AI reads it and fills in the form. It isn't saved.", a paste box (up to 20,000 characters) and a "Fill in the recipe" button. **From a link** is "We open the page and an AI fills in the form from it. It isn't saved.", an address field and "Fill in the recipe" (Enter does it too); an address with no `https://` gets one. **From a file** takes a photo, screenshot or PDF by "Choose a file", or dropped on the box (the "or drop it here" hint is hidden on a phone).*
 
 | Reading state | What you see |
 |---|---|
@@ -442,6 +470,7 @@ block-beta
   E5["Prep and cook<br/>Prep 10 min · Cook 35 min  ›"]:2
   E6["Photo"]:2
   E7["Description<br/>Sticky, tangy chicken thighs…  ›"]:2
+  E19["WHERE IT'S FROM<br/>+ New source · Mom's recipe cards · NYT Cooking · Serious Eats"]:2
   E9["INGREDIENTS 6"]:2
   E10["Chicken thighs"]:1
   E11["2 lb"]:1
@@ -459,6 +488,7 @@ block-beta
   style E5 fill:transparent,stroke:#888888,stroke-width:1px;
   style E6 fill:transparent,stroke:#888888,stroke-width:1px;
   style E7 fill:transparent,stroke:#888888,stroke-width:1px;
+  style E19 fill:transparent,stroke:#888888,stroke-width:1px;
   style E9 fill:transparent,stroke:#888888,stroke-width:1px;
   style E10 fill:transparent,stroke:#888888,stroke-width:1px;
   style E11 fill:transparent,stroke:#888888,stroke-width:1px;
@@ -470,7 +500,7 @@ block-beta
   style E17 fill:transparent,stroke:#888888,stroke-width:1px;
   style E18 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*A recipe needs a title and at least one ingredient. Everything a recipe normally has is part of the flow, not a button at the bottom: servings and times, a photo, a description, the ingredients, the steps and the nutrition. The basics are summary rows, not boxes: Title, Prep and cook and Description each show a small caption, the value (the description cut off after two lines; "Add a title", "Add prep and cook time" and "Add a line about this dish" in muted text while empty) and a chevron, and Servings stays the stepper. Tapping a row opens its editor: on a phone (or a screen under 600px tall) a drawer over the form titled with the plain noun ("Title", "Prep and cook", "Description"), one text box or two ("Prep time" and "Cook time", each with a visible "min"), the cursor in the first, ending in a full-width Done; from `sm` up a popover under the row with the same fields and Done. Enter in a one-line field closes the editor and never saves the recipe, and Escape or the back gesture closes only the editor. A bad value (minutes that aren't whole, text over its limit) shows in red under the row's summary and in the editor, and the footer note says what to fix. A recipe written from scratch opens its title editor by itself once, so typing starts at once; a recipe filled in from a reading, and any existing recipe, opens with every row closed, and the form opens with no text box on screen at 390px. Ingredients and steps are one-line summaries; the one being edited is the only one open. Removing an ingredient or a step (the ✕, the trash, or "Remove" in its drawer) takes it out at once and shows "Removed Salt" (or "Removed step 3") with "Undo · 6" counting down to 1 above the pinned footer; Undo puts it back in its place, a second removal replaces the first, and the removal stands when the count ends. On a phone each row editor is a drawer that never leaves the form: an ingredient (search, then amount, unit and a note, then "Add another" or Done, and "Remove from this recipe" for an existing one), a step (one text box titled "Step 3", which takes the cursor about a third of a second after the drawer opens, once it has slid in; Done, "Add another" only while adding, "Remove step" for an existing one, and a step left blank is dropped when the drawer closes) and the nutrition numbers (four compact fields, Done, and "Reset to what we calculated", which refills the fields and keeps the drawer open). From `sm` up a row opens its fields in place. A name the reader found that no ingredient matches arrives as "Add as new ingredient" / "Choose another". Nutrition shows what we added up from the ingredients as small emoji tiles, per serving, with a warning icon when some ingredients have no nutrition info (a small modal on a phone or touch screen, a tooltip with a mouse); Edit opens the four numbers (the drawer on a phone, inputs in place with Done from `sm`), any number changed becomes the person's own and "Reset to what we calculated" brings back the calculated ones. This is a page-sized form, so it is a Subview; the drawers on top of it are the allowed exception to "no overlay on a subview" because they are the form's own row editors, one level deep. Leaving the form while it holds typed or read-in work (the header's back, Cancel, Escape or the phone's back gesture) asks "Discard this recipe?" with "Keep editing" and "Discard" (a destructive confirm); an untouched form closes at once, and saving never asks.*
+*A recipe needs a title and at least one ingredient. Everything a recipe normally has is part of the flow, not a button at the bottom: servings and times, a photo, a description, where it's from, the ingredients, the steps and the nutrition. The basics are summary rows, not boxes: Title, Prep and cook and Description each show a small caption, the value (the description cut off after two lines; "Add a title", "Add prep and cook time" and "Add a line about this dish" in muted text while empty) and a chevron, and Servings stays the stepper. Tapping a row opens its editor: on a phone (or a screen under 600px tall) a drawer over the form titled with the plain noun ("Title", "Prep and cook", "Description"), one text box or two ("Prep time" and "Cook time", each with a visible "min"), the cursor in the first, ending in a full-width Done; from `sm` up a popover under the row with the same fields and Done. Enter in a one-line field closes the editor and never saves the recipe, and Escape or the back gesture closes only the editor. A bad value (minutes that aren't whole, text over its limit) shows in red under the row's summary and in the editor, and the footer note says what to fix. A recipe written from scratch opens its title editor by itself once, so typing starts at once; a recipe filled in from a reading, and any existing recipe, opens with every row closed, and the form opens with no text box on screen at 390px once a source exists (before that, "Where it's from" shows its one name field). "Where it's from" is optional and always visible after the description: the person's sources as pills with a dashed "New source" first (nothing preselected for a hand-written recipe; a typed new name is added together with the recipe when it is saved, and a name that matches a source already there, ignoring case, reuses it; a "Remove source" link shows while one is chosen), a plain text field in their place until the first source exists, and the line "Optional. It shows on the recipe, and you can filter by it." A recipe read from a link starts on its site's source (the one already named for the site, with or without its "www.") or on "New source" with the site's name filled in, which the person can change like any answer; text and files start with none. While the sources couldn't be loaded the section is left out and the recipe keeps the source it had. Ingredients and steps are one-line summaries; the one being edited is the only one open. Removing an ingredient or a step (the ✕, the trash, or "Remove" in its drawer) takes it out at once and shows "Removed Salt" (or "Removed step 3") with "Undo · 6" counting down to 1 above the pinned footer; Undo puts it back in its place, a second removal replaces the first, and the removal stands when the count ends. On a phone each row editor is a drawer that never leaves the form: an ingredient (search, then amount, unit and a note, then "Add another" or Done, and "Remove from this recipe" for an existing one), a step (one text box titled "Step 3", which takes the cursor about a third of a second after the drawer opens, once it has slid in; Done, "Add another" only while adding, "Remove step" for an existing one, and a step left blank is dropped when the drawer closes) and the nutrition numbers (four compact fields, Done, and "Reset to what we calculated", which refills the fields and keeps the drawer open). From `sm` up a row opens its fields in place. A name the reader found that no ingredient matches arrives as "Add as new ingredient" / "Choose another". Nutrition shows what we added up from the ingredients as small emoji tiles, per serving, with a warning icon when some ingredients have no nutrition info (a small modal on a phone or touch screen, a tooltip with a mouse); Edit opens the four numbers (the drawer on a phone, inputs in place with Done from `sm`), any number changed becomes the person's own and "Reset to what we calculated" brings back the calculated ones. This is a page-sized form, so it is a Subview; the drawers on top of it are the allowed exception to "no overlay on a subview" because they are the form's own row editors, one level deep. Leaving the form while it holds typed or read-in work (the header's back, Cancel, Escape or the phone's back gesture) asks "Discard this recipe?" with "Keep editing" and "Discard" (a destructive confirm); an untouched form closes at once, and saving never asks.*
 
 **Recipe details** (drawer — tap a recipe in the list)
 
@@ -479,7 +509,7 @@ block-beta
 block-beta
   columns 2
   T1["Adobo chicken"]:2
-  T2["🍽️ 4 servings · 🔪 Prep 10 min · ⏲️ Cook 35 min"]:2
+  T2["🍽️ 4 servings · 🔪 Prep 10 min · ⏲️ Cook 35 min · 📖 From Serious Eats"]:2
   T4["Cost $12.80 ⚠ · $3.20 per serving"]:2
   T5["🔥 495 · 💪 61g · 🌾 3g · 🥑 25g (when on)"]:2
   T6["2 ingredients need a price · Add prices   ✕"]:2
@@ -503,7 +533,8 @@ block-beta
   style T12 fill:transparent,stroke:#888888,stroke-width:1px;
   style T13 fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*The front matter is one plain line of emoji and text for servings and times (never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone or touch screen, a tooltip with a mouse) and whose value reads "No prices yet" while nothing is priced, as every Cost tile does, calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm.*
+*The front matter is one plain line of emoji and text for servings, times and, when the recipe has a source that still exists, "📖 From {source}" (a long name wraps inside the line; never chips or pills), then a Cost tile whose warning icon says what the total leaves out (a small modal on a phone or touch screen, a tooltip with a mouse) and whose value reads "No prices yet" while nothing is priced, as every Cost tile does, calories and macros as emoji tiles per serving when they are switched on, and the nudge line where a gap meets a number (✕ closes it for these ingredients). The footer holds both actions together: Modify beside the one primary, "Add to calendar", which is the widest control and closes the drawer to open Plan a meal with this recipe on the plate. Delete is the trash in the recipe form's footer, and removing a recipe that planned days use takes it off the lists, not out of those days, and says so in the confirm.*
+
 
 **Saved meals** (the Meals pill) and **Meal details** (drawer) share the recipe patterns: a list of meal rows, and a drawer with a Cost tile (warning icon when it leaves something out, "No prices yet" while nothing is priced), the plate's calories and macros as emoji tiles when on, the items with servings and cost, and in the footer Modify beside the one primary "Plan it", which closes the drawer and opens Plan a meal on a chosen day. Modify opens the same Meal subview used for planning, without a day. The builder's header carries the meal's name (or the plate's first item while planning), its rows are a title with a compact servings stepper beneath (40px hit areas from a pseudo-element), and a tinted summary shows the cost, its warning icon and the plate's emoji macros. Adding stays the search field in the form. Removing an item from the plate shows "Removed Taco shells · Undo · 6" above the footer, and Undo puts it back in its place with its servings.
 
@@ -805,13 +836,15 @@ block-beta
 | Stepper | MealBuilder, Recipe form (shared) | half-step stepper, `isCompact` for rows, 40px targets |
 | RecipeStart, RecipeStartDrawer | Recipes tab and Calendar (phone drawer, rendered once at the top of Pinch and raised by New, "Add a recipe" and a way's back button), Recipe subview (first page from `sm`) | the four ways to begin a recipe as rows through the shared `MethodPicker` (rows only; each way's `onPick` opens its own screen) |
 | RecipeReader | Recipe subview | the text, file and link screens of a way in: its own disclosure line above its input, a "Fill in the recipe" button (text and link), a reading state and failure line, and "Write it yourself instead"; link reading calls `fetchPageContent` through `recipePageQueryOptions` |
-| RecipeForm | Recipe subview | all sections visible via `FormSection` and `Field`: servings and times, photo, description, `RecipeIngredients`, `RecipeSteps` and `NutritionReview` (each a drawer on a phone, rows open in place from `sm`) |
+| RecipeForm | Recipe subview | all sections visible via `FormSection` and `Field`: servings and times, photo, description, where it's from (`PickOrCreate`), `RecipeIngredients`, `RecipeSteps` and `NutritionReview` (each a drawer on a phone, rows open in place from `sm`) |
+| SourcesSubview, SourceFormSheet | Recipes tab's Sources entry | the list of sources with their recipe counts and the one-field Source sheet (rename, add, delete); a `Subview` and a `FormSheet`, mirroring Stores |
+| EntryRow | Kitchen (Stores, Products), Recipes (Sources) | the tinted-icon entry tile with its count and chevron (the icon hides at 360px and under, the chevron at 400px and under) |
 | RecipeRow, MealRow | Recipes tab | cover or emoji tile, title, muted details, then the cost and macro lines when shown; the tile and text share a top edge and the chevron sits on the first line |
 | IngredientRow, FamilyGroup | Kitchen | name, a price line and a macro line (each can be hidden), the chevron on the name's line; `SectionDivider` groups |
-| FilterBar | Kitchen ingredients, Products (shared) | search plus a filter icon with a count badge (a drawer on phones, a popover from `sm`) and an optional trailing button (Kitchen's eye), dismissible chips and "Clear"; the drawer's button shows the count and can take a shorter label for 360px and under ("Show 12 ingredients" / "Show 12") |
+| FilterBar | Kitchen ingredients, Products, and Recipes once a recipe has a source (shared) | search plus a filter icon with a count badge (a drawer on phones, a popover from `sm`) and an optional trailing button (Kitchen's eye), dismissible chips and "Clear"; the drawer's button shows the count and can take a shorter label for 360px and under ("Show 12 ingredients" / "Show 12") |
 | SummaryEditor | Recipe form: Title, Prep and cook, Description (shared) | a one-line summary row (caption, value, chevron, red problem line) whose editor is a drawer on a phone and a popover under the row from `sm`, each ending in Done; the title's editor opens by itself on a blank hand-written recipe |
 | UndoSnackbar, useUndoRemoval | Recipe form (ingredients, steps), meal builder plate (shared) | "Removed X · Undo · 6" floating above the pinned footer, counting 6 to 1, one pending removal at a time |
-| ViewOptions, ListViewControls | Kitchen filter bar, beside the Recipes / Meals pills (only while that list has rows) | the eye button (a drawer on a phone, a popover from `sm`, tinted once something differs, with Reset): Show prices, Show calories and macros (reads off, with a line saying where to turn them on, while no metric is on) and, for ingredients, the nutrition basis, which the ingredient drawer's switch shares; `ViewOptions` is shared, `ListViewControls` is Pinch's contents; kept per person and list on the device (`useListViewOptions`) |
+| ViewOptions, ListViewControls | Kitchen and Recipes filter bars (`trailing`), or beside the Recipes / Meals pills (only while that list has rows and no recipe has a source) | the eye button (a drawer on a phone, a popover from `sm`, tinted once something differs, with Reset): Show prices, Show calories and macros (reads off, with a line saying where to turn them on, while no metric is on) and, for ingredients, the nutrition basis, which the ingredient drawer's switch shares; `ViewOptions` is shared, `ListViewControls` is Pinch's contents; kept per person and list on the device (`useListViewOptions`) |
 | HelpTip | cost warnings, stats help (shared) | a help or warning icon: a small modal (with a hairline border) on a phone or any touch screen, whatever its width; with a mouse a tooltip that opens on hover or keyboard focus, stays open on a click, places itself above or below and inside the screen (and re-measures while a drawer is still sliding in), its arrow on the icon. Escape closes a tooltip and still reaches a drawer under it; in a modal it closes only the modal |
 | Subview | Recipe, Meal, Stores and Products screens (shared) | the round "Back" button and title; the header's back, Escape (overlay subviews) and the phone's back gesture all do the same thing: the screen's own step back (the recipe's reading screens, its "Discard this recipe?" question) or, without one, close; a drawer or modal opened above it takes Escape and the gesture first and the subview stays |
 | PillGroup | everywhere options are picked (shared) | choosing never reorders visible options: a chosen option that was hidden behind "Show all" takes the last visible slot, and the fully open list keeps its original order; a pick-one group shows no "1 selected" count |
@@ -846,6 +879,21 @@ flowchart LR
     F -->|Yes| G["'Add as new ingredient' on its row"] --> H[Review and edit]
     F -->|No| H
     H --> I[Save] --> J["Recipe drawer with its cost and a price nudge"]
+```
+
+**Say where a recipe came from, then find it again**
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
+flowchart LR
+    A["Recipe form: Where it's from"] --> B{"Which one?"}
+    B -->|Pick a source pill| D[Save]
+    B -->|New source: type a name| D
+    B -->|Leave it| D
+    D --> E["Recipe drawer: 📖 From Serious Eats"]
+    D --> F["Recipes: Sources entry and a filter appear"]
+    F --> G["Filter by Serious Eats · 3"] --> H["Chip: From Serious Eats ✕"]
+    F --> I["Sources subview: rename or delete"] --> J["Delete: the recipes stay and lose the label"]
 ```
 
 **Plan a meal, tweak a day, keep it**
@@ -912,7 +960,8 @@ flowchart LR
 
 | Entity | Initial (create) | Later (edit only) | Later-set entry point | Grouping | "Other" option? |
 |---|---|---|---|---|---|
-| Recipe | how to start (text, file, link or by hand; each way its own screen), then title and ingredients (ingredient + amount + unit) | everything else is a visible section of the same form: servings, times, photo, description, steps, own nutrition | the recipe drawer's Modify | none; `FormSection`s, no chips | none |
+| Recipe | how to start (text, file, link or by hand; each way its own screen), then title and ingredients (ingredient + amount + unit) | everything else is a visible section of the same form: servings, times, photo, description, where it's from, steps, own nutrition | the recipe drawer's Modify | none; `FormSection`s, no chips | none |
+| Source | name | — | the Sources subview row; "New source" in the recipe form's "Where it's from" | none | none |
 | Ingredient | name, family (`PickOrCreate`: existing family, new family, or none) | serving size and nutrition (typed per an amount of g, oz or servings as the label prints it, stored per 100 g), unit conversions (Next Steps) | the ingredient drawer's Modify; the fill-in sheet for a missing nutrition value | none; chips for serving size and nutrition | family: "New family" is the dashed first pill |
 | Product | store (`PickOrCreate`), price, package size | label, link, default flag | the ingredient drawer's product rows; the fill-in sheet for a missing price or size | none | store: "New store" is the dashed first pill |
 | Store | pick from the well-known list, or name | image | the Stores subview row | none | "Can't find it? Add your own" reveals the name and image fields |
@@ -932,4 +981,5 @@ flowchart LR
 - **Week** — Sunday to Saturday, to match the month grid; the week view shows those seven days and its stats describe them.
 - **Money** — integer cents everywhere; nutrition stored per 100 g (typed on a label's basis and converted on save, shown per serving only as a display) with servings computed from the recipe's own amounts.
 - **View options** — which lines a list's rows show is a per-person, per-device choice in the browser, not a field, so no rule or listener is involved and nothing syncs.
+- **A source is a label, not a field of the recipe's story** — `Recipe.sourceId` points at a `Source` (an id and a label); it is not `Recipe.source`, which only says how a draft was made. A missing key, `null` and an id with no source all read as no source, and deleting a source clears the pointer on its recipes.
 - **A well-known store joins "your stores" on first use** — so a product always points at a store document of the person's own.

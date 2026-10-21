@@ -205,7 +205,8 @@ function RecipeReader({ method, onRead, onManual }: RecipeReaderProps) {
       return (
         <>
           <p className='text-muted-foreground text-sm'>
-            We open the page and an AI reads the recipe from it.
+            We open the page and an AI fills in the form from it. It isn't
+            saved.
           </p>
           <Input
             type='url'

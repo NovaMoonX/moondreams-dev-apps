@@ -81,6 +81,12 @@ export const KITCHEN_VIEW_LABELS: Record<KitchenView, string> = {
 };
 
 export const MAX_NAME_LENGTH = 120;
+export const MAX_SOURCE_LABEL_LENGTH = 80;
+/** Writes per batch when a source's removal reaches many recipes: under Firestore's 500. */
+export const SOURCE_BATCH_SIZE = 400;
+/** The recipes filter's two answers that aren't a source; a source id is a UUID, so neither can collide with one. */
+export const SOURCE_FILTER_ANY = 'any';
+export const SOURCE_FILTER_NONE = 'none';
 export const MAX_SERVING_AMOUNT = 1_000_000;
 /** What "1 serving" is for an ingredient with no serving size of its own. */
 export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;
