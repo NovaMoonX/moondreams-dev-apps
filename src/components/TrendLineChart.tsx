@@ -5,6 +5,7 @@ import {
   ComposedChart,
   Line,
   ReferenceDot,
+  ReferenceArea,
   ReferenceLine,
   usePlotArea,
   ResponsiveContainer,
@@ -33,8 +34,10 @@ interface TrendLineChartProps {
   /** Fixes the y-axis so a changing series visibly moves instead of re-scaling to fit; `yTicks` are its labelled values. */
   yDomain?: [number, number];
   yTicks?: number[];
-  /** A faint vertical guide, such as where the past ends. */
-  divider?: { x: number; label: string };
+  /** Faint vertical guides, such as where the past ends; a label sits at the top or bottom of its line. */
+  dividers?: { x: number; label: string; labelAt?: 'top' | 'bottom' }[];
+  /** A faintly shaded stretch of the x-axis with its own label. */
+  band?: { x1: number; x2: number; label: string };
   /** A small dot on the line with a callout and arrow, always visible, such as where it crosses a guide. */
   marker?: { x: number; y: number; label: string };
   /** A horizontal guide, such as break even at 0. */
@@ -138,7 +141,8 @@ function TrendLineChart({
   yDomain,
   yTicks,
   marker,
-  divider,
+  dividers,
+  band,
   hasDots = true,
   seriesLabel,
   readoutLabels,
@@ -242,7 +246,7 @@ function TrendLineChart({
             tickFormatter={formatY}
             stroke='var(--color-muted-foreground)'
             tick={tickStyle}
-            width={isSoft ? 40 : 48}
+            width={48}
             axisLine={!isSoft}
             tickLine={!isSoft}
             tickCount={isSoft ? 3 : undefined}
@@ -349,20 +353,39 @@ function TrendLineChart({
               activeDot={{ r: 5 }}
             />
           )}
-          {divider && (
+          {band && (
+            <ReferenceArea
+              x1={band.x1}
+              x2={band.x2}
+              fill='var(--color-primary)'
+              fillOpacity={0.06}
+              stroke='none'
+              label={{
+                value: band.label,
+                position: 'insideTop',
+                fill: 'var(--color-muted-foreground)',
+                fontSize: 10,
+              }}
+            />
+          )}
+          {dividers?.map((divider) => (
             <ReferenceLine
+              key={divider.x}
               x={divider.x}
               stroke='var(--color-muted-foreground)'
               strokeOpacity={0.35}
               strokeWidth={1}
               label={{
                 value: divider.label,
-                position: 'insideTopLeft',
+                position:
+                  divider.labelAt === 'bottom'
+                    ? 'insideBottomRight'
+                    : 'insideTopLeft',
                 fill: 'var(--color-muted-foreground)',
                 fontSize: 10,
               }}
             />
-          )}
+          ))}
           {marker && (
             <ReferenceDot
               x={marker.x}

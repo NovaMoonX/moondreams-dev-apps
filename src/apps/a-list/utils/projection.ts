@@ -346,7 +346,7 @@ export interface NetPoint {
   x: number;
   /** Net savings in cents on this day under the plan. */
   y: number;
-  /** The same day if nothing more is watched; null before today. */
+  /** The comparison line (what happens with less or nothing more watched); null before today. */
   y2: number | null;
 }
 
@@ -387,6 +387,7 @@ export function getNetSeries(
   projection: ProjectionResult,
   addedBy: AddedBy,
   fromDay: number = todayDay,
+  baselineAddedBy: AddedBy = () => 0,
 ): NetPoint[] {
   const endDay = projection.coveredUntil;
   const billCosts = Array.from({ length: projection.months + 1 }, (_, count) =>
@@ -420,7 +421,7 @@ export function getNetSeries(
     return {
       x: day,
       y: saved + (isPast ? 0 : addedBy(day)) - cost,
-      y2: isPast ? null : base.savedCents - cost,
+      y2: isPast ? null : base.savedCents + baselineAddedBy(day) - cost,
     };
   });
   return result;

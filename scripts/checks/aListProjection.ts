@@ -311,6 +311,27 @@ const afterSeries = getNetSeries(
   hm.startDate,
 );
 assert.equal(afterSeries.at(-1)?.y, after.netCents);
+// The comparison line for "after everything planned" is planned-only, so the gap at the end is exactly what the pace adds
+const plannedOnly = projectCalendar(hbase, hm, pplan);
+const gapSeries = getNetSeries(
+  hbase,
+  hm,
+  hnow,
+  after,
+  getPlannedThenPaceAddedBy(pplan, hnow, pace2, 2000),
+  hm.startDate,
+  getCalendarAddedBy(pplan),
+);
+assert.equal(
+  gapSeries.at(-1)?.y2,
+  plannedOnly.addedCents === null
+    ? null
+    : hbase.savedCents + plannedOnly.addedCents - after.costCents,
+);
+assert.equal(
+  (gapSeries.at(-1)?.y ?? 0) - (gapSeries.at(-1)?.y2 ?? 0),
+  after.movies * 0 + (after.addedCents ?? 0) - (plannedOnly.addedCents ?? 0),
+);
 assert.equal(
   getPlannedThenPaceAddedBy(pplan, hnow, pace2, 2000)(utc(2026, 11, 10)),
   0,

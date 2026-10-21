@@ -26,6 +26,7 @@ import {
   getCalendarPlan,
   getNetSeries,
   getPaceAddedBy,
+  getPlanEndDay,
   getPlannedThenPaceAddedBy,
   getPaceMax,
   getProjectionBase,
@@ -135,7 +136,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   const months =
     pickedMonths !== null && horizons.includes(pickedMonths)
       ? pickedMonths
-      : horizons[0];
+      : (horizons[includePlan ? 1 : 0] ?? horizons[0]);
   const ticketCents =
     valueInput === null
       ? base.averageTicketCents
@@ -167,6 +168,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             paceResult,
             addedBy,
             fromDay,
+            includePlan ? getCalendarAddedBy(plan) : undefined,
           );
     return { result: paceResult, series: paceSeries };
   };
@@ -296,13 +298,33 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   };
   const breakEvenLine = getBreakEvenLine();
 
+  const planEnd = getPlanEndDay(plan, todayDay);
+  const hasPlanEndMark =
+    includePlan && planEnd > todayDay && planEnd < result.coveredUntil;
+  // The band's label needs about 40% of the chart's width, or it is clipped.
+  const hasRoomForBandLabel =
+    hasPlanEndMark &&
+    series[0] !== undefined &&
+    (result.coveredUntil - planEnd) / (result.coveredUntil - series[0].x) >=
+      0.4;
+  const comparisonLabel = includePlan ? 'Planned only' : 'No more movies';
+  const lastPoint = series.at(-1);
+  const afterPlanGain =
+    hasPlanEndMark && lastPoint && lastPoint.y2 !== null
+      ? lastPoint.y - lastPoint.y2
+      : 0;
+  const afterPlanLine =
+    afterPlanGain > 0
+      ? `Once everything planned ends ${formatShortDate(planEnd)}, ${counts[unit]} a ${unit} adds about ${formatCents(afterPlanGain)} by ${until}.`
+      : null;
+
   const getChartDescription = () => {
     const end = series.at(-1);
     if (!end) return '';
     const stop =
       scenario === 'none' || end.y2 === null
         ? ''
-        : ` With no more movies, ${formatCents(end.y2)}.`;
+        : ` ${includePlan ? 'With only what is planned' : 'With no more movies'}, ${formatCents(end.y2)}.`;
     return `Net savings reach ${formatCents(end.y)} by ${until}.${stop}`;
   };
 
@@ -425,6 +447,11 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               {breakEvenLine}
             </p>
           )}
+          {afterPlanLine && (
+            <p className='text-muted-foreground mt-1 text-sm'>
+              {afterPlanLine}
+            </p>
+          )}
           {scenario === 'planned' && result.unpricedCount > 0 && (
             <p className='text-muted-foreground mt-1 text-sm'>
               {pluralize(result.unpricedCount, 'showing')} with no price and no
@@ -444,17 +471,39 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               <TrendLineChart
                 data={series}
                 seriesLabel='Net savings'
-                readoutLabels={{ main: 'Net', secondary: 'No more' }}
+                readoutLabels={{
+                  main: 'Net',
+                  secondary: includePlan ? 'Planned' : 'No more',
+                }}
                 curve='linear'
                 secondaryLabel={
-                  scenario === 'none' ? undefined : 'No more movies'
+                  scenario === 'none' ? undefined : comparisonLabel
                 }
                 referenceY={{ value: 0, label: 'Break even' }}
                 yDomain={axis?.domain}
                 yTicks={axis?.ticks}
-                divider={
-                  series[0] && series[0].x < todayDay
-                    ? { x: todayDay, label: 'Today' }
+                dividers={[
+                  ...(series[0] && series[0].x < todayDay
+                    ? [{ x: todayDay, label: 'Today' }]
+                    : []),
+                  ...(hasPlanEndMark
+                    ? [
+                        {
+                          x: planEnd,
+                          label: '',
+                        },
+                      ]
+                    : []),
+                ]}
+                band={
+                  hasPlanEndMark
+                    ? {
+                        x1: planEnd,
+                        x2: result.coveredUntil,
+                        label: hasRoomForBandLabel
+                          ? `After ${formatShortDate(planEnd)} · ${counts[unit]} a ${unit}`
+                          : '',
+                      }
                     : undefined
                 }
                 marker={
@@ -494,7 +543,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                       dash='0.1 7'
                       className='text-foreground/85'
                     />
-                    No more movies
+                    {comparisonLabel}
                   </span>
                 )}
               </div>
