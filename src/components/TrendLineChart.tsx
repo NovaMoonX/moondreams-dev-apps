@@ -29,6 +29,11 @@ interface TrendLineChartProps {
   emptyLabel?: string;
   /** Names the `y2` line, dashed and muted beside the main one. */
   secondaryLabel?: string;
+  /** Fixes the y-axis so a changing series visibly moves instead of re-scaling to fit; `yTicks` are its labelled values. */
+  yDomain?: [number, number];
+  yTicks?: number[];
+  /** A ring on the line, such as where it crosses a guide. */
+  marker?: { x: number; y: number };
   /** A horizontal guide, such as break even at 0. */
   referenceY?: { value: number; label: string };
   /** Short names for the compact readout (it must fit a 320px plot); default to the full labels. */
@@ -58,6 +63,9 @@ function TrendLineChart({
   emptyLabel = 'Not enough data yet to chart a trend.',
   secondaryLabel,
   referenceY,
+  yDomain,
+  yTicks,
+  marker,
   hasDots = true,
   seriesLabel,
   readoutLabels,
@@ -165,6 +173,9 @@ function TrendLineChart({
             axisLine={!isSoft}
             tickLine={!isSoft}
             tickCount={isSoft ? 3 : undefined}
+            domain={yDomain}
+            ticks={yTicks}
+            allowDataOverflow={yDomain !== undefined}
             label={
               yLabel
                 ? {
@@ -263,6 +274,16 @@ function TrendLineChart({
               strokeWidth={2}
               dot={hasDots ? { r: 3, fill: 'var(--color-primary)' } : false}
               activeDot={{ r: 5 }}
+            />
+          )}
+          {marker && (
+            <ReferenceDot
+              x={marker.x}
+              y={marker.y}
+              r={6}
+              fill='var(--color-card)'
+              stroke='var(--color-foreground)'
+              strokeWidth={2.5}
             />
           )}
           {isSoft && (

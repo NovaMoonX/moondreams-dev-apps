@@ -7,6 +7,7 @@ import MoneyInput from '@/components/MoneyInput';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import Stepper from '@/components/Stepper';
 import Subview from '@/components/Subview';
+import { getNiceMoneyAxis } from '@/utils/chartUtils';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
@@ -19,6 +20,7 @@ import { getCycleDate } from '@apps/a-list/utils/billing';
 import { getDayKey } from '@apps/a-list/utils/dayKeys';
 import {
   getBreakEven,
+  getBreakEvenPoint,
   getCalendarAddedBy,
   getCalendarPlan,
   getNetSeries,
@@ -83,6 +85,8 @@ function pluralize(count: number, word: string) {
   return result;
 }
 
+const DAY_MS = 86_400_000;
+
 const clampCount = (goal: number | null, fallback: number, max: number) =>
   Math.max(1, Math.min(goal ?? fallback, max));
 
@@ -138,9 +142,65 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     result.netCents === null
       ? []
       : getNetSeries(base, membership, todayDay, result, getAddedBy());
-  const breakEven = isPace ? getBreakEven(base, result, ticketCents) : null;
   const isBrokenEven = result.netCents !== null && result.netCents >= 0;
   const until = formatDateUTC(result.coveredUntil);
+  const breakEvenPoint = getBreakEvenPoint(series);
+  const breakEven = isPace ? getBreakEven(base, result, ticketCents) : null;
+
+  const getPaceSeries = (count: number) => {
+    const paceResult = projectPace(
+      base,
+      membership,
+      todayDay,
+      { unit, count },
+      months,
+      ticketCents,
+    );
+    const paceSeries = getNetSeries(
+      base,
+      membership,
+      todayDay,
+      paceResult,
+      getPaceAddedBy(todayDay, { unit, count }, ticketCents),
+    );
+    return { result: paceResult, series: paceSeries };
+  };
+
+  // A pace keeps the axis sized for the fastest pace, so a step on the counter moves the line instead of re-fitting the scale.
+  const getAxis = () => {
+    if (!isPace || series.length === 0) return undefined;
+
+    const fastest = getPaceSeries(getPaceMax(unit)).series;
+    const values = [...series, ...fastest].flatMap((point) => [
+      point.y,
+      point.y2,
+    ]);
+    return getNiceMoneyAxis(Math.min(0, ...values), Math.max(0, ...values));
+  };
+  const axis = getAxis();
+
+  const getNextStepLine = () => {
+    if (!isPace || ticketCents === null || counts[unit] >= getPaceMax(unit))
+      return null;
+
+    const next = getPaceSeries(counts[unit] + 1);
+    const gain = (next.result.netCents ?? 0) - (result.netCents ?? 0);
+    if (gain <= 0) return null;
+
+    const nextPoint = getBreakEvenPoint(next.series);
+    const days =
+      breakEvenPoint && nextPoint
+        ? Math.round((breakEvenPoint.x - nextPoint.x) / DAY_MS)
+        : 0;
+    const getTail = () => {
+      if (days >= 1) return ` and breaks even ${pluralize(days, 'day')} sooner`;
+      if (!breakEvenPoint && nextPoint)
+        return ` and would break even around ${formatDateUTC(nextPoint.x)}`;
+      return '';
+    };
+    return `One more a ${unit} adds about ${formatCents(gain)} by ${until}${getTail()}.`;
+  };
+  const nextStepLine = getNextStepLine();
 
   const getContractLine = () => {
     if (base.minimumMonthsLeft === 0)
@@ -165,8 +225,10 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   };
 
   const getBreakEvenLine = () => {
-    if (!isPace) return null;
-    if (isBrokenEven || !breakEven || breakEven.perPeriod === null) return null;
+    if (breakEvenPoint)
+      return `You'd break even around ${formatDateUTC(breakEvenPoint.x)}.`;
+    if (!isPace || isBrokenEven || !breakEven || breakEven.perPeriod === null)
+      return null;
     if (breakEven.perPeriod > getPaceMax(unit))
       return `Breaking even by then would take more than A-List's ${getPaceMax(unit)} a ${unit}.`;
     return `Breaking even takes about ${breakEven.perPeriod} a ${unit} (${pluralize(breakEven.movies, 'movie')} in all).`;
@@ -234,6 +296,9 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                 isThin
               />
             </div>
+            {nextStepLine && (
+              <p className='text-muted-foreground text-xs'>{nextStepLine}</p>
+            )}
           </div>
         )}
         <div className='border-border bg-card rounded-3xl border p-4 shadow-sm'>
@@ -308,6 +373,11 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   scenario === 'none' ? undefined : 'No more movies'
                 }
                 referenceY={{ value: 0, label: 'Break even' }}
+                yDomain={axis?.domain}
+                yTicks={axis?.ticks}
+                marker={
+                  breakEvenPoint ? { x: breakEvenPoint.x, y: 0 } : undefined
+                }
                 formatX={(value) =>
                   new Date(value).toLocaleDateString('en-US', {
                     month: 'short',
@@ -335,6 +405,15 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   />
                   Break even ($0)
                 </span>
+                {breakEvenPoint && (
+                  <span className='flex items-center gap-1.5'>
+                    <span
+                      className='border-foreground bg-card size-2.5 rounded-full border-2'
+                      aria-hidden='true'
+                    />
+                    You break even
+                  </span>
+                )}
                 {scenario !== 'none' && (
                   <span className='flex items-center gap-1.5'>
                     <LegendLine

@@ -8,8 +8,10 @@ import type {
   Viewing,
 } from '../../src/apps/a-list/types.ts';
 import { getCycleDate } from '../../src/apps/a-list/utils/billing.ts';
+import { getNiceMoneyAxis } from '../../src/utils/chartUtils.ts';
 import {
   getBreakEven,
+  getBreakEvenPoint,
   getCalendarAddedBy,
   getCalendarPlan,
   getNetSeries,
@@ -190,5 +192,44 @@ const calSeries = getNetSeries(
   getCalendarAddedBy(calPlan),
 );
 assert.equal(calSeries.at(-1)?.y, projectCalendar(base, m, calPlan).netCents);
+
+// Break even is where the line first rises through $0
+const rise = [
+  { x: 0, y: -400, y2: 0 },
+  { x: 10, y: -100, y2: 0 },
+  { x: 20, y: 100, y2: 0 },
+];
+assert.deepEqual(getBreakEvenPoint(rise), { x: 15 });
+assert.equal(
+  getBreakEvenPoint([
+    { x: 0, y: 100, y2: 0 },
+    { x: 5, y: -50, y2: 0 },
+  ]),
+  null,
+);
+assert.equal(
+  getBreakEvenPoint([
+    { x: 0, y: -100, y2: 0 },
+    { x: 5, y: -50, y2: 0 },
+  ]),
+  null,
+);
+assert.equal(getBreakEvenPoint([]), null);
+const realRise = getBreakEvenPoint(series);
+assert.equal(
+  realRise === null ||
+    (realRise.x >= series[0].x && realRise.x <= series.at(-1)!.x),
+  true,
+);
+
+// Axis bounds are round and cover the data and $0
+const axis = getNiceMoneyAxis(-4100, 29900);
+assert.equal(axis.domain[0] <= -4100 && axis.domain[1] >= 29900, true);
+assert.equal(axis.ticks.length <= 4 && axis.ticks.length >= 2, true);
+assert.equal(
+  axis.ticks.every((tick) => tick % 500 === 0),
+  true,
+);
+assert.equal(axis.ticks.includes(0), true);
 
 console.log('A-List projection checks passed');
