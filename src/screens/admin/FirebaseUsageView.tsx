@@ -1,13 +1,18 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 
+import Doughnut from '@/components/Doughnut';
+import { DOUGHNUT_SLOT_CLASSES, DOUGHNUT_SLOT_FILL_CLASSES } from '@/components/doughnutPalette';
 import HelpTip from '@/components/HelpTip';
+import { PillGroup } from '@/components/PillGroup';
 import SectionDivider from '@/components/SectionDivider';
 import StatTile from '@/components/StatTile';
 import { formatDateTime } from '@/utils/formatUtils';
 import {
   firebaseUsageQueryOptions,
   MONITORING_ROLE_MISSING,
+  type FirebaseFootprints,
   type FirebaseUsageLine,
 } from '@lib/admin/firebaseUsageQueries';
 import type { AppMetadata } from '@lib/types/appCatalog';
@@ -38,7 +43,6 @@ const getStatus = (line: FirebaseUsageLine) => {
 
 function UsageRow({ line }: { line: FirebaseUsageLine }) {
   const fraction = line.freeAmount > 0 ? line.used / line.freeAmount : 0;
-  const percent = Math.min(100, Math.round(fraction * 100));
   const status = getStatus(line);
   const overBy = line.period === 'day' ? 0 : Math.max(0, line.used - line.freeAmount);
   const detail = [
@@ -56,30 +60,110 @@ function UsageRow({ line }: { line: FirebaseUsageLine }) {
   };
 
   return (
-    <li className='space-y-1.5 py-3'>
-      <div className='flex items-baseline justify-between gap-3'>
-        <span className='text-foreground min-w-0 text-sm'>{line.label}</span>
-        <span className='text-muted-foreground shrink-0 text-right text-xs'>{getStatusText()}</span>
+    <li className='flex items-center gap-3 py-3'>
+      <Doughnut
+        size={56}
+        ariaLabel={`${line.label}: ${Math.round(fraction * 100)}% of the free amount`}
+        segments={[
+          {
+            id: line.id,
+            label: line.label,
+            value: Math.min(line.used, line.freeAmount),
+            valueText: `${formatAmount(line, line.used)} of ${formatAmount(line, line.freeAmount)}`,
+            className: status === 'within' ? 'stroke-primary' : 'stroke-warning',
+          },
+        ]}
+        total={line.freeAmount}
+        center={<span className='text-foreground text-[11px] leading-none font-medium'>{Math.round(fraction * 100)}%</span>}
+      />
+      <div className='min-w-0 flex-1 space-y-1'>
+        <div className='flex flex-wrap items-baseline justify-between gap-x-3'>
+          <span className='text-foreground text-sm whitespace-nowrap'>{line.label}</span>
+          <span className='text-muted-foreground text-xs'>{getStatusText()}</span>
+        </div>
+        <p className='text-muted-foreground text-xs'>
+          {USED_WORDS[line.period]}: {formatAmount(line, line.used)} of {formatAmount(line, line.freeAmount)}{' '}
+          {PERIOD_WORDS[line.period]}
+        </p>
+        {detail ? <p className='text-foreground text-xs'>{detail}</p> : null}
       </div>
-      <div
-        role='progressbar'
-        aria-label={`${line.label}: ${percent}% of the free amount`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        className='bg-muted h-2 overflow-hidden rounded-full'
-      >
-        <div
-          className={join('h-full rounded-full', status === 'within' ? 'bg-primary' : 'bg-warning')}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <p className='text-muted-foreground text-xs'>
-        {USED_WORDS[line.period]}: {formatAmount(line, line.used)} of {formatAmount(line, line.freeAmount)}{' '}
-        {PERIOD_WORDS[line.period]}
-      </p>
-      {detail ? <p className='text-foreground text-xs'>{detail}</p> : null}
     </li>
+  );
+}
+
+type ShareMetric = 'documents' | 'files';
+
+interface AppShareProps {
+  footprints: FirebaseFootprints;
+  appNames: Map<string, string>;
+}
+
+/** Stored data split by app: always a whole circle, since the parts are shares of the same total. */
+function AppShare({ footprints, appNames }: AppShareProps) {
+  const [metric, setMetric] = useState<ShareMetric>('documents');
+  const isFiles = metric === 'files';
+  const rows = [
+    ...footprints.apps.map((app) => ({
+      id: app.appId,
+      label: appNames.get(app.appId) ?? app.appId,
+      value: isFiles ? app.storageBytes : app.documents,
+    })),
+    ...(isFiles ? [{ id: 'shared', label: 'Shared (profile photos)', value: footprints.sharedStorageBytes }] : []),
+  ].map((row, index) => ({ ...row, slot: index % DOUGHNUT_SLOT_CLASSES.length }));
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  const formatValue = (value: number) => (isFiles ? formatBytes(value) : `${COUNT_FORMAT.format(value)} documents`);
+  const percentOf = (value: number) => (total > 0 ? `${Math.round((value / total) * 100)}%` : '–');
+
+  return (
+    <div className='space-y-3'>
+      <PillGroup<ShareMetric>
+        label='Split by'
+        value={metric}
+        onChange={setMetric}
+        isThin
+        options={[
+          { value: 'documents', label: 'Documents' },
+          { value: 'files', label: 'Files' },
+        ]}
+      />
+      {total === 0 ? (
+        <p className='text-muted-foreground text-sm'>Nothing stored yet.</p>
+      ) : (
+        <div className='flex justify-center'>
+          <Doughnut
+            size={168}
+            ariaLabel={`${isFiles ? 'Files' : 'Documents'} stored, split by app`}
+            segments={rows.map((row) => ({
+              id: row.id,
+              label: row.label,
+              value: row.value,
+              valueText: `${formatValue(row.value)} (${percentOf(row.value)})`,
+              className: DOUGHNUT_SLOT_CLASSES[row.slot],
+            }))}
+            center={
+              <>
+                <span className='text-foreground text-lg leading-tight font-semibold'>
+                  {isFiles ? formatBytes(total) : COUNT_FORMAT.format(total)}
+                </span>
+                <span className='text-muted-foreground text-xs'>{isFiles ? 'of files' : 'documents'}</span>
+              </>
+            }
+          />
+        </div>
+      )}
+      <ul className='divide-border divide-y'>
+        {rows.map((row) => (
+          <li key={row.id} className='flex items-center gap-3 py-2.5'>
+            <span aria-hidden='true' className={join('size-3 shrink-0 rounded-full', DOUGHNUT_SLOT_FILL_CLASSES[row.slot])} />
+            <span className='text-foreground min-w-0 flex-1 truncate text-sm'>{row.label}</span>
+            <span className='text-muted-foreground shrink-0 text-right text-xs whitespace-nowrap'>
+              <span className='block'>{formatValue(row.value)}</span>
+              <span className='block'>{percentOf(row.value)}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -157,25 +241,7 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
           {usage.footprints?.isPartial ? ' Very large collections are counted up to a cap, so these are at least this much.' : ''}
         </p>
         {usage.footprints ? (
-          <ul className='divide-border divide-y'>
-            {usage.footprints.apps.map((app) => (
-              <li key={app.appId} className='flex items-center justify-between gap-3 py-2.5'>
-                <span className='text-foreground min-w-0 truncate text-sm'>
-                  {appNames.get(app.appId) ?? app.appId}
-                </span>
-                <span className='text-muted-foreground shrink-0 text-right text-xs whitespace-nowrap'>
-                  <span className='block'>{COUNT_FORMAT.format(app.documents)} documents</span>
-                  <span className='block'>{formatBytes(app.storageBytes)} of files</span>
-                </span>
-              </li>
-            ))}
-            <li className='flex items-center justify-between gap-3 py-2.5'>
-              <span className='text-foreground min-w-0 truncate text-sm'>Shared (profile photos)</span>
-              <span className='text-muted-foreground shrink-0 text-xs whitespace-nowrap'>
-                {formatBytes(usage.footprints.sharedStorageBytes)} of files
-              </span>
-            </li>
-          </ul>
+          <AppShare footprints={usage.footprints} appNames={appNames} />
         ) : (
           <p className='text-muted-foreground text-sm'>We couldn&apos;t measure stored data just now.</p>
         )}
