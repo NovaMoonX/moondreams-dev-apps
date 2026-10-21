@@ -105,7 +105,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - [x] Create, view, edit, and delete recipes by hand (title, description, times, servings, ingredients, steps, cover image)
 - [x] See a recipe's nutrition added up from its ingredients, or type your own over it
 - [x] See a recipe's total cost and cost per serving, with any ingredients that can't be priced called out
-- [ ] Create a recipe from pasted text, a photo, or a PDF, with the AI filling in the form for you to review before saving
+- [x] Create a recipe from pasted text, a photo, or a PDF, with the AI filling in the form for you to review before saving
 - [ ] Copy a recipe as Markdown
 - [x] Put together a meal from any mix of recipes and ingredients, each with a serving count, and save it to reuse
 - [x] Meal calendar with a month view showing thin color bars and emojis per day
