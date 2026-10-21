@@ -149,12 +149,16 @@ function TrendLineChart({
               strokeOpacity={isSoft ? 0.5 : 1}
               strokeDasharray='4 4'
               ifOverflow='extendDomain'
-              label={{
-                value: referenceY.label,
-                position: 'insideTopRight',
-                fill: 'var(--color-muted-foreground)',
-                fontSize: 11,
-              }}
+              label={
+                isSoft
+                  ? undefined
+                  : {
+                      value: referenceY.label,
+                      position: 'insideTopRight',
+                      fill: 'var(--color-muted-foreground)',
+                      fontSize: 11,
+                    }
+              }
             />
           )}
           {secondaryLabel && (

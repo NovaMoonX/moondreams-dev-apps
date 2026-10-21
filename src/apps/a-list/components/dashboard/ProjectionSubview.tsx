@@ -262,6 +262,13 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                   />
                   Net savings
                 </span>
+                <span className='flex items-center gap-1.5'>
+                  <span
+                    className='border-muted-foreground/50 h-0 w-4 border-t border-dashed'
+                    aria-hidden='true'
+                  />
+                  Break even
+                </span>
                 {scenario !== 'stop' && (
                   <span className='flex items-center gap-1.5'>
                     <span
