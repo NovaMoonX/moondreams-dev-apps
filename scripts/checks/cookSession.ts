@@ -24,6 +24,14 @@ import {
   getTimerPushAction,
   needsTimerPush,
 } from '../../src/apps/pinch/utils/cooks.ts';
+import {
+  applyWhyChoice,
+  getChangeTopics,
+  getDraftChanges,
+  getWhyChoices,
+  isWhyAsked,
+  type RecipeContent,
+} from '../../src/apps/pinch/utils/recipeChanges.ts';
 import { formatClock } from '../../src/utils/durationUtils.ts';
 import { clearViewerSessions } from '../../src/utils/viewerSessionUtils.ts';
 
@@ -644,6 +652,163 @@ assert.equal(
   getTimerBuzzOffer('unsupported', false),
   'unsupported',
   'a browser that cannot push is offered the way in, which says why',
+);
+
+const ingredientLine = (
+  id: string,
+  ingredientId: string,
+  amount: number,
+  note: string | null = null,
+) => ({
+  id,
+  ingredientId,
+  amount,
+  unit: 'TSP' as const,
+  note,
+  group: null,
+});
+const changeBase: RecipeContent = {
+  title: 'Adobo chicken',
+  description: 'Sticky and tangy.',
+  servings: 4,
+  prepMinutes: 10,
+  cookMinutes: 35,
+  ingredients: [
+    ingredientLine('l1', 'salt', 1),
+    ingredientLine('l2', 'vinegar', 2),
+  ],
+  steps: ['Marinate.', 'Simmer for 25 minutes.'],
+  nutritionOverride: null,
+  sourceId: null,
+};
+const topicsFor = (patch: Partial<RecipeContent>) =>
+  getChangeTopics(changeBase, { ...changeBase, ...patch });
+
+assert.deepEqual(
+  topicsFor({
+    ingredients: [
+      ingredientLine('l1', 'salt', 2),
+      ingredientLine('l2', 'vinegar', 2),
+    ],
+  }),
+  { hasIngredients: true, hasSteps: false },
+  'a changed amount asks about the ingredients only',
+);
+assert.deepEqual(
+  topicsFor({ ingredients: [changeBase.ingredients[0]] }),
+  { hasIngredients: true, hasSteps: false },
+  'taking a line out asks about the ingredients',
+);
+assert.deepEqual(
+  topicsFor({ steps: ['Marinate.', 'Simmer for 30 minutes.'] }),
+  { hasIngredients: false, hasSteps: true },
+  'a reworded step asks about the steps only',
+);
+assert.deepEqual(
+  topicsFor({
+    ingredients: [
+      ingredientLine('l1', 'salt', 2),
+      ingredientLine('l2', 'vinegar', 2),
+    ],
+    steps: ['Simmer for 25 minutes.', 'Marinate.'],
+  }),
+  { hasIngredients: true, hasSteps: false },
+  'steps only moved around are not asked about',
+);
+assert.deepEqual(
+  topicsFor({
+    ingredients: [changeBase.ingredients[1], changeBase.ingredients[0]],
+  }),
+  { hasIngredients: false, hasSteps: false },
+  'ingredients only moved around are not asked about',
+);
+assert.deepEqual(
+  topicsFor({ title: 'Better adobo', servings: 6, cookMinutes: 45 }),
+  { hasIngredients: false, hasSteps: false },
+  'a new name, servings or time is recorded but never asked about',
+);
+assert.equal(
+  isWhyAsked(topicsFor({ description: 'Tangier.' })),
+  false,
+  'a description change does not stop a save to ask why',
+);
+assert.equal(
+  isWhyAsked(topicsFor({ steps: ['Marinate.'] })),
+  true,
+  'a removed step does',
+);
+
+const draftChanges = getDraftChanges(
+  changeBase,
+  {
+    ...changeBase,
+    ingredients: [
+      ...changeBase.ingredients,
+      ingredientLine('l3', 'new-lime', 1, 'zest'),
+    ],
+    newIngredients: [{ id: 'new-lime', name: ' Lime ' }],
+    newSource: null,
+  },
+  new Map([
+    ['salt', { name: 'Salt' }],
+    ['vinegar', { name: 'Vinegar' }],
+  ]),
+  new Map(),
+);
+assert.deepEqual(
+  draftChanges.changes,
+  ['Added Lime, 1 tsp'],
+  'an ingredient the draft is about to create is named by its typed name',
+);
+assert.equal(draftChanges.topics.hasIngredients, true);
+
+assert.deepEqual(getWhyChoices({ hasIngredients: true, hasSteps: false }), [
+  'Tasted better',
+  'Ran out of it',
+  'Too much',
+  'Not enough',
+]);
+assert.deepEqual(getWhyChoices({ hasIngredients: false, hasSteps: true }), [
+  'Easier this way',
+  'Faster',
+  'Tasted better',
+  'Fixing a mistake',
+]);
+assert.equal(
+  getWhyChoices({ hasIngredients: true, hasSteps: true }).length,
+  4,
+  'there are four reasons whatever changed',
+);
+const choices = getWhyChoices({ hasIngredients: true, hasSteps: false });
+assert.equal(
+  applyWhyChoice('', 'Too much', choices),
+  'Too much',
+  'a chip fills an empty box',
+);
+assert.equal(
+  applyWhyChoice('Too much', 'Not enough', choices),
+  'Not enough',
+  'a chip replaces another chip',
+);
+assert.equal(
+  applyWhyChoice('The sauce was sharp', 'Too much', choices),
+  'The sauce was sharp. Too much',
+  'a chip follows what was typed',
+);
+assert.equal(
+  applyWhyChoice('The sauce was sharp.', 'Too much', choices),
+  'The sauce was sharp. Too much',
+  'and one full stop, not two',
+);
+assert.equal(
+  applyWhyChoice('Too much of it for us', 'too much', choices),
+  'Too much of it for us',
+  'a chip already in the words is not added again',
+);
+assert.equal(
+  applyWhyChoice('x'.repeat(1995), 'Too much', choices),
+  'x'.repeat(1995),
+  'a chip that would pass the note’s length is left out',
 );
 
 console.log('cookSession: all checks passed');

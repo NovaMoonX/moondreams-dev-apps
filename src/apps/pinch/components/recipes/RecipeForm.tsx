@@ -1,4 +1,10 @@
-import { useMemo, useState, type ReactNode, type RefObject } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import {
   Button,
@@ -7,6 +13,7 @@ import {
   type FormCustomFieldProps,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUp, X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
@@ -34,7 +41,6 @@ import {
   RecipeDescriptionField,
   RecipeTimesField,
   RecipeTitleField,
-  RecipeWhyField,
 } from '@apps/pinch/components/recipes/RecipeBasics';
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
 import RecipeLinksField from '@apps/pinch/components/recipes/RecipeLinksField';
@@ -55,6 +61,7 @@ import {
   type RecipeFormData,
 } from '@apps/pinch/components/recipes/recipeFormModel';
 import RecipeSteps from '@apps/pinch/components/recipes/RecipeSteps';
+import RecipeWhyStep from '@apps/pinch/components/recipes/RecipeWhyStep';
 import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
@@ -70,6 +77,7 @@ import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
 import {
   removeRecipe,
   saveRecipe,
+  type RecipeDraft,
 } from '@apps/pinch/store/actions/recipeActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
 import {
@@ -108,6 +116,11 @@ import {
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
+import {
+  getDraftChanges,
+  getWhyChoices,
+  isWhyAsked,
+} from '@apps/pinch/utils/recipeChanges';
 import { getCareProblem, parseCareText } from '@apps/pinch/utils/recipeCare';
 import { getShownCover } from '@apps/pinch/utils/recipeCover';
 import {
@@ -145,8 +158,12 @@ interface RecipeFormProps {
   onTitleChange: (title: string) => void;
   /** Tells the screen whether leaving now would throw work away. */
   isDirtyRef: RefObject<boolean>;
+  /** Holds a function that steps back inside the form (out of the question about why) and says whether it did, for the screen's own back to call first. */
+  backStepRef: RefObject<(() => boolean) | null>;
   /** Cancel and the screen's own back go through the screen, which asks before discarding. */
   onLeave: () => void;
+  /** For a form shown inside another screen: runs after a save instead of closing the open subview, and the form offers no delete. */
+  onSaved?: () => void;
 }
 
 function RecipeForm({
@@ -157,7 +174,9 @@ function RecipeForm({
   initialNote,
   onTitleChange,
   isDirtyRef,
+  backStepRef,
   onLeave,
+  onSaved,
 }: RecipeFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -200,13 +219,16 @@ function RecipeForm({
         }
       : initialIdea
         ? getDataFromIdea(initialIdea, sources)
-        : {
-            ...getInitialData(recipe, sourcesById, collections),
-            why: initialNote?.text ?? '',
-          },
+        : getInitialData(recipe, sourcesById, collections),
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
+  const [why, setWhy] = useState(initialNote?.text ?? '');
+  const [ask, setAsk] = useState<{
+    data: RecipeFormData;
+    changes: string[];
+    choices: string[];
+  } | null>(null);
   const { pending, showUndo, undo } = useUndoRemoval();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -447,23 +469,6 @@ function RecipeForm({
           />
         ),
       },
-      ...(tracking === 'on'
-        ? [
-            {
-              name: 'why',
-              render: (
-                props: FormCustomFieldProps,
-                position: SummaryGroupPosition,
-              ) => (
-                <RecipeWhyField
-                  value={String(props.value)}
-                  onChange={props.onValueChange}
-                  position={position}
-                />
-              ),
-            },
-          ]
-        : []),
     ];
     const getPosition = (index: number): SummaryGroupPosition => {
       if (groupRows.length === 1) return 'only';
@@ -753,61 +758,59 @@ function RecipeForm({
     return { sourceId: newSource.id, newSource };
   };
 
-  const handleSubmit = async (data: RecipeFormData) => {
+  const getDraft = (data: RecipeFormData, reason: string): RecipeDraft => {
+    const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
+    const { collectionIds, newCollections } = ownsCollections
+      ? getCollectionsToSave(data.collections, collections)
+      : { collectionIds: null, newCollections: [] };
+    return {
+      id: recipe?.id ?? null,
+      title: data.title,
+      categories: data.categories,
+      description: data.description.trim() || null,
+      servings: data.basics.servings,
+      prepMinutes: parseMinutes(data.basics.prep),
+      cookMinutes: parseMinutes(data.basics.cook),
+      ingredients: data.ingredients.map(toRecipeLine),
+      source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
+      sourceId,
+      newSource,
+      collectionChange:
+        collectionIds === null
+          ? null
+          : getCollectionChange(initialData.collections.ids, collectionIds),
+      newCollections,
+      newIngredients: [
+        ...new Map(
+          data.ingredients
+            .filter((row) => row.newName !== null)
+            .map((row) => [
+              row.ingredientId,
+              {
+                id: row.ingredientId,
+                name: toTypedIngredientName(row.newName ?? ''),
+              },
+            ]),
+        ).values(),
+      ],
+      nutritionOverride: parseNutrition(data.nutrition),
+      care: parseCareText(data.care),
+      links: toRecipeLinks(data.links),
+      steps: data.steps.map((step) => step.trim()).filter(Boolean),
+      coverFile: upload.file,
+      coverUrl: upload.file ? null : (webCover?.imageUrl ?? null),
+      removeCover: isCoverRemoved,
+      fromIdeaId: initialIdea?.id ?? null,
+      tweakReason: reason,
+    };
+  };
+
+  const save = async (data: RecipeFormData) => {
     setError(null);
     setIsSubmitting(true);
     try {
-      const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
-      const { collectionIds, newCollections } = ownsCollections
-        ? getCollectionsToSave(data.collections, collections)
-        : { collectionIds: null, newCollections: [] };
       const { recipeId: savedId } = await dispatch(
-        saveRecipe({
-          uid,
-          draft: {
-            id: recipe?.id ?? null,
-            title: data.title,
-            categories: data.categories,
-            description: data.description.trim() || null,
-            servings: data.basics.servings,
-            prepMinutes: parseMinutes(data.basics.prep),
-            cookMinutes: parseMinutes(data.basics.cook),
-            ingredients: data.ingredients.map(toRecipeLine),
-            source: recipe ? recipe.source : (initialRead?.source ?? 'MANUAL'),
-            sourceId,
-            newSource,
-            collectionChange:
-              collectionIds === null
-                ? null
-                : getCollectionChange(
-                    initialData.collections.ids,
-                    collectionIds,
-                  ),
-            newCollections,
-            newIngredients: [
-              ...new Map(
-                data.ingredients
-                  .filter((row) => row.newName !== null)
-                  .map((row) => [
-                    row.ingredientId,
-                    {
-                      id: row.ingredientId,
-                      name: toTypedIngredientName(row.newName ?? ''),
-                    },
-                  ]),
-              ).values(),
-            ],
-            nutritionOverride: parseNutrition(data.nutrition),
-            care: parseCareText(data.care),
-            links: toRecipeLinks(data.links),
-            steps: data.steps.map((step) => step.trim()).filter(Boolean),
-            coverFile: upload.file,
-            coverUrl: upload.file ? null : (webCover?.imageUrl ?? null),
-            removeCover: isCoverRemoved,
-            fromIdeaId: initialIdea?.id ?? null,
-            tweakReason: data.why,
-          },
-        }),
+        saveRecipe({ uid, draft: getDraft(data, why) }),
       ).unwrap();
       if (!recipe) {
         addToast({
@@ -828,12 +831,42 @@ function RecipeForm({
         });
         announceRecipeAdded(savedId);
       }
-      closeSubviewIf((current) => current === subview);
+      if (onSaved) onSaved();
+      else closeSubviewIf((current) => current === subview);
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this recipe.'));
       setIsSubmitting(false);
     }
   };
+
+  const handleSubmit = async (data: RecipeFormData) => {
+    if (recipe && tracking === 'on' && initialNote === null) {
+      const { changes, topics } = getDraftChanges(
+        recipe,
+        getDraft(data, ''),
+        ingredientsById,
+        sourcesById,
+      );
+      if (changes.length > 0 && isWhyAsked(topics)) {
+        setAsk({ data, changes, choices: getWhyChoices(topics) });
+        return;
+      }
+    }
+    await save(data);
+  };
+
+  useEffect(() => {
+    backStepRef.current =
+      ask === null
+        ? null
+        : () => {
+            setAsk(null);
+            return true;
+          };
+    return () => {
+      backStepRef.current = null;
+    };
+  }, [ask, backStepRef]);
 
   if (recipeId !== null && !recipe) {
     return (
@@ -889,6 +922,7 @@ function RecipeForm({
       )}
       <Form
         id='pinch-recipe'
+        className={join(ask !== null && 'hidden!')}
         form={fields}
         initialData={initialData}
         columns={1}
@@ -927,7 +961,8 @@ function RecipeForm({
               )
             }
             leftActions={
-              recipe && (
+              recipe &&
+              !onSaved && (
                 <DeleteIconButton
                   onClick={() => void handleDelete()}
                   disabled={isSubmitting}
@@ -956,6 +991,18 @@ function RecipeForm({
           />
         }
       />
+      {ask !== null && (
+        <RecipeWhyStep
+          changes={ask.changes}
+          choices={ask.choices}
+          value={why}
+          onChange={setWhy}
+          onBack={() => setAsk(null)}
+          onSave={() => void save(ask.data)}
+          isSubmitting={isSubmitting}
+          error={error}
+        />
+      )}
     </>
   );
 }

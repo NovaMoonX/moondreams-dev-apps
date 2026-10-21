@@ -91,8 +91,6 @@ export interface RecipeFormData {
   collections: CollectionsChoice;
   /** What the person typed over the added-up value, per metric; blank keeps that metric derived. */
   nutrition: Record<NutritionMetric, string>;
-  /** Why the recipe is being changed; becomes the tweak's note when saving records one. */
-  why: string;
 }
 
 export const getInitialData = (
@@ -137,7 +135,6 @@ export const getInitialData = (
         : '',
     ]),
   ) as Record<NutritionMetric, string>,
-  why: '',
 });
 
 const clipNote = (note: string | null) =>
