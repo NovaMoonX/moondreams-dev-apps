@@ -4,6 +4,7 @@ import type { MovieSearchResult, MovieSnapshot } from './types.js';
 
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_SEARCH_RESULTS = 20;
+const MAX_POPULAR_RESULTS = 30;
 const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/';
 const UNRATED = new Set(['NR', 'Not Rated', 'Unrated', 'NOT RATED', 'UNRATED']);
 // TMDB's two credentials: a v4 read token is a JWT sent as a header, a v3 key goes in the query.
@@ -14,6 +15,7 @@ interface TmdbSearchItem {
   title?: string;
   release_date?: string;
   poster_path?: string | null;
+  popularity?: number;
 }
 
 interface TmdbSearchResponse {
@@ -139,6 +141,29 @@ export async function searchTmdb(
     .filter((item, index) => items.findIndex((other) => other.id === item.id) === index)
     .sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
     .slice(0, MAX_SEARCH_RESULTS)
+    .map(toSearchResult);
+  return result;
+}
+
+/** Most popular first, up to 30: what is in US theaters now plus what opens soon, merged by popularity. */
+export async function popularTmdb(apiKey: string): Promise<MovieSearchResult[]> {
+  const fetchList = (path: string) =>
+    callTmdb<TmdbSearchResponse>(apiKey, path, { region: 'US', language: 'en-US', page: '1' });
+
+  const nowPlaying = await fetchList('/movie/now_playing');
+  // A failed upcoming list (timeout, rate limit) still returns what is playing.
+  const upcoming = await fetchList('/movie/upcoming').catch(() => null);
+
+  const items = [nowPlaying, upcoming]
+    .flatMap((data) => data?.results ?? [])
+    .filter(
+      (item): item is TmdbSearchItem & { id: number; title: string } =>
+        Number.isInteger(item.id) && typeof item.title === 'string' && item.title.length > 0,
+    );
+  const result = items
+    .filter((item, index) => items.findIndex((other) => other.id === item.id) === index)
+    .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+    .slice(0, MAX_POPULAR_RESULTS)
     .map(toSearchResult);
   return result;
 }

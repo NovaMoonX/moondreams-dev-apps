@@ -193,6 +193,18 @@ export async function searchOmdb(
   return result;
 }
 
+/** OMDb has no list of what is in theaters, so only the offline fixtures answer. */
+export async function popularOmdb(apiKey: string): Promise<MovieSearchResult[]> {
+  if (!isFixtureMode(apiKey)) {
+    return [];
+  }
+
+  const result = getFixtures()
+    .filter((movie) => movie.imdbID.startsWith('tt990'))
+    .map(({ Title, Year, imdbID, Poster }) => toSearchResult({ Title, Year, imdbID, Type: 'movie', Poster }));
+  return result;
+}
+
 export async function getOmdbTitle(apiKey: string, imdbId: string): Promise<MovieSnapshot> {
   const data = isFixtureMode(apiKey)
     ? fixtureTitle(imdbId)

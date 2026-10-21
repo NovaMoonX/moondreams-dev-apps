@@ -12,7 +12,10 @@ import {
   MOVIE_SEARCH_MIN_CHARS,
   WATCH_PRIORITY_LABELS,
 } from '@apps/a-list/constants';
-import { movieSearchQueryOptions } from '@apps/a-list/queries/movieQueries';
+import {
+  movieSearchQueryOptions,
+  popularMoviesQueryOptions,
+} from '@apps/a-list/queries/movieQueries';
 import {
   selectSeenCountByMovieKey,
   selectWatchlistItems,
@@ -52,6 +55,7 @@ function MoviePicker({
     ...movieSearchQueryOptions(debouncedQuery),
     enabled: canSearch,
   });
+  const popular = useQuery(popularMoviesQueryOptions());
   const normalizedQuery = normalizeString(query);
   // An empty search shows what's still unseen; typing searches the whole list, so a rewatch can be picked.
   const isWatchlistMatch = (item: WatchlistItem) => {
@@ -86,6 +90,16 @@ function MoviePicker({
       !watchlistKeys.has(movie.movieKey) &&
       !shownIdentities.has(getIdentity(movie.title, movie.year)),
   );
+  // Popular films fill the empty field only; the ones already on the watchlist are left out.
+  const popularResults =
+    query.trim() === ''
+      ? (popular.data ?? []).filter(
+          (movie) =>
+            !isListed(movie) &&
+            !watchlistKeys.has(movie.movieKey) &&
+            !shownIdentities.has(getIdentity(movie.title, movie.year)),
+        )
+      : [];
   const isSearchResting =
     search.error instanceof FirebaseError &&
     (search.error.code === 'functions/resource-exhausted' ||
@@ -96,7 +110,10 @@ function MoviePicker({
   const hasQuery = trimmedQuery.length >= MOVIE_SEARCH_MIN_CHARS;
   // Results belong to the query that fetched them, so they never outlive the text that asked for them.
   const visibleResults = hasQuery ? results : [];
-  const hasItems = watchlistMatches.length > 0 || visibleResults.length > 0;
+  const hasItems =
+    watchlistMatches.length > 0 ||
+    visibleResults.length > 0 ||
+    popularResults.length > 0;
 
   const getEmptyState = () => {
     if (hasItems) return null;
@@ -231,6 +248,24 @@ function MoviePicker({
               Can't find it? Add it by title
             </Button>
           )}
+        </div>
+      )}
+      {popularResults.length > 0 && (
+        <div className='space-y-1'>
+          <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
+            Popular in theaters
+          </h3>
+          <ul className='space-y-0.5'>
+            {popularResults.map((movie) =>
+              renderRow(
+                movie.movieKey,
+                movie.title,
+                movie.posterUrl,
+                movie.year ? String(movie.year) : null,
+                () => onPick(movie, false),
+              ),
+            )}
+          </ul>
         </div>
       )}
       {visibleResults.length > 0 && (

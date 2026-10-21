@@ -260,6 +260,8 @@ interface SharedViewing {
 
 This is the one place that ties the pieces together; the sections below hold the reasoning and the provider details.
 
+**Popular in theaters** (`MoviePicker` → `getPopularMovies`): with the search field empty the picker shows "Popular in theaters" (TMDB's US now-playing and upcoming lists, most popular first, cached a day on the server and on the device). Films already on the watchlist, by key or by title and year, are left out; typing replaces the list with search results. Where the provider has no such list (OMDb) the section is simply not drawn.
+
 **Searching** (`MoviePicker` → `searchMovies`)
 1. **Browser.** After a pause in typing (450 ms) and at least 2 characters, TanStack Query asks for the search. Its key is the normalized text under `a-list/movies/search/v2`, it is fresh for a day and persisted, so a repeat costs nothing, even offline.
 2. **`searchMovies`** (signed-in callers only) trims and lowercases the text and requires 2 to 100 characters.
@@ -286,7 +288,7 @@ This is the one place that ties the pieces together; the sections below hold the
 | A movie already saved as `imdb-…` | OMDb, whatever the default is |
 | A movie already saved as `tmdb-…` | TMDB, whatever the default is |
 
-Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getMovie.ts`, `movieProvider.ts`, `tmdb.ts`, `omdb.ts`, `movieCache.ts`, `lookupBudget.ts`) and, in the app, `components/add/MoviePicker.tsx`, `queries/movieQueries.ts`, `hooks/useRefreshUnreleasedMovies.ts`.
+Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getPopularMovies.ts`, `getMovie.ts`, `movieProvider.ts`, `tmdb.ts`, `omdb.ts`, `movieCache.ts`, `lookupBudget.ts`) and, in the app, `components/add/MoviePicker.tsx`, `queries/movieQueries.ts`, `hooks/useRefreshUnreleasedMovies.ts`.
 
 **The problem:** the app needs search, release dates, runtimes, content ratings and posters from a free source. No free source knows which AMC formats or showtimes exist, and the app never tries to find out (formats and prices stay member-entered).
 

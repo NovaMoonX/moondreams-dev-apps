@@ -11,6 +11,10 @@ const searchMoviesCallable = httpsCallable<
   { query: string },
   { results: MovieSearchResult[] }
 >(functions, 'searchMovies');
+const getPopularMoviesCallable = httpsCallable<
+  Record<string, never>,
+  { results: MovieSearchResult[] }
+>(functions, 'getPopularMovies');
 const getMovieCallable = httpsCallable<{ movieKey: string }, MovieSnapshot>(
   functions,
   'getMovie',
@@ -20,6 +24,7 @@ export const movieQueryKeys = {
   all: ['a-list', 'movies'] as const,
   search: (query: string) =>
     [...movieQueryKeys.all, 'search', 'v2', normalizeString(query)] as const,
+  popular: () => [...movieQueryKeys.all, 'popular'] as const,
   details: (movieKey: string) =>
     [...movieQueryKeys.all, 'details', movieKey] as const,
 };
@@ -33,6 +38,21 @@ export function movieSearchQueryOptions(query: string) {
       const result = await searchMoviesCallable({
         query: normalizeString(query),
       });
+      return result.data.results;
+    },
+    staleTime: DAY_MS,
+    gcTime: DAY_MS,
+    retry: false,
+    meta: { persist: true },
+  });
+}
+
+// The server refreshes the list daily, so a device asks no more often than that.
+export function popularMoviesQueryOptions() {
+  return queryOptions({
+    queryKey: movieQueryKeys.popular(),
+    queryFn: async () => {
+      const result = await getPopularMoviesCallable({});
       return result.data.results;
     },
     staleTime: DAY_MS,
