@@ -1303,6 +1303,33 @@ export function getShoppingMeals(
   return result;
 }
 
+/** Where a meal taken off the list stands while its sheet is open: the listener lands before the thunk resolves, so the row is drawn from the snapshot taken at the tap and never drops out and back in. */
+export interface HeldMeal {
+  meal: ShoppingMeal;
+  status: 'removing' | 'taken' | 'restored';
+}
+
+/** The sheet's rows, soonest first: the live meals, a held one drawn from its snapshot until it is restored, when the live meal takes over (the snapshot stands in until the listener catches up). `held` is null for a row drawn as an ordinary one. */
+export function getMealRows<H extends HeldMeal>(
+  live: ShoppingMeal[],
+  held: ReadonlyMap<string, H>,
+): { meal: ShoppingMeal; held: H | null }[] {
+  const liveSources = new Set(live.map((meal) => meal.source));
+  const hold = (entry: H | undefined) =>
+    entry && entry.status !== 'restored' ? entry : null;
+  const rows = [
+    ...live.map((meal) => {
+      const entry = hold(held.get(meal.source));
+      return { meal: entry?.meal ?? meal, held: entry };
+    }),
+    ...[...held.values()]
+      .filter((entry) => !liveSources.has(entry.meal.source))
+      .map((entry) => ({ meal: entry.meal, held: hold(entry) })),
+  ];
+  const result = rows.sort((a, b) => compareSourceLabels(a.meal, b.meal));
+  return result;
+}
+
 export interface PlanSpan {
   /** The first day counted: the range's own, or today when the range began earlier. */
   startKey: string;
