@@ -17,8 +17,9 @@ export interface UsageMetricSpec {
 }
 
 const GB = 1024 ** 3;
+const MB = 1024 ** 2;
 
-/** Prices below are list prices for a multi-region Firestore (nam5); re-check them against the pricing pages. */
+/** Free amounts are from firebase.google.com/pricing. Firestore, Cloud Storage and Functions-compute prices there say only "Google Cloud pricing"; the figures here are for multi-region Firestore (nam5) and still need checking against it. */
 export const PRICING_LAST_CHECKED = '2026-10-21';
 
 export const USAGE_METRICS: UsageMetricSpec[] = [
@@ -58,8 +59,8 @@ export const USAGE_METRICS: UsageMetricSpec[] = [
     label: 'Data downloaded',
     metricType: 'firebasedatabase.googleapis.com/network/sent_bytes_count',
     unit: 'bytes',
-    period: 'month',
-    freeAmount: 10 * GB,
+    period: 'day',
+    freeAmount: 360 * MB,
     pricePerUnit: 1 / GB,
   },
   {
@@ -83,16 +84,6 @@ export const USAGE_METRICS: UsageMetricSpec[] = [
     pricePerUnit: 0.026 / GB,
   },
   {
-    id: 'storage-download',
-    product: 'Cloud Storage',
-    label: 'Files downloaded',
-    metricType: 'storage.googleapis.com/network/sent_bytes_count',
-    unit: 'bytes',
-    period: 'day',
-    freeAmount: 1 * GB,
-    pricePerUnit: 0.12 / GB,
-  },
-  {
     id: 'functions-calls',
     product: 'Functions',
     label: 'Function calls',
@@ -103,6 +94,28 @@ export const USAGE_METRICS: UsageMetricSpec[] = [
     pricePerUnit: 0.4 / 1_000_000,
   },
 ];
+
+/** Download limits differ by bucket: legacy `.appspot.com` buckets get 1 GB a day, newer `.firebasestorage.app` ones 100 GB a month (in us-central1, us-west1 and us-east1 only). */
+export function getStorageDownloadSpec(bucketName: string): UsageMetricSpec {
+  const base = {
+    id: 'storage-download',
+    product: 'Cloud Storage' as const,
+    label: 'Files downloaded',
+    metricType: 'storage.googleapis.com/network/sent_bytes_count',
+    unit: 'bytes' as const,
+    pricePerUnit: 0.12 / GB,
+  };
+  if (bucketName.endsWith('.appspot.com')) return { ...base, period: 'day', freeAmount: 1 * GB };
+  return { ...base, period: 'month', freeAmount: 100 * GB };
+}
+
+/** Every limit the page tracks, with the storage download limit chosen for this project's bucket. */
+export function getUsageMetrics(bucketName: string) {
+  const result = USAGE_METRICS.flatMap((spec) =>
+    spec.id === 'storage-stored' ? [spec, getStorageDownloadSpec(bucketName)] : [spec],
+  );
+  return result;
+}
 
 export interface UsageLine {
   id: string;

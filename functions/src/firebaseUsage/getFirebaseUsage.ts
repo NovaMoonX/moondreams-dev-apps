@@ -1,9 +1,10 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
+import { getStorage } from 'firebase-admin/storage';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { getFootprints, type Footprints } from './attribution.js';
 import { getMonthStart, MonitoringAccessError, readMetric } from './monitoring.js';
-import { priceMetric, PRICING_LAST_CHECKED, USAGE_METRICS, type UsageLine } from './pricing.js';
+import { getUsageMetrics, priceMetric, PRICING_LAST_CHECKED, type UsageLine } from './pricing.js';
 import { readSampleMetric } from './sampleUsage.js';
 
 if (getApps().length === 0) {
@@ -61,7 +62,7 @@ export const getFirebaseUsage = onCall(
     try {
       const [lines, footprints] = await Promise.all([
         Promise.all(
-          USAGE_METRICS.map(async (spec) => {
+          getUsageMetrics(getStorage().bucket().name).map(async (spec) => {
             const daily = isEmulator
               ? readSampleMetric(spec, daysElapsed, daysInMonth)
               : await readMetric(projectId, spec, now);
