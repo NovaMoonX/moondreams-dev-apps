@@ -10,6 +10,10 @@ import type {
 import { getCycleDate } from '../../src/apps/a-list/utils/billing.ts';
 import {
   getBreakEven,
+  getCalendarAddedBy,
+  getCalendarPlan,
+  getNetSeries,
+  getPaceAddedBy,
   getProjectionBase,
   parseTicketCents,
   projectCalendar,
@@ -69,43 +73,60 @@ const nearBill = planned(utc(2026, 12, 15, 4), 1700);
 const result = projectCalendar(
   base,
   m,
-  [nearBill, planned(utc(2026, 12, 20), null)],
-  now,
+  getCalendarPlan(base, m, [nearBill, planned(utc(2026, 12, 20), null)], now),
 );
 assert.equal(result.movies, 2);
 assert.equal(result.months >= 3, true);
-assert.equal(projectCalendar(base, m, [], now).months, 3);
-assert.equal(projectCalendar(base, m, [], now).addedCents, 0);
+assert.equal(
+  projectCalendar(base, m, getCalendarPlan(base, m, [], now)).months,
+  3,
+);
+assert.equal(
+  projectCalendar(base, m, getCalendarPlan(base, m, [], now)).addedCents,
+  0,
+);
 const noAverage = getProjectionBase([], m, today);
 const unpriced = projectCalendar(
   noAverage,
   m,
-  [planned(utc(2026, 12, 20), null)],
-  now,
+  getCalendarPlan(noAverage, m, [planned(utc(2026, 12, 20), null)], now),
 );
 assert.equal(unpriced.unpricedCount, 1);
 assert.equal(unpriced.addedCents, 0);
-const over = projectCalendar(base, m, [planned(now - 1000, 1700)], now);
+const over = projectCalendar(
+  base,
+  m,
+  getCalendarPlan(base, m, [planned(now - 1000, 1700)], now),
+);
 assert.equal(over.unmarkedCount, 1);
 assert.equal(over.movies, 0);
 // 04:00 UTC on a bill day is still the day before in Los Angeles, so that bill isn't owed
 const mid = membership(utc(2026, 10, 15));
 const midBase = getProjectionBase([seen(1800)], mid, utc(2026, 11, 20));
 assert.equal(
-  projectCalendar(midBase, mid, [planned(utc(2027, 1, 15, 4), 1700)], now)
-    .months,
+  projectCalendar(
+    midBase,
+    mid,
+    getCalendarPlan(midBase, mid, [planned(utc(2027, 1, 15, 4), 1700)], now),
+  ).months,
   3,
 );
 assert.equal(
-  projectCalendar(midBase, mid, [planned(utc(2027, 1, 15, 20), 1700)], now)
-    .months,
+  projectCalendar(
+    midBase,
+    mid,
+    getCalendarPlan(midBase, mid, [planned(utc(2027, 1, 15, 20), 1700)], now),
+  ).months,
   4,
 );
 // AMC price + tax + average avoided fee
 const taxed = membership(utc(2026, 10, 14), 0.1);
 assert.equal(
-  projectCalendar(base, taxed, [planned(utc(2026, 12, 1), 1000)], now)
-    .addedCents,
+  projectCalendar(
+    base,
+    taxed,
+    getCalendarPlan(base, taxed, [planned(utc(2026, 12, 1), 1000)], now),
+  ).addedCents,
   1000 + 100 + 200,
 );
 
@@ -137,5 +158,28 @@ assert.equal(getBreakEven(base, { ...pace, costCents: 7500 }, 2000)?.movies, 2);
 assert.equal(parseTicketCents(''), null);
 assert.equal(parseTicketCents('18.5'), 1850);
 assert.equal(parseTicketCents('99999999'), null);
+
+// The graph ends on the projected net and starts on today's
+const series = getNetSeries(
+  base,
+  m,
+  today,
+  pace,
+  getPaceAddedBy(today, { unit: 'week', count: 2 }, 2000),
+);
+assert.equal(series[0].x, today);
+assert.equal(series[0].y, base.netNowCents);
+assert.equal(series.at(-1)?.x, pace.coveredUntil);
+assert.equal(series.at(-1)?.y, pace.netCents);
+assert.equal(series.at(-1)?.y2, projectStop(base, m).netCents);
+const calPlan = getCalendarPlan(base, m, [nearBill], now);
+const calSeries = getNetSeries(
+  base,
+  m,
+  today,
+  projectCalendar(base, m, calPlan),
+  getCalendarAddedBy(calPlan),
+);
+assert.equal(calSeries.at(-1)?.y, projectCalendar(base, m, calPlan).netCents);
 
 console.log('A-List projection checks passed');

@@ -175,29 +175,47 @@ function estimatePlannedCents(
   return result;
 }
 
-/** Every showing still ahead is watched, and the membership is paid up to the bill covering the last one. */
-export function projectCalendar(
+interface CalendarPlan {
+  ahead: { at: number; cents: number | null }[];
+  /** Planned showings already over that nobody has marked seen. */
+  unmarkedCount: number;
+}
+
+export function getCalendarPlan(
   base: ProjectionBase,
   membership: MembershipProfile,
   viewings: Viewing[],
   now: number,
-): ProjectionResult {
+): CalendarPlan {
   const planned = viewings.filter((viewing) => viewing.status === 'PLANNED');
   const ahead = planned.filter((viewing) => viewing.showtimeAt > now);
-  const estimates = ahead.map((viewing) =>
-    estimatePlannedCents(viewing, membership, base),
-  );
-  const lastShowing = ahead.reduce(
-    (latest, viewing) => Math.max(latest, viewing.showtimeAt),
+  const result: CalendarPlan = {
+    ahead: ahead.map((viewing) => ({
+      at: viewing.showtimeAt,
+      cents: estimatePlannedCents(viewing, membership, base),
+    })),
+    unmarkedCount: planned.length - ahead.length,
+  };
+  return result;
+}
+
+/** Every showing still ahead is watched, and the membership is paid up to the bill covering the last one. */
+export function projectCalendar(
+  base: ProjectionBase,
+  membership: MembershipProfile,
+  plan: CalendarPlan,
+): ProjectionResult {
+  const lastShowing = plan.ahead.reduce(
+    (latest, showing) => Math.max(latest, showing.at),
     0,
   );
   // The viewer's local day, like every other day the screen compares against.
   const lastDay =
     lastShowing === 0 ? 0 : (fromDateInputValue(getDayKey(lastShowing)) ?? 0);
   const result = finish(base, membership, {
-    movies: ahead.length,
-    addedCents: estimates.reduce<number>(
-      (total, cents) => total + (cents ?? 0),
+    movies: plan.ahead.length,
+    addedCents: plan.ahead.reduce(
+      (total, showing) => total + (showing.cents ?? 0),
       0,
     ),
     months: Math.max(
@@ -206,8 +224,9 @@ export function projectCalendar(
         ? 0
         : getBillingCycleDates(membership.startDate, lastDay).length,
     ),
-    unpricedCount: estimates.filter((cents) => cents === null).length,
-    unmarkedCount: planned.length - ahead.length,
+    unpricedCount: plan.ahead.filter((showing) => showing.cents === null)
+      .length,
+    unmarkedCount: plan.unmarkedCount,
   });
   return result;
 }
@@ -260,5 +279,76 @@ export function getBreakEven(
     perPeriod:
       projection.periods > 0 ? Math.ceil(movies / projection.periods) : null,
   };
+  return result;
+}
+
+export interface NetPoint {
+  x: number;
+  /** Net savings in cents on this day under the plan. */
+  y: number;
+  /** The same day if nothing more is watched. */
+  y2: number;
+}
+
+/** What a plan has added by a given day, in cents. */
+export type AddedBy = (day: number) => number;
+
+export const getCalendarAddedBy =
+  (plan: CalendarPlan): AddedBy =>
+  (day) =>
+    plan.ahead.reduce(
+      (total, showing) =>
+        showing.at < day + DAY_MS ? total + (showing.cents ?? 0) : total,
+      0,
+    );
+
+export const getPaceAddedBy =
+  (
+    todayDay: number,
+    pace: { unit: PaceUnit; count: number },
+    ticketCents: number | null,
+  ): AddedBy =>
+  (day) =>
+    Math.floor(
+      (pace.count * (day - todayDay)) /
+        (pace.unit === 'week' ? WEEK_MS : MONTH_MS),
+    ) * (ticketCents ?? 0);
+
+/** Net savings by week and on each bill, from today to the day the paid months run to. */
+export function getNetSeries(
+  base: ProjectionBase,
+  membership: MembershipProfile,
+  todayDay: number,
+  projection: ProjectionResult,
+  addedBy: AddedBy,
+): NetPoint[] {
+  const endDay = projection.coveredUntil;
+  const billCosts = Array.from({ length: projection.months + 1 }, (_, count) =>
+    Array.from({ length: count }, (_, offset) =>
+      getMonthlyTotalAt(membership, getCycleDate(membership.startDate, offset)),
+    ).reduce((total, cents) => total + cents, 0),
+  );
+  const billDays = Array.from({ length: projection.months }, (_, offset) =>
+    getCycleDate(membership.startDate, offset),
+  ).filter((day) => day > todayDay && day < endDay);
+  const weekDays = Array.from(
+    { length: Math.max(0, Math.ceil((endDay - todayDay) / WEEK_MS)) },
+    (_, week) => todayDay + week * WEEK_MS,
+  ).filter((day) => day < endDay);
+  const days = [...new Set([...weekDays, ...billDays, endDay])].sort(
+    (left, right) => left - right,
+  );
+  const result = days.map((day) => {
+    const billed = Math.min(
+      projection.months,
+      getBillingCycleDates(membership.startDate, day).length,
+    );
+    const cost = billCosts[day >= endDay ? projection.months : billed];
+    return {
+      x: day,
+      y: base.savedCents + addedBy(day) - cost,
+      y2: base.savedCents - cost,
+    };
+  });
   return result;
 }

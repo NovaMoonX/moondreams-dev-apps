@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import TrendLineChart from '@/components/TrendLineChart';
 import MoneyInput from '@/components/MoneyInput';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import Stepper from '@/components/Stepper';
@@ -18,6 +19,10 @@ import { getCycleDate } from '@apps/a-list/utils/billing';
 import { getDayKey } from '@apps/a-list/utils/dayKeys';
 import {
   getBreakEven,
+  getCalendarAddedBy,
+  getCalendarPlan,
+  getNetSeries,
+  getPaceAddedBy,
   getPaceMax,
   getProjectionBase,
   parseTicketCents,
@@ -56,7 +61,8 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   const viewings = useAppSelector(selectViewingItems);
   const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
   const base = getProjectionBase(viewings, membership, todayDay);
-  const calendar = projectCalendar(base, membership, viewings, now);
+  const plan = getCalendarPlan(base, membership, viewings, now);
+  const calendar = projectCalendar(base, membership, plan);
 
   const [pickedScenario, setScenario] = useState<Scenario | null>(null);
   const [counts, setCounts] = useState<Record<PaceUnit, number>>({
@@ -91,6 +97,19 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     );
   };
   const result = getResult();
+  const getAddedBy = () => {
+    if (scenario === 'stop') return () => 0;
+    if (scenario === 'calendar') return getCalendarAddedBy(plan);
+    return getPaceAddedBy(
+      todayDay,
+      { unit: scenario, count: counts[scenario] },
+      ticketCents,
+    );
+  };
+  const series =
+    result.netCents === null
+      ? []
+      : getNetSeries(base, membership, todayDay, result, getAddedBy());
   const breakEven = isPace ? getBreakEven(base, result, ticketCents) : null;
   const isBrokenEven = result.netCents !== null && result.netCents >= 0;
   const until = formatDateUTC(result.coveredUntil);
@@ -203,6 +222,30 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               so {result.unmarkedCount === 1 ? "it isn't" : "they aren't"}{' '}
               counted.
             </p>
+          )}
+          {series.length > 1 && (
+            <div className='mt-3'>
+              <TrendLineChart
+                data={series}
+                seriesLabel='Net savings'
+                curve='linear'
+                secondaryLabel={
+                  scenario === 'stop' ? undefined : 'If you stop now'
+                }
+                referenceY={{ value: 0, label: 'Break even' }}
+                formatX={(value) =>
+                  new Date(value).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC',
+                  })
+                }
+                formatY={(value) =>
+                  formatCents(Math.round(value / 100) * 100).replace('.00', '')
+                }
+                hasDots={false}
+              />
+            </div>
           )}
         </div>
         {isPace && (

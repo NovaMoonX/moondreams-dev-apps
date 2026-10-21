@@ -52,7 +52,7 @@ import {
 import { usePagination } from '@apps/nine-lives/utils/usePagination';
 
 import DetailsDisclosure from './DetailsDisclosure';
-import TrendLineChart from './TrendLineChart';
+import TrendLineChart from '@/components/TrendLineChart';
 import ViewToggle, { type ViewToggleValue } from './ViewToggle';
 
 const { input, select, textarea, custom } = FormFactories;
