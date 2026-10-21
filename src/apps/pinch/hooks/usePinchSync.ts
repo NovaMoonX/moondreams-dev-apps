@@ -17,6 +17,7 @@ import {
   startProductsListener,
   startRecipesListener,
   startSettingsListener,
+  startSharesListener,
   startShoppingListener,
   startSourcesListener,
   startStoresListener,
@@ -92,6 +93,11 @@ import {
   setSettingsLoadError,
 } from '@apps/pinch/store/slices/settingsSlice';
 import {
+  clearShares,
+  setShares,
+  setSharesLoadError,
+} from '@apps/pinch/store/slices/sharesSlice';
+import {
   clearShopping,
   setShopping,
   setShoppingLoadError,
@@ -132,6 +138,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
       dispatch(clearPinchSettings());
       dispatch(clearPlannedMeals());
       dispatch(clearMeals());
+      dispatch(clearShares());
       return;
     }
 
@@ -328,7 +335,21 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
         ),
     );
 
+    const unsubscribeShares = startSharesListener(
+      uid,
+      (shares) => dispatch(setShares(shares)),
+      (error) => {
+        console.error('Pinch shares listener failed', error);
+        dispatch(
+          setSharesLoadError(
+            getErrorMessage(error, 'Unable to load your shared links.'),
+          ),
+        );
+      },
+    );
+
     return () => {
+      unsubscribeShares();
       unsubscribeMeals();
       unsubscribePinchSettings();
       unsubscribeSettings();

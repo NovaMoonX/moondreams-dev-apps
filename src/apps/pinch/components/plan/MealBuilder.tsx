@@ -46,6 +46,7 @@ import {
   selectPlannedMeals,
   selectRecipes,
   selectRecipesById,
+  selectShareBySource,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
 import type { ItemKind, MealItem, MealType } from '@apps/pinch/types';
@@ -150,6 +151,10 @@ function MealBuilder({
     plannedMeals.find((meal) => meal.id === plannedMealId) ?? null;
   const existingMeal =
     mode === 'meal' && mealId ? (savedMealsById.get(mealId) ?? null) : null;
+  const isShared = useAppSelector(
+    (state) =>
+      selectShareBySource('MEAL', existingMeal?.id ?? '')(state) !== null,
+  );
   const starter =
     mode === 'plan' && !existingPlanned && mealId
       ? (savedMealsById.get(mealId) ?? null)
@@ -444,7 +449,7 @@ function MealBuilder({
 
     const confirmed = await confirm({
       title: 'Delete meal',
-      message: `Delete ${existingMeal.name}? Days you've already planned it on keep their own copy. This action cannot be undone.`,
+      message: `Delete ${existingMeal.name}? Days you've already planned it on keep their own copy.${isShared ? " It's shared, so its link stops working too." : ''} This action cannot be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });

@@ -224,6 +224,8 @@ export type PinchSubview =
   | { kind: 'sources' }
   /** Reminders and how long a new box keeps. */
   | { kind: 'settings' }
+  /** Every link the person shared, to copy, update or stop; `fromSheet` when a Share view's cap line opened it, so back returns to the screen under it and not to Settings. */
+  | { kind: 'shares'; fromSheet?: boolean }
   /** The ingredients the person has on hand, grouped, each package with its own amount and date; `ingredientId` opens that ingredient's packages first. */
   | { kind: 'pantry'; ingredientId?: string }
   /** Fridge & freezer; `place` is the one a door named, shown first. */
@@ -615,4 +617,121 @@ export interface CookingResume {
   currentId: string;
   positions: Record<string, { stepIndex: number; servings: number }>;
   timers: ResumeTimer[];
+}
+
+export type ShareKind = 'RECIPE' | 'MEAL';
+
+/** One ingredient line as a visitor sees it: a name and an amount, never the owner's own ingredient record. */
+export interface SharedIngredient {
+  name: string;
+  /** The `cat-` id when the owner's line is a catalog ingredient, which every kitchen shares; null for one the owner made. */
+  catalogId: string | null;
+  amount: number | null;
+  unit: Unit;
+  note: string | null;
+  group: string | null;
+}
+
+export interface SharedRecipeLink {
+  kind: RecipeLinkKind;
+  label: string | null;
+  /** https only. */
+  url: string;
+}
+
+/** A recipe as a share carries it: what is needed to read it, cook it and copy it. No prices, notes, ratings, collections, source or favorite. */
+export interface SharedRecipe {
+  title: string;
+  description: string | null;
+  servings: number;
+  prepMinutes: number | null;
+  cookMinutes: number | null;
+  ingredients: SharedIngredient[];
+  steps: string[];
+  care: RecipeCare | null;
+  links: SharedRecipeLink[];
+  /** True when the share holds a copy of the cover the owner uploaded (`apps/pinch/shares/{shareId}/cover-{index}.webp`); a web cover is never shared. */
+  hasCover: boolean;
+}
+
+export type SharedMealItem =
+  | { kind: 'RECIPE'; servings: number; /** An index into `SharedMeal.recipes`. */ recipeIndex: number }
+  | { kind: 'INGREDIENT'; servings: number; name: string; catalogId: string | null };
+
+/** A saved meal as a share carries it: its name and items, with each recipe inline once. */
+export interface SharedMeal {
+  name: string;
+  recipes: SharedRecipe[];
+  items: SharedMealItem[];
+}
+
+/** The owner's own record of a link they made; the shared copy itself lives where only the server reads it. */
+export interface PinchShare {
+  /** An unguessable 26-character id (`[2-9a-hj-np-z]`), also the address of the link. */
+  id: string;
+  ownerUid: string;
+  kind: ShareKind;
+  /** The owner's recipe or saved meal. */
+  sourceId: string;
+  /** For the owner's own list. */
+  title: string;
+  /** The source's change stamp when the copy was taken, to tell whether it has changed since. */
+  sourceUpdatedAt: number;
+  createdAt: number;
+  /** When the copy was last taken. */
+  updatedAt: number;
+}
+
+/** What `getPinchShare` answers a visitor: the same body for a malformed, unknown and deleted id. */
+export type PinchShareResult =
+  | { status: 'not_found' }
+  | {
+      status: 'ok';
+      kind: ShareKind;
+      sharedAt: number;
+      /** Whether the signed-in visitor is the one who shared it; the owner's uid is never sent. */
+      isOwner: boolean;
+      /** The owner's own recipe or meal id, sent only to the owner. */
+      ownerSourceId: string | null;
+      recipe: SharedRecipe | null;
+      meal: SharedMeal | null;
+    };
+
+export interface ShareCoverRef {
+  /** The recipe's index in the share (0 for a recipe share). */
+  index: number;
+  /** The owner's recipe the cover is copied from. */
+  recipeId: string;
+}
+
+/** What `changePinchShare` takes; the server rebuilds the copy from the allowlist and mints the id. */
+export type ChangePinchShareRequest =
+  | {
+      action: 'create' | 'update';
+      /** Required to update; ignored to create (the server mints it, and returns the existing share for a source that already has one). */
+      shareId: string | null;
+      kind: ShareKind;
+      sourceId: string;
+      recipe: SharedRecipe | null;
+      meal: SharedMeal | null;
+      covers: ShareCoverRef[];
+      sourceUpdatedAt: number;
+    }
+  | { action: 'renew' | 'delete'; shareId: string };
+
+export interface ChangePinchShareResult {
+  /** The id of the share after the change; null once it is deleted. */
+  shareId: string | null;
+}
+
+export interface CopyPinchShareCoverRequest {
+  shareId: string;
+  index: number;
+  /** The signed-in visitor's new recipe the cover is copied onto. */
+  recipeId: string;
+}
+
+export interface CopyPinchShareCoverResult {
+  /** The Storage path of the new cover, or null when the share has none to copy. */
+  coverPath: string | null;
 }

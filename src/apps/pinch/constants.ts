@@ -13,6 +13,7 @@ import type {
   RecipeLinkKind,
   RecipesView,
   RecipeStartMethod,
+  ShareKind,
   ShoppingView,
   Unit,
 } from '@apps/pinch/types';
@@ -60,6 +61,14 @@ export const NUTRITION_METRICS = NUTRITION_CELLS.map((cell) => cell.key);
 export const LIST_SEARCH_THRESHOLD = 8;
 /** A section's heading counts its rows only past this many; fewer are counted at a glance. */
 export const SECTION_COUNT_THRESHOLD = 10;
+/** Shared links shown before "Show N more". */
+export const SHARES_FIRST_PAGE = 12;
+/** A shared link's address is this path plus the share's id. */
+export const SHARE_LINK_PATH = '/pinch/shared/';
+export const SHARE_KIND_EMOJIS: Record<ShareKind, string> = {
+  RECIPE: '🍲',
+  MEAL: '🍽️',
+};
 
 export const UNITS: Unit[] = [
   'G',
@@ -139,6 +148,65 @@ export const MAX_DISMISSED_NUDGES = 500;
 export const MAX_PASTE_CHARS = 20_000;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_MEAL_ITEMS = 10;
+
+/** What the slot on the page behind a share link says, by what was shared. */
+export const SHARE_BENEFITS_TITLE = 'With an account';
+
+export const SHARE_SLOT_COPY: Record<
+  'RECIPE' | 'MEAL',
+  {
+    eyebrow: string;
+    emoji: string;
+    ownerLead: string;
+    visitorLead: string;
+    visitorHint: string;
+    addLabel: string;
+    addingLabel: string;
+    addedHint: string;
+    signedOutLead: string;
+    signedOutHint: string;
+    benefits: { emoji: string; text: string }[];
+  }
+> = {
+  RECIPE: {
+    eyebrow: 'Shared recipe',
+    emoji: '🍲',
+    ownerLead: 'Your shared recipe',
+    visitorLead: 'Want this in your recipes?',
+    visitorHint: 'Adds your own copy to change, plan and cook.',
+    addLabel: 'Add to my recipes',
+    addingLabel: 'Adding it to your recipes…',
+    addedHint: 'Find it under Recipes in Pinch.',
+    signedOutLead: 'Keep this recipe',
+    signedOutHint: 'Sign in to add it to your own recipes.',
+    benefits: [
+      {
+        emoji: '📅',
+        text: 'Plan it on a day and get a shopping list, with nutrition and cost',
+      },
+      { emoji: '⏲️', text: 'Cook it step by step, with timers' },
+    ],
+  },
+  MEAL: {
+    eyebrow: 'Shared saved meal',
+    emoji: '🍽️',
+    ownerLead: 'Your shared saved meal',
+    visitorLead: 'Want this saved meal?',
+    visitorHint: 'Adds your own copy, with the recipes it uses.',
+    addLabel: 'Add to my saved meals',
+    addingLabel: 'Adding it to your saved meals…',
+    addedHint: 'Find it under Saved meals, in Recipes.',
+    signedOutLead: 'Keep this saved meal',
+    signedOutHint: 'Sign in to add it to your own saved meals.',
+    benefits: [
+      {
+        emoji: '📅',
+        text: 'Plan it on a day and get a shopping list, with nutrition and cost',
+      },
+      { emoji: '⏲️', text: 'Cook its recipes step by step, with timers' },
+    ],
+  },
+};
 
 /** The caps on lines per add and on items are not enforced by the rules. */
 export const MAX_SHOPPING_LINES_PER_ADD = 200;
@@ -753,3 +821,11 @@ export const COOK_WAKE_TIMER_GRACE_MS = 2 * 60_000;
 export const COOK_WAKE_MAX_MS = 60 * 60_000;
 /** "Keep listening" runs to a fixed deadline; commands don't extend it. */
 export const COOK_LOCK_MS = 15 * 60_000;
+
+export const SHARE_ID_LENGTH = 26;
+/** The most links one person holds at once; the server counts them. */
+export const MAX_PINCH_SHARES = 30;
+/** The most recipes a shared meal carries: a saved meal holds at most `MAX_MEAL_ITEMS`. */
+export const MAX_SHARED_MEAL_RECIPES = MAX_MEAL_ITEMS;
+/** The most ingredient lines a shared meal carries across its recipes, so adding it stays one batch of fewer than 500 writes. */
+export const MAX_SHARED_MEAL_LINES = 300;

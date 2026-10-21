@@ -4,6 +4,7 @@ import { useAppSelector } from '@/store';
 import KeepingSection from '@apps/pinch/components/settings/KeepingSection';
 import PhotosSection from '@apps/pinch/components/settings/PhotosSection';
 import RemindersSection from '@apps/pinch/components/settings/RemindersSection';
+import SharedLinksSection from '@apps/pinch/components/settings/SharedLinksSection';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import { selectPinchSettingsLoadError } from '@apps/pinch/store/selectors';
 
@@ -18,15 +19,18 @@ function SettingsSubview({ uid }: SettingsSubviewProps) {
 
   return (
     <Subview title='Settings' onClose={closeSubview}>
-      {loadError !== null ? (
-        <IntroCard icon='🧂' lead="Your settings couldn't load just now." />
-      ) : (
-        <div className='space-y-5'>
-          <RemindersSection uid={uid} />
-          <KeepingSection uid={uid} />
-          <PhotosSection uid={uid} />
-        </div>
-      )}
+      <div className='space-y-5'>
+        {loadError !== null ? (
+          <IntroCard icon='🧂' lead="Your settings couldn't load just now." />
+        ) : (
+          <>
+            <RemindersSection uid={uid} />
+            <KeepingSection uid={uid} />
+            <PhotosSection uid={uid} />
+          </>
+        )}
+        <SharedLinksSection />
+      </div>
     </Subview>
   );
 }

@@ -17,6 +17,7 @@ import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { deleteCooks } from '@apps/pinch/store/actions/cookActions';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { deleteNotes } from '@apps/pinch/store/actions/noteActions';
+import { stopSharingDeleted } from '@apps/pinch/store/actions/shareActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import {
   selectIngredientsById,
@@ -27,7 +28,11 @@ import type { CollectionChange } from '@apps/pinch/utils/collections';
 import { getRecipeChanges } from '@apps/pinch/utils/recipeChanges';
 import { getTweakReason } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
-import { getCoverFields, isCoverUrl } from '@apps/pinch/utils/recipeCover';
+import {
+  getCoverFields,
+  getRecipeCoverPath,
+  isCoverUrl,
+} from '@apps/pinch/utils/recipeCover';
 import { isInUse } from '@apps/pinch/utils/references';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
@@ -95,9 +100,6 @@ const getCollectionWrites = (
     after: null,
   };
 };
-
-export const getRecipeCoverPath = (uid: string, recipeId: string) =>
-  `apps/pinch/kitchens/${uid}/recipes/${recipeId}/cover.webp`;
 
 export interface RecipeDraft {
   /** The recipe being edited; null adds a new one. */
@@ -406,7 +408,7 @@ interface RemoveRecipeInput {
   id: string;
 }
 
-/** Deletes the recipe, its cover, its cooks and its notes, or archives it (cover, cooks and notes kept) when a planned day or saved meal still uses it. */
+/** Deletes the recipe, its cover, its cooks, its notes and its shared link, or archives it (cover, cooks, notes and link kept) when a planned day or saved meal still uses it. An archive leaves `updatedAt` alone: a shared link compares it, and nothing it shows changed. */
 export const removeRecipe = createAsyncThunk<
   string,
   RemoveRecipeInput,
@@ -421,10 +423,7 @@ export const removeRecipe = createAsyncThunk<
     try {
       await freezeBeforeEdit(uid, getState());
       if (isInUse(await readUsage(uid, getState(), 'RECIPE', id))) {
-        await updateDoc(recipeDoc(uid, id), {
-          isArchived: true,
-          updatedAt: Date.now(),
-        });
+        await updateDoc(recipeDoc(uid, id), { isArchived: true });
         return id;
       }
 
@@ -434,6 +433,8 @@ export const removeRecipe = createAsyncThunk<
         getWriteMessage(error, 'Unable to delete this recipe.'),
       );
     }
+
+    stopSharingDeleted(getState(), 'RECIPE', id);
 
     await deleteCooks(uid, id).catch((error) =>
       console.error("Pinch could not clear a deleted recipe's cooks", error),

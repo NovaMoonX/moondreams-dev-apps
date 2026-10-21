@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { stopSharingDeleted } from '@apps/pinch/store/actions/shareActions';
 import type { ItemKind, Meal } from '@apps/pinch/types';
 
 const mealDoc = (uid: string, id: string) =>
@@ -74,7 +75,7 @@ interface SetMealFavoriteInput {
   isFavorite: boolean;
 }
 
-/** Writes the value asked for, never a toggle read from a cache. */
+/** Writes the value asked for, never a toggle read from a cache, and leaves `updatedAt` alone: a shared link compares it to say the meal changed, and a star is not shared. */
 export const setMealFavorite = createAsyncThunk<
   void,
   SetMealFavoriteInput,
@@ -83,7 +84,7 @@ export const setMealFavorite = createAsyncThunk<
   'pinch/meals/setFavorite',
   async ({ uid, id, isFavorite }, { rejectWithValue }) => {
     try {
-      await updateDoc(mealDoc(uid, id), { isFavorite, updatedAt: Date.now() });
+      await updateDoc(mealDoc(uid, id), { isFavorite });
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to change this star.'),
@@ -97,12 +98,12 @@ interface RemoveMealInput {
   id: string;
 }
 
-/** A saved meal is always deletable: planned days hold their own copy and nothing reads `sourceMealId`. */
+/** A saved meal is always deletable: planned days hold their own copy and nothing reads `sourceMealId`. Its shared link is taken down after the delete has committed. */
 export const removeMeal = createAsyncThunk<
   string,
   RemoveMealInput,
-  { rejectValue: string }
->('pinch/meals/remove', async ({ uid, id }, { rejectWithValue }) => {
+  { state: RootState; rejectValue: string }
+>('pinch/meals/remove', async ({ uid, id }, { getState, rejectWithValue }) => {
   try {
     await deleteDoc(mealDoc(uid, id));
   } catch (error) {
@@ -110,6 +111,8 @@ export const removeMeal = createAsyncThunk<
       getErrorMessage(error, 'Unable to delete this meal.'),
     );
   }
+
+  stopSharingDeleted(getState(), 'MEAL', id);
 
   return id;
 });

@@ -17,6 +17,15 @@ import AppNavPanel from '@ui/AppNavPanel';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
 
+/** A link's page never names what it shows: its title is the same for every link. */
+const getPageTitle = (pathname: string, appName: string | null) => {
+  if (pathname.startsWith('/a-list/shared/')) {
+    return 'Movie calendar - A-List Tracker';
+  }
+  if (pathname.startsWith('/pinch/shared/')) return 'Shared on Pinch';
+  return appName ? `${appName} - Moondreams Dev Apps` : 'Moondreams Dev Apps';
+};
+
 function LocationSync() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,7 +54,7 @@ function LocationSync() {
           ? 'home'
           : locationPathname
               .replace(/^\/+/, '')
-              .replace(/^(a-list\/shared)\/.*$/, '$1');
+              .replace(/^((?:a-list|pinch)\/shared)\/.*$/, '$1');
 
       setCurrentLocation(nextLocation);
     }
@@ -73,9 +82,7 @@ function LocationSync() {
         );
       });
 
-    document.title = location.pathname.startsWith('/a-list/shared/')
-      ? 'Movie calendar - A-List Tracker'
-      : app ? `${app.name} - Moondreams Dev Apps` : 'Moondreams Dev Apps';
+    document.title = getPageTitle(location.pathname, app?.name ?? null);
   }, [location.pathname]);
 
   return null;

@@ -19,6 +19,8 @@ import {
   PlateRows,
 } from '@apps/pinch/components/recipes/PlateRecipe';
 import { SECTION_COUNT_THRESHOLD } from '@apps/pinch/constants';
+import ShareDoorRow from '@apps/pinch/components/share/ShareDoorRow';
+import ShareView from '@apps/pinch/components/share/ShareView';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import LeftOutTip from '@apps/pinch/components/shared/LeftOutTip';
 import {
@@ -73,6 +75,8 @@ function MealDrawer({
   const isStockReady = useAppSelector(selectIsContainersReady);
   const stockError = useAppSelector(selectContainersLoadError);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareFooter, setShareFooter] = useState<HTMLElement | null>(null);
   const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
@@ -86,6 +90,7 @@ function MealDrawer({
   };
   const getViewKey = () => {
     if (openRecipeId !== null) return `recipe:${openRecipeId}`;
+    if (isShareOpen) return 'share';
     return isMoreOpen ? 'more' : 'plate';
   };
 
@@ -111,6 +116,49 @@ function MealDrawer({
     return 'Add prices from the recipes on this plate, or in Kitchen.';
   };
 
+  const getFooter = () => {
+    if (openRecipeId !== null) return undefined;
+    if (isShareOpen) {
+      return <div ref={setShareFooter} className='px-4 pb-4 empty:hidden' />;
+    }
+
+    return (
+      <div className='flex gap-2 px-4 pb-4'>
+        <Button
+          type='button'
+          variant='secondary'
+          className='shrink-0 max-sm:px-3'
+          onClick={() => onModify(meal.id)}
+        >
+          Modify
+        </Button>
+        <Button
+          ref={moreRef}
+          type='button'
+          variant='secondary'
+          size='icon'
+          aria-label='More for this saved meal'
+          title='More for this saved meal'
+          aria-expanded={isMoreOpen}
+          onClick={() => setIsMoreOpen((open) => !open)}
+          className={join(
+            'text-foreground! size-10 min-w-10 shrink-0 p-0',
+            isMoreOpen && 'bg-accent!',
+          )}
+        >
+          <Ellipsis className='h-5 w-5' aria-hidden='true' />
+        </Button>
+        <Button
+          type='button'
+          className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
+          onClick={() => onPlan(meal.id)}
+        >
+          Plan it
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <DetailSheet
       isOpen
@@ -125,43 +173,7 @@ function MealDrawer({
           onClick={() => onToggleFavorite(meal)}
         />
       }
-      footer={
-        openRecipeId !== null ? undefined : (
-          <div className='flex gap-2 px-4 pb-4'>
-            <Button
-              type='button'
-              variant='secondary'
-              className='shrink-0 max-sm:px-3'
-              onClick={() => onModify(meal.id)}
-            >
-              Modify
-            </Button>
-            <Button
-              ref={moreRef}
-              type='button'
-              variant='secondary'
-              size='icon'
-              aria-label='More for this saved meal'
-              title='More for this saved meal'
-              aria-expanded={isMoreOpen}
-              onClick={() => setIsMoreOpen((open) => !open)}
-              className={join(
-                'text-foreground! size-10 min-w-10 shrink-0 p-0',
-                isMoreOpen && 'bg-accent!',
-              )}
-            >
-              <Ellipsis className='h-5 w-5' aria-hidden='true' />
-            </Button>
-            <Button
-              type='button'
-              className='min-w-0 flex-1 whitespace-nowrap max-sm:px-3'
-              onClick={() => onPlan(meal.id)}
-            >
-              Plan it
-            </Button>
-          </div>
-        )
-      }
+      footer={getFooter()}
     >
       {openRecipeId !== null && (
         <PlateRecipeView
@@ -170,7 +182,23 @@ function MealDrawer({
           onBack={() => setOpenRecipeId(null)}
         />
       )}
-      {isMoreOpen && openRecipeId === null && (
+      {isShareOpen && openRecipeId === null && (
+        <div className='space-y-4'>
+          <div className='space-y-1'>
+            <BackLink onBack={() => setIsShareOpen(false)} />
+            <p className='font-medium [@media(max-height:599px)]:hidden'>
+              Share this saved meal
+            </p>
+          </div>
+          <ShareView
+            kind='MEAL'
+            sourceId={meal.id}
+            footerNode={shareFooter}
+            onClose={onClose}
+          />
+        </div>
+      )}
+      {isMoreOpen && !isShareOpen && openRecipeId === null && (
         <div className='space-y-5'>
           <BackLink onBack={closeMore} />
           <div className='space-y-2'>
@@ -202,6 +230,11 @@ function MealDrawer({
                   onClick={() => onPutAway(meal.id)}
                 />
               )}
+              <ShareDoorRow
+                kind='MEAL'
+                sourceId={meal.id}
+                onClick={() => setIsShareOpen(true)}
+              />
             </ActionGroup>
             {stockError === null && !isStockReady && (
               <p className='text-muted-foreground text-sm'>

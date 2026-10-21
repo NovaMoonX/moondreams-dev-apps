@@ -9,6 +9,18 @@ Every piece of work in this repo ends with a **draft PR**, opened automatically 
 
 **Skip it** only for a PR that changes no app behaviour or UI (docs, CI config, skills): say so in the PR body in one line.
 
+## The body's shape (the reviewer reads this first)
+
+The person reviewing wants to know what they are looking at, what they must do and how it works before they see any evidence. Write the body in this order:
+
+1. **`## Overview`**: what a person can now do, from the product and user side, one bullet per capability ("Share a recipe by a link anyone can open"). Each bullet has sub-bullets with the technical know-how in a line each (the callable, the collection, the component that changed). Say what the PR is stacked on in one line above it, and name anything the owner asked for by quoting it once.
+2. **`## What you need to do`**: the reviewer's list and nothing else: decisions that are theirs (each as a question with the option and its cost), the short list of new copy to approve (the full list lives below), steps before the merge (deploy order, secrets and config), steps after (what to open and what it should show), and what could not be checked from here.
+3. **`## How it works`**: the architecture in short sections: data and paths, rules (widened, narrowed or unchanged, one line each), Functions, the main flows, and what is deliberately not built.
+4. **`## Screenshots`**: before | after for changes, one image for new screens (section 1 below).
+5. **Evidence, collapsed:** `## Regression check` (security rules first), `## Performance`, `## Privacy`, `## Reviews`, `## Not checked`, `## Copy for the owner to approve` (complete), `## Rules written down` and any journey or behaviour tables, each as `<details><summary><b>Regression check</b>: 14 rows, access widened in one</summary>` followed by a blank line and the section's content (tables need that blank line), closed by `</details>`. The summary line carries the verdict, so the reader can decide whether to open it. A block with nothing to say is left out, not filled.
+
+Keep the first three sections short enough to read without scrolling past evidence; link to an evidence block instead of repeating its figures.
+
 ## 1. Screenshots in the PR body
 
 The reader should see what changed without checking out the branch.

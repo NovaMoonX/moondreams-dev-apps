@@ -8,6 +8,7 @@ import type {
   PlannedMeal,
   Product,
   ResolvedFamily,
+  ShareKind,
 } from '@apps/pinch/types';
 import {
   byEatBy,
@@ -42,6 +43,7 @@ import {
 } from '@apps/pinch/utils/settings';
 import { getCollectionCounts } from '@apps/pinch/utils/collections';
 import { sortFavoritesFirst } from '@apps/pinch/utils/favorites';
+import { getShareKey, getShareStatus } from '@apps/pinch/utils/sharing';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const selectRecords = (state: RootState) => state.pinch.ingredients.records;
@@ -662,3 +664,41 @@ export const selectUsualDays = createSelector(
       freezerDays: freezerDays ?? null,
     }),
 );
+
+const selectShareItems = (state: RootState) => state.pinch.shares.items;
+
+/** The person's links, the latest copy first. */
+export const selectShares = createSelector([selectShareItems], (shares) =>
+  [...shares].sort((a, b) => b.updatedAt - a.updatedAt),
+);
+
+export const selectSharesBySource = createSelector(
+  [selectShareItems],
+  (shares) =>
+    new Map(
+      shares.map((share) => [getShareKey(share.kind, share.sourceId), share]),
+    ),
+);
+
+export const selectShareBySource =
+  (kind: ShareKind, sourceId: string) => (state: RootState) =>
+    selectSharesBySource(state).get(getShareKey(kind, sourceId)) ?? null;
+
+/** Whether each link's original is gone and whether it changed since the copy was taken, by the link's id. */
+export const selectShareStatuses = createSelector(
+  [selectShares, selectRecipesById, selectMealsById],
+  (shares, recipesById, mealsById) =>
+    new Map(
+      shares.map((share) => [
+        share.id,
+        getShareStatus(share, recipesById, mealsById),
+      ]),
+    ),
+);
+
+export const selectSharesLoadError = (state: RootState) =>
+  state.pinch.shares.loadError;
+
+/** Until it has loaded, or after it failed, whether a recipe is already shared isn't known. */
+export const selectIsSharesReady = (state: RootState) =>
+  state.pinch.shares.isLoaded && state.pinch.shares.loadError === null;

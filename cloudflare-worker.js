@@ -87,14 +87,23 @@ const APP_REGISTRY = [
     description:
       'Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.',
     image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-pinch.png',
+    pages: [
+      {
+        prefix: '/pinch/shared/',
+        title: 'A recipe shared on Pinch',
+        description:
+          'Someone shared a recipe or a meal with you. Open the link to read it.',
+      },
+    ],
   },
 ];
 
-// Tells search engines not to list the page in their results, even those that never run its JS (where the noindex meta tag is added).
+// Tells search engines not to list the page or follow its links, and browsers not to send its address as a referrer, even for those that never run its JS (where the same meta tags are added).
 // The copy is needed because a fetched response's headers are read-only.
-function withNoIndex(response) {
+function withUnlistedPageHeaders(response) {
   const result = new Response(response.body, response);
-  result.headers.set('X-Robots-Tag', 'noindex');
+  result.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  result.headers.set('Referrer-Policy', 'no-referrer');
   return result;
 }
 
@@ -138,7 +147,7 @@ export default {
     const isUnlisted = APP_REGISTRY.some((app) =>
       (app.pages ?? []).some(({ prefix }) => url.pathname.startsWith(prefix)),
     );
-    const response = isUnlisted ? withNoIndex(fetched) : fetched;
+    const response = isUnlisted ? withUnlistedPageHeaders(fetched) : fetched;
 
     const appMeta = getAppMeta(url);
 
