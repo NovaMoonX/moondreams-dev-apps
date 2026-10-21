@@ -29,6 +29,7 @@ import EventSuggestionHost, { type EventSuggestionHandle } from '@apps/waypoint/
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
+import RevealChip from '@/components/RevealChip';
 import SectionDivider from '@/components/SectionDivider';
 import DayHeader from '@apps/waypoint/components/DayHeader';
 import SectionHeader from '@/components/SectionHeader';
@@ -87,6 +88,7 @@ const OUTSIDE_TAB = 'outside';
 const EAGER_DAYS = 2;
 const ESTIMATED_CARD_HEIGHT = 210;
 const ESTIMATED_LOGISTICS_HEIGHT = 44;
+const ESTIMATED_ADD_ROW_HEIGHT = 40;
 const getItemHeight = (items: TimelineEvent[]) =>
   items.reduce((total, item) => total + (item.eventType === 'TRAVEL' ? ESTIMATED_LOGISTICS_HEIGHT : ESTIMATED_CARD_HEIGHT), 0);
 
@@ -396,7 +398,9 @@ export function TimelineSection({
   };
 
   const getLogisticsHeight = (bucket: IndexBucket) =>
-    typeof bucket === 'number' ? (logisticsByDay.get(bucket)?.length ?? 0) * ESTIMATED_LOGISTICS_HEIGHT : 0;
+    typeof bucket === 'number'
+      ? (logisticsByDay.get(bucket)?.length ?? 0) * ESTIMATED_LOGISTICS_HEIGHT + (canAddEvents ? ESTIMATED_ADD_ROW_HEIGHT : 0)
+      : 0;
 
   const renderEventItems = (items: TimelineEvent[], dayIndex?: number) => {
     const timelineNodes = buildTimelineItems(items).map((item) => {
@@ -421,24 +425,10 @@ export function TimelineSection({
 
   const renderDayAdd = (dayIndex: number, label: string) =>
     canAddEvents && (
-      <Button
-        type='button'
-        variant='tertiary'
-        size='sm'
-        aria-label={`Add to ${label}`}
-        className="relative whitespace-nowrap before:absolute before:-inset-y-1.5 before:-inset-x-1 before:content-['']"
-        onClick={() => openNew(dayIndex)}
-      >
-        Add
-      </Button>
+      <RevealChip icon={<span>+</span>} ariaLabel={`Add to ${label}`} onClick={() => openNew(dayIndex)}>
+        Add to this day
+      </RevealChip>
     );
-
-  const renderDayTrailing = (dayIndex: number, label: string, weather: ReactNode) => (
-    <div className='flex items-center gap-2'>
-      {weather}
-      {renderDayAdd(dayIndex, label)}
-    </div>
-  );
 
   const renderDivider = (label: string, trailing?: ReactNode) => (
     <SectionDivider label={label} trailing={trailing} />
@@ -489,13 +479,14 @@ export function TimelineSection({
               <div key={day} className='space-y-3'>
                 {renderDivider(
                   getDayDateLabel(trip.startDate, day),
-                  renderDayTrailing(day, getDayDateLabel(trip.startDate, day), compactAllDaysWeather ? renderDayWeather(day, true) : null),
+                  compactAllDaysWeather ? renderDayWeather(day, true) : undefined,
                 )}
                 {!compactAllDaysWeather && renderDayWeather(day, false)}
                 {renderEventItems(
                   visibleEvents.filter((event) => event.dayIndex === day),
                   day,
                 )}
+                {renderDayAdd(day, getDayDateLabel(trip.startDate, day))}
               </div>
             ))}
         </div>
@@ -533,16 +524,13 @@ export function TimelineSection({
               <DayHeader
                 isSticky={isPhone}
                 label={getBucketLabel(bucket, trip.startDate, dayCount)}
-                trailing={
-                  typeof bucket === 'number'
-                    ? renderDayTrailing(bucket, getBucketLabel(bucket, trip.startDate, dayCount), compactAllDaysWeather ? renderDayWeather(bucket, true) : null)
-                    : undefined
-                }
+                trailing={typeof bucket === 'number' && compactAllDaysWeather ? renderDayWeather(bucket, true) : undefined}
               />
               {typeof bucket === 'number' && !compactAllDaysWeather && renderDayWeather(bucket, false)}
               <div className='space-y-3 pb-3'>
                 <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={getItemHeight(items) + getLogisticsHeight(bucket)}>
                   {renderEventItems(items, typeof bucket === 'number' ? bucket : undefined)}
+                  {typeof bucket === 'number' && renderDayAdd(bucket, getBucketLabel(bucket, trip.startDate, dayCount))}
                 </LazyMount>
               </div>
             </div>
