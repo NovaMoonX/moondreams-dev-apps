@@ -291,7 +291,7 @@ block-beta
   style S1 fill:transparent,stroke:#888888,stroke-width:1px;
   style Manual fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*An empty search shows your unseen watchlist (calendar adds), then "In theaters and coming soon": what is playing in US theaters and what opens soon, most popular first, each row saying "In theaters" or "Opens Oct 30" with an info icon beside the heading saying what is left out (films already on your watchlist, seen or not), the first 8 shown (and when everything is already on your list, one line says so), with "Show all N" (shown for watchlist adds and calendar plans, not when backfilling movies you've seen). Picking a film opens its details: for a suggested film on a watchlist add, what the film is (release, runtime, rating, genres, synopsis) and the trailer come first, and "Add to watchlist" is what brings up "How badly do you want to see it?" (a tap on a suggestion is interest, not intent); where "Watch trailer on YouTube" opens the trailer in a new tab (nothing is loaded from YouTube until the tap; trailer picks save on the tap and have no details step, on purpose: the person is in the theater watching trailers). A film that is on the list and already seen is reachable by typing, for a rewatch. Typing searches your watchlist and the movie database together, watchlist matches first. The same picker opens Add to watchlist. Search results show a title and year only; the release date, runtime and rating arrive once a movie is picked. The movie database allows a limited number of lookups a day, shared across everyone using the app, so typing waits for a pause and repeat searches are remembered. If search is unavailable, or a movie isn't in the database, "Add it by title" asks for a title and, optionally, a release date; that movie has no poster, so its cover is a title tile.*
+*An empty search shows your unseen watchlist (calendar adds), then "In theaters and coming soon": what is playing in US theaters and what opens soon, most popular first, each row saying "In theaters" or "Opens Oct 30" with an info icon beside the heading saying what is left out (films already on your watchlist, seen or not), the first 8 shown (and when everything is already on your list, one line says so), with "Show all N" (shown for watchlist adds and calendar plans, not when backfilling movies you've seen). Picking a film opens its details. For a suggested film on a watchlist add, those details are what the film is (release, runtime, rating, genres, a synopsis folded to four lines with "Read more") and "Watch trailer on YouTube", which opens in a new tab and loads nothing from YouTube until the tap; a tap on a suggestion is interest, not intent. "I want to see this" brings up "How badly do you want to see it?" and the format in place, under the same facts, and the primary becomes "Add"; Back returns to the facts. A suggested film with no synopsis, genres or trailer skips the facts view and keeps the plain form. A calendar plan from a suggestion shows the same facts above its form. Trailer picks save on the tap and have no details step, on purpose: the person is in the theater watching trailers. A film that is on the list and already seen is reachable by typing, for a rewatch. Typing searches your watchlist and the movie database together, watchlist matches first. The same picker opens Add to watchlist. Search results show a title and year only; the release date, runtime and rating arrive once a movie is picked. The movie database allows a limited number of lookups a day, shared across everyone using the app, so typing waits for a pause and repeat searches are remembered. If search is unavailable, or a movie isn't in the database, "Add it by title" asks for a title and, optionally, a release date; that movie has no poster, so its cover is a title tile.*
 
 **Add to calendar — details** (the same drawer, step 2; the content swaps in place)
 ```mermaid
@@ -511,7 +511,7 @@ block-beta
 ```
 *Each row is a card with a full-height poster, release date, preferred format, a Must See / Want to See badge in the top-right corner, a tear-off date chip when a showing is planned, and, under Seen, the latest watched date with "×2" for rewatches. Tapping a row opens a drawer: Add to calendar (swaps in place), Edit (swaps in place), Remove.*
 
-**Add to watchlist — details** (drawer, step 2; step 1 is the picker shown above)
+**Add to watchlist — details** (drawer, step 2; step 1 is the picker shown above; a suggested film first shows its genres, synopsis and trailer and asks for the priority below only after "I want to see this")
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
@@ -535,7 +535,7 @@ block-beta
   style Spacer fill:transparent,stroke:none;
   style Add fill:transparent,stroke:#888888,stroke-width:1px;
 ```
-*Shows what the movie database knows (release date, runtime, rating). Priority defaults to Want to See; preferred format is optional and defaults to no preference. The app never tries to find out which AMC formats a movie plays in; the preferred format is always a plain pick from the fixed list (Standard and the five premium formats), or none.*
+*Shows what the movie database knows (release date, runtime, rating; for a suggested film also genres, a synopsis and the trailer). Priority defaults to Want to See; preferred format is optional and defaults to no preference. The app never tries to find out which AMC formats a movie plays in; the preferred format is always a plain pick from the fixed list (Standard and the five premium formats), or none.*
 
 **Dashboard**
 ```mermaid
@@ -626,7 +626,7 @@ flowchart LR
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'clusterBkg': 'transparent', 'primaryBorderColor': '#888888', 'clusterBorder': '#888888', 'lineColor': '#888888', 'primaryTextColor': '#333333'}}}%%
 flowchart LR
-    A[Watchlist] --> B[+ Add] --> C[Search] --> D[Pick a movie] --> E[See release date, runtime, rating] --> F[Set priority and preferred format] --> G[Add] --> H[Appears in All and its priority tab, and in Opening if it releases within a week]
+    A[Watchlist] --> B[+ Add] --> C[Search] --> D[Pick a movie] --> E[See release date, runtime, rating, and for a suggestion genres, synopsis, trailer] --> E2[I want to see this] --> F[Set priority and preferred format] --> G[Add] --> H[Appears in All and its priority tab, and in Opening if it releases within a week]
 ```
 
 **Add to calendar**
