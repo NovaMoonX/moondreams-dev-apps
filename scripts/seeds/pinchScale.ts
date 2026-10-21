@@ -148,8 +148,16 @@ const DISH_WORDS = [
   'dumplings',
 ];
 const MASS_UNITS = ['G', 'OZ', 'LB', 'KG'] as const;
+const IDEA_SITES = [
+  'Serious Eats',
+  'NYT Cooking',
+  'Smitten Kitchen',
+  'Budget Bytes',
+  'Minimalist Baker',
+];
 const SHOPPING_UNITS = ['G', 'EACH', 'LB', 'CUP', 'OZ'] as const;
 const SHOPPING_ITEM_COUNT = 80;
+const IDEA_COUNT = 80;
 const SHOPPING_FAMILY_COUNT = 25;
 // The last label is long on purpose, to see a name wrap on a phone.
 const SOURCE_LABELS = [
@@ -194,7 +202,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals, about 1,100 planned meals over three months and an 80-item shopping list. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list and 80 recipe ideas. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -378,6 +386,43 @@ export async function seedPinchScale(
   );
   shoppingItems.forEach((entry, index) =>
     add(`shoppingItems/${entry.id}`, {
+      ...entry,
+      createdAt: createdAt + index,
+      updatedAt: createdAt + index,
+    }),
+  );
+
+  // 80 ideas: a link in two of every three (one in three with a picture address that cannot load offline) and the rest jotted,
+  // every seventh with a title over 100 characters, every ninth with a long note, and every tenth already made into a recipe.
+  const ideas = Array.from({ length: IDEA_COUNT }, (_, index) => {
+    const isLink = index % 3 !== 2;
+    const dish = `${RECIPE_WORDS[index % RECIPE_WORDS.length]} ${DISH_WORDS[(index * 5) % DISH_WORDS.length]}`;
+    const site = IDEA_SITES[index % IDEA_SITES.length];
+    return {
+      id: `scale-idea-${index}`,
+      kind: isLink ? 'LINK' : 'TEXT',
+      title:
+        index % 7 === 6
+          ? `${dish} with a long list of extras: roasted garlic, a quick pickle, toasted seeds and something green on the side`
+          : `${dish} ${index + 1}`,
+      note:
+        index % 9 === 8
+          ? 'Worth trying on a slow weekend. '.repeat(18).trim()
+          : index % 4 === 0
+            ? 'Saw this and liked it.'
+            : null,
+      url: isLink ? `https://www.example.com/scale/idea-${index}` : null,
+      siteName: isLink ? site : null,
+      imageUrl:
+        isLink && index % 3 === 0
+          ? `https://images.example.test/scale/idea-${index}.jpg`
+          : null,
+      photoPath: null,
+      recipeId: index % 10 === 9 ? `scale-recipe-${index}` : null,
+    };
+  });
+  ideas.forEach((entry, index) =>
+    add(`ideas/${entry.id}`, {
       ...entry,
       createdAt: createdAt + index,
       updatedAt: createdAt + index,

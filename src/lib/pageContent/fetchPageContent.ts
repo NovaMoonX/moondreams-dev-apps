@@ -35,15 +35,21 @@ export interface PageContent {
   images?: string[];
 }
 
-const fetchPageContentCallable = httpsCallable<PageContentRequest, PageContent>(
-  functions,
-  'fetchPageContent',
-);
+export interface PageContentOptions {
+  /** Gives up on the call after this long; the function's own limit when omitted. */
+  timeoutMs?: number;
+}
 
 /** Raw callable: call through `pageContentQueryOptions` so a repeat of the same request isn't fetched twice. */
 export async function fetchPageContent(
   request: PageContentRequest,
+  { timeoutMs }: PageContentOptions = {},
 ): Promise<PageContent> {
-  const result = await fetchPageContentCallable(request);
+  const callable = httpsCallable<PageContentRequest, PageContent>(
+    functions,
+    'fetchPageContent',
+    timeoutMs === undefined ? undefined : { timeout: timeoutMs },
+  );
+  const result = await callable(request);
   return result.data;
 }

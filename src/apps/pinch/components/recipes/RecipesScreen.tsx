@@ -11,6 +11,7 @@ import LazyMount from '@/components/LazyMount';
 import SectionHeader from '@/components/SectionHeader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
+import IdeasView from '@apps/pinch/components/ideas/IdeasView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
 import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
@@ -23,6 +24,7 @@ import {
   LIST_SEARCH_THRESHOLD,
   RECIPES_VIEW_LABELS,
   RECIPES_VIEWS,
+  SOFT_MAX_IDEAS,
   SOURCE_FILTER_ANY,
   SOURCE_FILTER_NONE,
 } from '@apps/pinch/constants';
@@ -30,6 +32,7 @@ import { useListViewOptions } from '@apps/pinch/hooks/useListViewOptions';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   selectCostContext,
+  selectIdeasLoadError,
   selectMeals,
   selectRecipeCosts,
   selectRecipes,
@@ -75,6 +78,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
   const sourceCounts = useAppSelector(selectSourceCounts);
+  const ideaCount = useAppSelector((state) => state.pinch.ideas.items.length);
+  const ideasLoadError = useAppSelector(selectIdeasLoadError);
+  const isIdeasLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
   const [view, setView] = useState<RecipesView>('recipes');
   const [query, setQuery] = useState('');
   const [pickedSource, setPickedSource] = useState(SOURCE_FILTER_ANY);
@@ -82,8 +88,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [openMealId, setOpenMealId] = useState<string | null>(null);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
+  const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
 
-  const total = view === 'meals' ? meals.length : recipes.length;
+  const isIdeas = view === 'ideas';
+  const canAddIdea = isIdeasLoaded && ideasLoadError === null;
+  const total = isIdeas ? 0 : view === 'meals' ? meals.length : recipes.length;
   const hasFilterBar = view === 'recipes' && sourceCounts.bySource.size > 0;
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
@@ -163,6 +172,16 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   );
 
   const getBody = () => {
+    if (isIdeas) {
+      return (
+        <IdeasView
+          uid={uid}
+          isAddOpen={isIdeaAddOpen}
+          onAddClose={() => setIsIdeaAddOpen(false)}
+          onOpenRecipe={setOpenId}
+        />
+      );
+    }
     if (view === 'meals') {
       if (meals.length === 0) {
         return (
@@ -291,6 +310,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   };
 
   const handleNew = () => {
+    if (isIdeas) {
+      if (canAddIdea) setIsIdeaAddOpen(true);
+      return;
+    }
     if (view === 'meals') {
       openSubview({ kind: 'meal', id: null });
       return;
@@ -305,24 +328,27 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   return (
     <div className='space-y-4'>
       <SectionHeader
-        title='Recipes'
+        title={RECIPES_VIEW_LABELS[view]}
         action={
-          <Button
-            type='button'
-            size='sm'
-            rounded='full'
-            className='gap-1'
-            onClick={handleNew}
-          >
-            <Plus className='h-4 w-4' aria-hidden='true' />
-            New
-          </Button>
+          (!isIdeas || ideaCount < SOFT_MAX_IDEAS) && (
+            <Button
+              type='button'
+              size='sm'
+              rounded='full'
+              className='gap-1'
+              disabled={isIdeas && !canAddIdea}
+              onClick={handleNew}
+            >
+              <Plus className='h-4 w-4' aria-hidden='true' />
+              {isIdeas ? 'New idea' : 'New'}
+            </Button>
+          )
         }
       />
       <div className='flex items-center justify-between gap-3'>
         <div className='min-w-0'>
           <PillGroup
-            label='Recipes or meals'
+            label='Recipes, meals or ideas'
             options={VIEW_OPTIONS}
             value={view}
             onChange={(next) => {
@@ -338,7 +364,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             customizedCount={viewOptions.customizedCount}
             onChange={viewOptions.update}
             onReset={viewOptions.reset}
-            className='h-10 w-10'
+            className='-my-3'
           />
         )}
       </div>

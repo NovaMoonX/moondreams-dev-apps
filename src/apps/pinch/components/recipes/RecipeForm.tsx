@@ -31,6 +31,7 @@ import {
 import RecipeIngredients from '@apps/pinch/components/recipes/RecipeIngredients';
 import {
   getDataFromExtracted,
+  getDataFromIdea,
   getInitialData,
   getReadSourceChoice,
   isValidMinutes,
@@ -65,7 +66,12 @@ import {
   selectSourcesById,
   selectSourcesLoadError,
 } from '@apps/pinch/store/selectors';
-import type { NutritionMetric, Recipe, RecipeSource } from '@apps/pinch/types';
+import type {
+  Idea,
+  NutritionMetric,
+  Recipe,
+  RecipeSource,
+} from '@apps/pinch/types';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import { describeUsage, isInUse } from '@apps/pinch/utils/references';
 
@@ -94,6 +100,8 @@ interface RecipeFormProps {
   recipeId: string | null;
   /** What a reader found for a new recipe; the form opens filled in with it. */
   initialRead: RecipeRead | null;
+  /** The idea a new recipe is made from: the form opens with what it knows, and saving marks it made. */
+  initialIdea: Idea | null;
   /** Keeps the screen's header on the recipe's name as it is typed. */
   onTitleChange: (title: string) => void;
   /** Tells the screen whether leaving now would throw work away. */
@@ -106,6 +114,7 @@ function RecipeForm({
   uid,
   recipeId,
   initialRead,
+  initialIdea,
   onTitleChange,
   isDirtyRef,
   onLeave,
@@ -137,7 +146,9 @@ function RecipeForm({
             sources,
           ),
         }
-      : getInitialData(recipe, sourcesById),
+      : initialIdea
+        ? getDataFromIdea(initialIdea, sources)
+        : getInitialData(recipe, sourcesById),
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
@@ -205,7 +216,8 @@ function RecipeForm({
     };
   }, [formData.ingredients, formData.basics.servings, ingredientsById]);
 
-  const isBlankByHand = recipeId === null && initialRead === null;
+  const isBlankByHand =
+    recipeId === null && initialRead === null && initialIdea === null;
   const unresolvedCount = formData.ingredients.filter(
     (row) => row.ingredientId === '',
   ).length;
@@ -492,7 +504,7 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
-      await dispatch(
+      const { linkedIdea } = await dispatch(
         saveRecipe({
           uid,
           draft: {
@@ -526,10 +538,23 @@ function RecipeForm({
             steps: data.steps.map((step) => step.trim()).filter(Boolean),
             coverFile: upload.file,
             removeCover: isCoverRemoved,
+            fromIdeaId: initialIdea?.id ?? null,
           },
         }),
       ).unwrap();
-      if (!recipe && subview?.kind === 'recipe' && subview.fromCalendar) {
+      if (initialIdea) {
+        addToast({
+          title: 'Recipe added',
+          description: linkedIdea
+            ? `“${initialIdea.title}” moved to Made into recipes.`
+            : undefined,
+          type: 'success',
+        });
+      } else if (
+        !recipe &&
+        subview?.kind === 'recipe' &&
+        subview.fromCalendar
+      ) {
         addToast({
           title: `Added ${data.title.trim()} to your recipes`,
           type: 'success',
@@ -553,6 +578,20 @@ function RecipeForm({
   return (
     <>
       <UndoSnackbar pending={pending} onUndo={undo} />
+      {initialIdea && (
+        <p className='text-muted-foreground mb-4 text-sm wrap-break-word'>
+          From your idea:{' '}
+          <span className='text-foreground font-medium'>
+            {initialIdea.title}
+          </span>
+          {initialIdea.kind === 'PHOTO' && (
+            <span className='mt-1 block text-xs'>
+              Its photo stays with the idea. To have an AI read a picture, start
+              a new recipe with “From a file”.
+            </span>
+          )}
+        </p>
+      )}
       {initialRead && !isNoteClosed && (
         <div
           className='bg-accent mb-4 flex items-start gap-2 rounded-2xl p-3 text-sm'

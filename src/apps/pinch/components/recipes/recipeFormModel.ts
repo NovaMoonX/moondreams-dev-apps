@@ -1,5 +1,6 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { generateUuid } from '@/utils';
+import { getWebLinkHost } from '@/utils/urlUtils';
 import {
   MAX_MINUTES,
   MAX_RECIPE_INGREDIENTS,
@@ -9,6 +10,7 @@ import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
 import { matchIngredient } from '@apps/pinch/utils/ingredientMatch';
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
+  Idea,
   NutritionMetric,
   NutritionValues,
   Recipe,
@@ -140,17 +142,35 @@ export const getDataFromExtracted = (
   };
 };
 
+const getSiteSourceChoice = (
+  label: string,
+  sources: Source[],
+): SourceChoice => {
+  const { existing, label: site } = getHostSource(label, sources);
+  if (existing) return { choice: existing.id, newText: '' };
+  return site === '' ? NO_SOURCE_CHOICE : { choice: NEW_CHOICE, newText: site };
+};
+
 /** What a reading starts the source on: for a link, the site's own source (made on save if there isn't one yet); a pasted text or a file names no place. */
 export const getReadSourceChoice = (
   source: RecipeSource,
   label: string,
   sources: Source[],
-): SourceChoice => {
-  if (source !== 'AI_LINK') return NO_SOURCE_CHOICE;
-  const { existing, label: host } = getHostSource(label, sources);
-  if (existing) return { choice: existing.id, newText: '' };
-  return host === '' ? NO_SOURCE_CHOICE : { choice: NEW_CHOICE, newText: host };
-};
+): SourceChoice =>
+  source === 'AI_LINK' ? getSiteSourceChoice(label, sources) : NO_SOURCE_CHOICE;
+
+export const getDataFromIdea = (
+  idea: Idea,
+  sources: Source[],
+): RecipeFormData => ({
+  ...getInitialData(null),
+  title: idea.title,
+  description: idea.note ?? '',
+  sourceChoice:
+    idea.kind === 'LINK' && idea.url
+      ? getSiteSourceChoice(getWebLinkHost(idea.url) ?? '', sources)
+      : NO_SOURCE_CHOICE,
+});
 
 const parseTyped = (text: string) => (text.trim() === '' ? null : Number(text));
 

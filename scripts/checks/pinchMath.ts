@@ -13,6 +13,22 @@ import {
 import { formatRowCost } from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
 import {
+  getComparableUrl,
+  getWebLinkHost,
+  hasSeveralWebLinks,
+  toWebLink,
+} from '../../src/utils/urlUtils.ts';
+import {
+  findIdeaByUrl,
+  getIdeaDetail,
+  getIdeaRecipeMethod,
+  getIdeaSearchText,
+  getMissingIdeaFields,
+  getReadingForIdea,
+  toIdeaImageUrl,
+  toIdeaUrl,
+} from '../../src/apps/pinch/utils/ideas.ts';
+import {
   getItemsLines,
   getMergedFields,
   getRecipeLines,
@@ -23,7 +39,9 @@ import {
   mergeLines,
   roundAmount,
 } from '../../src/apps/pinch/utils/shopping.ts';
+import type { ExtractedRecipe } from '../../src/apps/pinch/utils/normalizeRecipe.ts';
 import type {
+  Idea,
   MealItem,
   Gap,
   Product,
@@ -579,6 +597,344 @@ assert.deepEqual(
   ),
   [],
   'a meal item over a recipe with no servings gives no lines',
+);
+assert.equal(
+  toWebLink('  https://www.Example.com/a/  '),
+  'https://www.example.com/a/',
+  'stray spaces around a link are dropped and its host is lower-cased',
+);
+assert.equal(
+  toWebLink('Lemon bars\nhttps://site.example.com/lemon-bars'),
+  'https://site.example.com/lemon-bars',
+  'a title and a link that share the pasted text give the link',
+);
+assert.equal(
+  toWebLink('Lemon bars\thttps://site.example.com/x\tlook at this'),
+  'https://site.example.com/x',
+  'tabs separate words as spaces do',
+);
+assert.equal(
+  toWebLink('HTTPS://Site.example.com/x \r\n my notes'),
+  'https://site.example.com/x',
+  'a link with a capital scheme is found among words and line breaks',
+);
+assert.equal(
+  toWebLink('https://one.example.com/a https://two.example.com/b'),
+  null,
+  'two links in one paste are not one link',
+);
+assert.equal(
+  toWebLink('https://one.example.com/a\nhttp://two.example.com/b'),
+  null,
+  'two links on two lines are not one link',
+);
+assert.equal(
+  hasSeveralWebLinks('one https://a.example.com/x and http://b.example.com/y'),
+  true,
+  'two links are counted',
+);
+assert.equal(
+  hasSeveralWebLinks('Lemon bars\nhttps://a.example.com/x'),
+  false,
+  'one link among words is one link',
+);
+assert.equal(
+  toWebLink('example.com/recipes/very\nlong/path-that-wrapped'),
+  'https://example.com/recipes/verylong/path-that-wrapped',
+  'a link with no scheme that wrapped over lines is joined',
+);
+assert.equal(
+  toWebLink('https://example.com/a?next=https://other.example.com/b'),
+  'https://example.com/a?next=https://other.example.com/b',
+  'a link that holds another address in its query is still one link',
+);
+assert.equal(
+  toWebLink('seriouseats.com/recipes/x'),
+  'https://seriouseats.com/recipes/x',
+  'a link with no scheme is read as https',
+);
+assert.equal(
+  toWebLink('http://example.com'),
+  'http://example.com/',
+  'http stays http',
+);
+[
+  'javascript:alert(1)',
+  'ftp://files.example.com/x',
+  'mailto:a@example.com',
+  'data:text/html,hi',
+  'https://user:secret@example.com/x',
+  'not a link',
+  'localhost:3000',
+  '',
+  '   ',
+].forEach((text) =>
+  assert.equal(
+    toWebLink(text),
+    null,
+    `${JSON.stringify(text)} is not a web link`,
+  ),
+);
+assert.equal(
+  getWebLinkHost('https://www.seriouseats.com/x'),
+  'seriouseats.com',
+  'the host drops www',
+);
+
+const comparable = (text: string) => getComparableUrl(text);
+const samePage = [
+  'https://www.example.com/recipes/lemon-bars',
+  'http://example.com/recipes/lemon-bars/',
+  'EXAMPLE.com/recipes/lemon-bars?utm_source=news&utm_medium=email#comments',
+  'https://example.com/recipes/lemon-bars?fbclid=abc&gclid=def',
+  ' https://example.com/recipes/lemon-bars/?igshid=1 ',
+  'https://example.com/recipes/lemon-bars?igsh=abc&si=def&mibextid=ghi',
+];
+samePage.forEach((text) =>
+  assert.equal(
+    comparable(text),
+    'example.com/recipes/lemon-bars',
+    `${text} is the same page`,
+  ),
+);
+assert.notEqual(
+  comparable('https://example.com/recipes/lemon-bars'),
+  comparable('https://example.com/recipes/lemon-cake'),
+  'another path is another page',
+);
+assert.notEqual(
+  comparable('https://example.com/watch?v=1'),
+  comparable('https://example.com/watch?v=2'),
+  'a parameter that picks the page keeps it apart',
+);
+assert.equal(
+  comparable('https://example.com/p?b=2&a=1'),
+  comparable('https://example.com/p?a=1&b=2'),
+  'parameter order does not matter',
+);
+assert.equal(
+  comparable('https://example.com'),
+  'example.com',
+  'a bare site has no trailing slash',
+);
+assert.equal(comparable('hello'), null, 'text is not a page');
+
+const idea = (fields: Partial<Idea>): Idea => ({
+  id: 'idea',
+  kind: 'TEXT',
+  title: 'Lemon bars',
+  note: null,
+  url: null,
+  siteName: null,
+  imageUrl: null,
+  photoPath: null,
+  recipeId: null,
+  createdAt: 1,
+  updatedAt: 1,
+  ...fields,
+});
+const saved = [
+  idea({ id: 'a', kind: 'LINK', url: 'https://www.example.com/lemon-bars/' }),
+  idea({ id: 'b', kind: 'TEXT' }),
+];
+assert.equal(
+  findIdeaByUrl(saved, 'http://example.com/lemon-bars?utm_source=x')?.id,
+  'a',
+  'a link already saved is found by its page',
+);
+assert.equal(
+  findIdeaByUrl(saved, 'https://example.com/lemon-bars', 'a'),
+  null,
+  'the idea being edited is not its own duplicate',
+);
+assert.equal(
+  findIdeaByUrl(saved, 'https://example.com/other'),
+  null,
+  'a new page is not a duplicate',
+);
+assert.equal(findIdeaByUrl(saved, 'nonsense'), null, 'text matches nothing');
+
+assert.equal(
+  toIdeaUrl(`https://example.com/${'a'.repeat(2000)}`),
+  null,
+  'a link over 2,000 characters is not kept',
+);
+assert.equal(
+  toIdeaImageUrl('https://images.example.com/a.jpg'),
+  'https://images.example.com/a.jpg',
+  'an https picture is kept',
+);
+assert.equal(
+  toIdeaImageUrl('http://images.example.com/a.jpg'),
+  null,
+  'an http picture is not kept',
+);
+assert.equal(
+  toIdeaImageUrl('javascript:alert(1)'),
+  null,
+  'a script address is not kept',
+);
+assert.equal(toIdeaImageUrl(null), null, 'no picture is none');
+
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      siteName: 'Serious Eats',
+      url: 'https://www.example.com/x',
+      note: 'Chill overnight',
+    }),
+  ),
+  'Serious Eats',
+  'a link row says its site, not its note',
+);
+assert.equal(
+  getIdeaDetail(idea({ kind: 'LINK', url: 'https://www.example.com/x' })),
+  'example.com',
+  'a link with no site name says its host',
+);
+assert.equal(
+  getIdeaDetail(idea({ note: '\n  First line  \nSecond line' })),
+  'First line',
+  'a jotted idea says the first line of its note',
+);
+assert.equal(getIdeaDetail(idea({})), null, 'nothing to say gives no line');
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: 'seriouseats.com',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  null,
+  'a link saved with its host as the title does not say the host twice',
+);
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: ' SeriousEats.com ',
+      siteName: 'seriouseats.com',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  null,
+  'the comparison ignores case and spaces',
+);
+assert.equal(
+  getIdeaDetail(
+    idea({
+      kind: 'LINK',
+      title: 'seriouseats.com',
+      note: 'Sunday project',
+      url: 'https://www.seriouseats.com/x',
+    }),
+  ),
+  'Sunday project',
+  'a repeated site gives way to the first line of the note',
+);
+assert.equal(
+  getIdeaDetail(idea({ title: 'Sunday project', note: 'sunday project' })),
+  null,
+  'a note that is only the title says nothing more',
+);
+assert.equal(
+  getIdeaSearchText(
+    idea({ kind: 'LINK', siteName: 'NYT Cooking', note: 'overnight' }),
+  ),
+  'Lemon bars NYT Cooking overnight',
+  'search covers the title, site and note',
+);
+assert.deepEqual(
+  getMissingIdeaFields({ id: 'x', title: 't', note: null }),
+  {
+    url: null,
+    siteName: null,
+    imageUrl: null,
+    photoPath: null,
+    recipeId: null,
+  },
+  'an older idea gets the keys it lacks, as null',
+);
+assert.deepEqual(
+  getMissingIdeaFields(idea({})),
+  {},
+  'a whole idea lacks nothing',
+);
+
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: 'https://example.com/a' })),
+  'link',
+  'a link idea starts from the link way',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: 'not a link' })),
+  'manual',
+  'a link idea whose address can not be opened starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'LINK', url: null })),
+  'manual',
+  'a link idea with no address starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'PHOTO', url: null })),
+  'manual',
+  'a photo idea starts by hand',
+);
+assert.equal(
+  getIdeaRecipeMethod(idea({ kind: 'TEXT', url: 'https://example.com/a' })),
+  'manual',
+  'a typed note starts by hand',
+);
+
+const reading: ExtractedRecipe = {
+  title: 'Chicken adobo',
+  servings: 4,
+  prepMinutes: 10,
+  cookMinutes: 40,
+  description: 'Soy and vinegar, braised.',
+  ingredients: [{ name: 'chicken thigh', amount: 2, unit: 'LB', note: null }],
+  steps: ['Braise.'],
+  unread: [],
+};
+const linkIdea = idea({
+  kind: 'LINK',
+  url: 'https://www.seriouseats.com/adobo',
+  title: 'My adobo',
+  note: 'Mom likes it',
+});
+assert.deepEqual(
+  getReadingForIdea(reading, linkIdea),
+  { ...reading, title: 'My adobo', description: 'Mom likes it' },
+  "a reading keeps the idea's own title and note and fills the rest",
+);
+assert.equal(
+  getReadingForIdea(reading, { ...linkIdea, note: '  ' }).description,
+  'Soy and vinegar, braised.',
+  'a blank note leaves the page description',
+);
+assert.equal(
+  getReadingForIdea(reading, { ...linkIdea, title: 'SeriousEats.com' }).title,
+  'Chicken adobo',
+  "a title that is only the site's name gives way to the recipe's",
+);
+assert.equal(
+  getReadingForIdea(
+    { ...reading, title: null },
+    {
+      ...linkIdea,
+      title: 'seriouseats.com',
+    },
+  ).title,
+  'seriouseats.com',
+  'no recipe title leaves the idea title as it was',
+);
+assert.deepEqual(
+  getReadingForIdea(reading, linkIdea).ingredients,
+  reading.ingredients,
+  'the ingredients and steps are the reading’s own',
 );
 
 assert.equal(formatRowCost(null, false), 'No price yet');
