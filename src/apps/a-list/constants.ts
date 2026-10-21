@@ -175,4 +175,4 @@ export const SHARE_RANGE_OPTIONS: {
 export const MIN_CONTRACT_MONTHS = 3;
 /** A-List covers up to this many movies in a week (Friday to Thursday). */
 export const MAX_MOVIES_PER_WEEK = 4;
-export const MAX_MOVIES_PER_MONTH = 17;
+export const MAX_MOVIES_PER_MONTH = 18;
