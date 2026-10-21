@@ -22,6 +22,7 @@ import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
+import { getVoiceQuality, pickVoice } from '../../src/utils/speechUtils.ts';
 
 const sharedFiles = [
   ...readdirSync(new URL('../../src/lib/speech/', import.meta.url), {
@@ -278,3 +279,96 @@ assert.equal(
 );
 
 console.log('speechShared: all checks passed');
+
+const voice = (
+  name: string,
+  lang: string,
+  isLocal: boolean,
+  isDefault = false,
+) =>
+  ({
+    name,
+    lang,
+    localService: isLocal,
+    default: isDefault,
+  }) as SpeechSynthesisVoice;
+const pick = (voices: SpeechSynthesisVoice[], lang: string) =>
+  pickVoice(voices, lang)?.name ?? null;
+
+assert.deepEqual(
+  [
+    'Microsoft Aria Online (Natural) - English (United States)',
+    'Samantha (Enhanced)',
+    'Ava (Premium)',
+    'Siri Voice 2',
+    'Google US English',
+    'Microsoft David Desktop',
+    'Alex',
+    'Fred (compact)',
+    'English (America) espeak',
+  ].map((name) => getVoiceQuality(voice(name, 'en-US', true))),
+  [3, 3, 3, 3, 2, 0, 0, -2, -2],
+  'a voice is ranked by what its name says it is',
+);
+assert.equal(
+  pick(
+    [
+      voice('Microsoft David Desktop', 'en-US', true, true),
+      voice(
+        'Microsoft Aria Online (Natural) - English (United States)',
+        'en-US',
+        false,
+      ),
+    ],
+    'en-US',
+  ),
+  'Microsoft Aria Online (Natural) - English (United States)',
+  'a natural voice beats the default one even when it is a network voice',
+);
+assert.equal(
+  pick(
+    [
+      voice('Google US English', 'en-US', false),
+      voice('Samantha (Enhanced)', 'en-US', true),
+    ],
+    'en-US',
+  ),
+  'Samantha (Enhanced)',
+  'a higher-ranked voice beats a lower one',
+);
+assert.equal(
+  pick([voice('Zira', 'en-US', false), voice('David', 'en-US', true)], 'en-US'),
+  'David',
+  'at equal rank a voice on the device is chosen over a network voice',
+);
+assert.equal(
+  pick(
+    [voice('Alex', 'en-US', true), voice('Daniel', 'en-US', true, true)],
+    'en-US',
+  ),
+  'Daniel',
+  'at equal rank and place the browser default is chosen',
+);
+assert.equal(
+  pick(
+    [voice('Daniel (Premium)', 'en-GB', true), voice('Alex', 'en-US', true)],
+    'en-US',
+  ),
+  'Alex',
+  'the exact language wins before quality',
+);
+assert.equal(
+  pick(
+    [voice('Fred (compact)', 'en-GB', true), voice('Amelie', 'fr-FR', true)],
+    'en-US',
+  ),
+  'Fred (compact)',
+  'the same language from another region when there is no exact one',
+);
+assert.equal(
+  pick([voice('Amelie', 'fr-FR', true)], 'en-US'),
+  null,
+  'no voice for the language',
+);
+assert.equal(pick([], 'en-US'), null, 'no voices at all');
+console.log('speechShared: voice ranking checks passed');
