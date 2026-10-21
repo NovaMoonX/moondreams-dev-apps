@@ -120,7 +120,7 @@ html[data-subview-open] .sticky-app-bar {
   top: 0;
 }
 
-html[data-subview-open][data-site-banner='true'] .sticky-app-bar {
+html[data-subview-open][data-site-banner='true'] .sticky-app-bar:not([data-subview-overlay] *) {
   top: 2.25rem;
 }
 
@@ -128,7 +128,7 @@ html[data-subview-open] .sticky-day-bar {
   top: calc(3.75rem - 1px);
 }
 
-html[data-subview-open][data-site-banner='true'] .sticky-day-bar {
+html[data-subview-open][data-site-banner='true'] .sticky-day-bar:not([data-subview-overlay] *) {
   top: calc(2.25rem + 3.75rem - 1px);
 }
 
@@ -162,13 +162,20 @@ html.dark .subview-card {
 
 /* The page of an in-place subview: the backdrop shows around the card. */
 .subview-page {
+  display: flex;
+  flex-direction: column;
   min-height: 100dvh;
   width: 100%;
   padding: var(--subview-inset);
+  padding-top: max(var(--subview-inset), env(safe-area-inset-top));
 }
 
 html[data-site-banner='true'] .subview-page {
   padding-top: calc(var(--subview-inset) + 2.25rem);
+}
+
+.subview-page > .subview-card {
+  flex: 1 1 auto;
 }
 
 /* The full-screen layer of an overlay subview: the backdrop with the card (the scroller) inside it. */
@@ -179,6 +186,7 @@ html[data-site-banner='true'] .subview-page {
   display: flex;
   justify-content: center;
   padding: var(--subview-inset);
+  padding-top: max(var(--subview-inset), env(safe-area-inset-top));
   padding-bottom: max(var(--subview-inset), env(safe-area-inset-bottom));
   background-color: var(
     --subview-backdrop,

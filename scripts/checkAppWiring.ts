@@ -44,15 +44,21 @@ const THEME_TOKENS = [
 const themeProblems = listFiles('src/apps')
   .filter((file) => file.endsWith('.css'))
   .flatMap((file) => {
-    const css = readFileSync(file, 'utf8');
-    const blocks = /\.dark\s*\{/.test(css) ? 2 : 1;
-    return THEME_TOKENS.filter(
-      ({ token, inEachBlock }) =>
-        css.split(token).length - 1 < (inEachBlock ? blocks : 1),
-    ).map(
-      ({ token, inEachBlock }) =>
-        `${file}: does not set ${token}${inEachBlock && blocks === 2 ? ' in both its light and dark blocks' : ''}`,
+    const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = Array.from(
+      css.matchAll(/html\.[\w-]+-theme(\.dark)?\s*\{([^}]*)\}/g),
+      (match) => ({ isDark: match[1] !== undefined, body: match[2] }),
     );
+    const sets = (isDark: boolean, token: string) =>
+      rules.some((rule) => rule.isDark === isDark && rule.body.includes(token));
+    const hasDarkRule = rules.some((rule) => rule.isDark);
+    return THEME_TOKENS.flatMap(({ token, inEachBlock }) => {
+      const missingLight = !sets(false, token);
+      const missingDark = inEachBlock && hasDarkRule && !sets(true, token);
+      return missingLight || missingDark
+        ? [`${file}: does not set ${token} in its ${missingLight ? 'light' : 'dark'} block`]
+        : [];
+    });
   });
 
 problems.push(...themeProblems);

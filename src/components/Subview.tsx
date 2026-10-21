@@ -97,7 +97,8 @@ interface SubviewProps {
 /**
  * A nested page that takes over a mini-app: it opens at the top, brings its own way back, and
  * closes on the browser's back gesture rather than leaving the page beneath it. It floats as a card on
- * a tint of the app's colour and hides the site header; the card's look is the `--subview-*` tokens.
+ * a tint of the app's colour and hides the site header; the card's look is the `--subview-*` tokens, and its
+ * unlayered CSS beats any Tailwind surface class in `className` (use it for width only).
  */
 function Subview({
   children,
@@ -121,11 +122,10 @@ function Subview({
   }, [overlay]);
 
   useEffect(() => {
-    if (!overlay) {
-      return;
-    }
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (overlay) {
+      document.body.style.overflow = 'hidden';
+    }
     // Capture, so a dialog on top is still there to be seen before it closes itself on this keydown; an open
     // dropdown is found by where focus is and a tooltip by being on screen, as neither has handled it yet.
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -146,7 +146,9 @@ function Subview({
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      if (overlay) {
+        document.body.style.overflow = previousOverflow;
+      }
       window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [overlay, goBack]);
@@ -189,7 +191,7 @@ function Subview({
     <div className='subview-page'>
       <div
         className={join(
-          'subview-card mx-auto min-h-[calc(100dvh-var(--subview-inset)*2)] w-full max-w-2xl px-(--subview-pad) pt-3 pb-4 [@media(max-height:499px)]:pt-1 [@media(max-height:499px)]:pb-3',
+          'subview-card mx-auto w-full max-w-2xl px-(--subview-pad) pt-3 pb-4 [@media(max-height:499px)]:pt-1 [@media(max-height:499px)]:pb-3',
           className,
         )}
       >
