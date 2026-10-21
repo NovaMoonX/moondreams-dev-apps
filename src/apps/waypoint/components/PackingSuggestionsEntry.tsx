@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -28,6 +28,7 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
   const { addToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [pending, setPending] = useState<string[]>([]);
+  const inFlight = useRef(new Set<string>());
   const events = useAppSelector(selectSortedTimelineEvents);
   const sharedItems = useAppSelector((state) => state.waypoint.checklist.items);
   const personalItems = useAppSelector(selectPersonalChecklistItems);
@@ -52,21 +53,28 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
       ),
     [sharedItems, personalItems, trip.id],
   );
-  const isListed = (title: string) => listed.has(title.toLowerCase()) || pending.includes(title);
+  const isListed = (title: string) => listed.has(title.toLowerCase());
+  const isPending = (title: string) => pending.includes(title);
 
-  if (suggestions.length === 0 || getLocalDayIndex(trip.startDate, now) >= dayCount) {
+  const missing = suggestions.flatMap(({ items, title: kind }) =>
+    items.filter((title) => !isListed(title) && !isPending(title)).map((title) => ({ title, kind })),
+  );
+  const total = suggestions.reduce((sum, { items }) => sum + items.length, 0);
+  const hasLeft = suggestions.some(({ items }) => items.some((title) => !isListed(title)));
+
+  if (trip.isArchived || (!hasLeft && !isOpen) || getLocalDayIndex(trip.startDate, now) >= 0) {
     return null;
   }
 
-  const missing = suggestions.flatMap(({ items, reason }) =>
-    items.filter((title) => !isListed(title)).map((title) => ({ title, reason })),
-  );
-  const total = suggestions.reduce((sum, { items }) => sum + items.length, 0);
-
-  const add = async (entries: { title: string; reason: string }[]) => {
+  const add = async (requested: { title: string; kind: string }[]) => {
+    const entries = requested.filter(({ title }) => !inFlight.current.has(title) && !listed.has(title.toLowerCase()));
+    if (entries.length === 0) {
+      return;
+    }
+    entries.forEach(({ title }) => inFlight.current.add(title));
     setPending((current) => [...current, ...entries.map(({ title }) => title)]);
     const results = await Promise.allSettled(
-      entries.map(({ title, reason }) =>
+      entries.map(({ title, kind }) =>
         dispatch(
           createChecklistItem({
             tripId: trip.id,
@@ -74,7 +82,7 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
             title,
             category: 'PACKING',
             customCategoryLabel: null,
-            note: reason,
+            note: `Suggested for ${kind.toLowerCase()}`,
             completeByDayIndex: null,
             assignedToUids: [],
             isPrivate: true,
@@ -82,12 +90,13 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
         ).unwrap(),
       ),
     );
+    entries.forEach(({ title }) => inFlight.current.delete(title));
     setPending((current) => current.filter((title) => !entries.some((entry) => entry.title === title)));
-    const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-    if (failed) {
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failures.length > 0) {
       addToast({
-        title: 'Could not add everything',
-        description: getErrorMessage(failed.reason, 'Please try again.'),
+        title: `${failures.length} of ${entries.length} couldn't be added`,
+        description: getErrorMessage(failures[0].reason, 'Please try again.'),
         type: 'error',
       });
     }
@@ -98,7 +107,7 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
       <SectionEntryRow
         heading='Pack for the weather'
         icon={<Luggage className='h-5 w-5' />}
-        title={`${total} ${total === 1 ? 'thing' : 'things'} to wear or bring`}
+        title={`${missing.length} ${missing.length === 1 ? 'thing' : 'things'} left to wear or bring`}
         summary={suggestions.map(({ emoji, title }) => `${emoji} ${title}`).join(' · ')}
         onOpen={() => setIsOpen(true)}
       />
@@ -141,10 +150,11 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
                         type='button'
                         variant='secondary'
                         size='sm'
-                        className='shrink-0'
-                        onClick={() => void add([{ title: item, reason }])}
+                        className='relative shrink-0 before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-[""]'
+                        disabled={isPending(item)}
+                        onClick={() => void add([{ title: item, kind: title }])}
                       >
-                        Add
+                        {isPending(item) ? 'Adding…' : 'Add'}
                       </Button>
                     )}
                   </li>

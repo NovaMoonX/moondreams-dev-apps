@@ -5,7 +5,7 @@ export interface PackingSuggestion {
   id: string;
   emoji: string;
   title: string;
-  /** What the forecast says, in a sentence: "Rain on Oct 22 and Oct 23." */
+  /** What the forecast says. */
   reason: string;
   items: string[];
 }
@@ -17,9 +17,9 @@ export interface PackingDay {
 
 // Forecasts are in °F.
 const COLD_LOW = 40;
-const CHILLY_LOW = 55;
+const CHILLY_LOW = 50;
 const HOT_HIGH = 85;
-const SUNNY_HIGH = 60;
+const SUNNY_HIGH = 75;
 const POSSIBLE_SHOWER_CHANCE = 30;
 const BIG_SWING = 25;
 const LIKELY_RAIN_CHANCE = 50;
@@ -80,7 +80,7 @@ export function getPackingSuggestions(days: PackingDay[], getDayLabel: (dayIndex
     },
     {
       suggestion: { id: 'shower', emoji: '🌦️', title: 'Maybe a shower', items: ['Compact umbrella'] },
-      labels: labelsFor(isShowerPossible),
+      labels: days.some(isWet) ? [] : labelsFor(isShowerPossible),
       reason: (list) => `A shower is possible on ${list}.`,
     },
     {
@@ -91,7 +91,7 @@ export function getPackingSuggestions(days: PackingDay[], getDayLabel: (dayIndex
     {
       suggestion: { id: 'cold', emoji: '🧥', title: 'Cold', items: ['Warm coat', 'Gloves', 'Warm hat', 'Warm socks'] },
       labels: labelsFor(isCold),
-      reason: (list) => `Lows down to ${Math.round(lowest)}°F on ${list}.`,
+      reason: (list) => `Cold nights on ${list}, down to ${Math.round(lowest)}°F.`,
     },
     {
       suggestion: { id: 'chilly', emoji: '🧣', title: 'Chilly', items: ['Light jacket', 'Sweater or hoodie'] },
@@ -101,7 +101,7 @@ export function getPackingSuggestions(days: PackingDay[], getDayLabel: (dayIndex
     {
       suggestion: { id: 'sun', emoji: '😎', title: 'Sunny', items: ['Sunglasses', 'Sun hat', 'Sunscreen'] },
       labels: labelsFor(isSunny),
-      reason: (list) => `Mostly sunny on ${list}, so bring something to shade your eyes and face.`,
+      reason: (list) => `Mostly sunny on ${list}.`,
     },
     {
       suggestion: {
@@ -111,7 +111,7 @@ export function getPackingSuggestions(days: PackingDay[], getDayLabel: (dayIndex
         items: ['Reusable water bottle', 'Light, breathable clothes', 'Sunscreen', 'Sun hat'],
       },
       labels: labelsFor(isHot),
-      reason: (list) => `Highs up to ${Math.round(highest)}°F on ${list}.`,
+      reason: (list) => `Hot days on ${list}, up to ${Math.round(highest)}°F.`,
     },
     {
       suggestion: { id: 'swing', emoji: '🌡️', title: 'Big swings', items: ['Layers you can add or shed'] },

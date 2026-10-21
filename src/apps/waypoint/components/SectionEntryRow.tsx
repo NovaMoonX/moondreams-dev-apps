@@ -26,7 +26,7 @@ function SectionEntryRow({ heading, icon, title, summary, onOpen }: SectionEntry
         <span className='text-muted-foreground shrink-0'>{icon}</span>
         <span className='min-w-0 flex-1'>
           <span className='block truncate text-sm font-medium'>{title}</span>
-          <span className='text-muted-foreground block text-xs'>{summary}</span>
+          <span className='text-muted-foreground line-clamp-2 text-xs'>{summary}</span>
         </span>
         <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
       </Button>
