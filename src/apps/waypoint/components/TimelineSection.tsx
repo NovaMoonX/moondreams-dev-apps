@@ -29,11 +29,11 @@ import EventSuggestionHost, { type EventSuggestionHandle } from '@apps/waypoint/
 import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
-import SectionDivider from '@/components/SectionDivider';
 import DayHeader from '@apps/waypoint/components/DayHeader';
 import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
+import DayDetailHost, { type DayDetailHandle } from '@apps/waypoint/components/DayDetailHost';
 import LogisticsDetailHost, { type LogisticsDetailHandle } from '@apps/waypoint/components/LogisticsDetailHost';
 import LogisticsRow from '@apps/waypoint/components/LogisticsRow';
 import { getLogisticsEntries, toMinutes, type LogisticsEntry } from '@apps/waypoint/utils/timelineLogistics';
@@ -119,6 +119,7 @@ export function TimelineSection({
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
   const logisticsDetailRef = useRef<LogisticsDetailHandle>(null);
+  const dayDetailRef = useRef<DayDetailHandle>(null);
   const suggestionRef = useRef<EventSuggestionHandle>(null);
   const isPhone = useMediaQuery().isBelow('sm');
   const stays = useAppSelector(selectStays);
@@ -419,8 +420,14 @@ export function TimelineSection({
     return [...merged.nodes, ...merged.rest.map((row) => row.node)];
   };
 
-  const renderDivider = (label: string, trailing?: ReactNode) => (
-    <SectionDivider label={label} trailing={trailing} />
+  const renderDivider = (label: string, trailing?: ReactNode, day?: number) => (
+    <DayHeader
+      isSticky={false}
+      label={label}
+      trailing={trailing}
+      canOpen={canAddEvents && day !== undefined}
+      onOpen={() => day !== undefined && dayDetailRef.current?.open(day)}
+    />
   );
 
   const renderDayWeather = (dayIndex: number, isMinimized: boolean) => {
@@ -469,6 +476,7 @@ export function TimelineSection({
                 {renderDivider(
                   getDayDateLabel(trip.startDate, day),
                   compactAllDaysWeather ? renderDayWeather(day, true) : undefined,
+                  day,
                 )}
                 {!compactAllDaysWeather && renderDayWeather(day, false)}
                 {renderEventItems(
@@ -513,6 +521,8 @@ export function TimelineSection({
                 isSticky={isPhone}
                 label={getBucketLabel(bucket, trip.startDate, dayCount)}
                 trailing={typeof bucket === 'number' && compactAllDaysWeather ? renderDayWeather(bucket, true) : undefined}
+                canOpen={typeof bucket === 'number' && canAddEvents}
+                onOpen={() => typeof bucket === 'number' && dayDetailRef.current?.open(bucket)}
               />
               {typeof bucket === 'number' && !compactAllDaysWeather && renderDayWeather(bucket, false)}
               <div className='space-y-3 pb-3'>
@@ -617,7 +627,7 @@ export function TimelineSection({
           action={
             canAddEvents && (
               <div className='flex items-center gap-2'>
-                <Button type='button' onClick={openNew}>
+                <Button type='button' onClick={() => openNew(selectedDayIndex ?? undefined)}>
                   Add
                 </Button>
               </div>
@@ -702,6 +712,7 @@ export function TimelineSection({
         {weather.hasWeather && <WeatherAttribution />}
       </section>
       <LogisticsDetailHost trip={trip} handleRef={logisticsDetailRef} />
+      <DayDetailHost trip={trip} events={events} logisticsByDay={logisticsByDay} handleRef={dayDetailRef} onAdd={openNew} />
       <EventSuggestionHost trip={trip} currentUserId={currentUserId} handleRef={suggestionRef} />
       <WeatherDetailSheet
         isOpen={isWeatherOpen}
