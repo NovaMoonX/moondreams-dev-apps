@@ -83,12 +83,14 @@ function LegendLine({
   );
 }
 
-const formatShortDate = (value: number) =>
-  new Date(value).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+const shortDateFormat = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+const formatWholeCents = (cents: number) =>
+  formatCents(Math.round(cents / 100) * 100).replace(/\.00$/, '');
+const formatShortDate = (value: number) => shortDateFormat.format(value);
 
 function pluralize(count: number, word: string) {
   const result = count === 1 ? `${count} ${word}` : `${count} ${word}s`;
@@ -120,11 +122,12 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   const [unit, setUnit] = useState<PaceUnit>('week');
   const [pickedMonths, setPickedMonths] = useState<number | null>(null);
   const [valueInput, setValueInput] = useState<string | null>(null);
-  const [isAfterPlan, setIsAfterPlan] = useState(false);
+  const [pickedAfterPlan, setPickedAfterPlan] = useState<boolean | null>(null);
 
   const scenario: Scenario =
     pickedScenario ?? (calendar.movies > 0 ? 'planned' : 'none');
   const isPace = scenario === 'pace';
+  const isAfterPlan = pickedAfterPlan ?? calendar.movies > 0;
   const includePlan = isPace && isAfterPlan && calendar.movies > 0;
   const horizons = includePlan
     ? [
@@ -134,13 +137,20 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
       ]
     : base.horizons;
   const months =
-    pickedMonths !== null && horizons.includes(pickedMonths)
-      ? pickedMonths
-      : (horizons[includePlan ? 1 : 0] ?? horizons[0]);
+    pickedMonths !== null &&
+    [...base.horizons, ...horizons].includes(pickedMonths)
+      ? Math.max(pickedMonths, includePlan ? calendar.months : 0)
+      : horizons[0];
   const ticketCents =
     valueInput === null
       ? base.averageTicketCents
       : parseTicketCents(valueInput);
+
+  const fromDay = Math.max(
+    membership.startDate,
+    todayDay - HISTORY_DAYS * DAY_MS,
+  );
+  const planEnd = getPlanEndDay(plan, todayDay);
 
   const getPaceOutcome = (count: number) => {
     const pace = { unit, count };
@@ -169,14 +179,11 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             addedBy,
             fromDay,
             includePlan ? getCalendarAddedBy(plan) : undefined,
+            includePlan ? planEnd : undefined,
           );
     return { result: paceResult, series: paceSeries };
   };
 
-  const fromDay = Math.max(
-    membership.startDate,
-    todayDay - HISTORY_DAYS * DAY_MS,
-  );
   const getOutcome = () => {
     if (scenario === 'none') {
       const stop = projectStop(base, membership);
@@ -234,7 +241,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   const axis = getAxis();
 
   const getNextStepLine = () => {
-    if (!isPace || ticketCents === null) return null;
+    if (!isPace || includePlan || ticketCents === null) return null;
     if (counts[unit] >= getPaceMax(unit))
       return `That's the most A-List covers a ${unit}.`;
 
@@ -275,38 +282,39 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
     if (scenario === 'planned')
       return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then cancel before the ${bill} bill.`;
     if (includePlan)
-      return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then ${counts[unit]} a ${unit}, and cancel before the ${bill} bill.`;
-    return `You watch ${counts[unit]} a ${unit}, then cancel before the ${bill} bill.`;
+      return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then ${counts[unit]} movies a ${unit}, and cancel before the ${bill} bill.`;
+    return `You watch ${counts[unit]} movies a ${unit}, then cancel before the ${bill} bill.`;
   };
 
   const getEyebrow = () => {
     if (scenario === 'none') return 'Net savings with no more movies';
     if (scenario === 'planned') return 'Net savings with everything planned';
-    if (includePlan)
-      return `Net savings after everything planned, then ${counts[unit]} a ${unit}`;
+    if (includePlan) return `After planned, then ${counts[unit]} a ${unit}`;
     return `Net savings at ${counts[unit]} a ${unit}`;
   };
 
   const getBreakEvenLine = () => {
     if (breakEvenPoint)
-      return `${breakEvenPoint.x > todayDay ? "You'd break even" : 'You broke even'} around ${formatDateUTC(breakEvenPoint.x)}.`;
+      return breakEvenPoint.x > todayDay
+        ? `You'd break even around ${formatDateUTC(breakEvenPoint.x)}.`
+        : null;
     if (!isPace || isBrokenEven || !breakEven || breakEven.perPeriod === null)
       return null;
     if (breakEven.perPeriod > getPaceMax(unit))
       return `Breaking even by then would take more than A-List's ${getPaceMax(unit)} a ${unit}.`;
-    return `Breaking even takes about ${breakEven.perPeriod} a ${unit} (${pluralize(breakEven.movies, 'movie')} in all).`;
+    return `Breaking even takes about ${breakEven.perPeriod} a ${unit} ${includePlan ? '' : `(${pluralize(breakEven.movies, 'movie')} in all)`}.`;
   };
   const breakEvenLine = getBreakEvenLine();
 
-  const planEnd = getPlanEndDay(plan, todayDay);
   const hasPlanEndMark =
     includePlan && planEnd > todayDay && planEnd < result.coveredUntil;
   // The band's label needs about 40% of the chart's width, or it is clipped.
-  const hasRoomForBandLabel =
-    hasPlanEndMark &&
-    series[0] !== undefined &&
-    (result.coveredUntil - planEnd) / (result.coveredUntil - series[0].x) >=
-      0.4;
+  const bandShare =
+    hasPlanEndMark && series[0] !== undefined
+      ? (result.coveredUntil - planEnd) / (result.coveredUntil - series[0].x)
+      : 0;
+  const hasRoomForBandLabel = bandShare >= 0.4;
+  const planEndPoint = series.find((point) => point.x === planEnd);
   const comparisonLabel = includePlan ? 'Planned only' : 'No more movies';
   const lastPoint = series.at(-1);
   const afterPlanGain =
@@ -315,7 +323,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
       : 0;
   const afterPlanLine =
     afterPlanGain > 0
-      ? `Once everything planned ends ${formatShortDate(planEnd)}, ${counts[unit]} a ${unit} adds about ${formatCents(afterPlanGain)} by ${until}.`
+      ? `${counts[unit]} movies a ${unit} after ${formatShortDate(planEnd)} adds about ${formatWholeCents(afterPlanGain)} of the ${formatWholeCents(lastPoint?.y ?? 0)} by ${until}.`
       : null;
 
   const getChartDescription = () => {
@@ -385,16 +393,12 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             {calendar.movies > 0 && (
               <div className='flex items-center justify-between gap-3 pt-1'>
                 <p className='text-sm'>
-                  Start after everything planned
-                  <span className='text-muted-foreground block text-xs'>
-                    Your {pluralize(calendar.movies, 'showing')} on the calendar
-                    come first.
-                  </span>
+                  Watch my {pluralize(calendar.movies, 'planned showing')} first
                 </p>
                 <AppToggle
-                  aria-label='Start after everything planned'
+                  aria-label={`Watch my ${pluralize(calendar.movies, 'planned showing')} first`}
                   checked={isAfterPlan}
-                  onCheckedChange={setIsAfterPlan}
+                  onCheckedChange={setPickedAfterPlan}
                 />
               </div>
             )}
@@ -484,37 +488,50 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                 yTicks={axis?.ticks}
                 dividers={[
                   ...(series[0] && series[0].x < todayDay
-                    ? [{ x: todayDay, label: 'Today' }]
-                    : []),
-                  ...(hasPlanEndMark
                     ? [
                         {
-                          x: planEnd,
-                          label: '',
+                          x: todayDay,
+                          label: 'Today',
+                          labelAt: 'bottom' as const,
                         },
                       ]
                     : []),
+                  ...(hasPlanEndMark ? [{ x: planEnd, label: '' }] : []),
                 ]}
                 band={
-                  hasPlanEndMark
+                  hasPlanEndMark && bandShare >= 0.15
                     ? {
                         x1: planEnd,
                         x2: result.coveredUntil,
                         label: hasRoomForBandLabel
-                          ? `After ${formatShortDate(planEnd)} · ${counts[unit]} a ${unit}`
+                          ? `Then ${counts[unit]} a ${unit}`
                           : '',
                       }
                     : undefined
                 }
-                marker={
-                  breakEvenPoint
-                    ? {
-                        x: breakEvenPoint.x,
-                        y: 0,
-                        label: `${breakEvenPoint.x > todayDay ? 'Break even' : 'Broke even'} ${formatShortDate(breakEvenPoint.x)}`,
-                      }
-                    : undefined
-                }
+                markers={[
+                  ...(breakEvenPoint
+                    ? [
+                        {
+                          x: breakEvenPoint.x,
+                          y: 0,
+                          label: `${breakEvenPoint.x > todayDay ? 'Break even' : 'Broke even'} ${formatShortDate(breakEvenPoint.x)}`,
+                          prefer: 'above' as const,
+                        },
+                      ]
+                    : []),
+                  ...(hasPlanEndMark && planEndPoint
+                    ? [
+                        {
+                          x: planEnd,
+                          y: planEndPoint.y,
+                          label: `Planned ends ${formatShortDate(planEnd)}`,
+                          prefer: 'below' as const,
+                          isHollow: true,
+                        },
+                      ]
+                    : []),
+                ]}
                 formatX={formatShortDate}
                 formatValue={formatCents}
                 formatY={(value) =>

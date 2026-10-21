@@ -39,7 +39,7 @@ interface TrendLineChartProps {
   /** A faintly shaded stretch of the x-axis with its own label. */
   band?: { x1: number; x2: number; label: string };
   /** A small dot on the line with a callout and arrow, always visible, such as where it crosses a guide. */
-  marker?: { x: number; y: number; label: string };
+  markers?: ChartMarker[];
   /** A horizontal guide, such as break even at 0. */
   referenceY?: { value: number; label: string };
   /** Short names for the compact readout (it must fit a 320px plot); default to the full labels. */
@@ -56,29 +56,64 @@ interface TrendLineChartProps {
   hasDots?: boolean;
 }
 
+export interface ChartMarker {
+  x: number;
+  y: number;
+  label: string;
+  /** Which side of the dot the callout prefers; it flips when that side has no room. */
+  prefer?: 'above' | 'below';
+  /** A hollow dot, to tell a second marker from the first. */
+  isHollow?: boolean;
+}
+
 const CALLOUT_HEIGHT = 22;
 const CALLOUT_ARROW = 6;
 
-/** A small dot with a label above it and an arrow pointing down at the dot, kept inside the plot. */
+/** A small dot with a label and an arrow pointing at it, kept inside the plot. A rising line leaves the up-left and down-right of any point clear, so the callout goes to one of those. */
 function MarkerCallout({
   cx,
   cy,
   label,
+  prefer = 'above',
+  isHollow = false,
 }: {
   cx?: number;
   cy?: number;
   label: string;
+  prefer?: 'above' | 'below';
+  isHollow?: boolean;
 }) {
   const plot = usePlotArea();
   if (cx === undefined || cy === undefined) return null;
 
+  const left = (plot?.x ?? 0) + 2;
+  const right = (plot?.x ?? 0) + (plot?.width ?? 0) - 2;
+  const top = plot?.y ?? 0;
+  const bottom = top + (plot?.height ?? 0) + 18;
   const width = label.length * 6 + 20;
-  const minX = (plot?.x ?? 0) + 2;
-  const maxX = (plot?.x ?? 0) + (plot?.width ?? width + 4) - width - 2;
-  // The callout sits up and to the left of the dot, where a rising line leaves room, with the arrow near its right end.
-  const boxX = Math.max(minX, Math.min(cx - width + 16, maxX));
-  const boxY = cy - CALLOUT_ARROW - 4 - CALLOUT_HEIGHT;
+  const options = [
+    {
+      side: 'above',
+      boxX: cx - width + 16,
+      boxY: cy - CALLOUT_ARROW - 4 - CALLOUT_HEIGHT,
+    },
+    { side: 'below', boxX: cx - 16, boxY: cy + CALLOUT_ARROW + 4 },
+  ] as const;
+  const ordered = prefer === 'above' ? options : [options[1], options[0]];
+  const fits = (option: (typeof options)[number]) =>
+    option.boxX >= left &&
+    option.boxX + width <= right &&
+    option.boxY >= top &&
+    option.boxY + CALLOUT_HEIGHT <= bottom;
+  // Neither side fits cleanly (a dot near an edge): up-left, where a rising line is lowest.
+  const pick = ordered.find(fits) ?? options[0];
+  const boxX = Math.max(left, Math.min(pick.boxX, right - width));
+  const boxY = Math.max(top, pick.boxY);
+  const isAbove = pick.side === 'above';
   const arrowX = Math.max(boxX + 10, Math.min(cx, boxX + width - 10));
+  const baseY = isAbove ? boxY + CALLOUT_HEIGHT : boxY;
+  const tipY = isAbove ? baseY + CALLOUT_ARROW : baseY - CALLOUT_ARROW;
+  const seamY = isAbove ? baseY - 2 : baseY - 0.5;
   return (
     <g pointerEvents='none'>
       <rect
@@ -91,14 +126,14 @@ function MarkerCallout({
         stroke='var(--color-border)'
       />
       <path
-        d={`M${arrowX - 5},${boxY + CALLOUT_HEIGHT - 0.5} L${arrowX},${boxY + CALLOUT_HEIGHT + CALLOUT_ARROW} L${arrowX + 5},${boxY + CALLOUT_HEIGHT - 0.5} Z`}
+        d={`M${arrowX - 5},${baseY + (isAbove ? -0.5 : 0.5)} L${arrowX},${tipY} L${arrowX + 5},${baseY + (isAbove ? -0.5 : 0.5)} Z`}
         fill='var(--color-popover)'
         stroke='var(--color-border)'
         strokeLinejoin='round'
       />
       <rect
         x={arrowX - 5.5}
-        y={boxY + CALLOUT_HEIGHT - 2}
+        y={seamY}
         width={11}
         height={2.5}
         fill='var(--color-popover)'
@@ -117,8 +152,8 @@ function MarkerCallout({
         cx={cx}
         cy={cy}
         r={4.5}
-        fill='var(--color-primary)'
-        stroke='var(--color-popover)'
+        fill={isHollow ? 'var(--color-popover)' : 'var(--color-primary)'}
+        stroke={isHollow ? 'var(--color-primary)' : 'var(--color-popover)'}
         strokeWidth={2}
       />
     </g>
@@ -140,7 +175,7 @@ function TrendLineChart({
   referenceY,
   yDomain,
   yTicks,
-  marker,
+  markers,
   dividers,
   band,
   hasDots = true,
@@ -246,7 +281,7 @@ function TrendLineChart({
             tickFormatter={formatY}
             stroke='var(--color-muted-foreground)'
             tick={tickStyle}
-            width={48}
+            width={isSoft ? 56 : 48}
             axisLine={!isSoft}
             tickLine={!isSoft}
             tickCount={isSoft ? 3 : undefined}
@@ -386,13 +421,20 @@ function TrendLineChart({
               }}
             />
           ))}
-          {marker && (
+          {markers?.map((marker) => (
             <ReferenceDot
+              key={marker.label}
               x={marker.x}
               y={marker.y}
-              shape={<MarkerCallout label={marker.label} />}
+              shape={
+                <MarkerCallout
+                  label={marker.label}
+                  prefer={marker.prefer}
+                  isHollow={marker.isHollow}
+                />
+              }
             />
-          )}
+          ))}
           {isSoft && (
             <ReferenceDot
               x={last.x}

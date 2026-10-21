@@ -337,4 +337,25 @@ assert.equal(
   0,
 );
 
+// The comparison line can start where the plan ends, with a point exactly there
+const planEndDay = getPlanEndDay(pplan, hnow);
+const fromPlanEnd = getNetSeries(
+  hbase,
+  hm,
+  hnow,
+  after,
+  getPlannedThenPaceAddedBy(pplan, hnow, pace2, 2000),
+  hm.startDate,
+  getCalendarAddedBy(pplan),
+  planEndDay,
+);
+const endPoint = fromPlanEnd.find((point) => point.x === planEndDay);
+assert.equal(endPoint !== undefined && endPoint.y2 === endPoint.y, true);
+assert.equal(
+  fromPlanEnd
+    .filter((point) => point.x < planEndDay)
+    .every((point) => point.y2 === null),
+  true,
+);
+
 console.log('A-List projection checks passed');

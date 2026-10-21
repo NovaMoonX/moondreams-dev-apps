@@ -388,6 +388,7 @@ export function getNetSeries(
   addedBy: AddedBy,
   fromDay: number = todayDay,
   baselineAddedBy: AddedBy = () => 0,
+  baselineFromDay: number = todayDay,
 ): NetPoint[] {
   const endDay = projection.coveredUntil;
   const billCosts = Array.from({ length: projection.months + 1 }, (_, count) =>
@@ -402,7 +403,9 @@ export function getNetSeries(
     { length: Math.max(0, Math.ceil((endDay - fromDay) / WEEK_MS)) },
     (_, week) => fromDay + week * WEEK_MS,
   ).filter((day) => day < endDay);
-  const days = [...new Set([...weekDays, ...billDays, todayDay, endDay])]
+  const days = [
+    ...new Set([...weekDays, ...billDays, todayDay, baselineFromDay, endDay]),
+  ]
     .filter((day) => day >= fromDay)
     .sort((left, right) => left - right);
   const result = days.map((day) => {
@@ -421,7 +424,10 @@ export function getNetSeries(
     return {
       x: day,
       y: saved + (isPast ? 0 : addedBy(day)) - cost,
-      y2: isPast ? null : base.savedCents + baselineAddedBy(day) - cost,
+      y2:
+        day < baselineFromDay
+          ? null
+          : base.savedCents + baselineAddedBy(day) - cost,
     };
   });
   return result;
