@@ -17,6 +17,8 @@ export interface MovieSearchResult {
 export interface PopularMovie extends MovieSearchResult {
   /** Date-only (UTC midnight) when the film opens in the future; null once it is in theaters. */
   opensOn: number | null;
+  /** https link to the film's trailer on YouTube; null when the provider has none. */
+  trailerUrl: string | null;
 }
 
 export interface TheatreResult {

@@ -1,8 +1,12 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
+import { Play } from 'lucide-react';
+import { useState } from 'react';
 
 import SearchInput from '@/components/SearchInput';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -22,6 +26,8 @@ import {
 } from '@apps/a-list/store/selectors';
 import type { MovieSearchResult, WatchlistItem } from '@apps/a-list/types';
 
+const POPULAR_COLLAPSED_COUNT = 8;
+
 interface MoviePickerProps {
   query: string;
   onQueryChange: (query: string) => void;
@@ -31,6 +37,8 @@ interface MoviePickerProps {
   onAddByTitle: () => void;
   /** Calendar adds pick from the watchlist first; watchlist adds search the movie database only. */
   showWatchlist: boolean;
+  /** What is in theaters or opening soon, offered while the field is empty; off where it is the wrong data (logging films already seen). */
+  showPopular: boolean;
   /** Blocks every row while a pick is being saved, so a double tap can't save twice. */
   isDisabled?: boolean;
 }
@@ -42,6 +50,7 @@ function MoviePicker({
   onPickWatchlistItem,
   onAddByTitle,
   showWatchlist,
+  showPopular,
   isDisabled = false,
 }: MoviePickerProps) {
   const watchlist = useAppSelector(selectWatchlistItems);
@@ -55,7 +64,11 @@ function MoviePicker({
     ...movieSearchQueryOptions(debouncedQuery),
     enabled: canSearch,
   });
-  const popular = useQuery(popularMoviesQueryOptions());
+  const popular = useQuery({
+    ...popularMoviesQueryOptions(),
+    enabled: showPopular,
+  });
+  const [isPopularOpen, setIsPopularOpen] = useState(false);
   const normalizedQuery = normalizeString(query);
   // An empty search shows what's still unseen; typing searches the whole list, so a rewatch can be picked.
   const isWatchlistMatch = (item: WatchlistItem) => {
@@ -82,9 +95,16 @@ function MoviePicker({
   const listedIdentities = getIdentities(watchlist);
   const watchlistKeys = new Set(watchlistMatches.map((item) => item.movieKey));
   const shownIdentities = getIdentities(watchlistMatches);
+  // A hand-typed film often has no date, so a list entry without a year matches on title alone.
+  const undatedTitles = new Set(
+    watchlist
+      .filter((item) => item.movie.releaseDate === null)
+      .map((item) => normalizeString(item.movie.title)),
+  );
   const isListed = (movie: MovieSearchResult) =>
     listedKeys.has(movie.movieKey) ||
-    listedIdentities.has(getIdentity(movie.title, movie.year));
+    listedIdentities.has(getIdentity(movie.title, movie.year)) ||
+    undatedTitles.has(normalizeString(movie.title));
   const results = (search.data ?? []).filter(
     (movie) =>
       !watchlistKeys.has(movie.movieKey) &&
@@ -92,7 +112,7 @@ function MoviePicker({
   );
   // Popular films fill the empty field only; the ones already on the watchlist are left out.
   const popularResults =
-    query.trim() === ''
+    showPopular && query.trim() === ''
       ? (popular.data ?? []).filter((movie) => !isListed(movie))
       : [];
   const isSearchResting =
@@ -101,6 +121,11 @@ function MoviePicker({
       search.error.code === 'functions/failed-precondition');
 
   const trimmedQuery = query.trim();
+  const popularShown = isPopularOpen
+    ? popularResults
+    : popularResults.slice(0, POPULAR_COLLAPSED_COUNT);
+  const isPopularLoading =
+    showPopular && trimmedQuery === '' && popular.isPending;
 
   const hasQuery = trimmedQuery.length >= MOVIE_SEARCH_MIN_CHARS;
   // Results belong to the query that fetched them, so they never outlive the text that asked for them.
@@ -112,7 +137,7 @@ function MoviePicker({
 
   const getEmptyState = () => {
     if (hasItems) return null;
-    if (trimmedQuery === '' && popular.isPending) return null;
+    if (isPopularLoading) return null;
     if (trimmedQuery === '')
       return {
         emoji: '🍿',
@@ -165,15 +190,19 @@ function MoviePicker({
     posterUrl: string | null,
     detail: string | null,
     onClick: () => void,
+    trailerUrl: string | null = null,
   ) => (
-    <li key={key}>
+    <li key={key} className='relative'>
       <Button
         type='button'
         variant='tertiary'
         size='stripped'
         onClick={onClick}
         disabled={isDisabled}
-        className='text-foreground! hover:bg-muted h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left'
+        className={join(
+          'text-foreground! hover:bg-muted h-auto w-full justify-start gap-3 rounded-2xl px-2 py-2 text-left',
+          trailerUrl && 'pr-12',
+        )}
       >
         <span className='h-14 w-10 shrink-0 overflow-hidden rounded-lg shadow-sm'>
           <PosterCover title={title} posterUrl={posterUrl} compact />
@@ -187,6 +216,21 @@ function MoviePicker({
           )}
         </span>
       </Button>
+      {trailerUrl && (
+        <Button
+          href={trailerUrl}
+          target='_blank'
+          rel='noopener noreferrer'
+          variant='tertiary'
+          size='stripped'
+          rounded='full'
+          aria-label={`Watch the trailer for ${title}`}
+          title='Watch the trailer'
+          className='text-foreground! absolute top-4 right-1 h-10 w-10 justify-center'
+        >
+          <Play className='h-4 w-4' aria-hidden='true' />
+        </Button>
+      )}
     </li>
   );
 
@@ -223,6 +267,11 @@ function MoviePicker({
           </ul>
         </div>
       )}
+      {isPopularLoading && watchlistMatches.length === 0 && (
+        <p className='text-muted-foreground py-6 text-center text-sm'>
+          Looking up what's playing…
+        </p>
+      )}
       {emptyState && (
         <div className='space-y-3 py-8 text-center'>
           <p className='text-5xl' aria-hidden='true'>
@@ -249,19 +298,32 @@ function MoviePicker({
       {popularResults.length > 0 && (
         <div className='space-y-1'>
           <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-            Popular in theaters
+            In theaters and coming soon
           </h3>
           <ul className='space-y-0.5'>
-            {popularResults.map((movie) =>
+            {popularShown.map((movie) =>
               renderRow(
                 movie.movieKey,
                 movie.title,
                 movie.posterUrl,
-                movie.year ? String(movie.year) : null,
+                movie.opensOn === null
+                  ? 'In theaters'
+                  : `Opens ${formatDateUTC(movie.opensOn)}`,
                 () => onPick(movie, false),
+                movie.trailerUrl,
               ),
             )}
           </ul>
+          {popularResults.length > POPULAR_COLLAPSED_COUNT && (
+            <ShowMoreButton
+              isOpen={isPopularOpen}
+              onClick={() => setIsPopularOpen((current) => !current)}
+            >
+              {isPopularOpen
+                ? 'Show fewer'
+                : `Show all ${popularResults.length}`}
+            </ShowMoreButton>
+          )}
         </div>
       )}
       {visibleResults.length > 0 && (

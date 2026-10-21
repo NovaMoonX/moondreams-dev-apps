@@ -19,6 +19,14 @@ interface TmdbSearchItem {
   popularity?: number;
 }
 
+interface TmdbVideo {
+  key?: string;
+  site?: string;
+  type?: string;
+  official?: boolean;
+  published_at?: string;
+}
+
 interface TmdbSearchResponse {
   results?: TmdbSearchItem[];
   total_pages?: number;
@@ -112,6 +120,25 @@ function toSearchResult(item: TmdbSearchItem & { id: number; title: string }): M
   };
 }
 
+const YOUTUBE_KEY = /^[A-Za-z0-9_-]{11}$/;
+
+/** An official YouTube trailer first, then the newest one; null when there is none. */
+async function getTrailerUrl(apiKey: string, tmdbId: number): Promise<string | null> {
+  const data = await callTmdb<{ results?: TmdbVideo[] }>(apiKey, `/movie/${tmdbId}/videos`, {
+    language: 'en-US',
+    include_video_language: 'en,null',
+  }).catch(() => null);
+  const trailer = (data?.results ?? [])
+    .filter((video) => video.site === 'YouTube' && video.type === 'Trailer' && YOUTUBE_KEY.test(video.key ?? ''))
+    .sort(
+      (a, b) =>
+        Number(b.official ?? false) - Number(a.official ?? false) ||
+        (b.published_at ?? '').localeCompare(a.published_at ?? ''),
+    )[0];
+  const result = trailer?.key ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
+  return result;
+}
+
 /** The usable, de-duplicated items across pages of a list response. */
 function toListItems(pages: Array<TmdbSearchResponse | null>) {
   const items = pages
@@ -168,13 +195,20 @@ export async function popularTmdb(apiKey: string): Promise<PopularMovie[]> {
     toListItems([data])
       .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
       .slice(0, POPULAR_PER_LIST);
-  const result = toListItems([{ results: [...topOf(nowPlaying), ...topOf(upcoming)] }])
+  const top = toListItems([{ results: [...topOf(nowPlaying), ...topOf(upcoming)] }])
     .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
-    .slice(0, MAX_POPULAR_RESULTS)
-    .map((item) => {
+    .slice(0, MAX_POPULAR_RESULTS);
+  // One videos lookup per film, in parallel; a film whose lookup fails just has no trailer link.
+  const result = await Promise.all(
+    top.map(async (item) => {
       const releaseDate = parseTmdbDate(item.release_date);
-      return { ...toSearchResult(item), opensOn: releaseDate !== null && releaseDate > today ? releaseDate : null };
-    });
+      return {
+        ...toSearchResult(item),
+        opensOn: releaseDate !== null && releaseDate > today ? releaseDate : null,
+        trailerUrl: await getTrailerUrl(apiKey, item.id),
+      };
+    }),
+  );
   return result;
 }
 

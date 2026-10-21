@@ -10,7 +10,7 @@ Server-side code for the mini-apps. Every function:
 
 | Function | Trigger | App | What it does |
 | --- | --- | --- | --- |
-| `getPopularMovies` | callable | A-List Tracker | `{}` → `{ results }` (up to 30, most popular first, each with `opensOn` for a film not yet open): what is in US theaters now plus what opens soon, from TMDB; empty on OMDb |
+| `getPopularMovies` | callable | A-List Tracker | `{}` → `{ results }` (up to 30, most popular first, each with `opensOn` for a film not yet open and a YouTube `trailerUrl`): what is in US theaters now plus what opens soon, from TMDB; empty on OMDb |
 | `searchMovies` | callable | A-List Tracker | `{ query }` → `{ results }` (up to 20, newest first) from TMDB, or OMDb when no TMDB key is set |
 | `getMovie` | callable | A-List Tracker | `{ movieKey }` → a movie snapshot (release date, runtime, rating, poster) from the provider that issued the key (`tmdb-…` or `imdb-…`) |
 | `getCalendarShare` | callable, **no sign-in** | A-List Tracker | `{ shareId, pin? }` → `{ status: 'ok', calendar }`, or `pin_required`, `wrong_pin`, `not_found`. Serves a calendar share to anyone with its link |
@@ -94,7 +94,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
   - **TMDB credential:** either the v4 "API Read Access Token" (sent as a Bearer header) or the v3 API key (sent as `api_key`); it is detected from the value.
   - **Search:** up to 20 results, newest release first (a second page is fetched when there is one). **Details:** US theatrical date, US rating, runtime, poster.
   - **Terms:** TMDB is free for non-commercial use only and requires its credit line and logo (shown in Membership settings); cached data must be under 6 months old (ours is 7 days or less).
-- **Popular in theaters:** `getPopularMovies` (signed-in callers only) merges TMDB's US now-playing and upcoming lists by popularity. OMDb has no such list, so it answers empty (only the emulator fixtures answer offline). An empty answer is never cached.
+- **Popular in theaters:** `getPopularMovies` (signed-in callers only) merges TMDB's US now-playing and upcoming lists by popularity. OMDb has no such list, so it answers empty (only the emulator fixtures answer offline). Building the list makes one extra TMDB `/videos` call per film (a failed one just leaves that film without a trailer link). An empty answer is never cached.
 - **Server cache:**
   - `apps/a-list/searchCache`: 7 days for searches, 1 day for the popular list.
   - `apps/a-list/movieCache`: 30 days once a movie is released, 1 day before that (unreleased dates move).

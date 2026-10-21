@@ -24,7 +24,7 @@ export const movieQueryKeys = {
   all: ['a-list', 'movies'] as const,
   search: (query: string) =>
     [...movieQueryKeys.all, 'search', 'v2', normalizeString(query)] as const,
-  popular: () => [...movieQueryKeys.all, 'popular', 'v2'] as const,
+  popular: () => [...movieQueryKeys.all, 'popular', 'v3'] as const,
   details: (movieKey: string) =>
     [...movieQueryKeys.all, 'details', movieKey] as const,
 };

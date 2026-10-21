@@ -484,6 +484,7 @@ export function AddFlow({
           query={query}
           onQueryChange={setQuery}
           showWatchlist={isCalendar}
+          showPopular={!isPast}
           isDisabled={isSaving}
           onPick={(result, isListed) =>
             isQuick

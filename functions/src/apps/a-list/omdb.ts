@@ -204,6 +204,7 @@ export async function popularOmdb(apiKey: string): Promise<PopularMovie[]> {
     .map(({ Title, Year, imdbID, Poster, Released }) => ({
       ...toSearchResult({ Title, Year, imdbID, Type: 'movie', Poster }),
       opensOn: (parseReleased(Released) ?? 0) > Date.now() ? parseReleased(Released) : null,
+      trailerUrl: null,
     }));
   return result;
 }
