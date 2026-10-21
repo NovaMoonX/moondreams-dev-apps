@@ -47,6 +47,31 @@ interface ProjectionSubviewProps {
   onClose: () => void;
 }
 
+function LegendLine({
+  strokeWidth,
+  dash,
+  className,
+}: {
+  strokeWidth: number;
+  dash?: string;
+  className: string;
+}) {
+  return (
+    <svg width='20' height='6' aria-hidden='true' className={className}>
+      <line
+        x1='2'
+        y1='3'
+        x2='18'
+        y2='3'
+        stroke='currentColor'
+        strokeWidth={strokeWidth}
+        strokeDasharray={dash}
+        strokeLinecap='round'
+      />
+    </svg>
+  );
+}
+
 function pluralize(count: number, word: string) {
   const result = count === 1 ? `${count} ${word}` : `${count} ${word}s`;
   return result;
@@ -261,6 +286,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                     timeZone: 'UTC',
                   })
                 }
+                formatValue={formatCents}
                 formatY={(value) =>
                   formatCents(Math.round(value / 100) * 100).replace('.00', '')
                 }
@@ -270,24 +296,22 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               />
               <div className='text-muted-foreground mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs'>
                 <span className='flex items-center gap-1.5'>
-                  <span
-                    className='bg-primary h-1 w-4 rounded-full'
-                    aria-hidden='true'
-                  />
+                  <LegendLine strokeWidth={3} className='text-primary' />
                   Net savings
                 </span>
                 <span className='flex items-center gap-1.5'>
-                  <span
-                    className='bg-muted-foreground/45 h-px w-4'
-                    aria-hidden='true'
+                  <LegendLine
+                    strokeWidth={1}
+                    className='text-muted-foreground/70'
                   />
                   Break even ($0)
                 </span>
                 {scenario !== 'stop' && (
                   <span className='flex items-center gap-1.5'>
-                    <span
-                      className='border-foreground/55 h-0 w-4 border-t-[3px] border-dotted'
-                      aria-hidden='true'
+                    <LegendLine
+                      strokeWidth={3}
+                      dash='0.1 6'
+                      className='text-foreground/85'
                     />
                     If you stop now
                   </span>

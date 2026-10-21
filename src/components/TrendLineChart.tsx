@@ -24,6 +24,8 @@ interface TrendLineChartProps {
   yLabel?: string;
   formatX?: (value: number) => string;
   formatY?: (value: number) => string;
+  /** Full-precision text for the readout, when axis ticks are rounded; defaults to `formatY`. */
+  formatValue?: (value: number) => string;
   emptyLabel?: string;
   /** Names the `y2` line, dashed and muted beside the main one. */
   secondaryLabel?: string;
@@ -50,6 +52,7 @@ function TrendLineChart({
       day: 'numeric',
     }),
   formatY = (value) => String(value),
+  formatValue,
   emptyLabel = 'Not enough data yet to chart a trend.',
   secondaryLabel,
   referenceY,
@@ -74,8 +77,42 @@ function TrendLineChart({
     fontSize: isSoft ? 11 : 12,
   };
 
+  const readoutText = formatValue ?? formatY;
+  const renderReadout = ({
+    active,
+    payload,
+    label,
+  }: {
+    active?: boolean;
+    payload?: readonly { dataKey?: unknown; value?: unknown }[];
+    label?: unknown;
+  }) => {
+    if (!active || !payload?.length) return null;
+
+    const main = payload.find((item) => item.dataKey === 'y');
+    const other = payload.find((item) => item.dataKey === 'y2');
+    return (
+      <div className='border-border bg-popover text-popover-foreground rounded-full border px-3 py-1 text-xs whitespace-nowrap shadow-sm'>
+        <span className='font-medium'>{formatX(Number(label))}</span>
+        {main && <span> · {readoutText(Number(main.value))}</span>}
+        {other && secondaryLabel && (
+          <span className='text-muted-foreground'>
+            {' '}
+            · {secondaryLabel} {readoutText(Number(other.value))}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className={join('w-full', isSoft && 'touch-pan-y', className)}>
+    <div
+      className={join(
+        'w-full',
+        isSoft && 'touch-pan-y touch-pinch-zoom',
+        className,
+      )}
+    >
       <ResponsiveContainer width='100%' height='100%'>
         <ComposedChart
           data={sorted}
@@ -132,7 +169,7 @@ function TrendLineChart({
           <Tooltip
             labelFormatter={(value) => formatX(Number(value))}
             formatter={(value, name) => [
-              formatY(Number(value)),
+              readoutText(Number(value)),
               name === 'y2' ? secondaryLabel : (seriesLabel ?? yLabel ?? ''),
             ]}
             separator={isSoft ? ': ' : undefined}
@@ -148,6 +185,7 @@ function TrendLineChart({
                   }
                 : undefined
             }
+            content={isSoft ? renderReadout : undefined}
             contentStyle={{
               background: 'var(--color-popover)',
               color: 'var(--color-popover-foreground)',
@@ -159,7 +197,7 @@ function TrendLineChart({
             <ReferenceLine
               y={referenceY.value}
               stroke='var(--color-muted-foreground)'
-              strokeOpacity={isSoft ? 0.45 : 1}
+              strokeOpacity={isSoft ? 0.35 : 1}
               strokeWidth={1}
               strokeDasharray={isSoft ? undefined : '4 4'}
               ifOverflow='extendDomain'
@@ -184,7 +222,7 @@ function TrendLineChart({
                   ? 'var(--color-foreground)'
                   : 'var(--color-muted-foreground)'
               }
-              strokeOpacity={isSoft ? 0.55 : 1}
+              strokeOpacity={isSoft ? 0.85 : 1}
               strokeWidth={isSoft ? 3 : 2}
               strokeDasharray={isSoft ? '0.1 7' : '5 4'}
               strokeLinecap='round'
