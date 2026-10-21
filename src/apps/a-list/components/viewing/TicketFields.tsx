@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 import { Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 
 import MoneyInput from '@/components/MoneyInput';
@@ -42,6 +44,7 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
     theatre?.theatreId ?? null,
     draft.format,
   );
+  const edited = useRef({ fee: false, tax: false });
   const shown = resolveTicketDraft(draft, suggestion);
   const { ticket, errors } = evaluateTicketDraft(draft, suggestion);
   const isPremium = draft.format !== 'STANDARD';
@@ -128,12 +131,18 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
             placeholder='1.50'
             value={shown.fee}
             errorMessage={errors.fee}
-            onChange={(value) => props.onValueChange(value)}
+            onChange={(value) => {
+              edited.current.fee = true;
+              props.onValueChange(value);
+            }}
           />
           <FeeChips
             value={shown.fee}
             chips={feeChips}
-            onPick={(cents) => props.onValueChange(centsToInputValue(cents))}
+            onPick={(cents) => {
+              edited.current.fee = true;
+              props.onValueChange(centsToInputValue(cents));
+            }}
           />
         </div>
       ),
@@ -147,7 +156,10 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
           placeholder={estimatedTax}
           value={shown.tax}
           errorMessage={errors.tax}
-          onChange={(value) => props.onValueChange(value)}
+          onChange={(value) => {
+            edited.current.tax = true;
+            props.onValueChange(value);
+          }}
         />
       ),
     }),
@@ -163,13 +175,20 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
         columns={1}
         spacing='normal'
         onDataChange={(data) =>
-          onChange(applyTicketFormChange(draft, data as Partial<TicketDraft>))
+          onChange(
+            applyTicketFormChange(
+              draft,
+              data as Partial<TicketDraft>,
+              edited.current,
+            ),
+          )
         }
       />
       <SuggestionNote
         suggestion={suggestion}
         draft={draft}
         theatreName={theatre?.name ?? null}
+        hasTax={shown.tax.trim() !== ''}
       />
       {ticket && (
         <p className='text-muted-foreground text-sm'>

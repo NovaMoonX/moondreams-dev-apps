@@ -134,10 +134,13 @@ function PurchaseReturnPrompt({
             suggestion={suggestion}
             draft={draft}
             theatreName={viewing.theatre?.name ?? null}
+            hasTax={shown.tax.trim() !== ''}
           />
           <p className='text-muted-foreground text-sm'>
-            Check the convenience fee and the tax against your checkout. If a
-            line wasn't there or showed $0, enter 0.
+            {suggestion.isFeeLearned || suggestion.isTaxLearned
+              ? 'Check the convenience fee and the tax against your checkout.'
+              : 'Add the convenience fee and the tax from your checkout.'}{' '}
+            If a line wasn't there or showed $0, enter 0.
           </p>
           <div className='space-y-1.5'>
             <p className='text-sm font-medium'>Convenience fee</p>

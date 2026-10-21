@@ -61,18 +61,19 @@ export function resolveTicketDraft(
   return result;
 }
 
-/** Applies the form's new values, marking the fee or tax as the member's own once it differs from what was shown. */
+/** Applies the form's new values; `edited` says which of the fee and tax the member just typed or picked. */
 export function applyTicketFormChange(
   draft: TicketDraft,
   data: Partial<
     Pick<TicketDraft, 'format' | 'price' | 'standardPrice' | 'fee' | 'tax'>
   >,
+  edited: { fee: boolean; tax: boolean },
 ): TicketDraft {
   const result = {
     ...draft,
     ...data,
-    isFeeEdited: draft.isFeeEdited || (data.fee ?? draft.fee) !== draft.fee,
-    isTaxEdited: draft.isTaxEdited || (data.tax ?? draft.tax) !== draft.tax,
+    isFeeEdited: draft.isFeeEdited || edited.fee,
+    isTaxEdited: draft.isTaxEdited || edited.tax,
   };
   return result;
 }

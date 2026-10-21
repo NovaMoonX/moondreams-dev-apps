@@ -137,12 +137,15 @@ export function getTicketSuggestion(
   const learnedFee = getMostUsed(
     here
       .filter((viewing) => viewing.ticket!.format === format)
+      .filter((viewing) => Number.isFinite(viewing.ticket!.feeAvoidedCents))
       .map((viewing) => ({
         value: viewing.ticket!.feeAvoidedCents,
         at: viewing.showtimeAt,
       })),
   );
-  const taxed = here.filter((viewing) => viewing.ticket!.taxRate !== null);
+  const taxed = here.filter((viewing) =>
+    Number.isFinite(viewing.ticket!.taxRate),
+  );
   const learnedRate = getBestFittingRate(taxed);
   const result = {
     feeCents: learnedFee ?? fallbackFeeCents,
