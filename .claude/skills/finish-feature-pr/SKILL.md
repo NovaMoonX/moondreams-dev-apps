@@ -165,7 +165,7 @@ dev server and emulators running and finish with `npm run seed:reset`.
   step 1's sync only covers what existed when the session started. Do not
   skip this because step 1 already ran once — treat every push in this
   skill as needing a fresh sync first, not just the first one.
-- **Bump `SITE_VERSION`** per "Release hygiene" in `CLAUDE.md` — check before every commit in this skill and compare against `origin/main` first (finishing a feature PR is a minor bump; bump once per PR).
+- **Set the version label** per "Release hygiene" in `CLAUDE.md`: exactly one of `patch` or `minor` on the PR (finishing a feature PR is `minor`), checked whenever the PR's scope changes. Never edit `SITE_VERSION`.
 - Commit with a message describing the actual end state, not the original
   PR title if it no longer matches.
 - Push to the PR's branch.

@@ -7,15 +7,14 @@ import {
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { useQuery } from '@tanstack/react-query';
 
 import FallbackImage from '@/components/FallbackImage';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PhotoPicker from '@/components/forms/PhotoPicker';
 import IntroCard from '@/components/IntroCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useImageUpload } from '@/hooks/useImageUpload';
+import { useLinkLookup } from '@/hooks/useLinkPreview';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -37,9 +36,7 @@ import {
 import { selectIdeas } from '@apps/pinch/store/selectors';
 import {
   clipIdeaTitle,
-  clipSiteName,
   findIdeaByUrl,
-  toIdeaImageUrl,
   toIdeaUrl,
 } from '@apps/pinch/utils/ideas';
 
@@ -219,27 +216,19 @@ export function IdeaLinkWay({
 
   const link = toIdeaUrl(data.url);
   const duplicate = link === null ? null : findIdeaByUrl(ideas, link);
-  const settledText = useDebouncedValue(data.url, DEBOUNCE_MS.linkDetection);
-  const lookupLink = useDebouncedValue(
-    duplicate ? null : link,
-    DEBOUNCE_MS.linkDetection,
+  const { preview, isLooking, hasFailed, settledText } = useLinkLookup(
+    data.url,
+    {
+      getQueryOptions: ideaPageQueryOptions,
+      isEnabled: link !== null && duplicate === null,
+    },
   );
-  const lookup = useQuery({
-    ...ideaPageQueryOptions(lookupLink ?? ''),
-    enabled: lookupLink !== null,
-  });
-
-  const isSettled = lookupLink !== null && lookupLink === link;
-  const page = isSettled && lookup.isSuccess ? lookup.data : null;
-  const isLooking =
-    link !== null && duplicate === null && (!isSettled || lookup.isFetching);
-  const hasFailed = isSettled && !lookup.isFetching && lookup.isError;
   const host = link === null ? null : getWebLinkHost(link);
-  const pageTitle = clipIdeaTitle(page?.title ?? '');
-  const siteName = clipSiteName(page?.meta?.siteName) ?? host;
-  const imageUrl = toIdeaImageUrl(page?.meta?.image);
+  const pageTitle = preview?.title ?? '';
+  const siteName = preview?.siteName ?? host;
+  const imageUrl = preview?.imageUrl ?? null;
   const title = typed && typed.link === link ? typed.title : pageTitle;
-  const needsTitle = hasFailed || (page !== null && pageTitle === '');
+  const needsTitle = hasFailed || (preview !== null && pageTitle === '');
   const isInvalid =
     data.url.trim() !== '' && link === null && settledText === data.url;
 
@@ -317,7 +306,7 @@ export function IdeaLinkWay({
             </p>
           );
         }
-        if (page === null && !hasFailed) {
+        if (preview === null && !hasFailed) {
           return null;
         }
         return (
@@ -348,7 +337,7 @@ export function IdeaLinkWay({
                     setTyped({ link: link ?? '', title: value })
                   }
                 />
-                {page && siteName && (
+                {preview && siteName && (
                   <p className='text-muted-foreground text-xs wrap-break-word'>
                     {siteName}
                   </p>
@@ -402,7 +391,7 @@ export function IdeaLinkWay({
             title,
             note: data.note,
             url: data.url,
-            siteName: page ? siteName : null,
+            siteName: preview ? siteName : null,
             imageUrl,
             photoFile: null,
           });

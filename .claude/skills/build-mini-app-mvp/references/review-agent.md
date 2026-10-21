@@ -35,7 +35,7 @@ You are reviewing one pull request in a stacked series for NovaMoonX/moondreams-
    - Each finding must be a concrete defect with a failure scenario. Skip taste nits, and don't invent problems.
 4. Fix real findings minimally.
    - Run `npx prettier --write "src/apps/<id>/**/*.{ts,tsx}"` (never on markdown), `npx tsc -b --force` and `npx eslint .`. All must pass.
-   - Don't bump `SITE_VERSION`.
+   - Don't edit `SITE_VERSION`.
    - If `firestore.rules` changes, verify one allowed and one denied write against the emulator, using `.claude/skills/build-mini-app-mvp/scripts/rules.py`.
 5. **Browser-check any behaviour change** with `.claude/skills/build-mini-app-mvp/scripts/runval.sh "node <script>.mjs"`.
    - Base the script on `.claude/skills/build-mini-app-mvp/scripts/pw.mjs` (import it by absolute path): 390px wide, America/Los_Angeles.
