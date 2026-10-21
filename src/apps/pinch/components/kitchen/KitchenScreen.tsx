@@ -76,7 +76,7 @@ function EntryRow({ icon, label, count, onClick }: EntryRowProps) {
         </span>
       )}
       <ChevronRight
-        className='text-muted-foreground h-4 w-4 shrink-0'
+        className='text-muted-foreground h-4 w-4 shrink-0 max-[400px]:hidden'
         aria-hidden='true'
       />
     </Button>
