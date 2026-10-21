@@ -16,6 +16,7 @@ import DashboardScreen from '@apps/a-list/components/dashboard/DashboardScreen';
 import TicketsList from '@apps/a-list/components/dashboard/TicketsList';
 import ShareSubview from '@apps/a-list/components/share/ShareSubview';
 import TheatersSubview from '@apps/a-list/components/theaters/TheatersSubview';
+import ProjectionSubview from '@apps/a-list/components/dashboard/ProjectionSubview';
 import MembershipSettingsSubview from '@apps/a-list/components/dashboard/MembershipSettingsSubview';
 import PastMoviesOfferModal from '@apps/a-list/components/setup/PastMoviesOfferModal';
 import SetupModal from '@apps/a-list/components/setup/SetupModal';
@@ -147,6 +148,7 @@ function AList() {
   const isSubviewOpen =
     overlay?.kind === 'add' ||
     overlay?.kind === 'membership' ||
+    overlay?.kind === 'projection' ||
     overlay?.kind === 'share' ||
     overlay?.kind === 'theaters' ||
     overlay?.kind === 'tickets';
@@ -167,6 +169,12 @@ function AList() {
       )}
       {overlay?.kind === 'theaters' && (
         <TheatersSubview onClose={() => setOverlay(null)} />
+      )}
+      {overlay?.kind === 'projection' && (
+        <ProjectionSubview
+          membership={membership}
+          onClose={() => setOverlay(null)}
+        />
       )}
       {overlay?.kind === 'membership' && (
         <MembershipSettingsSubview

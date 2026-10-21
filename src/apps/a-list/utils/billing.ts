@@ -4,6 +4,17 @@ function getDaysInUtcMonth(year: number, monthIndex: number) {
   return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
 }
 
+/** The billing date `offset` months after the start date (date-only, UTC midnight), clamped to the month's last day. */
+export function getCycleDate(startDate: number, offset: number): number {
+  const start = new Date(startDate);
+  const year =
+    start.getUTCFullYear() + Math.floor((start.getUTCMonth() + offset) / 12);
+  const monthIndex = (start.getUTCMonth() + offset) % 12;
+  const day = Math.min(start.getUTCDate(), getDaysInUtcMonth(year, monthIndex));
+  const result = Date.UTC(year, monthIndex, day);
+  return result;
+}
+
 /**
  * Every billing date from the start date through `todayDay` (both date-only, UTC midnight). Each is
  * computed from the start date, clamped to the month's last day, so a 31st bills Feb 28 and then
@@ -20,17 +31,7 @@ export function getBillingCycleDates(
     (today.getUTCMonth() - start.getUTCMonth());
   const result = Array.from(
     { length: Math.max(0, monthSpan + 1) },
-    (_, offset) => {
-      const year =
-        start.getUTCFullYear() +
-        Math.floor((start.getUTCMonth() + offset) / 12);
-      const monthIndex = (start.getUTCMonth() + offset) % 12;
-      const day = Math.min(
-        start.getUTCDate(),
-        getDaysInUtcMonth(year, monthIndex),
-      );
-      return Date.UTC(year, monthIndex, day);
-    },
+    (_, offset) => getCycleDate(startDate, offset),
   ).filter((cycleDate) => cycleDate <= todayDay);
   return result;
 }
