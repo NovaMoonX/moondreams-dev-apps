@@ -231,6 +231,7 @@ const SEED_INGREDIENTS = [
     familyId: 'cat-fam-chicken',
     iconKey: null,
     nutritionPer100g: nutrition(215, 19.4, 0.2, 14.6),
+    defaultProductId: 'seed-pinch-product-chicken-feet-green-market',
   },
   {
     ...baseIngredient,
@@ -283,6 +284,17 @@ const SEED_PRODUCTS = [
     label: null,
     priceCents: 1499,
     sizeAmount: 20,
+    sizeUnit: 'LB',
+    url: null,
+  },
+  // Priced after the lunch three days back was fixed, so that day can use today's prices.
+  {
+    id: 'seed-pinch-product-chicken-feet-green-market',
+    ingredientId: 'seed-pinch-ingredient-chicken-feet',
+    storeId: 'seed-pinch-store-green-market',
+    label: null,
+    priceCents: 599,
+    sizeAmount: 2,
     sizeUnit: 'LB',
     url: null,
   },
@@ -518,6 +530,11 @@ const PLANNED_BLUEPRINTS: {
   type: SeedMealType;
   items: ReturnType<typeof item>[];
   meal?: string;
+  fixedWithoutPrice?: {
+    leftOut: { kind: string; ingredientId: string }[];
+    nutrition: ReturnType<typeof nutrition>;
+    lines: { itemId: string; costCents: number | null }[];
+  };
 }[] = [
   {
     day: -3,
@@ -597,6 +614,23 @@ const PLANNED_BLUEPRINTS: {
     )[index % 6],
     items: [item('a', 'RECIPE', 'seed-pinch-recipe-rice', 1 + (index % 3) / 2)],
   })),
+  // Fixed the morning after, before chicken feet had a price, so it says "Wasn't priced" until the day is priced again.
+  // Written the way snapshots were before `repricedAt` existed, so that shape stays exercised.
+  {
+    day: -3,
+    type: 'LUNCH',
+    items: [item('a', 'INGREDIENT', 'seed-pinch-ingredient-chicken-feet', 1)],
+    fixedWithoutPrice: {
+      leftOut: [
+        {
+          kind: 'NO_PRODUCT',
+          ingredientId: 'seed-pinch-ingredient-chicken-feet',
+        },
+      ],
+      nutrition: nutrition(215, 19.4, 0.2, 14.6),
+      lines: [{ itemId: 'a', costCents: null }],
+    },
+  },
 ];
 
 // Alex's own kitchen; every other fixture account starts with an empty one.
@@ -707,7 +741,13 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
           refIds: Array.from(
             new Set(blueprint.items.map((entry) => entry.refId)),
           ),
-          snapshot: null,
+          snapshot: blueprint.fixedWithoutPrice
+            ? {
+                frozenAt: today - 2 * DAY_MS + 9 * 3_600_000,
+                costCents: null,
+                ...blueprint.fixedWithoutPrice,
+              }
+            : null,
           createdAt: createdAt + index,
           updatedAt: createdAt + index,
         });

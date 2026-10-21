@@ -12,6 +12,7 @@ import {
   getMealNutrition,
   type NutritionResult,
 } from '@apps/pinch/utils/nutritionMath';
+import { getGapKey } from '@apps/pinch/utils/gaps';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
 export interface CostContext {
@@ -116,28 +117,7 @@ export function getPlannedMealCost(
   };
 }
 
-/** Several meals' costs added up, with what any of them left out. */
-export function combineMealCosts(costs: MealCost[]): Omit<MealCost, 'items'> {
-  const priced = costs.flatMap((cost) =>
-    cost.totalCents === null ? [] : [cost.totalCents],
-  );
-
-  return {
-    totalCents:
-      priced.length === 0
-        ? null
-        : priced.reduce((sum, cents) => sum + cents, 0),
-    leftOut: [
-      ...new Map(
-        costs
-          .flatMap((cost) => cost.leftOut)
-          .map((gap) => [`${gap.kind}:${gap.ingredientId}`, gap]),
-      ).values(),
-    ],
-  };
-}
-
-/** The write-once record of a meal's cost and nutrition, taken from the data as it is now. */
+/** A meal's cost and nutrition, taken from the data as it is now. */
 export function buildSnapshot(
   items: MealItem[],
   context: CostContext,
@@ -152,6 +132,7 @@ export function buildSnapshot(
 
   return {
     frozenAt,
+    repricedAt: null,
     costCents: cost.totalCents,
     leftOut: cost.leftOut.map(({ kind, ingredientId }) => ({
       kind,
@@ -162,5 +143,95 @@ export function buildSnapshot(
       itemId: item.id,
       costCents: cost.items.get(item.id)?.cents ?? null,
     })),
+  };
+}
+
+/** Null for a snapshot that was never priced again, including one written before the key existed. */
+export const getRepricedAt = (snapshot: PlannedSnapshot | null) =>
+  snapshot?.repricedAt ?? null;
+
+const centsDiffer = (before: number | null, after: number | null) =>
+  before === null || after === null
+    ? before !== after
+    : Math.round(before) !== Math.round(after);
+
+/** Whether today's data would show a fixed meal differently: its total, a line or what it leaves out. Cents compare as shown, so sub-cent noise never offers a pointless re-price. */
+export function wouldRepriceChange(
+  meal: PlannedMeal,
+  context: CostContext,
+): boolean {
+  const { snapshot } = meal;
+  if (!snapshot) {
+    return false;
+  }
+
+  const cost = getMealCost(meal.items, context);
+  const fixedLines = new Map(
+    snapshot.lines.map((line) => [line.itemId, line.costCents]),
+  );
+  const fixedLeftOut = new Set(snapshot.leftOut.map(getGapKey));
+  const result =
+    centsDiffer(snapshot.costCents, cost.totalCents) ||
+    meal.items.some((item) =>
+      centsDiffer(
+        fixedLines.get(item.id) ?? null,
+        cost.items.get(item.id)?.cents ?? null,
+      ),
+    ) ||
+    cost.leftOut.length !== fixedLeftOut.size ||
+    cost.leftOut.some((gap) => !fixedLeftOut.has(getGapKey(gap)));
+
+  return result;
+}
+
+/** A fixed meal's snapshot worked out from today's data, keeping when the day was first fixed. */
+export function buildRepricedSnapshot(
+  snapshot: PlannedSnapshot,
+  items: MealItem[],
+  context: CostContext,
+  repricedAt: number,
+): PlannedSnapshot {
+  return {
+    ...buildSnapshot(items, context, snapshot.frozenAt),
+    repricedAt,
+  };
+}
+
+export interface RepricePreview {
+  /** What the day's fixed meals add up to; null when none was priced. */
+  beforeCents: number | null;
+  /** The same meals worked out from today's data, as the re-price would write them. */
+  afterCents: number | null;
+  /** Ingredients today's prices still can't price. */
+  leftOutCount: number;
+}
+
+const addKnown = (values: (number | null)[]) => {
+  const known = values.flatMap((value) => (value === null ? [] : [value]));
+  return known.length === 0
+    ? null
+    : known.reduce((sum, value) => sum + value, 0);
+};
+
+/** What a day reads before and after being priced again, from the same function the re-price writes with. */
+export function getRepricePreview(
+  meals: PlannedMeal[],
+  context: CostContext,
+): RepricePreview {
+  const fixed = meals.flatMap((meal) =>
+    meal.snapshot ? [{ meal, snapshot: meal.snapshot }] : [],
+  );
+  const after = fixed.map(({ meal, snapshot }) =>
+    buildRepricedSnapshot(snapshot, meal.items, context, snapshot.frozenAt),
+  );
+
+  return {
+    beforeCents: addKnown(fixed.map(({ snapshot }) => snapshot.costCents)),
+    afterCents: addKnown(after.map((snapshot) => snapshot.costCents)),
+    leftOutCount: new Set(
+      after.flatMap((snapshot) =>
+        snapshot.leftOut.map((gap) => gap.ingredientId),
+      ),
+    ).size,
   };
 }

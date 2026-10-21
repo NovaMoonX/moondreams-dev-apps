@@ -6,7 +6,7 @@ import { MEAL_TYPE_LABELS } from '@apps/pinch/constants';
 import { selectCostContext } from '@apps/pinch/store/selectors';
 import type { PlannedMeal } from '@apps/pinch/types';
 import { formatRowCost } from '@apps/pinch/utils/mealFormat';
-import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
+import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
 
 interface MealRowProps {
   meal: PlannedMeal;
@@ -44,7 +44,11 @@ function MealRow({ meal, title, subtitle, onOpen }: MealRowProps) {
         )}
       </span>
       <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
-        {formatRowCost(totalCents, meal.snapshot !== null)}
+        {formatRowCost(
+          totalCents,
+          meal.snapshot !== null,
+          getRepricedAt(meal.snapshot) !== null,
+        )}
       </span>
     </Button>
   );

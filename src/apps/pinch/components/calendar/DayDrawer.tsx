@@ -8,6 +8,7 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
+import RepriceDayRow from '@apps/pinch/components/calendar/RepriceDayRow';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
@@ -40,9 +41,10 @@ import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCost,
   formatRowCost,
+  getFixedNote,
   getItemTitle,
 } from '@apps/pinch/utils/mealFormat';
-import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
+import { getPlannedMealCost, getRepricedAt } from '@apps/pinch/utils/mealMath';
 import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import { withWholeCalories } from '@apps/pinch/utils/stats';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -91,6 +93,10 @@ function DayDrawer({
   const show = useAppSelector(selectShowNutrition);
   const [footerEl, setFooterEl] = useState<HTMLElement | null>(null);
   const isFrozen = meals.length > 0 && meals.every((meal) => meal.snapshot);
+  const fixedSnapshots = meals.flatMap((meal) => meal.snapshot ?? []);
+  const isRepriced = fixedSnapshots.some(
+    (snapshot) => getRepricedAt(snapshot) !== null,
+  );
   const leftOutCount = countLeftOutIngredients(stats.leftOut);
 
   return (
@@ -147,11 +153,13 @@ function DayDrawer({
                   value={
                     stats.mealsPriced === 0
                       ? isFrozen
-                        ? "Wasn't priced"
+                        ? isRepriced
+                          ? 'Still no price'
+                          : "Wasn't priced"
                         : 'No prices yet'
                       : formatCost(stats.spendCents)
                   }
-                  detail={isFrozen ? 'Fixed when the day passed' : undefined}
+                  detail={isFrozen ? getFixedNote(fixedSnapshots) : undefined}
                   help={
                     leftOutCount > 0 && stats.mealsPriced > 0 ? (
                       <HelpTip
@@ -242,6 +250,7 @@ function DayDrawer({
                                       {formatRowCost(
                                         itemCost?.cents,
                                         meal.snapshot !== null,
+                                        getRepricedAt(meal.snapshot) !== null,
                                       )}
                                     </span>
                                   </span>
@@ -255,6 +264,7 @@ function DayDrawer({
                   </section>
                 );
               })}
+              <RepriceDayRow uid={uid} dayKey={dayKey} />
               {getDateOfDayKey(dayKey) >= getLocalTodayDate() && (
                 <AddToShoppingRow
                   subtitle='Choose what you need for the day'
