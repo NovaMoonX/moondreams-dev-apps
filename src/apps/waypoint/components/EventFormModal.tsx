@@ -150,6 +150,8 @@ interface EventFormModalProps {
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
   prefill?: EventPrefill;
+  /** The day a new event starts on, when it is added from that day's header. */
+  initialDayIndex?: number;
   events?: TimelineEvent[];
   /** A rough center point (from an existing trip event/stay) to bias place search
    * results toward, so "starbucks" finds the one near this trip first. */
@@ -294,6 +296,26 @@ function getDayChoices(trip: TripSpace, current: number | null, allowNoDay: bool
   return [...none, ...days];
 }
 
+/** The plans on either side of a start time on one day, so the person can see what they are fitting into. */
+function getDayNeighbors(
+  trip: TripSpace,
+  events: TimelineEvent[],
+  ownId: string | undefined,
+  dayIndex: number | null,
+  time: string,
+) {
+  if (dayIndex === null || !time) return null;
+  const sameDay = events
+    .filter((other) => other.id !== ownId && !other.isArchived)
+    .map((other) => ({ title: other.title, ...getEventTime(trip, other) }))
+    .filter((other) => other.dayIndex === dayIndex && other.startTime)
+    .sort((first, second) => (first.startTime ?? '').localeCompare(second.startTime ?? ''));
+  const before = sameDay.filter((other) => (other.startTime ?? '') < time).at(-1) ?? null;
+  const after = sameDay.find((other) => (other.startTime ?? '') >= time) ?? null;
+  const result = { before, after, isEmpty: sameDay.length === 0 };
+  return result;
+}
+
 function getDerivedTitle(draft: EventDraft): string {
   if (draft.eventType === 'TRAVEL') {
     const transitType = draft.quickField as TransitType;
@@ -392,6 +414,7 @@ function getInitialDraft(
   event: TimelineEvent | undefined,
   legFrom?: NextLegSeed,
   prefill?: EventPrefill,
+  initialDayIndex?: number,
 ): EventDraft {
   if (legFrom) {
     return getNextLegDraft(trip, legFrom);
@@ -399,7 +422,7 @@ function getInitialDraft(
   if (prefill && !event) {
     return getPrefilledDraft(trip, prefill);
   }
-  const draft = getBaseDraft(trip, event);
+  const draft = getBaseDraft(trip, event, initialDayIndex);
   const mirrorKey =
     event?.eventType === 'TRAVEL'
       ? TRANSIT_LOCATION_MIRROR_KEYS[draft.quickField as TransitType]
@@ -412,14 +435,15 @@ function getInitialDraft(
   return { ...withLocation, hasTitle, title: hasTitle ? (event?.title ?? '') : '' };
 }
 
-function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventDraft {
+function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined, initialDayIndex?: number): EventDraft {
   const time = event ? getEventTime(trip, event) : null;
+  const newDayIndex = initialDayIndex ?? getDefaultDayIndex(trip);
   return {
     eventType: event?.eventType ?? 'ACTIVITY',
     title: '',
     hasTitle: false,
-    dayIndex: event ? (time?.dayIndex ?? null) : getDefaultDayIndex(trip),
-    endDayIndex: event ? (time?.endDayIndex ?? null) : getDefaultDayIndex(trip),
+    dayIndex: event ? (time?.dayIndex ?? null) : newDayIndex,
+    endDayIndex: event ? (time?.endDayIndex ?? null) : newDayIndex,
     hasEndTime: Boolean(time?.endTime),
     time: time?.startTime || '09:00',
     endTime: time?.endTime ?? '',
@@ -529,6 +553,7 @@ function EventFormModal({
   memberOptions,
   event,
   prefill,
+  initialDayIndex,
   events = [],
   legFrom,
   placeBias,
@@ -542,7 +567,7 @@ function EventFormModal({
   const queryClient = useQueryClient();
   const isPhone = useMediaQuery().isBelow('sm');
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
+  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill, initialDayIndex));
   const checklistItems = useAppSelector((state) => state.waypoint.checklist.items);
   const bookingEventIds = useMemo(() => new Set(events.map((other) => other.id)), [events]);
   const bookingChoices = useMemo(
@@ -581,6 +606,10 @@ function EventFormModal({
             all.findIndex((candidate) => normalizeLabel(candidate) === normalizeLabel(label)) === index,
         ),
     [events, draft.eventType],
+  );
+  const dayNeighbors = useMemo(
+    () => getDayNeighbors(trip, events, event?.id, draft.dayIndex, draft.time),
+    [trip, events, event?.id, draft.dayIndex, draft.time],
   );
   const isTravel = draft.eventType === 'TRAVEL';
   const canArriveEarly =
@@ -1254,6 +1283,22 @@ function EventFormModal({
               onChange={(changeEvent) => updateStart(draft.dayIndex, changeEvent.target.value)}
             />
           </div>
+          {dayNeighbors && (
+            <div className='text-muted-foreground space-y-0.5 text-xs'>
+              {dayNeighbors.isEmpty ? (
+                <p>Nothing else is planned this day.</p>
+              ) : (
+                <>
+                  <p className='truncate'>
+                    Before: {dayNeighbors.before ? `${formatClockTime(dayNeighbors.before.startTime ?? '')} ${dayNeighbors.before.title}` : 'nothing earlier'}
+                  </p>
+                  <p className='truncate'>
+                    After: {dayNeighbors.after ? `${formatClockTime(dayNeighbors.after.startTime ?? '')} ${dayNeighbors.after.title}` : 'nothing later'}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {isRelative && startZone && (
             <ZoneField
               label={draft.hasEndTime ? 'Leaves in' : 'In'}

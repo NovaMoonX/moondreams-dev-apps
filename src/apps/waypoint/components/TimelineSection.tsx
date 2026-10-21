@@ -419,6 +419,27 @@ export function TimelineSection({
     return [...merged.nodes, ...merged.rest.map((row) => row.node)];
   };
 
+  const renderDayAdd = (dayIndex: number, label: string) =>
+    canAddEvents && (
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        aria-label={`Add to ${label}`}
+        className="relative whitespace-nowrap before:absolute before:-inset-y-1.5 before:-inset-x-1 before:content-['']"
+        onClick={() => openNew(dayIndex)}
+      >
+        Add
+      </Button>
+    );
+
+  const renderDayTrailing = (dayIndex: number, label: string, weather: ReactNode) => (
+    <div className='flex items-center gap-2'>
+      {weather}
+      {renderDayAdd(dayIndex, label)}
+    </div>
+  );
+
   const renderDivider = (label: string, trailing?: ReactNode) => (
     <SectionDivider label={label} trailing={trailing} />
   );
@@ -468,7 +489,7 @@ export function TimelineSection({
               <div key={day} className='space-y-3'>
                 {renderDivider(
                   getDayDateLabel(trip.startDate, day),
-                  compactAllDaysWeather ? renderDayWeather(day, true) : undefined,
+                  renderDayTrailing(day, getDayDateLabel(trip.startDate, day), compactAllDaysWeather ? renderDayWeather(day, true) : null),
                 )}
                 {!compactAllDaysWeather && renderDayWeather(day, false)}
                 {renderEventItems(
@@ -512,7 +533,11 @@ export function TimelineSection({
               <DayHeader
                 isSticky={isPhone}
                 label={getBucketLabel(bucket, trip.startDate, dayCount)}
-                trailing={typeof bucket === 'number' && compactAllDaysWeather ? renderDayWeather(bucket, true) : undefined}
+                trailing={
+                  typeof bucket === 'number'
+                    ? renderDayTrailing(bucket, getBucketLabel(bucket, trip.startDate, dayCount), compactAllDaysWeather ? renderDayWeather(bucket, true) : null)
+                    : undefined
+                }
               />
               {typeof bucket === 'number' && !compactAllDaysWeather && renderDayWeather(bucket, false)}
               <div className='space-y-3 pb-3'>
@@ -617,7 +642,7 @@ export function TimelineSection({
           action={
             canAddEvents && (
               <div className='flex items-center gap-2'>
-                <Button type='button' onClick={openNew}>
+                <Button type='button' onClick={() => openNew(selectedDayIndex ?? undefined)}>
                   Add
                 </Button>
               </div>
