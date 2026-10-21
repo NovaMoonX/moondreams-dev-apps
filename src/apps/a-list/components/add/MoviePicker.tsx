@@ -93,12 +93,7 @@ function MoviePicker({
   // Popular films fill the empty field only; the ones already on the watchlist are left out.
   const popularResults =
     query.trim() === ''
-      ? (popular.data ?? []).filter(
-          (movie) =>
-            !isListed(movie) &&
-            !watchlistKeys.has(movie.movieKey) &&
-            !shownIdentities.has(getIdentity(movie.title, movie.year)),
-        )
+      ? (popular.data ?? []).filter((movie) => !isListed(movie))
       : [];
   const isSearchResting =
     search.error instanceof FirebaseError &&
