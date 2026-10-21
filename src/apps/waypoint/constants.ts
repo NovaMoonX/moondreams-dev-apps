@@ -274,6 +274,13 @@ export const MEAL_TYPE_EMOJIS: Record<MealType, string> = {
   SNACK: '🍿',
 };
 
+export const MEAL_TYPE_BADGE_CLASSES: Record<MealType, string> = {
+  BREAKFAST: 'bg-yellow-200 text-yellow-900 dark:bg-yellow-900 dark:text-yellow-100',
+  LUNCH: 'bg-orange-200 text-orange-900 dark:bg-orange-900 dark:text-orange-100',
+  DINNER: 'bg-rose-200 text-rose-900 dark:bg-rose-900 dark:text-rose-100',
+  SNACK: 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
+};
+
 export const ACTIVITY_SETTING_LABELS: Record<ActivitySetting, string> = {
   INDOOR: 'Indoor',
   OUTDOOR: 'Outdoor',

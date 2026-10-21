@@ -123,6 +123,7 @@ export function RentalDetailLines({
 
 export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: RentalCardProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = getDisplayImage({ place: rental.pickupPlace, linkPreview: rental.linkPreview });
@@ -189,13 +190,14 @@ export function RentalCard({ trip, rental, canEdit, onEdit, onSaveNotes }: Renta
                 canEdit={canEdit}
                 onSave={(notes) => onSaveNotes(rental, notes)}
                 variant='subtle'
+              onEditingChange={setIsEditingNotes}
                 placeholder={RENTAL_NOTES_PLACEHOLDER}
               />
             </div>
           )}
         </div>
         {!isSmallScreen && (
-          <div className='absolute right-4 bottom-4'>
+          <div className={join('absolute right-4 bottom-4', isEditingNotes && 'hidden')}>
             <NoExpenseBadge getSubject={() => getRentalSubject(rental)} />
           </div>
         )}

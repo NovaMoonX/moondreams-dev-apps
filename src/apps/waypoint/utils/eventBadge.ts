@@ -2,6 +2,9 @@ import {
   EVENT_TYPE_BADGE_CLASSES,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
+  MEAL_TYPE_BADGE_CLASSES,
+  MEAL_TYPE_EMOJIS,
+  MEAL_TYPE_LABELS,
   TRANSIT_TYPE_BADGE_CLASSES,
   TRANSIT_TYPE_EMOJIS,
   TRANSIT_TYPE_LABELS,
@@ -16,8 +19,8 @@ export interface EventBadge {
 
 type BadgeSource = Pick<TimelineEvent, 'eventType' | 'eventDetails'>;
 
-/** How an event announces its kind: a travel event shows its transit type (and color)
- * rather than the generic travel badge. */
+/** How an event announces its kind: a travel event shows its transit type and a dining event its
+ * meal (each with its own color) rather than the generic badge. */
 export function getEventBadge({ eventType, eventDetails }: BadgeSource): EventBadge {
   if (eventType === 'TRAVEL' && eventDetails && 'transitType' in eventDetails) {
     const { transitType } = eventDetails;
@@ -26,6 +29,16 @@ export function getEventBadge({ eventType, eventDetails }: BadgeSource): EventBa
         emoji: TRANSIT_TYPE_EMOJIS[transitType],
         label: TRANSIT_TYPE_LABELS[transitType],
         className: TRANSIT_TYPE_BADGE_CLASSES[transitType],
+      };
+    }
+  }
+  if (eventType === 'DINING' && eventDetails && 'mealType' in eventDetails) {
+    const { mealType } = eventDetails;
+    if (MEAL_TYPE_LABELS[mealType]) {
+      return {
+        emoji: MEAL_TYPE_EMOJIS[mealType],
+        label: MEAL_TYPE_LABELS[mealType],
+        className: MEAL_TYPE_BADGE_CLASSES[mealType],
       };
     }
   }

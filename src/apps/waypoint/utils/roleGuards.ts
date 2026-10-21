@@ -57,9 +57,9 @@ export function hasTripStarted(trip: TripSpace, now = Date.now()) {
   return now >= trip.startDate;
 }
 
-/** Any member may post an idea, but only until the trip starts; voting and reading never close. */
-export function canAddIdea(trip: TripSpace, uid: string, now = Date.now()) {
-  return isTripMember(trip, uid) && !hasTripStarted(trip, now);
+/** Any member may post an idea, before or during the trip; only the itinerary narrows to Admins once it starts. */
+export function canAddIdea(trip: TripSpace, uid: string) {
+  return isTripMember(trip, uid);
 }
 
 /** Only an idea's own poster may edit it, in any trip phase. */

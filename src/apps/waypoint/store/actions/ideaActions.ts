@@ -16,7 +16,6 @@ import { validateEventTime, type EventFields } from '@apps/waypoint/store/action
 import type { IdeaDetails, IdeaType, TimelineEvent, TripIdea, TripSpace } from '@apps/waypoint/types';
 import { cancelEventReminder, scheduleEventReminder } from '@apps/waypoint/utils/reminders';
 import {
-  canAddIdea,
   canCreateItem,
   canDeleteIdea,
   canEditIdea,
@@ -38,9 +37,6 @@ export const createIdea = createAsyncThunk<TripIdea, CreateIdeaInput, { rejectVa
   async ({ uid, trip, ...fields }, { rejectWithValue }) => {
     if (!isTripMember(trip, uid)) {
       return rejectWithValue('You do not have permission to add ideas to this trip.');
-    }
-    if (!canAddIdea(trip, uid)) {
-      return rejectWithValue('This trip has started, so new ideas can no longer be added.');
     }
     if (!fields.title.trim()) {
       return rejectWithValue('Enter a name for this idea.');

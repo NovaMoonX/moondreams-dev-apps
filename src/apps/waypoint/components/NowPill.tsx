@@ -16,6 +16,7 @@ import { getDisplayImage } from '@/utils/enrichmentUtils';
 import FallbackImage from '@/components/FallbackImage';
 import { EventDetailLines } from '@apps/waypoint/components/EventCard';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import { getEventNavigationLocation } from '@apps/waypoint/utils/navigationLocation';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import {
@@ -256,7 +257,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
             onClose={() => setOpenEventId(null)}
             title={openEvent.title}
             imageUrl={getDisplayImage(openEvent)}
-            location={openEvent}
+            location={getEventNavigationLocation(openEvent)}
             linkUrl={openEvent.linkUrl}
             onEdit={null}
           >
@@ -278,7 +279,7 @@ function NowPill({ trip, currentUserId }: NowPillProps) {
               )}
               {details}
               <div className='flex items-center gap-2'>
-                <MapNavigationButton {...openEvent} variant='primary' />
+                <MapNavigationButton {...getEventNavigationLocation(openEvent)} variant='primary' />
                 {openEvent.linkUrl && (
                   <Button
                     href={openEvent.linkUrl}

@@ -8,7 +8,7 @@ import { shallowEqual } from 'react-redux';
 import { useAppSelector } from '@/store';
 import { formatClockTime } from '@/utils/formatUtils';
 
-import { getEventStatus, selectEventsByDay } from '@apps/waypoint/store/selectors';
+import { getLiveEventStatus, selectEventsByDay } from '@apps/waypoint/store/selectors';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { buildTimelineItems, type EventGroup } from '@apps/waypoint/utils/eventGroups';
 import { formatEventArriveBy, getEventArriveByMs, getEventTime } from '@apps/waypoint/utils/tripTime';
@@ -27,9 +27,9 @@ interface TodayAgendaProps {
 
 function TodayAgenda({ trip, currentUserId, title, dayIndex, now, limit, onViewAll, onOpenEvent }: TodayAgendaProps) {
   const dayEvents = useAppSelector(selectEventsByDay(dayIndex, trip, currentUserId), shallowEqual);
+  const liveDayEvents = dayEvents.filter((event) => !event.isArchived);
   const items = buildTimelineItems(
-    dayEvents
-      .filter((event) => !event.isArchived)
+    liveDayEvents
       .sort((a, b) => (getEventTime(trip, a).startMs ?? 0) - (getEventTime(trip, b).startMs ?? 0)),
   ).slice(0, limit);
 
@@ -38,7 +38,7 @@ function TodayAgenda({ trip, currentUserId, title, dayIndex, now, limit, onViewA
   }
 
   const renderRow = (event: TimelineEvent, isNested = false) => {
-    const status = getEventStatus(trip, event, now);
+    const status = getLiveEventStatus(trip, event, liveDayEvents, now);
     const isDone = status === 'COMPLETED';
     const arriveByMs = getEventArriveByMs(trip, event);
     const arriveBy = arriveByMs !== null && arriveByMs > now ? formatEventArriveBy(trip, event) : null;

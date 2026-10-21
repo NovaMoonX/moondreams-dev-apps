@@ -13,6 +13,7 @@ import LinkedTodosBadge from '@apps/waypoint/components/LinkedTodosBadge';
 import NoExpenseBadge from '@apps/waypoint/components/NoExpenseBadge';
 import { getEventSubject } from '@apps/waypoint/utils/relatedSubjects';
 import MapNavigationButton from '@apps/waypoint/components/MapNavigationButton';
+import { getEventNavigationLocation } from '@apps/waypoint/utils/navigationLocation';
 import PlaceDetailsDrawer from '@apps/waypoint/components/PlaceDetailsDrawer';
 import NotesField from '@apps/waypoint/components/NotesField';
 import FallbackImage from '@/components/FallbackImage';
@@ -219,7 +220,7 @@ export function EventDetailLines({
           {event.arriveByNote && <p className='text-muted-foreground pl-7 italic'>{event.arriveByNote}</p>}
         </div>
       )}
-      {locationLabel && <LocationLink {...event} label={locationLabel} />}
+      {locationLabel && <LocationLink {...getEventNavigationLocation(event)} label={locationLabel} />}
       {(event.venueOpenTime || event.venueCloseTime) && (
         <p className='text-muted-foreground text-sm'>
           Open {event.venueOpenTime ? formatClockTime(event.venueOpenTime) : '?'} -{' '}
@@ -278,6 +279,7 @@ export function EventCard({
   const canToggleArchive = canArchive;
   const stackActionLabel = isStacked ? 'Edit stack' : isGrouped ? 'Stack whole group' : 'Stack event';
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = showCover ? getDisplayImage(event) : null;
@@ -301,7 +303,7 @@ export function EventCard({
 
   const actionButtons = (
     <div className='flex flex-wrap gap-2'>
-      {!event.isArchived && <MapNavigationButton {...event} />}
+      {!event.isArchived && <MapNavigationButton {...getEventNavigationLocation(event)} />}
       {canToggleArchive && showArchiveToggle && (
         <Button
           type='button'
@@ -402,7 +404,7 @@ export function EventCard({
           </div>
           {!isSmallScreen && (
             <div className='flex shrink-0 gap-2'>
-              {!event.isArchived && <MapNavigationButton {...event} />}
+              {!event.isArchived && <MapNavigationButton {...getEventNavigationLocation(event)} />}
               {canToggleArchive && showArchiveToggle && (
                 <Button
                   type='button'
@@ -446,12 +448,13 @@ export function EventCard({
               canEdit={canModify}
               onSave={(notes) => onSaveNotes(event, notes)}
               variant='subtle'
+              onEditingChange={setIsEditingNotes}
               placeholder={EVENT_NOTES_PLACEHOLDER}
             />
           </div>
         )}
         {!isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-          <div className='absolute right-4 bottom-4 flex items-center gap-2'>
+          <div className={join('absolute right-4 bottom-4 flex items-center gap-2', isEditingNotes && 'hidden')}>
             <LinkedTodosBadge getSubject={() => getEventSubject(trip, event)} />
             <NoExpenseBadge getSubject={() => getEventSubject(trip, event)} />
           </div>
@@ -488,7 +491,7 @@ export function EventCard({
           onClose={() => setIsDrawerOpen(false)}
           title={event.title}
           imageUrl={getDisplayImage(event)}
-          location={event}
+          location={getEventNavigationLocation(event)}
           linkUrl={event.linkUrl}
           onEdit={canModify ? () => { closeDrawer(); onEdit(event); } : null}
           stackLabel={stackActionLabel}

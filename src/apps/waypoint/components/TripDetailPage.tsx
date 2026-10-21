@@ -86,7 +86,7 @@ import {
 } from '@apps/waypoint/store/actions/tripActions';
 import { getTripStatus, selectIsTripDataLoaded, selectSortedIdeas, selectSortedRentals, selectSortedStays } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
-import { canAddIdea, hasTripRole, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
+import { canAddIdea, hasTripRole, hasTripStarted, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 import { buildTimelineMarkdown, buildTripMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 
@@ -164,7 +164,8 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canEditDates = canEdit && isRelativeTrip(trip);
   const isAdmin = isTripAdmin(trip, currentUserId);
-  const canAddIdeas = canAddIdea(trip, currentUserId, now);
+  const canAddIdeas = canAddIdea(trip, currentUserId);
+  const isIdeaBoardProminent = canAddIdeas && !hasTripStarted(trip, now);
 
   // The trip list -> trip detail transition is a query-param change, not a route change,
   // so the browser doesn't reset scroll position on its own — do it explicitly.
@@ -481,12 +482,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     </Button>
   );
 
-  const ideasOverview = (hasAppNav ? sectionTab === '' : canAddIdeas) && (
+  const ideasOverview = (hasAppNav ? sectionTab === '' : isIdeaBoardProminent) && (
     <div className='mt-5'>
       <IdeasOverview
         trip={trip}
         currentUserId={currentUserId}
         canAdd={canAddIdeas}
+        isProminent={isIdeaBoardProminent}
         onOpen={() => setSectionTab('ideas')}
         onAdd={setIdeaFormType}
       />
@@ -708,7 +710,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <TravelPrompts trip={trip} currentUserId={currentUserId} />
           </div>
         )}
-        {canAddIdeas && ideasOverview}
+        {isIdeaBoardProminent && ideasOverview}
         {(hasAppNav ? sectionTab === '' : true) && (
           <ChecklistOverview trip={trip} currentUserId={currentUserId} onOpen={() => setSectionTab('checklist')} />
         )}
@@ -718,7 +720,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <RentalsEntry onOpen={() => setSectionTab('rentals')} />
           </div>
         )}
-        {!canAddIdeas && ideasOverview}
+        {!isIdeaBoardProminent && ideasOverview}
         {!hasAppNav && <hr className='border-border mt-4' />}
         <Tabs
           value={sectionTab}

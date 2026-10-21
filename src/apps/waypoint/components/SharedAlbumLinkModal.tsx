@@ -7,6 +7,10 @@ interface SharedAlbumLinkModalProps {
   isOpen: boolean;
   tripId: string;
   currentUrl: string | null;
+  /** Only Admins and Editors may change a link that is already set. */
+  canChange: boolean;
+  /** Opens on the link field instead of the album view (the card's "Change"). */
+  startChanging?: boolean;
   isSaving: boolean;
   onSubmit: (url: string) => void;
   onClose: () => void;
@@ -16,11 +20,42 @@ function SharedAlbumLinkModal({
   isOpen,
   tripId,
   currentUrl,
+  canChange,
+  startChanging = false,
   isSaving,
   onSubmit,
   onClose,
 }: SharedAlbumLinkModalProps) {
   const [url, setUrl] = useState(currentUrl ?? '');
+  const [isChanging, setIsChanging] = useState(currentUrl === null || startChanging);
+  const isViewing = currentUrl !== null && !isChanging;
+
+  if (isViewing) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title='Shared album'>
+        <p className='text-muted-foreground text-sm'>
+          Everyone&apos;s trip photos in one place. Add yours from the album.
+        </p>
+        <div className='mt-4 space-y-2'>
+          <Button href={currentUrl} target='_blank' rel='noreferrer' size='lg' className='w-full'>
+            Open album <ExternalLink className='h-3.5 w-3.5' />
+          </Button>
+          <div className='flex items-center justify-between gap-2'>
+            {canChange ? (
+              <Button type='button' variant='secondary' onClick={() => setIsChanging(true)}>
+                Change link
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button type='button' variant='tertiary' onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
@@ -30,17 +65,6 @@ function SharedAlbumLinkModal({
       disableCloseOnOverlayClick={isSaving}
     >
       <div className='space-y-2'>
-        {currentUrl && (
-          <Button
-            href={currentUrl}
-            target='_blank'
-            rel='noreferrer'
-            variant='link'
-            className='h-auto p-0'
-          >
-            Open current album <ExternalLink className='h-3.5 w-3.5' />
-          </Button>
-        )}
         <Label htmlFor={`album-link-${tripId}`}>Album URL</Label>
         <Input
           id={`album-link-${tripId}`}
@@ -77,7 +101,7 @@ function SharedAlbumLinkModal({
             type='button'
             variant='secondary'
             disabled={isSaving}
-            onClick={onClose}
+            onClick={currentUrl ? () => setIsChanging(false) : onClose}
           >
             Cancel
           </Button>
