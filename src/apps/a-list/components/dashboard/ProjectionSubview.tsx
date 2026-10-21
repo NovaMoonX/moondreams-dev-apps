@@ -10,19 +10,17 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
-import {
-  centsToInputValue,
-  formatCents,
-  parseMoneyToCents,
-} from '@/utils/moneyUtils';
+import { centsToInputValue, formatCents } from '@/utils/moneyUtils';
 import { MIN_CONTRACT_MONTHS } from '@apps/a-list/constants';
 import { selectViewingItems } from '@apps/a-list/store/selectors';
 import type { MembershipProfile } from '@apps/a-list/types';
+import { getCycleDate } from '@apps/a-list/utils/billing';
 import { getDayKey } from '@apps/a-list/utils/dayKeys';
 import {
-  getMoviesToBreakEven,
+  getBreakEven,
   getPaceMax,
   getProjectionBase,
+  parseTicketCents,
   projectCalendar,
   projectPace,
   projectStop,
@@ -33,10 +31,10 @@ import {
 type Scenario = 'stop' | 'calendar' | 'week' | 'month';
 
 const SCENARIO_OPTIONS: PillOption<Scenario>[] = [
-  { value: 'stop', emoji: '🛑', label: 'Stop now' },
-  { value: 'calendar', emoji: '📅', label: 'My calendar' },
-  { value: 'week', emoji: '🗓️', label: 'Per week' },
-  { value: 'month', emoji: '🍿', label: 'Per month' },
+  { value: 'stop', label: 'Stop now' },
+  { value: 'calendar', label: 'Calendar' },
+  { value: 'week', label: 'Weekly' },
+  { value: 'month', label: 'Monthly' },
 ];
 
 interface ProjectionSubviewProps {
@@ -49,6 +47,9 @@ function pluralize(count: number, word: string) {
   return result;
 }
 
+const clampCount = (goal: number | null, fallback: number, max: number) =>
+  Math.max(1, Math.min(goal ?? fallback, max));
+
 /** A what-if for the membership: where net savings would land under a few simple plans. Nothing here is saved. */
 function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   const now = useNow();
@@ -59,8 +60,8 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
 
   const [pickedScenario, setScenario] = useState<Scenario | null>(null);
   const [counts, setCounts] = useState<Record<PaceUnit, number>>({
-    week: Math.min(membership.weeklyGoal ?? 2, getPaceMax('week')),
-    month: Math.min(membership.monthlyGoal ?? 8, getPaceMax('month')),
+    week: clampCount(membership.weeklyGoal, 2, getPaceMax('week')),
+    month: clampCount(membership.monthlyGoal, 8, getPaceMax('month')),
   });
   const [pickedMonths, setPickedMonths] = useState<number | null>(null);
   const [valueInput, setValueInput] = useState<string | null>(null);
@@ -74,29 +75,25 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   const ticketCents =
     valueInput === null
       ? base.averageTicketCents
-      : parseMoneyToCents(valueInput);
+      : parseTicketCents(valueInput);
   const isPace = scenario === 'week' || scenario === 'month';
 
   const getResult = (): ProjectionResult => {
     if (scenario === 'stop') return projectStop(base, membership);
     if (scenario === 'calendar') return calendar;
-    const unit = scenario;
     return projectPace(
       base,
       membership,
       todayDay,
-      { unit, count: counts[unit] },
+      { unit: scenario, count: counts[scenario] },
       months,
       ticketCents,
     );
   };
   const result = getResult();
-  const netNowCents =
-    base.savedCents - base.monthlyTotalCents * base.cyclesBilled;
-  const toBreakEven = isPace
-    ? getMoviesToBreakEven(base, result.costCents, ticketCents)
-    : null;
+  const breakEven = isPace ? getBreakEven(base, result, ticketCents) : null;
   const isBrokenEven = result.netCents !== null && result.netCents >= 0;
+  const until = formatDateUTC(result.coveredUntil);
 
   const getContractLine = () => {
     if (base.minimumMonthsLeft === 0)
@@ -106,72 +103,40 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   };
 
   const getSummaryLine = () => {
-    if (scenario === 'stop')
-      return `Last bill ${formatDateUTC(result.lastBillDate)}`;
+    if (scenario === 'stop') return `Covered until ${until}.`;
     if (scenario === 'calendar') {
       if (result.movies === 0)
         return 'Nothing is planned ahead on your calendar yet.';
-      return `${pluralize(result.movies, 'showing')} ahead, paid up to ${formatDateUTC(result.lastBillDate)}`;
+      return `${pluralize(result.movies, 'showing')} ahead, assuming you watch them all. Covered until ${until}.`;
     }
-    return `${pluralize(result.movies, 'movie')} by ${formatDateUTC(result.lastBillDate)}, ${pluralize(result.months, 'month')} billed`;
+    return `${pluralize(result.movies, 'movie')} by ${until}.`;
   };
+
+  const getBreakEvenLine = () => {
+    if (!breakEven || breakEven.movies === 0 || breakEven.perPeriod === null)
+      return null;
+    const unit = scenario as PaceUnit;
+    if (breakEven.perPeriod > getPaceMax(unit))
+      return `Breaking even by then would take more than A-List's ${getPaceMax(unit)} a ${unit}.`;
+    return `Breaking even takes about ${breakEven.perPeriod} a ${unit} (${pluralize(breakEven.movies, 'movie')} in all).`;
+  };
+  const breakEvenLine = getBreakEvenLine();
 
   return (
     <Subview title='Projection' onClose={onClose}>
       <div className='space-y-4'>
-        <p className='bg-secondary/60 rounded-2xl px-4 py-3 text-sm'>
+        <p className='bg-secondary/60 border-border rounded-2xl border px-4 py-3 text-sm'>
           <span aria-hidden='true'>🔒 </span>
           {getContractLine()}
         </p>
         <PillGroup
-          label='What if you'
+          label='What if'
           options={SCENARIO_OPTIONS}
           value={scenario}
           onChange={setScenario}
           isThin
         />
-        {isPace && (
-          <div className='space-y-3'>
-            <div className='flex flex-wrap items-center justify-between gap-3'>
-              <p className='text-sm font-medium'>Movies a {scenario}</p>
-              <Stepper
-                label={`Movies a ${scenario}`}
-                value={counts[scenario]}
-                min={1}
-                max={getPaceMax(scenario)}
-                step={1}
-                onChange={(count) =>
-                  setCounts((current) => ({ ...current, [scenario]: count }))
-                }
-              />
-            </div>
-            <PillGroup
-              label='Keep going for'
-              options={base.horizons.map((value) => ({
-                value: String(value),
-                label: `${value} months`,
-              }))}
-              value={String(months)}
-              onChange={(value) => setPickedMonths(Number(value))}
-              isThin
-            />
-            <div className='space-y-1'>
-              <p className='text-sm font-medium'>Each movie saves you</p>
-              <MoneyInput
-                ariaLabel='What each movie saves you'
-                value={valueInput ?? centsToInputValue(base.averageTicketCents)}
-                onChange={setValueInput}
-                placeholder='0.00'
-              />
-              <p className='text-muted-foreground text-xs'>
-                {base.averageTicketCents === null
-                  ? 'No tickets on record yet, so type what a ticket usually costs.'
-                  : 'Your average so far, with fees and tax. Change it to try another.'}
-              </p>
-            </div>
-          </div>
-        )}
-        <div className='border-border bg-card rounded-3xl border p-5 shadow-sm'>
+        <div className='border-border bg-card rounded-3xl border p-4 shadow-sm'>
           <p className='text-muted-foreground flex items-center gap-2 text-sm font-medium'>
             <span
               className='bg-accent grid size-8 place-items-center rounded-full text-base'
@@ -189,15 +154,11 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             <>
               <p
                 className={join(
-                  'mt-2 text-5xl font-bold tracking-tight tabular-nums',
+                  'mt-2 text-4xl font-bold tracking-tight tabular-nums sm:text-5xl',
                   isBrokenEven ? 'text-success' : 'text-foreground',
                 )}
               >
                 {formatCents(result.netCents)}
-              </p>
-              <p className='text-muted-foreground mt-2 text-sm'>
-                {formatCents(base.savedCents + (result.addedCents ?? 0))} in
-                tickets, after {formatCents(result.costCents)} of membership
               </p>
               <p
                 className={join(
@@ -209,32 +170,84 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               >
                 <span aria-hidden='true'>{isBrokenEven ? '🎉' : '🎯'}</span>
                 {isBrokenEven
-                  ? 'Broken even'
+                  ? 'Would break even'
                   : `${formatCents(-result.netCents)} short of break even`}
+              </p>
+              <p className='text-muted-foreground mt-2 text-sm'>
+                {formatCents(base.savedCents + (result.addedCents ?? 0))} in
+                tickets, after {formatCents(result.costCents)} of membership (
+                {pluralize(result.months, 'bill')}).
               </p>
             </>
           )}
-          <p className='text-muted-foreground mt-3 text-sm'>
-            {getSummaryLine()}
-          </p>
-          {toBreakEven !== null && toBreakEven > 0 && (
+          {result.netCents !== null && (
             <p className='text-muted-foreground mt-1 text-sm'>
-              Breaking even takes {pluralize(toBreakEven, 'movie')} by then
-              {result.movies < toBreakEven
-                ? '.'
-                : ', and this pace gets there.'}
+              {getSummaryLine()} Right now it's {formatCents(base.netNowCents)}.
+            </p>
+          )}
+          {breakEvenLine && (
+            <p className='text-muted-foreground mt-1 text-sm'>
+              {breakEvenLine}
             </p>
           )}
           {scenario === 'calendar' && result.unpricedCount > 0 && (
             <p className='text-muted-foreground mt-1 text-sm'>
-              {pluralize(result.unpricedCount, 'showing')} with no price count
-              as $0.
+              {pluralize(result.unpricedCount, 'showing')} with no price and no
+              tickets on record yet count as $0.
             </p>
           )}
-          <p className='text-muted-foreground mt-1 text-sm'>
-            Today it's {formatCents(netNowCents)}.
-          </p>
+          {scenario === 'calendar' && result.unmarkedCount > 0 && (
+            <p className='text-muted-foreground mt-1 text-sm'>
+              {pluralize(result.unmarkedCount, 'showing')} already over{' '}
+              {result.unmarkedCount === 1 ? "isn't" : "aren't"} marked seen yet,
+              so {result.unmarkedCount === 1 ? "it isn't" : "they aren't"}{' '}
+              counted.
+            </p>
+          )}
         </div>
+        {isPace && (
+          <div className='space-y-3'>
+            <div className='flex flex-wrap items-center justify-between gap-3'>
+              <p className='text-sm font-medium'>Movies a {scenario}</p>
+              <Stepper
+                label={`Movies a ${scenario}`}
+                value={counts[scenario]}
+                min={1}
+                max={getPaceMax(scenario)}
+                step={1}
+                onChange={(count) =>
+                  setCounts((current) => ({ ...current, [scenario]: count }))
+                }
+              />
+            </div>
+            <PillGroup
+              label='Keep going until'
+              options={base.horizons.map((value) => ({
+                value: String(value),
+                label: formatDateUTC(getCycleDate(membership.startDate, value)),
+              }))}
+              value={String(months)}
+              onChange={(value) => setPickedMonths(Number(value))}
+              isThin
+            />
+            <div className='space-y-1'>
+              <p className='text-muted-foreground text-xs font-medium'>
+                Each movie saves you
+              </p>
+              <MoneyInput
+                ariaLabel='What each movie saves you'
+                value={valueInput ?? centsToInputValue(base.averageTicketCents)}
+                onChange={setValueInput}
+                placeholder='0.00'
+              />
+              <p className='text-muted-foreground text-xs'>
+                {base.averageTicketCents === null
+                  ? 'No tickets on record yet. Type what a ticket usually costs you, fees and tax included.'
+                  : 'Your average so far, with fees and tax. Change it to try another.'}
+              </p>
+            </div>
+          </div>
+        )}
         <p className='text-muted-foreground text-center text-xs'>
           Just an estimate. Nothing here is saved.
         </p>

@@ -1,59 +1,72 @@
 import {
-  MIN_CONTRACT_MONTHS,
   MAX_MOVIES_PER_MONTH,
   MAX_MOVIES_PER_WEEK,
+  MIN_CONTRACT_MONTHS,
 } from '@apps/a-list/constants';
 import type { MembershipProfile, Viewing } from '@apps/a-list/types';
 import {
   getBillingCycleDates,
   getCycleDate,
+  getMembershipCost,
   getMonthlyTotalAt,
 } from '@apps/a-list/utils/billing';
+import { getDayKey } from '@apps/a-list/utils/dayKeys';
+import { fromDateInputValue } from '@/utils/dateInputUtils';
+import { parseMoneyToCents } from '@/utils/moneyUtils';
 
 const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
+// Mean month length, so a monthly pace doesn't depend on which months the window crosses.
 const MONTH_MS = 30.4375 * DAY_MS;
 const HORIZON_CANDIDATES = [3, 6, 9, 12, 18, 24];
+const HORIZON_COUNT = 3;
+/** A typed ticket value above this is a slip, not a plan. */
+const MAX_TICKET_CENTS = 100_000;
 
 export interface ProjectionBase {
-  /** Seen tickets' savings so far. */
   savedCents: number;
-  /** Months billed so far. */
   cyclesBilled: number;
   /** Months still owed before the minimum is met; 0 once it is. */
   minimumMonthsLeft: number;
   monthlyTotalCents: number;
-  /** The average a seen ticket saved (price, fee and tax); null before any ticket is on record. */
+  /** Net savings today, from the same cost the dashboard uses. */
+  netNowCents: number;
+  /** Average of seen tickets (price, fee and tax); null before any is on record. */
   averageTicketCents: number | null;
-  /** The average convenience fee a seen ticket avoided. */
   averageFeeCents: number;
-  /** Total billed months a pace can run to, soonest first. */
+  /** Total months billed that a pace can run to. */
   horizons: number[];
 }
 
 export interface ProjectionResult {
   movies: number;
-  /** What those movies add to the savings; null when a pace has no ticket value to use. */
+  /** Null when a pace has no ticket value to use. */
   addedCents: number | null;
-  /** Total membership cost through the projection. */
   costCents: number;
-  /** Total months billed at the end of the projection. */
+  /** Bills paid in all. */
   months: number;
-  /** Date-only: the last bill the projection pays. */
-  lastBillDate: number;
-  /** Savings so far plus `addedCents`, less `costCents`; null when `addedCents` is. */
+  /** Date-only: the next bill after the last one paid, so the day the paid months run to. */
+  coveredUntil: number;
   netCents: number | null;
-  /** Planned showings counted without a price, which add nothing. */
+  /** Planned showings with no price and no average to fall back on, counted as $0. */
   unpricedCount: number;
+  /** Planned showings already over that aren't marked seen, so they count for nothing. */
+  unmarkedCount: number;
+  /** Weeks or months a pace runs for; 0 for the other plans. */
+  periods: number;
 }
 
-/** Month totals a pace can run to; past the longest, the next three half years. */
+/** Month totals a pace can run to, always three. */
 function getHorizons(cyclesBilled: number) {
   const ahead = HORIZON_CANDIDATES.filter((months) => months > cyclesBilled);
-  const result =
-    ahead.length > 0
-      ? ahead.slice(0, 4)
-      : [6, 12, 18].map((extra) => cyclesBilled + extra);
+  const last = ahead.at(-1) ?? cyclesBilled;
+  const result = [
+    ...ahead,
+    ...Array.from(
+      { length: HORIZON_COUNT },
+      (_, index) => last + 6 * (index + 1),
+    ),
+  ].slice(0, HORIZON_COUNT);
   return result;
 }
 
@@ -78,6 +91,7 @@ export function getProjectionBase(
     cyclesBilled,
     minimumMonthsLeft: Math.max(0, MIN_CONTRACT_MONTHS - cyclesBilled),
     monthlyTotalCents: membership.monthlyTotalCents,
+    netNowCents: savedCents - getMembershipCost(membership, todayDay),
     averageTicketCents:
       tickets.length === 0 ? null : Math.round(savedCents / tickets.length),
     averageFeeCents:
@@ -94,47 +108,60 @@ export function getProjectionBase(
   return result;
 }
 
-/** What a membership costs when it is billed for `months` in all. */
-function getCostForMonths(membership: MembershipProfile, months: number) {
-  const result = Array.from({ length: months }, (_, offset) =>
-    getMonthlyTotalAt(membership, getCycleDate(membership.startDate, offset)),
-  ).reduce((total, cents) => total + cents, 0);
+/** A typed ticket value in cents; null when blank, not an amount, or implausibly large. */
+export function parseTicketCents(input: string): number | null {
+  const cents = parseMoneyToCents(input);
+  const result = cents === null || cents > MAX_TICKET_CENTS ? null : cents;
   return result;
 }
 
 function finish(
   base: ProjectionBase,
   membership: MembershipProfile,
-  movies: number,
-  addedCents: number | null,
-  months: number,
-  unpricedCount: number,
+  plan: {
+    movies: number;
+    addedCents: number | null;
+    months: number;
+    unpricedCount?: number;
+    unmarkedCount?: number;
+    periods?: number;
+  },
 ): ProjectionResult {
-  const costCents = getCostForMonths(membership, months);
+  const months = Math.max(plan.months, MIN_CONTRACT_MONTHS);
+  const costCents = Array.from({ length: months }, (_, offset) =>
+    getMonthlyTotalAt(membership, getCycleDate(membership.startDate, offset)),
+  ).reduce((total, cents) => total + cents, 0);
   const result: ProjectionResult = {
-    movies,
-    addedCents,
+    movies: plan.movies,
+    addedCents: plan.addedCents,
     costCents,
     months,
-    lastBillDate: getCycleDate(membership.startDate, months - 1),
+    coveredUntil: getCycleDate(membership.startDate, months),
     netCents:
-      addedCents === null ? null : base.savedCents + addedCents - costCents,
-    unpricedCount,
+      plan.addedCents === null
+        ? null
+        : base.savedCents + plan.addedCents - costCents,
+    unpricedCount: plan.unpricedCount ?? 0,
+    unmarkedCount: plan.unmarkedCount ?? 0,
+    periods: plan.periods ?? 0,
   };
   return result;
 }
 
-/** Stopping now still pays out the minimum: the bills already due and the ones before it is met. */
+/** Stopping now still pays the bills already due and any left before the minimum is met. */
 export function projectStop(
   base: ProjectionBase,
   membership: MembershipProfile,
 ): ProjectionResult {
-  const months = Math.max(base.cyclesBilled, MIN_CONTRACT_MONTHS);
-  const result = finish(base, membership, 0, 0, months, 0);
+  const result = finish(base, membership, {
+    movies: 0,
+    addedCents: 0,
+    months: base.cyclesBilled,
+  });
   return result;
 }
 
-/** What one planned showing is likely to save: AMC's price with tax and the avoided fee, else the member's average. */
+/** AMC's price with tax and the average avoided fee, else the member's average. */
 function estimatePlannedCents(
   viewing: Viewing,
   membership: MembershipProfile,
@@ -148,16 +175,15 @@ function estimatePlannedCents(
   return result;
 }
 
-/** Showings still ahead on the calendar all get watched, and the membership is paid up to the last one. */
+/** Every showing still ahead is watched, and the membership is paid up to the bill covering the last one. */
 export function projectCalendar(
   base: ProjectionBase,
   membership: MembershipProfile,
   viewings: Viewing[],
   now: number,
 ): ProjectionResult {
-  const ahead = viewings.filter(
-    (viewing) => viewing.status === 'PLANNED' && viewing.showtimeAt > now,
-  );
+  const planned = viewings.filter((viewing) => viewing.status === 'PLANNED');
+  const ahead = planned.filter((viewing) => viewing.showtimeAt > now);
   const estimates = ahead.map((viewing) =>
     estimatePlannedCents(viewing, membership, base),
   );
@@ -165,22 +191,24 @@ export function projectCalendar(
     (latest, viewing) => Math.max(latest, viewing.showtimeAt),
     0,
   );
-  const lastDay = Math.floor(lastShowing / DAY_MS) * DAY_MS;
-  const months = Math.max(
-    base.cyclesBilled,
-    MIN_CONTRACT_MONTHS,
-    lastShowing === 0
-      ? 0
-      : getBillingCycleDates(membership.startDate, lastDay).length,
-  );
-  const result = finish(
-    base,
-    membership,
-    ahead.length,
-    estimates.reduce<number>((total, cents) => total + (cents ?? 0), 0),
-    months,
-    estimates.filter((cents) => cents === null).length,
-  );
+  // The viewer's local day, like every other day the screen compares against.
+  const lastDay =
+    lastShowing === 0 ? 0 : (fromDateInputValue(getDayKey(lastShowing)) ?? 0);
+  const result = finish(base, membership, {
+    movies: ahead.length,
+    addedCents: estimates.reduce<number>(
+      (total, cents) => total + (cents ?? 0),
+      0,
+    ),
+    months: Math.max(
+      base.cyclesBilled,
+      lastDay === 0
+        ? 0
+        : getBillingCycleDates(membership.startDate, lastDay).length,
+    ),
+    unpricedCount: estimates.filter((cents) => cents === null).length,
+    unmarkedCount: planned.length - ahead.length,
+  });
   return result;
 }
 
@@ -206,28 +234,31 @@ export function projectPace(
   );
   const periods = windowMs / (pace.unit === 'week' ? WEEK_MS : MONTH_MS);
   const movies = Math.floor(pace.count * periods);
-  const result = finish(
-    base,
-    membership,
+  const result = finish(base, membership, {
     movies,
-    ticketCents === null ? null : movies * ticketCents,
-    Math.max(months, MIN_CONTRACT_MONTHS),
-    0,
-  );
+    addedCents: ticketCents === null ? null : movies * ticketCents,
+    months: Math.max(months, base.cyclesBilled),
+    periods,
+  });
   return result;
 }
 
-/** Movies at `ticketCents` each that bring the projection to break even; null with no ticket value. */
-export function getMoviesToBreakEven(
+/** The movies, and the steady pace over the projection's window, that bring it to break even; null with no ticket value. */
+export function getBreakEven(
   base: ProjectionBase,
-  costCents: number,
+  projection: ProjectionResult,
   ticketCents: number | null,
-): number | null {
+): { movies: number; perPeriod: number | null } | null {
   if (ticketCents === null || ticketCents <= 0) return null;
 
-  const result = Math.max(
+  const movies = Math.max(
     0,
-    Math.ceil((costCents - base.savedCents) / ticketCents),
+    Math.ceil((projection.costCents - base.savedCents) / ticketCents),
   );
+  const result = {
+    movies,
+    perPeriod:
+      projection.periods > 0 ? Math.ceil(movies / projection.periods) : null,
+  };
   return result;
 }
