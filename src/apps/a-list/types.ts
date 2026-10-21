@@ -54,6 +54,10 @@ export interface PopularMovie extends MovieSearchResult {
   opensOn: number | null;
   /** https link to the film's trailer on YouTube; null when the provider has none. */
   trailerUrl: string | null;
+  /** The film's synopsis, trimmed; null when the provider has none. */
+  overview: string | null;
+  /** Up to three genre names, most prominent first. */
+  genres: string[];
 }
 
 export type AListOverlay =

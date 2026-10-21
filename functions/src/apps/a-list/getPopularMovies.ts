@@ -11,7 +11,7 @@ if (getApps().length === 0) {
 
 const POPULAR_CACHE_MS = 86_400_000;
 // Bump when the shape or order of results changes, so older cached lists are not served.
-const POPULAR_CACHE_VERSION = 3;
+const POPULAR_CACHE_VERSION = 4;
 
 export const getPopularMovies = onCall(
   {
@@ -34,8 +34,12 @@ export const getPopularMovies = onCall(
     }
 
     const results = await provider.popular(provider.getKey());
-    // An empty answer is not cached, so a parsing gap or a provider without a list doesn't stick for a day.
-    if (results.length > 0) {
+    // Not cached when empty, or when every film lacks genres or trailers (their lookups failed): that would stick for a day.
+    const isDegraded =
+      results.length === 0 ||
+      results.every((movie) => movie.genres.length === 0) ||
+      results.every((movie) => movie.trailerUrl === null);
+    if (!isDegraded) {
       await writeCache('searchCache', cacheId, results);
     }
     return { results };

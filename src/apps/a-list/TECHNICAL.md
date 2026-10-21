@@ -260,7 +260,7 @@ interface SharedViewing {
 
 This is the one place that ties the pieces together; the sections below hold the reasoning and the provider details.
 
-**In theaters and coming soon** (`MoviePicker` → `getPopularMovies`): with the search field empty the picker shows this group (TMDB's US now-playing and upcoming lists, the top 15 of each merged by popularity, each row carrying `opensOn` for a film not yet open and a `trailerUrl` (the official YouTube trailer from TMDB's `/videos`, one extra call per film while the daily list is built, `null` when the lookup fails or none exists); cached a day on the server and on the device; not counted by the OMDb lookup budget; about 32 upstream calls per cache fill, once a day). It is not shown when backfilling seen movies. Bump `POPULAR_CACHE_VERSION` and the client key when the shape changes. Films already on the watchlist, by key or by title and year, are left out; typing replaces the list with search results. Where the provider has no such list (OMDb) the section is simply not drawn.
+**In theaters and coming soon** (`MoviePicker` → `getPopularMovies`): with the search field empty the picker shows this group (TMDB's US now-playing and upcoming lists, the top 15 of each merged by popularity, each row carrying `opensOn` for a film not yet open, a `trailerUrl` (the official YouTube trailer from TMDB's `/videos`, one call per film, `null` when the lookup fails or none exists), a synopsis (`overview`, cut at a word under 400 characters) and up to three genre names (from the list responses' `genre_ids` and one `/genre/movie/list` call; a failed genre call leaves them empty); cached a day on the server and on the device unless every film came back without genres or without trailers, which means a lookup failed; not counted by the OMDb lookup budget; about 33 upstream calls per cache fill). It is not shown when backfilling seen movies. Bump `POPULAR_CACHE_VERSION` and the client key when the shape changes. Films already on the watchlist, by key or by title and year, are left out; typing replaces the list with search results. Where the provider has no such list (OMDb) the section is simply not drawn.
 
 **Searching** (`MoviePicker` → `searchMovies`)
 1. **Browser.** After a pause in typing (450 ms) and at least 2 characters, TanStack Query asks for the search. Its key is the normalized text under `a-list/movies/search/v2`, it is fresh for a day and persisted, so a repeat costs nothing, even offline.
@@ -315,7 +315,7 @@ Code: `functions/src/apps/a-list/` (`searchMovies.ts`, `getPopularMovies.ts`, `g
 
 ```typescript
 // searchMovies({ query: string })  → { results: MovieSearchResult[] }   (≤ 20, newest year first)
-// getPopularMovies({})              → { results: MovieSearchResult[] }   (≤ 30, most popular first; each with opensOn: number | null, trailerUrl: string | null; [] on OMDb)
+// getPopularMovies({})              → { results: MovieSearchResult[] }   (≤ 30, most popular first; each with opensOn: number | null, trailerUrl: string | null, overview: string | null, genres: string[]; [] on OMDb)
 interface MovieSearchResult {
   movieKey: string;                  // "imdb-tt0133093"
   title: string;

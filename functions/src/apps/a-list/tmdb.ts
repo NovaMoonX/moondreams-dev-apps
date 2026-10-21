@@ -6,6 +6,8 @@ const FETCH_TIMEOUT_MS = 6000;
 const MAX_SEARCH_RESULTS = 20;
 const MAX_POPULAR_RESULTS = 30;
 const POPULAR_PER_LIST = 15;
+const MAX_OVERVIEW_CHARS = 400;
+const MAX_GENRES = 3;
 const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/';
 const UNRATED = new Set(['NR', 'Not Rated', 'Unrated', 'NOT RATED', 'UNRATED']);
 // TMDB's two credentials: a v4 read token is a JWT sent as a header, a v3 key goes in the query.
@@ -17,6 +19,8 @@ interface TmdbSearchItem {
   release_date?: string;
   poster_path?: string | null;
   popularity?: number;
+  overview?: string;
+  genre_ids?: number[];
 }
 
 interface TmdbVideo {
@@ -120,6 +124,35 @@ function toSearchResult(item: TmdbSearchItem & { id: number; title: string }): M
   };
 }
 
+/** The synopsis cut at a word so it never ends mid-word; null when blank. */
+function toOverview(value: string | undefined) {
+  const text = value?.replace(/\s+/g, ' ').trim() ?? '';
+  if (text === '') {
+    return null;
+  }
+  if (text.length <= MAX_OVERVIEW_CHARS) {
+    return text;
+  }
+
+  const result = `${text.slice(0, MAX_OVERVIEW_CHARS).replace(/\s+\S*$/, '')}…`;
+  return result;
+}
+
+async function getGenreNames(apiKey: string): Promise<Map<number, string>> {
+  const data = await callTmdb<{ genres?: Array<{ id?: number; name?: string }> }>(apiKey, '/genre/movie/list', {
+    language: 'en-US',
+  }).catch(() => {
+    console.warn('TMDB genre list failed');
+    return null;
+  });
+  const result = new Map(
+    (data?.genres ?? [])
+      .filter((genre): genre is { id: number; name: string } => Number.isInteger(genre.id) && !!genre.name)
+      .map((genre) => [genre.id, genre.name.slice(0, 40)]),
+  );
+  return result;
+}
+
 const YOUTUBE_KEY = /^[A-Za-z0-9_-]{11}$/;
 
 /** An official YouTube trailer first, then the newest one; null when there is none. */
@@ -184,9 +217,10 @@ export async function popularTmdb(apiKey: string): Promise<PopularMovie[]> {
     callTmdb<TmdbSearchResponse>(apiKey, path, { region: 'US', language: 'en-US', page: '1' });
 
   // A failed upcoming list (timeout, rate limit) still returns what is playing.
-  const [nowPlaying, upcoming] = await Promise.all([
+  const [nowPlaying, upcoming, genreNames] = await Promise.all([
     fetchList('/movie/now_playing'),
     fetchList('/movie/upcoming').catch(() => null),
+    getGenreNames(apiKey),
   ]);
   const today = Date.now() - (Date.now() % 86_400_000);
 
@@ -206,6 +240,11 @@ export async function popularTmdb(apiKey: string): Promise<PopularMovie[]> {
         ...toSearchResult(item),
         opensOn: releaseDate !== null && releaseDate > today ? releaseDate : null,
         trailerUrl: await getTrailerUrl(apiKey, item.id),
+        overview: toOverview(item.overview),
+        genres: (item.genre_ids ?? [])
+          .map((id) => genreNames.get(id))
+          .filter((name): name is string => !!name)
+          .slice(0, MAX_GENRES),
       };
     }),
   );
