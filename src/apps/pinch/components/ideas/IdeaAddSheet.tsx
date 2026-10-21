@@ -1,10 +1,12 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import MethodPicker from '@/components/MethodPicker';
+import { useBackStep } from '@/hooks/useBackHistory';
 import {
   IdeaLinkWay,
   IdeaPhotoWay,
@@ -18,11 +20,33 @@ type Stage = 'pick' | IdeaStartMethod;
 interface IdeaAddSheetProps {
   uid: string;
   onClose: () => void;
-  onOpenExisting: (id: string) => void;
+  /** Opens the idea a pasted link already belongs to; without it the sheet only says so. */
+  onOpenExisting?: (id: string) => void;
+  /** Says what was saved in a toast, for a sheet opened away from the Ideas list, where the new row isn't in view. */
+  confirmsWithToast?: boolean;
 }
 
-function IdeaAddSheet({ uid, onClose, onOpenExisting }: IdeaAddSheetProps) {
+function IdeaAddSheet({
+  uid,
+  onClose,
+  onOpenExisting,
+  confirmsWithToast = false,
+}: IdeaAddSheetProps) {
+  const { addToast } = useToast();
   const [stage, setStage] = useState<Stage>('pick');
+  const handleSaved = (title: string) => {
+    if (confirmsWithToast) {
+      addToast({
+        title: `Saved ${title} to your ideas`,
+        description: navigator.onLine
+          ? undefined
+          : "It's on this phone and saves when you're back online.",
+        type: 'success',
+      });
+    }
+    onClose();
+  };
+  useBackStep(stage !== 'pick', () => setStage('pick'));
 
   return (
     <FormSheet
@@ -58,11 +82,16 @@ function IdeaAddSheet({ uid, onClose, onOpenExisting }: IdeaAddSheetProps) {
             <IdeaLinkWay
               uid={uid}
               onClose={onClose}
+              onSaved={handleSaved}
               onOpenExisting={onOpenExisting}
             />
           )}
-          {stage === 'photo' && <IdeaPhotoWay uid={uid} onClose={onClose} />}
-          {stage === 'text' && <IdeaTextWay uid={uid} onClose={onClose} />}
+          {stage === 'photo' && (
+            <IdeaPhotoWay uid={uid} onClose={onClose} onSaved={handleSaved} />
+          )}
+          {stage === 'text' && (
+            <IdeaTextWay uid={uid} onClose={onClose} onSaved={handleSaved} />
+          )}
         </div>
       )}
     </FormSheet>

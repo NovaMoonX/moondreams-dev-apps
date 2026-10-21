@@ -2,6 +2,7 @@ import { memo } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { PenLine } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
 import { formatDateShort } from '@/utils/formatUtils';
@@ -16,9 +17,17 @@ interface NoteEntryProps {
   writtenBefore: number | null;
   /** Null reads the entry without the Edit button. */
   onEdit: ((id: string) => void) | null;
+  /** Opens the recipe's form with this note quoted; offered on a note, never on a tweak. */
+  onApply: ((id: string) => void) | null;
 }
 
-function NoteEntry({ note, cook, writtenBefore, onEdit }: NoteEntryProps) {
+function NoteEntry({
+  note,
+  cook,
+  writtenBefore,
+  onEdit,
+  onApply,
+}: NoteEntryProps) {
   const isTweak = note.kind === 'TWEAK';
   const date = formatDateShort(note.createdAt);
   const text = note.text ?? null;
@@ -66,6 +75,19 @@ function NoteEntry({ note, cook, writtenBefore, onEdit }: NoteEntryProps) {
           <p className='text-muted-foreground text-xs'>
             Written before your {formatDateShort(writtenBefore)} tweak
           </p>
+        )}
+        {onApply && !isTweak && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            aria-label={`Apply the note from ${date} to the recipe`}
+            className='-my-1 h-10 gap-1.5 px-0! text-sm font-normal'
+            onClick={() => onApply(note.id)}
+          >
+            <PenLine className='h-4 w-4' aria-hidden='true' />
+            Apply to the recipe
+          </Button>
         )}
       </div>
     </li>

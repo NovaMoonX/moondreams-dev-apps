@@ -4,6 +4,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import SuggestionChips from '@/components/SuggestionChips';
 import { findDurations, formatDuration } from '@/utils/durationUtils';
+import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 import { MAX_COOK_TIMERS, MAX_STEP_DOTS } from '@apps/pinch/constants';
 import type { CookTimer } from '@apps/pinch/hooks/useCookTimers';
 
@@ -15,6 +16,9 @@ const ZOOMED_SCALE = 1.05;
 interface CookStepViewProps {
   steps: string[];
   index: number;
+  /** The lines this step names, scaled. */
+  ingredients: CookRow[];
+  isAmountNoteShown: boolean;
   timers: CookTimer[];
   isTimersFull: boolean;
   onStartTimer: (stepNumber: number, seconds: number, label: string) => void;
@@ -24,6 +28,8 @@ interface CookStepViewProps {
 function CookStepView({
   steps,
   index,
+  ingredients,
+  isAmountNoteShown,
   timers,
   isTimersFull,
   onStartTimer,
@@ -112,6 +118,35 @@ function CookStepView({
         >
           {step}
         </p>
+        {ingredients.length > 0 && (
+          <div className='space-y-1'>
+            <p className='text-muted-foreground text-xs'>In this step</p>
+            <ul className='divide-border divide-y'>
+              {ingredients.map((row) => (
+                <li
+                  key={row.id}
+                  className='flex items-baseline justify-between gap-3 py-1.5 text-base'
+                >
+                  <span className='min-w-0 wrap-break-word'>{row.name}</span>
+                  <span
+                    className={
+                      row.isMeasured
+                        ? 'shrink-0 font-semibold whitespace-nowrap'
+                        : 'text-muted-foreground max-w-[50%] text-right wrap-break-word'
+                    }
+                  >
+                    {row.amountText}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {isAmountNoteShown && (
+          <p className='text-muted-foreground text-xs'>
+            Amounts written in this step stay as they are.
+          </p>
+        )}
       </div>
       {chips.length > 0 && (
         <div className='space-y-2'>

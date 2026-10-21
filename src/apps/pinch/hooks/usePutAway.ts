@@ -27,8 +27,7 @@ import {
 } from '@apps/pinch/utils/containers';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 
-interface UsePutAwayInput {
-  uid: string;
+export interface PutAwayEntry {
   recipe: Recipe;
   servings: number;
   eatenTonight: number | null;
@@ -36,7 +35,14 @@ interface UsePutAwayInput {
   cookId: string | null;
 }
 
+interface UsePutAwayInput {
+  uid: string;
+  /** One per recipe cooked on this screen; only one can have its details open at a time. */
+  entries: PutAwayEntry[];
+}
+
 interface Details {
+  recipeId: string;
   place: ContainerPlace;
   openedPlace: ContainerPlace;
   isPlaceFixed: boolean;
@@ -54,40 +60,50 @@ type UndoState = 'PENDING' | 'FAILED';
 
 const NO_CONTAINERS: never[] = [];
 
-export function usePutAway({
-  uid,
-  recipe,
-  servings,
-  eatenTonight,
-  cookId,
-}: UsePutAwayInput) {
+export function usePutAway({ uid, entries }: UsePutAwayInput) {
   const { putAway, undoSaved } = useContainerActions(uid);
   const isReady = useAppSelector(selectIsContainersReady);
-  const hasStock = useAppSelector((state) =>
-    selectStockByRecipe(state).has(recipe.id),
-  );
-  const saved =
-    useAppSelector((state) =>
-      cookId === null ? undefined : selectContainersByCookId(state).get(cookId),
-    ) ?? NO_CONTAINERS;
+  const stockByRecipe = useAppSelector(selectStockByRecipe);
+  const containersByCookId = useAppSelector(selectContainersByCookId);
   const [details, setDetails] = useState<Details | null>(null);
-  const [dismissedCookId, setDismissedCookId] = useState<string | null>(null);
+  const [dismissedCookIds, setDismissedCookIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saves, setSaves] = useState<Save[]>([]);
   const [undoStates, setUndoStates] = useState<Record<string, UndoState>>({});
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{
+    recipeId: string;
+    text: string;
+  } | null>(null);
 
-  const isDismissed = cookId !== null && dismissedCookId === cookId;
-  const care = getRecipeCare(recipe);
-  const savedTotal = saved.reduce(
-    (sum, container) => sum + (getStartServings(container) ?? 0),
-    0,
-  );
-  const left = Math.floor(
-    servings - (eatenTonight ?? CONTAINER_SITTING_SERVINGS) - savedTotal,
-  );
-  const defaultServings = getPutAwayServings(left);
+  const measure = (entry: PutAwayEntry) => {
+    const saved: Container[] =
+      entry.cookId === null
+        ? NO_CONTAINERS
+        : (containersByCookId.get(entry.cookId) ?? NO_CONTAINERS);
+    const savedTotal = saved.reduce(
+      (sum, container) => sum + (getStartServings(container) ?? 0),
+      0,
+    );
+    const left = Math.floor(
+      entry.servings -
+        (entry.eatenTonight ?? CONTAINER_SITTING_SERVINGS) -
+        savedTotal,
+    );
+    return {
+      saved,
+      savedTotal,
+      left,
+      defaultServings: getPutAwayServings(left),
+    };
+  };
+
+  const openEntry =
+    details === null
+      ? null
+      : (entries.find((entry) => entry.recipe.id === details.recipeId) ?? null);
+  const open = openEntry === null ? null : measure(openEntry);
+  const care = openEntry === null ? null : getRecipeCare(openEntry.recipe);
   const containers =
     details === null
       ? 1
@@ -106,9 +122,18 @@ export function usePutAway({
     setDetails((current) => (current ? { ...current, ...patch } : current));
 
   const save = async () => {
-    if (details === null || eatBy === null || !isValid || cookId === null) {
+    if (
+      details === null ||
+      openEntry === null ||
+      eatBy === null ||
+      !isValid ||
+      openEntry.cookId === null
+    ) {
       return;
     }
+    const { recipe, servings, cookId } = openEntry;
+    const onWriteFailed = (text: string) =>
+      setNotice({ recipeId: recipe.id, text });
     setError(null);
     setNotice(null);
     setIsSaving(true);
@@ -124,7 +149,7 @@ export function usePutAway({
           place: details.place,
           eatBy,
         })),
-        { withToast: false, onWriteFailed: setNotice },
+        { withToast: false, onWriteFailed },
       );
       setSaves((current) => [
         ...current,
@@ -133,7 +158,7 @@ export function usePutAway({
       setDetails(null);
       setIsSaving(false);
     } catch (saveError) {
-      setError(getErrorMessage(saveError, 'Unable to save this container.'));
+      setError(getErrorMessage(saveError, 'Unable to save this box.'));
       setIsSaving(false);
     }
   };
@@ -146,26 +171,69 @@ export function usePutAway({
     if (save === null || undoStates[save.ids[0]] !== undefined) return;
 
     const key = save.ids[0];
+    const recipeId = batch[0].recipeId ?? '';
     setNotice(null);
     setUndoStates((current) => ({ ...current, [key]: 'PENDING' }));
     try {
       await undoSaved(save.ids);
     } catch (undoError) {
       setUndoStates((current) => ({ ...current, [key]: 'FAILED' }));
-      setNotice(
-        `Couldn't undo that. ${getErrorMessage(undoError, 'You can change it from Prepared meals.')}`,
-      );
+      setNotice({
+        recipeId,
+        text: `Couldn't undo that. ${getErrorMessage(undoError, 'You can change it in Fridge & freezer.')}`,
+      });
     }
   };
 
+  const dismissCook = (cookId: string | null) => {
+    if (cookId !== null) {
+      setDismissedCookIds((current) => [...current, cookId]);
+    }
+  };
+
+  const getEntry = (recipeId: string) => {
+    const entry = entries.find((candidate) => candidate.recipe.id === recipeId);
+    if (!entry) {
+      return null;
+    }
+
+    const { saved, left, defaultServings } = measure(entry);
+    const isBulk = isBulkMeal({
+      servings: entry.servings,
+      care: getRecipeCare(entry.recipe),
+      hasStock: stockByRecipe.has(recipeId),
+    });
+    const isDismissed =
+      entry.cookId !== null && dismissedCookIds.includes(entry.cookId);
+    const result = {
+      isAvailable: isReady && entry.cookId !== null,
+      isBulk,
+      /** A first put-away is always offered; another only while something is left. */
+      canOffer: saved.length === 0 || left > 0,
+      isAsking: isBulk && left > 0 && !isDismissed && saved.length === 0,
+      saved,
+      notice: notice?.recipeId === recipeId ? notice.text : null,
+      open: (place: ContainerPlace, isPlaceFixed = true) => {
+        setError(null);
+        setNotice(null);
+        setDetails({
+          recipeId,
+          place,
+          openedPlace: place,
+          isPlaceFixed,
+          servings: defaultServings,
+          containers: 1,
+          typedEatBy: null,
+        });
+      },
+      dismiss: () => dismissCook(entry.cookId),
+    };
+    return result;
+  };
+
   return {
-    isAvailable: isReady && cookId !== null,
-    isAsking:
-      isBulkMeal({ servings, care, hasStock }) &&
-      left > 0 &&
-      !isDismissed &&
-      saved.length === 0,
-    saved,
+    /** What one recipe's put-away card shows and can do. */
+    getEntry,
     getUndo: (batch: Container[]) => {
       const save = getSave(batch);
       return save === null
@@ -176,20 +244,21 @@ export function usePutAway({
           };
     },
     undo,
-    notice,
-    isOpen: details !== null,
+    openRecipeId: openEntry === null ? null : openEntry.recipe.id,
+    isOpen: openEntry !== null,
     isSaving,
     error,
     canSave: isValid,
     hasDraft:
       details !== null &&
+      open !== null &&
       !isSaving &&
-      (details.servings !== defaultServings ||
+      (details.servings !== open.defaultServings ||
         details.containers !== 1 ||
         details.typedEatBy !== null ||
         details.place !== details.openedPlace),
     fields:
-      details === null
+      details === null || openEntry === null || open === null
         ? null
         : {
             place: details.place,
@@ -201,36 +270,24 @@ export function usePutAway({
             maxContainers: getContainerCountMax(details.servings),
             splitText: getSplitText(details.servings, containers),
             basis: getPutAwayBasis({
-              made: servings,
-              eatenTonight,
-              saved: savedTotal,
+              made: openEntry.servings,
+              eatenTonight: openEntry.eatenTonight,
+              saved: open.savedTotal,
             }),
             overNote:
-              savedTotal + details.servings > Math.round(servings)
-                ? `That's more than the ${Math.round(servings)} you made.`
+              open.savedTotal + details.servings >
+              Math.round(openEntry.servings)
+                ? `That's more than the ${Math.round(openEntry.servings)} you made.`
                 : null,
             eatByText,
             setEatByText: (text: string) => update({ typedEatBy: text }),
             hint: getEatByHint(move, preset),
           },
     isPlaceFixed: details?.isPlaceFixed ?? false,
-    open: (place: ContainerPlace, isPlaceFixed = true) => {
-      setError(null);
-      setNotice(null);
-      setDetails({
-        place,
-        openedPlace: place,
-        isPlaceFixed,
-        servings: defaultServings,
-        containers: 1,
-        typedEatBy: null,
-      });
-    },
-    dismiss: () => setDismissedCookId(cookId),
     skip: () => {
       setDetails(null);
       setError(null);
-      setDismissedCookId(cookId);
+      dismissCook(openEntry?.cookId ?? null);
     },
     save,
   };

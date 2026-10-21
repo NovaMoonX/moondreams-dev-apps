@@ -4,7 +4,9 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import {
   addCook,
   markPlannedCooked,
+  markPlannedPlateCooked,
   removeCook,
+  removeCooks,
 } from '@apps/pinch/store/actions/cookActions';
 import { selectCooksLoadError } from '@apps/pinch/store/selectors';
 import type { Recipe } from '@apps/pinch/types';
@@ -31,6 +33,11 @@ export function useCookActions(uid: string) {
     await dispatch(removeCook({ uid, id })).unwrap();
   };
 
+  /** Takes back every cook a screen wrote, all or none, with no toast: the screen holds its own Undo. */
+  const undoCooks = async (ids: string[]) => {
+    await dispatch(removeCooks({ uid, ids })).unwrap();
+  };
+
   const undoFromToast = async (id: string) => {
     try {
       await undoCook(id);
@@ -43,9 +50,11 @@ export function useCookActions(uid: string) {
     }
   };
 
+  /** A screen that confirms the cook itself (and holds its own Undo) passes `isToasted: false`. */
   const markRecipeCooked = async (
     recipe: Pick<Recipe, 'id' | 'title'>,
     servings: number,
+    { isToasted = true }: { isToasted?: boolean } = {},
   ) => {
     const id = await dispatch(
       addCook({
@@ -55,12 +64,14 @@ export function useCookActions(uid: string) {
         cookedAt: Date.now(),
       }),
     ).unwrap();
-    addToast({
-      title: `Marked ${recipe.title} as cooked`,
-      type: 'success',
-      duration: UNDO_TOAST_MS,
-      action: { label: 'Undo', onClick: () => void undoFromToast(id) },
-    });
+    if (isToasted) {
+      addToast({
+        title: `Marked ${recipe.title} as cooked`,
+        type: 'success',
+        duration: UNDO_TOAST_MS,
+        action: { label: 'Undo', onClick: () => void undoFromToast(id) },
+      });
+    }
     return id;
   };
 
@@ -97,12 +108,26 @@ export function useCookActions(uid: string) {
     return id;
   };
 
+  /** Marks a planned plate's recipes in one write, with no toast: the screen that asks shows what was marked and what already was. */
+  const markPlannedPlate = async (input: {
+    plannedMealId: string;
+    entries: { recipeId: string; servings: number }[];
+    cookedAt: number;
+  }) => {
+    const results = await dispatch(
+      markPlannedPlateCooked({ uid, ...input }),
+    ).unwrap();
+    return results;
+  };
+
   return {
     isReady: isLoaded && loadError === null,
     isLoaded,
     loadError,
     markRecipeCooked,
     markPlannedRecipeCooked,
+    markPlannedPlate,
     undoCook,
+    undoCooks,
   };
 }

@@ -240,7 +240,7 @@ export function usePinchSync(uid: string | null, shownMonth: string) {
         console.error('Pinch containers listener failed', error);
         dispatch(
           setContainersLoadError(
-            getErrorMessage(error, 'Unable to load your prepared meals.'),
+            getErrorMessage(error, 'Unable to load your fridge and freezer.'),
           ),
         );
       },

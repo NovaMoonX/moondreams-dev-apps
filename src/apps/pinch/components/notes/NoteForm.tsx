@@ -6,14 +6,13 @@ import {
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { PenLine } from 'lucide-react';
 
-import ActionRow from '@/components/ActionRow';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort, formatDateTime } from '@/utils/formatUtils';
 import ChangeList from '@apps/pinch/components/notes/ChangeList';
@@ -54,12 +53,10 @@ interface NoteFormProps {
   recipeId: string;
   /** The note being changed; null writes a new one. */
   noteId: string | null;
-  /** The cook a new note starts on. */
+  /** The cook a new note is about, which then isn't asked; null asks, starting on a cook from today when there is one. */
   initialCookId: string | null;
   onCancel: () => void;
   onDone: () => void;
-  /** Closes this and opens the recipe's form with the note quoted; offered for a saved NOTE. */
-  onUpdateRecipe?: (noteId: string) => void;
 }
 
 /** Editing saves only the words: a note's cook and date stay as they were. */
@@ -70,7 +67,6 @@ function NoteForm({
   initialCookId,
   onCancel,
   onDone,
-  onUpdateRecipe,
 }: NoteFormProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -87,9 +83,12 @@ function NoteForm({
   );
   const isNotesLoaded = useAppSelector((state) => state.pinch.notes.isLoaded);
   const notesError = useAppSelector(selectNotesLoadError);
+  const [today] = useState(() => toLocalDateInputValue(Date.now()));
+  const isToday = (cook: Cook) =>
+    toLocalDateInputValue(cook.cookedAt) === today;
   const [initialData] = useState<NoteFormData>(() => ({
     text: note?.text ?? '',
-    cook: initialCookId ?? NO_COOK,
+    cook: initialCookId ?? cooks.find(isToday)?.id ?? NO_COOK,
   }));
   const [data, setData] = useState<NoteFormData>(initialData);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -111,11 +110,16 @@ function NoteForm({
       { value: NO_COOK, label: 'No, just a note' },
       ...choices.map((cook, index) => ({
         value: cook.id,
-        label: labels[index],
+        label:
+          toLocalDateInputValue(cook.cookedAt) === today &&
+          labels[index] === formatDateShort(cook.cookedAt)
+            ? 'Today'
+            : labels[index],
       })),
     ];
-  }, [choices]);
-  const hasCookQuestion = !isEditing && isCooksReady && choices.length > 0;
+  }, [choices, today]);
+  const hasCookQuestion =
+    !isEditing && initialCookId === null && isCooksReady && choices.length > 0;
   const isFull = !isEditing && isNoteHistoryFull(noteCount);
   const isDirty = isEditing
     ? data.text !== (note?.text ?? '')
@@ -197,38 +201,8 @@ function NoteForm({
             }),
           ]
         : []),
-      ...(note && note.kind === 'NOTE' && onUpdateRecipe
-        ? [
-            custom({
-              name: 'update',
-              label: '',
-              renderComponent: () => (
-                <ActionRow
-                  icon={<PenLine className='h-4 w-4' />}
-                  label='Update the recipe from this note'
-                  subtitle={
-                    isDirty
-                      ? 'Save your changes first'
-                      : 'Opens the recipe with this note above it'
-                  }
-                  isDisabled={isDirty || isSubmitting}
-                  onClick={() => onUpdateRecipe(note.id)}
-                />
-              ),
-            }),
-          ]
-        : []),
     ],
-    [
-      note,
-      noteCook,
-      isTweak,
-      hasCookQuestion,
-      cookOptions,
-      isDirty,
-      isSubmitting,
-      onUpdateRecipe,
-    ],
+    [note, noteCook, isTweak, hasCookQuestion, cookOptions],
   );
 
   const handleSubmit = async () => {

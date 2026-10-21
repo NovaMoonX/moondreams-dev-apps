@@ -16,6 +16,7 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Stepper from '@/components/Stepper';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch } from '@/store';
 import {
@@ -71,6 +72,7 @@ function CookEditView({
   const [servings, setServings] = useState(cook?.servings ?? defaultServings);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useBackStep(true, onBack);
 
   const isTimeUntouched =
     cook !== null && date === start.date && time === start.time;
@@ -133,8 +135,27 @@ function CookEditView({
           </div>
         ),
       }),
+      ...(cook && onAddNote
+        ? [
+            custom({
+              name: 'note',
+              label: '',
+              renderComponent: () => (
+                <ActionRow
+                  icon={<NotebookPen className='h-4 w-4' />}
+                  label='Add a note'
+                  subtitle={
+                    isChanged ? 'Save your changes first' : 'About this cook'
+                  }
+                  isDisabled={isChanged || isSubmitting}
+                  onClick={onAddNote}
+                />
+              ),
+            }),
+          ]
+        : []),
     ],
-    [date, time, servings, now],
+    [date, time, servings, now, cook, onAddNote, isChanged, isSubmitting],
   );
 
   const handleSubmit = async () => {
@@ -200,19 +221,10 @@ function CookEditView({
           {cook ? (planNote ?? 'Change when or how much.') : 'An earlier cook'}
         </p>
       </div>
-      {cook && onAddNote && (
-        <ActionRow
-          icon={<NotebookPen className='h-4 w-4' />}
-          label='Add a note'
-          subtitle={isChanged ? 'Save your changes first' : 'About this cook'}
-          isDisabled={isChanged || isSubmitting}
-          onClick={onAddNote}
-        />
-      )}
       <Form
         id='pinch-cook'
         form={fields}
-        initialData={{ when: '', servings: '' }}
+        initialData={{ when: '', servings: '', note: '' }}
         columns={1}
         onSubmit={() => {
           void handleSubmit();

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import FormSection from '@/components/FormSection';
+import { CONTAINER_PLACE_EMOJIS } from '@apps/pinch/constants';
 import type { RecipeCare } from '@apps/pinch/types';
 import { formatCareDays } from '@apps/pinch/utils/recipeCare';
 
@@ -31,12 +32,12 @@ function RecipeCareSection({ care }: RecipeCareSectionProps) {
     <FormSection title='Keeping it'>
       <ul className='space-y-1.5'>
         {care.fridgeDays !== null && (
-          <CareLine emoji='🧊'>
+          <CareLine emoji={CONTAINER_PLACE_EMOJIS.FRIDGE}>
             Keeps {formatCareDays(care.fridgeDays)} in the fridge
           </CareLine>
         )}
         {care.freezerDays !== null && (
-          <CareLine emoji='❄️'>
+          <CareLine emoji={CONTAINER_PLACE_EMOJIS.FREEZER}>
             Keeps {formatCareDays(care.freezerDays)} in the freezer
           </CareLine>
         )}

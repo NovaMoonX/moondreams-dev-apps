@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChefHat } from 'lucide-react';
+import { CircleCheck } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
 import { useAppSelector } from '@/store';
@@ -56,16 +56,16 @@ function PlannedCookRow({
     }
   };
 
-  const handleUndo = async (cookedAt: number) => {
+  const handleNotCooked = async (cookedAt: number) => {
     const isConfirmed = await confirm({
-      title: 'Delete this cook?',
-      message: `The cook from ${formatDateTime(cookedAt)} comes off your history. This can't be undone.`,
-      confirmText: 'Delete',
+      title: 'Not cooked after all?',
+      message: `The cook from ${formatDateTime(cookedAt)} comes off ${recipe.title}'s history. You can't undo this.`,
+      confirmText: 'Remove the cook',
       destructive: true,
     });
     if (!isConfirmed) return;
 
-    await run(() => undoCook(cookId), 'Unable to undo this.');
+    await run(() => undoCook(cookId), 'Unable to remove this cook.');
   };
 
   const handleMark = () =>
@@ -92,12 +92,12 @@ function PlannedCookRow({
           <Button
             type='button'
             variant='tertiary'
-            aria-label={`Undo marking ${recipe.title} as cooked`}
+            aria-label={`Mark ${recipe.title} as not cooked`}
             className="relative h-auto p-0 underline underline-offset-4 after:absolute after:-inset-x-2 after:-inset-y-2.5 after:content-['']"
             disabled={isWorking}
-            onClick={() => void handleUndo(cook.cookedAt)}
+            onClick={() => void handleNotCooked(cook.cookedAt)}
           >
-            Undo
+            Not cooked
           </Button>
         </p>
       ) : (
@@ -105,7 +105,7 @@ function PlannedCookRow({
           actions={[
             {
               key: 'mark',
-              icon: <ChefHat className='h-4 w-4' />,
+              icon: <CircleCheck className='h-4 w-4' />,
               label: 'Mark as cooked',
               description: `Mark ${recipe.title} as cooked, ${formatServings(servings)}`,
               isDisabled: !isReady || isWorking || isHistoryFull,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -11,25 +11,27 @@ import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
 import ItemSearch from '@apps/pinch/components/plan/ItemSearch';
-import type { IngredientRow } from '@apps/pinch/components/recipes/recipeFormModel';
+import {
+  isRowAmountValid,
+  type IngredientRow,
+} from '@apps/pinch/components/recipes/recipeFormModel';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   DEFAULT_SERVING,
   MAX_NOTE_LENGTH,
   MAX_RECIPE_INGREDIENTS,
-  MAX_SERVING_AMOUNT,
   UNIT_LABELS,
 } from '@apps/pinch/constants';
-import { selectIngredientsById } from '@apps/pinch/store/selectors';
+import {
+  selectIngredients,
+  selectIngredientsById,
+} from '@apps/pinch/store/selectors';
+import { findNearMatches } from '@apps/pinch/utils/catalogSearch';
 import { normalizeName } from '@apps/pinch/utils/ingredientMatch';
 
-const isAmountValid = (row: IngredientRow) => {
-  const amount = Number(row.amount);
-  return row.amount.trim() !== '' && amount > 0 && amount <= MAX_SERVING_AMOUNT;
-};
-
 const getAmountLabel = (row: IngredientRow) => {
-  if (isAmountValid(row)) {
+  if (row.isAmountless) return row.note ?? '';
+  if (isRowAmountValid(row)) {
     return `${Math.round(Number(row.amount) * 100) / 100} ${UNIT_LABELS[row.unit]}`;
   }
   return row.amount.trim() === '' ? 'Add an amount' : 'Check the amount';
@@ -57,20 +59,67 @@ function IngredientEditor({
   showRemove,
 }: IngredientEditorProps) {
   const [isChoosing, setIsChoosing] = useState(false);
+  const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
+  const noteRef = useRef<HTMLInputElement>(null);
+  const ingredients = useAppSelector(selectIngredients);
+  const servingUnit = useAppSelector(selectIngredientsById).get(
+    row.ingredientId,
+  )?.serving.unit;
+  const isUnresolved = row.ingredientId === '';
+  const proposedName = row.proposedName ?? '';
+  const usedIds = rows.map((candidate) => candidate.ingredientId).join(',');
+  const nearMatches = useMemo(() => {
+    if (!isUnresolved) return [];
+    const used = new Set(usedIds.split(','));
+    const result = findNearMatches(
+      ingredients.filter((ingredient) => !used.has(ingredient.id)),
+      proposedName,
+    );
+    return result;
+  }, [isUnresolved, ingredients, proposedName, usedIds]);
 
-  if (row.ingredientId === '') {
+  if (isUnresolved) {
     return (
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
           <span className='text-foreground font-medium'>{displayName}</span>{' '}
           isn’t in your ingredients yet.
         </p>
-        <div className='flex flex-wrap gap-2'>
+        {nearMatches.length > 0 && (
+          <div className='space-y-1.5'>
+            <p className='text-muted-foreground text-xs'>
+              Did you mean one of these?
+            </p>
+            <div className='flex flex-wrap gap-x-2 gap-y-3'>
+              {nearMatches.map((ingredient) => (
+                <Button
+                  key={ingredient.id}
+                  type='button'
+                  size='sm'
+                  rounded='full'
+                  variant='secondary'
+                  className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+                  onClick={() =>
+                    onUpdate({
+                      ingredientId: ingredient.id,
+                      proposedName: null,
+                      newName: null,
+                    })
+                  }
+                >
+                  {ingredient.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className='flex flex-wrap gap-x-2 gap-y-3'>
           <Button
             type='button'
             size='sm'
             rounded='full'
             variant='secondary'
+            className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
             onClick={() =>
               onUpdate({
                 ingredientId:
@@ -91,9 +140,10 @@ function IngredientEditor({
             size='sm'
             rounded='full'
             variant='secondary'
+            className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
             onClick={() => setIsChoosing((current) => !current)}
           >
-            {isChoosing ? 'Close' : 'Choose another'}
+            {isChoosing ? 'Close' : 'Pick from your ingredients'}
           </Button>
         </div>
         {isChoosing && (
@@ -122,35 +172,80 @@ function IngredientEditor({
 
   return (
     <div className='space-y-3' onKeyDown={blockEnterSubmit}>
-      <div className='grid grid-cols-2 gap-3'>
-        <Field label='Amount'>
-          {(id) => (
-            <Input
-              id={id}
-              type='number'
-              inputMode='decimal'
-              min={0}
-              step='any'
-              variant='outline'
-              value={row.amount}
-              onChange={(event) => onUpdate({ amount: event.target.value })}
-            />
-          )}
-        </Field>
+      {row.isAmountless ? (
         <div className='space-y-1.5'>
-          <p className='text-sm font-medium'>Unit</p>
-          <UnitSelect
-            value={row.unit}
-            onChange={(unit) => onUpdate({ unit })}
-          />
+          <p className='font-medium'>Amount</p>
+          <div className='flex min-h-10 flex-wrap items-center gap-x-3'>
+            <span className='text-muted-foreground'>No amount</span>
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className='h-10 px-0!'
+              onClick={() => {
+                setIsAmountJustAdded(true);
+                onUpdate({
+                  isAmountless: false,
+                  amount: '',
+                  unit: servingUnit ?? row.unit,
+                });
+              }}
+            >
+              Add an amount
+            </Button>
+          </div>
         </div>
-      </div>
-      <Field label='Note'>
+      ) : (
+        <div className='space-y-1'>
+          <div className='grid grid-cols-2 gap-3'>
+            <Field label='Amount'>
+              {(id) => (
+                <Input
+                  id={id}
+                  type='number'
+                  inputMode='decimal'
+                  min={0}
+                  step='any'
+                  variant='outline'
+                  autoFocus={isAmountJustAdded}
+                  value={row.amount}
+                  onChange={(event) => onUpdate({ amount: event.target.value })}
+                />
+              )}
+            </Field>
+            <div className='space-y-1.5'>
+              <p className='text-sm font-medium'>Unit</p>
+              <UnitSelect
+                value={row.unit}
+                onChange={(unit) => onUpdate({ unit })}
+              />
+            </div>
+          </div>
+          <Button
+            type='button'
+            variant='link'
+            size='sm'
+            className='h-10 px-0!'
+            onClick={() => {
+              onUpdate({ isAmountless: true, amount: '' });
+              if (!row.note) noteRef.current?.focus();
+            }}
+          >
+            No amount (to taste, a handful…)
+          </Button>
+        </div>
+      )}
+      <Field label='Detail'>
         {(id) => (
           <Input
             id={id}
+            ref={noteRef}
             variant='outline'
-            placeholder='diced, room temperature…'
+            placeholder={
+              row.isAmountless
+                ? 'to taste, a handful…'
+                : 'diced, room temperature…'
+            }
             maxLength={MAX_NOTE_LENGTH}
             value={row.note ?? ''}
             onChange={(event) =>
@@ -240,6 +335,7 @@ function RecipeIngredients({
         ingredientId,
         amount: String(serving.amount),
         unit: serving.unit,
+        isAmountless: false,
         note: null,
         proposedName: null,
         newName: null,
@@ -249,7 +345,7 @@ function RecipeIngredients({
   };
 
   return (
-    <div className='space-y-3'>
+    <div className='space-y-3' data-recipe-ingredients>
       {rows.length > 0 && (
         <ul className='divide-border divide-y'>
           {rows.map((row) => {
@@ -257,13 +353,20 @@ function RecipeIngredients({
             const label = getAmountLabel(row);
             const isUnresolved = row.ingredientId === '';
             return (
-              <li key={row.id} className='py-1'>
+              <li
+                key={row.id}
+                className='py-1'
+                data-ingredient-unresolved={isUnresolved || undefined}
+                data-ingredient-amount-wrong={
+                  (!isUnresolved && !isRowAmountValid(row)) || undefined
+                }
+              >
                 <div className='flex items-center gap-1'>
                   <Button
                     type='button'
                     variant='tertiary'
                     aria-expanded={isPhone ? undefined : openId === row.id}
-                    aria-label={`${name}, ${isUnresolved ? 'not in your ingredients yet' : label}`}
+                    aria-label={`${name}, ${isUnresolved ? 'not in your ingredients yet' : label || 'no amount'}`}
                     onClick={() => {
                       if (isPhone) {
                         setDrawer({ kind: 'edit', id: row.id });
@@ -284,7 +387,7 @@ function RecipeIngredients({
                           </span>
                         )}
                       </span>
-                      {(row.note || isUnresolved) && (
+                      {((row.note && !row.isAmountless) || isUnresolved) && (
                         <span className='text-muted-foreground block truncate text-xs font-normal'>
                           {isUnresolved
                             ? 'Not in your ingredients yet · tap to add or choose'
@@ -292,16 +395,21 @@ function RecipeIngredients({
                         </span>
                       )}
                     </span>
-                    <span
-                      className={join(
-                        'shrink-0 text-sm font-normal whitespace-nowrap',
-                        isAmountValid(row)
-                          ? 'text-muted-foreground'
-                          : 'text-destructive',
-                      )}
-                    >
-                      {label}
-                    </span>
+                    {label !== '' && (
+                      <span
+                        className={join(
+                          'text-sm font-normal',
+                          row.isAmountless
+                            ? 'max-w-[50%] truncate'
+                            : 'shrink-0 whitespace-nowrap',
+                          isRowAmountValid(row)
+                            ? 'text-muted-foreground'
+                            : 'text-destructive',
+                        )}
+                      >
+                        {label}
+                      </span>
+                    )}
                   </Button>
                   <Button
                     type='button'

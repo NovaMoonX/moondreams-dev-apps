@@ -7,7 +7,6 @@ import {
   selectDefaultProducts,
   selectShowNutrition,
   selectStoresById,
-  selectUsedIngredientIds,
 } from '@apps/pinch/store/selectors';
 import type { NutritionSwitches, ResolvedIngredient } from '@apps/pinch/types';
 import {
@@ -63,24 +62,16 @@ function IngredientRow({
     selectDefaultProducts(state).get(ingredient.id),
   );
   const show = useAppSelector(selectShowNutrition);
-  const isUsedWithoutPrice = useAppSelector(
-    (state) =>
-      !selectDefaultProducts(state).has(ingredient.id) &&
-      selectUsedIngredientIds(state).has(ingredient.id),
-  );
   const storeName =
     useAppSelector(
       (state) =>
         selectStoresById(state).get(defaultProduct?.storeId ?? '')?.name,
     ) ?? 'Removed store';
 
-  const getPriceLine = () => {
-    if (!showPrices) return null;
-    if (defaultProduct)
-      return `${storeName} · ${formatPriceAndSize(defaultProduct)}`;
-    return isUsedWithoutPrice ? 'No price yet' : null;
-  };
-  const priceLine = getPriceLine();
+  const priceLine =
+    showPrices && defaultProduct
+      ? `${storeName} · ${formatPriceAndSize(defaultProduct)}`
+      : null;
   const nutrition = showMacros
     ? getRowNutrition(ingredient, basis, show)
     : null;

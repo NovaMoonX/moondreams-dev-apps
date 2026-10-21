@@ -4,7 +4,6 @@ import {
   CONTAINER_PLACE_LABELS,
 } from '@apps/pinch/constants';
 import { getStockParts, type StockSummary } from '@apps/pinch/utils/containers';
-import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 interface StockLineProps {
   summary: StockSummary | undefined;
@@ -21,24 +20,19 @@ function StockLine({ summary }: StockLineProps) {
   }
 
   return (
-    <span className='text-muted-foreground flex flex-col gap-y-0.5 text-xs font-normal sm:flex-row sm:flex-wrap sm:gap-x-1.5'>
-      {parts.map((part, index) => (
+    <span className='text-muted-foreground flex flex-col gap-y-0.5 text-xs font-normal sm:flex-row sm:flex-wrap sm:gap-x-3'>
+      {parts.map((part) => (
         <span
           key={part.place}
-          className='flex items-center gap-x-1.5 whitespace-nowrap'
+          className='flex flex-wrap items-center gap-x-1.5 gap-y-0.5'
         >
-          {index > 0 && (
-            <span aria-hidden='true' className='max-sm:hidden'>
-              ·
-            </span>
-          )}
-          <span>
+          <span className='whitespace-nowrap'>
             <span aria-hidden='true'>{CONTAINER_PLACE_EMOJIS[part.place]}</span>{' '}
-            {formatServings(part.servings)}
+            {part.servings}
             <span className='sr-only'>
-              {' '}
-              in the {CONTAINER_PLACE_LABELS[part.place].toLowerCase()}
-            </span>
+              {part.servings === 1 ? ' serving' : ' servings'}
+            </span>{' '}
+            in the {CONTAINER_PLACE_LABELS[part.place].toLowerCase()}
           </span>
           {part.due && (
             <EatByBadge state={part.due.state} label={part.due.label} />

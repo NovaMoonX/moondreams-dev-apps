@@ -1,5 +1,4 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
+import GroupRow, { GroupRowLines } from '@/components/GroupRow';
 import { useAppSelector } from '@/store';
 import EatByBadge from '@apps/pinch/components/containers/EatByBadge';
 import {
@@ -14,7 +13,6 @@ import {
   selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import {
-  getEatByPhrase,
   getStockParts,
   getStockSourcesText,
   type MealStock,
@@ -57,42 +55,42 @@ function StockRows({ target, onOpenStock }: StockRowsProps) {
       )
     : null;
 
+  const ariaLabel = parts
+    .map((part) =>
+      [
+        `${formatServings(part.servings)} in your ${CONTAINER_PLACE_LABELS[part.place].toLowerCase()}`,
+        part.due?.label,
+      ]
+        .filter((piece) => piece !== undefined)
+        .join(', '),
+    )
+    .join('; ');
+
   return (
-    <div className='flex'>
-      <Button
-        type='button'
-        variant='tertiary'
-        onClick={onOpenStock}
-        className="text-muted-foreground! relative h-auto max-w-full flex-col items-start gap-1.5 rounded-none p-0 px-0! py-0! text-left text-sm font-normal whitespace-normal after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-['']"
-      >
-        {parts.map((part) => {
-          const eatBy =
-            part.place === 'FRIDGE' ? stock.fridgeEatBy : stock.freezerEatBy;
-          const text = `${formatServings(part.servings)} in your ${CONTAINER_PLACE_LABELS[part.place].toLowerCase()}`;
-          return (
-            <span
-              key={part.place}
-              className='flex flex-wrap items-center gap-x-2 gap-y-1'
-            >
+    <GroupRow ariaLabel={ariaLabel} onClick={onOpenStock}>
+      <GroupRowLines
+        lines={parts.map((part) => ({
+          key: part.place,
+          icon: CONTAINER_PLACE_EMOJIS[part.place],
+          content: (
+            <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
               <span>
-                <span aria-hidden='true'>
-                  {CONTAINER_PLACE_EMOJIS[part.place]}
-                </span>{' '}
-                <span className='decoration-muted-foreground/50 underline underline-offset-4'>
-                  {part.due === null && eatBy !== null
-                    ? `${text}, eat by ${getEatByPhrase(eatBy)}`
-                    : text}
-                </span>
+                {formatServings(part.servings)} in the{' '}
+                {CONTAINER_PLACE_LABELS[part.place].toLowerCase()}
               </span>
               {part.due && (
                 <EatByBadge state={part.due.state} label={part.due.label} />
               )}
             </span>
-          );
-        })}
-        {sourcesText && <span className='text-xs'>{sourcesText}</span>}
-      </Button>
-    </div>
+          ),
+        }))}
+      />
+      {sourcesText && (
+        <span className='text-muted-foreground mt-1 block pl-7.5 text-xs'>
+          {sourcesText}
+        </span>
+      )}
+    </GroupRow>
   );
 }
 

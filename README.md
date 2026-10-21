@@ -11,7 +11,7 @@ A collection of mini-apps built to fit whatever felt useful, fun, or simply inte
 - 🐱 **Nine Lives** — a private home base for cat owners to keep track of health records, visits, vaccinations, symptoms, and the everyday care that keeps a household organized.
 - 🧭 **Waypoint** — a collaborative trip planner for shared itineraries, live travel coordination, and the details that keep a journey running smoothly.
 - 🎟️ **A-List Tracker** — a personal companion for AMC Stubs A-List members that turns a calendar of movie nights into ticket savings, premium-format savings, and a clear answer on whether the membership is paying for itself.
-- 🧂 **Pinch** — a calm, personal kitchen planner that keeps your ingredients, recipes, and meals on a calendar, with what everything costs and, whenever you want it, the nutrition.
+- 🧂 **Pinch** — Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.
 
 The header's menu (the hamburger, top left) slides in every app you can open, and apps that keep their place in the URL (A-List's tabs, Waypoint's trips) reopen where you last left them. Swipe right on the header to open it and left to close.
 

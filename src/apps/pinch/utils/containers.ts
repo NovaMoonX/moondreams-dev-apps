@@ -1,7 +1,9 @@
+import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { formatList } from '@/utils/formatUtils';
 import {
   BULK_MEAL_SERVINGS,
   CONTAINER_EAT_SOON_DAYS,
+  CONTAINER_FREEZER_DATE_DAYS,
   CONTAINER_FREEZER_DAYS,
   CONTAINER_FRIDGE_DAYS,
   CONTAINER_PLACE_LABELS,
@@ -102,6 +104,37 @@ export const getEatByPhrase = (eatBy: number, now = Date.now()) => {
   if (days === 1) return 'tomorrow';
   return formatDayShort(getPlannedDayKey(eatBy), now);
 };
+
+/** The one eat-by item a row shows: tinted when it is due, plain otherwise. */
+export const getEatByLabel = (eatBy: number, now = Date.now()) => {
+  const days = getDaysLeft(eatBy, now);
+  if (days < 0) return 'Past its date';
+  if (days === 0) return 'Eat today';
+  const label = `Eat by ${getEatByPhrase(eatBy, now)}`;
+  return label;
+};
+
+/** When it last went into the freezer, which is what a freezer row leads with. */
+export const getFrozenAt = (
+  container: Pick<Container, 'history' | 'createdAt'>,
+) =>
+  container.history.filter((event) => event.kind === 'FREEZE').at(-1)?.at ??
+  container.createdAt;
+
+/** "Frozen Oct 5", the frozen instant's local day through the cached day formatters. */
+export const getFrozenText = (
+  container: Pick<Container, 'history' | 'createdAt'>,
+  now = Date.now(),
+) =>
+  `Frozen ${formatDayShort(toLocalDateInputValue(getFrozenAt(container)), now)}`;
+
+/** A fridge row always names its eat-by; a freezer row only once it is past or within a week. */
+export const isEatByShown = (
+  container: Pick<Container, 'place' | 'eatBy'>,
+  now = Date.now(),
+) =>
+  container.place === 'FRIDGE' ||
+  getDaysLeft(container.eatBy, now) <= CONTAINER_FREEZER_DATE_DAYS;
 
 export const getEatByDefault = (
   move: EatByMove,
@@ -360,8 +393,8 @@ export const getNewContainerProblem = (
   if (!isValidEatBy(input.eatBy)) return 'Pick a day to eat it by.';
   if (isContainerListFull(inStockCount, adding)) {
     return inStockCount >= SOFT_MAX_CONTAINERS
-      ? `You have ${SOFT_MAX_CONTAINERS} containers in stock. Finish or delete one to add more.`
-      : `That would pass the ${SOFT_MAX_CONTAINERS} containers you can keep in stock. Finish or delete some first.`;
+      ? `You have ${SOFT_MAX_CONTAINERS} boxes in your fridge and freezer. Finish or delete one to add more.`
+      : `That would pass the ${SOFT_MAX_CONTAINERS} boxes you can keep in your fridge and freezer. Finish or delete some first.`;
   }
   return null;
 };
@@ -448,10 +481,14 @@ export const planClearOut = (
   });
 
 const countContainers = (count: number) =>
-  `${count} ${count === 1 ? 'container' : 'containers'}`;
+  `${count} ${count === 1 ? 'box' : 'boxes'}`;
 
-export const getClearOutMessage = (count: number, servings: number) =>
-  `This takes ${countContainers(count)} (${formatServings(servings)}) off your list and keeps ${count === 1 ? 'it' : 'them'} in Finished as cleared out. You can undo it right after.`;
+export const getClearOutMessage = (
+  count: number,
+  servings: number,
+  place: ContainerPlace,
+) =>
+  `This takes ${countContainers(count)} (${formatServings(servings)}) out of the ${CONTAINER_PLACE_LABELS[place].toLowerCase()} and keeps ${count === 1 ? 'it' : 'them'} in What you finished as cleared out. You can undo it right after.`;
 
 export const getPutBackText = (restored: number, total: number) =>
   restored === total
@@ -544,7 +581,92 @@ export const planCount = (
   };
 };
 
+export type CountChange =
+  | { kind: 'SAME' }
+  | { kind: 'EAT'; eaten: number }
+  | { kind: 'ALL' }
+  | { kind: 'COUNT'; count: number };
+
+/** What answering "How many are left?" records: fewer is eaten, none eats the rest, more corrects the count. */
+export const getCountChange = (current: number, next: number): CountChange => {
+  if (next === current) return { kind: 'SAME' };
+  if (next <= 0) return { kind: 'ALL' };
+  const change: CountChange =
+    next < current
+      ? { kind: 'EAT', eaten: current - next }
+      : { kind: 'COUNT', count: next };
+  return change;
+};
+
+export const getCountChangeCopy = (current: number, next: number) => {
+  const change = getCountChange(current, next);
+  switch (change.kind) {
+    case 'SAME':
+      return {
+        change,
+        line: `It says ${formatServings(current)} now.`,
+        action: 'Save',
+      };
+    case 'EAT':
+      return {
+        change,
+        line: `Records that you ate ${change.eaten}.`,
+        action: `Ate ${change.eaten}`,
+      };
+    case 'ALL':
+      return {
+        change,
+        line: 'Records that you ate the rest. It moves to What you finished.',
+        action: 'Ate the rest',
+      };
+    default:
+      return {
+        change,
+        line: `Corrects the count from ${current} to ${change.count}.`,
+        action: 'Save',
+      };
+  }
+};
+
+/** "How many boxes are left?" for a batch: only fewer, each box gone eaten whole. */
+export const getBoxCountCopy = (current: number, next: number) => {
+  const eaten = Math.max(0, current - next);
+  if (eaten === 0) {
+    return {
+      eaten,
+      line: `It says ${countContainers(current)} now.`,
+      action: 'Save',
+    };
+  }
+  if (next <= 0) {
+    return {
+      eaten,
+      line: 'Records that you ate them all. They move to What you finished.',
+      action: 'Ate them all',
+    };
+  }
+  const copy = {
+    eaten,
+    line: `Records that you ate ${countContainers(eaten)}.`,
+    action: `Ate ${countContainers(eaten)}`,
+  };
+  return copy;
+};
+
 const END_KINDS: ContainerEventKind[] = ['EAT', 'TOSS', 'CLEAR'];
+
+/** A finished box can go back in as it was while the eat, toss or clear-out that ended it is still its last event, long after the toast's Undo is gone. */
+export const canPutBack = (
+  container: Pick<Container, 'status' | 'history'>,
+) => {
+  const last = container.history.at(-1);
+  const result =
+    container.status === 'DONE' &&
+    last !== undefined &&
+    END_KINDS.includes(last.kind) &&
+    last.servings !== null;
+  return result;
+};
 
 /** Only while the EAT, TOSS or CLEAR is still the last event, so a later change is never rewound. */
 export const planUndoEnd = (
@@ -612,7 +734,7 @@ export const getEventText = (event: ContainerEvent) => {
     case 'EAT':
       return amount === '' ? 'Ate some' : `Ate ${amount}`;
     case 'TOSS':
-      return amount === '' ? 'Threw it out' : `Threw out ${amount}`;
+      return amount === '' ? 'Tossed' : `Tossed ${amount}`;
     case 'CLEAR':
       return amount === '' ? 'Cleared out' : `Cleared out · ${amount}`;
     default:
@@ -624,21 +746,78 @@ export const getEventText = (event: ContainerEvent) => {
 export const getStartServings = (container: Container) =>
   container.history.find((event) => event.place !== null)?.servings ?? null;
 
+/** Counts what was eaten from the history, so a corrected count reads true; a history that may have been trimmed past the cap names no number it can't vouch for. */
 export const getFinishedText = (container: Container) => {
   const last = container.history.at(-1);
-  const started = getStartServings(container);
+  const isWhole =
+    getStartServings(container) !== null &&
+    container.history.length < MAX_CONTAINER_HISTORY;
+  const eaten = container.history
+    .filter((event) => event.kind === 'EAT')
+    .reduce((sum, event) => sum + (event.servings ?? 0), 0);
   if (last?.kind === 'TOSS' || last?.kind === 'CLEAR') {
-    const verb = last.kind === 'TOSS' ? 'Threw out' : 'Cleared out';
+    const verb = last.kind === 'TOSS' ? 'Tossed' : 'Cleared out';
     const ended = last.servings ?? container.servings;
-    return started !== null && started > ended
-      ? `${verb} ${ended} of ${started}`
+    return isWhole && eaten > 0
+      ? `${verb} ${ended} of ${ended + eaten}`
       : `${verb} ${formatServings(ended)}`;
   }
-  return started === null ? 'Ate it all' : `Ate ${formatServings(started)}`;
+  return isWhole && eaten > 0 ? `Ate ${formatServings(eaten)}` : 'Ate it all';
 };
 
 export const byEatBy = (a: Container, b: Container) =>
   a.eatBy - b.eatBy || a.createdAt - b.createdAt || a.id.localeCompare(b.id);
+
+/** Boxes put away together share a moment, a place, an eat-by date and a dish; a box moved or re-dated alone leaves its batch. */
+export const getBatchKey = (
+  container: Pick<
+    Container,
+    'createdAt' | 'place' | 'eatBy' | 'recipeId' | 'mealId' | 'title'
+  >,
+) =>
+  [
+    container.createdAt,
+    container.place,
+    container.eatBy,
+    container.recipeId,
+    container.mealId,
+    container.title,
+  ].join('|');
+
+/** The box an action on a batch takes first: an opened one (fewer servings) before a full one. */
+const byTakeOrder = (a: Container, b: Container) =>
+  a.servings - b.servings || a.id.localeCompare(b.id);
+
+export interface ContainerBatch {
+  key: string;
+  boxes: Container[];
+}
+
+/** One row per batch, in the order of each batch's first box, each batch's boxes in the order actions take them. */
+export const groupBatches = (containers: Container[]): ContainerBatch[] => {
+  const byKey = containers.reduce((groups, container) => {
+    const key = getBatchKey(container);
+    return groups.set(key, [...(groups.get(key) ?? []), container]);
+  }, new Map<string, Container[]>());
+  const batches = Array.from(byKey, ([key, boxes]) => ({
+    key,
+    boxes: boxes.length > 1 ? [...boxes].sort(byTakeOrder) : boxes,
+  }));
+  return batches;
+};
+
+/** "2 servings" for one box, "3 boxes of 2 servings" for a batch, "3 boxes · 7 servings" when they differ. */
+export const getBatchServingsText = (boxes: Pick<Container, 'servings'>[]) => {
+  const [first] = boxes;
+  if (boxes.length === 1) return formatServings(first.servings);
+
+  const total = boxes.reduce((sum, box) => sum + box.servings, 0);
+  const isEven = boxes.every((box) => box.servings === first.servings);
+  const text = isEven
+    ? `${boxes.length} boxes of ${formatServings(first.servings)}`
+    : `${boxes.length} boxes · ${formatServings(total)}`;
+  return text;
+};
 
 export const getStockMaps = (containers: Container[]) =>
   containers.reduce(
@@ -697,13 +876,7 @@ export const getStockParts = (summary: StockSummary, now = Date.now()) =>
     const due =
       eatBy === null || state === 'LATER'
         ? null
-        : {
-            state,
-            label:
-              state === 'PAST'
-                ? 'Past its date'
-                : `Eat by ${getEatByPhrase(eatBy, now)}`,
-          };
+        : { state, label: getEatByLabel(eatBy, now) };
     return [{ place, servings, due }];
   });
 
@@ -771,7 +944,7 @@ export const getPlacesText = (summary: {
 
 export const getDueText = (soonCount: number, pastCount: number) =>
   [
-    soonCount > 0 && `${soonCount} to eat soon`,
+    soonCount > 0 && `${soonCount} to eat by tomorrow`,
     pastCount > 0 &&
       `${pastCount} past ${pastCount === 1 ? 'its' : 'their'} date`,
   ]
@@ -794,7 +967,7 @@ export const getSavedHeadline = (
   const what =
     batch.length === 1
       ? formatServings(total)
-      : `${batch.length} containers (${formatServings(total)})`;
+      : `${batch.length} boxes (${formatServings(total)})`;
   return `Saved ${what} in the ${CONTAINER_PLACE_LABELS[batch[0].place].toLowerCase()}`;
 };
 
@@ -957,6 +1130,8 @@ export interface StockedItem {
   summary: StockSummary;
 }
 
+const MAX_STOCK_NAMES = 3;
+
 /** Informational only: the app never subtracts stock from the list. */
 export const getShoppingStockLine = (
   stocked: StockedItem[],
@@ -964,7 +1139,12 @@ export const getShoppingStockLine = (
 ) => {
   if (stocked.length === 0) return null;
   if (stocked.length > 1) {
-    return `You already have prepared servings of ${formatList(stocked.map((entry) => entry.name))}.`;
+    const names = stocked.map((entry) => entry.name);
+    const shown =
+      names.length > MAX_STOCK_NAMES
+        ? `${names.slice(0, MAX_STOCK_NAMES).join(', ')} and ${names.length - MAX_STOCK_NAMES} more`
+        : formatList(names);
+    return `You already have servings of ${shown} in your fridge or freezer.`;
   }
 
   const [{ name, summary }] = stocked;

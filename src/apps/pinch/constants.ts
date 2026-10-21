@@ -54,6 +54,8 @@ export const NUTRITION_METRICS = NUTRITION_CELLS.map((cell) => cell.key);
 
 /** A list gets a search from this many rows. */
 export const LIST_SEARCH_THRESHOLD = 8;
+/** A section's heading counts its rows only past this many; fewer are counted at a glance. */
+export const SECTION_COUNT_THRESHOLD = 10;
 
 export const UNITS: Unit[] = [
   'G',
@@ -115,12 +117,115 @@ export const MAX_MEAL_ITEMS = 10;
 /** The caps on lines per add and on items are not enforced by the rules. */
 export const MAX_SHOPPING_LINES_PER_ADD = 200;
 export const SOFT_MAX_SHOPPING_ITEMS = 300;
+/** The rules' cap on what one item remembers put it on the list. */
+export const MAX_SHOPPING_SOURCES = 60;
 export const SHOPPING_GROUP_PAGE_SIZE = 100;
 export const SHOPPING_MOVE_DELAY_MS = 1200;
-export const SHOPPING_VIEWS: ShoppingView[] = ['toBuy', 'got'];
+export const SHOPPING_VIEWS: ShoppingView[] = ['toBuy', 'got', 'all'];
 export const SHOPPING_VIEW_LABELS: Record<ShoppingView, string> = {
   toBuy: 'To buy',
   got: 'Got it',
+  all: 'All',
+};
+/** The shopping list's sections, in the order a shop is walked. */
+export const SHOP_SECTIONS = [
+  'produce',
+  'meat',
+  'dairy',
+  'bakery',
+  'pantry',
+  'spices',
+  'snacks',
+  'frozen',
+  'other',
+] as const;
+export type ShopSection = (typeof SHOP_SECTIONS)[number];
+export const SHOP_SECTION_LABELS: Record<ShopSection, string> = {
+  produce: 'Produce',
+  meat: 'Meat & fish',
+  dairy: 'Dairy & eggs',
+  bakery: 'Bakery',
+  pantry: 'Pantry',
+  spices: 'Spices & oils',
+  snacks: 'Snacks & drinks',
+  frozen: 'Frozen',
+  other: 'Other',
+};
+/** Where each catalog family is found in a shop; a family not listed, the person's own included, is Other. */
+export const SHOP_SECTION_BY_FAMILY: Partial<Record<string, ShopSection>> = {
+  'cat-fam-onion': 'produce',
+  'cat-fam-pepper': 'produce',
+  'cat-fam-tomato': 'produce',
+  'cat-fam-potato': 'produce',
+  'cat-fam-vegetables': 'produce',
+  'cat-fam-greens': 'produce',
+  'cat-fam-fruit': 'produce',
+  'cat-fam-citrus': 'produce',
+  'cat-fam-berries': 'produce',
+  'cat-fam-herbs': 'produce',
+  'cat-fam-soy': 'produce',
+  'cat-fam-chicken': 'meat',
+  'cat-fam-beef': 'meat',
+  'cat-fam-pork': 'meat',
+  'cat-fam-turkey': 'meat',
+  'cat-fam-lamb': 'meat',
+  'cat-fam-fish': 'meat',
+  'cat-fam-shellfish': 'meat',
+  'cat-fam-eggs': 'dairy',
+  'cat-fam-milk': 'dairy',
+  'cat-fam-cheese': 'dairy',
+  'cat-fam-yogurt': 'dairy',
+  'cat-fam-butter': 'dairy',
+  'cat-fam-bread': 'bakery',
+  'cat-fam-rice': 'pantry',
+  'cat-fam-grains': 'pantry',
+  'cat-fam-pasta': 'pantry',
+  'cat-fam-flour': 'pantry',
+  'cat-fam-baking': 'pantry',
+  'cat-fam-sugar': 'pantry',
+  'cat-fam-beans': 'pantry',
+  'cat-fam-broth': 'pantry',
+  'cat-fam-pickles': 'pantry',
+  'cat-fam-sauces': 'pantry',
+  'cat-fam-nuts': 'pantry',
+  'cat-fam-seeds': 'pantry',
+  'cat-fam-spices': 'spices',
+  'cat-fam-oil': 'spices',
+  'cat-fam-vinegar': 'spices',
+  'cat-fam-snacks': 'snacks',
+  'cat-fam-drinks': 'snacks',
+};
+/** Catalog ingredients shelved away from their family: a can of tomatoes sits in the pantry, ice cream in the freezer. */
+export const SHOP_SECTION_BY_INGREDIENT: Partial<Record<string, ShopSection>> =
+  {
+    'cat-fresh-ginger': 'produce',
+    'cat-canned-diced-tomatoes': 'pantry',
+    'cat-crushed-tomatoes': 'pantry',
+    'cat-tomato-sauce': 'pantry',
+    'cat-tomato-paste': 'pantry',
+    'cat-marinara-sauce': 'pantry',
+    'cat-sun-dried-tomatoes': 'pantry',
+    'cat-pumpkin-puree': 'pantry',
+    'cat-raisins': 'pantry',
+    'cat-dates': 'pantry',
+    'cat-dried-cranberries': 'pantry',
+    'cat-shredded-coconut': 'pantry',
+    'cat-canned-tuna': 'pantry',
+    'cat-sardines': 'pantry',
+    'cat-coconut-milk': 'pantry',
+    'cat-evaporated-milk': 'pantry',
+    'cat-vanilla-ice-cream': 'frozen',
+  };
+/** Staples outside Spices & oils that an add sheet also leaves unticked. */
+export const USUALLY_AT_HOME_IDS: readonly string[] = ['cat-water'];
+/** Below this many rows the list is one run in shop order, with no section dividers. */
+export const SHOP_SECTION_DIVIDER_MIN_ROWS = 8;
+
+export const SHOPPING_ADD_MODES = ['one', 'plan'] as const;
+export type ShoppingAddMode = (typeof SHOPPING_ADD_MODES)[number];
+export const SHOPPING_ADD_MODE_LABELS: Record<ShoppingAddMode, string> = {
+  one: 'One thing',
+  plan: 'From your plan',
 };
 /** A chunk reads then deletes each item, two operations apiece, under Firestore's 500 per transaction. */
 export const SHOPPING_BATCH_SIZE = 250;
@@ -208,6 +313,15 @@ export const MEAL_TYPES: MealType[] = [
   'DESSERT',
   'DRINK',
 ];
+/** The order a month cell shows its meals in, so dinner, the meal most people plan, is never the one behind "+N"; drawers and Week keep meal-time order. */
+export const MONTH_CELL_MEAL_ORDER: MealType[] = [
+  'DINNER',
+  'LUNCH',
+  'BREAKFAST',
+  'SNACK',
+  'DESSERT',
+  'DRINK',
+];
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   BREAKFAST: 'Breakfast',
   LUNCH: 'Lunch',
@@ -246,7 +360,7 @@ export const RECIPE_COVER_MAX_DIMENSION = 1280;
 export const RECIPES_VIEWS: RecipesView[] = ['recipes', 'meals', 'ideas'];
 export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {
   recipes: 'Recipes',
-  meals: 'Meals',
+  meals: 'Saved meals',
   ideas: 'Ideas',
 };
 
@@ -266,13 +380,16 @@ export const UNIT_TO_BASE: Record<Unit, number> = {
   EACH: 1,
 };
 
-export const CALENDAR_VIEWS = ['month', 'week', 'day'] as const;
+export const CALENDAR_VIEWS = ['month', 'week'] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
-export const DEFAULT_CALENDAR_VIEW: CalendarView = 'month';
+/** Month from `lg` up, where the grid has room for meal names; Week, starting today, on anything narrower. */
+export const DEFAULT_CALENDAR_VIEW: Record<'wide' | 'narrow', CalendarView> = {
+  wide: 'month',
+  narrow: 'week',
+};
 export const CALENDAR_VIEW_LABELS: Record<CalendarView, string> = {
   month: 'Month',
   week: 'Week',
-  day: 'Day',
 };
 
 /** The meal type's colour tokens from `pinch.css`: the solid for an edge or a dot, the soft tint for a chip or a pill. */
@@ -397,8 +514,9 @@ export const CONTAINER_PLACE_LABELS: Record<ContainerPlace, string> = {
   FRIDGE: 'Fridge',
   FREEZER: 'Freezer',
 };
+/** Two that don't both read "frozen": an ice cube beside a snowflake said freezer twice. */
 export const CONTAINER_PLACE_EMOJIS: Record<ContainerPlace, string> = {
-  FRIDGE: '🧊',
+  FRIDGE: '🥛',
   FREEZER: '❄️',
 };
 export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({
@@ -429,7 +547,10 @@ export const MAX_EAT_BY_DATE = 4_102_444_800_000;
 export const CONTAINER_FRIDGE_DAYS = 4;
 export const CONTAINER_FREEZER_DAYS = 90;
 export const CONTAINER_THAWED_DAYS = 2;
-export const CONTAINER_EAT_SOON_DAYS = 2;
+/** Due today or tomorrow: a wider window tints most of a box's life and stops meaning "eat it now". */
+export const CONTAINER_EAT_SOON_DAYS = 1;
+/** A freezer row names its eat-by only once it is this close, or past; before that it says when it was frozen. */
+export const CONTAINER_FREEZER_DATE_DAYS = 7;
 export const BULK_MEAL_SERVINGS = 5;
 export const CONTAINER_SITTING_SERVINGS = 2;
 /** Counted by the client only; the rules do not count documents. */

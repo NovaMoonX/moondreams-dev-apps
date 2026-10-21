@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Drawer, Modal, Panel } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface FormSheetProps {
@@ -24,35 +25,69 @@ const STICKY_FOOTER =
  * `ModalFooterActions` stay pinned to the bottom edge while the fields scroll under them. A search or a
  * sequence is a `Subview` instead, and a handful of simple fields is a plain `Modal`.
  */
-function FormSheet({ isOpen, onClose, title, children, wide = 'modal' }: FormSheetProps) {
+function FormSheet({
+  isOpen,
+  onClose,
+  title,
+  children,
+  wide = 'modal',
+}: FormSheetProps) {
   const isPhone = useMediaQuery().isBelow('sm');
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
 
   if (isPhone) {
     return (
       <Drawer
+        id={dialogId}
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={onDialogClose}
         title={title}
         showCloseButton
         disableCloseOnOverlayClick
         className='max-h-[92dvh] [&>div]:max-h-[92dvh]'
       >
-        <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]')}>{children}</div>
+        <div
+          className={join(
+            STICKY_FOOTER,
+            '[&_.form-footer]:bottom-[-1.5rem] [&_.form-footer]:-mb-6 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
+          )}
+        >
+          {children}
+        </div>
       </Drawer>
     );
   }
 
   if (wide === 'panel') {
     return (
-      <Panel isOpen={isOpen} onClose={onClose} title={title}>
-        <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3')}>{children}</div>
+      <Panel
+        id={dialogId}
+        isOpen={isOpen}
+        onClose={onDialogClose}
+        title={title}
+      >
+        <div
+          className={join(
+            STICKY_FOOTER,
+            '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3',
+          )}
+        >
+          {children}
+        </div>
       </Panel>
     );
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <div className={join(STICKY_FOOTER, '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3')}>{children}</div>
+    <Modal id={dialogId} isOpen={isOpen} onClose={onDialogClose} title={title}>
+      <div
+        className={join(
+          STICKY_FOOTER,
+          '[&_.form-footer]:bottom-0 [&_.form-footer]:pb-3',
+        )}
+      >
+        {children}
+      </div>
     </Modal>
   );
 }

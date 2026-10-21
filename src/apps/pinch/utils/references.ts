@@ -80,9 +80,13 @@ export function describeUsage(usage: Usage): string {
     usage.savedMeals > 0 &&
       plural(usage.savedMeals, 'saved meal', 'saved meals'),
     usage.recipes > 0 && plural(usage.recipes, 'recipe', 'recipes'),
-    usage.products > 0 && plural(usage.products, 'product', 'products'),
+    usage.products > 0 && plural(usage.products, 'price', 'prices'),
     usage.containers > 0 &&
-      plural(usage.containers, 'prepared container', 'prepared containers'),
+      plural(
+        usage.containers,
+        'box in your fridge or freezer',
+        'boxes in your fridge or freezer',
+      ),
   ].filter((part): part is string => part !== false);
 
   return parts.length <= 2

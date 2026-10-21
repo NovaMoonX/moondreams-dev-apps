@@ -7,6 +7,8 @@ export interface PinchOverlayContextValue {
   openSubview: (subview: PinchSubview) => void;
   /** Switches to the Shopping tab unless a subview is up when it runs, so a late tap never replaces a form holding typed work. */
   showShoppingTab: () => void;
+  /** Shows the Calendar's week on a day, under the same guard, and also not while a dialog is open over the screen. */
+  showCalendarDay: (dayKey: string) => void;
   closeSubview: () => void;
   /** Closes the open subview only if `isCurrent` says it is still the one that asked, for a close that follows an awaited write. */
   closeSubviewIf: (
@@ -16,6 +18,10 @@ export interface PinchOverlayContextValue {
   isStartOpen: boolean;
   /** `fromCalendar` marks the new recipe as started from the calendar's empty state; it defaults to false on every open. */
   setIsStartOpen: (isOpen: boolean, fromCalendar?: boolean) => void;
+  /** Opens a subview for a toast's action, unless a subview is already up or a dialog is open, so a late tap never replaces typed work. */
+  openSubviewFromToast: (subview: PinchSubview) => void;
+  /** The new-idea sheet over whatever screen shows, for a way in other than the Ideas list. */
+  openIdeaSheet: () => void;
 }
 
 /** One subview value for the whole app, so a full-page screen can never open on top of another. */

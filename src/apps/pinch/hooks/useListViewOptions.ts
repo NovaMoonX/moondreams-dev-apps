@@ -18,7 +18,7 @@ export const DEFAULT_LIST_VIEW_OPTIONS: ListViewOptions = {
   showStock: true,
 };
 
-type ListViewList = 'recipes' | 'ingredients';
+type ListViewList = 'recipes' | 'ingredients' | 'calendar';
 
 const BASES: string[] = NUTRITION_BASIS_OPTIONS.map((option) => option.value);
 
@@ -60,7 +60,8 @@ export const countCustomizedViewOptions = (
 ) =>
   [
     options.showPrices !== DEFAULT_LIST_VIEW_OPTIONS.showPrices,
-    options.showMacros !== DEFAULT_LIST_VIEW_OPTIONS.showMacros,
+    list !== 'calendar' &&
+      options.showMacros !== DEFAULT_LIST_VIEW_OPTIONS.showMacros,
     list === 'ingredients' && options.basis !== DEFAULT_LIST_VIEW_OPTIONS.basis,
     list === 'recipes' &&
       options.showStock !== DEFAULT_LIST_VIEW_OPTIONS.showStock,

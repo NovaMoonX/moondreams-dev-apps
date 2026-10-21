@@ -79,20 +79,26 @@ const addUp = (
     { values: NO_VALUES, missing: [] },
   );
 
-/** A recipe's nutrition per serving: added up from its lines unless the person typed their own for a metric. */
+/** A recipe's nutrition per serving: added up from its lines unless the person typed their own for a metric. A line with no amount adds nothing and is never missing. */
 export function getRecipeNutrition(
   recipe: Recipe,
   ingredientsById: Map<string, ResolvedIngredient>,
 ): NutritionResult {
   const summed = addUp(
-    recipe.ingredients.map((line) => ({
-      ingredientId: line.ingredientId,
-      grams: getGrams(
-        line.amount,
-        line.unit,
-        ingredientsById.get(line.ingredientId),
-      ),
-    })),
+    recipe.ingredients.flatMap((line) =>
+      line.amount === null
+        ? []
+        : [
+            {
+              ingredientId: line.ingredientId,
+              grams: getGrams(
+                line.amount,
+                line.unit,
+                ingredientsById.get(line.ingredientId),
+              ),
+            },
+          ],
+    ),
     ingredientsById,
   );
   const override = recipe.nutritionOverride ?? NO_VALUES;

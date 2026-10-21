@@ -89,7 +89,7 @@ Open Pinch to a three-tab shell: Calendar (left), Recipes (centre, raised) and K
 - [ ] The Kitchen search finds by name and alias and shows one empty state, never results and an empty line together.
 - [ ] About 200 catalog ingredients ship, each with a family, nutrition per 100 g, a serving size and an icon or the jar fallback; the data build is reproducible from the script.
 - [ ] The theme is correct in light and dark on a filled button, selected pill, badge and highlighted card; nothing outside Pinch is re-themed.
-- [ ] Licence notices for the icon set (and the FDC licence outcome) are recorded; an About row in a later settings sheet will surface them.
+- [ ] Licence notices for the icon set (and the FDC licence outcome) are recorded; "About the numbers" at the end of every View options sheet surfaces them.
 - [ ] The `apps/pinch` rule is verified against the emulator (admin allowed, a random user denied per the predicates); no kitchen rule is added yet (state this in the PR); `firestore.indexes.json` is unchanged.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
@@ -142,7 +142,7 @@ A person can add an ingredient with just a name (a ready-to-eat food like Dorito
 **Files:**
 - `src/apps/pinch/catalog/catalogStores.ts`
 - `src/apps/pinch/components/shared/StoreLogo.tsx`
-- `src/apps/pinch/components/kitchen/StoresSubview.tsx`, `StoreFormSheet.tsx`, `StorePicker.tsx`, `KitchenScreen.tsx` (a Stores entry row)
+- `src/apps/pinch/components/kitchen/StoresSubview.tsx` (merged into `ProductsSubview`, Stores & prices, by the audit), `StoreFormSheet.tsx`, `StorePicker.tsx`, `KitchenScreen.tsx` (a Stores entry row)
 - `src/apps/pinch/store/slices/storesSlice.ts`, `actions/storeActions.ts`, `listeners/kitchenListeners.ts`, `selectors.ts`
 - `firestore.rules` (`stores`) and `storage.rules` (`apps/pinch/kitchens/{uid}/stores/{storeId}/…`)
 - `.env.example` (the logo token name), `src/apps/pinch/constants.ts` (`storeLogoUrl` provider switch)
@@ -226,7 +226,7 @@ A person attaches products to any ingredient: store, price and package size, wit
 **Context:** Read `TECHNICAL.md`'s `Recipe`, `saveRecipe` and the recipe rules; `UX.md`'s Recipes tab, Recipe subview (create and edit) and Recipe details; `FormScreen`/`Subview`, `DetailSheet`, `AddFieldChips`, `PhotoPicker`.
 
 ### Description
-A person writes a recipe by hand — a title, servings and ingredients with amounts and units — then adds steps, a description, times and a cover photo from "+ Add X" chips. Recipes list in the Recipes tab, open in a drawer, and can be edited or deleted.
+A person writes a recipe by hand — a title, servings and ingredients with amounts and units — then adds steps, a description, times and a cover photo from "+ Add X" chips. Recipes list in the Recipes tab, open in a drawer, and can be edited or deleted. A line may have no amount ("salt to taste"): it saves as its words and is left out of cost and nutrition.
 
 ### Possible Approach
 1. `Recipe` and `RecipeIngredient` types, slice, user-tier listener and `saveRecipe` (full-shape `setDoc` on create, field-scoped `updateDoc` on edit; a cover uploads to Storage first).
@@ -255,7 +255,7 @@ A person writes a recipe by hand — a title, servings and ingredients with amou
 - `src/apps/pinch/utils/quantity.ts`, `unitCost.ts`, `recipeMath.ts`, `gaps.ts`
 - `src/apps/pinch/store/selectors.ts` (`selectRecipeCosts`)
 - `src/apps/pinch/components/recipes/RecipeRow.tsx`, `RecipeDrawer.tsx` (cost line)
-- `src/apps/pinch/components/shared/CostLine.tsx` (a cost with its "leaves out" note)
+- `src/apps/pinch/components/shared/CostLine.tsx` (a cost with its "leaves out" note; the audit folded it into the recipe drawer's Cost tile and `LeftOutTip`)
 - `scripts/checks/pinchMath.ts` (a throwaway worked-examples check)
 
 **Context:** Read `TECHNICAL.md`'s Logic §1 (quantity and cost) and the worked example, Derived values, and open question 9; `UX.md`'s Recipe details.
@@ -275,7 +275,7 @@ Every recipe shows its total cost and cost per serving, calculated from its ingr
 
 ### Success Criteria
 - [ ] The worked examples produce the stated numbers; rounding happens once at the display edge (no drift between a total and the sum of its lines).
-- [ ] A recipe with no products shows no cost and a plain "No prices yet" line, never $0.00.
+- [ ] A recipe with no prices shows no cost tile; the price note under its ingredients invites "See what it costs: … · Add prices", never $0.00.
 - [ ] A recipe whose only product changes price updates its cost live; an archived or removed product no longer counts.
 - [ ] The recipe list at 200 recipes stays instant at 4× throttle (`selectRecipeCosts` is the only per-recipe computation).
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
@@ -288,7 +288,7 @@ Every recipe shows its total cost and cost per serving, calculated from its ingr
 **Files:**
 - `src/apps/pinch/components/shared/GapNudge.tsx`, `FillInSheet.tsx`
 - `src/apps/pinch/components/recipes/RecipeDrawer.tsx`, `kitchen/IngredientRow.tsx` (nudge placement)
-- `src/apps/pinch/store/slices/settingsSlice.ts`, `actions/settingsActions.ts` (`dismissNudge`), `listeners/kitchenListeners.ts`
+- `src/apps/pinch/store/slices/settingsSlice.ts`, `actions/settingsActions.ts` (`saveSettings`), `listeners/kitchenListeners.ts`
 - `src/apps/pinch/utils/gaps.ts` (dismissals)
 - `firestore.rules` (the `kitchens/{uid}` document: settings shape validation)
 - `scripts/seeds/pinch.ts`
@@ -296,10 +296,10 @@ Every recipe shows its total cost and cost per serving, calculated from its ingr
 **Context:** Read `TECHNICAL.md`'s Logic §4 (gaps and nudges), `KitchenSettings`, and the rules; `UX.md`'s Nudge and fill-in screen and its wording table; the README's "Filling In As You Go".
 
 ### Description
-Where a gap changes a number, one quiet line says so and offers to fix it: "2 ingredients need a price · Add prices". Tapping it opens a short sheet that walks through just those ingredients. Closing the line keeps it away for that ingredient. Missing details appear only as these in-context lines.
+Where a gap changes a number, one quiet line says so and offers to fix it: "2 ingredients need a price · Add prices". Tapping it opens a short sheet that walks through just those ingredients. Closing the line keeps it away for that ingredient. Missing details appear only as these in-context lines. Superseded in the Pinch audit: the close is "Not now", which quiets the line until the page reloads; the stored dismissal is still read but no longer written.
 
 ### Possible Approach
-1. `KitchenSettings` type, slice and listener; the kitchen document is created lazily by the first `dismissNudge` or `saveSettings` (a field-scoped dotted-path write). Rules for the document: `showNutrition` shape, `dismissedNudges` ≤ 500 keys.
+1. `KitchenSettings` type, slice and listener; the kitchen document is created lazily by the first `saveSettings` (an early build also created it on a dismissal) (a field-scoped dotted-path write). Rules for the document: `showNutrition` shape, `dismissedNudges` ≤ 500 keys.
 2. `gaps.ts` now filters by `dismissedNudges`; `GapNudge` renders only when the filtered list is non-empty (muted text, a link, a ✕ with a 40px hit area).
 3. `FillInSheet` (`FormSheet`): one row per ingredient with only the fields that gap needs (a product's store, price and size; a package size for "can't compare"); rows left blank stay unchanged; Save is always available; saving goes through `saveProduct` and clears that ingredient's dismissal keys in the same write.
 4. Place the nudge in the recipe drawer under the cost line and on an ingredient row ("No price yet", muted, no ✕). The stats row and meal builder reuse it in Issues 10 and 12.
@@ -397,8 +397,8 @@ A planned meal can hold any mix of recipes and ingredients, each with its own se
 **Target PR Size:** ~450 lines
 **Files:**
 - `src/apps/pinch/components/recipes/MealRow.tsx`, `MealDrawer.tsx`, `MealSubview.tsx`, `RecipesScreen.tsx` (the Meals pill)
-- `src/apps/pinch/components/plan/MealBuilder.tsx` ("Start from a saved meal", "Save as a meal")
-- `src/apps/pinch/components/calendar/PlannedMealView.tsx` (Save as a meal, swaps in place)
+- `src/apps/pinch/components/plan/MealBuilder.tsx` (recent recipes and saved meals; saved meals are also in the search)
+- `src/apps/pinch/components/calendar/PlannedMealView.tsx` (Save to Saved meals, swaps in place)
 - `src/apps/pinch/store/slices/mealsSlice.ts`, `actions/mealActions.ts`, `listeners/kitchenListeners.ts`
 - `firestore.rules` (`meals`)
 - `scripts/seeds/pinch.ts`
@@ -411,11 +411,11 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 ### Possible Approach
 1. `Meal` slice and listener; `saveMeal` / `removeMeal`; `planMeal` accepts `sourceMealId` and `name` and copies items with new row ids.
 2. Meals pill in Recipes: `MealRow`s, `MealDrawer` (items, servings, total cost with nudge, "Plan it" primary that closes the drawer and opens Plan a meal on a chosen day, Modify / Copy / Delete in the muted block); `MealSubview` is the same builder without a day.
-3. In `MealBuilder`, a `PickOrCreate` row "Start from a saved meal" (dashed New first, nothing preselected), and a "Save as a meal" switch with a name field once there are two or more items. "Save as a meal" on a planned meal swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
+3. In `MealBuilder`, recent recipes and saved meals as a captioned pill row while the plate is empty (nothing preselected) and saved meals in the one search. "Save to Saved meals" lives on a planned meal, which swaps the drawer in place to a name field and Save (`savePlannedAsMeal`).
 4. Rules for `meals` (≤ 30 items, shape); seed a few meals and a planned meal copied from one.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** Save as a meal (from a day or the builder) and + New in the Meals pill. **Read:** the Meals list and drawer. **Update:** Modify. **Delete:** the subview's trash icon with a destructive confirm (a meal is always deletable: nothing reads `sourceMealId` for display).
+- [ ] **Create:** Save to Saved meals (from a planned meal) and + New saved meal in the Saved meals pill. **Read:** the Saved meals list and drawer. **Update:** Modify. **Delete:** the subview's trash icon with a destructive confirm (a meal is always deletable: nothing reads `sourceMealId` for display).
 
 ### Success Criteria
 - [ ] Planning a saved meal, editing the saved meal, then opening the planned day shows the old items; editing the planned day leaves the saved meal as it was.
@@ -438,7 +438,7 @@ A person saves the meals they eat again (adobo chicken with cilantro lime rice a
 **Context:** Read `TECHNICAL.md`'s Derived values (month stats, average per meal) and open question 6; `UX.md`'s Calendar (stats row) and Breakdown; A-List's `CounterRow` and `StatTile` use.
 
 ### Description
-Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet.
+Above the month, a stats row shows what the month cost and the average cost per meal. Tapping it opens a breakdown by day or by meal type. When items are left out, the row says so and offers the fill-in sheet. Superseded in the Pinch audit (tranche 1): one summary line and a summary sheet replace the stats row and breakdown.
 
 ### Possible Approach
 1. `selectMonthStats(monthKey)` in one pass over the window's planned meals: `{ spendCents, mealsPriced, avgPerMealCents, leftOut }`; the average divides by planned meals that have at least one priced item.
@@ -461,27 +461,27 @@ Above the month, a stats row shows what the month cost and the average cost per 
 **Prerequisites:** Issue 12, Issue 3
 **Target PR Size:** ~500 lines
 **Files:**
-- `src/apps/pinch/components/settings/SettingsSheet.tsx`, `CalendarScreen.tsx` (gear), `StatsRow.tsx` (help link)
+- `src/apps/pinch/components/shared/ListViewControls.tsx` ("Nutrition, everywhere" in View options), `CalendarScreen.tsx` (the eye)
 - `src/apps/pinch/components/shared/NutritionLine.tsx`
 - `src/apps/pinch/utils/recipeMath.ts` (nutrition), `mealMath.ts`, `stats.ts`
 - `src/apps/pinch/components/recipes/RecipeForm.tsx` ("+ My own nutrition" chip), `RecipeDrawer.tsx`, `MealDrawer.tsx`, `PlannedMealView.tsx`
 - `src/apps/pinch/store/actions/settingsActions.ts` (`saveSettings`)
 - `scripts/seeds/pinch.ts`
 
-**Context:** Read `TECHNICAL.md`'s Logic §2 (nutrition) and `KitchenSettings`; `UX.md`'s Settings, Calendar (stats row) and Recipe form; the README's "Cost and Nutrition".
+**Context:** Read `TECHNICAL.md`'s Logic §2 (nutrition) and `KitchenSettings`; `UX.md`'s View options, Calendar (summary line) and Recipe form; the README's "Cost and Nutrition".
 
 ### Description
-Nutrition is always stored and shown only when switched on. Settings has four `AppToggle`s (calories, protein, carbs, fat), all off to start. A recipe's nutrition adds up from its ingredients, and the person can type their own over it. With a metric on, it shows per serving on recipes and meals and as a daily average on the calendar's stats row; with protein on, the row adds average price per gram of protein.
+Nutrition is always stored and shown only when switched on. View options has four `AppToggle`s under "Nutrition, everywhere" (calories, protein, carbs, fat), all off to start. A recipe's nutrition adds up from its ingredients, and the person can type their own over it. With a metric on, it shows per serving on recipes and meals and as a daily average on the calendar's stats row; with protein on, the row adds average price per gram of protein.
 
 ### Possible Approach
-1. `saveSettings({ showNutrition })` with dotted-path writes; the Settings sheet is a `FormSheet` from the Calendar gear and from the stats row's help link; include an About row for licences and attributions.
+1. `saveSettings({ showNutrition })` with dotted-path writes; View options (`ListViewControls`) carries a "Nutrition, everywhere" section and an "About the numbers" row for licences and attributions, reached from the eye on the Calendar, Recipes, Meals and Kitchen.
 2. Nutrition math per metric as in the TDD (grams from the same bridge as cost; the override replaces a derived metric when non-null); `NO_NUTRITION` gaps only for metrics that are on.
-3. `NutritionLine` renders only the metrics that are on and renders nothing when all are off; wire it into the recipe row and drawer, meal drawer, planned meal view and the stats row; `selectMonthStats` adds daily averages and `proteinPriceCentsPerGram` over meals where both are known.
+3. `NutritionLine` renders only the metrics that are on and renders nothing when all are off; wire it into the recipe row and drawer, meal drawer, planned meal view and the summary sheet; `selectMonthStats` adds daily averages and `proteinPriceCentsPerGram` over meals where both are known.
 4. Recipe form: "+ My own nutrition" chip (visible whether or not anything is on) with four optional per-serving fields.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Update:** settings switches and a recipe's nutrition override. **Read:** nutrition on the surfaces above. **Delete:** the chip's "Remove" clears the override.
-- [ ] **Entry point:** the Calendar gear and the stats row's help link.
+- [ ] **Entry point:** the eye on the Calendar, Recipes, Meals and Kitchen.
 
 ### Success Criteria
 - [ ] With all four off, no nutrition appears anywhere and no nutrition nudge shows; turning one on shows it immediately and only that metric.
@@ -700,7 +700,7 @@ Marking a meal made takes its ingredients out of stock. Prepared servings are al
 
 ### Issue 21: The shopping list with stock, low stock and stores
 
-**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal, planned meal or day (or one ingredient), merged by ingredient and unit, grouped by family, with "Got it" and an approximate cost (TECHNICAL.md §5b).
+**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal or a day or range of planned days (or one ingredient), merged by ingredient and unit, each line remembering what put it there, in shop sections, with To buy / Got it / All and an approximate cost (TECHNICAL.md §5b).
 **Target PR Size:** ~350 lines
 **Files:**
 - Shopping tab: `ShoppingScreen` (`components/shopping/`), `utils/shopping.ts`, a low-stock section and a group-by-store option
@@ -712,7 +712,7 @@ Subtract tracked stock from what the list asks for, add a section for low-stock 
 
 ### Possible Approach
 1. When adding, subtract tracked stock per ingredient and unit; an untracked ingredient is listed in full.
-2. Low-stock section from thresholds; a "By store" grouping next to the family one, from each ingredient's default product.
+2. Low-stock section from thresholds; a "By store" filter next to the shop sections the list is grouped by, from each ingredient's default product.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Read:** the list by family or by store, and the low-stock section; **Update:** tick off, change amount (both exist).
@@ -778,7 +778,7 @@ Paste text from a chat; Pinch shows what would change (ingredients, amounts, ste
 **Context:** UX Calendar; README Next Steps.
 
 ### Description
-A week (Monday to Sunday) with its meals by day and the week's stats, and a full-page day detail.
+A week (Monday to Sunday) with its meals by day and the week's stats, and a full-page day detail. Superseded in the Pinch audit (tranche 1): below `lg` the week is seven days from today, from `lg` seven columns Sunday to Saturday; one summary line and a summary sheet carry its numbers, and the Day view is gone (a day is its drawer).
 
 ### Possible Approach
 1. Reuse day totals and planned-by-day selectors; a Month / Week switch.
@@ -985,7 +985,7 @@ Paste a link and a recipe form fills in for review.
 **Context:** UX Recipe details.
 
 ### Description
-A big-type, one-step-at-a-time view that keeps the screen awake. As built, the planned "ingredient peek" is an Ingredients view beside Steps (scaled to the servings being made and tickable), a step's times become timers, leaving while a timer is going asks first, and the recipe's latest note or tweak shows above the steps and ingredients when there is one.
+A big-type, one-step-at-a-time view that keeps the screen awake. As built, each step lists the ingredients it names with their amounts in kitchen measures, an Ingredients view (beside the steps from `lg`) scales and ticks them, cooking opens at the recipe's own servings, a step's times become timers named for their step, leaving while a timer is going asks first, the recipe's latest note shows above the steps, a planned dinner of several recipes opens as one session (recipe pills, one timer strip, up to four timers for all of them), and Finish records the cook, one per recipe, in one panel with one Undo, put-away and a note.
 
 ### Possible Approach
 1. Wake Lock API with a graceful fallback; step navigation by buttons, swipe and arrow keys; an Ingredients view that scales amounts with the shopping list's own `scaleAmount`; timers that run to a clock deadline.
@@ -1012,7 +1012,7 @@ A big-type, one-step-at-a-time view that keeps the screen awake. As built, the p
 **Context:** Read `TECHNICAL.md` §5f and open question 20; `UX.md`'s Recipe, Recipe details and Cooking mode; CLAUDE.md's "A phone form shows a few inputs at a time" and "Text that leaves the app is safe to paste" (Pinch has no copy-out, so it only matters if one returns).
 
 ### Description
-A recipe can say how many days what it makes keeps in the fridge and the freezer, how to reheat it, and carry a tip. It is a "Keeping it" row in the recipe form, a quiet section on the recipe, one line on cooking mode's last screen ("Leftovers keep 3 days in the fridge, 3 months in the freezer") and something the three readings fill in for review when the source says so.
+A recipe can say how many days what it makes keeps in the fridge and the freezer, how to reheat it, and carry a tip. It is a "Keeping it" row in the recipe form, a quiet section on the recipe, the keeping times on cooking mode's put-away pills ("Fridge · keeps 3 days") and something the three readings fill in for review when the source says so.
 
 ### Possible Approach
 1. `Recipe.care: RecipeCare | null`, a required key written by every save of the recipe (so an older recipe, which has no key, gains it), read through `getRecipeCare`; days are whole numbers from 1 to 365, reheat and tip at most 300 characters.
@@ -1026,7 +1026,7 @@ A recipe can say how many days what it makes keeps in the fridge and the freezer
 
 ### Success Criteria
 - [ ] A recipe written before this (no `care` key) opens, shows no section, edits and saves, and its save writes `care` explicitly; checked in the browser over a legacy-shaped document.
-- [ ] A save that changes only a cooked recipe's care writes no tweak and leaves "Last tweaked" alone.
+- [ ] A save that changes only a cooked recipe's care writes no tweak and leaves the drawer's "changed" date alone.
 - [ ] The rules accept a valid care, null and a missing key for the owner and refuse bad days, an extra key and a wrong type, for everyone else too; the cases are listed in the PR as owner, another user and signed out.
 - [ ] A reading with no storage lines leaves the row quiet and lists nothing under "We couldn't read"; one with them fills the row for review and saves nothing until the recipe is saved.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and the editor was measured against the container rules.
@@ -1040,13 +1040,13 @@ A recipe can say how many days what it makes keeps in the fridge and the freezer
 - `Container`, `ContainerEvent` and the place, status and event kinds in `types.ts`, the caps and the named defaults in `constants.ts`, `utils/containers.ts` (every pure rule: eat-by classification and defaults, the plans, the history cap, the stock maps, the bulk-meal rule, the copy helpers), `isContainer` in `firestore.rules` and the Finished index in `firestore.indexes.json`
 - `store/slices/containersSlice.ts`, `startContainersListener`, `store/actions/containerActions.ts`, `queries/containerQueries.ts`, the container selectors, `hooks/useContainerActions.ts`, `useContainerDraft.ts`, `usePutAway.ts`
 - `components/containers/` (`PreparedEntry`, `ContainersSubview`, `ContainerRow`, `ContainerSheet`, `ContainerFormSheet`, `ContainerFields`, `EatByField`, `EatByBadge`, `StockLine`, `StockRows`, `EatFromStock`), `components/cooking/CookPutAway.tsx`
-- Changed: Kitchen (the row), `EntryRow` (a detail line), Recipes and Meals (rows, filter, drawers), the plate builder's search, the planned meal view, the shopping sheet, the cooking history sheet, `CookingSubview`
+- Changed: Kitchen (the row), `EntryTile` (the Fridge & freezer door, which began as `EntryChip`), Recipes and Meals (rows, filter, drawers), the plate builder's search, the planned meal view, the shopping sheet, the cooking history sheet, `CookingSubview`
 - The seeds: ten containers in every state for Alex, about 300 in stock and 260 finished for the scale kitchen
 
-**Context:** Read `TECHNICAL.md` decision 23, §5g, criterion 13 and open question 22; `UX.md`'s Prepared meals; CLAUDE.md's "Pick the atomic write that fits", "Know which of the two kinds of time value a field is" and the Firestore rules section on indexes and the evaluator.
+**Context:** Read `TECHNICAL.md` decision 23, §5g, criterion 13 and open question 22; `UX.md`'s Fridge & freezer; CLAUDE.md's "Pick the atomic write that fits", "Know which of the two kinds of time value a field is" and the Firestore rules section on indexes and the evaluator.
 
 ### Description
-Meal prep kept in the fridge or freezer is a list of containers: what each is, how many servings are in it, where it is, when to eat it by, and what has happened to it. Kitchen has a "Prepared meals" row and list; a recipe's and saved meal's rows and drawers say what is in stock; cooking mode asks "Putting any away?" after a bulk meal; a plan can eat from a container; the shopping sheet says what is already put away. A put-away can be several containers (portions in separate boxes thaw one at a time), a saved meal's stock includes its recipes', and a thaw or move never hides that a container is past its date.
+Meal prep kept in the fridge or freezer is a list of containers: what each is, how many servings are in it, where it is, when to eat it by, and what has happened to it. Kitchen has a "Fridge & freezer" door (a tile) and list (the audit renamed "Prepared meals" and "container" in the app to "Fridge & freezer" and "box"; the code keeps `Container`); a recipe's and saved meal's rows and drawers say what is in stock; cooking mode asks "Putting any away?" after a bulk meal; a plan can eat from a container; the shopping sheet says what is already put away. A put-away can be several containers (portions in separate boxes thaw one at a time), a saved meal's stock includes its recipes', and a thaw or move never hides that a container is past its date.
 
 ### Possible Approach
 1. One document per container (`servings`, `status`, `place`, `eatBy` as a date-only value, `history` of at most ten events), never split; finishing keeps the document, deleting erases it. A put-away writes one to twenty containers in one batch, each with its own history.
@@ -1056,7 +1056,7 @@ Meal prep kept in the fridge or freezer is a list of containers: what each is, h
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read / Update / Delete:** put some away (as one container or several), see what is in stock and finished, eat some or all, correct the count, move between fridge and freezer, change the eat-by date, throw it out, delete it.
-- [ ] **Entry points:** Kitchen's row, a recipe's and a saved meal's drawer, cooking mode's last screen, the Prepared meals list's "Add", a planned meal's "Eat from your fridge or freezer".
+- [ ] **Entry points:** Kitchen's row, a recipe's and a saved meal's drawer, cooking mode's last screen, the Fridge & freezer list's "Add", a planned meal's "Eat from your fridge or freezer".
 
 ### Success Criteria
 - [ ] Eat soon and past its date read right in the viewer's own time zone, west and east of UTC (`npm run check:pinch-math` under `America/Los_Angeles` and `Pacific/Auckland`), and an eat-by is never shown in local time.
@@ -1144,7 +1144,7 @@ See how a product's price has moved.
 **Prerequisites:** Issue 13
 **Target PR Size:** ~300 lines
 **Files:**
-- Goals in settings, stats row progress
+- Goals in View options, progress on the Calendar's summary sheet
 
 **Context:** Nutrition settings.
 

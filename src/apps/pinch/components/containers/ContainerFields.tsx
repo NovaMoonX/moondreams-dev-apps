@@ -79,7 +79,7 @@ function ContainerFields({
     <Stepper
       value={draft.containers}
       onChange={draft.setContainers}
-      label='Containers'
+      label='Boxes'
       min={1}
       max={draft.maxContainers}
       step={1}
@@ -98,7 +98,7 @@ function ContainerFields({
             {placePills}
           </div>
         )}
-        <SettingRow label='How many containers?' helper={draft.splitText}>
+        <SettingRow label='How many boxes?' helper={draft.splitText}>
           {containersStepper}
         </SettingRow>
         <EatByField
@@ -130,9 +130,7 @@ function ContainerFields({
         </div>
       )}
       <div className='space-y-1'>
-        <Label className='text-muted-foreground text-xs'>
-          How many containers?
-        </Label>
+        <Label className='text-muted-foreground text-xs'>How many boxes?</Label>
         {containersStepper}
         {draft.splitText && (
           <p className='text-muted-foreground text-xs'>{draft.splitText}</p>

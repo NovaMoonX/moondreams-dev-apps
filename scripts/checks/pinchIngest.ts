@@ -115,4 +115,111 @@ assert.equal(oversized.prepMinutes, null);
 assert.equal(oversized.ingredients[0].amount, null);
 assert.equal(oversized.ingredients[0].note?.length, 200);
 
+// AMOUNT: a line the recipe doesn't measure keeps its words as the note, never a made-up number.
+// The model can't be called here, so these use the JSON shape it returns for real readings.
+const shakshuka = normalizeExtractedRecipe({
+  title: 'Shakshuka',
+  servings: 3,
+  ingredients: [
+    { name: 'olive oil', amount: 2, unit: 'TBSP', note: null },
+    { name: 'salt and pepper', amount: null, unit: null, note: 'to taste' },
+    {
+      name: 'handful of fresh parsley',
+      amount: null,
+      unit: null,
+      note: 'chopped',
+    },
+    { name: 'salt to taste', amount: null, unit: 'TSP', note: null },
+    { name: 'Half and half', amount: null, unit: null, note: null },
+    { name: 'half and half', amount: 1, unit: 'CUP', note: null },
+    { name: 'macaroni and cheese', amount: null, unit: null, note: null },
+    { name: 'sweet and sour sauce', amount: null, unit: null, note: null },
+  ],
+  steps: ['Season with salt and pepper.'],
+  unread: [],
+});
+assert.deepEqual(
+  shakshuka.ingredients.map((line) => [
+    line.name,
+    line.amount,
+    line.unit,
+    line.note,
+  ]),
+  [
+    ['olive oil', 2, 'TBSP', null],
+    ['salt', null, null, 'to taste'],
+    ['pepper', null, null, 'to taste'],
+    ['fresh parsley', null, null, 'a handful, chopped'],
+    ['salt', null, null, 'to taste'],
+    ['Half and half', null, null, null],
+    ['half and half', 1, 'CUP', null],
+    ['macaroni and cheese', null, null, null],
+    ['sweet and sour sauce', null, null, null],
+  ],
+  '"salt and pepper to taste" is two lines and "handful of parsley" is parsley noted "a handful"; half and half, macaroni and cheese and sweet and sour sauce stay whole',
+);
+assert.deepEqual(
+  shakshuka.ingredients.slice(1, 4).map((line) => idOf(line.name)),
+  ['cat-salt', 'cat-black-pepper', 'cat-parsley'],
+  'each split or trimmed name finds its ingredient',
+);
+const pasta = normalizeExtractedRecipe({
+  ingredients: [
+    { name: 'spaghetti', amount: 12, unit: 'OZ', note: null },
+    {
+      name: 'Kosher salt and freshly ground black pepper',
+      amount: null,
+      unit: null,
+      note: null,
+    },
+    {
+      name: 'a small handful of basil leaves',
+      amount: null,
+      unit: null,
+      note: null,
+    },
+    {
+      name: 'parmesan, for serving',
+      amount: null,
+      unit: null,
+      note: 'to taste',
+    },
+    { name: 'sprigs of thyme', amount: null, unit: null, note: null },
+    { name: 'a pinch of salt', amount: 1, unit: 'PINCH', note: null },
+  ],
+  steps: [],
+  unread: [],
+});
+assert.deepEqual(
+  pasta.ingredients.map((line) => [line.name, line.amount, line.note]),
+  [
+    ['spaghetti', 12, null],
+    ['Kosher salt', null, null],
+    ['freshly ground black pepper', null, null],
+    ['basil leaves', null, 'a small handful'],
+    ['parmesan', null, 'for serving, to taste'],
+    ['thyme', null, 'sprigs'],
+    ['a pinch of salt', 1, null],
+  ],
+  'a measured line is left as read; an unmeasured one loses its measure words to the note',
+);
+assert.equal(
+  normalizeExtractedRecipe({
+    ingredients: [
+      { name: 'salt to taste', amount: null, unit: null, note: 'to taste' },
+    ],
+  }).ingredients[0].note,
+  'to taste',
+  'the same words in the name and the note are said once',
+);
+assert.equal(
+  normalizeExtractedRecipe({
+    ingredients: Array.from({ length: 40 }, () => ({
+      name: 'salt and pepper',
+    })),
+  }).ingredients.length,
+  60,
+  'splitting lines never takes a recipe past its cap',
+);
+
 console.log('pinchIngest: all checks passed');

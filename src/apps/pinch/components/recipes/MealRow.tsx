@@ -16,7 +16,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Meal } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
-import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
+import { formatRowPrice, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { getMealCost } from '@apps/pinch/utils/mealMath';
 import {
   getMealNutrition,
@@ -72,10 +72,9 @@ function MealRow({
   const detail = [
     `${meal.items.length} ${meal.items.length === 1 ? 'item' : 'items'}`,
     showPrices &&
-      (cost.totalCents === null ? 'No price yet' : formatCost(cost.totalCents)),
-    showPrices && cost.totalCents !== null && leftOutCount > 0
-      ? `leaves out ${leftOutCount}`
-      : null,
+      (cost.totalCents === null
+        ? 'No price yet'
+        : formatRowPrice(cost.totalCents, leftOutCount > 0)),
   ]
     .filter(Boolean)
     .join(' · ');

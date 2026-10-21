@@ -4,7 +4,6 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { RefreshCw } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
-import HelpTip from '@/components/HelpTip';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -24,7 +23,6 @@ import {
 } from '@apps/pinch/utils/dayKeys';
 import { getRepriceLines } from '@apps/pinch/utils/mealFormat';
 import {
-  getRepricedAt,
   getRepricePreview,
   wouldRepriceChange,
 } from '@apps/pinch/utils/mealMath';
@@ -66,12 +64,7 @@ function RepriceDayRow({ uid, dayKey }: RepriceDayRowProps) {
     setIsBusy(true);
     try {
       const dayName = formatDayShort(dayKey);
-      const lines = getRepriceLines(
-        getRepricePreview(meals, costContext),
-        meals.some(
-          (meal) => meal.snapshot && getRepricedAt(meal.snapshot) !== null,
-        ),
-      );
+      const lines = getRepriceLines(getRepricePreview(meals, costContext));
       const confirmed = await confirm({
         title: `Use today's prices for ${dayName}?`,
         message: (
@@ -130,18 +123,6 @@ function RepriceDayRow({ uid, dayKey }: RepriceDayRowProps) {
           subtitle="Redoes this day's cost and nutrition from today"
           isDisabled={isBusy}
           onClick={() => void handleReprice()}
-          trailing={
-            <HelpTip title="Today's prices" placement='top'>
-              <p>
-                A day is fixed when it passes, so adding a price later doesn't
-                change it.
-              </p>
-              <p>
-                This redoes the day with the prices and recipes you have now, so
-                calories can change too.
-              </p>
-            </HelpTip>
-          }
         />
       )}
       {error && (

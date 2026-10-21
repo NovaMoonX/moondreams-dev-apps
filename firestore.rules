@@ -1469,15 +1469,22 @@ service cloud.firestore {
           && data.createdAt is int && data.updatedAt is int;
       }
 
+      // What put a line on the list (planned meal ids and 'recipe:<id>'). Rules can't walk a list, so the client shapes its entries; a line written before sources existed has no key.
+      function isShoppingSources(value) {
+        return value is list && value.size() <= 60;
+      }
+
+      // A null amount is a line with just a name ("parsley", from a recipe line with no amount), always counted in EACH.
       function isShoppingItem(data, id) {
-        return data.keys().hasOnly(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'sources', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'ingredientId', 'amount', 'unit', 'isChecked', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.ingredientId, 80)
-          && isPositiveAmount(data.amount)
+          && ((data.amount == null && data.unit == 'EACH') || isPositiveAmount(data.amount))
           && isUnit(data.unit)
           && id == data.ingredientId + '__' + data.unit
           && data.isChecked is bool
+          && isShoppingSources(data.get('sources', []))
           && data.createdAt is int && data.updatedAt is int;
       }
 

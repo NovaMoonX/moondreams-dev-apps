@@ -85,7 +85,7 @@ const APP_REGISTRY = [
     title: 'Pinch - Moondreams Dev Apps',
     path: '/pinch',
     description:
-      'A calm, personal kitchen planner that keeps your ingredients, recipes, and meals on a calendar, with what everything costs and, whenever you want it, the nutrition.',
+      'Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.',
     image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-pinch.png',
   },
 ];

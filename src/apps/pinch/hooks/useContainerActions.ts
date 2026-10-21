@@ -9,11 +9,14 @@ import {
 } from '@apps/pinch/constants';
 import {
   changeContainerEatBy,
+  changeContainersEatBy,
   clearOutPlace,
   correctContainerCount,
   eatContainer,
+  endContainers,
   moveContainer,
   removeContainer,
+  removeContainers,
   tossContainer,
   undoClearOut,
   undoContainerBatch,
@@ -28,13 +31,14 @@ import {
 import type { Container, ContainerPlace } from '@apps/pinch/types';
 import {
   buildContainer,
+  canPutBack,
   getNewContainersProblem,
+  getEatByPhrase,
   getPutBackText,
   getSavedText,
   isContainerListFull,
   type NewContainerInput,
 } from '@apps/pinch/utils/containers';
-import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const UNDO_TOAST_MS = 6000;
 
@@ -102,7 +106,7 @@ export function useContainerActions(uid: string) {
       await dispatch(undoContainerBatch({ uid, ids })).unwrap();
     } catch (error) {
       showUndoFailed(
-        getErrorMessage(error, 'You can change it from Prepared meals.'),
+        getErrorMessage(error, 'You can change it from Fridge & freezer.'),
       );
     }
   };
@@ -111,16 +115,16 @@ export function useContainerActions(uid: string) {
     try {
       await dispatch(undoContainerEnd({ uid, id, at })).unwrap();
     } catch {
-      showUndoFailed('You can change it from Prepared meals.');
+      showUndoFailed('You can change it from Fridge & freezer.');
     }
   };
 
   const getProblem = (inputs: Omit<NewContainerInput, 'id'>[]) => {
     if (loadError !== null) {
-      return "Your prepared meals couldn't load, so adding is paused.";
+      return "Your fridge and freezer couldn't load, so adding is paused.";
     }
     if (!isReady) {
-      return 'Your prepared meals are still loading. Try again in a moment.';
+      return 'Your fridge and freezer are still loading. Try again in a moment.';
     }
     return getNewContainersProblem(inputs, inStockCount);
   };
@@ -165,17 +169,23 @@ export function useContainerActions(uid: string) {
       dispatch(undoContainerBatch({ uid, ids })).unwrap(),
     );
 
-  const eat = (container: Container, count: number | 'ALL') =>
+  /** `toastTitle` replaces the toast's own words, for a box eaten whole out of a batch. */
+  const eat = (
+    container: Container,
+    count: number | 'ALL',
+    toastTitle?: string,
+  ) =>
     once(container.id, async () => {
-      const { at, isFinished } = await dispatch(
+      const { at, isFinished, servingsLeft } = await dispatch(
         eatContainer({ uid, id: container.id, count }),
       ).unwrap();
       const eaten = count === 'ALL' ? container.servings : count;
+      const ownTitle = isFinished
+        ? `Finished ${container.title}`
+        : `Ate ${eaten} · ${servingsLeft} left`;
       addUndoToast(
-        isFinished
-          ? `Finished ${container.title}`
-          : `Ate ${formatServings(eaten)}`,
-        isFinished ? undefined : container.title,
+        toastTitle ?? ownTitle,
+        isFinished && toastTitle === undefined ? undefined : container.title,
         () => undoEnd(container.id, at),
       );
       return isFinished;
@@ -186,16 +196,27 @@ export function useContainerActions(uid: string) {
       const { at } = await dispatch(
         tossContainer({ uid, id: container.id }),
       ).unwrap();
-      addUndoToast(`Threw out ${container.title}`, undefined, () =>
+      addUndoToast(`Tossed ${container.title}`, undefined, () =>
         undoEnd(container.id, at),
       );
       return true;
     });
 
   const move = (container: Container, to: ContainerPlace, eatBy: number) =>
-    once(container.id, () =>
-      dispatch(moveContainer({ uid, id: container.id, to, eatBy })).unwrap(),
-    );
+    once(container.id, async () => {
+      await dispatch(
+        moveContainer({ uid, id: container.id, to, eatBy }),
+      ).unwrap();
+      addToast({
+        title:
+          to === 'FREEZER'
+            ? `Put ${container.title} in the freezer`
+            : `Thawed ${container.title} in the fridge`,
+        description: `Eat by ${getEatByPhrase(eatBy)}`,
+        type: 'success',
+      });
+      return true;
+    });
 
   const changeEatBy = (container: Container, eatBy: number) =>
     once(container.id, () =>
@@ -233,6 +254,34 @@ export function useContainerActions(uid: string) {
     }
   };
 
+  /** Eats or tosses every box of a batch at once, with one Undo for all of them. */
+  const endBatch = (
+    boxes: Container[],
+    kind: 'EAT' | 'TOSS',
+    toastTitle: string,
+  ) =>
+    once(`batch:${boxes.map(({ id }) => id).join(',')}`, async () => {
+      const ended = await dispatch(
+        endContainers({ uid, ids: boxes.map(({ id }) => id), kind }),
+      ).unwrap();
+      addUndoToast(toastTitle, boxes[0].title, () => undoClear(ended));
+      return true;
+    });
+
+  const changeBatchEatBy = (boxes: Container[], eatBy: number) =>
+    once(`batch:${boxes.map(({ id }) => id).join(',')}`, () =>
+      dispatch(
+        changeContainersEatBy({ uid, ids: boxes.map(({ id }) => id), eatBy }),
+      ).unwrap(),
+    );
+
+  const removeBatch = (boxes: Container[]) =>
+    once(`batch:${boxes.map(({ id }) => id).join(',')}`, () =>
+      dispatch(
+        removeContainers({ uid, ids: boxes.map(({ id }) => id) }),
+      ).unwrap(),
+    );
+
   /** Resolves to how many it really cleared, and a sentence when it stopped partway. */
   const clearOut = (place: ContainerPlace, ids: string[]) =>
     once(`clear:${place}`, async () => {
@@ -242,23 +291,23 @@ export function useContainerActions(uid: string) {
       if (cleared.length > 0) {
         addUndoToast(
           `Cleared out the ${CONTAINER_PLACE_LABELS[place].toLowerCase()}`,
-          `${cleared.length} ${cleared.length === 1 ? 'container' : 'containers'}`,
+          `${cleared.length} ${cleared.length === 1 ? 'box' : 'boxes'}`,
           () => undoClear(cleared),
         );
       }
       return { count: cleared.length, error };
     });
 
-  /** A cleared-out container back in stock as it was, for a clear-out that took one by mistake. */
+  /** A finished box back in stock as it was before what ended it, for a mis-tap the toast's Undo no longer covers. */
   const putBack = (container: Container) =>
     once(container.id, async () => {
       const last = container.history.at(-1);
-      if (last?.kind !== 'CLEAR') {
+      if (!canPutBack(container) || last === undefined) {
         throw new Error('That has changed since, so it could not be undone.');
       }
       if (isReady && isContainerListFull(inStockCount)) {
         throw new Error(
-          `You have ${SOFT_MAX_CONTAINERS} containers in stock. Finish or delete one to put this back.`,
+          `You have ${SOFT_MAX_CONTAINERS} boxes in your fridge and freezer. Finish or delete one to put this back.`,
         );
       }
       await dispatch(
@@ -282,6 +331,9 @@ export function useContainerActions(uid: string) {
     changeEatBy,
     correctCount,
     remove,
+    endBatch,
+    changeBatchEatBy,
+    removeBatch,
     clearOut,
     putBack,
   };

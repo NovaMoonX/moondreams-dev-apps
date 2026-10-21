@@ -47,7 +47,8 @@ export const normalizeName = (name: string) =>
     .map(singular)
     .join(' ');
 
-const withoutFiller = (name: string) =>
+/** A name compared without the words that only describe it (fresh, chopped, boneless). */
+export const withoutFiller = (name: string) =>
   normalizeName(name)
     .split(' ')
     .filter((word) => !FILLER.has(word))

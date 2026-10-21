@@ -1,4 +1,12 @@
-import type { ResolvedFamily, ResolvedIngredient } from '@apps/pinch/types';
+import { CATALOG_FAMILIES_BY_ID } from '@apps/pinch/catalog';
+import type {
+  Recipe,
+  ResolvedFamily,
+  ResolvedIngredient,
+  Source,
+} from '@apps/pinch/types';
+import { getRecipeSource } from '@apps/pinch/utils/sources';
+import { withoutFiller } from '@apps/pinch/utils/ingredientMatch';
 
 const normalize = (text: string) =>
   text
@@ -9,11 +17,15 @@ const normalize = (text: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+interface SearchText {
+  name: string;
+  aliases: string[];
+  family: string;
+  haystack: string;
+}
+
 // An ingredient object is replaced when it changes, so its normalized text is built once per object.
-const SEARCH_TEXT = new WeakMap<
-  ResolvedIngredient,
-  { name: string; haystack: string }
->();
+const SEARCH_TEXT = new WeakMap<ResolvedIngredient, SearchText>();
 
 const getSearchText = (ingredient: ResolvedIngredient) => {
   const cached = SEARCH_TEXT.get(ingredient);
@@ -22,13 +34,39 @@ const getSearchText = (ingredient: ResolvedIngredient) => {
   }
   const entry = {
     name: normalize(ingredient.name),
+    aliases: ingredient.aliases.map(normalize),
+    family: normalize(
+      (ingredient.familyId &&
+        CATALOG_FAMILIES_BY_ID.get(ingredient.familyId)?.name) ||
+        '',
+    ),
     haystack: normalize([ingredient.name, ...ingredient.aliases].join(' ')),
   };
   SEARCH_TEXT.set(ingredient, entry);
   return entry;
 };
 
-/** Ingredients whose name or an alias contains every word typed, names that start with the text first. */
+const startsAWord = (text: string, word: string) =>
+  text.startsWith(word) || text.includes(` ${word}`);
+
+/** Lower is closer: the name, then an alias, said exactly; the name starting with it; every word starting a word of the name; a member of a family with that name; an alias starting with it; anything else that contains every word. */
+const getRank = (text: SearchText, typed: string, words: string[]) => {
+  if (text.name === typed) return 0;
+  if (text.aliases.includes(typed)) return 1;
+  if (text.name.startsWith(typed)) return 2;
+  if (words.every((word) => startsAWord(text.name, word))) return 3;
+  if (words.every((word) => text.family.includes(word))) return 4;
+  if (
+    text.aliases.some((alias) =>
+      words.every((word) => startsAWord(alias, word)),
+    )
+  ) {
+    return 5;
+  }
+  return 6;
+};
+
+/** Ingredients whose name, an alias or their catalog family's name holds every word typed, closest first (an exact name or alias, then a name that starts with it, then a family's members), accents ignored. */
 export function searchIngredients(
   ingredients: ResolvedIngredient[],
   query: string,
@@ -40,15 +78,92 @@ export function searchIngredients(
 
   const typed = words.join(' ');
   const result = ingredients
-    .filter((ingredient) =>
-      words.every((word) => getSearchText(ingredient).haystack.includes(word)),
-    )
+    .flatMap((ingredient) => {
+      const text = getSearchText(ingredient);
+      const isMatch = words.every(
+        (word) => text.haystack.includes(word) || text.family.includes(word),
+      );
+      return isMatch ? [{ ingredient, rank: getRank(text, typed, words) }] : [];
+    })
     .sort(
       (a, b) =>
-        Number(getSearchText(b).name.startsWith(typed)) -
-          Number(getSearchText(a).name.startsWith(typed)) ||
-        a.name.localeCompare(b.name),
-    );
+        a.rank - b.rank || a.ingredient.name.localeCompare(b.ingredient.name),
+    )
+    .map(({ ingredient }) => ingredient);
+
+  return result;
+}
+
+const NEAR_MATCH_LIMIT = 3;
+const MIN_NEAR_WORD_LENGTH = 3;
+const NOT_THE_THING = new Set([
+  'and',
+  'with',
+  'for',
+  'into',
+  'plus',
+  'shredded',
+  'grated',
+  'crushed',
+  'cooked',
+  'canned',
+  'dried',
+  'toasted',
+  'roasted',
+  'smoked',
+  'peeled',
+  'cubed',
+]);
+
+/** Up to three ingredients a name nothing matched might mean ("shredded lettuce": Iceberg lettuce, Romaine lettuce). Each word that names a thing finds the ingredients with a word of their name (then an alias) starting with it, the name that is or begins with it and the shorter name first; the words take turns from the last, usually the thing itself. */
+export function findNearMatches(
+  ingredients: ResolvedIngredient[],
+  name: string,
+): ResolvedIngredient[] {
+  const words = withoutFiller(name)
+    .split(' ')
+    .filter(
+      (word) => word.length >= MIN_NEAR_WORD_LENGTH && !NOT_THE_THING.has(word),
+    )
+    .reverse();
+  const rankFor = (word: string) =>
+    ingredients
+      .flatMap((ingredient) => {
+        const text = getSearchText(ingredient);
+        const isInName = startsAWord(text.name, word);
+        const isInAlias =
+          !isInName && text.aliases.some((alias) => startsAWord(alias, word));
+        if (!isInName && !isInAlias) return [];
+        return [
+          {
+            ingredient,
+            rank: [
+              isInName ? 0 : 1,
+              text.name.startsWith(word) ? 0 : 1,
+              ingredient.name.length,
+            ],
+          },
+        ];
+      })
+      .sort(
+        (a, b) =>
+          a.rank[0] - b.rank[0] ||
+          a.rank[1] - b.rank[1] ||
+          a.rank[2] - b.rank[2] ||
+          a.ingredient.name.localeCompare(b.ingredient.name),
+      )
+      .map((entry) => entry.ingredient);
+  const lists = words.map(rankFor);
+  const depth = Math.max(0, ...lists.map((list) => list.length));
+  const result = [
+    ...new Map(
+      Array.from({ length: depth }, (_, index) =>
+        lists.flatMap((list) => (list[index] ? [list[index]] : [])),
+      )
+        .flat()
+        .map((ingredient) => [ingredient.id, ingredient]),
+    ).values(),
+  ].slice(0, NEAR_MATCH_LIMIT);
 
   return result;
 }
@@ -122,6 +237,61 @@ export function searchByName<T extends { name: string }>(
       : items.filter((item) =>
           words.every((word) => normalize(item.name).includes(word)),
         );
+
+  return result;
+}
+
+export interface RecipeSearchEntry {
+  recipe: Recipe;
+  title: string;
+  rest: string;
+}
+
+/** Each recipe's title and the rest of what a person might type to find it (its ingredients' names and aliases, its source and its description), normalized once. */
+export function buildRecipeSearchIndex(
+  recipes: Recipe[],
+  ingredientsById: Map<string, ResolvedIngredient>,
+  sourcesById: Map<string, Source>,
+): RecipeSearchEntry[] {
+  const result = recipes.map((recipe) => ({
+    recipe,
+    title: normalize(recipe.title),
+    rest: normalize(
+      [
+        ...recipe.ingredients.flatMap((line) => {
+          const ingredient = ingredientsById.get(line.ingredientId);
+          return ingredient ? [ingredient.name, ...ingredient.aliases] : [];
+        }),
+        getRecipeSource(recipe, sourcesById)?.label ?? '',
+        recipe.description ?? '',
+      ].join(' '),
+    ),
+  }));
+
+  return result;
+}
+
+/** Recipes where every word typed is in the title or starts a word of the rest, those with every word in the title first, each group in the index's order; an empty query keeps them all. */
+export function searchRecipes(
+  index: RecipeSearchEntry[],
+  query: string,
+): Recipe[] {
+  const words = normalize(query).split(' ').filter(Boolean);
+  if (words.length === 0) {
+    return index.map((entry) => entry.recipe);
+  }
+
+  const isInTitle = (entry: RecipeSearchEntry) =>
+    words.every((word) => entry.title.includes(word));
+  const matches = index.filter((entry) =>
+    words.every(
+      (word) => entry.title.includes(word) || startsAWord(entry.rest, word),
+    ),
+  );
+  const result = [
+    ...matches.filter(isInTitle),
+    ...matches.filter((entry) => !isInTitle(entry)),
+  ].map((entry) => entry.recipe);
 
   return result;
 }

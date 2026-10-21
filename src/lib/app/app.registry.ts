@@ -56,7 +56,7 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     name: 'Pinch',
     path: '/pinch',
     description:
-      'A calm, personal kitchen planner that keeps your ingredients, recipes, and meals on a calendar, with what everything costs and, whenever you want it, the nutrition.',
+      'Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.',
     createdAt: '2026-10-12',
   },
 ];
