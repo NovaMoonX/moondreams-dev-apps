@@ -1,12 +1,17 @@
 import type {
   Gap,
   MealItem,
+  PlannedMeal,
+  PlannedSnapshot,
   Product,
   RecipeCost,
   ResolvedIngredient,
 } from '@apps/pinch/types';
 import { DEFAULT_SERVING } from '@apps/pinch/constants';
-import type { NutritionResult } from '@apps/pinch/utils/nutritionMath';
+import {
+  getMealNutrition,
+  type NutritionResult,
+} from '@apps/pinch/utils/nutritionMath';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
 export interface CostContext {
@@ -86,5 +91,76 @@ export function getMealCost(items: MealItem[], context: CostContext): MealCost {
         : priced.reduce((sum, cents) => sum + cents, 0),
     leftOut,
     items: new Map(items.map((item, index) => [item.id, costs[index]])),
+  };
+}
+
+/** A planned meal's cost: what it was when its day passed if it has been frozen, otherwise what it is now. */
+export function getPlannedMealCost(
+  meal: PlannedMeal,
+  context: CostContext,
+): MealCost {
+  const { snapshot } = meal;
+  if (!snapshot) {
+    return getMealCost(meal.items, context);
+  }
+
+  return {
+    totalCents: snapshot.costCents,
+    leftOut: snapshot.leftOut,
+    items: new Map(
+      snapshot.lines.map((line) => [
+        line.itemId,
+        { cents: line.costCents, gaps: [] },
+      ]),
+    ),
+  };
+}
+
+/** Several meals' costs added up, with what any of them left out. */
+export function combineMealCosts(costs: MealCost[]): Omit<MealCost, 'items'> {
+  const priced = costs.flatMap((cost) =>
+    cost.totalCents === null ? [] : [cost.totalCents],
+  );
+
+  return {
+    totalCents:
+      priced.length === 0
+        ? null
+        : priced.reduce((sum, cents) => sum + cents, 0),
+    leftOut: [
+      ...new Map(
+        costs
+          .flatMap((cost) => cost.leftOut)
+          .map((gap) => [`${gap.kind}:${gap.ingredientId}`, gap]),
+      ).values(),
+    ],
+  };
+}
+
+/** The write-once record of a meal's cost and nutrition, taken from the data as it is now. */
+export function buildSnapshot(
+  items: MealItem[],
+  context: CostContext,
+  frozenAt: number,
+): PlannedSnapshot {
+  const cost = getMealCost(items, context);
+  const nutrition = getMealNutrition(
+    items,
+    context.recipeNutrition,
+    context.ingredientsById,
+  );
+
+  return {
+    frozenAt,
+    costCents: cost.totalCents,
+    leftOut: cost.leftOut.map(({ kind, ingredientId }) => ({
+      kind,
+      ingredientId,
+    })),
+    nutrition: nutrition.values,
+    lines: items.map((item) => ({
+      itemId: item.id,
+      costCents: cost.items.get(item.id)?.cents ?? null,
+    })),
   };
 }

@@ -29,9 +29,9 @@ import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { mealMarkdown } from '@apps/pinch/utils/markdown/dayMarkdown';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
-import { getMealCost } from '@apps/pinch/utils/mealMath';
+import { getPlannedMealCost } from '@apps/pinch/utils/mealMath';
 import {
-  getMealNutrition,
+  getPlannedMealNutrition,
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
 
@@ -69,9 +69,9 @@ function PlannedMealView({
     return null;
   }
 
-  const cost = getMealCost(meal.items, costContext);
-  const nutrition = getMealNutrition(
-    meal.items,
+  const cost = getPlannedMealCost(meal, costContext);
+  const nutrition = getPlannedMealNutrition(
+    meal,
     costContext.recipeNutrition,
     costContext.ingredientsById,
   );
@@ -230,6 +230,11 @@ function PlannedMealView({
             · {formatLeftOut(cost.leftOut)}
           </span>
         )}
+        {meal.snapshot && (
+          <span className='text-muted-foreground block text-xs'>
+            Prices as they were that day
+          </span>
+        )}
       </p>
       {hasShownValue(nutrition.values, show) && (
         <p className='text-muted-foreground text-sm'>
@@ -237,14 +242,21 @@ function PlannedMealView({
         </p>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
-      <Button
-        type='button'
-        variant='secondary'
-        className='h-11 w-full'
-        onClick={() => onEdit(meal.id, meal.mealType)}
-      >
-        Change items or servings
-      </Button>
+      {meal.snapshot ? (
+        <p className='text-muted-foreground text-sm'>
+          This day has passed, so its meals stay as they were. Remove one and
+          add it again to change it.
+        </p>
+      ) : (
+        <Button
+          type='button'
+          variant='secondary'
+          className='h-11 w-full'
+          onClick={() => onEdit(meal.id, meal.mealType)}
+        >
+          Change items or servings
+        </Button>
+      )}
       <Button
         type='button'
         variant='secondary'

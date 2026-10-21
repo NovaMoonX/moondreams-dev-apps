@@ -11,6 +11,7 @@ import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
 import { getGapKey } from '@apps/pinch/utils/gaps';
 import type {
@@ -85,6 +86,7 @@ export const saveIngredient = createAsyncThunk<
       : (newFamily?.id ?? matchedFamilyId ?? draft.familyId);
 
     try {
+      await freezeBeforeEdit(uid, getState());
       const batch = writeBatch(db);
       if (newFamily && !isCatalog) {
         batch.set(kitchenDoc(uid, 'families', newFamily.id), newFamily);
@@ -160,39 +162,43 @@ interface RemoveIngredientInput {
 export const removeIngredient = createAsyncThunk<
   string,
   RemoveIngredientInput,
-  { rejectValue: string }
->('pinch/ingredients/remove', async ({ uid, id }, { rejectWithValue }) => {
-  try {
-    const recordRef = kitchenDoc(uid, 'ingredients', id);
-    await runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(recordRef);
-      if (!snapshot.exists()) {
-        return;
-      }
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/ingredients/remove',
+  async ({ uid, id }, { getState, rejectWithValue }) => {
+    try {
+      await freezeBeforeEdit(uid, getState());
+      const recordRef = kitchenDoc(uid, 'ingredients', id);
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(recordRef);
+        if (!snapshot.exists()) {
+          return;
+        }
 
-      const { catalogId, defaultProductId } = snapshot.data();
-      if (catalogId == null || defaultProductId == null) {
-        transaction.delete(recordRef);
-        return;
-      }
+        const { catalogId, defaultProductId } = snapshot.data();
+        if (catalogId == null || defaultProductId == null) {
+          transaction.delete(recordRef);
+          return;
+        }
 
-      transaction.update(recordRef, {
-        name: null,
-        familyId: null,
-        iconKey: null,
-        nutritionPer100g: null,
-        servingAmount: null,
-        servingUnit: null,
-        gramsPerMl: null,
-        gramsEach: null,
-        updatedAt: Date.now(),
+        transaction.update(recordRef, {
+          name: null,
+          familyId: null,
+          iconKey: null,
+          nutritionPer100g: null,
+          servingAmount: null,
+          servingUnit: null,
+          gramsPerMl: null,
+          gramsEach: null,
+          updatedAt: Date.now(),
+        });
       });
-    });
-  } catch (error) {
-    return rejectWithValue(
-      getErrorMessage(error, 'Unable to remove this ingredient.'),
-    );
-  }
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to remove this ingredient.'),
+      );
+    }
 
-  return id;
-});
+    return id;
+  },
+);

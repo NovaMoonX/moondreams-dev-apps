@@ -27,7 +27,10 @@ import {
   weekMarkdown,
 } from '@apps/pinch/utils/markdown/dayMarkdown';
 import { formatCost, getItemTitle } from '@apps/pinch/utils/mealFormat';
-import { getMealCost } from '@apps/pinch/utils/mealMath';
+import {
+  combineMealCosts,
+  getPlannedMealCost,
+} from '@apps/pinch/utils/mealMath';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const NO_MEALS: PlannedMeal[] = [];
@@ -53,10 +56,10 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
     ? pickedMealId
     : null;
 
-  const dayCost = getMealCost(
-    meals.flatMap((meal) => meal.items),
-    costContext,
+  const dayCost = combineMealCosts(
+    meals.map((meal) => getPlannedMealCost(meal, costContext)),
   );
+  const isFrozen = meals.length > 0 && meals.every((meal) => meal.snapshot);
   const leftOutCount = countLeftOutIngredients(dayCost.leftOut);
 
   return (
@@ -123,6 +126,11 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
                     · {formatLeftOut(dayCost.leftOut)}
                   </span>
                 )}
+                {isFrozen && (
+                  <span className='text-muted-foreground block text-xs'>
+                    Prices as they were that day
+                  </span>
+                )}
               </p>
               {MEAL_TYPES.map((type) => {
                 const ofType = meals.filter((meal) => meal.mealType === type);
@@ -138,7 +146,7 @@ function DayDrawer({ uid, dayKey, onClose, onAdd, onEdit }: DayDrawerProps) {
                     </h3>
                     <ul className='divide-border divide-y'>
                       {ofType.map((meal) => {
-                        const mealCost = getMealCost(meal.items, costContext);
+                        const mealCost = getPlannedMealCost(meal, costContext);
                         return (
                           <li key={meal.id}>
                             <Button

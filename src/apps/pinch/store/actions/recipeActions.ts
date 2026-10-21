@@ -6,6 +6,7 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
 import type {
@@ -71,6 +72,7 @@ export const saveRecipe = createAsyncThunk<
     const path = getRecipeCoverPath(uid, recipeId);
 
     try {
+      await freezeBeforeEdit(uid, getState());
       if (draft.coverFile) {
         await uploadFile(
           path,
@@ -173,6 +175,7 @@ export const removeRecipe = createAsyncThunk<
     );
 
     try {
+      await freezeBeforeEdit(uid, getState());
       await deleteDoc(recipeDoc(uid, id));
     } catch (error) {
       return rejectWithValue(
