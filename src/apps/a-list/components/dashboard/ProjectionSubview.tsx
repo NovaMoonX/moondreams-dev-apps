@@ -86,6 +86,8 @@ function pluralize(count: number, word: string) {
 }
 
 const DAY_MS = 86_400_000;
+/** A tap on the counter moves a month's pace by two so the line visibly moves. */
+const PACE_STEP: Record<PaceUnit, number> = { week: 1, month: 2 };
 
 const clampCount = (goal: number | null, fallback: number, max: number) =>
   Math.max(1, Math.min(goal ?? fallback, max));
@@ -168,9 +170,9 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
 
   // A pace keeps the axis sized for the fastest pace, so a step on the counter moves the line instead of re-fitting the scale.
   const getAxis = () => {
-    if (!isPace || series.length === 0) return undefined;
+    if (series.length === 0) return undefined;
 
-    const fastest = getPaceSeries(getPaceMax(unit)).series;
+    const fastest = isPace ? getPaceSeries(getPaceMax(unit)).series : [];
     const values = [...series, ...fastest].flatMap((point) => [
       point.y,
       point.y2,
@@ -180,10 +182,12 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   const axis = getAxis();
 
   const getNextStepLine = () => {
-    if (!isPace || ticketCents === null || counts[unit] >= getPaceMax(unit))
-      return null;
+    if (!isPace || ticketCents === null) return null;
+    if (counts[unit] >= getPaceMax(unit))
+      return `That's the most A-List covers a ${unit}.`;
 
-    const next = getPaceSeries(counts[unit] + 1);
+    const step = PACE_STEP[unit];
+    const next = getPaceSeries(Math.min(counts[unit] + step, getPaceMax(unit)));
     const gain = (next.result.netCents ?? 0) - (result.netCents ?? 0);
     if (gain <= 0) return null;
 
@@ -198,7 +202,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
         return ` and would break even around ${formatDateUTC(nextPoint.x)}`;
       return '';
     };
-    return `One more a ${unit} adds about ${formatCents(gain)} by ${until}${getTail()}.`;
+    return `${step === 1 ? 'One more' : 'Two more'} a ${unit} adds about ${formatCents(gain)} by ${until}${getTail()}.`;
   };
   const nextStepLine = getNextStepLine();
 
@@ -283,7 +287,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                 value={counts[unit]}
                 min={1}
                 max={getPaceMax(unit)}
-                step={1}
+                step={PACE_STEP[unit]}
                 onChange={(count) =>
                   setCounts((current) => ({ ...current, [unit]: count }))
                 }

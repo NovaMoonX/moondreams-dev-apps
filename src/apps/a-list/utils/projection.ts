@@ -345,15 +345,18 @@ export function getNetSeries(
   return result;
 }
 
-/** Where the series first rises through $0, interpolated between its points; null when it starts at or above $0 or never gets there. */
+/** Where the series last rises through $0 and stays there, interpolated between its points; null when it starts at or above $0 or ends below it. */
 export function getBreakEvenPoint(series: NetPoint[]): { x: number } | null {
   if (series.length === 0 || series[0].y >= 0) return null;
 
-  const index = series.findIndex((point) => point.y >= 0);
-  if (index < 1) return null;
+  const lastBelow = series.reduce(
+    (last, point, index) => (point.y < 0 ? index : last),
+    -1,
+  );
+  if (lastBelow === series.length - 1) return null;
 
-  const before = series[index - 1];
-  const after = series[index];
+  const before = series[lastBelow];
+  const after = series[lastBelow + 1];
   const share = (0 - before.y) / (after.y - before.y);
   const result = { x: Math.round(before.x + share * (after.x - before.x)) };
   return result;

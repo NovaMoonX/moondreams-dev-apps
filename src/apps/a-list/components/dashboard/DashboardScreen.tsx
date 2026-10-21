@@ -17,6 +17,8 @@ import {
 import type { MembershipProfile } from '@apps/a-list/types';
 import { formatCents } from '@/utils/moneyUtils';
 
+const HIT_AREA = "relative after:absolute after:-inset-1.5 after:content-['']";
+
 interface DashboardScreenProps {
   membership: MembershipProfile;
 }
@@ -84,6 +86,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
             variant='secondary'
             size='icon'
             rounded='full'
+            className={HIT_AREA}
             aria-label='Membership settings'
             onClick={() => openOverlay({ kind: 'membership' })}
           >
@@ -109,6 +112,7 @@ function DashboardScreen({ membership }: DashboardScreenProps) {
                 variant='secondary'
                 size='icon'
                 rounded='full'
+                className={HIT_AREA}
                 aria-label='Projection: see where your net savings could land'
                 title='Projection'
                 onClick={() => openOverlay({ kind: 'projection' })}

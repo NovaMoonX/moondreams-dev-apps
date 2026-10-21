@@ -222,6 +222,21 @@ assert.equal(
   true,
 );
 
+// A line that crosses and then slips back below $0 has no break-even day; one that dips and recovers uses the crossing that holds
+const slip = [
+  { x: 0, y: -300, y2: 0 },
+  { x: 10, y: 100, y2: 0 },
+  { x: 20, y: -50, y2: 0 },
+];
+assert.equal(getBreakEvenPoint(slip), null);
+const recover = [
+  { x: 0, y: -300, y2: 0 },
+  { x: 10, y: 100, y2: 0 },
+  { x: 20, y: -100, y2: 0 },
+  { x: 30, y: 100, y2: 0 },
+];
+assert.deepEqual(getBreakEvenPoint(recover), { x: 25 });
+
 // Axis bounds are round and cover the data and $0
 const axis = getNiceMoneyAxis(-4100, 29900);
 assert.equal(axis.domain[0] <= -4100 && axis.domain[1] >= 29900, true);
@@ -231,5 +246,16 @@ assert.equal(
   true,
 );
 assert.equal(axis.ticks.includes(0), true);
+
+// Narrow and huge ranges keep whole-dollar, few ticks
+const narrow = getNiceMoneyAxis(-400, 400);
+assert.equal(
+  narrow.ticks.every((tick) => tick % 100 === 0),
+  true,
+);
+assert.equal(narrow.ticks.length <= 4, true);
+const huge = getNiceMoneyAxis(-3_000_000_000, 0);
+assert.equal(huge.ticks.length <= 4 && huge.ticks.length >= 2, true);
+assert.equal(getNiceMoneyAxis(50, 50).ticks.length >= 1, true);
 
 console.log('A-List projection checks passed');
