@@ -1,7 +1,7 @@
 import { parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { useNavigate } from 'react-router-dom';
 
-const VIEWS = ['apps', 'members'] as const;
+const VIEWS = ['apps', 'members', 'firebase'] as const;
 const SECTIONS = ['usage', 'settings'] as const;
 
 export type DashboardSection = (typeof SECTIONS)[number];
@@ -43,6 +43,9 @@ export function useDashboardUrlState() {
   const showMembers = (options?: NavigateOptions) =>
     update({ view: 'members', app: null, section: null, member: null }, options);
 
+  const showFirebase = (options?: NavigateOptions) =>
+    update({ view: 'firebase', app: null, section: null, member: null }, options);
+
   const showApp = (appId: string, options?: NavigateOptions) =>
     update({ view: 'apps', app: appId, section: null, member: null }, options);
 
@@ -64,6 +67,7 @@ export function useDashboardUrlState() {
     section: state.section ?? 'usage',
     member: state.member,
     showMembers,
+    showFirebase,
     showApp,
     setSection,
     openMember,

@@ -15,6 +15,7 @@ import AdminRefreshButton from './admin/AdminRefreshButton';
 import AppDetail from './admin/AppDetail';
 import { isSameDraft, toDraft, type AppDraft } from './admin/appDraft';
 import DashboardNav from './admin/DashboardNav';
+import FirebaseUsageView from './admin/FirebaseUsageView';
 import MembersView from './admin/MembersView';
 import { useAllAppUsage } from './admin/useAllAppUsage';
 import { useDashboardUrlState } from './admin/useDashboardUrlState';
@@ -32,11 +33,22 @@ function AdminDashboard() {
   const users = usersQuery.data ?? NO_USERS;
 
   const isMembersOpen = url.view === 'members';
+  const isFirebaseOpen = url.view === 'firebase';
   // A phone with no app chosen shows the list, but the wide layout's main view is never empty.
-  const selectedApp = isMembersOpen
-    ? undefined
-    : (allApps.find((app) => app.id === url.app) ?? (isWide ? allApps[0] : undefined));
-  const selected = isMembersOpen ? 'members' : (selectedApp?.id ?? null);
+  const selectedApp =
+    isMembersOpen || isFirebaseOpen
+      ? undefined
+      : (allApps.find((app) => app.id === url.app) ?? (isWide ? allApps[0] : undefined));
+  const getSelected = () => {
+    if (isMembersOpen) return 'members';
+    if (isFirebaseOpen) return 'firebase';
+    return selectedApp?.id ?? null;
+  };
+  const selected = getSelected();
+  const getDetailTitle = () => {
+    if (isFirebaseOpen) return 'Firebase usage';
+    return selectedApp?.name ?? 'Members';
+  };
 
   const getDraft = (app: AppMetadata) => drafts[app.id] ?? toDraft(app);
   const isDirty = (app: AppMetadata) => !isSameDraft(getDraft(app), toDraft(app));
@@ -48,6 +60,12 @@ function AdminDashboard() {
     setDrafts((current) =>
       Object.fromEntries(Object.entries(current).filter(([id]) => id !== appId)),
     );
+
+  const getPhoneDetail = () => {
+    if (isMembersOpen) return members;
+    if (isFirebaseOpen) return firebaseUsage;
+    return appDetail;
+  };
 
   if (!user || !isAdmin) {
     return null;
@@ -66,6 +84,7 @@ function AdminDashboard() {
       unsavedAppIds={allApps.filter(isDirty).map((app) => app.id)}
       isWide={isWide}
       onSelectMembers={() => url.showMembers({ isStep })}
+      onSelectFirebase={() => url.showFirebase({ isStep })}
       onSelectApp={(appId) => url.showApp(appId, { isStep })}
     />
   );
@@ -79,6 +98,7 @@ function AdminDashboard() {
       onSelectMember={url.openMember}
     />
   );
+  const firebaseUsage = <FirebaseUsageView apps={allApps} />;
   const appDetail = selectedApp ? (
     <AppDetail
       app={selectedApp}
@@ -102,13 +122,13 @@ function AdminDashboard() {
         <div className='mx-auto w-full max-w-5xl space-y-4'>
           <div className='flex items-center gap-2'>
             <SubviewHeader
-              title={selectedApp?.name ?? 'Members'}
+              title={getDetailTitle()}
               onBack={url.goBack}
               className='mb-0 min-w-0 flex-1'
             />
             <AdminRefreshButton />
           </div>
-          {isMembersOpen ? members : appDetail}
+          {getPhoneDetail()}
         </div>
       </div>
     );
@@ -145,6 +165,11 @@ function AdminDashboard() {
                 <div className='max-w-3xl space-y-4'>
                   <SectionHeader title='Members' />
                   {members}
+                </div>
+              ) : isFirebaseOpen ? (
+                <div className='max-w-3xl space-y-4'>
+                  <SectionHeader title='Firebase usage' />
+                  {firebaseUsage}
                 </div>
               ) : (
                 (appDetail ?? <p className='text-muted-foreground text-sm'>No apps yet.</p>)

@@ -92,6 +92,7 @@ import {
   buildEventTimeFields,
   getEventTime,
   isRelativeTrip,
+  toTripMoment,
 } from '@apps/waypoint/utils/tripTime';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -150,6 +151,7 @@ interface EventFormModalProps {
   memberOptions: { label: string; value: string }[];
   event?: TimelineEvent;
   prefill?: EventPrefill;
+  initialDayIndex?: number;
   events?: TimelineEvent[];
   /** A rough center point (from an existing trip event/stay) to bias place search
    * results toward, so "starbucks" finds the one near this trip first. */
@@ -294,6 +296,46 @@ function getDayChoices(trip: TripSpace, current: number | null, allowNoDay: bool
   return [...none, ...days];
 }
 
+function getDayNeighbors(
+  trip: TripSpace,
+  events: TimelineEvent[],
+  ownId: string | undefined,
+  dayIndex: number | null,
+  time: string,
+  timezone: string | null,
+) {
+  if (dayIndex === null || !time) return null;
+  const draftMs = toTripMoment(trip, dayIndex, time, timezone);
+  const dayStartMs = toTripMoment(trip, dayIndex, '00:00', timezone);
+  const dayEndMs = toTripMoment(trip, dayIndex + 1, '00:00', timezone);
+  if (draftMs === null || dayStartMs === null || dayEndMs === null) return null;
+  const sameDay = events
+    .filter((other) => other.id !== ownId && !other.isArchived)
+    .map((other) => ({ title: other.title, ...getEventTime(trip, other) }))
+    .filter(
+      (other) =>
+        other.startMs !== null &&
+        other.startTime !== null &&
+        other.startMs < dayEndMs &&
+        (other.impliedEndMs ?? other.startMs) > dayStartMs,
+    )
+    .sort((first, second) => (first.startMs ?? 0) - (second.startMs ?? 0));
+  const before = sameDay.filter((other) => (other.startMs ?? 0) < draftMs).at(-1) ?? null;
+  const after = sameDay.find((other) => (other.startMs ?? 0) >= draftMs) ?? null;
+  const result = { before, after, isEmpty: sameDay.length === 0 };
+  return result;
+}
+
+function describeNeighbor(trip: TripSpace, dayIndex: number, other: NonNullable<ReturnType<typeof getDayNeighbors>>['before']) {
+  if (!other?.startTime) return null;
+  const otherDay = other.dayIndex !== null && other.dayIndex !== dayIndex ? `Day ${other.dayIndex + 1} ` : '';
+  const zone =
+    other.timezone && other.timezone !== trip.timezone
+      ? ` ${formatTimezoneAbbreviation(other.timezone, other.startMs ?? undefined)}`
+      : '';
+  return `${otherDay}${formatClockTime(other.startTime)}${zone} ${other.title}`;
+}
+
 function getDerivedTitle(draft: EventDraft): string {
   if (draft.eventType === 'TRAVEL') {
     const transitType = draft.quickField as TransitType;
@@ -392,6 +434,7 @@ function getInitialDraft(
   event: TimelineEvent | undefined,
   legFrom?: NextLegSeed,
   prefill?: EventPrefill,
+  initialDayIndex?: number,
 ): EventDraft {
   if (legFrom) {
     return getNextLegDraft(trip, legFrom);
@@ -399,7 +442,7 @@ function getInitialDraft(
   if (prefill && !event) {
     return getPrefilledDraft(trip, prefill);
   }
-  const draft = getBaseDraft(trip, event);
+  const draft = getBaseDraft(trip, event, initialDayIndex);
   const mirrorKey =
     event?.eventType === 'TRAVEL'
       ? TRANSIT_LOCATION_MIRROR_KEYS[draft.quickField as TransitType]
@@ -412,14 +455,15 @@ function getInitialDraft(
   return { ...withLocation, hasTitle, title: hasTitle ? (event?.title ?? '') : '' };
 }
 
-function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined): EventDraft {
+function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined, initialDayIndex?: number): EventDraft {
   const time = event ? getEventTime(trip, event) : null;
+  const newDayIndex = initialDayIndex ?? getDefaultDayIndex(trip);
   return {
     eventType: event?.eventType ?? 'ACTIVITY',
     title: '',
     hasTitle: false,
-    dayIndex: event ? (time?.dayIndex ?? null) : getDefaultDayIndex(trip),
-    endDayIndex: event ? (time?.endDayIndex ?? null) : getDefaultDayIndex(trip),
+    dayIndex: event ? (time?.dayIndex ?? null) : newDayIndex,
+    endDayIndex: event ? (time?.endDayIndex ?? null) : newDayIndex,
     hasEndTime: Boolean(time?.endTime),
     time: time?.startTime || '09:00',
     endTime: time?.endTime ?? '',
@@ -529,6 +573,7 @@ function EventFormModal({
   memberOptions,
   event,
   prefill,
+  initialDayIndex,
   events = [],
   legFrom,
   placeBias,
@@ -542,7 +587,7 @@ function EventFormModal({
   const queryClient = useQueryClient();
   const isPhone = useMediaQuery().isBelow('sm');
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill));
+  const [draft, setDraft] = useState<EventDraft>(() => getInitialDraft(trip, event, legFrom, prefill, initialDayIndex));
   const checklistItems = useAppSelector((state) => state.waypoint.checklist.items);
   const bookingEventIds = useMemo(() => new Set(events.map((other) => other.id)), [events]);
   const bookingChoices = useMemo(
@@ -590,6 +635,10 @@ function EventFormModal({
   const lastDayWithBuffer = dayCount + MAX_DAYS_OUTSIDE_TRIP - 1;
   const startZone = draft.timezone ?? trip.timezone;
   const endZone = draft.endTimezone ?? startZone;
+  const dayNeighbors = useMemo(
+    () => getDayNeighbors(trip, events, event?.id, draft.dayIndex, draft.time, draft.timezone),
+    [trip, events, event?.id, draft.dayIndex, draft.time, draft.timezone],
+  );
   const startDayAt = trip.startDate + (draft.dayIndex ?? 0) * 86_400_000;
   const endDayAt = trip.startDate + (draft.endDayIndex ?? draft.dayIndex ?? 0) * 86_400_000;
 
@@ -1254,6 +1303,22 @@ function EventFormModal({
               onChange={(changeEvent) => updateStart(draft.dayIndex, changeEvent.target.value)}
             />
           </div>
+          {dayNeighbors && (
+            <div className='text-muted-foreground space-y-0.5 text-xs'>
+              {dayNeighbors.isEmpty ? (
+                <p>Nothing else is planned this day.</p>
+              ) : (
+                <>
+                  <p className='truncate'>
+                    Before: {describeNeighbor(trip, draft.dayIndex ?? 0, dayNeighbors.before) ?? 'nothing earlier'}
+                  </p>
+                  <p className='truncate'>
+                    After: {describeNeighbor(trip, draft.dayIndex ?? 0, dayNeighbors.after) ?? 'nothing later'}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {isRelative && startZone && (
             <ZoneField
               label={draft.hasEndTime ? 'Leaves in' : 'In'}
