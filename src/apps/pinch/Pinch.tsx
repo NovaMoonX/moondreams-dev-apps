@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
+import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import ProductsSubview from '@apps/pinch/components/kitchen/ProductsSubview';
 import StoresSubview from '@apps/pinch/components/kitchen/StoresSubview';
@@ -164,6 +165,13 @@ function Pinch() {
       {subview?.kind === 'meal' && (
         <MealSubview uid={user.uid} mealId={subview.id} />
       )}
+      {subview?.kind === 'cook' && (
+        <CookingSubview
+          key={subview.recipeId}
+          recipeId={subview.recipeId}
+          servings={subview.servings}
+        />
+      )}
       {subview?.kind === 'plan' && (
         <PlanMealSubview
           key={`${subview.dayKey}-${subview.mealType ?? ''}-${subview.plannedMealId ?? 'new'}-${subview.fromMealId ?? ''}-${subview.fromRecipeId ?? ''}`}
@@ -182,6 +190,7 @@ function Pinch() {
             subview.kind !== 'recipe' &&
             subview.kind !== 'plan' &&
             subview.kind !== 'meal' &&
+            subview.kind !== 'cook' &&
             'hidden',
         )}
       >

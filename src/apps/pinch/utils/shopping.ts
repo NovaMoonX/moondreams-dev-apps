@@ -9,6 +9,7 @@ import type {
   ShoppingItem,
   Unit,
 } from '@apps/pinch/types';
+import { scaleAmount } from '@apps/pinch/utils/quantity';
 import { getLineCost } from '@apps/pinch/utils/recipeMath';
 
 export interface ShoppingLine {
@@ -91,13 +92,15 @@ const getRecipeRawLines = (
   servings: number,
   ingredientsById: Map<string, ResolvedIngredient>,
 ): ShoppingLine[] =>
-  recipe.ingredients
-    .filter((line) => ingredientsById.has(line.ingredientId))
-    .map((line) => ({
-      ingredientId: line.ingredientId,
-      amount: (line.amount * servings) / recipe.servings,
-      unit: line.unit,
-    }));
+  recipe.servings > 0
+    ? recipe.ingredients
+        .filter((line) => ingredientsById.has(line.ingredientId))
+        .map((line) => ({
+          ingredientId: line.ingredientId,
+          amount: scaleAmount(line.amount, servings, recipe.servings),
+          unit: line.unit,
+        }))
+    : [];
 
 /** A recipe's lines scaled from its own servings to `servings`; a line whose ingredient is gone is left out. */
 export function getRecipeLines(
