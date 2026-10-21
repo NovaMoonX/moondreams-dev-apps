@@ -86,7 +86,7 @@ import {
   type EditTripValues,
 } from '@apps/waypoint/store/actions/tripActions';
 import { getTripStatus, selectIsTripDataLoaded, selectSortedIdeas, selectSortedRentals, selectSortedStays } from '@apps/waypoint/store/selectors';
-import type { IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
+import type { ChecklistCategory, IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
 import { canAddIdea, hasTripRole, hasTripStarted, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 import { buildTimelineMarkdown, buildTripMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
@@ -139,6 +139,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const [pendingTab, setPendingTab] = useState<string | null>(null);
   const navTab = isTabPending && pendingTab !== null ? pendingTab : sectionTab;
 
+  const [checklistCategory, setChecklistCategory] = useState<ChecklistCategory | 'ALL'>('ALL');
   const setSectionTab = (value: string) => {
     setPendingTab(value);
     startTabTransition(() => setSelectedTab(value));
@@ -504,7 +505,14 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     if (sectionTab === 'rentals')
       return <RentalsSection trip={trip} currentUserId={currentUserId} />;
     if (sectionTab === 'checklist')
-      return <ChecklistSection trip={trip} currentUserId={currentUserId} />;
+      return (
+        <ChecklistSection
+          trip={trip}
+          currentUserId={currentUserId}
+          categoryPick={checklistCategory}
+          onCategoryPickChange={setChecklistCategory}
+        />
+      );
     return (
       <IdeasSection
         trip={trip}
@@ -696,7 +704,12 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <TripEntryPoints
               trip={trip}
               currentUserId={currentUserId}
-              onOpen={setSectionTab}
+              onOpen={(value) => {
+                if (value === 'checklist') {
+                  setChecklistCategory('ALL');
+                }
+                setSectionTab(value);
+              }}
               includeLogistics={isActive}
             />
           </div>
@@ -713,7 +726,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         )}
         {isIdeaBoardProminent && ideasOverview}
         {(hasAppNav ? sectionTab === '' : true) && (
-          <ChecklistOverview trip={trip} currentUserId={currentUserId} onOpen={() => setSectionTab('checklist')} />
+          <ChecklistOverview
+            trip={trip}
+            onOpen={(category) => {
+              setChecklistCategory(category);
+              setSectionTab('checklist');
+            }}
+          />
         )}
         {(hasAppNav ? sectionTab === '' : true) && (
           <PackingSuggestionsEntry trip={trip} currentUserId={currentUserId} />
@@ -779,7 +798,12 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
             <RentalsSection trip={trip} currentUserId={currentUserId} />
           </TabsContent>
           <TabsContent value='checklist'>
-            <ChecklistSection trip={trip} currentUserId={currentUserId} />
+            <ChecklistSection
+              trip={trip}
+              currentUserId={currentUserId}
+              categoryPick={checklistCategory}
+              onCategoryPickChange={setChecklistCategory}
+            />
           </TabsContent>
           <TabsContent value='ideas'>
             <IdeasSection
