@@ -99,7 +99,7 @@ function MealRow({
           🍽️
         </span>
         <span className='min-w-0 flex-1'>
-          <span className='text-foreground block truncate pr-9 font-medium'>
+          <span className='text-foreground line-clamp-2 pr-9 font-medium wrap-break-word whitespace-normal'>
             {meal.name}
           </span>
           <span className='text-muted-foreground block truncate text-xs font-normal'>

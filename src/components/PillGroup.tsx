@@ -401,6 +401,8 @@ interface MultiPillGroupProps<T extends string> {
   options: readonly PillOption<T>[];
   values: readonly T[];
   onChange: (values: T[]) => void;
+  /** A short fixed list keeps every option visible, with no "Show all". */
+  showAll?: boolean;
 }
 
 /** Pick any number of a few options. */
@@ -409,11 +411,13 @@ export function MultiPillGroup<T extends string>({
   options,
   values,
   onChange,
+  showAll,
 }: MultiPillGroupProps<T>) {
   return (
     <PillOptions
       label={label}
       options={options}
+      showAll={showAll}
       selectedCount={values.length}
       isSelected={(optionValue) => values.includes(optionValue)}
       onToggle={(optionValue) =>

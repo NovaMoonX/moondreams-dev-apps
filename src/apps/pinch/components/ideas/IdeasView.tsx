@@ -8,8 +8,10 @@ import IdeaAddSheet from '@apps/pinch/components/ideas/IdeaAddSheet';
 import IdeaDrawer from '@apps/pinch/components/ideas/IdeaDrawer';
 import IdeaFormSheet from '@apps/pinch/components/ideas/IdeaFormSheet';
 import IdeaRow from '@apps/pinch/components/ideas/IdeaRow';
+import ListSortControl from '@apps/pinch/components/shared/ListSortControl';
 import { LIST_SEARCH_THRESHOLD, SOFT_MAX_IDEAS } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePinchSessionState } from '@apps/pinch/hooks/usePinchSession';
 import {
   selectIdeaGroups,
   selectIdeas,
@@ -19,9 +21,15 @@ import {
 import type { Idea } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import {
+  getIdeaDetail,
   getIdeaRecipeMethod,
   getIdeaSearchText,
 } from '@apps/pinch/utils/ideas';
+import {
+  DEFAULT_LIST_SORT,
+  sortList,
+  type ListSort,
+} from '@apps/pinch/utils/listSort';
 
 const filterIdeas = (ideas: Idea[], query: string) =>
   searchByName(
@@ -31,7 +39,22 @@ const filterIdeas = (ideas: Idea[], query: string) =>
 
 const IDEA_CHUNK = 20;
 const EAGER_IDEA_CHUNKS = 1;
-const ROW_HEIGHT = 73;
+const COVER_SIZE = 56;
+const ROW_PADDING_AND_RULE = 17;
+const TITLE_LINE = 24;
+const TITLE_CHARS_PER_LINE = 26;
+
+/** A title runs to two lines at most, judged from its length, and a row is never shorter than its picture. */
+const getRowHeight = (idea: Idea) =>
+  Math.max(
+    COVER_SIZE,
+    TITLE_LINE *
+      Math.min(
+        2,
+        Math.max(1, Math.ceil(idea.title.length / TITLE_CHARS_PER_LINE)),
+      ) +
+      (getIdeaDetail(idea) === null ? 0 : 16),
+  ) + ROW_PADDING_AND_RULE;
 
 interface IdeaRowsProps {
   ideas: Idea[];
@@ -49,7 +72,10 @@ function IdeaRows({ ideas, isEager, onOpen }: IdeaRowsProps) {
             chunk * IDEA_CHUNK,
             (chunk + 1) * IDEA_CHUNK,
           );
-          const estimatedHeight = rows.length * ROW_HEIGHT;
+          const estimatedHeight = rows.reduce(
+            (sum, idea) => sum + getRowHeight(idea),
+            0,
+          );
           return (
             <div
               key={chunk}
@@ -103,15 +129,23 @@ function IdeasView({
   const loadError = useAppSelector(selectIdeasLoadError);
   const isLoaded = useAppSelector((state) => state.pinch.ideas.isLoaded);
   const [query, setQuery] = useState(initialQuery);
+  const [chosenSort, setSort] = usePinchSessionState<ListSort>(
+    'recipes:sort:ideas',
+    DEFAULT_LIST_SORT,
+  );
   const [overlay, setOverlay] = useState<Overlay | null>(null);
 
   const hasSearch = ideas.length >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
+  const sort = hasSearch ? chosenSort : DEFAULT_LIST_SORT;
   const shownToTry = useMemo(
-    () => filterIdeas(toTry, trimmed),
-    [toTry, trimmed],
+    () => sortList(filterIdeas(toTry, trimmed), sort, (idea) => idea.title),
+    [toTry, trimmed, sort],
   );
-  const shownMade = useMemo(() => filterIdeas(made, trimmed), [made, trimmed]);
+  const shownMade = useMemo(
+    () => sortList(filterIdeas(made, trimmed), sort, (idea) => idea.title),
+    [made, trimmed, sort],
+  );
 
   const openIdea = overlay ? (ideasById.get(overlay.id) ?? null) : null;
 
@@ -179,11 +213,19 @@ function IdeasView({
         </p>
       )}
       {hasSearch && loadError === null && (
-        <SearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder='Search ideas'
-        />
+        <div className='flex items-center gap-2'>
+          <SearchInput
+            className='min-w-0 flex-1'
+            value={query}
+            onChange={setQuery}
+            placeholder='Search ideas'
+          />
+          <ListSortControl
+            label='Sort ideas'
+            sort={chosenSort}
+            onChange={setSort}
+          />
+        </div>
       )}
       {getBody()}
       {isAddOpen && (

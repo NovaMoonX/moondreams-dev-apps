@@ -38,6 +38,7 @@ import { resizeImageToWebp } from '@/utils/imageCompression';
 import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
 import type {
   Collection,
+  DishCategory,
   IngredientRecord,
   NutritionValues,
   Recipe,
@@ -105,6 +106,7 @@ export interface RecipeDraft {
   /** The recipe being edited; null adds a new one. */
   id: string | null;
   title: string;
+  categories: DishCategory[];
   description: string | null;
   servings: number;
   prepMinutes: number | null;
@@ -258,6 +260,7 @@ export const saveRecipe = createAsyncThunk<
 
       const fields = {
         title: draft.title.trim(),
+        categories: draft.categories,
         description: draft.description,
         servings: draft.servings,
         prepMinutes: draft.prepMinutes,
