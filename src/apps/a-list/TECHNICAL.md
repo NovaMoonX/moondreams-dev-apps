@@ -251,6 +251,7 @@ interface SharedViewing {
 | Convenience-fee chips and tax-rate chips (and the default rate) | distinct `ticket.feeAvoidedCents` and `ticket.taxRate` over viewings, plus the membership's `taxRate` | `selectFeeChips`, `selectTaxRateChips` |
 | Pending Seen prompts | `PLANNED` viewings with `endsAt ≤ now` | `selectPendingSeenPrompts` |
 | Previews window | the earliest `PLANNED` viewing with `showtimeAt − 10 min ≤ now ≤ showtimeAt + 30 min` (`PREVIEWS_WINDOW_*_MINUTES`) | `selectPreviewsWindowViewing` |
+| Projection (no more movies, everything planned, a set pace, optionally after everything planned) | `SEEN` tickets (average and history), `PLANNED` viewings ahead, the membership's start date and monthly total | `getProjectionBase`, `projectStop`, `projectCalendar`, `projectPace`, `projectPlannedThenPace`, `getPlanEndDay`, `getPlannedThenPaceAddedBy`, `getNetSeries` (from up to 120 days back, with a comparison baseline that can start at the plan's end) and `getBreakEvenPoint` (the last rise through $0 that holds) in `utils/projection.ts`, read on demand by `ProjectionSubview` (not stored); `npm run check:a-list` covers the util. Planned showings already over but not marked seen are left out and the screen says so |
 | Format split (count and %), activity over time, rating groups, per-format premium averages (Next Steps) | viewings | `selectDashboardBreakdowns` |
 
 ---

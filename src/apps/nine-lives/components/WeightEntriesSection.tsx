@@ -5,6 +5,7 @@ import { shallowEqual } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
+import TrendLineChart from '@/components/TrendLineChart';
 
 import {
   createWeightEntry,
@@ -14,7 +15,6 @@ import {
 import { selectWeightEntriesByCat } from '../store/selectors';
 import type { WeightEntry } from '../types';
 import { convertWeight } from '../utils/litterCalculators';
-import TrendLineChart from './TrendLineChart';
 import ViewToggle, { type ViewToggleValue } from './ViewToggle';
 import WeightEntryFormModal from './WeightEntryFormModal';
 import WeightHistoryList from './WeightHistoryList';
