@@ -1,6 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import SuggestionChips from '@/components/SuggestionChips';
@@ -14,19 +13,17 @@ interface RecipeWhyStepProps {
   choices: string[];
   value: string;
   onChange: (value: string) => void;
-  onBack: () => void;
   onSave: () => void;
   isSubmitting: boolean;
   error: string | null;
 }
 
-/** Shown in place of the recipe form when a save of a cooked recipe changes its ingredients or steps: the changes, then the one question that goes with them. Saving never waits on the answer. */
+/** Shown in place of the recipe form when a save of a cooked recipe changes its ingredients or steps: the changes, then the one question that goes with them. Saving never waits on the answer, and the screen's own back returns to the form. */
 function RecipeWhyStep({
   changes,
   choices,
   value,
   onChange,
-  onBack,
   onSave,
   isSubmitting,
   error,
@@ -34,7 +31,6 @@ function RecipeWhyStep({
   return (
     <div className='flex flex-1 flex-col'>
       <div className='space-y-4 pb-4'>
-        <BackLink onBack={onBack} label='Back to the recipe' />
         <div className='space-y-1'>
           <h2 className='text-lg font-medium'>Why did you change it?</h2>
           <p className='text-muted-foreground text-sm'>

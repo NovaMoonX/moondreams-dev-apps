@@ -60,7 +60,7 @@ export function SubviewSurround() {
   return <Layer />;
 }
 
-/** The strip above a subview's header that names the mini-app. It takes the place of the page's top padding, so it costs no height (12px and empty on a short landscape phone). */
+/** The strip above a subview's header that names the mini-app. It takes the place of the page's top padding, so it costs no height on a phone (12px and empty on a short landscape phone); from md up it is 12px taller so its text clears the wider frame edge. */
 export function SubviewEyebrow() {
   const { Eyebrow } = useContext(SubviewFrameContext);
   const identity = useFrameIdentity();
@@ -69,7 +69,7 @@ export function SubviewEyebrow() {
   return (
     <div
       aria-hidden='true'
-      className='text-muted-foreground flex h-6 items-center text-xs font-medium [@media(max-height:499px)]:h-3'
+      className='text-muted-foreground flex h-6 items-center text-xs font-medium [@media(max-height:499px)]:h-3 [@media(min-width:768px)_and_(min-height:500px)]:h-9 [@media(min-width:768px)_and_(min-height:500px)]:pt-3'
     >
       {Line !== null && (
         <span className='flex min-w-0 items-center gap-1.5 [@media(max-height:499px)]:hidden'>

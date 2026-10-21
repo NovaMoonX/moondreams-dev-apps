@@ -193,7 +193,10 @@ const isOtherMeasure = (
     next.unit === null ||
     first.unit === next.unit ||
     getGroupKey(first.group) !== getGroupKey(next.group) ||
-    toComparable(first.name, true) !== toComparable(next.name, true)
+    toComparable(first.name, true) !== toComparable(next.name, true) ||
+    (first.note !== null &&
+      next.note !== null &&
+      first.note.trim().toLowerCase() !== next.note.trim().toLowerCase())
   ) {
     return false;
   }

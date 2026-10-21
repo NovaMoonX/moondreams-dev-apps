@@ -1,5 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
@@ -137,7 +139,8 @@ function IdeasView({
 
   const hasSearch = ideas.length >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
-  const sort = hasSearch ? chosenSort : DEFAULT_LIST_SORT;
+  const hasSort = ideas.length >= 2;
+  const sort = hasSort ? chosenSort : DEFAULT_LIST_SORT;
   const shownToTry = useMemo(
     () => sortList(filterIdeas(toTry, trimmed), sort, (idea) => idea.title),
     [toTry, trimmed, sort],
@@ -212,14 +215,18 @@ function IdeasView({
           another.
         </p>
       )}
-      {hasSearch && loadError === null && (
-        <div className='flex items-center gap-2'>
-          <SearchInput
-            className='min-w-0 flex-1'
-            value={query}
-            onChange={setQuery}
-            placeholder='Search ideas'
-          />
+      {(hasSearch || hasSort) && loadError === null && (
+        <div
+          className={join('flex items-center gap-2', !hasSearch && 'justify-end')}
+        >
+          {hasSearch && (
+            <SearchInput
+              className='min-w-0 flex-1'
+              value={query}
+              onChange={setQuery}
+              placeholder='Search ideas'
+            />
+          )}
           <ListSortControl
             label='Sort ideas'
             sort={chosenSort}

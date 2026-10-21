@@ -282,6 +282,7 @@ function IngredientEditor({
   const [isAmountJustAdded, setIsAmountJustAdded] = useState(false);
   const [groupNames] = useState(() => getGroupNames(rows));
   const noteRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
   const ingredients = useAppSelector(selectIngredients);
   const servingUnit = useAppSelector(selectIngredientsById).get(
     row.ingredientId,
@@ -294,6 +295,19 @@ function IngredientEditor({
     row.group,
   );
   const usedIds = usedInGroup.join(',');
+  const isReadyForAmount = !isUnresolved && !row.isAmountless;
+
+  useEffect(() => {
+    if (
+      !isReadyForAmount ||
+      !window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => amountRef.current?.focus(), 250);
+    return () => window.clearTimeout(timer);
+  }, [isReadyForAmount]);
+
   const nearMatches = useMemo(() => {
     if (!isUnresolved) return [];
     const used = new Set(usedIds.split(','));
@@ -424,6 +438,7 @@ function IngredientEditor({
                   min={0}
                   step='any'
                   variant='outline'
+                  ref={amountRef}
                   autoFocus={isAmountJustAdded}
                   value={row.amount}
                   onChange={(event) => onUpdate({ amount: event.target.value })}

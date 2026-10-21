@@ -128,15 +128,14 @@ const readBody = async (
 ) => {
   const reader = body.getReader();
   const chunks: Uint8Array<ArrayBuffer>[] = [];
-  let loaded = 0;
-  while (true) {
+  const readNext = async (loaded: number): Promise<Blob> => {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) return new Blob(chunks);
     chunks.push(value as Uint8Array<ArrayBuffer>);
-    loaded += value.length;
-    onProgress(Math.min(1, loaded / total));
-  }
-  return new Blob(chunks);
+    onProgress(Math.min(1, (loaded + value.length) / total));
+    return readNext(loaded + value.length);
+  };
+  return readNext(0);
 };
 
 const downloadToCache = async (

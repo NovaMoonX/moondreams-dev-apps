@@ -42,6 +42,7 @@ interface HeldRow extends HeldMeal {
   stopId: string;
   entries: StopEntry[];
   note: string | undefined;
+  rowNote: string | undefined;
   takenAt: number;
 }
 
@@ -210,6 +211,7 @@ function ShoppingMealsSheet({
         stopId,
         entries: [],
         note: undefined,
+        rowNote: undefined,
         takenAt: 0,
       }),
     );
@@ -224,6 +226,7 @@ function ShoppingMealsSheet({
           stopId,
           entries: result.entries,
           note: getStoppedText(result.rows, meal),
+          rowNote: getStoppedText({ ...result.rows, removed: 0 }, meal),
           takenAt: performance.now(),
         }),
       );
@@ -242,33 +245,37 @@ function ShoppingMealsSheet({
   };
 
   const handleClose = () => {
-    held.forEach((entry) => {
-      if (
-        entry.status !== 'taken' ||
-        entry.entries.length === 0 ||
-        undone.has(entry.stopId)
-      ) {
-        return;
-      }
+    const pending = [...held.values()].filter(
+      (entry) =>
+        entry.status === 'taken' &&
+        entry.entries.length > 0 &&
+        !undone.has(entry.stopId),
+    );
+    if (pending.length > 0) {
       const id = generateUuid();
       addToast({
         id,
-        title: `Took ${getName(entry.meal)} off your list`,
-        description: entry.note,
+        title:
+          pending.length === 1
+            ? `Took ${getName(pending[0].meal)} off your list`
+            : `Took ${pending.length} meals off your list`,
+        description: pending.length === 1 ? pending[0].note : undefined,
         type: 'success',
         duration: UNDO_TOAST_MS,
         action: {
           label: 'Undo',
           onClick: () => {
             removeToast(id);
-            if (undone.has(entry.stopId)) return;
-
-            undone.add(entry.stopId);
-            void undo(entry.entries);
+            pending
+              .filter((entry) => !undone.has(entry.stopId))
+              .forEach((entry) => {
+                undone.add(entry.stopId);
+                void undo(entry.entries);
+              });
           },
         },
       });
-    });
+    }
     onClose();
   };
 
@@ -386,9 +393,9 @@ function ShoppingMealsSheet({
                       facts={getFacts(row)}
                       className='text-muted-foreground text-xs'
                     />
-                    {entry?.status === 'taken' && entry.note && (
+                    {entry?.status === 'taken' && entry.rowNote && (
                       <p className='text-muted-foreground mt-0.5 text-xs wrap-break-word'>
-                        {entry.note}
+                        {entry.rowNote}
                       </p>
                     )}
                   </div>

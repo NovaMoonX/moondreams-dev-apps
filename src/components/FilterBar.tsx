@@ -101,7 +101,7 @@ function FilterBar({
           hasActive ? `${filterLabel}, ${activeCount} on` : filterLabel
         }
         aria-expanded={isOpen}
-        className={join('h-12 w-12 shrink-0 p-0', hasActive && 'bg-accent!')}
+        className={join('h-12 w-12 shrink-0 p-0 max-[359px]:h-10 max-[359px]:w-10', hasActive && 'bg-accent!')}
         onClick={() => setIsOpen((open) => !open)}
       >
         <SlidersHorizontal className='h-5 w-5' aria-hidden='true' />

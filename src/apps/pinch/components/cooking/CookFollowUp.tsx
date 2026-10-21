@@ -3,6 +3,7 @@ import { PenLine } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
 import Pill from '@/components/Pill';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import TickMark from '@/components/TickMark';
 
 const CARD_CLASS = 'bg-muted/50 border-border w-full rounded-2xl border';
@@ -32,6 +33,7 @@ function CookFollowUp({
   onApply,
   onChoose,
 }: CookFollowUpProps) {
+  const isShort = useIsShortScreen();
   const captionLine = caption && (
     <p className='text-muted-foreground text-xs wrap-break-word'>{caption}</p>
   );
@@ -74,27 +76,43 @@ function CookFollowUp({
           ? `${caption}: Anything you'd change?`
           : "Anything you'd change?"
       }
-      className={join(CARD_CLASS, 'space-y-3 px-4 py-4 text-center')}
+      className={join(
+        CARD_CLASS,
+        isShort ? 'space-y-1 px-3 py-2' : 'space-y-3 px-4 py-4 text-center',
+      )}
     >
       <div>
         {captionLine}
-        <p className='font-medium'>Anything you'd change?</p>
+        <p className={join('font-medium', isShort && 'text-sm')}>
+          Anything you'd change?
+        </p>
       </div>
       <div
         role='group'
         aria-label="What you'd change"
-        className='flex flex-wrap justify-center gap-2'
+        className={join(
+          'flex gap-2',
+          isShort ? 'justify-start' : 'flex-wrap justify-center',
+        )}
       >
         <Pill isSelected={isNothingChosen} onClick={() => onChoose('NOTHING')}>
           Nothing
         </Pill>
         {isNoteAvailable && (
-          <Pill isSelected={false} onClick={() => onChoose('NOTE')}>
-            A note for next time
+          <Pill
+            isSelected={false}
+            ariaLabel='A note for next time'
+            onClick={() => onChoose('NOTE')}
+          >
+            {isShort ? 'A note' : 'A note for next time'}
           </Pill>
         )}
-        <Pill isSelected={false} onClick={() => onChoose('CHANGE')}>
-          Change the recipe
+        <Pill
+          isSelected={false}
+          ariaLabel='Change the recipe'
+          onClick={() => onChoose('CHANGE')}
+        >
+          {isShort ? 'Change it' : 'Change the recipe'}
         </Pill>
       </div>
     </section>

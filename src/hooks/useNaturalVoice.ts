@@ -15,11 +15,13 @@ import {
   warmNaturalVoice,
 } from '@/lib/speech/naturalVoice/naturalVoiceEngine';
 
+let consumerCount = 0;
+
 /**
  * The opt-in for a more natural reading voice that runs on the device. `storageKey` is where this person's choice is
  * remembered on this browser (off to start). Turning it on downloads about `sizeMb` megabytes once from `host`, keeps
  * them in the browser and starts the voice; turning it off frees it but keeps the download, `remove` deletes it. While it
- * is not `isReady`, readings use the browser's voice, so the choice never blocks speech. Pass `isOn` to
+ * is not `isReady`, readings use the browser's voice, so the choice never blocks speech. The voice is freed from memory when the last screen using this hook closes. Pass `isOn` to
  * `useSpeechCommands` as `isNaturalVoice`. Secure pages with WebAssembly only (`isSupported`); draw nothing where it is false.
  */
 export function useNaturalVoice(storageKey: string) {
@@ -29,6 +31,14 @@ export function useNaturalVoice(storageKey: string) {
     subscribeNaturalVoice,
     getNaturalVoiceState,
   );
+
+  useEffect(() => {
+    consumerCount += 1;
+    return () => {
+      consumerCount -= 1;
+      if (consumerCount === 0) unloadNaturalVoice();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSupported || !isChosen) return;

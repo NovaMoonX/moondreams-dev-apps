@@ -413,7 +413,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const hasViewOptions = total > 0 && !hasFilterBar;
   const hasSearch = hasFilterBar || total >= LIST_SEARCH_THRESHOLD;
   const trimmed = hasSearch ? query.trim() : '';
-  const hasSort = !isIdeas && total >= 2 && (hasFilterBar || hasSearch);
+  const hasSort = !isIdeas && total >= 2;
   const activeRecipeSort = hasSort ? recipeSort : DEFAULT_LIST_SORT;
   const activeMealSort = hasSort ? mealSort : DEFAULT_LIST_SORT;
 
@@ -1196,18 +1196,26 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           )}
         </FilterBar>
       ) : (
-        hasSearch && (
-          <div className={join('flex items-center gap-2', searchClassName)}>
-            <SearchInput
-              className='min-w-0 flex-1'
-              value={query}
-              onChange={setQuery}
-              placeholder={
-                shownView === 'meals'
-                  ? 'Search saved meals'
-                  : 'Search by name or ingredient'
-              }
-            />
+        (hasSearch || hasSort) && (
+          <div
+            className={join(
+              'flex items-center gap-2',
+              !hasSearch && 'justify-end',
+              searchClassName,
+            )}
+          >
+            {hasSearch && (
+              <SearchInput
+                className='min-w-0 flex-1'
+                value={query}
+                onChange={setQuery}
+                placeholder={
+                  shownView === 'meals'
+                    ? 'Search saved meals'
+                    : 'Search by name or ingredient'
+                }
+              />
+            )}
             {sortControl}
           </div>
         )

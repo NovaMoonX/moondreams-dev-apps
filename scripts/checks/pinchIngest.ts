@@ -757,6 +757,8 @@ const dual = normalizeExtractedRecipe({
     { name: 'Milk', amount: 240, unit: 'ML', note: null },
     { name: 'Water', amount: 2, unit: 'CUP', note: null },
     { name: 'Water', amount: 100, unit: 'ML', note: null },
+    { name: 'Cream', amount: 1, unit: 'CUP', note: 'to whip' },
+    { name: 'Cream', amount: 250, unit: 'ML', note: 'for the sauce' },
   ],
 });
 assert.deepEqual(
@@ -778,8 +780,10 @@ assert.deepEqual(
     ['Milk', 1, 'CUP', null, null],
     ['Water', 2, 'CUP', null, null],
     ['Water', 100, 'ML', null, null],
+    ['Cream', 1, 'CUP', 'to whip', null],
+    ['Cream', 250, 'ML', 'for the sauce', null],
   ],
-  '500 g then 1 lb and 1 cup then 240 ml are one amount each (the first measure stays, a note only the second carried is kept); different amounts, the same unit twice, another heading or a different kind of unit are separate lines',
+  '500 g then 1 lb and 1 cup then 240 ml are one amount each (the first measure stays, a note only the second carried is kept); different amounts, the same unit twice, another heading, a different kind of unit or two different notes (two uses of one ingredient) are separate lines',
 );
 const draft = getDataFromExtracted(
   normalizeExtractedRecipe({

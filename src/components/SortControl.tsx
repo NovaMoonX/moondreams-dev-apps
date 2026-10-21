@@ -55,10 +55,10 @@ function SortControl<T extends string>({
   const trigger = (
     <Button
       type='button'
-      variant={isActive ? 'secondary' : 'outline'}
+      variant='secondary'
       rounded='full'
       aria-label={`${label}, by ${options.find((choice) => choice.value === value)?.label ?? ''}`}
-      className='h-12 w-12 shrink-0 p-0'
+      className={join('h-12 w-12 shrink-0 p-0 max-[359px]:h-10 max-[359px]:w-10', isActive && 'bg-accent!')}
       onClick={isPhone ? () => setIsOpen(true) : undefined}
     >
       <ArrowUpDown className='h-5 w-5' />

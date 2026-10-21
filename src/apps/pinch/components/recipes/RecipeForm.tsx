@@ -997,7 +997,6 @@ function RecipeForm({
           choices={ask.choices}
           value={why}
           onChange={setWhy}
-          onBack={() => setAsk(null)}
           onSave={() => void save(ask.data)}
           isSubmitting={isSubmitting}
           error={error}

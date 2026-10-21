@@ -249,25 +249,14 @@ export const getListeningEffect = (
   return null;
 };
 
-const QUIET_STOPS: ListeningStop[] = [
-  'denied',
-  'service',
-  'no-microphone',
-  'unavailable',
-  'language',
-];
 
-/** Which cue goes with a change of phase: a rising one when the mic opens for commands or starts waiting, a falling one when a window closes, a wait runs out or the mic is turned off, none for a change that only extends a window or a stop caused by a failure. */
+/** Which cue goes with a change of phase: a rising chime when the mic opens for commands or starts waiting, none when a window closes, a wait runs out, the mic is turned off or a failure stops it. */
 export const getListeningCue = (
   previous: ListeningState,
   next: ListeningState,
-): 'start' | 'stop' | null => {
+): 'start' | null => {
   if (previous.phase === next.phase) return null;
-  if (next.phase === 'OFF') {
-    return next.stopped !== null && QUIET_STOPS.includes(next.stopped)
-      ? null
-      : 'stop';
-  }
-  if (previous.phase === 'WINDOW' && next.phase === 'WAITING') return 'stop';
+  if (next.phase === 'OFF') return null;
+  if (previous.phase === 'WINDOW' && next.phase === 'WAITING') return null;
   return 'start';
 };

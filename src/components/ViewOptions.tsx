@@ -102,7 +102,7 @@ function ViewOptions({
       aria-label={label}
       aria-expanded={isOpen}
       className={join(
-        'h-12 w-12 shrink-0 p-0',
+        'h-12 w-12 shrink-0 p-0 max-[359px]:h-10 max-[359px]:w-10',
         isCustomized && 'bg-accent!',
         className,
       )}

@@ -20,7 +20,7 @@ const getDescription = (voice: NaturalVoice) => {
   if (voice.status === 'loading') return 'Getting ready…';
   if (voice.problem !== null) return PROBLEM_TEXT[voice.problem];
   if (voice.isReady) return 'On. It reads with a voice on this device.';
-  return `Sounds less robotic. Downloads about ${voice.sizeMb} MB once (the voice file comes from ${voice.host}). It runs on this device and sends nothing.`;
+  return `Sounds less robotic. A one-time download of about ${voice.sizeMb} MB, best on Wi-Fi (the voice file comes from ${voice.host}). It runs on this device and sends nothing. It uses eSpeak NG (GPL-3.0, source at github.com/espeak-ng/espeak-ng).`;
 };
 
 interface NaturalVoiceOptionProps {
