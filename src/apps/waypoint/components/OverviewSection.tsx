@@ -430,7 +430,13 @@ function CheckInStayCard({
         {!isSmallScreen && (
           <div className='flex shrink-0 gap-2'>
             {onEdit && (
-              <Button type='button' size='sm' variant='secondary' onClick={onEdit}>
+              <Button
+                type='button'
+                size='sm'
+                variant='secondary'
+                className="relative after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']"
+                onClick={onEdit}
+              >
                 Modify
               </Button>
             )}
@@ -519,7 +525,13 @@ function RentalTodayCard({
         {!isSmallScreen && (
           <div className='flex shrink-0 gap-2'>
             {onEdit && (
-              <Button type='button' size='sm' variant='secondary' onClick={onEdit}>
+              <Button
+                type='button'
+                size='sm'
+                variant='secondary'
+                className="relative after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']"
+                onClick={onEdit}
+              >
                 Modify
               </Button>
             )}
