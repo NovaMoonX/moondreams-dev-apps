@@ -208,7 +208,7 @@ function TrendLineChart({
             <ReferenceLine
               y={referenceY.value}
               stroke='var(--color-muted-foreground)'
-              strokeOpacity={isSoft ? 0.35 : 1}
+              strokeOpacity={isSoft ? 0.6 : 1}
               strokeWidth={1}
               strokeDasharray={isSoft ? undefined : '4 4'}
               ifOverflow='extendDomain'

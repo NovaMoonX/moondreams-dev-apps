@@ -18,8 +18,6 @@ const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
 // Mean month length, so a monthly pace doesn't depend on which months the window crosses.
 const MONTH_MS = 30.4375 * DAY_MS;
-const HORIZON_CANDIDATES = [3, 6, 9, 12, 18, 24];
-const HORIZON_COUNT = 3;
 /** A typed ticket value above this is a slip, not a plan. */
 const MAX_TICKET_CENTS = 100_000;
 
@@ -56,17 +54,10 @@ export interface ProjectionResult {
   periods: number;
 }
 
-/** Month totals a pace can run to, always three. */
+/** Month totals a pace can run to: the earliest cancel date (where stopping now ends), then later ones. */
 function getHorizons(cyclesBilled: number) {
-  const ahead = HORIZON_CANDIDATES.filter((months) => months > cyclesBilled);
-  const last = ahead.at(-1) ?? cyclesBilled;
-  const result = [
-    ...ahead,
-    ...Array.from(
-      { length: HORIZON_COUNT },
-      (_, index) => last + 6 * (index + 1),
-    ),
-  ].slice(0, HORIZON_COUNT);
+  const first = Math.max(cyclesBilled, MIN_CONTRACT_MONTHS);
+  const result = [first, first + 3, first + 9];
   return result;
 }
 

@@ -150,13 +150,12 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
   };
 
   const getPlanLine = () => {
+    const bill = formatDateUTC(result.coveredUntil);
     if (scenario === 'none')
-      return 'You cancel now and pay only what the minimum requires.';
+      return `You cancel now and pay only what the minimum requires. Your last paid bill ends ${bill}.`;
     if (scenario === 'planned')
-      return calendar.movies === 0
-        ? 'Nothing is planned on your calendar yet.'
-        : `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then cancel.`;
-    return `You watch ${counts[unit]} a ${unit}, then cancel on the date you pick below.`;
+      return `You watch all ${pluralize(calendar.movies, 'showing')} already on your calendar, then cancel before the ${bill} bill.`;
+    return `You watch ${counts[unit]} a ${unit}, then cancel before the ${bill} bill.`;
   };
 
   const getEyebrow = () => {
@@ -199,13 +198,44 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
           </p>
           <PillGroup
             label='How many more movies will you watch?'
-            options={SCENARIO_OPTIONS}
+            options={SCENARIO_OPTIONS.filter(
+              (option) =>
+                option.value !== 'planned' ||
+                calendar.movies > 0 ||
+                scenario === 'planned',
+            )}
             value={scenario}
             onChange={setScenario}
             isThin
           />
           <p className='text-muted-foreground text-sm'>{getPlanLine()}</p>
         </div>
+        {isPace && (
+          <div className='space-y-1'>
+            <p className='text-muted-foreground text-xs font-medium'>
+              How often
+            </p>
+            <div className='flex flex-wrap items-center gap-x-4 gap-y-2'>
+              <Stepper
+                label={`Movies a ${unit}`}
+                value={counts[unit]}
+                min={1}
+                max={getPaceMax(unit)}
+                step={1}
+                onChange={(count) =>
+                  setCounts((current) => ({ ...current, [unit]: count }))
+                }
+              />
+              <PillGroup
+                label='Per'
+                options={UNIT_OPTIONS}
+                value={unit}
+                onChange={setUnit}
+                isThin
+              />
+            </div>
+          </div>
+        )}
         <div className='border-border bg-card rounded-3xl border p-4 shadow-sm'>
           <p className='text-muted-foreground flex items-center gap-2 text-sm font-medium'>
             <span
@@ -218,7 +248,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
           </p>
           {result.netCents === null ? (
             <p className='mt-2 text-lg font-semibold'>
-              Add what a movie saves you to see this.
+              Type what a movie saves you, below, to see this.
             </p>
           ) : (
             <>
@@ -239,7 +269,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
                 )}
               >
                 <span aria-hidden='true'>{isBrokenEven ? '🎉' : '🎯'}</span>
-                {isBrokenEven ? 'Would break even' : 'Short of break even'}
+                {isBrokenEven ? 'Ahead of break even' : 'Short of break even'}
               </p>
               <p className='text-muted-foreground mt-2 text-sm'>
                 {formatCents(base.savedCents + (result.addedCents ?? 0))} in
@@ -272,7 +302,7 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
               <TrendLineChart
                 data={series}
                 seriesLabel='Net savings'
-                readoutLabels={{ main: 'Net', secondary: 'None' }}
+                readoutLabels={{ main: 'Net', secondary: 'No more' }}
                 curve='linear'
                 secondaryLabel={
                   scenario === 'none' ? undefined : 'No more movies'
@@ -321,26 +351,6 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
         </div>
         {isPace && (
           <div className='space-y-3'>
-            <div className='flex flex-wrap items-center justify-between gap-3'>
-              <p className='text-sm font-medium'>How many</p>
-              <Stepper
-                label={`Movies a ${unit}`}
-                value={counts[unit]}
-                min={1}
-                max={getPaceMax(unit)}
-                step={1}
-                onChange={(count) =>
-                  setCounts((current) => ({ ...current, [unit]: count }))
-                }
-              />
-            </div>
-            <PillGroup
-              label='Per'
-              options={UNIT_OPTIONS}
-              value={unit}
-              onChange={setUnit}
-              isThin
-            />
             <p className='text-muted-foreground text-xs font-medium'>
               Cancel before the bill on
             </p>

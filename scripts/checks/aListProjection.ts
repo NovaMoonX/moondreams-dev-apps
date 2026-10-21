@@ -52,7 +52,7 @@ const fresh = getProjectionBase([], m, utc(2026, 10, 1));
 assert.equal(fresh.averageTicketCents, null);
 assert.equal(fresh.cyclesBilled, 0);
 assert.equal(fresh.minimumMonthsLeft, 3);
-assert.deepEqual(fresh.horizons, [3, 6, 9]);
+assert.deepEqual(fresh.horizons, [3, 6, 12]);
 assert.equal(getProjectionBase([], m, utc(2028, 1, 1)).horizons.length, 3);
 assert.deepEqual(getProjectionBase([], m, utc(2030, 1, 1)).horizons.length, 3);
 
