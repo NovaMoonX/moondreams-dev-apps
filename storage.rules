@@ -58,6 +58,20 @@ service firebase.storage {
       allow delete: if isKitchenOwner();
     }
 
+    // A recipe's cover, private to the person whose kitchen it is.
+    match /apps/pinch/kitchens/{uid}/recipes/{recipeId}/{fileName} {
+      function isKitchenOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      allow read: if isKitchenOwner();
+      allow create, update: if isKitchenOwner()
+        && fileName == 'cover.webp'
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isKitchenOwner();
+    }
+
     match /waypoint/trips/{tripId}/cover/{fileName} {
       function isTripMember() {
         return request.auth != null
