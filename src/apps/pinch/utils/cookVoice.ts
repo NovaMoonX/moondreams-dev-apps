@@ -618,7 +618,7 @@ const parseMoreTime = (
   if (length === null || read === null || read.seconds !== null) return null;
   if (!(
     read.hasNoun ||
-    read.name === null ||
+    (read.name === null && context.timers.length > 0) ||
     isKnownTimerName(read.name, context)
   )) {
     return null;
@@ -648,7 +648,9 @@ const parseTimer = (
     const isTalk =
       groups.verb === 'give' && !/\bmore\b/.test(groups.rest ?? '');
     if (seconds === null || isTalk) return null;
-    if (!(hasNoun || name === null || isKnown)) return null;
+    if (!(hasNoun || (name === null && context.timers.length > 0) || isKnown)) {
+      return null;
+    }
     return {
       kind: 'EXTEND_TIMER',
       seconds,
@@ -787,8 +789,9 @@ const parseTimerAnswer = (
     .split(' ')
     .filter((word) => !ANSWER_NOISE.has(word))
     .join(' ');
-  const ordinal =
-    trimmed === 'last'
+  const ordinal = /^(?:the |number )?one$/.test(text)
+    ? 1
+    : trimmed === 'last'
       ? ids.length
       : (ORDINALS[trimmed] ?? Number(wordsToDigits(trimmed)));
   if (Number.isInteger(ordinal) && ordinal >= 1 && ordinal <= ids.length) {

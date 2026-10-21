@@ -858,6 +858,11 @@ const timerContext: CookVoiceContext = {
     { id: 't3', names: ['Boil eggs'], label: '10 min' },
   ],
 };
+assert.equal(
+  parse('add a minute'),
+  null,
+  'with no timer in the session, adding time is not a command',
+);
 const parseWithTimers = (text: string, context = timerContext) =>
   parse(text, context);
 const target = (part: Partial<CookTimerTarget>): CookTimerTarget => ({
@@ -1026,6 +1031,8 @@ assert.deepEqual(
     'the last one',
     '3',
     'the fifteen minute one',
+    'one',
+    'number one',
   ].map((phrase) => parse(phrase, asked)),
   [
     pick(['t1']),
@@ -1037,6 +1044,8 @@ assert.deepEqual(
     pick(['t3']),
     pick(['t3']),
     pick(['t2']),
+    pick(['t1']),
+    pick(['t1']),
   ],
   'while asked which timer, a name, a place in the list or a length picks it',
 );
