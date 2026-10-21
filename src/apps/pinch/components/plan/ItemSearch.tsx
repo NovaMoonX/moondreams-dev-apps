@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
@@ -25,6 +26,9 @@ interface ItemSearchProps {
   /** Ingredients already chosen, so they aren't offered twice. */
   excludeIds?: readonly string[];
   autoFocus?: boolean;
+  resultsClassName?: string;
+  /** The field still takes typing, but no result can be picked. */
+  isDisabled?: boolean;
 }
 
 /** One search over the catalog and the person's own ingredients, capped at a few rows, that ends with "add this as a new ingredient" when nothing has exactly the typed name. */
@@ -34,6 +38,8 @@ function ItemSearch({
   onPickRecipe,
   excludeIds = [],
   autoFocus = false,
+  resultsClassName,
+  isDisabled = false,
 }: ItemSearchProps) {
   const dispatch = useAppDispatch();
   const ingredients = useAppSelector(selectIngredients);
@@ -118,12 +124,13 @@ function ItemSearch({
           Type a name to find it, or add one that isn't in the list.
         </p>
       ) : (
-        <ul className='divide-border divide-y'>
+        <ul className={join('divide-border divide-y', resultsClassName)}>
           {recipeMatches.map((recipe) => (
             <li key={recipe.id}>
               <Button
                 type='button'
                 variant='tertiary'
+                disabled={isDisabled}
                 onClick={() => {
                   setQuery('');
                   onPickRecipe?.(recipe.id);
@@ -150,6 +157,7 @@ function ItemSearch({
               <Button
                 type='button'
                 variant='tertiary'
+                disabled={isDisabled}
                 onClick={() => {
                   setQuery('');
                   onPick(ingredient.id);
@@ -172,7 +180,7 @@ function ItemSearch({
               <Button
                 type='button'
                 variant='tertiary'
-                disabled={isCreating}
+                disabled={isCreating || isDisabled}
                 onClick={() => void createFromName()}
                 className='h-auto min-h-12 w-full justify-start gap-3 px-0! py-1.5 text-left'
               >

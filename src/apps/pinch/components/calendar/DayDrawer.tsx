@@ -8,6 +8,7 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import PlannedMealView from '@apps/pinch/components/calendar/PlannedMealView';
+import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
@@ -23,8 +24,17 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
-import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
+import type {
+  Gap,
+  MealType,
+  PlannedMeal,
+  ShoppingRequest,
+} from '@apps/pinch/types';
+import {
+  formatDayTitle,
+  getDateOfDayKey,
+  getLocalTodayDate,
+} from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatCost,
@@ -47,6 +57,7 @@ interface DayDrawerProps {
   onAdd: (mealType: MealType | null) => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
   onFillIn: (gaps: Gap[]) => void;
+  onAddToShopping: (request: ShoppingRequest) => void;
 }
 
 /** One day's meals grouped by type; picking one swaps the drawer to that meal, with a way back. */
@@ -58,6 +69,7 @@ function DayDrawer({
   onAdd,
   onEdit,
   onFillIn,
+  onAddToShopping,
 }: DayDrawerProps) {
   const mealsByDay = useAppSelector(selectPlannedByDay);
   const meals = mealsByDay.get(dayKey) ?? NO_MEALS;
@@ -107,6 +119,7 @@ function DayDrawer({
           onBack={() => setPickedMealId(null)}
           onEdit={onEdit}
           onFillIn={onFillIn}
+          onAddToShopping={onAddToShopping}
           footerEl={footerEl}
         />
       ) : (
@@ -231,6 +244,18 @@ function DayDrawer({
                   </section>
                 );
               })}
+              {getDateOfDayKey(dayKey) >= getLocalTodayDate() && (
+                <AddToShoppingRow
+                  subtitle='Choose what you need for the day'
+                  onClick={() =>
+                    onAddToShopping({
+                      kind: 'items',
+                      items: meals.flatMap((meal) => meal.items),
+                      label: formatDayTitle(dayKey),
+                    })
+                  }
+                />
+              )}
             </>
           )}
         </div>

@@ -12,11 +12,25 @@ import {
 } from '../../src/apps/pinch/utils/gaps.ts';
 import { formatRowCost } from '../../src/apps/pinch/utils/mealFormat.ts';
 import { getRecipeCost } from '../../src/apps/pinch/utils/recipeMath.ts';
+import {
+  getItemsLines,
+  getMergedFields,
+  getRecipeLines,
+  getShoppingCost,
+  getShoppingItemId,
+  groupShoppingItems,
+  isValidAmount,
+  mergeLines,
+  roundAmount,
+} from '../../src/apps/pinch/utils/shopping.ts';
 import type {
+  MealItem,
   Gap,
   Product,
   Recipe,
+  ResolvedFamily,
   ResolvedIngredient,
+  ShoppingItem,
   Unit,
 } from '../../src/apps/pinch/types.ts';
 
@@ -205,6 +219,367 @@ const scaled = scaleNutrition(
   1.5,
 );
 assert.deepEqual(scaled, { calories: 300, protein: 15, carbs: null, fat: 7.5 });
+
+// Shopping list lines
+const shopIngredient = (
+  id: string,
+  name: string,
+  familyId: string | null,
+  serving: { amount: number; unit: Unit },
+) =>
+  ({
+    id,
+    name,
+    familyId,
+    serving,
+    gramsPerMl: null,
+    gramsEach: null,
+  }) as ResolvedIngredient;
+
+const shopIngredients = new Map(
+  [
+    shopIngredient('rice', 'Rice', 'fam-rice', { amount: 0.25, unit: 'CUP' }),
+    shopIngredient('chicken', 'Chicken', 'fam-chicken', {
+      amount: 4,
+      unit: 'OZ',
+    }),
+    shopIngredient('chips', 'Chips', null, { amount: 28, unit: 'G' }),
+    shopIngredient('salt', 'Salt', 'fam-gone', { amount: 1, unit: 'TSP' }),
+  ].map((entry) => [entry.id, entry]),
+);
+
+const shopRecipe = (
+  id: string,
+  servings: number,
+  lines: [string, number, Unit][],
+) =>
+  ({
+    ...recipe(servings, lines),
+    id,
+  }) as Recipe;
+
+const adobo = shopRecipe('adobo', 4, [
+  ['chicken', 2, 'LB'],
+  ['rice', 1, 'CUP'],
+  ['salt', 1, 'TSP'],
+  ['gone', 3, 'EACH'],
+]);
+const ricePot = shopRecipe('ricePot', 2, [
+  ['rice', 0.5, 'CUP'],
+  ['rice', 8, 'TBSP'],
+]);
+const shopRecipes = new Map([adobo, ricePot].map((entry) => [entry.id, entry]));
+
+assert.equal(getShoppingItemId('cat-salt', 'FL_OZ'), 'cat-salt__FL_OZ');
+
+assert.deepEqual(
+  getRecipeLines(adobo, shopIngredients),
+  [
+    { ingredientId: 'chicken', amount: 2, unit: 'LB' },
+    { ingredientId: 'rice', amount: 1, unit: 'CUP' },
+    { ingredientId: 'salt', amount: 1, unit: 'TSP' },
+  ],
+  'a recipe at its own servings is its own lines, and an ingredient that is gone is left out',
+);
+assert.deepEqual(
+  getRecipeLines(adobo, shopIngredients, 6).map((line) => line.amount),
+  [3, 1.5, 1.5],
+  'six servings of a four-serving recipe scales every line by 1.5',
+);
+assert.deepEqual(
+  getRecipeLines(adobo, shopIngredients, 0.5).map((line) => line.amount),
+  [0.25, 0.13, 0.13],
+  'half a serving rounds to two decimals',
+);
+assert.deepEqual(
+  getRecipeLines(ricePot, shopIngredients),
+  [
+    { ingredientId: 'rice', amount: 0.5, unit: 'CUP' },
+    { ingredientId: 'rice', amount: 8, unit: 'TBSP' },
+  ],
+  'the same ingredient in two units stays two lines: units are never converted',
+);
+
+const mealItem = (
+  id: string,
+  kind: MealItem['kind'],
+  refId: string,
+  servings: number,
+): MealItem => ({ id, kind, refId, servings });
+const dayLines = getItemsLines(
+  [
+    mealItem('a', 'RECIPE', 'adobo', 2),
+    mealItem('b', 'RECIPE', 'ricePot', 2),
+    mealItem('c', 'INGREDIENT', 'rice', 3),
+    mealItem('d', 'INGREDIENT', 'chips', 3),
+    mealItem('e', 'RECIPE', 'deleted-recipe', 1),
+    mealItem('f', 'INGREDIENT', 'deleted-ingredient', 1),
+  ],
+  shopRecipes,
+  shopIngredients,
+);
+assert.deepEqual(
+  dayLines,
+  [
+    { ingredientId: 'chicken', amount: 1, unit: 'LB' },
+    { ingredientId: 'rice', amount: 1.75, unit: 'CUP' },
+    { ingredientId: 'salt', amount: 0.5, unit: 'TSP' },
+    { ingredientId: 'rice', amount: 8, unit: 'TBSP' },
+    { ingredientId: 'chips', amount: 84, unit: 'G' },
+  ],
+  'a day sums recipe items scaled by servings and ingredient items at their serving size, per ingredient and unit',
+);
+assert.deepEqual(
+  mergeLines([
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP' },
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP' },
+    { ingredientId: 'rice', amount: 1 / 3, unit: 'CUP' },
+    { ingredientId: 'salt', amount: 0.001, unit: 'TSP' },
+  ]),
+  [{ ingredientId: 'rice', amount: 1, unit: 'CUP' }],
+  'thirds add up to one before rounding, and a line that rounds to nothing is dropped',
+);
+
+const shopItem = (
+  ingredientId: string,
+  unit: Unit,
+  amount: number,
+  isChecked: boolean,
+): ShoppingItem => ({
+  id: getShoppingItemId(ingredientId, unit),
+  ingredientId,
+  amount,
+  unit,
+  isChecked,
+  createdAt: 1,
+  updatedAt: 1,
+});
+const shopFamilies = [
+  { id: 'fam-chicken', name: 'Chicken', isCustom: false },
+  { id: 'fam-rice', name: 'Rice', isCustom: false },
+] as ResolvedFamily[];
+const grouped = groupShoppingItems(
+  [
+    shopItem('chips', 'G', 28, false),
+    shopItem('rice', 'CUP', 1, false),
+    shopItem('salt', 'TSP', 1, false),
+    shopItem('chicken', 'LB', 2, false),
+    shopItem('chicken', 'OZ', 4, false),
+    shopItem('missing', 'EACH', 2, false),
+    shopItem('rice', 'LB', 5, true),
+  ],
+  shopIngredients,
+  shopFamilies,
+);
+assert.deepEqual(
+  grouped.groups.map((group) => [
+    group.name,
+    group.rows.map((row) => row.name),
+  ]),
+  [
+    ['Chicken', ['Chicken', 'Chicken']],
+    ['Rice', ['Rice']],
+    ['Other', ['Chips', 'Removed ingredient', 'Salt']],
+  ],
+  'groups follow the family order, and an ingredient with no family or an unknown one, or one that is gone, lands in Other',
+);
+assert.deepEqual(
+  grouped.groups[0].rows.map((row) => row.unit),
+  ['LB', 'OZ'],
+  'one ingredient in two units is two rows',
+);
+assert.deepEqual(
+  grouped.checked.map((row) => row.id),
+  ['rice__LB'],
+  'a checked item is in "Got it", not in its group',
+);
+
+const heldItems = [
+  shopItem('rice', 'CUP', 1, true),
+  shopItem('salt', 'TSP', 1, false),
+  shopItem('chips', 'G', 28, true),
+];
+const heldGrouped = groupShoppingItems(
+  heldItems,
+  shopIngredients,
+  shopFamilies,
+  new Map([
+    ['rice__CUP', false],
+    ['salt__TSP', true],
+  ]),
+);
+assert.deepEqual(
+  heldGrouped.groups.map((group) => [
+    group.name,
+    group.rows.map((row) => [row.id, row.isChecked]),
+  ]),
+  [['Rice', [['rice__CUP', true]]]],
+  'a row just ticked stays in its group, still carrying its stored checked flag',
+);
+assert.deepEqual(
+  heldGrouped.checked.map((row) => [row.id, row.isChecked]),
+  [
+    ['chips__G', true],
+    ['salt__TSP', false],
+  ],
+  'a row just unticked stays in "Got it" until it is let go, and the unheld rows follow the stored flag',
+);
+assert.deepEqual(
+  groupShoppingItems(heldItems, shopIngredients, shopFamilies, new Map()),
+  groupShoppingItems(heldItems, shopIngredients, shopFamilies),
+  'an empty hold changes nothing',
+);
+
+const shopCost = getShoppingCost(
+  [
+    { ingredientId: 'chicken', amount: 2, unit: 'LB' },
+    { ingredientId: 'rice', amount: 1, unit: 'CUP' },
+    { ingredientId: 'salt', amount: 1, unit: 'TSP' },
+    { ingredientId: 'salt', amount: 2, unit: 'G' },
+  ],
+  shopIngredients,
+  new Map([['chicken', chickenProduct]]),
+);
+assert.equal(
+  Math.round(shopCost.totalCents ?? 0),
+  632,
+  'the list prices the amounts that have a product',
+);
+assert.deepEqual(
+  shopCost.leftOut.map((gap) => `${gap.kind}:${gap.ingredientId}`),
+  ['NO_PRODUCT:rice', 'NO_PRODUCT:salt'],
+  'what has no product is left out once per ingredient',
+);
+assert.equal(
+  getShoppingCost([], shopIngredients, new Map()).totalCents,
+  null,
+  'an empty list has no price',
+);
+assert.equal(
+  getShoppingCost(
+    [{ ingredientId: 'chicken', amount: 1, unit: 'CUP' }],
+    shopIngredients,
+    new Map([['chicken', chickenProduct]]),
+  ).leftOut[0]?.kind,
+  'NOT_COMPARABLE',
+  'a unit that cannot be compared with the package is left out',
+);
+
+// Merging a line into an item
+const NOW = 1_800_000_000_000;
+const flour = (amount: number) => ({
+  ingredientId: 'flour',
+  amount,
+  unit: 'CUP' as Unit,
+});
+assert.deepEqual(
+  getMergedFields(null, flour(1.5), NOW),
+  { amount: 1.5, isChecked: false, updatedAt: NOW },
+  'a new line starts unchecked with its amount',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 0.1, isChecked: false }, flour(0.2), NOW),
+  { amount: 0.3, isChecked: false, updatedAt: NOW },
+  'an open item gains the amount, rounded to two decimals',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 5, isChecked: true }, flour(2), NOW),
+  { amount: 2, isChecked: false, updatedAt: NOW },
+  'an item already checked off starts again with only the new amount',
+);
+assert.equal(
+  getMergedFields({ amount: 999_999.5, isChecked: false }, flour(5), NOW)
+    .amount,
+  1_000_000,
+  'an open item stops at the cap',
+);
+assert.equal(
+  getMergedFields(null, flour(2_000_000), NOW).amount,
+  1_000_000,
+  'a new item stops at the cap',
+);
+assert.equal(
+  getMergedFields({ amount: 5, isChecked: true }, flour(2_000_000), NOW).amount,
+  1_000_000,
+  'a restarted item stops at the cap',
+);
+assert.deepEqual(
+  mergeLines([flour(600_000), flour(600_000)]),
+  [flour(1_000_000)],
+  'lines that add past the cap stop at it',
+);
+
+// Moving a line to another unit carries whether it was checked off
+assert.equal(
+  getMergedFields(null, flour(8), NOW, true).isChecked,
+  true,
+  'a checked line moved into a unit with no item stays checked',
+);
+assert.equal(
+  getMergedFields(null, flour(8), NOW, false).isChecked,
+  false,
+  'an open line moved into a unit with no item stays open',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 4, isChecked: false }, flour(8), NOW, true),
+  { amount: 12, isChecked: false, updatedAt: NOW },
+  'moving into an open item adds to it and it stays open, whichever way the moved line was',
+);
+assert.deepEqual(
+  getMergedFields({ amount: 4, isChecked: true }, flour(8), NOW, true),
+  { amount: 8, isChecked: false, updatedAt: NOW },
+  'moving into a checked item starts it again with the moved amount',
+);
+
+// Amounts that scale to nothing, or can't be held
+const pinchOfSalt = shopRecipe('pinch', 4, [
+  ['salt', 0.01, 'TSP'],
+  ['rice', 1, 'CUP'],
+]);
+assert.deepEqual(
+  getRecipeLines(pinchOfSalt, shopIngredients, 1),
+  [{ ingredientId: 'rice', amount: 0.25, unit: 'CUP' }],
+  'an amount that rounds to zero after scaling is left out, and the rest stays',
+);
+assert.deepEqual(
+  getRecipeLines(
+    shopRecipe('only-a-pinch', 4, [['salt', 0.01, 'TSP']]),
+    shopIngredients,
+    1,
+  ),
+  [],
+  'a recipe whose every line rounds to zero gives no lines to add',
+);
+assert.equal(
+  isValidAmount(roundAmount(0.004)),
+  false,
+  'a typed amount that rounds to zero is refused',
+);
+assert.equal(isValidAmount(roundAmount(0.006)), true, 'two decimals are kept');
+assert.deepEqual(
+  [0, -1, NaN, Infinity, 1_000_000.01].map(isValidAmount),
+  [false, false, false, false, false],
+  'zero, negative, not-a-number, infinite and over-cap amounts are refused',
+);
+assert.equal(isValidAmount(1_000_000), true, 'the cap itself is allowed');
+const noServings = shopRecipe('no-servings', 0, [['rice', 1, 'CUP']]);
+assert.deepEqual(
+  [
+    getRecipeLines(noServings, shopIngredients),
+    getRecipeLines(noServings, shopIngredients, 2),
+  ],
+  [[], []],
+  'a recipe with no servings gives no lines, never an endless amount',
+);
+assert.deepEqual(
+  getItemsLines(
+    [mealItem('z', 'RECIPE', 'no-servings', 2)],
+    new Map([[noServings.id, noServings]]),
+    shopIngredients,
+  ),
+  [],
+  'a meal item over a recipe with no servings gives no lines',
+);
 
 assert.equal(formatRowCost(null, false), 'No price yet');
 assert.equal(formatRowCost(undefined, false), 'No price yet');

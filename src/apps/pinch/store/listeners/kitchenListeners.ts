@@ -16,6 +16,7 @@ import type {
   PlannedMeal,
   Product,
   Recipe,
+  ShoppingItem,
   Source,
   Store,
 } from '@apps/pinch/types';
@@ -99,6 +100,21 @@ export function startSourcesListener(
     kitchenCollection(uid, 'sources'),
     (snapshot) =>
       onChange(snapshot.docs.map((document) => document.data() as Source)),
+    onError,
+  );
+}
+
+export function startShoppingListener(
+  uid: string,
+  onChange: (items: ShoppingItem[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    kitchenCollection(uid, 'shoppingItems'),
+    (snapshot) =>
+      onChange(
+        snapshot.docs.map((document) => document.data() as ShoppingItem),
+      ),
     onError,
   );
 }

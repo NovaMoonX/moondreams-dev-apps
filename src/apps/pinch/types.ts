@@ -1,4 +1,4 @@
-export type PinchTab = 'calendar' | 'recipes' | 'kitchen';
+export type PinchTab = 'calendar' | 'recipes' | 'kitchen' | 'shopping';
 
 export type Unit =
   | 'G'
@@ -253,6 +253,25 @@ export interface Source {
   createdAt: number;
   updatedAt: number;
 }
+
+/** One thing to buy: an ingredient in one unit, so adding it again merges into it. */
+export interface ShoppingItem {
+  /** Immutable. */
+  id: string;
+  /** Immutable. */
+  ingredientId: string;
+  /** Above zero, at most 1,000,000, two decimals. */
+  amount: number;
+  /** Immutable: a different unit is a different item. */
+  unit: Unit;
+  isChecked: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type ShoppingRequest =
+  | { kind: 'recipe'; recipeId: string }
+  | { kind: 'items'; items: MealItem[]; label: string };
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {

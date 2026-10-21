@@ -698,25 +698,24 @@ Marking a meal made takes its ingredients out of stock. Making a batch adds prep
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
-### Issue 21: A shopping list from what you've planned
+### Issue 21: The shopping list with stock, low stock and stores
 
-**Prerequisites:** Issue 19, Issue 9
-**Target PR Size:** ~450 lines
+**Prerequisites:** Issue 19, Issue 9. The list itself has shipped as the Shopping tab: a stored `shoppingItems` collection, filled from a recipe, saved meal, planned meal or day (or one ingredient), merged by ingredient and unit, grouped by family, with "Got it" and an approximate cost (TECHNICAL.md §5b).
+**Target PR Size:** ~350 lines
 **Files:**
-- Kitchen: Shopping list subview, `utils/shoppingList.ts`, grouped by store, low-stock section
-- Copy sheet support for the list
+- Shopping tab: `ShoppingScreen` (`components/shopping/`), `utils/shopping.ts`, a low-stock section and a group-by-store option
 
-**Context:** README Next Steps; UX Kitchen entries.
+**Context:** README Next Steps; UX Shopping list.
 
 ### Description
-A list built from the meals ahead, minus tracked stock, with a section for low-stock ingredients and totals from the person's own products, grouped by store.
+Subtract tracked stock from what the list asks for, add a section for low-stock ingredients, and offer grouping by the default product's store with totals from the person's own products.
 
 ### Possible Approach
-1. Sum planned items' ingredient amounts by ingredient; subtract tracked stock; group by default product's store; low-stock section from thresholds.
-2. Check-off state stays on the device.
+1. When adding, subtract tracked stock per ingredient and unit; an untracked ingredient is listed in full.
+2. Low-stock section from thresholds; a "By store" grouping next to the family one, from each ingredient's default product.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Read:** the list; **Update:** check off; no stored entity beyond device state.
+- [ ] **Read:** the list by family or by store, and the low-stock section; **Update:** tick off, change amount (both exist).
 
 ### Success Criteria
 - [ ] Totals match the products' prices; an untracked ingredient is listed in full.
