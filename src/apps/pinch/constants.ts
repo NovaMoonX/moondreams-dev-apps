@@ -702,9 +702,8 @@ export const CONTAINER_PLACE_LABELS: Record<ContainerPlace, string> = {
   FRIDGE: 'Fridge',
   FREEZER: 'Freezer',
 };
-/** Two that don't both read "frozen": an ice cube beside a snowflake said freezer twice. */
 export const CONTAINER_PLACE_EMOJIS: Record<ContainerPlace, string> = {
-  FRIDGE: '🥛',
+  FRIDGE: '🧊',
   FREEZER: '❄️',
 };
 export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({
@@ -769,7 +768,7 @@ export const PACKAGE_PLACE_LABELS: Record<PackagePlace, string> = {
 };
 export const PACKAGE_PLACE_EMOJIS: Record<PackagePlace, string> = {
   PANTRY: '🥫',
-  FRIDGE: '🥛',
+  FRIDGE: '🧊',
   FREEZER: '❄️',
 };
 export const PACKAGE_PLACE_OPTIONS = PACKAGE_PLACES.map((place) => ({
@@ -777,19 +776,6 @@ export const PACKAGE_PLACE_OPTIONS = PACKAGE_PLACES.map((place) => ({
   label: PACKAGE_PLACE_LABELS[place],
   emoji: PACKAGE_PLACE_EMOJIS[place],
 }));
-export const PACKAGE_EMOJI = '📦';
-/** The chip on an ingredient's row: what it is, by the part of the shop it comes from. */
-export const PANTRY_SECTION_EMOJIS: Record<ShopSection, string> = {
-  produce: '🥬',
-  meat: '🥩',
-  dairy: '🥛',
-  bakery: '🍞',
-  pantry: '🥫',
-  spices: '🧂',
-  snacks: '🍿',
-  frozen: '🍦',
-  other: PACKAGE_EMOJI,
-};
 export const PACKAGE_EVENT_KINDS: PackageEventKind[] = [
   'ADDED',
   'USED',

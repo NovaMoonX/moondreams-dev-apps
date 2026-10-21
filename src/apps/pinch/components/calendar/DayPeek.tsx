@@ -12,7 +12,7 @@ import type {
   Recipe,
   ResolvedIngredient,
 } from '@apps/pinch/types';
-import { formatDayTitle } from '@apps/pinch/utils/dayKeys';
+import { formatDayHeading } from '@apps/pinch/utils/dayKeys';
 import {
   getItemTitle,
   getPlannedMealTitle,
@@ -40,11 +40,12 @@ const getMealDetail = (
 
 interface DayPeekProps {
   dayKey: string;
+  isToday: boolean;
   meals: PlannedMeal[];
 }
 
 /** What a day's hover card shows on a computer: each meal under its type with its items. */
-function DayPeek({ dayKey, meals }: DayPeekProps) {
+function DayPeek({ dayKey, isToday, meals }: DayPeekProps) {
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const show = useAppSelector(selectShowNutrition);
@@ -54,24 +55,34 @@ function DayPeek({ dayKey, meals }: DayPeekProps) {
 
   return (
     <div className='space-y-1 text-left'>
-      <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-        {formatDayTitle(dayKey)}
+      <p className='text-sm font-semibold'>
+        {formatDayHeading(dayKey, isToday)}
       </p>
-      {meals.slice(0, MAX_ROWS).map((meal) => {
-        const detail = getMealDetail(meal, recipesById, ingredientsById);
-        return (
-          <div key={meal.id} className='py-1'>
-            <p className='text-sm font-medium wrap-break-word'>
-              <span aria-hidden='true'>{MEAL_TYPE_EMOJIS[meal.mealType]}</span>{' '}
-              {MEAL_TYPE_LABELS[meal.mealType]} ·{' '}
-              {getPlannedMealTitle(meal, recipesById, ingredientsById)}
-            </p>
-            {detail && (
-              <p className='text-muted-foreground text-xs'>{detail}</p>
-            )}
-          </div>
-        );
-      })}
+      <ul className='space-y-1.5 pt-1'>
+        {meals.slice(0, MAX_ROWS).map((meal) => {
+          const detail = getMealDetail(meal, recipesById, ingredientsById);
+          return (
+            <li key={meal.id} className='flex items-start gap-2'>
+              <span
+                className='w-5 shrink-0 text-center text-sm'
+                aria-hidden='true'
+              >
+                {MEAL_TYPE_EMOJIS[meal.mealType]}
+              </span>
+              <span className='min-w-0 flex-1'>
+                <span className='line-clamp-2 text-sm font-medium break-words'>
+                  {getPlannedMealTitle(meal, recipesById, ingredientsById)}
+                </span>
+                <span className='text-muted-foreground block text-xs'>
+                  {[MEAL_TYPE_LABELS[meal.mealType], detail]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
       {hasShownValue(dailyNutrition, show) && (
         <MacroStats
           className='text-muted-foreground pt-1 text-xs'

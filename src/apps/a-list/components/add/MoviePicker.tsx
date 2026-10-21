@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
 
+import CantFindItButton from '@/components/CantFindItButton';
 import SearchInput from '@/components/SearchInput';
 import { DEBOUNCE_MS, useDebouncedValue } from '@/hooks/useDebounce';
 import { useAppSelector } from '@/store';
@@ -222,14 +223,9 @@ function MoviePicker({
             )}
           </div>
           {emptyState.offerManual && (
-            <Button
-              type='button'
-              rounded='full'
-              variant={isSearchResting ? 'primary' : 'secondary'}
-              onClick={onAddByTitle}
-            >
+            <CantFindItButton onClick={onAddByTitle}>
               Can't find it? Add it by title
-            </Button>
+            </CantFindItButton>
           )}
         </div>
       )}
