@@ -19,7 +19,8 @@ export interface PackingDay {
 const COLD_LOW = 40;
 const CHILLY_LOW = 55;
 const HOT_HIGH = 85;
-const SUNNY_HIGH = 70;
+const SUNNY_HIGH = 60;
+const POSSIBLE_SHOWER_CHANCE = 30;
 const BIG_SWING = 25;
 const LIKELY_RAIN_CHANCE = 50;
 
@@ -28,6 +29,9 @@ const SOAKING: WeatherConditionId[] = ['heavy-rain', 'thunderstorms'];
 
 const isWet = ({ forecast }: PackingDay) =>
   WET.includes(getWeatherCondition(forecast.weatherCode).id) || (forecast.precipChance ?? 0) >= LIKELY_RAIN_CHANCE;
+const isStormy = ({ forecast }: PackingDay) => getWeatherCondition(forecast.weatherCode).id === 'thunderstorms';
+const isShowerPossible = (day: PackingDay) =>
+  !isWet(day) && (day.forecast.precipChance ?? 0) >= POSSIBLE_SHOWER_CHANCE;
 const isSoaking = ({ forecast }: PackingDay) => SOAKING.includes(getWeatherCondition(forecast.weatherCode).id);
 const isSnowy = ({ forecast }: PackingDay) => getWeatherCondition(forecast.weatherCode).id === 'snow';
 const isSunny = ({ forecast }: PackingDay) =>
@@ -59,10 +63,25 @@ export function getPackingSuggestions(days: PackingDay[], getDayLabel: (dayIndex
         id: 'rain',
         emoji: '🌧️',
         title: 'Rain',
-        items: ['Umbrella', 'Rain jacket', ...(days.some(isSoaking) ? ['Waterproof shoes'] : [])],
+        items: [
+          'Umbrella',
+          'Rain jacket',
+          ...(days.some(isSoaking) ? ['Waterproof shoes'] : []),
+          ...(days.filter(isWet).some(({ forecast }) => (forecast.tempMin ?? 0) > CHILLY_LOW) ? ['Quick-dry clothes'] : []),
+        ],
       },
       labels: labelsFor(isWet),
       reason: (list) => `Rain is in the forecast for ${list}.`,
+    },
+    {
+      suggestion: { id: 'storm', emoji: '⛈️', title: 'Storms', items: ['Dry bag or rain cover for your bag'] },
+      labels: labelsFor(isStormy),
+      reason: (list) => `Thunderstorms are possible on ${list}.`,
+    },
+    {
+      suggestion: { id: 'shower', emoji: '🌦️', title: 'Maybe a shower', items: ['Compact umbrella'] },
+      labels: labelsFor(isShowerPossible),
+      reason: (list) => `A shower is possible on ${list}.`,
     },
     {
       suggestion: { id: 'snow', emoji: '🌨️', title: 'Snow', items: ['Warm coat', 'Waterproof boots', 'Gloves', 'Warm hat'] },
@@ -80,19 +99,19 @@ export function getPackingSuggestions(days: PackingDay[], getDayLabel: (dayIndex
       reason: (list) => `Mornings and evenings cool down on ${list}.`,
     },
     {
+      suggestion: { id: 'sun', emoji: '😎', title: 'Sunny', items: ['Sunglasses', 'Sun hat', 'Sunscreen'] },
+      labels: labelsFor(isSunny),
+      reason: (list) => `Mostly sunny on ${list}, so bring something to shade your eyes and face.`,
+    },
+    {
       suggestion: {
         id: 'hot',
         emoji: '🥵',
         title: 'Hot',
-        items: ['Sunscreen', 'Sun hat', 'Reusable water bottle', 'Light, breathable clothes'],
+        items: ['Reusable water bottle', 'Light, breathable clothes', 'Sunscreen', 'Sun hat'],
       },
       labels: labelsFor(isHot),
       reason: (list) => `Highs up to ${Math.round(highest)}°F on ${list}.`,
-    },
-    {
-      suggestion: { id: 'sun', emoji: '😎', title: 'Sunny', items: ['Sunglasses', 'Sunscreen'] },
-      labels: labelsFor(isSunny),
-      reason: (list) => `Sunshine on ${list}.`,
     },
     {
       suggestion: { id: 'swing', emoji: '🌡️', title: 'Big swings', items: ['Layers you can add or shed'] },
