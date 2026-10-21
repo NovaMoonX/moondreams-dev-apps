@@ -6,14 +6,18 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import BreakdownDrawer from '@apps/pinch/components/calendar/BreakdownDrawer';
+import StatsRow from '@apps/pinch/components/calendar/StatsRow';
+import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import DayDrawer from '@apps/pinch/components/calendar/DayDrawer';
 import MealBarCell from '@apps/pinch/components/calendar/MealBarCell';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
+  selectMonthStats,
   selectPlannedByDay,
   selectPlannedMeals,
 } from '@apps/pinch/store/selectors';
-import type { MealType, PlannedMeal } from '@apps/pinch/types';
+import type { Gap, MealType, PlannedMeal } from '@apps/pinch/types';
 import {
   formatMonthTitle,
   getCellDayKey,
@@ -57,6 +61,9 @@ function CalendarScreen({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
   const [peekDayKey, setPeekDayKey] = useState<string | null>(null);
+  const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+  const [fillIn, setFillIn] = useState<Gap[] | null>(null);
+  const stats = useAppSelector((state) => selectMonthStats(state, shownMonth));
 
   const [year, month] = shownMonth.split('-').map(Number);
   const isCurrentMonth = shownMonth === getLocalMonthKey(new Date(now));
@@ -96,6 +103,12 @@ function CalendarScreen({
             Add
           </Button>
         }
+      />
+      <StatsRow
+        uid={uid}
+        stats={stats}
+        onOpenBreakdown={() => setIsBreakdownOpen(true)}
+        onFillIn={setFillIn}
       />
       <div className='flex items-center justify-between gap-2'>
         <Button
@@ -204,6 +217,16 @@ function CalendarScreen({
           );
         }}
       />
+      {isBreakdownOpen && (
+        <BreakdownDrawer
+          monthKey={shownMonth}
+          stats={stats}
+          onClose={() => setIsBreakdownOpen(false)}
+        />
+      )}
+      {fillIn && (
+        <FillInSheet uid={uid} gaps={fillIn} onClose={() => setFillIn(null)} />
+      )}
       {openDayKey && (
         <DayDrawer
           key={openDayKey}
