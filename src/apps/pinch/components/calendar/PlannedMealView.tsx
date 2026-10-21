@@ -8,6 +8,7 @@ import CopyPanel from '@/components/CopyPanel';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import NutritionLine from '@apps/pinch/components/shared/NutritionLine';
+import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import ItemIcon from '@apps/pinch/components/shared/ItemIcon';
 import {
   MAX_NAME_LENGTH,
@@ -23,7 +24,7 @@ import {
   selectRecipesById,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { MealType } from '@apps/pinch/types';
+import type { Gap, MealType } from '@apps/pinch/types';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
 import { mealMarkdown } from '@apps/pinch/utils/markdown/dayMarkdown';
@@ -40,6 +41,7 @@ interface PlannedMealViewProps {
   plannedMealId: string;
   onBack: () => void;
   onEdit: (plannedMealId: string, mealType: MealType) => void;
+  onFillIn: (gaps: Gap[]) => void;
 }
 
 /** A planned meal inside the day drawer: its items, servings and cost, and the way to take it off the day. */
@@ -48,6 +50,7 @@ function PlannedMealView({
   plannedMealId,
   onBack,
   onEdit,
+  onFillIn,
 }: PlannedMealViewProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -211,7 +214,7 @@ function PlannedMealView({
               </span>
               <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
                 {itemCost?.cents == null
-                  ? 'No price'
+                  ? 'No price yet'
                   : formatCost(itemCost.cents)}
               </span>
             </li>
@@ -236,6 +239,9 @@ function PlannedMealView({
           </span>
         )}
       </p>
+      {!meal.snapshot && (
+        <GapNudge uid={uid} gaps={cost.leftOut} onFillIn={onFillIn} />
+      )}
       {hasShownValue(nutrition.values, show) && (
         <p className='text-muted-foreground text-sm'>
           <NutritionLine values={nutrition.values} show={show} /> for the plate

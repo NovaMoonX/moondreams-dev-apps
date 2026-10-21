@@ -70,9 +70,9 @@ Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: scre
 
 1. Make sure the label exists with the exact name. Rename a near-duplicate label rather than creating a second one, and delete strays you created.
 2. Create the issues in ISSUES.md order, so issue N maps to a predictable number. Try in this order:
-   1. **The gist script** from the repo root. Pass the label explicitly, since `npm run issues:create` derives "A List (App)" from the folder name and loses punctuation:
+   1. **The gist script** from the repo root. The script takes `--app-name` (the board's "Apps" option), not `--label`; `npm run issues:create` reads that name from `public/manifest-<id>.json`, which no longer exists (the hub is one installable app), so call the script directly:
       ```bash
-      ../_gists/create-github-issues/init.sh src/apps/<id>/ISSUES.md --label "<App Name> (App)" --project-number 3 --project-status-value Ready
+      ../_gists/create-github-issues/init.sh src/apps/<id>/ISSUES.md --app-name "<App Name>" --project-number 3 --project-status-value Ready
       ```
    2. **Otherwise**, the MCP `issue_write` tool or `gh api repos/{o}/{r}/issues`, with the label and a tier label.
    3. **If both fail**, abandon issue creation, tell the user, and continue with the PRs, using "Implements Issue N of ISSUES.md" in the bodies.

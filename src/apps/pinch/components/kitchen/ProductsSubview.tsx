@@ -98,8 +98,8 @@ function ProductsSubview({ uid }: ProductsSubviewProps) {
         )}
         {products.length === 0 ? (
           <p className='text-muted-foreground py-6 text-center text-sm'>
-            Add a product to an ingredient and it shows up here, grouped by
-            where you buy it.
+            Open an ingredient in the Kitchen and tap “Add a product”: it shows
+            up here, grouped by where you buy it.
           </p>
         ) : groups.length === 0 ? (
           <p className='text-muted-foreground py-6 text-center text-sm wrap-break-word'>

@@ -90,7 +90,7 @@ function IngredientDrawer({
             )}
             {ingredient.isAdjusted && (
               <p className='text-muted-foreground text-sm'>
-                Built in, with your changes
+                Built in · you adjusted it
               </p>
             )}
             {ingredient.aliases.length > 0 && (

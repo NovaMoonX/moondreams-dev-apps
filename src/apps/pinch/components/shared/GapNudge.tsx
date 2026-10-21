@@ -108,12 +108,12 @@ function GapNudge({ uid, gaps, onFillIn }: GapNudgeProps) {
         {hasFailed ? "Couldn't hide this just now. " : null}
         {text}{' '}
         <span className='whitespace-nowrap'>
-          ·{' '}
+          <span className='max-[360px]:hidden'>· </span>
           <Button
             type='button'
             variant='link'
             onClick={() => onFillIn(open)}
-            className='relative h-auto p-0 align-baseline text-sm leading-[inherit] after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
+            className='relative h-auto p-0 align-baseline text-sm leading-[inherit] font-medium after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[""]'
           >
             {action}
           </Button>

@@ -188,6 +188,8 @@ export type PinchSubview =
       plannedMealId: string | null;
       /** A saved meal whose items start the plate. */
       fromMealId: string | null;
+      /** A recipe that starts the plate. */
+      fromRecipeId: string | null;
     }
   | { kind: 'meal'; id: string | null };
 

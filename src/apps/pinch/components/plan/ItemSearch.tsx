@@ -111,7 +111,7 @@ function ItemSearch({
         value={query}
         onChange={setQuery}
         placeholder={
-          onPickRecipe ? 'Search recipes and ingredients' : 'Search ingredients'
+          onPickRecipe ? 'Search recipes, ingredients' : 'Search ingredients'
         }
         autoFocus={autoFocus}
       />

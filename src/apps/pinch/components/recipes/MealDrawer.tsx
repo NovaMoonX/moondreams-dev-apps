@@ -117,7 +117,7 @@ function MealDrawer({
                   </span>
                   <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap'>
                     {itemCost?.cents == null
-                      ? 'No price'
+                      ? 'No price yet'
                       : formatCost(itemCost.cents)}
                   </span>
                 </li>

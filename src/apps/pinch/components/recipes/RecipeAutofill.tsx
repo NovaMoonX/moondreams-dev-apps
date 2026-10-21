@@ -98,7 +98,7 @@ function RecipeAutofill({ onFilled }: RecipeAutofillProps) {
   };
 
   return (
-    <div className='border-border space-y-3 rounded-2xl border p-3'>
+    <div className='border-border mb-4 space-y-3 rounded-2xl border p-3'>
       <div className='flex items-center gap-3'>
         <span className='w-6 shrink-0 text-center text-lg' aria-hidden='true'>
           📷
@@ -167,12 +167,13 @@ function RecipeAutofill({ onFilled }: RecipeAutofillProps) {
             <span className='text-muted-foreground text-xs'>
               {text.length >= MAX_PASTE_CHARS * 0.9
                 ? `${text.length.toLocaleString()} / ${MAX_PASTE_CHARS.toLocaleString()}`
-                : 'An AI reads it and fills in the form. It isn’t saved.'}
+                : ''}
             </span>
             <Button
               type='button'
               size='sm'
               rounded='full'
+              className='shrink-0 whitespace-nowrap'
               loading={isReading}
               disabled={isReading || text.trim() === ''}
               onClick={() =>

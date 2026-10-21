@@ -147,9 +147,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
                   estimatedHeight={estimatedHeight}
                   eager={chunk < EAGER_RECIPE_CHUNKS}
                 >
-                  <ul className='divide-border divide-y'>
+                  <ul className='divide-border divide-y lg:grid lg:grid-cols-2 lg:gap-x-8 lg:divide-y-0'>
                     {rows.map((recipe) => (
-                      <li key={recipe.id}>
+                      <li
+                        key={recipe.id}
+                        className='lg:border-border lg:border-b'
+                      >
                         <RecipeRow
                           recipe={recipe}
                           cost={costs.get(recipe.id)}
@@ -214,6 +217,17 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           uid={uid}
           recipeId={openId}
           onClose={() => setOpenId(null)}
+          onPlan={(id) => {
+            setOpenId(null);
+            openSubview({
+              kind: 'plan',
+              dayKey: getCellDayKey(new Date()),
+              mealType: null,
+              plannedMealId: null,
+              fromMealId: null,
+              fromRecipeId: id,
+            });
+          }}
           onModify={(id) => {
             setOpenId(null);
             openSubview({ kind: 'recipe', id });
@@ -238,6 +252,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
               mealType: null,
               plannedMealId: null,
               fromMealId: id,
+              fromRecipeId: null,
             });
           }}
           onModify={(id) => {

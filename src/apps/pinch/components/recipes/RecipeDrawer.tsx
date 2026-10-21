@@ -27,7 +27,6 @@ import {
 import { formatMinutes, formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const gapLabel = (kind: GapKind | undefined) => {
-  if (kind === 'NO_PRODUCT') return 'No price yet';
   if (kind === 'NOT_COMPARABLE')
     return "Can't compare this unit to the product's";
   return null;
@@ -37,6 +36,7 @@ interface RecipeDrawerProps {
   uid: string;
   recipeId: string;
   onClose: () => void;
+  onPlan: (id: string) => void;
   onModify: (id: string) => void;
   onFillIn: (gaps: Gap[]) => void;
 }
@@ -45,6 +45,7 @@ function RecipeDrawer({
   uid,
   recipeId,
   onClose,
+  onPlan,
   onModify,
   onFillIn,
 }: RecipeDrawerProps) {
@@ -75,9 +76,9 @@ function RecipeDrawer({
             <Button
               type='button'
               className='w-full'
-              onClick={() => onModify(recipe.id)}
+              onClick={() => onPlan(recipe.id)}
             >
-              Modify
+              Add to calendar
             </Button>
           </div>
         )
@@ -141,6 +142,11 @@ function RecipeDrawer({
                     <span className='min-w-0'>
                       {ingredientsById.get(line.ingredientId)?.name ??
                         'Removed ingredient'}
+                      {line.note && (
+                        <span className='text-muted-foreground block text-xs'>
+                          {line.note}
+                        </span>
+                      )}
                       {gap && (
                         <span className='text-muted-foreground block text-xs'>
                           {gap}
@@ -176,6 +182,14 @@ function RecipeDrawer({
           )}
 
           <div className='bg-muted/50 rounded-2xl p-1'>
+            <Button
+              type='button'
+              variant='tertiary'
+              className='h-11 w-full'
+              onClick={() => onModify(recipe.id)}
+            >
+              Modify
+            </Button>
             <Button
               type='button'
               variant='tertiary'

@@ -110,3 +110,18 @@ html.pinch-theme [data-pill][aria-pressed='true'] {
 html.pinch-theme button.text-primary:not(:disabled):not([class*='bg-']):not([class*='border-primary']):not([class*='underline-offset']) {
   color: var(--color-foreground);
 }
+
+/* A link-style button stays underlined: on a phone there is no hover to reveal it, and an action that reads as a caption goes unnoticed. */
+html.pinch-theme button[class*='underline-offset'] {
+  text-decoration-line: underline;
+}
+
+/* The soft tinted blocks that group a drawer's actions need an edge in dark, where the tint all but disappears into the sheet. */
+html.pinch-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+/* The search field's native clear icon is drawn in the browser's blue; it is a control, not a link. */
+html.pinch-theme input[type='search']::-webkit-search-cancel-button {
+  filter: grayscale(1);
+}

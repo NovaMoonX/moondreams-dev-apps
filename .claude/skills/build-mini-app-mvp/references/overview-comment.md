@@ -47,13 +47,13 @@ Nothing to run for a new callable: the deploy opens it to the browser (README's 
 Run from the `moondreams-dev-apps` root, as two separate code blocks: a dry run, then the real run.
 ```bash
 ../_gists/create-github-issues/init.sh src/apps/<id>/ISSUES.md \
-  --label "<App Name> (App)" --project-number 3 --project-status-value Ready --dry-run
+  --app-name "<App Name>" --project-number 3 --project-status-value Ready --dry-run
 ```
 ```bash
 ../_gists/create-github-issues/init.sh src/apps/<id>/ISSUES.md \
-  --label "<App Name> (App)" --project-number 3 --project-status-value Ready
+  --app-name "<App Name>" --project-number 3 --project-status-value Ready
 ```
-Warn when `npm run issues:create -- <id>` would derive the wrong label.
+Warn that `npm run issues:create -- <id>` needs `public/manifest-<id>.json`, which does not exist, so the script is called directly with `--app-name`; the script has no `--label` flag, so say which label the issues already carry.
 
 ### 6. Brand assets
 Include the light and dark icon SVG sources inline in fenced `svg` blocks. Say that the logo and banner in the repo are placeholders built from them, and that the user creates the final assets.

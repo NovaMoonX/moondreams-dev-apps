@@ -18,6 +18,8 @@ interface MealBarCellProps {
   isOutsideMonth: boolean;
   /** The hover card is for a computer; a phone's cell is just the face, with no popover built behind it. */
   hasPeek: boolean;
+  /** A wide screen's cell is tall enough to name each meal's first item; narrower screens show only the colour bar. */
+  getMealTitle: ((meal: PlannedMeal) => string) | null;
   /** Controlled by the calendar so only one day's peek is ever open. */
   isPeekOpen: boolean;
   onPeekOpenChange: (isOpen: boolean) => void;
@@ -38,6 +40,7 @@ function MealBarCell({
   isToday,
   isOutsideMonth,
   hasPeek,
+  getMealTitle,
   isPeekOpen,
   onPeekOpenChange,
 }: MealBarCellProps) {
@@ -66,12 +69,23 @@ function MealBarCell({
           >
             {MEAL_TYPE_EMOJIS[meal.mealType]}
           </span>
-          <span
-            className='h-1.5 flex-1 rounded-full'
-            style={{
-              backgroundColor: `var(--pinch-meal-${meal.mealType.toLowerCase()})`,
-            }}
-          />
+          {getMealTitle ? (
+            <span
+              className='min-w-0 flex-1 truncate border-l-2 pl-1 text-left text-[11px] leading-4 font-medium'
+              style={{
+                borderLeftColor: `var(--pinch-meal-${meal.mealType.toLowerCase()})`,
+              }}
+            >
+              {getMealTitle(meal)}
+            </span>
+          ) : (
+            <span
+              className='h-1.5 flex-1 rounded-full'
+              style={{
+                backgroundColor: `var(--pinch-meal-${meal.mealType.toLowerCase()})`,
+              }}
+            />
+          )}
         </span>
       ))}
       {meals.length > MAX_BARS && (
