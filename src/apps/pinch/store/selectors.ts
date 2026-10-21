@@ -9,6 +9,12 @@ import type {
   Product,
   ResolvedFamily,
 } from '@apps/pinch/types';
+import {
+  byEatBy,
+  getMealStockMap,
+  getStockMaps,
+  groupContainersByCook,
+} from '@apps/pinch/utils/containers';
 import { getCookSummaries, groupCooksByRecipe } from '@apps/pinch/utils/cooks';
 import { getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import {
@@ -40,7 +46,7 @@ export const selectIsPinchLoaded = (state: RootState) =>
   state.pinch.recipes.isLoaded &&
   state.pinch.sources.isLoaded;
 
-/** Sources, the shopping list, ideas, cooking history and recipe notes are optional extras: their failures are left out so each only takes its own UI away. */
+/** Sources, the shopping list, ideas, cooking history, recipe notes and prepared meals are optional extras: their failures are left out so each only takes its own UI away. */
 export const selectPinchLoadError = (state: RootState) =>
   state.pinch.ingredients.loadError ??
   state.pinch.families.loadError ??
@@ -262,6 +268,42 @@ export const selectCooksById = createSelector(
 export const selectCooksLoadError = (state: RootState) =>
   state.pinch.cooks.loadError;
 
+const selectContainerItems = (state: RootState) => state.pinch.containers.items;
+
+export const selectContainers = createSelector(
+  [selectContainerItems],
+  (containers) => [...containers].sort(byEatBy),
+);
+
+export const selectContainersById = createSelector(
+  [selectContainers],
+  (containers) =>
+    new Map(containers.map((container) => [container.id, container])),
+);
+
+const selectStock = createSelector([selectContainers], getStockMaps);
+
+export const selectStockByRecipe = createSelector(
+  [selectStock],
+  (stock) => stock.byRecipe,
+);
+
+export const selectStockByMeal = createSelector(
+  [selectStock],
+  (stock) => stock.byMeal,
+);
+
+export const selectContainersByCookId = createSelector(
+  [selectContainers],
+  groupContainersByCook,
+);
+
+export const selectContainersLoadError = (state: RootState) =>
+  state.pinch.containers.loadError;
+
+export const selectIsContainersReady = (state: RootState) =>
+  state.pinch.containers.isLoaded && state.pinch.containers.loadError === null;
+
 const selectNoteItems = (state: RootState) => state.pinch.notes.items;
 
 export const selectNotesByRecipe = createSelector(
@@ -433,6 +475,11 @@ const selectMealItems = (state: RootState) => state.pinch.meals.items;
 /** The saved meals, newest first. */
 export const selectMeals = createSelector([selectMealItems], (meals) =>
   [...meals].sort((a, b) => b.createdAt - a.createdAt),
+);
+
+export const selectStockByMealWithRecipes = createSelector(
+  [selectMeals, selectStockByRecipe, selectStockByMeal],
+  getMealStockMap,
 );
 
 export const selectMealsById = createSelector(

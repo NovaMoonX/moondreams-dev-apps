@@ -191,6 +191,176 @@ const SEED_NOTES = [
   },
 ];
 
+type SeedEventKind =
+  'MADE' | 'FRIDGE' | 'FREEZE' | 'THAW' | 'EAT' | 'TOSS' | 'CLEAR' | 'EDIT';
+
+const seedEvent = (
+  kind: SeedEventKind,
+  daysAgo: number,
+  hour: number,
+  details: {
+    servings?: number;
+    place?: 'FRIDGE' | 'FREEZER';
+    note?: string;
+  } = {},
+) => ({
+  kind,
+  daysAgo,
+  hour,
+  servings: details.servings ?? null,
+  place: details.place ?? null,
+  note: details.note ?? null,
+});
+
+const SEED_CONTAINERS = [
+  {
+    id: 'seed-pinch-container-adobo-fridge',
+    title: 'Adobo chicken',
+    recipeId: 'seed-pinch-recipe-adobo',
+    mealId: null,
+    cookId: 'seed-pinch-planned-1__seed-pinch-recipe-adobo',
+    servings: 2,
+    status: 'IN_STOCK',
+    place: 'FRIDGE',
+    eatByDays: 1,
+    events: [
+      seedEvent('MADE', 3, 12, { servings: 4 }),
+      seedEvent('FRIDGE', 3, 12, { servings: 4, place: 'FRIDGE' }),
+      seedEvent('EAT', 1, 19, { servings: 2 }),
+    ],
+  },
+  {
+    id: 'seed-pinch-container-rice-fridge',
+    title: 'Cilantro lime rice',
+    recipeId: 'seed-pinch-recipe-rice',
+    mealId: null,
+    cookId: null,
+    servings: 3,
+    status: 'IN_STOCK',
+    place: 'FRIDGE',
+    eatByDays: 4,
+    events: [seedEvent('FRIDGE', 0, 9, { servings: 3, place: 'FRIDGE' })],
+  },
+  {
+    id: 'seed-pinch-container-adobo-freezer',
+    title: 'Adobo chicken',
+    recipeId: 'seed-pinch-recipe-adobo',
+    mealId: null,
+    cookId: 'seed-pinch-cook-2',
+    servings: 5,
+    status: 'IN_STOCK',
+    place: 'FREEZER',
+    eatByDays: 80,
+    events: [
+      seedEvent('MADE', 10, 19, { servings: 6 }),
+      seedEvent('FREEZE', 10, 19, { servings: 6, place: 'FREEZER' }),
+      seedEvent('EAT', 4, 18, { servings: 1 }),
+    ],
+  },
+  {
+    id: 'seed-pinch-container-stock-freezer',
+    title: 'Chicken stock',
+    recipeId: null,
+    mealId: null,
+    cookId: null,
+    servings: 4,
+    status: 'IN_STOCK',
+    place: 'FREEZER',
+    eatByDays: -3,
+    events: [seedEvent('FREEZE', 100, 17, { servings: 4, place: 'FREEZER' })],
+  },
+  {
+    id: 'seed-pinch-container-adobo-thawed',
+    title: 'Adobo chicken',
+    recipeId: 'seed-pinch-recipe-adobo',
+    mealId: null,
+    cookId: null,
+    servings: 3,
+    status: 'IN_STOCK',
+    place: 'FRIDGE',
+    eatByDays: 2,
+    events: [
+      seedEvent('FREEZE', 40, 18, { servings: 3, place: 'FREEZER' }),
+      seedEvent('THAW', 12, 8, { servings: 3, place: 'FRIDGE' }),
+      seedEvent('FREEZE', 12, 20, { servings: 3, place: 'FREEZER' }),
+      seedEvent('THAW', 0, 8, { servings: 3, place: 'FRIDGE' }),
+    ],
+  },
+  {
+    id: 'seed-pinch-container-meal-fridge',
+    title: 'Adobo and rice',
+    recipeId: null,
+    mealId: 'seed-pinch-meal-adobo-rice',
+    cookId: null,
+    servings: 2,
+    status: 'IN_STOCK',
+    place: 'FRIDGE',
+    eatByDays: 3,
+    events: [seedEvent('FRIDGE', 1, 20, { servings: 2, place: 'FRIDGE' })],
+  },
+  {
+    id: 'seed-pinch-container-lentil-freezer',
+    title: "Grandma's lentil soup",
+    recipeId: null,
+    mealId: null,
+    cookId: null,
+    servings: 6,
+    status: 'IN_STOCK',
+    place: 'FREEZER',
+    eatByDays: 45,
+    events: [seedEvent('FREEZE', 30, 16, { servings: 6, place: 'FREEZER' })],
+  },
+  {
+    id: 'seed-pinch-container-adobo-done',
+    title: 'Adobo chicken',
+    recipeId: 'seed-pinch-recipe-adobo',
+    mealId: null,
+    cookId: 'seed-pinch-cook-1',
+    servings: 2,
+    status: 'DONE',
+    place: 'FRIDGE',
+    eatByDays: -16,
+    events: [
+      seedEvent('MADE', 24, 18, { servings: 4 }),
+      seedEvent('FRIDGE', 24, 18, { servings: 4, place: 'FRIDGE' }),
+      seedEvent('EAT', 23, 19, { servings: 2 }),
+      seedEvent('EAT', 21, 19, { servings: 2 }),
+    ],
+  },
+  {
+    id: 'seed-pinch-container-rice-tossed',
+    title: 'Cilantro lime rice',
+    recipeId: 'seed-pinch-recipe-rice',
+    mealId: null,
+    cookId: null,
+    servings: 2,
+    status: 'DONE',
+    place: 'FRIDGE',
+    eatByDays: -10,
+    events: [
+      seedEvent('FRIDGE', 14, 20, { servings: 2, place: 'FRIDGE' }),
+      seedEvent('EDIT', 12, 8, { note: 'EAT_BY_MOVED' }),
+      seedEvent('TOSS', 8, 18, { servings: 2 }),
+    ],
+  },
+  {
+    id: 'seed-pinch-container-chili-cleared',
+    title: 'Turkey chili',
+    recipeId: null,
+    mealId: null,
+    cookId: null,
+    servings: 3,
+    status: 'DONE',
+    place: 'FREEZER',
+    eatByDays: 30,
+    events: [
+      seedEvent('FREEZE', 60, 19, { servings: 4, place: 'FREEZER' }),
+      seedEvent('EAT', 40, 19, { servings: 1 }),
+      seedEvent('CLEAR', 5, 10, { servings: 3 }),
+    ],
+  },
+];
+
 const nutrition = (
   calories: number,
   protein: number,
@@ -708,6 +878,33 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(cook.id)
         .set({ ...cook, cookedAt, createdAt: cookedAt, updatedAt: cookedAt });
     }),
+    ...SEED_CONTAINERS.map(({ eatByDays, events, ...container }) => {
+      const formatDay = (ms: number) =>
+        new Date(ms).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        });
+      const history = events.map(({ daysAgo, hour, ...event }) => ({
+        ...event,
+        note:
+          event.note === 'EAT_BY_MOVED'
+            ? `Eat by ${formatDay(today + (eatByDays - 2) * DAY_MS)} → ${formatDay(today + eatByDays * DAY_MS)}`
+            : event.note,
+        at: today - daysAgo * DAY_MS + hour * 3_600_000,
+      }));
+      const lastAt = history[history.length - 1].at;
+      return kitchenRef
+        .collection('containers')
+        .doc(container.id)
+        .set({
+          ...container,
+          eatBy: today + eatByDays * DAY_MS,
+          history,
+          createdAt: history[0].at,
+          updatedAt: lastAt,
+        });
+    }),
     ...SEED_NOTES.map(({ daysAgo, hour, ...entry }) => {
       const at = today - daysAgo * DAY_MS + hour * 3_600_000;
       return kitchenRef
@@ -790,6 +987,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_SOURCES.length +
       SEED_SHOPPING.length +
       SEED_COOKS.length +
+      SEED_CONTAINERS.length +
       SEED_NOTES.length +
       SEED_IDEAS.length +
       SEED_INGREDIENTS.length +

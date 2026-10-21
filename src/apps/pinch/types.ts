@@ -186,6 +186,7 @@ export type PinchSubview =
   | { kind: 'stores' }
   | { kind: 'products' }
   | { kind: 'sources' }
+  | { kind: 'containers'; recipeId?: string; mealId?: string }
   /** The way a new recipe already chose to begin; without one it opens on the list of ways. */
   | {
       kind: 'recipe';
@@ -321,6 +322,43 @@ export interface Cook {
 
 export type NoteKind = 'NOTE' | 'TWEAK';
 
+export type ContainerPlace = 'FRIDGE' | 'FREEZER';
+export type ContainerStatus = 'IN_STOCK' | 'DONE';
+export type ContainerEventKind =
+  'MADE' | 'FRIDGE' | 'FREEZE' | 'THAW' | 'EAT' | 'TOSS' | 'CLEAR' | 'EDIT';
+
+export interface ContainerEvent {
+  kind: ContainerEventKind;
+  /** An instant. */
+  at: number;
+  servings: number | null;
+  /** Set for FRIDGE, FREEZE and THAW, else null. */
+  place: ContainerPlace | null;
+  note: string | null;
+}
+
+export interface Container {
+  id: string;
+  title: string;
+  /** Immutable. */
+  recipeId: string | null;
+  /** Immutable; never set together with `recipeId`. */
+  mealId: string | null;
+  /** Immutable. */
+  cookId: string | null;
+  /** A finished container keeps the portions it ended with. */
+  servings: number;
+  status: ContainerStatus;
+  place: ContainerPlace;
+  /** Date-only: UTC midnight. */
+  eatBy: number;
+  /** Oldest first, capped. */
+  history: ContainerEvent[];
+  /** Immutable. */
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** One entry in a recipe's journal: something to remember after cooking, or the record of an edit to the recipe. */
 export interface RecipeNote {
   /** Immutable. */
@@ -342,7 +380,7 @@ export interface RecipeNote {
 
 export type ShoppingRequest =
   | { kind: 'recipe'; recipeId: string }
-  | { kind: 'items'; items: MealItem[]; label: string };
+  | { kind: 'items'; items: MealItem[]; label: string; mealId?: string | null };
 
 /** One line of a recipe: it names the ingredient and an amount, never a store or product. */
 export interface RecipeIngredient {

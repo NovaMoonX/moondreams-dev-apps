@@ -14,6 +14,7 @@ import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import StockRows from '@apps/pinch/components/containers/StockRows';
 import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
@@ -71,6 +72,8 @@ interface RecipeDrawerProps {
   onFillIn: (gaps: Gap[]) => void;
   onAddToShopping: (request: ShoppingRequest) => void;
   onOpenHistory: (id: string) => void;
+  onOpenStock: (id: string) => void;
+  onPutAway: (id: string) => void;
   /** A null `noteId` starts a new note. */
   onOpenNote: (recipeId: string, noteId: string | null) => void;
 }
@@ -84,6 +87,8 @@ function RecipeDrawer({
   onFillIn,
   onAddToShopping,
   onOpenHistory,
+  onOpenStock,
+  onPutAway,
   onOpenNote,
 }: RecipeDrawerProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
@@ -315,6 +320,12 @@ function RecipeDrawer({
                 onClick={() => void handleMarkCooked()}
               />
             )}
+            <StockRows
+              uid={uid}
+              target={{ kind: 'recipe', id: recipe.id }}
+              onOpenStock={() => onOpenStock(recipe.id)}
+              onPutAway={() => onPutAway(recipe.id)}
+            />
             <AddToShoppingRow
               isGrouped
               subtitle='Choose what you need for this recipe'

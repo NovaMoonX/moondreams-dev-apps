@@ -673,7 +673,7 @@ A person can say how much of an ingredient they have. An ingredient they haven't
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
-### Issue 20: Mark a meal as made: stock comes out, batches become prepared servings
+### Issue 20: Mark a meal as made: stock comes out (batches became prepared containers, Issue 41)
 
 **Prerequisites:** Issue 19
 **Target PR Size:** ~500 lines
@@ -684,14 +684,14 @@ A person can say how much of an ingredient they have. An ingredient they haven't
 **Context:** TDD Logic §7; the agreed rule: stock deducts on "mark as made", and prepared servings are consumed separately so nothing deducts twice.
 
 ### Description
-Marking a meal made takes its ingredients out of stock. Making a batch adds prepared servings a person can plan from later, and eating one doesn't deduct ingredients again.
+Marking a meal made takes its ingredients out of stock. Prepared servings are already built, as containers (Issue 41), and eating from one never touches ingredient stock; this issue is the ingredient side that is left.
 
 ### Possible Approach
 1. A transaction on made: deduct tracked stock only (untracked is untouched), set `madeAt`.
-2. Prepared servings as items a planned meal can use; consuming one decrements it and never touches ingredient stock.
+2. Prepared servings need nothing here: Issue 41's containers are eaten from a plan and never deduct ingredients.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read / Update / Delete:** mark and unmark made, create, plan and adjust prepared servings.
+- [ ] **Create / Read / Update / Delete:** mark and unmark made.
 
 ### Success Criteria
 - [ ] No double deduction (emulator walk-through); untracked ingredients never go negative or to zero.
@@ -1030,6 +1030,42 @@ A recipe can say how many days what it makes keeps in the fridge and the freezer
 - [ ] The rules accept a valid care, null and a missing key for the owner and refuse bad days, an extra key and a wrong type, for everyone else too; the cases are listed in the PR as owner, another user and signed out.
 - [ ] A reading with no storage lines leaves the row quiet and lists nothing under "We couldn't read"; one with them fills the row for review and saves nothing until the recipe is saved.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and the editor was measured against the container rules.
+- [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
+
+### Issue 41: Prepared containers: meal prep kept in the fridge or freezer
+
+**Prerequisites:** Issue 7, Issue 11, Issue 14, Issue 33, Issue 40
+**Target PR Size:** ~2,500 lines (data and rules, a listener and store slice, the Kitchen row and list, the container sheet, list insight, cooking mode's question, eating from a plan, the shopping line, seeds, checks and docs)
+**Files:**
+- `Container`, `ContainerEvent` and the place, status and event kinds in `types.ts`, the caps and the named defaults in `constants.ts`, `utils/containers.ts` (every pure rule: eat-by classification and defaults, the plans, the history cap, the stock maps, the bulk-meal rule, the copy helpers), `isContainer` in `firestore.rules` and the Finished index in `firestore.indexes.json`
+- `store/slices/containersSlice.ts`, `startContainersListener`, `store/actions/containerActions.ts`, `queries/containerQueries.ts`, the container selectors, `hooks/useContainerActions.ts`, `useContainerDraft.ts`, `usePutAway.ts`
+- `components/containers/` (`PreparedEntry`, `ContainersSubview`, `ContainerRow`, `ContainerSheet`, `ContainerFormSheet`, `ContainerFields`, `EatByField`, `EatByBadge`, `StockLine`, `StockRows`, `EatFromStock`), `components/cooking/CookPutAway.tsx`
+- Changed: Kitchen (the row), `EntryRow` (a detail line), Recipes and Meals (rows, filter, drawers), the plate builder's search, the planned meal view, the shopping sheet, the cooking history sheet, `CookingSubview`
+- The seeds: ten containers in every state for Alex, about 300 in stock and 260 finished for the scale kitchen
+
+**Context:** Read `TECHNICAL.md` decision 23, §5g, criterion 13 and open question 22; `UX.md`'s Prepared meals; CLAUDE.md's "Pick the atomic write that fits", "Know which of the two kinds of time value a field is" and the Firestore rules section on indexes and the evaluator.
+
+### Description
+Meal prep kept in the fridge or freezer is a list of containers: what each is, how many servings are in it, where it is, when to eat it by, and what has happened to it. Kitchen has a "Prepared meals" row and list; a recipe's and saved meal's rows and drawers say what is in stock; cooking mode asks "Putting any away?" after a bulk meal; a plan can eat from a container; the shopping sheet says what is already put away. A put-away can be several containers (portions in separate boxes thaw one at a time), a saved meal's stock includes its recipes', and a thaw or move never hides that a container is past its date.
+
+### Possible Approach
+1. One document per container (`servings`, `status`, `place`, `eatBy` as a date-only value, `history` of at most ten events), never split; finishing keeps the document, deleting erases it. A put-away writes one to twenty containers in one batch, each with its own history.
+2. Every change that depends on the stored state is a `runTransaction` over a pure plan, so another device's change is never written over.
+3. Keep the rules' history check lean: the evaluator's 1,000-expression limit allows about ten events checked by index.
+4. One listener for what is in stock; Finished is read on demand through TanStack Query with its composite index.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read / Update / Delete:** put some away (as one container or several), see what is in stock and finished, eat some or all, correct the count, move between fridge and freezer, change the eat-by date, throw it out, delete it.
+- [ ] **Entry points:** Kitchen's row, a recipe's and a saved meal's drawer, cooking mode's last screen, the Prepared meals list's "Add", a planned meal's "Eat from your fridge or freezer".
+
+### Success Criteria
+- [ ] Eat soon and past its date read right in the viewer's own time zone, west and east of UTC (`npm run check:pinch-math` under `America/Los_Angeles` and `Pacific/Auckland`), and an eat-by is never shown in local time.
+- [ ] The rules accept a valid container for the owner and refuse a bad shape, eleven events, servings 0, a non-midnight eat-by and a changed immutable field, for everyone else too; the cases are listed in the PR as owner, another user and signed out, against the previous rules as the control.
+- [ ] A failed or denied containers listener degrades only its own UI; checked by loading the previous rules into the emulator.
+- [ ] Two quick taps eat one portion and save one container, and Enter then Enter on a list row eats nothing; Escape and the back gesture close one thing at a time; leaving the put-away details after a change asks first, and a save that isn't confirmed yet never holds the screen.
+- [ ] A thaw or move of a container already past its date keeps that date and says so; a recipe whose only use is food in the fridge or freezer is archived, not erased.
+- [ ] Driven on the scale kitchen at 4× CPU: tab switches, the stock list with about 300 containers, a recipe drawer and the Recipes list with stock lines, against the base build.
+- [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the feature was driven in a real browser at 390×844 and 320×568 in light and dark and at 1280, and every sheet was measured against the container rules.
 - [ ] The README Build Plan line(s) this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Pinch rules files are updated if the app's design vocabulary changed.
 
 ## Beyond

@@ -4,7 +4,10 @@ import { useStore } from 'react-redux';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { NotebookPen, PackagePlus } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
@@ -14,6 +17,7 @@ import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNotes from '@apps/pinch/components/cooking/CookNotes';
+import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookStepView from '@apps/pinch/components/cooking/CookStepView';
 import CookTimerStrip from '@apps/pinch/components/cooking/CookTimerStrip';
 import {
@@ -26,6 +30,7 @@ import { useCookActions } from '@apps/pinch/hooks/useCookActions';
 import { useCookNote } from '@apps/pinch/hooks/useCookNote';
 import { useCookTimers } from '@apps/pinch/hooks/useCookTimers';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import { usePutAway } from '@apps/pinch/hooks/usePutAway';
 import {
   selectCooksById,
   selectCookSummaries,
@@ -107,7 +112,18 @@ function CookingSession({
     recipeId: recipe.id,
     recipeTitle: recipe.title,
     cookId: isCooked ? cookedId : null,
-    onSaved: closeIfStillOpen,
+    onSaved: () => {
+      if (!putAway.isAsking) closeIfStillOpen();
+    },
+  });
+
+  const isAlreadyMarked = hasPlannedCook && cookedId === null && !isMarking;
+  const putAway = usePutAway({
+    uid,
+    recipe,
+    servings,
+    eatenTonight: plannedMealId === null ? null : (initialServings ?? null),
+    cookId: isCooked ? cookedId : isAlreadyMarked ? plannedCookId : null,
   });
 
   const lastIndex = recipe.steps.length - 1;
@@ -118,7 +134,6 @@ function CookingSession({
   const isFinishShown = isFinished && isStepsView && hasSteps;
   const canMark = isCooksReady && !isRemoved;
   const leftoversLine = getLeftoversLine(getRecipeCare(recipe));
-  const isAlreadyMarked = hasPlannedCook && cookedId === null && !isMarking;
 
   const scrollToTop = () =>
     rootRef.current
@@ -152,17 +167,29 @@ function CookingSession({
     return isConfirmed;
   };
 
-  const confirmDiscard = async () => {
-    if (!note.hasDraft) return true;
-
-    const isDiscarded = await confirm({
-      title: 'Discard this note?',
-      message: "It isn't saved yet. Discarding it loses what you typed.",
+  const confirmDiscardOf = (title: string, message: string) =>
+    confirm({
+      title,
+      message,
       confirmText: 'Discard',
       cancelText: 'Keep editing',
       destructive: true,
     });
-    return isDiscarded;
+
+  const confirmDiscard = async () => {
+    if (note.hasDraft) {
+      return confirmDiscardOf(
+        'Discard this note?',
+        "It isn't saved yet. Discarding it loses what you typed.",
+      );
+    }
+    if (putAway.hasDraft) {
+      return confirmDiscardOf(
+        'Discard this container?',
+        "It isn't saved yet. Discarding it loses what you chose.",
+      );
+    }
+    return true;
   };
 
   const leave = async () => {
@@ -281,6 +308,26 @@ function CookingSession({
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
+  const getFinishCopy = () => {
+    if (isCooked) {
+      return {
+        title: 'Marked as cooked',
+        line: 'Saved to your cooking history.',
+      };
+    }
+    if (isAlreadyMarked) {
+      return {
+        title: 'Already marked as cooked',
+        line: "It's in your cooking history, so nothing more is saved.",
+      };
+    }
+    return {
+      title: 'Nice work. Mark it as cooked?',
+      line: 'Keeps a record. You can change the date later.',
+    };
+  };
+  const finishCopy = getFinishCopy();
+
   const showLockNote =
     !isCooked && (!wakeLock.isSupported || wakeLock.hasFailed);
   const isChanged =
@@ -307,94 +354,107 @@ function CookingSession({
         )}
         {!isFinishShown && <CookNotes recipeId={recipe.id} />}
         {isFinishShown ? (
-          isCooked ? (
-            <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
+          <div className='mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 py-6'>
+            <div className='space-y-3 text-center'>
               <p className='text-2xl leading-snug font-medium'>
-                Marked as cooked
-              </p>
-              <div className='space-y-0.5'>
-                <p className='font-medium'>{formatServings(servings)}</p>
-                <p className='text-muted-foreground text-sm'>
-                  Saved to your cooking history.
-                </p>
-              </div>
-              {leftoversLine && (
-                <p className='text-muted-foreground text-sm text-balance'>
-                  {leftoversLine}
-                </p>
-              )}
-              {note.isOpen ? (
-                <div className='w-full max-w-md space-y-2 text-left'>
-                  <NoteTextField
-                    label='Your note'
-                    placeholder='Less vinegar next time, the sauce was ready early'
-                    maxLength={MAX_RECIPE_NOTE_LENGTH}
-                    value={note.text}
-                    onChange={note.setText}
-                    shouldFocus
-                  />
-                  {note.error && (
-                    <p className='text-destructive text-sm' role='alert'>
-                      {note.error}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                note.isAvailable && (
-                  <Button
-                    type='button'
-                    variant='link'
-                    className='h-10'
-                    onClick={note.open}
-                  >
-                    Add a note about it
-                  </Button>
-                )
-              )}
-            </div>
-          ) : (
-            <div className='flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center'>
-              <p className='text-2xl leading-snug font-medium'>
-                {isAlreadyMarked
-                  ? 'Already marked as cooked'
-                  : 'Nice work. Mark it as cooked?'}
+                {finishCopy.title}
               </p>
               <div className='space-y-0.5'>
                 {!isAlreadyMarked && (
                   <p className='font-medium'>{formatServings(servings)}</p>
                 )}
                 <p className='text-muted-foreground text-sm'>
-                  {isAlreadyMarked
-                    ? "It's in your cooking history, so nothing more is saved."
-                    : 'Keeps a record. You can change the date later.'}
+                  {finishCopy.line}
                 </p>
               </div>
               {leftoversLine && (
-                <p className='text-muted-foreground text-sm text-balance'>
+                <p
+                  className={join(
+                    'text-muted-foreground text-sm text-balance',
+                    putAway.isOpen && 'max-[360px]:hidden',
+                  )}
+                >
                   {leftoversLine}
                 </p>
               )}
-              {isHistoryFull && !isAlreadyMarked && (
+              {isCooked && note.isSaved && (
+                <p className='text-muted-foreground text-sm'>Note saved.</p>
+              )}
+              {isHistoryFull && !isCooked && !isAlreadyMarked && (
                 <p className='text-muted-foreground text-sm'>
                   This recipe's history is full. Delete an older cook to add
                   more.
                 </p>
               )}
-              {markError && !isAlreadyMarked && (
+              {markError && !isCooked && !isAlreadyMarked && (
                 <p className='text-destructive text-sm' role='alert'>
                   {markError}
                 </p>
               )}
+            </div>
+            {(isCooked || isAlreadyMarked) && !note.isOpen && (
+              <CookPutAway putAway={putAway} />
+            )}
+            {isCooked && note.isOpen && (
+              <div className='bg-muted/50 border-border space-y-2 rounded-2xl border p-4'>
+                <NoteTextField
+                  label='Your note'
+                  placeholder='Less vinegar next time, the sauce was ready early'
+                  maxLength={MAX_RECIPE_NOTE_LENGTH}
+                  value={note.text}
+                  onChange={note.setText}
+                  shouldFocus
+                />
+                {note.error && (
+                  <p className='text-destructive text-sm' role='alert'>
+                    {note.error}
+                  </p>
+                )}
+              </div>
+            )}
+            <ActionGroup>
+              {(isCooked || isAlreadyMarked) &&
+                putAway.isAvailable &&
+                !putAway.isOpen &&
+                !putAway.isAsking &&
+                !note.isOpen && (
+                  <ActionRow
+                    icon={<PackagePlus className='h-4 w-4' />}
+                    label={
+                      putAway.saved.length > 0
+                        ? 'Put another away'
+                        : 'Put some away'
+                    }
+                    subtitle='Fridge or freezer, with an eat-by date'
+                    onClick={() => putAway.open('FRIDGE', false)}
+                    isGrouped
+                  />
+                )}
+              {isCooked &&
+                note.isAvailable &&
+                !note.isSaved &&
+                !note.isOpen &&
+                !putAway.isOpen && (
+                  <ActionRow
+                    icon={<NotebookPen className='h-4 w-4' />}
+                    label='Add a note about it'
+                    subtitle='Something to remember next time'
+                    onClick={note.open}
+                    isGrouped
+                  />
+                )}
+            </ActionGroup>
+            {!isCooked && (
               <Button
                 type='button'
                 variant='tertiary'
-                className='h-10 underline'
+                className='h-10 self-center underline'
                 onClick={() => setIsFinished(false)}
               >
                 Back to the last step
               </Button>
-            </div>
-          )
+            )}
+          </div>
         ) : isStepsView ? (
           hasSteps ? (
             <CookStepView
@@ -450,7 +510,36 @@ function CookingSession({
             onDismiss={handleDismissTimer}
           />
           <div className='flex gap-3'>
-            {isFinishShown && isCooked && note.isOpen ? (
+            {isFinishShown &&
+            (isCooked || isAlreadyMarked) &&
+            putAway.isOpen ? (
+              <>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  className={join(
+                    'h-14 shrink-0 px-6 text-base',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  disabled={putAway.isSaving}
+                  onClick={putAway.skip}
+                >
+                  Skip
+                </Button>
+                <Button
+                  type='button'
+                  className={join(
+                    'h-14 min-w-0 flex-1 text-lg',
+                    '[@media(max-height:500px)]:h-11',
+                  )}
+                  loading={putAway.isSaving}
+                  disabled={putAway.isSaving || !putAway.canSave}
+                  onClick={() => void putAway.save()}
+                >
+                  Save
+                </Button>
+              </>
+            ) : isFinishShown && isCooked && note.isOpen ? (
               <>
                 <Button
                   type='button'

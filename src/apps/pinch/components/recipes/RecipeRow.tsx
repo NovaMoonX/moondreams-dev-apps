@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { shallowEqual } from 'react-redux';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
@@ -6,11 +7,13 @@ import { ChevronRight } from 'lucide-react';
 import MacroStats from '@/components/MacroStats';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
+import StockLine from '@apps/pinch/components/containers/StockLine';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import {
   selectCookSummaries,
   selectRecipeNutrition,
   selectShowNutrition,
+  selectStockByRecipe,
 } from '@apps/pinch/store/selectors';
 import type { Recipe, RecipeCost } from '@apps/pinch/types';
 import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
@@ -26,6 +29,7 @@ interface RecipeRowProps {
   cost: RecipeCost | undefined;
   showPrices: boolean;
   showMacros: boolean;
+  showStock: boolean;
   onOpen: (id: string) => void;
 }
 
@@ -34,12 +38,18 @@ function RecipeRow({
   cost,
   showPrices,
   showMacros,
+  showStock,
   onOpen,
 }: RecipeRowProps) {
   const nutrition = useAppSelector(selectRecipeNutrition).get(recipe.id);
   const show = useAppSelector(selectShowNutrition);
   const cookCount = useAppSelector(
     (state) => selectCookSummaries(state).get(recipe.id)?.count ?? 0,
+  );
+  const stock = useAppSelector(
+    (state) =>
+      showStock ? selectStockByRecipe(state).get(recipe.id) : undefined,
+    shallowEqual,
   );
   const total = getTotalMinutes(recipe);
   const detail = [
@@ -95,6 +105,7 @@ function RecipeRow({
             className='text-muted-foreground mt-0.5 text-xs font-normal'
           />
         )}
+        <StockLine summary={stock} />
       </span>
       <ChevronRight
         className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'

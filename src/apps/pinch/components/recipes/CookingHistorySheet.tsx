@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 
+import { useQuery } from '@tanstack/react-query';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft, ChevronRight, NotebookPen } from 'lucide-react';
 
@@ -13,13 +15,20 @@ import {
   COOK_HISTORY_PAGE_SIZE,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
+import { CONTAINER_EMOJI } from '@apps/pinch/constants';
+import { scopedContainersQueryOptions } from '@apps/pinch/queries/containerQueries';
 import {
+  selectContainersByCookId,
   selectCooksByRecipe,
   selectNotesLoadError,
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { Cook } from '@apps/pinch/types';
+import type { Container, Cook } from '@apps/pinch/types';
+import {
+  getPutAwayText,
+  groupContainersByCook,
+} from '@apps/pinch/utils/containers';
 import { getCookServings, isCookHistoryFull } from '@apps/pinch/utils/cooks';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
@@ -55,6 +64,25 @@ function CookingHistorySheet({
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
   const lastToken = useRef(0);
+
+  const stockByCook = useAppSelector(selectContainersByCookId);
+  const recipeContainers = useQuery(
+    scopedContainersQueryOptions(uid, 'recipeId', recipeId),
+  ).data;
+  const putAwayByCook = useMemo(() => {
+    const merged = new Map<string, Container>(
+      (recipeContainers ?? []).map((container) => [container.id, container]),
+    );
+    stockByCook.forEach((list) =>
+      list.forEach((container) => merged.set(container.id, container)),
+    );
+    return new Map(
+      [...groupContainersByCook([...merged.values()])].map(([cookId, list]) => [
+        cookId,
+        getPutAwayText(list),
+      ]),
+    );
+  }, [recipeContainers, stockByCook]);
 
   const plannedById = useMemo(
     () => new Map(plannedMeals.map((planned) => [planned.id, planned])),
@@ -197,6 +225,7 @@ function CookingHistorySheet({
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
             {cooks.slice(0, visibleCount).map((cook) => {
               const planNote = getPlanNote(cook);
+              const putAway = putAwayByCook.get(cook.id) ?? null;
               const day = formatDateShort(cook.cookedAt);
               return (
                 <li key={cook.id} className='pb-1'>
@@ -218,6 +247,12 @@ function CookingHistorySheet({
                       {planNote && (
                         <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
                           {planNote}
+                        </span>
+                      )}
+                      {putAway && (
+                        <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
+                          <span aria-hidden='true'>{CONTAINER_EMOJI}</span>{' '}
+                          {putAway}
                         </span>
                       )}
                     </span>

@@ -193,6 +193,9 @@ const BIG_TWEAK = [
   'Ingredients reordered',
   'and 3 more',
 ];
+const CONTAINERS_PER_RECIPE = [0, 1, 2, 0, 3, 1, 2, 0, 2, 3];
+const MEAL_CONTAINER_COUNT = 10;
+const FINISHED_CONTAINER_COUNT = 260;
 const SHOPPING_FAMILY_COUNT = 25;
 // The last label is long on purpose, to see a name wrap on a phone.
 const SOURCE_LABELS = [
@@ -237,7 +240,7 @@ async function writeAll(
   }
 }
 
-/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list, 80 recipe ideas, about 330 cooks and about 310 notes. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
+/** Seeds Taylor's kitchen with the volume a long-time cook might reach: 300 ingredients in 40 families, 150 products at 12 stores, 200 recipes (half with storage notes) from 12 sources, 60 saved meals, about 1,100 planned meals over three months, an 80-item shopping list, 80 recipe ideas, about 330 cooks, about 310 notes, about 300 containers in stock and about 260 finished ones. Emulators only, and only when asked for (`npm run seed:pinch-scale`); `seed:reset` brings the baseline back. */
 export async function seedPinchScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -603,6 +606,99 @@ export async function seedPinchScale(
       updatedAt: createdAt + index,
     });
   });
+
+  // Its own generator, so the rest of the fixture is unchanged.
+  const containerRandom = makeRandom(20260404);
+  const containerInt = (min: number, max: number) =>
+    min + Math.floor(containerRandom() * (max - min + 1));
+  const makeContainer = (
+    id: string,
+    subject: { recipeId: string | null; mealId: string | null; title: string },
+    status: 'IN_STOCK' | 'DONE',
+  ) => {
+    const place = containerRandom() < 0.4 ? 'FRIDGE' : 'FREEZER';
+    const servings = containerInt(1, 8);
+    const startedDaysAgo = containerInt(1, 90);
+    const startedAt = today - startedDaysAgo * DAY_MS + 18 * 3_600_000;
+    const placeEvent = {
+      kind: place === 'FRIDGE' ? 'FRIDGE' : 'FREEZE',
+      at: startedAt,
+      servings,
+      place,
+      note: null,
+    };
+    const eatenAt =
+      today - containerInt(0, startedDaysAgo) * DAY_MS + 19 * 3_600_000;
+    const history =
+      status === 'DONE'
+        ? [
+            placeEvent,
+            { kind: 'EAT', at: eatenAt, servings, place: null, note: null },
+          ]
+        : [placeEvent];
+    return {
+      id,
+      title: subject.title,
+      recipeId: subject.recipeId,
+      mealId: subject.mealId,
+      cookId: null,
+      servings,
+      status,
+      place,
+      eatBy:
+        status === 'DONE'
+          ? today - containerInt(0, 60) * DAY_MS
+          : today +
+            (place === 'FRIDGE' ? containerInt(-2, 6) : containerInt(5, 110)) *
+              DAY_MS,
+      history,
+      createdAt: startedAt,
+      updatedAt: status === 'DONE' ? eatenAt : startedAt,
+    };
+  };
+  const stockedContainers = [
+    ...recipes.flatMap((recipe, recipeIndex) =>
+      Array.from(
+        {
+          length:
+            recipeIndex === 1
+              ? 12
+              : CONTAINERS_PER_RECIPE[
+                  recipeIndex % CONTAINERS_PER_RECIPE.length
+                ],
+        },
+        (_, index) =>
+          makeContainer(
+            `scale-container-${recipeIndex}-${index}`,
+            { recipeId: recipe.id, mealId: null, title: recipe.title },
+            'IN_STOCK',
+          ),
+      ),
+    ),
+    ...meals
+      .slice(0, MEAL_CONTAINER_COUNT)
+      .map((meal, index) =>
+        makeContainer(
+          `scale-container-meal-${index}`,
+          { recipeId: null, mealId: meal.id, title: meal.name },
+          'IN_STOCK',
+        ),
+      ),
+  ];
+  const finishedContainers = Array.from(
+    { length: FINISHED_CONTAINER_COUNT },
+    (_, index) => {
+      const recipe = recipes[containerInt(0, recipes.length - 1)];
+      return makeContainer(
+        `scale-container-done-${index}`,
+        { recipeId: recipe.id, mealId: null, title: recipe.title },
+        'DONE',
+      );
+    },
+  );
+  [...stockedContainers, ...finishedContainers].forEach((container) =>
+    add(`containers/${container.id}`, container),
+  );
 
   await writeAll(firestore, writes);
 

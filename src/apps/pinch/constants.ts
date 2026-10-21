@@ -1,4 +1,6 @@
 import type {
+  ContainerEventKind,
+  ContainerPlace,
   Dimension,
   IdeaKind,
   IdeaStartMethod,
@@ -383,3 +385,51 @@ export const RECIPE_NOTES_PAGE_SIZE = 50;
 export const NOTE_COOK_CHOICES = 4;
 /** The most meals one day can have priced again in the one transaction that does it, under Firestore's 500 writes: the action's limit, not the rules'. */
 export const MAX_REPRICE_MEALS = 400;
+
+export const CONTAINER_PLACES: ContainerPlace[] = ['FRIDGE', 'FREEZER'];
+export const CONTAINER_PLACE_LABELS: Record<ContainerPlace, string> = {
+  FRIDGE: 'Fridge',
+  FREEZER: 'Freezer',
+};
+export const CONTAINER_PLACE_EMOJIS: Record<ContainerPlace, string> = {
+  FRIDGE: '🧊',
+  FREEZER: '❄️',
+};
+export const CONTAINER_PLACE_OPTIONS = CONTAINER_PLACES.map((place) => ({
+  value: place,
+  label: CONTAINER_PLACE_LABELS[place],
+  emoji: CONTAINER_PLACE_EMOJIS[place],
+}));
+export const CONTAINER_EMOJI = '🍱';
+export const CONTAINER_EVENT_KINDS: ContainerEventKind[] = [
+  'MADE',
+  'FRIDGE',
+  'FREEZE',
+  'THAW',
+  'EAT',
+  'TOSS',
+  'CLEAR',
+  'EDIT',
+];
+export const MAX_CONTAINER_SERVINGS = 100;
+export const MAX_CONTAINERS_PER_PUT_AWAY = 20;
+/** Set by the rules evaluator's budget of 1,000 expressions a request, not only by the length check: ten events with servings and place each pass; ten that also carry a note can fail. */
+export const MAX_CONTAINER_HISTORY = 10;
+export const MAX_CONTAINER_NOTE_LENGTH = 80;
+export const MAX_CONTAINER_TITLE_LENGTH = 120;
+// 2000-01-01 and 2100-01-01, UTC midnight: the bounds the rules take.
+export const MIN_EAT_BY_DATE = 946_684_800_000;
+export const MAX_EAT_BY_DATE = 4_102_444_800_000;
+export const CONTAINER_FRIDGE_DAYS = 4;
+export const CONTAINER_FREEZER_DAYS = 90;
+export const CONTAINER_THAWED_DAYS = 2;
+export const CONTAINER_EAT_SOON_DAYS = 2;
+export const BULK_MEAL_SERVINGS = 5;
+export const CONTAINER_SITTING_SERVINGS = 2;
+/** Counted by the client only; the rules do not count documents. */
+export const SOFT_MAX_CONTAINERS = 500;
+export const CONTAINER_LIST_PAGE_SIZE = 20;
+export const CONTAINER_FINISHED_PAGE_SIZE = 25;
+export const CONTAINER_QUERY_LIMIT = 200;
+/** Containers one transaction of a clear-out or its Undo re-reads and writes, under Firestore's 500: the action's limit, not the rules'. */
+export const CONTAINER_CLEAR_CHUNK_SIZE = 200;
