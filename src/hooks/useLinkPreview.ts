@@ -45,14 +45,20 @@ const toPreview = (url: string, page: PageContent): PageLinkPreview => {
   };
 };
 
-/**
- * What a pasted link points at, or null until it is certain: the text is a whole web link, typing has paused on it
- * and its page has been read. There is no loading or failed state to draw, so a card built from this never flashes.
- */
-export function useLinkPreview(
+export interface LinkLookup {
+  /** The page, once read; null before that and after a failure. */
+  preview: PageLinkPreview | null;
+  /** A whole web link has been pasted and its page is not read yet (typing has not paused, or the read is running). */
+  isLooking: boolean;
+  /** The read finished without a page. */
+  hasFailed: boolean;
+}
+
+/** For a form whose Save waits on the read or asks for a title when it fails; anything that only draws the page uses `useLinkPreview`. */
+export function useLinkLookup(
   text: string,
   { getQueryOptions, isEnabled = true }: UseLinkPreviewOptions,
-): PageLinkPreview | null {
+): LinkLookup {
   const settledText = useDebouncedValue(text, DEBOUNCE_MS.linkDetection);
   const typedLink = toWebLink(text);
   const url =
@@ -64,7 +70,23 @@ export function useLinkPreview(
     enabled: url !== null && isEnabled,
   });
 
-  const preview =
-    url !== null && lookup.data ? toPreview(url, lookup.data) : null;
+  const isActive = typedLink !== null && isEnabled;
+  const result: LinkLookup = {
+    preview: url !== null && lookup.data ? toPreview(url, lookup.data) : null,
+    isLooking: isActive && (url === null || lookup.isFetching),
+    hasFailed: isActive && url !== null && !lookup.isFetching && lookup.isError,
+  };
+  return result;
+}
+
+/**
+ * What a pasted link points at, or null until it is certain: the text is a whole web link, typing has paused on it
+ * and its page has been read. There is no loading or failed state to draw, so a card built from this never flashes.
+ */
+export function useLinkPreview(
+  text: string,
+  options: UseLinkPreviewOptions,
+): PageLinkPreview | null {
+  const { preview } = useLinkLookup(text, options);
   return preview;
 }
