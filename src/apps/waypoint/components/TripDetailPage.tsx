@@ -724,6 +724,9 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         )}
         {isIdeaBoardProminent && ideasOverview}
         {(hasAppNav ? sectionTab === '' : true) && (
+          <PackingSuggestionsEntry trip={trip} currentUserId={currentUserId} />
+        )}
+        {(hasAppNav ? sectionTab === '' : true) && (
           <ChecklistOverview
             trip={trip}
             onOpen={(category) => {
@@ -731,9 +734,6 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
               setChecklistCategory(category);
             }}
           />
-        )}
-        {(hasAppNav ? sectionTab === '' : true) && (
-          <PackingSuggestionsEntry trip={trip} currentUserId={currentUserId} />
         )}
         {hasAppNav && sectionTab === '' && !isActive && (
           <div className='mt-5 space-y-3'>
