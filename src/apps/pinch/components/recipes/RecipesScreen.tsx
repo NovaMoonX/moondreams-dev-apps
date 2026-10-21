@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { BookOpen, Plus } from 'lucide-react';
 
+import EntryChip from '@/components/EntryChip';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -16,7 +17,6 @@ import ContainerFormSheet, {
 } from '@apps/pinch/components/containers/ContainerFormSheet';
 import IdeasView from '@apps/pinch/components/ideas/IdeasView';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
-import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import FillInSheet from '@apps/pinch/components/shared/FillInSheet';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
@@ -499,16 +499,6 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           />
         )}
       </div>
-      {view === 'recipes' && sources.length > 0 && (
-        <div className='grid grid-cols-2 gap-2'>
-          <EntryRow
-            icon={<BookOpen className='h-4 w-4' />}
-            label='Sources'
-            count={sources.length}
-            onClick={() => openSubview({ kind: 'sources' })}
-          />
-        </div>
-      )}
       {hasFilterBar ? (
         <FilterBar
           query={query}
@@ -569,6 +559,16 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             placeholder={view === 'meals' ? 'Search meals' : 'Search recipes'}
           />
         )
+      )}
+      {view === 'recipes' && sources.length > 0 && (
+        <div className='flex flex-wrap gap-2'>
+          <EntryChip
+            icon={<BookOpen className='h-4 w-4' />}
+            label='Sources'
+            count={sources.length}
+            onClick={() => openSubview({ kind: 'sources' })}
+          />
+        </div>
       )}
       {getBody()}
       {openId && (

@@ -1,6 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { PackagePlus, ShoppingBasket } from 'lucide-react';
 
-import ActionGroup from '@/components/ActionGroup';
+import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import DetailSheet from '@/components/DetailSheet';
 import FormSection from '@/components/FormSection';
 import HelpTip from '@/components/HelpTip';
@@ -8,12 +9,13 @@ import MacroStats from '@/components/MacroStats';
 import StatTile from '@/components/StatTile';
 import { useAppSelector } from '@/store';
 import StockRows from '@apps/pinch/components/containers/StockRows';
-import AddToShoppingRow from '@apps/pinch/components/shared/AddToShoppingRow';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
 import NudgeCountNote from '@apps/pinch/components/shared/NudgeCountNote';
 import {
+  selectContainersLoadError,
   selectCostContext,
   selectIngredientsById,
+  selectIsContainersReady,
   selectMealsById,
   selectRecipesById,
   selectShowNutrition,
@@ -61,6 +63,8 @@ function MealDrawer({
   const show = useAppSelector(selectShowNutrition);
   const recipesById = useAppSelector(selectRecipesById);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const isStockReady = useAppSelector(selectIsContainersReady);
+  const stockError = useAppSelector(selectContainersLoadError);
 
   if (!meal) {
     return null;
@@ -73,6 +77,30 @@ function MealDrawer({
     costContext.ingredientsById,
   );
   const leftOutCount = countLeftOutIngredients(cost.leftOut);
+  const actions: ActionChip[] = [
+    {
+      key: 'shopping',
+      icon: <ShoppingBasket className='h-4 w-4' />,
+      label: 'Shopping list',
+      description: 'Add to shopping list: choose what you need for this meal',
+      onClick: () =>
+        onAddToShopping({
+          kind: 'items',
+          items: meal.items,
+          label: meal.name,
+          mealId: meal.id,
+        }),
+    },
+    stockError === null && {
+      key: 'put-away',
+      icon: <PackagePlus className='h-4 w-4' />,
+      label: 'Put some away',
+      description:
+        'Put some away in the fridge or freezer, with an eat-by date',
+      isDisabled: !isStockReady,
+      onClick: () => onPutAway(meal.id),
+    },
+  ].filter((action) => action !== false);
 
   return (
     <DetailSheet
@@ -100,6 +128,20 @@ function MealDrawer({
       }
     >
       <div className='space-y-5'>
+        <div className='space-y-3'>
+          <StockRows
+            target={{ kind: 'meal', id: meal.id }}
+            onOpenStock={() => onOpenStock(meal.id)}
+          />
+          <div className='space-y-1.5'>
+            <ActionChips label='Meal actions' actions={actions} />
+            {stockError === null && !isStockReady && (
+              <p className='text-muted-foreground text-xs'>
+                Loading your prepared meals…
+              </p>
+            )}
+          </div>
+        </div>
         <div className='space-y-3'>
           <StatTile
             label='Cost'
@@ -166,26 +208,6 @@ function MealDrawer({
             })}
           </ul>
         </FormSection>
-        <ActionGroup>
-          <StockRows
-            uid={uid}
-            target={{ kind: 'meal', id: meal.id }}
-            onOpenStock={() => onOpenStock(meal.id)}
-            onPutAway={() => onPutAway(meal.id)}
-          />
-          <AddToShoppingRow
-            isGrouped
-            subtitle='Choose what you need for this meal'
-            onClick={() =>
-              onAddToShopping({
-                kind: 'items',
-                items: meal.items,
-                label: meal.name,
-                mealId: meal.id,
-              })
-            }
-          />
-        </ActionGroup>
       </div>
     </DetailSheet>
   );

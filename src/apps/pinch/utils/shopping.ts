@@ -7,6 +7,7 @@ import type {
   ResolvedFamily,
   ResolvedIngredient,
   ShoppingItem,
+  ShoppingView,
   Unit,
 } from '@apps/pinch/types';
 import { scaleAmount } from '@apps/pinch/utils/quantity';
@@ -142,13 +143,13 @@ export function getItemsLines(
 const byName = (a: ShoppingRowData, b: ShoppingRowData) =>
   a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit);
 
-/** Groups what is left by ingredient family, with "Other" last, and keeps what is checked off apart. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
+/** Groups what is left and what is checked off, each by ingredient family with "Other" last. A row in `held` is drawn where it was (true is "Got it") while its own `isChecked` is the stored truth. */
 export function groupShoppingItems(
   items: ShoppingItem[],
   ingredientsById: Map<string, ResolvedIngredient>,
   families: ResolvedFamily[],
   held: ReadonlyMap<string, boolean> = new Map(),
-): { groups: ShoppingGroup[]; checked: ShoppingRowData[] } {
+): Record<ShoppingView, ShoppingGroup[]> {
   const familyOrder = new Map(
     families.map((family, index) => [family.id, index]),
   );
@@ -174,25 +175,41 @@ export function groupShoppingItems(
     };
   });
 
-  const buckets = entries
-    .filter(({ isGot }) => !isGot)
-    .reduce((acc, { row, familyId }) => {
+  const toGroups = (side: typeof entries) => {
+    const buckets = side.reduce((acc, { row, familyId }) => {
       acc.set(familyId, [...(acc.get(familyId) ?? []), row]);
       return acc;
     }, new Map<string, ShoppingRowData[]>());
-  const groups = [...buckets.entries()]
-    .map(([id, rows]) => ({
-      id,
-      name: familyNames.get(id) ?? OTHER_GROUP_NAME,
-      rows: [...rows].sort(byName),
-    }))
-    .sort((a, b) => getRank(a.id) - getRank(b.id));
-  const checked = entries
-    .filter(({ isGot }) => isGot)
-    .map(({ row }) => row)
-    .sort(byName);
+    const result = [...buckets.entries()]
+      .map(([id, rows]) => ({
+        id,
+        name: familyNames.get(id) ?? OTHER_GROUP_NAME,
+        rows: [...rows].sort(byName),
+      }))
+      .sort((a, b) => getRank(a.id) - getRank(b.id));
+    return result;
+  };
 
-  return { groups, checked };
+  const grouped = {
+    toBuy: toGroups(entries.filter(({ isGot }) => !isGot)),
+    got: toGroups(entries.filter(({ isGot }) => isGot)),
+  };
+  return grouped;
+}
+
+/** The view the list shows: the person's pick, unless what was typed since then matches nothing there and something in the other view. */
+export function getShownShoppingView(
+  pick: { view: ShoppingView; query: string },
+  query: string,
+  matches: Record<ShoppingView, number>,
+): ShoppingView {
+  const other: ShoppingView = pick.view === 'toBuy' ? 'got' : 'toBuy';
+  const isNewSearch = query !== '' && query !== pick.query;
+  const view =
+    isNewSearch && matches[pick.view] === 0 && matches[other] > 0
+      ? other
+      : pick.view;
+  return view;
 }
 
 export interface ShoppingCost {

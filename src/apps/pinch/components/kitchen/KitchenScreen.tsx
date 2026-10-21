@@ -3,8 +3,10 @@ import { memo, useMemo, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Plus, ShoppingCart, Store } from 'lucide-react';
 
+import EntryChip from '@/components/EntryChip';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
+import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
@@ -20,7 +22,6 @@ import {
 } from '@apps/pinch/components/kitchen/ingredientFilters';
 import ProductFormSheet from '@apps/pinch/components/kitchen/ProductFormSheet';
 import PreparedEntry from '@apps/pinch/components/containers/PreparedEntry';
-import EntryRow from '@apps/pinch/components/shared/EntryRow';
 import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import {
   INGREDIENT_FLAG_OPTIONS,
@@ -38,6 +39,7 @@ import {
   selectIngredientsById,
   selectProducts,
   selectProductsById,
+  selectContainersLoadError,
   selectShowNutrition,
   selectStores,
   selectUsedIngredientIds,
@@ -89,6 +91,11 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   const viewOptions = useListViewOptions(uid, 'ingredients');
   const isAnyMetricOn = hasAnyMetricOn(useAppSelector(selectShowNutrition));
 
+  const hasPrepared = useAppSelector(
+    (state) =>
+      state.pinch.containers.items.length > 0 ||
+      selectContainersLoadError(state) !== null,
+  );
   const trimmed = query.trim();
   const yours = useMemo(
     () =>
@@ -139,12 +146,13 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
   );
 
   const hasFilters = activeFilters.length > 0;
+  const isFirstRun = view === 'yours' && yours.length === 0 && !hasFilters;
   const isPriceFiltered = filters.price !== 'any';
   const totalCount = isPriceFiltered ? yours.length : scoped.length;
   const countText =
     hasFilters || trimmed !== ''
-      ? `${shown.length} of ${totalCount}`
-      : `${shown.length}`;
+      ? `${shown.length} of ${totalCount} ingredients`
+      : `${shown.length} ${shown.length === 1 ? 'ingredient' : 'ingredients'}`;
   const clearFilters = () => setFilters(NO_INGREDIENT_FILTERS);
 
   const getEmptyState = () => {
@@ -223,114 +231,129 @@ function KitchenScreen({ uid }: KitchenScreenProps) {
     <div className='space-y-4'>
       <SectionHeader
         title='Kitchen'
-        subtitle="Your ingredients, products, stores and what you've put away."
+        subtitle='Your ingredients.'
+        action={
+          <Button
+            type='button'
+            size='sm'
+            rounded='full'
+            className='gap-1'
+            onClick={() => setOverlay({ kind: 'form', id: null })}
+          >
+            <Plus className='h-4 w-4' aria-hidden='true' />
+            New ingredient
+          </Button>
+        }
       />
-      <div className='grid grid-cols-2 gap-2'>
-        <EntryRow
-          icon={<Store className='h-4 w-4' />}
-          label='Stores'
-          count={storeCount}
-          onClick={() => openSubview({ kind: 'stores' })}
+      {isFirstRun ? (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={isPhone ? 'Search' : 'Search ingredients'}
         />
-        <EntryRow
-          icon={<ShoppingCart className='h-4 w-4' />}
-          label='Products'
-          count={productCount}
-          onClick={() => openSubview({ kind: 'products' })}
-        />
-        <PreparedEntry />
-      </div>
-      <div className='flex h-10 items-center justify-between gap-3'>
-        <h3 className='text-muted-foreground flex min-w-0 items-baseline gap-2 text-xs font-semibold tracking-wide uppercase'>
-          Ingredients
-          <span className='text-xs font-normal tracking-normal whitespace-nowrap normal-case'>
-            {countText}
-          </span>
-        </h3>
-        <Button
-          type='button'
-          size='sm'
-          rounded='full'
-          className='gap-1'
-          onClick={() => setOverlay({ kind: 'form', id: null })}
+      ) : (
+        <FilterBar
+          query={query}
+          onQueryChange={setQuery}
+          searchPlaceholder={isPhone ? 'Search' : 'Search ingredients'}
+          filterLabel='Filter ingredients'
+          activeFilters={activeFilters}
+          onRemoveFilter={(key) =>
+            setFilters((current) => removeIngredientFilter(current, key))
+          }
+          onClearFilters={clearFilters}
+          doneLabel={`Show ${shown.length} ${shown.length === 1 ? 'ingredient' : 'ingredients'}`}
+          compactDoneLabel={`Show ${shown.length}`}
+          leading={
+            <>
+              <PillGroup
+                label='Which ingredients'
+                options={VIEW_OPTIONS}
+                value={view}
+                onChange={setView}
+                isThin
+              />
+              <span className='text-muted-foreground text-xs whitespace-nowrap'>
+                {countText}
+              </span>
+            </>
+          }
+          trailing={
+            <ListViewControls
+              options={viewOptions.options}
+              customizedCount={viewOptions.customizedCount}
+              onChange={viewOptions.update}
+              onReset={viewOptions.reset}
+              hasBasis
+            />
+          }
         >
-          <Plus className='h-4 w-4' aria-hidden='true' />
-          New
-        </Button>
-      </div>
-      <FilterBar
-        query={query}
-        onQueryChange={setQuery}
-        searchPlaceholder={isPhone ? 'Search' : 'Search ingredients'}
-        filterLabel='Filter ingredients'
-        activeFilters={activeFilters}
-        onRemoveFilter={(key) =>
-          setFilters((current) => removeIngredientFilter(current, key))
-        }
-        onClearFilters={clearFilters}
-        doneLabel={`Show ${shown.length} ${shown.length === 1 ? 'ingredient' : 'ingredients'}`}
-        compactDoneLabel={`Show ${shown.length}`}
-        leading={
-          <PillGroup
-            label='Which ingredients'
-            options={VIEW_OPTIONS}
-            value={view}
-            onChange={setView}
-            isThin
-          />
-        }
-        trailing={
-          <ListViewControls
-            options={viewOptions.options}
-            customizedCount={viewOptions.customizedCount}
-            onChange={viewOptions.update}
-            onReset={viewOptions.reset}
-            hasBasis
-          />
-        }
-      >
-        <FilterSection title='Price'>
-          <PillGroup
-            label='Price'
-            options={PRICE_OPTIONS}
-            value={filters.price}
-            onChange={(price) =>
-              setFilters((current) => ({ ...current, price }))
-            }
-          />
-          <p className='text-muted-foreground text-xs'>
-            <strong className='text-foreground font-medium'>
-              Needs a price
-            </strong>{' '}
-            looks at what your recipes, meals and plans use.{' '}
-            <strong className='text-foreground font-medium'>Has a price</strong>{' '}
-            looks at what you've priced. Both only search Yours, even with All
-            picked.
-          </p>
-        </FilterSection>
-        <FilterSection title='Show only'>
-          <MultiPillGroup
-            label='Show only'
-            options={FLAG_OPTIONS}
-            values={filters.flags}
-            onChange={(flags) =>
-              setFilters((current) => ({ ...current, flags }))
-            }
-          />
-        </FilterSection>
-        {familyOptions.length > 0 && (
-          <FilterSection title='Family'>
+          <FilterSection title='Price'>
+            <PillGroup
+              label='Price'
+              options={PRICE_OPTIONS}
+              value={filters.price}
+              onChange={(price) =>
+                setFilters((current) => ({ ...current, price }))
+              }
+            />
+            <p className='text-muted-foreground text-xs'>
+              <strong className='text-foreground font-medium'>
+                Needs a price
+              </strong>{' '}
+              looks at what your recipes, meals and plans use.{' '}
+              <strong className='text-foreground font-medium'>
+                Has a price
+              </strong>{' '}
+              looks at what you've priced. Both only search Yours, even with All
+              picked.
+            </p>
+          </FilterSection>
+          <FilterSection title='Show only'>
             <MultiPillGroup
-              label='Families'
-              options={familyOptions}
-              values={filters.familyIds}
-              onChange={(familyIds) =>
-                setFilters((current) => ({ ...current, familyIds }))
+              label='Show only'
+              options={FLAG_OPTIONS}
+              values={filters.flags}
+              onChange={(flags) =>
+                setFilters((current) => ({ ...current, flags }))
               }
             />
           </FilterSection>
-        )}
-      </FilterBar>
+          {familyOptions.length > 0 && (
+            <FilterSection title='Family'>
+              <MultiPillGroup
+                label='Families'
+                options={familyOptions}
+                values={filters.familyIds}
+                onChange={(familyIds) =>
+                  setFilters((current) => ({ ...current, familyIds }))
+                }
+              />
+            </FilterSection>
+          )}
+        </FilterBar>
+      )}
+      {(hasPrepared || storeCount > 0 || productCount > 0) && (
+        <div className='flex flex-wrap gap-2'>
+          {hasPrepared && <PreparedEntry />}
+          {storeCount > 0 && (
+            <EntryChip
+              icon={<Store className='h-4 w-4' />}
+              label='Stores'
+              count={storeCount}
+              onClick={() => openSubview({ kind: 'stores' })}
+            />
+          )}
+          {productCount > 0 && (
+            <EntryChip
+              icon={<ShoppingCart className='h-4 w-4' />}
+              label='Products'
+              count={productCount}
+              onClick={() => openSubview({ kind: 'products' })}
+            />
+          )}
+        </div>
+      )}
       {groups.length === 0 ? (
         getEmptyState()
       ) : (
