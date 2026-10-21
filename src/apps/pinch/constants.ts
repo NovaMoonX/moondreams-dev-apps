@@ -101,3 +101,19 @@ export const RECIPES_VIEW_LABELS: Record<RecipesView, string> = {
   recipes: 'Recipes',
   meals: 'Meals',
 };
+
+/** Grams for a mass unit, millilitres for a volume unit, 1 for a count. */
+export const UNIT_TO_BASE: Record<Unit, number> = {
+  G: 1,
+  KG: 1000,
+  OZ: 28.3495,
+  LB: 453.592,
+  ML: 1,
+  L: 1000,
+  TSP: 4.92892,
+  TBSP: 14.7868,
+  CUP: 236.588,
+  FL_OZ: 29.5735,
+  PINCH: 0.308,
+  EACH: 1,
+};

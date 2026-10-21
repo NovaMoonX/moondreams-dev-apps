@@ -15,7 +15,7 @@ import {
   RECIPES_VIEWS,
 } from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
-import { selectRecipes } from '@apps/pinch/store/selectors';
+import { selectRecipeCosts, selectRecipes } from '@apps/pinch/store/selectors';
 import type { RecipesView } from '@apps/pinch/types';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 
@@ -27,6 +27,7 @@ const VIEW_OPTIONS = RECIPES_VIEWS.map((value) => ({
 function RecipesScreen() {
   const { openSubview } = usePinchOverlay();
   const recipes = useAppSelector(selectRecipes);
+  const costs = useAppSelector(selectRecipeCosts);
   const [view, setView] = useState<RecipesView>('recipes');
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -68,7 +69,11 @@ function RecipesScreen() {
       <ul className='divide-border divide-y'>
         {shown.map((recipe) => (
           <li key={recipe.id}>
-            <RecipeRow recipe={recipe} onOpen={setOpenId} />
+            <RecipeRow
+              recipe={recipe}
+              cost={costs.get(recipe.id)}
+              onOpen={setOpenId}
+            />
           </li>
         ))}
       </ul>

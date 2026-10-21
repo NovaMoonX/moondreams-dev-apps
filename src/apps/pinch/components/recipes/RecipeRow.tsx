@@ -1,8 +1,10 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import { formatCents } from '@/utils/moneyUtils';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
-import type { Recipe } from '@apps/pinch/types';
+import type { Recipe, RecipeCost } from '@apps/pinch/types';
+import { countLeftOutIngredients } from '@apps/pinch/utils/gaps';
 import {
   formatMinutes,
   formatServings,
@@ -11,10 +13,11 @@ import {
 
 interface RecipeRowProps {
   recipe: Recipe;
+  cost: RecipeCost | undefined;
   onOpen: (id: string) => void;
 }
 
-function RecipeRow({ recipe, onOpen }: RecipeRowProps) {
+function RecipeRow({ recipe, cost, onOpen }: RecipeRowProps) {
   const total = getTotalMinutes(recipe);
   const detail = [
     formatServings(recipe.servings),
@@ -22,6 +25,8 @@ function RecipeRow({ recipe, onOpen }: RecipeRowProps) {
   ]
     .filter(Boolean)
     .join(' · ');
+
+  const leftOutCount = cost ? countLeftOutIngredients(cost.leftOut) : 0;
 
   return (
     <Button
@@ -42,6 +47,14 @@ function RecipeRow({ recipe, onOpen }: RecipeRowProps) {
         <span className='text-muted-foreground block truncate text-xs font-normal'>
           {detail}
         </span>
+        {cost?.perServingCents != null && (
+          <span className='text-muted-foreground block text-xs font-normal'>
+            <span className='whitespace-nowrap'>
+              {formatCents(Math.round(cost.perServingCents))} / serving
+            </span>
+            {leftOutCount > 0 && ` · leaves out ${leftOutCount}`}
+          </span>
+        )}
       </span>
       <ChevronRight
         className='text-muted-foreground h-5 w-5 shrink-0'
