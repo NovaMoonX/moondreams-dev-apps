@@ -19,10 +19,14 @@ import {
   getDigestMessage,
   getDigestRun,
   getLocalMoment,
+  getDigestLink,
+  mergeDigestItems,
   resolveZone,
   toDigestItems,
+  toPackageDigestItems,
   type DigestItem,
 } from '../../functions/src/apps/pinch/eatSoonDigest.ts';
+import { getPackageState } from '../../src/apps/pinch/utils/packages.ts';
 
 const item = (name: string, daysLeft: number): DigestItem => ({
   name,
@@ -295,6 +299,137 @@ assert.doesNotMatch(
     .join(' '),
   /safe|spoil|fresh|bad|danger|sick/i,
   'the note names what is due and never says anything about safety',
+);
+
+// A package's window is the person's own lead days, and the note counts what the app calls due or past at that window
+['America/Los_Angeles', 'Pacific/Auckland', 'UTC'].forEach((zone) => {
+  process.env.TZ = zone;
+  [Date.UTC(2026, 9, 18, 6, 30), Date.UTC(2026, 9, 18, 23, 30)].forEach(
+    (now) => {
+      const todayOf = dayToUtcMidnight(getLocalMoment(now, zone).day);
+      [1, 2, 3].forEach((lead) => {
+        [-3, -2, -1, 0, 1, 2, 3, 4, 5].forEach((offset) => {
+          const expiresAt = todayOf + offset * DAY_MS;
+          const { from, to } = getDigestBounds(todayOf, lead);
+          assert.equal(
+            expiresAt >= from && expiresAt <= to,
+            getPackageState(expiresAt, now, lead) !== 'LATER' &&
+              offset >= -DIGEST_PAST_DAYS,
+            `${zone}, ${lead} lead days: the note counts a package the app calls due, plus the day just past (${offset})`,
+          );
+        });
+      });
+    },
+  );
+});
+
+// Packages become one item per ingredient
+const ingredient = (name: string, daysLeft: number): DigestItem => ({
+  name,
+  daysLeft,
+  kind: 'ingredient',
+});
+assert.deepEqual(toPackageDigestItems([], today), []);
+assert.deepEqual(
+  toPackageDigestItems(
+    [
+      { ingredientName: 'Whole milk', expiresAt: today + DAY_MS },
+      { ingredientName: 'whole  milk ', expiresAt: today },
+      { ingredientName: 'Whole milk', expiresAt: today + 2 * DAY_MS },
+      { ingredientName: 'Spinach', expiresAt: today - DAY_MS },
+      { ingredientName: 'Cilantro', expiresAt: today + DAY_MS },
+    ],
+    today,
+  ),
+  [
+    ingredient('Spinach', -1),
+    ingredient('whole milk', 0),
+    ingredient('Cilantro', 1),
+  ],
+  'three cartons of milk are one item at the nearest date, nearest first, then by name',
+);
+assert.deepEqual(
+  toPackageDigestItems(
+    [
+      { ingredientName: 7, expiresAt: today },
+      { ingredientName: ' ', expiresAt: today },
+      { ingredientName: 'Rice', expiresAt: null },
+      { ingredientName: 'Rice', expiresAt: 'soon' },
+      { ingredientName: 'Rice', expiresAt: today },
+    ],
+    today,
+  ),
+  [ingredient('Rice', 0)],
+  'a package with no usable name or date is skipped, so one with no date is never named',
+);
+
+// One list from every source
+assert.deepEqual(mergeDigestItems([]), []);
+assert.deepEqual(
+  mergeDigestItems([
+    [item('Chili', 1), item('Rice', 2)],
+    [ingredient('Spinach', -1), ingredient('rice', 0)],
+  ]),
+  [ingredient('Spinach', -1), ingredient('rice', 0), item('Chili', 1)],
+  'a dish and an ingredient with one name are one thing, at the nearer date',
+);
+assert.deepEqual(
+  mergeDigestItems([[item('Rice', 1)], [ingredient('Rice', 1)]]),
+  [item('Rice', 1)],
+  'on the same day the dish keeps the name',
+);
+assert.deepEqual(
+  mergeDigestItems([[ingredient('Rice', 1)], [item('Rice', 1)]]),
+  [item('Rice', 1)],
+  'whichever source comes first',
+);
+
+// What the push says once an ingredient is in it
+assert.deepEqual(getDigestMessage([ingredient('Spinach', -1)]), {
+  title: 'Check your kitchen',
+  body: 'Spinach needs a look',
+});
+assert.equal(
+  getDigestMessage([
+    ingredient('Chicken stock', -1),
+    ingredient('Spinach', 0),
+    ingredient('Milk', 1),
+    ingredient('Rice', 1),
+  ])?.body,
+  'Chicken stock, Spinach and 2 more need a look',
+  'names stay capped at two',
+);
+assert.equal(
+  getDigestMessage([item('Chili', 0), ingredient('Milk', 1)])?.body,
+  'Chili and Milk need a look',
+  'a dish and an ingredient are one note',
+);
+assert.equal(
+  getDigestMessage([item('Chili', 0)])?.title,
+  'Eat soon',
+  'a note with only dishes says what it always said',
+);
+assert.equal(getDigestMessage([]), null);
+assert.doesNotMatch(
+  `${getDigestMessage([ingredient('Milk', -1)])?.title} ${getDigestMessage([ingredient('Milk', -1)])?.body}`,
+  /safe|spoil|fresh|bad|danger|sick/i,
+  'the note about ingredients never says anything about safety either',
+);
+
+// Where the note opens
+assert.equal(
+  getDigestLink([item('Chili', 0)]),
+  '/pinch?tab=kitchen&open=fridge',
+);
+assert.equal(
+  getDigestLink([ingredient('Milk', 0)]),
+  '/pinch?tab=kitchen&open=pantry',
+  'only ingredients open the pantry',
+);
+assert.equal(
+  getDigestLink([ingredient('Milk', 0), item('Chili', 0)]),
+  '/pinch?tab=kitchen&open=fridge',
+  'a dish among them opens the fridge',
 );
 
 console.log('pinchDigest: all checks passed');

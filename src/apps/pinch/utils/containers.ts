@@ -92,25 +92,46 @@ export const isContainerListFull = (inStockCount: number, adding = 1) =>
 export const getDaysLeft = (eatBy: number, now = Date.now()) =>
   Math.round((eatBy - getLocalTodayDate(now)) / DAY_MS);
 
-export const getEatByState = (eatBy: number, now = Date.now()): EatByState => {
+/** Past, due within `soonDays` (a box's own window, or the person's lead days for a package), or later: the one rule a box and a package share. */
+export const getEatByState = (
+  eatBy: number,
+  now = Date.now(),
+  soonDays = CONTAINER_EAT_SOON_DAYS,
+): EatByState => {
   const days = getDaysLeft(eatBy, now);
   if (days < 0) return 'PAST';
-  return days <= CONTAINER_EAT_SOON_DAYS ? 'SOON' : 'LATER';
+  return days <= soonDays ? 'SOON' : 'LATER';
 };
 
-export const getEatByPhrase = (eatBy: number, now = Date.now()) => {
+const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  timeZone: 'UTC',
+});
+
+/** "today", "tomorrow", a date; a date within the week is its weekday ("Fri") when `withWeekday` is on. */
+export const getEatByPhrase = (
+  eatBy: number,
+  now = Date.now(),
+  withWeekday = false,
+) => {
   const days = getDaysLeft(eatBy, now);
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
+  if (withWeekday && days > 1 && days < 7)
+    return weekdayFormatter.format(eatBy);
   return formatDayShort(getPlannedDayKey(eatBy), now);
 };
 
-/** The one eat-by item a row shows: tinted when it is due, plain otherwise. */
-export const getEatByLabel = (eatBy: number, now = Date.now()) => {
+/** The one eat-by item a row shows: tinted when it is due, plain otherwise. A package says "Use" where a box says "Eat". */
+export const getEatByLabel = (
+  eatBy: number,
+  now = Date.now(),
+  verb: 'Eat' | 'Use' = 'Eat',
+) => {
   const days = getDaysLeft(eatBy, now);
   if (days < 0) return 'Past its date';
-  if (days === 0) return 'Eat today';
-  const label = `Eat by ${getEatByPhrase(eatBy, now)}`;
+  if (days === 0) return `${verb} today`;
+  const label = `${verb} by ${getEatByPhrase(eatBy, now, verb === 'Use')}`;
   return label;
 };
 

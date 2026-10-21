@@ -9970,6 +9970,7 @@ assert.equal(
       freezerDays: null,
       reminders: {
         eatSoon: false,
+        expiring: false,
         timers: false,
         leadDays: 1,
         hour: 9,
@@ -9985,6 +9986,7 @@ assert.equal(
       .reminders,
     {
       eatSoon: true,
+      expiring: false,
       timers: false,
       leadDays: 1,
       hour: 9,
@@ -10031,6 +10033,7 @@ assert.equal(
     stgWithDefaults(olderDocument)?.reminders,
     {
       eatSoon: true,
+      expiring: false,
       timers: false,
       leadDays: 1,
       hour: 7,

@@ -22,6 +22,7 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   freezerDays: null,
   reminders: {
     eatSoon: false,
+    expiring: false,
     timers: false,
     leadDays: DEFAULT_LEAD_DAYS,
     hour: DEFAULT_REMINDER_HOUR,
