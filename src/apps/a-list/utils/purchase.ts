@@ -33,14 +33,8 @@ export function applyPurchaseToDraft(
   };
 }
 
-export function getPurchaseTicketDraft(
-  plan: PurchasePlan,
-  defaultFeeCents: number,
-): TicketDraft {
-  return applyPurchaseToDraft(
-    getInitialTicketDraft(null, defaultFeeCents),
-    plan,
-  );
+export function getPurchaseTicketDraft(plan: PurchasePlan): TicketDraft {
+  return applyPurchaseToDraft(getInitialTicketDraft(null), plan);
 }
 
 /** "Dolby Cinema · $20.49", or just the format when AMC listed no price. */
