@@ -29,7 +29,7 @@ html.a-list-theme.dark {
   --color-popover-foreground: var(--color-foreground);
   --color-tooltip: var(--color-popover);
   --color-tooltip-foreground: var(--color-popover-foreground);
-  --subview-backdrop-dark: color-mix(in oklab, var(--color-primary) 22%, black);
+  --subview-backdrop-dark: color-mix(in oklab, var(--color-primary) 10%, black);
   --color-primary: var(--color-red-500);
   --color-primary-foreground: var(--color-white);
   --color-secondary: var(--color-rose-950);
