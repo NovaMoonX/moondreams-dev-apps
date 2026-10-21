@@ -42,7 +42,9 @@ const getStatus = (line: FirebaseUsageLine) => {
 };
 
 function UsageRow({ line }: { line: FirebaseUsageLine }) {
-  const fraction = line.freeAmount > 0 ? line.used / line.freeAmount : 0;
+  const hasFreeAmount = line.freeAmount > 0;
+  const fraction = hasFreeAmount ? line.used / line.freeAmount : 0;
+  const ringPercent = hasFreeAmount ? `${Math.round(fraction * 100)}%` : '–';
   const status = getStatus(line);
   const overBy = line.period === 'day' ? 0 : Math.max(0, line.used - line.freeAmount);
   const detail = [
@@ -63,18 +65,19 @@ function UsageRow({ line }: { line: FirebaseUsageLine }) {
     <li className='flex items-center gap-3 py-3'>
       <Doughnut
         size={56}
-        ariaLabel={`${line.label}: ${Math.round(fraction * 100)}% of the free amount`}
+        ariaLabel={`${line.label}: ${ringPercent} of the free amount`}
+        isDecorative
         segments={[
           {
             id: line.id,
             label: line.label,
-            value: Math.min(line.used, line.freeAmount),
+            value: hasFreeAmount ? Math.min(line.used, line.freeAmount) : line.used,
             valueText: `${formatAmount(line, line.used)} of ${formatAmount(line, line.freeAmount)}`,
             className: status === 'within' ? 'stroke-primary' : 'stroke-warning',
           },
         ]}
-        total={line.freeAmount}
-        center={<span className='text-foreground text-[11px] leading-none font-medium'>{Math.round(fraction * 100)}%</span>}
+        total={hasFreeAmount ? line.freeAmount : line.used}
+        center={<span className='text-foreground text-[11px] leading-none font-medium'>{ringPercent}</span>}
       />
       <div className='min-w-0 flex-1 space-y-1'>
         <div className='flex flex-wrap items-baseline justify-between gap-x-3'>
@@ -109,10 +112,17 @@ function AppShare({ footprints, appNames }: AppShareProps) {
       value: isFiles ? app.storageBytes : app.documents,
     })),
     ...(isFiles ? [{ id: 'shared', label: 'Shared (profile photos)', value: footprints.sharedStorageBytes }] : []),
-  ].map((row, index) => ({ ...row, slot: index % DOUGHNUT_SLOT_CLASSES.length }));
+  ]
+    .map((row, index) => ({ ...row, slot: index % DOUGHNUT_SLOT_CLASSES.length }))
+    .sort((a, b) => (a.id === 'shared' ? 1 : b.id === 'shared' ? -1 : b.value - a.value));
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const formatValue = (value: number) => (isFiles ? formatBytes(value) : `${COUNT_FORMAT.format(value)} documents`);
-  const percentOf = (value: number) => (total > 0 ? `${Math.round((value / total) * 100)}%` : '–');
+  const percentOf = (value: number) => {
+    if (total === 0) return '–';
+    if (value > 0 && value / total < 0.01) return '<1%';
+    return `${Math.round((value / total) * 100)}%`;
+  };
+  const formatRowValue = (value: number) => (isFiles ? formatBytes(value) : COUNT_FORMAT.format(value));
 
   return (
     <div className='space-y-3'>
@@ -151,13 +161,13 @@ function AppShare({ footprints, appNames }: AppShareProps) {
           />
         </div>
       )}
-      <ul className='divide-border divide-y'>
+      <ul aria-label={`${isFiles ? 'Files' : 'Documents'} by app`} className='divide-border divide-y'>
         {rows.map((row) => (
           <li key={row.id} className='flex items-center gap-3 py-2.5'>
             <span aria-hidden='true' className={join('size-3 shrink-0 rounded-full', DOUGHNUT_SLOT_FILL_CLASSES[row.slot])} />
             <span className='text-foreground min-w-0 flex-1 truncate text-sm'>{row.label}</span>
             <span className='text-muted-foreground shrink-0 text-right text-xs whitespace-nowrap'>
-              <span className='block'>{formatValue(row.value)}</span>
+              <span className='block'>{formatRowValue(row.value)}</span>
               <span className='block'>{percentOf(row.value)}</span>
             </span>
           </li>

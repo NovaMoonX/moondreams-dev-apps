@@ -5,7 +5,7 @@ export const DOUGHNUT_SLOT_CLASSES = [
   'stroke-[#1baf7a] dark:stroke-[#199e70]',
   'stroke-[#eda100] dark:stroke-[#c98500]',
   'stroke-[#e87ba4] dark:stroke-[#d55181]',
-  'stroke-[#008300] dark:stroke-[#008300]',
+  'stroke-[#6250d6] dark:stroke-[#9085e9]',
 ] as const;
 
 export const DOUGHNUT_SLOT_FILL_CLASSES = [
@@ -14,5 +14,5 @@ export const DOUGHNUT_SLOT_FILL_CLASSES = [
   'bg-[#1baf7a] dark:bg-[#199e70]',
   'bg-[#eda100] dark:bg-[#c98500]',
   'bg-[#e87ba4] dark:bg-[#d55181]',
-  'bg-[#008300] dark:bg-[#008300]',
+  'bg-[#6250d6] dark:bg-[#9085e9]',
 ] as const;
