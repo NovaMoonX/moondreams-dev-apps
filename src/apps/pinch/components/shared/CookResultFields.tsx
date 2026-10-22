@@ -75,7 +75,7 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
       <div
         className={join(
           'flex gap-4',
-          isLarge ? 'flex-col' : 'items-center',
+          isLarge ? 'flex-col' : 'items-center max-[359px]:flex-col max-[359px]:items-start',
         )}
       >
         <span
