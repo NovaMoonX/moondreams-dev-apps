@@ -1,14 +1,11 @@
-import { useMemo } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, NotebookPen } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
-import ActionGroup from '@/components/ActionGroup';
 import ClampedText from '@/components/ClampedText';
 import FactsLine, { type Fact } from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
-import GroupRow from '@/components/GroupRow';
 import LabelChip from '@/components/LabelChip';
 import MacroStats from '@/components/MacroStats';
 import SectionDivider from '@/components/SectionDivider';
@@ -18,6 +15,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import LineStockMarker from '@apps/pinch/components/pantry/LineStockMarker';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
+import RecipeJournalRow from '@apps/pinch/components/recipes/RecipeJournalRow';
 import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSection';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
@@ -28,7 +26,6 @@ import {
   selectCollections,
   selectHasPackages,
   selectIngredientsById,
-  selectNotesByRecipe,
   selectPackagesByIngredient,
   selectRecipeCosts,
   selectRecipeNutrition,
@@ -36,7 +33,7 @@ import {
   selectSourceCounts,
   selectSourcesById,
 } from '@apps/pinch/store/selectors';
-import type { Gap, GapKind, Recipe, RecipeNote } from '@apps/pinch/types';
+import type { Gap, GapKind, Recipe } from '@apps/pinch/types';
 import {
   getCollectionsPill,
   getRecipeCollections,
@@ -61,7 +58,6 @@ import {
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
-import { groupEntriesByStep } from '@apps/pinch/utils/notes';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -72,28 +68,6 @@ const gapLabel = (kind: GapKind | undefined) => {
 
 const SOURCE_LABEL_KEEP_END = 14;
 
-/** The tips written for a step (or the whole recipe), under the words they belong to. */
-function TipLines({ tips }: { tips: RecipeNote[] | undefined }) {
-  if (!tips || tips.length === 0) return null;
-  return (
-    <ul className='space-y-1'>
-      {tips.map((tip) => (
-        <li
-          key={tip.id}
-          className='text-muted-foreground flex gap-2 text-sm wrap-break-word'
-        >
-          <span aria-hidden='true' className='w-5 shrink-0 text-center'>
-            💡
-          </span>
-          <span className='sr-only'>Tip: </span>
-          <span className='min-w-0 flex-1 whitespace-pre-wrap'>{tip.text}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-const NO_NOTES: RecipeNote[] = [];
-
 const SHORT_SCREEN_MAX_HEIGHT = 599;
 
 interface RecipeFrontProps {
@@ -103,8 +77,10 @@ interface RecipeFrontProps {
   onShowPhoto?: (opener: HTMLElement) => void;
   /** The drawer's own list of collections; without it "In 3 collections" is only a label. */
   onShowCollections?: (opener: HTMLElement | null) => void;
-  /** Opens the recipe's tips, notes, changes and cooking history in place; the row is drawn only where the view exists. */
-  onShowNotes?: (opener: HTMLElement | null) => void;
+  /** Opens one of the person's entries to read and edit, or a new one when null; the journal row is drawn only where this exists. */
+  onOpenEntry?: (noteId: string | null) => void;
+  /** Opens the recipe's form to make a planned change. */
+  onApplyChange?: (noteId: string) => void;
   /** Shows the Recipes list narrowed to this source; left out, the source is only a label. */
   onShowSource?: (sourceId: string) => void;
   /** Shows the Recipes list narrowed to this collection; left out, the collection is only a label. */
@@ -119,7 +95,8 @@ function RecipeFront({
   recipe,
   onShowPhoto,
   onShowCollections,
-  onShowNotes,
+  onOpenEntry,
+  onApplyChange,
   onShowSource,
   onShowCollection,
   onFillIn,
@@ -139,15 +116,6 @@ function RecipeFront({
   const isLandscape = isShort && !isBelow('sm');
 
   const care = getRecipeCare(recipe);
-  const notes = useAppSelector(selectNotesByRecipe).get(recipe.id) ?? NO_NOTES;
-  const entryCount = notes.length;
-  const tips = useMemo(() => {
-    const grouped = groupEntriesByStep(
-      notes.filter((note) => note.kind === 'TIP'),
-      recipe.steps,
-    );
-    return grouped;
-  }, [notes, recipe.steps]);
   const links = getRecipeLinks(recipe);
   const source = getRecipeSource(recipe, sourcesById);
   const hasMoreFromSource =
@@ -491,19 +459,10 @@ function RecipeFront({
                 </span>
                 <span className='min-w-0 space-y-1'>
                   <span className='block whitespace-pre-wrap'>{step}</span>
-                  <TipLines tips={tips.byStep.get(index)} />
                 </span>
               </li>
             ))}
           </ol>
-          {tips.wholeRecipe.length > 0 && (
-            <div className='space-y-1 pt-1'>
-              <p className='text-muted-foreground text-xs'>
-                For the whole recipe
-              </p>
-              <TipLines tips={tips.wholeRecipe} />
-            </div>
-          )}
         </FormSection>
       )}
 
@@ -521,26 +480,12 @@ function RecipeFront({
         </>
       )}
 
-      {onShowNotes && (
-        <ActionGroup>
-          <GroupRow
-            icon={<NotebookPen className='h-4 w-4' />}
-            ariaLabel='Tips, notes and changes'
-            onClick={() =>
-              onShowNotes(
-                document.activeElement instanceof HTMLElement
-                  ? document.activeElement
-                  : null,
-              )
-            }
-          >
-            Tips, notes and changes
-            <span className='text-muted-foreground'>
-              {' · '}
-              {entryCount === 0 ? 'Add one' : entryCount}
-            </span>
-          </GroupRow>
-        </ActionGroup>
+      {onOpenEntry && onApplyChange && (
+        <RecipeJournalRow
+          recipeId={recipe.id}
+          onOpen={onOpenEntry}
+          onApplyChange={onApplyChange}
+        />
       )}
     </div>
   );

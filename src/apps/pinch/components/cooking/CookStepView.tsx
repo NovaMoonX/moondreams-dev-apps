@@ -5,7 +5,8 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import SwipeArea from '@/components/SwipeArea';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookStepTimer from '@apps/pinch/components/cooking/CookStepTimer';
-import CookStepTray from '@apps/pinch/components/cooking/CookStepTray';
+import type { RecipeNote } from '@apps/pinch/types';
+import CookStepDock from '@apps/pinch/components/cooking/CookStepDock';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 
 const SIDE_BY_SIDE = {
@@ -37,6 +38,11 @@ interface CookStepViewProps {
   ingredients: CookRow[];
   isAmountNoteShown: boolean;
   aside: ReactNode;
+  /** What was written for this step, tips first. */
+  entries: RecipeNote[];
+  onEditEntry: (id: string) => void;
+  onApplyChange: (id: string) => void;
+  onReadEntries: ((kind: 'TIP' | 'NOTE' | 'CHANGE') => void) | null;
   dishes: ReactNode;
   /** The times the step mentions that have no timer yet. */
   timerSlots: StepTimerSlot[];
@@ -73,6 +79,10 @@ function CookStepView({
   ingredients,
   isAmountNoteShown,
   aside,
+  entries,
+  onEditEntry,
+  onApplyChange,
+  onReadEntries,
   dishes,
   timerSlots,
   isTimersFull,
@@ -172,10 +182,14 @@ function CookStepView({
           )}
         >
           {aside}
-          <CookStepTray
+          <CookStepDock
             key={stepNumber}
             rows={ingredients}
             isAmountNoteShown={isAmountNoteShown}
+            entries={entries}
+            onEdit={onEditEntry}
+            onApplyChange={onApplyChange}
+            onRead={onReadEntries}
           />
         </div>
       </div>

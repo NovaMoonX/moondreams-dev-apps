@@ -29,6 +29,8 @@ interface CookReviewProps {
   doneText: string | null;
   /** How many of the changes written in this cook are still planned. */
   plannedChangeCount: number;
+  /** The footer already offers "Update the recipe" for this recipe's planned changes, so the card doesn't. */
+  isUpdateInFooter: boolean;
   onAdd: () => void;
   onEdit: (id: string) => void;
   /** Opens the recipe's form with those planned changes. */
@@ -46,6 +48,7 @@ function CookReview({
   isNothingChosen,
   doneText,
   plannedChangeCount,
+  isUpdateInFooter,
   onAdd,
   onEdit,
   onApplyChanges,
@@ -55,7 +58,7 @@ function CookReview({
   const isShort = useIsShortScreen();
   const hasEntries = entries.length > 0;
   const actions: ActionChip[] = [
-    ...(plannedChangeCount > 0
+    ...(plannedChangeCount > 0 && !isUpdateInFooter
       ? [
           {
             key: 'apply',
@@ -79,7 +82,7 @@ function CookReview({
           },
         ]
       : []),
-    ...(plannedChangeCount === 0
+    ...(plannedChangeCount === 0 && !isUpdateInFooter
       ? [
           {
             key: 'change',

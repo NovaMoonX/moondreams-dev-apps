@@ -49,7 +49,6 @@ import CookReview, {
   type CookReviewEntry,
 } from '@apps/pinch/components/cooking/CookReview';
 import CookResultCard from '@apps/pinch/components/cooking/CookResultCard';
-import CookStepEntriesSheet from '@apps/pinch/components/cooking/CookStepEntriesSheet';
 import CookStepView, {
   type StepTimerSlot,
 } from '@apps/pinch/components/cooking/CookStepView';
@@ -401,7 +400,7 @@ function CookingSession({
 }: CookingSessionProps) {
   const dispatch = useAppDispatch();
   const store = useStore<RootState>();
-  const { closeSubview, closeSubviewIf } = usePinchOverlay();
+  const { closeSubview, closeSubviewIf, openSubview } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
   const [timerDraft, setTimerDraft] = useState<KitchenTimerDraft>(
@@ -463,7 +462,6 @@ function CookingSession({
   const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
   const [gotItNotes, setGotItNotes] = useState<string[]>([]);
-  const [entriesOpenKey, setEntriesOpenKey] = useState<string | null>(null);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -969,11 +967,12 @@ function CookingSession({
     return true;
   };
 
-  const leave = async () => {
+  const leave = async (afterLeave?: () => void) => {
     if (!(await confirmDiscard())) return;
     if (!(await confirmLeave())) return;
     clearCookingSession(uid);
     closeIfStillOpen();
+    afterLeave?.();
   };
 
   const getOverlay = () =>
@@ -2195,6 +2194,28 @@ function CookingSession({
       .reverse();
     return [...earlier, ...written];
   };
+  /** The recipes with a change still planned; with exactly one, finishing offers "Update the recipe" in the footer. */
+  const changeTargets = followUpRecords.flatMap((record) => {
+    const ids = getReviewEntries(record.recipeId, true)
+      .filter((entry) => entry.note.kind === 'CHANGE')
+      .map((entry) => entry.note.id);
+    return ids.length === 0
+      ? []
+      : [{ recipeId: record.recipeId, ids, title: record.entry.recipe.title }];
+  });
+  const footerChange = changeTargets.length === 1 ? changeTargets[0] : null;
+  const handleWrapUpAndUpdate = () => {
+    if (footerChange === null) return;
+    // eslint-disable-next-line react-hooks/purity -- runs from a tap
+    if (Date.now() - finishedAt.current < DONE_GUARD_MS) return;
+    void leave(() =>
+      openSubview({
+        kind: 'recipe',
+        id: footerChange.recipeId,
+        fromChangeIds: footerChange.ids,
+      }),
+    );
+  };
   const hasFollowUps = records.some(
     (record) =>
       getReviewEntries(record.recipeId).length > 0 ||
@@ -2232,17 +2253,14 @@ function CookingSession({
     ) : null;
   const isDishStripInStep = isStepsView && hasSteps && !isWide;
   const stepEntries = getEntriesAt(recipe, index, false);
-  const readEntries = () =>
+  const readEntries = (kind: 'TIP' | 'NOTE' | 'CHANGE') =>
     voice.speak(
-      [
-        getSpokenEntries(stepEntries, 'TIPS', formatDateShort),
-        getSpokenEntries(stepEntries, 'NOTES', formatDateShort),
-      ]
-        .filter((text) => text !== null)
-        .join(' '),
+      getSpokenEntries(
+        stepEntries.filter((entry) => entry.kind === kind),
+        kind === 'TIP' ? 'TIPS' : 'NOTES',
+        formatDateShort,
+      ) ?? '',
     );
-  const stepKey = `${recipe.id}:${index}`;
-  const isEntriesOpen = entriesOpenKey === stepKey;
   const openStepCapture = () =>
     capture.open({ recipeId: recipe.id, stepIndex: index, kind: 'TIP' });
   const noteCard =
@@ -2274,33 +2292,18 @@ function CookingSession({
       <Timer className='h-4 w-4' aria-hidden='true' />
     </Button>
   );
-  const canWrite = capture.isAvailable(recipe.id) && !isRemoved;
-  const entriesButton =
-    canWrite || stepEntries.length > 0 ? (
+  const captureButton =
+    capture.isAvailable(recipe.id) && !isRemoved ? (
       <Button
         type='button'
         variant='secondary'
         size='icon'
         rounded='full'
-        className='relative size-10 shrink-0'
-        aria-label={
-          stepEntries.length === 0
-            ? 'Add a tip, note or change for this step'
-            : `${stepEntries.length === 1 ? '1 tip, note or change' : `${stepEntries.length} tips, notes and changes`} for this step`
-        }
-        onClick={() =>
-          stepEntries.length === 0 ? openStepCapture() : setEntriesOpenKey(stepKey)
-        }
+        className='size-10 shrink-0'
+        aria-label='Add a tip, note or change for this step'
+        onClick={openStepCapture}
       >
         <NotebookPen className='h-4 w-4' aria-hidden='true' />
-        {stepEntries.length > 0 && (
-          <span
-            aria-hidden='true'
-            className='bg-primary text-primary-foreground absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold'
-          >
-            {stepEntries.length}
-          </span>
-        )}
       </Button>
     ) : null;
   const ingredientsButton = isWide ? null : (
@@ -2329,11 +2332,15 @@ function CookingSession({
       action={
         <div className='flex shrink-0 items-center gap-2'>
           {timersButton}
-          {entriesButton}
+          {captureButton}
           {ingredientsButton}
         </div>
       }
       aside={noteCard}
+      entries={stepEntries}
+      onEditEntry={capture.edit}
+      onApplyChange={(id) => void startEdit(recipe.id, [id])}
+      onReadEntries={voice.isSupported ? readEntries : null}
       dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)
@@ -2679,6 +2686,7 @@ function CookingSession({
                     isNothingChosen={followUps[record.recipeId] === 'NOTHING'}
                     doneText={getFollowUpDone(record.recipeId)}
                     plannedChangeCount={plannedChanges.length}
+                    isUpdateInFooter={footerChange !== null}
                     onAdd={() =>
                       capture.open({
                         recipeId: record.recipeId,
@@ -2872,17 +2880,32 @@ function CookingSession({
                   </Button>
                 </>
               ) : isFinishShown ? (
-                <Button
-                  ref={primaryRef}
-                  type='button'
-                  className={join(
-                    'h-14 min-w-0 flex-1 text-lg',
-                    '[@media(max-height:500px)]:h-11',
+                <>
+                  {footerChange !== null && !capture.isOpen && !putAway.isOpen && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className={join(
+                        'h-14 min-w-0 shrink px-4 text-base max-sm:px-3',
+                        '[@media(max-height:500px)]:h-11',
+                      )}
+                      onClick={handleWrapUpAndUpdate}
+                    >
+                      {isPlate ? `Update ${footerChange.title}` : 'Update the recipe'}
+                    </Button>
                   )}
-                  onClick={handleDone}
-                >
-                  Done
-                </Button>
+                  <Button
+                    ref={primaryRef}
+                    type='button'
+                    className={join(
+                      'h-14 min-w-0 flex-1 text-lg',
+                      '[@media(max-height:500px)]:h-11',
+                    )}
+                    onClick={handleDone}
+                  >
+                    Done
+                  </Button>
+                </>
               ) : isTimersView ? (
                 <>
                   <Button
@@ -2969,29 +2992,6 @@ function CookingSession({
         />
       )}
       <CookVoiceExplainer voice={voice} ingredientExample={ingredientExample} />
-      <CookStepEntriesSheet
-        isOpen={isEntriesOpen && isStepsView && !isEditing}
-        onClose={() => setEntriesOpenKey(null)}
-        stepNumber={index + 1}
-        entries={stepEntries}
-        onAdd={
-          canWrite
-            ? () => {
-                setEntriesOpenKey(null);
-                openStepCapture();
-              }
-            : null
-        }
-        onEdit={(id) => {
-          setEntriesOpenKey(null);
-          capture.edit(id);
-        }}
-        onApplyChange={(id) => {
-          setEntriesOpenKey(null);
-          void startEdit(recipe.id, [id]);
-        }}
-        onRead={voice.isSupported ? readEntries : null}
-      />
     </Subview>
   );
 }
