@@ -18,7 +18,11 @@ import {
   findStoreForLink,
   normalizeExtractedProduct,
 } from '../../src/apps/pinch/utils/normalizeProduct.ts';
-import { getProductReadFailureLine } from '../../src/apps/pinch/utils/readFailures.ts';
+import { isBotCheckPage } from '../../src/lib/pageContent/botCheck.ts';
+import {
+  classifyReadFailure,
+  getProductReadFailureLine,
+} from '../../src/apps/pinch/utils/readFailures.ts';
 import { resolveIngredients } from '../../src/apps/pinch/utils/resolveIngredient.ts';
 import { CATALOG_INGREDIENTS_BY_ID } from '../../src/apps/pinch/catalog/index.ts';
 
@@ -369,7 +373,15 @@ assert.deepEqual(findStoreForLink('not a link', [ownWalmart]), {
 
 // products: a failed reading names its cause and says the price can be typed
 const lines = (
-  ['unreachable', 'busy', 'unavailable', 'link', 'unread', 'empty'] as const
+  [
+    'unreachable',
+    'busy',
+    'unavailable',
+    'link',
+    'blocked',
+    'unread',
+    'empty',
+  ] as const
 ).map((cause) => getProductReadFailureLine(cause));
 assert.equal(new Set(lines).size, lines.length);
 assert.equal(
@@ -379,8 +391,47 @@ assert.equal(
 );
 assert.equal(
   lines.filter((line) => /type (it|the price) in below/i.test(line)).length,
-  4,
+  5,
   'when the page is the trouble, the form is the way forward',
+);
+
+// products: a bot check is a blocked page, never an empty product
+const page = (title: string | null, text = '', structuredData?: never[]) => ({
+  url: 'https://www.walmart.com/ip/1',
+  title,
+  text,
+  structuredData,
+});
+assert.equal(isBotCheckPage(page('Robot or human?')), true);
+assert.equal(isBotCheckPage(page('Access Denied')), true);
+assert.equal(isBotCheckPage(page('Just a moment...')), true);
+assert.equal(
+  isBotCheckPage(
+    page('Walmart', 'Please verify you are a human. Press & hold'),
+  ),
+  true,
+);
+assert.equal(
+  isBotCheckPage(page('Great Value Black Beans, 4 lb', 'Black beans $4.98')),
+  false,
+);
+assert.equal(
+  isBotCheckPage(
+    page('Robot or human?', 'x', [{ '@type': 'Product' }] as never[]),
+  ),
+  false,
+  'a page with its own product data is the product',
+);
+assert.equal(
+  isBotCheckPage(page('Recipe', `${'Stir. '.repeat(400)} captcha`)),
+  false,
+  'a long page that mentions a captcha is not a bot check',
+);
+assert.equal(classifyReadFailure({ code: 'blocked-page' }, true), 'blocked');
+assert.equal(
+  classifyReadFailure({ code: 'blocked-page' }, false),
+  'unreachable',
+  'offline is the connection whatever the error says',
 );
 
 console.log('pinchKitchen: all checks passed');

@@ -1,8 +1,15 @@
+import { BLOCKED_PAGE_CODE } from '@/lib/pageContent/botCheck';
 import type { RecipeSource } from '@apps/pinch/types';
 
 /** Why a reading failed, told by what is to blame: the connection or the reader, the link, or what the reader found. */
 export type ReadFailure =
-  'unreachable' | 'busy' | 'unavailable' | 'link' | 'unread' | 'empty';
+  | 'unreachable'
+  | 'busy'
+  | 'unavailable'
+  | 'link'
+  | 'blocked'
+  | 'unread'
+  | 'empty';
 
 interface ErrorShape {
   code?: unknown;
@@ -36,6 +43,7 @@ export function classifyReadFailure(
   if (!isOnline) return 'unreachable';
 
   const { code, message, customErrorData } = asShape(error);
+  if (code === BLOCKED_PAGE_CODE) return 'blocked';
   const status = customErrorData?.status;
   if (typeof code === 'string' && code.startsWith('functions/')) {
     return classifyCallable(code.slice('functions/'.length), message);
@@ -110,6 +118,9 @@ export function getProductReadFailureLine(cause: ReadFailure) {
   }
   if (cause === 'unavailable') {
     return "The reader isn't available right now. You can type the price in below.";
+  }
+  if (cause === 'blocked') {
+    return "That store won't let apps read its page, so you can type the price in below.";
   }
   if (cause === 'link') {
     return "We couldn't open that page. Some stores don't let apps read their pages, so you can type the price in below.";
