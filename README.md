@@ -57,7 +57,7 @@ VITE_GOOGLE_PLACES_API_KEY=
 # Pinch store logos: a publishable Logo.dev token (pk_…), sent only with a store's web domain. Logos fall back to a letter tile when unset.
 VITE_STORE_LOGO_TOKEN=
 
-# App Check (required by Nine Lives' AI ingestion). Prod: reCAPTCHA v3 site key (Firebase Console > App Check).
+# App Check (required by every Firebase AI Logic call: Pinch's recipe reading, Nine Lives' ingestion). Prod: the reCAPTCHA Enterprise site key App Check is registered with. Also a GitHub Actions secret of the same name, which both hosting workflows pass to the build.
 VITE_FIREBASE_APPCHECK_SITE_KEY=
 # Local: the team's shared debug-token UUID (registered under App Check > Manage debug tokens) — ask a teammate.
 VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=
@@ -153,6 +153,14 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 ## Troubleshooting
 
 Problems we've hit before, so we don't hit them again.
+
+### Every AI call fails with `401 Firebase App Check token is invalid`
+
+- **Symptom:** on the deployed app, Pinch's recipe reading (and any other Firebase AI Logic call) fails with `[401 ] Firebase App Check token is invalid. (AI/fetch-error)` on `firebasevertexai.googleapis.com/.../generateContent`. The Network panel shows no `exchangeRecaptcha...Token` request at all, and the console has no `appCheck/...` error.
+- **Cause (two, both needed fixing):** the hosting workflows never passed `VITE_FIREBASE_APPCHECK_SITE_KEY` to the build, so deployed builds skipped `initializeAppCheck` and the AI call went out without a usable token. And App Check was registered with reCAPTCHA Enterprise while `src/lib/firebase/config.ts` used `ReCaptchaV3Provider`, the classic flow, which an Enterprise key cannot complete.
+- **Fix:** `firebase-hosting-merge.yml` and `firebase-hosting-preview.yml` pass the key from the `VITE_FIREBASE_APPCHECK_SITE_KEY` repository secret (the Enterprise **site** key, not the secret key), and `config.ts` uses `ReCaptchaEnterpriseProvider`. The key's allowed domains (Google Cloud Console > Security > reCAPTCHA > the key > Settings) must include `apps.moondreams.dev`; preview hosts (`*.web.app`) are separate domains.
+- **Telling it apart:** after the fix a recipe read shows `exchangeRecaptchaEnterpriseToken` returning 200. A 403 on that request is the key or its domains; a 400 is a key that is not an Enterprise key; no request at all means the key is missing from the build (check the secret and the build env). Locally with emulators, the debug token (`VITE_FIREBASE_APPCHECK_DEBUG_TOKEN`) bypasses the provider, so this never shows up there.
+- **Not verified:** the live exchange against production; it needs the secret and the domain in place.
 
 ### A recipe from a link always says "We couldn't read a recipe from that page"
 
