@@ -41,7 +41,7 @@ interface HowToVideoProps {
   ariaLabel: string;
 }
 
-/** The thumbnail with a play button; the host's player (and its scripts) load only after the tap. */
+/** The thumbnail with a play button; the host's player (and its scripts) load only after the tap. `playing` follows the player's own play and pause, so a re-render never restarts a video the person paused. */
 function HowToVideo({ video, ariaLabel }: HowToVideoProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const poster = useMemo(
@@ -73,6 +73,9 @@ function HowToVideo({ video, ariaLabel }: HowToVideoProps) {
         height='100%'
         fallback={TILE}
         onClickPreview={() => setIsPlaying(true)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
       />
     </div>
   );
