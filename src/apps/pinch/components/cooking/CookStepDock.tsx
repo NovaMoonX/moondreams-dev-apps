@@ -282,7 +282,7 @@ function CookStepDock({
           id={panelId}
           aria-label={getTitle()}
           data-no-swipe=''
-          className='bg-popover text-popover-foreground border-border absolute inset-x-0 bottom-full z-20 mb-2 space-y-1 rounded-2xl border p-2 shadow-lg'
+          className='bg-popover text-popover-foreground border-border absolute inset-x-0 bottom-full z-20 mb-2 space-y-1 rounded-2xl border p-2 shadow-lg [@media(max-height:500px)_and_(min-width:640px)]:top-full [@media(max-height:500px)_and_(min-width:640px)]:bottom-auto [@media(max-height:500px)_and_(min-width:640px)]:mt-2 [@media(max-height:500px)_and_(min-width:640px)]:mb-0'
         >
           <div className='flex min-h-8 items-center justify-between gap-2 px-1'>
             <p className='text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium'>
