@@ -273,6 +273,23 @@ check('deleting an included entry changes the stamp, so the link reads as change
   assert.equal(getShareStatus(taken, recipes, new Map(), notesBy(noteDeleted)).isStale, false);
 });
 
+check('entries beyond the share caps do not move the stamp, and a link is not read as changed while notes load', () => {
+  const source: ShareSource = { kind: 'RECIPE', recipe: full };
+  const many = Array.from({ length: MAX_SHARED_TIPS + 5 }, (_, index) =>
+    tipOf(`cap-${index}`, `Tip ${index}`, { createdAt: index, updatedAt: index }),
+  );
+  const stamp = (notes: RecipeNote[]) =>
+    getShareSourceStamp(source, new Map(), new Map([['r-owner-1', notes]]), TIPS);
+  const edited = many.map((tip, index) =>
+    index === many.length - 1 ? { ...tip, updatedAt: 99999 } : tip,
+  );
+  assert.equal(stamp(edited), stamp(many), 'a tip past the cap is not in the copy');
+  const taken = shareRecord(stamp(many), TIPS);
+  const recipes = new Map([['r-owner-1', full]]);
+  assert.equal(getShareStatus(taken, recipes, new Map(), new Map(), false).isStale, false);
+  assert.equal(getShareStatus(taken, recipes, new Map(), new Map(), true).isStale, true);
+});
+
 check('a link made before the choice existed carries no entries, and an entry added to it never marks it changed', () => {
   const legacy = shareRecord(full.updatedAt, TIPS) as unknown as Record<string, unknown>;
   delete legacy.includesTips;

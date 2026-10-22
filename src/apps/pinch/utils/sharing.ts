@@ -106,7 +106,23 @@ const toSharedLinks = (links: RecipeLink[] | undefined): SharedRecipeLink[] => {
 const getEntries = (notes: RecipeNote[], kind: 'TIP' | 'NOTE'): RecipeNote[] =>
   notes.filter((note) => note.kind === kind && (note.text ?? '').trim() !== '');
 
-/** A recipe's tips or notes as a share carries them: the words and the step they sit under (its number, or null for the whole recipe), in step order, oldest first. Only the words and the step number leave: never a date, an id or a cook. */
+/** The tips or notes a share carries for one recipe: in step order (the whole recipe's first), oldest first, cut to the cap. */
+const pickSharedEntries = (
+  recipe: Recipe,
+  notes: RecipeNote[],
+  kind: 'TIP' | 'NOTE',
+  maxCount: number,
+): { note: RecipeNote; step: number | null }[] =>
+  getEntries(notes, kind)
+    .map((note) => ({ note, step: resolveNoteStep(note, recipe.steps) }))
+    .sort(
+      (a, b) =>
+        (a.step ?? -1) - (b.step ?? -1) ||
+        a.note.createdAt - b.note.createdAt,
+    )
+    .slice(0, maxCount);
+
+/** Only the words and the step number leave: never a date, an id or a cook. */
 const toSharedEntries = (
   recipe: Recipe,
   notes: RecipeNote[],
@@ -114,26 +130,24 @@ const toSharedEntries = (
   maxCount: number,
   maxLength: number,
 ): SharedRecipeEntry[] =>
-  getEntries(notes, kind)
-    .map((note) => ({
-      text: (note.text ?? '').trim().slice(0, maxLength),
-      step: resolveNoteStep(note, recipe.steps),
-      createdAt: note.createdAt,
-    }))
-    .sort(
-      (a, b) =>
-        (a.step ?? -1) - (b.step ?? -1) || a.createdAt - b.createdAt,
-    )
-    .slice(0, maxCount)
-    .map(({ text, step }) => ({ text, step }));
+  pickSharedEntries(recipe, notes, kind, maxCount).map(({ note, step }) => ({
+    text: (note.text ?? '').trim().slice(0, maxLength),
+    step,
+  }));
 
 const getIncludedEntries = (
+  recipe: Recipe,
   notes: RecipeNote[],
   includes: ShareIncludes,
-): RecipeNote[] => [
-  ...(includes.tips ? getEntries(notes, 'TIP') : []),
-  ...(includes.notes ? getEntries(notes, 'NOTE') : []),
-];
+): RecipeNote[] =>
+  [
+    ...(includes.tips
+      ? pickSharedEntries(recipe, notes, 'TIP', MAX_SHARED_TIPS)
+      : []),
+    ...(includes.notes
+      ? pickSharedEntries(recipe, notes, 'NOTE', MAX_SHARED_NOTES)
+      : []),
+  ].map(({ note }) => note);
 
 /** Copies fields by name, never the recipe itself, so a field added to it later stays out of a share. */
 export function buildSharedRecipe(
@@ -278,7 +292,7 @@ export function getShareSourceStamp(
 ): number {
   const recipes = getShareRecipes(source, recipesById);
   const entries = recipes.flatMap((recipe) =>
-    getIncludedEntries(notesByRecipe.get(recipe.id) ?? [], includes),
+    getIncludedEntries(recipe, notesByRecipe.get(recipe.id) ?? [], includes),
   );
   const result =
     Math.max(
@@ -365,6 +379,7 @@ export function getShareStatus(
   recipesById: Map<string, Recipe>,
   mealsById: Map<string, Meal>,
   notesByRecipe: NotesByRecipe = new Map(),
+  isNotesReady = true,
 ): ShareStatus {
   const source = getShareSource(
     share.kind,
@@ -374,6 +389,11 @@ export function getShareStatus(
   );
   if (source === null) return { isGone: true, isStale: false };
 
+  const includes = getShareIncludes(share);
+  if (!isNotesReady && (includes.tips || includes.notes)) {
+    return { isGone: false, isStale: false };
+  }
+
   const result = {
     isGone: false,
     isStale: isShareStale(
@@ -382,7 +402,7 @@ export function getShareStatus(
         source,
         recipesById,
         notesByRecipe,
-        getShareIncludes(share),
+        includes,
       ),
     ),
   };

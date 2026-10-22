@@ -16,7 +16,11 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate } from '@/utils/formatUtils';
-import { MAX_PINCH_SHARES } from '@apps/pinch/constants';
+import {
+  MAX_PINCH_SHARES,
+  MAX_SHARED_NOTES,
+  MAX_SHARED_TIPS,
+} from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   renewShareLink,
@@ -95,13 +99,13 @@ function IncludeChoices({
       key: 'tips' as const,
       label: 'Your tips',
       count: tipCount,
-      hint: 'Advice for making it, under the step it belongs to.',
+      hint: `Advice for making it, under the step it belongs to.${tipCount > MAX_SHARED_TIPS ? ` The first ${MAX_SHARED_TIPS} are shared.` : ''}`,
     },
     {
       key: 'notes' as const,
       label: 'Your notes',
       count: noteCount,
-      hint: 'Shown as you wrote them. Planned changes stay out.',
+      hint: `Shown as you wrote them. Visitors can read them but don't get a copy. Planned changes stay out.${noteCount > MAX_SHARED_NOTES ? ` The first ${MAX_SHARED_NOTES} are shared.` : ''}`,
     },
   ].filter((row) => row.count > 0 || includes[row.key]);
   if (rows.length === 0) return null;
@@ -246,8 +250,20 @@ function ShareView({
   const hasWebPhoto = recipes.some(
     (recipe) => recipe.coverPath == null && Boolean(recipe.coverUrl),
   );
-  const hasEntries = tipCount + noteCount > 0;
-  const leftOut = `Your name, planned changes, prices, favorites, cooking history and collections.${hasEntries ? ' Tips and notes too, unless you include them.' : ''}${hasWebPhoto ? ' A photo from a web search stays out too.' : ''}`;
+  const joinWords = (words: string[]) => words.join(' and ');
+  const taken = [
+    ...(includes.tips && tipCount > 0 ? ['tips'] : []),
+    ...(includes.notes && noteCount > 0 ? ['notes'] : []),
+  ];
+  const held = [
+    ...(!includes.tips && tipCount > 0 ? ['tips'] : []),
+    ...(!includes.notes && noteCount > 0 ? ['notes'] : []),
+  ];
+  const copyLine =
+    taken.length === 0
+      ? inCopy
+      : `${inCopy} Your ${joinWords(taken)} too.`;
+  const leftOut = `Your name, planned changes, prices, favorites, cooking history and collections.${held.length > 0 ? ` Your ${joinWords(held)} too, unless you include them.` : ''}${hasWebPhoto ? ' A photo from a web search stays out too.' : ''}`;
   const includeChoices = (
     <IncludeChoices
       tipCount={tipCount}
@@ -472,7 +488,7 @@ function ShareView({
                 <div>
                   <dt className='font-medium'>In the copy</dt>
                   <dd className='text-muted-foreground text-pretty'>
-                    {inCopy}
+                    {copyLine}
                   </dd>
                 </div>
                 <div>

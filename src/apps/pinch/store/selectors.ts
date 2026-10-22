@@ -694,12 +694,25 @@ export const selectShareBySource =
 
 /** Whether each link's original is gone and whether it changed since the copy was taken, by the link's id. */
 export const selectShareStatuses = createSelector(
-  [selectShares, selectRecipesById, selectMealsById, selectNotesByRecipe],
-  (shares, recipesById, mealsById, notesByRecipe) =>
+  [
+    selectShares,
+    selectRecipesById,
+    selectMealsById,
+    selectNotesByRecipe,
+    (state: RootState) =>
+      state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
+  ],
+  (shares, recipesById, mealsById, notesByRecipe, isNotesReady) =>
     new Map(
       shares.map((share) => [
         share.id,
-        getShareStatus(share, recipesById, mealsById, notesByRecipe),
+        getShareStatus(
+          share,
+          recipesById,
+          mealsById,
+          notesByRecipe,
+          isNotesReady,
+        ),
       ]),
     ),
 );

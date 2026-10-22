@@ -26,9 +26,10 @@ interface EntryListProps {
   title: string;
   emoji: string;
   entries: SharedRecipeEntry[];
+  caption?: string;
 }
 
-function EntryList({ title, emoji, entries }: EntryListProps) {
+function EntryList({ title, emoji, entries, caption }: EntryListProps) {
   if (entries.length === 0) return null;
 
   return (
@@ -50,6 +51,9 @@ function EntryList({ title, emoji, entries }: EntryListProps) {
           </li>
         ))}
       </ul>
+      {caption && (
+        <p className='text-muted-foreground pt-1.5 text-xs'>{caption}</p>
+      )}
     </FormSection>
   );
 }
@@ -130,7 +134,12 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
       )}
 
       <EntryList title='Tips' emoji='💡' entries={recipe.tips} />
-      <EntryList title='Notes' emoji='📝' entries={recipe.notes} />
+      <EntryList
+        title='Notes'
+        emoji='📝'
+        entries={recipe.notes}
+        caption='Notes stay on this page when you add the recipe.'
+      />
 
       <RecipeLinksSection links={links} rel={LINK_REL} isPlayerHidden />
     </div>

@@ -35,6 +35,7 @@ import ListViewControls from '@apps/pinch/components/shared/ListViewControls';
 import AddToCollectionSheet from '@apps/pinch/components/recipes/AddToCollectionSheet';
 import CollectionsSheet from '@apps/pinch/components/recipes/CollectionsSheet';
 import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
+import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import NoteSheet from '@apps/pinch/components/notes/NoteSheet';
 import MealDrawer from '@apps/pinch/components/recipes/MealDrawer';
 import MealRow from '@apps/pinch/components/recipes/MealRow';
@@ -288,6 +289,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [noteTarget, setNoteTarget] = useState<{
     recipeId: string;
     noteId: string | null;
+    kind: WrittenNoteKind | null;
   } | null>(null);
   const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
   const [isPickingCollections, setIsPickingCollections] = useState(false);
@@ -1273,9 +1275,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             setOpenId(null);
             setPutAway({ kind: 'recipe', id });
           }}
-          onOpenNote={(recipeId, noteId) => {
+          onOpenNote={(recipeId, noteId, kind = null) => {
             setOpenId(null);
-            setNoteTarget({ recipeId, noteId });
+            setNoteTarget({ recipeId, noteId, kind });
           }}
         />
       )}
@@ -1286,6 +1288,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           recipeId={noteTarget.recipeId}
           noteId={noteTarget.noteId}
           initialCookId={null}
+          initialKind={noteTarget.kind}
           onClose={() =>
             setNoteTarget((current) =>
               current === noteTarget ? null : current,

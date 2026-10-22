@@ -37,7 +37,8 @@ interface CookStepViewProps {
   /** The lines this step names, scaled. */
   ingredients: CookRow[];
   isAmountNoteShown: boolean;
-  aside: ReactNode;
+  /** Where the first step leads with the recipe's latest note, until "Got it"; null elsewhere. */
+  lastTime: { recipeId: string; isDismissed: boolean; onGotIt: () => void } | null;
   /** What was written for this step, tips first. */
   entries: RecipeNote[];
   onEditEntry: (id: string) => void;
@@ -78,7 +79,7 @@ function CookStepView({
   index,
   ingredients,
   isAmountNoteShown,
-  aside,
+  lastTime,
   entries,
   onEditEntry,
   onApplyChange,
@@ -181,7 +182,6 @@ function CookStepView({
             SIDE_BY_SIDE.column,
           )}
         >
-          {aside}
           <CookStepDock
             key={stepNumber}
             rows={ingredients}
@@ -190,6 +190,7 @@ function CookStepView({
             onEdit={onEditEntry}
             onApplyChange={onApplyChange}
             onRead={onReadEntries}
+            lastTime={lastTime}
           />
         </div>
       </div>

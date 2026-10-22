@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import {
   Button,
@@ -49,6 +49,8 @@ interface CookEditViewProps {
   onBack: () => void;
   /** Opens a note about this cook; null where none can be written (a cook not saved yet, or notes that didn't load). */
   onAddNote: (() => void) | null;
+  /** What came out of this cook, drawn above the note row; null for a cook not saved yet. */
+  journal: ReactNode;
 }
 
 function CookEditView({
@@ -60,6 +62,7 @@ function CookEditView({
   planNote,
   onBack,
   onAddNote,
+  journal,
 }: CookEditViewProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -87,6 +90,15 @@ function CookEditView({
 
   const fields = useMemo(
     () => [
+      ...(cook && journal
+        ? [
+            custom({
+              name: 'journal',
+              label: '',
+              renderComponent: () => journal,
+            }),
+          ]
+        : []),
       custom({
         name: 'when',
         label: '',
@@ -171,7 +183,7 @@ function CookEditView({
           ]
         : []),
     ],
-    [date, time, servings, now, cook, onAddNote, isChanged, isSubmitting, uid],
+    [date, time, servings, now, cook, onAddNote, journal, isChanged, isSubmitting, uid],
   );
 
   const handleSubmit = async () => {
@@ -234,7 +246,7 @@ function CookEditView({
       <Form
         id='pinch-cook'
         form={fields}
-        initialData={{ when: '', servings: '', result: '', note: '' }}
+        initialData={{ when: '', servings: '', result: '', journal: '', note: '' }}
         columns={1}
         onSubmit={() => {
           void handleSubmit();

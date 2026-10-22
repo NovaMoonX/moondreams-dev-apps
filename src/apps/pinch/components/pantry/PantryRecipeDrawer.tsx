@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import ContainerFormSheet from '@apps/pinch/components/containers/ContainerFormSheet';
 import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
+import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import NoteSheet from '@apps/pinch/components/notes/NoteSheet';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
@@ -15,7 +16,12 @@ type Side =
   | { kind: 'shopping'; request: ShoppingRequest }
   | { kind: 'history'; recipeId: string }
   | { kind: 'putAway'; recipeId: string }
-  | { kind: 'note'; recipeId: string; noteId: string | null };
+  | {
+      kind: 'note';
+      recipeId: string;
+      noteId: string | null;
+      noteKind: WrittenNoteKind | null;
+    };
 
 interface PantryRecipeDrawerProps {
   uid: string;
@@ -58,8 +64,8 @@ function PantryRecipeDrawer({
             openSubview({ kind: 'containers', recipeId: id, place })
           }
           onPutAway={(id) => setSide({ kind: 'putAway', recipeId: id })}
-          onOpenNote={(id, noteId) =>
-            setSide({ kind: 'note', recipeId: id, noteId })
+          onOpenNote={(id, noteId, noteKind = null) =>
+            setSide({ kind: 'note', recipeId: id, noteId, noteKind })
           }
         />
       )}
@@ -93,6 +99,7 @@ function PantryRecipeDrawer({
           recipeId={side.recipeId}
           noteId={side.noteId}
           initialCookId={null}
+          initialKind={side.noteKind}
           onClose={onClose}
         />
       )}

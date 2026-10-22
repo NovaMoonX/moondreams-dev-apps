@@ -83,7 +83,7 @@ const getAddProblem = (
     return GONE_STEP;
   }
   if (
-    kind === 'NOTE' &&
+    kind !== 'TIP' &&
     cookId !== null &&
     !state.pinch.cooks.items.some(
       (cook) => cook.id === cookId && cook.recipeId === recipeId,
@@ -104,7 +104,7 @@ interface AddNoteInput {
   text: string;
   /** Why the change; only a change keeps it. */
   reason: string | null;
-  /** The cook a note follows up, or null. A tip and a change never follow one. */
+  /** The cook a note or a change was written for, or null. A tip never follows one. */
   cookId: string | null;
   /** The step it is about (0-based), or null for the whole recipe. */
   stepIndex: number | null;
@@ -135,7 +135,7 @@ export const addNote = createAsyncThunk<
     kind,
     text: text.trim(),
     changes: [],
-    cookId: kind === 'NOTE' ? input.cookId : null,
+    cookId: kind === 'TIP' ? null : input.cookId,
     ...getStepAnchor(steps, stepIndex),
     reason: getReason(kind, input.reason),
     createdAt: now,
@@ -222,6 +222,41 @@ export const updateNote = createAsyncThunk<
     return id;
   },
 );
+
+interface AttachNotesInput {
+  uid: string;
+  recipeId: string;
+  cookId: string;
+  noteIds: string[];
+}
+
+/** Ties the notes and changes written while cooking to the cook once it is recorded: only entries with no cook yet, only the cook field, so a later edit and the share's change stamp are untouched. */
+export const attachNotesToCook = createAsyncThunk<
+  number,
+  AttachNotesInput,
+  { state: RootState }
+>('pinch/notes/attachToCook', async ({ uid, recipeId, cookId, noteIds }, { getState }) => {
+  const ids = new Set(noteIds);
+  const targets = getState().pinch.notes.items.filter(
+    (note) =>
+      ids.has(note.id) &&
+      note.recipeId === recipeId &&
+      note.kind !== 'TIP' &&
+      note.cookId == null,
+  );
+  if (targets.length === 0) return 0;
+
+  const batch = writeBatch(db);
+  targets.forEach((note) => batch.update(noteDoc(uid, note.id), { cookId }));
+  try {
+    await batch.commit();
+  } catch (error) {
+    console.error('Pinch could not tie its entries to the cook', error);
+    return 0;
+  }
+
+  return targets.length;
+});
 
 interface RemoveNoteInput {
   uid: string;

@@ -252,7 +252,7 @@ const SEED_STEP_NOTES = [
     kind: 'CHANGE',
     text: 'Double the garlic in the marinade.',
     changes: [],
-    cookId: null,
+    cookId: 'seed-pinch-planned-1__seed-pinch-recipe-adobo',
     stepIndex: 0,
     reason: 'The kids wanted it garlickier.',
     daysAgo: 3,

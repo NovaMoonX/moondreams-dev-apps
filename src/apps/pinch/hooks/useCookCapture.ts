@@ -134,7 +134,7 @@ export function useCookCapture({
               kind: draft.kind,
               text: draft.text,
               reason: draft.kind === 'CHANGE' ? draft.reason : null,
-              cookId: draft.kind === 'NOTE' ? getCookId(draft.recipeId) : null,
+              cookId: draft.kind === 'TIP' ? null : getCookId(draft.recipeId),
               stepIndex: draft.stepIndex,
             }),
           ).unwrap();
@@ -183,7 +183,7 @@ export function useCookCapture({
           kind: input.kind,
           text: input.text,
           reason: null,
-          cookId: input.kind === 'NOTE' ? getCookId(input.recipeId) : null,
+          cookId: input.kind === 'TIP' ? null : getCookId(input.recipeId),
           stepIndex: input.stepIndex,
         }),
       ).unwrap();

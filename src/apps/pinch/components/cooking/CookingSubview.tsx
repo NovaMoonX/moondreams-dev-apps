@@ -38,7 +38,6 @@ import { formatDateShort } from '@/utils/formatUtils';
 import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
 import CookCaptureView from '@apps/pinch/components/cooking/CookCaptureView';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
-import CookNoteCard from '@apps/pinch/components/cooking/CookNoteCard';
 import CookTimerBuzz from '@apps/pinch/components/cooking/CookTimerBuzz';
 import CookPantryTake from '@apps/pinch/components/cooking/CookPantryTake';
 import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
@@ -94,6 +93,7 @@ import {
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import { updateCook } from '@apps/pinch/store/actions/cookActions';
+import { attachNotesToCook } from '@apps/pinch/store/actions/noteActions';
 import { announceCookingSession } from '@apps/pinch/lib/cookingSessionPresence';
 import {
   clearCookingSession,
@@ -102,6 +102,7 @@ import {
 import type {
   CookingResume,
   CookView,
+  PinchSubview,
   PlateCookRecipe,
   Recipe,
   RecipeNote,
@@ -400,7 +401,7 @@ function CookingSession({
 }: CookingSessionProps) {
   const dispatch = useAppDispatch();
   const store = useStore<RootState>();
-  const { closeSubview, closeSubviewIf, openSubview } = usePinchOverlay();
+  const { closeSubview, closeSubviewIf, replaceSubviewIf } = usePinchOverlay();
   const { confirm } = useActionModal();
   const [view, setView] = useState<CookView>('steps');
   const [timerDraft, setTimerDraft] = useState<KitchenTimerDraft>(
@@ -599,13 +600,11 @@ function CookingSession({
       cookSummaries,
     ],
   );
-  const closeIfStillOpen = () =>
-    closeSubviewIf(
-      (current) =>
-        current?.kind === 'cook' &&
-        current.recipeId === openedRecipeId &&
-        (current.plannedMealId ?? null) === plannedMealId,
-    );
+  const isStillOpen = (current: PinchSubview | null) =>
+    current?.kind === 'cook' &&
+    current.recipeId === openedRecipeId &&
+    (current.plannedMealId ?? null) === plannedMealId;
+  const closeIfStillOpen = () => closeSubviewIf(isStillOpen);
   const isRecorded = records.some((record) => record.recordedCookId !== null);
   const capture = useCookCapture({
     uid,
@@ -864,6 +863,24 @@ function CookingSession({
 
   useEffect(() => announceCookingSession(sessionId), [sessionId]);
 
+  const tiedToCook = useRef(new Set<string>());
+  useEffect(() => {
+    records.forEach((record) => {
+      if (record.recordedCookId === null) return;
+      const key = `${record.recordedCookId}:${capture.captured.length}`;
+      if (capture.captured.length === 0 || tiedToCook.current.has(key)) return;
+      tiedToCook.current.add(key);
+      void dispatch(
+        attachNotesToCook({
+          uid,
+          recipeId: record.recipeId,
+          cookId: record.recordedCookId,
+          noteIds: capture.captured,
+        }),
+      );
+    });
+  }, [records, capture.captured, dispatch, uid]);
+
   useEffect(() => {
     if (isFinished) {
       clearCookingSession(uid);
@@ -967,12 +984,12 @@ function CookingSession({
     return true;
   };
 
-  const leave = async (afterLeave?: () => void) => {
+  const leave = async (then?: PinchSubview) => {
     if (!(await confirmDiscard())) return;
     if (!(await confirmLeave())) return;
     clearCookingSession(uid);
-    closeIfStillOpen();
-    afterLeave?.();
+    if (then === undefined) closeIfStillOpen();
+    else replaceSubviewIf(isStillOpen, then);
   };
 
   const getOverlay = () =>
@@ -2208,13 +2225,11 @@ function CookingSession({
     if (footerChange === null) return;
     // eslint-disable-next-line react-hooks/purity -- runs from a tap
     if (Date.now() - finishedAt.current < DONE_GUARD_MS) return;
-    void leave(() =>
-      openSubview({
-        kind: 'recipe',
-        id: footerChange.recipeId,
-        fromChangeIds: footerChange.ids,
-      }),
-    );
+    void leave({
+      kind: 'recipe',
+      id: footerChange.recipeId,
+      fromChangeIds: footerChange.ids,
+    });
   };
   const hasFollowUps = records.some(
     (record) =>
@@ -2263,14 +2278,14 @@ function CookingSession({
     );
   const openStepCapture = () =>
     capture.open({ recipeId: recipe.id, stepIndex: index, kind: 'TIP' });
-  const noteCard =
-    !isWide && isCookNoteShown(index, gotItNotes, recipe.id) ? (
-      <CookNoteCard
-        key={recipe.id}
-        recipeId={recipe.id}
-        onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
-      />
-    ) : null;
+  const lastTime =
+    !isWide && index === 0
+      ? {
+          recipeId: recipe.id,
+          isDismissed: !isCookNoteShown(index, gotItNotes, recipe.id),
+          onGotIt: () => setGotItNotes((current) => [...current, recipe.id]),
+        }
+      : null;
   const notesDoor = (
     <RecipeNotes
       recipeId={recipe.id}
@@ -2336,7 +2351,7 @@ function CookingSession({
           {ingredientsButton}
         </div>
       }
-      aside={noteCard}
+      lastTime={lastTime}
       entries={stepEntries}
       onEditEntry={capture.edit}
       onApplyChange={(id) => void startEdit(recipe.id, [id])}
@@ -2686,7 +2701,7 @@ function CookingSession({
                     isNothingChosen={followUps[record.recipeId] === 'NOTHING'}
                     doneText={getFollowUpDone(record.recipeId)}
                     plannedChangeCount={plannedChanges.length}
-                    isUpdateInFooter={footerChange !== null}
+                    isUpdateInFooter={footerChange?.recipeId === record.recipeId}
                     onAdd={() =>
                       capture.open({
                         recipeId: record.recipeId,
@@ -2886,12 +2901,22 @@ function CookingSession({
                       type='button'
                       variant='secondary'
                       className={join(
-                        'h-14 min-w-0 shrink px-4 text-base max-sm:px-3',
+                        'h-14 shrink-0 px-4 text-sm sm:text-base max-sm:px-3',
                         '[@media(max-height:500px)]:h-11',
                       )}
+                      aria-label={
+                        isPlate
+                          ? `Update ${footerChange.title}`
+                          : 'Update the recipe'
+                      }
                       onClick={handleWrapUpAndUpdate}
                     >
-                      {isPlate ? `Update ${footerChange.title}` : 'Update the recipe'}
+                      <span className='sm:hidden'>Update recipe</span>
+                      <span className='max-w-48 truncate max-sm:hidden'>
+                        {isPlate
+                          ? `Update ${footerChange.title}`
+                          : 'Update the recipe'}
+                      </span>
                     </Button>
                   )}
                   <Button

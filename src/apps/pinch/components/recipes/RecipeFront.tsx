@@ -15,7 +15,8 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppSelector } from '@/store';
 import LineStockMarker from '@apps/pinch/components/pantry/LineStockMarker';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
-import RecipeJournalRow from '@apps/pinch/components/recipes/RecipeJournalRow';
+import RecipeEntryRows from '@apps/pinch/components/recipes/RecipeEntryRows';
+import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSection';
 import CoverImage from '@apps/pinch/components/shared/CoverImage';
 import GapNudge from '@apps/pinch/components/shared/GapNudge';
@@ -77,10 +78,8 @@ interface RecipeFrontProps {
   onShowPhoto?: (opener: HTMLElement) => void;
   /** The drawer's own list of collections; without it "In 3 collections" is only a label. */
   onShowCollections?: (opener: HTMLElement | null) => void;
-  /** Opens one of the person's entries to read and edit, or a new one when null; the journal row is drawn only where this exists. */
-  onOpenEntry?: (noteId: string | null) => void;
-  /** Opens the recipe's form to make a planned change. */
-  onApplyChange?: (noteId: string) => void;
+  /** Opens one of the person's tips or notes to read and edit, or a new one of a kind when null; the rows are drawn only where this exists. */
+  onOpenEntry?: (noteId: string | null, kind: WrittenNoteKind | null) => void;
   /** Shows the Recipes list narrowed to this source; left out, the source is only a label. */
   onShowSource?: (sourceId: string) => void;
   /** Shows the Recipes list narrowed to this collection; left out, the collection is only a label. */
@@ -96,7 +95,6 @@ function RecipeFront({
   onShowPhoto,
   onShowCollections,
   onOpenEntry,
-  onApplyChange,
   onShowSource,
   onShowCollection,
   onFillIn,
@@ -480,12 +478,8 @@ function RecipeFront({
         </>
       )}
 
-      {onOpenEntry && onApplyChange && (
-        <RecipeJournalRow
-          recipeId={recipe.id}
-          onOpen={onOpenEntry}
-          onApplyChange={onApplyChange}
-        />
+      {onOpenEntry && (
+        <RecipeEntryRows recipeId={recipe.id} onOpen={onOpenEntry} />
       )}
     </div>
   );

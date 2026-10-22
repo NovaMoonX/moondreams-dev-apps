@@ -12,8 +12,10 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import StarRating from '@/components/StarRating';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
+import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
 import CookEditView from '@apps/pinch/components/recipes/CookEditView';
+import CookJournal from '@apps/pinch/components/recipes/CookJournal';
 import CookPhotoThumb from '@apps/pinch/components/shared/CookPhotoThumb';
 import {
   COOK_HISTORY_FIRST_PAGE,
@@ -46,6 +48,23 @@ import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const NO_COOKS: Cook[] = [];
+
+/** What was written for a cook, in a few words: "A note", "A note and 2 changes". */
+const getWrittenLine = (kinds: string[] | undefined) => {
+  if (kinds === undefined) return null;
+  const count = (wanted: string[]) =>
+    kinds.filter((kind) => wanted.includes(kind)).length;
+  const notes = count(['NOTE']);
+  const changes = count(['CHANGE', 'TWEAK']);
+  const parts = [
+    ...(notes === 0 ? [] : [notes === 1 ? 'a note' : `${notes} notes`]),
+    ...(changes === 0
+      ? []
+      : [changes === 1 ? 'a change' : `${changes} changes`]),
+  ];
+  const line = parts.join(' and ');
+  return line === '' ? null : `${line[0].toUpperCase()}${line.slice(1)}`;
+};
 const HIDDEN_WORTH_A_BUTTON = 3;
 /** Photos drawn at once: the grid is the latest ones, and every cook with a photo is also a row of All cooks. */
 const PHOTOS_SHOWN = 30;
@@ -53,7 +72,7 @@ const PHOTOS_SHOWN = 30;
 type HistoryView =
   | { kind: 'list' }
   | { kind: 'edit'; cookId: string | null; token: number }
-  | { kind: 'note'; cookId: string; token: number };
+  | { kind: 'note'; cookId: string; noteId: string | null; token: number };
 
 interface CookingHistorySheetProps {
   uid: string;
@@ -77,10 +96,30 @@ function CookingHistorySheet({
   );
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId);
   const notedCookIds = useMemo(
-    () => new Set((notes ?? []).map((entry) => entry.cookId ?? null)),
+    () =>
+      new Set(
+        (notes ?? [])
+          .filter((entry) => entry.kind === 'NOTE')
+          .map((entry) => entry.cookId ?? null),
+      ),
+    [notes],
+  );
+  const writtenByCook = useMemo(
+    () =>
+      (notes ?? []).reduce(
+        (counts, entry) =>
+          entry.cookId == null || entry.kind === 'TIP'
+            ? counts
+            : counts.set(entry.cookId, [
+                ...(counts.get(entry.cookId) ?? []),
+                entry.kind,
+              ]),
+        new Map<string, string[]>(),
+      ),
     [notes],
   );
   const summary = useAppSelector(selectCookSummaries).get(recipeId);
+  const { openSubview } = usePinchOverlay();
   const [mode, setMode] = useState<'cooks' | 'photos'>('cooks');
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
@@ -131,8 +170,8 @@ function CookingHistorySheet({
   };
   const openEdit = (cookId: string | null) =>
     openView((token) => ({ kind: 'edit', cookId, token }));
-  const openNote = (cookId: string) =>
-    openView((token) => ({ kind: 'note', cookId, token }));
+  const openNote = (cookId: string, noteId: string | null = null) =>
+    openView((token) => ({ kind: 'note', cookId, noteId, token }));
   const closeView = (token: number) =>
     setView((current) =>
       current.kind !== 'list' && current.token === token
@@ -179,13 +218,13 @@ function CookingHistorySheet({
             <p className='text-muted-foreground text-sm'>
               {noteCook ? (
                 <>
-                  A note about the cook from{' '}
+                  What you wrote about the cook from{' '}
                   <span className='whitespace-nowrap'>
                     {formatDateShort(noteCook.cookedAt)}
                   </span>
                 </>
               ) : (
-                'A note about a cook'
+                'What you wrote about a cook'
               )}
             </p>
           </div>
@@ -193,7 +232,7 @@ function CookingHistorySheet({
             key={noteView.token}
             uid={uid}
             recipeId={recipeId}
-            noteId={null}
+            noteId={noteView.noteId}
             initialCookId={noteView.cookId}
             onCancel={closeNote}
             onDone={closeNote}
@@ -216,6 +255,23 @@ function CookingHistorySheet({
             editedCook && isNotesReady && !notedCookIds.has(editedCook.id)
               ? () => openNote(editedCook.id)
               : null
+          }
+          journal={
+            editedCook && writtenByCook.has(editedCook.id) ? (
+              <CookJournal
+                recipeId={recipeId}
+                cookId={editedCook.id}
+                onEdit={(noteId) => openNote(editedCook.id, noteId)}
+                onApplyChange={(noteId) => {
+                  onClose();
+                  openSubview({
+                    kind: 'recipe',
+                    id: recipeId,
+                    fromChangeIds: [noteId],
+                  });
+                }}
+              />
+            ) : null
           }
         />
       );
@@ -317,6 +373,7 @@ function CookingHistorySheet({
               const planNote = getPlanNote(cook);
               const putAway = putAwayByCook.get(cook.id) ?? null;
               const day = formatDateShort(cook.cookedAt);
+              const writtenLine = getWrittenLine(writtenByCook.get(cook.id));
               return (
                 <li key={cook.id} className='pb-1'>
                   <Button
@@ -348,6 +405,11 @@ function CookingHistorySheet({
                         <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
                           <span aria-hidden='true'>{CONTAINER_EMOJI}</span>{' '}
                           {putAway}
+                        </span>
+                      )}
+                      {writtenLine !== null && (
+                        <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
+                          {writtenLine}
                         </span>
                       )}
                     </span>
