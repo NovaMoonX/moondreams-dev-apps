@@ -207,6 +207,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
               },
               servingAmount: ingredient.serving.amount,
               servingUnit: ingredient.serving.unit,
+              aliases: null,
             },
           }),
         ).unwrap();

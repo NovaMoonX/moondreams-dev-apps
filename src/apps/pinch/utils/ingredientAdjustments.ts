@@ -1,5 +1,6 @@
 import { formatMacro, type MacroKey } from '@/utils/macroUtils';
 import { UNIT_LABELS } from '@apps/pinch/constants';
+import { getRecordAliases } from '@apps/pinch/utils/ingredientRecord';
 import type {
   CatalogIngredient,
   IngredientRecord,
@@ -73,6 +74,15 @@ export function getIngredientAdjustments(
           label: 'Serving size',
           builtIn: servingText(catalog.serving),
           yours: servingText(recordServing),
+        }
+      : null,
+    getRecordAliases(record).length > 0
+      ? {
+          key: 'aliases',
+          label: 'Other names',
+          builtIn:
+            catalog.aliases.length === 0 ? 'None' : catalog.aliases.join(', '),
+          yours: getRecordAliases(record).join(', '),
         }
       : null,
     record.gramsPerMl != null && record.gramsPerMl !== catalog.gramsPerMl

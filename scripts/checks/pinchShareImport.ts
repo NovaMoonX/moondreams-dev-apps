@@ -115,6 +115,7 @@ const own = (
   servingUnit: null,
   gramsPerMl: null,
   gramsEach: null,
+  aliases: [],
   defaultProductId: null,
   isArchived,
   createdAt: 1,

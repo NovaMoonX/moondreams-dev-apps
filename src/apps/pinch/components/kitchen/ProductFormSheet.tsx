@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import {
   Button,
@@ -11,6 +11,7 @@ import {
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Link2, Tag } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
 import AddFieldChips, {
@@ -24,6 +25,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
+import ProductLinkField from '@apps/pinch/components/kitchen/ProductLinkField';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
@@ -31,6 +33,8 @@ import {
   MAX_PRICE_CENTS,
   MAX_SERVING_AMOUNT,
 } from '@apps/pinch/constants';
+import { extractProductFromPage } from '@apps/pinch/lib/extractProduct';
+import { productPageQueryOptions } from '@apps/pinch/queries/productPageQueries';
 import {
   removeProduct,
   saveProduct,
@@ -42,10 +46,16 @@ import {
   selectProductsByIngredient,
   selectRecipes,
   selectRecipesById,
+  selectStores,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
 import type { Product, ResolvedIngredient, Unit } from '@apps/pinch/types';
 import { getIngredientUses } from '@apps/pinch/utils/gapOrder';
+import { findStoreForLink } from '@apps/pinch/utils/normalizeProduct';
+import {
+  classifyReadFailure,
+  getProductReadFailureLine,
+} from '@apps/pinch/utils/readFailures';
 
 const { custom } = FormFactories;
 
@@ -64,7 +74,6 @@ interface Reveal<T> {
 
 interface Extras {
   label: Reveal<string>;
-  link: Reveal<string>;
 }
 
 interface FormData {
@@ -73,8 +82,45 @@ interface FormData {
   sizeAmount: string;
   sizeUnit: Unit;
   makeDefault: boolean;
+  link: Reveal<string>;
   extras: Extras;
 }
+
+interface ReadState {
+  isFilling: boolean;
+  note: string | null;
+  error: string | null;
+}
+
+const IDLE_READING: ReadState = { isFilling: false, note: null, error: null };
+
+const getFilledNote = (
+  hasStore: boolean,
+  hasPrice: boolean,
+  hasSize: boolean,
+  hasLabel: boolean,
+) => {
+  const filled = [
+    hasStore && 'the store',
+    hasPrice && 'the price',
+    hasSize && 'the size',
+    hasLabel && 'the label',
+  ].filter((part) => typeof part === 'string');
+  const missing = [!hasPrice && 'the price', !hasSize && 'the size'].filter(
+    (part) => typeof part === 'string',
+  );
+  const sentence = (parts: string[]) =>
+    parts.length > 1
+      ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+      : parts[0];
+  const result = [
+    `Filled in ${sentence(filled)}. Check them before you add.`,
+    missing.length > 0 && `We couldn't find ${sentence(missing)}.`,
+  ]
+    .filter((part) => typeof part === 'string')
+    .join(' ');
+  return result;
+};
 
 const getInitialData = (product: Product | null): FormData => ({
   storeId: product?.storeId ?? null,
@@ -82,22 +128,36 @@ const getInitialData = (product: Product | null): FormData => ({
   sizeAmount: product ? String(product.sizeAmount) : '',
   sizeUnit: product?.sizeUnit ?? 'LB',
   makeDefault: false,
+  link: {
+    enabled: product === null || product.url != null,
+    value: product?.url ?? '',
+  },
   extras: {
     label: { enabled: product?.label != null, value: product?.label ?? '' },
-    link: { enabled: product?.url != null, value: product?.url ?? '' },
   },
 });
 
 interface ExtrasFieldsProps {
   extras: Extras;
   onChange: (extras: Extras) => void;
+  canAddLink: boolean;
+  onAddLink: () => void;
 }
 
-function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
+function ExtrasFields({
+  extras,
+  onChange,
+  canAddLink,
+  onAddLink,
+}: ExtrasFieldsProps) {
   const chips = [
-    { key: 'label', label: 'Label', icon: <Tag className='h-4 w-4' /> },
-    { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> },
-  ].filter((chip) => !extras[chip.key as keyof Extras].enabled);
+    ...(extras.label.enabled
+      ? []
+      : [{ key: 'label', label: 'Label', icon: <Tag className='h-4 w-4' /> }]),
+    ...(canAddLink
+      ? [{ key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> }]
+      : []),
+  ];
 
   return (
     <div className='space-y-4'>
@@ -123,35 +183,15 @@ function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
           />
         </RemovableField>
       )}
-      {extras.link.enabled && (
-        <RemovableField
-          label='Link'
-          removeLabel='Remove link'
-          onRemove={() =>
-            onChange({ ...extras, link: { enabled: false, value: '' } })
-          }
-        >
-          <Input
-            variant='outline'
-            type='url'
-            placeholder='https://'
-            value={extras.link.value}
-            onChange={(event) =>
-              onChange({
-                ...extras,
-                link: { enabled: true, value: event.target.value },
-              })
-            }
-          />
-        </RemovableField>
-      )}
       <AddFieldChips
         chips={chips}
         onAdd={(key) =>
-          onChange({
-            ...extras,
-            [key]: { ...extras[key as keyof Extras], enabled: true },
-          })
+          key === 'link'
+            ? onAddLink()
+            : onChange({
+                ...extras,
+                label: { ...extras.label, enabled: true },
+              })
         }
       />
     </div>
@@ -182,20 +222,26 @@ function ProductFormSheet({
       product !== null &&
       selectDefaultProducts(state).get(ingredient.id)?.id === product.id,
   );
+  const queryClient = useQueryClient();
   const storesById = useAppSelector(selectStoresById);
+  const visibleStores = useAppSelector(selectStores);
   const recipes = useAppSelector(selectRecipes);
   const recipesById = useAppSelector(selectRecipesById);
   const plannedMeals = useAppSelector(selectPlannedMeals);
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const initialData = useMemo(() => getInitialData(product), [product]);
+  const [initialData, setInitialData] = useState(() => getInitialData(product));
+  // The form reads its initial data once, so a reading that fills it remounts the form with the filled values.
+  const [fillCount, setFillCount] = useState(0);
   const [formData, setFormData] = useState<FormData>(initialData);
+  const [suggestedStore, setSuggestedStore] = useState<string | null>(null);
+  const [reading, setReading] = useState<ReadState>(IDLE_READING);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const priceCents = parseMoneyToCents(formData.price);
   const sizeAmount =
     formData.sizeAmount.trim() === '' ? null : Number(formData.sizeAmount);
-  const link = formData.extras.link;
+  const link = formData.link;
   const use = getIngredientUses(
     recipes,
     plannedMeals,
@@ -236,8 +282,116 @@ function ProductFormSheet({
       link.value.trim() === '' ||
       isValidHttpsUrl(link.value.trim()));
 
-  const fields = useMemo(
-    () => [
+  const fillFromPage = useCallback(
+    async (pageLink: string) => {
+      setReading({ isFilling: true, note: null, error: null });
+      try {
+        const page = await queryClient.fetchQuery(
+          productPageQueryOptions(pageLink),
+        );
+        const found = await extractProductFromPage(page);
+        const match = findStoreForLink(pageLink, visibleStores);
+        const hasPrice = found.priceCents !== null;
+        const hasSize = found.sizeAmount !== null && found.sizeUnit !== null;
+        if (!hasPrice && !hasSize && found.label === null) {
+          setReading({
+            isFilling: false,
+            note: null,
+            error: getProductReadFailureLine('empty'),
+          });
+          return;
+        }
+
+        const next: FormData = {
+          ...formData,
+          storeId: match.storeId ?? formData.storeId,
+          price: hasPrice
+            ? centsToInputValue(found.priceCents)
+            : formData.price,
+          sizeAmount: hasSize ? String(found.sizeAmount) : formData.sizeAmount,
+          sizeUnit: found.sizeUnit ?? formData.sizeUnit,
+          link: { enabled: true, value: pageLink },
+          extras: {
+            label:
+              found.label === null
+                ? formData.extras.label
+                : { enabled: true, value: found.label },
+          },
+        };
+        setInitialData(next);
+        setFormData(next);
+        setFillCount((count) => count + 1);
+        setSuggestedStore(match.storeId === null ? match.suggestedName : null);
+        setReading({
+          isFilling: false,
+          note: getFilledNote(
+            match.storeId !== null,
+            hasPrice,
+            hasSize,
+            found.label !== null,
+          ),
+          error: null,
+        });
+      } catch (readError) {
+        console.error('Reading a product page failed', readError);
+        setReading({
+          isFilling: false,
+          note: null,
+          error: getProductReadFailureLine(
+            classifyReadFailure(readError, navigator.onLine),
+          ),
+        });
+      }
+    },
+    [formData, queryClient, visibleStores],
+  );
+
+  const fields = useMemo(() => {
+    const linkField = custom({
+      name: 'link',
+      label: '',
+      renderComponent: () => {
+        if (!link.enabled) {
+          return null;
+        }
+
+        const field = (
+          <ProductLinkField
+            caption={product === null ? 'Start from a product page' : undefined}
+            value={link.value}
+            onChange={(value) =>
+              setFormData((current) => ({
+                ...current,
+                link: { enabled: true, value },
+              }))
+            }
+            onFill={(pageLink) => void fillFromPage(pageLink)}
+            isFilling={reading.isFilling}
+            note={reading.note}
+            error={reading.error}
+          />
+        );
+        return product === null ? (
+          field
+        ) : (
+          <RemovableField
+            label='Link'
+            removeLabel='Remove link'
+            onRemove={() =>
+              setFormData((current) => ({
+                ...current,
+                link: { enabled: false, value: '' },
+              }))
+            }
+          >
+            {field}
+          </RemovableField>
+        );
+      },
+    });
+
+    return [
+      ...(product === null ? [linkField] : []),
       custom({
         name: 'storeId',
         label: 'Where do you buy it?',
@@ -245,6 +399,7 @@ function ProductFormSheet({
           <StorePicker
             uid={uid}
             value={props.value as string | null}
+            suggestedStoreName={suggestedStore}
             onChange={(storeId) => props.onValueChange(storeId)}
           />
         ),
@@ -308,6 +463,7 @@ function ProductFormSheet({
           </div>
         ),
       }),
+      ...(product !== null ? [linkField] : []),
       custom({
         name: 'extras',
         label: '',
@@ -315,6 +471,13 @@ function ProductFormSheet({
           <ExtrasFields
             extras={props.value as Extras}
             onChange={props.onValueChange}
+            canAddLink={product !== null && !link.enabled}
+            onAddLink={() =>
+              setFormData((current) => ({
+                ...current,
+                link: { enabled: true, value: current.link.value },
+              }))
+            }
           />
         ),
       }),
@@ -340,17 +503,21 @@ function ProductFormSheet({
             }),
           ]
         : []),
-    ],
-    [
-      uid,
-      otherCount,
-      isCurrentDefault,
-      formData.price,
-      formData.sizeAmount,
-      formData.sizeUnit,
-      echo,
-    ],
-  );
+    ];
+  }, [
+    uid,
+    product,
+    otherCount,
+    isCurrentDefault,
+    formData.price,
+    formData.sizeAmount,
+    formData.sizeUnit,
+    echo,
+    link,
+    reading,
+    suggestedStore,
+    fillFromPage,
+  ]);
 
   const handleDelete = async () => {
     if (!product) {
@@ -396,9 +563,7 @@ function ProductFormSheet({
             priceCents,
             sizeAmount,
             sizeUnit: formData.sizeUnit,
-            url: data.extras.link.enabled
-              ? data.extras.link.value.trim() || null
-              : null,
+            url: link.enabled ? link.value.trim() || null : null,
             makeDefault: data.makeDefault === true,
           },
         }),
@@ -417,6 +582,7 @@ function ProductFormSheet({
   return (
     <FormSheet isOpen onClose={onClose} title={title}>
       <Form
+        key={fillCount}
         id='pinch-product'
         form={fields}
         initialData={initialData}
@@ -428,6 +594,7 @@ function ProductFormSheet({
             price: current.price,
             sizeAmount: current.sizeAmount,
             sizeUnit: current.sizeUnit,
+            link: current.link,
           }))
         }
         onSubmit={(data) => {

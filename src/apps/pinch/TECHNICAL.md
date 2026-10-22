@@ -243,6 +243,7 @@ interface IngredientRecord {
   servingUnit: Unit | null;
   gramsPerMl: number | null;                    // density, bridges mass <-> volume (user-supplied; editing UI is Next Steps)
   gramsEach: number | null;                     // weight of one, bridges mass <-> count (same)
+  aliases: string[];                            // other names the person calls it by, at most 10 of up to 120 characters; a document written before aliases lacks the key (reads as [])
   defaultProductId: string | null;
   isArchived: boolean;                          // custom ingredients only; a document written before archiving lacks the key (reads as false, backfilled on edit)
   createdAt: number;                            // immutable
@@ -253,6 +254,8 @@ interface IngredientRecord {
 For a catalog ingredient the document id *is* the catalog id, so there is exactly one record per catalog ingredient and "upsert" is a plain `setDoc` with merge-free full shape on first write. For a custom ingredient the id is `generateUuid()`.
 
 **Resolved ingredient (client-only, never stored).** `resolveIngredient(id)` = catalog entry (if `cat-`) overlaid by the record: `name`, `familyId`, `nutritionPer100g`, serving and conversions each fall back to the catalog when the record's field is `null`. An id with neither a catalog entry nor a record resolves to a placeholder `"Removed ingredient"` so a dangling reference can never crash a screen.
+
+**Aliases.** `aliases` holds the person's own other names for an ingredient, custom or adjusted catalog (a catalog ingredient keeps its built-in names, and `resolveCatalogIngredient` lists them first and the person's after, dropping one the catalog already has, ignoring case). `resolveIngredient` therefore gives every reader (`searchIngredients`, `matchIngredient`, the recipe search index, cooking mode's step matching) one `aliases` list, so "Ranch Salad Dressing & Recipe Mix" finds "Dry ranch seasoning powder" in search and a recipe reading that writes the long name links to it. The Ingredient form's "Other names" chip reveals a `TextListField` (`src/components/forms/TextListField.tsx`, general: a box that adds on Enter or Add, chips with an ✕); `cleanAliases` (`utils/ingredientRecord.ts`) trims, collapses spaces, cuts at 120 characters, drops blanks, repeats (ignoring case) and the ingredient's own name, and keeps ten. `IngredientDraft.aliases` is `string[] | null`: null (the fill-in sheet, the pickers' "New ingredient") leaves a saved ingredient's names alone, and an empty list clears them, so a sheet that doesn't show them can never wipe them. A catalog ingredient with only aliases of its own counts as adjusted (it shows the Adjusted badge and an "Other names" row, built in beside yours) and "Use the built-in values" clears them. The rules check `aliases` is a list of at most 10 and each of the ten slots is a 1 to 120 character string (`isAliasList`, one expression per slot since rules can't loop); a record without the key passes (`get('aliases', [])`). Nothing stops two ingredients from sharing an alias: a reading that names it links the person's own ingredient before the catalog's and leaves two equally close ones for the person.
 
 ### 3. `Family` — `…/families/{id}`
 
@@ -296,6 +299,8 @@ interface Product {
 ```
 
 The default product is the ingredient's `defaultProductId`, not a flag on the product, so changing the default is one field write on one document. The first product added to an ingredient becomes its default in the same batch.
+
+**Reading a product page.** A new price starts with a link field (`ProductLinkField`, "Start from a product page"); an existing one keeps its optional "Link" chip, now the same field. The pasted link's preview is the shared `useLinkPreview` over `queries/productPageQueries.ts` (`fetchPageContent` for `text`, `meta` and `structuredData` filtered to `schemaTypes: ['Product']`, kept ten minutes, never persisted), and "Fill in from this page" fetches the same query (one call for the preview and the reading) and hands the page to `extractProductFromPage` (`lib/extractProduct.ts`, the shared `generativeModel` with a schema whose five keys are all required and nullable: `brand`, `price` in dollars, `sizeAmount`, `sizeUnit` from the app's units, `unread`). `normalizeExtractedProduct` (`utils/normalizeProduct.ts`) is the guard: the price becomes whole cents above zero and under `MAX_PRICE_CENTS`, a size counts only with a known unit, the brand is cut at a word. `findStoreForLink` matches the link's host to a well-known store's domain (or a subdomain of it, never a look-alike) and then to the person's own non-archived store with that `catalogStoreId`; a well-known store the person hasn't added is only named, and the store picker opens already searching for it (`suggestedStoreName`), because a form never writes a store the person didn't pick. The reading touches only what the page gave (a field it couldn't read keeps what is typed), says what it filled and what it couldn't find, and re-seeds the form by remounting it (`Form` reads `initialData` once). A failure is classified (`classifyReadFailure`) and worded by `getProductReadFailureLine`: the connection, the reader, or the page ("Some stores don't let apps read their pages, so you can type the price in below"). The price, the size and the link stay in the sheet's own state beside the form's, so the reading can set them. **Unverified:** the sandbox can't reach walmart.com, so no real store page was read; the reading was driven against mocked page and model answers, and retail sites that serve a robot check to servers will fail with the "couldn't open that page" line.
 
 ### 6. `Recipe` — `…/recipes/{id}`
 
@@ -1374,7 +1379,8 @@ src/apps/pinch/
 │   ├── useShareAdd.ts              # the public page's add and Undo, with the one in-flight guard
 │   └── useListViewOptions.ts       # a list's View options, per person, over useLocalStorageState
 ├── lib/
-│   └── extractRecipe.ts            # text, file and page readers, response schema, error mapping
+│   ├── extractRecipe.ts            # text, file and page readers, response schema, error mapping
+│   └── extractProduct.ts           # a product page's price, size and brand, response schema
 ├── queries/
 │   └── shareQueries.ts  storageImageQueries.ts  recipePageQueries.ts  ideaPageQueries.ts  photoQueries.ts  containerQueries.ts   # containerQueries: the Finished page and a recipe's containers (Firestore reads, never persisted);  recipePageQueries: text, meta and Recipe data of a page; ideaPageQueries: a page's meta only
 ├── store/

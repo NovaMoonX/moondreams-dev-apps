@@ -410,6 +410,7 @@ export async function seedPinchScale(
       servingUnit: 'G',
       gramsPerMl: null,
       gramsEach: null,
+      aliases: [],
       defaultProductId: productIdByIngredient.get(ingredient.id) ?? null,
       isArchived: false,
       createdAt,

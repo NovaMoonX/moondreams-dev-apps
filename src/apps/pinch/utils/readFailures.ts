@@ -89,3 +89,22 @@ export function canPasteTextInstead(cause: ReadFailure) {
   const result = cause === 'link' || cause === 'unread' || cause === 'empty';
   return result;
 }
+
+/** The sentence under a product link when its reading fails: the cause, and that the price can be typed in below. */
+export function getProductReadFailureLine(cause: ReadFailure) {
+  if (cause === 'unreachable') {
+    return "We couldn't reach the reader. Check your connection and try again.";
+  }
+  if (cause === 'busy') {
+    return 'The reader is busy right now. Give it a minute and try again.';
+  }
+  if (cause === 'unavailable') {
+    return "The reader isn't available right now. You can type the price in below.";
+  }
+  if (cause === 'link') {
+    return "We couldn't open that page. Some stores don't let apps read their pages, so you can type the price in below.";
+  }
+  return cause === 'empty'
+    ? "We couldn't find a price on that page. You can type it in below."
+    : "We couldn't read that page right now. You can type the price in below.";
+}

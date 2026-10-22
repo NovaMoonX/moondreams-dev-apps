@@ -33,6 +33,7 @@ const custom = (id: string, name: string): IngredientRecord => ({
   servingUnit: null,
   gramsPerMl: null,
   gramsEach: null,
+  aliases: [],
   defaultProductId: null,
   createdAt: 0,
   updatedAt: 0,

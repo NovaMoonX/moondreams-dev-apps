@@ -182,6 +182,7 @@ const buildCustomRecord = (
   servingUnit: null,
   gramsPerMl: null,
   gramsEach: null,
+  aliases: [],
   defaultProductId: null,
   isArchived: false,
   createdAt: now,

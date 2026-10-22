@@ -13,6 +13,7 @@ import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
+import { cleanAliases } from '@apps/pinch/utils/ingredientRecord';
 import { isInUse } from '@apps/pinch/utils/references';
 import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
 import { getGapKey } from '@apps/pinch/utils/gaps';
@@ -38,6 +39,8 @@ export interface IngredientDraft {
   nutrition: NutritionValues | null;
   servingAmount: number | null;
   servingUnit: Unit | null;
+  /** Other names as typed, cleaned and capped on the way in; null leaves a saved ingredient's names as they are (a sheet that doesn't show them), and a new one starts with none. */
+  aliases: string[] | null;
 }
 
 const sameName = (a: string, b: string) =>
@@ -65,6 +68,8 @@ export const saveIngredient = createAsyncThunk<
     const isCatalog = draft.catalogId !== null;
     const id = draft.id ?? draft.catalogId ?? generateUuid();
     const typedFamily = draft.newFamilyName?.trim() ?? '';
+    const aliases =
+      draft.aliases === null ? null : cleanAliases(draft.aliases, draft.name);
 
     const matchedFamilyId =
       typedFamily === ''
@@ -105,6 +110,7 @@ export const saveIngredient = createAsyncThunk<
           nutritionPer100g: draft.nutrition,
           servingAmount: draft.servingAmount,
           servingUnit: draft.servingUnit,
+          ...(aliases === null ? {} : { aliases }),
           updatedAt: now,
         };
         batch.update(
@@ -125,6 +131,7 @@ export const saveIngredient = createAsyncThunk<
           servingUnit: draft.servingUnit,
           gramsPerMl: null,
           gramsEach: null,
+          aliases: aliases ?? [],
           defaultProductId: null,
           isArchived: false,
           createdAt: now,
@@ -205,6 +212,7 @@ export const removeIngredient = createAsyncThunk<
           servingUnit: null,
           gramsPerMl: null,
           gramsEach: null,
+          aliases: [],
           updatedAt: Date.now(),
         });
       });

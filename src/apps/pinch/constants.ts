@@ -111,6 +111,8 @@ export const KITCHEN_VIEW_LABELS: Record<KitchenView, string> = {
 };
 
 export const MAX_NAME_LENGTH = 120;
+/** Other names one ingredient can carry; a client cap, with the count also held by the rules. */
+export const MAX_INGREDIENT_ALIASES = 10;
 export const MAX_SOURCE_LABEL_LENGTH = 80;
 /** Writes per batch when a source's removal reaches many recipes: under Firestore's 500. */
 export const SOURCE_BATCH_SIZE = 400;
