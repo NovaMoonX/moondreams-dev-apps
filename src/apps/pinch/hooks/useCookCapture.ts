@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import {
@@ -122,18 +123,25 @@ export function useCookCapture({
     setIsSaving(true);
     try {
       if (draft.noteId === null) {
-        const noteId = await dispatch(
-          addNote({
-            uid,
-            recipeId: draft.recipeId,
-            kind: draft.kind,
-            text: draft.text,
-            reason: draft.kind === 'CHANGE' ? draft.reason : null,
-            cookId: draft.kind === 'NOTE' ? getCookId(draft.recipeId) : null,
-            stepIndex: draft.stepIndex,
-          }),
-        ).unwrap();
+        const noteId = generateUuid();
         setCaptured((current) => [...current, noteId]);
+        try {
+          await dispatch(
+            addNote({
+              uid,
+              id: noteId,
+              recipeId: draft.recipeId,
+              kind: draft.kind,
+              text: draft.text,
+              reason: draft.kind === 'CHANGE' ? draft.reason : null,
+              cookId: draft.kind === 'NOTE' ? getCookId(draft.recipeId) : null,
+              stepIndex: draft.stepIndex,
+            }),
+          ).unwrap();
+        } catch (addError) {
+          setCaptured((current) => current.filter((id) => id !== noteId));
+          throw addError;
+        }
       } else {
         await dispatch(
           updateNote({
@@ -141,7 +149,9 @@ export function useCookCapture({
             id: draft.noteId,
             text: draft.text,
             reason: draft.kind === 'CHANGE' ? draft.reason : undefined,
-            stepIndex: draft.stepIndex,
+            ...(draft.stepIndex === draft.initial.stepIndex
+              ? {}
+              : { stepIndex: draft.stepIndex }),
           }),
         ).unwrap();
       }
@@ -155,23 +165,32 @@ export function useCookCapture({
 
   /** Writes an entry without the composer, for one dictated aloud. Resolves to its id, which the caller keeps if it should be able to take it back. */
   const quickAdd = async (input: {
+    /** An id the caller minted, so it can offer to take the entry back before the write reaches the server. */
+    id: string;
     recipeId: string;
     kind: WrittenNoteKind;
     text: string;
     stepIndex: number | null;
   }) => {
-    const noteId = await dispatch(
-      addNote({
-        uid,
-        recipeId: input.recipeId,
-        kind: input.kind,
-        text: input.text,
-        reason: null,
-        cookId: input.kind === 'NOTE' ? getCookId(input.recipeId) : null,
-        stepIndex: input.stepIndex,
-      }),
-    ).unwrap();
+    const noteId = input.id;
     setCaptured((current) => [...current, noteId]);
+    try {
+      await dispatch(
+        addNote({
+          uid,
+          id: noteId,
+          recipeId: input.recipeId,
+          kind: input.kind,
+          text: input.text,
+          reason: null,
+          cookId: input.kind === 'NOTE' ? getCookId(input.recipeId) : null,
+          stepIndex: input.stepIndex,
+        }),
+      ).unwrap();
+    } catch (addError) {
+      setCaptured((current) => current.filter((id) => id !== noteId));
+      throw addError;
+    }
     return noteId;
   };
 

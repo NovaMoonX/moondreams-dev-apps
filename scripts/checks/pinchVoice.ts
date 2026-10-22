@@ -1276,6 +1276,12 @@ expectKind(
   'what was just dictated can be taken back',
 );
 
+assert.deepEqual(
+  ['constructor', 'toString', 'hasOwnProperty', '__proto__'].map((word) => parse(word)),
+  [null, null, null, null],
+  'a word that names an object property is not a command',
+);
+
 const dictating: CookVoiceContext = {
   ...plate,
   choice: { kind: 'DICTATE', entryKind: 'TIP' },

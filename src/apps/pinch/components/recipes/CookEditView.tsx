@@ -26,6 +26,7 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateTime } from '@/utils/formatUtils';
+import CookResultFields from '@apps/pinch/components/shared/CookResultFields';
 import { MAX_COOKED_SERVINGS } from '@apps/pinch/constants';
 import {
   addCook,
@@ -134,6 +135,22 @@ function CookEditView({
           </div>
         ),
       }),
+      ...(cook
+        ? [
+            custom({
+              name: 'result',
+              label: '',
+              renderComponent: () => (
+                <div className='space-y-1'>
+                  <Label className='text-muted-foreground text-xs'>
+                    How it turned out
+                  </Label>
+                  <CookResultFields uid={uid} cookId={cook.id} isLarge />
+                </div>
+              ),
+            }),
+          ]
+        : []),
       ...(cook && onAddNote
         ? [
             custom({
@@ -154,7 +171,7 @@ function CookEditView({
           ]
         : []),
     ],
-    [date, time, servings, now, cook, onAddNote, isChanged, isSubmitting],
+    [date, time, servings, now, cook, onAddNote, isChanged, isSubmitting, uid],
   );
 
   const handleSubmit = async () => {
@@ -209,13 +226,15 @@ function CookEditView({
       <div className='space-y-0.5'>
         <p className='font-medium wrap-break-word'>{recipeTitle}</p>
         <p className='text-muted-foreground text-sm'>
-          {cook ? (planNote ?? 'Change when or how much.') : 'An earlier cook'}
+          {cook
+            ? (planNote ?? 'Change when or how much, and how it turned out.')
+            : 'An earlier cook'}
         </p>
       </div>
       <Form
         id='pinch-cook'
         form={fields}
-        initialData={{ when: '', servings: '', note: '' }}
+        initialData={{ when: '', servings: '', result: '', note: '' }}
         columns={1}
         onSubmit={() => {
           void handleSubmit();

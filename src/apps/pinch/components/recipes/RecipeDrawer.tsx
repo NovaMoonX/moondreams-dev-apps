@@ -53,8 +53,10 @@ import {
   getRecipeCollections,
 } from '@apps/pinch/utils/collections';
 import {
+  formatCookRating,
   getCookId,
   getCookServings,
+  getRatingAverage,
   isCookHistoryFull,
 } from '@apps/pinch/utils/cooks';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
@@ -300,9 +302,15 @@ function RecipeDrawer({
   const getCookedText = () => {
     if (!cookSummary) return null;
     const day = formatDateShort(cookSummary.lastCookedAt);
+    const average = getRatingAverage(cookSummary);
+    const rating = average === null ? null : `★ ${formatCookRating(average)}`;
     return cookSummary.count === 1
-      ? { lead: 'Cooked once,', when: `on ${day}` }
-      : { lead: `Cooked ${cookSummary.count} times,`, when: `last ${day}` };
+      ? { lead: 'Cooked once,', when: `on ${day}`, rating }
+      : {
+          lead: `Cooked ${cookSummary.count} times,`,
+          when: `last ${day}`,
+          rating,
+        };
   };
   const cookedText = getCookedText();
   const getViewBody = () => {
@@ -330,11 +338,17 @@ function RecipeDrawer({
             <ActionGroup>
               <GroupRow
                 icon={<TickMark />}
-                ariaLabel={`${cookedText.lead} ${cookedText.when}. Cooking history`}
+                ariaLabel={`${cookedText.lead} ${cookedText.when}${cookedText.rating ? `, rated ${cookedText.rating.slice(2)} on average` : ''}. Cooking history`}
                 onClick={() => onOpenHistory(recipe.id)}
               >
                 {cookedText.lead}{' '}
                 <span className='whitespace-nowrap'>{cookedText.when}</span>
+                {cookedText.rating && (
+                  <span className='text-muted-foreground whitespace-nowrap'>
+                    {' · '}
+                    {cookedText.rating}
+                  </span>
+                )}
               </GroupRow>
             </ActionGroup>
           )}

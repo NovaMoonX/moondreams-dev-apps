@@ -7,11 +7,14 @@ import { ChevronRight, NotebookPen } from 'lucide-react';
 
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
+import { PillGroup } from '@/components/PillGroup';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import StarRating from '@/components/StarRating';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
 import CookEditView from '@apps/pinch/components/recipes/CookEditView';
+import CookPhotoThumb from '@apps/pinch/components/shared/CookPhotoThumb';
 import {
   COOK_HISTORY_FIRST_PAGE,
   COOK_HISTORY_PAGE_SIZE,
@@ -21,6 +24,7 @@ import { CONTAINER_EMOJI } from '@apps/pinch/constants';
 import { scopedContainersQueryOptions } from '@apps/pinch/queries/containerQueries';
 import {
   selectContainersByCookId,
+  selectCookSummaries,
   selectCooksByRecipe,
   selectNotesByRecipe,
   selectNotesLoadError,
@@ -32,12 +36,19 @@ import {
   getPutAwayText,
   groupContainersByCook,
 } from '@apps/pinch/utils/containers';
-import { getCookServings, isCookHistoryFull } from '@apps/pinch/utils/cooks';
+import {
+  formatCookRating,
+  getCookServings,
+  getRatingAverage,
+  isCookHistoryFull,
+} from '@apps/pinch/utils/cooks';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const NO_COOKS: Cook[] = [];
 const HIDDEN_WORTH_A_BUTTON = 3;
+/** Photos drawn at once: the grid is the latest ones, and every cook with a photo is also a row of All cooks. */
+const PHOTOS_SHOWN = 30;
 
 type HistoryView =
   | { kind: 'list' }
@@ -69,6 +80,8 @@ function CookingHistorySheet({
     () => new Set((notes ?? []).map((entry) => entry.cookId ?? null)),
     [notes],
   );
+  const summary = useAppSelector(selectCookSummaries).get(recipeId);
+  const [mode, setMode] = useState<'cooks' | 'photos'>('cooks');
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
   const lastToken = useRef(0);
@@ -132,6 +145,24 @@ function CookingHistorySheet({
   const isCollapsible =
     visibleCount === cooks.length &&
     cooks.length > COOK_HISTORY_FIRST_PAGE + HIDDEN_WORTH_A_BUTTON;
+
+  const average = summary === undefined ? null : getRatingAverage(summary);
+  const photoCount = summary?.photoCount ?? 0;
+  const resultsLine =
+    average === null && photoCount === 0
+      ? null
+      : [
+          average === null
+            ? null
+            : `★ ${formatCookRating(average)} average from ${summary?.ratedCount ?? 0} ${summary?.ratedCount === 1 ? 'rating' : 'ratings'}`,
+          photoCount === 0
+            ? null
+            : `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}`,
+        ]
+          .filter((part) => part !== null)
+          .join(' · ');
+  const photoCooks = cooks.filter((cook) => cook.photoPath != null);
+  const shownMode = photoCount > 0 ? mode : 'cooks';
 
   const getBody = () => {
     if (view.kind === 'note') {
@@ -225,11 +256,61 @@ function CookingHistorySheet({
               + Add an earlier cook
             </Button>
           )}
+          {resultsLine !== null && (
+            <p className='text-muted-foreground text-sm'>{resultsLine}</p>
+          )}
+          {photoCount > 0 && (
+            <PillGroup
+              label='How to look over your cooks'
+              isThin
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'cooks', label: 'All cooks' },
+                { value: 'photos', label: `Photos · ${photoCount}` },
+              ]}
+            />
+          )}
         </div>
         {cooks.length === 0 ? (
           <p className='text-muted-foreground py-4 text-center text-sm'>
             No cooks yet. Add the ones you remember.
           </p>
+        ) : shownMode === 'photos' ? (
+          <ul className='grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto pt-2 sm:grid-cols-3'>
+            {photoCooks.slice(0, PHOTOS_SHOWN).map((cook) => {
+              const day = formatDateShort(cook.cookedAt);
+              return (
+                <li key={cook.id}>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    aria-label={`The cook from ${day}${cook.rating == null ? '' : `, rated ${formatCookRating(cook.rating)}`}`}
+                    className='h-auto w-full flex-col items-stretch gap-1.5 px-0! py-0 text-left font-normal'
+                    onClick={() => openEdit(cook.id)}
+                  >
+                    <CookPhotoThumb
+                      cook={cook}
+                      className='aspect-square w-full rounded-2xl'
+                    />
+                    <span className='flex flex-wrap items-center gap-x-2 text-xs'>
+                      <span className='text-foreground whitespace-nowrap'>
+                        {day}
+                      </span>
+                      {cook.rating != null && (
+                        <StarRating value={cook.rating} />
+                      )}
+                    </span>
+                  </Button>
+                </li>
+              );
+            })}
+            {photoCooks.length > PHOTOS_SHOWN && (
+              <li className='col-span-full text-muted-foreground text-xs'>
+                The latest {PHOTOS_SHOWN} are here; the rest are in All cooks.
+              </li>
+            )}
+          </ul>
         ) : (
           <ul className='divide-border min-h-0 flex-1 divide-y overflow-y-auto'>
             {cooks.slice(0, visibleCount).map((cook) => {
@@ -253,6 +334,11 @@ function CookingHistorySheet({
                           {formatServings(cook.servings)}
                         </span>
                       </span>
+                      {cook.rating != null && (
+                        <span className='block pt-0.5'>
+                          <StarRating value={cook.rating} />
+                        </span>
+                      )}
                       {planNote && (
                         <span className='text-muted-foreground block text-xs font-normal wrap-break-word'>
                           {planNote}
@@ -265,6 +351,7 @@ function CookingHistorySheet({
                         </span>
                       )}
                     </span>
+                    <CookPhotoThumb cook={cook} className='size-12' />
                     <ChevronRight
                       className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
                       aria-hidden='true'

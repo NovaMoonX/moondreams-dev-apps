@@ -126,7 +126,11 @@ import {
 import {
   getCookId,
   getCookServings,
+  formatCookRating,
+  getCookPhotoPath,
   getCookSummaries,
+  getRatingAverage,
+  isValidCookRating,
   getMarkableRecipes,
   getMissingCookFields,
   getPlannedCookId,
@@ -1313,8 +1317,8 @@ assert.deepEqual(
     x.localeCompare(y),
   ),
   [
-    ['adobo', { count: 4, lastCookedAt: 500 }],
-    ['rice', { count: 1, lastCookedAt: 300 }],
+    ['adobo', { count: 4, lastCookedAt: 500, ratedCount: 0, ratingTotal: 0, photoCount: 0 }],
+    ['rice', { count: 1, lastCookedAt: 300, ratedCount: 0, ratingTotal: 0, photoCount: 0 }],
   ],
   'the summary counts each recipe and keeps its latest cook, in one pass',
 );
@@ -1443,14 +1447,58 @@ assert.deepEqual(
 );
 assert.deepEqual(
   getMissingCookFields({ id: 'x', recipeId: 'adobo' }),
-  { plannedMealId: null },
-  'an older cook gets the key it lacks, as null',
+  { plannedMealId: null, rating: null, photoPath: null },
+  'an older cook gets the keys it lacks, as null',
 );
 assert.deepEqual(
-  getMissingCookFields({ plannedMealId: null }),
+  getMissingCookFields({ plannedMealId: null, rating: null, photoPath: null }),
   {},
-  'a cook with the key, even a null one, lacks nothing',
+  'a cook with the keys, even null ones, lacks nothing',
 );
+assert.deepEqual(
+  getMissingCookFields({ plannedMealId: 'p', rating: 4 }),
+  { photoPath: null },
+  'a cook rated before photos gets only the photo key',
+);
+
+{
+  assert.deepEqual(
+    [0, 0.25, 0.5, 1, 1.5, 4.5, 5, 5.5, 6, -1, NaN, Infinity].map(isValidCookRating),
+    [false, false, true, true, true, true, true, false, false, false, false, false],
+    'a rating is half a star to five stars, in half steps',
+  );
+  assert.deepEqual(
+    [4, 4.5, 3.25].map(formatCookRating),
+    ['4', '4.5', '3.3'],
+    'a whole rating shows no decimal and a half shows one',
+  );
+  assert.equal(
+    getRatingAverage({ ratedCount: 0, ratingTotal: 0 }),
+    null,
+    'nothing rated has no average, never 0',
+  );
+  assert.equal(
+    getRatingAverage({ ratedCount: 3, ratingTotal: 13 }),
+    4.3,
+    'the average is over the cooks that were rated, to one decimal',
+  );
+  const rated = [
+    { ...cookOf('a', 'adobo', 100), rating: 4.5, photoPath: 'p/a' },
+    { ...cookOf('b', 'adobo', 200), rating: null, photoPath: null },
+    { ...cookOf('c', 'adobo', 300) },
+    { ...cookOf('d', 'adobo', 400), rating: 3, photoPath: null },
+  ] as Cook[];
+  assert.deepEqual(
+    getCookSummaries(rated).get('adobo'),
+    { count: 4, lastCookedAt: 400, ratedCount: 2, ratingTotal: 7.5, photoCount: 1 },
+    'cooks with no rating (null, or a key an older cook lacks) are not counted as 0 stars',
+  );
+  assert.equal(
+    getCookPhotoPath('alex', 'p__r', 1760000000000),
+    'apps/pinch/kitchens/alex/cooks/p__r/photo-1760000000000.webp',
+    'a cook\'s photo has its own folder and a new name for each upload',
+  );
+}
 
 const repriceIngredient = (id: string) =>
   ({
@@ -10442,6 +10490,31 @@ assert.equal(
     getStepAnchorText('Whisk   the\n eggs'),
     'Whisk the eggs',
     'spaces and line breaks in a step are squashed before it is kept',
+  );
+
+  {
+    const repeated = ['Preheat.', 'Stir.', 'Bake.', 'Stir.'];
+    const onLast = {
+      stepIndex: 3,
+      stepText: getStepAnchorText('Stir.'),
+    };
+    assert.equal(
+      resolveNoteStep(onLast, ['Mix.', ...repeated]),
+      4,
+      'a step that reads like another and moved is found at the nearest of the two, not the first',
+    );
+    assert.equal(
+      resolveNoteStep({ stepIndex: 1, stepText: getStepAnchorText('Stir.') }, ['Mix.', ...repeated]),
+      2,
+      'and the other one when the entry was written near it',
+    );
+  }
+  assert.equal(
+    (getJoinedChangeReason([
+      { ...entry('long', 'CHANGE', 1, null), reason: 'x'.repeat(2500) } as RecipeNote,
+    ]) ?? '').length <= 2000,
+    true,
+    'a reason with no spaces is still cut to the rules\' 2,000 characters, the ellipsis included',
   );
 
   const tip = entry('tip', 'TIP', 100, 1);

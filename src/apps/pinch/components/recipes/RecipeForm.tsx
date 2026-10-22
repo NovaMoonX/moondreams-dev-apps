@@ -8,6 +8,7 @@ import {
 
 import {
   Button,
+  Checkbox,
   Form,
   FormFactories,
   type FormCustomFieldProps,
@@ -224,7 +225,14 @@ function RecipeForm({
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
-  const [why, setWhy] = useState(() => getJoinedChangeReason(initialChanges) ?? '');
+  const [appliedIds, setAppliedIds] = useState(() =>
+    initialChanges.map((change) => change.id),
+  );
+  const [typedWhy, setWhy] = useState<string | null>(null);
+  const applied = initialChanges.filter((change) =>
+    appliedIds.includes(change.id),
+  );
+  const why = typedWhy ?? getJoinedChangeReason(applied) ?? '';
   const [ask, setAsk] = useState<{
     data: RecipeFormData;
     changes: string[];
@@ -803,7 +811,7 @@ function RecipeForm({
       removeCover: isCoverRemoved,
       fromIdeaId: initialIdea?.id ?? null,
       tweakReason: reason,
-      appliesChangeIds: initialChanges.map((change) => change.id),
+      appliesChangeIds: applied.map((change) => change.id),
     };
   };
 
@@ -842,10 +850,10 @@ function RecipeForm({
   };
 
   const handleSubmit = async (data: RecipeFormData) => {
-    const hasReason = initialChanges.length > 0 && why.trim() !== '';
+    const hasReason = applied.length > 0 && why.trim() !== '';
     if (
       recipe &&
-      (tracking === 'on' || initialChanges.length > 0) &&
+      (tracking === 'on' || applied.length > 0) &&
       !hasReason
     ) {
       const { changes, topics } = getDraftChanges(
@@ -897,17 +905,32 @@ function RecipeForm({
           <p className='text-muted-foreground text-xs'>
             {initialChanges.length === 1
               ? 'Applying the change you planned'
-              : `Applying the ${initialChanges.length} changes you planned`}
+              : `Applying the ${initialChanges.length} changes you planned. Untick one this edit doesn't make, and it stays planned.`}
           </p>
           <ul className='space-y-2'>
             {initialChanges.map((change) => (
-              <li key={change.id} className='space-y-0.5'>
-                <ClampedText text={change.text ?? ''} />
-                {(change.reason ?? '') !== '' && (
-                  <p className='text-muted-foreground text-xs'>
-                    Why: {change.reason}
-                  </p>
+              <li key={change.id} className='flex items-start gap-3'>
+                {initialChanges.length > 1 && (
+                  <Checkbox
+                    aria-label={`Apply: ${change.text ?? ''}`}
+                    checked={appliedIds.includes(change.id)}
+                    onCheckedChange={(checked) =>
+                      setAppliedIds((current) =>
+                        checked === true
+                          ? [...current, change.id]
+                          : current.filter((id) => id !== change.id),
+                      )
+                    }
+                  />
                 )}
+                <span className='min-w-0 flex-1 space-y-0.5'>
+                  <ClampedText text={change.text ?? ''} />
+                  {(change.reason ?? '') !== '' && (
+                    <span className='text-muted-foreground block text-xs'>
+                      Why: {change.reason}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>

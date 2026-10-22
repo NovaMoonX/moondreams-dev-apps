@@ -299,7 +299,7 @@ function NoteForm({
             id: noteId,
             text: data.text,
             ...(note?.kind === 'CHANGE' ? { reason: data.reason } : {}),
-            ...(isTweak ? {} : { stepIndex }),
+            ...(isTweak || data.step === initialData.step ? {} : { stepIndex }),
           }),
         ).unwrap();
       } else {

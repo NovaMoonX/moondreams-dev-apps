@@ -164,9 +164,10 @@ export const leadWithAdvice = (text: string) => {
 
 const squashText = (text: string) => text.replace(/\s+/g, ' ').trim();
 
+/** At most `max` characters, the ellipsis included. */
 const clipAtWord = (text: string, max: number) => {
   if (text.length <= max) return text;
-  const cut = text.slice(0, max);
+  const cut = text.slice(0, max - 1);
   const lastSpace = cut.lastIndexOf(' ');
   return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 };
@@ -198,8 +199,14 @@ export const resolveNoteStep = (
   if (steps[index] !== undefined && getStepAnchorText(steps[index]) === text) {
     return index;
   }
-  const moved = steps.findIndex((step) => getStepAnchorText(step) === text);
-  return moved === -1 ? null : moved;
+  const moved = steps.flatMap((step, at) =>
+    getStepAnchorText(step) === text ? [at] : [],
+  );
+  if (moved.length === 0) return null;
+  // Two steps can read the same ("Stir."): the one nearest where the entry was written, the later one when both are, since a step is added more often than taken out.
+  return moved.reduce((nearest, at) =>
+    Math.abs(at - index) <= Math.abs(nearest - index) ? at : nearest,
+  );
 };
 
 /** Whether an entry was written about a step that has since been rewritten or removed. */
@@ -228,8 +235,12 @@ export const sortStepEntries = (notes: RecipeNote[]) =>
         a.id.localeCompare(b.id),
     );
 
-/** A recipe's tips, changes and notes split by the step they are about, and the ones for the whole recipe. An entry whose step was rewritten lands in the whole recipe. */
-export const groupEntriesByStep = (notes: RecipeNote[], steps: string[]) => {
+const groupedByNotes = new WeakMap<
+  RecipeNote[],
+  WeakMap<string[], ReturnType<typeof buildEntryGroups>>
+>();
+
+const buildEntryGroups = (notes: RecipeNote[], steps: string[]) => {
   const entries = sortStepEntries(notes);
   const byStep = entries.reduce((groups, entry) => {
     const at = resolveNoteStep(entry, steps);
@@ -241,6 +252,17 @@ export const groupEntriesByStep = (notes: RecipeNote[], steps: string[]) => {
   );
 
   return { byStep, wholeRecipe };
+};
+
+/** A recipe's tips, changes and notes split by the step they are about, and the ones for the whole recipe. An entry whose step was rewritten lands in the whole recipe. The answer is kept per list of notes and list of steps, which the store replaces only when they change, so a screen that re-renders with a timer never groups again. */
+export const groupEntriesByStep = (notes: RecipeNote[], steps: string[]) => {
+  const bySteps = groupedByNotes.get(notes) ?? new WeakMap();
+  groupedByNotes.set(notes, bySteps);
+  const known = bySteps.get(steps);
+  if (known) return known;
+  const result = buildEntryGroups(notes, steps);
+  bySteps.set(steps, result);
+  return result;
 };
 
 /** The note the cooking screen leads with before the first step: the latest NOTE that is not about one step (a step's own notes show with it). */

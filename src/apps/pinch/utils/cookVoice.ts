@@ -1087,8 +1087,9 @@ const parseOne = (
 
   const exact = EXACT.get(text);
   if (exact) return { kind: exact };
-  const entryKind = ADD_PHRASES[text];
-  if (entryKind !== undefined) return { kind: 'ADD_ENTRY', entryKind };
+  if (Object.hasOwn(ADD_PHRASES, text)) {
+    return { kind: 'ADD_ENTRY', entryKind: ADD_PHRASES[text] };
+  }
   const renamed = parseRename(text, context);
   if (renamed) return renamed;
   const named = parseTimeLeft(text, context);
@@ -1099,8 +1100,9 @@ const parseOne = (
   ) {
     return { kind: 'TIME_LEFT', target: NO_TIMER_TARGET };
   }
-  const direction = CYCLE_PHRASES[text];
-  if (direction !== undefined) return { kind: 'CYCLE_RECIPE', direction };
+  if (Object.hasOwn(CYCLE_PHRASES, text)) {
+    return { kind: 'CYCLE_RECIPE', direction: CYCLE_PHRASES[text] };
+  }
   const result =
     parseTimer(text, context) ??
     parseAmount(text, context) ??

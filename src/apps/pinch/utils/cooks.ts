@@ -2,6 +2,7 @@ import type { DevicePushState } from '@/lib/notifications/devicePush';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
   ALERT_REPEAT_MS,
+  COOK_RATING_STEP,
   KITCHEN_TIMER_NAME,
   MAX_ALERT_REPEATS,
   MAX_COOK_TIMERS,
@@ -24,6 +25,10 @@ import { getLocalTodayDate } from '@apps/pinch/utils/dayKeys';
 export interface CookSummary {
   count: number;
   lastCookedAt: number;
+  /** Cooks the person rated, and the sum of those ratings. */
+  ratedCount: number;
+  ratingTotal: number;
+  photoCount: number;
 }
 
 export interface MarkableRecipe {
@@ -65,6 +70,9 @@ export const getCookSummaries = (cooks: Cook[]) => {
     summaries.set(cook.recipeId, {
       count: (known?.count ?? 0) + 1,
       lastCookedAt: Math.max(known?.lastCookedAt ?? -Infinity, cook.cookedAt),
+      ratedCount: (known?.ratedCount ?? 0) + (cook.rating == null ? 0 : 1),
+      ratingTotal: (known?.ratingTotal ?? 0) + (cook.rating ?? 0),
+      photoCount: (known?.photoCount ?? 0) + (cook.photoPath ? 1 : 0),
     });
     return summaries;
   }, new Map<string, CookSummary>());
@@ -119,8 +127,34 @@ export const mergePlannedCook = (existing: Cook | null, incoming: Cook) =>
     : { isNew: false, cook: existing };
 
 /** The rules want every key on the merged document, so an edit writes back the one an older cook lacks. */
-export const getMissingCookFields = (existing: object) =>
-  'plannedMealId' in existing ? {} : { plannedMealId: null };
+export const getMissingCookFields = (existing: object) => ({
+  ...('plannedMealId' in existing ? {} : { plannedMealId: null }),
+  ...('rating' in existing ? {} : { rating: null }),
+  ...('photoPath' in existing ? {} : { photoPath: null }),
+});
+
+/** A rating the person can give: half a star to five, in half steps. */
+export const isValidCookRating = (rating: number) =>
+  Number.isFinite(rating) &&
+  rating >= COOK_RATING_STEP &&
+  rating <= 5 &&
+  Number.isInteger(rating / COOK_RATING_STEP);
+
+/** The average of the ratings given, to one decimal, or null before any; and how many cooks have a photo. */
+export const getRatingAverage = (summary: {
+  ratedCount: number;
+  ratingTotal: number;
+}) =>
+  summary.ratedCount === 0
+    ? null
+    : Math.round((summary.ratingTotal / summary.ratedCount) * 10) / 10;
+
+export const formatCookRating = (rating: number) =>
+  Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
+
+/** A new name for every photo of a cook, so a replaced picture is a new address and no cached copy of the old one can show. */
+export const getCookPhotoPath = (uid: string, cookId: string, at: number) =>
+  `apps/pinch/kitchens/${uid}/cooks/${cookId}/photo-${at}.webp`;
 
 export const getCookServings = (servings: number) =>
   servings > 0 ? Math.min(servings, MAX_COOKED_SERVINGS) : 1;

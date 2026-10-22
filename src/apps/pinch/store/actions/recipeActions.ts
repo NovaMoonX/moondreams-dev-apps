@@ -365,7 +365,11 @@ export const saveRecipe = createAsyncThunk<
         await deleteFile(path).catch(() => undefined);
       }
       return rejectWithValue(
-        getWriteMessage(error, 'Unable to save this recipe.'),
+        tweakPlan.kind === 'APPLY' &&
+          error instanceof FirebaseError &&
+          error.code === 'permission-denied'
+          ? 'That change was already applied or taken off on another device. Close this and open the recipe again.'
+          : getWriteMessage(error, 'Unable to save this recipe.'),
       );
     }
 

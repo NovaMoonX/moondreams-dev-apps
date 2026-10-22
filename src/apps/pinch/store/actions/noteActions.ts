@@ -108,7 +108,12 @@ interface AddNoteInput {
   cookId: string | null;
   /** The step it is about (0-based), or null for the whole recipe. */
   stepIndex: number | null;
+  /** An id the caller minted, so it can keep the entry (a review list, an undo) before the write reaches the server. */
+  id?: string;
 }
+
+/** How long a write waits for the server before the entry is treated as saved: offline it sits queued on the phone and reaches the server later, and a cook never waits on it. */
+const LOCAL_WRITE_GRACE_MS = 1500;
 
 export const addNote = createAsyncThunk<
   string,
@@ -125,7 +130,7 @@ export const addNote = createAsyncThunk<
     [];
   const now = Date.now();
   const note: RecipeNote = {
-    id: generateUuid(),
+    id: input.id ?? generateUuid(),
     recipeId,
     kind,
     text: text.trim(),
@@ -138,7 +143,14 @@ export const addNote = createAsyncThunk<
   };
 
   try {
-    await setDoc(noteDoc(uid, note.id), note);
+    const write = setDoc(noteDoc(uid, note.id), note);
+    await Promise.race([
+      write,
+      new Promise<void>((resolve) =>
+        window.setTimeout(resolve, LOCAL_WRITE_GRACE_MS),
+      ),
+    ]);
+    write.catch((error) => console.error('Pinch note write failed', error));
   } catch (error) {
     return rejectWithValue(getWriteMessage(error, 'Unable to save this entry.'));
   }

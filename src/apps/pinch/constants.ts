@@ -686,6 +686,9 @@ export const MIN_COOK_SERVINGS = 0.5;
 export const MAX_COOK_SERVINGS = 1000;
 
 export const MAX_COOKED_SERVINGS = 1000;
+/** The longer edge of a cook's photo once it is stored. */
+export const COOK_PHOTO_MAX_DIMENSION = 1280;
+export const COOK_RATING_STEP = 0.5;
 /** The most cooks one recipe's history takes before asking to delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_COOKS_PER_RECIPE = 500;
 /** Under Firestore's 500 writes per batch. */

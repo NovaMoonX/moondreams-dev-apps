@@ -48,6 +48,7 @@ import CookRecord, {
 import CookReview, {
   type CookReviewEntry,
 } from '@apps/pinch/components/cooking/CookReview';
+import CookResultCard from '@apps/pinch/components/cooking/CookResultCard';
 import CookStepNotes from '@apps/pinch/components/cooking/CookStepNotes';
 import CookStepTips from '@apps/pinch/components/cooking/CookStepTips';
 import CookStepView, {
@@ -177,6 +178,19 @@ interface TimerArg {
 
 const NO_ARG: TimerArg = { ms: 0, name: '' };
 const NO_RECIPE_NOTES: RecipeNote[] = [];
+/** How long "undo that" can take back what was just dictated. */
+const UNDO_DICTATION_MS = 60_000;
+/** What the mic still does while a tip, note or change is being typed: only the ways out and the timers. */
+const VOICE_WHILE_WRITING = new Set<CookActionCommand['kind']>([
+  'PAUSE_TIMER',
+  'RESUME_TIMER',
+  'STOP_TIMER',
+  'EXTEND_TIMER',
+  'RENAME_TIMER',
+  'TIME_LEFT',
+  'START_TIMER',
+  'TIMER_ANSWER',
+]);
 const ENTRY_WORDS: Record<CookEntryKind, string> = {
   TIP: 'tip',
   NOTE: 'note',
@@ -460,7 +474,12 @@ function CookingSession({
   const voiceGuardedUntil = useRef(0);
   const hasCoachedNext = useRef(false);
   const hasCoachedUndo = useRef(false);
-  const lastDictatedId = useRef<string | null>(null);
+  const lastDictated = useRef<{
+    id: string;
+    at: number;
+    recipeId: string;
+    stepIndex: number;
+  } | null>(null);
   const missedFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -1958,6 +1977,7 @@ function CookingSession({
       if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
         return refuse('Go to a step to add that.');
       }
+      if (capture.isOpen) return refuse('Finish writing this one first.');
       if (!capture.isAvailable(recipe.id) || isRemoved) {
         return refuse("Your notes aren't ready, or this recipe's are full.");
       }
@@ -1976,20 +1996,28 @@ function CookingSession({
       if (question === null || question.kind !== 'DICTATE') {
         return refuse('Nothing was asked.');
       }
+      if (!isDictationHere(question)) return refuse('That step is no longer open.');
       const word = ENTRY_WORDS[question.entryKind];
+      const id = generateUuid();
+      lastDictated.current = {
+        id,
+         
+        at: Date.now(),
+        recipeId: question.recipeId,
+        stepIndex: question.stepIndex,
+      };
       void capture
         .quickAdd({
+          id,
           recipeId: question.recipeId,
           kind: question.entryKind,
           text,
           stepIndex: question.stepIndex,
         })
-        .then(
-          (id) => {
-            lastDictatedId.current = id;
-          },
-          () => voice.speak(`Sorry, I couldn't save that ${word}.`),
-        );
+        .catch(() => {
+          lastDictated.current = null;
+          voice.speak(`Sorry, I couldn't save that ${word}.`);
+        });
       const coaching = hasCoachedUndo.current ? '' : ' Say undo that to take it back.';
       hasCoachedUndo.current = true;
       return done(
@@ -1998,11 +2026,25 @@ function CookingSession({
       );
     },
     undoEntry: () => {
-      const id = lastDictatedId.current;
-      if (id === null) return refuse('There is nothing to undo.');
-      lastDictatedId.current = null;
+      const last = lastDictated.current;
+      const written = last === null ? undefined : notesById.get(last.id);
+      // Only what the voice just wrote, still as it wrote it, on the step it is on: never an entry turned into a tweak or edited since.
+      if (
+        last === null ||
+        written === undefined ||
+        written.kind === 'TWEAK' ||
+        written.updatedAt !== written.createdAt ||
+         
+        Date.now() - last.at > UNDO_DICTATION_MS ||
+        isFinishShown ||
+        last.recipeId !== recipe.id ||
+        last.stepIndex !== index
+      ) {
+        return refuse('There is nothing to undo.');
+      }
+      lastDictated.current = null;
       void capture
-        .removeById(id)
+        .removeById(last.id)
         .catch(() => voice.speak("Sorry, I couldn't take that back."));
       return done('Took that back', 'Okay, I took that back.');
     },
@@ -2020,11 +2062,23 @@ function CookingSession({
   const voiceStepMatch =
     matchesByRecipe.get(voiceStep.recipe.id)?.[voiceStep.stepNumber - 1] ??
     null;
+  /** A dictation waits only for the step it was asked on, with the composer closed, nothing ringing and no timer on screen: anything else the person did since means they are not saying a tip. */
+  const isDictationHere = (question: { recipeId: string; stepIndex: number }) =>
+    question.recipeId === recipe.id &&
+    question.stepIndex === index &&
+    isStepsView &&
+    focused === null &&
+    !capture.isOpen &&
+    !isAnyRinging &&
+    !isFinishShown &&
+    !isEditing;
   const getVoiceChoice = (): CookVoiceChoice | null => {
     if (!voice.isOn || pending === null) return null;
     if (pending.kind === 'LENGTH') return { kind: 'LENGTH' };
     if (pending.kind === 'DICTATE') {
-      return { kind: 'DICTATE', entryKind: pending.entryKind };
+      return isDictationHere(pending)
+        ? { kind: 'DICTATE', entryKind: pending.entryKind }
+        : null;
     }
     const asked = pending.ids.flatMap((id) =>
       timers.timers.filter((timer) => timer.id === id),
@@ -2056,7 +2110,9 @@ function CookingSession({
   };
   const { connect: connectVoice } = voice;
   const runVoiceCommand = useEffectEvent((command: CookActionCommand) =>
-    runCookCommand(command, makeVoiceActions()),
+    capture.isOpen && !VOICE_WHILE_WRITING.has(command.kind)
+      ? refuse('Finish writing this one first.')
+      : runCookCommand(command, makeVoiceActions()),
   );
   useEffect(() => connectVoice(runVoiceCommand, voiceContext));
   const namedLines = voiceContext.lines.filter((line) => line.names.length > 0);
@@ -2541,6 +2597,16 @@ function CookingSession({
                 problem={getRecordProblem()}
               />
             )}
+            {!capture.isOpen &&
+              !putAway.isOpen &&
+              followUpRecords.map((record) => (
+                <CookResultCard
+                  key={record.recipeId}
+                  uid={uid}
+                  cookId={record.recordedCookId ?? ''}
+                  caption={isPlate ? record.entry.recipe.title : null}
+                />
+              ))}
             {!capture.isOpen && !putAway.isOpen && isRecorded && (
               <CookPantryTake take={pantryTake} />
             )}
