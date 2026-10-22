@@ -355,7 +355,7 @@ export const IDEA_START_METHODS: {
     id: 'link',
     emoji: IDEA_KIND_EMOJIS.LINK,
     title: 'From a link',
-    description: 'Paste a recipe page you like',
+    description: 'Paste a recipe page or video you like',
   },
   {
     id: 'photo',
@@ -393,7 +393,7 @@ export const RECIPE_START_METHODS: {
     id: 'link',
     emoji: '🔗',
     title: 'From a link',
-    description: 'A recipe page on the web',
+    description: 'A recipe page or a YouTube video',
   },
   {
     id: 'manual',
