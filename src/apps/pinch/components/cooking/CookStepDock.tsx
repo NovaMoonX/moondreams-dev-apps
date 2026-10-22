@@ -2,9 +2,8 @@ import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, History, PenLine, Pencil, Scale, Volume2 } from 'lucide-react';
+import { Check, History, PenLine, Plus, Scale, Volume2 } from 'lucide-react';
 
-import ActionChips from '@/components/ActionChips';
 import ClampedText from '@/components/ClampedText';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useAppSelector } from '@/store';
@@ -38,19 +37,29 @@ const KIND_WORDS: Record<DockKind, { one: string; many: string }> = {
   CHANGE: { one: 'change to make', many: 'changes to make' },
 };
 
+const ADD_LABEL = 'Add a tip, note or change for this step';
+
 const NO_NOTES: RecipeNote[] = [];
 const NO_STEPS: string[] = [];
 
-interface ViewButtonProps {
+interface IconButtonProps {
   label: string;
-  isOn: boolean;
+  isOn?: boolean;
   count?: number;
+  isDashed?: boolean;
   onClick: () => void;
   children: ReactNode;
 }
 
-/** One view's icon in the switcher: 32px visible, 40px to hit, its count a small badge on the corner. */
-function ViewButton({ label, isOn, count, onClick, children }: ViewButtonProps) {
+/** One icon in the container's header: 32px visible, 40px to hit, its count a small badge on the corner. */
+function IconButton({
+  label,
+  isOn,
+  count,
+  isDashed,
+  onClick,
+  children,
+}: IconButtonProps) {
   return (
     <Button
       type='button'
@@ -61,6 +70,7 @@ function ViewButton({ label, isOn, count, onClick, children }: ViewButtonProps) 
       className={join(
         'text-foreground! relative size-8 min-w-8 shrink-0 rounded-full px-0! py-0! text-base before:absolute before:-inset-1 before:content-[""]',
         isOn && 'bg-accent! border-primary! border',
+        isDashed && 'border-border border border-dashed',
       )}
       onClick={onClick}
     >
@@ -82,11 +92,14 @@ interface CookStepDockProps {
   isAmountNoteShown: boolean;
   /** Everything written for the step on screen (the whole recipe's too on the first), tips first. */
   entries: RecipeNote[];
+  /** Opens one entry to read in full and change. */
   onEdit: (id: string) => void;
   /** Opens the recipe's form to make a planned change. */
   onApplyChange: (id: string) => void;
   /** Reads one kind's entries aloud; null where the browser cannot speak. */
   onRead: ((kind: DockKind) => void) | null;
+  /** Starts a new tip, note or change for this step; null where none can be written. */
+  onAdd: (() => void) | null;
   /** Where the cook starts, the recipe's latest whole-recipe note leads until "Got it"; null on every later step and on a wide screen, which shows it beside the step. */
   lastTime: {
     recipeId: string;
@@ -97,7 +110,7 @@ interface CookStepDockProps {
 }
 
 /**
- * The bottom of a step is one container. A row of icons at its top names what it can show (the last note, what the step uses, and each kind of thing written for it with its count) and the one body under it shows one of them, so a person who needs one thing never has the rest on screen. The note from last time leads on the first step until "Got it"; it stays one tap away after. A step with nothing written and no note is just the ingredient tray.
+ * The bottom of a step is one container, and the one place to read or add what is written for it. A row of icons at its top names what it can show (the last note, what the step uses, and each kind of thing written for it with its count) and a + that adds one; the one body under it, always the same height, shows one view. Several entries of a kind are cards that scroll sideways and snap, like the recipe's rows: a card is cut to a few lines and opens the entry to read in full. The note from last time leads on the first step until "Got it"; it stays one tap away after. A step with nothing written is just the ingredient tray and a way to add.
  */
 function CookStepDock({
   rows,
@@ -106,6 +119,7 @@ function CookStepDock({
   onEdit,
   onApplyChange,
   onRead,
+  onAdd,
   lastTime,
   className,
 }: CookStepDockProps) {
@@ -125,12 +139,41 @@ function CookStepDock({
   const lastNote =
     lastTime !== null && isNotesReady ? getLastTimeNote(notes, steps) : null;
   if (entries.length === 0 && lastNote === null) {
+    if (onAdd === null) {
+      return (
+        <CookStepTray
+          rows={rows}
+          isAmountNoteShown={isAmountNoteShown}
+          className={className}
+        />
+      );
+    }
+
     return (
-      <CookStepTray
-        rows={rows}
-        isAmountNoteShown={isAmountNoteShown}
-        className={className}
-      />
+      <div className={join('flex items-start gap-2', className)}>
+        {rows.length > 0 ? (
+          <CookStepTray
+            rows={rows}
+            isAmountNoteShown={isAmountNoteShown}
+            className='min-w-0 flex-1'
+          />
+        ) : (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='border-border text-foreground! h-10 min-w-0 flex-1 justify-start gap-2 rounded-2xl border border-dashed px-4 text-sm font-normal'
+            onClick={onAdd}
+          >
+            <Plus className='h-4 w-4' aria-hidden='true' />
+            Add a tip, note or change
+          </Button>
+        )}
+        {rows.length > 0 && (
+          <IconButton label={ADD_LABEL} isDashed onClick={onAdd}>
+            <Plus className='h-4 w-4' aria-hidden='true' />
+          </IconButton>
+        )}
+      </div>
     );
   }
 
@@ -153,47 +196,9 @@ function CookStepDock({
   const shownEntries = entries.filter((entry) => entry.kind === shown);
   const summary = rows.length > 0 ? getAmountsSummary(rows) : null;
 
-  const select = (view: DockView) => setSelected(view);
   const gotIt = () => {
     lastTime?.onGotIt();
     setSelected(null);
-  };
-
-  const getActions = (entry: RecipeNote) => [
-    {
-      key: 'edit',
-      icon: <Pencil className='h-4 w-4' />,
-      label: 'Edit',
-      description: `Edit your ${entry.kind === 'TIP' ? 'tip' : entry.kind === 'CHANGE' ? 'change' : 'note'}`,
-      onClick: () => onEdit(entry.id),
-    },
-  ];
-
-  const getApplyAction = (id: string) => ({
-    key: 'apply',
-    icon: <PenLine className='h-4 w-4' />,
-    label: 'Update the recipe',
-    onClick: () => onApplyChange(id),
-  });
-
-  const getHeaderAction = () => {
-    if (shown !== 'LAST' && shown !== 'AMOUNTS' && onRead) {
-      return (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          rounded='full'
-          aria-label={`Read the ${KIND_WORDS[shown].many.split(' ')[0]} aloud`}
-          title='Read aloud'
-          className='text-foreground! size-8 shrink-0 p-0 relative before:absolute before:-inset-1 before:content-[""]'
-          onClick={() => onRead(shown)}
-        >
-          <Volume2 className='h-4 w-4' aria-hidden='true' />
-        </Button>
-      );
-    }
-    return null;
   };
 
   const getBody = () => {
@@ -202,7 +207,7 @@ function CookStepDock({
       const isChangedSince =
         lastTweakAt !== null && lastTweakAt > lastNote.createdAt;
       return (
-        <div className='space-y-0.5 px-2 pb-1'>
+        <div className='h-full space-y-0.5 overflow-y-auto px-2'>
           <div className='flex min-h-8 items-center justify-between gap-2'>
             <p className='text-muted-foreground text-xs font-medium'>
               Last time · {formatDateShort(lastNote.createdAt)}
@@ -234,7 +239,7 @@ function CookStepDock({
     }
     if (shown === 'AMOUNTS' && summary) {
       return (
-        <div className='px-2 pb-1'>
+        <div className='h-full overflow-y-auto px-2'>
           <p className='text-muted-foreground text-xs font-medium'>
             {summary.caption}
           </p>
@@ -248,56 +253,71 @@ function CookStepDock({
               )}
             </>
           ) : (
-            <p className='line-clamp-2 text-sm wrap-break-word [@media(max-height:700px)]:hidden'>
+            <p className='line-clamp-3 text-sm wrap-break-word [@media(max-height:700px)]:line-clamp-2'>
               {summary.text}
             </p>
           )}
         </div>
       );
     }
+
+    const isMany = shownEntries.length > 1;
     return (
       <ul
-        className={join(
-          'divide-border divide-y px-2',
-        )}
+        aria-label={`Your ${shown === 'TIP' ? 'tips' : shown === 'NOTE' ? 'notes' : 'changes'} for this step`}
+        className='flex h-full snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
       >
-        {shownEntries.map((entry) => (
-          <li key={entry.id} className='py-1.5 first:pt-0 last:pb-0'>
-            <div className='flex items-start gap-2'>
-              <span
-                aria-hidden='true'
-                className='w-5 shrink-0 pt-0.5 text-center'
+        {shownEntries.map((entry) => {
+          const isChange = entry.kind === 'CHANGE';
+          const kindWord =
+            entry.kind === 'TIP'
+              ? 'tip'
+              : entry.kind === 'CHANGE'
+                ? 'change'
+                : 'note';
+          return (
+            <li
+              key={entry.id}
+              className={join(
+                'bg-background/70 border-border flex shrink-0 snap-start items-stretch rounded-xl border',
+                isMany ? 'w-[88%]' : 'w-full self-start',
+              )}
+            >
+              <Button
+                type='button'
+                variant='tertiary'
+                aria-label={`Open your ${kindWord}: ${entry.text ?? ''}`}
+                className='text-foreground! h-auto min-w-0 flex-1 flex-col items-start justify-start gap-0.5 rounded-xl px-3 py-2 text-left font-normal whitespace-normal'
+                onClick={() => onEdit(entry.id)}
               >
-                {NOTE_KIND_EMOJIS[entry.kind]}
-              </span>
-              <div className='min-w-0 flex-1 pt-0.5'>
-                <ClampedText text={entry.text ?? ''} maxLines={isShort ? 2 : 4} />
-                {entry.kind === 'CHANGE' && (entry.reason ?? '') !== '' && (
-                  <p className='text-muted-foreground text-xs wrap-break-word'>
+                <span
+                  className={join(
+                    'w-full text-sm wrap-break-word',
+                    isChange || isShort ? 'line-clamp-2' : 'line-clamp-3',
+                  )}
+                >
+                  <span aria-hidden='true'>{NOTE_KIND_EMOJIS[entry.kind]} </span>
+                  {entry.text}
+                </span>
+                {isChange && (entry.reason ?? '') !== '' && (
+                  <span className='text-muted-foreground line-clamp-1 w-full text-xs'>
                     Why: {entry.reason}
-                  </p>
+                  </span>
                 )}
-              </div>
-              <ActionChips
-                isIconOnly
-                label='Your entry'
-                className='shrink-0 flex-nowrap gap-1'
-                actions={[
-                  ...(entry.kind === 'CHANGE' && isShort
-                    ? [getApplyAction(entry.id)]
-                    : []),
-                  ...getActions(entry),
-                ]}
-              />
-            </div>
-            {entry.kind === 'CHANGE' && !isShort && (
-              <ActionChips
-                className='pl-7'
-                actions={[getApplyAction(entry.id)]}
-              />
-            )}
-          </li>
-        ))}
+              </Button>
+              {isChange && (
+                <div className='flex items-start pt-1.5 pr-1.5'>
+                  <IconButton
+                    label='Update the recipe with this change'
+                    onClick={() => onApplyChange(entry.id)}
+                  >
+                    <PenLine className='h-4 w-4' aria-hidden='true' />
+                  </IconButton>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     );
   };
@@ -310,47 +330,59 @@ function CookStepDock({
         className,
       )}
     >
-      <div className='flex min-h-10 items-center justify-between gap-2 px-1'>
-        <div role='group' aria-label='What to show' className='flex gap-2'>
+      <div className='flex min-h-10 items-center justify-between gap-1'>
+        <div role='group' aria-label='What to show' className='flex gap-1'>
           {views.includes('LAST') && (
-            <ViewButton
+            <IconButton
               label='The note from last time'
               isOn={shown === 'LAST'}
-              onClick={() => select('LAST')}
+              onClick={() => setSelected('LAST')}
             >
               <History className='h-4 w-4' aria-hidden='true' />
-            </ViewButton>
+            </IconButton>
           )}
           {views.includes('AMOUNTS') && (
-            <ViewButton
+            <IconButton
               label='Amounts for this step'
               isOn={shown === 'AMOUNTS'}
-              onClick={() => select('AMOUNTS')}
+              onClick={() => setSelected('AMOUNTS')}
             >
               <Scale className='h-4 w-4' aria-hidden='true' />
-            </ViewButton>
+            </IconButton>
           )}
           {kinds.map((kind) => {
             const count = entries.filter((entry) => entry.kind === kind).length;
             const words = KIND_WORDS[kind];
             return (
-              <ViewButton
+              <IconButton
                 key={kind}
                 label={`${count} ${count === 1 ? words.one : words.many}`}
                 isOn={shown === kind}
                 count={count}
-                onClick={() => select(kind)}
+                onClick={() => setSelected(kind)}
               >
                 <span aria-hidden='true'>{NOTE_KIND_EMOJIS[kind]}</span>
-              </ViewButton>
+              </IconButton>
             );
           })}
         </div>
-        {getHeaderAction()}
+        <div className='flex shrink-0 gap-1'>
+          {shown !== 'LAST' && shown !== 'AMOUNTS' && onRead && (
+            <IconButton
+              label={`Read the ${KIND_WORDS[shown].many.split(' ')[0]} aloud`}
+              onClick={() => onRead(shown)}
+            >
+              <Volume2 className='h-4 w-4' aria-hidden='true' />
+            </IconButton>
+          )}
+          {onAdd && (
+            <IconButton label={ADD_LABEL} isDashed onClick={onAdd}>
+              <Plus className='h-4 w-4' aria-hidden='true' />
+            </IconButton>
+          )}
+        </div>
       </div>
-      <div className='h-28 overflow-y-auto [@media(max-height:700px)]:h-20'>
-        {getBody()}
-      </div>
+      <div className='h-28 [@media(max-height:700px)]:h-20'>{getBody()}</div>
     </section>
   );
 }

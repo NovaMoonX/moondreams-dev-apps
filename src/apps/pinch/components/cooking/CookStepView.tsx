@@ -44,6 +44,8 @@ interface CookStepViewProps {
   onEditEntry: (id: string) => void;
   onApplyChange: (id: string) => void;
   onReadEntries: ((kind: 'TIP' | 'NOTE' | 'CHANGE') => void) | null;
+  /** Starts a new tip, note or change for this step; null where none can be written. */
+  onAddEntry: (() => void) | null;
   dishes: ReactNode;
   /** The times the step mentions that have no timer yet. */
   timerSlots: StepTimerSlot[];
@@ -84,6 +86,7 @@ function CookStepView({
   onEditEntry,
   onApplyChange,
   onReadEntries,
+  onAddEntry,
   dishes,
   timerSlots,
   isTimersFull,
@@ -190,6 +193,7 @@ function CookStepView({
             onEdit={onEditEntry}
             onApplyChange={onApplyChange}
             onRead={onReadEntries}
+            onAdd={onAddEntry}
             lastTime={lastTime}
           />
         </div>

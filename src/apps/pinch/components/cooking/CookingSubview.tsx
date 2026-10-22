@@ -16,7 +16,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ChevronLeft,
   ListChecks,
-  NotebookPen,
   Pause,
   Play,
   Timer,
@@ -2353,20 +2352,6 @@ function CookingSession({
       <Timer className='h-4 w-4' aria-hidden='true' />
     </Button>
   );
-  const captureButton =
-    capture.isAvailable(recipe.id) && !isRemoved ? (
-      <Button
-        type='button'
-        variant='secondary'
-        size='icon'
-        rounded='full'
-        className='size-10 shrink-0'
-        aria-label='Add a tip, note or change for this step'
-        onClick={openStepCapture}
-      >
-        <NotebookPen className='h-4 w-4' aria-hidden='true' />
-      </Button>
-    ) : null;
   const ingredientsButton = isWide ? null : (
     <Button
       type='button'
@@ -2393,7 +2378,6 @@ function CookingSession({
       action={
         <div className='flex shrink-0 items-center gap-2'>
           {timersButton}
-          {captureButton}
           {ingredientsButton}
         </div>
       }
@@ -2402,6 +2386,9 @@ function CookingSession({
       onEditEntry={capture.edit}
       onApplyChange={(id) => void startEdit(recipe.id, [id])}
       onReadEntries={voice.isSupported ? readEntries : null}
+      onAddEntry={
+        capture.isAvailable(recipe.id) && !isRemoved ? openStepCapture : null
+      }
       dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)

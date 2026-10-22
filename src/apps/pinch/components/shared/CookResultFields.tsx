@@ -75,7 +75,7 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
       <div
         className={join(
           'flex gap-4',
-          isLarge ? 'flex-col' : 'items-center max-[359px]:flex-col max-[359px]:items-start',
+          isLarge ? 'flex-col' : 'items-center max-[359px]:flex-col',
         )}
       >
         <span
@@ -98,7 +98,12 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
             <Camera className='h-8 w-8' aria-hidden='true' />
           )}
         </span>
-        <div className='flex min-w-0 flex-1 flex-col items-start gap-2'>
+        <div
+          className={join(
+            'flex min-w-0 flex-1 flex-col gap-2',
+            isLarge ? 'items-start' : 'items-start max-[359px]:items-center',
+          )}
+        >
           <StarRating
             size='lg'
             value={cook.rating ?? null}
