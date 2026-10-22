@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
-import { watchForAppUpdates } from './lib/app/appUpdate';
+import { markUpdateReady, watchForAppUpdates } from './lib/app/appUpdate';
 import { reloadOnFirestoreReset } from './lib/firebase/localData';
 import { installVersionPeek } from './lib/app/versionPeek';
 import { IS_INSTALLED_APP } from '@utils/pwaUtils';
@@ -14,19 +14,8 @@ registerSW({ immediate: true });
 document.documentElement.toggleAttribute('data-installed-app', IS_INSTALLED_APP);
 watchForAppUpdates();
 
-// A tab opened before a deploy can't fetch the new build's lazy chunks; reload once to pick them up.
-window.addEventListener('vite:preloadError', () => {
-  // A person inside a task (cooking mode) keeps it: the feature that wanted the chunk fails alone and the next full load repairs it.
-  if (document.documentElement.hasAttribute('data-subview-open')) return;
-  try {
-    const lastReload = Number(sessionStorage.getItem('chunk-reload-at'));
-    if (Date.now() - lastReload < 30_000) return;
-    sessionStorage.setItem('chunk-reload-at', String(Date.now()));
-  } catch {
-    return;
-  }
-  window.location.reload();
-});
+// A tab opened before a deploy can't fetch the new build's lazy chunks; offer the Restart strip, never reload for them.
+window.addEventListener('vite:preloadError', markUpdateReady);
 installVersionPeek();
 reloadOnFirestoreReset();
 

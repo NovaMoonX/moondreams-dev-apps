@@ -16,6 +16,13 @@ export function getIsUpdateReady() {
   return isUpdateReady;
 }
 
+/** Raises the top strip's "New version ready · Restart"; the page itself never reloads on its own. */
+export function markUpdateReady() {
+  if (isUpdateReady) return;
+  isUpdateReady = true;
+  listeners.forEach((listener) => listener());
+}
+
 /**
  * Installed apps stay alive in the background and rarely navigate, so the browser's own update
  * check seldom runs. Re-check on resume, on reconnecting and every 15 minutes; a worker that takes over a page that was
@@ -31,8 +38,7 @@ export function watchForAppUpdates() {
       isClaimed = true;
       return;
     }
-    isUpdateReady = true;
-    listeners.forEach((listener) => listener());
+    markUpdateReady();
   });
 
   void navigator.serviceWorker.ready.then((registration) => {

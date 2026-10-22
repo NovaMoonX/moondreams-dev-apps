@@ -67,8 +67,8 @@ function OfflineBanner() {
       {shownVariant === 'update' && (
         <Button
           size='sm'
-          variant='secondary'
-          className='pointer-events-auto relative h-7 px-3 after:absolute after:-inset-1.5'
+          variant='base'
+          className='pointer-events-auto relative h-7 bg-primary-foreground! px-3 text-primary! after:absolute after:-inset-1.5'
           onClick={() => window.location.reload()}
         >
           Restart
