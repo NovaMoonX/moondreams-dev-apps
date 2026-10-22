@@ -448,6 +448,7 @@ function CookVoiceSheet({
             label='Read tips and notes too'
             description='With Read steps aloud on, also reads the tips and notes written for each step.'
             checked={voice.isReadingNotes}
+            isDisabled={!voice.isReadingAloud}
             onCheckedChange={voice.setIsReadingNotes}
           />
           <NaturalVoiceOption voice={voice.natural} />

@@ -1062,7 +1062,8 @@ const parseSwitch = (
 
 /** The words said while a tip, note or change is being dictated: everything is the entry, except a way out. A phrase longer than a sentence or two is clipped at a word, never dropped. */
 const parseDictation = (transcript: string): CookCommand | null => {
-  const text = transcript.replace(/\s+/g, ' ').trim();
+  const spoken = transcript.replace(/\s+/g, ' ').trim();
+  const text = `${spoken.charAt(0).toUpperCase()}${spoken.slice(1)}`;
   const plain = normalizeTranscript(transcript);
   if (plain === '') return null;
   if (CANCEL_ANSWERS.has(plain)) return answer({ kind: 'NEVER_MIND' });

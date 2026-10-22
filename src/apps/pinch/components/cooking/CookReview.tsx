@@ -124,7 +124,7 @@ function CookReview({
       {hasEntries && (
         <ul
           aria-label='What you wrote while cooking'
-          className='divide-border border-border bg-background/60 divide-y rounded-xl border'
+          className='divide-border border-border divide-y border-y'
         >
           {entries.map(({ note, stepAt }) => (
             <li key={note.id}>

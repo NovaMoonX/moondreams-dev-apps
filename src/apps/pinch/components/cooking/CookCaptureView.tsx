@@ -51,7 +51,7 @@ function CookCaptureView({
       </div>
       {isEditing ? (
         <p className='text-muted-foreground text-xs'>
-          Changing your {NOTE_KIND_LABELS[draft.kind].toLowerCase()}
+          Your {NOTE_KIND_LABELS[draft.kind].toLowerCase()}
         </p>
       ) : (
         <NoteKindPills value={draft.kind} onChange={capture.setKind} />

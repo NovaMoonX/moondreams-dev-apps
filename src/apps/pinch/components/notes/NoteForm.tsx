@@ -117,7 +117,7 @@ function NoteForm({
       kind:
         note !== null && note.kind !== 'TWEAK'
           ? note.kind
-          : (initialKind ?? 'NOTE'),
+          : (initialKind ?? (cooks.length === 0 ? 'TIP' : 'NOTE')),
       text: note?.text ?? '',
       reason: note?.reason ?? '',
       step: at === null ? WHOLE_RECIPE : String(at),

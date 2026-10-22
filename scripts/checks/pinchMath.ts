@@ -10519,6 +10519,17 @@ assert.equal(
 
   const tip = entry('tip', 'TIP', 100, 1);
   assert.equal(resolveNoteStep(tip, steps), 1, 'a step that did not move stays');
+  const longStep = `Simmer the sauce gently, stirring now and then, until it coats the back of a spoon and the oil starts to separate at the edges.`;
+  assert.equal(
+    resolveNoteStep({ stepIndex: 0, stepText: `${longStep.slice(0, 40)}…` }, [longStep]),
+    0,
+    'a kept beginning of any length finds its long step, so changing the clip never strands entries',
+  );
+  assert.equal(
+    resolveNoteStep({ stepIndex: 0, stepText: `${longStep.slice(0, 40)}…` }, ['Boil the water.']),
+    null,
+    'and a different step does not match it',
+  );
   assert.equal(
     resolveNoteStep(tip, ['A new first step.', ...steps]),
     2,

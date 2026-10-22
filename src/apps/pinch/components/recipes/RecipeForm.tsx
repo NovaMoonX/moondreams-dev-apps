@@ -19,6 +19,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUp, X } from 'lucide-react';
 
 import ClampedText from '@/components/ClampedText';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSection from '@/components/FormSection';
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -259,6 +260,7 @@ function RecipeForm({
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
+  const [isAllChangesShown, setIsAllChangesShown] = useState(false);
   const [appliedIds, setAppliedIds] = useState(() =>
     initialChanges.map((change) => change.id),
   );
@@ -959,7 +961,7 @@ function RecipeForm({
               : `Applying the ${initialChanges.length} changes you planned. Untick one this edit doesn't make, and it stays planned.`}
           </p>
           <ul className='space-y-2'>
-            {initialChanges.map((change) => (
+            {(isAllChangesShown ? initialChanges : initialChanges.slice(0, 3)).map((change) => (
               <li key={change.id} className='flex items-start gap-3'>
                 {initialChanges.length > 1 && (
                   <Checkbox
@@ -985,6 +987,16 @@ function RecipeForm({
               </li>
             ))}
           </ul>
+          {initialChanges.length > 3 && (
+            <ShowMoreButton
+              isOpen={isAllChangesShown}
+              onClick={() => setIsAllChangesShown((shown) => !shown)}
+            >
+              {isAllChangesShown
+                ? 'Show fewer'
+                : `and ${initialChanges.length - 3} more`}
+            </ShowMoreButton>
+          )}
         </div>
       )}
       {initialRead && !isNoteClosed && (

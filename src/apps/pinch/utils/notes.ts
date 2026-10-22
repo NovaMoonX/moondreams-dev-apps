@@ -176,6 +176,14 @@ const clipAtWord = (text: string, max: number) => {
 export const getStepAnchorText = (step: string) =>
   clipAtWord(squashText(step), NOTE_STEP_ANCHOR_LENGTH);
 
+/** Whether a step still reads as the words an entry kept: whole when it kept the whole step, else the same beginning, so changing the clip length never strands stored entries. */
+const readsAs = (step: string, kept: string) => {
+  const squashed = squashText(step);
+  if (!kept.endsWith('…')) return squashed === kept;
+  const beginning = kept.slice(0, -1);
+  return beginning !== '' && squashed.startsWith(beginning);
+};
+
 /** Where an entry about a step is written: the step's number (0-based) and its first words, or both null for the whole recipe or a step that does not exist. */
 export const getStepAnchor = (steps: string[], index: number | null) => {
   const step = index === null ? undefined : steps[index];
@@ -196,11 +204,11 @@ export const resolveNoteStep = (
   if (index === null) return null;
   const text = note.stepText ?? null;
   if (text === null) return index < steps.length ? index : null;
-  if (steps[index] !== undefined && getStepAnchorText(steps[index]) === text) {
+  if (steps[index] !== undefined && readsAs(steps[index], text)) {
     return index;
   }
   const moved = steps.flatMap((step, at) =>
-    getStepAnchorText(step) === text ? [at] : [],
+    readsAs(step, text) ? [at] : [],
   );
   if (moved.length === 0) return null;
   // Two steps can read the same ("Stir."): the one nearest where the entry was written, the later one when both are, since a step is added more often than taken out.

@@ -722,7 +722,7 @@ export const NOTE_KIND_HINTS: Record<(typeof WRITTEN_NOTE_KINDS)[number], string
   {
     TIP: 'Advice for making it, any time you cook it.',
     CHANGE: 'Something to change in the recipe. Apply it when you are ready.',
-    NOTE: 'About this time you cooked it.',
+    NOTE: 'Something you noticed, for next time.',
   };
 
 /** The label and example under the words box for each kind. */

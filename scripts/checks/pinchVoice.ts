@@ -1292,8 +1292,13 @@ assert.deepEqual(
   'while a tip is being dictated, what is said is the tip',
 );
 assert.deepEqual(
+  parse('keep the pan hot', dictating),
+  { kind: 'DICTATION', text: 'Keep the pan hot' },
+  'a dictated entry starts with a capital letter',
+);
+assert.deepEqual(
   parse('next', dictating),
-  { kind: 'DICTATION', text: 'next' },
+  { kind: 'DICTATION', text: 'Next' },
   'and even a command word is the words, so a tip never moves the step',
 );
 assert.deepEqual(

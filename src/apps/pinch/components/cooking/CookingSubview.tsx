@@ -948,6 +948,12 @@ function CookingSession({
     });
 
   const confirmDiscard = async () => {
+    if (capture.hasDraft && capture.draft?.noteId != null) {
+      return confirmDiscardOf(
+        'Discard your changes?',
+        'The entry stays as it was saved.',
+      );
+    }
     if (capture.hasDraft) {
       return confirmDiscardOf(
         'Discard this entry?',
@@ -2022,7 +2028,7 @@ function CookingSession({
       hasCoachedUndo.current = true;
       return done(
         `Saved your ${word} for step ${question.stepIndex + 1}`,
-        `Saved your ${word} for step ${question.stepIndex + 1}.${coaching}`,
+        `Saved your ${word} for step ${question.stepIndex + 1}: ${text.length > 80 ? `${text.slice(0, 80)}…` : text}.${coaching}`,
       );
     },
     undoEntry: () => {
@@ -2160,18 +2166,34 @@ function CookingSession({
   const followUpRecords = records.filter(
     (record) => record.recordedCookId !== null,
   );
-  const getReviewEntries = (recipeId: string): CookReviewEntry[] => {
+  const getReviewEntries = (
+    recipeId: string,
+    isIncludingEarlier = false,
+  ): CookReviewEntry[] => {
     const steps =
       entries.find((candidate) => candidate.recipe.id === recipeId)?.recipe
         .steps ?? [];
-    return capture.captured.flatMap((id) => {
+    const toEntry = (found: RecipeNote) => ({
+      note: found,
+      stepAt: resolveNoteStep(found, steps),
+    });
+    const written = capture.captured.flatMap((id) => {
       const found = notesById.get(id);
       return found !== undefined &&
         found.recipeId === recipeId &&
         found.kind !== 'TWEAK'
-        ? [{ note: found, stepAt: resolveNoteStep(found, steps) }]
+        ? [toEntry(found)]
         : [];
     });
+    if (!isIncludingEarlier) return written;
+    const earlier = (notesByRecipe.get(recipeId) ?? NO_RECIPE_NOTES)
+      .filter(
+        (found) =>
+          found.kind === 'CHANGE' && !capture.captured.includes(found.id),
+      )
+      .map(toEntry)
+      .reverse();
+    return [...earlier, ...written];
   };
   const hasFollowUps = records.some(
     (record) =>
@@ -2638,7 +2660,7 @@ function CookingSession({
             {!capture.isOpen &&
               !putAway.isOpen &&
               followUpRecords.map((record) => {
-                const reviewEntries = getReviewEntries(record.recipeId);
+                const reviewEntries = getReviewEntries(record.recipeId, true);
                 const plannedChanges = reviewEntries.filter(
                   (entry) => entry.note.kind === 'CHANGE',
                 );
