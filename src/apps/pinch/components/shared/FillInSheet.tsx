@@ -21,7 +21,10 @@ import {
   MAX_SERVING_AMOUNT,
   NUTRITION_CELLS,
 } from '@apps/pinch/constants';
-import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
+import {
+  addIngredientAlias,
+  saveIngredient,
+} from '@apps/pinch/store/actions/ingredientActions';
 import { saveProduct } from '@apps/pinch/store/actions/productActions';
 import {
   selectDefaultProducts,
@@ -49,6 +52,8 @@ interface RowState {
   sizeUnit: Unit;
   link: string;
   isLinkShown: boolean;
+  alias: string | null;
+  isAliasOn: boolean;
   suggestedStore: string | null;
   /** Bumped by a reading so the store picker is seeded again. */
   fillCount: number;
@@ -106,6 +111,8 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
       ),
       link: '',
       isLinkShown: false,
+      alias: null,
+      isAliasOn: false,
       suggestedStore: null,
       fillCount: 0,
     };
@@ -195,7 +202,10 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const isLast = index + 1 >= rows.length;
 
   const fillFromPage = async (pageLink: string) => {
-    const result = await read(pageLink);
+    if (!ingredient) {
+      return;
+    }
+    const result = await read(pageLink, ingredient);
     if (result === null) {
       return;
     }
@@ -222,6 +232,8 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
           sizeUnit: found.sizeUnit ?? live.sizeUnit,
           link: pageLink,
           suggestedStore: match.storeId === null ? match.suggestedName : null,
+          alias: found.alias,
+          isAliasOn: false,
           fillCount: live.fillCount + 1,
         },
       };
@@ -275,6 +287,19 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         ).unwrap();
       } else if (draft) {
         await dispatch(saveProduct({ uid, draft })).unwrap();
+        if (row.isAliasOn && row.alias !== null) {
+          await dispatch(
+            addIngredientAlias({
+              uid,
+              ingredientId: ingredient.id,
+              alias: row.alias,
+            }),
+          )
+            .unwrap()
+            .catch((aliasError) =>
+              console.error('Adding the other name failed', aliasError),
+            );
+        }
       }
       setIsSubmitting(false);
       advance();
@@ -424,12 +449,27 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
               value={row.link}
               onChange={(link) => {
                 resetReading();
-                update(getGapKey(gap), gap, { link, suggestedStore: null });
+                update(getGapKey(gap), gap, {
+                  link,
+                  suggestedStore: null,
+                  alias: null,
+                  isAliasOn: false,
+                });
               }}
               onFill={(pageLink) => void fillFromPage(pageLink)}
               isFilling={reading.isFilling}
               note={reading.note}
               error={reading.error}
+              aliasOffer={
+                row.alias === null
+                  ? null
+                  : {
+                      text: row.alias,
+                      isOn: row.isAliasOn,
+                      onChange: (isAliasOn) =>
+                        update(getGapKey(gap), gap, { isAliasOn }),
+                    }
+              }
             />
           ) : (
             <div>

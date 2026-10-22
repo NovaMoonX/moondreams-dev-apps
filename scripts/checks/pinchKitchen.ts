@@ -11,6 +11,7 @@ import { matchIngredient } from '../../src/apps/pinch/utils/ingredientMatch.ts';
 import {
   cleanAliases,
   getRecordAliases,
+  mergeAlias,
 } from '../../src/apps/pinch/utils/ingredientRecord.ts';
 import {
   findStoreForLink,
@@ -170,6 +171,7 @@ assert.deepEqual(
     priceCents: 88,
     sizeAmount: 1,
     sizeUnit: 'OZ',
+    alias: null,
     unread: ['the page shows no unit price'],
   },
 );
@@ -186,6 +188,7 @@ assert.deepEqual(
     priceCents: null,
     sizeAmount: null,
     sizeUnit: null,
+    alias: null,
     unread: [],
   },
   'a price or size that is not a positive amount is unread',
@@ -197,6 +200,7 @@ assert.deepEqual(
     priceCents: null,
     sizeAmount: null,
     sizeUnit: null,
+    alias: null,
     unread: [],
   },
   'a size in a unit the app does not know is no size',
@@ -219,6 +223,62 @@ assert.equal(
   }).unread.length,
   5,
   'a few unread notes at most',
+);
+
+// products: a general name is kept only when it really is one
+const ctx = {
+  knownNames: ['Dry ranch seasoning powder', 'Ranch packet'],
+  title: 'Great Value Classic Ranch Salad Dressing & Recipe Mix, 1 oz',
+};
+const aliasOf = (alias: unknown, brand: string | null = 'Great Value') =>
+  normalizeExtractedProduct({ brand, alias }, ctx).alias;
+assert.equal(
+  aliasOf('Ranch Salad Dressing & Recipe Mix'),
+  'Ranch Salad Dressing & Recipe Mix',
+  'a generalization of the product name is offered',
+);
+assert.equal(aliasOf(ctx.title), null, 'never the whole product name');
+assert.equal(
+  aliasOf('Great Value Ranch Salad Dressing Mix'),
+  null,
+  'never with the brand in it',
+);
+assert.equal(aliasOf('Ranch Dressing Mix, 1 oz'), null, 'never with a size');
+assert.equal(aliasOf('Ranch Dressing Mix 12 ct'), null, 'never with a count');
+assert.equal(
+  aliasOf('dry ranch seasoning powder'),
+  null,
+  "never the ingredient's own name, ignoring case",
+);
+assert.equal(
+  aliasOf('Ranch packets'),
+  null,
+  'nor one of its names in the plural',
+);
+assert.equal(aliasOf('   '), null);
+assert.equal(aliasOf(42), null);
+assert.equal(aliasOf('Ranch Salad Dressing & Recipe Mix', null) !== null, true);
+
+// aliases: adding one name to an ingredient
+assert.deepEqual(mergeAlias(['A'], 'B', ['Own']), ['A', 'B']);
+assert.equal(mergeAlias(['A'], 'a', ['Own']), null, 'a repeat is not added');
+assert.equal(mergeAlias([], 'own', ['Own']), null, 'its own name is not added');
+assert.equal(
+  mergeAlias([], 'Boneless skinless chicken breast', [
+    'Chicken breast',
+    'boneless skinless chicken breast',
+  ]),
+  null,
+  'a built-in name is not added again',
+);
+assert.equal(
+  mergeAlias(
+    Array.from({ length: 10 }, (_, index) => `Name ${index}`),
+    'One more',
+    [],
+  ),
+  null,
+  'a full list takes no more',
 );
 
 // products: the store a page is on

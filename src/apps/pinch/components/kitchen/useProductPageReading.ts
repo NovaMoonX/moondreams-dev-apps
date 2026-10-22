@@ -79,7 +79,10 @@ export function useProductPageReading({ hasLabel = true } = {}) {
   }, []);
 
   const read = useCallback(
-    async (pageLink: string): Promise<ProductReading | null> => {
+    async (
+      pageLink: string,
+      ingredient: { name: string; aliases: string[] },
+    ): Promise<ProductReading | null> => {
       latestRequest.current += 1;
       const request = latestRequest.current;
       setReading({ isFilling: true, note: null, error: null });
@@ -87,7 +90,7 @@ export function useProductPageReading({ hasLabel = true } = {}) {
         const page = await queryClient.fetchQuery(
           productPageQueryOptions(pageLink),
         );
-        const found = await extractProductFromPage(page);
+        const found = await extractProductFromPage(page, ingredient);
         if (request !== latestRequest.current) {
           return null;
         }

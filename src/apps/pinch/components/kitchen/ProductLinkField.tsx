@@ -1,4 +1,9 @@
-import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Checkbox,
+  Input,
+  Label,
+} from '@moondreamsdev/dreamer-ui/components';
 import { Link2 } from 'lucide-react';
 
 import LinkPreviewCard from '@/components/LinkPreviewCard';
@@ -6,12 +11,19 @@ import { useLinkPreview } from '@/hooks/useLinkPreview';
 import { toWebLink } from '@/utils/urlUtils';
 import { productPageQueryOptions } from '@apps/pinch/queries/productPageQueries';
 
+export interface AliasOffer {
+  text: string;
+  isOn: boolean;
+  onChange: (isOn: boolean) => void;
+}
+
 interface ProductLinkFieldProps {
   caption?: string;
   savedLink?: string | null;
   isEditing?: boolean;
   canClear?: boolean;
   shouldFocus?: boolean;
+  aliasOffer?: AliasOffer | null;
   value: string;
   onChange: (value: string) => void;
   onFill: (link: string) => void;
@@ -27,6 +39,7 @@ function ProductLinkField({
   isEditing = false,
   canClear = true,
   shouldFocus = false,
+  aliasOffer = null,
   value,
   onChange,
   onFill,
@@ -103,6 +116,18 @@ function ProductLinkField({
         <p className='text-muted-foreground text-xs' role='status'>
           {note}
         </p>
+      )}
+      {hasRead && aliasOffer && (
+        <label className='flex min-h-10 cursor-pointer items-start gap-3 py-1 text-sm select-none'>
+          <Checkbox
+            aria-label={`Also call this ingredient ${aliasOffer.text}`}
+            checked={aliasOffer.isOn}
+            onCheckedChange={(checked) => aliasOffer.onChange(checked === true)}
+          />
+          <span className='min-w-0 wrap-break-word'>
+            Also call this ingredient “{aliasOffer.text}”
+          </span>
+        </label>
       )}
       {error && <p className='text-destructive text-xs'>{error}</p>}
     </div>

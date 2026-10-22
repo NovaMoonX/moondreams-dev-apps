@@ -34,6 +34,7 @@ import {
   MAX_PRICE_CENTS,
   MAX_SERVING_AMOUNT,
 } from '@apps/pinch/constants';
+import { addIngredientAlias } from '@apps/pinch/store/actions/ingredientActions';
 import {
   removeProduct,
   saveProduct,
@@ -190,6 +191,10 @@ function ProductFormSheet({
   const [formData, setFormData] = useState<FormData>(initialData);
   const [suggestedStore, setSuggestedStore] = useState<string | null>(null);
   const { reading, read, reset: resetReading } = useProductPageReading();
+  const [aliasOffer, setAliasOffer] = useState<{
+    text: string;
+    isOn: boolean;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -266,7 +271,7 @@ function ProductFormSheet({
 
   const fillFromPage = useCallback(
     async (pageLink: string) => {
-      const result = await read(pageLink);
+      const result = await read(pageLink, ingredient);
       if (result === null) {
         return;
       }
@@ -295,8 +300,11 @@ function ProductFormSheet({
       setFormData(next);
       setFillCount((count) => count + 1);
       setSuggestedStore(match.storeId === null ? match.suggestedName : null);
+      setAliasOffer(
+        found.alias === null ? null : { text: found.alias, isOn: false },
+      );
     },
-    [read],
+    [read, ingredient],
   );
 
   const fields = useMemo(() => {
@@ -317,6 +325,7 @@ function ProductFormSheet({
             value={link.value}
             onChange={(value) => {
               resetReading();
+              setAliasOffer(null);
               setFormData((current) => ({
                 ...current,
                 link: { enabled: true, value },
@@ -326,6 +335,13 @@ function ProductFormSheet({
             isFilling={reading.isFilling}
             note={reading.note}
             error={reading.error}
+            aliasOffer={
+              aliasOffer && {
+                ...aliasOffer,
+                onChange: (isOn) =>
+                  setAliasOffer((current) => current && { ...current, isOn }),
+              }
+            }
           />
         );
         return product === null ? (
@@ -475,6 +491,7 @@ function ProductFormSheet({
     echo,
     link,
     reading,
+    aliasOffer,
     suggestedStore,
     fillFromPage,
     resetReading,
@@ -529,6 +546,19 @@ function ProductFormSheet({
           },
         }),
       ).unwrap();
+      if (aliasOffer?.isOn) {
+        await dispatch(
+          addIngredientAlias({
+            uid,
+            ingredientId: ingredient.id,
+            alias: aliasOffer.text,
+          }),
+        )
+          .unwrap()
+          .catch((aliasError) =>
+            console.error('Adding the other name failed', aliasError),
+          );
+      }
       onClose();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this price.'));
