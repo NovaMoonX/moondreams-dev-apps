@@ -386,7 +386,7 @@ function RecipeReader({
       return `Up to ${MAX_PASTE_CHARS.toLocaleString()} characters.`;
     }
     if (getYouTubeId(link) !== null) {
-      return 'An AI watches and listens to the video, so this can take a minute. It has to be a public video.';
+      return 'An AI watches the video, which can take a minute. It must be public.';
     }
     if (!canPasteText) {
       return 'The address saved with your idea.';
