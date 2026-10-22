@@ -53,7 +53,7 @@ export function classifyReadFailure(
 
 const getUnreadLine = (source: RecipeSource, isVideo: boolean) => {
   if (isVideo) {
-    return "We couldn't read a recipe from that video. It has to be a public YouTube video.";
+    return "We couldn't read a recipe from that video. It may be private or too long.";
   }
   if (source === 'AI_LINK') return "We couldn't read a recipe from that page.";
   if (source === 'AI_TEXT') {

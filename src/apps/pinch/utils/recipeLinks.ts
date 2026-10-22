@@ -38,6 +38,8 @@ const YOUTUBE_HOSTS = new Set([
   'youtube-nocookie.com',
 ]);
 const YOUTUBE_ID_PATHS = new Set(['shorts', 'embed', 'live', 'v']);
+// Two embed paths that are not videos but are as long as an id.
+const NOT_VIDEO_IDS = new Set(['videoseries', 'live_stream']);
 
 const isBlank = (text: string) => text.trim() === '';
 
@@ -65,7 +67,11 @@ export const getYouTubeId = (text: string) => {
   };
   const candidate = getCandidate();
   const result =
-    candidate !== undefined && YOUTUBE_ID.test(candidate) ? candidate : null;
+    candidate !== undefined &&
+    YOUTUBE_ID.test(candidate) &&
+    !NOT_VIDEO_IDS.has(candidate)
+      ? candidate
+      : null;
   return result;
 };
 

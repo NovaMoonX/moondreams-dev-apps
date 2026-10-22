@@ -66,7 +66,7 @@ const FIELD_CLASS =
 const READER_COPY: Record<ReaderMethod, { caption: string; lead: string }> = {
   link: {
     caption: 'Recipe link',
-    lead: 'An AI reads the page, or watches the video if it is a YouTube link, and fills in the form.',
+    lead: 'An AI reads the page and fills in the form.',
   },
   text: {
     caption: 'Recipe text',
@@ -168,7 +168,7 @@ function RecipeReader({
   // The reading's own request, so the preview and "Fill in the recipe" share one page fetch.
   const preview = useLinkPreview(method === 'link' ? link : '', {
     getQueryOptions: recipePageQueryOptions,
-    isEnabled: canPasteText,
+    isEnabled: canPasteText && getYouTubeId(link) === null,
   });
 
   useEffect(() => {
@@ -365,13 +365,18 @@ function RecipeReader({
     );
   };
 
-  const getIntro = () =>
-    ideaTitle === undefined || initialUrl === undefined
-      ? { lead: copy.lead, rest: SAVED_LINE }
-      : {
-          lead: `From your idea: ${ideaTitle}`,
-          rest: 'We open its link, and an AI reads the page and fills in the form. You look it over before anything is saved.',
-        };
+  const getIntro = () => {
+    if (ideaTitle === undefined || initialUrl === undefined) {
+      return { lead: copy.lead, rest: SAVED_LINE };
+    }
+    const isVideo = getYouTubeId(initialUrl) !== null;
+    return {
+      lead: `From your idea: ${ideaTitle}`,
+      rest: isVideo
+        ? 'An AI watches and listens to the video and fills in the form. You look it over before anything is saved.'
+        : 'We open its link, and an AI reads the page and fills in the form. You look it over before anything is saved.',
+    };
+  };
 
   const getHint = () => {
     if (method === 'file') {
@@ -380,11 +385,11 @@ function RecipeReader({
     if (method === 'text') {
       return `Up to ${MAX_PASTE_CHARS.toLocaleString()} characters.`;
     }
-    if (!canPasteText) {
-      return 'The address saved with your idea.';
-    }
     if (getYouTubeId(link) !== null) {
       return 'An AI watches and listens to the video, so this can take a minute. It has to be a public video.';
+    }
+    if (!canPasteText) {
+      return 'The address saved with your idea.';
     }
     return 'Copy the address from your browser. We open the page to find its title and picture.';
   };

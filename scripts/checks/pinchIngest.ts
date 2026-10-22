@@ -999,7 +999,7 @@ const videoLines = (
 assert.deepEqual(
   videoLines.filter((line) => /video/i.test(line)),
   [
-    "We couldn't read a recipe from that video. It has to be a public YouTube video.",
+    "We couldn't read a recipe from that video. It may be private or too long.",
     "We couldn't find a recipe in that video.",
   ],
   'a YouTube reading names the video only when the video is the trouble, and never blames the connection or the reader on it',
