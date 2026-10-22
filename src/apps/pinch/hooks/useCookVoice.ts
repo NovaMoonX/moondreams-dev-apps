@@ -257,7 +257,7 @@ export function useCookVoice({
   const messageCount = useRef(0);
   const readStepKey = useRef<string | null>(null);
   const stepSpokenKey = useRef<string | null>(null);
-  const notesReadKey = useRef<string | null>(null);
+  const notesDueKey = useRef<string | null>(null);
   const waitRef = useRef<{ enteredAt: number; spans: WakeBusySpan[] } | null>(
     null,
   );
@@ -382,7 +382,7 @@ export function useCookVoice({
   const begin = () => {
     readStepKey.current = null;
     stepSpokenKey.current = null;
-    notesReadKey.current = null;
+    notesDueKey.current = null;
     setExpiredStop(null);
     setMessage(null);
     onTurnOn?.();
@@ -497,12 +497,24 @@ export function useCookVoice({
     if (isHearing && isReadingAloud && spoken !== null) {
       if (readStepKey.current === stepKey) return;
       readStepKey.current = stepKey;
+      notesDueKey.current = isReadingNotes && notesWords !== null ? stepKey : null;
       say(spoken);
+      if (speech.status === 'speaking') stepSpokenKey.current = stepKey;
       return;
     }
     if (stepKey !== readStepKey.current) readStepKey.current = null;
     if (stepKey !== null) quiet();
-  }, [isHearing, isReadingAloud, stepKey, spoken, say, quiet]);
+  }, [
+    isHearing,
+    isReadingAloud,
+    isReadingNotes,
+    notesWords,
+    stepKey,
+    spoken,
+    say,
+    quiet,
+    speech.status,
+  ]);
 
   // What was written for the step is its own reading, after the step has finished and a short pause, with its own lead-in, so it never runs into the instruction.
   useEffect(() => {
@@ -512,17 +524,17 @@ export function useCookVoice({
   }, [speech.status, stepKey]);
 
   useEffect(() => {
-    if (!isReadingAloud || !isReadingNotes || notesWords === null) return;
-    if (speech.status !== 'listening' || stepKey === null) return;
-    if (stepSpokenKey.current !== stepKey || notesReadKey.current === stepKey) {
+    if (notesDueKey.current !== stepKey || stepKey === null) return;
+    if (speech.status !== 'listening' || stepSpokenKey.current !== stepKey) {
       return;
     }
     const timeoutId = window.setTimeout(() => {
-      notesReadKey.current = stepKey;
+      if (notesDueKey.current !== stepKey || notesWords === null) return;
+      notesDueKey.current = null;
       say(`${NOTES_LEAD} ${notesWords}`);
     }, NOTES_PAUSE_MS);
     return () => window.clearTimeout(timeoutId);
-  }, [speech.status, isReadingAloud, isReadingNotes, notesWords, stepKey, say]);
+  }, [speech.status, notesWords, stepKey, say]);
 
   const turnOn = () => {
     setHasAgreed(true);
@@ -595,7 +607,10 @@ export function useCookVoice({
     isReadingNotes,
     setIsReadingNotes,
     /** Speaks `text` now, whether or not the mic is on. */
-    speak: say,
+    speak: (text: string) => {
+      notesDueKey.current = null;
+      say(text);
+    },
     natural,
   };
 }

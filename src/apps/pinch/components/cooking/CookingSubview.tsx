@@ -807,6 +807,7 @@ function CookingSession({
     );
   };
   const stepEntries = getEntriesAt(recipe, index, false);
+  const isOnStep = focused === null && isStepsView && hasSteps && !isFinishShown;
   const dockKey = `${recipe.id}:${index}`;
   const shownView = dockOpen?.key === dockKey ? dockOpen.view : null;
   const showDockView = (view: DockView | null) =>
@@ -1051,6 +1052,7 @@ function CookingSession({
     );
     if (!target) return;
     voice.stop();
+    setDockOpen(null);
     scrollBeforeEdit.current = getOverlay()?.scrollTop ?? 0;
     editDirtyRef.current = false;
     setEditTitle(target.recipe.title);
@@ -2038,7 +2040,7 @@ function CookingSession({
         formatDateShort,
       );
       if (text === null) return answerNo('No tips for this step.');
-      if (focused === null && stepEntries.some((entry) => entry.kind === 'TIP')) {
+      if (isOnStep && stepEntries.some((entry) => entry.kind === 'TIP')) {
         showDockView('TIP');
       }
       return done('Reading the tips', text);
@@ -2055,14 +2057,12 @@ function CookingSession({
         : stepEntries.some((entry) => entry.kind === 'CHANGE')
           ? 'CHANGE'
           : null;
-      if (focused === null && kind !== null) showDockView(kind);
+      if (isOnStep && kind !== null) showDockView(kind);
       return done('Reading the notes', text);
     },
     showEntries: (kind) => {
       const word = ENTRY_WORDS[kind];
-      if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
-        return refuse('Go to a step to see that.');
-      }
+      if (!isOnStep) return refuse('Go to a step to see that.');
       const count = stepEntries.filter((entry) => entry.kind === kind).length;
       if (count === 0) {
         return answerNo(`No ${word}s for this step.`);
@@ -2641,6 +2641,8 @@ function CookingSession({
           void cancelCapture();
         } else if (focused !== null) {
           backToStep();
+        } else if (isStepsView && shownView !== null) {
+          showDockView(null);
         } else if (isStepsView) {
           void leave();
         } else {

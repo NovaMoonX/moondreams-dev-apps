@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, History, PenLine, Plus, Scale, Volume2, X } from 'lucide-react';
+import { Check, PenLine, Plus, Volume2, X } from 'lucide-react';
 
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
@@ -48,6 +48,7 @@ interface BubbleProps {
   isDashed?: boolean;
   isInline?: boolean;
   controls?: string;
+  view?: string;
   onClick: () => void;
   children: ReactNode;
 }
@@ -61,6 +62,7 @@ function Bubble({
   isDashed,
   isInline,
   controls,
+  view,
   onClick,
   children,
 }: BubbleProps) {
@@ -69,22 +71,29 @@ function Bubble({
     <Button
       type='button'
       variant='tertiary'
-      aria-pressed={isOn}
+      aria-pressed={controls === undefined ? isOn : undefined}
       aria-expanded={controls === undefined ? undefined : isOn}
-      aria-controls={controls}
+      aria-controls={isOn ? controls : undefined}
+      data-view={view}
       aria-label={label}
       title={label}
       className={join(
         'text-foreground! relative shrink-0 rounded-full px-0! py-0! text-base before:absolute before:content-[""]',
         isInline ? 'size-8 min-w-8' : 'size-9 min-w-9',
-        isBordered ? 'before:-inset-[3px]' : 'before:-inset-0.5',
+        isBordered ? 'before:-inset-[3px]' : isInline ? 'before:-inset-1' : 'before:-inset-0.5',
         isOn && 'bg-accent! border-primary! border',
         isNudged && !isOn && 'bg-accent! border-border border',
-        isDashed && 'border-muted-foreground/60 border border-dashed',
+        isDashed && 'border-muted-foreground/80 border border-dashed',
       )}
       onClick={onClick}
     >
       {children}
+      {isNudged && !isOn && (
+        <span
+          aria-hidden='true'
+          className='bg-primary absolute -top-0.5 -right-0.5 size-2.5 rounded-full'
+        />
+      )}
       {count !== undefined && (
         <span
           aria-hidden='true'
@@ -161,8 +170,23 @@ function CookStepDock({
   ];
   const open: DockView | null =
     shown !== null && views.includes(shown) ? shown : null;
-  const close = () => onShow(null);
-  useBackStep(open !== null, close);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const onShowRef = useRef(onShow);
+  useEffect(() => {
+    onShowRef.current = onShow;
+  });
+  // The screen holds which view is open, so a dock that goes away (another step, the ingredient list, the recipe form) takes it down with it instead of leaving it to come back.
+  useEffect(() => () => onShowRef.current(null), []);
+  const close = () => {
+    const opener = open;
+    onShow(null);
+    window.setTimeout(() => {
+      groupRef.current
+        ?.querySelector<HTMLElement>(`[data-view="${opener}"]`)
+        ?.focus();
+    }, 0);
+  };
+  useBackStep(open !== null, () => onShow(null));
 
   if (views.length === 0 && onAdd === null) return null;
 
@@ -294,7 +318,7 @@ function CookStepDock({
                   type='button'
                   variant='secondary'
                   className='relative h-8 shrink-0 gap-1 rounded-full px-3 text-xs before:absolute before:-inset-1 before:content-[""]'
-                  aria-label='Got it, put this note away while you cook'
+                  aria-label='Got it'
                   onClick={() => {
                     lastTime?.onGotIt();
                     close();
@@ -324,6 +348,7 @@ function CookStepDock({
         </section>
       )}
       <div
+        ref={groupRef}
         role='group'
         aria-label='Written and used in this step'
         className='flex min-h-10 items-center justify-end gap-2'
@@ -334,9 +359,10 @@ function CookStepDock({
             isOn={open === 'LAST'}
             isNudged={!isDismissed}
             controls={panelId}
+            view='LAST'
             onClick={() => toggle('LAST')}
           >
-            <History className='h-4 w-4' aria-hidden='true' />
+            <span aria-hidden='true'>💬</span>
           </Bubble>
         )}
         {rows.length > 0 && (
@@ -344,9 +370,10 @@ function CookStepDock({
             label='Amounts for this step'
             isOn={open === 'AMOUNTS'}
             controls={panelId}
+            view='AMOUNTS'
             onClick={() => toggle('AMOUNTS')}
           >
-            <Scale className='h-4 w-4' aria-hidden='true' />
+            <span aria-hidden='true'>⚖️</span>
           </Bubble>
         )}
         {kinds.map((kind) => {
@@ -359,6 +386,7 @@ function CookStepDock({
               isOn={open === kind}
               count={count}
               controls={panelId}
+              view={kind}
               onClick={() => toggle(kind)}
             >
               <span aria-hidden='true'>{NOTE_KIND_EMOJIS[kind]}</span>
