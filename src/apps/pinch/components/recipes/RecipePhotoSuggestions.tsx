@@ -32,7 +32,6 @@ const SKELETON_TILES = Array.from(
 interface RecipePhotoSuggestionsProps {
   uid: string;
   title: string;
-  /** The picture the recipe's source offered; it leads the grid so choosing another doesn't lose it. */
   sourcePhoto: WebPhoto | null;
   selectedUrl: string | null;
   onPick: (photo: WebPhoto) => void;

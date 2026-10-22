@@ -21,7 +21,7 @@ import {
 
 /** What a source tells us about a recipe beyond its words: a picture to start the cover on, and the address the recipe came from. Offered to the form, which the person reviews; nothing here is saved by itself. */
 export interface ReadExtras {
-  /** Pictures the source publishes for the dish, best first; the form starts the cover on the first one that loads. */
+  /** Pictures the source publishes for the dish, best first. */
   photos: WebPhoto[];
   link: {
     kind: Extract<RecipeLinkKind, 'HOW_TO' | 'ORIGINAL'>;
@@ -40,7 +40,6 @@ const getVideoPhoto = (id: string, size: string, thumb: string): WebPhoto => ({
   host: YOUTUBE_HOST,
 });
 
-/** A YouTube video's own picture (the large one when the video has it, else the standard one) and the video itself as the recipe's how-to. */
 export const getVideoExtras = (text: string): ReadExtras => {
   const id = getYouTubeId(text);
   const url = getYouTubeWatchUrl(text);
@@ -75,7 +74,6 @@ const getOriginalLink = (url: string): ReadExtras['link'] => {
   return result;
 };
 
-/** A web page's own picture (its social-preview image) and the page itself as the original recipe. */
 export const getPageExtras = (
   page: PageContent,
   typedUrl: string,
@@ -104,7 +102,6 @@ export const getIdeaExtras = (
   return result;
 };
 
-/** The links a form starts with from what a source told us. */
 export const getExtraLinks = (extras: ReadExtras): RecipeLink[] =>
   extras.link === null
     ? []
@@ -117,15 +114,18 @@ export const getExtraLinks = (extras: ReadExtras): RecipeLink[] =>
         },
       ];
 
-const TITLE_TAIL = /\s+[|–—•-]\s+.*$/;
+const TITLE_TAIL = /\s+[|–—•-]\s+[^|–—•-]*$/;
+const MIN_TITLE_LENGTH = 3;
 
 /** Fills a title or description the reader left empty from the page's own: the site's name after a bar or dash is dropped from the title. */
 export const withPageFallbacks = (
   recipe: ExtractedRecipe,
   page: Pick<PageContent, 'title' | 'meta'>,
 ): ExtractedRecipe => {
+  const fullTitle = (page.title ?? '').trim();
+  const withoutSite = fullTitle.replace(TITLE_TAIL, '').trim();
   const pageTitle = clipAtWord(
-    (page.title ?? '').replace(TITLE_TAIL, '').trim(),
+    withoutSite.length >= MIN_TITLE_LENGTH ? withoutSite : fullTitle,
     MAX_RECIPE_TITLE_LENGTH,
   );
   const pageDescription = clipAtWord(

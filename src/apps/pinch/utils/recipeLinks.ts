@@ -80,7 +80,7 @@ export const getYouTubeThumbnailUrl = (id: string) =>
 
 const getYouTubeStart = (link: string) => {
   const start = new URL(link).searchParams.get('t');
-  const result = start !== null && /^[\dms]+$/i.test(start) ? start : null;
+  const result = start !== null && /^[\dhms]+$/i.test(start) ? start : null;
   return result;
 };
 

@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
   type RefObject,
@@ -235,6 +236,7 @@ function RecipeForm({
         : [],
   );
   const [sourcePhoto, setSourcePhoto] = useState<WebPhoto | null>(null);
+  const hasChosenCover = useRef(false);
   const [initialData] = useState(() =>
     initialRead
       ? {
@@ -587,17 +589,20 @@ function RecipeForm({
             sourcePhoto={sourcePhoto}
             title={formData.title}
             onSelect={(file) => {
+              hasChosenCover.current = true;
               pickCover(file);
               setIsCoverRemoved(false);
               isDirtyRef.current = true;
             }}
             onPickWeb={(photo) => {
+              hasChosenCover.current = true;
               clearCover();
               setWebCover(photo);
               setIsCoverRemoved(false);
               isDirtyRef.current = true;
             }}
             onRemove={() => {
+              hasChosenCover.current = true;
               clearCover();
               setWebCover(null);
               setIsCoverRemoved(true);
@@ -894,7 +899,7 @@ function RecipeForm({
     void findLoadablePhoto(offeredPhotos).then((photo) => {
       if (!isCurrent || photo === null) return;
       setSourcePhoto(photo);
-      setWebCover((current) => current ?? photo);
+      if (!hasChosenCover.current) setWebCover(photo);
     });
     return () => {
       isCurrent = false;

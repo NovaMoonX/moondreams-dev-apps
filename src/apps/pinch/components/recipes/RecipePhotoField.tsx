@@ -14,7 +14,6 @@ interface RecipePhotoFieldProps {
   cover: ShownCover | null;
   error: string | null;
   canSuggest: boolean;
-  /** The picture the recipe's source offered, kept among the choices so picking another never loses it. */
   sourcePhoto: WebPhoto | null;
   title: string;
   onSelect: (file: File | null) => void;

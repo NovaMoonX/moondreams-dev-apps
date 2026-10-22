@@ -39,6 +39,11 @@ assert.equal(
   WATCH,
   'a start time that is not a time is dropped',
 );
+assert.equal(
+  getYouTubeWatchUrl(`https://youtu.be/${ID}?t=1h2m3s`),
+  `${WATCH}&t=1h2m3s`,
+  'hours are kept',
+);
 assert.equal(getYouTubeWatchUrl('https://www.youtube.com/@channel'), null);
 assert.equal(
   getYouTubeWatchUrl('https://example.com/watch?v=aqz-KE-bpKQ'),
@@ -142,6 +147,19 @@ assert.equal(
   'the site after the bar is dropped',
 );
 assert.equal(filled.description, 'Sour, salty and a little sweet.');
+const titleOf = (title: string) =>
+  withPageFallbacks(read, { title, meta: undefined }).title;
+assert.equal(
+  titleOf("Mom's Best - Chicken Noodle Soup | Kitchn"),
+  "Mom's Best - Chicken Noodle Soup",
+  'only the last segment is dropped',
+);
+assert.equal(titleOf('Adobo | X'), 'Adobo');
+assert.equal(
+  titleOf('A | Chicken Adobo Site'),
+  'A | Chicken Adobo Site',
+  'a cut that leaves almost nothing is not made',
+);
 const kept = withPageFallbacks(
   { ...read, title: 'My adobo', description: 'Mine.' },
   page,
