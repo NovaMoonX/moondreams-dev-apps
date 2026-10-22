@@ -694,13 +694,13 @@ export interface SharedRecipeLink {
   url: string;
 }
 
-/** One tip as a share carries it: its words and the step it sits under (0-based), null for the whole recipe. Never a date, id or cook. */
-export interface SharedRecipeTip {
+/** One tip or note as a share carries it: its words and the step it sits under (0-based), null for the whole recipe. Never a date, id or cook. */
+export interface SharedRecipeEntry {
   text: string;
   step: number | null;
 }
 
-/** A recipe as a share carries it: what is needed to read it, cook it and copy it, with its tips. No prices, notes, changes, ratings, collections, source or favorite. */
+/** A recipe as a share carries it: what is needed to read it, cook it and copy it, with its tips and notes when the owner includes them. No prices, planned changes, ratings, collections, source or favorite. */
 export interface SharedRecipe {
   title: string;
   description: string | null;
@@ -711,7 +711,10 @@ export interface SharedRecipe {
   steps: string[];
   care: RecipeCare | null;
   links: SharedRecipeLink[];
-  tips: SharedRecipeTip[];
+  /** Empty unless the owner includes their tips. */
+  tips: SharedRecipeEntry[];
+  /** Empty unless the owner includes their notes. */
+  notes: SharedRecipeEntry[];
   /** True when the share holds a copy of the cover the owner uploaded (`apps/pinch/shares/{shareId}/cover-{index}.webp`); a web cover is never shared. */
   hasCover: boolean;
 }
@@ -739,6 +742,9 @@ export interface PinchShare {
   title: string;
   /** The source's change stamp when the copy was taken, to tell whether it has changed since. */
   sourceUpdatedAt: number;
+  /** Whether the copy carries the owner's tips and notes, each chosen on its own. A link made before the choice existed has neither key: read it as false. */
+  includesTips: boolean;
+  includesNotes: boolean;
   createdAt: number;
   /** When the copy was last taken. */
   updatedAt: number;
@@ -778,6 +784,8 @@ export type ChangePinchShareRequest =
       meal: SharedMeal | null;
       covers: ShareCoverRef[];
       sourceUpdatedAt: number;
+      includesTips: boolean;
+      includesNotes: boolean;
     }
   | { action: 'renew' | 'delete'; shareId: string };
 

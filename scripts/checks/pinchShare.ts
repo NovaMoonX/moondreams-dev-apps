@@ -12,6 +12,8 @@ import {
   shareCoverPath,
   toCoverRefs,
   toCoveredCopy,
+  toIncludedCopy,
+  toShareIncludes,
   toShareResult,
   toSharedMeal,
   toSharedRecipe,
@@ -55,6 +57,7 @@ const recipe = (extra: Record<string, unknown> = {}) => ({
   care: null,
   links: [],
   tips: [],
+  notes: [],
   hasCover: false,
   ...extra,
 });
@@ -78,7 +81,8 @@ check(
         ...recipe(),
         ownerUid: 'owner-uid-secret',
         priceCents: 499,
-        notes: ['a private note'],
+        changes: ['a planned change'],
+        history: ['a private cook'],
         nutritionOverride: { calories: 1 },
         coverUrl: 'https://tracker.example/pixel.png',
         coverPath: 'apps/pinch/kitchens/owner-uid-secret/recipes/r/cover.webp',
@@ -119,6 +123,7 @@ check(
       'hasCover',
       'ingredients',
       'links',
+      'notes',
       'prepMinutes',
       'servings',
       'steps',
@@ -852,7 +857,48 @@ check('tips are capped in number and length, and junk is dropped', () => {
 check('a copy taken before tips existed reads as having none', () => {
   const legacy = { ...recipe() } as Record<string, unknown>;
   delete legacy.tips;
+  delete legacy.notes;
   assert.deepEqual(toSharedRecipe(legacy)?.tips, []);
+  assert.deepEqual(toSharedRecipe(legacy)?.notes, []);
+});
+
+check('a note keeps only its words and its step, and is capped on its own limits', () => {
+  const result = recipeOf({
+    steps: ['One.', 'Two.'],
+    notes: [
+      { text: 'Better with less vinegar.', step: 1, id: 'secret', cookId: 'cook-secret', createdAt: 5, reason: 'why' },
+      ...many(L.MAX_SHARED_NOTES + 5, (index) => ({ text: `Note ${index}`, step: null })),
+      { text: '' },
+      null,
+    ],
+  });
+  assert.deepEqual(result.notes[0], { text: 'Better with less vinegar.', step: 1 });
+  assert.equal(result.notes.length, L.MAX_SHARED_NOTES);
+  const long = recipeOf({ notes: [{ text: text(L.MAX_SHARED_NOTE_LENGTH + 1), step: null }] });
+  assert.equal(long.notes[0]?.text.length, L.MAX_SHARED_NOTE_LENGTH);
+});
+
+check('tips and notes are separate lists: one sent as the other stays where it was sent', () => {
+  const result = recipeOf({ tips: [{ text: 'tip', step: null }], notes: [{ text: 'note', step: null }] });
+  assert.deepEqual(result.tips.map((e) => e.text), ['tip']);
+  assert.deepEqual(result.notes.map((e) => e.text), ['note']);
+});
+
+check('only an explicit true includes tips or notes, and the rest are stripped from every recipe', () => {
+  const body = recipeOf({ tips: [{ text: 'tip', step: null }], notes: [{ text: 'note', step: null }] });
+  const copy = { recipe: body, meal: { name: 'Dinner', recipes: [body], items: [] } };
+  [undefined, null, 'true', 1, {}, false].forEach((odd) => {
+    const includes = toShareIncludes(odd, odd);
+    assert.deepEqual(includes, { tips: false, notes: false });
+  });
+  const none = toIncludedCopy(copy, toShareIncludes(false, false));
+  assert.deepEqual([none.recipe?.tips, none.recipe?.notes, none.meal?.recipes[0]?.tips, none.meal?.recipes[0]?.notes], [[], [], [], []]);
+  const tipsOnly = toIncludedCopy(copy, toShareIncludes(true, 'yes'));
+  assert.equal(tipsOnly.recipe?.tips.length, 1);
+  assert.equal(tipsOnly.recipe?.notes.length, 0);
+  const notesOnly = toIncludedCopy(copy, toShareIncludes(undefined, true));
+  assert.equal(notesOnly.meal?.recipes[0]?.tips.length, 0);
+  assert.equal(notesOnly.meal?.recipes[0]?.notes.length, 1);
 });
 
 const idPatternIn = (rules: string, header: string) => {

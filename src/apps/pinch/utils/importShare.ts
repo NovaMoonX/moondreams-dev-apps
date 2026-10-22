@@ -78,6 +78,8 @@ export interface ShareImportPlanResult {
 export interface WrittenTip {
   id: string;
   recipeId: string;
+  /** As the add left it, to tell later whether the person has edited the tip. */
+  updatedAt: number;
 }
 
 interface WrittenDoc {
@@ -104,6 +106,8 @@ export interface UndoSurvey {
   recipes: Map<string, { updatedAt: number; ingredientIds: string[] }>;
   meals: Map<string, { updatedAt: number; items: MealItem[] }>;
   ingredients: Map<string, number>;
+  /** Every note the person has now: an Undo that deleted a recipe would orphan any they wrote on an added one. */
+  notes: Map<string, { updatedAt: number; recipeId: string }>;
   /** Ids that planned days, prices and boxes in the fridge or freezer point at. */
   usedIds: Set<string>;
 }
@@ -501,7 +505,11 @@ export function getWritten(
       updatedAt,
     })),
     tips: plan.recipes.flatMap(({ recipe, tips }) =>
-      tips.map((tip) => ({ id: tip.id, recipeId: recipe.id })),
+      tips.map((tip) => ({
+        id: tip.id,
+        recipeId: recipe.id,
+        updatedAt: tip.updatedAt,
+      })),
     ),
     coverRecipeIds: copiedCovers.map((cover) => cover.recipeId),
     missingCovers: getCoverTargets(plan).length - copiedCovers.length,
@@ -556,7 +564,19 @@ export function planUndo(
       ),
     );
 
+  const writtenTipIds = new Set(written.tips.map((tip) => tip.id));
+  const isTipsChanged =
+    written.tips.some((tip) => {
+      const stored = survey.notes.get(tip.id);
+      return stored !== undefined && stored.updatedAt !== tip.updatedAt;
+    }) ||
+    [...survey.notes].some(
+      ([id, note]) =>
+        !writtenTipIds.has(id) && writtenRecipeIds.has(note.recipeId),
+    );
+
   const isBlocked =
+    isTipsChanged ||
     written.recipes.some(
       (entry) =>
         isChanged(entry, survey.recipes.get(entry.id)) ||

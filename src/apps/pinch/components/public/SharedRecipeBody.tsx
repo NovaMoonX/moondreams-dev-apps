@@ -3,7 +3,11 @@ import SectionDivider from '@/components/SectionDivider';
 import RecipeCareSection from '@apps/pinch/components/recipes/RecipeCareSection';
 import RecipeLinksSection from '@apps/pinch/components/recipes/RecipeLinksSection';
 import { UNIT_LABELS } from '@apps/pinch/constants';
-import type { SharedIngredient, SharedRecipe } from '@apps/pinch/types';
+import type {
+  SharedIngredient,
+  SharedRecipe,
+  SharedRecipeEntry,
+} from '@apps/pinch/types';
 import { groupIngredientLines } from '@apps/pinch/utils/ingredientGroups';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { cleanLinks } from '@apps/pinch/utils/recipeLinks';
@@ -18,6 +22,38 @@ interface SharedRecipeBodyProps {
 }
 
 /** Every string is drawn as text, and a link opens only as https. */
+interface EntryListProps {
+  title: string;
+  emoji: string;
+  entries: SharedRecipeEntry[];
+}
+
+function EntryList({ title, emoji, entries }: EntryListProps) {
+  if (entries.length === 0) return null;
+
+  return (
+    <FormSection title={title}>
+      <ul className='divide-border border-border divide-y overflow-hidden rounded-2xl border'>
+        {entries.map((entry, index) => (
+          <li key={index} className='flex gap-3 px-4 py-3 text-sm'>
+            <span aria-hidden='true' className='w-5 shrink-0 text-center'>
+              {emoji}
+            </span>
+            <span className='min-w-0 flex-1 wrap-break-word whitespace-pre-wrap'>
+              {entry.text}
+              {entry.step !== null && (
+                <span className='text-muted-foreground block text-xs'>
+                  Step {entry.step + 1}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </FormSection>
+  );
+}
+
 function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
   const care = getRecipeCare(recipe);
   const links = cleanLinks(
@@ -93,27 +129,8 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
         <RecipeCareSection care={care} title='Keeping leftovers' isCard />
       )}
 
-      {recipe.tips.length > 0 && (
-        <FormSection title='Tips'>
-          <ul className='divide-border border-border divide-y overflow-hidden rounded-2xl border'>
-            {recipe.tips.map((tip, index) => (
-              <li key={index} className='flex gap-3 px-4 py-3 text-sm'>
-                <span aria-hidden='true' className='w-5 shrink-0 text-center'>
-                  💡
-                </span>
-                <span className='min-w-0 flex-1 wrap-break-word whitespace-pre-wrap'>
-                  {tip.text}
-                  {tip.step !== null && (
-                    <span className='text-muted-foreground block text-xs'>
-                      Step {tip.step + 1}
-                    </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </FormSection>
-      )}
+      <EntryList title='Tips' emoji='💡' entries={recipe.tips} />
+      <EntryList title='Notes' emoji='📝' entries={recipe.notes} />
 
       <RecipeLinksSection links={links} rel={LINK_REL} isPlayerHidden />
     </div>

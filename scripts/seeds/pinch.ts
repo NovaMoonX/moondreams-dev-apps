@@ -1134,8 +1134,16 @@ interface SeedRecipeLike {
   links?: { kind: string; label: string | null; url: string }[];
 }
 
+const toShareEntries = (recipeId: string, kind: 'TIP' | 'NOTE') =>
+  [...SEED_NOTES, ...SEED_STEP_NOTES]
+    .filter((note) => note.kind === kind && note.recipeId === recipeId)
+    .map((note) => ({
+      text: note.text,
+      step: 'stepIndex' in note ? note.stepIndex : null,
+    }));
+
 // What the app builds from a recipe: lines named the way a visitor reads them and nothing of the owner's. The share's own allowlist then rebuilds it.
-const toShareRecipe = (recipe: SeedRecipeLike) => ({
+const toShareRecipe = (recipe: SeedRecipeLike, includes = { tips: false, notes: false }) => ({
   title: recipe.title,
   description: recipe.description,
   servings: recipe.servings,
@@ -1158,9 +1166,8 @@ const toShareRecipe = (recipe: SeedRecipeLike) => ({
     label,
     url,
   })),
-  tips: SEED_STEP_NOTES.filter(
-    (note) => note.kind === 'TIP' && note.recipeId === recipe.id,
-  ).map((note) => ({ text: note.text, step: note.stepIndex })),
+  tips: includes.tips ? toShareEntries(recipe.id, 'TIP') : [],
+  notes: includes.notes ? toShareEntries(recipe.id, 'NOTE') : [],
   hasCover: false,
 });
 
@@ -1178,7 +1185,9 @@ export function buildSeedShares(
   const recipeIds = Array.from(new Set(meal.items.map((entry) => entry.refId)));
   const recipeCopy = toCoveredCopy(
     {
-      recipe: toSharedRecipe(toShareRecipe(findSeedRecipe(recipeSourceId))),
+      recipe: toSharedRecipe(
+        toShareRecipe(findSeedRecipe(recipeSourceId), { tips: true, notes: true }),
+      ),
       meal: null,
     },
     new Set(hasRecipeCover ? [0] : []),
@@ -1197,7 +1206,14 @@ export function buildSeedShares(
   };
   const recipeAt = now - 3 * DAY_MS;
   const mealAt = now - 16 * DAY_MS;
-  const sourceUpdatedAt = now - 14 * DAY_MS;
+  const today = Math.floor(now / DAY_MS) * DAY_MS;
+  const entryTimes = [...SEED_NOTES, ...SEED_STEP_NOTES]
+    .filter((note) => note.kind === 'TIP' || note.kind === 'NOTE')
+    .filter((note) => note.recipeId === recipeSourceId)
+    .map((note) => today - note.daysAgo * DAY_MS + note.hour * 3_600_000);
+  // The app's change stamp for a share that includes tips and notes: the latest change plus the entry count.
+  const sourceUpdatedAt =
+    Math.max(now - 14 * DAY_MS, ...entryTimes) + entryTimes.length;
   return [
     {
       share: {
@@ -1207,6 +1223,8 @@ export function buildSeedShares(
         sourceId: recipeSourceId,
         title: 'Adobo chicken',
         sourceUpdatedAt,
+        includesTips: true,
+        includesNotes: true,
         createdAt: recipeAt,
         updatedAt: recipeAt,
       },
@@ -1225,6 +1243,8 @@ export function buildSeedShares(
         sourceId: meal.id,
         title: meal.name,
         sourceUpdatedAt: mealAt,
+        includesTips: false,
+        includesNotes: false,
         createdAt: mealAt,
         updatedAt: mealAt,
       },

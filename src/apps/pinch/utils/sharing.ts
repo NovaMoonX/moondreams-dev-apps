@@ -2,6 +2,8 @@ import { isValidHttpsUrl } from '@/utils/urlUtils';
 import {
   MAX_SHARED_MEAL_LINES,
   MAX_SHARED_MEAL_RECIPES,
+  MAX_SHARED_NOTES,
+  MAX_SHARED_NOTE_LENGTH,
   MAX_SHARED_TIPS,
   MAX_SHARED_TIP_LENGTH,
   SHARE_LINK_PATH,
@@ -22,12 +24,28 @@ import type {
   SharedMealItem,
   SharedRecipe,
   SharedRecipeLink,
-  SharedRecipeTip,
+  SharedRecipeEntry,
 } from '@apps/pinch/types';
 import { resolveNoteStep } from '@apps/pinch/utils/notes';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
 
 export type NotesByRecipe = Map<string, RecipeNote[]>;
+
+/** Which of the owner's written entries a share carries, each chosen on its own. */
+export interface ShareIncludes {
+  tips: boolean;
+  notes: boolean;
+}
+
+export const NO_SHARE_INCLUDES: ShareIncludes = { tips: false, notes: false };
+
+/** A link made before the choice existed has neither flag: it carries neither. */
+export const getShareIncludes = (
+  share: Pick<PinchShare, 'includesTips' | 'includesNotes'>,
+): ShareIncludes => ({
+  tips: share.includesTips === true,
+  notes: share.includesNotes === true,
+});
 
 export type ShareSource =
   { kind: 'RECIPE'; recipe: Recipe } | { kind: 'MEAL'; meal: Meal };
@@ -37,6 +55,8 @@ export interface SharePayload {
   meal: SharedMeal | null;
   covers: ShareCoverRef[];
   sourceUpdatedAt: number;
+  includesTips: boolean;
+  includesNotes: boolean;
 }
 
 export interface ShareStatus {
@@ -83,19 +103,20 @@ const toSharedLinks = (links: RecipeLink[] | undefined): SharedRecipeLink[] => {
   return result;
 };
 
-const getTips = (notes: RecipeNote[]): RecipeNote[] =>
-  notes.filter(
-    (note) => note.kind === 'TIP' && (note.text ?? '').trim() !== '',
-  );
+const getEntries = (notes: RecipeNote[], kind: 'TIP' | 'NOTE'): RecipeNote[] =>
+  notes.filter((note) => note.kind === kind && (note.text ?? '').trim() !== '');
 
-/** A recipe's tips as a share carries them: the words and the step they sit under (its number, or null for the whole recipe), in step order, oldest first. Only the words and the step number leave: never a date, an id or a cook. */
-const toSharedTips = (
+/** A recipe's tips or notes as a share carries them: the words and the step they sit under (its number, or null for the whole recipe), in step order, oldest first. Only the words and the step number leave: never a date, an id or a cook. */
+const toSharedEntries = (
   recipe: Recipe,
   notes: RecipeNote[],
-): SharedRecipeTip[] =>
-  getTips(notes)
+  kind: 'TIP' | 'NOTE',
+  maxCount: number,
+  maxLength: number,
+): SharedRecipeEntry[] =>
+  getEntries(notes, kind)
     .map((note) => ({
-      text: (note.text ?? '').trim().slice(0, MAX_SHARED_TIP_LENGTH),
+      text: (note.text ?? '').trim().slice(0, maxLength),
       step: resolveNoteStep(note, recipe.steps),
       createdAt: note.createdAt,
     }))
@@ -103,14 +124,23 @@ const toSharedTips = (
       (a, b) =>
         (a.step ?? -1) - (b.step ?? -1) || a.createdAt - b.createdAt,
     )
-    .slice(0, MAX_SHARED_TIPS)
+    .slice(0, maxCount)
     .map(({ text, step }) => ({ text, step }));
+
+const getIncludedEntries = (
+  notes: RecipeNote[],
+  includes: ShareIncludes,
+): RecipeNote[] => [
+  ...(includes.tips ? getEntries(notes, 'TIP') : []),
+  ...(includes.notes ? getEntries(notes, 'NOTE') : []),
+];
 
 /** Copies fields by name, never the recipe itself, so a field added to it later stays out of a share. */
 export function buildSharedRecipe(
   recipe: Recipe,
   ingredientsById: Map<string, ResolvedIngredient>,
   notes: RecipeNote[] = [],
+  includes: ShareIncludes = NO_SHARE_INCLUDES,
 ): SharedRecipe {
   const result: SharedRecipe = {
     title: recipe.title,
@@ -124,7 +154,12 @@ export function buildSharedRecipe(
     steps: [...recipe.steps],
     care: getRecipeCare(recipe),
     links: toSharedLinks(recipe.links),
-    tips: toSharedTips(recipe, notes),
+    tips: includes.tips
+      ? toSharedEntries(recipe, notes, 'TIP', MAX_SHARED_TIPS, MAX_SHARED_TIP_LENGTH)
+      : [],
+    notes: includes.notes
+      ? toSharedEntries(recipe, notes, 'NOTE', MAX_SHARED_NOTES, MAX_SHARED_NOTE_LENGTH)
+      : [],
     hasCover: recipe.coverPath != null,
   };
 
@@ -175,11 +210,17 @@ export function buildSharedMeal(
   recipesById: Map<string, Recipe>,
   ingredientsById: Map<string, ResolvedIngredient>,
   notesByRecipe: NotesByRecipe = new Map(),
+  includes: ShareIncludes = NO_SHARE_INCLUDES,
 ): SharedMeal | { error: string } {
   const recipes = getMealShareRecipes(meal, recipesById);
   const indexById = new Map(recipes.map((recipe, index) => [recipe.id, index]));
   const sharedRecipes = recipes.map((recipe) =>
-    buildSharedRecipe(recipe, ingredientsById, notesByRecipe.get(recipe.id)),
+    buildSharedRecipe(
+      recipe,
+      ingredientsById,
+      notesByRecipe.get(recipe.id),
+      includes,
+    ),
   );
   const items = meal.items.flatMap((item) =>
     toSharedItem(item, indexById, ingredientsById),
@@ -228,26 +269,23 @@ export function getCoverRefs(recipes: Recipe[]): ShareCoverRef[] {
   return result;
 }
 
-/** The latest change to a recipe as a share would carry it: the recipe itself or one of its tips. */
-const getRecipeStamp = (recipe: Recipe, notes: RecipeNote[] | undefined) =>
-  Math.max(recipe.updatedAt, ...getTips(notes ?? []).map((tip) => tip.updatedAt));
-
-/** A meal's stamp includes its recipes', so changing one of them counts as changing the meal. */
+/** The latest change to what a share would carry: the source, its recipes and the entries included. Adding the entry count moves it when an entry is deleted, which no timestamp shows. */
 export function getShareSourceStamp(
   source: ShareSource,
   recipesById: Map<string, Recipe>,
   notesByRecipe: NotesByRecipe = new Map(),
+  includes: ShareIncludes = NO_SHARE_INCLUDES,
 ): number {
-  if (source.kind === 'RECIPE') {
-    return getRecipeStamp(source.recipe, notesByRecipe.get(source.recipe.id));
-  }
-
-  const result = Math.max(
-    source.meal.updatedAt,
-    ...getShareRecipes(source, recipesById).map((recipe) =>
-      getRecipeStamp(recipe, notesByRecipe.get(recipe.id)),
-    ),
+  const recipes = getShareRecipes(source, recipesById);
+  const entries = recipes.flatMap((recipe) =>
+    getIncludedEntries(notesByRecipe.get(recipe.id) ?? [], includes),
   );
+  const result =
+    Math.max(
+      source.kind === 'MEAL' ? source.meal.updatedAt : 0,
+      ...recipes.map((recipe) => recipe.updatedAt),
+      ...entries.map((entry) => entry.updatedAt),
+    ) + entries.length;
 
   return result;
 }
@@ -255,7 +293,7 @@ export function getShareSourceStamp(
 export const isShareStale = (
   share: Pick<PinchShare, 'sourceUpdatedAt'>,
   stamp: number,
-) => stamp > share.sourceUpdatedAt;
+) => stamp !== share.sourceUpdatedAt;
 
 export function getShareSource(
   kind: ShareKind,
@@ -277,11 +315,13 @@ export function buildSharePayload(
   recipesById: Map<string, Recipe>,
   ingredientsById: Map<string, ResolvedIngredient>,
   notesByRecipe: NotesByRecipe = new Map(),
+  includes: ShareIncludes = NO_SHARE_INCLUDES,
 ): SharePayload | { error: string } {
   const sourceUpdatedAt = getShareSourceStamp(
     source,
     recipesById,
     notesByRecipe,
+    includes,
   );
   const covers = getCoverRefs(getShareRecipes(source, recipesById));
 
@@ -291,10 +331,13 @@ export function buildSharePayload(
         source.recipe,
         ingredientsById,
         notesByRecipe.get(source.recipe.id),
+        includes,
       ),
       meal: null,
       covers,
       sourceUpdatedAt,
+      includesTips: includes.tips,
+      includesNotes: includes.notes,
     };
   }
 
@@ -303,10 +346,18 @@ export function buildSharePayload(
     recipesById,
     ingredientsById,
     notesByRecipe,
+    includes,
   );
   if ('error' in meal) return meal;
 
-  return { recipe: null, meal, covers, sourceUpdatedAt };
+  return {
+    recipe: null,
+    meal,
+    covers,
+    sourceUpdatedAt,
+    includesTips: includes.tips,
+    includesNotes: includes.notes,
+  };
 }
 
 export function getShareStatus(
@@ -327,7 +378,12 @@ export function getShareStatus(
     isGone: false,
     isStale: isShareStale(
       share,
-      getShareSourceStamp(source, recipesById, notesByRecipe),
+      getShareSourceStamp(
+        source,
+        recipesById,
+        notesByRecipe,
+        getShareIncludes(share),
+      ),
     ),
   };
 

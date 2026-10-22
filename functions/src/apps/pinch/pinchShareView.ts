@@ -23,6 +23,8 @@ export const SHARE_LIMITS = {
   MAX_SHARED_MEAL_LINES: 300,
   MAX_SHARED_TIPS: 30,
   MAX_SHARED_TIP_LENGTH: 2000,
+  MAX_SHARED_NOTES: 30,
+  MAX_SHARED_NOTE_LENGTH: 2000,
   MAX_PINCH_SHARES: 30,
   SHARE_ID_LENGTH: 26,
 } as const;
@@ -76,7 +78,7 @@ export interface SharedRecipeCare {
   tip: string | null;
 }
 
-export interface SharedRecipeTip {
+export interface SharedRecipeEntry {
   text: string;
   step: number | null;
 }
@@ -91,7 +93,8 @@ export interface SharedRecipe {
   steps: string[];
   care: SharedRecipeCare | null;
   links: SharedRecipeLink[];
-  tips: SharedRecipeTip[];
+  tips: SharedRecipeEntry[];
+  notes: SharedRecipeEntry[];
   hasCover: boolean;
 }
 
@@ -292,18 +295,22 @@ function toLink(raw: unknown): SharedRecipeLink | null {
   return result;
 }
 
-function toTip(raw: unknown, stepCount: number): SharedRecipeTip | null {
+function toEntry(
+  raw: unknown,
+  stepCount: number,
+  maxLength: number,
+): SharedRecipeEntry | null {
   if (!isRecord(raw)) {
     return null;
   }
 
-  const text = toText(raw.text, SHARE_LIMITS.MAX_SHARED_TIP_LENGTH);
+  const text = toText(raw.text, maxLength);
   if (text === null) {
     return null;
   }
 
   const step = toInt(raw.step, 0, stepCount - 1);
-  const result: SharedRecipeTip = { text, step };
+  const result: SharedRecipeEntry = { text, step };
   return result;
 }
 
@@ -373,8 +380,14 @@ export function toSharedRecipe(
     links,
     tips: toList(
       raw.tips,
-      (tip) => toTip(tip, steps.length),
+      (tip) => toEntry(tip, steps.length, SHARE_LIMITS.MAX_SHARED_TIP_LENGTH),
       SHARE_LIMITS.MAX_SHARED_TIPS,
+    ),
+    notes: toList(
+      raw.notes,
+      (note) =>
+        toEntry(note, steps.length, SHARE_LIMITS.MAX_SHARED_NOTE_LENGTH),
+      SHARE_LIMITS.MAX_SHARED_NOTES,
     ),
     hasCover: keepCover && raw.hasCover === true,
   };
@@ -521,6 +534,37 @@ export function toCoveredCopy(
         hasCover: covered.has(index),
       })),
     },
+  };
+  return result;
+}
+
+export interface ShareIncludes {
+  tips: boolean;
+  notes: boolean;
+}
+
+/** Only an explicit `true` includes; a missing or odd value is a no. */
+export const toShareIncludes = (
+  includesTips: unknown,
+  includesNotes: unknown,
+): ShareIncludes => ({
+  tips: includesTips === true,
+  notes: includesNotes === true,
+});
+
+/** Drops the tips or notes the owner did not include, whatever the client sent. */
+export function toIncludedCopy(
+  copy: SharedCopy,
+  includes: ShareIncludes,
+): SharedCopy {
+  const strip = (recipe: SharedRecipe): SharedRecipe => ({
+    ...recipe,
+    tips: includes.tips ? recipe.tips : [],
+    notes: includes.notes ? recipe.notes : [],
+  });
+  const result: SharedCopy = {
+    recipe: copy.recipe && strip(copy.recipe),
+    meal: copy.meal && { ...copy.meal, recipes: copy.meal.recipes.map(strip) },
   };
   return result;
 }

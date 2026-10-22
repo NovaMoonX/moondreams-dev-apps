@@ -98,6 +98,7 @@ const recipeOf = (
   care: null,
   links: [],
   tips: [],
+  notes: [],
   hasCover: false,
   ...overrides,
 });
@@ -508,15 +509,34 @@ const ids = (plan: ShareImportPlan) => ({
     entry.tips.map((tip) => tip.id).sort(),
   );
   const recipeStored = new Map([[entry.recipe.id, { updatedAt: entry.recipe.updatedAt, ingredientIds: [] as string[] }]]);
-  const undo = planUndo(written, {
+  const tipsStored = new Map(
+    written.tips.map((tip) => [tip.id, { updatedAt: tip.updatedAt, recipeId: tip.recipeId }]),
+  );
+  const survey = (notes: Map<string, { updatedAt: number; recipeId: string }>) => ({
     recipes: recipeStored,
     meals: new Map(),
     ingredients: new Map(),
+    notes,
     usedIds: new Set<string>(),
   });
+  const undo = planUndo(written, survey(tipsStored));
   assert.equal(undo.problem, null);
   if (undo.problem !== null) throw new Error('unreachable');
   assert.deepEqual([...undo.tipIds].sort(), entry.tips.map((tip) => tip.id).sort(), 'Undo takes back the tips with their recipe');
+  const [firstTip] = written.tips;
+  assert.ok(
+    planUndo(written, survey(new Map(tipsStored).set(firstTip.id, { updatedAt: firstTip.updatedAt + 1, recipeId: firstTip.recipeId }))).problem !== null,
+    'a tip the person has edited since stops the Undo',
+  );
+  assert.ok(
+    planUndo(written, survey(new Map(tipsStored).set('later-note', { updatedAt: 1, recipeId: entry.recipe.id }))).problem !== null,
+    'a note written on an added recipe stops the Undo, so none is left without its recipe',
+  );
+  assert.equal(
+    planUndo(written, survey(new Map(tipsStored).set('elsewhere', { updatedAt: 1, recipeId: 'another-recipe' }))).problem,
+    null,
+    'a note on another recipe does not',
+  );
 }
 
 {
@@ -874,6 +894,12 @@ const ids = (plan: ShareImportPlan) => ({
     ]),
     ingredients: new Map(
       written.ingredients.map((entry) => [entry.id, entry.updatedAt]),
+    ),
+    notes: new Map(
+      written.tips.map((tip) => [
+        tip.id,
+        { updatedAt: tip.updatedAt, recipeId: tip.recipeId },
+      ]),
     ),
     usedIds: new Set<string>(),
     ...overrides,

@@ -942,8 +942,10 @@ export const MAX_PINCH_SHARES = 30;
 export const MAX_SHARED_MEAL_RECIPES = MAX_MEAL_ITEMS;
 /** The most ingredient lines a shared meal carries across its recipes, so adding it stays one batch of fewer than 500 writes. */
 export const MAX_SHARED_MEAL_LINES = 300;
-/** The most tips one shared recipe carries, and the longest one, matching the Function's own caps. */
+/** The most tips (and, separately, notes) one shared recipe carries, and the longest one, matching the Function's own caps. */
 export const MAX_SHARED_TIPS = 30;
 export const MAX_SHARED_TIP_LENGTH = 2000;
+export const MAX_SHARED_NOTES = 30;
+export const MAX_SHARED_NOTE_LENGTH = 2000;
 /** The most tips one add brings across all its recipes, so the add stays one batch under Firestore's 500 writes. */
 export const MAX_IMPORTED_TIPS = 150;
