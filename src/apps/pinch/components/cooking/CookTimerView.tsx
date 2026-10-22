@@ -281,7 +281,7 @@ function CookTimerView({
             <div
               role='group'
               aria-label={`Controls for the ${timer.label} timer`}
-              className='mt-2 flex min-h-7 flex-wrap items-center justify-center gap-1.5 text-sm'
+              className='mt-2 flex min-h-7 flex-wrap items-center justify-center gap-3 text-sm'
             >
               {isPaused && (
                 <Button

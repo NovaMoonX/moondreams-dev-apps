@@ -148,10 +148,13 @@ function CookTimersView({
 
   return (
     <div className='mx-auto flex w-full max-w-xl flex-1 flex-col gap-6'>
-      <BackLink label='Back to the steps' onBack={onBack} />
+      <div className='order-1'>
+        <BackLink label='Back to the steps' onBack={onBack} />
+      </div>
       <section
         aria-label='New timer'
-        className='bg-muted/50 border-border space-y-4 rounded-2xl border p-4'
+        hidden={isFull}
+        className='bg-muted/50 border-border order-2 space-y-4 rounded-2xl border p-4 [@media(max-height:700px)]:order-3'
       >
         <Field label='Name' isCompact>
           {() => (
@@ -211,7 +214,10 @@ function CookTimersView({
           </Field>
         )}
       </section>
-      <section aria-label='Your timers' className='min-w-0'>
+      <section
+        aria-label='Your timers'
+        className='order-3 min-w-0 [@media(max-height:700px)]:order-2'
+      >
         <SectionHeader title='Your timers' />
         {timers.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
