@@ -51,7 +51,6 @@ jobs:
           VITE_FIREBASE_APPCHECK_SITE_KEY: ${{ secrets.VITE_FIREBASE_APPCHECK_SITE_KEY }}
           VITE_GOOGLE_PLACES_API_KEY: ${{ secrets.VITE_GOOGLE_PLACES_API_KEY }}
           VITE_STORE_LOGO_TOKEN: ${{ secrets.VITE_STORE_LOGO_TOKEN }}
-          VITE_FIREBASE_APPCHECK_SITE_KEY: ${{ secrets.VITE_FIREBASE_APPCHECK_SITE_KEY }}
       # Tagged before the deploy so a failed deploy skips a number instead of reusing it; a re-run keeps its tag.
       - name: Tag the release
         run: |
