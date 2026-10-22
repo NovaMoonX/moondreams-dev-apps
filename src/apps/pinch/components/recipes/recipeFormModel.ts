@@ -38,6 +38,12 @@ import {
   getRecipeLinks,
   type LinksText,
 } from '@apps/pinch/utils/recipeLinks';
+import {
+  getExtraLinks,
+  getIdeaExtras,
+  NO_EXTRAS,
+  type ReadExtras,
+} from '@apps/pinch/utils/readExtras';
 import { getHostSource, getRecipeSource } from '@apps/pinch/utils/sources';
 import type {
   Collection,
@@ -140,10 +146,11 @@ export const getInitialData = (
 const clipNote = (note: string | null) =>
   note === null ? null : clipAtWord(note, MAX_NOTE_LENGTH);
 
-/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick, cased like the app's own names with prep words such as "bone-in" moved to the line's note. A second line for an ingredient already listed under the same heading adds to it when the units agree and stays its own line when they don't, so no amount is lost; under another heading it is always its own line. A line the recipe gives no amount ("salt to taste") keeps none. */
+/** A blank recipe filled with what a reader found; names that match an ingredient are linked, the rest wait for the person to add or pick, cased like the app's own names with prep words such as "bone-in" moved to the line's note. A second line for an ingredient already listed under the same heading adds to it when the units agree and stays its own line when they don't, so no amount is lost; under another heading it is always its own line. A line the recipe gives no amount ("salt to taste") keeps none. The link a source came from (a video as the how-to, a page as the original recipe) starts the links. */
 export const getDataFromExtracted = (
   extracted: ExtractedRecipe,
   ingredients: ResolvedIngredient[],
+  extras: ReadExtras = NO_EXTRAS,
 ): RecipeFormData => {
   const blank = getInitialData(null);
   const rows = extracted.ingredients.reduce<IngredientRow[]>((acc, line) => {
@@ -221,6 +228,7 @@ export const getDataFromExtracted = (
     ingredients: orderIngredientLines(rows).slice(0, MAX_RECIPE_INGREDIENTS),
     steps: extracted.steps,
     care: getCareText(extracted.care),
+    links: getLinksText(getExtraLinks(extras)),
   };
 };
 
@@ -248,6 +256,7 @@ export const getDataFromIdea = (
   ...getInitialData(null),
   title: idea.title,
   description: idea.note ?? '',
+  links: getLinksText(getExtraLinks(getIdeaExtras(idea))),
   sourceChoice:
     idea.kind === 'LINK' && idea.url
       ? getSiteSourceChoice(getWebLinkHost(idea.url) ?? '', sources)

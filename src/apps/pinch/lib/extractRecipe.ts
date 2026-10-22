@@ -16,6 +16,7 @@ import {
   normalizeExtractedRecipe,
   type ExtractedRecipe,
 } from '@apps/pinch/utils/normalizeRecipe';
+import { withPageFallbacks } from '@apps/pinch/utils/readExtras';
 
 export type { ExtractedRecipe };
 
@@ -193,7 +194,7 @@ export async function extractRecipeFromVideo(
   ]);
 }
 
-/** Reads a recipe from a web page's text and any Recipe data it publishes: the model writes the draft, so a page with partial or no data still reads. Not cached: every reading is a fresh call. */
+/** Reads a recipe from a web page's text and any Recipe data it publishes: the model writes the draft, so a page with partial or no data still reads, and a title or description it left empty is filled from the page's own. Not cached: every reading is a fresh call. */
 export async function extractRecipeFromPage(
   page: PageContent,
 ): Promise<ExtractedRecipe> {
@@ -204,9 +205,11 @@ export async function extractRecipeFromPage(
     .filter(Boolean)
     .join('\n');
 
-  return generate([
+  const extracted = await generate([
     {
       text: `${PROMPT}\n\nThis came from a web page, so ignore ads, comments and related links.\n\n--- BEGIN RECIPE ---\n${heading}\n\n${data}Page text:\n${page.text ?? ''}\n--- END RECIPE ---`,
     },
   ]);
+
+  return withPageFallbacks(extracted, page);
 }
