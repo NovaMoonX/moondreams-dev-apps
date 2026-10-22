@@ -9,6 +9,7 @@ import FormSection from '@/components/FormSection';
 import ImageChoiceGrid from '@/components/ImageChoiceGrid';
 import { DEBOUNCE_MS, useDebouncedCallback } from '@/hooks/useDebounce';
 import { generateUuid } from '@/utils';
+import { canLoadImage } from '@/utils/imageUtils';
 import {
   PHOTO_PROBE_TIMEOUT_MS,
   PHOTO_RESULT_COUNT,
@@ -23,22 +24,6 @@ const POT = '🍲';
 const SHORT_TILE_CLASS =
   '[@media(max-height:500px)]:aspect-auto [@media(max-height:500px)]:h-14';
 
-// A hotlinked photo is often gone or refuses to be shown elsewhere, so the person hears it at the tap, not after saving.
-
-const probeImage = (url: string, timeoutMs: number) =>
-  new Promise<boolean>((resolve) => {
-    const image = new Image();
-    const timer = window.setTimeout(() => resolve(false), timeoutMs);
-    const settle = (isLoaded: boolean) => {
-      window.clearTimeout(timer);
-      resolve(isLoaded);
-    };
-    image.referrerPolicy = 'no-referrer';
-    image.onload = () => settle(true);
-    image.onerror = () => settle(false);
-    image.src = url;
-  });
-
 const SKELETON_TILES = Array.from(
   { length: PHOTO_RESULT_COUNT },
   (_, index) => index,
@@ -47,6 +32,8 @@ const SKELETON_TILES = Array.from(
 interface RecipePhotoSuggestionsProps {
   uid: string;
   title: string;
+  /** The picture the recipe's source offered; it leads the grid so choosing another doesn't lose it. */
+  sourcePhoto: WebPhoto | null;
   selectedUrl: string | null;
   onPick: (photo: WebPhoto) => void;
 }
@@ -54,6 +41,7 @@ interface RecipePhotoSuggestionsProps {
 function RecipePhotoSuggestions({
   uid,
   title,
+  sourcePhoto,
   selectedUrl,
   onPick,
 }: RecipePhotoSuggestionsProps) {
@@ -102,7 +90,7 @@ function RecipePhotoSuggestions({
     latestPick.current = photo.imageUrl;
     setHasFailedPick(false);
     setCheckingUrl(photo.imageUrl);
-    const isReachable = await probeImage(
+    const isReachable = await canLoadImage(
       photo.imageUrl,
       PHOTO_PROBE_TIMEOUT_MS,
     );
@@ -133,8 +121,15 @@ function RecipePhotoSuggestions({
     });
   };
 
+  const photos = [
+    ...(sourcePhoto ? [sourcePhoto] : []),
+    ...(isError ? [] : (data ?? [])).filter(
+      (photo) => photo.imageUrl !== sourcePhoto?.imageUrl,
+    ),
+  ].slice(0, PHOTO_RESULT_COUNT);
+
   const getBody = () => {
-    if (isWaiting) {
+    if (isWaiting && sourcePhoto === null) {
       return (
         <>
           <div className='grid grid-cols-3 gap-2' aria-hidden='true'>
@@ -154,19 +149,12 @@ function RecipePhotoSuggestions({
         </>
       );
     }
-    if (isError) {
+    if (photos.length === 0) {
       return (
         <p className='text-muted-foreground text-sm'>
-          We couldn’t look up photos just now. You can still choose your own
-          above.
-        </p>
-      );
-    }
-    if (!data || data.length === 0) {
-      return (
-        <p className='text-muted-foreground text-sm'>
-          Nothing turned up for this title. You can still choose your own photo
-          above.
+          {isError
+            ? 'We couldn’t look up photos just now. You can still choose your own above.'
+            : 'Nothing turned up for this title. You can still choose your own photo above.'}
         </p>
       );
     }
@@ -174,7 +162,7 @@ function RecipePhotoSuggestions({
       <>
         <ImageChoiceGrid
           label='Photos from the web'
-          choices={data.map((photo) => ({
+          choices={photos.map((photo) => ({
             key: photo.imageUrl,
             src: photo.thumbUrl,
             label: `${photo.title || 'Photo'} from ${photo.host}`,
@@ -185,10 +173,20 @@ function RecipePhotoSuggestions({
           fallback={POT}
           tileClassName={SHORT_TILE_CLASS}
           onPick={(key) => {
-            const photo = data.find((entry) => entry.imageUrl === key);
+            const photo = photos.find((entry) => entry.imageUrl === key);
             if (photo) void handlePick(photo);
           }}
         />
+        {isWaiting && (
+          <p className='text-muted-foreground text-xs' role='status'>
+            Searching…
+          </p>
+        )}
+        {isError && (
+          <p className='text-muted-foreground text-sm'>
+            We couldn’t look up more photos just now.
+          </p>
+        )}
         {hasFailedPick && (
           <p className='text-destructive text-sm' role='alert'>
             That photo can’t be reached right now. Try another one.

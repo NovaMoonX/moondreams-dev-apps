@@ -513,6 +513,8 @@ export const PHOTO_RESULT_COUNT = 6;
 /** The callable gives up at 10 seconds; the app waits a little longer than that for its answer. */
 export const PHOTO_LOOKUP_TIMEOUT_MS = 14_000;
 export const PHOTO_PROBE_TIMEOUT_MS = 8000;
+/** A source's picture narrower than this isn't used as a cover: it is a stand-in (YouTube answers a missing large thumbnail with a 120 px one) or too small to fill a recipe's header. */
+export const MIN_COVER_WIDTH = 200;
 
 /** The most links one recipe holds, the how-to video included: the rules check the count, the client shapes each link. */
 export const MAX_RECIPE_LINKS = 8;
