@@ -208,7 +208,9 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         ...current,
         [id]: {
           ...live,
-          storeId: match.storeId ?? live.storeId,
+          storeId:
+            match.storeId ??
+            (match.suggestedName === null ? live.storeId : null),
           price:
             found.priceCents === null
               ? live.price
@@ -342,32 +344,6 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
             </div>
           </div>
         )}
-        {gap.kind === 'NO_PRODUCT' &&
-          (row.isLinkShown ? (
-            <ProductLinkField
-              caption='Product page'
-              value={row.link}
-              onChange={(link) => {
-                resetReading();
-                update(getGapKey(gap), gap, { link, suggestedStore: null });
-              }}
-              onFill={(pageLink) => void fillFromPage(pageLink)}
-              isFilling={reading.isFilling}
-              note={reading.note}
-              error={reading.error}
-            />
-          ) : (
-            <div>
-              <RevealChip
-                icon={<Plus className='h-4 w-4' aria-hidden='true' />}
-                onClick={() =>
-                  update(getGapKey(gap), gap, { isLinkShown: true })
-                }
-              >
-                From a product page
-              </RevealChip>
-            </div>
-          ))}
         {gap.kind === 'NO_PRODUCT' && (
           <StorePicker
             key={`${gap.ingredientId}-${row.fillCount}`}
@@ -439,6 +415,34 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
             </div>
           </div>
         )}
+        {gap.kind === 'NO_PRODUCT' &&
+          (row.isLinkShown ? (
+            <ProductLinkField
+              caption='From a product page'
+              isEditing
+              shouldFocus
+              value={row.link}
+              onChange={(link) => {
+                resetReading();
+                update(getGapKey(gap), gap, { link, suggestedStore: null });
+              }}
+              onFill={(pageLink) => void fillFromPage(pageLink)}
+              isFilling={reading.isFilling}
+              note={reading.note}
+              error={reading.error}
+            />
+          ) : (
+            <div>
+              <RevealChip
+                icon={<Plus className='h-4 w-4' aria-hidden='true' />}
+                onClick={() =>
+                  update(getGapKey(gap), gap, { isLinkShown: true })
+                }
+              >
+                From a product page
+              </RevealChip>
+            </div>
+          ))}
         {!isNutrition && !isBlank(row) && draft === null && (
           <p className='text-muted-foreground text-sm'>
             {gap.kind === 'NO_PRODUCT'

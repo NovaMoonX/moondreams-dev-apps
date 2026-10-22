@@ -11,6 +11,7 @@ interface ProductLinkFieldProps {
   savedLink?: string | null;
   isEditing?: boolean;
   canClear?: boolean;
+  shouldFocus?: boolean;
   value: string;
   onChange: (value: string) => void;
   onFill: (link: string) => void;
@@ -25,6 +26,7 @@ function ProductLinkField({
   savedLink = null,
   isEditing = false,
   canClear = true,
+  shouldFocus = false,
   value,
   onChange,
   onFill,
@@ -51,6 +53,7 @@ function ProductLinkField({
           variant='outline'
           type='url'
           aria-label='Product page link'
+          autoFocus={shouldFocus}
           placeholder='https://'
           value={value}
           onChange={(event) => onChange(event.target.value)}
