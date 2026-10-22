@@ -211,8 +211,10 @@ html[data-site-banner='true'] .subview-page {
   );
 }
 
+/* `min-width: 0`: a `clip` card is not a scroll container, so its automatic flex minimum is its content's min-content width and one wide child would stretch it past the screen. */
 .subview-backdrop > .subview-card {
   flex: 1 1 auto;
+  min-width: 0;
   align-self: flex-start;
   min-height: calc(100% - var(--subview-top) - var(--subview-inset));
   margin: var(--subview-top) var(--subview-inset) var(--subview-inset);
