@@ -36,6 +36,8 @@ import {
   saveIngredient,
 } from '@apps/pinch/store/actions/ingredientActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
+import { CATALOG_INGREDIENTS_BY_ID } from '@apps/pinch/catalog';
+import { getCatalogOverrides } from '@apps/pinch/utils/ingredientAdjustments';
 import {
   cleanAliases,
   getRecordAliases,
@@ -652,20 +654,31 @@ function IngredientFormSheet({
       ? cleanAliases(data.extras.aliases.value, data.name)
       : [];
 
+    const servingAmount = isServingOn
+      ? parseAmount(data.extras.serving.value.amount)
+      : null;
+    const catalog = isCatalog
+      ? (CATALOG_INGREDIENTS_BY_ID.get(ingredient.id) ?? null)
+      : null;
+    const overrides = catalog
+      ? getCatalogOverrides(
+          catalog,
+          nutrition,
+          servingAmount === null
+            ? null
+            : { amount: servingAmount, unit: data.extras.serving.value.unit },
+        )
+      : null;
+
     const isUnchangedCatalog =
-      isCatalog &&
-      !ingredient.isAdjusted &&
+      catalog !== null &&
+      overrides !== null &&
+      !ingredient?.isAdjusted &&
       aliases.length === 0 &&
-      (nutrition === null ||
-        (['calories', 'protein', 'carbs', 'fat'] as const).every(
-          (metric) => nutrition[metric] === ingredient.per100g[metric],
-        )) &&
-      (!isServingOn ||
-        (parseAmount(data.extras.serving.value.amount) ===
-          ingredient.serving.amount &&
-          data.extras.serving.value.unit === ingredient.serving.unit));
+      overrides.nutrition === null &&
+      overrides.serving === null;
     if (isUnchangedCatalog) {
-      onSaved(ingredient.id);
+      onSaved(catalog.id);
       return;
     }
 
@@ -683,11 +696,15 @@ function IngredientFormSheet({
                 : data.family.choice,
             newFamilyName:
               data.family.choice === NEW_CHOICE ? data.family.newText : null,
-            nutrition,
-            servingAmount: isServingOn
-              ? parseAmount(data.extras.serving.value.amount)
-              : null,
-            servingUnit: isServingOn ? data.extras.serving.value.unit : null,
+            nutrition: overrides ? overrides.nutrition : nutrition,
+            servingAmount: overrides
+              ? (overrides.serving?.amount ?? null)
+              : servingAmount,
+            servingUnit: overrides
+              ? (overrides.serving?.unit ?? null)
+              : isServingOn
+                ? data.extras.serving.value.unit
+                : null,
             aliases,
           },
         }),

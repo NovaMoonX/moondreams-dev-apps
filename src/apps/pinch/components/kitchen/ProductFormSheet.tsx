@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -242,6 +242,10 @@ function ProductFormSheet({
   const sizeAmount =
     formData.sizeAmount.trim() === '' ? null : Number(formData.sizeAmount);
   const link = formData.link;
+  const latestFormData = useRef(formData);
+  useEffect(() => {
+    latestFormData.current = formData;
+  }, [formData]);
   const use = getIngredientUses(
     recipes,
     plannedMeals,
@@ -302,6 +306,7 @@ function ProductFormSheet({
           return;
         }
 
+        const formData = latestFormData.current;
         const next: FormData = {
           ...formData,
           storeId: match.storeId ?? formData.storeId,
@@ -343,7 +348,7 @@ function ProductFormSheet({
         });
       }
     },
-    [formData, queryClient, visibleStores],
+    [queryClient, visibleStores],
   );
 
   const fields = useMemo(() => {
@@ -358,6 +363,7 @@ function ProductFormSheet({
         const field = (
           <ProductLinkField
             caption={product === null ? 'Start from a product page' : undefined}
+            savedLink={product?.url ?? null}
             value={link.value}
             onChange={(value) =>
               setFormData((current) => ({

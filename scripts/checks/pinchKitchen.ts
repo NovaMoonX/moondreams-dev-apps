@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { CATALOG_STORES } from '../../src/apps/pinch/catalog/catalogStores.ts';
 import type { IngredientRecord, Store } from '../../src/apps/pinch/types.ts';
 import { searchIngredients } from '../../src/apps/pinch/utils/catalogSearch.ts';
-import { getIngredientAdjustments } from '../../src/apps/pinch/utils/ingredientAdjustments.ts';
+import {
+  getCatalogOverrides,
+  getIngredientAdjustments,
+} from '../../src/apps/pinch/utils/ingredientAdjustments.ts';
 import { matchIngredient } from '../../src/apps/pinch/utils/ingredientMatch.ts';
 import {
   cleanAliases,
@@ -121,6 +124,36 @@ assert.equal(
   ).some((adjustment) => adjustment.key === 'aliases'),
   true,
   'the Adjusted list says which names are theirs',
+);
+
+// a saved built-in ingredient keeps only what differs from its built-in values
+const chicken = CATALOG_INGREDIENTS_BY_ID.get('cat-chicken-breast');
+assert.ok(chicken);
+assert.deepEqual(
+  getCatalogOverrides(chicken, chicken.per100g, chicken.serving),
+  { nutrition: null, serving: null },
+  'an alias-only save copies no built-in numbers or serving',
+);
+assert.deepEqual(
+  getCatalogOverrides(
+    chicken,
+    { ...chicken.per100g, protein: chicken.per100g.protein + 1 },
+    chicken.serving,
+  ),
+  {
+    nutrition: {
+      calories: null,
+      protein: chicken.per100g.protein + 1,
+      carbs: null,
+      fat: null,
+    },
+    serving: null,
+  },
+  'only the changed number is kept',
+);
+assert.deepEqual(
+  getCatalogOverrides(chicken, null, { amount: 7, unit: 'OZ' }).serving,
+  { amount: 7, unit: 'OZ' },
 );
 
 // products: a reading is cleaned to what the form accepts

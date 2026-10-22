@@ -8,6 +8,7 @@ import { productPageQueryOptions } from '@apps/pinch/queries/productPageQueries'
 
 interface ProductLinkFieldProps {
   caption?: string;
+  savedLink?: string | null;
   value: string;
   onChange: (value: string) => void;
   onFill: (link: string) => void;
@@ -19,6 +20,7 @@ interface ProductLinkFieldProps {
 /** A product page's address, its preview once the page is read, and a button that fills the price and size from it. */
 function ProductLinkField({
   caption,
+  savedLink = null,
   value,
   onChange,
   onFill,
@@ -28,6 +30,7 @@ function ProductLinkField({
 }: ProductLinkFieldProps) {
   const preview = useLinkPreview(value, {
     getQueryOptions: productPageQueryOptions,
+    isEnabled: value.trim() !== (savedLink ?? ''),
   });
   const link = toWebLink(value);
   const isTyped = value.trim() !== '';
