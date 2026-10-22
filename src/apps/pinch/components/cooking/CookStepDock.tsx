@@ -68,9 +68,10 @@ function IconButton({
       aria-label={label}
       title={label}
       className={join(
-        'text-foreground! relative size-8 min-w-8 shrink-0 rounded-full px-0! py-0! text-base before:absolute before:-inset-1 before:content-[""]',
+        'text-foreground! relative size-8 min-w-8 shrink-0 rounded-full px-0! py-0! text-base before:absolute before:content-[""]',
+        isOn || isDashed ? 'before:-inset-[5px]' : 'before:-inset-1',
         isOn && 'bg-accent! border-primary! border',
-        isDashed && 'border-border border border-dashed',
+        isDashed && 'border-muted-foreground/60 border border-dashed',
       )}
       onClick={onClick}
     >
@@ -150,29 +151,23 @@ function CookStepDock({
     }
 
     return (
-      <div className={join('flex items-start gap-2', className)}>
+      <div
+        className={join(
+          'flex items-start gap-2',
+          rows.length === 0 && 'justify-end',
+          className,
+        )}
+      >
         {rows.length > 0 ? (
           <CookStepTray
             rows={rows}
             isAmountNoteShown={isAmountNoteShown}
             className='min-w-0 flex-1'
           />
-        ) : (
-          <Button
-            type='button'
-            variant='tertiary'
-            className='border-border text-foreground! h-10 min-w-0 flex-1 justify-start gap-2 rounded-2xl border border-dashed px-4 text-sm font-normal'
-            onClick={onAdd}
-          >
-            <Plus className='h-4 w-4' aria-hidden='true' />
-            Add a tip, note or change
-          </Button>
-        )}
-        {rows.length > 0 && (
-          <IconButton label={ADD_LABEL} isDashed onClick={onAdd}>
-            <Plus className='h-4 w-4' aria-hidden='true' />
-          </IconButton>
-        )}
+        ) : null}
+        <IconButton label={ADD_LABEL} isDashed onClick={onAdd}>
+          <Plus className='h-4 w-4' aria-hidden='true' />
+        </IconButton>
       </div>
     );
   }
@@ -225,10 +220,13 @@ function CookStepDock({
               </Button>
             )}
           </div>
-          <ClampedText
-            text={leadWithAdvice(body)}
-            maxLines={isShort ? 2 : 4}
-          />
+          {isShort ? (
+            <p className='line-clamp-2 text-sm wrap-break-word [@media(max-height:600px)]:line-clamp-1'>
+              {leadWithAdvice(body)}
+            </p>
+          ) : (
+            <ClampedText text={leadWithAdvice(body)} maxLines={4} />
+          )}
           {isChangedSince && (
             <p className='text-muted-foreground text-xs'>
               You've changed the recipe since.
@@ -265,7 +263,7 @@ function CookStepDock({
     return (
       <ul
         aria-label={`Your ${shown === 'TIP' ? 'tips' : shown === 'NOTE' ? 'notes' : 'changes'} for this step`}
-        className='flex h-full snap-x snap-mandatory items-stretch gap-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+        className='flex h-full snap-x snap-mandatory items-start gap-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
       >
         {shownEntries.map((entry) => {
           const isChange = entry.kind === 'CHANGE';
@@ -382,7 +380,9 @@ function CookStepDock({
           )}
         </div>
       </div>
-      <div className='h-28 [@media(max-height:700px)]:h-20'>{getBody()}</div>
+      <div className='h-28 [@media(max-height:700px)]:h-20 [@media(max-height:600px)]:h-16!'>
+        {getBody()}
+      </div>
     </section>
   );
 }
