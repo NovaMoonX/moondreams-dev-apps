@@ -252,7 +252,10 @@ function ProductFormSheet({
   }, [formData]);
   useEffect(() => {
     if (fillCount > 0) {
-      priceRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      priceRef.current?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      });
     }
   }, [fillCount]);
   const use = getIngredientUses(
@@ -390,12 +393,13 @@ function ProductFormSheet({
             isEditing={product !== null}
             canClear={product === null}
             value={link.value}
-            onChange={(value) =>
+            onChange={(value) => {
+              setReading(IDLE_READING);
               setFormData((current) => ({
                 ...current,
                 link: { enabled: true, value },
-              }))
-            }
+              }));
+            }}
             onFill={(pageLink) => void fillFromPage(pageLink)}
             isFilling={reading.isFilling}
             note={reading.note}

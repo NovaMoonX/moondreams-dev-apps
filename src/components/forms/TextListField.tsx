@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { X } from 'lucide-react';
@@ -28,6 +28,12 @@ function TextListField({
   shouldFocus = false,
 }: TextListFieldProps) {
   const [text, setText] = useState('');
+  const boxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (shouldFocus) {
+      boxRef.current?.scrollIntoView({ block: 'end' });
+    }
+  }, [shouldFocus, values.length]);
   const typed = text.trim().replace(/\s+/g, ' ');
   const isRepeat = values.some(
     (value) => value.toLowerCase() === typed.toLowerCase(),
@@ -66,7 +72,7 @@ function TextListField({
           That's the most you can add ({maxItems}). Remove one to add another.
         </p>
       ) : (
-        <div className='flex items-center gap-2'>
+        <div ref={boxRef} className='flex scroll-mb-24 items-center gap-2'>
           <Input
             variant='outline'
             aria-label={ariaLabel}
