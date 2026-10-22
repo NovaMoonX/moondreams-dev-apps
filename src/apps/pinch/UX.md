@@ -704,7 +704,7 @@ block-beta
   S1["‹ New recipe"]
   S2["📝 From text · Paste a recipe, say from a chat"]
   S3["📎 From a file · A photo, screenshot or PDF"]
-  S4["🔗 From a link · A recipe page on the web"]
+  S4["🔗 From a link · A recipe page or a YouTube video"]
   S5["✍️ Write it yourself · Start with a blank recipe"]
   S6["💡 Keep it as an idea · Save a link, a photo or a few words for later  (dashed, quiet)"]
   style S1 fill:transparent,stroke:#888888,stroke-width:1px;

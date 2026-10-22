@@ -993,6 +993,22 @@ assert.deepEqual(
   [false, false, false],
   'a line about the connection never names the link, the text or the file',
 );
+const videoLines = (
+  ['unreachable', 'busy', 'unavailable', 'link', 'unread', 'empty'] as const
+).map((cause) => getReadFailureLine(cause, 'AI_LINK', true));
+assert.deepEqual(
+  videoLines.filter((line) => /video/i.test(line)),
+  [
+    "We couldn't read a recipe from that video. It has to be a public YouTube video.",
+    "We couldn't find a recipe in that video.",
+  ],
+  'a YouTube reading names the video only when the video is the trouble, and never blames the connection or the reader on it',
+);
+assert.deepEqual(
+  everyLine.filter(({ line }) => /video/i.test(line)),
+  [],
+  'a page, text or file reading never says video',
+);
 assert.deepEqual(
   everyLine.filter(({ line }) =>
     /paste (its|the) text|write it yourself/i.test(line),

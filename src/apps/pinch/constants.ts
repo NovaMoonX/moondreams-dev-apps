@@ -391,7 +391,7 @@ export const RECIPE_START_METHODS: {
     id: 'link',
     emoji: '🔗',
     title: 'From a link',
-    description: 'A recipe page on the web',
+    description: 'A recipe page or a YouTube video',
   },
   {
     id: 'manual',

@@ -28,11 +28,13 @@ import {
   extractRecipeFromFile,
   extractRecipeFromPage,
   extractRecipeFromText,
+  extractRecipeFromVideo,
   type ExtractedRecipe,
 } from '@apps/pinch/lib/extractRecipe';
 import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
 import { selectIdeaGroups } from '@apps/pinch/store/selectors';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
+import { getYouTubeId } from '@apps/pinch/utils/recipeLinks';
 import {
   canPasteTextInstead,
   classifyReadFailure,
@@ -64,7 +66,7 @@ const FIELD_CLASS =
 const READER_COPY: Record<ReaderMethod, { caption: string; lead: string }> = {
   link: {
     caption: 'Recipe link',
-    lead: 'An AI reads the page and fills in the form.',
+    lead: 'An AI reads the page, or watches the video if it is a YouTube link, and fills in the form.',
   },
   text: {
     caption: 'Recipe text',
@@ -175,10 +177,10 @@ function RecipeReader({
     }
   }, [method]);
 
-  const fail = (cause: ReadFailure, source: RecipeSource) =>
+  const fail = (cause: ReadFailure, source: RecipeSource, isVideo: boolean) =>
     setState(
       failed(
-        getReadFailureLine(cause, source),
+        getReadFailureLine(cause, source, isVideo),
         method === 'link' && canPasteText && canPasteTextInstead(cause),
       ),
     );
@@ -187,6 +189,7 @@ function RecipeReader({
     label: string,
     source: RecipeSource,
     read: () => Promise<ExtractedRecipe>,
+    isVideo = false,
   ) => {
     setState({ status: 'reading', label });
     try {
@@ -195,7 +198,7 @@ function RecipeReader({
         return;
       }
       if (extracted.ingredients.length === 0) {
-        fail('empty', source);
+        fail('empty', source, isVideo);
         return;
       }
 
@@ -209,7 +212,7 @@ function RecipeReader({
       if (!isMounted()) {
         return;
       }
-      fail(classifyReadFailure(error, navigator.onLine), source);
+      fail(classifyReadFailure(error, navigator.onLine), source, isVideo);
     } finally {
       setFileKey((current) => current + 1);
     }
@@ -242,6 +245,17 @@ function RecipeReader({
     if (url === null) {
       setState(
         failed("That doesn't look like a web link. Check it and try again."),
+      );
+      return;
+    }
+
+    const videoId = getYouTubeId(url);
+    if (videoId !== null) {
+      void run(
+        'youtube.com',
+        'AI_LINK',
+        () => extractRecipeFromVideo(videoId),
+        true,
       );
       return;
     }
@@ -368,6 +382,9 @@ function RecipeReader({
     }
     if (!canPasteText) {
       return 'The address saved with your idea.';
+    }
+    if (getYouTubeId(link) !== null) {
+      return 'An AI watches and listens to the video, so this can take a minute. It has to be a public video.';
     }
     return 'Copy the address from your browser. We open the page to find its title and picture.';
   };
