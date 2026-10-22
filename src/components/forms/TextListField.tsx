@@ -13,6 +13,7 @@ interface TextListFieldProps {
   placeholder?: string;
   maxItems: number;
   maxLength: number;
+  shouldFocus?: boolean;
 }
 
 /** A short list of typed texts, added on Enter or "Add" and kept as chips with an ✕; Enter never submits the form around it. */
@@ -24,6 +25,7 @@ function TextListField({
   placeholder,
   maxItems,
   maxLength,
+  shouldFocus = false,
 }: TextListFieldProps) {
   const [text, setText] = useState('');
   const typed = text.trim().replace(/\s+/g, ' ');
@@ -72,6 +74,7 @@ function TextListField({
             maxLength={maxLength}
             value={text}
             onChange={(event) => setText(event.target.value)}
+            autoFocus={shouldFocus}
             onBlur={add}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {

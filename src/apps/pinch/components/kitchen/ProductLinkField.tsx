@@ -3,12 +3,13 @@ import { Link2 } from 'lucide-react';
 
 import LinkPreviewCard from '@/components/LinkPreviewCard';
 import { useLinkPreview } from '@/hooks/useLinkPreview';
-import { isValidHttpsUrl, toWebLink } from '@/utils/urlUtils';
+import { toWebLink } from '@/utils/urlUtils';
 import { productPageQueryOptions } from '@apps/pinch/queries/productPageQueries';
 
 interface ProductLinkFieldProps {
   caption?: string;
   savedLink?: string | null;
+  isEditing?: boolean;
   value: string;
   onChange: (value: string) => void;
   onFill: (link: string) => void;
@@ -21,6 +22,7 @@ interface ProductLinkFieldProps {
 function ProductLinkField({
   caption,
   savedLink = null,
+  isEditing = false,
   value,
   onChange,
   onFill,
@@ -34,7 +36,8 @@ function ProductLinkField({
   });
   const link = toWebLink(value);
   const isTyped = value.trim() !== '';
-  const needsHttps = isTyped && !isValidHttpsUrl(value.trim());
+  const isUnreadable = isTyped && link === null;
+  const hasRead = note !== null;
 
   return (
     <div className='space-y-2'>
@@ -49,6 +52,11 @@ function ProductLinkField({
           placeholder='https://'
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={() => {
+            if (link !== null && link !== value.trim()) {
+              onChange(link);
+            }
+          }}
         />
         {isTyped && (
           <Button
@@ -61,7 +69,7 @@ function ProductLinkField({
           </Button>
         )}
       </div>
-      {preview && <LinkPreviewCard preview={preview} />}
+      {preview && !hasRead && <LinkPreviewCard preview={preview} />}
       {link !== null && (
         <Button
           type='button'
@@ -75,14 +83,15 @@ function ProductLinkField({
           Fill in from this page
         </Button>
       )}
-      {needsHttps ? (
+      {isUnreadable && (
         <p className='text-destructive text-xs'>
-          Start the link with https:// to keep it.
+          Paste the whole address of the page.
         </p>
-      ) : (
+      )}
+      {!isUnreadable && !hasRead && (
         <p className='text-muted-foreground text-xs'>
           Paste a product page and an AI reads it to fill in the price and size.
-          Nothing is saved until you add it.
+          Nothing is saved until you {isEditing ? 'save' : 'add'} it.
         </p>
       )}
       {note && <p className='text-muted-foreground text-xs'>{note}</p>}

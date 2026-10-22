@@ -215,11 +215,17 @@ const getInitialData = (
 
 interface ExtrasFieldsProps {
   extras: Extras;
+  shouldFocusAliases: boolean;
   conversions: Conversions;
   onChange: (extras: Extras) => void;
 }
 
-function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
+function ExtrasFields({
+  extras,
+  shouldFocusAliases,
+  conversions,
+  onChange,
+}: ExtrasFieldsProps) {
   const chips = [
     {
       key: 'aliases',
@@ -318,6 +324,7 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
             placeholder='Ranch dressing mix'
             maxItems={MAX_INGREDIENT_ALIASES}
             maxLength={MAX_NAME_LENGTH}
+            shouldFocus={shouldFocusAliases}
           />
           <p className='text-muted-foreground text-xs'>
             Search and recipe readings find this ingredient by these names too.
@@ -580,13 +587,14 @@ function IngredientFormSheet({
         renderComponent: (props) => (
           <ExtrasFields
             extras={props.value as Extras}
+            shouldFocusAliases={!initialData.extras.aliases.enabled}
             conversions={conversions}
             onChange={props.onValueChange}
           />
         ),
       }),
     ],
-    [isCatalog, familyOptions, conversions],
+    [isCatalog, familyOptions, conversions, initialData],
   );
 
   const handleDelete = async () => {

@@ -96,6 +96,7 @@ const IDLE_READING: ReadState = { isFilling: false, note: null, error: null };
 
 const getFilledNote = (
   hasStore: boolean,
+  suggestedStore: string | null,
   hasPrice: boolean,
   hasSize: boolean,
   hasLabel: boolean,
@@ -114,8 +115,10 @@ const getFilledNote = (
       ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
       : parts[0];
   const result = [
-    `Filled in ${sentence(filled)}. Check them before you add.`,
+    `Filled in ${sentence(filled)}. Check them over.`,
     missing.length > 0 && `We couldn't find ${sentence(missing)}.`,
+    suggestedStore !== null &&
+      `${suggestedStore} isn't one of your stores yet: pick it below.`,
   ]
     .filter((part) => typeof part === 'string')
     .join(' ');
@@ -242,10 +245,16 @@ function ProductFormSheet({
   const sizeAmount =
     formData.sizeAmount.trim() === '' ? null : Number(formData.sizeAmount);
   const link = formData.link;
+  const priceRef = useRef<HTMLDivElement>(null);
   const latestFormData = useRef(formData);
   useEffect(() => {
     latestFormData.current = formData;
   }, [formData]);
+  useEffect(() => {
+    if (fillCount > 0) {
+      priceRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [fillCount]);
   const use = getIngredientUses(
     recipes,
     plannedMeals,
@@ -285,6 +294,19 @@ function ProductFormSheet({
     (!link.enabled ||
       link.value.trim() === '' ||
       isValidHttpsUrl(link.value.trim()));
+
+  const getBlocker = () => {
+    if (formData.storeId === null || !storesById.has(formData.storeId)) {
+      return 'Choose where you buy it.';
+    }
+    if (priceCents === null || priceCents > MAX_PRICE_CENTS) {
+      return 'Add the price.';
+    }
+    if (sizeAmount === null || !(sizeAmount > 0)) {
+      return 'Add the package size.';
+    }
+    return 'Start the link with https:// to keep it.';
+  };
 
   const fillFromPage = useCallback(
     async (pageLink: string) => {
@@ -331,6 +353,7 @@ function ProductFormSheet({
           isFilling: false,
           note: getFilledNote(
             match.storeId !== null,
+            match.storeId === null ? match.suggestedName : null,
             hasPrice,
             hasSize,
             found.label !== null,
@@ -364,6 +387,7 @@ function ProductFormSheet({
           <ProductLinkField
             caption={product === null ? 'Start from a product page' : undefined}
             savedLink={product?.url ?? null}
+            isEditing={product !== null}
             value={link.value}
             onChange={(value) =>
               setFormData((current) => ({
@@ -414,7 +438,10 @@ function ProductFormSheet({
         name: 'price',
         label: '',
         renderComponent: () => (
-          <div className='grid items-start gap-3 min-[400px]:grid-cols-2'>
+          <div
+            ref={priceRef}
+            className='grid items-start gap-3 min-[400px]:grid-cols-2'
+          >
             <Field label='Price' isCompact>
               {() => (
                 <MoneyInput
@@ -608,6 +635,7 @@ function ProductFormSheet({
         }}
         submitButton={
           <ModalFooterActions
+            note={isFormComplete ? null : getBlocker()}
             leftActions={
               product && (
                 <DeleteIconButton
