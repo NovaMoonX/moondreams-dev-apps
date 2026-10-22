@@ -29,6 +29,7 @@ import { useProductPageReading } from '@apps/pinch/components/kitchen/useProduct
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
+  MAX_LINK_URL_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PRICE_CENTS,
   MAX_SERVING_AMOUNT,
@@ -247,7 +248,8 @@ function ProductFormSheet({
     sizeAmount <= MAX_SERVING_AMOUNT &&
     (!link.enabled ||
       link.value.trim() === '' ||
-      isValidHttpsUrl(link.value.trim()));
+      (isValidHttpsUrl(link.value.trim()) &&
+        link.value.trim().length <= MAX_LINK_URL_LENGTH));
 
   const getBlocker = () => {
     if (formData.storeId === null || !storesById.has(formData.storeId)) {

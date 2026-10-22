@@ -16,6 +16,7 @@ import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
 import { useProductPageReading } from '@apps/pinch/components/kitchen/useProductPageReading';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
+  MAX_LINK_URL_LENGTH,
   MAX_PRICE_CENTS,
   MAX_SERVING_AMOUNT,
   NUTRITION_CELLS,
@@ -46,7 +47,6 @@ interface RowState {
   price: string;
   sizeAmount: string;
   sizeUnit: Unit;
-  label: string | null;
   link: string;
   isLinkShown: boolean;
   suggestedStore: string | null;
@@ -86,7 +86,11 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const [index, setIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { reading, read, reset: resetReading } = useProductPageReading();
+  const {
+    reading,
+    read,
+    reset: resetReading,
+  } = useProductPageReading({ hasLabel: false });
 
   const getRow = (gap: Gap): RowState =>
     values[getGapKey(gap)] ?? {
@@ -100,7 +104,6 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         uses.get(gap.ingredientId),
         ingredientsById.get(gap.ingredientId),
       ),
-      label: null,
       link: '',
       isLinkShown: false,
       suggestedStore: null,
@@ -149,11 +152,15 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
       id: null,
       ingredientId: gap.ingredientId,
       storeId: row.storeId,
-      label: row.label,
+      label: null,
       priceCents,
       sizeAmount,
       sizeUnit: row.sizeUnit,
-      url: isValidHttpsUrl(row.link.trim()) ? row.link.trim() : null,
+      url:
+        isValidHttpsUrl(row.link.trim()) &&
+        row.link.trim().length <= MAX_LINK_URL_LENGTH
+          ? row.link.trim()
+          : null,
       makeDefault: true,
     };
   };
@@ -194,21 +201,28 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
     }
 
     const { found, match } = result;
-    update(getGapKey(gap), gap, {
-      storeId: match.storeId ?? row.storeId,
-      price:
-        found.priceCents === null
-          ? row.price
-          : centsToInputValue(found.priceCents),
-      sizeAmount:
-        found.sizeAmount === null || found.sizeUnit === null
-          ? row.sizeAmount
-          : String(found.sizeAmount),
-      sizeUnit: found.sizeUnit ?? row.sizeUnit,
-      label: found.label ?? row.label,
-      link: pageLink,
-      suggestedStore: match.storeId === null ? match.suggestedName : null,
-      fillCount: row.fillCount + 1,
+    const id = getGapKey(gap);
+    setValues((current) => {
+      const live = { ...getRow(gap), ...current[id] };
+      return {
+        ...current,
+        [id]: {
+          ...live,
+          storeId: match.storeId ?? live.storeId,
+          price:
+            found.priceCents === null
+              ? live.price
+              : centsToInputValue(found.priceCents),
+          sizeAmount:
+            found.sizeAmount === null || found.sizeUnit === null
+              ? live.sizeAmount
+              : String(found.sizeAmount),
+          sizeUnit: found.sizeUnit ?? live.sizeUnit,
+          link: pageLink,
+          suggestedStore: match.storeId === null ? match.suggestedName : null,
+          fillCount: live.fillCount + 1,
+        },
+      };
     });
     if (match.storeId !== null) {
       setLastStoreId(match.storeId);
@@ -335,7 +349,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
               value={row.link}
               onChange={(link) => {
                 resetReading();
-                update(getGapKey(gap), gap, { link });
+                update(getGapKey(gap), gap, { link, suggestedStore: null });
               }}
               onFill={(pageLink) => void fillFromPage(pageLink)}
               isFilling={reading.isFilling}

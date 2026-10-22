@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -38,13 +38,17 @@ const sentence = (parts: string[]) =>
     ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
     : parts[0];
 
-const getFilledNote = ({ found, match }: ProductReading, hasSize: boolean) => {
+const getFilledNote = (
+  { found, match }: ProductReading,
+  hasSize: boolean,
+  hasLabel: boolean,
+) => {
   const hasPrice = found.priceCents !== null;
   const filled = [
     match.storeId !== null && 'the store',
     hasPrice && 'the price',
     hasSize && 'the size',
-    found.label !== null && 'the label',
+    hasLabel && found.label !== null && 'the label',
   ].filter((part) => typeof part === 'string');
   const missing = [!hasPrice && 'the price', !hasSize && 'the size'].filter(
     (part) => typeof part === 'string',
@@ -61,25 +65,39 @@ const getFilledNote = ({ found, match }: ProductReading, hasSize: boolean) => {
   return result;
 };
 
-/** Reads a product page into a price, size, brand and store for a form to take; the caller applies it. */
-export function useProductPageReading() {
+/** Reads a product page into a price, size, brand and store for a form to take; the caller applies it. A reading that lands after `reset` or a newer one is dropped (it returns null). */
+export function useProductPageReading({ hasLabel = true } = {}) {
   const queryClient = useQueryClient();
   const stores = useAppSelector(selectStores);
   const [reading, setReading] = useState<ReadState>(IDLE_READING);
 
-  const reset = useCallback(() => setReading(IDLE_READING), []);
+  const latestRequest = useRef(0);
+
+  const reset = useCallback(() => {
+    latestRequest.current += 1;
+    setReading(IDLE_READING);
+  }, []);
 
   const read = useCallback(
     async (pageLink: string): Promise<ProductReading | null> => {
+      latestRequest.current += 1;
+      const request = latestRequest.current;
       setReading({ isFilling: true, note: null, error: null });
       try {
         const page = await queryClient.fetchQuery(
           productPageQueryOptions(pageLink),
         );
         const found = await extractProductFromPage(page);
+        if (request !== latestRequest.current) {
+          return null;
+        }
         const result = { found, match: findStoreForLink(pageLink, stores) };
         const hasSize = found.sizeAmount !== null && found.sizeUnit !== null;
-        if (found.priceCents === null && !hasSize && found.label === null) {
+        if (
+          found.priceCents === null &&
+          !hasSize &&
+          !(hasLabel && found.label !== null)
+        ) {
           setReading({
             isFilling: false,
             note: null,
@@ -90,12 +108,15 @@ export function useProductPageReading() {
 
         setReading({
           isFilling: false,
-          note: getFilledNote(result, hasSize),
+          note: getFilledNote(result, hasSize, hasLabel),
           error: null,
         });
         return result;
       } catch (readError) {
         console.error('Reading a product page failed', readError);
+        if (request !== latestRequest.current) {
+          return null;
+        }
         setReading({
           isFilling: false,
           note: null,
@@ -106,7 +127,7 @@ export function useProductPageReading() {
         return null;
       }
     },
-    [queryClient, stores],
+    [queryClient, stores, hasLabel],
   );
 
   return { reading, read, reset };

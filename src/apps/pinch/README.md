@@ -91,7 +91,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **Add your own.** The corner market, a farm stand, an online shop: give it a name and, if you like, a photo or logo. Without an image it gets a tile with its first letter.
 - **Pick a store when you add a price.** The picker shows your stores first, then the well-known ones, with a search once the list grows. Adding a price from Stores & prices first asks which ingredient it is for and offers up to three that still need one.
 - **Start a price from a product page.** In a new price, paste a product link and "Fill in from this page" has an AI read the page and fill in the store (when it is one of yours), the price, the package size and the brand, for you to check; nothing is saved until you add it. If the page can't be read (some stores don't let apps open their pages), the form is still there and you type the price.
-- **The same from the "Add prices" sheet.** When a recipe or the Calendar says an ingredient needs a price, each row of "Prices and sizes" has a "From a product page" chip that fills that row from a link, then "Save and next" moves on.
+- **The same from the "Add prices" sheet.** When a recipe or the Calendar says an ingredient needs a price, each row of "Prices and sizes" has a "From a product page" chip that fills that row's store, price and size from a link, then "Save and next" moves on.
 - **Stores are for you.** Stores & prices lists every price under its store, and a store's heading opens its name and logo. They aren't part of anything you share.
 
 ### Cost and Nutrition, In Detail
