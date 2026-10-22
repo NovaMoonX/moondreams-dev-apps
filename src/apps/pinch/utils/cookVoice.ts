@@ -81,6 +81,53 @@ export type CookEntryKind = 'TIP' | 'NOTE' | 'CHANGE';
 /** What a step's bubbles can show while it is read aloud: the note from last time or one kind of entry. */
 export type CookSpokenView = 'LAST' | CookEntryKind;
 
+export interface CookReadingSegment {
+  view: CookSpokenView;
+  text: string;
+}
+
+/** What is left of the reading that follows a step: its segments, how many were started and the view the reading itself put on screen. */
+export interface CookReadingQueue {
+  key: string;
+  next: number;
+  opened: CookSpokenView | null;
+  segments: CookReadingSegment[];
+}
+
+export type CookReadingStep =
+  | { kind: 'STOP' }
+  | {
+      kind: 'SAY';
+      queue: CookReadingQueue;
+      segment: CookReadingSegment;
+      isFirst: boolean;
+    }
+  | { kind: 'FINISH'; close: CookSpokenView | null };
+
+/** The next move of the reading after a step. It stops when the step changed, the setting went off or the person opened, changed or closed a view of their own, and takes down only the view it opened. */
+export const stepCookReading = (
+  queue: CookReadingQueue,
+  context: {
+    stepKey: string | null;
+    isOn: boolean;
+    openView: CookSpokenView | null;
+  },
+): CookReadingStep => {
+  if (!context.isOn || context.stepKey !== queue.key) return { kind: 'STOP' };
+  if (queue.opened !== null && context.openView !== queue.opened) {
+    return { kind: 'STOP' };
+  }
+  const segment = queue.segments[queue.next];
+  if (segment === undefined) return { kind: 'FINISH', close: queue.opened };
+
+  return {
+    kind: 'SAY',
+    queue: { ...queue, next: queue.next + 1, opened: segment.view },
+    segment,
+    isFirst: queue.next === 0,
+  };
+};
+
 export type CookCommand =
   | { kind: 'NEXT' }
   | { kind: 'BACK' }

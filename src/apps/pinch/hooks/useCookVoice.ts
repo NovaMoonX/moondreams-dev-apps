@@ -11,8 +11,11 @@ import { hasDialogOnTop } from '@/utils/dialogUtils';
 import { COOK_WINDOW_MS } from '@apps/pinch/constants';
 import {
   getCookCommandKey,
+  stepCookReading,
   type CookCommand,
   type CookEntryKind,
+  type CookReadingQueue,
+  type CookReadingSegment,
   type CookSpokenView,
   type CookTimerAnswer,
   type CookTimerScope,
@@ -44,7 +47,7 @@ const MESSAGE_MS = {
 /** How long the line says why voice control stopped; the unlit mic says the rest. */
 const STOP_LINE_MS = 8000;
 const NOTES_PAUSE_MS = 1000;
-const NO_SEGMENTS: { view: CookSpokenView; text: string }[] = [];
+const NO_SEGMENTS: CookReadingSegment[] = [];
 const NOTES_LEAD = 'Your tips and notes for this step.';
 const MAX_QUOTE_CHARS = 22;
 
@@ -188,10 +191,12 @@ interface UseCookVoiceOptions {
     key: string;
     spoken: string;
     /** What was written for the step, read after it kind by kind: the note from last time, then tips, notes and planned changes. */
-    notesSegments: { view: CookSpokenView; text: string }[];
+    notesSegments: CookReadingSegment[];
   } | null;
   /** Puts the view being read on screen (and null takes it down again when the reading is over). */
   onShowView?: (view: CookSpokenView | null) => void;
+  /** The view open above the step's bubbles now, so the reading never closes or reopens one the person changed. */
+  openView?: CookSpokenView | null;
   /** Runs inside the tap that turns voice control on, for browser features that need a tap (the timer's sound). */
   onTurnOn?: () => void;
   /** How many timers run now, and when the latest one rang: the wait for the wake phrase does not count the time a timer runs or the two minutes after one rings. */
@@ -206,6 +211,7 @@ export function useCookVoice({
   uid,
   step,
   onShowView,
+  openView = null,
   onTurnOn,
   runningTimers,
   lastRingAt,
@@ -270,9 +276,11 @@ export function useCookVoice({
   const messageCount = useRef(0);
   const readStepKey = useRef<string | null>(null);
   const stepSpokenKey = useRef<string | null>(null);
-  const notesQueue = useRef<{ key: string; next: number } | null>(null);
-  const segmentsRef = useRef<{ view: CookSpokenView; text: string }[]>([]);
+  const notesQueue = useRef<CookReadingQueue | null>(null);
+  const segmentsRef = useRef<CookReadingSegment[]>(NO_SEGMENTS);
   const onShowViewRef = useRef(onShowView);
+  const openViewRef = useRef(openView);
+  const isReadingRef = useRef({ isAloud: false, isNotes: false });
   const waitRef = useRef<{ enteredAt: number; spans: WakeBusySpan[] } | null>(
     null,
   );
@@ -346,13 +354,17 @@ export function useCookVoice({
     if (!result.ok) {
       show(result.reason, 'PROBLEM');
       if (isReadingAloud || result.isSpoken) {
+        notesQueue.current = null;
         controls.current.say(result.spoken ?? result.reason);
       }
       return true;
     }
     if (result.show) show(result.show, 'ANSWER');
     else show(`Heard “${transcript}”`, 'HEARD');
-    if (result.speak) controls.current.say(result.speak);
+    if (result.speak) {
+      notesQueue.current = null;
+      controls.current.say(result.speak);
+    }
     return true;
   };
 
@@ -508,6 +520,8 @@ export function useCookVoice({
   useEffect(() => {
     segmentsRef.current = segments;
     onShowViewRef.current = onShowView;
+    openViewRef.current = openView;
+    isReadingRef.current = { isAloud: isReadingAloud, isNotes: isReadingNotes };
   });
   const spoken = stepWords;
 
@@ -518,7 +532,7 @@ export function useCookVoice({
       readStepKey.current = stepKey;
       notesQueue.current =
         isReadingNotes && segments.length > 0 && stepKey !== null
-          ? { key: stepKey, next: 0 }
+          ? { key: stepKey, next: 0, opened: null, segments: segmentsRef.current }
           : null;
       say(spoken);
       if (speech.status === 'speaking') stepSpokenKey.current = stepKey;
@@ -553,16 +567,26 @@ export function useCookVoice({
     }
     const timeoutId = window.setTimeout(() => {
       const current = notesQueue.current;
-      if (current === null || current.key !== stepKey) return;
-      const segment = segmentsRef.current[current.next];
-      if (segment === undefined) {
-        notesQueue.current = null;
-        onShowViewRef.current?.(null);
+      if (current === null) return;
+      const next = stepCookReading(current, {
+        stepKey,
+        isOn: isReadingRef.current.isAloud && isReadingRef.current.isNotes,
+        openView: openViewRef.current,
+      });
+      if (next.kind === 'SAY') {
+        notesQueue.current = next.queue;
+        onShowViewRef.current?.(next.segment.view);
+        say(
+          next.isFirst
+            ? `${NOTES_LEAD} ${next.segment.text}`
+            : next.segment.text,
+        );
         return;
       }
-      notesQueue.current = { key: stepKey, next: current.next + 1 };
-      onShowViewRef.current?.(segment.view);
-      say(current.next === 0 ? `${NOTES_LEAD} ${segment.text}` : segment.text);
+      notesQueue.current = null;
+      if (next.kind === 'FINISH' && next.close !== null) {
+        onShowViewRef.current?.(null);
+      }
     }, NOTES_PAUSE_MS);
     return () => window.clearTimeout(timeoutId);
   }, [speech.status, stepKey, say]);

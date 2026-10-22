@@ -12,11 +12,13 @@ import {
   pickTimersToTell,
   readCookCommand,
   resolveVoiceTimers,
+  stepCookReading,
   readSpokenDuration,
   toSingular,
   toSpokenAmount,
   toSpokenLabel,
   type CookCommand,
+  type CookReadingQueue,
   type CookTimerTarget,
   type CookVoiceChoice,
   type CookVoiceContext,
@@ -1373,6 +1375,60 @@ assert.deepEqual(
   parse('read the tips', { ...plate, choice: { kind: 'LENGTH' } }),
   { kind: 'READ_TIPS' },
   'a timer question does not stop tips being read',
+);
+
+const queue: CookReadingQueue = {
+  key: 'adobo:0',
+  next: 0,
+  opened: null,
+  segments: [
+    { view: 'TIP', text: 'Tip: pat it dry.' },
+    { view: 'CHANGE', text: 'A change you planned: more garlic.' },
+  ],
+};
+const on = { stepKey: 'adobo:0', isOn: true, openView: null } as const;
+const first = stepCookReading(queue, on);
+assert.deepEqual(
+  first.kind === 'SAY' && [first.segment.view, first.isFirst, first.queue.opened, first.queue.next],
+  ['TIP', true, 'TIP', 1],
+  'the reading after a step starts with the first view and says it opened it',
+);
+const second =
+  first.kind === 'SAY' ? stepCookReading(first.queue, { ...on, openView: 'TIP' }) : first;
+assert.deepEqual(
+  second.kind === 'SAY' && [second.segment.view, second.isFirst],
+  ['CHANGE', false],
+  'then the next view, without the lead-in',
+);
+const last =
+  second.kind === 'SAY' ? stepCookReading(second.queue, { ...on, openView: 'CHANGE' }) : second;
+assert.deepEqual(
+  last,
+  { kind: 'FINISH', close: 'CHANGE' },
+  'the end takes down the view the reading opened',
+);
+assert.deepEqual(
+  second.kind === 'SAY' && stepCookReading(second.queue, { ...on, openView: 'AMOUNTS' as never }),
+  { kind: 'STOP' },
+  'a view the person opened in the meantime stops the reading and is left alone',
+);
+assert.deepEqual(
+  first.kind === 'SAY' && stepCookReading(first.queue, { ...on, openView: null }),
+  { kind: 'STOP' },
+  'closing the view stops the reading, so the next one never reopens',
+);
+assert.deepEqual(
+  [
+    stepCookReading(queue, { ...on, isOn: false }),
+    stepCookReading(queue, { ...on, stepKey: 'adobo:1' }),
+  ],
+  [{ kind: 'STOP' }, { kind: 'STOP' }],
+  'turning the setting off or moving to another step stops it',
+);
+assert.deepEqual(
+  stepCookReading({ ...queue, segments: [] }, on),
+  { kind: 'FINISH', close: null },
+  'a step with nothing written ends without taking anything down',
 );
 
 console.log('pinchVoice: all checks passed');

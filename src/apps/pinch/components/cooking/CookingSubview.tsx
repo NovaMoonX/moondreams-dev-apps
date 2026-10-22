@@ -787,28 +787,22 @@ function CookingSession({
       ...(groups.byStep.get(at) ?? []),
     ].filter((entry) => entry.id !== lastTimeId);
   };
-  /** What is read after a step when the person asked for it, one view at a time so each is on screen while it is read: the note the cook leads with on the first step, every tip, and what was written for that very step. The whole recipe's older notes wait for "read the notes". */
-  const getSpokenSegments = (at: number) => {
-    const all = notesByRecipe.get(recipe.id) ?? NO_RECIPE_NOTES;
-    const lastTime = getLastTimeNote(all, recipe.steps);
-    const spokenEntries = getEntriesAt(recipe, at, true).filter(
-      (entry) =>
-        entry.kind === 'TIP' ||
-        resolveNoteStep(entry, recipe.steps) === at ||
-        entry.id === lastTime?.id,
-    );
-    const lastEntries = spokenEntries.filter((entry) => entry.id === lastTime?.id);
-    const rest = spokenEntries.filter((entry) => entry.id !== lastTime?.id);
+  const stepEntries = getEntriesAt(recipe, index, false);
+  /** What is read after a step when the person asked for it, one view at a time and only the views the step's bubbles draw, each with the entries its panel lists, so what is heard is what is on screen. */
+  const getSpokenSegments = () => {
+    const lastEntry =
+      isWide || index !== 0
+        ? null
+        : getLastTimeNote(notesByRecipe.get(recipe.id) ?? NO_RECIPE_NOTES, recipe.steps);
     return [
-      { view: 'LAST' as const, text: getSpokenEntries(lastEntries, 'NOTES', formatDateShort) },
-      { view: 'TIP' as const, text: getSpokenEntries(rest, 'TIPS', formatDateShort) },
-      { view: 'NOTE' as const, text: getSpokenEntries(rest, 'NOTES', formatDateShort) },
-      { view: 'CHANGE' as const, text: getSpokenEntries(rest, 'CHANGES', formatDateShort) },
+      { view: 'LAST' as const, text: getSpokenEntries(lastEntry === null ? [] : [lastEntry], 'NOTES', formatDateShort) },
+      { view: 'TIP' as const, text: getSpokenEntries(stepEntries, 'TIPS', formatDateShort) },
+      { view: 'NOTE' as const, text: getSpokenEntries(stepEntries, 'NOTES', formatDateShort) },
+      { view: 'CHANGE' as const, text: getSpokenEntries(stepEntries, 'CHANGES', formatDateShort) },
     ].flatMap((segment) =>
       segment.text === null ? [] : [{ view: segment.view, text: segment.text }],
     );
   };
-  const stepEntries = getEntriesAt(recipe, index, false);
   const isOnStep = focused === null && isStepsView && hasSteps && !isFinishShown;
   const dockKey = `${recipe.id}:${index}`;
   const shownView = dockOpen?.key === dockKey ? dockOpen.view : null;
@@ -817,6 +811,7 @@ function CookingSession({
   const voice = useCookVoice({
     uid,
     onShowView: (view) => showDockView(view),
+    openView: shownView === 'AMOUNTS' ? null : shownView,
     step:
       isStepsView &&
       hasSteps &&
@@ -827,7 +822,7 @@ function CookingSession({
         ? {
             key: `${recipe.id}:${index}`,
             spoken: spokenStep,
-            notesSegments: getSpokenSegments(index),
+            notesSegments: getSpokenSegments(),
           }
         : null,
     onTurnOn: timers.prepareSound,
