@@ -11,7 +11,6 @@ import {
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Link2, Tag } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
 import AddFieldChips, {
@@ -26,6 +25,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
 import ProductLinkField from '@apps/pinch/components/kitchen/ProductLinkField';
+import { useProductPageReading } from '@apps/pinch/components/kitchen/useProductPageReading';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
@@ -33,8 +33,6 @@ import {
   MAX_PRICE_CENTS,
   MAX_SERVING_AMOUNT,
 } from '@apps/pinch/constants';
-import { extractProductFromPage } from '@apps/pinch/lib/extractProduct';
-import { productPageQueryOptions } from '@apps/pinch/queries/productPageQueries';
 import {
   removeProduct,
   saveProduct,
@@ -46,16 +44,10 @@ import {
   selectProductsByIngredient,
   selectRecipes,
   selectRecipesById,
-  selectStores,
   selectStoresById,
 } from '@apps/pinch/store/selectors';
 import type { Product, ResolvedIngredient, Unit } from '@apps/pinch/types';
 import { getIngredientUses } from '@apps/pinch/utils/gapOrder';
-import { findStoreForLink } from '@apps/pinch/utils/normalizeProduct';
-import {
-  classifyReadFailure,
-  getProductReadFailureLine,
-} from '@apps/pinch/utils/readFailures';
 
 const { custom } = FormFactories;
 
@@ -85,45 +77,6 @@ interface FormData {
   link: Reveal<string>;
   extras: Extras;
 }
-
-interface ReadState {
-  isFilling: boolean;
-  note: string | null;
-  error: string | null;
-}
-
-const IDLE_READING: ReadState = { isFilling: false, note: null, error: null };
-
-const getFilledNote = (
-  hasStore: boolean,
-  suggestedStore: string | null,
-  hasPrice: boolean,
-  hasSize: boolean,
-  hasLabel: boolean,
-) => {
-  const filled = [
-    hasStore && 'the store',
-    hasPrice && 'the price',
-    hasSize && 'the size',
-    hasLabel && 'the label',
-  ].filter((part) => typeof part === 'string');
-  const missing = [!hasPrice && 'the price', !hasSize && 'the size'].filter(
-    (part) => typeof part === 'string',
-  );
-  const sentence = (parts: string[]) =>
-    parts.length > 1
-      ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
-      : parts[0];
-  const result = [
-    `Filled in ${sentence(filled)}. Check them over.`,
-    missing.length > 0 && `We couldn't find ${sentence(missing)}.`,
-    suggestedStore !== null &&
-      `${suggestedStore} isn't one of your stores yet: pick it below.`,
-  ]
-    .filter((part) => typeof part === 'string')
-    .join(' ');
-  return result;
-};
 
 const getInitialData = (product: Product | null): FormData => ({
   storeId: product?.storeId ?? null,
@@ -225,9 +178,7 @@ function ProductFormSheet({
       product !== null &&
       selectDefaultProducts(state).get(ingredient.id)?.id === product.id,
   );
-  const queryClient = useQueryClient();
   const storesById = useAppSelector(selectStoresById);
-  const visibleStores = useAppSelector(selectStores);
   const recipes = useAppSelector(selectRecipes);
   const recipesById = useAppSelector(selectRecipesById);
   const plannedMeals = useAppSelector(selectPlannedMeals);
@@ -237,7 +188,7 @@ function ProductFormSheet({
   const [fillCount, setFillCount] = useState(0);
   const [formData, setFormData] = useState<FormData>(initialData);
   const [suggestedStore, setSuggestedStore] = useState<string | null>(null);
-  const [reading, setReading] = useState<ReadState>(IDLE_READING);
+  const { reading, read, reset: resetReading } = useProductPageReading();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -313,68 +264,37 @@ function ProductFormSheet({
 
   const fillFromPage = useCallback(
     async (pageLink: string) => {
-      setReading({ isFilling: true, note: null, error: null });
-      try {
-        const page = await queryClient.fetchQuery(
-          productPageQueryOptions(pageLink),
-        );
-        const found = await extractProductFromPage(page);
-        const match = findStoreForLink(pageLink, visibleStores);
-        const hasPrice = found.priceCents !== null;
-        const hasSize = found.sizeAmount !== null && found.sizeUnit !== null;
-        if (!hasPrice && !hasSize && found.label === null) {
-          setReading({
-            isFilling: false,
-            note: null,
-            error: getProductReadFailureLine('empty'),
-          });
-          return;
-        }
-
-        const formData = latestFormData.current;
-        const next: FormData = {
-          ...formData,
-          storeId: match.storeId ?? formData.storeId,
-          price: hasPrice
-            ? centsToInputValue(found.priceCents)
-            : formData.price,
-          sizeAmount: hasSize ? String(found.sizeAmount) : formData.sizeAmount,
-          sizeUnit: found.sizeUnit ?? formData.sizeUnit,
-          link: { enabled: true, value: pageLink },
-          extras: {
-            label:
-              found.label === null
-                ? formData.extras.label
-                : { enabled: true, value: found.label },
-          },
-        };
-        setInitialData(next);
-        setFormData(next);
-        setFillCount((count) => count + 1);
-        setSuggestedStore(match.storeId === null ? match.suggestedName : null);
-        setReading({
-          isFilling: false,
-          note: getFilledNote(
-            match.storeId !== null,
-            match.storeId === null ? match.suggestedName : null,
-            hasPrice,
-            hasSize,
-            found.label !== null,
-          ),
-          error: null,
-        });
-      } catch (readError) {
-        console.error('Reading a product page failed', readError);
-        setReading({
-          isFilling: false,
-          note: null,
-          error: getProductReadFailureLine(
-            classifyReadFailure(readError, navigator.onLine),
-          ),
-        });
+      const result = await read(pageLink);
+      if (result === null) {
+        return;
       }
+
+      const { found, match } = result;
+      const formData = latestFormData.current;
+      const hasSize = found.sizeAmount !== null && found.sizeUnit !== null;
+      const next: FormData = {
+        ...formData,
+        storeId: match.storeId ?? formData.storeId,
+        price:
+          found.priceCents === null
+            ? formData.price
+            : centsToInputValue(found.priceCents),
+        sizeAmount: hasSize ? String(found.sizeAmount) : formData.sizeAmount,
+        sizeUnit: found.sizeUnit ?? formData.sizeUnit,
+        link: { enabled: true, value: pageLink },
+        extras: {
+          label:
+            found.label === null
+              ? formData.extras.label
+              : { enabled: true, value: found.label },
+        },
+      };
+      setInitialData(next);
+      setFormData(next);
+      setFillCount((count) => count + 1);
+      setSuggestedStore(match.storeId === null ? match.suggestedName : null);
     },
-    [queryClient, visibleStores],
+    [read],
   );
 
   const fields = useMemo(() => {
@@ -394,7 +314,7 @@ function ProductFormSheet({
             canClear={product === null}
             value={link.value}
             onChange={(value) => {
-              setReading(IDLE_READING);
+              resetReading();
               setFormData((current) => ({
                 ...current,
                 link: { enabled: true, value },
@@ -555,6 +475,7 @@ function ProductFormSheet({
     reading,
     suggestedStore,
     fillFromPage,
+    resetReading,
   ]);
 
   const handleDelete = async () => {

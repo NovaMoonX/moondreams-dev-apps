@@ -1,14 +1,19 @@
 import { useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { Plus } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import MoneyInput from '@/components/MoneyInput';
+import RevealChip from '@/components/RevealChip';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { parseMoneyToCents } from '@/utils/moneyUtils';
+import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
+import { isValidHttpsUrl } from '@/utils/urlUtils';
+import ProductLinkField from '@apps/pinch/components/kitchen/ProductLinkField';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
+import { useProductPageReading } from '@apps/pinch/components/kitchen/useProductPageReading';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   MAX_PRICE_CENTS,
@@ -41,6 +46,12 @@ interface RowState {
   price: string;
   sizeAmount: string;
   sizeUnit: Unit;
+  label: string | null;
+  link: string;
+  isLinkShown: boolean;
+  suggestedStore: string | null;
+  /** Bumped by a reading so the store picker is seeded again. */
+  fillCount: number;
 }
 
 interface FillInSheetProps {
@@ -75,6 +86,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const [index, setIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { reading, read, reset: resetReading } = useProductPageReading();
 
   const getRow = (gap: Gap): RowState =>
     values[getGapKey(gap)] ?? {
@@ -88,6 +100,11 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         uses.get(gap.ingredientId),
         ingredientsById.get(gap.ingredientId),
       ),
+      label: null,
+      link: '',
+      isLinkShown: false,
+      suggestedStore: null,
+      fillCount: 0,
     };
   const update = (id: string, gap: Gap, patch: Partial<RowState>) =>
     setValues((current) => ({
@@ -132,11 +149,11 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
       id: null,
       ingredientId: gap.ingredientId,
       storeId: row.storeId,
-      label: null,
+      label: row.label,
       priceCents,
       sizeAmount,
       sizeUnit: row.sizeUnit,
-      url: null,
+      url: isValidHttpsUrl(row.link.trim()) ? row.link.trim() : null,
       makeDefault: true,
     };
   };
@@ -170,7 +187,36 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const canSave = isNutrition ? isNutritionValid : draft !== null;
   const isLast = index + 1 >= rows.length;
 
+  const fillFromPage = async (pageLink: string) => {
+    const result = await read(pageLink);
+    if (result === null) {
+      return;
+    }
+
+    const { found, match } = result;
+    update(getGapKey(gap), gap, {
+      storeId: match.storeId ?? row.storeId,
+      price:
+        found.priceCents === null
+          ? row.price
+          : centsToInputValue(found.priceCents),
+      sizeAmount:
+        found.sizeAmount === null || found.sizeUnit === null
+          ? row.sizeAmount
+          : String(found.sizeAmount),
+      sizeUnit: found.sizeUnit ?? row.sizeUnit,
+      label: found.label ?? row.label,
+      link: pageLink,
+      suggestedStore: match.storeId === null ? match.suggestedName : null,
+      fillCount: row.fillCount + 1,
+    });
+    if (match.storeId !== null) {
+      setLastStoreId(match.storeId);
+    }
+  };
+
   const advance = () => {
+    resetReading();
     setError(null);
     if (isLast) {
       onClose();
@@ -282,11 +328,38 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
             </div>
           </div>
         )}
+        {gap.kind === 'NO_PRODUCT' &&
+          (row.isLinkShown ? (
+            <ProductLinkField
+              caption='Product page'
+              value={row.link}
+              onChange={(link) => {
+                resetReading();
+                update(getGapKey(gap), gap, { link });
+              }}
+              onFill={(pageLink) => void fillFromPage(pageLink)}
+              isFilling={reading.isFilling}
+              note={reading.note}
+              error={reading.error}
+            />
+          ) : (
+            <div>
+              <RevealChip
+                icon={<Plus className='h-4 w-4' aria-hidden='true' />}
+                onClick={() =>
+                  update(getGapKey(gap), gap, { isLinkShown: true })
+                }
+              >
+                From a product page
+              </RevealChip>
+            </div>
+          ))}
         {gap.kind === 'NO_PRODUCT' && (
           <StorePicker
-            key={gap.ingredientId}
+            key={`${gap.ingredientId}-${row.fillCount}`}
             uid={uid}
             value={row.storeId}
+            suggestedStoreName={row.suggestedStore}
             onChange={(storeId) => {
               update(getGapKey(gap), gap, { storeId });
               if (storeId !== null) setLastStoreId(storeId);
