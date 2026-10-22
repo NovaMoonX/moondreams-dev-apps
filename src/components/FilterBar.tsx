@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
@@ -9,6 +9,14 @@ import LabelChip from '@/components/LabelChip';
 import SearchInput from '@/components/SearchInput';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+
+const NARROW_QUERY = '(max-width: 360px)';
+const subscribeNarrow = (onChange: () => void) => {
+  const list = window.matchMedia(NARROW_QUERY);
+  list.addEventListener('change', onChange);
+  return () => list.removeEventListener('change', onChange);
+};
+const getIsNarrow = () => window.matchMedia(NARROW_QUERY).matches;
 
 export interface ActiveFilter {
   key: string;
@@ -81,6 +89,7 @@ function FilterBar({
 }: FilterBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
+  const isNarrow = useSyncExternalStore(subscribeNarrow, getIsNarrow, () => false);
   const content =
     typeof children === 'function'
       ? children(() => setIsOpen(false))
@@ -134,16 +143,9 @@ function FilterBar({
         className='h-11 min-w-0 flex-1'
         onClick={() => setIsOpen(false)}
       >
-        {compactDoneLabel ? (
-          <span className='contents'>
-            <span className='truncate max-[360px]:hidden'>{doneLabel}</span>
-            <span className='truncate min-[361px]:hidden'>
-              {compactDoneLabel}
-            </span>
-          </span>
-        ) : (
-          <span className='truncate'>{doneLabel}</span>
-        )}
+        <span className='truncate'>
+          {isNarrow && compactDoneLabel ? compactDoneLabel : doneLabel}
+        </span>
       </Button>
     </div>
   );
