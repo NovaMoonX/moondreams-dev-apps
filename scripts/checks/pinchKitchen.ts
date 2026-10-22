@@ -20,6 +20,7 @@ import {
 } from '../../src/apps/pinch/utils/normalizeProduct.ts';
 import { isBotCheckPage } from '../../src/lib/pageContent/botCheck.ts';
 import {
+  canReadPictureInstead,
   classifyReadFailure,
   getProductReadFailureLine,
 } from '../../src/apps/pinch/utils/readFailures.ts';
@@ -432,6 +433,31 @@ assert.equal(
   classifyReadFailure({ code: 'blocked-page' }, false),
   'unreachable',
   'offline is the connection whatever the error says',
+);
+
+// products: a screenshot or photo is offered only where the page or the reading is the trouble
+assert.deepEqual(
+  (
+    [
+      'unreachable',
+      'busy',
+      'unavailable',
+      'link',
+      'blocked',
+      'unread',
+      'empty',
+    ] as const
+  ).filter(canReadPictureInstead),
+  ['link', 'blocked', 'unread', 'empty'],
+);
+assert.equal(
+  /page/i.test(getProductReadFailureLine('empty', true)),
+  false,
+  'a failed picture never blames a page',
+);
+assert.equal(
+  /type the price in below/i.test(getProductReadFailureLine('unread', true)),
+  true,
 );
 
 console.log('pinchKitchen: all checks passed');

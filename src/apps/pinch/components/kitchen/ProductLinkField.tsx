@@ -1,12 +1,15 @@
+import { useRef, useState } from 'react';
+
 import {
   Button,
   Checkbox,
   Input,
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
-import { Link2 } from 'lucide-react';
+import { Camera, Link2 } from 'lucide-react';
 
 import LinkPreviewCard from '@/components/LinkPreviewCard';
+import RevealChip from '@/components/RevealChip';
 import { useLinkPreview } from '@/hooks/useLinkPreview';
 import { toWebLink } from '@/utils/urlUtils';
 import { productPageQueryOptions } from '@apps/pinch/queries/productPageQueries';
@@ -30,6 +33,9 @@ interface ProductLinkFieldProps {
   isFilling: boolean;
   note: string | null;
   error: string | null;
+  /** A screenshot or photo could get past the failure shown, so the field offers one. */
+  canTryPicture: boolean;
+  onReadFile: (file: File) => void;
 }
 
 /** A product page's address, its preview once the page is read, and a button that fills the price and size from it. */
@@ -46,7 +52,11 @@ function ProductLinkField({
   isFilling,
   note,
   error,
+  canTryPicture,
+  onReadFile,
 }: ProductLinkFieldProps) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [fileKey, setFileKey] = useState(0);
   const preview = useLinkPreview(value, {
     getQueryOptions: productPageQueryOptions,
     isEnabled: value.trim() !== (savedLink ?? ''),
@@ -131,6 +141,34 @@ function ProductLinkField({
         </label>
       )}
       {error && <p className='text-destructive text-xs'>{error}</p>}
+      {canTryPicture && (
+        <div className='space-y-1.5'>
+          <p className='text-muted-foreground text-xs'>
+            Or choose a screenshot of the page, or a photo of the shelf tag or
+            package. An AI reads the picture to fill in the price and size.
+            Nothing is saved until you {isEditing ? 'save' : 'add'} it.
+          </p>
+          <RevealChip
+            icon={<Camera className='h-4 w-4' aria-hidden='true' />}
+            onClick={() => fileRef.current?.click()}
+          >
+            Read a screenshot or photo
+          </RevealChip>
+          <Input
+            key={fileKey}
+            ref={fileRef}
+            type='file'
+            accept='image/*,application/pdf'
+            aria-label='Upload a screenshot or photo of the product'
+            className='hidden'
+            onChange={(event) => {
+              const next = event.target.files?.[0];
+              setFileKey((current) => current + 1);
+              if (next) onReadFile(next);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

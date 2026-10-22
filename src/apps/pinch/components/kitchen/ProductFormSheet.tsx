@@ -25,7 +25,10 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
 import ProductLinkField from '@apps/pinch/components/kitchen/ProductLinkField';
-import { useProductPageReading } from '@apps/pinch/components/kitchen/useProductPageReading';
+import {
+  useProductPageReading,
+  type ProductReading,
+} from '@apps/pinch/components/kitchen/useProductPageReading';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
@@ -190,7 +193,12 @@ function ProductFormSheet({
   const [fillCount, setFillCount] = useState(0);
   const [formData, setFormData] = useState<FormData>(initialData);
   const [suggestedStore, setSuggestedStore] = useState<string | null>(null);
-  const { reading, read, reset: resetReading } = useProductPageReading();
+  const {
+    reading,
+    read,
+    readFile,
+    reset: resetReading,
+  } = useProductPageReading();
   const [aliasOffer, setAliasOffer] = useState<{
     text: string;
     isOn: boolean;
@@ -269,14 +277,8 @@ function ProductFormSheet({
     return 'Start the link with https:// to keep it.';
   };
 
-  const fillFromPage = useCallback(
-    async (pageLink: string) => {
-      const result = await read(pageLink, ingredient);
-      if (result === null) {
-        return;
-      }
-
-      const { found, match } = result;
+  const applyReading = useCallback(
+    ({ found, match }: ProductReading, pageLink: string | null) => {
       const formData = latestFormData.current;
       const hasSize = found.sizeAmount !== null && found.sizeUnit !== null;
       const next: FormData = {
@@ -288,7 +290,10 @@ function ProductFormSheet({
             : centsToInputValue(found.priceCents),
         sizeAmount: hasSize ? String(found.sizeAmount) : formData.sizeAmount,
         sizeUnit: found.sizeUnit ?? formData.sizeUnit,
-        link: { enabled: true, value: pageLink },
+        link:
+          pageLink === null
+            ? formData.link
+            : { enabled: true, value: pageLink },
         extras: {
           label:
             found.label === null
@@ -304,7 +309,27 @@ function ProductFormSheet({
         found.alias === null ? null : { text: found.alias, isOn: false },
       );
     },
-    [read, ingredient],
+    [],
+  );
+
+  const fillFromPage = useCallback(
+    async (pageLink: string) => {
+      const result = await read(pageLink, ingredient);
+      if (result !== null) {
+        applyReading(result, pageLink);
+      }
+    },
+    [read, ingredient, applyReading],
+  );
+
+  const fillFromFile = useCallback(
+    async (file: File) => {
+      const result = await readFile(file, ingredient);
+      if (result !== null) {
+        applyReading(result, null);
+      }
+    },
+    [readFile, ingredient, applyReading],
   );
 
   const fields = useMemo(() => {
@@ -335,6 +360,8 @@ function ProductFormSheet({
             isFilling={reading.isFilling}
             note={reading.note}
             error={reading.error}
+            canTryPicture={reading.canTryPicture}
+            onReadFile={(file) => void fillFromFile(file)}
             aliasOffer={
               aliasOffer && {
                 ...aliasOffer,
@@ -495,6 +522,7 @@ function ProductFormSheet({
     aliasOffer,
     suggestedStore,
     fillFromPage,
+    fillFromFile,
     resetReading,
   ]);
 

@@ -3,14 +3,21 @@ import { useCallback, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useAppSelector } from '@/store';
-import { extractProductFromPage } from '@apps/pinch/lib/extractProduct';
+import { isReadableFile } from '@/utils/fileUtils';
+import {
+  extractProductFromFile,
+  extractProductFromPage,
+} from '@apps/pinch/lib/extractProduct';
 import { productPageQueryOptions } from '@apps/pinch/queries/productPageQueries';
 import {
   selectIngredientRecordsById,
   selectIngredientsById,
   selectStores,
 } from '@apps/pinch/store/selectors';
-import { MAX_INGREDIENT_ALIASES } from '@apps/pinch/constants';
+import {
+  MAX_INGREDIENT_ALIASES,
+  MAX_UPLOAD_BYTES,
+} from '@apps/pinch/constants';
 import {
   getRecordAliases,
   isNameTaken,
@@ -21,21 +28,35 @@ import {
   type StoreForLink,
 } from '@apps/pinch/utils/normalizeProduct';
 import {
+  canReadPictureInstead,
   classifyReadFailure,
   getProductReadFailureLine,
+  type ReadFailure,
 } from '@apps/pinch/utils/readFailures';
 
 export interface ReadState {
   isFilling: boolean;
   note: string | null;
   error: string | null;
+  /** The failure is one a screenshot or photo could get past. */
+  canTryPicture: boolean;
 }
 
 export const IDLE_READING: ReadState = {
   isFilling: false,
   note: null,
   error: null,
+  canTryPicture: false,
 };
+
+const NO_STORE: StoreForLink = { storeId: null, suggestedName: null };
+
+const failed = (cause: ReadFailure, isPicture: boolean): ReadState => ({
+  isFilling: false,
+  note: null,
+  error: getProductReadFailureLine(cause, isPicture),
+  canTryPicture: canReadPictureInstead(cause),
+});
 
 export interface ProductReading {
   found: ExtractedProduct;
@@ -89,19 +110,18 @@ export function useProductPageReading({ hasLabel = true } = {}) {
     setReading(IDLE_READING);
   }, []);
 
-  const read = useCallback(
+  const run = useCallback(
     async (
-      pageLink: string,
-      ingredient: { id: string; name: string; aliases: string[] },
+      getRaw: () => Promise<ExtractedProduct>,
+      getMatch: () => StoreForLink,
+      ingredient: { id: string },
+      isPicture: boolean,
     ): Promise<ProductReading | null> => {
       latestRequest.current += 1;
       const request = latestRequest.current;
-      setReading({ isFilling: true, note: null, error: null });
+      setReading({ ...IDLE_READING, isFilling: true });
       try {
-        const page = await queryClient.fetchQuery(
-          productPageQueryOptions(pageLink),
-        );
-        const raw = await extractProductFromPage(page, ingredient);
+        const raw = await getRaw();
         const isAliasUsable =
           raw.alias !== null &&
           getRecordAliases(recordsById.get(ingredient.id) ?? null).length <
@@ -111,44 +131,87 @@ export function useProductPageReading({ hasLabel = true } = {}) {
         if (request !== latestRequest.current) {
           return null;
         }
-        const result = { found, match: findStoreForLink(pageLink, stores) };
+        const result = { found, match: getMatch() };
         const hasSize = found.sizeAmount !== null && found.sizeUnit !== null;
         if (
           found.priceCents === null &&
           !hasSize &&
           !(hasLabel && found.label !== null)
         ) {
-          setReading({
-            isFilling: false,
-            note: null,
-            error: getProductReadFailureLine('empty'),
-          });
+          setReading(failed('empty', isPicture));
           return null;
         }
 
         setReading({
-          isFilling: false,
+          ...IDLE_READING,
           note: getFilledNote(result, hasSize, hasLabel),
-          error: null,
         });
         return result;
       } catch (readError) {
-        console.error('Reading a product page failed', readError);
+        console.error('Reading a product failed', readError);
         if (request !== latestRequest.current) {
           return null;
         }
-        setReading({
-          isFilling: false,
-          note: null,
-          error: getProductReadFailureLine(
-            classifyReadFailure(readError, navigator.onLine),
-          ),
-        });
+        setReading(
+          failed(classifyReadFailure(readError, navigator.onLine), isPicture),
+        );
         return null;
       }
     },
-    [queryClient, stores, ingredientsById, recordsById, hasLabel],
+    [recordsById, ingredientsById, hasLabel],
   );
 
-  return { reading, read, reset };
+  const read = useCallback(
+    (
+      pageLink: string,
+      ingredient: { id: string; name: string; aliases: string[] },
+    ) =>
+      run(
+        async () =>
+          extractProductFromPage(
+            await queryClient.fetchQuery(productPageQueryOptions(pageLink)),
+            ingredient,
+          ),
+        () => findStoreForLink(pageLink, stores),
+        ingredient,
+        false,
+      ),
+    [run, queryClient, stores],
+  );
+
+  const readFile = useCallback(
+    async (
+      file: File,
+      ingredient: { id: string; name: string; aliases: string[] },
+    ) => {
+      if (!isReadableFile(file)) {
+        latestRequest.current += 1;
+        setReading({
+          ...IDLE_READING,
+          error: "That file isn't a photo or a screenshot.",
+          canTryPicture: true,
+        });
+        return null;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        latestRequest.current += 1;
+        setReading({
+          ...IDLE_READING,
+          error: `That file is too big to read. Try one under ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.`,
+          canTryPicture: true,
+        });
+        return null;
+      }
+      const result = await run(
+        () => extractProductFromFile(file, ingredient),
+        () => NO_STORE,
+        ingredient,
+        true,
+      );
+      return result;
+    },
+    [run],
+  );
+
+  return { reading, read, readFile, reset };
 }

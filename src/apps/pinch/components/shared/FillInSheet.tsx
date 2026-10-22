@@ -13,7 +13,10 @@ import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
 import ProductLinkField from '@apps/pinch/components/kitchen/ProductLinkField';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
-import { useProductPageReading } from '@apps/pinch/components/kitchen/useProductPageReading';
+import {
+  useProductPageReading,
+  type ProductReading,
+} from '@apps/pinch/components/kitchen/useProductPageReading';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
   MAX_LINK_URL_LENGTH,
@@ -94,6 +97,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const {
     reading,
     read,
+    readFile,
     reset: resetReading,
   } = useProductPageReading({ hasLabel: false });
 
@@ -201,16 +205,10 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const canSave = isNutrition ? isNutritionValid : draft !== null;
   const isLast = index + 1 >= rows.length;
 
-  const fillFromPage = async (pageLink: string) => {
-    if (!ingredient) {
-      return;
-    }
-    const result = await read(pageLink, ingredient);
-    if (result === null) {
-      return;
-    }
-
-    const { found, match } = result;
+  const applyReading = (
+    { found, match }: ProductReading,
+    pageLink: string | null,
+  ) => {
     const id = getGapKey(gap);
     setValues((current) => {
       const live = { ...getRow(gap), ...current[id] };
@@ -230,7 +228,7 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
               ? live.sizeAmount
               : String(found.sizeAmount),
           sizeUnit: found.sizeUnit ?? live.sizeUnit,
-          link: pageLink,
+          link: pageLink ?? live.link,
           suggestedStore: match.storeId === null ? match.suggestedName : null,
           alias: found.alias,
           isAliasOn: false,
@@ -240,6 +238,26 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
     });
     if (match.storeId !== null) {
       setLastStoreId(match.storeId);
+    }
+  };
+
+  const fillFromPage = async (pageLink: string) => {
+    if (!ingredient) {
+      return;
+    }
+    const result = await read(pageLink, ingredient);
+    if (result !== null) {
+      applyReading(result, pageLink);
+    }
+  };
+
+  const fillFromFile = async (file: File) => {
+    if (!ingredient) {
+      return;
+    }
+    const result = await readFile(file, ingredient);
+    if (result !== null) {
+      applyReading(result, null);
     }
   };
 
@@ -460,6 +478,8 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
               isFilling={reading.isFilling}
               note={reading.note}
               error={reading.error}
+              canTryPicture={reading.canTryPicture}
+              onReadFile={(file) => void fillFromFile(file)}
               aliasOffer={
                 row.alias === null
                   ? null
