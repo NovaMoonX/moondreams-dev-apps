@@ -57,7 +57,7 @@ const asUnit = (value: unknown) =>
     : null;
 
 const SIZE_PHRASE =
-  /\b\d+(?:[.,]\d+)?\s*(?:oz|ounces?|lbs?|pounds?|g|kg|ml|l|ct|count|pack|fl)\b/i;
+  /\b\d+(?:[.,]\d+)?[\s-]*(?:oz|ounces?|fl|fluid|lbs?|pounds?|g|grams?|kg|ml|l|liters?|litres?|gal|gallons?|qt|quarts?|pt|pints?|ct|count|pk|packs?|dozen|bags?|sticks?)\b|\bpack of \d+/i;
 
 const containsWords = (text: string, words: string) =>
   words !== '' && ` ${text} `.includes(` ${words} `);

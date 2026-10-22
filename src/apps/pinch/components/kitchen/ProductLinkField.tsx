@@ -108,8 +108,9 @@ function ProductLinkField({
       )}
       {!isUnreadable && !hasRead && (
         <p className='text-muted-foreground text-xs'>
-          Paste a product page and an AI reads it to fill in the price and size.
-          Nothing is saved until you {isEditing ? 'save' : 'add'} it.
+          Paste a product page and an AI reads it, with the ingredient's name,
+          to fill in the price and size. Nothing is saved until you{' '}
+          {isEditing ? 'save' : 'add'} it.
         </p>
       )}
       {note && (

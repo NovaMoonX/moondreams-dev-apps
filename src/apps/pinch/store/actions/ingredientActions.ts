@@ -12,11 +12,13 @@ import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
+import { selectIngredientsById } from '@apps/pinch/store/selectors';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import {
   buildCatalogRecord,
   cleanAliases,
   getRecordAliases,
+  isNameTaken,
   mergeAlias,
 } from '@apps/pinch/utils/ingredientRecord';
 import { isInUse } from '@apps/pinch/utils/references';
@@ -244,10 +246,15 @@ interface AddIngredientAliasInput {
 export const addIngredientAlias = createAsyncThunk<
   boolean,
   AddIngredientAliasInput,
-  { rejectValue: string }
+  { state: RootState; rejectValue: string }
 >(
   'pinch/ingredients/addAlias',
-  async ({ uid, ingredientId, alias }, { rejectWithValue }) => {
+  async ({ uid, ingredientId, alias }, { getState, rejectWithValue }) => {
+    const others = [...selectIngredientsById(getState()).values()];
+    if (isNameTaken(alias, others, ingredientId)) {
+      return false;
+    }
+
     const catalog = CATALOG_INGREDIENTS_BY_ID.get(ingredientId) ?? null;
     const ref = kitchenDoc(uid, 'ingredients', ingredientId);
     try {

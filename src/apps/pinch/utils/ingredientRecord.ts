@@ -51,6 +51,20 @@ export function cleanAliases(typed: string[], ownName: string | null) {
   return result;
 }
 
+/** Whether another ingredient already answers to this name, which would make a recipe line that says it link to the wrong one. */
+export const isNameTaken = (
+  name: string,
+  ingredients: { id: string; name: string; aliases: string[] }[],
+  exceptId: string,
+) =>
+  ingredients.some(
+    (other) =>
+      other.id !== exceptId &&
+      [other.name, ...other.aliases].some(
+        (known) => toComparable(known, true) === toComparable(name, true),
+      ),
+  );
+
 /** The alias list with `alias` added, or null when it is already a name of the ingredient (`knownNames`), repeats one, or the list is full. */
 export function mergeAlias(
   current: string[],

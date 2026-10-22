@@ -5,7 +5,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAppSelector } from '@/store';
 import { extractProductFromPage } from '@apps/pinch/lib/extractProduct';
 import { productPageQueryOptions } from '@apps/pinch/queries/productPageQueries';
-import { selectStores } from '@apps/pinch/store/selectors';
+import {
+  selectIngredientRecordsById,
+  selectIngredientsById,
+  selectStores,
+} from '@apps/pinch/store/selectors';
+import { MAX_INGREDIENT_ALIASES } from '@apps/pinch/constants';
+import {
+  getRecordAliases,
+  isNameTaken,
+} from '@apps/pinch/utils/ingredientRecord';
 import {
   findStoreForLink,
   type ExtractedProduct,
@@ -69,6 +78,8 @@ const getFilledNote = (
 export function useProductPageReading({ hasLabel = true } = {}) {
   const queryClient = useQueryClient();
   const stores = useAppSelector(selectStores);
+  const ingredientsById = useAppSelector(selectIngredientsById);
+  const recordsById = useAppSelector(selectIngredientRecordsById);
   const [reading, setReading] = useState<ReadState>(IDLE_READING);
 
   const latestRequest = useRef(0);
@@ -81,7 +92,7 @@ export function useProductPageReading({ hasLabel = true } = {}) {
   const read = useCallback(
     async (
       pageLink: string,
-      ingredient: { name: string; aliases: string[] },
+      ingredient: { id: string; name: string; aliases: string[] },
     ): Promise<ProductReading | null> => {
       latestRequest.current += 1;
       const request = latestRequest.current;
@@ -90,7 +101,13 @@ export function useProductPageReading({ hasLabel = true } = {}) {
         const page = await queryClient.fetchQuery(
           productPageQueryOptions(pageLink),
         );
-        const found = await extractProductFromPage(page, ingredient);
+        const raw = await extractProductFromPage(page, ingredient);
+        const isAliasUsable =
+          raw.alias !== null &&
+          getRecordAliases(recordsById.get(ingredient.id) ?? null).length <
+            MAX_INGREDIENT_ALIASES &&
+          !isNameTaken(raw.alias, [...ingredientsById.values()], ingredient.id);
+        const found = isAliasUsable ? raw : { ...raw, alias: null };
         if (request !== latestRequest.current) {
           return null;
         }
@@ -130,7 +147,7 @@ export function useProductPageReading({ hasLabel = true } = {}) {
         return null;
       }
     },
-    [queryClient, stores, hasLabel],
+    [queryClient, stores, ingredientsById, recordsById, hasLabel],
   );
 
   return { reading, read, reset };

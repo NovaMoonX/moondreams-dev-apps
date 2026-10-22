@@ -350,12 +350,13 @@ function ProductFormSheet({
           <RemovableField
             label='Link'
             removeLabel='Remove link'
-            onRemove={() =>
+            onRemove={() => {
+              setAliasOffer(null);
               setFormData((current) => ({
                 ...current,
                 link: { enabled: false, value: '' },
-              }))
-            }
+              }));
+            }}
           >
             {field}
           </RemovableField>

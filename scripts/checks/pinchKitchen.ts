@@ -11,6 +11,7 @@ import { matchIngredient } from '../../src/apps/pinch/utils/ingredientMatch.ts';
 import {
   cleanAliases,
   getRecordAliases,
+  isNameTaken,
   mergeAlias,
 } from '../../src/apps/pinch/utils/ingredientRecord.ts';
 import {
@@ -255,9 +256,45 @@ assert.equal(
   null,
   'nor one of its names in the plural',
 );
+for (const sized of [
+  'Ranch Mix 1-oz',
+  'Ranch Mix 16 fluid ounces',
+  'Ranch Mix 1 gallon',
+  'Ranch Mix 24 pk',
+  'Ranch Mix Pack of 6',
+  'Ranch Mix 12-count',
+]) {
+  assert.equal(
+    aliasOf(sized),
+    null,
+    `a size in "${sized}" is not a general name`,
+  );
+}
 assert.equal(aliasOf('   '), null);
 assert.equal(aliasOf(42), null);
 assert.equal(aliasOf('Ranch Salad Dressing & Recipe Mix', null) !== null, true);
+
+// aliases: a name another ingredient already answers to is never offered
+const others = [
+  { id: 'cat-whole-milk', name: 'Whole milk', aliases: ['Milk'] },
+  { id: 'c-oat', name: 'Oat milk', aliases: [] },
+];
+assert.equal(
+  isNameTaken('milk', others, 'c-oat'),
+  true,
+  "another ingredient's other name",
+);
+assert.equal(
+  isNameTaken('Oat milks', others, 'cat-whole-milk'),
+  true,
+  'plural folded',
+);
+assert.equal(
+  isNameTaken('oat milk', others, 'c-oat'),
+  false,
+  'its own name is not a collision',
+);
+assert.equal(isNameTaken('Almond milk', others, 'c-oat'), false);
 
 // aliases: adding one name to an ingredient
 assert.deepEqual(mergeAlias(['A'], 'B', ['Own']), ['A', 'B']);
