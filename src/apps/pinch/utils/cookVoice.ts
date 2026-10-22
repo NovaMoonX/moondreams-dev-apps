@@ -1,7 +1,10 @@
 import { toPlainText } from '@/lib/speech/speechText';
 import { findDurations, formatDuration } from '@/utils/durationUtils';
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
-import { MAX_KITCHEN_TIMER_SECONDS } from '@apps/pinch/constants';
+import {
+  MAX_COOK_DICTATION_CHARS,
+  MAX_KITCHEN_TIMER_SECONDS,
+} from '@apps/pinch/constants';
 
 /** A spoken phrase longer than this is talk, not a command. */
 const MAX_COMMAND_CHARS = 80;
@@ -72,6 +75,9 @@ export type CookTimerAnswer =
   | { kind: 'LENGTH'; seconds: number }
   | { kind: 'NEVER_MIND' };
 
+/** What a spoken "add a …" writes. */
+export type CookEntryKind = 'TIP' | 'NOTE' | 'CHANGE';
+
 export type CookCommand =
   | { kind: 'NEXT' }
   | { kind: 'BACK' }
@@ -91,6 +97,12 @@ export type CookCommand =
   | { kind: 'AMOUNT'; query: string; lineIds: string[] }
   | { kind: 'SWITCH_RECIPE'; recipeId: string | null; candidates: string[] }
   | { kind: 'CYCLE_RECIPE'; direction: 1 | -1 }
+  | { kind: 'READ_TIPS' }
+  | { kind: 'READ_NOTES' }
+  | { kind: 'ADD_ENTRY'; entryKind: CookEntryKind }
+  /** The words said after "add a tip": heard only while that question waits. */
+  | { kind: 'DICTATION'; text: string }
+  | { kind: 'UNDO_ENTRY' }
   | { kind: 'STOP_LISTENING' };
 
 /** A timer as a spoken name can reach it: every name it goes by (its step's first words, a kitchen timer's name, its recipe) and its length as the card shows it ("10 min"). */
@@ -104,7 +116,9 @@ export interface CookVoiceTimer {
 export type CookVoiceChoice =
   /** `isConfirm`: one timer the app guessed at, waiting for a yes or a no. */
   | { kind: 'TIMER'; timers: CookVoiceTimer[]; isConfirm?: boolean }
-  | { kind: 'LENGTH' };
+  | { kind: 'LENGTH' }
+  /** Waiting for the words of a tip, note or change; the next thing said is written down. */
+  | { kind: 'DICTATE'; entryKind: CookEntryKind };
 
 export interface CookVoiceContext {
   /** The recipes on screen, in plate order; one for a single recipe. */
@@ -125,6 +139,9 @@ type PlainKind =
   | 'SHOW_INGREDIENTS'
   | 'SHOW_STEPS'
   | 'SHOW_TIMERS'
+  | 'READ_TIPS'
+  | 'READ_NOTES'
+  | 'UNDO_ENTRY'
   | 'FINISH'
   | 'STOP_LISTENING';
 
@@ -210,6 +227,60 @@ const PHRASES: Record<PlainKind, string[]> = {
     'timer list',
     'the timer list',
   ],
+  READ_TIPS: [
+    'tips',
+    'the tips',
+    'read tips',
+    'read the tips',
+    'read tip',
+    'read the tip',
+    'read me the tips',
+    'read me the tip',
+    'repeat tips',
+    'repeat the tips',
+    'repeat tip',
+    'repeat the tip',
+    'say the tip again',
+    'say the tips again',
+    'any tips',
+    'what are the tips',
+    'whats the tip',
+    'what is the tip',
+  ],
+  READ_NOTES: [
+    'read notes',
+    'read the notes',
+    'read my notes',
+    'read note',
+    'read the note',
+    'read my note',
+    'read me the notes',
+    'read me my notes',
+    'repeat notes',
+    'repeat the notes',
+    'repeat my notes',
+    'repeat the note',
+    'repeat my note',
+    'say the notes again',
+    'any notes',
+    'what are my notes',
+    'what did i note',
+  ],
+  UNDO_ENTRY: [
+    'undo that',
+    'undo it',
+    'delete that',
+    'scratch that',
+    'undo the tip',
+    'undo the note',
+    'undo the change',
+    'delete that tip',
+    'delete that note',
+    'delete that change',
+    'undo that tip',
+    'undo that note',
+    'undo that change',
+  ],
   FINISH: [
     'finish',
     'done',
@@ -280,6 +351,26 @@ const CYCLE_PHRASES: Record<string, 1 | -1> = {
   'change dish': 1,
   'previous recipe': -1,
   'previous dish': -1,
+};
+
+const ADD_PHRASES: Record<string, CookEntryKind> = {
+  'add a tip': 'TIP',
+  'add tip': 'TIP',
+  'new tip': 'TIP',
+  'i have a tip': 'TIP',
+  'save a tip': 'TIP',
+  'add a note': 'NOTE',
+  'add note': 'NOTE',
+  'new note': 'NOTE',
+  'make a note': 'NOTE',
+  'take a note': 'NOTE',
+  'write a note': 'NOTE',
+  'note this': 'NOTE',
+  'add a change': 'CHANGE',
+  'add change': 'CHANGE',
+  'new change': 'CHANGE',
+  'suggest a change': 'CHANGE',
+  'note a change': 'CHANGE',
 };
 
 const EXACT = new Map<string, PlainKind>(
@@ -897,6 +988,7 @@ const parseChoiceAnswer = (
   const { choice } = context;
   if (choice === null) return null;
   if (CANCEL_ANSWERS.has(text)) return answer({ kind: 'NEVER_MIND' });
+  if (choice.kind === 'DICTATE') return null;
   return choice.kind === 'LENGTH'
     ? parseLengthAnswer(text)
     : parseTimerAnswer(text, choice.timers, choice.isConfirm === true);
@@ -968,16 +1060,35 @@ const parseSwitch = (
   };
 };
 
+/** The words said while a tip, note or change is being dictated: everything is the entry, except a way out. A phrase longer than a sentence or two is clipped at a word, never dropped. */
+const parseDictation = (transcript: string): CookCommand | null => {
+  const text = transcript.replace(/\s+/g, ' ').trim();
+  const plain = normalizeTranscript(transcript);
+  if (plain === '') return null;
+  if (CANCEL_ANSWERS.has(plain)) return answer({ kind: 'NEVER_MIND' });
+  if (EXACT.get(plain) === 'STOP_LISTENING') return { kind: 'STOP_LISTENING' };
+  if (text.length <= MAX_COOK_DICTATION_CHARS) return { kind: 'DICTATION', text };
+  const cut = text.slice(0, MAX_COOK_DICTATION_CHARS);
+  const space = cut.lastIndexOf(' ');
+  return {
+    kind: 'DICTATION',
+    text: (space > MAX_COOK_DICTATION_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd(),
+  };
+};
+
 const parseOne = (
   transcript: string,
   context: CookVoiceContext,
 ): CookCommand | null => {
+  if (context.choice?.kind === 'DICTATE') return parseDictation(transcript);
   if (transcript.length > MAX_COMMAND_CHARS * 2) return null;
   const text = normalizeTranscript(transcript);
   if (text === '' || text.length > MAX_COMMAND_CHARS) return null;
 
   const exact = EXACT.get(text);
   if (exact) return { kind: exact };
+  const entryKind = ADD_PHRASES[text];
+  if (entryKind !== undefined) return { kind: 'ADD_ENTRY', entryKind };
   const renamed = parseRename(text, context);
   if (renamed) return renamed;
   const named = parseTimeLeft(text, context);

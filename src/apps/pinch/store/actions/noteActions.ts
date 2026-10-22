@@ -24,6 +24,7 @@ import {
 import type { RecipeNote } from '@apps/pinch/types';
 import {
   getMissingNoteFields,
+  getStepAnchor,
   getTweakReason,
   isNoteHistoryFull,
   isValidNoteText,
@@ -47,12 +48,22 @@ const getWriteMessage = (error: unknown, fallback: string) => {
   return getErrorMessage(error, fallback);
 };
 
+const GONE_STEP = 'That step is gone, so the entry cannot follow it.';
+
+/** The reason a CHANGE keeps: its words trimmed, null when there are none; any other kind keeps none. */
+const getReason = (kind: RecipeNote['kind'], reason: string | null) => {
+  const trimmed = kind === 'CHANGE' ? (reason ?? '').trim() : '';
+  return trimmed === '' ? null : trimmed;
+};
+
 const getAddProblem = (
   state: RootState,
-  recipeId: string,
-  text: string,
-  cookId: string | null,
+  input: Pick<
+    AddNoteInput,
+    'recipeId' | 'kind' | 'text' | 'reason' | 'cookId' | 'stepIndex'
+  >,
 ) => {
+  const { recipeId, kind, text, reason, cookId, stepIndex } = input;
   const { isLoaded, loadError, items } = state.pinch.notes;
   if (loadError !== null) {
     return "Your recipe notes couldn't load, so adding is paused.";
@@ -60,11 +71,19 @@ const getAddProblem = (
   if (!isLoaded) {
     return 'Your recipe notes are still loading. Try again in a moment.';
   }
-  if (!state.pinch.recipes.items.some((recipe) => recipe.id === recipeId)) {
+  const recipe = state.pinch.recipes.items.find(
+    (entry) => entry.id === recipeId,
+  );
+  if (!recipe) {
     return 'This recipe is gone, so there is nothing to add to.';
   }
   if (!isValidNoteText(text)) return BAD_TEXT;
+  if ((reason ?? '').trim().length > MAX_RECIPE_NOTE_LENGTH) return BAD_TEXT;
+  if (stepIndex !== null && recipe.steps[stepIndex] === undefined) {
+    return GONE_STEP;
+  }
   if (
+    kind === 'NOTE' &&
     cookId !== null &&
     !state.pinch.cooks.items.some(
       (cook) => cook.id === cookId && cook.recipeId === recipeId,
@@ -79,75 +98,107 @@ const getAddProblem = (
 interface AddNoteInput {
   uid: string;
   recipeId: string;
+  /** A tip, a planned change or a note; a tweak is written by saving the recipe. */
+  kind: 'NOTE' | 'TIP' | 'CHANGE';
+  /** The words; for a change, what to change. */
   text: string;
-  /** The cook this follows up, or null for a note about the recipe. */
+  /** Why the change; only a change keeps it. */
+  reason: string | null;
+  /** The cook a note follows up, or null. A tip and a change never follow one. */
   cookId: string | null;
+  /** The step it is about (0-based), or null for the whole recipe. */
+  stepIndex: number | null;
 }
 
 export const addNote = createAsyncThunk<
   string,
   AddNoteInput,
   { state: RootState; rejectValue: string }
->(
-  'pinch/notes/add',
-  async ({ uid, recipeId, text, cookId }, { getState, rejectWithValue }) => {
-    const problem = getAddProblem(getState(), recipeId, text, cookId);
-    if (problem !== null) return rejectWithValue(problem);
+>('pinch/notes/add', async (input, { getState, rejectWithValue }) => {
+  const { uid, recipeId, kind, text, stepIndex } = input;
+  const state = getState();
+  const problem = getAddProblem(state, input);
+  if (problem !== null) return rejectWithValue(problem);
 
-    const now = Date.now();
-    const note: RecipeNote = {
-      id: generateUuid(),
-      recipeId,
-      kind: 'NOTE',
-      text: text.trim(),
-      changes: [],
-      cookId,
-      createdAt: now,
-      updatedAt: now,
-    };
+  const steps =
+    state.pinch.recipes.items.find((recipe) => recipe.id === recipeId)?.steps ??
+    [];
+  const now = Date.now();
+  const note: RecipeNote = {
+    id: generateUuid(),
+    recipeId,
+    kind,
+    text: text.trim(),
+    changes: [],
+    cookId: kind === 'NOTE' ? input.cookId : null,
+    ...getStepAnchor(steps, stepIndex),
+    reason: getReason(kind, input.reason),
+    createdAt: now,
+    updatedAt: now,
+  };
 
-    try {
-      await setDoc(noteDoc(uid, note.id), note);
-    } catch (error) {
-      return rejectWithValue(
-        getWriteMessage(error, 'Unable to save this note.'),
-      );
-    }
+  try {
+    await setDoc(noteDoc(uid, note.id), note);
+  } catch (error) {
+    return rejectWithValue(getWriteMessage(error, 'Unable to save this entry.'));
+  }
 
-    return note.id;
-  },
-);
+  return note.id;
+});
 
 interface UpdateNoteInput {
   uid: string;
   id: string;
   text: string;
+  /** A change's why; ignored for every other kind. Leave out to keep it as it is. */
+  reason?: string | null;
+  /** Moves the entry to this step (0-based) or to the whole recipe (null); leave out to keep it where it is. A tweak has no step. */
+  stepIndex?: number | null;
 }
 
-/** Only the text and `updatedAt`: a tweak's record of what changed is history, and a note's cook and date stay as they were. */
+/** The words, a change's reason and the step, with `updatedAt`: a tweak's record of what changed is history, and an entry's cook and date stay as they were. */
 export const updateNote = createAsyncThunk<
   string,
   UpdateNoteInput,
   { state: RootState; rejectValue: string }
 >(
   'pinch/notes/update',
-  async ({ uid, id, text }, { getState, rejectWithValue }) => {
-    const existing = getState().pinch.notes.items.find(
-      (note) => note.id === id,
-    );
+  async ({ uid, id, text, reason, stepIndex }, { getState, rejectWithValue }) => {
+    const state = getState();
+    const existing = state.pinch.notes.items.find((note) => note.id === id);
     if (!existing) {
-      return rejectWithValue('This note is gone, so there is nothing to save.');
+      return rejectWithValue('This entry is gone, so there is nothing to save.');
     }
     const isTweak = existing.kind === 'TWEAK';
     if (text.trim().length > MAX_RECIPE_NOTE_LENGTH) {
       return rejectWithValue(BAD_TEXT);
     }
     if (!isTweak && !isValidNoteText(text)) return rejectWithValue(BAD_TEXT);
+    if ((reason ?? '').trim().length > MAX_RECIPE_NOTE_LENGTH) {
+      return rejectWithValue(BAD_TEXT);
+    }
+    const steps =
+      state.pinch.recipes.items.find((recipe) => recipe.id === existing.recipeId)
+        ?.steps ?? [];
+    if (
+      !isTweak &&
+      stepIndex !== undefined &&
+      stepIndex !== null &&
+      steps[stepIndex] === undefined
+    ) {
+      return rejectWithValue(GONE_STEP);
+    }
 
     try {
       await updateDoc(noteDoc(uid, id), {
         ...getMissingNoteFields(existing),
         text: isTweak ? getTweakReason(text) : text.trim(),
+        ...(existing.kind === 'CHANGE' && reason !== undefined
+          ? { reason: getReason('CHANGE', reason) }
+          : {}),
+        ...(!isTweak && stepIndex !== undefined
+          ? getStepAnchor(steps, stepIndex)
+          : {}),
         updatedAt: Date.now(),
       });
     } catch (error) {

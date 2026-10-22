@@ -147,6 +147,8 @@ export interface PinchVoiceSettings {
   hasAgreed: boolean | null;
   /** Read each step aloud while the microphone is on. */
   isReadingAloud: boolean | null;
+  /** Also read the tips and notes written for a step, right after the step. A document written before this key lacks it, which reads as null (not chosen). */
+  isReadingNotes: boolean | null;
   /** Wait for the wake phrase instead of listening for one window per tap. */
   isWaiting: boolean | null;
 }
@@ -277,8 +279,8 @@ export type PinchSubview =
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
       fromIdeaId?: string;
-      /** The note the form was opened from: shown as a quote, never changed by the save. */
-      fromNoteId?: string;
+      /** The CHANGE entries the form is applying: shown as quotes, and turned into the one TWEAK that records the edit when it is saved. */
+      fromChangeIds?: string[];
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
@@ -419,7 +421,8 @@ export interface Cook {
   updatedAt: number;
 }
 
-export type NoteKind = 'NOTE' | 'TWEAK';
+/** What an entry in a recipe's journal is. A NOTE is a personal reflection on a cook, a TIP is timeless advice for making the dish, a CHANGE is an edit the person means to make (with why), and a TWEAK is the dated record of an edit that was made. Applying a CHANGE turns that same entry into the TWEAK. */
+export type NoteKind = 'NOTE' | 'TIP' | 'CHANGE' | 'TWEAK';
 
 export type ContainerPlace = 'FRIDGE' | 'FREEZER';
 export type ContainerStatus = 'IN_STOCK' | 'DONE';
@@ -498,21 +501,27 @@ export interface Package {
   updatedAt: number;
 }
 
-/** One entry in a recipe's journal: something to remember after cooking, or the record of an edit to the recipe. */
+/** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {
   /** Immutable. */
   id: string;
   /** Immutable. A recipe that no longer exists reads as none: its notes are ignored. */
   recipeId: string;
-  /** Immutable. */
+  /** Immutable, except that a CHANGE becomes a TWEAK when the recipe form applies it. */
   kind: NoteKind;
-  /** A NOTE always has it; a TWEAK's is the optional reason for the change. 1 to 2,000 characters when set. */
+  /** A NOTE, TIP or CHANGE always has it (a CHANGE's is what to change); a TWEAK's is the optional reason for the change. 1 to 2,000 characters when set. */
   text: string | null;
-  /** A TWEAK's short summaries of what the edit changed, fixed when it was saved; empty for a NOTE. Immutable. */
+  /** A TWEAK's short summaries of what the edit changed, fixed when it was saved; empty for every other kind. Immutable. */
   changes: string[];
-  /** Immutable. The cook this follows up; a cook that no longer exists reads as none. */
+  /** Immutable. The cook this follows up, for a NOTE; a cook that no longer exists reads as none. A TIP never has one. */
   cookId: string | null;
-  /** An instant, shown in local time. Immutable. */
+  /** The step (0-based) a NOTE, TIP or CHANGE is about, so cooking shows it with that step; null is the whole recipe. A document written before steps lacks the key, which reads as null. */
+  stepIndex: number | null;
+  /** The first words of that step as they were when the entry was written, so the entry finds its step again after steps are added, removed or moved. Written with `stepIndex`; a missing key reads as null. */
+  stepText: string | null;
+  /** Why the person wants a CHANGE, in their words; null for every other kind. A missing key reads as null. */
+  reason: string | null;
+  /** An instant, shown in local time. Immutable, except that applying a CHANGE dates the TWEAK it becomes. */
   createdAt: number;
   updatedAt: number;
 }
@@ -657,6 +666,8 @@ export interface CookingResume {
   currentId: string;
   positions: Record<string, { stepIndex: number; servings: number }>;
   timers: ResumeTimer[];
+  /** The journal entries written on this screen, for the review at the end. A session saved before them lacks the key, which reads as none. */
+  captured?: string[];
 }
 
 export type ShareKind = 'RECIPE' | 'MEAL';

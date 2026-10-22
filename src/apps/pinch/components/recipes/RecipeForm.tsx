@@ -115,6 +115,7 @@ import {
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
+import { getJoinedChangeReason } from '@apps/pinch/utils/notes';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
 import {
   getDraftChanges,
@@ -152,8 +153,8 @@ interface RecipeFormProps {
   initialRead: RecipeRead | null;
   /** The idea a new recipe is made from: the form opens with what it knows, and saving marks it made. */
   initialIdea: Idea | null;
-  /** The note the person is updating this recipe from: shown as a quote, and the tweak's reason starts as its words. The note itself is never changed. */
-  initialNote: RecipeNote | null;
+  /** The planned changes this edit applies: shown as quotes, and the tweak's reason starts as theirs. Saving turns the oldest into the tweak and takes the rest off, unless nothing changed. */
+  initialChanges: RecipeNote[];
   /** Keeps the screen's header on the recipe's name as it is typed. */
   onTitleChange: (title: string) => void;
   /** Tells the screen whether leaving now would throw work away. */
@@ -171,7 +172,7 @@ function RecipeForm({
   recipeId,
   initialRead,
   initialIdea,
-  initialNote,
+  initialChanges,
   onTitleChange,
   isDirtyRef,
   backStepRef,
@@ -223,7 +224,7 @@ function RecipeForm({
   );
   const [formData, setFormData] = useState<RecipeFormData>(initialData);
   const [isNoteClosed, setIsNoteClosed] = useState(false);
-  const [why, setWhy] = useState(initialNote?.text ?? '');
+  const [why, setWhy] = useState(() => getJoinedChangeReason(initialChanges) ?? '');
   const [ask, setAsk] = useState<{
     data: RecipeFormData;
     changes: string[];
@@ -802,6 +803,7 @@ function RecipeForm({
       removeCover: isCoverRemoved,
       fromIdeaId: initialIdea?.id ?? null,
       tweakReason: reason,
+      appliesChangeIds: initialChanges.map((change) => change.id),
     };
   };
 
@@ -840,7 +842,12 @@ function RecipeForm({
   };
 
   const handleSubmit = async (data: RecipeFormData) => {
-    if (recipe && tracking === 'on' && initialNote === null) {
+    const hasReason = initialChanges.length > 0 && why.trim() !== '';
+    if (
+      recipe &&
+      (tracking === 'on' || initialChanges.length > 0) &&
+      !hasReason
+    ) {
       const { changes, topics } = getDraftChanges(
         recipe,
         getDraft(data, ''),
@@ -885,12 +892,25 @@ function RecipeForm({
           new recipe with “From a file”.
         </p>
       )}
-      {initialNote && (
-        <div className='bg-accent border-border mb-4 space-y-0.5 rounded-2xl border p-3 text-sm'>
+      {initialChanges.length > 0 && (
+        <div className='bg-accent border-border mb-4 space-y-2 rounded-2xl border p-3 text-sm'>
           <p className='text-muted-foreground text-xs'>
-            Updating from your note
+            {initialChanges.length === 1
+              ? 'Applying the change you planned'
+              : `Applying the ${initialChanges.length} changes you planned`}
           </p>
-          <ClampedText text={initialNote.text ?? ''} />
+          <ul className='space-y-2'>
+            {initialChanges.map((change) => (
+              <li key={change.id} className='space-y-0.5'>
+                <ClampedText text={change.text ?? ''} />
+                {(change.reason ?? '') !== '' && (
+                  <p className='text-muted-foreground text-xs'>
+                    Why: {change.reason}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {initialRead && !isNoteClosed && (

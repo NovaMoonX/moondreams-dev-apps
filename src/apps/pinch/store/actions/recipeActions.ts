@@ -140,6 +140,8 @@ export interface RecipeDraft {
   fromIdeaId: string | null;
   /** Why the person changed the recipe, for the tweak a save of a cooked recipe records; ignored when none is recorded. */
   tweakReason: string;
+  /** The planned changes this edit applies. When the edit changed the recipe, the oldest of them becomes the tweak that records it (same entry, no new one) and the rest are taken off; when it changed nothing they stay planned. */
+  appliesChangeIds: string[];
 }
 
 interface SaveRecipeInput {
@@ -152,15 +154,31 @@ interface SaveRecipeResult {
   linkedIdea: boolean;
 }
 
-/** Compared with the recipe as this device last saw it, so an edit made elsewhere in between can show up in the lines. */
-const getTweak = (
+type TweakPlan =
+  | { kind: 'NONE' }
+  | { kind: 'NEW'; note: RecipeNote }
+  /** `note` is the planned change that becomes the tweak; `absorbedIds` are the others the same edit applied. */
+  | { kind: 'APPLY'; note: RecipeNote; absorbedIds: string[] };
+
+/** Compared with the recipe as this device last saw it, so an edit made elsewhere in between can show up in the lines. A planned change the edit applies turns into the tweak itself, so applying it leaves one entry. */
+const getTweakPlan = (
   state: RootState,
   existing: Recipe | null,
   draft: RecipeDraft,
   now: number,
-): RecipeNote | null => {
-  if (existing === null || selectTweakTracking(state, existing.id) !== 'on') {
-    return null;
+): TweakPlan => {
+  if (existing === null) return { kind: 'NONE' };
+  const planned = state.pinch.notes.items
+    .filter(
+      (note) =>
+        draft.appliesChangeIds.includes(note.id) &&
+        note.kind === 'CHANGE' &&
+        note.recipeId === existing.id,
+    )
+    .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
+  const isApplying = planned.length > 0;
+  if (!isApplying && selectTweakTracking(state, existing.id) !== 'on') {
+    return { kind: 'NONE' };
   }
 
   const { changes } = getDraftChanges(
@@ -169,23 +187,32 @@ const getTweak = (
     selectIngredientsById(state),
     selectSourcesById(state),
   );
-  if (changes.length === 0) return null;
+  if (changes.length === 0) return { kind: 'NONE' };
 
   const tweak: RecipeNote = {
-    id: generateUuid(),
+    id: isApplying ? planned[0].id : generateUuid(),
     recipeId: existing.id,
     kind: 'TWEAK',
     text: getTweakReason(draft.tweakReason),
     changes,
     cookId: null,
+    stepIndex: isApplying ? (planned[0].stepIndex ?? null) : null,
+    stepText: isApplying ? (planned[0].stepText ?? null) : null,
+    reason: null,
     createdAt: now,
     updatedAt: now,
   };
 
-  return tweak;
+  return isApplying
+    ? {
+        kind: 'APPLY',
+        note: tweak,
+        absorbedIds: planned.slice(1).map((note) => note.id),
+      }
+    : { kind: 'NEW', note: tweak };
 };
 
-/** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). A cooked recipe's edit also records a tweak note in the same batch, so the note exists exactly when the recipe changed. An uploaded cover goes to Storage first and is cleaned up if the write fails; a web cover is only its address, and the upload it replaces is deleted once the write has committed. */
+/** Writes a recipe: a new one in full, an edit as only the fields the form owns (backfilling keys an older recipe lacks). A cooked recipe's edit also records a tweak note in the same batch, so the note exists exactly when the recipe changed; when the edit applies planned changes, the oldest of them becomes that tweak instead of a new entry being added. An uploaded cover goes to Storage first and is cleaned up if the write fails; a web cover is only its address, and the upload it replaces is deleted once the write has committed. */
 export const saveRecipe = createAsyncThunk<
   SaveRecipeResult,
   SaveRecipeInput,
@@ -217,7 +244,7 @@ export const saveRecipe = createAsyncThunk<
       );
     }
     const path = getRecipeCoverPath(uid, recipeId);
-    const tweak = getTweak(getState(), existing, draft, now);
+    const tweakPlan = getTweakPlan(getState(), existing, draft, now);
     const cover = getCoverFields({
       uploadPath: path,
       hasFile: draft.coverFile !== null,
@@ -314,7 +341,12 @@ export const saveRecipe = createAsyncThunk<
         if (collectionWrites.after) {
           batch.update(recipeDoc(uid, recipeId), collectionWrites.after);
         }
-        if (tweak) batch.set(noteDoc(uid, tweak.id), tweak);
+        if (tweakPlan.kind !== 'NONE') {
+          batch.set(noteDoc(uid, tweakPlan.note.id), tweakPlan.note);
+        }
+        if (tweakPlan.kind === 'APPLY') {
+          tweakPlan.absorbedIds.forEach((id) => batch.delete(noteDoc(uid, id)));
+        }
       } else {
         const recipe: Recipe = {
           id: recipeId,

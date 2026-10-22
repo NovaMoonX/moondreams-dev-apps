@@ -1227,4 +1227,96 @@ assert.deepEqual(
   'no drops a guess, and yes means nothing when a timer is asked for by name',
 );
 
+expectKind(
+  [
+    'read the tips',
+    'read tips',
+    'Read me the tips.',
+    'repeat the tip',
+    'any tips',
+    'what are the tips',
+    'okay Pepper read the tips please',
+  ],
+  { kind: 'READ_TIPS' },
+  'tips are read when asked for, in the words people use to repeat a thing',
+);
+expectKind(
+  ['read the notes', 'read my notes', 'repeat my note', 'what did I note', 'any notes'],
+  { kind: 'READ_NOTES' },
+  'notes are read when asked for',
+);
+assert.deepEqual(
+  [parse('tip'), parse('note'), parse('tips for chicken'), parse('add salt')],
+  [null, null, null, null],
+  'a word the kitchen says on its own is not a command',
+);
+assert.deepEqual(
+  parse(['repeat', 'repeat the tip']),
+  { kind: 'REPEAT' },
+  'plain repeat still reads the step',
+);
+assert.deepEqual(
+  ['add a tip', 'new tip', 'I have a tip', 'Add a note', 'make a note', 'add a change', 'suggest a change'].map(
+    (phrase) => parse(phrase),
+  ),
+  [
+    { kind: 'ADD_ENTRY', entryKind: 'TIP' },
+    { kind: 'ADD_ENTRY', entryKind: 'TIP' },
+    { kind: 'ADD_ENTRY', entryKind: 'TIP' },
+    { kind: 'ADD_ENTRY', entryKind: 'NOTE' },
+    { kind: 'ADD_ENTRY', entryKind: 'NOTE' },
+    { kind: 'ADD_ENTRY', entryKind: 'CHANGE' },
+    { kind: 'ADD_ENTRY', entryKind: 'CHANGE' },
+  ],
+  'a tip, a note or a change is started by saying so',
+);
+expectKind(
+  ['undo that', 'scratch that', 'delete that note'],
+  { kind: 'UNDO_ENTRY' },
+  'what was just dictated can be taken back',
+);
+
+const dictating: CookVoiceContext = {
+  ...plate,
+  choice: { kind: 'DICTATE', entryKind: 'TIP' },
+};
+assert.deepEqual(
+  parse("Don't crowd the pan or it will steam", dictating),
+  { kind: 'DICTATION', text: "Don't crowd the pan or it will steam" },
+  'while a tip is being dictated, what is said is the tip',
+);
+assert.deepEqual(
+  parse('next', dictating),
+  { kind: 'DICTATION', text: 'next' },
+  'and even a command word is the words, so a tip never moves the step',
+);
+assert.deepEqual(
+  ['never mind', 'cancel', 'forget it'].map((phrase) => parse(phrase, dictating)),
+  Array.from({ length: 3 }, () => ({
+    kind: 'TIMER_ANSWER',
+    answer: { kind: 'NEVER_MIND' },
+  })),
+  'a way out is still a way out',
+);
+assert.deepEqual(
+  parse('stop listening', dictating),
+  { kind: 'STOP_LISTENING' },
+  'and so is turning the mic off',
+);
+assert.equal(parse('   ', dictating), null, 'silence is not a tip');
+{
+  const long = parse(`${'tender '.repeat(120)}end`, dictating);
+  assert.equal(long?.kind, 'DICTATION', 'a long tip is kept, not dropped');
+  assert.equal(
+    long?.kind === 'DICTATION' && long.text.length <= 400 && !long.text.endsWith(' '),
+    true,
+    'but cut to the cap at a word',
+  );
+}
+assert.deepEqual(
+  parse('read the tips', { ...plate, choice: { kind: 'LENGTH' } }),
+  { kind: 'READ_TIPS' },
+  'a timer question does not stop tips being read',
+);
+
 console.log('pinchVoice: all checks passed');

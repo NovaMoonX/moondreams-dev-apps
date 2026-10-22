@@ -13,9 +13,15 @@ import { useStore } from 'react-redux';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronLeft, ListChecks, Pause, Play, Timer } from 'lucide-react';
+import {
+  ChevronLeft,
+  ListChecks,
+  NotebookPen,
+  Pause,
+  Play,
+  Timer,
+} from 'lucide-react';
 
-import NoteTextField from '@/components/NoteTextField';
 import Subview from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWakeLock } from '@/hooks/useWakeLock';
@@ -28,10 +34,9 @@ import {
   formatDuration,
 } from '@/utils/durationUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDateShort } from '@/utils/formatUtils';
 import CookDishStrip from '@apps/pinch/components/cooking/CookDishStrip';
-import CookFollowUp, {
-  type CookFollowUpChoice,
-} from '@apps/pinch/components/cooking/CookFollowUp';
+import CookCaptureView from '@apps/pinch/components/cooking/CookCaptureView';
 import CookIngredientsView from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookNoteCard from '@apps/pinch/components/cooking/CookNoteCard';
 import CookTimerBuzz from '@apps/pinch/components/cooking/CookTimerBuzz';
@@ -40,6 +45,11 @@ import CookPutAway from '@apps/pinch/components/cooking/CookPutAway';
 import CookRecord, {
   type CookRecordStatus,
 } from '@apps/pinch/components/cooking/CookRecord';
+import CookReview, {
+  type CookReviewEntry,
+} from '@apps/pinch/components/cooking/CookReview';
+import CookStepNotes from '@apps/pinch/components/cooking/CookStepNotes';
+import CookStepTips from '@apps/pinch/components/cooking/CookStepTips';
 import CookStepView, {
   type StepTimerSlot,
 } from '@apps/pinch/components/cooking/CookStepView';
@@ -57,10 +67,9 @@ import {
   COOK_CHOICE_MS,
   KITCHEN_TIMER_NAME,
   MAX_COOK_TIMERS,
-  MAX_RECIPE_NOTE_LENGTH,
 } from '@apps/pinch/constants';
 import { useCookActions } from '@apps/pinch/hooks/useCookActions';
-import { useCookNote } from '@apps/pinch/hooks/useCookNote';
+import { useCookCapture } from '@apps/pinch/hooks/useCookCapture';
 import {
   getRemainingMs,
   useCookTimers,
@@ -80,6 +89,8 @@ import {
   selectCooksById,
   selectCookSummaries,
   selectIngredientsById,
+  selectNotesById,
+  selectNotesByRecipe,
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
@@ -94,12 +105,19 @@ import type {
   CookView,
   PlateCookRecipe,
   Recipe,
+  RecipeNote,
   ResumeTimer,
 } from '@apps/pinch/types';
 import {
   applyResumePositions,
   buildCookingSnapshot,
 } from '@apps/pinch/utils/cookSession';
+import {
+  getLastTimeNote,
+  getSpokenEntries,
+  groupEntriesByStep,
+  resolveNoteStep,
+} from '@apps/pinch/utils/notes';
 import {
   EMPTY_KITCHEN_TIMER_DRAFT,
   getCookStartServings,
@@ -134,6 +152,7 @@ import {
   type CookTimerAnswer,
   type CookTimerTarget,
   type CookVoiceChoice,
+  type CookEntryKind,
   type CookVoiceTimer,
 } from '@apps/pinch/utils/cookVoice';
 import { getPlateTitle } from '@apps/pinch/utils/mealFormat';
@@ -157,6 +176,12 @@ interface TimerArg {
 }
 
 const NO_ARG: TimerArg = { ms: 0, name: '' };
+const NO_RECIPE_NOTES: RecipeNote[] = [];
+const ENTRY_WORDS: Record<CookEntryKind, string> = {
+  TIP: 'tip',
+  NOTE: 'note',
+  CHANGE: 'change',
+};
 
 /** A question the voice asked and is waiting on: which of these timers, or how long a new one runs. */
 type PendingQuestion =
@@ -168,7 +193,9 @@ type PendingQuestion =
       name: string;
       isConfirm?: boolean;
     }
-  | { kind: 'LENGTH'; name: string | null };
+  | { kind: 'LENGTH'; name: string | null }
+  /** Waiting for the words of a tip, note or change to write for the step on screen. */
+  | { kind: 'DICTATE'; entryKind: CookEntryKind; recipeId: string; stepIndex: number };
 
 const TIMER_VERB_WORDS: Record<PendingTimerVerb, string> = {
   PAUSE: 'pause',
@@ -396,7 +423,8 @@ function CookingSession({
   );
   const [edit, setEdit] = useState<{
     recipeId: string;
-    noteId: string | null;
+    /** The planned changes the form applies; empty changes the recipe with none planned. */
+    changeIds: string[];
     token: string;
     isFromFinish: boolean;
   } | null>(null);
@@ -431,6 +459,8 @@ function CookingSession({
   const guardedUntil = useRef(0);
   const voiceGuardedUntil = useRef(0);
   const hasCoachedNext = useRef(false);
+  const hasCoachedUndo = useRef(false);
+  const lastDictatedId = useRef<string | null>(null);
   const missedFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -560,13 +590,18 @@ function CookingSession({
         (current.plannedMealId ?? null) === plannedMealId,
     );
   const isRecorded = records.some((record) => record.recordedCookId !== null);
-  const note = useCookNote({
+  const capture = useCookCapture({
     uid,
-    entries: records.map((record) => ({
-      recipeId: record.recipeId,
-      cookId: record.recordedCookId,
-    })),
+    initialCaptured: resume?.captured ?? [],
+    getCookId: (recipeId) =>
+      records.find((record) => record.recipeId === recipeId)?.recordedCookId ??
+      null,
+    getSteps: (recipeId) =>
+      entries.find((candidate) => candidate.recipe.id === recipeId)?.recipe
+        .steps ?? [],
   });
+  const notesById = useAppSelector(selectNotesById);
+  const notesByRecipe = useAppSelector(selectNotesByRecipe);
 
   const pantryTake = usePantryTake(
     uid,
@@ -667,7 +702,7 @@ function CookingSession({
     recipe.id,
     index + 1,
   );
-  const isDraftOpen = isFinishShown && (note.isOpen || putAway.isOpen);
+  const isDraftOpen = capture.isOpen || (isFinishShown && putAway.isOpen);
   const focused = isDraftOpen || isEditing ? null : timers.focused;
   const focusedEntry =
     focused === null
@@ -716,6 +751,37 @@ function CookingSession({
   });
 
   const spokenStep = `${isPlate ? `${recipe.title}. ` : ''}Step ${index + 1} of ${recipe.steps.length}. ${stepText}`;
+  /** The tips, planned changes and notes for a step (the whole recipe's too on the first); the note the first step leads with is left out unless asked for, since its card is on screen. */
+  const getEntriesAt = (target: Recipe, at: number, withLastTime: boolean) => {
+    const all = notesByRecipe.get(target.id) ?? NO_RECIPE_NOTES;
+    const groups = groupEntriesByStep(all, target.steps);
+    const lastTimeId = withLastTime
+      ? null
+      : (getLastTimeNote(all, target.steps)?.id ?? null);
+    return [
+      ...(at === 0 ? groups.wholeRecipe : []),
+      ...(groups.byStep.get(at) ?? []),
+    ].filter((entry) => entry.id !== lastTimeId);
+  };
+  /** What is read after a step when the person asked for it: every tip, what was written for that very step, and on the first step the note the cook leads with. The whole recipe's older notes wait for "read the notes". */
+  const getSpokenNotes = (at: number) => {
+    const all = notesByRecipe.get(recipe.id) ?? NO_RECIPE_NOTES;
+    const lastTime = getLastTimeNote(all, recipe.steps);
+    const spokenEntries = getEntriesAt(recipe, at, true).filter(
+      (entry) =>
+        entry.kind === 'TIP' ||
+        resolveNoteStep(entry, recipe.steps) === at ||
+        entry.id === lastTime?.id,
+    );
+    return (
+      [
+        getSpokenEntries(spokenEntries, 'TIPS', formatDateShort),
+        getSpokenEntries(spokenEntries, 'NOTES', formatDateShort),
+      ]
+        .filter((text) => text !== null)
+        .join(' ') || null
+    );
+  };
   const voice = useCookVoice({
     uid,
     step:
@@ -723,8 +789,13 @@ function CookingSession({
       hasSteps &&
       !isFinishShown &&
       !isEditing &&
+      !capture.isOpen &&
       focused === null
-        ? { key: `${recipe.id}:${index}`, spoken: spokenStep }
+        ? {
+            key: `${recipe.id}:${index}`,
+            spoken: spokenStep,
+            notesSpoken: getSpokenNotes(index),
+          }
         : null,
     onTurnOn: timers.prepareSound,
     isAlarmRinging: timers.timers.some((timer) => timer.status === 'done'),
@@ -801,6 +872,7 @@ function CookingSession({
         },
         currentId,
         positions: plate,
+        captured: capture.captured,
         timers: timers.timers.map((timer): ResumeTimer => {
           const name = timer.recipeId === null ? timer.stepName : null;
           return timer.status === 'running'
@@ -819,6 +891,7 @@ function CookingSession({
     plannedMealDate,
     currentId,
     plate,
+    capture.captured,
     timers.timers,
     getReminderId,
     pushRevision,
@@ -856,9 +929,9 @@ function CookingSession({
     });
 
   const confirmDiscard = async () => {
-    if (note.hasDraft) {
+    if (capture.hasDraft) {
       return confirmDiscardOf(
-        'Discard this note?',
+        'Discard this entry?',
         "It isn't saved yet. Discarding it loses what you typed.",
       );
     }
@@ -881,7 +954,7 @@ function CookingSession({
   const getOverlay = () =>
     rootRef.current?.closest<HTMLElement>('[data-subview-scroller]') ?? null;
 
-  const startEdit = async (recipeId: string, noteId: string | null) => {
+  const startEdit = async (recipeId: string, changeIds: string[]) => {
     if (isEditing || !(await confirmDiscard())) return;
     const target = entries.find(
       (candidate) => candidate.recipe.id === recipeId,
@@ -893,13 +966,11 @@ function CookingSession({
     setEditTitle(target.recipe.title);
     setEdit({
       recipeId,
-      noteId,
+      changeIds,
       token: generateUuid(),
       isFromFinish: isFinished,
     });
   };
-
-  const applyNote = (noteId: string) => startEdit(recipe.id, noteId);
 
   const leaveEdit = async () => {
     if (editBackStepRef.current?.()) return;
@@ -930,20 +1001,8 @@ function CookingSession({
     setEdit((current) => (current?.token === saved.token ? null : current));
   };
 
-  const chooseFollowUp = async (
-    recipeId: string,
-    choice: CookFollowUpChoice,
-  ) => {
-    if (choice === 'CHANGE') {
-      await startEdit(recipeId, null);
-      return;
-    }
-    if (choice === 'NOTE') {
-      note.open(recipeId);
-      return;
-    }
+  const chooseNothing = (recipeId: string) =>
     setFollowUps((current) => ({ ...current, [recipeId]: 'NOTHING' }));
-  };
 
   useLayoutEffect(() => {
     if (edit === null) {
@@ -951,10 +1010,27 @@ function CookingSession({
     }
   }, [edit]);
 
-  const cancelNote = async () => {
+  const cancelCapture = async () => {
     if (!(await confirmDiscard())) return;
-    note.cancel();
+    capture.cancel();
     focusPrimary();
+  };
+
+  const deleteCaptured = async () => {
+    const kind = capture.draft?.kind;
+    if (kind === undefined) return;
+    const word = kind === 'CHANGE' ? 'change' : kind === 'TIP' ? 'tip' : 'note';
+    const isConfirmed = await ask({
+      title: `Delete this ${word}?`,
+      message: `It comes off the recipe's notes. This can't be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Keep it',
+      destructive: true,
+    });
+    if (isConfirmed) {
+      await capture.remove();
+      focusPrimary();
+    }
   };
 
   const focusPrimary = () =>
@@ -1042,7 +1118,6 @@ function CookingSession({
     setUndoState('PENDING');
     try {
       await undoCooks(ids);
-      note.reset();
       setFollowUps({});
       setCookedIds((current) =>
         Object.fromEntries(
@@ -1261,7 +1336,11 @@ function CookingSession({
   };
 
   useEffect(() => {
-    if (isEditing || (focused === null && (!isStepsView || !hasSteps))) {
+    if (
+      isEditing ||
+      capture.isOpen ||
+      (focused === null && (!isStepsView || !hasSteps))
+    ) {
       return;
     }
 
@@ -1855,6 +1934,78 @@ function CookingSession({
       showDish(target.recipe.id);
       return done(`Showing ${target.recipe.title}`);
     },
+    readTips: () => {
+      const text = getSpokenEntries(
+        getEntriesAt(voiceStep.recipe, voiceStep.stepNumber - 1, true),
+        'TIPS',
+        formatDateShort,
+      );
+      return text === null
+        ? answerNo('No tips for this step.')
+        : done('Reading the tips', text);
+    },
+    readNotes: () => {
+      const text = getSpokenEntries(
+        getEntriesAt(voiceStep.recipe, voiceStep.stepNumber - 1, true),
+        'NOTES',
+        formatDateShort,
+      );
+      return text === null
+        ? answerNo('No notes for this step.')
+        : done('Reading the notes', text);
+    },
+    addEntry: (kind) => {
+      if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
+        return refuse('Go to a step to add that.');
+      }
+      if (!capture.isAvailable(recipe.id) || isRemoved) {
+        return refuse("Your notes aren't ready, or this recipe's are full.");
+      }
+      setPending({
+        kind: 'DICTATE',
+        entryKind: kind,
+        recipeId: recipe.id,
+        stepIndex: index,
+      });
+      const word = ENTRY_WORDS[kind];
+      return done(`Say your ${word}`, `Go ahead. Say your ${word}.`);
+    },
+    dictation: (text) => {
+      const question = pending;
+      setPending(null);
+      if (question === null || question.kind !== 'DICTATE') {
+        return refuse('Nothing was asked.');
+      }
+      const word = ENTRY_WORDS[question.entryKind];
+      void capture
+        .quickAdd({
+          recipeId: question.recipeId,
+          kind: question.entryKind,
+          text,
+          stepIndex: question.stepIndex,
+        })
+        .then(
+          (id) => {
+            lastDictatedId.current = id;
+          },
+          () => voice.speak(`Sorry, I couldn't save that ${word}.`),
+        );
+      const coaching = hasCoachedUndo.current ? '' : ' Say undo that to take it back.';
+      hasCoachedUndo.current = true;
+      return done(
+        `Saved your ${word} for step ${question.stepIndex + 1}`,
+        `Saved your ${word} for step ${question.stepIndex + 1}.${coaching}`,
+      );
+    },
+    undoEntry: () => {
+      const id = lastDictatedId.current;
+      if (id === null) return refuse('There is nothing to undo.');
+      lastDictatedId.current = null;
+      void capture
+        .removeById(id)
+        .catch(() => voice.speak("Sorry, I couldn't take that back."));
+      return done('Took that back', 'Okay, I took that back.');
+    },
     cycleRecipe: (direction) => {
       if (!isPlate) return refuse('Only one recipe is cooking.');
       const at = entries.findIndex(
@@ -1872,6 +2023,9 @@ function CookingSession({
   const getVoiceChoice = (): CookVoiceChoice | null => {
     if (!voice.isOn || pending === null) return null;
     if (pending.kind === 'LENGTH') return { kind: 'LENGTH' };
+    if (pending.kind === 'DICTATE') {
+      return { kind: 'DICTATE', entryKind: pending.entryKind };
+    }
     const asked = pending.ids.flatMap((id) =>
       timers.timers.filter((timer) => timer.id === id),
     );
@@ -1950,22 +2104,30 @@ function CookingSession({
   const followUpRecords = records.filter(
     (record) => record.recordedCookId !== null,
   );
+  const getReviewEntries = (recipeId: string): CookReviewEntry[] => {
+    const steps =
+      entries.find((candidate) => candidate.recipe.id === recipeId)?.recipe
+        .steps ?? [];
+    return capture.captured.flatMap((id) => {
+      const found = notesById.get(id);
+      return found !== undefined &&
+        found.recipeId === recipeId &&
+        found.kind !== 'TWEAK'
+        ? [{ note: found, stepAt: resolveNoteStep(found, steps) }]
+        : [];
+    });
+  };
   const hasFollowUps = records.some(
     (record) =>
-      note.isSaved(record.recipeId) ||
+      getReviewEntries(record.recipeId).length > 0 ||
       followUps[record.recipeId] === 'CHANGED' ||
       (putAway.getEntry(record.recipeId)?.saved.length ?? 0) > 0,
   );
-  const getFollowUpDone = (recipeId: string) => {
-    const lines = [
-      note.isSaved(recipeId) && 'Note saved.',
-      followUps[recipeId] === 'CHANGED' && 'Recipe changed.',
-    ].filter((line) => line !== false);
-    return lines.length === 0 ? null : lines.join(' ');
-  };
-  const openNoteTitle =
-    records.find((record) => record.recipeId === note.openRecipeId)?.entry
-      .recipe.title ?? null;
+  const getFollowUpDone = (recipeId: string) =>
+    followUps[recipeId] === 'CHANGED' ? 'Recipe changed.' : null;
+  const openCaptureTitle =
+    entries.find((candidate) => candidate.recipe.id === capture.draft?.recipeId)
+      ?.recipe.title ?? null;
 
   const getTimerNote = () => {
     if (focused === null || focused.status === 'done') return null;
@@ -1991,13 +2153,19 @@ function CookingSession({
       <CookDishStrip dishes={dishes} value={recipe.id} onChange={showRecipe} />
     ) : null;
   const isDishStripInStep = isStepsView && hasSteps && !isWide;
+  const stepEntries = getEntriesAt(recipe, index, false);
+  const stepTips = stepEntries.filter((entry) => entry.kind === 'TIP');
+  const stepNotes = stepEntries.filter((entry) => entry.kind !== 'TIP');
+  const readEntries = (which: 'TIPS' | 'NOTES') =>
+    voice.speak(getSpokenEntries(stepEntries, which, formatDateShort) ?? '');
+  const openStepCapture = () =>
+    capture.open({ recipeId: recipe.id, stepIndex: index, kind: 'TIP' });
   const noteCard =
     !isWide && isCookNoteShown(index, gotItNotes, recipe.id) ? (
       <CookNoteCard
         key={recipe.id}
         recipeId={recipe.id}
         onGotIt={() => setGotItNotes((current) => [...current, recipe.id])}
-        onApply={(noteId) => void applyNote(noteId)}
       />
     ) : null;
   const notesDoor = (
@@ -2005,7 +2173,7 @@ function CookingSession({
       recipeId={recipe.id}
       onAdd={null}
       onEdit={null}
-      onApply={(noteId) => void applyNote(noteId)}
+      onApplyChange={(noteId) => void startEdit(recipe.id, [noteId])}
     />
   );
   const timersButton = (
@@ -2021,15 +2189,30 @@ function CookingSession({
       <Timer className='h-4 w-4' aria-hidden='true' />
     </Button>
   );
+  const captureButton =
+    capture.isAvailable(recipe.id) && !isRemoved ? (
+      <Button
+        type='button'
+        variant='secondary'
+        size='icon'
+        rounded='full'
+        className='size-10 shrink-0'
+        aria-label='Add a tip, note or change for this step'
+        onClick={openStepCapture}
+      >
+        <NotebookPen className='h-4 w-4' aria-hidden='true' />
+      </Button>
+    ) : null;
   const ingredientsButton = isWide ? null : (
     <Button
       type='button'
       variant='secondary'
-      className='h-10 shrink-0 gap-2 px-4 text-sm'
+      className='h-10 shrink-0 gap-2 px-4 text-sm max-[379px]:w-10 max-[379px]:px-0'
+      aria-label='Ingredients'
       onClick={() => showView('ingredients')}
     >
       <ListChecks className='h-4 w-4' aria-hidden='true' />
-      Ingredients
+      <span className='max-[379px]:hidden'>Ingredients</span>
     </Button>
   );
   const stepContent = hasSteps ? (
@@ -2046,10 +2229,27 @@ function CookingSession({
       action={
         <div className='flex shrink-0 items-center gap-2'>
           {timersButton}
+          {captureButton}
           {ingredientsButton}
         </div>
       }
-      aside={noteCard}
+      tips={
+        <CookStepTips
+          tips={stepTips}
+          onRead={voice.isSupported ? () => readEntries('TIPS') : null}
+        />
+      }
+      aside={
+        <>
+          {noteCard}
+          <CookStepNotes
+            entries={stepNotes}
+            onEdit={capture.edit}
+            onApplyChange={(id) => void startEdit(recipe.id, [id])}
+            onRead={voice.isSupported ? () => readEntries('NOTES') : null}
+          />
+        </>
+      }
       dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)
@@ -2265,6 +2465,8 @@ function CookingSession({
       onBack={() => {
         if (isEditing) {
           void leaveEdit();
+        } else if (capture.isOpen) {
+          void cancelCapture();
         } else if (focused !== null) {
           backToStep();
         } else if (isStepsView) {
@@ -2284,6 +2486,15 @@ function CookingSession({
         {!isDishStripInStep && dishStrip}
         {focused !== null ? (
           getTimerContent()
+        ) : capture.isOpen && !isFinishShown ? (
+          <CookCaptureView
+            capture={capture}
+            steps={recipe.steps}
+            caption={isPlate ? recipe.title : null}
+            backLabel='Back to the step'
+            onBack={() => void cancelCapture()}
+            onDelete={() => void deleteCaptured()}
+          />
         ) : isTimersView ? (
           <CookTimersView
             timers={getTimerRows(timers.timers, null)}
@@ -2303,7 +2514,7 @@ function CookingSession({
             <p className='text-center text-2xl leading-snug font-medium'>
               Nice work
             </p>
-            {!note.isOpen && !putAway.isOpen && (
+            {!capture.isOpen && !putAway.isOpen && (
               <CookRecord
                 status={recordStatus}
                 rows={records.map((record) => ({
@@ -2330,10 +2541,10 @@ function CookingSession({
                 problem={getRecordProblem()}
               />
             )}
-            {!note.isOpen && !putAway.isOpen && isRecorded && (
+            {!capture.isOpen && !putAway.isOpen && isRecorded && (
               <CookPantryTake take={pantryTake} />
             )}
-            {!note.isOpen &&
+            {!capture.isOpen &&
               recordedEntries.map((record) => (
                 <CookPutAway
                   key={record.recipeId}
@@ -2343,52 +2554,57 @@ function CookingSession({
                   caption={isPlate ? record.entry.recipe.title : null}
                 />
               ))}
-            {isRecorded && note.isOpen && (
-              <div className='bg-muted/50 border-border space-y-2 rounded-2xl border p-4'>
-                <NoteTextField
-                  label={
-                    isPlate && openNoteTitle
-                      ? `Your note about ${openNoteTitle}`
-                      : 'Your note'
-                  }
-                  placeholder='Less vinegar next time, the sauce was ready early'
-                  maxLength={MAX_RECIPE_NOTE_LENGTH}
-                  value={note.text}
-                  onChange={note.setText}
-                  shouldFocus
-                />
-                {note.error && (
-                  <p className='text-destructive text-sm' role='alert'>
-                    {note.error}
-                  </p>
-                )}
-              </div>
+            {isRecorded && capture.isOpen && (
+              <CookCaptureView
+                capture={capture}
+                steps={
+                  entries.find(
+                    (candidate) =>
+                      candidate.recipe.id === capture.draft?.recipeId,
+                  )?.recipe.steps ?? []
+                }
+                caption={isPlate ? openCaptureTitle : null}
+                backLabel='Back'
+                onBack={() => void cancelCapture()}
+                onDelete={() => void deleteCaptured()}
+              />
             )}
-            {!note.isOpen &&
+            {!capture.isOpen &&
               !putAway.isOpen &&
               followUpRecords.map((record) => {
-                const doneText = getFollowUpDone(record.recipeId);
-                const savedNoteId = note.getSavedNoteId(record.recipeId);
+                const reviewEntries = getReviewEntries(record.recipeId);
+                const plannedChanges = reviewEntries.filter(
+                  (entry) => entry.note.kind === 'CHANGE',
+                );
                 return (
-                  <CookFollowUp
+                  <CookReview
                     key={record.recipeId}
                     caption={isPlate ? record.entry.recipe.title : null}
+                    entries={reviewEntries}
+                    canAdd={capture.isAvailable(record.recipeId)}
                     isNothingChosen={followUps[record.recipeId] === 'NOTHING'}
-                    isNoteAvailable={note.isAvailable(record.recipeId)}
-                    doneText={doneText}
-                    onApply={
-                      savedNoteId !== null &&
-                      followUps[record.recipeId] !== 'CHANGED'
-                        ? () => void startEdit(record.recipeId, savedNoteId)
-                        : null
+                    doneText={getFollowUpDone(record.recipeId)}
+                    plannedChangeCount={plannedChanges.length}
+                    onAdd={() =>
+                      capture.open({
+                        recipeId: record.recipeId,
+                        stepIndex: null,
+                        kind: 'NOTE',
+                      })
                     }
-                    onChoose={(choice) =>
-                      void chooseFollowUp(record.recipeId, choice)
+                    onEdit={capture.edit}
+                    onApplyChanges={() =>
+                      void startEdit(
+                        record.recipeId,
+                        plannedChanges.map((entry) => entry.note.id),
+                      )
                     }
+                    onChangeRecipe={() => void startEdit(record.recipeId, [])}
+                    onNothing={() => chooseNothing(record.recipeId)}
                   />
                 );
               })}
-            {!note.isOpen && !putAway.isOpen && (
+            {!capture.isOpen && !putAway.isOpen && (
               <Button
                 type='button'
                 variant='secondary'
@@ -2534,7 +2750,7 @@ function CookingSession({
                     Save
                   </Button>
                 </>
-              ) : isFinishShown && isRecorded && note.isOpen ? (
+              ) : capture.isOpen && (isRecorded || !isFinishShown) ? (
                 <>
                   <Button
                     type='button'
@@ -2543,8 +2759,8 @@ function CookingSession({
                       'h-14 shrink-0 px-6 text-base',
                       '[@media(max-height:500px)]:h-11',
                     )}
-                    disabled={note.isSaving}
-                    onClick={() => void cancelNote()}
+                    disabled={capture.isSaving}
+                    onClick={() => void cancelCapture()}
                   >
                     Cancel
                   </Button>
@@ -2554,11 +2770,11 @@ function CookingSession({
                       'h-14 min-w-0 flex-1 text-lg',
                       '[@media(max-height:500px)]:h-11',
                     )}
-                    loading={note.isSaving}
-                    disabled={note.isSaving || !note.canSave}
-                    onClick={() => void note.save()}
+                    loading={capture.isSaving}
+                    disabled={capture.isSaving || !capture.canSave}
+                    onClick={() => void capture.save()}
                   >
-                    Save note
+                    Save
                   </Button>
                 </>
               ) : isFinishShown ? (
@@ -2650,7 +2866,7 @@ function CookingSession({
           key={edit.token}
           uid={uid}
           recipeId={edit.recipeId}
-          noteId={edit.noteId}
+          changeIds={edit.changeIds}
           isDirtyRef={editDirtyRef}
           backStepRef={editBackStepRef}
           onTitleChange={setEditTitle}

@@ -7,6 +7,7 @@ import {
   toSharedRecipe,
 } from '../../functions/src/apps/pinch/pinchShareView.ts';
 import { CATALOG_INGREDIENTS } from '../../src/apps/pinch/catalog/catalogIngredients.ts';
+import { getStepAnchor } from '../../src/apps/pinch/utils/notes.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -208,6 +209,58 @@ const SEED_NOTES = [
     changes: [],
     cookId: 'seed-pinch-cook-4',
     daysAgo: 6,
+    hour: 19,
+  },
+];
+
+/** Entries written for a step. The four above keep the shape from before steps (no `stepIndex`, `stepText` or `reason` key), so the legacy path stays exercised; these carry them, and their step words are worked out from the recipe, as the app does. */
+const SEED_STEP_NOTES = [
+  {
+    id: 'seed-pinch-tip-adobo-lid',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'TIP',
+    text: 'Leave the lid a little open so it simmers without boiling over.',
+    changes: [],
+    cookId: null,
+    stepIndex: 1,
+    reason: null,
+    daysAgo: 20,
+    hour: 18,
+  },
+  {
+    id: 'seed-pinch-tip-adobo-whole',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'TIP',
+    text: 'Chicken thighs with the skin on hold up best. Pat them dry first.',
+    changes: [],
+    cookId: null,
+    stepIndex: null,
+    reason: null,
+    daysAgo: 20,
+    hour: 18,
+  },
+  {
+    id: 'seed-pinch-change-adobo-garlic',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'CHANGE',
+    text: 'Double the garlic in the marinade.',
+    changes: [],
+    cookId: null,
+    stepIndex: 0,
+    reason: 'The kids wanted it garlickier.',
+    daysAgo: 3,
+    hour: 20,
+  },
+  {
+    id: 'seed-pinch-note-adobo-step',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'NOTE',
+    text: 'The sauce was ready in 15 minutes on my stove, so check it early.',
+    changes: [],
+    cookId: 'seed-pinch-planned-1__seed-pinch-recipe-adobo',
+    stepIndex: 2,
+    reason: null,
+    daysAgo: 3,
     hour: 19,
   },
 ];
@@ -1320,6 +1373,21 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .doc(entry.id)
         .set({ ...entry, createdAt: at, updatedAt: at });
     }),
+    ...SEED_STEP_NOTES.map(({ daysAgo, hour, ...entry }) => {
+      const at = today - daysAgo * DAY_MS + hour * 3_600_000;
+      const steps =
+        SEED_RECIPES.find((recipe) => recipe.id === entry.recipeId)?.steps ??
+        [];
+      return kitchenRef
+        .collection('notes')
+        .doc(entry.id)
+        .set({
+          ...entry,
+          ...getStepAnchor(steps, entry.stepIndex),
+          createdAt: at,
+          updatedAt: at,
+        });
+    }),
     ...SEED_SHOPPING.map((entry, index) =>
       kitchenRef
         .collection('shoppingItems')
@@ -1413,6 +1481,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_CONTAINERS.length +
       SEED_PACKAGES.length +
       SEED_NOTES.length +
+      SEED_STEP_NOTES.length +
       SEED_IDEAS.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +

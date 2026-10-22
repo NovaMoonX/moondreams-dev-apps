@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, ChevronDown, PenLine } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
@@ -13,20 +13,26 @@ import {
   selectNoteSummaries,
   selectNotesByRecipe,
   selectNotesLoadError,
+  selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
-import { getNoteSummary, leadWithAdvice } from '@apps/pinch/utils/notes';
+import {
+  getLastTimeNote,
+  getNoteSummary,
+  leadWithAdvice,
+} from '@apps/pinch/utils/notes';
 
 const NO_NOTES: RecipeNote[] = [];
+const NO_STEPS: string[] = [];
 const LONG_NOTE_CHARS = 180;
 
 interface CookNoteCardProps {
   recipeId: string;
   onGotIt: () => void;
-  onApply: (noteId: string) => void;
 }
 
-function CookNoteCard({ recipeId, onGotIt, onApply }: CookNoteCardProps) {
+/** What the cook leads with: the latest note the person wrote about the whole recipe, from the last time they made it. Notes about one step show with that step. */
+function CookNoteCard({ recipeId, onGotIt }: CookNoteCardProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
@@ -34,10 +40,12 @@ function CookNoteCard({ recipeId, onGotIt, onApply }: CookNoteCardProps) {
     (state) =>
       state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
   );
+  const steps =
+    useAppSelector(selectRecipesById).get(recipeId)?.steps ?? NO_STEPS;
   const isShort = useIsShortScreen();
   const [isOpen, setIsOpen] = useState(false);
 
-  const latest = notes.find((entry) => entry.kind === 'NOTE') ?? null;
+  const latest = getLastTimeNote(notes, steps);
   if (!isReady || latest === null) {
     return null;
   }
@@ -54,24 +62,13 @@ function CookNoteCard({ recipeId, onGotIt, onApply }: CookNoteCardProps) {
       description: 'Got it, hide this note while you cook',
       onClick: onGotIt,
     },
-    ...(isOpen || isShort
-      ? []
-      : [
-          {
-            key: 'apply',
-            icon: <PenLine className='h-4 w-4' />,
-            label: 'Apply to the recipe',
-            description: `Apply the note from ${date} to the recipe`,
-            onClick: () => onApply(latest.id),
-          },
-        ]),
   ];
   const notesList = (
     <RecipeNotes
       recipeId={recipeId}
       onAdd={null}
       onEdit={null}
-      onApply={onApply}
+      onApplyChange={null}
     />
   );
 

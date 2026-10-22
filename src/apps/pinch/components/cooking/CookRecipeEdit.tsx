@@ -7,8 +7,8 @@ import { selectNotesById } from '@apps/pinch/store/selectors';
 interface CookRecipeEditProps {
   uid: string;
   recipeId: string;
-  /** The note being applied to the recipe, quoted at the top of the form. */
-  noteId: string | null;
+  /** The planned changes being applied to the recipe, quoted at the top of the form. */
+  changeIds: string[];
   isDirtyRef: RefObject<boolean>;
   backStepRef: RefObject<(() => boolean) | null>;
   onTitleChange: (title: string) => void;
@@ -20,7 +20,7 @@ interface CookRecipeEditProps {
 function CookRecipeEdit({
   uid,
   recipeId,
-  noteId,
+  changeIds,
   isDirtyRef,
   backStepRef,
   onTitleChange,
@@ -29,10 +29,16 @@ function CookRecipeEdit({
 }: CookRecipeEditProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const notesById = useAppSelector(selectNotesById);
-  const [note] = useState(() => {
-    const found = notesById.get(noteId ?? '') ?? null;
-    return found !== null && found.recipeId === recipeId ? found : null;
-  });
+  const [changes] = useState(() =>
+    changeIds.flatMap((id) => {
+      const found = notesById.get(id);
+      return found !== undefined &&
+        found.kind === 'CHANGE' &&
+        found.recipeId === recipeId
+        ? [found]
+        : [];
+    }),
+  );
 
   useLayoutEffect(() => {
     rootRef.current
@@ -51,7 +57,7 @@ function CookRecipeEdit({
         recipeId={recipeId}
         initialRead={null}
         initialIdea={null}
-        initialNote={note}
+        initialChanges={changes}
         isDirtyRef={isDirtyRef}
         backStepRef={backStepRef}
         onTitleChange={onTitleChange}

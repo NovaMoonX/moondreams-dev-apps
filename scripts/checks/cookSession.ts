@@ -879,4 +879,75 @@ assert.equal(
   'a chip that would pass the note’s length is left out',
 );
 
+// Tips, notes and changes written on the screen
+{
+  const written = buildCookingSnapshot({
+    ...{
+      uid: UID,
+      sessionId: 'session-1',
+      now: NOW,
+      open: {
+        recipeId: 'adobo',
+        servings: null,
+        plannedMealId: null,
+        plannedMealDate: null,
+        plate: null,
+      },
+      currentId: 'adobo',
+      positions: { adobo: { stepIndex: 1, servings: 4 } },
+      timers: [],
+    },
+    captured: ['0b0f6a3c-1f0e-4a0e-9d4b-2f6d1a1c9e11', 'note-2'],
+  });
+  assert.deepEqual(
+    parse(written)?.resume.captured,
+    ['0b0f6a3c-1f0e-4a0e-9d4b-2f6d1a1c9e11', 'note-2'],
+    'what was written while cooking is still listed after the screen is picked up',
+  );
+  const { captured: ignored, ...withoutKey } = written.resume;
+  assert.equal(ignored?.length, 2);
+  assert.deepEqual(
+    parse({ ...written, resume: withoutKey })?.resume.captured,
+    [],
+    'a session saved before entries were written reads as none',
+  );
+  assert.deepEqual(
+    parse({ ...written, resume: { ...written.resume, captured: [3, '', {}] } })
+      ?.resume.captured,
+    [],
+    'a list that is not ids is dropped without failing the pick-up',
+  );
+  assert.equal(
+    parse({
+      ...written,
+      resume: {
+        ...written.resume,
+        captured: Array.from({ length: 61 }, (_, index) => `n${index}`),
+      },
+    })?.resume.captured.length,
+    0,
+    'more than the cap is not trusted',
+  );
+  assert.equal(
+    buildCookingSnapshot({
+      uid: UID,
+      sessionId: 's',
+      now: NOW,
+      open: {
+        recipeId: 'adobo',
+        servings: null,
+        plannedMealId: null,
+        plannedMealDate: null,
+        plate: null,
+      },
+      currentId: 'adobo',
+      positions: {},
+      timers: [],
+      captured: Array.from({ length: 80 }, (_, index) => `n${index}`),
+    }).resume.captured?.length,
+    60,
+    'a session keeps at most the cap',
+  );
+}
+
 console.log('cookSession: all checks passed');

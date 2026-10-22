@@ -342,12 +342,12 @@ function RecipeDrawer({
             recipeId={recipe.id}
             onAdd={() => onOpenNote(recipe.id, null)}
             onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
-            onApply={(noteId) => {
+            onApplyChange={(noteId) => {
               onClose();
               openSubview({
                 kind: 'recipe',
                 id: recipe.id,
-                fromNoteId: noteId,
+                fromChangeIds: [noteId],
               });
             }}
           />

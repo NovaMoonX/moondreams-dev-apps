@@ -1583,18 +1583,21 @@ service cloud.firestore {
           && isNoteChangeAt(changes, 6) && isNoteChangeAt(changes, 7);
       }
 
-      // A NOTE is the person's own words; a TWEAK records what an edit to the recipe changed, with an optional reason in `text`.
+      // A NOTE is the person's own words about a cook; a TIP is advice for the dish itself; a CHANGE is a change the person means to make, with the reason in `reason`; a TWEAK records what an edit to the recipe changed, with an optional reason in `text`. A NOTE, TIP or CHANGE may name one step (`stepIndex`, with `stepText` to find it again once steps move); a document written before them lacks all three keys, which read as null.
       function isRecipeNote(data, id) {
-        return data.keys().hasOnly(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'stepIndex', 'stepText', 'reason', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.recipeId, 80)
-          && data.kind in ['NOTE', 'TWEAK']
+          && data.kind in ['NOTE', 'TIP', 'CHANGE', 'TWEAK']
           && (data.text == null || isShortText(data.text, 2000))
-          && (data.kind == 'NOTE' ? data.text is string : true)
+          && (data.kind == 'TWEAK' ? true : data.text is string)
           && isNoteChanges(data.changes)
           && (data.kind == 'TWEAK' || data.changes.size() == 0)
-          && (data.cookId == null || isShortText(data.cookId, 80))
+          && (data.cookId == null || (data.kind != 'TIP' && isShortText(data.cookId, 80)))
+          && (data.get('stepIndex', null) == null || (data.stepIndex is int && data.stepIndex >= 0 && data.stepIndex < 60))
+          && (data.get('stepText', null) == null || isShortText(data.stepText, 120))
+          && (data.get('reason', null) == null || (data.kind == 'CHANGE' && isShortText(data.reason, 2000)))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1879,12 +1882,14 @@ service cloud.firestore {
       match /notes/{id} {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isRecipeNote(request.resource.data, id);
+        // An edit keeps the kind, the cook, the changes and the date. The one exception is a CHANGE the recipe form applied: the same document becomes the TWEAK that records the edit (its lines, dated when it was applied), so applying a change leaves one entry and not two.
         allow update: if isKitchenOwner() && isRecipeNote(request.resource.data, id)
           && request.resource.data.recipeId == resource.data.recipeId
-          && request.resource.data.kind == resource.data.kind
           && request.resource.data.cookId == resource.data.get('cookId', null)
-          && request.resource.data.changes == resource.data.get('changes', [])
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && ((request.resource.data.kind == resource.data.kind
+              && request.resource.data.changes == resource.data.get('changes', [])
+              && request.resource.data.createdAt == resource.data.createdAt)
+            || (resource.data.kind == 'CHANGE' && request.resource.data.kind == 'TWEAK'));
       }
 
       match /containers/{id} {
@@ -1944,9 +1949,10 @@ service cloud.firestore {
       function isVoice(value) {
         return value == null
           || (value is map
-            && value.keys().hasOnly(['hasAgreed', 'isReadingAloud', 'isWaiting'])
+            && value.keys().hasOnly(['hasAgreed', 'isReadingAloud', 'isReadingNotes', 'isWaiting'])
             && isNullOrBool(value.get('hasAgreed', null))
             && isNullOrBool(value.get('isReadingAloud', null))
+            && isNullOrBool(value.get('isReadingNotes', null))
             && isNullOrBool(value.get('isWaiting', null)));
       }
 

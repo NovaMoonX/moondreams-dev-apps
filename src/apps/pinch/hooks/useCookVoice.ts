@@ -12,6 +12,7 @@ import { COOK_WINDOW_MS } from '@apps/pinch/constants';
 import {
   getCookCommandKey,
   type CookCommand,
+  type CookEntryKind,
   type CookTimerAnswer,
   type CookTimerScope,
   type CookTimerTarget,
@@ -74,6 +75,11 @@ export interface CookVoiceActions {
     candidates: string[],
   ) => CookVoiceResult;
   cycleRecipe: (direction: 1 | -1) => CookVoiceResult;
+  readTips: () => CookVoiceResult;
+  readNotes: () => CookVoiceResult;
+  addEntry: (kind: CookEntryKind) => CookVoiceResult;
+  dictation: (text: string) => CookVoiceResult;
+  undoEntry: () => CookVoiceResult;
 }
 
 export interface CookVoiceMessage {
@@ -130,6 +136,16 @@ export const runCookCommand = (
       return actions.switchRecipe(command.recipeId, command.candidates);
     case 'CYCLE_RECIPE':
       return actions.cycleRecipe(command.direction);
+    case 'READ_TIPS':
+      return actions.readTips();
+    case 'READ_NOTES':
+      return actions.readNotes();
+    case 'ADD_ENTRY':
+      return actions.addEntry(command.entryKind);
+    case 'DICTATION':
+      return actions.dictation(command.text);
+    case 'UNDO_ENTRY':
+      return actions.undoEntry();
   }
 };
 
@@ -155,7 +171,7 @@ const quote = (text: string) =>
 interface UseCookVoiceOptions {
   uid: string;
   /** The step on screen as it is read aloud; null while no step is shown (a reading already going, such as an answer, then carries on). */
-  step: { key: string; spoken: string } | null;
+  step: { key: string; spoken: string; notesSpoken: string | null } | null;
   /** Runs inside the tap that turns voice control on, for browser features that need a tap (the timer's sound). */
   onTurnOn?: () => void;
   /** How many timers run now, and when the latest one rang: the wait for the wake phrase does not count the time a timer runs or the two minutes after one rings. */
@@ -183,12 +199,17 @@ export function useCookVoice({
     `pinch:${uid}:voice:read-aloud`,
     false,
   );
+  const [localReadingNotes, setLocalReadingNotes] = useLocalStoragePreference(
+    `pinch:${uid}:voice:read-notes`,
+    false,
+  );
   const [localWaiting, setLocalWaiting] = useLocalStoragePreference(
     `pinch:${uid}:voice:wake`,
     false,
   );
   const hasAgreed = settings.voice.hasAgreed ?? localAgreed;
   const isReadingAloud = settings.voice.isReadingAloud ?? localReadingAloud;
+  const isReadingNotes = settings.voice.isReadingNotes ?? localReadingNotes;
   const isWaitingPreferred = settings.voice.isWaiting ?? localWaiting;
   const setHasAgreed = (next: boolean) => {
     setLocalAgreed(next);
@@ -197,6 +218,10 @@ export function useCookVoice({
   const setIsReadingAloud = (next: boolean) => {
     setLocalReadingAloud(next);
     void saveSettings({ voice: { isReadingAloud: next } });
+  };
+  const setIsReadingNotes = (next: boolean) => {
+    setLocalReadingNotes(next);
+    void saveSettings({ voice: { isReadingNotes: next } });
   };
   const setIsWaitingPreferred = (next: boolean) => {
     setLocalWaiting(next);
@@ -451,7 +476,14 @@ export function useCookVoice({
   const isHearing =
     speech.status === 'listening' || speech.status === 'speaking';
   const stepKey = step?.key ?? null;
-  const spoken = step?.spoken ?? null;
+  const stepWords = step?.spoken ?? null;
+  const notesWords = step?.notesSpoken ?? null;
+  const spoken =
+    stepWords === null
+      ? null
+      : isReadingNotes && notesWords !== null
+        ? `${stepWords} ${notesWords}`
+        : stepWords;
 
   // A step is read once per showing: listening coming back (a hidden tab, a reading that ended) doesn't read it again.
   useEffect(() => {
@@ -532,6 +564,11 @@ export function useCookVoice({
     choose,
     isReadingAloud,
     setIsReadingAloud: setReadingAloud,
+    /** Reads a step's tips and notes right after the step. */
+    isReadingNotes,
+    setIsReadingNotes,
+    /** Speaks `text` now, whether or not the mic is on. */
+    speak: say,
     natural,
   };
 }

@@ -1,9 +1,11 @@
 import {
   MAX_RECIPE_NOTE_LENGTH,
+  MAX_SPOKEN_NOTE_CHARS,
   NOTE_COOK_CHOICES,
+  NOTE_STEP_ANCHOR_LENGTH,
   SOFT_MAX_RECIPE_NOTES,
 } from '@apps/pinch/constants';
-import type { Cook, RecipeNote } from '@apps/pinch/types';
+import type { Cook, NoteKind, RecipeNote } from '@apps/pinch/types';
 
 export interface NoteSummary {
   count: number;
@@ -53,23 +55,38 @@ export const isValidNoteText = (text: string) => {
   return trimmed !== '' && trimmed.length <= MAX_RECIPE_NOTE_LENGTH;
 };
 
-/** One journal entry in a line: a note says its day and words, a tweak what changed and why. */
+/** One journal entry in a line: a note says its day and words, a tweak what changed and why, a change what is planned and why. */
 export const getNoteSummary = (
   note: RecipeNote,
   formatDay: (at: number) => string,
 ) => {
   const day = formatDay(note.createdAt);
   const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
-  const body =
-    note.kind === 'TWEAK'
-      ? [(note.changes ?? []).map(squash).join('; '), squash(note.text ?? '')]
-          .filter(Boolean)
-          .join('. ')
-      : squash(note.text ?? '');
-  const title =
-    note.kind === 'TWEAK' ? `Changed on ${day}` : `Your latest note (${day})`;
+  const body = getSummaryBody(note, squash);
+  const title = getSummaryTitle(note, day);
 
   return { label: body === '' ? title : `${title}:`, body };
+};
+
+const getSummaryBody = (note: RecipeNote, squash: (text: string) => string) => {
+  if (note.kind === 'TWEAK') {
+    return [(note.changes ?? []).map(squash).join('; '), squash(note.text ?? '')]
+      .filter(Boolean)
+      .join('. ');
+  }
+  if (note.kind === 'CHANGE') {
+    return [squash(note.text ?? ''), squash(note.reason ?? '')]
+      .filter(Boolean)
+      .join('. ');
+  }
+  return squash(note.text ?? '');
+};
+
+const getSummaryTitle = (note: RecipeNote, day: string) => {
+  if (note.kind === 'TWEAK') return `Changed on ${day}`;
+  if (note.kind === 'CHANGE') return `A change you planned (${day})`;
+  if (note.kind === 'TIP') return `A tip (${day})`;
+  return `Your latest note (${day})`;
 };
 
 export const getTweakReason = (text: string) => text.trim() || null;
@@ -88,6 +105,9 @@ export const getMissingNoteFields = (existing: object) => ({
   ...('text' in existing ? {} : { text: null }),
   ...('changes' in existing ? {} : { changes: [] }),
   ...('cookId' in existing ? {} : { cookId: null }),
+  ...('stepIndex' in existing ? {} : { stepIndex: null }),
+  ...('stepText' in existing ? {} : { stepText: null }),
+  ...('reason' in existing ? {} : { reason: null }),
 });
 
 /** Whether edits to a recipe are recorded as a tweak: the recipe has been cooked, both lists have loaded without error and the journal has room. */
@@ -140,4 +160,130 @@ const NEXT_TIME = /[.!?]\s+(?=next time\b)/i;
 export const leadWithAdvice = (text: string) => {
   const match = NEXT_TIME.exec(text);
   return match ? `…${text.slice(match.index + match[0].length)}` : text;
+};
+
+const squashText = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+const clipAtWord = (text: string, max: number) => {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+};
+
+/** The words an entry keeps to find its step again: the step with its spaces squashed, cut at a word. */
+export const getStepAnchorText = (step: string) =>
+  clipAtWord(squashText(step), NOTE_STEP_ANCHOR_LENGTH);
+
+/** Where an entry about a step is written: the step's number (0-based) and its first words, or both null for the whole recipe or a step that does not exist. */
+export const getStepAnchor = (steps: string[], index: number | null) => {
+  const step = index === null ? undefined : steps[index];
+  return step === undefined || index === null
+    ? { stepIndex: null, stepText: null }
+    : { stepIndex: index, stepText: getStepAnchorText(step) };
+};
+
+/**
+ * The step an entry is about in the recipe as it is now: its number while that step still reads as it did, the step its words moved to, or null when the entry is for the whole recipe or its step was rewritten or removed (it then reads as a recipe-wide entry that says so).
+ * An entry written without the step's words trusts its number.
+ */
+export const resolveNoteStep = (
+  note: Pick<RecipeNote, 'stepIndex' | 'stepText'>,
+  steps: string[],
+) => {
+  const index = note.stepIndex ?? null;
+  if (index === null) return null;
+  const text = note.stepText ?? null;
+  if (text === null) return index < steps.length ? index : null;
+  if (steps[index] !== undefined && getStepAnchorText(steps[index]) === text) {
+    return index;
+  }
+  const moved = steps.findIndex((step) => getStepAnchorText(step) === text);
+  return moved === -1 ? null : moved;
+};
+
+/** Whether an entry was written about a step that has since been rewritten or removed. */
+export const isStepLost = (
+  note: Pick<RecipeNote, 'stepIndex' | 'stepText'>,
+  steps: string[],
+) => (note.stepIndex ?? null) !== null && resolveNoteStep(note, steps) === null;
+
+const KIND_RANK: Record<NoteKind, number> = {
+  TIP: 0,
+  CHANGE: 1,
+  NOTE: 2,
+  TWEAK: 3,
+};
+
+/** The entries a person writes to be read while cooking (never a tweak), in the order they show: tips, planned changes, then notes, each newest first. */
+export const isStepEntry = (note: RecipeNote) => note.kind !== 'TWEAK';
+
+export const sortStepEntries = (notes: RecipeNote[]) =>
+  [...notes]
+    .filter(isStepEntry)
+    .sort(
+      (a, b) =>
+        KIND_RANK[a.kind] - KIND_RANK[b.kind] ||
+        b.createdAt - a.createdAt ||
+        a.id.localeCompare(b.id),
+    );
+
+/** A recipe's tips, changes and notes split by the step they are about, and the ones for the whole recipe. An entry whose step was rewritten lands in the whole recipe. */
+export const groupEntriesByStep = (notes: RecipeNote[], steps: string[]) => {
+  const entries = sortStepEntries(notes);
+  const byStep = entries.reduce((groups, entry) => {
+    const at = resolveNoteStep(entry, steps);
+    if (at !== null) groups.set(at, [...(groups.get(at) ?? []), entry]);
+    return groups;
+  }, new Map<number, RecipeNote[]>());
+  const wholeRecipe = entries.filter(
+    (entry) => resolveNoteStep(entry, steps) === null,
+  );
+
+  return { byStep, wholeRecipe };
+};
+
+/** The note the cooking screen leads with before the first step: the latest NOTE that is not about one step (a step's own notes show with it). */
+export const getLastTimeNote = (notes: RecipeNote[], steps: string[]) =>
+  [...notes]
+    .filter(
+      (note) => note.kind === 'NOTE' && resolveNoteStep(note, steps) === null,
+    )
+    .sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))[0] ??
+  null;
+
+/** The reasons of the changes being applied, as the one reason the tweak keeps: each different one once, in the order the changes were written. */
+export const getJoinedChangeReason = (changes: RecipeNote[]) => {
+  const reasons = changes
+    .map((change) => squashText(change.reason ?? '').replace(/[.!?]+$/, ''))
+    .filter((reason, index, all) => reason !== '' && all.indexOf(reason) === index);
+  const joined = reasons.join('. ');
+  const result = joined === '' ? null : clipAtWord(joined, MAX_RECIPE_NOTE_LENGTH);
+
+  return result;
+};
+
+/** What a person hears for the tips or the notes of the step on screen. The tips are advice for any cook; the notes are their own, so each says when it was written. Null when there is nothing to say. */
+export const getSpokenEntries = (
+  entries: RecipeNote[],
+  which: 'TIPS' | 'NOTES',
+  formatDay: (at: number) => string,
+) => {
+  const wanted = entries.filter((entry) =>
+    which === 'TIPS' ? entry.kind === 'TIP' : entry.kind !== 'TIP' && isStepEntry(entry),
+  );
+  if (wanted.length === 0) return null;
+
+  const sentences = wanted.map((entry) => {
+    const text = clipAtWord(squashText(entry.text ?? ''), MAX_SPOKEN_NOTE_CHARS);
+    const end = (value: string) => (/[.!?]$/.test(value) ? value : `${value}.`);
+    if (entry.kind === 'TIP') return `Tip: ${end(text)}`;
+    if (entry.kind === 'CHANGE') {
+      const reason = squashText(entry.reason ?? '');
+      return `A change you planned: ${end(text)}${reason === '' ? '' : ` Because ${end(reason.charAt(0).toLowerCase() + reason.slice(1))}`}`;
+    }
+    return `Your note from ${formatDay(entry.createdAt)}: ${end(text)}`;
+  });
+
+  return sentences.join(' ');
 };

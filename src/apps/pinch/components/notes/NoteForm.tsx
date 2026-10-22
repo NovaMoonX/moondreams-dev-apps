@@ -16,7 +16,16 @@ import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort, formatDateTime } from '@/utils/formatUtils';
 import ChangeList from '@apps/pinch/components/notes/ChangeList';
-import { MAX_RECIPE_NOTE_LENGTH } from '@apps/pinch/constants';
+import NoteKindPills, {
+  type WrittenNoteKind,
+} from '@apps/pinch/components/notes/NoteKindPills';
+import NoteReasonField from '@apps/pinch/components/notes/NoteReasonField';
+import NoteStepPicker from '@apps/pinch/components/notes/NoteStepPicker';
+import {
+  MAX_RECIPE_NOTE_LENGTH,
+  NOTE_KIND_LABELS,
+  NOTE_TEXT_COPY,
+} from '@apps/pinch/constants';
 import {
   addNote,
   removeNote,
@@ -36,6 +45,7 @@ import {
   getNoteCookChoices,
   isNoteHistoryFull,
   isValidNoteText,
+  resolveNoteStep,
 } from '@apps/pinch/utils/notes';
 
 const { custom } = FormFactories;
@@ -43,10 +53,18 @@ const { custom } = FormFactories;
 const NO_COOK = 'none';
 const NO_COOKS: Cook[] = [];
 
+const WHOLE_RECIPE = '';
+const NO_STEPS: string[] = [];
+
 interface NoteFormData {
+  kind: WrittenNoteKind;
   text: string;
+  reason: string;
+  /** The step's number (0-based) as text, or empty for the whole recipe. */
+  step: string;
   cook: string;
 }
+
 
 interface NoteFormProps {
   uid: string;
@@ -55,16 +73,22 @@ interface NoteFormProps {
   noteId: string | null;
   /** The cook a new note is about, which then isn't asked; null asks, starting on a cook from today when there is one. */
   initialCookId: string | null;
+  /** What a new entry starts as; null starts as a note. */
+  initialKind?: WrittenNoteKind | null;
+  /** The step a new entry starts on (0-based); null starts on the whole recipe. */
+  initialStepIndex?: number | null;
   onCancel: () => void;
   onDone: () => void;
 }
 
-/** Editing saves only the words: a note's cook and date stay as they were. */
+/** A tip, a planned change or a note about the whole recipe or one step. Editing saves the words, a change's reason and the step: an entry's kind, cook and date stay as they were. */
 function NoteForm({
   uid,
   recipeId,
   noteId,
   initialCookId,
+  initialKind = null,
+  initialStepIndex = null,
   onCancel,
   onDone,
 }: NoteFormProps) {
@@ -86,10 +110,20 @@ function NoteForm({
   const [today] = useState(() => toLocalDateInputValue(Date.now()));
   const isToday = (cook: Cook) =>
     toLocalDateInputValue(cook.cookedAt) === today;
-  const [initialData] = useState<NoteFormData>(() => ({
-    text: note?.text ?? '',
-    cook: initialCookId ?? cooks.find(isToday)?.id ?? NO_COOK,
-  }));
+  const steps = recipe?.steps ?? NO_STEPS;
+  const [initialData] = useState<NoteFormData>(() => {
+    const at = note === null ? initialStepIndex : resolveNoteStep(note, steps);
+    return {
+      kind:
+        note !== null && note.kind !== 'TWEAK'
+          ? note.kind
+          : (initialKind ?? 'NOTE'),
+      text: note?.text ?? '',
+      reason: note?.reason ?? '',
+      step: at === null ? WHOLE_RECIPE : String(at),
+      cook: initialCookId ?? cooks.find(isToday)?.id ?? NO_COOK,
+    };
+  });
   const [data, setData] = useState<NoteFormData>(initialData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,8 +156,12 @@ function NoteForm({
     !isEditing && initialCookId === null && isCooksReady && choices.length > 0;
   const isFull = !isEditing && isNoteHistoryFull(noteCount);
   const isDirty = isEditing
-    ? data.text !== (note?.text ?? '')
+    ? data.text !== initialData.text ||
+      data.reason !== initialData.reason ||
+      data.step !== initialData.step
     : data.text.trim() !== '';
+  const kind: WrittenNoteKind | 'TWEAK' = isTweak ? 'TWEAK' : data.kind;
+  const stepIndex = data.step === WHOLE_RECIPE ? null : Number(data.step);
   const isTextOk = isTweak || isValidNoteText(data.text);
 
   const getBlocker = () => {
@@ -132,8 +170,8 @@ function NoteForm({
     }
     if (!isTextOk) {
       return isEditing
-        ? 'A note needs some words. Delete it instead if you no longer want it.'
-        : 'Write a note to save.';
+        ? 'An entry needs some words. Delete it instead if you no longer want it.'
+        : `Write ${kind === 'NOTE' ? 'a note' : `a ${NOTE_KIND_LABELS[kind].toLowerCase()}`} to save.`;
     }
     return null;
   };
@@ -149,7 +187,7 @@ function NoteForm({
               renderComponent: () => (
                 <div className='space-y-2'>
                   <p className='text-muted-foreground text-xs'>
-                    {note.kind === 'TWEAK' ? 'Changed on' : 'Note from'}{' '}
+                    {NOTE_KIND_LABELS[note.kind]} from{' '}
                     {formatDateShort(note.createdAt)}
                     {noteCook &&
                       ` · after cooking on ${formatDateShort(noteCook.cookedAt)}`}
@@ -161,18 +199,25 @@ function NoteForm({
               ),
             }),
           ]
-        : []),
+        : [
+            custom({
+              name: 'kind',
+              label: '',
+              renderComponent: (props) => (
+                <NoteKindPills
+                  value={String(props.value) as WrittenNoteKind}
+                  onChange={props.onValueChange}
+                />
+              ),
+            }),
+          ]),
       custom({
         name: 'text',
         label: '',
         renderComponent: (props) => (
           <NoteTextField
-            label={isTweak ? 'Why you changed it' : 'Your note'}
-            placeholder={
-              isTweak
-                ? 'Optional'
-                : 'Less vinegar next time, the sauce was ready early'
-            }
+            label={NOTE_TEXT_COPY[kind].label}
+            placeholder={NOTE_TEXT_COPY[kind].placeholder}
             maxLength={MAX_RECIPE_NOTE_LENGTH}
             value={String(props.value)}
             onChange={props.onValueChange}
@@ -180,7 +225,42 @@ function NoteForm({
           />
         ),
       }),
-      ...(hasCookQuestion
+      ...(kind === 'CHANGE'
+        ? [
+            custom({
+              name: 'reason',
+              label: '',
+              renderComponent: (props) => (
+                <NoteReasonField
+                  value={String(props.value)}
+                  onChange={props.onValueChange}
+                />
+              ),
+            }),
+          ]
+        : []),
+      ...(!isTweak && steps.length > 0
+        ? [
+            custom({
+              name: 'step',
+              label: '',
+              renderComponent: (props) => (
+                <NoteStepPicker
+                  steps={steps}
+                  value={
+                    String(props.value) === WHOLE_RECIPE
+                      ? null
+                      : Number(props.value)
+                  }
+                  onChange={(next) =>
+                    props.onValueChange(next === null ? WHOLE_RECIPE : String(next))
+                  }
+                />
+              ),
+            }),
+          ]
+        : []),
+      ...(hasCookQuestion && kind === 'NOTE'
         ? [
             custom({
               name: 'cook',
@@ -202,7 +282,7 @@ function NoteForm({
           ]
         : []),
     ],
-    [note, noteCook, isTweak, hasCookQuestion, cookOptions],
+    [note, noteCook, isTweak, kind, steps, hasCookQuestion, cookOptions],
   );
 
   const handleSubmit = async () => {
@@ -214,19 +294,29 @@ function NoteForm({
     try {
       if (noteId !== null) {
         await dispatch(
-          updateNote({ uid, id: noteId, text: data.text }),
+          updateNote({
+            uid,
+            id: noteId,
+            text: data.text,
+            ...(note?.kind === 'CHANGE' ? { reason: data.reason } : {}),
+            ...(isTweak ? {} : { stepIndex }),
+          }),
         ).unwrap();
       } else {
         await dispatch(
           addNote({
             uid,
             recipeId,
+            kind: data.kind,
             text: data.text,
-            cookId: data.cook === NO_COOK ? null : data.cook,
+            reason: data.kind === 'CHANGE' ? data.reason : null,
+            cookId:
+              data.kind === 'NOTE' && data.cook !== NO_COOK ? data.cook : null,
+            stepIndex,
           }),
         ).unwrap();
         addToast({
-          title: `Added a note to ${recipe?.title ?? 'your recipe'}`,
+          title: `Added a ${NOTE_KIND_LABELS[data.kind].toLowerCase()} to ${recipe?.title ?? 'your recipe'}`,
           type: 'success',
         });
       }
@@ -242,11 +332,11 @@ function NoteForm({
       return;
     }
     const confirmed = await confirm({
-      title: 'Delete this note?',
+      title: `Delete this ${NOTE_KIND_LABELS[note.kind].toLowerCase()}?`,
       message:
         note.kind === 'TWEAK'
           ? `The record of the change on ${formatDateShort(note.createdAt)} comes off the recipe's notes. The recipe itself stays as it is. This can't be undone.`
-          : `The note from ${formatDateShort(note.createdAt)} comes off the recipe's notes. This can't be undone.`,
+          : `The ${NOTE_KIND_LABELS[note.kind].toLowerCase()} from ${formatDateShort(note.createdAt)} comes off the recipe's notes. This can't be undone.`,
       confirmText: 'Delete',
       destructive: true,
     });
@@ -309,7 +399,7 @@ function NoteForm({
           leftActions={
             note && (
               <DeleteIconButton
-                label='Delete this note'
+                label={`Delete this ${note ? NOTE_KIND_LABELS[note.kind].toLowerCase() : 'entry'}`}
                 onClick={() => void handleDelete()}
                 disabled={isSubmitting}
               />

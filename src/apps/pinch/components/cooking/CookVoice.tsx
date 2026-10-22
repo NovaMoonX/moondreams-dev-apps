@@ -362,6 +362,7 @@ function CookVoiceSheet({
     ['next', 'Next step'],
     ['back', 'Step before'],
     ['repeat', 'Reads it aloud'],
+    ['read the tips', 'Reads this step’s tips'],
     ['start the timer', 'Starts its timer'],
     [`how much ${ingredientExample}`, 'Says the amount'],
   ];
@@ -372,6 +373,17 @@ function CookVoiceSheet({
         ['ingredients', 'Shows the ingredient list'],
         ['timers', 'Shows all your timers'],
         ['steps', 'Back to the steps'],
+      ],
+    },
+    {
+      label: 'Tips and notes',
+      rows: [
+        ['read the tips', 'Reads the tips for this step'],
+        ['read the notes', 'Reads your notes and planned changes'],
+        ['add a tip', 'Then say it, and it is saved to this step'],
+        ['add a note', 'Same, as a note about this cook'],
+        ['add a change', 'Same, as a change to make to the recipe'],
+        ['undo that', 'Takes back what you just added'],
       ],
     },
     {
@@ -431,6 +443,12 @@ function CookVoiceSheet({
             description='Reads each step as it appears, while the mic is on.'
             checked={voice.isReadingAloud}
             onCheckedChange={voice.setIsReadingAloud}
+          />
+          <ViewOptionSwitch
+            label='Read tips and notes too'
+            description='With Read steps aloud on, also reads the tips and notes written for each step.'
+            checked={voice.isReadingNotes}
+            onCheckedChange={voice.setIsReadingNotes}
           />
           <NaturalVoiceOption voice={voice.natural} />
           <DisclosureLine

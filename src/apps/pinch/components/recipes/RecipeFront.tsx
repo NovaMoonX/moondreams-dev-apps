@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
@@ -24,6 +26,7 @@ import {
   selectCollections,
   selectHasPackages,
   selectIngredientsById,
+  selectNotesByRecipe,
   selectPackagesByIngredient,
   selectRecipeCosts,
   selectRecipeNutrition,
@@ -31,7 +34,7 @@ import {
   selectSourceCounts,
   selectSourcesById,
 } from '@apps/pinch/store/selectors';
-import type { Gap, GapKind, Recipe } from '@apps/pinch/types';
+import type { Gap, GapKind, Recipe, RecipeNote } from '@apps/pinch/types';
 import {
   getCollectionsPill,
   getRecipeCollections,
@@ -56,6 +59,7 @@ import {
   getTotalMinutes,
 } from '@apps/pinch/utils/recipeFormat';
 import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
+import { groupEntriesByStep } from '@apps/pinch/utils/notes';
 import { getRecipeSource } from '@apps/pinch/utils/sources';
 
 const gapLabel = (kind: GapKind | undefined) => {
@@ -65,6 +69,28 @@ const gapLabel = (kind: GapKind | undefined) => {
 };
 
 const SOURCE_LABEL_KEEP_END = 14;
+
+/** The tips written for a step (or the whole recipe), under the words they belong to. */
+function TipLines({ tips }: { tips: RecipeNote[] | undefined }) {
+  if (!tips || tips.length === 0) return null;
+  return (
+    <ul className='space-y-1'>
+      {tips.map((tip) => (
+        <li
+          key={tip.id}
+          className='text-muted-foreground flex gap-2 text-sm wrap-break-word'
+        >
+          <span aria-hidden='true' className='w-5 shrink-0 text-center'>
+            💡
+          </span>
+          <span className='sr-only'>Tip: </span>
+          <span className='min-w-0 flex-1 whitespace-pre-wrap'>{tip.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+const NO_NOTES: RecipeNote[] = [];
 
 const SHORT_SCREEN_MAX_HEIGHT = 599;
 
@@ -108,6 +134,14 @@ function RecipeFront({
   const isLandscape = isShort && !isBelow('sm');
 
   const care = getRecipeCare(recipe);
+  const notes = useAppSelector(selectNotesByRecipe).get(recipe.id) ?? NO_NOTES;
+  const tips = useMemo(() => {
+    const grouped = groupEntriesByStep(
+      notes.filter((note) => note.kind === 'TIP'),
+      recipe.steps,
+    );
+    return grouped;
+  }, [notes, recipe.steps]);
   const links = getRecipeLinks(recipe);
   const source = getRecipeSource(recipe, sourcesById);
   const hasMoreFromSource =
@@ -449,10 +483,21 @@ function RecipeFront({
                 <span className='bg-accent text-accent-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
                   {index + 1}
                 </span>
-                <span className='min-w-0 whitespace-pre-wrap'>{step}</span>
+                <span className='min-w-0 space-y-1'>
+                  <span className='block whitespace-pre-wrap'>{step}</span>
+                  <TipLines tips={tips.byStep.get(index)} />
+                </span>
               </li>
             ))}
           </ol>
+          {tips.wholeRecipe.length > 0 && (
+            <div className='space-y-1 pt-1'>
+              <p className='text-muted-foreground text-xs'>
+                For the whole recipe
+              </p>
+              <TipLines tips={tips.wholeRecipe} />
+            </div>
+          )}
         </FormSection>
       )}
 
