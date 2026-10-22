@@ -36,7 +36,7 @@ function CookRecipeEdit({
 
   useLayoutEffect(() => {
     rootRef.current
-      ?.closest<HTMLElement>('[data-subview-overlay]')
+      ?.closest<HTMLElement>('[data-subview-scroller]')
       ?.scrollTo({ top: 0 });
   }, []);
 

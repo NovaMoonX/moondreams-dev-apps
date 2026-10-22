@@ -69,23 +69,24 @@
  *   --subview-border           the card's hairline
  *   --subview-radius           the card's corner radius
  *   --subview-shadow           the card's shadow in light (dark relies on the backdrop and the hairline)
- * `--subview-inset` is the gap between card and screen edge and `--subview-pad` the card's own padding; together they are the 16px
- * page gutter on a phone, so content keeps its left edge and loses no width. A short landscape phone drops the card to full bleed. */
+ * `--subview-inset` is the gap between card and screen edge and `--subview-pad` the card's own padding, which keeps content
+ * clear of the card's curve. A short landscape phone drops the card to full bleed. */
 html {
   --subview-inset: 0.5rem;
-  --subview-pad: 0.5rem;
+  --subview-pad: 1rem;
 }
 
 @media (min-width: 640px) {
   html {
     --subview-inset: 1rem;
-    --subview-pad: 1rem;
+    --subview-pad: 1.5rem;
   }
 }
 
 @media (min-width: 1024px) {
   html {
     --subview-inset: 1.5rem;
+    --subview-pad: 2rem;
   }
 }
 
@@ -133,10 +134,8 @@ html[data-subview-open][data-site-banner='true'] .sticky-day-bar:not([data-subvi
 }
 
 .subview-card {
+  position: relative;
   background-color: var(--color-background);
-  /* An outline drawn inside the box, so the hairline takes none of the 16px gutter. */
-  outline: 1px solid var(--subview-border, var(--color-border));
-  outline-offset: -1px;
   border-radius: var(--subview-radius, 1.5rem);
   box-shadow: var(
     --subview-shadow,
@@ -145,9 +144,21 @@ html[data-subview-open][data-site-banner='true'] .sticky-day-bar:not([data-subvi
   );
 }
 
-/* `clip`, not `hidden`: it trims a sticky bar's bleed to the card's rounded edge without making the card a scroll container (an overlay's card is the scroller). */
-.subview-page > .subview-card {
+/* `clip`, not `hidden`: it trims a sticky header's or footer's bleed to the card's rounded edge without making the card a scroll container, so the page scrolls. */
+.subview-card {
   overflow: clip;
+}
+
+/* The hairline is drawn over the card's contents, inside its box (it takes none of the gutter), so a header or footer stuck to the
+ * screen's edge never covers it: the border runs down both sides of them as it does beside the content. */
+.subview-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  border: 1px solid var(--subview-border, var(--color-border));
+  border-radius: inherit;
 }
 
 html.dark .subview-card {
@@ -156,9 +167,12 @@ html.dark .subview-card {
 
 @media (max-height: 499px) {
   .subview-card {
-    outline: 0;
     border-radius: 0;
     box-shadow: none !important;
+  }
+
+  .subview-card::after {
+    display: none;
   }
 }
 
@@ -180,20 +194,28 @@ html[data-site-banner='true'] .subview-page {
   flex: 1 1 auto;
 }
 
-/* The full-screen layer of an overlay subview: the backdrop with the card (the scroller) inside it. */
+/* The full-screen layer of an overlay subview: the backdrop is the scroller, so the page's scrollbar sits at the screen's edge and the whole card moves, as it does for an in-place subview.
+ * The gap to the screen's edge is the card's margin, not the scroller's padding: a sticky header or footer keeps clear of a scroller's padding, which would leave a strip of scrolling content beside it. */
 .subview-backdrop {
   position: fixed;
   inset: 0;
   z-index: 40;
   display: flex;
   justify-content: center;
-  padding: var(--subview-inset);
-  padding-top: max(var(--subview-inset), env(safe-area-inset-top));
-  padding-bottom: max(var(--subview-inset), env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  --subview-top: max(var(--subview-inset), env(safe-area-inset-top));
   background-color: var(
     --subview-backdrop,
     color-mix(in oklab, var(--color-primary) 16%, var(--color-background))
   );
+}
+
+.subview-backdrop > .subview-card {
+  flex: 1 1 auto;
+  align-self: flex-start;
+  min-height: calc(100% - var(--subview-top) - var(--subview-inset));
+  margin: var(--subview-top) var(--subview-inset) var(--subview-inset);
 }
 
 html.dark .subview-backdrop {

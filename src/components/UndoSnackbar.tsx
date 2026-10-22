@@ -42,9 +42,12 @@ function SnackbarBar({ pending, onUndo, isOverSheet }: SnackbarBarProps) {
       observer?.observe(footer);
     }
     window.addEventListener('resize', update);
+    // Capture: a scroll event doesn't bubble, and a subview's scroller is its backdrop, not the window.
+    window.addEventListener('scroll', update, true);
     return () => {
       observer?.disconnect();
       window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
     };
   }, []);
 

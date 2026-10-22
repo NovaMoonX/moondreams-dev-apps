@@ -155,17 +155,17 @@ function Subview({
 
   if (overlay) {
     return createPortal(
-      <div className='subview-backdrop'>
+      <div className='subview-backdrop' data-subview-scroller=''>
         <div
           role='dialog'
           data-subview-overlay=''
           aria-label={title}
           className={join(
-            'subview-card h-full w-full max-w-2xl overflow-y-auto overscroll-contain',
+            'subview-card flex max-w-2xl flex-col',
             className,
           )}
         >
-          <div className='flex min-h-full flex-col px-(--subview-pad) pb-(--subview-pad) *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0 [&_.form-footer]:bg-background/95 [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-(--subview-pad) [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-(--subview-pad) [&_.form-footer]:py-3 [&_.form-footer]:backdrop-blur'>
+          <div className='flex flex-1 flex-col px-(--subview-pad) pb-(--subview-pad) *:last:flex *:last:flex-1 *:last:flex-col has-[.form-footer]:pb-0 [&_.form-footer]:bg-background [&_.form-footer]:border-border [&_.form-footer]:sticky [&_.form-footer]:bottom-0 [&_.form-footer]:z-10 [&_.form-footer]:-mx-(--subview-pad) [&_.form-footer]:mt-auto! [&_.form-footer]:border-t [&_.form-footer]:px-(--subview-pad) [&_.form-footer]:pt-3 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))]'>
             {title !== undefined && (
               <div className='bg-background sticky top-0 z-20 -mx-(--subview-pad) px-(--subview-pad) pt-3 pb-3 [@media(max-height:499px)]:pt-1'>
                 <SubviewHeader
@@ -191,7 +191,7 @@ function Subview({
     <div className='subview-page'>
       <div
         className={join(
-          'subview-card mx-auto w-full max-w-2xl px-(--subview-pad) pt-3 pb-4 [@media(max-height:499px)]:pt-1 [@media(max-height:499px)]:pb-3',
+          'subview-card mx-auto w-full max-w-2xl px-(--subview-pad) pt-3 pb-6 [@media(max-height:499px)]:pt-1 [@media(max-height:499px)]:pb-3',
           className,
         )}
       >
@@ -201,7 +201,7 @@ function Subview({
             onBack={goBack}
             action={headerAction}
             isTitleWrapped={isTitleWrapped}
-            className='sticky-app-bar bg-background/80 -mx-(--subview-pad) mb-3 min-h-14 px-(--subview-pad) py-2.5 backdrop-blur [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
+            className='sticky-app-bar bg-background -mx-(--subview-pad) mb-3 min-h-14 px-(--subview-pad) py-2.5 [@media(max-height:499px)]:min-h-12 [@media(max-height:499px)]:py-1'
           />
         )}
         <SubviewTitleContext.Provider value={title ?? null}>

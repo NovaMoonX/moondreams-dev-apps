@@ -753,7 +753,7 @@ function CookingSession({
 
   const scrollToTop = () =>
     rootRef.current
-      ?.closest<HTMLElement>('[data-subview-overlay]')
+      ?.closest<HTMLElement>('[data-subview-scroller]')
       ?.scrollTo({ top: 0 });
 
   const goBy = (direction: 1 | -1) => {
@@ -879,7 +879,7 @@ function CookingSession({
   };
 
   const getOverlay = () =>
-    rootRef.current?.closest<HTMLElement>('[data-subview-overlay]') ?? null;
+    rootRef.current?.closest<HTMLElement>('[data-subview-scroller]') ?? null;
 
   const startEdit = async (recipeId: string, noteId: string | null) => {
     if (isEditing || !(await confirmDiscard())) return;
@@ -1236,7 +1236,7 @@ function CookingSession({
     }
     if (focusKey !== null && !wasShown) {
       rootRef.current
-        ?.closest<HTMLElement>('[data-subview-overlay]')
+        ?.closest<HTMLElement>('[data-subview-scroller]')
         ?.scrollTo({ top: 0 });
     }
     const frame = window.requestAnimationFrame(() => {
