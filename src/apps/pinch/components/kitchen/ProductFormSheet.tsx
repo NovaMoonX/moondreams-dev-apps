@@ -388,6 +388,7 @@ function ProductFormSheet({
             caption={product === null ? 'Start from a product page' : undefined}
             savedLink={product?.url ?? null}
             isEditing={product !== null}
+            canClear={product === null}
             value={link.value}
             onChange={(value) =>
               setFormData((current) => ({

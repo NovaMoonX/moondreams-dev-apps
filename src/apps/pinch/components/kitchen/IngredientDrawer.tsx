@@ -206,7 +206,7 @@ function IngredientDrawer({
                 <p className='line-clamp-2 wrap-break-word'>{usedIn}</p>
               )}
               {shownAliases.length > 0 && (
-                <p className='wrap-break-word'>
+                <p className='line-clamp-2 wrap-break-word'>
                   Also called {shownAliases.join(', ')}
                   {hiddenAliasCount > 0 && ` and ${hiddenAliasCount} more`}
                 </p>

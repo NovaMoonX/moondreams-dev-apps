@@ -10,6 +10,7 @@ interface ProductLinkFieldProps {
   caption?: string;
   savedLink?: string | null;
   isEditing?: boolean;
+  canClear?: boolean;
   value: string;
   onChange: (value: string) => void;
   onFill: (link: string) => void;
@@ -23,6 +24,7 @@ function ProductLinkField({
   caption,
   savedLink = null,
   isEditing = false,
+  canClear = true,
   value,
   onChange,
   onFill,
@@ -58,7 +60,7 @@ function ProductLinkField({
             }
           }}
         />
-        {isTyped && (
+        {isTyped && canClear && (
           <Button
             type='button'
             variant='tertiary'
@@ -94,7 +96,11 @@ function ProductLinkField({
           Nothing is saved until you {isEditing ? 'save' : 'add'} it.
         </p>
       )}
-      {note && <p className='text-muted-foreground text-xs'>{note}</p>}
+      {note && (
+        <p className='text-muted-foreground text-xs' role='status'>
+          {note}
+        </p>
+      )}
       {error && <p className='text-destructive text-xs'>{error}</p>}
     </div>
   );

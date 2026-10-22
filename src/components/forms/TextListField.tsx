@@ -45,7 +45,7 @@ function TextListField({
   return (
     <div className='space-y-2'>
       {values.length > 0 && (
-        <ul className='flex flex-wrap gap-x-2 gap-y-3' aria-label={listLabel}>
+        <ul className='flex flex-wrap gap-x-2 gap-y-4' aria-label={listLabel}>
           {values.map((value) => (
             <li key={value} className='max-w-full'>
               <LabelChip
