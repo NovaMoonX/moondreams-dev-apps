@@ -14,6 +14,7 @@ interface RecipePhotoFieldProps {
   cover: ShownCover | null;
   error: string | null;
   canSuggest: boolean;
+  sourcePhoto: WebPhoto | null;
   title: string;
   onSelect: (file: File | null) => void;
   onPickWeb: (photo: WebPhoto) => void;
@@ -25,6 +26,7 @@ function RecipePhotoField({
   cover,
   error,
   canSuggest,
+  sourcePhoto,
   title,
   onSelect,
   onPickWeb,
@@ -74,6 +76,7 @@ function RecipePhotoField({
           <RecipePhotoSuggestions
             uid={uid}
             title={title}
+            sourcePhoto={sourcePhoto}
             selectedUrl={cover?.host ? cover.url : null}
             onPick={onPickWeb}
           />

@@ -280,13 +280,13 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
         onTypedChange={(isTyped) => {
           isTypedRef.current = isTyped;
         }}
-        onRead={(recipe, source, label) => {
+        onRead={(recipe, source, label, extras) => {
           isTypedRef.current = false;
           const reading = fromIdea
             ? getReadingForIdea(recipe, fromIdea)
             : recipe;
           isDirtyRef.current = true;
-          setRead({ recipe: reading, source, label });
+          setRead({ recipe: reading, source, label, extras });
           setTitle(reading.title ?? '');
           setStage('form');
         }}

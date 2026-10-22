@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
   type RefObject,
@@ -33,6 +34,7 @@ import { store, useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { blockEnterSubmit } from '@/utils/formKeyUtils';
+import { canLoadImage } from '@/utils/imageUtils';
 import Stepper from '@/components/Stepper';
 import NutritionReview from '@apps/pinch/components/recipes/NutritionReview';
 import CategoryField from '@apps/pinch/components/shared/CategoryField';
@@ -67,7 +69,9 @@ import {
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
   MAX_RECIPE_TITLE_LENGTH,
+  MIN_COVER_WIDTH,
   NUTRITION_METRICS,
+  PHOTO_PROBE_TIMEOUT_MS,
   SECTION_COUNT_THRESHOLD,
 } from '@apps/pinch/constants';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
@@ -115,6 +119,7 @@ import {
   type CollectionsChoice,
 } from '@apps/pinch/utils/collections';
 import { getCellDayKey } from '@apps/pinch/utils/dayKeys';
+import { getIdeaExtras, type ReadExtras } from '@apps/pinch/utils/readExtras';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { getJoinedChangeReason } from '@apps/pinch/utils/notes';
 import { getRecipeNutrition } from '@apps/pinch/utils/nutritionMath';
@@ -141,7 +146,23 @@ export interface RecipeRead {
   recipe: ExtractedRecipe;
   source: RecipeSource;
   label: string;
+  extras: ReadExtras;
 }
+
+/** The first of the pictures a source offers that loads; they are tried in order so a missing large one falls back to the next. */
+const findLoadablePhoto = (photos: WebPhoto[]) =>
+  photos.reduce<Promise<WebPhoto | null>>(
+    async (found, photo) =>
+      (await found) ??
+      ((await canLoadImage(
+        photo.imageUrl,
+        PHOTO_PROBE_TIMEOUT_MS,
+        MIN_COVER_WIDTH,
+      ))
+        ? photo
+        : null),
+    Promise.resolve(null),
+  );
 
 const isRowValid = (row: IngredientRow) =>
   row.ingredientId !== '' && isRowAmountValid(row);
@@ -209,10 +230,23 @@ function RecipeForm({
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
   const [isCoverRemoved, setIsCoverRemoved] = useState(false);
   const [webCover, setWebCover] = useState<WebPhoto | null>(null);
+  const [offeredPhotos] = useState(() =>
+    initialRead
+      ? initialRead.extras.photos
+      : initialIdea
+        ? getIdeaExtras(initialIdea).photos
+        : [],
+  );
+  const [sourcePhoto, setSourcePhoto] = useState<WebPhoto | null>(null);
+  const hasChosenCover = useRef(false);
   const [initialData] = useState(() =>
     initialRead
       ? {
-          ...getDataFromExtracted(initialRead.recipe, ingredients),
+          ...getDataFromExtracted(
+            initialRead.recipe,
+            ingredients,
+            initialRead.extras,
+          ),
           sourceChoice: getReadSourceChoice(
             initialRead.source,
             initialRead.label,
@@ -561,19 +595,23 @@ function RecipeForm({
             cover={cover}
             error={coverError}
             canSuggest={recipe === null}
+            sourcePhoto={sourcePhoto}
             title={formData.title}
             onSelect={(file) => {
+              hasChosenCover.current = true;
               pickCover(file);
               setIsCoverRemoved(false);
               isDirtyRef.current = true;
             }}
             onPickWeb={(photo) => {
+              hasChosenCover.current = true;
               clearCover();
               setWebCover(photo);
               setIsCoverRemoved(false);
               isDirtyRef.current = true;
             }}
             onRemove={() => {
+              hasChosenCover.current = true;
               clearCover();
               setWebCover(null);
               setIsCoverRemoved(true);
@@ -653,6 +691,7 @@ function RecipeForm({
   }, [
     uid,
     cover,
+    sourcePhoto,
     recipe,
     formData.title,
     coverError,
@@ -869,6 +908,18 @@ function RecipeForm({
     }
     await save(data);
   };
+
+  useEffect(() => {
+    let isCurrent = true;
+    void findLoadablePhoto(offeredPhotos).then((photo) => {
+      if (!isCurrent || photo === null) return;
+      setSourcePhoto(photo);
+      if (!hasChosenCover.current) setWebCover(photo);
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [offeredPhotos]);
 
   useEffect(() => {
     backStepRef.current =

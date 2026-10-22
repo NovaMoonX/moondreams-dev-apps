@@ -78,6 +78,23 @@ export const getYouTubeId = (text: string) => {
 export const getYouTubeThumbnailUrl = (id: string) =>
   `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
 
+const getYouTubeStart = (link: string) => {
+  const start = new URL(link).searchParams.get('t');
+  const result = start !== null && /^[\dhms]+$/i.test(start) ? start : null;
+  return result;
+};
+
+/** The usual address of the video in a YouTube link, keeping its start time but none of the tracking a shared link carries; null for anything that is not one video. */
+export const getYouTubeWatchUrl = (text: string) => {
+  const id = getYouTubeId(text);
+  const link = normalizeLinkUrl(text);
+  if (id === null || link === null) return null;
+
+  const start = getYouTubeStart(link);
+  const result = `https://www.youtube.com/watch?v=${id}${start === null ? '' : `&t=${start}`}`;
+  return result;
+};
+
 /** A how-to video the recipe drawer can play in place: the address the player loads, and the host's own picture when we can name it without asking anyone. */
 export interface InlineVideo {
   src: string;
@@ -106,9 +123,8 @@ export const getInlineVideo = (text: string): InlineVideo | null => {
 
   const youTubeId = getYouTubeId(link);
   if (youTubeId !== null) {
-    const start = new URL(link).searchParams.get('t');
-    const query =
-      start !== null && /^[\dms]+$/i.test(start) ? `?t=${start}` : '';
+    const start = getYouTubeStart(link);
+    const query = start === null ? '' : `?t=${start}`;
     return {
       src: `https://www.youtube-nocookie.com/embed/${youTubeId}${query}`,
       thumbnailUrl: getYouTubeThumbnailUrl(youTubeId),
