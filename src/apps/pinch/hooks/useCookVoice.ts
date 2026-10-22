@@ -42,6 +42,8 @@ const MESSAGE_MS = {
 } as const;
 /** How long the line says why voice control stopped; the unlit mic says the rest. */
 const STOP_LINE_MS = 8000;
+const NOTES_PAUSE_MS = 1000;
+const NOTES_LEAD = 'Your tips and notes for this step.';
 const MAX_QUOTE_CHARS = 22;
 
 export type CookVoiceResult =
@@ -77,6 +79,8 @@ export interface CookVoiceActions {
   cycleRecipe: (direction: 1 | -1) => CookVoiceResult;
   readTips: () => CookVoiceResult;
   readNotes: () => CookVoiceResult;
+  showEntries: (kind: CookEntryKind) => CookVoiceResult;
+  closeEntries: () => CookVoiceResult;
   addEntry: (kind: CookEntryKind) => CookVoiceResult;
   dictation: (text: string) => CookVoiceResult;
   undoEntry: () => CookVoiceResult;
@@ -140,6 +144,10 @@ export const runCookCommand = (
       return actions.readTips();
     case 'READ_NOTES':
       return actions.readNotes();
+    case 'SHOW_ENTRIES':
+      return actions.showEntries(command.entryKind);
+    case 'CLOSE_ENTRIES':
+      return actions.closeEntries();
     case 'ADD_ENTRY':
       return actions.addEntry(command.entryKind);
     case 'DICTATION':
@@ -248,6 +256,8 @@ export function useCookVoice({
   const lastHeard = useRef({ key: '', at: 0 });
   const messageCount = useRef(0);
   const readStepKey = useRef<string | null>(null);
+  const stepSpokenKey = useRef<string | null>(null);
+  const notesReadKey = useRef<string | null>(null);
   const waitRef = useRef<{ enteredAt: number; spans: WakeBusySpan[] } | null>(
     null,
   );
@@ -371,6 +381,8 @@ export function useCookVoice({
 
   const begin = () => {
     readStepKey.current = null;
+    stepSpokenKey.current = null;
+    notesReadKey.current = null;
     setExpiredStop(null);
     setMessage(null);
     onTurnOn?.();
@@ -478,12 +490,7 @@ export function useCookVoice({
   const stepKey = step?.key ?? null;
   const stepWords = step?.spoken ?? null;
   const notesWords = step?.notesSpoken ?? null;
-  const spoken =
-    stepWords === null
-      ? null
-      : isReadingNotes && notesWords !== null
-        ? `${stepWords} ${notesWords}`
-        : stepWords;
+  const spoken = stepWords;
 
   // A step is read once per showing: listening coming back (a hidden tab, a reading that ended) doesn't read it again.
   useEffect(() => {
@@ -496,6 +503,26 @@ export function useCookVoice({
     if (stepKey !== readStepKey.current) readStepKey.current = null;
     if (stepKey !== null) quiet();
   }, [isHearing, isReadingAloud, stepKey, spoken, say, quiet]);
+
+  // What was written for the step is its own reading, after the step has finished and a short pause, with its own lead-in, so it never runs into the instruction.
+  useEffect(() => {
+    if (speech.status === 'speaking' && readStepKey.current === stepKey) {
+      stepSpokenKey.current = stepKey;
+    }
+  }, [speech.status, stepKey]);
+
+  useEffect(() => {
+    if (!isReadingAloud || !isReadingNotes || notesWords === null) return;
+    if (speech.status !== 'listening' || stepKey === null) return;
+    if (stepSpokenKey.current !== stepKey || notesReadKey.current === stepKey) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      notesReadKey.current = stepKey;
+      say(`${NOTES_LEAD} ${notesWords}`);
+    }, NOTES_PAUSE_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [speech.status, isReadingAloud, isReadingNotes, notesWords, stepKey, say]);
 
   const turnOn = () => {
     setHasAgreed(true);

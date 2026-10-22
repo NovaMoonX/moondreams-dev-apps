@@ -6,7 +6,9 @@ import SwipeArea from '@/components/SwipeArea';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookStepTimer from '@apps/pinch/components/cooking/CookStepTimer';
 import type { RecipeNote } from '@apps/pinch/types';
-import CookStepDock from '@apps/pinch/components/cooking/CookStepDock';
+import CookStepDock, {
+  type DockView,
+} from '@apps/pinch/components/cooking/CookStepDock';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 
 const SIDE_BY_SIDE = {
@@ -44,6 +46,9 @@ interface CookStepViewProps {
   onEditEntry: (id: string) => void;
   onApplyChange: (id: string) => void;
   onReadEntries: ((kind: 'TIP' | 'NOTE' | 'CHANGE') => void) | null;
+  /** The view open above the step's bubbles, if any. */
+  shownView: DockView | null;
+  onShowView: (view: DockView | null) => void;
   /** Starts a new tip, note or change for this step; null where none can be written. */
   onAddEntry: (() => void) | null;
   dishes: ReactNode;
@@ -86,6 +91,8 @@ function CookStepView({
   onEditEntry,
   onApplyChange,
   onReadEntries,
+  shownView,
+  onShowView,
   onAddEntry,
   dishes,
   timerSlots,
@@ -195,6 +202,8 @@ function CookStepView({
             onRead={onReadEntries}
             onAdd={onAddEntry}
             lastTime={lastTime}
+            shown={shownView}
+            onShow={onShowView}
           />
         </div>
       </div>

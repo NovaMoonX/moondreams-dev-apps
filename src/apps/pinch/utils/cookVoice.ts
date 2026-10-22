@@ -99,6 +99,8 @@ export type CookCommand =
   | { kind: 'CYCLE_RECIPE'; direction: 1 | -1 }
   | { kind: 'READ_TIPS' }
   | { kind: 'READ_NOTES' }
+  | { kind: 'SHOW_ENTRIES'; entryKind: CookEntryKind }
+  | { kind: 'CLOSE_ENTRIES' }
   | { kind: 'ADD_ENTRY'; entryKind: CookEntryKind }
   /** The words said after "add a tip": heard only while that question waits. */
   | { kind: 'DICTATION'; text: string }
@@ -141,9 +143,25 @@ type PlainKind =
   | 'SHOW_TIMERS'
   | 'READ_TIPS'
   | 'READ_NOTES'
+  | 'CLOSE_ENTRIES'
   | 'UNDO_ENTRY'
   | 'FINISH'
   | 'STOP_LISTENING';
+
+const ENTRY_NOUNS: { kind: CookEntryKind; text: string }[] = [
+  ...['tip', 'tips'].map((text) => ({ kind: 'TIP' as const, text })),
+  ...['note', 'notes'].map((text) => ({ kind: 'NOTE' as const, text })),
+  ...[
+    'change',
+    'changes',
+    'planned change',
+    'planned changes',
+    'changes to make',
+  ].map((text) => ({ kind: 'CHANGE' as const, text })),
+];
+const ENTRY_DETERMINERS = ['', 'the ', 'my '];
+const SHOW_VERBS = ['show', 'show me', 'open', 'see'];
+const CLOSE_VERBS = ['close', 'hide'];
 
 // Only what "What to say" shows and plain synonyms of it: an everyday phrase ("go on", "again") is said to people too.
 const PHRASES: Record<PlainKind, string[]> = {
@@ -266,6 +284,20 @@ const PHRASES: Record<PlainKind, string[]> = {
     'what are my notes',
     'what did i note',
   ],
+  CLOSE_ENTRIES: [
+    'close that',
+    'close it',
+    'close this',
+    'close the panel',
+    'hide that',
+    'hide it',
+    'hide this',
+    ...ENTRY_NOUNS.flatMap((noun) =>
+      CLOSE_VERBS.flatMap((verb) =>
+        ENTRY_DETERMINERS.map((det) => `${verb} ${det}${noun.text}`),
+      ),
+    ),
+  ],
   UNDO_ENTRY: [
     'undo that',
     'undo it',
@@ -372,6 +404,16 @@ const ADD_PHRASES: Record<string, CookEntryKind> = {
   'suggest a change': 'CHANGE',
   'note a change': 'CHANGE',
 };
+
+const SHOW_PHRASES: Record<string, CookEntryKind> = Object.fromEntries(
+  ENTRY_NOUNS.flatMap((noun) =>
+    SHOW_VERBS.flatMap((verb) =>
+      ENTRY_DETERMINERS.map(
+        (det) => [`${verb} ${det}${noun.text}`, noun.kind] as const,
+      ),
+    ),
+  ),
+);
 
 const EXACT = new Map<string, PlainKind>(
   (Object.entries(PHRASES) as [PlainKind, string[]][]).flatMap(
@@ -1088,6 +1130,9 @@ const parseOne = (
 
   const exact = EXACT.get(text);
   if (exact) return { kind: exact };
+  if (Object.hasOwn(SHOW_PHRASES, text)) {
+    return { kind: 'SHOW_ENTRIES', entryKind: SHOW_PHRASES[text] };
+  }
   if (Object.hasOwn(ADD_PHRASES, text)) {
     return { kind: 'ADD_ENTRY', entryKind: ADD_PHRASES[text] };
   }

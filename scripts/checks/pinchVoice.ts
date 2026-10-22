@@ -1270,6 +1270,41 @@ assert.deepEqual(
   ],
   'a tip, a note or a change is started by saying so',
 );
+assert.deepEqual(
+  [
+    'show me the tips',
+    'Show the tips.',
+    'show my tips',
+    'open the tips',
+    'show me my notes',
+    'show notes',
+    'show the changes',
+    'show me the planned changes',
+    'okay Pepper show me the tips please',
+  ].map((phrase) => parse(phrase)),
+  [
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'NOTE' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'NOTE' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'CHANGE' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'CHANGE' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+  ],
+  'tips, notes and changes are put on screen by asking to see them',
+);
+expectKind(
+  ['close the note', 'close the tips', 'close my notes', 'hide the changes', 'close that', 'close it', 'hide that'],
+  { kind: 'CLOSE_ENTRIES' },
+  'what is open above the step is closed by saying so',
+);
+assert.deepEqual(
+  [parse('close'), parse('show'), parse('show me the tip of the iceberg'), parse('close the oven')],
+  [null, null, null, null],
+  'a bare close or show, or a sentence that only starts like one, is not a command',
+);
 expectKind(
   ['undo that', 'scratch that', 'delete that note'],
   { kind: 'UNDO_ENTRY' },

@@ -378,7 +378,10 @@ function CookVoiceSheet({
     {
       label: 'Tips and notes',
       rows: [
-        ['read the tips', 'Reads the tips for this step'],
+        ['show me the tips', 'Opens this step’s tips on screen'],
+        ['show my notes', 'Opens your notes (or “show the changes”)'],
+        ['close the note', 'Closes what is open'],
+        ['read the tips', 'Opens them and reads them aloud'],
         ['read the notes', 'Reads your notes and planned changes'],
         ['add a tip', 'Then say it, and it is saved to this step'],
         ['add a note', 'Same, as a note about this cook'],
@@ -445,8 +448,8 @@ function CookVoiceSheet({
             onCheckedChange={voice.setIsReadingAloud}
           />
           <ViewOptionSwitch
-            label='Read tips and notes too'
-            description='With Read steps aloud on, also reads the tips and notes written for each step.'
+            label='Read tips and notes after each step'
+            description='Once a step has been read, pauses a moment, then reads what you wrote for it.'
             checked={voice.isReadingNotes}
             isDisabled={!voice.isReadingAloud}
             onCheckedChange={voice.setIsReadingNotes}

@@ -47,6 +47,7 @@ import CookReview, {
   type CookReviewEntry,
 } from '@apps/pinch/components/cooking/CookReview';
 import CookResultCard from '@apps/pinch/components/cooking/CookResultCard';
+import type { DockView } from '@apps/pinch/components/cooking/CookStepDock';
 import CookStepView, {
   type StepTimerSlot,
 } from '@apps/pinch/components/cooking/CookStepView';
@@ -469,6 +470,7 @@ function CookingSession({
   const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
   const [gotItNotes, setGotItNotes] = useState<string[]>([]);
+  const [dockOpen, setDockOpen] = useState<{ key: string; view: DockView } | null>(null);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -804,6 +806,11 @@ function CookingSession({
         .join(' ') || null
     );
   };
+  const stepEntries = getEntriesAt(recipe, index, false);
+  const dockKey = `${recipe.id}:${index}`;
+  const shownView = dockOpen?.key === dockKey ? dockOpen.view : null;
+  const showDockView = (view: DockView | null) =>
+    setDockOpen(view === null ? null : { key: dockKey, view });
   const voice = useCookVoice({
     uid,
     step:
@@ -2030,9 +2037,11 @@ function CookingSession({
         'TIPS',
         formatDateShort,
       );
-      return text === null
-        ? answerNo('No tips for this step.')
-        : done('Reading the tips', text);
+      if (text === null) return answerNo('No tips for this step.');
+      if (focused === null && stepEntries.some((entry) => entry.kind === 'TIP')) {
+        showDockView('TIP');
+      }
+      return done('Reading the tips', text);
     },
     readNotes: () => {
       const text = getSpokenEntries(
@@ -2040,9 +2049,32 @@ function CookingSession({
         'NOTES',
         formatDateShort,
       );
-      return text === null
-        ? answerNo('No notes for this step.')
-        : done('Reading the notes', text);
+      if (text === null) return answerNo('No notes for this step.');
+      const kind = stepEntries.some((entry) => entry.kind === 'NOTE')
+        ? 'NOTE'
+        : stepEntries.some((entry) => entry.kind === 'CHANGE')
+          ? 'CHANGE'
+          : null;
+      if (focused === null && kind !== null) showDockView(kind);
+      return done('Reading the notes', text);
+    },
+    showEntries: (kind) => {
+      const word = ENTRY_WORDS[kind];
+      if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
+        return refuse('Go to a step to see that.');
+      }
+      const count = stepEntries.filter((entry) => entry.kind === kind).length;
+      if (count === 0) {
+        return answerNo(`No ${word}s for this step.`);
+      }
+      showDockView(kind);
+      const label = `${count} ${count === 1 ? word : `${word}s`}`;
+      return done(`Showing ${label}`, `Showing ${label}.`);
+    },
+    closeEntries: () => {
+      if (shownView === null) return answerNo('Nothing is open.');
+      showDockView(null);
+      return done('Closed');
     },
     addEntry: (kind) => {
       if (focused !== null || !isStepsView || !hasSteps || isFinishShown) {
@@ -2312,7 +2344,6 @@ function CookingSession({
       <CookDishStrip dishes={dishes} value={recipe.id} onChange={showRecipe} />
     ) : null;
   const isDishStripInStep = isStepsView && hasSteps && !isWide;
-  const stepEntries = getEntriesAt(recipe, index, false);
   const readEntries = (kind: 'TIP' | 'NOTE' | 'CHANGE') =>
     voice.speak(
       getSpokenEntries(
@@ -2386,6 +2417,8 @@ function CookingSession({
       onEditEntry={capture.edit}
       onApplyChange={(id) => void startEdit(recipe.id, [id])}
       onReadEntries={voice.isSupported ? readEntries : null}
+      shownView={shownView}
+      onShowView={showDockView}
       onAddEntry={
         capture.isAvailable(recipe.id) && !isRemoved ? openStepCapture : null
       }
