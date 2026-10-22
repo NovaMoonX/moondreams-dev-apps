@@ -57,7 +57,7 @@ VITE_GOOGLE_PLACES_API_KEY=
 # Pinch store logos: a publishable Logo.dev token (pk_…), sent only with a store's web domain. Logos fall back to a letter tile when unset.
 VITE_STORE_LOGO_TOKEN=
 
-# App Check (required by every Firebase AI Logic call: Pinch's recipe reading, Nine Lives' ingestion). Prod: the reCAPTCHA Enterprise site key App Check is registered with. Also a GitHub Actions secret of the same name, which both hosting workflows pass to the build.
+# App Check (required by every Firebase AI Logic call: Pinch's recipe reading, Nine Lives' ingestion). Prod: the site key of a score-based (no challenge) reCAPTCHA Enterprise Website key that App Check is registered with. Also a GitHub Actions secret of the same name, which both hosting workflows pass to the build.
 VITE_FIREBASE_APPCHECK_SITE_KEY=
 # Local: the team's shared debug-token UUID (registered under App Check > Manage debug tokens) — ask a teammate.
 VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=
@@ -156,11 +156,19 @@ Problems we've hit before, so we don't hit them again.
 
 ### Every AI call fails with `401 Firebase App Check token is invalid`
 
-- **Symptom:** on the deployed app, Pinch's recipe reading (and any other Firebase AI Logic call) fails with `[401 ] Firebase App Check token is invalid. (AI/fetch-error)` on `firebasevertexai.googleapis.com/.../generateContent`. The Network panel shows no `exchangeRecaptcha...Token` request at all, and the console has no `appCheck/...` error.
-- **Cause (two, both needed fixing):** the hosting workflows never passed `VITE_FIREBASE_APPCHECK_SITE_KEY` to the build, so deployed builds skipped `initializeAppCheck` and the AI call went out without a usable token. And App Check was registered with reCAPTCHA Enterprise while `src/lib/firebase/config.ts` used `ReCaptchaV3Provider`, the classic flow, which an Enterprise key cannot complete.
-- **Fix:** `firebase-hosting-merge.yml` and `firebase-hosting-preview.yml` pass the key from the `VITE_FIREBASE_APPCHECK_SITE_KEY` repository secret (the Enterprise **site** key, not the secret key), and `config.ts` uses `ReCaptchaEnterpriseProvider`. The key's allowed domains (Google Cloud Console > Security > reCAPTCHA > the key > Settings) must include `apps.moondreams.dev`; preview hosts (`*.web.app`) are separate domains.
-- **Telling it apart:** after the fix a recipe read shows `exchangeRecaptchaEnterpriseToken` returning 200. A 403 on that request is the key or its domains; a 400 is a key that is not an Enterprise key; no request at all means the key is missing from the build (check the secret and the build env). Locally with emulators, the debug token (`VITE_FIREBASE_APPCHECK_DEBUG_TOKEN`) bypasses the provider, so this never shows up there.
-- **Not verified:** the live exchange against production; it needs the secret and the domain in place.
+- **Symptom:** on the deployed app, Pinch's recipe reading, Nine Lives' ingestion and any other Firebase AI Logic call fail with `[401 ] Firebase App Check token is invalid. (AI/fetch-error)` on `firebasevertexai.googleapis.com/.../generateContent`. The console also shows `@firebase/vertexai: Unable to obtain a valid App Check token: AppCheck: ReCAPTCHA error. (appCheck/recaptcha-error)`, and Realtime Database logs "Provided AppCheck credentials ... are invalid". There is no `firebaseappcheck.googleapis.com/...:exchangeRecaptchaEnterpriseToken` request. The failing call's `X-Firebase-AppCheck` header is `eyJlcnJvciI6IlVOS05PV05fRVJST1IifQ==`, which decodes to `{"error":"UNKNOWN_ERROR"}`: the SDK's placeholder, sent when no real token could be made.
+- **Causes (three, in the order they showed up):**
+  1. The hosting workflows never passed `VITE_FIREBASE_APPCHECK_SITE_KEY` to the build, so deployed builds skipped `initializeAppCheck` altogether.
+  2. App Check was registered with reCAPTCHA Enterprise while `src/lib/firebase/config.ts` used `ReCaptchaV3Provider`, the classic flow.
+  3. **The reCAPTCHA key was created with the checkbox challenge.** App Check needs a score-based key, and Google's Enterprise endpoint rejects a checkbox key for this use: the `.../recaptcha/enterprise/anchor?...&size=invisible` response is an error page (`recaptcha.anchor.ErrorMain.init(["ainput", ... "Invalid input" ...])` instead of `Main.init`), so no `reload` request follows and no token is ever made. It looks like a domain or key-type problem but isn't: the key and `apps.moondreams.dev` were both accepted, and opening the anchor URL by hand shows a blank page for both the good and the bad case.
+- **Fix:** the hosting workflows pass the key from the `VITE_FIREBASE_APPCHECK_SITE_KEY` repository secret, `config.ts` uses `ReCaptchaEnterpriseProvider`, and the key is a new Enterprise key in Google Cloud Console > Security > reCAPTCHA: type **Website**, domain `apps.moondreams.dev`, **"Will you use challenges?" off** (score-based; challenge is a locked setting that cannot be changed after creation, so a wrong key means a new key). Put the **site** key (not the secret) in both the secret and Firebase Console > App Check > Apps > the web app > reCAPTCHA Enterprise, then re-run "Deploy to Firebase Hosting on merge", since the key is baked in at build time. Preview hosts (`*.web.app`) are separate domains and need adding to the key if AI should work in previews.
+- **Telling it apart (record a HAR with the type filter on All and Disable cache on, since the reCAPTCHA requests are not fetch/XHR):**
+  - No `enterprise.js` request: the key is missing from the build (secret empty or not set when the build ran).
+  - `anchor` answers with `ErrorMain.init`, or there is no `reload` request: the key is the wrong kind (a checkbox or classic key) or not an Enterprise key; the anchor's own text, "Invalid domain for site key", is the domain case.
+  - `reload` succeeds but `exchangeRecaptchaEnterpriseToken` returns 403: the Firebase API key's restrictions need **Firebase App Check API**, or the key registered in App Check differs from the one in the build.
+  - `exchangeRecaptchaEnterpriseToken` returns 200 and `generateContent` still fails: a different problem (model name, quota); read the response body.
+- **Locally** with emulators the debug token (`VITE_FIREBASE_APPCHECK_DEBUG_TOKEN`) bypasses the provider, so none of this shows up there.
+- **Verified:** after swapping to a score-based key and redeploying, recipe reading works in production.
 
 ### A recipe from a link always says "We couldn't read a recipe from that page"
 
