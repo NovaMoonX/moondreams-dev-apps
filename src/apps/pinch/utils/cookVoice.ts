@@ -545,6 +545,8 @@ export const matchByName = <T extends { id: string; names: string[] }>(
 const wordsToDigits = (text: string) =>
   text
     .replace(/\bhalf an hour\b/g, '30 minutes')
+    .replace(/\bthree quarters of an hour\b/g, '45 minutes')
+    .replace(/\b(?:a )?quarter of an hour\b/g, '15 minutes')
     .replace(
       /(?:^|\b(?:a|an|one) )(hour|minute|second)s? and a half\b/g,
       '1.5 $1s',

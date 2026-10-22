@@ -275,11 +275,13 @@ function CookTimersView({
                       label={`${timer.stepName} timer`}
                       actions={getChangeActions(timer)}
                     />
-                    <ActionChips
-                      isIconOnly
-                      label={`End ${timer.stepName} timer`}
-                      actions={[getEndAction(timer)]}
-                    />
+                    {timer.status !== 'running' && (
+                      <ActionChips
+                        isIconOnly
+                        label={`End ${timer.stepName} timer`}
+                        actions={[getEndAction(timer)]}
+                      />
+                    )}
                   </div>
                 </li>
               );

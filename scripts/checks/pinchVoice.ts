@@ -165,6 +165,11 @@ expectKind(
   'half an hour is thirty minutes',
 );
 expectKind(
+  ['start the quarter of an hour timer', 'start the fifteen minute timer'],
+  { kind: 'START_TIMER', seconds: 900, name: null },
+  'a quarter of an hour is fifteen minutes',
+);
+expectKind(
   ['start the hour and a half timer', 'start the one and a half hour timer'],
   { kind: 'START_TIMER', seconds: 5400, name: null },
   'an hour and a half is ninety minutes',

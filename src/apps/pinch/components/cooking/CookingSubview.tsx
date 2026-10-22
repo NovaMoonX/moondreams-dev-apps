@@ -1324,9 +1324,9 @@ function CookingSession({
       ? refuse(`No timer is ${state}.`)
       : refuse(`No ${formatDuration(target.seconds)} timer is ${state}.`);
   };
-  const capRefusal = refuse(
+  const capRefusal = answerNo(
     `${MAX_COOK_TIMERS} timers are going already.`,
-    `${MAX_COOK_TIMERS} timers are going. Another can start once one finishes or is reset.`,
+    `${MAX_COOK_TIMERS} timers are already going. Reset or finish one first.`,
   );
 
   const showDish = (recipeId: string) => {
@@ -2015,7 +2015,7 @@ function CookingSession({
       size='icon'
       rounded='full'
       className='size-10 shrink-0'
-      aria-label='Timers'
+      aria-label={timers.liveCount > 0 ? `Timers, ${timers.liveCount} going` : 'Timers'}
       onClick={handleShowTimers}
     >
       <Timer className='h-4 w-4' aria-hidden='true' />
