@@ -338,8 +338,9 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const visibleViews = RECIPES_VIEWS.filter(
     (candidate) =>
       candidate === 'recipes' ||
-      (candidate === 'meals' && (meals.length > 0 || recipes.length >= 2)) ||
-      (candidate === 'ideas' && (ideaCount > 0 || ideasLoadError !== null)),
+      (candidate === 'meals' && (meals.length > 0 || recipes.length >= 1)) ||
+      (candidate === 'ideas' &&
+        (ideaCount > 0 || ideasLoadError !== null || recipes.length >= 1)),
   );
   const shownView = visibleViews.includes(view) ? view : 'recipes';
   const isIdeas = shownView === 'ideas';
