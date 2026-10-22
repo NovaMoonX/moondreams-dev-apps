@@ -34,6 +34,12 @@ import {
 import { recipePageQueryOptions } from '@apps/pinch/queries/recipePageQueries';
 import { selectIdeaGroups } from '@apps/pinch/store/selectors';
 import type { RecipeSource, RecipeStartMethod } from '@apps/pinch/types';
+import {
+  getPageExtras,
+  getVideoExtras,
+  NO_EXTRAS,
+  type ReadExtras,
+} from '@apps/pinch/utils/readExtras';
 import { getYouTubeId } from '@apps/pinch/utils/recipeLinks';
 import {
   canPasteTextInstead,
@@ -48,6 +54,16 @@ type State =
   | { status: 'failed'; message: string; canPasteInstead: boolean };
 
 type ReaderMethod = Exclude<RecipeStartMethod, 'manual'>;
+
+interface Reading {
+  recipe: ExtractedRecipe;
+  extras: ReadExtras;
+}
+
+const toReading = (recipe: ExtractedRecipe): Reading => ({
+  recipe,
+  extras: NO_EXTRAS,
+});
 
 const SAVED_LINE = 'You look it over before anything is saved.';
 
@@ -105,11 +121,12 @@ interface RecipeReaderProps {
   initialUrl?: string;
   /** The idea that link came from, named in the card at the top. */
   ideaTitle?: string;
-  /** Called with what the reader found; the form fills what was read and the person reviews it before saving. */
+  /** Called with what the reader found and what the source offers beyond the recipe (its picture, its address); the form fills what was read and the person reviews it before saving. */
   onRead: (
     recipe: ExtractedRecipe,
     source: RecipeSource,
     label: string,
+    extras: ReadExtras,
   ) => void;
   onManual: () => void;
   /** Switches a link that would not open to pasting the page's text; the link is typed work, so the screen above asks before it is lost. */
@@ -188,12 +205,12 @@ function RecipeReader({
   const run = async (
     label: string,
     source: RecipeSource,
-    read: () => Promise<ExtractedRecipe>,
+    read: () => Promise<Reading>,
     isVideo = false,
   ) => {
     setState({ status: 'reading', label });
     try {
-      const extracted = await read();
+      const { recipe: extracted, extras } = await read();
       if (!isMounted()) {
         return;
       }
@@ -202,7 +219,7 @@ function RecipeReader({
         return;
       }
 
-      onRead(extracted, source, label);
+      onRead(extracted, source, label, extras);
     } catch (error) {
       console.error(
         'Reading the recipe failed',
@@ -237,7 +254,9 @@ function RecipeReader({
     }
 
     setFile(next);
-    void run(next.name, 'AI_FILE', () => extractRecipeFromFile(next));
+    void run(next.name, 'AI_FILE', async () =>
+      toReading(await extractRecipeFromFile(next)),
+    );
   };
 
   const handleLink = () => {
@@ -254,17 +273,22 @@ function RecipeReader({
       void run(
         'youtube.com',
         'AI_LINK',
-        () => extractRecipeFromVideo(videoId),
+        async () => ({
+          recipe: await extractRecipeFromVideo(videoId),
+          extras: getVideoExtras(url),
+        }),
         true,
       );
       return;
     }
 
-    void run(new URL(url).hostname, 'AI_LINK', async () =>
-      extractRecipeFromPage(
-        await queryClient.fetchQuery(recipePageQueryOptions(url)),
-      ),
-    );
+    void run(new URL(url).hostname, 'AI_LINK', async () => {
+      const page = await queryClient.fetchQuery(recipePageQueryOptions(url));
+      return {
+        recipe: await extractRecipeFromPage(page),
+        extras: getPageExtras(page, url),
+      };
+    });
   };
 
   const fillFromIdea = (ideaId: string) => {
@@ -283,7 +307,9 @@ function RecipeReader({
   };
 
   const handleText = () =>
-    void run('your text', 'AI_TEXT', () => extractRecipeFromText(text));
+    void run('your text', 'AI_TEXT', async () =>
+      toReading(await extractRecipeFromText(text)),
+    );
 
   const handleTyped = (next: string) => {
     onTypedChange?.(next.trim() !== '' && next !== (initialUrl ?? ''));
