@@ -10631,18 +10631,20 @@ assert.equal(
     "Tip: Don't crowd the pan. Tip: Pat it dry.",
     'tips are read one after another, each ending in a full stop',
   );
+  const mixed = [
+    entry('t1', 'TIP', 1, 1, 'A tip'),
+    entry('n1', 'NOTE', 5, 1, 'Oven ran hot'),
+    entry('c1', 'CHANGE', 6, 1, 'Use four cloves', 'It was bland'),
+  ];
   assert.equal(
-    getSpokenEntries(
-      [
-        entry('t1', 'TIP', 1, 1, 'A tip'),
-        entry('n1', 'NOTE', 5, 1, 'Oven ran hot'),
-        entry('c1', 'CHANGE', 6, 1, 'Use four cloves', 'It was bland'),
-      ],
-      'NOTES',
-      day,
-    ),
-    'Your note from day5: Oven ran hot. A change you planned: Use four cloves. Because it was bland.',
-    'notes are read with their day, a planned change with its reason, and a tip is not a note',
+    getSpokenEntries(mixed, 'NOTES', day),
+    'Your note from day5: Oven ran hot.',
+    'notes are read with their day, and neither a tip nor a planned change is read as a note',
+  );
+  assert.equal(
+    getSpokenEntries(mixed, 'CHANGES', day),
+    'A change you planned: Use four cloves. Because it was bland.',
+    'a planned change is read on its own, with its reason',
   );
   assert.equal(
     getSpokenEntries([entry('t1', 'TIP', 1, 1)], 'NOTES', day),

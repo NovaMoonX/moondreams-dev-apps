@@ -1245,6 +1245,16 @@ expectKind(
   { kind: 'READ_NOTES' },
   'notes are read when asked for',
 );
+expectKind(
+  ['read the changes', 'repeat the changes', 'repeat my changes', 'repeat the planned changes', 'any changes'],
+  { kind: 'READ_CHANGES' },
+  'planned changes are read on their own, apart from the notes',
+);
+expectKind(
+  ['repeat the instructions', 'read the instructions', 'repeat instructions', 'say the instructions again'],
+  { kind: 'REPEAT' },
+  'the step itself is asked for again as its instructions',
+);
 assert.deepEqual(
   [parse('tip'), parse('note'), parse('tips for chicken'), parse('add salt')],
   [null, null, null, null],

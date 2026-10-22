@@ -293,14 +293,18 @@ export const getJoinedChangeReason = (changes: RecipeNote[]) => {
   return result;
 };
 
-/** What a person hears for the tips or the notes of the step on screen. The tips are advice for any cook; the notes are their own, so each says when it was written. Null when there is nothing to say. */
+const SPOKEN_KINDS = { TIPS: 'TIP', NOTES: 'NOTE', CHANGES: 'CHANGE' } as const;
+
+/** What a person hears for the tips, the notes or the planned changes of the step on screen, each kind on its own. The tips are advice for any cook; the notes are their own, so each says when it was written. Null when there is nothing to say. */
 export const getSpokenEntries = (
   entries: RecipeNote[],
-  which: 'TIPS' | 'NOTES',
+  which: keyof typeof SPOKEN_KINDS,
   formatDay: (at: number) => string,
 ) => {
-  const wanted = entries.filter((entry) =>
-    which === 'TIPS' ? entry.kind === 'TIP' : entry.kind !== 'TIP' && isStepEntry(entry),
+  const wanted = entries.filter(
+    (entry) =>
+      entry.kind === SPOKEN_KINDS[which] &&
+      (which === 'TIPS' || isStepEntry(entry)),
   );
   if (wanted.length === 0) return null;
 

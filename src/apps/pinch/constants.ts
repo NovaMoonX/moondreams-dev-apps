@@ -713,7 +713,7 @@ export const NOTE_KIND_LABELS: Record<NoteKind, string> = {
 export const NOTE_KIND_EMOJIS: Record<NoteKind, string> = {
   TIP: '💡',
   CHANGE: '✏️',
-  NOTE: '📝',
+  NOTE: '🗒️',
   TWEAK: '✏️',
 };
 

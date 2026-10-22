@@ -78,6 +78,9 @@ export type CookTimerAnswer =
 /** What a spoken "add a …" writes. */
 export type CookEntryKind = 'TIP' | 'NOTE' | 'CHANGE';
 
+/** What a step's bubbles can show while it is read aloud: the note from last time or one kind of entry. */
+export type CookSpokenView = 'LAST' | CookEntryKind;
+
 export type CookCommand =
   | { kind: 'NEXT' }
   | { kind: 'BACK' }
@@ -99,6 +102,7 @@ export type CookCommand =
   | { kind: 'CYCLE_RECIPE'; direction: 1 | -1 }
   | { kind: 'READ_TIPS' }
   | { kind: 'READ_NOTES' }
+  | { kind: 'READ_CHANGES' }
   | { kind: 'SHOW_ENTRIES'; entryKind: CookEntryKind }
   | { kind: 'CLOSE_ENTRIES' }
   | { kind: 'ADD_ENTRY'; entryKind: CookEntryKind }
@@ -143,6 +147,7 @@ type PlainKind =
   | 'SHOW_TIMERS'
   | 'READ_TIPS'
   | 'READ_NOTES'
+  | 'READ_CHANGES'
   | 'CLOSE_ENTRIES'
   | 'UNDO_ENTRY'
   | 'FINISH'
@@ -194,6 +199,15 @@ const PHRASES: Record<PlainKind, string[]> = {
     'read the step',
     'read step',
     'read this step',
+    'repeat the instructions',
+    'repeat the instruction',
+    'repeat instructions',
+    'read the instructions',
+    'read the instruction',
+    'read instructions',
+    'say the instructions again',
+    'repeat the directions',
+    'read the directions',
   ],
   SHOW_INGREDIENTS: [
     'ingredients',
@@ -283,6 +297,24 @@ const PHRASES: Record<PlainKind, string[]> = {
     'any notes',
     'what are my notes',
     'what did i note',
+  ],
+  READ_CHANGES: [
+    'read changes',
+    'read the changes',
+    'read my changes',
+    'read the change',
+    'read me the changes',
+    'read the planned changes',
+    'read my planned changes',
+    'repeat changes',
+    'repeat the changes',
+    'repeat my changes',
+    'repeat the change',
+    'repeat the planned changes',
+    'say the changes again',
+    'any changes',
+    'what are the changes',
+    'what did i plan to change',
   ],
   CLOSE_ENTRIES: [
     'close that',

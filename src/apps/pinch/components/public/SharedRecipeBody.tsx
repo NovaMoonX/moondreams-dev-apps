@@ -136,7 +136,7 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
       <EntryList title='Tips' emoji='💡' entries={recipe.tips} />
       <EntryList
         title='Notes'
-        emoji='📝'
+        emoji='🗒️'
         entries={recipe.notes}
         caption='Notes stay on this page when you add the recipe.'
       />
