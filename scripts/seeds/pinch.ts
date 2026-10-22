@@ -1158,6 +1158,9 @@ const toShareRecipe = (recipe: SeedRecipeLike) => ({
     label,
     url,
   })),
+  tips: SEED_STEP_NOTES.filter(
+    (note) => note.kind === 'TIP' && note.recipeId === recipe.id,
+  ).map((note) => ({ text: note.text, step: note.stepIndex })),
   hasCover: false,
 });
 

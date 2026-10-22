@@ -49,8 +49,7 @@ import CookReview, {
   type CookReviewEntry,
 } from '@apps/pinch/components/cooking/CookReview';
 import CookResultCard from '@apps/pinch/components/cooking/CookResultCard';
-import CookStepNotes from '@apps/pinch/components/cooking/CookStepNotes';
-import CookStepTips from '@apps/pinch/components/cooking/CookStepTips';
+import CookStepEntriesSheet from '@apps/pinch/components/cooking/CookStepEntriesSheet';
 import CookStepView, {
   type StepTimerSlot,
 } from '@apps/pinch/components/cooking/CookStepView';
@@ -464,6 +463,7 @@ function CookingSession({
   const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
   const [gotItNotes, setGotItNotes] = useState<string[]>([]);
+  const [entriesOpenKey, setEntriesOpenKey] = useState<string | null>(null);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -2232,10 +2232,17 @@ function CookingSession({
     ) : null;
   const isDishStripInStep = isStepsView && hasSteps && !isWide;
   const stepEntries = getEntriesAt(recipe, index, false);
-  const stepTips = stepEntries.filter((entry) => entry.kind === 'TIP');
-  const stepNotes = stepEntries.filter((entry) => entry.kind !== 'TIP');
-  const readEntries = (which: 'TIPS' | 'NOTES') =>
-    voice.speak(getSpokenEntries(stepEntries, which, formatDateShort) ?? '');
+  const readEntries = () =>
+    voice.speak(
+      [
+        getSpokenEntries(stepEntries, 'TIPS', formatDateShort),
+        getSpokenEntries(stepEntries, 'NOTES', formatDateShort),
+      ]
+        .filter((text) => text !== null)
+        .join(' '),
+    );
+  const stepKey = `${recipe.id}:${index}`;
+  const isEntriesOpen = entriesOpenKey === stepKey;
   const openStepCapture = () =>
     capture.open({ recipeId: recipe.id, stepIndex: index, kind: 'TIP' });
   const noteCard =
@@ -2267,18 +2274,33 @@ function CookingSession({
       <Timer className='h-4 w-4' aria-hidden='true' />
     </Button>
   );
-  const captureButton =
-    capture.isAvailable(recipe.id) && !isRemoved ? (
+  const canWrite = capture.isAvailable(recipe.id) && !isRemoved;
+  const entriesButton =
+    canWrite || stepEntries.length > 0 ? (
       <Button
         type='button'
         variant='secondary'
         size='icon'
         rounded='full'
-        className='size-10 shrink-0'
-        aria-label='Add a tip, note or change for this step'
-        onClick={openStepCapture}
+        className='relative size-10 shrink-0'
+        aria-label={
+          stepEntries.length === 0
+            ? 'Add a tip, note or change for this step'
+            : `${stepEntries.length === 1 ? '1 tip, note or change' : `${stepEntries.length} tips, notes and changes`} for this step`
+        }
+        onClick={() =>
+          stepEntries.length === 0 ? openStepCapture() : setEntriesOpenKey(stepKey)
+        }
       >
         <NotebookPen className='h-4 w-4' aria-hidden='true' />
+        {stepEntries.length > 0 && (
+          <span
+            aria-hidden='true'
+            className='bg-primary text-primary-foreground absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold'
+          >
+            {stepEntries.length}
+          </span>
+        )}
       </Button>
     ) : null;
   const ingredientsButton = isWide ? null : (
@@ -2307,27 +2329,11 @@ function CookingSession({
       action={
         <div className='flex shrink-0 items-center gap-2'>
           {timersButton}
-          {captureButton}
+          {entriesButton}
           {ingredientsButton}
         </div>
       }
-      tips={
-        <CookStepTips
-          tips={stepTips}
-          onRead={voice.isSupported ? () => readEntries('TIPS') : null}
-        />
-      }
-      aside={
-        <>
-          {noteCard}
-          <CookStepNotes
-            entries={stepNotes}
-            onEdit={capture.edit}
-            onApplyChange={(id) => void startEdit(recipe.id, [id])}
-            onRead={voice.isSupported ? () => readEntries('NOTES') : null}
-          />
-        </>
-      }
+      aside={noteCard}
       dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)
@@ -2963,6 +2969,29 @@ function CookingSession({
         />
       )}
       <CookVoiceExplainer voice={voice} ingredientExample={ingredientExample} />
+      <CookStepEntriesSheet
+        isOpen={isEntriesOpen && isStepsView && !isEditing}
+        onClose={() => setEntriesOpenKey(null)}
+        stepNumber={index + 1}
+        entries={stepEntries}
+        onAdd={
+          canWrite
+            ? () => {
+                setEntriesOpenKey(null);
+                openStepCapture();
+              }
+            : null
+        }
+        onEdit={(id) => {
+          setEntriesOpenKey(null);
+          capture.edit(id);
+        }}
+        onApplyChange={(id) => {
+          setEntriesOpenKey(null);
+          void startEdit(recipe.id, [id]);
+        }}
+        onRead={voice.isSupported ? readEntries : null}
+      />
     </Subview>
   );
 }

@@ -71,7 +71,7 @@ function NoteEntry({
         <span className='whitespace-nowrap'>
           {isTweak ? `Changed on ${date}` : date}
         </span>
-        {note.kind !== 'NOTE' && (
+        {note.kind !== 'NOTE' && !isTweak && (
           <span className='bg-accent text-accent-foreground border-border rounded-full border px-2 py-0.5 text-xs font-normal whitespace-nowrap'>
             {isChange ? 'To change' : NOTE_KIND_LABELS[note.kind]}
           </span>
@@ -102,7 +102,7 @@ function NoteEntry({
         )}
         {writtenBefore !== null && (
           <p className='text-muted-foreground text-xs'>
-            Written before your {formatDateShort(writtenBefore)} tweak
+            Written before you changed the recipe on {formatDateShort(writtenBefore)}
           </p>
         )}
         <ActionChips actions={actions} />

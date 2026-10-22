@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   MAX_SHARED_MEAL_LINES,
   MAX_SHARED_MEAL_RECIPES,
+  MAX_SHARED_TIPS,
 } from '../../src/apps/pinch/constants.ts';
 import type {
   Meal,
@@ -10,6 +11,7 @@ import type {
   PinchShare,
   Recipe,
   RecipeIngredient,
+  RecipeNote,
   ResolvedIngredient,
 } from '../../src/apps/pinch/types.ts';
 import {
@@ -25,6 +27,7 @@ import {
   isShareStale,
   type ShareSource,
 } from '../../src/apps/pinch/utils/sharing.ts';
+import { getStepAnchorText } from '../../src/apps/pinch/utils/notes.ts';
 
 let passed = 0;
 const check = (name: string, run: () => void) => {
@@ -164,8 +167,85 @@ check('a recipe copy has exactly the public keys', () => {
     'prepMinutes',
     'servings',
     'steps',
+    'tips',
     'title',
   ]);
+});
+
+// ---- Tips travel with a recipe, and only their words and step ----
+const tipOf = (id: string, text: string | null, extra: Partial<RecipeNote> = {}): RecipeNote => ({
+  id,
+  recipeId: 'r-owner-1',
+  kind: 'TIP',
+  text,
+  changes: [],
+  cookId: null,
+  stepIndex: null,
+  stepText: null,
+  reason: null,
+  createdAt: 10,
+  updatedAt: 10,
+  ...extra,
+});
+const stepAnchor = (index: number) => ({
+  stepIndex: index,
+  stepText: getStepAnchorText(full.steps[index]),
+});
+const notesOfFull: RecipeNote[] = [
+  tipOf('t-late', 'Rest it.', { ...stepAnchor(1), createdAt: 30, updatedAt: 40 }),
+  tipOf('t-whole', 'Make it a day ahead.', { createdAt: 20 }),
+  tipOf('t-early', 'Salt the beef.', { ...stepAnchor(0), createdAt: 5 }),
+  tipOf('t-lost', 'Gone step.', { stepIndex: 0, stepText: 'a step that was rewritten', createdAt: 25 }),
+  tipOf('t-blank', '   '),
+  { ...tipOf('n-note', 'PRIVATE-NOTE'), kind: 'NOTE' },
+  { ...tipOf('n-change', 'PRIVATE-CHANGE', { reason: 'PRIVATE-REASON' }), kind: 'CHANGE' },
+  { ...tipOf('n-tweak', null, { changes: ['PRIVATE-LINE'] }), kind: 'TWEAK' },
+];
+const withTipsShared = buildSharedRecipe(full, ingredientsById, notesOfFull);
+
+check('a recipe copy carries its tips in step order, as words and a step only', () => {
+  assert.deepEqual(withTipsShared.tips, [
+    { text: 'Make it a day ahead.', step: null },
+    { text: 'Gone step.', step: null },
+    { text: 'Salt the beef.', step: 0 },
+    { text: 'Rest it.', step: 1 },
+  ]);
+  const text = JSON.stringify(withTipsShared);
+  ['PRIVATE-NOTE', 'PRIVATE-CHANGE', 'PRIVATE-REASON', 'PRIVATE-LINE', 't-late', 'cookId', 'createdAt'].forEach(
+    (marker) => assert.ok(!text.includes(marker), `"${marker}" leaked into the copy`),
+  );
+});
+
+check('a recipe with no tips shares an empty list', () => {
+  assert.deepEqual(buildSharedRecipe(full, ingredientsById).tips, []);
+});
+
+check("a recipe's stamp follows its tips, and nothing else in the journal", () => {
+  assert.equal(
+    getShareSourceStamp(
+      { kind: 'RECIPE', recipe: full },
+      new Map(),
+      new Map([['r-owner-1', notesOfFull]]),
+    ),
+    Math.max(full.updatedAt, 40),
+  );
+  assert.equal(
+    getShareSourceStamp(
+      { kind: 'RECIPE', recipe: full },
+      new Map(),
+      new Map([['r-owner-1', [{ ...notesOfFull[5], updatedAt: 99999 }]]]),
+    ),
+    full.updatedAt,
+  );
+});
+
+check('more tips than a share holds are cut to the cap, oldest kept', () => {
+  const many = Array.from({ length: MAX_SHARED_TIPS + 4 }, (_, index) =>
+    tipOf(`m-${index}`, `Tip ${index}`, { createdAt: index }),
+  );
+  const result = buildSharedRecipe(full, ingredientsById, many);
+  assert.equal(result.tips.length, MAX_SHARED_TIPS);
+  assert.equal(result.tips[0].text, 'Tip 0');
 });
 
 check('a recipe copy carries none of the private fields', () => {

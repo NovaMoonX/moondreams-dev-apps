@@ -2,6 +2,8 @@ import { isValidHttpsUrl } from '@/utils/urlUtils';
 import {
   MAX_SHARED_MEAL_LINES,
   MAX_SHARED_MEAL_RECIPES,
+  MAX_SHARED_TIPS,
+  MAX_SHARED_TIP_LENGTH,
   SHARE_LINK_PATH,
 } from '@apps/pinch/constants';
 import type {
@@ -10,6 +12,7 @@ import type {
   PinchShare,
   Recipe,
   RecipeIngredient,
+  RecipeNote,
   RecipeLink,
   ResolvedIngredient,
   ShareCoverRef,
@@ -19,8 +22,12 @@ import type {
   SharedMealItem,
   SharedRecipe,
   SharedRecipeLink,
+  SharedRecipeTip,
 } from '@apps/pinch/types';
+import { resolveNoteStep } from '@apps/pinch/utils/notes';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+
+export type NotesByRecipe = Map<string, RecipeNote[]>;
 
 export type ShareSource =
   { kind: 'RECIPE'; recipe: Recipe } | { kind: 'MEAL'; meal: Meal };
@@ -76,10 +83,34 @@ const toSharedLinks = (links: RecipeLink[] | undefined): SharedRecipeLink[] => {
   return result;
 };
 
+const getTips = (notes: RecipeNote[]): RecipeNote[] =>
+  notes.filter(
+    (note) => note.kind === 'TIP' && (note.text ?? '').trim() !== '',
+  );
+
+/** A recipe's tips as a share carries them: the words and the step they sit under (its number, or null for the whole recipe), in step order, oldest first. Only the words and the step number leave: never a date, an id or a cook. */
+const toSharedTips = (
+  recipe: Recipe,
+  notes: RecipeNote[],
+): SharedRecipeTip[] =>
+  getTips(notes)
+    .map((note) => ({
+      text: (note.text ?? '').trim().slice(0, MAX_SHARED_TIP_LENGTH),
+      step: resolveNoteStep(note, recipe.steps),
+      createdAt: note.createdAt,
+    }))
+    .sort(
+      (a, b) =>
+        (a.step ?? -1) - (b.step ?? -1) || a.createdAt - b.createdAt,
+    )
+    .slice(0, MAX_SHARED_TIPS)
+    .map(({ text, step }) => ({ text, step }));
+
 /** Copies fields by name, never the recipe itself, so a field added to it later stays out of a share. */
 export function buildSharedRecipe(
   recipe: Recipe,
   ingredientsById: Map<string, ResolvedIngredient>,
+  notes: RecipeNote[] = [],
 ): SharedRecipe {
   const result: SharedRecipe = {
     title: recipe.title,
@@ -93,6 +124,7 @@ export function buildSharedRecipe(
     steps: [...recipe.steps],
     care: getRecipeCare(recipe),
     links: toSharedLinks(recipe.links),
+    tips: toSharedTips(recipe, notes),
     hasCover: recipe.coverPath != null,
   };
 
@@ -142,11 +174,12 @@ export function buildSharedMeal(
   meal: Meal,
   recipesById: Map<string, Recipe>,
   ingredientsById: Map<string, ResolvedIngredient>,
+  notesByRecipe: NotesByRecipe = new Map(),
 ): SharedMeal | { error: string } {
   const recipes = getMealShareRecipes(meal, recipesById);
   const indexById = new Map(recipes.map((recipe, index) => [recipe.id, index]));
   const sharedRecipes = recipes.map((recipe) =>
-    buildSharedRecipe(recipe, ingredientsById),
+    buildSharedRecipe(recipe, ingredientsById, notesByRecipe.get(recipe.id)),
   );
   const items = meal.items.flatMap((item) =>
     toSharedItem(item, indexById, ingredientsById),
@@ -195,16 +228,25 @@ export function getCoverRefs(recipes: Recipe[]): ShareCoverRef[] {
   return result;
 }
 
+/** The latest change to a recipe as a share would carry it: the recipe itself or one of its tips. */
+const getRecipeStamp = (recipe: Recipe, notes: RecipeNote[] | undefined) =>
+  Math.max(recipe.updatedAt, ...getTips(notes ?? []).map((tip) => tip.updatedAt));
+
 /** A meal's stamp includes its recipes', so changing one of them counts as changing the meal. */
 export function getShareSourceStamp(
   source: ShareSource,
   recipesById: Map<string, Recipe>,
+  notesByRecipe: NotesByRecipe = new Map(),
 ): number {
-  if (source.kind === 'RECIPE') return source.recipe.updatedAt;
+  if (source.kind === 'RECIPE') {
+    return getRecipeStamp(source.recipe, notesByRecipe.get(source.recipe.id));
+  }
 
   const result = Math.max(
     source.meal.updatedAt,
-    ...getShareRecipes(source, recipesById).map((recipe) => recipe.updatedAt),
+    ...getShareRecipes(source, recipesById).map((recipe) =>
+      getRecipeStamp(recipe, notesByRecipe.get(recipe.id)),
+    ),
   );
 
   return result;
@@ -234,20 +276,34 @@ export function buildSharePayload(
   source: ShareSource,
   recipesById: Map<string, Recipe>,
   ingredientsById: Map<string, ResolvedIngredient>,
+  notesByRecipe: NotesByRecipe = new Map(),
 ): SharePayload | { error: string } {
-  const sourceUpdatedAt = getShareSourceStamp(source, recipesById);
+  const sourceUpdatedAt = getShareSourceStamp(
+    source,
+    recipesById,
+    notesByRecipe,
+  );
   const covers = getCoverRefs(getShareRecipes(source, recipesById));
 
   if (source.kind === 'RECIPE') {
     return {
-      recipe: buildSharedRecipe(source.recipe, ingredientsById),
+      recipe: buildSharedRecipe(
+        source.recipe,
+        ingredientsById,
+        notesByRecipe.get(source.recipe.id),
+      ),
       meal: null,
       covers,
       sourceUpdatedAt,
     };
   }
 
-  const meal = buildSharedMeal(source.meal, recipesById, ingredientsById);
+  const meal = buildSharedMeal(
+    source.meal,
+    recipesById,
+    ingredientsById,
+    notesByRecipe,
+  );
   if ('error' in meal) return meal;
 
   return { recipe: null, meal, covers, sourceUpdatedAt };
@@ -257,6 +313,7 @@ export function getShareStatus(
   share: PinchShare,
   recipesById: Map<string, Recipe>,
   mealsById: Map<string, Meal>,
+  notesByRecipe: NotesByRecipe = new Map(),
 ): ShareStatus {
   const source = getShareSource(
     share.kind,
@@ -268,7 +325,10 @@ export function getShareStatus(
 
   const result = {
     isGone: false,
-    isStale: isShareStale(share, getShareSourceStamp(source, recipesById)),
+    isStale: isShareStale(
+      share,
+      getShareSourceStamp(source, recipesById, notesByRecipe),
+    ),
   };
 
   return result;

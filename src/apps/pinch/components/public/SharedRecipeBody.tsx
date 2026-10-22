@@ -93,6 +93,28 @@ function SharedRecipeBody({ recipe }: SharedRecipeBodyProps) {
         <RecipeCareSection care={care} title='Keeping leftovers' isCard />
       )}
 
+      {recipe.tips.length > 0 && (
+        <FormSection title='Tips'>
+          <ul className='divide-border border-border divide-y overflow-hidden rounded-2xl border'>
+            {recipe.tips.map((tip, index) => (
+              <li key={index} className='flex gap-3 px-4 py-3 text-sm'>
+                <span aria-hidden='true' className='w-5 shrink-0 text-center'>
+                  💡
+                </span>
+                <span className='min-w-0 flex-1 wrap-break-word whitespace-pre-wrap'>
+                  {tip.text}
+                  {tip.step !== null && (
+                    <span className='text-muted-foreground block text-xs'>
+                      Step {tip.step + 1}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </FormSection>
+      )}
+
       <RecipeLinksSection links={links} rel={LINK_REL} isPlayerHidden />
     </div>
   );

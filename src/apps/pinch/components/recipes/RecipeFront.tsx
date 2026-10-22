@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, NotebookPen } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
 import ClampedText from '@/components/ClampedText';
 import FactsLine, { type Fact } from '@/components/FactsLine';
 import FormSection from '@/components/FormSection';
+import GroupRow from '@/components/GroupRow';
 import LabelChip from '@/components/LabelChip';
 import MacroStats from '@/components/MacroStats';
 import SectionDivider from '@/components/SectionDivider';
@@ -101,6 +103,8 @@ interface RecipeFrontProps {
   onShowPhoto?: (opener: HTMLElement) => void;
   /** The drawer's own list of collections; without it "In 3 collections" is only a label. */
   onShowCollections?: (opener: HTMLElement | null) => void;
+  /** Opens the recipe's tips, notes, changes and cooking history in place; the row is drawn only where the view exists. */
+  onShowNotes?: (opener: HTMLElement | null) => void;
   /** Shows the Recipes list narrowed to this source; left out, the source is only a label. */
   onShowSource?: (sourceId: string) => void;
   /** Shows the Recipes list narrowed to this collection; left out, the collection is only a label. */
@@ -115,6 +119,7 @@ function RecipeFront({
   recipe,
   onShowPhoto,
   onShowCollections,
+  onShowNotes,
   onShowSource,
   onShowCollection,
   onFillIn,
@@ -135,6 +140,7 @@ function RecipeFront({
 
   const care = getRecipeCare(recipe);
   const notes = useAppSelector(selectNotesByRecipe).get(recipe.id) ?? NO_NOTES;
+  const entryCount = notes.length;
   const tips = useMemo(() => {
     const grouped = groupEntriesByStep(
       notes.filter((note) => note.kind === 'TIP'),
@@ -513,6 +519,28 @@ function RecipeFront({
           {linksSection}
           {figures}
         </>
+      )}
+
+      {onShowNotes && (
+        <ActionGroup>
+          <GroupRow
+            icon={<NotebookPen className='h-4 w-4' />}
+            ariaLabel='Tips, notes and changes'
+            onClick={() =>
+              onShowNotes(
+                document.activeElement instanceof HTMLElement
+                  ? document.activeElement
+                  : null,
+              )
+            }
+          >
+            Tips, notes and changes
+            <span className='text-muted-foreground'>
+              {' · '}
+              {entryCount === 0 ? 'Add one' : entryCount}
+            </span>
+          </GroupRow>
+        </ActionGroup>
       )}
     </div>
   );

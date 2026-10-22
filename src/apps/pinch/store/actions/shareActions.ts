@@ -7,8 +7,10 @@ import { MAX_PINCH_SHARES } from '@apps/pinch/constants';
 import {
   selectIngredientsById,
   selectMealsById,
+  selectNotesByRecipe,
   selectRecipesById,
   selectShareBySource,
+  selectShareNotesBlock,
 } from '@apps/pinch/store/selectors';
 import type {
   ChangePinchShareRequest,
@@ -112,10 +114,14 @@ export const saveShare = createAsyncThunk<
       return rejectWithValue('This is gone, so there is nothing to share.');
     }
 
+    const notesBlock = selectShareNotesBlock(state);
+    if (notesBlock !== null) return rejectWithValue(notesBlock);
+
     const payload = buildSharePayload(
       source,
       recipesById,
       selectIngredientsById(state),
+      selectNotesByRecipe(state),
     );
     if ('error' in payload) return rejectWithValue(payload.error);
 

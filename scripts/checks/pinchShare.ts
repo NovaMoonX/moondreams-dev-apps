@@ -54,6 +54,7 @@ const recipe = (extra: Record<string, unknown> = {}) => ({
   steps: ['Simmer.'],
   care: null,
   links: [],
+  tips: [],
   hasCover: false,
   ...extra,
 });
@@ -121,6 +122,7 @@ check(
       'prepMinutes',
       'servings',
       'steps',
+      'tips',
       'title',
     ]);
     assert.deepEqual(Object.keys(result.ingredients[0]).sort(), [
@@ -797,6 +799,60 @@ check("the unit list and every cap and list here equal the app's own", () => {
       `${name} drifted from src/apps/pinch/constants.ts`,
     ),
   );
+});
+
+check('a tip keeps only its words and its step, never a date, id or cook', () => {
+  const result = recipeOf({
+    steps: ['One.', 'Two.'],
+    tips: [
+      {
+        text: 'Pat it dry.',
+        step: 1,
+        id: 'note-id-secret',
+        cookId: 'cook-secret',
+        createdAt: 5,
+        kind: 'NOTE',
+      },
+    ],
+  });
+  assert.deepEqual(result.tips, [{ text: 'Pat it dry.', step: 1 }]);
+});
+
+check('a tip step that is not a step of the recipe reads as the whole recipe', () => {
+  const result = recipeOf({
+    steps: ['One.'],
+    tips: [
+      { text: 'a', step: 1 },
+      { text: 'b', step: -1 },
+      { text: 'c', step: 0.5 },
+      { text: 'd', step: '0' },
+      { text: 'e', step: null },
+    ],
+  });
+  assert.deepEqual(
+    result.tips.map((tip) => tip.step),
+    [null, null, null, null, null],
+  );
+});
+
+check('tips are capped in number and length, and junk is dropped', () => {
+  const result = recipeOf({
+    tips: [
+      ...many(L.MAX_SHARED_TIPS + 5, (index) => ({ text: `Tip ${index}`, step: null })),
+      { text: '' },
+      { text: 7 },
+      null,
+    ],
+  });
+  assert.equal(result.tips.length, L.MAX_SHARED_TIPS);
+  const long = recipeOf({ tips: [{ text: text(L.MAX_SHARED_TIP_LENGTH + 1), step: null }] });
+  assert.equal(long.tips[0]?.text.length, L.MAX_SHARED_TIP_LENGTH);
+});
+
+check('a copy taken before tips existed reads as having none', () => {
+  const legacy = { ...recipe() } as Record<string, unknown>;
+  delete legacy.tips;
+  assert.deepEqual(toSharedRecipe(legacy)?.tips, []);
 });
 
 const idPatternIn = (rules: string, header: string) => {

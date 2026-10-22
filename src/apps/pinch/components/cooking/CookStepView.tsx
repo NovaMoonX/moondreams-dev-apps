@@ -36,8 +36,6 @@ interface CookStepViewProps {
   /** The lines this step names, scaled. */
   ingredients: CookRow[];
   isAmountNoteShown: boolean;
-  /** The step's tips, under its timer cards so a timer the step offers stays right under its words. */
-  tips: ReactNode;
   aside: ReactNode;
   dishes: ReactNode;
   /** The times the step mentions that have no timer yet. */
@@ -74,7 +72,6 @@ function CookStepView({
   index,
   ingredients,
   isAmountNoteShown,
-  tips,
   aside,
   dishes,
   timerSlots,
@@ -164,7 +161,6 @@ function CookStepView({
               </div>
             </div>
           )}
-          {tips}
         </div>
         <div
           className={join(

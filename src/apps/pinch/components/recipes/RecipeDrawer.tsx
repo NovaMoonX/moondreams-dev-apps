@@ -7,7 +7,6 @@ import {
   CircleCheck,
   CookingPot,
   Ellipsis,
-  History,
   PackagePlus,
 } from 'lucide-react';
 
@@ -332,7 +331,7 @@ function RecipeDrawer({
         <div className='space-y-4'>
           <div className='space-y-1'>
             <BackLink onBack={backToRecipe} />
-            <p className='font-medium'>Notes and history</p>
+            <p className='font-medium'>Tips, notes and changes</p>
           </div>
           {cookedText && (
             <ActionGroup>
@@ -505,12 +504,6 @@ function RecipeDrawer({
             onClassName='text-[var(--pinch-drizzle)]'
             onClick={() => toggleFavorite(recipe)}
           />
-          <DoorButton
-            label='Notes and history'
-            icon={<History className='h-5 w-5' aria-hidden='true' />}
-            isOpen={shownView === 'history'}
-            onClick={(opener) => openView('history', opener)}
-          />
         </>
       }
       footer={
@@ -551,6 +544,7 @@ function RecipeDrawer({
           recipe={recipe}
           onShowPhoto={(opener) => openView('photo', opener)}
           onShowCollections={(opener) => openView('collections', opener)}
+          onShowNotes={(opener) => openView('history', opener)}
           onShowSource={onShowSource}
           onShowCollection={onShowCollection}
           onFillIn={onFillIn}

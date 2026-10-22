@@ -84,9 +84,10 @@ const commitPlan = async (uid: string, plan: ShareImportPlan) => {
   plan.ingredients.forEach((record) =>
     batch.set(kitchenDoc(uid, 'ingredients', record.id), record),
   );
-  plan.recipes.forEach(({ recipe }) =>
-    batch.set(kitchenDoc(uid, 'recipes', recipe.id), recipe),
-  );
+  plan.recipes.forEach(({ recipe, tips }) => {
+    batch.set(kitchenDoc(uid, 'recipes', recipe.id), recipe);
+    tips.forEach((tip) => batch.set(kitchenDoc(uid, 'notes', tip.id), tip));
+  });
   if (plan.meal) {
     batch.set(kitchenDoc(uid, 'meals', plan.meal.id), plan.meal);
   }
@@ -306,6 +307,7 @@ export const undoSharedImport = createAsyncThunk<
     if (undo.mealId !== null) {
       batch.delete(kitchenDoc(uid, 'meals', undo.mealId));
     }
+    undo.tipIds.forEach((id) => batch.delete(kitchenDoc(uid, 'notes', id)));
     undo.ingredientIds.forEach((id) =>
       batch.delete(kitchenDoc(uid, 'ingredients', id)),
     );

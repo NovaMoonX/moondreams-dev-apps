@@ -694,7 +694,13 @@ export interface SharedRecipeLink {
   url: string;
 }
 
-/** A recipe as a share carries it: what is needed to read it, cook it and copy it. No prices, notes, ratings, collections, source or favorite. */
+/** One tip as a share carries it: its words and the step it sits under (0-based), null for the whole recipe. Never a date, id or cook. */
+export interface SharedRecipeTip {
+  text: string;
+  step: number | null;
+}
+
+/** A recipe as a share carries it: what is needed to read it, cook it and copy it, with its tips. No prices, notes, changes, ratings, collections, source or favorite. */
 export interface SharedRecipe {
   title: string;
   description: string | null;
@@ -705,6 +711,7 @@ export interface SharedRecipe {
   steps: string[];
   care: RecipeCare | null;
   links: SharedRecipeLink[];
+  tips: SharedRecipeTip[];
   /** True when the share holds a copy of the cover the owner uploaded (`apps/pinch/shares/{shareId}/cover-{index}.webp`); a web cover is never shared. */
   hasCover: boolean;
 }

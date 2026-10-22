@@ -27,8 +27,10 @@ import {
   selectIngredientsById,
   selectIsSharesReady,
   selectMealsById,
+  selectNotesByRecipe,
   selectRecipesById,
   selectShareBySource,
+  selectShareNotesBlock,
   selectShareStatuses,
   selectSharesLoadError,
 } from '@apps/pinch/store/selectors';
@@ -59,13 +61,13 @@ const COPY: Record<
   RECIPE: {
     thing: 'recipe',
     inCopy:
-      'The title, a photo you uploaded, ingredients, steps, times, how to keep it and links.',
+      'The title, a photo you uploaded, ingredients, steps, times, how to keep it, links and your tips.',
     changed: "You've changed this recipe since you shared it.",
   },
   MEAL: {
     thing: 'saved meal',
     inCopy:
-      'The name, each recipe in it (with its photo you uploaded, ingredients, steps, times, how to keep it and links) and any plain ingredients.',
+      'The name, each recipe in it (with its photo you uploaded, ingredients, steps, times, how to keep it, links and your tips) and any plain ingredients.',
     changed:
       "You've changed this saved meal, or a recipe in it, since you shared it.",
   },
@@ -123,6 +125,8 @@ function ShareView({
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const notesByRecipe = useAppSelector(selectNotesByRecipe);
+  const notesBlock = useAppSelector(selectShareNotesBlock);
   const isBusyRef = useRef(false);
   const [busy, setBusy] = useState<BusyAction | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -135,7 +139,13 @@ function ShareView({
 
   const getBlockReason = () => {
     if (source === null) return null;
-    const payload = buildSharePayload(source, recipesById, ingredientsById);
+    if (notesBlock !== null) return notesBlock;
+    const payload = buildSharePayload(
+      source,
+      recipesById,
+      ingredientsById,
+      notesByRecipe,
+    );
     return 'error' in payload ? payload.error : null;
   };
   const blockReason = getBlockReason();
@@ -144,7 +154,7 @@ function ShareView({
     getShareRecipes(source, recipesById).some(
       (recipe) => recipe.coverPath == null && Boolean(recipe.coverUrl),
     );
-  const leftOut = `Your name, notes, prices, favorites, cooking history and collections.${hasWebPhoto ? ' A photo from a web search stays out too.' : ''}`;
+  const leftOut = `Your name, notes and changes, prices, favorites, cooking history and collections.${hasWebPhoto ? ' A photo from a web search stays out too.' : ''}`;
 
   const run = async (
     action: BusyAction,

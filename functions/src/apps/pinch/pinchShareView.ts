@@ -21,6 +21,8 @@ export const SHARE_LIMITS = {
   MAX_MEAL_ITEMS: 10,
   MAX_SHARED_MEAL_RECIPES: 10,
   MAX_SHARED_MEAL_LINES: 300,
+  MAX_SHARED_TIPS: 30,
+  MAX_SHARED_TIP_LENGTH: 2000,
   MAX_PINCH_SHARES: 30,
   SHARE_ID_LENGTH: 26,
 } as const;
@@ -74,6 +76,11 @@ export interface SharedRecipeCare {
   tip: string | null;
 }
 
+export interface SharedRecipeTip {
+  text: string;
+  step: number | null;
+}
+
 export interface SharedRecipe {
   title: string;
   description: string | null;
@@ -84,6 +91,7 @@ export interface SharedRecipe {
   steps: string[];
   care: SharedRecipeCare | null;
   links: SharedRecipeLink[];
+  tips: SharedRecipeTip[];
   hasCover: boolean;
 }
 
@@ -284,6 +292,21 @@ function toLink(raw: unknown): SharedRecipeLink | null {
   return result;
 }
 
+function toTip(raw: unknown, stepCount: number): SharedRecipeTip | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+
+  const text = toText(raw.text, SHARE_LIMITS.MAX_SHARED_TIP_LENGTH);
+  if (text === null) {
+    return null;
+  }
+
+  const step = toInt(raw.step, 0, stepCount - 1);
+  const result: SharedRecipeTip = { text, step };
+  return result;
+}
+
 function toCare(raw: unknown): SharedRecipeCare | null {
   if (!isRecord(raw)) {
     return null;
@@ -348,6 +371,11 @@ export function toSharedRecipe(
     steps,
     care: toCare(raw.care),
     links,
+    tips: toList(
+      raw.tips,
+      (tip) => toTip(tip, steps.length),
+      SHARE_LIMITS.MAX_SHARED_TIPS,
+    ),
     hasCover: keepCover && raw.hasCover === true,
   };
   return result;
