@@ -22,6 +22,7 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import StockRows from '@apps/pinch/components/containers/StockRows';
 import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
+import RecipeChanges from '@apps/pinch/components/recipes/RecipeChanges';
 import RecipeFront from '@apps/pinch/components/recipes/RecipeFront';
 import ShareDoorRow from '@apps/pinch/components/share/ShareDoorRow';
 import ShareView from '@apps/pinch/components/share/ShareView';
@@ -455,6 +456,18 @@ function RecipeDrawer({
           <StockRows
             target={{ kind: 'recipe', id: recipe.id }}
             onOpenStock={(place) => onOpenStock(recipe.id, place)}
+          />
+          <RecipeChanges
+            recipeId={recipe.id}
+            onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
+            onApplyChange={(noteId) => {
+              onClose();
+              openSubview({
+                kind: 'recipe',
+                id: recipe.id,
+                fromChangeIds: [noteId],
+              });
+            }}
           />
         </div>
       );

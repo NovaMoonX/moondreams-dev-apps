@@ -1888,11 +1888,12 @@ service cloud.firestore {
       match /notes/{id} {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isRecipeNote(request.resource.data, id);
-        // An edit keeps the kind, the changes and the date, and the cook once it has one: an entry written during a cook is tied to that cook when the cook is recorded, which sets it once (a tip never has one). The one kind change is a CHANGE the recipe form applied: the same document becomes the TWEAK that records the edit (its lines, dated when it was applied), so applying a change leaves one entry and not two.
+        // An edit keeps the kind, the changes and the date, and the cook once it has one: an entry written during a cook is tied to that cook when the cook is recorded, which sets it once, or again when that cook has since been deleted (a tip never has one). The one kind change is a CHANGE the recipe form applied: the same document becomes the TWEAK that records the edit (its lines, dated when it was applied), so applying a change leaves one entry and not two.
         allow update: if isKitchenOwner() && isRecipeNote(request.resource.data, id)
           && request.resource.data.recipeId == resource.data.recipeId
           && (request.resource.data.cookId == resource.data.get('cookId', null)
-            || resource.data.get('cookId', null) == null)
+            || resource.data.get('cookId', null) == null
+            || !exists(/databases/$(database)/documents/apps/pinch/kitchens/$(uid)/cooks/$(resource.data.cookId)))
           && ((request.resource.data.kind == resource.data.kind
               && request.resource.data.changes == resource.data.get('changes', [])
               && request.resource.data.createdAt == resource.data.createdAt)

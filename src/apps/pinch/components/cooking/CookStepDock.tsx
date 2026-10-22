@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -121,7 +121,6 @@ function CookStepDock({
     useAppSelector(selectRecipesById).get(recipeId)?.steps ?? NO_STEPS;
   const isShort = useIsShortScreen();
   const [selected, setSelected] = useState<DockView | null>(null);
-  const sectionRef = useRef<HTMLElement | null>(null);
 
   const lastNote =
     lastTime !== null && isNotesReady ? getLastTimeNote(notes, steps) : null;
@@ -154,12 +153,7 @@ function CookStepDock({
   const shownEntries = entries.filter((entry) => entry.kind === shown);
   const summary = rows.length > 0 ? getAmountsSummary(rows) : null;
 
-  const select = (view: DockView) => {
-    setSelected(view);
-    window.requestAnimationFrame(() =>
-      sectionRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
-    );
-  };
+  const select = (view: DockView) => setSelected(view);
   const gotIt = () => {
     lastTime?.onGotIt();
     setSelected(null);
@@ -183,20 +177,6 @@ function CookStepDock({
   });
 
   const getHeaderAction = () => {
-    if (shown === 'LAST' && !isDismissed) {
-      return (
-        <Button
-          type='button'
-          variant='secondary'
-          className='h-8 shrink-0 gap-1 rounded-full px-3 text-xs before:absolute before:-inset-1 before:content-[""] relative'
-          aria-label='Got it, hide this note while you cook'
-          onClick={gotIt}
-        >
-          <Check className='h-3.5 w-3.5' aria-hidden='true' />
-          Got it
-        </Button>
-      );
-    }
     if (shown !== 'LAST' && shown !== 'AMOUNTS' && onRead) {
       return (
         <Button
@@ -204,7 +184,7 @@ function CookStepDock({
           variant='tertiary'
           size='icon'
           rounded='full'
-          aria-label={`Read the ${shown === 'TIP' ? 'tips' : 'notes'} aloud`}
+          aria-label={`Read the ${KIND_WORDS[shown].many.split(' ')[0]} aloud`}
           title='Read aloud'
           className='text-foreground! size-8 shrink-0 p-0 relative before:absolute before:-inset-1 before:content-[""]'
           onClick={() => onRead(shown)}
@@ -223,9 +203,23 @@ function CookStepDock({
         lastTweakAt !== null && lastTweakAt > lastNote.createdAt;
       return (
         <div className='space-y-0.5 px-2 pb-1'>
-          <p className='text-muted-foreground text-xs font-medium'>
-            Last time · {formatDateShort(lastNote.createdAt)}
-          </p>
+          <div className='flex min-h-8 items-center justify-between gap-2'>
+            <p className='text-muted-foreground text-xs font-medium'>
+              Last time · {formatDateShort(lastNote.createdAt)}
+            </p>
+            {!isDismissed && (
+              <Button
+                type='button'
+                variant='secondary'
+                className='relative h-8 shrink-0 gap-1 rounded-full px-3 text-xs before:absolute before:-inset-1 before:content-[""]'
+                aria-label='Got it, hide this note while you cook'
+                onClick={gotIt}
+              >
+                <Check className='h-3.5 w-3.5' aria-hidden='true' />
+                Got it
+              </Button>
+            )}
+          </div>
           <ClampedText
             text={leadWithAdvice(body)}
             maxLines={isShort ? 2 : 4}
@@ -265,7 +259,6 @@ function CookStepDock({
       <ul
         className={join(
           'divide-border divide-y px-2',
-          isShort && 'max-h-28 overflow-y-auto',
         )}
       >
         {shownEntries.map((entry) => (
@@ -311,10 +304,9 @@ function CookStepDock({
 
   return (
     <section
-      ref={sectionRef}
       aria-label='Written and used in this step'
       className={join(
-        'bg-muted/50 border-border scroll-mb-28 space-y-1 rounded-2xl border p-2',
+        'bg-muted/50 border-border space-y-1 rounded-2xl border p-2',
         className,
       )}
     >
@@ -356,7 +348,9 @@ function CookStepDock({
         </div>
         {getHeaderAction()}
       </div>
-      {getBody()}
+      <div className='h-28 overflow-y-auto [@media(max-height:700px)]:h-20'>
+        {getBody()}
+      </div>
     </section>
   );
 }

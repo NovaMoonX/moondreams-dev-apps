@@ -115,11 +115,13 @@ function RecipeEntryRows({ recipeId, onOpen }: RecipeEntryRowsProps) {
                   className='text-foreground! h-auto w-full flex-col items-start justify-start gap-1.5 rounded-2xl px-3 py-3 text-left font-normal whitespace-normal'
                   onClick={() => onOpen(note.id, null)}
                 >
-                  <span className='text-muted-foreground flex w-full items-center gap-1.5 text-xs'>
-                    <span aria-hidden='true'>{NOTE_KIND_EMOJIS[kind]}</span>
-                    {where !== '' && <span>{where}</span>}
-                    {when !== '' && <span>{when}</span>}
-                  </span>
+                  {(where !== '' || when !== '') && (
+                    <span className='text-muted-foreground flex w-full items-center gap-1.5 text-xs'>
+                      <span aria-hidden='true'>{NOTE_KIND_EMOJIS[kind]}</span>
+                      {where !== '' && <span>{where}</span>}
+                      {when !== '' && <span>{when}</span>}
+                    </span>
+                  )}
                   <span className='line-clamp-4 w-full text-sm wrap-break-word'>
                     {note.text}
                   </span>

@@ -195,7 +195,7 @@ const getTweakPlan = (
     kind: 'TWEAK',
     text: getTweakReason(draft.tweakReason),
     changes,
-    cookId: null,
+    cookId: isApplying ? (planned[0].cookId ?? null) : null,
     stepIndex: null,
     stepText: null,
     reason: null,

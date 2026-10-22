@@ -164,6 +164,13 @@ import { matchStepIngredients } from '@apps/pinch/utils/stepIngredients';
 import { getRepeatedLineGroups } from '@apps/pinch/utils/ingredientGroups';
 
 /** Taps on Next that land after Finish swapped in Done are ignored for this long, so skimming to the end never leaves at once. */
+interface ChangeTarget {
+  recipeId: string;
+  ids: string[];
+  texts: string[];
+  title: string;
+}
+
 const DONE_GUARD_MS = 600;
 /** A spoken command lands up to a couple of seconds after the words, so "next" or "dismiss" this soon after a Time's up was meant before it. */
 const VOICE_DONE_GUARD_MS = 2000;
@@ -863,23 +870,34 @@ function CookingSession({
 
   useEffect(() => announceCookingSession(sessionId), [sessionId]);
 
-  const tiedToCook = useRef(new Set<string>());
+  const tyingToCook = useRef(new Set<string>());
   useEffect(() => {
     records.forEach((record) => {
       if (record.recordedCookId === null) return;
-      const key = `${record.recordedCookId}:${capture.captured.length}`;
-      if (capture.captured.length === 0 || tiedToCook.current.has(key)) return;
-      tiedToCook.current.add(key);
+      const recipeNotes = notesByRecipe.get(record.recipeId) ?? NO_RECIPE_NOTES;
+      const pending = capture.captured.filter((id) => {
+        const note = recipeNotes.find((found) => found.id === id);
+        return (
+          note !== undefined &&
+          !tyingToCook.current.has(id) &&
+          note.kind !== 'TIP' &&
+          (note.cookId == null || !cooksById.has(note.cookId))
+        );
+      });
+      if (pending.length === 0) return;
+      pending.forEach((id) => tyingToCook.current.add(id));
       void dispatch(
         attachNotesToCook({
           uid,
           recipeId: record.recipeId,
           cookId: record.recordedCookId,
-          noteIds: capture.captured,
+          noteIds: pending,
         }),
+      ).finally(() =>
+        pending.forEach((id) => tyingToCook.current.delete(id)),
       );
     });
-  }, [records, capture.captured, dispatch, uid]);
+  }, [records, capture.captured, notesByRecipe, cooksById, dispatch, uid]);
 
   useEffect(() => {
     if (isFinished) {
@@ -953,6 +971,27 @@ function CookingSession({
     return isConfirmed;
   };
 
+  /** On Done, once for each recipe with a change still planned until one says yes: the next screen is that recipe's form with the changes applied. "Not now" leaves them planned. */
+  const askToUpdate = async (
+    targets: ChangeTarget[],
+  ): Promise<ChangeTarget | null> => {
+    const [first, ...rest] = targets;
+    if (first === undefined) return null;
+
+    const name = isPlate ? first.title : 'the recipe';
+    const planned =
+      first.texts.length === 1
+        ? `You planned this change: “${first.texts[0]}”`
+        : `You planned ${first.texts.length} changes.`;
+    const isConfirmed = await ask({
+      title: `Update ${name}?`,
+      message: `${planned} Update ${name} with ${first.texts.length === 1 ? 'it' : 'them'} now? Not now keeps ${first.texts.length === 1 ? 'it' : 'them'} planned.`,
+      confirmText: 'Update now',
+      cancelText: 'Not now',
+    });
+    return isConfirmed ? first : askToUpdate(rest);
+  };
+
   const confirmDiscardOf = (title: string, message: string) =>
     ask({
       title,
@@ -984,12 +1023,16 @@ function CookingSession({
     return true;
   };
 
-  const leave = async (then?: PinchSubview) => {
-    if (!(await confirmDiscard())) return;
-    if (!(await confirmLeave())) return;
+  const leaveNow = (then?: PinchSubview) => {
     clearCookingSession(uid);
     if (then === undefined) closeIfStillOpen();
     else replaceSubviewIf(isStillOpen, then);
+  };
+
+  const leave = async () => {
+    if (!(await confirmDiscard())) return;
+    if (!(await confirmLeave())) return;
+    leaveNow();
   };
 
   const getOverlay = () =>
@@ -1207,10 +1250,17 @@ function CookingSession({
     void markCooked();
   };
 
-  const handleDone = () => {
+  const handleDone = async () => {
     // eslint-disable-next-line react-hooks/purity -- runs from a tap; once the voice actions are connected the compiler flags every clock read here
     if (Date.now() - finishedAt.current < DONE_GUARD_MS) return;
-    void leave();
+    if (!(await confirmDiscard())) return;
+    if (!(await confirmLeave())) return;
+    const target = await askToUpdate(changeTargets);
+    leaveNow(
+      target === null
+        ? undefined
+        : { kind: 'recipe', id: target.recipeId, fromChangeIds: target.ids },
+    );
   };
 
   const toggleGotOut = useCallback(
@@ -2211,26 +2261,22 @@ function CookingSession({
       .reverse();
     return [...earlier, ...written];
   };
-  /** The recipes with a change still planned; with exactly one, finishing offers "Update the recipe" in the footer. */
+  /** The recipes with a change still planned: Done asks about each in turn whether to update it now. */
   const changeTargets = followUpRecords.flatMap((record) => {
-    const ids = getReviewEntries(record.recipeId, true)
-      .filter((entry) => entry.note.kind === 'CHANGE')
-      .map((entry) => entry.note.id);
-    return ids.length === 0
+    const changes = getReviewEntries(record.recipeId, true).filter(
+      (entry) => entry.note.kind === 'CHANGE',
+    );
+    return changes.length === 0
       ? []
-      : [{ recipeId: record.recipeId, ids, title: record.entry.recipe.title }];
+      : [
+          {
+            recipeId: record.recipeId,
+            ids: changes.map((entry) => entry.note.id),
+            texts: changes.map((entry) => entry.note.text ?? ''),
+            title: record.entry.recipe.title,
+          },
+        ];
   });
-  const footerChange = changeTargets.length === 1 ? changeTargets[0] : null;
-  const handleWrapUpAndUpdate = () => {
-    if (footerChange === null) return;
-    // eslint-disable-next-line react-hooks/purity -- runs from a tap
-    if (Date.now() - finishedAt.current < DONE_GUARD_MS) return;
-    void leave({
-      kind: 'recipe',
-      id: footerChange.recipeId,
-      fromChangeIds: footerChange.ids,
-    });
-  };
   const hasFollowUps = records.some(
     (record) =>
       getReviewEntries(record.recipeId).length > 0 ||
@@ -2701,7 +2747,6 @@ function CookingSession({
                     isNothingChosen={followUps[record.recipeId] === 'NOTHING'}
                     doneText={getFollowUpDone(record.recipeId)}
                     plannedChangeCount={plannedChanges.length}
-                    isUpdateInFooter={footerChange?.recipeId === record.recipeId}
                     onAdd={() =>
                       capture.open({
                         recipeId: record.recipeId,
@@ -2710,12 +2755,6 @@ function CookingSession({
                       })
                     }
                     onEdit={capture.edit}
-                    onApplyChanges={() =>
-                      void startEdit(
-                        record.recipeId,
-                        plannedChanges.map((entry) => entry.note.id),
-                      )
-                    }
                     onChangeRecipe={() => void startEdit(record.recipeId, [])}
                     onNothing={() => chooseNothing(record.recipeId)}
                   />
@@ -2896,29 +2935,6 @@ function CookingSession({
                 </>
               ) : isFinishShown ? (
                 <>
-                  {footerChange !== null && !capture.isOpen && !putAway.isOpen && (
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      className={join(
-                        'h-14 shrink-0 px-4 text-sm sm:text-base max-sm:px-3',
-                        '[@media(max-height:500px)]:h-11',
-                      )}
-                      aria-label={
-                        isPlate
-                          ? `Update ${footerChange.title}`
-                          : 'Update the recipe'
-                      }
-                      onClick={handleWrapUpAndUpdate}
-                    >
-                      <span className='sm:hidden'>Update recipe</span>
-                      <span className='max-w-48 truncate max-sm:hidden'>
-                        {isPlate
-                          ? `Update ${footerChange.title}`
-                          : 'Update the recipe'}
-                      </span>
-                    </Button>
-                  )}
                   <Button
                     ref={primaryRef}
                     type='button'
@@ -2926,7 +2942,7 @@ function CookingSession({
                       'h-14 min-w-0 flex-1 text-lg',
                       '[@media(max-height:500px)]:h-11',
                     )}
-                    onClick={handleDone}
+                    onClick={() => void handleDone()}
                   >
                     Done
                   </Button>

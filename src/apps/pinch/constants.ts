@@ -721,7 +721,7 @@ export const NOTE_KIND_EMOJIS: Record<NoteKind, string> = {
 export const NOTE_KIND_HINTS: Record<(typeof WRITTEN_NOTE_KINDS)[number], string> =
   {
     TIP: 'Advice for making it, any time you cook it.',
-    CHANGE: 'A change to make to the recipe. It stays here until you update the recipe.',
+    CHANGE: 'A change to make to the recipe. It stays planned until you update the recipe.',
     NOTE: 'Something you noticed, for next time.',
   };
 

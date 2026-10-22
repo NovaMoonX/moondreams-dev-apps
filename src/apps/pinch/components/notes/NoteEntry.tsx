@@ -19,6 +19,8 @@ interface NoteEntryProps {
   stepAt: number | null;
   /** It was written about a step that has since been rewritten or removed. */
   isStepLost: boolean;
+  /** On the cook's own page: the cook's day and "written before" lines would only repeat it, so they are left out. */
+  isInCook?: boolean;
   /** Null reads the entry without the Edit chip. */
   onEdit: ((id: string) => void) | null;
   /** Opens the recipe's form to make a planned change; offered on a change only. */
@@ -31,6 +33,7 @@ function NoteEntry({
   writtenBefore,
   stepAt,
   isStepLost,
+  isInCook = false,
   onEdit,
   onApplyChange,
 }: NoteEntryProps) {
@@ -68,9 +71,11 @@ function NoteEntry({
   return (
     <li className='py-3'>
       <p className='flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 text-sm font-medium'>
-        <span className='whitespace-nowrap'>
-          {isTweak ? `Changed on ${date}` : date}
-        </span>
+        {(!isInCook || isTweak) && (
+          <span className='whitespace-nowrap'>
+            {isTweak ? `Changed on ${date}` : date}
+          </span>
+        )}
         {note.kind !== 'NOTE' && !isTweak && (
           <span className='bg-accent text-accent-foreground border-border rounded-full border px-2 py-0.5 text-xs font-normal whitespace-nowrap'>
             {isChange ? 'To change' : NOTE_KIND_LABELS[note.kind]}
@@ -100,7 +105,7 @@ function NoteEntry({
             Why: {reason}
           </p>
         )}
-        {writtenBefore !== null && (
+        {writtenBefore !== null && !isInCook && (
           <p className='text-muted-foreground text-xs'>
             Written before you changed the recipe on {formatDateShort(writtenBefore)}
           </p>

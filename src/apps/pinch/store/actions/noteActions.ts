@@ -230,19 +230,21 @@ interface AttachNotesInput {
   noteIds: string[];
 }
 
-/** Ties the notes and changes written while cooking to the cook once it is recorded: only entries with no cook yet, only the cook field, so a later edit and the share's change stamp are untouched. */
+/** Ties the notes and changes written while cooking to the cook once it is recorded: only entries with no cook (or whose cook was deleted), only the cook field, so a later edit and the share's change stamp are untouched. */
 export const attachNotesToCook = createAsyncThunk<
   number,
   AttachNotesInput,
   { state: RootState }
 >('pinch/notes/attachToCook', async ({ uid, recipeId, cookId, noteIds }, { getState }) => {
   const ids = new Set(noteIds);
-  const targets = getState().pinch.notes.items.filter(
+  const state = getState().pinch;
+  const targets = state.notes.items.filter(
     (note) =>
       ids.has(note.id) &&
       note.recipeId === recipeId &&
       note.kind !== 'TIP' &&
-      note.cookId == null,
+      (note.cookId == null ||
+        !state.cooks.items.some((cook) => cook.id === note.cookId)),
   );
   if (targets.length === 0) return 0;
 

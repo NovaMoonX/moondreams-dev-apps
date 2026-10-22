@@ -54,6 +54,7 @@ function CookJournal({
             writtenBefore={getWrittenBefore(note, lastTweakAt)}
             stepAt={resolveNoteStep(note, steps)}
             isStepLost={isStepLost(note, steps)}
+            isInCook
             onEdit={onEdit}
             onApplyChange={onApplyChange}
           />
