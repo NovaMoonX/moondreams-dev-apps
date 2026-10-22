@@ -57,7 +57,7 @@ VITE_GOOGLE_PLACES_API_KEY=
 # Pinch store logos: a publishable Logo.dev token (pk_…), sent only with a store's web domain. Logos fall back to a letter tile when unset.
 VITE_STORE_LOGO_TOKEN=
 
-# App Check (required by Nine Lives' AI ingestion). Prod: reCAPTCHA v3 site key (Firebase Console > App Check).
+# App Check (required by Nine Lives' AI ingestion). Prod: reCAPTCHA Enterprise site key (Firebase Console > App Check).
 VITE_FIREBASE_APPCHECK_SITE_KEY=
 # Local: the team's shared debug-token UUID (registered under App Check > Manage debug tokens) — ask a teammate.
 VITE_FIREBASE_APPCHECK_DEBUG_TOKEN=

@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import {
   initializeAppCheck,
-  ReCaptchaV3Provider,
+  ReCaptchaEnterpriseProvider,
   type AppCheck,
 } from 'firebase/app-check';
 import {
@@ -50,7 +50,7 @@ export const appCheck: AppCheck | null =
   appCheckSiteKey || isUsingFirebaseEmulators
     ? initializeAppCheck(app, {
         // The debug token set above makes the SDK bypass reCAPTCHA entirely, so any site key works in emulator mode.
-        provider: new ReCaptchaV3Provider(appCheckSiteKey || 'debug'),
+        provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey || 'debug'),
         isTokenAutoRefreshEnabled: true,
       })
     : null;
