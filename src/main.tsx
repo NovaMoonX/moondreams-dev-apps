@@ -14,8 +14,10 @@ registerSW({ immediate: true });
 document.documentElement.toggleAttribute('data-installed-app', IS_INSTALLED_APP);
 watchForAppUpdates();
 
-// A tab opened before a deploy can't fetch the new build's lazy chunks; offer the Restart strip, never reload for them.
-window.addEventListener('vite:preloadError', markUpdateReady);
+// A tab opened before a deploy can't fetch the new build's lazy chunks; offer Restart, never reload for them. Offline is not a new version.
+window.addEventListener('vite:preloadError', () => {
+  if (navigator.onLine) markUpdateReady();
+});
 installVersionPeek();
 reloadOnFirestoreReset();
 

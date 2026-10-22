@@ -15,7 +15,7 @@ const VARIANTS: Record<
   offline: {
     icon: WifiOff,
     label: "You're offline",
-    className: 'bg-destructive text-destructive-foreground',
+    className: 'bg-destructive text-destructive-foreground dark:bg-red-600',
   },
   reconnecting: {
     icon: LoaderCircle,
@@ -31,7 +31,7 @@ const VARIANTS: Record<
   reconnected: {
     icon: CheckCircle2,
     label: 'Back online',
-    className: 'bg-success text-success-foreground',
+    className: 'bg-emerald-700 text-white dark:bg-success dark:text-success-foreground',
   },
   update: {
     icon: RefreshCw,
@@ -68,7 +68,7 @@ function OfflineBanner() {
         <Button
           size='sm'
           variant='base'
-          className='pointer-events-auto relative h-7 bg-primary-foreground! px-3 text-primary! after:absolute after:-inset-1.5'
+          className='pointer-events-auto relative h-7 bg-primary-foreground! px-3 text-primary! after:absolute after:-inset-1.5 hover:bg-primary-foreground/85! focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground!'
           onClick={() => window.location.reload()}
         >
           Restart
