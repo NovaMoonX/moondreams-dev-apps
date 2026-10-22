@@ -1,4 +1,4 @@
-import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
+import { MAX_COOK_TIMERS, MAX_KITCHEN_TIMER_NAME } from '@apps/pinch/constants';
 import type {
   CookingResume,
   PlateCookRecipe,
@@ -41,6 +41,7 @@ export const toResumeTimer = (timer: ResumeTimer): ResumeTimer => {
   const base = {
     recipeId: timer.recipeId,
     stepNumber: timer.stepNumber,
+    name: timer.name,
     label: timer.label,
     durationMs: timer.durationMs,
   };
@@ -121,11 +122,21 @@ const isReminderId = (value: unknown): value is string =>
   typeof value === 'string' && /^[\w-]{1,64}$/.test(value);
 
 const parseTimer = (value: unknown): ResumeTimer | null => {
+  if (!isRecord(value)) return null;
+  // A kitchen timer has no dish and is named; a session saved before them has neither key.
+  const isKitchen = value.recipeId === null;
+  const name = value.name === undefined ? null : value.name;
   if (
-    !isRecord(value) ||
-    !isText(value.recipeId) ||
+    !(isKitchen || isText(value.recipeId)) ||
+    !(
+      name === null ||
+      (typeof name === 'string' &&
+        name !== '' &&
+        name.length <= MAX_KITCHEN_TIMER_NAME)
+    ) ||
+    (isKitchen && name === null) ||
     !isCount(value.stepNumber, 10_000) ||
-    value.stepNumber < 1 ||
+    (isKitchen ? value.stepNumber !== 0 : value.stepNumber < 1) ||
     typeof value.label !== 'string' ||
     !isTime(value.durationMs) ||
     !(
@@ -137,8 +148,9 @@ const parseTimer = (value: unknown): ResumeTimer | null => {
     return null;
   }
   const base = {
-    recipeId: value.recipeId,
+    recipeId: isKitchen ? null : (value.recipeId as string),
     stepNumber: value.stepNumber,
+    name: isKitchen ? name : null,
     label: value.label,
     durationMs: value.durationMs,
   };
@@ -371,7 +383,9 @@ export const resolveCookingResume = (
     }),
   );
   const timers = snapshot.resume.timers.filter(
-    (timer) => timer.stepNumber <= (stepCounts.get(timer.recipeId) ?? 0),
+    (timer) =>
+      timer.recipeId === null ||
+      timer.stepNumber <= (stepCounts.get(timer.recipeId) ?? 0),
   );
   const isPlate = kept.length > 1;
   const current = recipesById.get(currentId);

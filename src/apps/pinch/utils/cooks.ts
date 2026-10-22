@@ -2,11 +2,15 @@ import type { DevicePushState } from '@/lib/notifications/devicePush';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import {
   ALERT_REPEAT_MS,
+  KITCHEN_TIMER_NAME,
   MAX_ALERT_REPEATS,
   MAX_COOK_TIMERS,
   MAX_COOKED_SERVINGS,
+  MAX_KITCHEN_TIMER_NAME,
+  MAX_KITCHEN_TIMER_SECONDS,
   MAX_STEP_TIMERS,
   MIN_COOK_SERVINGS,
+  OTHER_TIMER_ROWS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
 import type {
@@ -269,9 +273,55 @@ export const countLiveTimers = (timers: { status: string }[]) =>
 export const canStartTimer = (timers: { status: string }[]) =>
   countLiveTimers(timers) < MAX_COOK_TIMERS;
 
+/** A kitchen timer's name as it is shown: spaces tidied, cut to the cap, the first letter up, and "Timer" when nothing was said. */
+export const toKitchenTimerName = (text: string) => {
+  const tidy = text
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, MAX_KITCHEN_TIMER_NAME);
+  return tidy === ''
+    ? KITCHEN_TIMER_NAME
+    : `${tidy.charAt(0).toUpperCase()}${tidy.slice(1)}`;
+};
+
+/** A kitchen timer being set up on the Timers screen: an optional name and a length, picked from a few or typed as whole minutes under Other. */
+export interface KitchenTimerDraft {
+  name: string;
+  /** A number of minutes as text, or `OTHER` while the typed length is the one. */
+  length: string | null;
+  otherMinutes: string;
+}
+
+export const EMPTY_KITCHEN_TIMER_DRAFT: KitchenTimerDraft = {
+  name: '',
+  length: null,
+  otherMinutes: '',
+};
+
+/** Whether `addMs` more fits on a timer with `remainingMs` left without passing a day. */
+export const canExtendTimer = (remainingMs: number, addMs: number) =>
+  addMs > 0 && remainingMs + addMs <= MAX_KITCHEN_TIMER_SECONDS * 1000;
+
+/** The draft's length in seconds, or null while none is picked or a typed one isn't whole minutes within a day. */
+export const getDraftSeconds = (draft: KitchenTimerDraft) => {
+  const text =
+    draft.length === 'OTHER' ? draft.otherMinutes.trim() : draft.length;
+  if (text === null || !/^\d{1,4}$/.test(text)) return null;
+  const seconds = Number(text) * 60;
+  return seconds > 0 && seconds <= MAX_KITCHEN_TIMER_SECONDS ? seconds : null;
+};
+
+/** The other timers the timer view lists: all of them until more than three would hide, then the first few and a count of the rest, which a row opens on the Timers screen. */
+export const getVisibleOtherTimers = <T>(others: T[]) => {
+  const hidden = others.length - OTHER_TIMER_ROWS;
+  return hidden > 3
+    ? { shown: others.slice(0, OTHER_TIMER_ROWS), hidden }
+    : { shown: others, hidden: 0 };
+};
+
 /** The times a step mentions (the first `MAX_STEP_TIMERS`) that have no timer yet, each a card with Start; a started one lives in the timer view or the pill row instead, so no timer shows in two places. */
 export const getReadyStepTimers = (
-  timers: { recipeId: string; stepNumber: number; label: string }[],
+  timers: { recipeId: string | null; stepNumber: number; label: string }[],
   shown: {
     recipeId: string;
     stepNumber: number;
@@ -380,7 +430,7 @@ export const getNextAlertRepeatAt = (rings: AlertRing[]) => {
 
 /** A timer's slot on a step: the same recipe, step and length, whichever timer ran there. */
 export const getTimerSlotKey = (timer: {
-  recipeId: string;
+  recipeId: string | null;
   stepNumber: number;
   label: string;
 }) => `${timer.recipeId}:${timer.stepNumber}:${timer.label}`;
@@ -438,7 +488,7 @@ export type TimerNext =
 /** What follows a timer's step, for "Up next": its recipe's next step, or on that recipe's last step the next recipe still short of its own last; nothing once the person is already on that step or past it, or every recipe is on its last. */
 export const getTimerNext = (
   recipes: { recipeId: string; stepIndex: number; stepCount: number }[],
-  timer: { recipeId: string; stepNumber: number },
+  timer: { recipeId: string | null; stepNumber: number },
 ): TimerNext | null => {
   const own = recipes.find((recipe) => recipe.recipeId === timer.recipeId);
   if (!own || own.stepIndex >= timer.stepNumber) {
@@ -478,7 +528,7 @@ export const getTimerSecondary = (
 /** On a plate, the other recipe still short of its last step while the timer's runs (waiting is the moment to start it), with the step it would open on; nothing on a lone recipe, when "Up next" already names that recipe or when no other recipe has a step to do. */
 export const getMeanwhile = (
   recipes: { recipeId: string; stepIndex: number; stepCount: number }[],
-  timerRecipeId: string,
+  timerRecipeId: string | null,
   next: TimerNext | null,
 ) => {
   const own = recipes.find((recipe) => recipe.recipeId === timerRecipeId);

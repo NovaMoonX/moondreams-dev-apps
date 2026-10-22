@@ -622,7 +622,7 @@ export interface RecipeCost {
   lines: Map<string, LineCost>;
 }
 
-export type CookView = 'steps' | 'ingredients';
+export type CookView = 'steps' | 'ingredients' | 'timers';
 
 /** A recipe of a planned plate that cooking holds, with what the plan has for it tonight. */
 export interface PlateCookRecipe {
@@ -632,8 +632,12 @@ export interface PlateCookRecipe {
 
 /** A cooking timer as it is saved on this device: a wall-clock deadline while running, what was left while paused, when it rang once done. */
 export type ResumeTimer = {
-  recipeId: string;
+  /** null for a kitchen timer, one the person named themselves that no dish owns. */
+  recipeId: string | null;
+  /** 0 for a kitchen timer. */
   stepNumber: number;
+  /** A kitchen timer's name; null for a dish's timer, which is named by its step. */
+  name: string | null;
   label: string;
   durationMs: number;
 } & (

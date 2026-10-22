@@ -6,14 +6,19 @@ import {
   formatSpokenTime,
   normalizeTranscript,
   parseCookCommand,
+  describeTimerGuess,
+  describeTimerQuestion,
+  getTimerChoiceNames,
   pickTimersToTell,
-  pickVoiceTimer,
   readCookCommand,
+  resolveVoiceTimers,
   readSpokenDuration,
   toSingular,
   toSpokenAmount,
   toSpokenLabel,
   type CookCommand,
+  type CookTimerTarget,
+  type CookVoiceChoice,
   type CookVoiceContext,
 } from '../../src/apps/pinch/utils/cookVoice.ts';
 
@@ -38,6 +43,8 @@ const plate: CookVoiceContext = {
     { id: 'coconut', names: ['Coconut milk'], isInStep: false },
     { id: 'tartar', names: ['Cream of tartar'], isInStep: false },
   ],
+  timers: [],
+  choice: null,
 };
 
 const single: CookVoiceContext = {
@@ -113,22 +120,27 @@ expectKind(
   { kind: 'STOP_LISTENING' },
   'every way to turn voice off turns it off',
 );
+const anyTimer: CookTimerTarget = { seconds: null, name: null, isAll: false };
 expectKind(
   [
     'how much time is left',
     'how much time left',
     'time left',
     'how long is left on the timer',
-    'how much time is left on the ten minute timer',
     "what's the timer at",
   ],
-  { kind: 'TIME_LEFT' },
+  { kind: 'TIME_LEFT', target: anyTimer },
   'asking how long is the time-left question',
+);
+assert.deepEqual(
+  parse('how much time is left on the ten minute timer'),
+  { kind: 'TIME_LEFT', target: { ...anyTimer, seconds: 600 } },
+  'a length said with the question picks the timer it asks about',
 );
 
 expectKind(
   ['start the timer', 'start timer', 'Start a timer.', 'start the timer again'],
-  { kind: 'START_TIMER', seconds: null },
+  { kind: 'START_TIMER', seconds: null, name: null },
   'start the timer starts the step timer',
 );
 expectKind(
@@ -139,37 +151,42 @@ expectKind(
     'set a timer for 10 minutes',
     'start timer for ten minutes',
   ],
-  { kind: 'START_TIMER', seconds: 600 },
+  { kind: 'START_TIMER', seconds: 600, name: null },
   'a length said with the timer picks the timer of that length',
 );
 expectKind(
   ['start the twenty five minute timer', 'start the twenty-five minute timer'],
-  { kind: 'START_TIMER', seconds: 1500 },
+  { kind: 'START_TIMER', seconds: 1500, name: null },
   'tens and ones said as words make one number',
 );
 expectKind(
   ['start the half an hour timer', 'start the thirty minute timer'],
-  { kind: 'START_TIMER', seconds: 1800 },
+  { kind: 'START_TIMER', seconds: 1800, name: null },
   'half an hour is thirty minutes',
 );
 expectKind(
+  ['start the quarter of an hour timer', 'start the fifteen minute timer'],
+  { kind: 'START_TIMER', seconds: 900, name: null },
+  'a quarter of an hour is fifteen minutes',
+);
+expectKind(
   ['start the hour and a half timer', 'start the one and a half hour timer'],
-  { kind: 'START_TIMER', seconds: 5400 },
+  { kind: 'START_TIMER', seconds: 5400, name: null },
   'an hour and a half is ninety minutes',
 );
 expectKind(
   ['pause', 'pause the timer', 'pause timer', 'hold the timer'],
-  { kind: 'PAUSE_TIMER', seconds: null },
+  { kind: 'PAUSE_TIMER', target: anyTimer },
   'pause pauses the timer',
 );
 expectKind(
   ['resume', 'resume the timer', 'unpause', 'continue the timer'],
-  { kind: 'RESUME_TIMER', seconds: null },
+  { kind: 'RESUME_TIMER', target: anyTimer },
   'resume resumes the timer',
 );
 expectKind(
   ['stop', 'dismiss', 'silence', 'stop the alarm', 'silence the alarm'],
-  { kind: 'STOP_TIMER', seconds: null, scope: 'RINGING' },
+  { kind: 'STOP_TIMER', target: anyTimer, scope: 'RINGING' },
   'a bare stop or the alarm only silences a ringing timer',
 );
 expectKind(
@@ -181,17 +198,17 @@ expectKind(
     'reset the timer',
     'turn off the timer',
   ],
-  { kind: 'STOP_TIMER', seconds: null, scope: 'ANY' },
+  { kind: 'STOP_TIMER', target: anyTimer, scope: 'ANY' },
   'stop the timer stops one that is going',
 );
 assert.deepEqual(
   parse('stop the 10 minute timer'),
-  { kind: 'STOP_TIMER', seconds: 600, scope: 'ANY' },
+  { kind: 'STOP_TIMER', target: { ...anyTimer, seconds: 600 }, scope: 'ANY' },
   'a length picks which timer to stop',
 );
 assert.deepEqual(
   parse('pause the twenty minute timer'),
-  { kind: 'PAUSE_TIMER', seconds: 1200 },
+  { kind: 'PAUSE_TIMER', target: { ...anyTimer, seconds: 1200 } },
   'a length picks which timer to pause',
 );
 
@@ -444,7 +461,7 @@ assert.deepEqual(
       transcript: 'switch to rice',
     },
     {
-      command: { kind: 'STOP_TIMER', seconds: null, scope: 'ANY' },
+      command: { kind: 'STOP_TIMER', target: anyTimer, scope: 'ANY' },
       transcript: 'stop the timer',
     },
     {
@@ -595,6 +612,49 @@ assert.deepEqual(
 assert.deepEqual(
   describeTimersLeft([
     {
+      label: '10 min',
+      name: 'Pasta water',
+      callName: 'Pasta water',
+      status: 'running',
+      remainingMs: 540_000,
+      clock: '9:00',
+    },
+  ]),
+  {
+    show: '9:00 left on the Pasta water timer',
+    speak: '9 minutes left on the Pasta water timer.',
+  },
+  'a timer the person named is told by its name, not its length',
+);
+assert.deepEqual(
+  describeTimersLeft(
+    [
+      {
+        label: '10 min',
+        name: 'A',
+        status: 'running',
+        remainingMs: 60_000,
+        clock: '1:00',
+      },
+      {
+        label: '5 min',
+        name: 'B',
+        status: 'paused',
+        remainingMs: 30_000,
+        clock: '0:30',
+      },
+    ],
+    3,
+  ),
+  {
+    show: '1:00 left · 0:30 left, paused · and 3 more',
+    speak: 'A: 1 minute left. B: 30 seconds left, paused. And 3 more.',
+  },
+  'a long list of timers is told in part, with how many were left out',
+);
+assert.deepEqual(
+  describeTimersLeft([
+    {
       label: '30 min',
       name: 'Marinate',
       status: 'paused',
@@ -670,46 +730,83 @@ assert.deepEqual(
 );
 
 const timerSet = [
-  { id: 'a', label: '30 min', status: 'running', remainingMs: 900_000 },
-  { id: 'b', label: '10 min', status: 'running', remainingMs: 120_000 },
-  { id: 'c', label: '25 min', status: 'paused', remainingMs: 600_000 },
-  { id: 'd', label: '5 min', status: 'done', remainingMs: 0 },
+  {
+    id: 'a',
+    label: '30 min',
+    status: 'running',
+    remainingMs: 900_000,
+    names: ['Marinate'],
+  },
+  {
+    id: 'b',
+    label: '10 min',
+    status: 'running',
+    remainingMs: 120_000,
+    names: ['Pasta water'],
+  },
+  {
+    id: 'c',
+    label: '25 min',
+    status: 'paused',
+    remainingMs: 600_000,
+    names: ['Simmer sauce'],
+  },
+  {
+    id: 'd',
+    label: '5 min',
+    status: 'done',
+    remainingMs: 0,
+    names: ['Rest steak'],
+  },
 ];
+const resolve = (
+  statuses: string[],
+  target: Partial<CookTimerTarget>,
+  focusedId: string | null = null,
+  timers = timerSet,
+) =>
+  resolveVoiceTimers(timers, {
+    statuses,
+    target: { ...anyTimer, ...target },
+    focusedId,
+  });
+const idOf = (resolution: ReturnType<typeof resolve>) =>
+  resolution.kind === 'ONE' ? resolution.timer.id : resolution.kind;
 assert.deepEqual(
   [
-    pickVoiceTimer(timerSet, {
-      statuses: ['running'],
-      label: null,
-      focusedId: 'a',
-    })?.id,
-    pickVoiceTimer(timerSet, {
-      statuses: ['running'],
-      label: null,
-      focusedId: null,
-    })?.id,
-    pickVoiceTimer(timerSet, {
-      statuses: ['running'],
-      label: null,
-      focusedId: 'c',
-    })?.id,
-    pickVoiceTimer(timerSet, {
-      statuses: ['running'],
-      label: '30 min',
-      focusedId: null,
-    })?.id,
-    pickVoiceTimer(timerSet, {
-      statuses: ['paused'],
-      label: null,
-      focusedId: null,
-    })?.id,
-    pickVoiceTimer(timerSet, {
-      statuses: ['running'],
-      label: '25 min',
-      focusedId: null,
-    }),
+    idOf(resolve(['running'], {}, 'a')),
+    idOf(resolve(['running'], {}, null)),
+    idOf(resolve(['running'], {}, 'c')),
+    idOf(resolve(['running'], { seconds: 1800 })),
+    idOf(resolve(['paused'], {})),
+    idOf(resolve(['running'], { seconds: 1500 })),
+    idOf(resolve(['running'], { name: 'pasta' })),
+    idOf(resolve(['running'], { name: 'sauce' })),
+    idOf(resolve(['running', 'paused'], { name: 'sauce' })),
+    idOf(resolve(['running'], { isAll: true })),
+    idOf(resolve([], {})),
   ],
-  ['a', 'b', 'b', 'a', 'c', null],
-  'pause and resume act on the timer in focus, else the one that ends soonest, and a said length must match',
+  ['a', 'ASK', 'ASK', 'a', 'c', 'NONE', 'b', 'ASK', 'c', 'ALL', 'NONE'],
+  'a timer is found by what is said (length, name, all) or the one in front on screen, the only one that fits is taken, and with several that fit and nothing to tell them apart it asks instead of picking',
+);
+assert.deepEqual(
+  [
+    idOf(resolve(['running'], { seconds: 600 }, 'a')),
+    idOf(
+      resolve(['running', 'paused'], { seconds: 600 }, null, [
+        ...timerSet,
+        {
+          id: 'e',
+          label: '10 min',
+          status: 'running',
+          remainingMs: 300_000,
+          names: ['Boil eggs'],
+        },
+      ]),
+    ),
+  ],
+  ['b', 'ASK'],
+  'a said length that fits two timers asks, and one in focus is no reason to skip the question when the person named something',
 );
 assert.deepEqual(
   [
@@ -730,37 +827,404 @@ const rangSet = [
     status: 'done',
     remainingMs: 0,
     endedAt: 2_000,
+    names: ['Rice'],
   },
-  { id: 'run', label: '5 min', status: 'running', remainingMs: 60_000 },
+  {
+    id: 'run',
+    label: '5 min',
+    status: 'running',
+    remainingMs: 60_000,
+    names: ['Eggs'],
+  },
   {
     id: 'early',
     label: '10 min',
     status: 'done',
     remainingMs: 0,
     endedAt: 1_000,
+    names: ['Pasta'],
   },
 ];
 assert.deepEqual(
   [
-    pickVoiceTimer(rangSet, {
-      statuses: ['done'],
-      label: null,
-      focusedId: null,
-    })?.id,
-    pickVoiceTimer(rangSet, {
-      statuses: ['done'],
-      label: null,
-      focusedId: 'late',
-    })?.id,
-    pickVoiceTimer(rangSet, {
-      statuses: ['done'],
-      label: '30 min',
-      focusedId: null,
-    })?.id,
+    idOf(resolve(['done'], {}, null, rangSet)),
+    idOf(resolve(['done'], {}, 'late', rangSet)),
+    idOf(resolve(['done'], { seconds: 1800 }, null, rangSet)),
     pickTimersToTell(rangSet, null).map((timer) => timer.id),
   ],
   ['early', 'late', 'late', ['early', 'run']],
-  'with two Time’s ups listed latest first, stop and time left take the one that rang first unless another is in focus or named',
+  'with two Time’s ups listed latest first, stop and time left take the one in focus, else the one that rang first, unless another is named',
+);
+
+const timerContext: CookVoiceContext = {
+  ...plate,
+  timers: [
+    { id: 't1', names: ['Pasta water'], label: '10 min' },
+    { id: 't2', names: ['Rice'], label: '15 min' },
+    { id: 't3', names: ['Boil eggs'], label: '10 min' },
+  ],
+};
+assert.equal(
+  parse('add a minute'),
+  null,
+  'with no timer in the session, adding time is not a command',
+);
+const parseWithTimers = (text: string, context = timerContext) =>
+  parse(text, context);
+const target = (part: Partial<CookTimerTarget>): CookTimerTarget => ({
+  ...anyTimer,
+  ...part,
+});
+
+[
+  ['set a timer for ten minutes for the pasta', 600, 'pasta'],
+  ['set a pasta timer for 10 minutes', 600, 'pasta'],
+  ['start a 10 minute timer for the rice', 600, 'rice'],
+  ['set a timer for the pasta', null, 'pasta'],
+  ['start a timer called garlic bread for five minutes', 300, 'garlic bread'],
+].forEach(([phrase, seconds, name]) =>
+  assert.deepEqual(
+    parseWithTimers(phrase as string),
+    { kind: 'START_TIMER', seconds, name },
+    `a new timer takes the length and the name said with it: "${phrase}"`,
+  ),
+);
+assert.deepEqual(
+  parseWithTimers('set a timer'),
+  { kind: 'START_TIMER', seconds: null, name: null },
+  'a timer with no length or name is still a start, and the screen asks how long',
+);
+
+[
+  ['pause the pasta timer', 'PAUSE_TIMER'],
+  ['pause the pasta', 'PAUSE_TIMER'],
+  ['resume the rice timer', 'RESUME_TIMER'],
+].forEach(([phrase, kind]) =>
+  assert.deepEqual(
+    parseWithTimers(phrase),
+    {
+      kind,
+      target: target({ name: phrase.includes('pasta') ? 'pasta' : 'rice' }),
+    },
+    `a name said with a timer verb picks the timer called that: "${phrase}"`,
+  ),
+);
+assert.deepEqual(
+  parseWithTimers('stop the rice'),
+  { kind: 'STOP_TIMER', target: target({ name: 'rice' }), scope: 'ANY' },
+  'a name that is a timer needs no "timer" after it',
+);
+['pause all timers', 'pause the timers', 'pause all the timers'].forEach(
+  (phrase) =>
+    assert.deepEqual(
+      parseWithTimers(phrase),
+      { kind: 'PAUSE_TIMER', target: target({ isAll: true }) },
+      `all pauses every timer: "${phrase}"`,
+    ),
+);
+assert.deepEqual(
+  [parseWithTimers('cancel all timers'), parseWithTimers('dismiss all')],
+  [
+    { kind: 'STOP_TIMER', target: target({ isAll: true }), scope: 'ANY' },
+    { kind: 'STOP_TIMER', target: target({ isAll: true }), scope: 'ANY' },
+  ],
+  'all stops every timer',
+);
+
+[
+  ['add two minutes', 120, null],
+  ['add a minute', 60, null],
+  ['add 2 minutes to the pasta timer', 120, 'pasta'],
+  ['extend the timer by five minutes', 300, null],
+  ['give the rice timer 3 more minutes', 180, 'rice'],
+  ['five more minutes', 300, null],
+  ['another 5 minutes', 300, null],
+  ['two more minutes on the rice', 120, 'rice'],
+].forEach(([phrase, seconds, name]) =>
+  assert.deepEqual(
+    parseWithTimers(phrase as string),
+    {
+      kind: 'EXTEND_TIMER',
+      seconds,
+      target: target({ name: name as string | null }),
+    },
+    `time is added to the timer said, or the one in front: "${phrase}"`,
+  ),
+);
+
+assert.deepEqual(
+  [
+    'how much time is left on the pasta',
+    'how much time is left on the pasta timer',
+    'how long on the rice',
+  ].map((phrase) => parseWithTimers(phrase)),
+  [
+    { kind: 'TIME_LEFT', target: target({ name: 'pasta' }) },
+    { kind: 'TIME_LEFT', target: target({ name: 'pasta' }) },
+    { kind: 'TIME_LEFT', target: target({ name: 'rice' }) },
+  ],
+  'time left can be asked about one timer by name',
+);
+assert.deepEqual(
+  [
+    'what timers are running',
+    'how much time is left on all the timers',
+    'list the timers',
+  ].map((phrase) => parseWithTimers(phrase)),
+  Array.from({ length: 3 }, () => ({
+    kind: 'TIME_LEFT',
+    target: target({ isAll: true }),
+  })),
+  'what is going can be asked of every timer at once',
+);
+assert.deepEqual(
+  ['timers', 'show the timers', 'open the timers'].map((phrase) =>
+    parseWithTimers(phrase),
+  ),
+  Array.from({ length: 3 }, () => ({ kind: 'SHOW_TIMERS' })),
+  'asking for the timers shows them',
+);
+
+[
+  'stop it',
+  'stop that',
+  'stop the oven',
+  'stop everything',
+  'pause for effect',
+  'turn off the oven',
+  'add salt',
+  'add two cups of rice',
+  'add 2 minutes to the cooking time',
+  'give me a minute',
+  'bake for ten minutes',
+  '10 minutes',
+  'how long for the chicken',
+  'set a timer for 10 minutes and 5 minutes',
+  'ten minutes',
+  'the pasta',
+  'the second one',
+  'never mind',
+].forEach((phrase) =>
+  assert.equal(
+    parseWithTimers(phrase),
+    null,
+    `kitchen talk about something that is not a timer is not a command, and a bare answer means nothing while no question waits: "${phrase}"`,
+  ),
+);
+assert.equal(
+  parse('pause the pasta'),
+  null,
+  'a name only counts as a timer when a timer has it',
+);
+
+const timerChoice: CookVoiceChoice = {
+  kind: 'TIMER',
+  timers: timerContext.timers,
+};
+const asked: CookVoiceContext = { ...timerContext, choice: timerChoice };
+const pick = (ids: string[], isAll = false) => ({
+  kind: 'TIMER_ANSWER',
+  answer: { kind: 'PICK', ids, isAll },
+});
+assert.deepEqual(
+  [
+    'pasta',
+    'the pasta timer',
+    'the rice',
+    'eggs',
+    'the first one',
+    'second',
+    'the last one',
+    '3',
+    'the fifteen minute one',
+    'one',
+    'number one',
+  ].map((phrase) => parse(phrase, asked)),
+  [
+    pick(['t1']),
+    pick(['t1']),
+    pick(['t2']),
+    pick(['t3']),
+    pick(['t1']),
+    pick(['t2']),
+    pick(['t3']),
+    pick(['t3']),
+    pick(['t2']),
+    pick(['t1']),
+    pick(['t1']),
+  ],
+  'while asked which timer, a name, a place in the list or a length picks it',
+);
+assert.deepEqual(
+  ['both', 'all of them', 'every timer'].map((phrase) => parse(phrase, asked)),
+  Array.from({ length: 3 }, () => pick(['t1', 't2', 't3'], true)),
+  'all picks every timer that was offered',
+);
+assert.deepEqual(
+  parse('ten minutes', asked),
+  pick(['t1', 't3']),
+  'a length two timers share picks both, and the screen asks again between them',
+);
+assert.deepEqual(
+  [parse('never mind', asked), parse('banana', asked), parse('next', asked)],
+  [
+    { kind: 'TIMER_ANSWER', answer: { kind: 'NEVER_MIND' } },
+    null,
+    { kind: 'NEXT' },
+  ],
+  'never mind drops the question, anything else is not an answer, and a real command still runs',
+);
+const askedLength: CookVoiceContext = {
+  ...timerContext,
+  choice: { kind: 'LENGTH' },
+};
+assert.deepEqual(
+  [
+    'ten minutes',
+    '10',
+    'five',
+    'an hour',
+    'half an hour',
+    '1 hour 30 minutes',
+  ].map((phrase) => parse(phrase, askedLength)),
+  [600, 600, 300, 3600, 1800, 5400].map((seconds) => ({
+    kind: 'TIMER_ANSWER',
+    answer: { kind: 'LENGTH', seconds },
+  })),
+  'while asked how long, a length (a bare number is minutes) answers',
+);
+assert.equal(
+  parse('banana', askedLength),
+  null,
+  'something that is not a length is not an answer to how long',
+);
+
+assert.deepEqual(
+  getTimerChoiceNames([
+    { name: 'Timer', label: '10 min' },
+    { name: 'Timer', label: '5 min' },
+    { name: 'Rice', label: '15 min' },
+  ]),
+  ['Timer (10 min)', 'Timer (5 min)', 'Rice'],
+  'two timers with one name are told apart by their length',
+);
+assert.deepEqual(
+  [
+    describeTimerQuestion(
+      [
+        { name: 'Pasta water', label: '10 min' },
+        { name: 'Rice', label: '15 min' },
+      ],
+      'pause',
+    ),
+    describeTimerQuestion(
+      ['A', 'B', 'C', 'D'].map((name) => ({ name, label: '1 min' })),
+      'pause',
+    ).show,
+    describeTimerQuestion(
+      ['A', 'B', 'C', 'D', 'E', 'F'].map((name) => ({ name, label: '1 min' })),
+      'extend',
+    ).show,
+  ],
+  [
+    {
+      show: 'Which timer to pause: Pasta water or Rice?',
+      speak: 'Which timer should I pause? Pasta water or Rice?',
+    },
+    'Which timer to pause: A, B, C, or D?',
+    'Which timer to extend: A, B, C, or 3 more?',
+  ],
+  'the question names up to four timers, then how many more',
+);
+
+assert.deepEqual(
+  [
+    resolve(['running'], { name: 'pasta wter' }),
+    resolve(['running'], { name: 'chicken' }),
+    resolve(['paused'], { name: 'chicken' }),
+  ].map((resolution) => [
+    resolution.kind,
+    resolution.kind === 'GUESS' ? resolution.timer.id : null,
+    resolution.kind === 'ASK' ? (resolution.missed ?? null) : null,
+  ]),
+  [
+    ['GUESS', 'b', null],
+    ['ASK', null, 'chicken'],
+    ['GUESS', 'c', null],
+  ],
+  'a name nothing has is matched to a close one (a misspelling, a mishearing) and asked about; with no close one the timers are offered, or the only one is asked about',
+);
+assert.deepEqual(
+  [
+    describeTimerGuess('Checkers', 'chicken'),
+    describeTimerQuestion([{ name: 'A', label: '1 min' }], 'pause', 'chicken')
+      .show,
+  ],
+  [
+    {
+      show: 'No chicken timer. Did you mean Checkers?',
+      speak: "I don't have a chicken timer. Did you mean Checkers?",
+    },
+    'No chicken timer. Which timer to pause: A?',
+  ],
+  'a guess and a miss are said plainly',
+);
+assert.deepEqual(
+  [
+    'rename the pasta timer to noodles',
+    'rename the ten minute timer to rice',
+    'call the pasta timer noodles',
+    'name this timer soup',
+    'rename it to soup',
+    'rename the pasta to noodles',
+  ].map((phrase) => parseWithTimers(phrase)),
+  [
+    {
+      kind: 'RENAME_TIMER',
+      target: target({ name: 'pasta' }),
+      name: 'noodles',
+    },
+    { kind: 'RENAME_TIMER', target: target({ seconds: 600 }), name: 'rice' },
+    {
+      kind: 'RENAME_TIMER',
+      target: target({ name: 'pasta' }),
+      name: 'noodles',
+    },
+    { kind: 'RENAME_TIMER', target: target({}), name: 'soup' },
+    { kind: 'RENAME_TIMER', target: target({}), name: 'soup' },
+    {
+      kind: 'RENAME_TIMER',
+      target: target({ name: 'pasta' }),
+      name: 'noodles',
+    },
+  ],
+  'a timer is renamed by saying which one and the new name',
+);
+assert.equal(
+  parseWithTimers('rename the oven to soup'),
+  null,
+  'renaming something that is not a timer is not a command',
+);
+assert.deepEqual(
+  ['showtime', 'show time', 'show times', 'show timer', 'timer list'].map(
+    (phrase) => parseWithTimers(phrase),
+  ),
+  Array.from({ length: 5 }, () => ({ kind: 'SHOW_TIMERS' })),
+  'what a recognizer hears for "show timers" still shows them',
+);
+const guessed: CookVoiceContext = {
+  ...timerContext,
+  choice: { kind: 'TIMER', timers: [timerContext.timers[0]], isConfirm: true },
+};
+assert.deepEqual(
+  ['yes', 'yeah', 'that one'].map((phrase) => parse(phrase, guessed)),
+  Array.from({ length: 3 }, () => pick(['t1'])),
+  'yes confirms the guessed timer',
+);
+assert.deepEqual(
+  [parse('no', guessed), parse('yes', asked)],
+  [{ kind: 'TIMER_ANSWER', answer: { kind: 'NEVER_MIND' } }, null],
+  'no drops a guess, and yes means nothing when a timer is asked for by name',
 );
 
 console.log('pinchVoice: all checks passed');
