@@ -11,7 +11,7 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 ## How It Works
 
 1. **Start with a stocked kitchen.** A ready-made catalog of everyday ingredients and seasonings is waiting, each with its nutrition.
-2. **Add what's missing.** Create your own ingredients, from a variant of an existing one (Chicken → Chicken breast) to a ready-to-eat food like Doritos. A name is all it takes to start.
+2. **Add what's missing.** Create your own ingredients, from a variant of an existing one (Chicken → Chicken breast) to a ready-to-eat food like Doritos. A name is all it takes to start, and you can add other names it goes by ("Ranch Salad Dressing & Recipe Mix" for dry ranch seasoning), so search and recipe readings find it either way.
 3. **Add what you pay.** Attach a store, a price, and a package size to any ingredient, like chicken breast from Walmart, whenever you have them handy, and see what it costs per pound beside each place. Pick the store from a list of well-known ones with their logos, or add your own.
 4. **Build recipes.** Write one by hand, or start from text, a file (a photo, screenshot or PDF) or a link to a recipe page or a YouTube video, and the AI fills in the recipe for you to review.
 5. **Bring recipes in from anywhere.** Paste a recipe copied from any chat, snap a photo of a cookbook page, or hand it a link.
@@ -90,6 +90,9 @@ Planning meals with an AI chat is easy to start and hard to keep going. Every co
 - **A list of well-known stores is ready.** Pinch includes the grocery stores and warehouse clubs most people shop at, each with its logo, so adding "Walmart" is a tap, not typing.
 - **Add your own.** The corner market, a farm stand, an online shop: give it a name and, if you like, a photo or logo. Without an image it gets a tile with its first letter.
 - **Pick a store when you add a price.** The picker shows your stores first, then the well-known ones, with a search once the list grows. Adding a price from Stores & prices first asks which ingredient it is for and offers up to three that still need one.
+- **Start a price from a product page.** In a new price, paste a product link and "Fill in from this page" has an AI read the page and fill in the store (when it is one of yours), the price, the package size and the brand, for you to check; nothing is saved until you add it. If the page can't be read (some stores don't let apps open their pages), the form is still there and you type the price.
+- **The same from the "Add prices" sheet.** When a recipe or the Calendar says an ingredient needs a price, each row of "Prices and sizes" has a "From a product page" chip that fills that row's store, price and size from a link, then "Save and next" moves on.
+- **A reading can offer another name for the ingredient.** When the page names the product in a general way ("Ranch Salad Dressing & Recipe Mix" for a branded 1 oz packet), the form offers "Also call this ingredient …" as an unticked box. It is never the whole product name, never with the brand or size in it, and never a name the ingredient already answers to; tick it and the name is added when the price is saved.
 - **Stores are for you.** Stores & prices lists every price under its store, and a store's heading opens its name and logo. They aren't part of anything you share.
 
 ### Cost and Nutrition, In Detail

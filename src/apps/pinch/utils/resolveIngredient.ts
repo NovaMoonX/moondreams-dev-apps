@@ -1,5 +1,6 @@
 import { CATALOG_INGREDIENTS } from '@apps/pinch/catalog';
 import { DEFAULT_SERVING } from '@apps/pinch/constants';
+import { getRecordAliases } from '@apps/pinch/utils/ingredientRecord';
 import type {
   CatalogIngredient,
   IngredientRecord,
@@ -32,7 +33,17 @@ const hasAdjustments = (record: IngredientRecord) =>
   record.nutritionPer100g != null ||
   record.servingAmount != null ||
   record.gramsPerMl != null ||
-  record.gramsEach != null;
+  record.gramsEach != null ||
+  getRecordAliases(record).length > 0;
+
+const mergeAliases = (catalog: string[], own: string[]) => {
+  const have = new Set(catalog.map((alias) => alias.toLowerCase()));
+  const result = [
+    ...catalog,
+    ...own.filter((alias) => !have.has(alias.toLowerCase())),
+  ];
+  return result;
+};
 
 export function resolveCatalogIngredient(
   catalog: CatalogIngredient,
@@ -47,7 +58,9 @@ export function resolveCatalogIngredient(
     id: catalog.id,
     name: record?.name ?? catalog.name,
     familyId: record?.familyId ?? catalog.familyId,
-    aliases: catalog.aliases,
+    aliases: record
+      ? mergeAliases(catalog.aliases, getRecordAliases(record))
+      : catalog.aliases,
     per100g: mergeNutrition(record?.nutritionPer100g ?? null, catalog.per100g),
     serving: hasServing
       ? {
@@ -72,7 +85,7 @@ export function resolveCustomIngredient(
     id: record.id,
     name: record.name ?? 'Unnamed ingredient',
     familyId: record.familyId,
-    aliases: [],
+    aliases: getRecordAliases(record),
     per100g: mergeNutrition(record.nutritionPer100g, NO_NUTRITION),
     serving: hasServing
       ? {

@@ -6,6 +6,7 @@ import { Plus, Star } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import HelpTip from '@/components/HelpTip';
+import LabelChip from '@/components/LabelChip';
 import MacroStats from '@/components/MacroStats';
 import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -35,8 +36,10 @@ import {
   scaleNutrition,
   type NutritionBasis,
 } from '@apps/pinch/utils/nutritionBasis';
-import { hasAnyMetricOn } from '@apps/pinch/utils/nutritionMath';
+import { hasShownValue } from '@apps/pinch/utils/nutritionMath';
 import { formatSize, formatUnitPrice } from '@apps/pinch/utils/productFormat';
+
+const MAX_SHOWN_ALIASES = 3;
 
 const BASIS_CHOICES = NUTRITION_BASIS_OPTIONS.map((option) => ({ ...option }));
 
@@ -127,6 +130,11 @@ function IngredientDrawer({
   const nutritionCaption = isPerServing
     ? `Per 1 serving (${servingText})`
     : 'Per 100 g';
+  const nutritionValues = isPerServing
+    ? scaleNutrition(ingredient.per100g, servingGrams / 100)
+    : ingredient.per100g;
+  const shownAliases = ingredient.aliases.slice(0, MAX_SHOWN_ALIASES);
+  const hiddenAliasCount = ingredient.aliases.length - shownAliases.length;
 
   return (
     <DetailSheet
@@ -155,23 +163,12 @@ function IngredientDrawer({
       }
     >
       <div className='space-y-5'>
-        <ul className='flex flex-wrap items-center gap-x-4 gap-y-1 text-sm'>
-          {[
-            family && {
-              key: 'family',
-              content: <span className='font-medium'>{family.name}</span>,
-            },
-            ingredient.isCustom && {
-              key: 'custom',
-              content: (
-                <>
-                  <span aria-hidden='true'>✏️ </span>One you added
-                </>
-              ),
-            },
-            ingredient.isAdjusted && {
-              key: 'adjusted',
-              content: (
+        <div className='space-y-1.5 empty:hidden'>
+          {(family || ingredient.isCustom || ingredient.isAdjusted) && (
+            <div className='flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm'>
+              {family && <span className='font-medium'>{family.name}</span>}
+              {ingredient.isCustom && <LabelChip>Added by you</LabelChip>}
+              {ingredient.isAdjusted && (
                 <HelpTip badgeLabel='Adjusted' title='What you adjusted'>
                   <p>
                     This ingredient is built in, with a few values of yours.
@@ -200,40 +197,27 @@ function IngredientDrawer({
                     trash button.
                   </p>
                 </HelpTip>
-              ),
-            },
-            usedIn !== null && {
-              key: 'used',
-              content: (
+              )}
+            </div>
+          )}
+          {(usedIn !== null || shownAliases.length > 0) && (
+            <div className='text-muted-foreground space-y-1 text-sm'>
+              {usedIn !== null && (
+                <p className='line-clamp-2 wrap-break-word'>{usedIn}</p>
+              )}
+              {shownAliases.length > 0 && (
                 <>
-                  <span aria-hidden='true'>🍲 </span>
-                  {usedIn}
+                  <p className='line-clamp-2 wrap-break-word'>
+                    Also called {shownAliases.join(', ')}
+                  </p>
+                  {hiddenAliasCount > 0 && <p>and {hiddenAliasCount} more</p>}
                 </>
-              ),
-              canWrap: true,
-            },
-          ]
-            .filter((fact) => fact !== false && fact !== undefined)
-            .map((fact) => (
-              <li
-                key={fact.key}
-                className={
-                  'canWrap' in fact
-                    ? 'min-w-0 wrap-break-word'
-                    : 'whitespace-nowrap'
-                }
-              >
-                {fact.content}
-              </li>
-            ))}
-        </ul>
-        {ingredient.aliases.length > 0 && (
-          <p className='text-muted-foreground text-sm'>
-            Also called {ingredient.aliases.join(', ')}
-          </p>
-        )}
+              )}
+            </div>
+          )}
+        </div>
 
-        {hasAnyMetricOn(show) && (
+        {hasShownValue(nutritionValues, show) && (
           <section aria-label={nutritionCaption} className='space-y-2'>
             <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2'>
               <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
@@ -249,15 +233,7 @@ function IngredientDrawer({
                 />
               )}
             </div>
-            <MacroStats
-              values={
-                isPerServing
-                  ? scaleNutrition(ingredient.per100g, servingGrams / 100)
-                  : ingredient.per100g
-              }
-              show={show}
-              variant='tiles'
-            />
+            <MacroStats values={nutritionValues} show={show} variant='tiles' />
           </section>
         )}
 

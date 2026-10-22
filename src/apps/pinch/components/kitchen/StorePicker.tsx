@@ -26,10 +26,17 @@ interface StorePickerProps {
   /** The chosen store's id, or null before anything is chosen. */
   value: string | null;
   onChange: (storeId: string | null) => void;
+  /** A well-known store the person lacks, searched for as the list opens. */
+  suggestedStoreName?: string | null;
 }
 
 /** Picks where something is bought: the person's own stores as logo pills, and a dashed "New store" pill that opens the well-known list and a box for one of their own. */
-function StorePicker({ uid, value, onChange }: StorePickerProps) {
+function StorePicker({
+  uid,
+  value,
+  onChange,
+  suggestedStoreName = null,
+}: StorePickerProps) {
   const dispatch = useAppDispatch();
   const visibleStores = useAppSelector(selectStores);
   const hiddenChoice = useAppSelector(selectStoresById).get(value ?? '');
@@ -40,8 +47,10 @@ function StorePicker({ uid, value, onChange }: StorePickerProps) {
         : visibleStores,
     [visibleStores, hiddenChoice],
   );
-  const [isAdding, setIsAdding] = useState(stores.length === 0);
-  const [query, setQuery] = useState('');
+  const [isAdding, setIsAdding] = useState(
+    stores.length === 0 || suggestedStoreName !== null,
+  );
+  const [query, setQuery] = useState(suggestedStoreName ?? '');
   const [ownName, setOwnName] = useState('');
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);

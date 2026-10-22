@@ -1,21 +1,33 @@
 import { useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { Plus } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import MoneyInput from '@/components/MoneyInput';
+import RevealChip from '@/components/RevealChip';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { parseMoneyToCents } from '@/utils/moneyUtils';
+import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
+import { isValidHttpsUrl } from '@/utils/urlUtils';
+import ProductLinkField from '@apps/pinch/components/kitchen/ProductLinkField';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
+import {
+  useProductPageReading,
+  type ProductReading,
+} from '@apps/pinch/components/kitchen/useProductPageReading';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
+  MAX_LINK_URL_LENGTH,
   MAX_PRICE_CENTS,
   MAX_SERVING_AMOUNT,
   NUTRITION_CELLS,
 } from '@apps/pinch/constants';
-import { saveIngredient } from '@apps/pinch/store/actions/ingredientActions';
+import {
+  addIngredientAlias,
+  saveIngredient,
+} from '@apps/pinch/store/actions/ingredientActions';
 import { saveProduct } from '@apps/pinch/store/actions/productActions';
 import {
   selectDefaultProducts,
@@ -41,6 +53,13 @@ interface RowState {
   price: string;
   sizeAmount: string;
   sizeUnit: Unit;
+  link: string;
+  isLinkShown: boolean;
+  alias: string | null;
+  isAliasOn: boolean;
+  suggestedStore: string | null;
+  /** Bumped by a reading so the store picker is seeded again. */
+  fillCount: number;
 }
 
 interface FillInSheetProps {
@@ -75,6 +94,12 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const [index, setIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const {
+    reading,
+    read,
+    readFile,
+    reset: resetReading,
+  } = useProductPageReading({ hasLabel: false });
 
   const getRow = (gap: Gap): RowState =>
     values[getGapKey(gap)] ?? {
@@ -88,6 +113,12 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         uses.get(gap.ingredientId),
         ingredientsById.get(gap.ingredientId),
       ),
+      link: '',
+      isLinkShown: false,
+      alias: null,
+      isAliasOn: false,
+      suggestedStore: null,
+      fillCount: 0,
     };
   const update = (id: string, gap: Gap, patch: Partial<RowState>) =>
     setValues((current) => ({
@@ -136,7 +167,11 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
       priceCents,
       sizeAmount,
       sizeUnit: row.sizeUnit,
-      url: null,
+      url:
+        isValidHttpsUrl(row.link.trim()) &&
+        row.link.trim().length <= MAX_LINK_URL_LENGTH
+          ? row.link.trim()
+          : null,
       makeDefault: true,
     };
   };
@@ -170,7 +205,64 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
   const canSave = isNutrition ? isNutritionValid : draft !== null;
   const isLast = index + 1 >= rows.length;
 
+  const applyReading = (
+    { found, match }: ProductReading,
+    pageLink: string | null,
+  ) => {
+    const id = getGapKey(gap);
+    setValues((current) => {
+      const live = { ...getRow(gap), ...current[id] };
+      return {
+        ...current,
+        [id]: {
+          ...live,
+          storeId:
+            match.storeId ??
+            (match.suggestedName === null ? live.storeId : null),
+          price:
+            found.priceCents === null
+              ? live.price
+              : centsToInputValue(found.priceCents),
+          sizeAmount:
+            found.sizeAmount === null || found.sizeUnit === null
+              ? live.sizeAmount
+              : String(found.sizeAmount),
+          sizeUnit: found.sizeUnit ?? live.sizeUnit,
+          link: pageLink ?? live.link,
+          suggestedStore: match.storeId === null ? match.suggestedName : null,
+          alias: found.alias,
+          isAliasOn: false,
+          fillCount: live.fillCount + 1,
+        },
+      };
+    });
+    if (match.storeId !== null) {
+      setLastStoreId(match.storeId);
+    }
+  };
+
+  const fillFromPage = async (pageLink: string) => {
+    if (!ingredient) {
+      return;
+    }
+    const result = await read(pageLink, ingredient);
+    if (result !== null) {
+      applyReading(result, pageLink);
+    }
+  };
+
+  const fillFromFile = async (file: File) => {
+    if (!ingredient) {
+      return;
+    }
+    const result = await readFile(file, ingredient);
+    if (result !== null) {
+      applyReading(result, null);
+    }
+  };
+
   const advance = () => {
+    resetReading();
     setError(null);
     if (isLast) {
       onClose();
@@ -207,11 +299,25 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
               },
               servingAmount: ingredient.serving.amount,
               servingUnit: ingredient.serving.unit,
+              aliases: null,
             },
           }),
         ).unwrap();
       } else if (draft) {
         await dispatch(saveProduct({ uid, draft })).unwrap();
+        if (row.isAliasOn && row.alias !== null) {
+          await dispatch(
+            addIngredientAlias({
+              uid,
+              ingredientId: ingredient.id,
+              alias: row.alias,
+            }),
+          )
+            .unwrap()
+            .catch((aliasError) =>
+              console.error('Adding the other name failed', aliasError),
+            );
+        }
       }
       setIsSubmitting(false);
       advance();
@@ -283,9 +389,10 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
         )}
         {gap.kind === 'NO_PRODUCT' && (
           <StorePicker
-            key={gap.ingredientId}
+            key={`${gap.ingredientId}-${row.fillCount}`}
             uid={uid}
             value={row.storeId}
+            suggestedStoreName={row.suggestedStore}
             onChange={(storeId) => {
               update(getGapKey(gap), gap, { storeId });
               if (storeId !== null) setLastStoreId(storeId);
@@ -351,6 +458,51 @@ function FillInSheet({ uid, gaps, onClose }: FillInSheetProps) {
             </div>
           </div>
         )}
+        {gap.kind === 'NO_PRODUCT' &&
+          (row.isLinkShown ? (
+            <ProductLinkField
+              caption='From a product page'
+              isEditing
+              shouldFocus
+              value={row.link}
+              onChange={(link) => {
+                resetReading();
+                update(getGapKey(gap), gap, {
+                  link,
+                  suggestedStore: null,
+                  alias: null,
+                  isAliasOn: false,
+                });
+              }}
+              onFill={(pageLink) => void fillFromPage(pageLink)}
+              isFilling={reading.isFilling}
+              note={reading.note}
+              error={reading.error}
+              canTryPicture={reading.canTryPicture}
+              onReadFile={(file) => void fillFromFile(file)}
+              aliasOffer={
+                row.alias === null
+                  ? null
+                  : {
+                      text: row.alias,
+                      isOn: row.isAliasOn,
+                      onChange: (isAliasOn) =>
+                        update(getGapKey(gap), gap, { isAliasOn }),
+                    }
+              }
+            />
+          ) : (
+            <div>
+              <RevealChip
+                icon={<Plus className='h-4 w-4' aria-hidden='true' />}
+                onClick={() =>
+                  update(getGapKey(gap), gap, { isLinkShown: true })
+                }
+              >
+                From a product page
+              </RevealChip>
+            </div>
+          ))}
         {!isNutrition && !isBlank(row) && draft === null && (
           <p className='text-muted-foreground text-sm'>
             {gap.kind === 'NO_PRODUCT'

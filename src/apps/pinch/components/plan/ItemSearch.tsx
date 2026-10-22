@@ -273,6 +273,7 @@ function ItemSearch({
             nutrition: null,
             servingAmount: null,
             servingUnit: null,
+            aliases: null,
           },
         }),
       ).unwrap();

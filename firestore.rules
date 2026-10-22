@@ -1399,8 +1399,23 @@ service cloud.firestore {
           && isNullOrMetric(value.carbs) && isNullOrMetric(value.fat));
       }
 
+      // Other names for an ingredient: at most 10, each a text of 1 to 120 characters. Rules can't loop, so each index is checked in turn; an ingredient written before aliases has no key.
+      function isAliasList(value) {
+        return value is list && value.size() <= 10
+          && (value.size() <= 0 || isShortText(value[0], 120))
+          && (value.size() <= 1 || isShortText(value[1], 120))
+          && (value.size() <= 2 || isShortText(value[2], 120))
+          && (value.size() <= 3 || isShortText(value[3], 120))
+          && (value.size() <= 4 || isShortText(value[4], 120))
+          && (value.size() <= 5 || isShortText(value[5], 120))
+          && (value.size() <= 6 || isShortText(value[6], 120))
+          && (value.size() <= 7 || isShortText(value[7], 120))
+          && (value.size() <= 8 || isShortText(value[8], 120))
+          && (value.size() <= 9 || isShortText(value[9], 120));
+      }
+
       function isIngredient(data, id) {
-        return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'defaultProductId', 'isArchived', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'gramsPerMl', 'gramsEach', 'aliases', 'defaultProductId', 'isArchived', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'catalogId', 'name', 'familyId', 'iconKey', 'nutritionPer100g', 'servingAmount', 'servingUnit', 'createdAt', 'updatedAt'])
           && data.id == id
           && (data.catalogId == null
@@ -1412,6 +1427,7 @@ service cloud.firestore {
           && ((data.servingAmount == null && data.servingUnit == null) || (isPositiveAmount(data.servingAmount) && isUnit(data.servingUnit)))
           && (data.get('gramsPerMl', null) == null || isPositiveAmount(data.gramsPerMl))
           && (data.get('gramsEach', null) == null || isPositiveAmount(data.gramsEach))
+          && isAliasList(data.get('aliases', []))
           && data.get('isArchived', false) is bool
           && (data.get('defaultProductId', null) == null || isShortText(data.defaultProductId, 80))
           && data.createdAt is int && data.updatedAt is int;

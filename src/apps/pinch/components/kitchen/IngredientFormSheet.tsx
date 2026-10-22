@@ -7,7 +7,7 @@ import {
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Gauge, Scale } from 'lucide-react';
+import { Gauge, Scale, Tags } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
 import AddFieldChips, {
@@ -15,6 +15,7 @@ import AddFieldChips, {
 } from '@/components/forms/AddFieldChips';
 import Field, { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import TextListField from '@/components/forms/TextListField';
 import FormSheet from '@/components/FormSheet';
 import MacroStats from '@/components/MacroStats';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -23,6 +24,7 @@ import { PillRow } from '@/components/PillGroup';
 import { useAppDispatch, useAppSelector } from '@/store';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
+  MAX_INGREDIENT_ALIASES,
   MAX_NAME_LENGTH,
   MAX_NUTRITION_VALUE,
   MAX_SERVING_AMOUNT,
@@ -34,6 +36,12 @@ import {
   saveIngredient,
 } from '@apps/pinch/store/actions/ingredientActions';
 import { getUsage } from '@apps/pinch/store/actions/usageActions';
+import { CATALOG_INGREDIENTS_BY_ID } from '@apps/pinch/catalog';
+import { getCatalogOverrides } from '@apps/pinch/utils/ingredientAdjustments';
+import {
+  cleanAliases,
+  getRecordAliases,
+} from '@apps/pinch/utils/ingredientRecord';
 import {
   getEntryGrams,
   getServingGrams,
@@ -48,6 +56,7 @@ import {
   selectIngredientRecordsById,
 } from '@apps/pinch/store/selectors';
 import type {
+  IngredientRecord,
   NutritionValues,
   ResolvedIngredient,
   Unit,
@@ -75,6 +84,7 @@ interface NutritionEntry {
 }
 
 interface Extras {
+  aliases: Reveal<string[]>;
   nutrition: Reveal<NutritionEntry>;
   serving: Reveal<{ amount: string; unit: Unit }>;
 }
@@ -165,8 +175,10 @@ const getBasisLabel = (extras: Extras, servingGrams: number | null) => {
 
 const getInitialData = (
   ingredient: ResolvedIngredient | null,
-  hasServing: boolean,
+  record: IngredientRecord | null,
 ): FormData => {
+  const hasServing = record?.servingAmount != null;
+  const aliases = getRecordAliases(record);
   const isCatalog = ingredient !== null && !ingredient.isCustom;
   const hasNutrition =
     ingredient !== null &&
@@ -176,6 +188,7 @@ const getInitialData = (
     name: ingredient?.name ?? '',
     family: { choice: ingredient?.familyId ?? '', newText: '' },
     extras: {
+      aliases: { enabled: aliases.length > 0, value: aliases },
       nutrition: {
         enabled: isCatalog || hasNutrition,
         value: {
@@ -202,12 +215,23 @@ const getInitialData = (
 
 interface ExtrasFieldsProps {
   extras: Extras;
+  shouldFocusAliases: boolean;
   conversions: Conversions;
   onChange: (extras: Extras) => void;
 }
 
-function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
+function ExtrasFields({
+  extras,
+  shouldFocusAliases,
+  conversions,
+  onChange,
+}: ExtrasFieldsProps) {
   const chips = [
+    {
+      key: 'aliases',
+      label: 'Other names',
+      icon: <Tags className='h-4 w-4' />,
+    },
     {
       key: 'serving',
       label: 'Serving size',
@@ -284,6 +308,29 @@ function ExtrasFields({ extras, conversions, onChange }: ExtrasFieldsProps) {
 
   return (
     <div className='space-y-4'>
+      {extras.aliases.enabled && (
+        <RemovableField
+          label='Other names'
+          removeLabel='Remove other names'
+          onRemove={() => remove('aliases', { enabled: false, value: [] })}
+        >
+          <TextListField
+            values={extras.aliases.value}
+            onChange={(value) =>
+              onChange({ ...extras, aliases: { enabled: true, value } })
+            }
+            ariaLabel='Another name for this ingredient'
+            listLabel='Other names you added'
+            placeholder='Ranch dressing mix'
+            maxItems={MAX_INGREDIENT_ALIASES}
+            maxLength={MAX_NAME_LENGTH}
+            shouldFocus={shouldFocusAliases}
+          />
+          <p className='text-muted-foreground text-xs'>
+            Search and recipe readings find this ingredient by these names too.
+          </p>
+        </RemovableField>
+      )}
       {extras.serving.enabled && (
         <RemovableField
           label='One serving is'
@@ -444,7 +491,7 @@ function IngredientFormSheet({
   const isCatalog = ingredient !== null && !ingredient.isCustom;
 
   const initialData = useMemo(
-    () => getInitialData(ingredient, record?.servingAmount != null),
+    () => getInitialData(ingredient, record),
     [ingredient, record],
   );
   const [formData, setFormData] = useState<FormData>(initialData);
@@ -540,13 +587,14 @@ function IngredientFormSheet({
         renderComponent: (props) => (
           <ExtrasFields
             extras={props.value as Extras}
+            shouldFocusAliases={!initialData.extras.aliases.enabled}
             conversions={conversions}
             onChange={props.onValueChange}
           />
         ),
       }),
     ],
-    [isCatalog, familyOptions, conversions],
+    [isCatalog, familyOptions, conversions, initialData],
   );
 
   const handleDelete = async () => {
@@ -610,20 +658,35 @@ function IngredientFormSheet({
     setError(null);
     setIsSubmitting(true);
     const isServingOn = data.extras.serving.enabled;
+    const aliases = data.extras.aliases.enabled
+      ? cleanAliases(data.extras.aliases.value, data.name)
+      : [];
+
+    const servingAmount = isServingOn
+      ? parseAmount(data.extras.serving.value.amount)
+      : null;
+    const catalog = isCatalog
+      ? (CATALOG_INGREDIENTS_BY_ID.get(ingredient.id) ?? null)
+      : null;
+    const overrides = catalog
+      ? getCatalogOverrides(
+          catalog,
+          nutrition,
+          servingAmount === null
+            ? null
+            : { amount: servingAmount, unit: data.extras.serving.value.unit },
+        )
+      : null;
 
     const isUnchangedCatalog =
-      isCatalog &&
-      !ingredient.isAdjusted &&
-      (nutrition === null ||
-        (['calories', 'protein', 'carbs', 'fat'] as const).every(
-          (metric) => nutrition[metric] === ingredient.per100g[metric],
-        )) &&
-      (!isServingOn ||
-        (parseAmount(data.extras.serving.value.amount) ===
-          ingredient.serving.amount &&
-          data.extras.serving.value.unit === ingredient.serving.unit));
+      catalog !== null &&
+      overrides !== null &&
+      !ingredient?.isAdjusted &&
+      aliases.length === 0 &&
+      overrides.nutrition === null &&
+      overrides.serving === null;
     if (isUnchangedCatalog) {
-      onSaved(ingredient.id);
+      onSaved(catalog.id);
       return;
     }
 
@@ -641,11 +704,16 @@ function IngredientFormSheet({
                 : data.family.choice,
             newFamilyName:
               data.family.choice === NEW_CHOICE ? data.family.newText : null,
-            nutrition,
-            servingAmount: isServingOn
-              ? parseAmount(data.extras.serving.value.amount)
-              : null,
-            servingUnit: isServingOn ? data.extras.serving.value.unit : null,
+            nutrition: overrides ? overrides.nutrition : nutrition,
+            servingAmount: overrides
+              ? (overrides.serving?.amount ?? null)
+              : servingAmount,
+            servingUnit: overrides
+              ? (overrides.serving?.unit ?? null)
+              : isServingOn
+                ? data.extras.serving.value.unit
+                : null,
+            aliases,
           },
         }),
       ).unwrap();

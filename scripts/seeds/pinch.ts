@@ -550,6 +550,7 @@ const baseIngredient = {
   servingUnit: null,
   gramsPerMl: null,
   gramsEach: null,
+  aliases: [] as string[],
   defaultProductId: null,
 };
 
@@ -579,6 +580,7 @@ const SEED_INGREDIENTS = [
     ...baseIngredient,
     id: 'seed-pinch-ingredient-house-blend',
     name: 'House spice blend',
+    aliases: ['Everyday spice mix'],
   },
   {
     ...baseIngredient,

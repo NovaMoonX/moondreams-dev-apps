@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   Button,
@@ -24,13 +24,20 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import { isValidHttpsUrl } from '@/utils/urlUtils';
+import ProductLinkField from '@apps/pinch/components/kitchen/ProductLinkField';
+import {
+  useProductPageReading,
+  type ProductReading,
+} from '@apps/pinch/components/kitchen/useProductPageReading';
 import StorePicker from '@apps/pinch/components/kitchen/StorePicker';
 import UnitSelect from '@apps/pinch/components/shared/UnitSelect';
 import {
+  MAX_LINK_URL_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PRICE_CENTS,
   MAX_SERVING_AMOUNT,
 } from '@apps/pinch/constants';
+import { addIngredientAlias } from '@apps/pinch/store/actions/ingredientActions';
 import {
   removeProduct,
   saveProduct,
@@ -64,7 +71,6 @@ interface Reveal<T> {
 
 interface Extras {
   label: Reveal<string>;
-  link: Reveal<string>;
 }
 
 interface FormData {
@@ -73,6 +79,7 @@ interface FormData {
   sizeAmount: string;
   sizeUnit: Unit;
   makeDefault: boolean;
+  link: Reveal<string>;
   extras: Extras;
 }
 
@@ -82,22 +89,36 @@ const getInitialData = (product: Product | null): FormData => ({
   sizeAmount: product ? String(product.sizeAmount) : '',
   sizeUnit: product?.sizeUnit ?? 'LB',
   makeDefault: false,
+  link: {
+    enabled: product === null || product.url != null,
+    value: product?.url ?? '',
+  },
   extras: {
     label: { enabled: product?.label != null, value: product?.label ?? '' },
-    link: { enabled: product?.url != null, value: product?.url ?? '' },
   },
 });
 
 interface ExtrasFieldsProps {
   extras: Extras;
   onChange: (extras: Extras) => void;
+  canAddLink: boolean;
+  onAddLink: () => void;
 }
 
-function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
+function ExtrasFields({
+  extras,
+  onChange,
+  canAddLink,
+  onAddLink,
+}: ExtrasFieldsProps) {
   const chips = [
-    { key: 'label', label: 'Label', icon: <Tag className='h-4 w-4' /> },
-    { key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> },
-  ].filter((chip) => !extras[chip.key as keyof Extras].enabled);
+    ...(extras.label.enabled
+      ? []
+      : [{ key: 'label', label: 'Label', icon: <Tag className='h-4 w-4' /> }]),
+    ...(canAddLink
+      ? [{ key: 'link', label: 'Link', icon: <Link2 className='h-4 w-4' /> }]
+      : []),
+  ];
 
   return (
     <div className='space-y-4'>
@@ -123,35 +144,15 @@ function ExtrasFields({ extras, onChange }: ExtrasFieldsProps) {
           />
         </RemovableField>
       )}
-      {extras.link.enabled && (
-        <RemovableField
-          label='Link'
-          removeLabel='Remove link'
-          onRemove={() =>
-            onChange({ ...extras, link: { enabled: false, value: '' } })
-          }
-        >
-          <Input
-            variant='outline'
-            type='url'
-            placeholder='https://'
-            value={extras.link.value}
-            onChange={(event) =>
-              onChange({
-                ...extras,
-                link: { enabled: true, value: event.target.value },
-              })
-            }
-          />
-        </RemovableField>
-      )}
       <AddFieldChips
         chips={chips}
         onAdd={(key) =>
-          onChange({
-            ...extras,
-            [key]: { ...extras[key as keyof Extras], enabled: true },
-          })
+          key === 'link'
+            ? onAddLink()
+            : onChange({
+                ...extras,
+                label: { ...extras.label, enabled: true },
+              })
         }
       />
     </div>
@@ -187,15 +188,41 @@ function ProductFormSheet({
   const recipesById = useAppSelector(selectRecipesById);
   const plannedMeals = useAppSelector(selectPlannedMeals);
   const ingredientsById = useAppSelector(selectIngredientsById);
-  const initialData = useMemo(() => getInitialData(product), [product]);
+  const [initialData, setInitialData] = useState(() => getInitialData(product));
+  // The form reads its initial data once, so a reading that fills it remounts the form with the filled values.
+  const [fillCount, setFillCount] = useState(0);
   const [formData, setFormData] = useState<FormData>(initialData);
+  const [suggestedStore, setSuggestedStore] = useState<string | null>(null);
+  const {
+    reading,
+    read,
+    readFile,
+    reset: resetReading,
+  } = useProductPageReading();
+  const [aliasOffer, setAliasOffer] = useState<{
+    text: string;
+    isOn: boolean;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const priceCents = parseMoneyToCents(formData.price);
   const sizeAmount =
     formData.sizeAmount.trim() === '' ? null : Number(formData.sizeAmount);
-  const link = formData.extras.link;
+  const link = formData.link;
+  const priceRef = useRef<HTMLDivElement>(null);
+  const latestFormData = useRef(formData);
+  useEffect(() => {
+    latestFormData.current = formData;
+  }, [formData]);
+  useEffect(() => {
+    if (fillCount > 0) {
+      priceRef.current?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      });
+    }
+  }, [fillCount]);
   const use = getIngredientUses(
     recipes,
     plannedMeals,
@@ -234,10 +261,138 @@ function ProductFormSheet({
     sizeAmount <= MAX_SERVING_AMOUNT &&
     (!link.enabled ||
       link.value.trim() === '' ||
-      isValidHttpsUrl(link.value.trim()));
+      (isValidHttpsUrl(link.value.trim()) &&
+        link.value.trim().length <= MAX_LINK_URL_LENGTH));
 
-  const fields = useMemo(
-    () => [
+  const getBlocker = () => {
+    if (formData.storeId === null || !storesById.has(formData.storeId)) {
+      return 'Choose where you buy it.';
+    }
+    if (priceCents === null || priceCents > MAX_PRICE_CENTS) {
+      return 'Add the price.';
+    }
+    if (sizeAmount === null || !(sizeAmount > 0)) {
+      return 'Add the package size.';
+    }
+    return 'Start the link with https:// to keep it.';
+  };
+
+  const applyReading = useCallback(
+    ({ found, match }: ProductReading, pageLink: string | null) => {
+      const formData = latestFormData.current;
+      const hasSize = found.sizeAmount !== null && found.sizeUnit !== null;
+      const next: FormData = {
+        ...formData,
+        storeId: match.storeId ?? formData.storeId,
+        price:
+          found.priceCents === null
+            ? formData.price
+            : centsToInputValue(found.priceCents),
+        sizeAmount: hasSize ? String(found.sizeAmount) : formData.sizeAmount,
+        sizeUnit: found.sizeUnit ?? formData.sizeUnit,
+        link:
+          pageLink === null
+            ? formData.link
+            : { enabled: true, value: pageLink },
+        extras: {
+          label:
+            found.label === null
+              ? formData.extras.label
+              : { enabled: true, value: found.label },
+        },
+      };
+      setInitialData(next);
+      setFormData(next);
+      setFillCount((count) => count + 1);
+      setSuggestedStore(match.storeId === null ? match.suggestedName : null);
+      setAliasOffer(
+        found.alias === null ? null : { text: found.alias, isOn: false },
+      );
+    },
+    [],
+  );
+
+  const fillFromPage = useCallback(
+    async (pageLink: string) => {
+      const result = await read(pageLink, ingredient);
+      if (result !== null) {
+        applyReading(result, pageLink);
+      }
+    },
+    [read, ingredient, applyReading],
+  );
+
+  const fillFromFile = useCallback(
+    async (file: File) => {
+      const result = await readFile(file, ingredient);
+      if (result !== null) {
+        applyReading(result, null);
+      }
+    },
+    [readFile, ingredient, applyReading],
+  );
+
+  const fields = useMemo(() => {
+    const linkField = custom({
+      name: 'link',
+      label: '',
+      renderComponent: () => {
+        if (!link.enabled) {
+          return null;
+        }
+
+        const field = (
+          <ProductLinkField
+            caption={product === null ? 'Start from a product page' : undefined}
+            savedLink={product?.url ?? null}
+            isEditing={product !== null}
+            canClear={product === null}
+            value={link.value}
+            onChange={(value) => {
+              resetReading();
+              setAliasOffer(null);
+              setFormData((current) => ({
+                ...current,
+                link: { enabled: true, value },
+              }));
+            }}
+            onFill={(pageLink) => void fillFromPage(pageLink)}
+            isFilling={reading.isFilling}
+            note={reading.note}
+            error={reading.error}
+            canTryPicture={reading.canTryPicture}
+            onReadFile={(file) => void fillFromFile(file)}
+            aliasOffer={
+              aliasOffer && {
+                ...aliasOffer,
+                onChange: (isOn) =>
+                  setAliasOffer((current) => current && { ...current, isOn }),
+              }
+            }
+          />
+        );
+        return product === null ? (
+          field
+        ) : (
+          <RemovableField
+            label='Link'
+            removeLabel='Remove link'
+            onRemove={() => {
+              setAliasOffer(null);
+              setFormData((current) => ({
+                ...current,
+                link: { enabled: false, value: '' },
+              }));
+            }}
+          >
+            {field}
+          </RemovableField>
+        );
+      },
+    });
+
+    return [
+      ...(product === null ? [linkField] : []),
       custom({
         name: 'storeId',
         label: 'Where do you buy it?',
@@ -245,6 +400,7 @@ function ProductFormSheet({
           <StorePicker
             uid={uid}
             value={props.value as string | null}
+            suggestedStoreName={suggestedStore}
             onChange={(storeId) => props.onValueChange(storeId)}
           />
         ),
@@ -253,7 +409,10 @@ function ProductFormSheet({
         name: 'price',
         label: '',
         renderComponent: () => (
-          <div className='grid items-start gap-3 min-[400px]:grid-cols-2'>
+          <div
+            ref={priceRef}
+            className='grid items-start gap-3 min-[400px]:grid-cols-2'
+          >
             <Field label='Price' isCompact>
               {() => (
                 <MoneyInput
@@ -308,6 +467,7 @@ function ProductFormSheet({
           </div>
         ),
       }),
+      ...(product !== null ? [linkField] : []),
       custom({
         name: 'extras',
         label: '',
@@ -315,6 +475,13 @@ function ProductFormSheet({
           <ExtrasFields
             extras={props.value as Extras}
             onChange={props.onValueChange}
+            canAddLink={product !== null && !link.enabled}
+            onAddLink={() =>
+              setFormData((current) => ({
+                ...current,
+                link: { enabled: true, value: current.link.value },
+              }))
+            }
           />
         ),
       }),
@@ -340,17 +507,24 @@ function ProductFormSheet({
             }),
           ]
         : []),
-    ],
-    [
-      uid,
-      otherCount,
-      isCurrentDefault,
-      formData.price,
-      formData.sizeAmount,
-      formData.sizeUnit,
-      echo,
-    ],
-  );
+    ];
+  }, [
+    uid,
+    product,
+    otherCount,
+    isCurrentDefault,
+    formData.price,
+    formData.sizeAmount,
+    formData.sizeUnit,
+    echo,
+    link,
+    reading,
+    aliasOffer,
+    suggestedStore,
+    fillFromPage,
+    fillFromFile,
+    resetReading,
+  ]);
 
   const handleDelete = async () => {
     if (!product) {
@@ -396,13 +570,24 @@ function ProductFormSheet({
             priceCents,
             sizeAmount,
             sizeUnit: formData.sizeUnit,
-            url: data.extras.link.enabled
-              ? data.extras.link.value.trim() || null
-              : null,
+            url: link.enabled ? link.value.trim() || null : null,
             makeDefault: data.makeDefault === true,
           },
         }),
       ).unwrap();
+      if (aliasOffer?.isOn) {
+        await dispatch(
+          addIngredientAlias({
+            uid,
+            ingredientId: ingredient.id,
+            alias: aliasOffer.text,
+          }),
+        )
+          .unwrap()
+          .catch((aliasError) =>
+            console.error('Adding the other name failed', aliasError),
+          );
+      }
       onClose();
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Unable to save this price.'));
@@ -417,6 +602,7 @@ function ProductFormSheet({
   return (
     <FormSheet isOpen onClose={onClose} title={title}>
       <Form
+        key={fillCount}
         id='pinch-product'
         form={fields}
         initialData={initialData}
@@ -428,6 +614,7 @@ function ProductFormSheet({
             price: current.price,
             sizeAmount: current.sizeAmount,
             sizeUnit: current.sizeUnit,
+            link: current.link,
           }))
         }
         onSubmit={(data) => {
@@ -435,6 +622,7 @@ function ProductFormSheet({
         }}
         submitButton={
           <ModalFooterActions
+            note={isFormComplete ? null : getBlocker()}
             leftActions={
               product && (
                 <DeleteIconButton

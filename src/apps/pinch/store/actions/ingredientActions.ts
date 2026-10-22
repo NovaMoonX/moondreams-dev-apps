@@ -12,9 +12,20 @@ import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { freezeBeforeEdit } from '@apps/pinch/store/actions/freezeActions';
+import { selectIngredientsById } from '@apps/pinch/store/selectors';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
+import {
+  buildCatalogRecord,
+  cleanAliases,
+  getRecordAliases,
+  isNameTaken,
+  mergeAlias,
+} from '@apps/pinch/utils/ingredientRecord';
 import { isInUse } from '@apps/pinch/utils/references';
-import { CATALOG_FAMILIES } from '@apps/pinch/catalog';
+import {
+  CATALOG_FAMILIES,
+  CATALOG_INGREDIENTS_BY_ID,
+} from '@apps/pinch/catalog';
 import { getGapKey } from '@apps/pinch/utils/gaps';
 import type {
   Family,
@@ -38,6 +49,8 @@ export interface IngredientDraft {
   nutrition: NutritionValues | null;
   servingAmount: number | null;
   servingUnit: Unit | null;
+  /** Other names as typed, cleaned and capped on the way in; null leaves a saved ingredient's names as they are (a sheet that doesn't show them), and a new one starts with none. */
+  aliases: string[] | null;
 }
 
 const sameName = (a: string, b: string) =>
@@ -65,6 +78,8 @@ export const saveIngredient = createAsyncThunk<
     const isCatalog = draft.catalogId !== null;
     const id = draft.id ?? draft.catalogId ?? generateUuid();
     const typedFamily = draft.newFamilyName?.trim() ?? '';
+    const aliases =
+      draft.aliases === null ? null : cleanAliases(draft.aliases, draft.name);
 
     const matchedFamilyId =
       typedFamily === ''
@@ -105,6 +120,7 @@ export const saveIngredient = createAsyncThunk<
           nutritionPer100g: draft.nutrition,
           servingAmount: draft.servingAmount,
           servingUnit: draft.servingUnit,
+          ...(aliases === null ? {} : { aliases }),
           updatedAt: now,
         };
         batch.update(
@@ -125,6 +141,7 @@ export const saveIngredient = createAsyncThunk<
           servingUnit: draft.servingUnit,
           gramsPerMl: null,
           gramsEach: null,
+          aliases: aliases ?? [],
           defaultProductId: null,
           isArchived: false,
           createdAt: now,
@@ -205,6 +222,7 @@ export const removeIngredient = createAsyncThunk<
           servingUnit: null,
           gramsPerMl: null,
           gramsEach: null,
+          aliases: [],
           updatedAt: Date.now(),
         });
       });
@@ -215,5 +233,66 @@ export const removeIngredient = createAsyncThunk<
     }
 
     return id;
+  },
+);
+
+interface AddIngredientAliasInput {
+  uid: string;
+  ingredientId: string;
+  alias: string;
+}
+
+/** Adds one other name to an ingredient in a field-scoped write after something else was saved; resolves false when the name was already one of its names or the list is full. */
+export const addIngredientAlias = createAsyncThunk<
+  boolean,
+  AddIngredientAliasInput,
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/ingredients/addAlias',
+  async ({ uid, ingredientId, alias }, { getState, rejectWithValue }) => {
+    const others = [...selectIngredientsById(getState()).values()];
+    if (isNameTaken(alias, others, ingredientId)) {
+      return false;
+    }
+
+    const catalog = CATALOG_INGREDIENTS_BY_ID.get(ingredientId) ?? null;
+    const ref = kitchenDoc(uid, 'ingredients', ingredientId);
+    try {
+      const result = await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        const record = snapshot.exists()
+          ? (snapshot.data() as IngredientRecord)
+          : null;
+        if (record === null && catalog === null) {
+          return false;
+        }
+
+        const knownNames = [
+          record?.name ?? '',
+          catalog?.name ?? '',
+          ...(catalog?.aliases ?? []),
+        ].filter((name) => name !== '');
+        const next = mergeAlias(getRecordAliases(record), alias, knownNames);
+        if (next === null) {
+          return false;
+        }
+
+        const now = Date.now();
+        if (record) {
+          transaction.update(ref, { aliases: next, updatedAt: now });
+        } else {
+          transaction.set(ref, {
+            ...buildCatalogRecord(ingredientId, null, now),
+            aliases: next,
+          });
+        }
+        return true;
+      });
+      return result;
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to add this name.'),
+      );
+    }
   },
 );

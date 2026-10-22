@@ -65,6 +65,8 @@ export interface IngredientRecord {
   gramsPerMl: number | null;
   /** Weight of one, bridging mass and count. */
   gramsEach: number | null;
+  /** Other names the person calls it by; a catalog ingredient keeps its built-in ones too. Documents written before aliases lack the key, which reads as empty. */
+  aliases: string[];
   /** The product that prices this ingredient; a product's own document is the source of truth, so a missing or stale id reads as "the first product". Documents written before products existed lack the key. */
   defaultProductId: string | null;
   /** Hidden from lists and pickers but still resolving for the planned days and recipes that use it; only a custom ingredient is ever archived. Documents written before archiving lack the key, which reads as false. */

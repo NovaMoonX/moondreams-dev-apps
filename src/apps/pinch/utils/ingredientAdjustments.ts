@@ -1,10 +1,41 @@
 import { formatMacro, type MacroKey } from '@/utils/macroUtils';
 import { UNIT_LABELS } from '@apps/pinch/constants';
+import { getRecordAliases } from '@apps/pinch/utils/ingredientRecord';
 import type {
   CatalogIngredient,
   IngredientRecord,
+  NutritionValues,
   Unit,
 } from '@apps/pinch/types';
+
+/** What a typed catalog ingredient changes: each number or serving that differs from the built-in one, null where it matches. */
+export function getCatalogOverrides(
+  catalog: CatalogIngredient,
+  nutrition: NutritionValues | null,
+  serving: { amount: number; unit: Unit } | null,
+) {
+  const changed = METRIC_KEYS.filter(
+    (key) => nutrition !== null && nutrition[key] !== catalog.per100g[key],
+  );
+  const isServingChanged =
+    serving !== null &&
+    (serving.amount !== catalog.serving.amount ||
+      serving.unit !== catalog.serving.unit);
+  const result = {
+    nutrition:
+      nutrition === null || changed.length === 0
+        ? null
+        : {
+            calories: null,
+            protein: null,
+            carbs: null,
+            fat: null,
+            ...Object.fromEntries(changed.map((key) => [key, nutrition[key]])),
+          },
+    serving: isServingChanged ? serving : null,
+  };
+  return result;
+}
 
 export interface IngredientAdjustment {
   key: string;
@@ -19,6 +50,8 @@ const METRICS: { key: MacroKey; label: string; unit: string }[] = [
   { key: 'carbs', label: 'Carbs', unit: ' g' },
   { key: 'fat', label: 'Fat', unit: ' g' },
 ];
+
+const METRIC_KEYS = ['calories', 'protein', 'carbs', 'fat'] as const;
 
 const round = (value: number) => String(Math.round(value * 100) / 100);
 
@@ -73,6 +106,15 @@ export function getIngredientAdjustments(
           label: 'Serving size',
           builtIn: servingText(catalog.serving),
           yours: servingText(recordServing),
+        }
+      : null,
+    getRecordAliases(record).length > 0
+      ? {
+          key: 'aliases',
+          label: 'Other names',
+          builtIn:
+            catalog.aliases.length === 0 ? 'None' : catalog.aliases.join(', '),
+          yours: getRecordAliases(record).join(', '),
         }
       : null,
     record.gramsPerMl != null && record.gramsPerMl !== catalog.gramsPerMl
