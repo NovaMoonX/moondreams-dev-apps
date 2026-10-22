@@ -25,8 +25,15 @@ export const getRecipeSource = (
   sourcesById: Map<string, Source>,
 ) => sourcesById.get(recipe.sourceId ?? '') ?? null;
 
+/** A site's short link host is the same place as its usual one, so a video shared either way lands in one source. */
+const HOST_ALIASES: Record<string, string> = { 'youtu.be': 'youtube.com' };
+
 export const getHostSource = (host: string, sources: Source[]) => {
-  const label = stripWww(host).slice(0, MAX_SOURCE_LABEL_LENGTH);
+  const stripped = stripWww(host);
+  const label = (HOST_ALIASES[stripped.toLowerCase()] ?? stripped).slice(
+    0,
+    MAX_SOURCE_LABEL_LENGTH,
+  );
   const wanted = normalizeSourceLabel(label);
   const existing =
     sources.find(

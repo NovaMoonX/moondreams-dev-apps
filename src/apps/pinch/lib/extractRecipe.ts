@@ -117,9 +117,19 @@ Rules:
 - Put anything you could not read or are unsure of in "unread", in plain words ("the last two ingredients are cut off").
 - If there is no recipe, return empty lists.`;
 
+const VIDEO_PROMPT = `This is a cooking video, not a written recipe. Watch all of it and listen to all of it, and build the recipe from BOTH what is said and what is shown, never from one alone.
+- Cooks often say an ingredient or an amount aloud without ever showing it as text, and often show a text overlay, caption or ingredient list while the audio is only music or silence. Read the spoken words from the audio and read every on-screen caption, overlay, label and written list from the frames. An ingredient or a step found in only one of them still belongs in the recipe.
+- A step that is only shown (a pan going into the oven, onions cooked until golden) and never said is still a step; write it as a plain instruction.
+- When the audio and the on-screen text give the same amount, use it. When they disagree, use the on-screen text for amounts, times and temperatures, and say so in "unread".
+- When the cook gives no amount ("a splash of soy sauce", "some garlic"), leave amount null and put their words in the note. Never guess an amount from how much looks poured or chopped.
+- Take the title from the video's own title card or the cook's own words. Ignore sponsor messages, intros, chatter, outros and requests to like or subscribe.
+- If the video makes more than one recipe, return the first and say so in "unread". Also put in "unread" anything you could not hear or read: unclear audio, text that is too small or on screen too briefly, a part that is cut off.`;
+
 const generate = async (
   parts: (
-    { text: string } | { inlineData: { data: string; mimeType: string } }
+    | { text: string }
+    | { inlineData: { data: string; mimeType: string } }
+    | { fileData: { fileUri: string; mimeType: string } }
   )[],
 ) => {
   const result = await generativeModel.generateContent({
@@ -165,6 +175,21 @@ export async function extractRecipeFromFile(
   return generate([
     { text: PROMPT },
     { inlineData: { data, mimeType: getUploadMimeType(inputFile) } },
+  ]);
+}
+
+/** Reads a recipe from a public YouTube video: the model takes the address itself and hears and sees the video, so no page is fetched. Not cached: every reading is a fresh call. */
+export async function extractRecipeFromVideo(
+  videoId: string,
+): Promise<ExtractedRecipe> {
+  return generate([
+    {
+      fileData: {
+        fileUri: `https://www.youtube.com/watch?v=${videoId}`,
+        mimeType: 'video/mp4',
+      },
+    },
+    { text: `${PROMPT}\n\n${VIDEO_PROMPT}` },
   ]);
 }
 

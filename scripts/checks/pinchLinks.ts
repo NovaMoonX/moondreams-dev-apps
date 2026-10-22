@@ -21,6 +21,7 @@ import {
   type LinksText,
 } from '../../src/apps/pinch/utils/recipeLinks.ts';
 import type { RecipeLink } from '../../src/apps/pinch/types.ts';
+import { getHostSource } from '../../src/apps/pinch/utils/sources.ts';
 
 const ID = 'aqz-KE-bpKQ';
 
@@ -55,7 +56,21 @@ assert.equal(
 );
 assert.equal(getYouTubeId(`HTTPS://WWW.YOUTUBE.COM/watch?v=${ID}`), ID, 'case');
 
+// a video shared by its short link starts the same source as one shared by its usual link
+assert.equal(getHostSource('youtu.be', []).label, 'youtube.com');
+assert.equal(getHostSource('www.seriouseats.com', []).label, 'seriouseats.com');
+
 // anything that is not one video on YouTube has no id
+assert.equal(
+  getYouTubeId('https://www.youtube.com/embed/videoseries?list=PLabc123'),
+  null,
+  'an embedded playlist is not a video',
+);
+assert.equal(
+  getYouTubeId('https://www.youtube.com/embed/live_stream?channel=UCabc'),
+  null,
+  'an embedded channel stream is not a video',
+);
 assert.equal(
   getYouTubeId('https://www.youtube.com/playlist?list=PLabc123'),
   null,

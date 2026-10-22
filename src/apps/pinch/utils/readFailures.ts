@@ -51,7 +51,10 @@ export function classifyReadFailure(
   return 'unread';
 }
 
-const getUnreadLine = (source: RecipeSource) => {
+const getUnreadLine = (source: RecipeSource, isVideo: boolean) => {
+  if (isVideo) {
+    return "We couldn't read a recipe from that video. It may be private or too long.";
+  }
   if (source === 'AI_LINK') return "We couldn't read a recipe from that page.";
   if (source === 'AI_TEXT') {
     return "We couldn't read that text right now. Try again.";
@@ -59,7 +62,8 @@ const getUnreadLine = (source: RecipeSource) => {
   return "We couldn't read that file right now. Try a clearer photo or a PDF.";
 };
 
-const getEmptyLine = (source: RecipeSource) => {
+const getEmptyLine = (source: RecipeSource, isVideo: boolean) => {
+  if (isVideo) return "We couldn't find a recipe in that video.";
   if (source === 'AI_LINK') return "We couldn't find a recipe on that page.";
   if (source === 'AI_TEXT') {
     return "We couldn't find a recipe in that text. Try pasting the whole recipe.";
@@ -67,8 +71,12 @@ const getEmptyLine = (source: RecipeSource) => {
   return "We couldn't find a recipe in that file. Try a clearer photo.";
 };
 
-/** The sentence under the field for a failure. It names only what caused it and what the person can do on this screen. */
-export function getReadFailureLine(cause: ReadFailure, source: RecipeSource) {
+/** The sentence under the field for a failure. It names only what caused it and what the person can do on this screen; a YouTube video is named as a video, not a page. */
+export function getReadFailureLine(
+  cause: ReadFailure,
+  source: RecipeSource,
+  isVideo = false,
+) {
   if (cause === 'unreachable') {
     return "We couldn't reach the reader. Check your connection and try again.";
   }
@@ -81,7 +89,9 @@ export function getReadFailureLine(cause: ReadFailure, source: RecipeSource) {
   if (cause === 'link' && source === 'AI_LINK') {
     return "We couldn't open that link. Check the address and try again.";
   }
-  return cause === 'empty' ? getEmptyLine(source) : getUnreadLine(source);
+  return cause === 'empty'
+    ? getEmptyLine(source, isVideo)
+    : getUnreadLine(source, isVideo);
 }
 
 /** Whether pasting the page's text could get past this failure: only when the link or what the reader found is the trouble, never the connection or the reader. */
