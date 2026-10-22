@@ -31,7 +31,7 @@ function BottomNav({ value, onChange }: BottomNavProps) {
         className={join(
           'h-auto flex-col gap-0.5 rounded-2xl! px-5 py-2 text-[11px] font-medium focus:outline-transparent!',
           isSelected
-            ? 'bg-secondary text-primary! font-semibold'
+            ? 'bg-secondary text-primary! font-semibold dark:text-secondary-foreground!'
             : 'text-muted-foreground!',
         )}
       >

@@ -3,6 +3,7 @@ import { Link, useLocation, useRouteError } from 'react-router-dom';
 
 import { VersionLabel } from '@components/VersionLabel';
 import { useAuth } from '@hooks/useAuth';
+import { useUpdateReady } from '@hooks/useUpdateReady';
 import { getRegistryAppForPath } from '../lib/app/app.registry';
 
 function getErrorDetails(error: unknown) {
@@ -16,6 +17,7 @@ function getErrorDetails(error: unknown) {
 function ErrorBoundary() {
   const error = useRouteError();
   const { isAdmin } = useAuth();
+  const isUpdateReady = useUpdateReady();
   const { pathname } = useLocation()
   const { message, stack } = getErrorDetails(error);
   const showDetails = import.meta.env.DEV || isAdmin;
@@ -43,9 +45,13 @@ function ErrorBoundary() {
             )}
           </div>
         )}
-        <div className='mt-6 flex justify-center'>
+        {isUpdateReady && (
+          <p className='text-foreground/70 mt-3 text-base'>A new version is ready. Restart to load it.</p>
+        )}
+        <div className='mt-6 flex flex-wrap justify-center gap-3'>
+          {isUpdateReady && <Button onClick={() => window.location.reload()}>Restart</Button>}
           <Link to='/'>
-            <Button>Back home</Button>
+            <Button variant={isUpdateReady ? 'secondary' : 'primary'}>Back home</Button>
           </Link>
         </div>
         <p className='text-foreground/50 mt-6 text-xs'><VersionLabel /></p>
