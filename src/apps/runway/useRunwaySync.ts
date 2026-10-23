@@ -97,16 +97,21 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     const run = { isCurrent: true };
     const dayIds = confirmedDayIds === '' ? [] : confirmedDayIds.split(',');
 
-    getRunwayEncryption(uid).then((encryption) => {
-      if (!run.isCurrent) return;
-      stop.current = startRecordsListener(
-        uid,
-        encryption,
-        dayIds,
-        (records) => dispatch(setRecords({ dayIds: confirmedDayIds, records })),
-        () => dispatch(setKeyStatus('failed')),
-      );
-    });
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        stop.current = startRecordsListener(
+          uid,
+          encryption,
+          dayIds,
+          (records) =>
+            dispatch(setRecords({ dayIds: confirmedDayIds, records })),
+          () => dispatch(setKeyStatus('failed')),
+        );
+      })
+      .catch(() => {
+        if (run.isCurrent) dispatch(setKeyStatus('failed'));
+      });
 
     return () => {
       run.isCurrent = false;
