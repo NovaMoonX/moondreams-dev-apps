@@ -16,6 +16,11 @@ export interface PinchOverlayContextValue {
   closeSubviewIf: (
     isCurrent: (subview: PinchSubview | null) => boolean,
   ) => void;
+  /** Swaps the open subview for another only if `isCurrent` says it is still the one that asked, so a leave answered late never replaces a form holding typed work. */
+  replaceSubviewIf: (
+    isCurrent: (subview: PinchSubview | null) => boolean,
+    next: PinchSubview,
+  ) => void;
   /** The phone's list of ways to start a recipe, a drawer that lives above the tabs so any screen (and a way's own screen, on back) can raise it. */
   isStartOpen: boolean;
   /** `fromCalendar` marks the new recipe as started from the calendar's empty state; it defaults to false on every open. */

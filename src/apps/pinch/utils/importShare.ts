@@ -5,8 +5,10 @@ import {
   MAX_MINUTES,
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
+  MAX_IMPORTED_TIPS,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
+  MAX_RECIPE_NOTE_LENGTH,
   MAX_RECIPE_STEPS,
   MAX_RECIPE_TITLE_LENGTH,
   MAX_SERVING_AMOUNT,
@@ -22,11 +24,13 @@ import type {
   PinchShareResult,
   Recipe,
   RecipeIngredient,
+  RecipeNote,
   ShareKind,
   SharedRecipe,
   SharedMeal,
 } from '@apps/pinch/types';
 import { cleanGroupName } from '@apps/pinch/utils/ingredientGroups';
+import { getStepAnchor } from '@apps/pinch/utils/notes';
 import {
   matchIngredient,
   normalizeName,
@@ -38,7 +42,7 @@ import { resolveIngredients } from '@apps/pinch/utils/resolveIngredient';
 
 /** What one import may write in a single batch: its recipes, the meal and every ingredient it has to make. */
 export const MAX_IMPORT_WRITES =
-  MAX_SHARED_MEAL_RECIPES + MAX_SHARED_MEAL_LINES + 1;
+  MAX_SHARED_MEAL_RECIPES + MAX_SHARED_MEAL_LINES + 1 + MAX_IMPORTED_TIPS;
 
 export const NO_INGREDIENTS_PROBLEM =
   "This recipe has no ingredients, so there's nothing to add.";
@@ -50,6 +54,8 @@ export const UNDO_BLOCKED_PROBLEM =
 
 export interface PlannedRecipe {
   recipe: Recipe;
+  /** The tips that came with it, as the new recipe's own. */
+  tips: RecipeNote[];
   /** The recipe's place in the share, which names its cover there. */
   shareIndex: number;
   hasCover: boolean;
@@ -69,6 +75,13 @@ export interface ShareImportPlanResult {
   problem: string | null;
 }
 
+export interface WrittenTip {
+  id: string;
+  recipeId: string;
+  /** As the add left it, to tell later whether the person has edited the tip. */
+  updatedAt: number;
+}
+
 interface WrittenDoc {
   id: string;
   /** The document's `updatedAt` as the add left it, to tell later whether it has changed. */
@@ -80,6 +93,8 @@ export interface ShareImportWritten {
   recipes: WrittenDoc[];
   meal: WrittenDoc | null;
   ingredients: WrittenDoc[];
+  /** The tips the add wrote, taken back with their recipe. */
+  tips: WrittenTip[];
   /** The recipes that got a copy of the shared cover. */
   coverRecipeIds: string[];
   /** Covers the share had that did not come along. */
@@ -91,6 +106,8 @@ export interface UndoSurvey {
   recipes: Map<string, { updatedAt: number; ingredientIds: string[] }>;
   meals: Map<string, { updatedAt: number; items: MealItem[] }>;
   ingredients: Map<string, number>;
+  /** Every note the person has now: an Undo that deleted a recipe would orphan any they wrote on an added one. */
+  notes: Map<string, { updatedAt: number; recipeId: string }>;
   /** Ids that planned days, prices and boxes in the fridge or freezer point at. */
   usedIds: Set<string>;
 }
@@ -102,6 +119,7 @@ export type UndoPlan =
       recipeIds: string[];
       mealId: string | null;
       ingredientIds: string[];
+      tipIds: string[];
       /** Ingredients the add made that stay because something else uses them now. */
       keptIngredients: number;
     };
@@ -279,9 +297,61 @@ const toRecipe = (
   updatedAt: now,
 });
 
+/** The shared tips as the new recipe's own, each under the same step of the imported recipe (or the whole recipe when that step isn't there). */
+const toTips = (
+  shared: SharedRecipe,
+  recipe: Recipe,
+  now: number,
+  makeId: () => string,
+): RecipeNote[] =>
+  (Array.isArray(shared.tips) ? shared.tips : []).flatMap((tip) => {
+    const text = asText(tip?.text, MAX_RECIPE_NOTE_LENGTH);
+    if (text === null) return [];
+    const step =
+      typeof tip.step === 'number' && Number.isInteger(tip.step)
+        ? tip.step
+        : null;
+    return [
+      {
+        id: makeId(),
+        recipeId: recipe.id,
+        kind: 'TIP' as const,
+        text,
+        changes: [],
+        cookId: null,
+        ...getStepAnchor(recipe.steps, step),
+        reason: null,
+        previous: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+  });
+
+const withTips = (
+  entry: Omit<PlannedRecipe, 'tips'>,
+  shared: SharedRecipe,
+  now: number,
+  makeId: () => string,
+): PlannedRecipe => ({
+  ...entry,
+  tips: toTips(shared, entry.recipe, now, makeId),
+});
+
+/** At most `MAX_IMPORTED_TIPS` across the whole add, so it stays one batch: the first recipes keep theirs whole. */
+const limitTips = (recipes: PlannedRecipe[]): PlannedRecipe[] =>
+  recipes.reduce<{ left: number; result: PlannedRecipe[] }>(
+    ({ left, result }, entry) => ({
+      left: Math.max(0, left - entry.tips.length),
+      result: [...result, { ...entry, tips: entry.tips.slice(0, left) }],
+    }),
+    { left: MAX_IMPORTED_TIPS, result: [] },
+  ).result;
+
+/** Tips are cut to their own cap beforehand, so only the rest of the add can make it too big. */
 const isTooBig = (plan: ShareImportPlan) =>
   plan.recipes.length + plan.ingredients.length + (plan.meal ? 1 : 0) >
-  MAX_IMPORT_WRITES;
+  MAX_IMPORT_WRITES - MAX_IMPORTED_TIPS;
 
 const withProblem = (problem: string): ShareImportPlanResult => ({
   plan: null,
@@ -300,13 +370,18 @@ export function planRecipeImport(
 
   const { created, getId } = mapIngredients(lines, records, now, makeId);
   const plan: ShareImportPlan = {
-    recipes: [
-      {
-        recipe: toRecipe(shared, makeId(), getId, now, makeId),
-        shareIndex: 0,
-        hasCover: shared.hasCover,
-      },
-    ],
+    recipes: limitTips([
+      withTips(
+        {
+          recipe: toRecipe(shared, makeId(), getId, now, makeId),
+          shareIndex: 0,
+          hasCover: shared.hasCover,
+        },
+        shared,
+        now,
+        makeId,
+      ),
+    ]),
     ingredients: created,
     meal: null,
   };
@@ -378,17 +453,26 @@ export function planMealImport(
     updatedAt: now,
   };
   const plan: ShareImportPlan = {
-    recipes: recipeIndexes.map((index) => ({
-      recipe: toRecipe(
-        shared.recipes[index],
-        idByIndex.get(index) as string,
-        getId,
-        now,
-        makeId,
+    recipes: limitTips(
+      recipeIndexes.map((index) =>
+        withTips(
+          {
+            recipe: toRecipe(
+              shared.recipes[index],
+              idByIndex.get(index) as string,
+              getId,
+              now,
+              makeId,
+            ),
+            shareIndex: index,
+            hasCover: shared.recipes[index].hasCover,
+          },
+          shared.recipes[index],
+          now,
+          makeId,
+        ),
       ),
-      shareIndex: index,
-      hasCover: shared.recipes[index].hasCover,
-    })),
+    ),
     ingredients: created,
     meal,
   };
@@ -421,6 +505,13 @@ export function getWritten(
       id,
       updatedAt,
     })),
+    tips: plan.recipes.flatMap(({ recipe, tips }) =>
+      tips.map((tip) => ({
+        id: tip.id,
+        recipeId: recipe.id,
+        updatedAt: tip.updatedAt,
+      })),
+    ),
     coverRecipeIds: copiedCovers.map((cover) => cover.recipeId),
     missingCovers: getCoverTargets(plan).length - copiedCovers.length,
   };
@@ -474,7 +565,19 @@ export function planUndo(
       ),
     );
 
+  const writtenTipIds = new Set(written.tips.map((tip) => tip.id));
+  const isTipsChanged =
+    written.tips.some((tip) => {
+      const stored = survey.notes.get(tip.id);
+      return stored !== undefined && stored.updatedAt !== tip.updatedAt;
+    }) ||
+    [...survey.notes].some(
+      ([id, note]) =>
+        !writtenTipIds.has(id) && writtenRecipeIds.has(note.recipeId),
+    );
+
   const isBlocked =
+    isTipsChanged ||
     written.recipes.some(
       (entry) =>
         isChanged(entry, survey.recipes.get(entry.id)) ||
@@ -501,6 +604,12 @@ export function planUndo(
         ? written.meal.id
         : null,
     ingredientIds,
+    tipIds: written.tips
+      .filter(
+        (tip) =>
+          survey.recipes.has(tip.recipeId),
+      )
+      .map((tip) => tip.id),
     keptIngredients: written.ingredients.filter(
       (entry) =>
         survey.ingredients.has(entry.id) && !ingredientIds.includes(entry.id),

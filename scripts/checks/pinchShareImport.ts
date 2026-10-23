@@ -5,6 +5,7 @@ import {
   MAX_MEAL_ITEMS,
   MAX_RECIPE_DESCRIPTION_LENGTH,
   MAX_RECIPE_INGREDIENTS,
+  MAX_IMPORTED_TIPS,
   MAX_RECIPE_LINKS,
   MAX_SHARED_MEAL_LINES,
   MAX_SHARED_MEAL_RECIPES,
@@ -96,6 +97,8 @@ const recipeOf = (
   steps: ['Mix it.', 'Cook it.'],
   care: null,
   links: [],
+  tips: [],
+  notes: [],
   hasCover: false,
   ...overrides,
 });
@@ -452,6 +455,114 @@ const ids = (plan: ShareImportPlan) => ({
   );
 }
 
+// ---- Tips come with the recipe, as the new recipe's own ----
+{
+  const tips = [
+    { text: 'Pat it dry.', step: 1 },
+    { text: 'Make it a day ahead.', step: null },
+    { text: 'Gone.', step: 7 },
+    { text: '   ', step: 0 },
+  ];
+  const plan = getPlan(
+    planRecipeImport(
+      recipeOf('Tipped', [line('Salt')], { tips }),
+      [],
+      NOW,
+      makeCounter(),
+    ),
+  );
+  const [entry] = plan.recipes;
+  assert.equal(entry.tips.length, 3, 'a blank tip is not written');
+  entry.tips.forEach((tip) => {
+    assert.equal(tip.recipeId, entry.recipe.id, 'each tip belongs to the new recipe');
+    assert.equal(tip.kind, 'TIP');
+    assert.equal(tip.cookId, null);
+    assert.deepEqual(tip.changes, []);
+    assert.equal(tip.reason, null);
+  });
+  const tipKeys = Object.keys(entry.tips[0]);
+  assert.ok(
+    tipKeys.every((key) => getRuleKeys('isRecipeNote', 'hasOnly').includes(key)),
+    'an imported tip has only keys the notes rule allows',
+  );
+  assert.ok(
+    getRuleKeys('isRecipeNote', 'hasAll').every((key) => tipKeys.includes(key)),
+    'and every key the rule requires',
+  );
+  assert.equal(entry.tips[0].stepIndex, 1);
+  assert.equal(entry.tips[0].stepText, 'Cook it.', 'a tip finds its step again by its words');
+  assert.equal(entry.tips[1].stepIndex, null);
+  assert.equal(entry.tips[2].stepIndex, null, 'a step the recipe lacks reads as the whole recipe');
+  assert.equal(new Set(entry.tips.map((tip) => tip.id)).size, 3);
+
+  const old = { ...recipeOf('Old', [line('Salt')]) } as Partial<SharedRecipe>;
+  delete old.tips;
+  assert.equal(
+    getPlan(planRecipeImport(old as SharedRecipe, [], NOW, makeCounter())).recipes[0].tips.length,
+    0,
+    'a copy made before tips existed brings none',
+  );
+
+  const written = getWritten(plan, []);
+  assert.deepEqual(
+    written.tips.map((tip) => tip.id).sort(),
+    entry.tips.map((tip) => tip.id).sort(),
+  );
+  const recipeStored = new Map([[entry.recipe.id, { updatedAt: entry.recipe.updatedAt, ingredientIds: [] as string[] }]]);
+  const tipsStored = new Map(
+    written.tips.map((tip) => [tip.id, { updatedAt: tip.updatedAt, recipeId: tip.recipeId }]),
+  );
+  const survey = (notes: Map<string, { updatedAt: number; recipeId: string }>) => ({
+    recipes: recipeStored,
+    meals: new Map(),
+    ingredients: new Map(),
+    notes,
+    usedIds: new Set<string>(),
+  });
+  const undo = planUndo(written, survey(tipsStored));
+  assert.equal(undo.problem, null);
+  if (undo.problem !== null) throw new Error('unreachable');
+  assert.deepEqual([...undo.tipIds].sort(), entry.tips.map((tip) => tip.id).sort(), 'Undo takes back the tips with their recipe');
+  const [firstTip] = written.tips;
+  assert.ok(
+    planUndo(written, survey(new Map(tipsStored).set(firstTip.id, { updatedAt: firstTip.updatedAt + 1, recipeId: firstTip.recipeId }))).problem !== null,
+    'a tip the person has edited since stops the Undo',
+  );
+  assert.ok(
+    planUndo(written, survey(new Map(tipsStored).set('later-note', { updatedAt: 1, recipeId: entry.recipe.id }))).problem !== null,
+    'a note written on an added recipe stops the Undo, so none is left without its recipe',
+  );
+  assert.equal(
+    planUndo(written, survey(new Map(tipsStored).set('elsewhere', { updatedAt: 1, recipeId: 'another-recipe' }))).problem,
+    null,
+    'a note on another recipe does not',
+  );
+}
+
+{
+  const manyTips = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({ text: `Tip ${index}`, step: null }));
+  const plan = getPlan(
+    planMealImport(
+      {
+        name: 'Tipped meal',
+        recipes: [0, 1, 2].map((index) =>
+          recipeOf(`R${index}`, [line(`Thing ${index}`)], { tips: manyTips(70) }),
+        ),
+        items: [0, 1, 2].map((index): SharedMealItem => ({ kind: 'RECIPE', servings: 1, recipeIndex: index })),
+      },
+      [],
+      NOW,
+      makeCounter(),
+    ),
+  );
+  assert.deepEqual(
+    plan.recipes.map((entry) => entry.tips.length),
+    [70, 70, MAX_IMPORTED_TIPS - 140],
+    'the first recipes keep their tips and the last one gets what is left of the cap',
+  );
+}
+
 // ---- A meal: each recipe once, items pointing at what was written ----
 {
   const soup = recipeOf(
@@ -648,12 +759,15 @@ const ids = (plan: ShareImportPlan) => ({
     })),
   });
   const writeCount = (plan: ShareImportPlan) =>
-    plan.recipes.length + plan.ingredients.length + (plan.meal ? 1 : 0);
+    plan.recipes.length +
+    plan.recipes.reduce((sum, entry) => sum + entry.tips.length, 0) +
+    plan.ingredients.length +
+    (plan.meal ? 1 : 0);
 
   assert.equal(MAX_SHARED_MEAL_RECIPES, MAX_MEAL_ITEMS);
   assert.equal(
     MAX_IMPORT_WRITES,
-    MAX_SHARED_MEAL_RECIPES + MAX_SHARED_MEAL_LINES + 1,
+    MAX_SHARED_MEAL_RECIPES + MAX_SHARED_MEAL_LINES + 1 + MAX_IMPORTED_TIPS,
   );
   assert.ok(MAX_IMPORT_WRITES < 500);
 
@@ -678,8 +792,8 @@ const ids = (plan: ShareImportPlan) => ({
   );
   assert.equal(
     writeCount(atCap),
-    MAX_IMPORT_WRITES,
-    'recipes + ingredients + the meal at the cap',
+    MAX_IMPORT_WRITES - MAX_IMPORTED_TIPS,
+    'recipes + ingredients + the meal at the cap, before any tips',
   );
   assert.ok(writeCount(atCap) < 500, 'one batch holds it');
 
@@ -780,6 +894,12 @@ const ids = (plan: ShareImportPlan) => ({
     ]),
     ingredients: new Map(
       written.ingredients.map((entry) => [entry.id, entry.updatedAt]),
+    ),
+    notes: new Map(
+      written.tips.map((tip) => [
+        tip.id,
+        { updatedAt: tip.updatedAt, recipeId: tip.recipeId },
+      ]),
     ),
     usedIds: new Set<string>(),
     ...overrides,

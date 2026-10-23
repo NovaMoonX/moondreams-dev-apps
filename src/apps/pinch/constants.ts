@@ -8,6 +8,7 @@ import type {
   KitchenView,
   ListSortKey,
   MealType,
+  NoteKind,
   PackageEventKind,
   PackagePlace,
   PinchTab,
@@ -687,6 +688,9 @@ export const MIN_COOK_SERVINGS = 0.5;
 export const MAX_COOK_SERVINGS = 1000;
 
 export const MAX_COOKED_SERVINGS = 1000;
+/** The longer edge of a cook's photo once it is stored. */
+export const COOK_PHOTO_MAX_DIMENSION = 1280;
+export const COOK_RATING_STEP = 0.5;
 /** The most cooks one recipe's history takes before asking to delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_COOKS_PER_RECIPE = 500;
 /** Under Firestore's 500 writes per batch. */
@@ -695,6 +699,61 @@ export const COOK_HISTORY_FIRST_PAGE = 8;
 export const COOK_HISTORY_PAGE_SIZE = 50;
 
 export const MAX_RECIPE_NOTE_LENGTH = 2000;
+
+/** The kinds a person writes (a TWEAK is written by saving the recipe), in the order they show on a step: advice for the dish first, then a change they plan, then their own notes. */
+export const WRITTEN_NOTE_KINDS = ['TIP', 'CHANGE', 'NOTE'] as const;
+
+export const NOTE_KIND_LABELS: Record<NoteKind, string> = {
+  TIP: 'Tip',
+  CHANGE: 'Change',
+  NOTE: 'Note',
+  TWEAK: 'Change',
+};
+
+export const NOTE_KIND_EMOJIS: Record<NoteKind, string> = {
+  TIP: '💡',
+  CHANGE: '✏️',
+  NOTE: '🗒️',
+  TWEAK: '✏️',
+};
+
+/** What each kind is for, said under its pill. */
+export const NOTE_KIND_HINTS: Record<(typeof WRITTEN_NOTE_KINDS)[number], string> =
+  {
+    TIP: 'Advice for making it, any time you cook it.',
+    CHANGE: 'A change to make to the recipe. It stays planned until you update the recipe.',
+    NOTE: 'Something you noticed, for next time.',
+  };
+
+/** The label and example under the words box for each kind. */
+export const NOTE_TEXT_COPY: Record<
+  NoteKind,
+  { label: string; placeholder: string }
+> = {
+  TIP: { label: 'Your tip', placeholder: "Don't overcrowd the pan" },
+  CHANGE: { label: 'What to change', placeholder: 'Use 4 cloves of garlic' },
+  NOTE: {
+    label: 'Your note',
+    placeholder: 'Less vinegar next time, the sauce was ready early',
+  },
+  TWEAK: { label: 'Why you changed it', placeholder: 'Optional' },
+};
+
+/** Starting phrases under a change's reason. */
+export const NOTE_REASON_CHOICES = [
+  'Tasted better',
+  'Too much',
+  'Not enough',
+  'Easier this way',
+] as const;
+
+/** The most a spoken tip, note or change takes, cut at a word. */
+export const MAX_COOK_DICTATION_CHARS = 400;
+
+/** How many words of a step an entry keeps, so it finds its step again after steps move. */
+export const NOTE_STEP_ANCHOR_LENGTH = 80;
+/** Past this many spoken characters an entry is read in part, so a long note never holds the kitchen up. */
+export const MAX_SPOKEN_NOTE_CHARS = 400;
 /** A tweak's lines, the "and N more" one included: the cap the rules enforce. */
 export const MAX_TWEAK_CHANGES = 8;
 export const MAX_TWEAK_CHANGE_LENGTH = 200;
@@ -883,3 +942,10 @@ export const MAX_PINCH_SHARES = 30;
 export const MAX_SHARED_MEAL_RECIPES = MAX_MEAL_ITEMS;
 /** The most ingredient lines a shared meal carries across its recipes, so adding it stays one batch of fewer than 500 writes. */
 export const MAX_SHARED_MEAL_LINES = 300;
+/** The most tips (and, separately, notes) one shared recipe carries, and the longest one, matching the Function's own caps. */
+export const MAX_SHARED_TIPS = 30;
+export const MAX_SHARED_TIP_LENGTH = 2000;
+export const MAX_SHARED_NOTES = 30;
+export const MAX_SHARED_NOTE_LENGTH = 2000;
+/** The most tips one add brings across all its recipes, so the add stays one batch under Firestore's 500 writes. */
+export const MAX_IMPORTED_TIPS = 150;

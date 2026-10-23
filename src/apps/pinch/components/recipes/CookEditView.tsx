@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import {
   Button,
@@ -26,6 +26,7 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateTime } from '@/utils/formatUtils';
+import CookResultFields from '@apps/pinch/components/shared/CookResultFields';
 import { MAX_COOKED_SERVINGS } from '@apps/pinch/constants';
 import {
   addCook,
@@ -48,6 +49,8 @@ interface CookEditViewProps {
   onBack: () => void;
   /** Opens a note about this cook; null where none can be written (a cook not saved yet, or notes that didn't load). */
   onAddNote: (() => void) | null;
+  /** What came out of this cook, drawn above the note row; null for a cook not saved yet. */
+  journal: ReactNode;
 }
 
 function CookEditView({
@@ -59,6 +62,7 @@ function CookEditView({
   planNote,
   onBack,
   onAddNote,
+  journal,
 }: CookEditViewProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -86,6 +90,15 @@ function CookEditView({
 
   const fields = useMemo(
     () => [
+      ...(cook && journal
+        ? [
+            custom({
+              name: 'journal',
+              label: '',
+              renderComponent: () => journal,
+            }),
+          ]
+        : []),
       custom({
         name: 'when',
         label: '',
@@ -134,6 +147,22 @@ function CookEditView({
           </div>
         ),
       }),
+      ...(cook
+        ? [
+            custom({
+              name: 'result',
+              label: '',
+              renderComponent: () => (
+                <div className='space-y-1'>
+                  <Label className='text-muted-foreground text-xs'>
+                    How it turned out
+                  </Label>
+                  <CookResultFields uid={uid} cookId={cook.id} isLarge />
+                </div>
+              ),
+            }),
+          ]
+        : []),
       ...(cook && onAddNote
         ? [
             custom({
@@ -154,7 +183,7 @@ function CookEditView({
           ]
         : []),
     ],
-    [date, time, servings, now, cook, onAddNote, isChanged, isSubmitting],
+    [date, time, servings, now, cook, onAddNote, journal, isChanged, isSubmitting, uid],
   );
 
   const handleSubmit = async () => {
@@ -209,13 +238,15 @@ function CookEditView({
       <div className='space-y-0.5'>
         <p className='font-medium wrap-break-word'>{recipeTitle}</p>
         <p className='text-muted-foreground text-sm'>
-          {cook ? (planNote ?? 'Change when or how much.') : 'An earlier cook'}
+          {cook
+            ? (planNote ?? 'Change when or how much, and how it turned out.')
+            : 'An earlier cook'}
         </p>
       </div>
       <Form
         id='pinch-cook'
         form={fields}
-        initialData={{ when: '', servings: '', note: '' }}
+        initialData={{ when: '', servings: '', result: '', journal: '', note: '' }}
         columns={1}
         onSubmit={() => {
           void handleSubmit();

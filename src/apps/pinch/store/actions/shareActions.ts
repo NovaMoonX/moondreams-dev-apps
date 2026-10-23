@@ -7,15 +7,21 @@ import { MAX_PINCH_SHARES } from '@apps/pinch/constants';
 import {
   selectIngredientsById,
   selectMealsById,
+  selectNotesByRecipe,
   selectRecipesById,
   selectShareBySource,
+  selectShareNotesBlock,
 } from '@apps/pinch/store/selectors';
 import type {
   ChangePinchShareRequest,
   ChangePinchShareResult,
   ShareKind,
 } from '@apps/pinch/types';
-import { buildSharePayload, getShareSource } from '@apps/pinch/utils/sharing';
+import {
+  buildSharePayload,
+  getShareSource,
+  type ShareIncludes,
+} from '@apps/pinch/utils/sharing';
 
 const changePinchShareCallable = httpsCallable<
   ChangePinchShareRequest,
@@ -91,6 +97,7 @@ const waitForListener = async (isArrived: () => boolean): Promise<void> => {
 interface SaveShareInput {
   kind: ShareKind;
   sourceId: string;
+  includes: ShareIncludes;
 }
 
 export const saveShare = createAsyncThunk<
@@ -99,7 +106,7 @@ export const saveShare = createAsyncThunk<
   { state: RootState; rejectValue: string }
 >(
   'pinch/shares/save',
-  async ({ kind, sourceId }, { getState, rejectWithValue }) => {
+  async ({ kind, sourceId, includes }, { getState, rejectWithValue }) => {
     const state = getState();
     const recipesById = selectRecipesById(state);
     const source = getShareSource(
@@ -112,10 +119,16 @@ export const saveShare = createAsyncThunk<
       return rejectWithValue('This is gone, so there is nothing to share.');
     }
 
+    const notesBlock =
+      includes.tips || includes.notes ? selectShareNotesBlock(state) : null;
+    if (notesBlock !== null) return rejectWithValue(notesBlock);
+
     const payload = buildSharePayload(
       source,
       recipesById,
       selectIngredientsById(state),
+      selectNotesByRecipe(state),
+      includes,
     );
     if ('error' in payload) return rejectWithValue(payload.error);
 

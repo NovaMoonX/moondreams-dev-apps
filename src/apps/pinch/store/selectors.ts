@@ -694,15 +694,38 @@ export const selectShareBySource =
 
 /** Whether each link's original is gone and whether it changed since the copy was taken, by the link's id. */
 export const selectShareStatuses = createSelector(
-  [selectShares, selectRecipesById, selectMealsById],
-  (shares, recipesById, mealsById) =>
+  [
+    selectShares,
+    selectRecipesById,
+    selectMealsById,
+    selectNotesByRecipe,
+    (state: RootState) =>
+      state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
+  ],
+  (shares, recipesById, mealsById, notesByRecipe, isNotesReady) =>
     new Map(
       shares.map((share) => [
         share.id,
-        getShareStatus(share, recipesById, mealsById),
+        getShareStatus(
+          share,
+          recipesById,
+          mealsById,
+          notesByRecipe,
+          isNotesReady,
+        ),
       ]),
     ),
 );
+
+/** Tips and notes travel with a share when the owner includes them, so such a copy is only taken once they have loaded: otherwise an update would quietly drop them. Null when it is safe, else the reason. */
+export const selectShareNotesBlock = (state: RootState): string | null => {
+  if (state.pinch.notes.loadError !== null) {
+    return "Your tips and notes couldn't load, so a link made now would leave them out. Try again in a moment.";
+  }
+  return state.pinch.notes.isLoaded
+    ? null
+    : 'Your tips and notes are still loading. Try again in a moment.';
+};
 
 export const selectSharesLoadError = (state: RootState) =>
   state.pinch.shares.loadError;

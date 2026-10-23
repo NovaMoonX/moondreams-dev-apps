@@ -1,7 +1,7 @@
 import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Link2, Link2Off, RefreshCw, Share2 } from 'lucide-react';
@@ -16,7 +16,11 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate } from '@/utils/formatUtils';
-import { MAX_PINCH_SHARES } from '@apps/pinch/constants';
+import {
+  MAX_PINCH_SHARES,
+  MAX_SHARED_NOTES,
+  MAX_SHARED_TIPS,
+} from '@apps/pinch/constants';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
 import {
   renewShareLink,
@@ -27,17 +31,21 @@ import {
   selectIngredientsById,
   selectIsSharesReady,
   selectMealsById,
+  selectNotesByRecipe,
   selectRecipesById,
   selectShareBySource,
+  selectShareNotesBlock,
   selectShareStatuses,
   selectSharesLoadError,
 } from '@apps/pinch/store/selectors';
 import type { PinchShare, ShareKind } from '@apps/pinch/types';
 import {
   buildSharePayload,
+  getShareIncludes,
   getShareRecipes,
   getShareSource,
   getShareUrl,
+  type ShareIncludes,
 } from '@apps/pinch/utils/sharing';
 
 const SHORT_SCREEN_MAX_HEIGHT = 599;
@@ -70,6 +78,72 @@ const COPY: Record<
       "You've changed this saved meal, or a recipe in it, since you shared it.",
   },
 };
+
+interface IncludeChoicesProps {
+  tipCount: number;
+  noteCount: number;
+  includes: ShareIncludes;
+  isDisabled: boolean;
+  onChange: (includes: ShareIncludes) => void;
+}
+
+function IncludeChoices({
+  tipCount,
+  noteCount,
+  includes,
+  isDisabled,
+  onChange,
+}: IncludeChoicesProps) {
+  const rows = [
+    {
+      key: 'tips' as const,
+      label: 'Your tips',
+      count: tipCount,
+      hint: `Advice for making it, under the step it belongs to.${tipCount > MAX_SHARED_TIPS ? ` The first ${MAX_SHARED_TIPS} are shared.` : ''}`,
+    },
+    {
+      key: 'notes' as const,
+      label: 'Your notes',
+      count: noteCount,
+      hint: `Shown as you wrote them. Visitors can read them but don't get a copy. Planned changes stay out.${noteCount > MAX_SHARED_NOTES ? ` The first ${MAX_SHARED_NOTES} are shared.` : ''}`,
+    },
+  ].filter((row) => row.count > 0 || includes[row.key]);
+  if (rows.length === 0) return null;
+
+  return (
+    <fieldset className='space-y-1'>
+      <legend className='text-sm font-medium'>Include</legend>
+      {rows.map((row) => (
+        <label
+          key={row.key}
+          className='flex min-h-12 cursor-pointer items-start gap-3 py-2'
+        >
+          <span className='mt-0.5 inline-flex shrink-0'>
+            <Checkbox
+              aria-label={row.label}
+              checked={includes[row.key]}
+              disabled={isDisabled}
+              onCheckedChange={(checked) =>
+                onChange({ ...includes, [row.key]: checked === true })
+              }
+            />
+          </span>
+          <span className='min-w-0'>
+            <span className='block text-sm'>
+              {row.label}{' '}
+              <span className='text-muted-foreground whitespace-nowrap'>
+                · {row.count}
+              </span>
+            </span>
+            <span className='text-muted-foreground block text-sm text-pretty'>
+              {row.hint}
+            </span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
 
 const getNoticeText = (notice: Notice, thing: string) => {
   if (notice === 'updated') {
@@ -123,7 +197,11 @@ function ShareView({
   const recipesById = useAppSelector(selectRecipesById);
   const mealsById = useAppSelector(selectMealsById);
   const ingredientsById = useAppSelector(selectIngredientsById);
+  const notesByRecipe = useAppSelector(selectNotesByRecipe);
+  const notesBlock = useAppSelector(selectShareNotesBlock);
   const isBusyRef = useRef(false);
+  const [tipsChoice, setTipsChoice] = useState<boolean | null>(null);
+  const [notesChoice, setNotesChoice] = useState<boolean | null>(null);
   const [busy, setBusy] = useState<BusyAction | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,18 +211,71 @@ function ShareView({
   const isBusy = busy !== null;
   const canSend = typeof navigator.share === 'function';
 
+  const shared = share === null ? null : getShareIncludes(share);
+  const includes: ShareIncludes = {
+    tips: tipsChoice ?? shared?.tips ?? false,
+    notes: notesChoice ?? shared?.notes ?? false,
+  };
+  const isIncludesChanged =
+    shared !== null &&
+    (includes.tips !== shared.tips || includes.notes !== shared.notes);
+  const recipes = source === null ? [] : getShareRecipes(source, recipesById);
+  const countEntries = (kind: 'TIP' | 'NOTE') =>
+    recipes.reduce(
+      (sum, recipe) =>
+        sum +
+        (notesByRecipe.get(recipe.id) ?? []).filter(
+          (note) => note.kind === kind && (note.text ?? '').trim() !== '',
+        ).length,
+      0,
+    );
+  const tipCount = countEntries('TIP');
+  const noteCount = countEntries('NOTE');
+
   const getBlockReason = () => {
     if (source === null) return null;
-    const payload = buildSharePayload(source, recipesById, ingredientsById);
+    if ((includes.tips || includes.notes) && notesBlock !== null) {
+      return notesBlock;
+    }
+    const payload = buildSharePayload(
+      source,
+      recipesById,
+      ingredientsById,
+      notesByRecipe,
+      includes,
+    );
     return 'error' in payload ? payload.error : null;
   };
   const blockReason = getBlockReason();
-  const hasWebPhoto =
-    source !== null &&
-    getShareRecipes(source, recipesById).some(
-      (recipe) => recipe.coverPath == null && Boolean(recipe.coverUrl),
-    );
-  const leftOut = `Your name, notes, prices, favorites, cooking history and collections.${hasWebPhoto ? ' A photo from a web search stays out too.' : ''}`;
+  const hasWebPhoto = recipes.some(
+    (recipe) => recipe.coverPath == null && Boolean(recipe.coverUrl),
+  );
+  const joinWords = (words: string[]) => words.join(' and ');
+  const taken = [
+    ...(includes.tips && tipCount > 0 ? ['tips'] : []),
+    ...(includes.notes && noteCount > 0 ? ['notes'] : []),
+  ];
+  const held = [
+    ...(!includes.tips && tipCount > 0 ? ['tips'] : []),
+    ...(!includes.notes && noteCount > 0 ? ['notes'] : []),
+  ];
+  const copyLine =
+    taken.length === 0
+      ? inCopy
+      : `${inCopy} Your ${joinWords(taken)} too.`;
+  const leftOut = `Your name, planned changes, prices, favorites, cooking history and collections.${held.length > 0 ? ` Your ${joinWords(held)} too, unless you include them.` : ''}${hasWebPhoto ? ' A photo from a web search stays out too.' : ''}`;
+  const includeChoices = (
+    <IncludeChoices
+      tipCount={tipCount}
+      noteCount={noteCount}
+      includes={includes}
+      isDisabled={isBusy}
+      onChange={(next) => {
+        setTipsChoice(next.tips);
+        setNotesChoice(next.notes);
+      }}
+    />
+  );
 
   const run = async (
     action: BusyAction,
@@ -158,6 +289,8 @@ function ShareView({
     setError(null);
     try {
       await task();
+      setTipsChoice(null);
+      setNotesChoice(null);
       setNotice(doneNotice);
     } catch (taskError) {
       setError(getErrorMessage(taskError, 'Something went wrong. Try again.'));
@@ -170,7 +303,7 @@ function ShareView({
   const save = (action: 'create' | 'update') =>
     run(
       action,
-      () => dispatch(saveShare({ kind, sourceId })).unwrap(),
+      () => dispatch(saveShare({ kind, sourceId, includes })).unwrap(),
       action === 'update' ? 'updated' : null,
     );
 
@@ -349,12 +482,13 @@ function ShareView({
               It's a copy as it is today, so changes you make later aren't in it
               unless you update it.
             </IntroCard>
+            {!isCapped && includeChoices}
             {!isCapped && (
               <dl className='space-y-3 text-sm'>
                 <div>
                   <dt className='font-medium'>In the copy</dt>
                   <dd className='text-muted-foreground text-pretty'>
-                    {inCopy}
+                    {copyLine}
                   </dd>
                 </div>
                 <div>
@@ -406,7 +540,8 @@ function ShareView({
 
     const url = getShareUrl(share.id, window.location.origin);
     const isGone = status?.isGone ?? false;
-    const isStale = (status?.isStale ?? false) && notice !== 'updated';
+    const isSourceStale = (status?.isStale ?? false) && notice !== 'updated';
+    const isStale = isSourceStale || isIncludesChanged;
     const verb = share.updatedAt > share.createdAt ? 'Updated' : 'Shared';
 
     return {
@@ -431,6 +566,7 @@ function ShareView({
                 </p>
               )}
             </div>
+            {!isGone && includeChoices}
             {isGone && (
               <IntroCard icon='🗑️' lead='The original was deleted.'>
                 The link still shows the copy you shared until you stop sharing.
@@ -438,7 +574,10 @@ function ShareView({
             )}
             {isStale && (
               <>
-                <IntroCard icon='✏️' lead={changed}>
+                <IntroCard
+                  icon='✏️'
+                  lead={isSourceStale ? changed : 'You changed what to include.'}
+                >
                   The link still shows the older copy.
                 </IntroCard>
                 {!isLandscape && (

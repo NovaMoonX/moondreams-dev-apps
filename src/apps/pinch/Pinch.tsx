@@ -166,6 +166,10 @@ function Pinch() {
       closeSubview: () => setSubview(null),
       closeSubviewIf: (isCurrent: (current: PinchSubview | null) => boolean) =>
         setSubview((current) => (isCurrent(current) ? null : current)),
+      replaceSubviewIf: (
+        isCurrent: (current: PinchSubview | null) => boolean,
+        next: PinchSubview,
+      ) => setSubview((current) => (isCurrent(current) ? next : current)),
       isStartOpen,
       setIsStartOpen: openStart,
       openIdeaSheet: () => setIsIdeaSheetOpen(true),

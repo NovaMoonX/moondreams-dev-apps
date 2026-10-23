@@ -9,6 +9,7 @@ import {
   Ellipsis,
   History,
   PackagePlus,
+  PenLine,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -17,12 +18,11 @@ import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import GroupRow from '@/components/GroupRow';
 import StarButton from '@/components/StarButton';
-import TickMark from '@/components/TickMark';
 import { useAppSelector } from '@/store';
-import { formatDateShort } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import StockRows from '@apps/pinch/components/containers/StockRows';
-import RecipeNotes from '@apps/pinch/components/notes/RecipeNotes';
+import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
+import RecipeChanges from '@apps/pinch/components/recipes/RecipeChanges';
 import RecipeFront from '@apps/pinch/components/recipes/RecipeFront';
 import ShareDoorRow from '@apps/pinch/components/share/ShareDoorRow';
 import ShareView from '@apps/pinch/components/share/ShareView';
@@ -38,6 +38,7 @@ import {
   selectCooksById,
   selectIsContainersReady,
   selectPlannedByDay,
+  selectNotesByRecipe,
   selectRecipes,
   selectRecipesById,
   selectStockByRecipe,
@@ -64,7 +65,7 @@ import { isStarred } from '@apps/pinch/utils/favorites';
 import { joinSourceNames } from '@apps/pinch/utils/shopping';
 
 type DrawerView =
-  'recipe' | 'photo' | 'history' | 'more' | 'collections' | 'share';
+  'recipe' | 'photo' | 'more' | 'collections' | 'share';
 
 interface DoorButtonProps {
   label: string;
@@ -178,8 +179,12 @@ interface RecipeDrawerProps {
   onOpenHistory: (id: string) => void;
   onOpenStock: (id: string, place: ContainerPlace) => void;
   onPutAway: (id: string) => void;
-  /** A null `noteId` starts a new note. */
-  onOpenNote: (recipeId: string, noteId: string | null) => void;
+  /** A null `noteId` starts a new one, of `kind` when it is given. */
+  onOpenNote: (
+    recipeId: string,
+    noteId: string | null,
+    kind?: WrittenNoteKind | null,
+  ) => void;
 }
 
 function RecipeDrawer({
@@ -200,6 +205,7 @@ function RecipeDrawer({
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const collections = useAppSelector(selectCollections);
   const cookSummary = useAppSelector(selectCookSummaries).get(recipeId);
+  const recipeNotes = useAppSelector(selectNotesByRecipe).get(recipeId);
   const { openSubview } = usePinchOverlay();
   const toggleFavorite = useRecipeFavorite(uid);
   const { isLoaded, loadError, markRecipeCooked } = useCookActions(uid);
@@ -273,6 +279,9 @@ function RecipeDrawer({
     }
   };
 
+  const plannedChangeIds = (recipeNotes ?? [])
+    .filter((note) => note.kind === 'CHANGE')
+    .map((note) => note.id);
   const care = getRecipeCare(recipe);
   const recipeCollections = getRecipeCollections(recipe, collections);
   const collectionsPill = getCollectionsPill(
@@ -297,14 +306,6 @@ function RecipeDrawer({
     (cookSummary !== undefined ||
       isBulkMeal({ servings: recipe.servings, care, hasStock }));
 
-  const getCookedText = () => {
-    if (!cookSummary) return null;
-    const day = formatDateShort(cookSummary.lastCookedAt);
-    return cookSummary.count === 1
-      ? { lead: 'Cooked once,', when: `on ${day}` }
-      : { lead: `Cooked ${cookSummary.count} times,`, when: `last ${day}` };
-  };
-  const cookedText = getCookedText();
   const getViewBody = () => {
     if (view === 'photo') {
       return (
@@ -315,41 +316,6 @@ function RecipeDrawer({
             coverUrl={recipe.coverUrl ?? null}
             version={recipe.updatedAt}
             className='w-full'
-          />
-        </div>
-      );
-    }
-    if (view === 'history') {
-      return (
-        <div className='space-y-4'>
-          <div className='space-y-1'>
-            <BackLink onBack={backToRecipe} />
-            <p className='font-medium'>Notes and history</p>
-          </div>
-          {cookedText && (
-            <ActionGroup>
-              <GroupRow
-                icon={<TickMark />}
-                ariaLabel={`${cookedText.lead} ${cookedText.when}. Cooking history`}
-                onClick={() => onOpenHistory(recipe.id)}
-              >
-                {cookedText.lead}{' '}
-                <span className='whitespace-nowrap'>{cookedText.when}</span>
-              </GroupRow>
-            </ActionGroup>
-          )}
-          <RecipeNotes
-            recipeId={recipe.id}
-            onAdd={() => onOpenNote(recipe.id, null)}
-            onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
-            onApply={(noteId) => {
-              onClose();
-              openSubview({
-                kind: 'recipe',
-                id: recipe.id,
-                fromNoteId: noteId,
-              });
-            }}
           />
         </div>
       );
@@ -393,6 +359,28 @@ function RecipeDrawer({
           <BackLink onBack={backToRecipe} />
           <div className='space-y-2'>
             <ActionGroup isRoomy caption='What would you like to do?'>
+              {plannedChangeIds.length > 0 && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<PenLine />}
+                  label='Update the recipe'
+                  subtitle={
+                    plannedChangeIds.length === 1
+                      ? 'With the change you planned'
+                      : `With the ${plannedChangeIds.length} changes you planned`
+                  }
+                  onClick={() => {
+                    onClose();
+                    openSubview({
+                      kind: 'recipe',
+                      id: recipe.id,
+                      fromChangeIds: plannedChangeIds,
+                    });
+                  }}
+                />
+              )}
               {cookPlan === null && recipe.steps.length > 0 && (
                 <ActionRow
                   isGrouped
@@ -469,6 +457,18 @@ function RecipeDrawer({
             target={{ kind: 'recipe', id: recipe.id }}
             onOpenStock={(place) => onOpenStock(recipe.id, place)}
           />
+          <RecipeChanges
+            recipeId={recipe.id}
+            onEdit={(noteId) => onOpenNote(recipe.id, noteId)}
+            onApplyChange={(noteId) => {
+              onClose();
+              openSubview({
+                kind: 'recipe',
+                id: recipe.id,
+                fromChangeIds: [noteId],
+              });
+            }}
+          />
         </div>
       );
     }
@@ -491,12 +491,14 @@ function RecipeDrawer({
             onClassName='text-[var(--pinch-drizzle)]'
             onClick={() => toggleFavorite(recipe)}
           />
-          <DoorButton
-            label='Notes and history'
-            icon={<History className='h-5 w-5' aria-hidden='true' />}
-            isOpen={shownView === 'history'}
-            onClick={(opener) => openView('history', opener)}
-          />
+          {cookSummary !== undefined && (
+            <DoorButton
+              label='Cooking history'
+              icon={<History className='h-5 w-5' aria-hidden='true' />}
+              isOpen={false}
+              onClick={() => onOpenHistory(recipe.id)}
+            />
+          )}
         </>
       }
       footer={
@@ -537,6 +539,7 @@ function RecipeDrawer({
           recipe={recipe}
           onShowPhoto={(opener) => openView('photo', opener)}
           onShowCollections={(opener) => openView('collections', opener)}
+          onOpenEntry={(noteId, kind) => onOpenNote(recipe.id, noteId, kind)}
           onShowSource={onShowSource}
           onShowCollection={onShowCollection}
           onFillIn={onFillIn}

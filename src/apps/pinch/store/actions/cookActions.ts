@@ -14,19 +14,27 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
-import { getErrorMessage } from '@/utils/errorUtils';
+import {
+  getErrorMessage,
+  getStorageErrorMessage,
+} from '@/utils/errorUtils';
+import { resizeImageToWebp } from '@/utils/imageCompression';
 import {
   COOK_BATCH_SIZE,
+  COOK_PHOTO_MAX_DIMENSION,
   MAX_COOKED_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
 import type { Cook } from '@apps/pinch/types';
 import {
   getCookId,
+  getCookPhotoPath,
   getMissingCookFields,
   isCookHistoryFull,
+  isValidCookRating,
   isValidCookServings,
   mergePlannedCook,
 } from '@apps/pinch/utils/cooks';
@@ -101,6 +109,8 @@ export const addCook = createAsyncThunk<
       plannedMealId: null,
       servings,
       cookedAt,
+      rating: null,
+      photoPath: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -163,6 +173,8 @@ export const markPlannedCooked = createAsyncThunk<
             plannedMealId,
             servings,
             cookedAt,
+            rating: null,
+            photoPath: null,
             createdAt: now,
             updatedAt: now,
           },
@@ -234,6 +246,8 @@ export const markPlannedPlateCooked = createAsyncThunk<
               plannedMealId,
               servings: entry.servings,
               cookedAt,
+              rating: null,
+              photoPath: null,
               createdAt: now,
               updatedAt: now,
             },
@@ -299,11 +313,28 @@ interface RemoveCookInput {
   id: string;
 }
 
+/** Deletes a cook's photo files once its documents are gone; a file that can't be deleted is left, since nothing points to it any more. */
+const deletePhotos = (paths: (string | null | undefined)[]) =>
+  Promise.all(
+    paths.flatMap((path) =>
+      path
+        ? [
+            deleteFile(path).catch((error) =>
+              console.error("Pinch could not delete a cook's photo", error),
+            ),
+          ]
+        : [],
+    ),
+  );
+
 export const removeCook = createAsyncThunk<
   string,
   RemoveCookInput,
-  { rejectValue: string }
->('pinch/cooks/remove', async ({ uid, id }, { rejectWithValue }) => {
+  { state: RootState; rejectValue: string }
+>('pinch/cooks/remove', async ({ uid, id }, { getState, rejectWithValue }) => {
+  const photoPath = getState().pinch.cooks.items.find(
+    (cook) => cook.id === id,
+  )?.photoPath;
   try {
     await deleteDoc(cookDoc(uid, id));
   } catch (error) {
@@ -311,6 +342,7 @@ export const removeCook = createAsyncThunk<
       getWriteMessage(error, 'Unable to delete this cook.'),
     );
   }
+  await deletePhotos([photoPath]);
 
   return id;
 });
@@ -324,8 +356,11 @@ interface RemoveCooksInput {
 export const removeCooks = createAsyncThunk<
   string[],
   RemoveCooksInput,
-  { rejectValue: string }
->('pinch/cooks/removeMany', async ({ uid, ids }, { rejectWithValue }) => {
+  { state: RootState; rejectValue: string }
+>('pinch/cooks/removeMany', async ({ uid, ids }, { getState, rejectWithValue }) => {
+  const photoPaths = getState()
+    .pinch.cooks.items.filter((cook) => ids.includes(cook.id))
+    .map((cook) => cook.photoPath);
   try {
     const batch = writeBatch(db);
     ids.forEach((id) => batch.delete(cookDoc(uid, id)));
@@ -335,9 +370,78 @@ export const removeCooks = createAsyncThunk<
       getWriteMessage(error, 'Unable to delete these cooks.'),
     );
   }
+  await deletePhotos(photoPaths);
 
   return ids;
 });
+
+interface SetCookReviewInput {
+  uid: string;
+  id: string;
+  /** A new rating, or null to take it off; leave out to keep it. */
+  rating?: number | null;
+  /** A new photo, or null to take it off; leave out to keep it. */
+  photoFile?: File | null;
+}
+
+/** How a cook turned out: its rating and its one photo, each written on its own as a field-scoped `updateDoc` that touches nothing else on the cook. A photo goes to Storage first under a new name and is cleaned up if the write fails; the one it replaces is deleted once the write has committed. */
+export const setCookReview = createAsyncThunk<
+  string,
+  SetCookReviewInput,
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/cooks/setReview',
+  async ({ uid, id, rating, photoFile }, { getState, rejectWithValue }) => {
+    const existing = getState().pinch.cooks.items.find(
+      (cook) => cook.id === id,
+    );
+    if (!existing) {
+      return rejectWithValue('This cook is gone, so there is nothing to save.');
+    }
+    if (rating != null && !isValidCookRating(rating)) {
+      return rejectWithValue('Pick between half a star and five stars.');
+    }
+
+    const now = Date.now();
+    const newPath =
+      photoFile instanceof File ? getCookPhotoPath(uid, id, now) : null;
+    try {
+      if (newPath !== null && photoFile) {
+        const resized = await resizeImageToWebp(
+          photoFile,
+          COOK_PHOTO_MAX_DIMENSION,
+        );
+        if (!resized.type.startsWith('image/')) {
+          return rejectWithValue(
+            "That picture couldn't be read. Try a JPG, PNG or WebP photo.",
+          );
+        }
+        await uploadFile(newPath, resized);
+      }
+      await updateDoc(cookDoc(uid, id), {
+        ...getMissingCookFields(existing),
+        ...(rating === undefined ? {} : { rating }),
+        ...(photoFile === undefined
+          ? {}
+          : { photoPath: newPath }),
+        updatedAt: now,
+      });
+    } catch (error) {
+      if (newPath !== null) await deleteFile(newPath).catch(() => undefined);
+      return rejectWithValue(
+        error instanceof FirebaseError && error.code.startsWith('storage/')
+          ? getStorageErrorMessage(error, "We couldn't save that picture.")
+          : getWriteMessage(error, "Unable to save how it turned out."),
+      );
+    }
+
+    if (photoFile !== undefined && existing.photoPath) {
+      await deletePhotos([existing.photoPath]);
+    }
+
+    return id;
+  },
+);
 
 /** Reads the recipe's cooks from Firestore, since the store is empty while they load or after they fail to. A failure is the caller's to ignore: a cook whose recipe is gone is never read. */
 export async function deleteCooks(uid: string, recipeId: string) {
@@ -359,5 +463,8 @@ export async function deleteCooks(uid: string, recipeId: string) {
       group.forEach((cook) => batch.delete(cook.ref));
       return batch.commit();
     }),
+  );
+  await deletePhotos(
+    docs.map((cook) => (cook.data() as Partial<Cook>).photoPath),
   );
 }

@@ -12,11 +12,13 @@ import {
   pickTimersToTell,
   readCookCommand,
   resolveVoiceTimers,
+  stepCookReading,
   readSpokenDuration,
   toSingular,
   toSpokenAmount,
   toSpokenLabel,
   type CookCommand,
+  type CookReadingQueue,
   type CookTimerTarget,
   type CookVoiceChoice,
   type CookVoiceContext,
@@ -1225,6 +1227,222 @@ assert.deepEqual(
   [parse('no', guessed), parse('yes', asked)],
   [{ kind: 'TIMER_ANSWER', answer: { kind: 'NEVER_MIND' } }, null],
   'no drops a guess, and yes means nothing when a timer is asked for by name',
+);
+
+expectKind(
+  [
+    'read the tips',
+    'read tips',
+    'Read me the tips.',
+    'repeat the tip',
+    'any tips',
+    'what are the tips',
+    'okay Pepper read the tips please',
+  ],
+  { kind: 'READ_TIPS' },
+  'tips are read when asked for, in the words people use to repeat a thing',
+);
+expectKind(
+  ['read the notes', 'read my notes', 'repeat my note', 'what did I note', 'any notes'],
+  { kind: 'READ_NOTES' },
+  'notes are read when asked for',
+);
+expectKind(
+  ['read the changes', 'repeat the changes', 'repeat my changes', 'repeat the planned changes', 'any changes'],
+  { kind: 'READ_CHANGES' },
+  'planned changes are read on their own, apart from the notes',
+);
+expectKind(
+  ['repeat the instructions', 'read the instructions', 'repeat instructions', 'say the instructions again'],
+  { kind: 'REPEAT' },
+  'the step itself is asked for again as its instructions',
+);
+assert.deepEqual(
+  [parse('tip'), parse('note'), parse('tips for chicken'), parse('add salt')],
+  [null, null, null, null],
+  'a word the kitchen says on its own is not a command',
+);
+assert.deepEqual(
+  parse(['repeat', 'repeat the tip']),
+  { kind: 'REPEAT' },
+  'plain repeat still reads the step',
+);
+assert.deepEqual(
+  ['add a tip', 'new tip', 'I have a tip', 'Add a note', 'make a note', 'add a change', 'suggest a change'].map(
+    (phrase) => parse(phrase),
+  ),
+  [
+    { kind: 'ADD_ENTRY', entryKind: 'TIP' },
+    { kind: 'ADD_ENTRY', entryKind: 'TIP' },
+    { kind: 'ADD_ENTRY', entryKind: 'TIP' },
+    { kind: 'ADD_ENTRY', entryKind: 'NOTE' },
+    { kind: 'ADD_ENTRY', entryKind: 'NOTE' },
+    { kind: 'ADD_ENTRY', entryKind: 'CHANGE' },
+    { kind: 'ADD_ENTRY', entryKind: 'CHANGE' },
+  ],
+  'a tip, a note or a change is started by saying so',
+);
+assert.deepEqual(
+  [
+    'show me the tips',
+    'Show the tips.',
+    'show my tips',
+    'open the tips',
+    'show me my notes',
+    'show notes',
+    'show the changes',
+    'show me the planned changes',
+    'okay Pepper show me the tips please',
+  ].map((phrase) => parse(phrase)),
+  [
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'NOTE' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'NOTE' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'CHANGE' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'CHANGE' },
+    { kind: 'SHOW_ENTRIES', entryKind: 'TIP' },
+  ],
+  'tips, notes and changes are put on screen by asking to see them',
+);
+expectKind(
+  [
+    'ingredients for this step',
+    'show me the ingredients for this step',
+    'what do I need for this step',
+  ],
+  { kind: 'SHOW_STEP_AMOUNTS' },
+  'what a step uses is shown by asking for the ingredients for this step, apart from the whole list',
+);
+expectKind(
+  ['note from last time', 'show the note from last time', 'what did I note last time'],
+  { kind: 'SHOW_LAST_NOTE' },
+  'the note the first step leads with is shown by asking for last time',
+);
+expectKind(
+  ['close the note', 'close the tips', 'close my notes', 'hide the changes', 'close that', 'close it', 'hide that'],
+  { kind: 'CLOSE_ENTRIES' },
+  'what is open above the step is closed by saying so',
+);
+assert.deepEqual(
+  [parse('close'), parse('show'), parse('show me the tip of the iceberg'), parse('close the oven')],
+  [null, null, null, null],
+  'a bare close or show, or a sentence that only starts like one, is not a command',
+);
+expectKind(
+  ['undo that', 'scratch that', 'delete that note'],
+  { kind: 'UNDO_ENTRY' },
+  'what was just dictated can be taken back',
+);
+
+assert.deepEqual(
+  ['constructor', 'toString', 'hasOwnProperty', '__proto__'].map((word) => parse(word)),
+  [null, null, null, null],
+  'a word that names an object property is not a command',
+);
+
+const dictating: CookVoiceContext = {
+  ...plate,
+  choice: { kind: 'DICTATE', entryKind: 'TIP' },
+};
+assert.deepEqual(
+  parse("Don't crowd the pan or it will steam", dictating),
+  { kind: 'DICTATION', text: "Don't crowd the pan or it will steam" },
+  'while a tip is being dictated, what is said is the tip',
+);
+assert.deepEqual(
+  parse('keep the pan hot', dictating),
+  { kind: 'DICTATION', text: 'Keep the pan hot' },
+  'a dictated entry starts with a capital letter',
+);
+assert.deepEqual(
+  parse('next', dictating),
+  { kind: 'DICTATION', text: 'Next' },
+  'and even a command word is the words, so a tip never moves the step',
+);
+assert.deepEqual(
+  ['never mind', 'cancel', 'forget it'].map((phrase) => parse(phrase, dictating)),
+  Array.from({ length: 3 }, () => ({
+    kind: 'TIMER_ANSWER',
+    answer: { kind: 'NEVER_MIND' },
+  })),
+  'a way out is still a way out',
+);
+assert.deepEqual(
+  parse('stop listening', dictating),
+  { kind: 'STOP_LISTENING' },
+  'and so is turning the mic off',
+);
+assert.equal(parse('   ', dictating), null, 'silence is not a tip');
+{
+  const long = parse(`${'tender '.repeat(120)}end`, dictating);
+  assert.equal(long?.kind, 'DICTATION', 'a long tip is kept, not dropped');
+  assert.equal(
+    long?.kind === 'DICTATION' && long.text.length <= 400 && !long.text.endsWith(' '),
+    true,
+    'but cut to the cap at a word',
+  );
+}
+assert.deepEqual(
+  parse('read the tips', { ...plate, choice: { kind: 'LENGTH' } }),
+  { kind: 'READ_TIPS' },
+  'a timer question does not stop tips being read',
+);
+
+const queue: CookReadingQueue = {
+  key: 'adobo:0',
+  next: 0,
+  opened: null,
+  segments: [
+    { view: 'TIP', text: 'Tip: pat it dry.' },
+    { view: 'CHANGE', text: 'A change you planned: more garlic.' },
+  ],
+};
+const on = { stepKey: 'adobo:0', isOn: true, openView: null } as const;
+const first = stepCookReading(queue, on);
+assert.deepEqual(
+  first.kind === 'SAY' && [first.segment.view, first.isFirst, first.queue.opened, first.queue.next],
+  ['TIP', true, 'TIP', 1],
+  'the reading after a step starts with the first view and says it opened it',
+);
+const second =
+  first.kind === 'SAY' ? stepCookReading(first.queue, { ...on, openView: 'TIP' }) : first;
+assert.deepEqual(
+  second.kind === 'SAY' && [second.segment.view, second.isFirst],
+  ['CHANGE', false],
+  'then the next view, without the lead-in',
+);
+const last =
+  second.kind === 'SAY' ? stepCookReading(second.queue, { ...on, openView: 'CHANGE' }) : second;
+assert.deepEqual(
+  last,
+  { kind: 'FINISH', close: 'CHANGE' },
+  'the end takes down the view the reading opened',
+);
+assert.deepEqual(
+  second.kind === 'SAY' && stepCookReading(second.queue, { ...on, openView: 'AMOUNTS' as never }),
+  { kind: 'STOP' },
+  'a view the person opened in the meantime stops the reading and is left alone',
+);
+assert.deepEqual(
+  first.kind === 'SAY' && stepCookReading(first.queue, { ...on, openView: null }),
+  { kind: 'STOP' },
+  'closing the view stops the reading, so the next one never reopens',
+);
+assert.deepEqual(
+  [
+    stepCookReading(queue, { ...on, isOn: false }),
+    stepCookReading(queue, { ...on, stepKey: 'adobo:1' }),
+  ],
+  [{ kind: 'STOP' }, { kind: 'STOP' }],
+  'turning the setting off or moving to another step stops it',
+);
+assert.deepEqual(
+  stepCookReading({ ...queue, segments: [] }, on),
+  { kind: 'FINISH', close: null },
+  'a step with nothing written ends without taking anything down',
 );
 
 console.log('pinchVoice: all checks passed');

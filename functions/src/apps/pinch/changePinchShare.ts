@@ -20,12 +20,18 @@ import {
   shareCoverPath,
   toCoverRefs,
   toCoveredCopy,
+  toIncludedCopy,
+  toShareIncludes,
   toSharedMeal,
   toSharedRecipe,
   type ShareCoverRef,
+  type ShareIncludes,
   type ShareKind,
   type SharedCopy,
 } from './pinchShareView.js';
+
+/** Firestore holds a document up to 1 MiB; the copy is one snapshot document, so it stops short of that. */
+const MAX_COPY_BYTES = 900_000;
 
 interface ChangeInput {
   kind: ShareKind;
@@ -33,6 +39,7 @@ interface ChangeInput {
   copy: SharedCopy;
   covers: ShareCoverRef[];
   sourceUpdatedAt: number;
+  includes: ShareIncludes;
 }
 
 interface OwnShare {
@@ -85,12 +92,21 @@ function readInput(data: Record<string, unknown>): ChangeInput {
     );
   }
 
+  const includes = toShareIncludes(data.includesTips, data.includesNotes);
+  const copy = toIncludedCopy({ recipe, meal }, includes);
+  if (Buffer.byteLength(JSON.stringify(copy)) > MAX_COPY_BYTES) {
+    throw new HttpsError(
+      'invalid-argument',
+      'This is too much to share in one link. Share fewer tips and notes, or fewer recipes at a time.',
+    );
+  }
   const result: ChangeInput = {
     kind,
     sourceId: data.sourceId,
-    copy: { recipe, meal },
+    copy,
     covers,
     sourceUpdatedAt,
+    includes,
   };
   return result;
 }
@@ -174,6 +190,8 @@ async function updateShare(uid: string, share: OwnShare, input: ChangeInput) {
     transaction.update(ref, {
       title: getTitle(copy),
       sourceUpdatedAt: input.sourceUpdatedAt,
+      includesTips: input.includes.tips,
+      includesNotes: input.includes.notes,
       updatedAt: now,
     });
     transaction.update(shareSnapshotRef(share.id), {
@@ -226,6 +244,8 @@ async function createShare(uid: string, input: ChangeInput) {
     sourceId: input.sourceId,
     title: getTitle(copy),
     sourceUpdatedAt: input.sourceUpdatedAt,
+    includesTips: input.includes.tips,
+    includesNotes: input.includes.notes,
     createdAt: now,
     updatedAt: now,
   });
@@ -289,6 +309,8 @@ async function renewShare(uid: string, requestedId: unknown) {
     sourceId: old.data.sourceId,
     title: getTitle(copy),
     sourceUpdatedAt: old.data.sourceUpdatedAt,
+    includesTips: old.data.includesTips === true,
+    includesNotes: old.data.includesNotes === true,
     createdAt: old.data.createdAt,
     updatedAt: old.data.updatedAt,
   });

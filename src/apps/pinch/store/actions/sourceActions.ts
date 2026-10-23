@@ -3,11 +3,18 @@ import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   MAX_SOURCE_LABEL_LENGTH,
   SOURCE_BATCH_SIZE,
 } from '@apps/pinch/constants';
+import {
+  selectSourcesById,
+  selectTweakTracking,
+} from '@apps/pinch/store/selectors';
+import { getOutsideTweak } from '@apps/pinch/utils/notes';
+import { getSourceRemovedLine } from '@apps/pinch/utils/recipeChanges';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
 
 const sourceDoc = (uid: string, id: string) =>
@@ -15,6 +22,9 @@ const sourceDoc = (uid: string, id: string) =>
 
 const recipeDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'recipes', id);
+
+const noteDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'notes', id);
 
 const isValidLabel = (label: string) =>
   label !== '' && label.length <= MAX_SOURCE_LABEL_LENGTH;
@@ -76,7 +86,7 @@ interface RemoveSourceInput {
   id: string;
 }
 
-/** Deletes the source and clears it from every loaded recipe that names it, in batches under the write limit. A recipe's `updatedAt` is left alone because it versions the cover image. */
+/** Deletes the source and clears it from every loaded recipe that names it, in batches under the write limit. A recipe's `updatedAt` is left alone because it versions the cover image; a recipe with cooks gets the change in its history, in the same batch. */
 export const removeSource = createAsyncThunk<
   string,
   RemoveSourceInput,
@@ -84,18 +94,32 @@ export const removeSource = createAsyncThunk<
 >(
   'pinch/sources/remove',
   async ({ uid, id }, { getState, rejectWithValue }) => {
+    const now = Date.now();
+    const label = selectSourcesById(getState()).get(id)?.label ?? null;
     const targets = [
-      { ref: sourceDoc(uid, id), isSource: true },
+      { ref: sourceDoc(uid, id), isSource: true, note: null },
       ...getState()
         .pinch.recipes.items.filter((recipe) => recipe.sourceId === id)
-        .map((recipe) => ({ ref: recipeDoc(uid, recipe.id), isSource: false })),
+        .map((recipe) => ({
+          ref: recipeDoc(uid, recipe.id),
+          isSource: false,
+          note:
+            selectTweakTracking(getState(), recipe.id) === 'on'
+              ? getOutsideTweak({
+                  id: generateUuid(),
+                  recipeId: recipe.id,
+                  changes: [getSourceRemovedLine(label)],
+                  now,
+                })
+              : null,
+        })),
     ];
     const groups = Array.from(
-      { length: Math.ceil(targets.length / SOURCE_BATCH_SIZE) },
+      { length: Math.ceil(targets.length / (SOURCE_BATCH_SIZE / 2)) },
       (_, index) =>
         targets.slice(
-          index * SOURCE_BATCH_SIZE,
-          (index + 1) * SOURCE_BATCH_SIZE,
+          index * (SOURCE_BATCH_SIZE / 2),
+          (index + 1) * (SOURCE_BATCH_SIZE / 2),
         ),
     );
 
@@ -103,11 +127,14 @@ export const removeSource = createAsyncThunk<
       await Promise.all(
         groups.map((group) => {
           const batch = writeBatch(db);
-          group.forEach(({ ref, isSource }) =>
-            isSource
-              ? batch.delete(ref)
-              : batch.update(ref, { sourceId: null }),
-          );
+          group.forEach(({ ref, isSource, note }) => {
+            if (isSource) {
+              batch.delete(ref);
+              return;
+            }
+            batch.update(ref, { sourceId: null });
+            if (note) batch.set(noteDoc(uid, note.id), note);
+          });
           return batch.commit();
         }),
       );

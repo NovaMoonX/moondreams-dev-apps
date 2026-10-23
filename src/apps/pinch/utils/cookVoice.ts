@@ -1,7 +1,10 @@
 import { toPlainText } from '@/lib/speech/speechText';
 import { findDurations, formatDuration } from '@/utils/durationUtils';
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
-import { MAX_KITCHEN_TIMER_SECONDS } from '@apps/pinch/constants';
+import {
+  MAX_COOK_DICTATION_CHARS,
+  MAX_KITCHEN_TIMER_SECONDS,
+} from '@apps/pinch/constants';
 
 /** A spoken phrase longer than this is talk, not a command. */
 const MAX_COMMAND_CHARS = 80;
@@ -72,11 +75,66 @@ export type CookTimerAnswer =
   | { kind: 'LENGTH'; seconds: number }
   | { kind: 'NEVER_MIND' };
 
+/** What a spoken "add a …" writes. */
+export type CookEntryKind = 'TIP' | 'NOTE' | 'CHANGE';
+
+/** What a step's bubbles can show while it is read aloud: the note from last time or one kind of entry. */
+export type CookSpokenView = 'LAST' | CookEntryKind;
+
+export interface CookReadingSegment {
+  view: CookSpokenView;
+  text: string;
+}
+
+/** What is left of the reading that follows a step: its segments, how many were started and the view the reading itself put on screen. */
+export interface CookReadingQueue {
+  key: string;
+  next: number;
+  opened: CookSpokenView | null;
+  segments: CookReadingSegment[];
+}
+
+export type CookReadingStep =
+  | { kind: 'STOP' }
+  | {
+      kind: 'SAY';
+      queue: CookReadingQueue;
+      segment: CookReadingSegment;
+      isFirst: boolean;
+    }
+  | { kind: 'FINISH'; close: CookSpokenView | null };
+
+/** The next move of the reading after a step. It stops when the step changed, the setting went off or the person opened, changed or closed a view of their own, and takes down only the view it opened. */
+export const stepCookReading = (
+  queue: CookReadingQueue,
+  context: {
+    stepKey: string | null;
+    isOn: boolean;
+    openView: CookSpokenView | null;
+  },
+): CookReadingStep => {
+  if (!context.isOn || context.stepKey !== queue.key) return { kind: 'STOP' };
+  if (queue.opened !== null && context.openView !== queue.opened) {
+    return { kind: 'STOP' };
+  }
+  const segment = queue.segments[queue.next];
+  if (segment === undefined) return { kind: 'FINISH', close: queue.opened };
+
+  return {
+    kind: 'SAY',
+    queue: { ...queue, next: queue.next + 1, opened: segment.view },
+    segment,
+    isFirst: queue.next === 0,
+  };
+};
+
 export type CookCommand =
   | { kind: 'NEXT' }
   | { kind: 'BACK' }
   | { kind: 'REPEAT' }
   | { kind: 'SHOW_INGREDIENTS' }
+  | { kind: 'SHOW_STEP_AMOUNTS' }
+  | { kind: 'SHOW_LAST_NOTE' }
   | { kind: 'SHOW_STEPS' }
   | { kind: 'FINISH' }
   | { kind: 'SHOW_TIMERS' }
@@ -91,6 +149,15 @@ export type CookCommand =
   | { kind: 'AMOUNT'; query: string; lineIds: string[] }
   | { kind: 'SWITCH_RECIPE'; recipeId: string | null; candidates: string[] }
   | { kind: 'CYCLE_RECIPE'; direction: 1 | -1 }
+  | { kind: 'READ_TIPS' }
+  | { kind: 'READ_NOTES' }
+  | { kind: 'READ_CHANGES' }
+  | { kind: 'SHOW_ENTRIES'; entryKind: CookEntryKind }
+  | { kind: 'CLOSE_ENTRIES' }
+  | { kind: 'ADD_ENTRY'; entryKind: CookEntryKind }
+  /** The words said after "add a tip": heard only while that question waits. */
+  | { kind: 'DICTATION'; text: string }
+  | { kind: 'UNDO_ENTRY' }
   | { kind: 'STOP_LISTENING' };
 
 /** A timer as a spoken name can reach it: every name it goes by (its step's first words, a kitchen timer's name, its recipe) and its length as the card shows it ("10 min"). */
@@ -104,7 +171,9 @@ export interface CookVoiceTimer {
 export type CookVoiceChoice =
   /** `isConfirm`: one timer the app guessed at, waiting for a yes or a no. */
   | { kind: 'TIMER'; timers: CookVoiceTimer[]; isConfirm?: boolean }
-  | { kind: 'LENGTH' };
+  | { kind: 'LENGTH' }
+  /** Waiting for the words of a tip, note or change; the next thing said is written down. */
+  | { kind: 'DICTATE'; entryKind: CookEntryKind };
 
 export interface CookVoiceContext {
   /** The recipes on screen, in plate order; one for a single recipe. */
@@ -123,10 +192,32 @@ type PlainKind =
   | 'BACK'
   | 'REPEAT'
   | 'SHOW_INGREDIENTS'
+  | 'SHOW_STEP_AMOUNTS'
+  | 'SHOW_LAST_NOTE'
   | 'SHOW_STEPS'
   | 'SHOW_TIMERS'
+  | 'READ_TIPS'
+  | 'READ_NOTES'
+  | 'READ_CHANGES'
+  | 'CLOSE_ENTRIES'
+  | 'UNDO_ENTRY'
   | 'FINISH'
   | 'STOP_LISTENING';
+
+const ENTRY_NOUNS: { kind: CookEntryKind; text: string }[] = [
+  ...['tip', 'tips'].map((text) => ({ kind: 'TIP' as const, text })),
+  ...['note', 'notes'].map((text) => ({ kind: 'NOTE' as const, text })),
+  ...[
+    'change',
+    'changes',
+    'planned change',
+    'planned changes',
+    'changes to make',
+  ].map((text) => ({ kind: 'CHANGE' as const, text })),
+];
+const ENTRY_DETERMINERS = ['', 'the ', 'my '];
+const SHOW_VERBS = ['show', 'show me', 'open', 'see'];
+const CLOSE_VERBS = ['close', 'hide'];
 
 // Only what "What to say" shows and plain synonyms of it: an everyday phrase ("go on", "again") is said to people too.
 const PHRASES: Record<PlainKind, string[]> = {
@@ -159,6 +250,15 @@ const PHRASES: Record<PlainKind, string[]> = {
     'read the step',
     'read step',
     'read this step',
+    'repeat the instructions',
+    'repeat the instruction',
+    'repeat instructions',
+    'read the instructions',
+    'read the instruction',
+    'read instructions',
+    'say the instructions again',
+    'repeat the directions',
+    'read the directions',
   ],
   SHOW_INGREDIENTS: [
     'ingredients',
@@ -173,6 +273,33 @@ const PHRASES: Record<PlainKind, string[]> = {
     'go to the ingredients',
     'open ingredients',
     'open the ingredients',
+  ],
+  SHOW_STEP_AMOUNTS: [
+    'ingredients for this step',
+    'the ingredients for this step',
+    'show the ingredients for this step',
+    'show me the ingredients for this step',
+    'show ingredients for this step',
+    'show the step ingredients',
+    'step ingredients',
+    'what do i need for this step',
+    'what does this step use',
+    'what does this step need',
+    'show what this step uses',
+  ],
+  SHOW_LAST_NOTE: [
+    'note from last time',
+    'the note from last time',
+    'show the note from last time',
+    'show me the note from last time',
+    'show my note from last time',
+    'show last time',
+    'show me last time',
+    'show the last note',
+    'show my last note',
+    'what did i note last time',
+    'what was my note from last time',
+    'read the note from last time',
   ],
   SHOW_STEPS: [
     'steps',
@@ -209,6 +336,92 @@ const PHRASES: Record<PlainKind, string[]> = {
     'show me my timers',
     'timer list',
     'the timer list',
+  ],
+  READ_TIPS: [
+    'tips',
+    'the tips',
+    'read tips',
+    'read the tips',
+    'read tip',
+    'read the tip',
+    'read me the tips',
+    'read me the tip',
+    'repeat tips',
+    'repeat the tips',
+    'repeat tip',
+    'repeat the tip',
+    'say the tip again',
+    'say the tips again',
+    'any tips',
+    'what are the tips',
+    'whats the tip',
+    'what is the tip',
+  ],
+  READ_NOTES: [
+    'read notes',
+    'read the notes',
+    'read my notes',
+    'read note',
+    'read the note',
+    'read my note',
+    'read me the notes',
+    'read me my notes',
+    'repeat notes',
+    'repeat the notes',
+    'repeat my notes',
+    'repeat the note',
+    'repeat my note',
+    'say the notes again',
+    'any notes',
+    'what are my notes',
+    'what did i note',
+  ],
+  READ_CHANGES: [
+    'read changes',
+    'read the changes',
+    'read my changes',
+    'read the change',
+    'read me the changes',
+    'read the planned changes',
+    'read my planned changes',
+    'repeat changes',
+    'repeat the changes',
+    'repeat my changes',
+    'repeat the change',
+    'repeat the planned changes',
+    'say the changes again',
+    'any changes',
+    'what are the changes',
+    'what did i plan to change',
+  ],
+  CLOSE_ENTRIES: [
+    'close that',
+    'close it',
+    'close this',
+    'close the panel',
+    'hide that',
+    'hide it',
+    'hide this',
+    ...ENTRY_NOUNS.flatMap((noun) =>
+      CLOSE_VERBS.flatMap((verb) =>
+        ENTRY_DETERMINERS.map((det) => `${verb} ${det}${noun.text}`),
+      ),
+    ),
+  ],
+  UNDO_ENTRY: [
+    'undo that',
+    'undo it',
+    'delete that',
+    'scratch that',
+    'undo the tip',
+    'undo the note',
+    'undo the change',
+    'delete that tip',
+    'delete that note',
+    'delete that change',
+    'undo that tip',
+    'undo that note',
+    'undo that change',
   ],
   FINISH: [
     'finish',
@@ -281,6 +494,36 @@ const CYCLE_PHRASES: Record<string, 1 | -1> = {
   'previous recipe': -1,
   'previous dish': -1,
 };
+
+const ADD_PHRASES: Record<string, CookEntryKind> = {
+  'add a tip': 'TIP',
+  'add tip': 'TIP',
+  'new tip': 'TIP',
+  'i have a tip': 'TIP',
+  'save a tip': 'TIP',
+  'add a note': 'NOTE',
+  'add note': 'NOTE',
+  'new note': 'NOTE',
+  'make a note': 'NOTE',
+  'take a note': 'NOTE',
+  'write a note': 'NOTE',
+  'note this': 'NOTE',
+  'add a change': 'CHANGE',
+  'add change': 'CHANGE',
+  'new change': 'CHANGE',
+  'suggest a change': 'CHANGE',
+  'note a change': 'CHANGE',
+};
+
+const SHOW_PHRASES: Record<string, CookEntryKind> = Object.fromEntries(
+  ENTRY_NOUNS.flatMap((noun) =>
+    SHOW_VERBS.flatMap((verb) =>
+      ENTRY_DETERMINERS.map(
+        (det) => [`${verb} ${det}${noun.text}`, noun.kind] as const,
+      ),
+    ),
+  ),
+);
 
 const EXACT = new Map<string, PlainKind>(
   (Object.entries(PHRASES) as [PlainKind, string[]][]).flatMap(
@@ -897,6 +1140,7 @@ const parseChoiceAnswer = (
   const { choice } = context;
   if (choice === null) return null;
   if (CANCEL_ANSWERS.has(text)) return answer({ kind: 'NEVER_MIND' });
+  if (choice.kind === 'DICTATE') return null;
   return choice.kind === 'LENGTH'
     ? parseLengthAnswer(text)
     : parseTimerAnswer(text, choice.timers, choice.isConfirm === true);
@@ -968,16 +1212,40 @@ const parseSwitch = (
   };
 };
 
+/** The words said while a tip, note or change is being dictated: everything is the entry, except a way out. A phrase longer than a sentence or two is clipped at a word, never dropped. */
+const parseDictation = (transcript: string): CookCommand | null => {
+  const spoken = transcript.replace(/\s+/g, ' ').trim();
+  const text = `${spoken.charAt(0).toUpperCase()}${spoken.slice(1)}`;
+  const plain = normalizeTranscript(transcript);
+  if (plain === '') return null;
+  if (CANCEL_ANSWERS.has(plain)) return answer({ kind: 'NEVER_MIND' });
+  if (EXACT.get(plain) === 'STOP_LISTENING') return { kind: 'STOP_LISTENING' };
+  if (text.length <= MAX_COOK_DICTATION_CHARS) return { kind: 'DICTATION', text };
+  const cut = text.slice(0, MAX_COOK_DICTATION_CHARS);
+  const space = cut.lastIndexOf(' ');
+  return {
+    kind: 'DICTATION',
+    text: (space > MAX_COOK_DICTATION_CHARS / 2 ? cut.slice(0, space) : cut).trimEnd(),
+  };
+};
+
 const parseOne = (
   transcript: string,
   context: CookVoiceContext,
 ): CookCommand | null => {
+  if (context.choice?.kind === 'DICTATE') return parseDictation(transcript);
   if (transcript.length > MAX_COMMAND_CHARS * 2) return null;
   const text = normalizeTranscript(transcript);
   if (text === '' || text.length > MAX_COMMAND_CHARS) return null;
 
   const exact = EXACT.get(text);
   if (exact) return { kind: exact };
+  if (Object.hasOwn(SHOW_PHRASES, text)) {
+    return { kind: 'SHOW_ENTRIES', entryKind: SHOW_PHRASES[text] };
+  }
+  if (Object.hasOwn(ADD_PHRASES, text)) {
+    return { kind: 'ADD_ENTRY', entryKind: ADD_PHRASES[text] };
+  }
   const renamed = parseRename(text, context);
   if (renamed) return renamed;
   const named = parseTimeLeft(text, context);
@@ -988,8 +1256,9 @@ const parseOne = (
   ) {
     return { kind: 'TIME_LEFT', target: NO_TIMER_TARGET };
   }
-  const direction = CYCLE_PHRASES[text];
-  if (direction !== undefined) return { kind: 'CYCLE_RECIPE', direction };
+  if (Object.hasOwn(CYCLE_PHRASES, text)) {
+    return { kind: 'CYCLE_RECIPE', direction: CYCLE_PHRASES[text] };
+  }
   const result =
     parseTimer(text, context) ??
     parseAmount(text, context) ??

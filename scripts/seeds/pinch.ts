@@ -7,6 +7,8 @@ import {
   toSharedRecipe,
 } from '../../functions/src/apps/pinch/pinchShareView.ts';
 import { CATALOG_INGREDIENTS } from '../../src/apps/pinch/catalog/catalogIngredients.ts';
+import { getCookPhotoPath } from '../../src/apps/pinch/utils/cooks.ts';
+import { getStepAnchor } from '../../src/apps/pinch/utils/notes.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -119,7 +121,7 @@ const SEED_IDEAS = [
   }),
 ];
 
-// Adobo three times over the past weeks at different servings and rice once, all marked from the recipe, plus the dinner
+// The first adobo cook and the rice cook keep the shape from before ratings and photos (no `rating` or `photoPath` key); the other adobo cooks are rated, and two of them have a photo (uploaded to the Storage emulator). Adobo three times over the past weeks at different servings and rice once, all marked from the recipe, plus the dinner
 // Alex marked from his plan three days ago (the deterministic id of `seed-pinch-planned-1`). Nachos and the chili have none.
 const SEED_COOKS = [
   {
@@ -137,6 +139,8 @@ const SEED_COOKS = [
     daysAgo: 17,
     hour: 18,
     servings: 6,
+    rating: 4,
+    hasPhoto: true,
   },
   {
     id: 'seed-pinch-cook-3',
@@ -145,6 +149,8 @@ const SEED_COOKS = [
     daysAgo: 9,
     hour: 18,
     servings: 2,
+    rating: 5,
+    hasPhoto: false,
   },
   {
     id: 'seed-pinch-cook-4',
@@ -161,6 +167,8 @@ const SEED_COOKS = [
     daysAgo: 3,
     hour: 12,
     servings: 4,
+    rating: 4.5,
+    hasPhoto: true,
   },
 ];
 
@@ -208,6 +216,58 @@ const SEED_NOTES = [
     changes: [],
     cookId: 'seed-pinch-cook-4',
     daysAgo: 6,
+    hour: 19,
+  },
+];
+
+/** Entries written for a step. The four above keep the shape from before steps (no `stepIndex`, `stepText` or `reason` key), so the legacy path stays exercised; these carry them, and their step words are worked out from the recipe, as the app does. */
+const SEED_STEP_NOTES = [
+  {
+    id: 'seed-pinch-tip-adobo-lid',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'TIP',
+    text: 'Leave the lid a little open so it simmers without boiling over.',
+    changes: [],
+    cookId: null,
+    stepIndex: 1,
+    reason: null,
+    daysAgo: 20,
+    hour: 18,
+  },
+  {
+    id: 'seed-pinch-tip-adobo-whole',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'TIP',
+    text: 'Chicken thighs with the skin on hold up best. Pat them dry first.',
+    changes: [],
+    cookId: null,
+    stepIndex: null,
+    reason: null,
+    daysAgo: 20,
+    hour: 18,
+  },
+  {
+    id: 'seed-pinch-change-adobo-garlic',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'CHANGE',
+    text: 'Double the garlic in the marinade.',
+    changes: [],
+    cookId: 'seed-pinch-planned-1__seed-pinch-recipe-adobo',
+    stepIndex: 0,
+    reason: 'The kids wanted it garlickier.',
+    daysAgo: 3,
+    hour: 20,
+  },
+  {
+    id: 'seed-pinch-note-adobo-step',
+    recipeId: 'seed-pinch-recipe-adobo',
+    kind: 'NOTE',
+    text: 'The sauce was ready in 15 minutes on my stove, so check it early.',
+    changes: [],
+    cookId: 'seed-pinch-planned-1__seed-pinch-recipe-adobo',
+    stepIndex: 2,
+    reason: null,
+    daysAgo: 3,
     hour: 19,
   },
 ];
@@ -1074,8 +1134,16 @@ interface SeedRecipeLike {
   links?: { kind: string; label: string | null; url: string }[];
 }
 
+const toShareEntries = (recipeId: string, kind: 'TIP' | 'NOTE') =>
+  [...SEED_NOTES, ...SEED_STEP_NOTES]
+    .filter((note) => note.kind === kind && note.recipeId === recipeId)
+    .map((note) => ({
+      text: note.text,
+      step: 'stepIndex' in note ? note.stepIndex : null,
+    }));
+
 // What the app builds from a recipe: lines named the way a visitor reads them and nothing of the owner's. The share's own allowlist then rebuilds it.
-const toShareRecipe = (recipe: SeedRecipeLike) => ({
+const toShareRecipe = (recipe: SeedRecipeLike, includes = { tips: false, notes: false }) => ({
   title: recipe.title,
   description: recipe.description,
   servings: recipe.servings,
@@ -1098,6 +1166,8 @@ const toShareRecipe = (recipe: SeedRecipeLike) => ({
     label,
     url,
   })),
+  tips: includes.tips ? toShareEntries(recipe.id, 'TIP') : [],
+  notes: includes.notes ? toShareEntries(recipe.id, 'NOTE') : [],
   hasCover: false,
 });
 
@@ -1115,7 +1185,9 @@ export function buildSeedShares(
   const recipeIds = Array.from(new Set(meal.items.map((entry) => entry.refId)));
   const recipeCopy = toCoveredCopy(
     {
-      recipe: toSharedRecipe(toShareRecipe(findSeedRecipe(recipeSourceId))),
+      recipe: toSharedRecipe(
+        toShareRecipe(findSeedRecipe(recipeSourceId), { tips: true, notes: true }),
+      ),
       meal: null,
     },
     new Set(hasRecipeCover ? [0] : []),
@@ -1134,7 +1206,14 @@ export function buildSeedShares(
   };
   const recipeAt = now - 3 * DAY_MS;
   const mealAt = now - 16 * DAY_MS;
-  const sourceUpdatedAt = now - 14 * DAY_MS;
+  const today = Math.floor(now / DAY_MS) * DAY_MS;
+  const entryTimes = [...SEED_NOTES, ...SEED_STEP_NOTES]
+    .filter((note) => note.kind === 'TIP' || note.kind === 'NOTE')
+    .filter((note) => note.recipeId === recipeSourceId)
+    .map((note) => today - note.daysAgo * DAY_MS + note.hour * 3_600_000);
+  // The app's change stamp for a share that includes tips and notes: the latest change plus the entry count.
+  const sourceUpdatedAt =
+    Math.max(now - 14 * DAY_MS, ...entryTimes) + entryTimes.length;
   return [
     {
       share: {
@@ -1144,6 +1223,8 @@ export function buildSeedShares(
         sourceId: recipeSourceId,
         title: 'Adobo chicken',
         sourceUpdatedAt,
+        includesTips: true,
+        includesNotes: true,
         createdAt: recipeAt,
         updatedAt: recipeAt,
       },
@@ -1162,6 +1243,8 @@ export function buildSeedShares(
         sourceId: meal.id,
         title: meal.name,
         sourceUpdatedAt: mealAt,
+        includesTips: false,
+        includesNotes: false,
         createdAt: mealAt,
         updatedAt: mealAt,
       },
@@ -1194,6 +1277,22 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     [176, 108, 52],
   );
   const seedShares = buildSeedShares(alex.uid, context.now, hasShareCover);
+  const cookPhotoPaths = new Map(
+    (
+      await Promise.all(
+        SEED_COOKS.filter((cook) => cook.hasPhoto).map(async (cook, index) => {
+          const cookedAt = today - cook.daysAgo * DAY_MS + cook.hour * 3_600_000;
+          const path = getCookPhotoPath(alex.uid, cook.id, cookedAt + 3_600_000);
+          const isUploaded = await uploadSeedImage(
+            path,
+            'that cook shows a camera tile',
+            index === 0 ? [196, 132, 60] : [120, 84, 52],
+          );
+          return isUploaded ? ([cook.id, path] as const) : null;
+        }),
+      )
+    ).filter((entry) => entry !== null),
+  );
 
   await Promise.all([
     // Alex already closed the nudge for the vinegar, so the adobo recipe's fill-in starts one short.
@@ -1257,10 +1356,22 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
     ),
     ...SEED_COOKS.map(({ daysAgo, hour, ...cook }) => {
       const cookedAt = today - daysAgo * DAY_MS + hour * 3_600_000;
+      const { hasPhoto, ...fields } = {
+        hasPhoto: false,
+        ...cook,
+      };
       return kitchenRef
         .collection('cooks')
         .doc(cook.id)
-        .set({ ...cook, cookedAt, createdAt: cookedAt, updatedAt: cookedAt });
+        .set({
+          ...fields,
+          ...('rating' in cook
+            ? { photoPath: hasPhoto ? (cookPhotoPaths.get(cook.id) ?? null) : null }
+            : {}),
+          cookedAt,
+          createdAt: cookedAt,
+          updatedAt: cookedAt,
+        });
     }),
     ...SEED_CONTAINERS.map(({ eatByDays, events, ...container }) => {
       const formatDay = (ms: number) =>
@@ -1319,6 +1430,21 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
         .collection('notes')
         .doc(entry.id)
         .set({ ...entry, createdAt: at, updatedAt: at });
+    }),
+    ...SEED_STEP_NOTES.map(({ daysAgo, hour, ...entry }) => {
+      const at = today - daysAgo * DAY_MS + hour * 3_600_000;
+      const steps =
+        SEED_RECIPES.find((recipe) => recipe.id === entry.recipeId)?.steps ??
+        [];
+      return kitchenRef
+        .collection('notes')
+        .doc(entry.id)
+        .set({
+          ...entry,
+          ...getStepAnchor(steps, entry.stepIndex),
+          createdAt: at,
+          updatedAt: at,
+        });
     }),
     ...SEED_SHOPPING.map((entry, index) =>
       kitchenRef
@@ -1413,6 +1539,7 @@ export async function seedPinch(context: SeedContext): Promise<SeedResult> {
       SEED_CONTAINERS.length +
       SEED_PACKAGES.length +
       SEED_NOTES.length +
+      SEED_STEP_NOTES.length +
       SEED_IDEAS.length +
       SEED_INGREDIENTS.length +
       SEED_PRODUCTS.length +

@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import ContainerFormSheet from '@apps/pinch/components/containers/ContainerFormSheet';
 import CookingHistorySheet from '@apps/pinch/components/recipes/CookingHistorySheet';
+import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 import NoteSheet from '@apps/pinch/components/notes/NoteSheet';
 import RecipeDrawer from '@apps/pinch/components/recipes/RecipeDrawer';
 import AddToShoppingSheet from '@apps/pinch/components/shared/AddToShoppingSheet';
@@ -15,12 +16,17 @@ type Side =
   | { kind: 'shopping'; request: ShoppingRequest }
   | { kind: 'history'; recipeId: string }
   | { kind: 'putAway'; recipeId: string }
-  | { kind: 'note'; recipeId: string; noteId: string | null };
+  | {
+      kind: 'note';
+      recipeId: string;
+      noteId: string | null;
+      noteKind: WrittenNoteKind | null;
+    };
 
 interface PantryRecipeDrawerProps {
   uid: string;
   recipeId: string;
-  /** The drawer, or the sheet it handed over to, closed: back to the pantry. */
+  /** The drawer closed: back to the pantry. */
   onClose: () => void;
 }
 
@@ -58,33 +64,38 @@ function PantryRecipeDrawer({
             openSubview({ kind: 'containers', recipeId: id, place })
           }
           onPutAway={(id) => setSide({ kind: 'putAway', recipeId: id })}
-          onOpenNote={(id, noteId) =>
-            setSide({ kind: 'note', recipeId: id, noteId })
+          onOpenNote={(id, noteId, noteKind = null) =>
+            setSide({ kind: 'note', recipeId: id, noteId, noteKind })
           }
         />
       )}
       {side?.kind === 'fillIn' && (
-        <FillInSheet uid={uid} gaps={side.gaps} onClose={onClose} />
+        <FillInSheet
+          uid={uid}
+          gaps={side.gaps}
+          onClose={() => setSide(null)}
+        />
       )}
       {side?.kind === 'shopping' && (
         <AddToShoppingSheet
           uid={uid}
           request={side.request}
-          onClose={onClose}
+          onClose={() => setSide(null)}
         />
       )}
       {side?.kind === 'history' && (
         <CookingHistorySheet
           uid={uid}
           recipeId={side.recipeId}
-          onClose={onClose}
+          onLeaveForForm={onClose}
+          onClose={() => setSide(null)}
         />
       )}
       {side?.kind === 'putAway' && (
         <ContainerFormSheet
           uid={uid}
           initial={{ kind: 'recipe', id: side.recipeId }}
-          onClose={onClose}
+          onClose={() => setSide(null)}
         />
       )}
       {side?.kind === 'note' && (
@@ -93,7 +104,8 @@ function PantryRecipeDrawer({
           recipeId={side.recipeId}
           noteId={side.noteId}
           initialCookId={null}
-          onClose={onClose}
+          initialKind={side.noteKind}
+          onClose={() => setSide(null)}
         />
       )}
     </>

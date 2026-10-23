@@ -18,11 +18,18 @@ import {
   selectNoteSummaries,
   selectNotesByRecipe,
   selectNotesLoadError,
+  selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
-import { getWrittenBefore, isNoteHistoryFull } from '@apps/pinch/utils/notes';
+import {
+  getWrittenBefore,
+  isNoteHistoryFull,
+  isStepLost,
+  resolveNoteStep,
+} from '@apps/pinch/utils/notes';
 
 const NO_NOTES: RecipeNote[] = [];
+const NO_STEPS: string[] = [];
 const HIDDEN_WORTH_A_BUTTON = 3;
 
 interface RecipeNotesProps {
@@ -31,14 +38,22 @@ interface RecipeNotesProps {
   onAdd: (() => void) | null;
   /** Null reads the notes without the Edit buttons. */
   onEdit: ((noteId: string) => void) | null;
-  onApply: (noteId: string) => void;
+  /** Opens the recipe's form to make a planned change; null reads the changes without the button. */
+  onApplyChange: ((noteId: string) => void) | null;
 }
 
-function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
+function RecipeNotes({
+  recipeId,
+  onAdd,
+  onEdit,
+  onApplyChange,
+}: RecipeNotesProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
   const cooksById = useAppSelector(selectCooksById);
+  const steps =
+    useAppSelector(selectRecipesById).get(recipeId)?.steps ?? NO_STEPS;
   const isLoaded = useAppSelector((state) => state.pinch.notes.isLoaded);
   const loadError = useAppSelector(selectNotesLoadError);
   const [limit, setLimit] = useState(RECIPE_NOTES_FIRST_PAGE);
@@ -59,7 +74,7 @@ function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
     if (isFull) {
       return `This recipe's notes are full (${SOFT_MAX_RECIPE_NOTES}). Delete an older one to add more.`;
     }
-    return 'Something to remember next time';
+    return 'A tip, a note or a change to make';
   };
 
   const hidden = notes.length - limit;
@@ -71,7 +86,7 @@ function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
   const addRow = onAdd && (
     <ActionRow
       icon={<NotebookPen className='h-4 w-4' />}
-      label='Add a note'
+      label='Add to your notes'
       subtitle={getAddSubtitle()}
       isDisabled={!isLoaded || isFull}
       onClick={onAdd}
@@ -101,8 +116,10 @@ function RecipeNotes({ recipeId, onAdd, onEdit, onApply }: RecipeNotesProps) {
               note={note}
               cook={cookId === null ? null : (cooksById.get(cookId) ?? null)}
               writtenBefore={getWrittenBefore(note, lastTweakAt)}
+              stepAt={resolveNoteStep(note, steps)}
+              isStepLost={isStepLost(note, steps)}
               onEdit={onEdit}
-              onApply={onApply}
+              onApplyChange={onApplyChange}
             />
           );
         })}

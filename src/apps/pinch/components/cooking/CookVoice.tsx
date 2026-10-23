@@ -361,7 +361,8 @@ function CookVoiceSheet({
     ...wakeRows,
     ['next', 'Next step'],
     ['back', 'Step before'],
-    ['repeat', 'Reads it aloud'],
+    ['repeat', 'Reads the step aloud again'],
+    ['read the tips', 'Reads this step’s tips'],
     ['start the timer', 'Starts its timer'],
     [`how much ${ingredientExample}`, 'Says the amount'],
   ];
@@ -372,6 +373,24 @@ function CookVoiceSheet({
         ['ingredients', 'Shows the ingredient list'],
         ['timers', 'Shows all your timers'],
         ['steps', 'Back to the steps'],
+      ],
+    },
+    {
+      label: 'Tips and notes',
+      rows: [
+        ['ingredients for this step', 'Opens what this step uses, and reads it'],
+        ['note from last time', 'Opens it on the first step, and reads it'],
+        ['show me the tips', 'Opens this step’s tips on screen'],
+        ['show my notes', 'Opens your notes for this step'],
+        ['show the changes', 'Opens the changes you planned'],
+        ['close the note', 'Closes what is open'],
+        ['read the tips', 'Opens them and reads them aloud'],
+        ['read the notes', 'The same for your notes'],
+        ['read the changes', 'The same for planned changes'],
+        ['add a tip', 'Then say it, and it is saved to this step'],
+        ['add a note', 'Same, as a note about this cook'],
+        ['add a change', 'Same, as a change to make to the recipe'],
+        ['undo that', 'Takes back what you just added'],
       ],
     },
     {
@@ -431,6 +450,13 @@ function CookVoiceSheet({
             description='Reads each step as it appears, while the mic is on.'
             checked={voice.isReadingAloud}
             onCheckedChange={voice.setIsReadingAloud}
+          />
+          <ViewOptionSwitch
+            label='Read tips, notes and changes after each step'
+            description='Once a step has been read, pauses a moment, then reads what you wrote for it.'
+            checked={voice.isReadingNotes}
+            isDisabled={!voice.isReadingAloud}
+            onCheckedChange={voice.setIsReadingNotes}
           />
           <NaturalVoiceOption voice={voice.natural} />
           <DisclosureLine

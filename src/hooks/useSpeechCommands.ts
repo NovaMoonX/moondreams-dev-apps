@@ -32,6 +32,9 @@ const MAX_FAST_FAILURES = RESTART_DELAYS_MS.length;
 const MAX_ALTERNATIVES = 3;
 /** A reading that hasn't started by then never will (no voice installed, a dropped event): stop trying to speak. */
 const SPEECH_START_TIMEOUT_MS = 1500;
+// A voice that stays silent this many readings in a row is given up on; one silent reading is a hiccup.
+const MAX_NO_STARTS = 2;
+const REPEATED_FINAL_MS = 700;
 
 export type SpeechCommandsStatus =
   'off' | 'starting' | 'listening' | 'speaking';
@@ -46,6 +49,7 @@ interface Session {
   isFailed: boolean;
   isAborted: boolean;
   handled: Set<number>;
+  lastFinal: { text: string; at: number } | null;
 }
 
 interface ListenerOptions {
@@ -53,6 +57,8 @@ interface ListenerOptions {
   speechLang: string;
   /** Gets each finished phrase's guesses, best first; returns true when it used the phrase. */
   onFinalTranscript: (alternatives: string[]) => boolean | void;
+  /** Gets the words of the phrase being said before it is finished, so a screen can show what is being picked up. */
+  onInterimTranscript?: (text: string) => void;
   /** Stops listening after this long with no phrase used; never when left out. */
   idleStopMs?: number;
   /** Runs when listening stops by itself (never for a `stop` the caller asked for), with why. */
@@ -92,6 +98,7 @@ export const createSpeechListener = (
     restartId: 0,
     idleId: 0,
     canSpeak: true,
+    noStarts: 0,
     speechToken: 0,
     stopReading: null as (() => void) | null,
     deafUntil: 0,
@@ -145,6 +152,14 @@ export const createSpeechListener = (
     if (session === null || state.isSpeaking || !state.isWanted) return;
     session.hadResult = true;
     if (Date.now() < state.deafUntil) return;
+    const interim = Array.from(
+      { length: event.results.length },
+      (_, index) => index,
+    )
+      .filter((index) => index >= event.resultIndex && !event.results[index].isFinal)
+      .map((index) => event.results[index][0].transcript.trim())
+      .join(' ');
+    if (interim !== '') state.options?.onInterimTranscript?.(interim);
     Array.from({ length: event.results.length }, (_, index) => index)
       .filter(
         (index) =>
@@ -158,6 +173,19 @@ export const createSpeechListener = (
         const alternatives = Array.from({ length: result.length }, (_, at) =>
           result[at].transcript.trim(),
         ).filter((transcript) => transcript !== '');
+        const now = Date.now();
+        const last = session.lastFinal;
+        // Some browsers re-send a finished phrase under a new index once interim results are on.
+        if (
+          last !== null &&
+          now - last.at < REPEATED_FINAL_MS &&
+          alternatives[0] === last.text
+        ) {
+          return;
+        }
+        if (alternatives.length > 0) {
+          session.lastFinal = { text: alternatives[0], at: now };
+        }
         if (
           alternatives.length > 0 &&
           state.options?.onFinalTranscript(alternatives)
@@ -226,7 +254,7 @@ export const createSpeechListener = (
     if (Recognition === null) return null;
     const recognition = new Recognition();
     recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.maxAlternatives = MAX_ALTERNATIVES;
     recognition.onstart = () => {
       if (!state.isWanted) {
@@ -258,6 +286,7 @@ export const createSpeechListener = (
       isFailed: false,
       isAborted: false,
       handled: new Set(),
+      lastFinal: null,
     };
     state.isRunning = true;
     try {
@@ -308,9 +337,11 @@ export const createSpeechListener = (
         isNatural: state.options?.isNaturalVoice === true,
         startTimeoutMs: SPEECH_START_TIMEOUT_MS,
         onNoStart: () => {
-          state.canSpeak = false;
+          state.noStarts += 1;
+          if (state.noStarts >= MAX_NO_STARTS) state.canSpeak = false;
         },
         onStart: () => {
+          state.noStarts = 0;
           if (token === state.speechToken && state.isWanted) {
             setStatus('speaking');
           }
@@ -390,6 +421,7 @@ export function useSpeechCommands({
   lang,
   speechLang,
   onFinalTranscript,
+  onInterimTranscript,
   idleStopMs,
   onHalt,
   isNaturalVoice,
@@ -404,6 +436,7 @@ export function useSpeechCommands({
       lang,
       speechLang,
       onFinalTranscript,
+      onInterimTranscript,
       idleStopMs,
       onHalt,
       isNaturalVoice,

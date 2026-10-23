@@ -1,11 +1,14 @@
 import FormSheet from '@/components/FormSheet';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
+import type { WrittenNoteKind } from '@apps/pinch/components/notes/NoteKindPills';
 
 interface NoteSheetProps {
   uid: string;
   recipeId: string;
   noteId: string | null;
   initialCookId: string | null;
+  initialKind?: WrittenNoteKind | null;
+  initialStepIndex?: number | null;
   onClose: () => void;
 }
 
@@ -14,6 +17,8 @@ function NoteSheet({
   recipeId,
   noteId,
   initialCookId,
+  initialKind = null,
+  initialStepIndex = null,
   onClose,
 }: NoteSheetProps) {
   return (
@@ -24,6 +29,8 @@ function NoteSheet({
         recipeId={recipeId}
         noteId={noteId}
         initialCookId={initialCookId}
+        initialKind={initialKind}
+        initialStepIndex={initialStepIndex}
         onCancel={onClose}
         onDone={onClose}
       />

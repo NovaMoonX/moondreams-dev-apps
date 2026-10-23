@@ -13,13 +13,16 @@ interface SwipeAreaProps {
   className?: string;
 }
 
-/** A block that turns a sideways touch or pen swipe into forward or back; vertical scrolling and pinch-zoom stay the browser's, and a zoomed-in page never swipes. */
+/** A block that turns a sideways touch or pen swipe into forward or back; vertical scrolling and pinch-zoom stay the browser's, a zoomed-in page never swipes, and a child marked `data-no-swipe` (a sideways scroller) keeps its swipes. */
 function SwipeArea({ children, onSwipe, className }: SwipeAreaProps) {
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    const isOptedOut =
+      event.target instanceof Element &&
+      event.target.closest('[data-no-swipe]') !== null;
     swipeStart.current =
-      event.pointerType === 'mouse' || !event.isPrimary
+      event.pointerType === 'mouse' || !event.isPrimary || isOptedOut
         ? null
         : { x: event.clientX, y: event.clientY };
   };

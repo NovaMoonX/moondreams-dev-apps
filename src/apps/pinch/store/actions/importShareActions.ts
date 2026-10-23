@@ -20,6 +20,7 @@ import type {
   Meal,
   PlannedMeal,
   Recipe,
+  RecipeNote,
   SharedMeal,
   SharedRecipe,
 } from '@apps/pinch/types';
@@ -84,9 +85,10 @@ const commitPlan = async (uid: string, plan: ShareImportPlan) => {
   plan.ingredients.forEach((record) =>
     batch.set(kitchenDoc(uid, 'ingredients', record.id), record),
   );
-  plan.recipes.forEach(({ recipe }) =>
-    batch.set(kitchenDoc(uid, 'recipes', recipe.id), recipe),
-  );
+  plan.recipes.forEach(({ recipe, tips }) => {
+    batch.set(kitchenDoc(uid, 'recipes', recipe.id), recipe);
+    tips.forEach((tip) => batch.set(kitchenDoc(uid, 'notes', tip.id), tip));
+  });
   if (plan.meal) {
     batch.set(kitchenDoc(uid, 'meals', plan.meal.id), plan.meal);
   }
@@ -198,11 +200,12 @@ const readUndoSurvey = async (
   const recipeIds = written.recipes.map((entry) => entry.id);
   const ingredientIds = written.ingredients.map((entry) => entry.id);
   const watched = new Set([...recipeIds, ...ingredientIds]);
-  const [recipes, meals, ingredients, planned, products, containers] =
+  const [recipes, meals, ingredients, notes, planned, products, containers] =
     await Promise.all([
       getDocsFromServer(kitchenCollection(uid, 'recipes')),
       getDocsFromServer(kitchenCollection(uid, 'meals')),
       getDocsFromServer(kitchenCollection(uid, 'ingredients')),
+      getDocsFromServer(kitchenCollection(uid, 'notes')),
       Promise.all(
         getChunks([...watched], QUERY_VALUE_LIMIT).map((part) =>
           getDocsFromServer(
@@ -265,6 +268,12 @@ const readUndoSurvey = async (
         (entry.data() as IngredientRecord).updatedAt,
       ]),
     ),
+    notes: new Map(
+      notes.docs.map((entry) => {
+        const data = entry.data() as RecipeNote;
+        return [entry.id, { updatedAt: data.updatedAt, recipeId: data.recipeId }];
+      }),
+    ),
     usedIds: new Set([
       ...planned
         .flatMap((snapshot) => snapshot.docs)
@@ -306,6 +315,7 @@ export const undoSharedImport = createAsyncThunk<
     if (undo.mealId !== null) {
       batch.delete(kitchenDoc(uid, 'meals', undo.mealId));
     }
+    undo.tipIds.forEach((id) => batch.delete(kitchenDoc(uid, 'notes', id)));
     undo.ingredientIds.forEach((id) =>
       batch.delete(kitchenDoc(uid, 'ingredients', id)),
     );

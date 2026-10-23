@@ -120,6 +120,15 @@ function CalendarScreen({
   const [isNutritionOpen, setIsNutritionOpen] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
+  const [origin, setOrigin] = useState<
+    'summary' | 'nutrition' | { dayKey: string } | null
+  >(null);
+  const returnToOrigin = () => {
+    if (origin === 'summary') setIsSummaryOpen(true);
+    else if (origin === 'nutrition') setIsNutritionOpen(true);
+    else if (origin) setOpenDay({ dayKey: origin.dayKey, mealId: null });
+    setOrigin(null);
+  };
   const { isBelow } = useMediaQuery();
   const isPhone = isBelow('sm');
   const isWide = !isBelow('lg');
@@ -344,6 +353,7 @@ function CalendarScreen({
                 subtitle={`${upcomingMealCount} ${upcomingMealCount === 1 ? 'meal' : 'meals'} from today on`}
                 onClick={() => {
                   setIsSummaryOpen(false);
+                  setOrigin('summary');
                   setShopping({
                     kind: 'range',
                     startKey:
@@ -361,6 +371,7 @@ function CalendarScreen({
           }}
           onFillIn={(gaps) => {
             setIsSummaryOpen(false);
+            setOrigin('summary');
             setFillIn(gaps);
           }}
         />
@@ -378,12 +389,20 @@ function CalendarScreen({
           }}
           onFillIn={(gaps) => {
             setIsNutritionOpen(false);
+            setOrigin('nutrition');
             setFillIn(gaps);
           }}
         />
       )}
       {fillIn && (
-        <FillInSheet uid={uid} gaps={fillIn} onClose={() => setFillIn(null)} />
+        <FillInSheet
+          uid={uid}
+          gaps={fillIn}
+          onClose={() => {
+            setFillIn(null);
+            returnToOrigin();
+          }}
+        />
       )}
       {openDay && (
         <DayDrawer
@@ -405,7 +424,9 @@ function CalendarScreen({
             openPlan(dayKey, mealType, plannedMealId);
           }}
           onAddToShopping={(request) => {
+            const { dayKey } = openDay;
             setOpenDay(null);
+            setOrigin({ dayKey });
             setShopping(request);
           }}
         />
@@ -414,7 +435,10 @@ function CalendarScreen({
         <AddToShoppingSheet
           uid={uid}
           request={shopping}
-          onClose={() => setShopping(null)}
+          onClose={() => {
+            setShopping(null);
+            returnToOrigin();
+          }}
         />
       )}
     </section>

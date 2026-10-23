@@ -146,6 +146,9 @@ const synth = {
       utterance.onend?.();
     }, 300);
   },
+  speaking: false,
+  pending: false,
+  resume() {},
   cancel() {
     const utterance = this.current;
     this.current = null;
@@ -350,25 +353,38 @@ const entries = (name: string) =>
   advance(30);
   env.speech = 'silent';
   listener.say('Garlic, 6.');
-  advance(1499);
-  assert.equal(
-    entries('start').length,
-    1,
-    'the mic stays off while a reading may still start',
+  advance(1500);
+  advance(40);
+  assert.deepEqual(
+    [
+      env.log.filter((entry) => entry.includes('speak:')).length,
+      entries('start').length,
+    ],
+    [2, 1],
+    'a reading that never starts is tried once more, with the mic still off',
   );
-  advance(1);
+  advance(1620);
   advance(40);
   assert.deepEqual(
     [seen.status, entries('start').length],
     ['listening', 2],
-    'a reading that never starts is given up after 1.5 s and listening comes back',
+    'when the second try is silent too it is given up and listening comes back',
   );
   env.log = [];
   listener.say('Soy sauce, a quarter cup.');
+  assert.equal(
+    env.log.filter((entry) => entry.includes('speak:')).length,
+    1,
+    'one silent reading does not turn the voice off for the session',
+  );
+  advance(3200);
+  advance(40);
+  env.log = [];
+  listener.say('Peppers.');
   assert.deepEqual(
     env.log.filter((entry) => entry.includes('speak:')),
     [],
-    'after a reading that never started, nothing more is read for the session',
+    'after two silent readings in a row nothing more is read for the session',
   );
 }
 

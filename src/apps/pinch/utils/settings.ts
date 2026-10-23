@@ -25,7 +25,12 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   freezerDays: null,
   suggestPhotos: true,
   calendarStats: false,
-  voice: { hasAgreed: null, isReadingAloud: null, isWaiting: null },
+  voice: {
+    hasAgreed: null,
+    isReadingAloud: null,
+    isReadingNotes: null,
+    isWaiting: null,
+  },
   reminders: {
     eatSoon: true,
     expiring: true,

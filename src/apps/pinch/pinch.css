@@ -204,6 +204,23 @@ html.pinch-theme button[role='checkbox']:focus-visible {
   outline-color: var(--color-primary);
 }
 
+/* A tick that tracks progress down a list swaps its ring for a coloured check, so the row's own text stays as it was. */
+html.pinch-theme
+  button[role='checkbox'][data-tick='mark']:is([aria-checked='true']) {
+  border-color: transparent;
+  background-color: transparent !important;
+  color: var(--pinch-drizzle);
+}
+
+html.pinch-theme button[role='checkbox'][data-tick='mark'] svg {
+  transform: scale(1.4);
+}
+
+html.pinch-theme button[role='checkbox'][data-tick='mark'] svg path {
+  stroke: currentColor;
+  stroke-width: 1.1;
+}
+
 /* The search field's native clear icon is drawn in the browser's blue; it is a control, not a link. */
 html.pinch-theme input[type='search']::-webkit-search-cancel-button {
   filter: grayscale(1);

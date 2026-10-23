@@ -126,7 +126,11 @@ import {
 import {
   getCookId,
   getCookServings,
+  formatCookRating,
+  getCookPhotoPath,
   getCookSummaries,
+  getRatingAverage,
+  isValidCookRating,
   getMarkableRecipes,
   getMissingCookFields,
   getPlannedCookId,
@@ -138,17 +142,25 @@ import {
 } from '../../src/apps/pinch/utils/cooks.ts';
 import {
   getCookChoiceLabels,
+  getJoinedChangeReason,
+  getLastTimeNote,
   getMissingNoteFields,
   getNoteSummary,
   getNoteCookChoices,
   getNoteSummaries,
+  getSpokenEntries,
+  getStepAnchor,
+  getStepAnchorText,
   getTweakReason,
   getTweakTracking,
   getWrittenBefore,
+  groupEntriesByStep,
   groupNotesByRecipe,
   isNoteHistoryFull,
+  isStepLost,
   isValidNoteText,
   leadWithAdvice,
+  resolveNoteStep,
 } from '../../src/apps/pinch/utils/notes.ts';
 import {
   getRecipeChanges,
@@ -1305,8 +1317,8 @@ assert.deepEqual(
     x.localeCompare(y),
   ),
   [
-    ['adobo', { count: 4, lastCookedAt: 500 }],
-    ['rice', { count: 1, lastCookedAt: 300 }],
+    ['adobo', { count: 4, lastCookedAt: 500, ratedCount: 0, ratingTotal: 0, photoCount: 0 }],
+    ['rice', { count: 1, lastCookedAt: 300, ratedCount: 0, ratingTotal: 0, photoCount: 0 }],
   ],
   'the summary counts each recipe and keeps its latest cook, in one pass',
 );
@@ -1435,14 +1447,58 @@ assert.deepEqual(
 );
 assert.deepEqual(
   getMissingCookFields({ id: 'x', recipeId: 'adobo' }),
-  { plannedMealId: null },
-  'an older cook gets the key it lacks, as null',
+  { plannedMealId: null, rating: null, photoPath: null },
+  'an older cook gets the keys it lacks, as null',
 );
 assert.deepEqual(
-  getMissingCookFields({ plannedMealId: null }),
+  getMissingCookFields({ plannedMealId: null, rating: null, photoPath: null }),
   {},
-  'a cook with the key, even a null one, lacks nothing',
+  'a cook with the keys, even null ones, lacks nothing',
 );
+assert.deepEqual(
+  getMissingCookFields({ plannedMealId: 'p', rating: 4 }),
+  { photoPath: null },
+  'a cook rated before photos gets only the photo key',
+);
+
+{
+  assert.deepEqual(
+    [0, 0.25, 0.5, 1, 1.5, 4.5, 5, 5.5, 6, -1, NaN, Infinity].map(isValidCookRating),
+    [false, false, true, true, true, true, true, false, false, false, false, false],
+    'a rating is half a star to five stars, in half steps',
+  );
+  assert.deepEqual(
+    [4, 4.5, 3.25].map(formatCookRating),
+    ['4', '4.5', '3.3'],
+    'a whole rating shows no decimal and a half shows one',
+  );
+  assert.equal(
+    getRatingAverage({ ratedCount: 0, ratingTotal: 0 }),
+    null,
+    'nothing rated has no average, never 0',
+  );
+  assert.equal(
+    getRatingAverage({ ratedCount: 3, ratingTotal: 13 }),
+    4.3,
+    'the average is over the cooks that were rated, to one decimal',
+  );
+  const rated = [
+    { ...cookOf('a', 'adobo', 100), rating: 4.5, photoPath: 'p/a' },
+    { ...cookOf('b', 'adobo', 200), rating: null, photoPath: null },
+    { ...cookOf('c', 'adobo', 300) },
+    { ...cookOf('d', 'adobo', 400), rating: 3, photoPath: null },
+  ] as Cook[];
+  assert.deepEqual(
+    getCookSummaries(rated).get('adobo'),
+    { count: 4, lastCookedAt: 400, ratedCount: 2, ratingTotal: 7.5, photoCount: 1 },
+    'cooks with no rating (null, or a key an older cook lacks) are not counted as 0 stars',
+  );
+  assert.equal(
+    getCookPhotoPath('alex', 'p__r', 1760000000000),
+    'apps/pinch/kitchens/alex/cooks/p__r/photo-1760000000000.webp',
+    'a cook\'s photo has its own folder and a new name for each upload',
+  );
+}
 
 const repriceIngredient = (id: string) =>
   ({
@@ -2127,7 +2183,7 @@ assert.deepEqual(
   'an override with nothing typed is the same as none',
 );
 assert.deepEqual(changesFor({ sourceId: 's1' }), [
-  'Source set to Serious Eats',
+  'Source set to “Serious Eats”',
 ]);
 assert.deepEqual(
   getRecipeChanges(
@@ -2136,7 +2192,7 @@ assert.deepEqual(
     names,
     sourceNames,
   ),
-  ["Source changed to Mom's recipe cards"],
+  ["Source changed to “Mom's recipe cards”"],
 );
 assert.deepEqual(
   getRecipeChanges(
@@ -2145,7 +2201,7 @@ assert.deepEqual(
     names,
     sourceNames,
   ),
-  ['Source removed'],
+  ['Source “Serious Eats” removed'],
 );
 assert.deepEqual(
   getRecipeChanges(baseRecipe, { ...baseRecipe, sourceId: 'gone' }, names),
@@ -2310,8 +2366,13 @@ assert.deepEqual(
     withCare({ fridgeDays: 5, freezerDays: null, reheat: null, tip: 'B.' }),
     names,
   ),
-  [],
-  'a change to the storage notes alone records nothing: the dish is the same',
+  [
+    'Keeping it: fridge time 3 days → 5 days',
+    'Keeping it: freezer time removed',
+    'Keeping it: reheating removed',
+    'Keeping it: tip changed',
+  ],
+  'a change to the storage notes is recorded, one line for each part',
 );
 assert.deepEqual(
   [
@@ -2319,8 +2380,22 @@ assert.deepEqual(
     getRecipeChanges(withCare(fullCare), withCare(null), names),
     getRecipeChanges(withCare(null), withCare(undefined), names),
   ],
-  [[], [], []],
-  'adding, removing and a missing key are all nothing to record',
+  [
+    [
+      'Keeping it: fridge time set to 3 days',
+      'Keeping it: freezer time set to 3 months',
+      'Keeping it: reheating added',
+      'Keeping it: tip added',
+    ],
+    [
+      'Keeping it: fridge time removed',
+      'Keeping it: freezer time removed',
+      'Keeping it: reheating removed',
+      'Keeping it: tip removed',
+    ],
+    [],
+  ],
+  'adding and removing the storage notes are recorded, and a missing key reads as none',
 );
 assert.deepEqual(
   getRecipeChanges(
@@ -2328,8 +2403,14 @@ assert.deepEqual(
     { ...withCare(fullCare), servings: 6 } as RecipeContent,
     names,
   ),
-  ['Serves 4 → 6'],
-  'storage notes changed beside a real change leave only the real line',
+  [
+    'Serves 4 → 6',
+    'Keeping it: fridge time set to 3 days',
+    'Keeping it: freezer time set to 3 months',
+    'Keeping it: reheating added',
+    'Keeping it: tip added',
+  ],
+  'storage notes changed beside a real change are listed after it',
 );
 
 const fuzzRandom = ((seed) => () => {
@@ -2547,11 +2628,26 @@ assert.deepEqual(
 );
 assert.deepEqual(
   getMissingNoteFields({ id: 'x', kind: 'NOTE', text: 't' }),
-  { changes: [], cookId: null },
+  {
+    changes: [],
+    cookId: null,
+    stepIndex: null,
+    stepText: null,
+    reason: null,
+    previous: null,
+  },
   'an older note gets the keys it lacks, empty',
 );
 assert.deepEqual(
-  getMissingNoteFields({ text: null, changes: [], cookId: null }),
+  getMissingNoteFields({
+    text: null,
+    changes: [],
+    cookId: null,
+    stepIndex: null,
+    stepText: null,
+    reason: null,
+    previous: null,
+  }),
   {},
   'a note with every key, even null ones, lacks nothing',
 );
@@ -9981,14 +10077,14 @@ assert.equal(
       ),
     ],
     [
-      [],
-      [],
+      ['Removed the group “For the chicken”'],
+      ['Moved Removed ingredient to “For the sauce”'],
       [
         'Added Soy sauce (for the SAUCE), 3 tbsp',
         'Removed Soy sauce (For the sauce)',
       ],
     ],
-    'moving lines between groups (to the front or the end of one) records no tweak, and a change to an ingredient in several groups names its group',
+    'removing a group and moving a line to another group are recorded, and a change to an ingredient in several groups names its group',
   );
 
   const read = getDataFromExtracted(
@@ -10203,7 +10299,7 @@ assert.equal(
       freezerDays: null,
       suggestPhotos: true,
       calendarStats: false,
-      voice: { hasAgreed: null, isReadingAloud: null, isWaiting: null },
+      voice: { hasAgreed: null, isReadingAloud: null, isReadingNotes: null, isWaiting: null },
       reminders: {
         eatSoon: true,
         expiring: true,
@@ -10336,7 +10432,7 @@ assert.equal(
   );
   assert.deepEqual(
     stgWithDefaults(olderDocument)?.voice,
-    { hasAgreed: null, isReadingAloud: null, isWaiting: null },
+    { hasAgreed: null, isReadingAloud: null, isReadingNotes: null, isWaiting: null },
     'and one written before the voice choices reads each as not chosen yet, so this device\'s own earlier choice still stands',
   );
   assert.deepEqual(
@@ -10345,7 +10441,7 @@ assert.equal(
       stgUpdates({ voice: { hasAgreed: true } }, 9),
     ],
     [
-      { hasAgreed: null, isReadingAloud: null, isWaiting: true },
+      { hasAgreed: null, isReadingAloud: null, isReadingNotes: null, isWaiting: true },
       [{ path: ['voice', 'hasAgreed'], value: true }, { path: ['updatedAt'], value: 9 }],
     ],
     'a voice choice is written on its own path and leaves the others unchosen',
@@ -10374,6 +10470,231 @@ assert.equal(
   );
   assert.equal(stgZone(null, 0), '');
   assert.equal(stgZone('Not/AZone', 0), '', 'an unknown zone names nothing');
+}
+
+{
+  const steps = [
+    'Heat the pan over medium heat until a drop of water dances.',
+    'Sear the chicken, skin side down, for six minutes without moving it.',
+    'Add the garlic and stir for thirty seconds.',
+  ];
+  const entry = (
+    id: string,
+    kind: RecipeNote['kind'],
+    createdAt: number,
+    stepIndex: number | null,
+    text = id,
+    reason: string | null = null,
+  ) =>
+    ({
+      id,
+      recipeId: 'adobo',
+      kind,
+      text,
+      changes: [],
+      cookId: null,
+      ...getStepAnchor(steps, stepIndex),
+      reason,
+      createdAt,
+      updatedAt: createdAt,
+    }) as RecipeNote;
+
+  assert.deepEqual(
+    getStepAnchor(steps, 1),
+    { stepIndex: 1, stepText: steps[1] },
+    'an entry keeps its step number and the step\'s words',
+  );
+  assert.deepEqual(
+    getStepAnchor(steps, null),
+    { stepIndex: null, stepText: null },
+    'the whole recipe has no step',
+  );
+  assert.deepEqual(
+    getStepAnchor(steps, 9),
+    { stepIndex: null, stepText: null },
+    'a step that does not exist is the whole recipe, not a dangling number',
+  );
+  assert.equal(
+    getStepAnchorText(`  ${'word '.repeat(40)}`).length <= 81,
+    true,
+    'a long step is kept to its first words, cut at a word',
+  );
+  assert.equal(
+    getStepAnchorText('Whisk   the\n eggs'),
+    'Whisk the eggs',
+    'spaces and line breaks in a step are squashed before it is kept',
+  );
+
+  {
+    const repeated = ['Preheat.', 'Stir.', 'Bake.', 'Stir.'];
+    const onLast = {
+      stepIndex: 3,
+      stepText: getStepAnchorText('Stir.'),
+    };
+    assert.equal(
+      resolveNoteStep(onLast, ['Mix.', ...repeated]),
+      4,
+      'a step that reads like another and moved is found at the nearest of the two, not the first',
+    );
+    assert.equal(
+      resolveNoteStep({ stepIndex: 1, stepText: getStepAnchorText('Stir.') }, ['Mix.', ...repeated]),
+      2,
+      'and the other one when the entry was written near it',
+    );
+  }
+  assert.equal(
+    (getJoinedChangeReason([
+      { ...entry('long', 'CHANGE', 1, null), reason: 'x'.repeat(2500) } as RecipeNote,
+    ]) ?? '').length <= 2000,
+    true,
+    'a reason with no spaces is still cut to the rules\' 2,000 characters, the ellipsis included',
+  );
+
+  const tip = entry('tip', 'TIP', 100, 1);
+  assert.equal(resolveNoteStep(tip, steps), 1, 'a step that did not move stays');
+  const longStep = `Simmer the sauce gently, stirring now and then, until it coats the back of a spoon and the oil starts to separate at the edges.`;
+  assert.equal(
+    resolveNoteStep({ stepIndex: 0, stepText: `${longStep.slice(0, 40)}…` }, [longStep]),
+    0,
+    'a kept beginning of any length finds its long step, so changing the clip never strands entries',
+  );
+  assert.equal(
+    resolveNoteStep({ stepIndex: 0, stepText: `${longStep.slice(0, 40)}…` }, ['Boil the water.']),
+    null,
+    'and a different step does not match it',
+  );
+  assert.equal(
+    resolveNoteStep(tip, ['A new first step.', ...steps]),
+    2,
+    'a step that moved down is found again by its words',
+  );
+  assert.equal(
+    resolveNoteStep(tip, [steps[0], 'Sear for ten minutes.', steps[2]]),
+    null,
+    'a rewritten step no longer holds the entry',
+  );
+  assert.equal(isStepLost(tip, [steps[0]]), true, 'a lost step is told apart from none');
+  assert.equal(
+    isStepLost(entry('whole', 'NOTE', 1, null), steps),
+    false,
+    'an entry for the whole recipe never has a lost step',
+  );
+  assert.equal(
+    resolveNoteStep({ stepIndex: 1, stepText: null }, steps),
+    1,
+    'an entry written without the step\'s words trusts its number',
+  );
+  assert.equal(
+    resolveNoteStep({ stepIndex: 5, stepText: null }, steps),
+    null,
+    'and drops it when that number is past the last step',
+  );
+  assert.equal(
+    resolveNoteStep({ stepIndex: undefined, stepText: undefined } as never, steps),
+    null,
+    'an entry written before steps lacks both keys and reads as the whole recipe',
+  );
+
+  const grouped = groupEntriesByStep(
+    [
+      entry('note2', 'NOTE', 300, 1),
+      entry('tweak', 'TWEAK', 400, null),
+      entry('tip1', 'TIP', 100, 1),
+      entry('change1', 'CHANGE', 250, 1),
+      entry('whole-tip', 'TIP', 90, null),
+      entry('tip-lost', 'TIP', 80, 0),
+      entry('note1', 'NOTE', 200, 1),
+    ],
+    [steps[0] + ' (edited)', ...steps.slice(1)],
+  );
+  assert.deepEqual(
+    grouped.byStep.get(1)?.map((e) => e.id),
+    ['tip1', 'change1', 'note2', 'note1'],
+    'a step lists tips, then planned changes, then notes, each newest first',
+  );
+  assert.deepEqual(
+    grouped.wholeRecipe.map((e) => e.id),
+    ['whole-tip', 'tip-lost'],
+    'entries for the whole recipe and for a rewritten step come together, and a tweak is in neither',
+  );
+  assert.equal(
+    [...grouped.byStep.values()].flat().some((e) => e.kind === 'TWEAK'),
+    false,
+    'a tweak is never shown with a step',
+  );
+
+  assert.equal(
+    getLastTimeNote(
+      [
+        entry('n1', 'NOTE', 100, null),
+        entry('n2', 'NOTE', 300, 1),
+        entry('n3', 'NOTE', 200, null),
+        entry('t', 'TIP', 400, null),
+      ],
+      steps,
+    )?.id,
+    'n3',
+    'the note the cook leads with is the latest about the whole recipe: a step\'s own note shows with that step and a tip is no note',
+  );
+  assert.equal(getLastTimeNote([], steps), null, 'no note leads with nothing');
+
+  assert.equal(
+    getJoinedChangeReason([
+      entry('c1', 'CHANGE', 1, 1, 'more garlic', 'Tasted bland.'),
+      entry('c2', 'CHANGE', 2, 2, 'less salt', 'Tasted bland'),
+      entry('c3', 'CHANGE', 3, 2, 'a splash of vinegar', '  Too sweet  '),
+      entry('c4', 'CHANGE', 4, null, 'x', null),
+    ]),
+    'Tasted bland. Too sweet',
+    'the tweak keeps each different reason once, in order, without doubled full stops',
+  );
+  assert.equal(
+    getJoinedChangeReason([entry('c', 'CHANGE', 1, null, 'x', null)]),
+    null,
+    'changes with no reasons leave the tweak\'s reason empty',
+  );
+
+  const day = (at: number) => `day${at}`;
+  assert.equal(
+    getSpokenEntries(
+      [entry('t1', 'TIP', 1, 1, "Don't crowd the pan"), entry('t2', 'TIP', 2, 1, 'Pat it dry.')],
+      'TIPS',
+      day,
+    ),
+    "Tip: Don't crowd the pan. Tip: Pat it dry.",
+    'tips are read one after another, each ending in a full stop',
+  );
+  const mixed = [
+    entry('t1', 'TIP', 1, 1, 'A tip'),
+    entry('n1', 'NOTE', 5, 1, 'Oven ran hot'),
+    entry('c1', 'CHANGE', 6, 1, 'Use four cloves', 'It was bland'),
+  ];
+  assert.equal(
+    getSpokenEntries(mixed, 'NOTES', day),
+    'Your note from day5: Oven ran hot.',
+    'notes are read with their day, and neither a tip nor a planned change is read as a note',
+  );
+  assert.equal(
+    getSpokenEntries(mixed, 'CHANGES', day),
+    'A change you planned: Use four cloves. Because it was bland.',
+    'a planned change is read on its own, with its reason',
+  );
+  assert.equal(
+    getSpokenEntries([entry('t1', 'TIP', 1, 1)], 'NOTES', day),
+    null,
+    'a step with no notes says so by saying nothing',
+  );
+  assert.equal(
+    (getSpokenEntries([entry('n', 'NOTE', 1, 1, 'word '.repeat(300))], 'NOTES', day) ?? '')
+      .length < 500,
+    true,
+    'a long note is read in part, so it never holds the kitchen up',
+  );
+  assert.equal(
+    getNoteSummary(entry('c', 'CHANGE', 1, 1, 'More garlic', 'Bland'), day).body,
+    'More garlic. Bland',
+    'a planned change reads as what and why',
+  );
 }
 
 console.log('pinchMath: all checks passed');

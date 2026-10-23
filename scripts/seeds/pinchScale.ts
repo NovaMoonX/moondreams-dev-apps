@@ -1,5 +1,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
 
+import { getStepAnchor } from '../../src/apps/pinch/utils/notes.ts';
+
 import {
   FIXTURE_USERS,
   type SeedContext,
@@ -626,9 +628,13 @@ export async function seedPinchScale(
       },
     ),
   );
-  cooks.forEach((cook) =>
+  // Two cooks in three are rated (a half-star step, no randomness so nothing earlier moves); the rest keep the shape from before ratings, with no `rating` or `photoPath` key.
+  cooks.forEach((cook, index) =>
     add(`cooks/${cook.id}`, {
       ...cook,
+      ...(index % 3 === 0
+        ? {}
+        : { rating: 0.5 * (1 + ((index * 7) % 10)), photoPath: null }),
       createdAt: cook.cookedAt,
       updatedAt: cook.cookedAt,
     }),
@@ -679,6 +685,48 @@ export async function seedPinchScale(
     });
   });
   notes.forEach((note) => add(`notes/${note.id}`, note));
+
+  // Entries for steps, so a step's tips and the per-render grouping are exercised: a tip on each of the first three steps of every recipe, a planned change on every fourth, and forty tips on one step of the recipe with the longest history.
+  const stepEntries = recipes.flatMap((recipe, recipeIndex) =>
+    (recipeIndex === 1
+      ? Array.from({ length: 40 }, (_, tipIndex) => ({
+          kind: 'TIP',
+          at: 0,
+          text: `Scale tip ${tipIndex + 1} for the first step.`,
+          reason: null,
+        }))
+      : [
+          ...[0, 1, 2].map((at) => ({
+            kind: 'TIP',
+            at,
+            text: `Keep an eye on this step (${at + 1}).`,
+            reason: null,
+          })),
+          ...(recipeIndex % 4 === 0
+            ? [
+                {
+                  kind: 'CHANGE',
+                  at: 1,
+                  text: 'Use a little less of the main ingredient.',
+                  reason: 'It was too much last time.',
+                },
+              ]
+            : []),
+        ]
+    ).map((entry, entryIndex) => ({
+      id: `scale-step-note-${recipeIndex}-${entryIndex}`,
+      recipeId: recipe.id,
+      kind: entry.kind,
+      text: entry.text,
+      changes: [],
+      cookId: null,
+      ...getStepAnchor(recipe.steps, entry.at),
+      reason: entry.reason,
+      createdAt: today - (entryIndex + 1) * 3_600_000,
+      updatedAt: today - (entryIndex + 1) * 3_600_000,
+    })),
+  );
+  stepEntries.forEach((note) => add(`notes/${note.id}`, note));
 
   const mealItems = (count: number, salt: number) =>
     Array.from({ length: count }, (_, itemIndex) => {

@@ -5,7 +5,10 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import SwipeArea from '@/components/SwipeArea';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 import CookStepTimer from '@apps/pinch/components/cooking/CookStepTimer';
-import CookStepTray from '@apps/pinch/components/cooking/CookStepTray';
+import type { RecipeNote } from '@apps/pinch/types';
+import CookStepDock, {
+  type DockView,
+} from '@apps/pinch/components/cooking/CookStepDock';
 import { MAX_COOK_TIMERS } from '@apps/pinch/constants';
 
 const SIDE_BY_SIDE = {
@@ -36,7 +39,21 @@ interface CookStepViewProps {
   /** The lines this step names, scaled. */
   ingredients: CookRow[];
   isAmountNoteShown: boolean;
-  aside: ReactNode;
+  /** Where the first step leads with the recipe's latest note, until "Got it"; null elsewhere. */
+  lastTime: { recipeId: string; isDismissed: boolean; onGotIt: () => void } | null;
+  /** What was written for this step, tips first. */
+  entries: RecipeNote[];
+  onEditEntry: (id: string) => void;
+  onApplyChange: ((id: string) => void) | null;
+  onReadEntries: ((kind: 'TIP' | 'NOTE' | 'CHANGE') => void) | null;
+  /** The view open above the step's bubbles, if any. */
+  shownView: DockView | null;
+  onShowView: (view: DockView | null) => void;
+  onDockGone: () => void;
+  /** Starts a new tip, note or change for this step; null where none can be written. */
+  onAddEntry: (() => void) | null;
+  /** A tip, note or change being written by voice, above the step's bubbles. */
+  dictation: ReactNode | null;
   dishes: ReactNode;
   /** The times the step mentions that have no timer yet. */
   timerSlots: StepTimerSlot[];
@@ -72,7 +89,16 @@ function CookStepView({
   index,
   ingredients,
   isAmountNoteShown,
-  aside,
+  lastTime,
+  entries,
+  onEditEntry,
+  onApplyChange,
+  onReadEntries,
+  shownView,
+  onShowView,
+  onDockGone,
+  onAddEntry,
+  dictation,
   dishes,
   timerSlots,
   isTimersFull,
@@ -171,11 +197,20 @@ function CookStepView({
             SIDE_BY_SIDE.column,
           )}
         >
-          {aside}
-          <CookStepTray
+          {dictation}
+          <CookStepDock
             key={stepNumber}
             rows={ingredients}
             isAmountNoteShown={isAmountNoteShown}
+            entries={entries}
+            onEdit={onEditEntry}
+            onApplyChange={onApplyChange}
+            onRead={onReadEntries}
+            onAdd={onAddEntry}
+            lastTime={lastTime}
+            shown={shownView}
+            onShow={onShowView}
+            onGone={onDockGone}
           />
         </div>
       </div>

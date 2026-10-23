@@ -12,6 +12,7 @@ export const COOKING_SESSION_VERSION = 1;
 export const COOKING_SESSION_MAX_AGE_MS = 12 * 3_600_000;
 const MAX_SAVED_TIMERS = MAX_COOK_TIMERS * 2;
 const MAX_SAVED_RECIPES = 20;
+const MAX_SAVED_CAPTURED = 60;
 const CLOCK_SLACK_MS = 5 * 60_000;
 
 /** What opened the screen, so picking a session up opens it the same way. */
@@ -76,6 +77,8 @@ export const buildCookingSnapshot = (input: {
   currentId: string;
   positions: Record<string, { stepIndex: number; servings: number }>;
   timers: ResumeTimer[];
+  /** The journal entries written on this screen. */
+  captured?: string[];
 }): CookingSnapshot => ({
   version: COOKING_SESSION_VERSION,
   uid: input.uid,
@@ -103,6 +106,7 @@ export const buildCookingSnapshot = (input: {
       ]),
     ),
     timers: input.timers.map(toResumeTimer),
+    captured: (input.captured ?? []).slice(0, MAX_SAVED_CAPTURED),
   },
 });
 
@@ -216,6 +220,14 @@ const parsePositions = (value: unknown) => {
     : null;
 };
 
+/** The entries written before the screen was left, or none: a session saved before them, or a list that is not ids, reads as none rather than failing the pick-up. */
+const parseCaptured = (value: unknown) =>
+  Array.isArray(value) &&
+  value.length <= MAX_SAVED_CAPTURED &&
+  value.every(isReminderId)
+    ? (value as string[])
+    : [];
+
 const parseTimers = (value: unknown) => {
   if (!Array.isArray(value) || value.length > MAX_SAVED_TIMERS) return null;
   const timers = value.flatMap((entry): ResumeTimer[] => {
@@ -287,7 +299,12 @@ export const parseCookingSnapshot = (
       sessionId: value.sessionId,
       savedAt: value.savedAt,
       open,
-      resume: { currentId, positions, timers },
+      resume: {
+        currentId,
+        positions,
+        timers,
+        captured: parseCaptured(resume?.captured),
+      },
     };
   } catch {
     return null;
@@ -404,7 +421,12 @@ export const resolveCookingResume = (
           : { servings: snapshot.open.servings }),
       plannedMealId,
     },
-    resume: { currentId, positions, timers },
+    resume: {
+      currentId,
+      positions,
+      timers,
+      captured: snapshot.resume.captured ?? [],
+    },
     title,
     dishTitle: isPlate ? (current?.title ?? null) : null,
     stepNumber: (positions[currentId]?.stepIndex ?? 0) + 1,

@@ -369,7 +369,7 @@ Classes:
 | "Saved {meal}" (saved-meal builder) | `MealBuilder.tsx:266` | — | STATUS |
 | "Saved {meal} to your meals" | `PlannedMealView.tsx:155` | — | STATUS |
 | "Recipe added" (from an idea) / "Added {X} to your recipes" (from the Calendar) | `RecipeForm.tsx:624, 636` | — | STATUS |
-| "Added a note to {recipe}" | `NoteForm.tsx:254`, `useCookNote.ts:64` | — | STATUS |
+| "Added a {tip, note or change} to {recipe}" | `NoteForm.tsx` (cooking mode saves with no toast: the entry is listed on the last panel) | — | STATUS |
 | "{Day} now uses today's prices" / "already uses" | `RepriceDayRow.tsx:107` | — | STATUS |
 | "Marked {recipe} as cooked" | `useCookActions.ts:58, 90` | **Undo** | STATUS |
 | "Already marked" | `useCookActions.ts:84` | — | STATUS |

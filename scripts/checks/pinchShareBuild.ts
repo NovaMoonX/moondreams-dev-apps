@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   MAX_SHARED_MEAL_LINES,
   MAX_SHARED_MEAL_RECIPES,
+  MAX_SHARED_TIPS,
 } from '../../src/apps/pinch/constants.ts';
 import type {
   Meal,
@@ -10,6 +11,7 @@ import type {
   PinchShare,
   Recipe,
   RecipeIngredient,
+  RecipeNote,
   ResolvedIngredient,
 } from '../../src/apps/pinch/types.ts';
 import {
@@ -25,6 +27,7 @@ import {
   isShareStale,
   type ShareSource,
 } from '../../src/apps/pinch/utils/sharing.ts';
+import { getStepAnchorText } from '../../src/apps/pinch/utils/notes.ts';
 
 let passed = 0;
 const check = (name: string, run: () => void) => {
@@ -161,11 +164,165 @@ check('a recipe copy has exactly the public keys', () => {
     'hasCover',
     'ingredients',
     'links',
+    'notes',
     'prepMinutes',
     'servings',
     'steps',
+    'tips',
     'title',
   ]);
+});
+
+// ---- Tips travel with a recipe, and only their words and step ----
+const tipOf = (id: string, text: string | null, extra: Partial<RecipeNote> = {}): RecipeNote => ({
+  id,
+  recipeId: 'r-owner-1',
+  kind: 'TIP',
+  text,
+  changes: [],
+  cookId: null,
+  stepIndex: null,
+  stepText: null,
+  reason: null,
+  previous: null,
+  createdAt: 10,
+  updatedAt: 10,
+  ...extra,
+});
+const stepAnchor = (index: number) => ({
+  stepIndex: index,
+  stepText: getStepAnchorText(full.steps[index]),
+});
+const notesOfFull: RecipeNote[] = [
+  tipOf('t-late', 'Rest it.', { ...stepAnchor(1), createdAt: 30, updatedAt: 40 }),
+  tipOf('t-whole', 'Make it a day ahead.', { createdAt: 20 }),
+  tipOf('t-early', 'Salt the beef.', { ...stepAnchor(0), createdAt: 5 }),
+  tipOf('t-lost', 'Gone step.', { stepIndex: 0, stepText: 'a step that was rewritten', createdAt: 25 }),
+  tipOf('t-blank', '   '),
+  { ...tipOf('n-note', 'PRIVATE-NOTE'), kind: 'NOTE' },
+  { ...tipOf('n-change', 'PRIVATE-CHANGE', { reason: 'PRIVATE-REASON' }), kind: 'CHANGE' },
+  {
+    ...tipOf('n-tweak', null, {
+      changes: ['PRIVATE-LINE'],
+      previous: {
+        title: 'PRIVATE-PREVIOUS',
+        description: null,
+        servings: 4,
+        prepMinutes: null,
+        cookMinutes: null,
+        ingredients: [],
+        steps: ['PRIVATE-PREVIOUS-STEP'],
+        nutritionOverride: null,
+        sourceId: null,
+      },
+    }),
+    kind: 'TWEAK',
+  },
+];
+const TIPS = { tips: true, notes: false };
+const NOTES = { tips: false, notes: true };
+const BOTH = { tips: true, notes: true };
+const shareRecord = (sourceUpdatedAt: number, includes: { tips: boolean; notes: boolean }): PinchShare => ({
+  id: 'abcdefghjkmnpqrstuvwxyz234',
+  ownerUid: 'owner-uid',
+  kind: 'RECIPE',
+  sourceId: 'r-owner-1',
+  title: 'Anything',
+  sourceUpdatedAt,
+  includesTips: includes.tips,
+  includesNotes: includes.notes,
+  createdAt: 1,
+  updatedAt: 1,
+});
+const withTipsShared = buildSharedRecipe(full, ingredientsById, notesOfFull, TIPS);
+
+check('a recipe copy carries its tips in step order, as words and a step only', () => {
+  assert.deepEqual(withTipsShared.tips, [
+    { text: 'Make it a day ahead.', step: null },
+    { text: 'Gone step.', step: null },
+    { text: 'Salt the beef.', step: 0 },
+    { text: 'Rest it.', step: 1 },
+  ]);
+  const text = JSON.stringify(withTipsShared);
+  ['PRIVATE-NOTE', 'PRIVATE-CHANGE', 'PRIVATE-REASON', 'PRIVATE-LINE', 'PRIVATE-PREVIOUS', 'previous', 't-late', 'cookId', 'createdAt'].forEach(
+    (marker) => assert.ok(!text.includes(marker), `"${marker}" leaked into the copy`),
+  );
+});
+
+check('a recipe with no tips shares an empty list, and tips are only carried when included', () => {
+  assert.deepEqual(buildSharedRecipe(full, ingredientsById).tips, []);
+  assert.deepEqual(buildSharedRecipe(full, ingredientsById, notesOfFull).tips, []);
+  assert.deepEqual(buildSharedRecipe(full, ingredientsById, notesOfFull, NOTES).tips, []);
+});
+
+check('notes are carried only when included, as words and a step, and never a change or tweak', () => {
+  assert.deepEqual(buildSharedRecipe(full, ingredientsById, notesOfFull, TIPS).notes, []);
+  const result = buildSharedRecipe(full, ingredientsById, notesOfFull, NOTES);
+  assert.deepEqual(result.notes, [{ text: 'PRIVATE-NOTE', step: null }]);
+  assert.deepEqual(result.tips, []);
+  const text = JSON.stringify(result);
+  ['PRIVATE-CHANGE', 'PRIVATE-REASON', 'PRIVATE-LINE', 'PRIVATE-PREVIOUS', 'previous'].forEach((marker) =>
+    assert.ok(!text.includes(marker), `"${marker}" leaked into the copy`),
+  );
+  assert.equal(buildSharedRecipe(full, ingredientsById, notesOfFull, BOTH).tips.length, 4);
+});
+
+check("a recipe's stamp follows the entries a share includes, and nothing else in the journal", () => {
+  const source: ShareSource = { kind: 'RECIPE', recipe: full };
+  const stamp = (notes: RecipeNote[], includes: { tips: boolean; notes: boolean }) =>
+    getShareSourceStamp(source, new Map(), new Map([['r-owner-1', notes]]), includes);
+  assert.equal(stamp(notesOfFull, TIPS), Math.max(full.updatedAt, 40) + 4);
+  assert.equal(stamp(notesOfFull, { tips: false, notes: false }), full.updatedAt);
+  assert.equal(stamp([{ ...notesOfFull[6], updatedAt: 99999 }], BOTH), full.updatedAt);
+  assert.equal(stamp([{ ...notesOfFull[5], updatedAt: 99999 }], TIPS), full.updatedAt);
+  assert.equal(stamp([{ ...notesOfFull[5], updatedAt: 99999 }], NOTES), 99999 + 1);
+});
+
+check('deleting an included entry changes the stamp, so the link reads as changed', () => {
+  const source: ShareSource = { kind: 'RECIPE', recipe: full };
+  const notesBy = (notes: RecipeNote[]) => new Map([['r-owner-1', notes]]);
+  const taken = shareRecord(getShareSourceStamp(source, new Map(), notesBy(notesOfFull), TIPS), TIPS);
+  const recipes = new Map([['r-owner-1', full]]);
+  assert.equal(getShareStatus(taken, recipes, new Map(), notesBy(notesOfFull)).isStale, false);
+  const withoutOne = notesOfFull.filter((note) => note.id !== 't-early');
+  assert.equal(getShareStatus(taken, recipes, new Map(), notesBy(withoutOne)).isStale, true);
+  const noteDeleted = notesOfFull.filter((note) => note.id !== 'n-note');
+  assert.equal(getShareStatus(taken, recipes, new Map(), notesBy(noteDeleted)).isStale, false);
+});
+
+check('entries beyond the share caps do not move the stamp, and a link is not read as changed while notes load', () => {
+  const source: ShareSource = { kind: 'RECIPE', recipe: full };
+  const many = Array.from({ length: MAX_SHARED_TIPS + 5 }, (_, index) =>
+    tipOf(`cap-${index}`, `Tip ${index}`, { createdAt: index, updatedAt: index }),
+  );
+  const stamp = (notes: RecipeNote[]) =>
+    getShareSourceStamp(source, new Map(), new Map([['r-owner-1', notes]]), TIPS);
+  const edited = many.map((tip, index) =>
+    index === many.length - 1 ? { ...tip, updatedAt: 99999 } : tip,
+  );
+  assert.equal(stamp(edited), stamp(many), 'a tip past the cap is not in the copy');
+  const taken = shareRecord(stamp(many), TIPS);
+  const recipes = new Map([['r-owner-1', full]]);
+  assert.equal(getShareStatus(taken, recipes, new Map(), new Map(), false).isStale, false);
+  assert.equal(getShareStatus(taken, recipes, new Map(), new Map(), true).isStale, true);
+});
+
+check('a link made before the choice existed carries no entries, and an entry added to it never marks it changed', () => {
+  const legacy = shareRecord(full.updatedAt, TIPS) as unknown as Record<string, unknown>;
+  delete legacy.includesTips;
+  delete legacy.includesNotes;
+  const recipes = new Map([['r-owner-1', full]]);
+  const notes = new Map([['r-owner-1', notesOfFull]]);
+  assert.equal(getShareStatus(legacy as unknown as PinchShare, recipes, new Map(), notes).isStale, false);
+});
+
+check('more tips than a share holds are cut to the cap, oldest kept', () => {
+  const many = Array.from({ length: MAX_SHARED_TIPS + 4 }, (_, index) =>
+    tipOf(`m-${index}`, `Tip ${index}`, { createdAt: index }),
+  );
+  const result = buildSharedRecipe(full, ingredientsById, many, TIPS);
+  assert.equal(result.tips.length, MAX_SHARED_TIPS);
+  assert.equal(result.tips[0].text, 'Tip 0');
 });
 
 check('a recipe copy carries none of the private fields', () => {
@@ -530,8 +687,32 @@ const share = (
   sourceId,
   title: 'Anything',
   sourceUpdatedAt,
+  includesTips: false,
+  includesNotes: false,
   createdAt: 1,
   updatedAt: 1,
+});
+
+check('a payload says what it carries, and a recipe in a meal follows the same choice', () => {
+  const notesByRecipe = new Map([['alpha', [
+    { ...tipOf('p-tip', 'A tip'), recipeId: 'alpha' },
+    { ...tipOf('p-note', 'A note'), recipeId: 'alpha', kind: 'NOTE' as const },
+  ]]]);
+  const build = (source: ShareSource, includes: { tips: boolean; notes: boolean }) => {
+    const payload = buildSharePayload(source, recipesById, ingredientsById, notesByRecipe, includes);
+    assert.ok(!('error' in payload));
+    return payload as Exclude<typeof payload, { error: string }>;
+  };
+  const off = build(mealSource, { tips: false, notes: false });
+  assert.deepEqual([off.includesTips, off.includesNotes], [false, false]);
+  assert.ok(off.meal?.recipes.every((r) => r.tips.length === 0 && r.notes.length === 0));
+  const tipsOnly = build(mealSource, TIPS);
+  assert.deepEqual([tipsOnly.includesTips, tipsOnly.includesNotes], [true, false]);
+  assert.ok(tipsOnly.meal?.recipes.some((r) => r.tips.length === 1));
+  assert.ok(tipsOnly.meal?.recipes.every((r) => r.notes.length === 0));
+  const notesOnly = build(recipeSource, NOTES);
+  assert.deepEqual(notesOnly.recipe?.notes, [{ text: 'A note', step: null }]);
+  assert.deepEqual(notesOnly.recipe?.tips, []);
 });
 
 check('a recipe is stamped by its own change time', () => {

@@ -147,6 +147,8 @@ export interface PinchVoiceSettings {
   hasAgreed: boolean | null;
   /** Read each step aloud while the microphone is on. */
   isReadingAloud: boolean | null;
+  /** Also read the tips and notes written for a step, right after the step. A document written before this key lacks it, which reads as null (not chosen). */
+  isReadingNotes: boolean | null;
   /** Wait for the wake phrase instead of listening for one window per tap. */
   isWaiting: boolean | null;
 }
@@ -277,8 +279,8 @@ export type PinchSubview =
       /** Opened from the phone's start drawer, which a way's back button raises again. */
       fromDrawer?: boolean;
       fromIdeaId?: string;
-      /** The note the form was opened from: shown as a quote, never changed by the save. */
-      fromNoteId?: string;
+      /** The CHANGE entries the form is applying: shown as quotes, and turned into the one TWEAK that records the edit when it is saved. */
+      fromChangeIds?: string[];
       /** Opened from the calendar's empty state, whose screen shows no new row afterwards, so saving says what was added. */
       fromCalendar?: boolean;
     }
@@ -414,12 +416,17 @@ export interface Cook {
   servings: number;
   /** An instant, shown in local time. */
   cookedAt: number;
+  /** How it turned out, 0.5 to 5 in half steps, or null. Written by the person after the cook; a cook written before ratings lacks the key, which reads as null. */
+  rating: number | null;
+  /** Storage path of the one photo of this cook, `apps/pinch/kitchens/{uid}/cooks/{id}/photo-{time}.webp` (a new name for each upload, so a replaced photo never shows a stale copy), or null. A cook written before photos lacks the key, which reads as null. */
+  photoPath: string | null;
   /** Immutable. */
   createdAt: number;
   updatedAt: number;
 }
 
-export type NoteKind = 'NOTE' | 'TWEAK';
+/** What an entry in a recipe's journal is. A NOTE is a personal reflection on a cook, a TIP is timeless advice for making the dish, a CHANGE is an edit the person means to make (with why), and a TWEAK is the dated record of an edit that was made. Applying a CHANGE turns that same entry into the TWEAK. */
+export type NoteKind = 'NOTE' | 'TIP' | 'CHANGE' | 'TWEAK';
 
 export type ContainerPlace = 'FRIDGE' | 'FREEZER';
 export type ContainerStatus = 'IN_STOCK' | 'DONE';
@@ -498,21 +505,44 @@ export interface Package {
   updatedAt: number;
 }
 
-/** One entry in a recipe's journal: something to remember after cooking, or the record of an edit to the recipe. */
+/** The fields of a recipe that a tweak compares, and that undoing it puts back. Categories, keeping times and links are kept by tweaks written later; a snapshot from before lacks the three keys (not the same as holding none), and undoing it leaves them as they are. */
+export type RecipeSnapshot = Pick<
+  Recipe,
+  | 'title'
+  | 'description'
+  | 'servings'
+  | 'prepMinutes'
+  | 'cookMinutes'
+  | 'ingredients'
+  | 'steps'
+  | 'nutritionOverride'
+  | 'sourceId'
+> &
+  Partial<Pick<Recipe, 'categories' | 'care' | 'links'>>;
+
+/** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {
   /** Immutable. */
   id: string;
   /** Immutable. A recipe that no longer exists reads as none: its notes are ignored. */
   recipeId: string;
-  /** Immutable. */
+  /** Immutable, except that a CHANGE becomes a TWEAK when the recipe form applies it. */
   kind: NoteKind;
-  /** A NOTE always has it; a TWEAK's is the optional reason for the change. 1 to 2,000 characters when set. */
+  /** A NOTE, TIP or CHANGE always has it (a CHANGE's is what to change); a TWEAK's is the optional reason for the change. 1 to 2,000 characters when set. */
   text: string | null;
-  /** A TWEAK's short summaries of what the edit changed, fixed when it was saved; empty for a NOTE. Immutable. */
+  /** A TWEAK's short summaries of what the edit changed, fixed when it was saved; empty for every other kind. Immutable. */
   changes: string[];
-  /** Immutable. The cook this follows up; a cook that no longer exists reads as none. */
+  /** Immutable. The cook this follows up, for a NOTE; a cook that no longer exists reads as none. A TIP never has one. */
   cookId: string | null;
-  /** An instant, shown in local time. Immutable. */
+  /** The step (0-based) a NOTE, TIP or CHANGE is about, so cooking shows it with that step; null is the whole recipe. A document written before steps lacks the key, which reads as null. */
+  stepIndex: number | null;
+  /** The first words of that step as they were when the entry was written, so the entry finds its step again after steps are added, removed or moved. Written with `stepIndex`; a missing key reads as null. */
+  stepText: string | null;
+  /** Why the person wants a CHANGE, in their words; null for every other kind. A missing key reads as null. */
+  reason: string | null;
+  /** A TWEAK's recipe as it was before the edit, so the edit can be undone while it is the recipe's latest; null for every other kind and for a tweak written before undo existed. Immutable. A missing key reads as null. */
+  previous: RecipeSnapshot | null;
+  /** An instant, shown in local time. Immutable, except that applying a CHANGE dates the TWEAK it becomes. */
   createdAt: number;
   updatedAt: number;
 }
@@ -657,6 +687,8 @@ export interface CookingResume {
   currentId: string;
   positions: Record<string, { stepIndex: number; servings: number }>;
   timers: ResumeTimer[];
+  /** The journal entries written on this screen, for the review at the end. A session saved before them lacks the key, which reads as none. */
+  captured?: string[];
 }
 
 export type ShareKind = 'RECIPE' | 'MEAL';
@@ -679,7 +711,13 @@ export interface SharedRecipeLink {
   url: string;
 }
 
-/** A recipe as a share carries it: what is needed to read it, cook it and copy it. No prices, notes, ratings, collections, source or favorite. */
+/** One tip or note as a share carries it: its words and the step it sits under (0-based), null for the whole recipe. Never a date, id or cook. */
+export interface SharedRecipeEntry {
+  text: string;
+  step: number | null;
+}
+
+/** A recipe as a share carries it: what is needed to read it, cook it and copy it, with its tips and notes when the owner includes them. No prices, planned changes, ratings, collections, source or favorite. */
 export interface SharedRecipe {
   title: string;
   description: string | null;
@@ -690,6 +728,10 @@ export interface SharedRecipe {
   steps: string[];
   care: RecipeCare | null;
   links: SharedRecipeLink[];
+  /** Empty unless the owner includes their tips. */
+  tips: SharedRecipeEntry[];
+  /** Empty unless the owner includes their notes. */
+  notes: SharedRecipeEntry[];
   /** True when the share holds a copy of the cover the owner uploaded (`apps/pinch/shares/{shareId}/cover-{index}.webp`); a web cover is never shared. */
   hasCover: boolean;
 }
@@ -717,6 +759,9 @@ export interface PinchShare {
   title: string;
   /** The source's change stamp when the copy was taken, to tell whether it has changed since. */
   sourceUpdatedAt: number;
+  /** Whether the copy carries the owner's tips and notes, each chosen on its own. A link made before the choice existed has neither key: read it as false. */
+  includesTips: boolean;
+  includesNotes: boolean;
   createdAt: number;
   /** When the copy was last taken. */
   updatedAt: number;
@@ -756,6 +801,8 @@ export type ChangePinchShareRequest =
       meal: SharedMeal | null;
       covers: ShareCoverRef[];
       sourceUpdatedAt: number;
+      includesTips: boolean;
+      includesNotes: boolean;
     }
   | { action: 'renew' | 'delete'; shareId: string };
 
