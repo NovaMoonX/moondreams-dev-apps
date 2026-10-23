@@ -17,6 +17,9 @@ import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
 import FundsRow from '@apps/runway/components/FundsRow';
 import { CONFIRM_WORDS, DRAFT_WORDS } from '@apps/runway/constants';
+import BillForm from '@apps/runway/forms/BillForm';
+import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
+import GoalForm from '@apps/runway/forms/GoalForm';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -32,7 +35,9 @@ import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import { effectiveStance } from '@apps/runway/engine/stance';
 import type { HoldChoice } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import {
+  selectChangeableKey,
   selectDraft,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
@@ -54,6 +59,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const [isEditingFunds, setIsEditingFunds] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [changingItemId, setChangingItemId] = useState<string | null>(null);
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
@@ -63,6 +69,12 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const isLoaded = isPlanLoaded && isDaysLoaded && isRecordsReady;
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
   const planStance = useAppSelector(selectStance);
+  const changing = useAppSelector((state) =>
+    changingItemId === null
+      ? null
+      : resolveCurrentOrNext(state.runway.versions, changingItemId, today),
+  );
+  const changeableIds = useAppSelector(selectChangeableKey);
 
   if (!view || !isDaysLoaded || !isRecordsReady) {
     return (
@@ -82,7 +94,8 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const hasChanges =
     override !== null &&
     (override.pairings !== null ||
-      Object.keys(override.holdResolutions).length > 0);
+      Object.keys(override.holdResolutions).length > 0 ||
+      Object.keys(override.payloads).length > 0);
 
   const persist = async (
     change: (current: typeof EMPTY_OVERRIDE) => typeof EMPTY_OVERRIDE,
@@ -155,6 +168,12 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         sourceNames={sourceNames}
         onChoose={choose}
         isChoosing={isSaving}
+        isDayOnly={Object.hasOwn(override?.payloads ?? {}, line.itemId)}
+        onChange={
+          day.on >= today && changeableIds.has(line.itemId)
+            ? () => setChangingItemId(line.itemId)
+            : undefined
+        }
       />
     );
   };
@@ -264,6 +283,40 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           stance={effectiveStance(planStance, day.stanceOverride)}
           onClose={() => setIsConfirming(false)}
         />
+      )}
+      {changing && changingItemId !== null && (
+        <>
+          {changing.kind === 'envelope' && (
+            <EnvelopeForm
+              key={changingItemId}
+              isOpen
+              title='Envelope'
+              editing={{ itemId: changingItemId, payload: changing.payload }}
+              presetDayKey={dayKey}
+              onClose={() => setChangingItemId(null)}
+            />
+          )}
+          {changing.kind === 'goal' && (
+            <GoalForm
+              key={changingItemId}
+              isOpen
+              title='Goal'
+              editing={{ itemId: changingItemId, payload: changing.payload }}
+              presetDayKey={dayKey}
+              onClose={() => setChangingItemId(null)}
+            />
+          )}
+          {changing.kind === 'bill' && (
+            <BillForm
+              key={changingItemId}
+              isOpen
+              title='Bill'
+              editing={{ itemId: changingItemId, payload: changing.payload }}
+              presetDayKey={dayKey}
+              onClose={() => setChangingItemId(null)}
+            />
+          )}
+        </>
       )}
       {isEditingFunds && (
         <PairingsEditor

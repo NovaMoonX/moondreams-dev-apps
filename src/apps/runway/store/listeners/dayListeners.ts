@@ -43,6 +43,7 @@ async function openDay(
     override: {
       pairings: opened?.pairings ?? null,
       holdResolutions: opened?.holdResolutions ?? {},
+      payloads: opened?.payloads ?? {},
     },
   };
   return result;

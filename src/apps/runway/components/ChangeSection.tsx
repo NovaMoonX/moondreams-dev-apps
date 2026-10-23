@@ -8,7 +8,7 @@ import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 function ChangeSection() {
   const value = use(ChangeFlowContext);
   if (!value) return null;
-  const { flow, itemId, kind, candidate } = value;
+  const { flow, kind } = value;
 
   return (
     <div className='space-y-4 pt-2'>
@@ -16,13 +16,11 @@ function ChangeSection() {
         value={flow.from}
         onChange={flow.setFrom}
         today={flow.today}
-      />
-      <EffectPreview
-        itemId={itemId}
+        days={flow.days}
         kind={kind}
-        payload={candidate}
-        effectiveFrom={flow.effectiveFrom}
+        presetDayKey={flow.presetDayKey}
       />
+      <EffectPreview changeJson={flow.changeJson} />
     </div>
   );
 }

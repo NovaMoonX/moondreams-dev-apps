@@ -116,6 +116,7 @@ function IncomeScreen() {
             </h3>
             <div className='py-1'>
               <ItemChangeControls
+                kind='source'
                 itemId={source.item.id}
                 current={source.version.payload}
                 today={today}
@@ -183,6 +184,7 @@ function IncomeScreen() {
                         {describeTiming(version.payload)}
                       </p>
                       <ItemChangeControls
+                        kind='payLine'
                         itemId={item.id}
                         current={version.payload}
                         today={today}

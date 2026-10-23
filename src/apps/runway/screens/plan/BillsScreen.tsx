@@ -83,6 +83,7 @@ function BillsScreen() {
                 planStance={stance}
                 footer={
                   <ItemChangeControls
+                    kind='bill'
                     itemId={item.id}
                     current={payload}
                     today={today}

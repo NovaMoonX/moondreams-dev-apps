@@ -15,7 +15,12 @@ import {
 } from '@apps/runway/store/listeners/dayListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
-import { selectConfirmedDayIds } from '@apps/runway/store/selectors/runwaySelectors';
+import { endItem } from '@apps/runway/store/actions/itemActions';
+import {
+  selectConfirmedDayIds,
+  selectReachedEndingsKey,
+} from '@apps/runway/store/selectors/runwaySelectors';
+import { formatDateUTC } from '@/utils/formatUtils';
 import {
   setDays,
   setItems,
@@ -34,6 +39,15 @@ export function useRunwaySync(uid: string | null, attempt: number) {
   const dispatch = useAppDispatch();
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
   const confirmedDayIds = useAppSelector(selectConfirmedDayIds);
+  const isPlanLoaded = useAppSelector(
+    (state) =>
+      state.runway.isItemsLoaded &&
+      state.runway.isVersionsLoaded &&
+      state.runway.isDaysLoaded,
+  );
+  const reachedEndings = useAppSelector((state) =>
+    selectReachedEndingsKey(state, todayAsUtcDate()),
+  );
 
   useEffect(() => {
     if (!uid) return;
@@ -127,4 +141,24 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       stop.current?.();
     };
   }, [uid, keyStatus, confirmedDayIds, dispatch]);
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || !isPlanLoaded || reachedEndings === '')
+      return;
+    const rows = JSON.parse(reachedEndings) as [string, number, string][];
+    getRunwayEncryption(uid)
+      .then((encryption) =>
+        Promise.all(
+          rows.map(([itemId, endedOn, name]) =>
+            endItem(uid, encryption, {
+              itemId,
+              endedOn,
+              summary: `${name}: ended after its last payday, ${formatDateUTC(endedOn)}.`,
+              note: null,
+            }),
+          ),
+        ),
+      )
+      .catch((error) => console.error('Marking an ending did not save', error));
+  }, [uid, keyStatus, isPlanLoaded, reachedEndings]);
 }

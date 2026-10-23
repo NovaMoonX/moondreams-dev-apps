@@ -31,7 +31,10 @@ export function describeLineAsk(
 export function describeLineReason(
   line: DraftLine,
   sourceNames: Record<string, string>,
+  name?: string,
 ) {
+  if (line.reason.code === 'returns' && name !== undefined)
+    return `${name} ${DRAFT_WORDS.returnsTo} ${formatCents(line.cents)} ${DRAFT_WORDS.returnsThisTime}`;
   if (line.reason.code === 'poolExhausted') return DRAFT_WORDS.outOfMoney;
   if (line.reason.code === 'nothingLeft') return DRAFT_WORDS.restEmpty;
   const names = [

@@ -83,6 +83,7 @@ function EnvelopesScreen() {
                   </p>
                   <div className='pt-2'>
                     <ItemChangeControls
+                      kind='envelope'
                       itemId={item.id}
                       current={version.payload}
                       today={today}

@@ -4,7 +4,11 @@ import { formatCents } from '@/utils/moneyUtils';
 import RangeNote from '@apps/runway/components/RangeNote';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PriorityBadge from '@apps/runway/components/PriorityBadge';
-import { DRAFT_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
+import {
+  CHANGE_WORDS,
+  DRAFT_WORDS,
+  PRIORITY_LABELS,
+} from '@apps/runway/constants';
 import type { HoldChoice } from '@apps/runway/types';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import {
@@ -21,6 +25,10 @@ interface DraftLineProps {
   /** Answers a short pairing; absent where the line cannot be answered. */
   onChoose?: (line: DraftLineData, choice: HoldChoice) => void;
   isChoosing?: boolean;
+  /** Opens the item to change it from this income day or for this day alone; absent where the item cannot be changed. */
+  onChange?: () => void;
+  /** This income day takes its own version of the line. */
+  isDayOnly?: boolean;
 }
 
 /** One envelope's line in a draft: what it got, the priority it was funded at and why. */
@@ -31,8 +39,10 @@ function DraftLine({
   sourceNames,
   onChoose,
   isChoosing = false,
+  onChange,
+  isDayOnly = false,
 }: DraftLineProps) {
-  const reason = describeLineReason(line, sourceNames);
+  const reason = describeLineReason(line, sourceNames, name);
   const tieNote = describeTieBreak(line);
   const billShare = describeBillShare(line);
   const isShort = line.shortBy > 0;
@@ -126,7 +136,25 @@ function DraftLine({
             ))}
           </div>
         )}
+        {isDayOnly && (
+          <p className='text-muted-foreground text-sm'>{DRAFT_WORDS.dayOnly}</p>
+        )}
         {tieNote && <p className='text-muted-foreground text-xs'>{tieNote}</p>}
+        {onChange && (
+          <div className='pt-2'>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              rounded='full'
+              className="text-foreground! relative h-7! min-h-0! w-fit px-3! py-0! before:absolute before:-inset-1.5 before:content-['']"
+              aria-label={`${CHANGE_WORDS.change} ${name}`}
+              onClick={onChange}
+            >
+              {CHANGE_WORDS.change}
+            </Button>
+          </div>
+        )}
       </div>
     </li>
   );

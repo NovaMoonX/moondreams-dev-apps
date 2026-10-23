@@ -10,8 +10,8 @@ import { CHANGE_WORDS, PREVIEW_SHOWN } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   previewChange,
+  type PreviewChange,
   type PreviewDay,
-  type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectBillProgress,
@@ -19,18 +19,14 @@ import {
   selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { ItemPayload } from '@apps/runway/utils/changeText';
-import type { ItemKind } from '@apps/runway/types';
 
 const MAX_LINES_SHOWN = 3;
 
 interface EffectPreviewProps {
-  itemId: string;
-  kind: ItemKind;
-  /** The item as the form has it now; null while the form is not finished. */
-  payload: ItemPayload | null;
-  /** The first day the change applies; null while it is not picked. */
-  effectiveFrom: number | null;
+  /** What is layered over the plan, as JSON of a `PreviewChange`; null while the form is not finished. */
+  changeJson: string | null;
+  /** Words for the empty case when a change moves no income day. */
+  emptyText?: string;
 }
 
 const getLineText = (day: PreviewDay) => {
@@ -44,12 +40,7 @@ const getLineText = (day: PreviewDay) => {
 };
 
 /** Each upcoming income day a change would move, before and after, worked out by the same engine that drafts the days. */
-function EffectPreview({
-  itemId,
-  kind,
-  payload,
-  effectiveFrom,
-}: EffectPreviewProps) {
+function EffectPreview({ changeJson, emptyText }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
   const versions = useAppSelector((state) => state.runway.versions);
@@ -59,23 +50,12 @@ function EffectPreview({
   const settledKey = useAppSelector(selectSettledKey);
   const billProgress = useAppSelector(selectBillProgress);
   const [isOpen, setIsOpen] = useState(false);
-
-  const payloadKey = payload === null ? '' : JSON.stringify(payload);
-  const virtual = useMemo<PreviewVersion | null>(
-    () =>
-      payloadKey === '' || effectiveFrom === null
-        ? null
-        : ({
-            itemId,
-            kind,
-            effectiveFrom,
-            effectiveUntil: null,
-            changeId: 'what-if',
-            payload: JSON.parse(payloadKey),
-          } as PreviewVersion),
-    [itemId, kind, payloadKey, effectiveFrom],
+  const settledJson = useDeferredValue(changeJson);
+  const settledVirtual = useMemo<PreviewChange | null>(
+    () => (settledJson === null ? null : JSON.parse(settledJson)),
+    [settledJson],
   );
-  const settledVirtual = useDeferredValue(virtual);
+  const virtual = changeJson;
 
   const days = useMemo(() => {
     if (settledVirtual === null) return null;
@@ -116,7 +96,7 @@ function EffectPreview({
     if (days.length === 0) {
       return (
         <p className='text-muted-foreground text-sm'>
-          {CHANGE_WORDS.previewNone}
+          {emptyText ?? CHANGE_WORDS.previewNone}
         </p>
       );
     }
