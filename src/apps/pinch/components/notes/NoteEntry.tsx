@@ -74,7 +74,7 @@ function NoteEntry({
           {
             key: 'undo',
             icon: <Undo2 className='h-4 w-4' />,
-            label: 'Undo this change',
+            label: 'Put the recipe back',
             description: `Put the recipe back to how it was before ${date}`,
             onClick: () => onUndo(note.id),
           },

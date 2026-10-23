@@ -2147,6 +2147,7 @@ function CookingSession({
       if (!capture.isAvailable(recipe.id) || isRemoved) {
         return refuse("Your notes aren't ready, or this recipe's are full.");
       }
+      showDockView(null);
       setPending({
         kind: 'DICTATE',
         token: generateUuid(),
@@ -2908,7 +2909,7 @@ function CookingSession({
             )}
           </div>
         ) : isWide ? (
-          <div className='grid flex-1 grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-10'>
+          <div className='grid flex-1 grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-stretch gap-10'>
             <div className='flex flex-col gap-4'>{stepContent}</div>
             <div className='border-border space-y-6 border-l pl-8'>
               {ingredientsContent}

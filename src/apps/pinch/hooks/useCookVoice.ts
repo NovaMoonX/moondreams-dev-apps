@@ -572,7 +572,10 @@ export function useCookVoice({
   const spoken = stepWords;
 
   // A step is read once per showing: listening coming back (a hidden tab, a reading that ended) doesn't read it again.
+  const lastReading = useRef({ isAloud: isReadingAloud, stepKey });
   useEffect(() => {
+    const previous = lastReading.current;
+    lastReading.current = { isAloud: isReadingAloud, stepKey };
     if (isHearing && isReadingAloud && spoken !== null) {
       if (readStepKey.current === stepKey) return;
       readStepKey.current = stepKey;
@@ -585,7 +588,13 @@ export function useCookVoice({
       return;
     }
     if (stepKey !== readStepKey.current) readStepKey.current = null;
-    if (stepKey !== null) quiet();
+    // Only a step that moved on or a setting that went off cuts a reading short: a spoken answer starting up flips the status too and must not be cancelled by it.
+    if (
+      stepKey !== null &&
+      (previous.isAloud !== isReadingAloud || previous.stepKey !== stepKey)
+    ) {
+      quiet();
+    }
   }, [
     isHearing,
     isReadingAloud,

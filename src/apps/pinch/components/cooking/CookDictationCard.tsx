@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check, Mic } from 'lucide-react';
@@ -30,12 +32,17 @@ function CookDictationCard({
   onUndo,
 }: CookDictationCardProps) {
   const isWaiting = phase === 'WAITING';
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    cardRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [phase, heard]);
 
   return (
     <div
+      ref={cardRef}
       role='status'
       aria-live='polite'
-      className='border-border bg-accent flex items-start gap-3 rounded-2xl border p-3'
+      className='border-border bg-accent flex scroll-mb-40 items-start gap-3 rounded-2xl border p-3'
     >
       <span
         aria-hidden='true'
@@ -60,7 +67,7 @@ function CookDictationCard({
         </p>
         <p
           className={join(
-            'mt-0.5 line-clamp-3 text-sm wrap-break-word',
+            'mt-0.5 line-clamp-3 text-sm wrap-break-word [@media(max-height:700px)]:line-clamp-2',
             heard === '' && isWaiting
               ? 'text-muted-foreground'
               : 'text-foreground',
@@ -78,7 +85,7 @@ function CookDictationCard({
       <Button
         variant='secondary'
         size='sm'
-        className='shrink-0 before:absolute before:-inset-[6px] before:content-[""] relative'
+        className='border-border relative shrink-0 border before:absolute before:-inset-[6px] before:content-[""]'
         onClick={isWaiting ? onCancel : onUndo}
       >
         {isWaiting ? 'Cancel' : 'Undo'}

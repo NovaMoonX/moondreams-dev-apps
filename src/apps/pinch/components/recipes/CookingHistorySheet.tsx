@@ -212,9 +212,9 @@ function CookingHistorySheet({
     const lines = undone.flatMap((entry) => entry.changes ?? []);
     const day = formatDateShort(undone[0].createdAt);
     const confirmed = await confirm({
-      title: 'Undo this change?',
-      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}. Its photo, keeping times, links and collections stay as they are, and this record of the change is removed.`,
-      confirmText: 'Undo change',
+      title: 'Put the recipe back?',
+      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}, which takes back: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}. Its photo, keeping times, links and collections stay as they are, this record of the change is removed, and a change you had planned is not planned again.`,
+      confirmText: 'Put it back',
       destructive: true,
     });
     if (!confirmed) return;
