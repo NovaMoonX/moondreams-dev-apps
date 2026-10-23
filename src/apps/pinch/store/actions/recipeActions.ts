@@ -5,6 +5,7 @@ import {
   arrayUnion,
   deleteDoc,
   doc,
+  runTransaction,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
@@ -25,8 +26,11 @@ import {
   selectTweakTracking,
 } from '@apps/pinch/store/selectors';
 import type { CollectionChange } from '@apps/pinch/utils/collections';
-import { getDraftChanges } from '@apps/pinch/utils/recipeChanges';
-import { getTweakReason } from '@apps/pinch/utils/notes';
+import {
+  getDraftChanges,
+  getRecipeSnapshot,
+} from '@apps/pinch/utils/recipeChanges';
+import { getTweakReason, planTweakUndo } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
 import {
   getCoverFields,
@@ -199,6 +203,7 @@ const getTweakPlan = (
     stepIndex: null,
     stepText: null,
     reason: null,
+    previous: getRecipeSnapshot(existing),
     createdAt: now,
     updatedAt: now,
   };
@@ -392,6 +397,59 @@ export const saveRecipe = createAsyncThunk<
       ));
 
     return { recipeId, linkedIdea };
+  },
+);
+
+interface UndoRecipeChangeInput {
+  uid: string;
+  recipeId: string;
+  /** The tweaks the recipe's latest save wrote. */
+  noteIds: string[];
+}
+
+/** Puts the recipe's edited fields back to how the tweak found them and takes the tweak off, in one transaction that re-reads both: it refuses when the recipe has been saved since (its `updatedAt` is no longer the tweak's date) or the tweak is gone. Only the compared fields and `updatedAt` are written, so the cover, care, links and collections stay as they are. */
+export const undoRecipeChange = createAsyncThunk<
+  number,
+  UndoRecipeChangeInput,
+  { state: RootState; rejectValue: string }
+>(
+  'pinch/recipes/undoChange',
+  async ({ uid, recipeId, noteIds }, { getState, rejectWithValue }) => {
+    const noteDocs = noteIds.map((id) =>
+      doc(db, 'apps', 'pinch', 'kitchens', uid, 'notes', id),
+    );
+    try {
+      await freezeBeforeEdit(uid, getState());
+      const refusal = await runTransaction(db, async (transaction) => {
+        const recipeSnapshot = await transaction.get(recipeDoc(uid, recipeId));
+        const noteSnapshots = await Promise.all(
+          noteDocs.map((ref) => transaction.get(ref)),
+        );
+        const plan = planTweakUndo(
+          recipeSnapshot.exists()
+            ? { updatedAt: (recipeSnapshot.data() as Recipe).updatedAt }
+            : null,
+          noteSnapshots.map((snapshot) =>
+            snapshot.exists() ? (snapshot.data() as RecipeNote) : null,
+          ),
+        );
+        if (plan.kind === 'REFUSE') return plan.message;
+
+        transaction.update(recipeDoc(uid, recipeId), {
+          ...plan.fields,
+          updatedAt: Date.now(),
+        });
+        noteDocs.forEach((ref) => transaction.delete(ref));
+        return null;
+      });
+      if (refusal !== null) return rejectWithValue(refusal);
+    } catch (error) {
+      return rejectWithValue(
+        getWriteMessage(error, 'Unable to undo this change.'),
+      );
+    }
+
+    return noteIds.length;
   },
 );
 

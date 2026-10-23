@@ -1589,9 +1589,24 @@ service cloud.firestore {
           && isNoteChangeAt(changes, 6) && isNoteChangeAt(changes, 7);
       }
 
+      // The recipe as a TWEAK found it, so the edit can be undone. Rules can't walk the lines or steps, so only the counts and the scalar fields are checked here; the client shapes each line and step the way the recipe's own write does.
+      function isTweakPrevious(value) {
+        return value is map
+          && value.keys().hasOnly(['title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'ingredients', 'steps', 'nutritionOverride', 'sourceId'])
+          && value.keys().hasAll(['title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'ingredients', 'steps', 'nutritionOverride', 'sourceId'])
+          && isShortText(value.title, 200)
+          && (value.description == null || isShortText(value.description, 2000))
+          && isPositiveAmount(value.servings)
+          && isNullOrMinutes(value.prepMinutes) && isNullOrMinutes(value.cookMinutes)
+          && isNutrition(value.nutritionOverride)
+          && value.ingredients is list && value.ingredients.size() >= 1 && value.ingredients.size() <= 60
+          && value.steps is list && value.steps.size() <= 60
+          && (value.sourceId == null || isShortText(value.sourceId, 80));
+      }
+
       // A NOTE is the person's own words about a cook; a TIP is advice for the dish itself; a CHANGE is a change the person means to make, with the reason in `reason`; a TWEAK records what an edit to the recipe changed, with an optional reason in `text`. A NOTE, TIP or CHANGE may name one step (`stepIndex`, with `stepText` to find it again once steps move); a document written before them lacks all three keys, which read as null.
       function isRecipeNote(data, id) {
-        return data.keys().hasOnly(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'stepIndex', 'stepText', 'reason', 'createdAt', 'updatedAt'])
+        return data.keys().hasOnly(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'stepIndex', 'stepText', 'reason', 'previous', 'createdAt', 'updatedAt'])
           && data.keys().hasAll(['id', 'recipeId', 'kind', 'text', 'changes', 'cookId', 'createdAt', 'updatedAt'])
           && data.id == id
           && isShortText(data.recipeId, 80)
@@ -1604,6 +1619,7 @@ service cloud.firestore {
           && (data.get('stepIndex', null) == null || (data.stepIndex is int && data.stepIndex >= 0 && data.stepIndex < 60))
           && (data.get('stepText', null) == null || isShortText(data.stepText, 120))
           && (data.get('reason', null) == null || (data.kind == 'CHANGE' && isShortText(data.reason, 2000)))
+          && (data.get('previous', null) == null || (data.kind == 'TWEAK' && isTweakPrevious(data.previous)))
           && data.createdAt is int && data.updatedAt is int;
       }
 
@@ -1888,7 +1904,7 @@ service cloud.firestore {
       match /notes/{id} {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isRecipeNote(request.resource.data, id);
-        // An edit keeps the kind, the changes and the date, and the cook once it has one: an entry written during a cook is tied to that cook when the cook is recorded, which sets it once, or again when that cook has since been deleted (a tip never has one). The one kind change is a CHANGE the recipe form applied: the same document becomes the TWEAK that records the edit (its lines, dated when it was applied), so applying a change leaves one entry and not two.
+        // An edit keeps the kind, the changes and the date, and the cook once it has one: an entry written during a cook is tied to that cook when the cook is recorded, which sets it once, or again when that cook has since been deleted (a tip never has one). An edit keeps `previous` too. The one kind change is a CHANGE the recipe form applied: the same document becomes the TWEAK that records the edit (its lines and what the recipe was before, dated when it was applied), so applying a change leaves one entry and not two.
         allow update: if isKitchenOwner() && isRecipeNote(request.resource.data, id)
           && request.resource.data.recipeId == resource.data.recipeId
           && (request.resource.data.cookId == resource.data.get('cookId', null)
@@ -1896,6 +1912,7 @@ service cloud.firestore {
             || !exists(/databases/$(database)/documents/apps/pinch/kitchens/$(uid)/cooks/$(resource.data.cookId)))
           && ((request.resource.data.kind == resource.data.kind
               && request.resource.data.changes == resource.data.get('changes', [])
+              && request.resource.data.get('previous', null) == resource.data.get('previous', null)
               && request.resource.data.createdAt == resource.data.createdAt)
             || (resource.data.kind == 'CHANGE' && request.resource.data.kind == 'TWEAK'));
       }

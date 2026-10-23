@@ -5,7 +5,12 @@ import {
   NOTE_STEP_ANCHOR_LENGTH,
   SOFT_MAX_RECIPE_NOTES,
 } from '@apps/pinch/constants';
-import type { Cook, NoteKind, RecipeNote } from '@apps/pinch/types';
+import type {
+  Cook,
+  NoteKind,
+  RecipeNote,
+  RecipeSnapshot,
+} from '@apps/pinch/types';
 
 export interface NoteSummary {
   count: number;
@@ -108,7 +113,73 @@ export const getMissingNoteFields = (existing: object) => ({
   ...('stepIndex' in existing ? {} : { stepIndex: null }),
   ...('stepText' in existing ? {} : { stepText: null }),
   ...('reason' in existing ? {} : { reason: null }),
+  ...('previous' in existing ? {} : { previous: null }),
 });
+
+const getLatestTweaks = (notes: RecipeNote[]) => {
+  const tweaks = notes.filter((note) => note.kind === 'TWEAK');
+  const latestAt = Math.max(...tweaks.map((note) => note.createdAt));
+  const result = tweaks.filter((note) => note.createdAt === latestAt);
+
+  return result;
+};
+
+/** The ids of the tweaks the recipe's last save wrote, when each can be put back: it kept what the recipe was, and the recipe has not been saved since (a later save moves its `updatedAt` past the tweak's date). Empty otherwise. */
+export const getUndoableTweakIds = (
+  notes: RecipeNote[],
+  recipeUpdatedAt: number | null,
+) => {
+  const latest = getLatestTweaks(notes);
+  const isUndoable =
+    latest.length > 0 &&
+    latest.every(
+      (note) => note.previous != null && note.createdAt === recipeUpdatedAt,
+    );
+  const result = isUndoable ? latest.map((note) => note.id) : [];
+
+  return result;
+};
+
+export type TweakUndoPlan =
+  | { kind: 'REVERT'; fields: RecipeSnapshot }
+  | { kind: 'REFUSE'; message: string };
+
+const refuse = (message: string): TweakUndoPlan => ({
+  kind: 'REFUSE',
+  message,
+});
+
+/** What undoing tweaks does to the recipe as the server has it now: the recipe goes back to how the first tweak saw it, or nothing is written and the sentence says why. */
+export const planTweakUndo = (
+  recipe: { updatedAt: number } | null,
+  tweaks: (RecipeNote | null)[],
+): TweakUndoPlan => {
+  if (recipe === null)
+    return refuse('This recipe is gone, so there is nothing to put back.');
+  const found = tweaks.filter((note) => note !== null);
+  if (found.length === 0 || found.length !== tweaks.length) {
+    return refuse(
+      'That change was already undone or removed. Close this and look again.',
+    );
+  }
+  const previous = found[0].previous ?? null;
+  if (found.some((note) => note.kind !== 'TWEAK' || note.previous == null)) {
+    return refuse(
+      "This change was saved before undo existed, so it can't be put back automatically.",
+    );
+  }
+  if (found.some((note) => note.createdAt !== recipe.updatedAt)) {
+    return refuse(
+      'The recipe was saved again after this change, so undoing it would lose that. Edit the recipe to change it back.',
+    );
+  }
+  const result: TweakUndoPlan =
+    previous === null
+      ? refuse('There is nothing to put back.')
+      : { kind: 'REVERT', fields: previous };
+
+  return result;
+};
 
 /** Whether edits to a recipe are recorded as a tweak: the recipe has been cooked, both lists have loaded without error and the journal has room. */
 export const getTweakTracking = (state: {

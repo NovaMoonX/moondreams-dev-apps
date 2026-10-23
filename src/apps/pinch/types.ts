@@ -505,6 +505,20 @@ export interface Package {
   updatedAt: number;
 }
 
+/** The fields of a recipe that a tweak compares, and that undoing it puts back. */
+export type RecipeSnapshot = Pick<
+  Recipe,
+  | 'title'
+  | 'description'
+  | 'servings'
+  | 'prepMinutes'
+  | 'cookMinutes'
+  | 'ingredients'
+  | 'steps'
+  | 'nutritionOverride'
+  | 'sourceId'
+>;
+
 /** One entry in a recipe's journal: something to remember or do next time, or the record of an edit to the recipe. */
 export interface RecipeNote {
   /** Immutable. */
@@ -525,6 +539,8 @@ export interface RecipeNote {
   stepText: string | null;
   /** Why the person wants a CHANGE, in their words; null for every other kind. A missing key reads as null. */
   reason: string | null;
+  /** A TWEAK's recipe as it was before the edit, so the edit can be undone while it is the recipe's latest; null for every other kind and for a tweak written before undo existed. Immutable. A missing key reads as null. */
+  previous: RecipeSnapshot | null;
   /** An instant, shown in local time. Immutable, except that applying a CHANGE dates the TWEAK it becomes. */
   createdAt: number;
   updatedAt: number;

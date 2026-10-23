@@ -7,8 +7,8 @@ import {
 } from '@apps/pinch/constants';
 import type {
   NutritionValues,
-  Recipe,
   RecipeIngredient,
+  RecipeSnapshot,
 } from '@apps/pinch/types';
 import {
   getGroupKey,
@@ -17,18 +17,20 @@ import {
 import { formatMinutes } from '@apps/pinch/utils/recipeFormat';
 
 /** What a tweak looks at: everything a recipe's form edits except the cover picture. */
-export type RecipeContent = Pick<
-  Recipe,
-  | 'title'
-  | 'description'
-  | 'servings'
-  | 'prepMinutes'
-  | 'cookMinutes'
-  | 'ingredients'
-  | 'steps'
-  | 'nutritionOverride'
-  | 'sourceId'
->;
+export type RecipeContent = RecipeSnapshot;
+
+/** The recipe as a tweak keeps it, every key present so it can be written to Firestore. */
+export const getRecipeSnapshot = (recipe: RecipeContent): RecipeSnapshot => ({
+  title: recipe.title,
+  description: recipe.description ?? null,
+  servings: recipe.servings,
+  prepMinutes: recipe.prepMinutes ?? null,
+  cookMinutes: recipe.cookMinutes ?? null,
+  ingredients: recipe.ingredients,
+  steps: recipe.steps,
+  nutritionOverride: recipe.nutritionOverride ?? null,
+  sourceId: recipe.sourceId ?? null,
+});
 
 const INGREDIENTS_REORDERED = 'Ingredients reordered';
 const STEPS_REORDERED = 'Steps reordered';

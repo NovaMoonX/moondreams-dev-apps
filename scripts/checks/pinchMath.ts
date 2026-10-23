@@ -2603,7 +2603,14 @@ assert.deepEqual(
 );
 assert.deepEqual(
   getMissingNoteFields({ id: 'x', kind: 'NOTE', text: 't' }),
-  { changes: [], cookId: null, stepIndex: null, stepText: null, reason: null },
+  {
+    changes: [],
+    cookId: null,
+    stepIndex: null,
+    stepText: null,
+    reason: null,
+    previous: null,
+  },
   'an older note gets the keys it lacks, empty',
 );
 assert.deepEqual(
@@ -2614,6 +2621,7 @@ assert.deepEqual(
     stepIndex: null,
     stepText: null,
     reason: null,
+    previous: null,
   }),
   {},
   'a note with every key, even null ones, lacks nothing',

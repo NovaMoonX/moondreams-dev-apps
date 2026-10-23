@@ -3,16 +3,21 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, NotebookPen } from 'lucide-react';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight, NotebookPen, Plus } from 'lucide-react';
 
+import ActionChips from '@/components/ActionChips';
+import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import { PillGroup } from '@/components/PillGroup';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import StarRating from '@/components/StarRating';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShort } from '@/utils/formatUtils';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
+import NoteEntry from '@apps/pinch/components/notes/NoteEntry';
 import NoteForm from '@apps/pinch/components/notes/NoteForm';
 import CookEditView from '@apps/pinch/components/recipes/CookEditView';
 import CookJournal from '@apps/pinch/components/recipes/CookJournal';
@@ -33,7 +38,8 @@ import {
   selectPlannedMeals,
   selectRecipesById,
 } from '@apps/pinch/store/selectors';
-import type { Container, Cook } from '@apps/pinch/types';
+import { undoRecipeChange } from '@apps/pinch/store/actions/recipeActions';
+import type { Container, Cook, RecipeNote } from '@apps/pinch/types';
 import {
   getPutAwayText,
   groupContainersByCook,
@@ -45,9 +51,14 @@ import {
   isCookHistoryFull,
 } from '@apps/pinch/utils/cooks';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
+import { getUndoableTweakIds } from '@apps/pinch/utils/notes';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const NO_COOKS: Cook[] = [];
+const NO_NOTES: RecipeNote[] = [];
+const NO_IDS: string[] = [];
+const CHANGES_FIRST_SHOWN = 4;
+const UNDO_LINES_SHOWN = 3;
 
 /** What was written for a cook, in a few words: "A note", "A note and 2 changes". */
 const getWrittenLine = (kinds: string[] | undefined) => {
@@ -78,12 +89,15 @@ interface CookingHistorySheetProps {
   uid: string;
   recipeId: string;
   onClose: () => void;
+  /** Leaves the sheet for the recipe's form without returning to the screen's drawer; closing does that. Falls back to `onClose`. */
+  onLeaveForForm?: () => void;
 }
 
 function CookingHistorySheet({
   uid,
   recipeId,
   onClose,
+  onLeaveForForm = onClose,
 }: CookingHistorySheetProps) {
   const recipe = useAppSelector(selectRecipesById).get(recipeId);
   const cooks = useAppSelector(selectCooksByRecipe).get(recipeId) ?? NO_COOKS;
@@ -95,6 +109,9 @@ function CookingHistorySheet({
       state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
   );
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId);
+  const dispatch = useAppDispatch();
+  const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const notedCookIds = useMemo(
     () =>
       new Set(
@@ -118,9 +135,19 @@ function CookingHistorySheet({
       ),
     [notes],
   );
+  const tweaks = useMemo(
+    () => (notes ?? NO_NOTES).filter((entry) => entry.kind === 'TWEAK'),
+    [notes],
+  );
+  const undoableIds = useMemo(
+    () => (recipe ? getUndoableTweakIds(tweaks, recipe.updatedAt) : NO_IDS),
+    [tweaks, recipe],
+  );
   const summary = useAppSelector(selectCookSummaries).get(recipeId);
   const { openSubview } = usePinchOverlay();
-  const [mode, setMode] = useState<'cooks' | 'photos'>('cooks');
+  const [mode, setMode] = useState<'cooks' | 'photos' | 'changes'>('cooks');
+  const [changesLimit, setChangesLimit] = useState(CHANGES_FIRST_SHOWN);
+  const [undoError, setUndoError] = useState<string | null>(null);
   const [view, setView] = useState<HistoryView>({ kind: 'list' });
   const [limit, setLimit] = useState(COOK_HISTORY_FIRST_PAGE);
   const lastToken = useRef(0);
@@ -179,6 +206,37 @@ function CookingHistorySheet({
         : current,
     );
 
+  const askUndo = async () => {
+    const undone = tweaks.filter((entry) => undoableIds.includes(entry.id));
+    if (undone.length === 0) return;
+    const lines = undone.flatMap((entry) => entry.changes ?? []);
+    const day = formatDateShort(undone[0].createdAt);
+    const confirmed = await confirm({
+      title: 'Undo this change?',
+      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}. Its photo, keeping times, links and collections stay as they are, and this record of the change is removed.`,
+      confirmText: 'Undo change',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    setUndoError(null);
+    try {
+      await dispatch(
+        undoRecipeChange({
+          uid,
+          recipeId,
+          noteIds: undone.map((entry) => entry.id),
+        }),
+      ).unwrap();
+      addToast({
+        title: `Put the recipe back to how it was before ${day}`,
+        type: 'success',
+      });
+    } catch (error) {
+      setUndoError(getErrorMessage(error, 'Unable to undo this change.'));
+    }
+  };
+
   const hidden = cooks.length - limit;
   const visibleCount = hidden > HIDDEN_WORTH_A_BUTTON ? limit : cooks.length;
   const isCollapsible =
@@ -201,7 +259,23 @@ function CookingHistorySheet({
           .filter((part) => part !== null)
           .join(' · ');
   const photoCooks = cooks.filter((cook) => cook.photoPath != null);
-  const shownMode = photoCount > 0 ? mode : 'cooks';
+  const shownMode =
+    (mode === 'photos' && photoCount > 0) ||
+    (mode === 'changes' && tweaks.length > 0)
+      ? mode
+      : 'cooks';
+  const modeOptions = [
+    { value: 'cooks' as const, label: 'All cooks' },
+    ...(photoCount > 0
+      ? [{ value: 'photos' as const, label: `Photos · ${photoCount}` }]
+      : []),
+    ...(tweaks.length > 0
+      ? [{ value: 'changes' as const, label: `Changes · ${tweaks.length}` }]
+      : []),
+  ];
+  const changesHidden = tweaks.length - changesLimit;
+  const shownChanges =
+    changesHidden > 1 ? tweaks.slice(0, changesLimit) : tweaks;
 
   const getBody = () => {
     if (view.kind === 'note') {
@@ -263,13 +337,16 @@ function CookingHistorySheet({
                 cookId={editedCook.id}
                 onEdit={(noteId) => openNote(editedCook.id, noteId)}
                 onApplyChange={(noteId) => {
-                  onClose();
+                  onLeaveForForm();
                   openSubview({
                     kind: 'recipe',
                     id: recipeId,
                     fromChangeIds: [noteId],
                   });
                 }}
+                undoableIds={undoableIds}
+                onUndo={() => void askUndo()}
+                undoError={undoError}
               />
             ) : null
           }
@@ -297,38 +374,65 @@ function CookingHistorySheet({
           <p className='font-medium wrap-break-word'>
             {recipe?.title ?? 'This recipe'}
           </p>
-          {isFull ? (
+          {shownMode === 'changes' ? null : isFull ? (
             <p className='text-muted-foreground text-sm'>
               A recipe's history holds up to {SOFT_MAX_COOKS_PER_RECIPE} cooks.
               Delete an older one to add more.
             </p>
           ) : (
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-10 justify-start px-0!'
+            <ActionRow
+              icon={<Plus className='h-4 w-4' />}
+              label='Add an earlier cook'
               onClick={() => openEdit(null)}
-            >
-              + Add an earlier cook
-            </Button>
+            />
           )}
           {resultsLine !== null && (
             <p className='text-muted-foreground text-sm'>{resultsLine}</p>
           )}
-          {photoCount > 0 && (
+          {modeOptions.length > 1 && (
             <PillGroup
               label='How to look over your cooks'
               isThin
-              value={mode}
+              value={shownMode}
               onChange={setMode}
-              options={[
-                { value: 'cooks', label: 'All cooks' },
-                { value: 'photos', label: `Photos · ${photoCount}` },
-              ]}
+              options={modeOptions}
             />
           )}
         </div>
-        {cooks.length === 0 ? (
+        {shownMode === 'changes' ? (
+          <div className='min-h-0 flex-1 overflow-y-auto'>
+            {undoError && (
+              <p className='text-destructive pt-2 text-sm'>{undoError}</p>
+            )}
+            <ul className='divide-border divide-y'>
+              {shownChanges.map((entry) => (
+                <NoteEntry
+                  key={entry.id}
+                  note={entry}
+                  cook={null}
+                  writtenBefore={null}
+                  stepAt={null}
+                  isStepLost={false}
+                  onEdit={null}
+                  onApplyChange={null}
+                  onUndo={
+                    undoableIds.includes(entry.id) ? () => void askUndo() : null
+                  }
+                />
+              ))}
+            </ul>
+            {changesHidden > 1 && (
+              <ShowMoreButton
+                isOpen={false}
+                onClick={() =>
+                  setChangesLimit(changesLimit + CHANGES_FIRST_SHOWN)
+                }
+              >
+                Show {Math.min(CHANGES_FIRST_SHOWN, changesHidden)} more
+              </ShowMoreButton>
+            )}
+          </div>
+        ) : cooks.length === 0 ? (
           <p className='text-muted-foreground py-4 text-center text-sm'>
             No cooks yet. Add the ones you remember.
           </p>
@@ -375,7 +479,7 @@ function CookingHistorySheet({
               const day = formatDateShort(cook.cookedAt);
               const writtenLine = getWrittenLine(writtenByCook.get(cook.id));
               return (
-                <li key={cook.id} className='pb-1'>
+                <li key={cook.id} className='pb-2'>
                   <Button
                     type='button'
                     variant='tertiary'
@@ -420,17 +524,18 @@ function CookingHistorySheet({
                     />
                   </Button>
                   {isNotesReady && !notedCookIds.has(cook.id) && (
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      size='sm'
-                      aria-label={`Add a note about the cook from ${day}`}
-                      className='-mt-1 h-10 gap-1.5 px-0! text-sm font-normal'
-                      onClick={() => openNote(cook.id)}
-                    >
-                      <NotebookPen className='h-4 w-4' aria-hidden='true' />
-                      Add a note
-                    </Button>
+                    <ActionChips
+                      className='pb-1'
+                      actions={[
+                        {
+                          key: 'note',
+                          icon: <NotebookPen className='h-4 w-4' />,
+                          label: 'Add a note',
+                          description: `Add a note about the cook from ${day}`,
+                          onClick: () => openNote(cook.id),
+                        },
+                      ]}
+                    />
                   )}
                 </li>
               );

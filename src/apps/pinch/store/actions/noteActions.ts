@@ -138,6 +138,7 @@ export const addNote = createAsyncThunk<
     cookId: kind === 'TIP' ? null : input.cookId,
     ...getStepAnchor(steps, stepIndex),
     reason: getReason(kind, input.reason),
+    previous: null,
     createdAt: now,
     updatedAt: now,
   };

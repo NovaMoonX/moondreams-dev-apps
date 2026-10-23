@@ -184,6 +184,7 @@ const tipOf = (id: string, text: string | null, extra: Partial<RecipeNote> = {})
   stepIndex: null,
   stepText: null,
   reason: null,
+  previous: null,
   createdAt: 10,
   updatedAt: 10,
   ...extra,
@@ -200,7 +201,23 @@ const notesOfFull: RecipeNote[] = [
   tipOf('t-blank', '   '),
   { ...tipOf('n-note', 'PRIVATE-NOTE'), kind: 'NOTE' },
   { ...tipOf('n-change', 'PRIVATE-CHANGE', { reason: 'PRIVATE-REASON' }), kind: 'CHANGE' },
-  { ...tipOf('n-tweak', null, { changes: ['PRIVATE-LINE'] }), kind: 'TWEAK' },
+  {
+    ...tipOf('n-tweak', null, {
+      changes: ['PRIVATE-LINE'],
+      previous: {
+        title: 'PRIVATE-PREVIOUS',
+        description: null,
+        servings: 4,
+        prepMinutes: null,
+        cookMinutes: null,
+        ingredients: [],
+        steps: ['PRIVATE-PREVIOUS-STEP'],
+        nutritionOverride: null,
+        sourceId: null,
+      },
+    }),
+    kind: 'TWEAK',
+  },
 ];
 const TIPS = { tips: true, notes: false };
 const NOTES = { tips: false, notes: true };
@@ -227,7 +244,7 @@ check('a recipe copy carries its tips in step order, as words and a step only', 
     { text: 'Rest it.', step: 1 },
   ]);
   const text = JSON.stringify(withTipsShared);
-  ['PRIVATE-NOTE', 'PRIVATE-CHANGE', 'PRIVATE-REASON', 'PRIVATE-LINE', 't-late', 'cookId', 'createdAt'].forEach(
+  ['PRIVATE-NOTE', 'PRIVATE-CHANGE', 'PRIVATE-REASON', 'PRIVATE-LINE', 'PRIVATE-PREVIOUS', 'previous', 't-late', 'cookId', 'createdAt'].forEach(
     (marker) => assert.ok(!text.includes(marker), `"${marker}" leaked into the copy`),
   );
 });
@@ -244,7 +261,7 @@ check('notes are carried only when included, as words and a step, and never a ch
   assert.deepEqual(result.notes, [{ text: 'PRIVATE-NOTE', step: null }]);
   assert.deepEqual(result.tips, []);
   const text = JSON.stringify(result);
-  ['PRIVATE-CHANGE', 'PRIVATE-REASON', 'PRIVATE-LINE'].forEach((marker) =>
+  ['PRIVATE-CHANGE', 'PRIVATE-REASON', 'PRIVATE-LINE', 'PRIVATE-PREVIOUS', 'previous'].forEach((marker) =>
     assert.ok(!text.includes(marker), `"${marker}" leaked into the copy`),
   );
   assert.equal(buildSharedRecipe(full, ingredientsById, notesOfFull, BOTH).tips.length, 4);

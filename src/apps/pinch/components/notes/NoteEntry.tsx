@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { Pencil, PenLine } from 'lucide-react';
+import { Pencil, PenLine, Undo2 } from 'lucide-react';
 
 import ActionChips, { type ActionChip } from '@/components/ActionChips';
 import ClampedText from '@/components/ClampedText';
@@ -25,6 +25,8 @@ interface NoteEntryProps {
   onEdit: ((id: string) => void) | null;
   /** Opens the recipe's form to make a planned change; offered on a change only. */
   onApplyChange: ((id: string) => void) | null;
+  /** Puts the recipe back to how it was before this change; set only on a recorded change that is the recipe's latest and can be reverted. */
+  onUndo?: ((id: string) => void) | null;
 }
 
 function NoteEntry({
@@ -36,6 +38,7 @@ function NoteEntry({
   isInCook = false,
   onEdit,
   onApplyChange,
+  onUndo = null,
 }: NoteEntryProps) {
   const isTweak = note.kind === 'TWEAK';
   const isChange = note.kind === 'CHANGE';
@@ -63,6 +66,17 @@ function NoteEntry({
             label: 'Edit',
             description: `Edit the ${kindName} from ${date}`,
             onClick: () => onEdit(note.id),
+          },
+        ]
+      : []),
+    ...(onUndo && isTweak
+      ? [
+          {
+            key: 'undo',
+            icon: <Undo2 className='h-4 w-4' />,
+            label: 'Undo this change',
+            description: `Put the recipe back to how it was before ${date}`,
+            onClick: () => onUndo(note.id),
           },
         ]
       : []),

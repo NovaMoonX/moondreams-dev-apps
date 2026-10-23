@@ -22,6 +22,11 @@ interface CookJournalProps {
   cookId: string;
   onEdit: (noteId: string) => void;
   onApplyChange: (noteId: string) => void;
+  /** Ids of the recorded changes that can be undone right now. */
+  undoableIds: string[];
+  onUndo: (noteId: string) => void;
+  /** Why the last undo did not happen. */
+  undoError: string | null;
 }
 
 /** What came out of one cook: the notes and changes written for it while cooking or after. A tip is the recipe's, never a cook's, so it is not here. */
@@ -30,6 +35,9 @@ function CookJournal({
   cookId,
   onEdit,
   onApplyChange,
+  undoableIds,
+  onUndo,
+  undoError,
 }: CookJournalProps) {
   const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
   const lastTweakAt =
@@ -57,9 +65,11 @@ function CookJournal({
             isInCook
             onEdit={onEdit}
             onApplyChange={onApplyChange}
+            onUndo={undoableIds.includes(note.id) ? onUndo : null}
           />
         ))}
       </ul>
+      {undoError && <p className='text-destructive text-sm'>{undoError}</p>}
     </div>
   );
 }

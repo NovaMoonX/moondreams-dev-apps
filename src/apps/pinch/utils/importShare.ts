@@ -321,6 +321,7 @@ const toTips = (
         cookId: null,
         ...getStepAnchor(recipe.steps, step),
         reason: null,
+        previous: null,
         createdAt: now,
         updatedAt: now,
       },
