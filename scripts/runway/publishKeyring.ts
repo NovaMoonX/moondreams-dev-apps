@@ -205,6 +205,11 @@ async function main() {
     if (!secretFile)
       throw new Refusal('Refused: --emulator needs --secret-file.');
   }
+  if (!isEmulator && process.env.FIRESTORE_EMULATOR_HOST) {
+    throw new Refusal(
+      'Refused: FIRESTORE_EMULATOR_HOST is set, so the canary would go to the emulator while the secret version goes to the real project. Unset it, or pass --emulator.',
+    );
+  }
   const dryRun = has('dry-run');
   if (getApps().length === 0) initializeApp({ projectId: project });
 
