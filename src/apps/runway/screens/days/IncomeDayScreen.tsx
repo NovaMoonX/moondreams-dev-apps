@@ -27,6 +27,7 @@ import type { HoldChoice } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   selectDraft,
+  selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
@@ -42,10 +43,12 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const today = todayAsUtcDate(useNow(60_000));
-  const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
+  const isLoaded = isPlanLoaded && isDaysLoaded;
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
 
-  if (!view) {
+  if (!view || !isDaysLoaded) {
     return (
       <Subview title='Income day' onClose={onClose}>
         <p className='text-muted-foreground text-sm'>
