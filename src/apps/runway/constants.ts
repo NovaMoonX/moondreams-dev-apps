@@ -13,3 +13,9 @@ export const RUNWAY_TAB_LABELS: Record<RunwayTab, string> = {
   days: 'Days',
   plan: 'Plan',
 };
+
+export const STANCES = ['conservative', 'middle', 'optimistic'] as const;
+
+export const SEALED_SCHEMA_VERSION = 1;
+
+export const DEFAULT_CURRENCY_CODE = 'USD';

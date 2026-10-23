@@ -136,12 +136,13 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run seed:waypoint`                          | Upsert core data and Waypoint trip fixtures.                                                     |
 | `npm run seed:a-list`                            | Upsert core data and A-List Tracker fixtures.                                                    |
 | `npm run seed:pinch`                             | Upsert core data and Pinch kitchen fixtures.                                                     |
+| `npm run seed:runway`                            | Upsert core data and Alex's Runway plan and its wrapped key.                                     |
 | `npm run seed:pinch-scale`                       | Upsert core data and Taylor's oversized "Big Kitchen (scale test)" for Pinch performance checks.   |
 | `npm run seed:reset`                             | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures.                                |
 | `npm run emulators:seed`                         | Start emulators, seed all fixtures, and exit.                                                    |
 | `npm run emulators:seed:reset`                   | Start emulators, clear all fixtures, reseed, and exit.                                           |
 
-Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, `pinch`, `pinch-scale`, or `all` to select a scope (`pinch-scale` is opt-in; `all` and `seed:reset` leave it out).
+Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, `pinch`, `pinch-scale`, `runway`, or `all` to select a scope (`pinch-scale` is opt-in; `all` and `seed:reset` leave it out).
 Normal runs are idempotent upserts and retain records created manually during local
 development. `--reset` is the explicit destructive local reset.
 
@@ -209,6 +210,15 @@ To add a main app or mini-app, create a module in `scripts/seeds/`, seed data un
 its owned collection path, call the module from `scripts/seed.ts`, and document its
 scope here. Keep fixed fixture UIDs in `scripts/seeds/types.ts` so global and
 app-specific records always agree.
+
+`runway` writes Alex's plan at `apps/runway/plans/seed-worth-the-wait-one` (a sealed currency payload) and
+its wrapped data key at `apps/runway/server/seed-worth-the-wait-one/keys/data`, so Alex's Runway opens at once.
+Every other account has no plan: its first open calls `getRunwayKey` and creates one. The seed derives Alex's data
+key from the emulator keyring and wraps it the way `getRunwayKey` does. That keyring is the `RUNWAY_MASTER_KEYS`
+line in `functions/.secret.local` (git-ignored), for example
+`RUNWAY_MASTER_KEYS='{"current":"m1","keys":{"m1":"<64 hex characters>"}}'`; with no file or line, both the seed
+and the emulator use the built-in development keyring. Restart the emulators and run `npm run seed:reset` after
+changing it, or Alex's plan will not open ("Your plan cannot be opened right now").
 
 ## Emulator snapshots
 

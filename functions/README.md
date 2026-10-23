@@ -31,6 +31,7 @@ Server-side code for the mini-apps. Every function:
 | `getPinchShare` | callable, **no sign-in needed** (a signed-in caller only learns whether the share is theirs) | Pinch | `{ shareId }` → `{ status: 'ok', kind, sharedAt, isOwner, ownerSourceId, recipe, meal }`, or `{ status: 'not_found' }` for a malformed, unknown or deleted id alike. Serves a shared recipe or saved meal to anyone with its link; never returns the owner's uid |
 | `changePinchShare` | callable | Pinch | `{ action, … }` with `action` one of `create`, `update`, `renew`, `delete` → `{ shareId }` (null once deleted). Makes a share (the server mints the id), takes its copy again, gives it a new address, or ends it; up to 30 shares per person |
 | `copyPinchShareCover` | callable | Pinch | `{ shareId, index, recipeId }` → `{ coverPath }`: copies a shared recipe's cover onto the signed-in visitor's own new recipe, or `{ coverPath: null }` when there is nothing to copy |
+| `getRunwayKey` | callable | Runway | `{}` → `{ appId: 'runway', keyId, keyVersion, key }`: the caller's plan data key (64 hex characters), over TLS. Creates the key and stores it wrapped under the current master key only when the plan has none; never when unwrapping fails (it answers `failed-precondition` and logs `runway.keys.unwrapFailed` with the master key id). Re-wraps a key stored under an older master key id |
 | `sendScheduledReminders` | schedule, every minute | shared | Sends due push reminders from `reminders` through FCM, and deletes finished ones after two weeks |
 | `sendEatSoonDigest` | schedule, every 30 minutes | Pinch | Sends each person who turned it on one push a day, in their own hour, naming the dishes in their fridge and freezer and, if they also turned that on, the ingredients in their pantry that are past their date or due soon |
 
@@ -43,6 +44,7 @@ Every callable requires a signed-in caller, except `getCalendarShare` and `getPi
 | `TMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getPopularMovies`, `getMovie` | `firebase functions:secrets:set TMDB_API_KEY --project moondreams-dev-apps` (paste the TMDB "API Read Access Token" or the v3 API key) |
 | `OMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getPopularMovies`, `getMovie` | `firebase functions:secrets:set OMDB_API_KEY --project moondreams-dev-apps` |
 | `AMC_API_KEY` | Functions secret, **required to deploy** | `findTheatres`, `findShowtimes` | `firebase functions:secrets:set AMC_API_KEY --project moondreams-dev-apps` (the vendor key from [developers.amctheatres.com](https://developers.amctheatres.com), sent as `X-AMC-Vendor-Key`) |
+| `RUNWAY_MASTER_KEYS` | Functions secret, **required to deploy**: a JSON keyring, `{ "current": "m1", "keys": { "m1": "<64 hex characters>" } }` | `getRunwayKey` | `firebase functions:secrets:set RUNWAY_MASTER_KEYS --project moondreams-dev-apps` (paste the keyring JSON; generate a key with `openssl rand -hex 32`). Ids are only ever added, never removed or reused. See "Runway: the master keyring" below. |
 | `MOVIE_PROVIDER` | env, optional (`tmdb` or `omdb`) | `searchMovies` | `functions/.env.local` locally. Forces a provider; unset, TMDB is used whenever its key is set. |
 | `TMDB_API_BASE` | env, optional | TMDB calls | `functions/.env.local`. Points TMDB calls at another server; a test aid, never set in production. |
 | `AMC_API_BASE` | env, optional | AMC calls | `functions/.env.local`. Points AMC calls at another server; a test aid, never set in production. |
@@ -124,6 +126,19 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 - **Server cache:** the whole day at a theater, 15 minutes, in `apps/a-list/theatreCache`; every movie asked about that day shares it.
 - **Offline fixtures:** in the emulator with no key readable, every title gets five showings (Standard, IMAX, Standard, Dolby, a sold-out Standard).
 - **Check after the key is set:** the response parsing was written from AMC's public docs and a third-party reference of live responses, and has not been run against the live API. Still unconfirmed: that `movieName` and `purchaseUrl` are present on every showtime, the Dolby and PRIME attribute codes, and the `/v2/locations` and `/v2/location-suggestions` shapes.
+
+### Runway: `getRunwayKey` and the master keyring
+
+- **What it guards:** each plan has one random 256-bit data key, stored only wrapped (AES-256-GCM, the uid as authenticated data) at `apps/runway/server/{uid}/keys/data`, which no client rule can read. Losing the keyring loses every plan.
+- **Flow:** in one transaction it reads that document; absent, it creates a key and wraps it under the keyring's `current` id; present, it unwraps it with the id the document names and, when that is not `current`, re-wraps it under `current`. A failed unwrap answers `failed-precondition` and never writes: nothing replaces a stored key. The raw key goes only to its owner in the response and is never stored or logged.
+- **Cold-start check:** the keyring is validated on an instance's first call (and again if the secret text changes). A malformed keyring, a `current` that is not in `keys` or any key that is not 32 bytes of hex fails every call and logs `runway.keys.keyringInvalid`.
+- **Log events:** `runway.keys.unwrapFailed` (ERROR, with `masterKeyId`, no bytes) and `runway.keys.keyringInvalid` (ERROR).
+- **Emulator:** reads `RUNWAY_MASTER_KEYS` from `functions/.secret.local`, one line in the form `RUNWAY_MASTER_KEYS='{"current":"m1","keys":{"m1":"<64 hex>"}}'`. With no value the built-in development keyring (`DEV_KEYRING` in `planKey.ts`) is used, and only when `FUNCTIONS_EMULATOR` is set; production never falls back. `npm run seed` reads the same file, so seeded plans open under whatever keyring the emulator runs with; change the file and run `npm run seed:reset` (and restart the emulators).
+- **Runbook stub:**
+  1. Create the secret before the PR that binds it merges, with a keyring of one key (the command above). The deploy fails without it.
+  2. Save the keyring to storage outside Google Cloud (a password manager entry, plus a second secure account) as soon as it exists.
+  3. Never run `firebase functions:secrets:destroy` or `secrets:prune` against it; a PR that removes the last function binding to it is rejected.
+  4. Rotation, verification, alerts and recovery drills arrive with the key-guarding issues; until then, adding a key means adding an id to the keyring JSON (keeping every earlier id) and moving `current`.
 
 ### `getFirebaseUsage`
 
