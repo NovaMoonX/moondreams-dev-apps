@@ -96,6 +96,15 @@ const APP_REGISTRY = [
       },
     ],
   },
+  {
+    id: 'runway',
+    name: 'Runway',
+    title: 'Runway - Moondreams Dev Apps',
+    path: '/runway',
+    description:
+      'An income-first budget planner for money that does not arrive or leave on a tidy schedule: draft where each income day should go, look ahead to see how far the plan holds, and change it when life changes.',
+    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-runway.png',
+  },
 ];
 
 // Tells search engines not to list the page or follow its links, and browsers not to send its address as a referrer, even for those that never run its JS (where the same meta tags are added).

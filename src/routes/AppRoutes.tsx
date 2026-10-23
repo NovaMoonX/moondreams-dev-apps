@@ -76,6 +76,20 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'runway',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: RunwayPage } = await import('@apps/runway/RunwayPage');
+          return {
+            Component: () => (
+              <ProtectedRoute appId='runway'>
+                <RunwayPage />
+              </ProtectedRoute>
+            ),
+          };
+        },
+      },
+      {
         path: 'a-list/shared/:shareId',
         HydrateFallback: Loading,
         lazy: async () => {
