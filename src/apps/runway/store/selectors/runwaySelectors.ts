@@ -16,6 +16,7 @@ import { buildDraft, type Draft } from '@apps/runway/engine/draft';
 import {
   collectFunded,
   collectPaid,
+  collectStarted,
   NO_PROGRESS,
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
@@ -30,6 +31,7 @@ import {
   LOOKAHEAD_MONTHS,
   OVERDUE_DAYS,
   PRIORITIES,
+  START_DAY_KEY,
 } from '@apps/runway/constants';
 import { addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
 import type {
@@ -221,22 +223,54 @@ export const selectIsRecordsReady = (state: RootState) => {
 
 const selectRecords = (state: RootState) => state.runway.records;
 
-/** What confirmed days have already given each plan item, from the records read; a goal's held money. */
-export const selectConfirmedByItem = createSelector(
-  [selectRecords],
-  (records) => sumConfirmedByItem(records),
-);
-
 const selectMoves = (state: RootState) => state.runway.moves;
+const selectStartDate = (state: RootState) =>
+  state.runway.plan?.startDate ?? null;
+
+/** What each plan item holds from the ledger: its starting amount plus what confirmed days gave it; a goal's held money. */
+export const selectHeldByItem = createSelector(
+  [selectRecords, selectMoves, selectStartDate],
+  (records, moves, startDate) => {
+    const confirmed = sumConfirmedByItem(records);
+    const { byItem } = collectStarted(moves, startDate);
+    const ids = new Set([...Object.keys(confirmed), ...Object.keys(byItem)]);
+    return Object.fromEntries(
+      [...ids].map((id) => [id, (confirmed[id] ?? 0) + (byItem[id] ?? 0)]),
+    );
+  },
+);
 const selectOpenDays = (state: RootState) => state.runway.days;
 
 /** What confirmed days set aside for each item and which payments were marked paid, from the records and moves read. */
 export const selectBillProgress = createSelector(
-  [selectRecords, selectOpenDays, selectMoves],
-  (records, days, moves): Record<string, BillProgressInput> => {
-    const funded = collectFunded(
+  [selectRecords, selectOpenDays, selectMoves, selectStartDate],
+  (records, days, moves, startDate): Record<string, BillProgressInput> => {
+    const confirmedFunded = collectFunded(
       records,
       new Map(days.map((day) => [day.id, day.expectedOn])),
+    );
+    const started = collectStarted(moves, startDate);
+    const funded = Object.fromEntries(
+      [
+        ...new Set([
+          ...Object.keys(confirmedFunded),
+          ...Object.keys(started.byItem),
+        ]),
+      ].map((id) => [
+        id,
+        [
+          ...(startDate !== null && (started.byItem[id] ?? 0) > 0
+            ? [
+                {
+                  dayKey: START_DAY_KEY,
+                  on: startDate,
+                  cents: started.byItem[id],
+                },
+              ]
+            : []),
+          ...(confirmedFunded[id] ?? []),
+        ],
+      ]),
     );
     const paid = collectPaid(moves);
     const ids = new Set([...Object.keys(funded), ...Object.keys(paid)]);
@@ -422,7 +456,6 @@ const selectDays = (state: RootState) => state.runway.days;
 const selectDayKey = (_state: RootState, dayKey: string) => dayKey;
 const selectToday = (_state: RootState, _dayKey: string, today: number) =>
   today;
-const selectHeldByItem = (state: RootState) => selectConfirmedByItem(state);
 
 const MAX_CACHED_DRAFTS = 24;
 const draftCaches = new WeakMap<object, Map<string, DraftView>>();

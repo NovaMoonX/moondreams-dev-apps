@@ -13,6 +13,8 @@ import Loading from '@/ui/Loading';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
+import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
+import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
 import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
@@ -37,6 +39,8 @@ function RunwayPage() {
     closeDay,
     moreEntry,
     closeMoreEntry,
+    view,
+    closeView,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
@@ -105,6 +109,22 @@ function RunwayPage() {
     return (
       <div className='page'>
         <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
+      </div>
+    );
+  }
+
+  if (view === 'start') {
+    return (
+      <div className='page'>
+        <StartingOutScreen />
+      </div>
+    );
+  }
+
+  if (view === 'freeToSpend') {
+    return (
+      <div className='page'>
+        <FreeToSpendScreen onClose={closeView} />
       </div>
     );
   }

@@ -47,6 +47,13 @@ import {
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
 import {
+  deriveBalances,
+  getFreeToSpendFigure,
+} from '../../src/apps/runway/engine/balances.ts';
+import { getBillCoverage } from '../../src/apps/runway/engine/coverage.ts';
+import {
+  collectStarted,
+  countFundedDays,
   collectFunded,
   collectPaid,
   countMarks,
@@ -3073,6 +3080,303 @@ const version = (
     keepTicks(['d:goal'], sealedOf(base, { 'd:goal': 0 }).changes),
     [],
     'a line corrected down to nothing is unticked',
+  );
+}
+
+{
+  // Starting point and balances: every figure is a sum of the ledger.
+  const start = 10 * DAY_MS;
+  const startMove = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    createdAt: number,
+    holding: 'money' | 'goal' | 'bill',
+    date = start,
+  ): OpenMove => ({
+    id,
+    kind: 'start',
+    date,
+    refId,
+    reversesMoveId: null,
+    createdAt,
+    payload: { amountCents: cents, holding },
+  });
+  const moves: OpenMove[] = [
+    startMove('m1', null, 100_000, 1, 'money'),
+    startMove('g1', 'goal', 20_000, 1, 'goal'),
+    startMove('b1', 'rent', 30_000, 1, 'bill'),
+    startMove('m0', null, 5_000, 0, 'money', start - DAY_MS),
+  ];
+  assert.deepEqual(
+    collectStarted(moves, start),
+    { money: 100_000, byItem: { goal: 20_000, rent: 30_000 } },
+    'the start moves of the start day count',
+  );
+  assert.deepEqual(
+    collectStarted([...moves, startMove('m2', null, 90_000, 2, 'money')], start)
+      .money,
+    90_000,
+    'a later run of the setup replaces an earlier holding',
+  );
+  assert.deepEqual(collectStarted(moves, null), { money: null, byItem: {} });
+  const kinds = { goal: 'goal', rent: 'bill', food: 'envelope' } as const;
+  const none = deriveBalances({
+    startDate: start,
+    moves,
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+  });
+  assert.equal(none.moneyOnHandCents, 100_000);
+  assert.equal(none.freeToSpendCents, 50_000, 'money less what is assigned');
+  assert.deepEqual(getFreeToSpendFigure(none), {
+    kind: 'amount',
+    cents: 50_000,
+  });
+  const confirmedRecord = {
+    id: 'd_confirmed',
+    dayId: 'd',
+    createdAt: 5,
+    kind: 'confirmed' as const,
+    payload: {
+      fingerprint: 'x',
+      stance: 'conservative' as const,
+      arrivedCents: 40_000,
+      expectedCents: 40_000,
+      freeToSpendCents: 5_000,
+      differences: [],
+      lines: [
+        {
+          lineId: 'd:goal',
+          itemId: 'goal',
+          name: 'Goal',
+          emoji: null,
+          tier: 'should' as const,
+          demandCents: 10_000,
+          cents: 10_000,
+          shortBy: 0,
+          paidBy: [],
+        },
+        {
+          lineId: 'd:food',
+          itemId: 'food',
+          name: 'Food',
+          emoji: null,
+          tier: 'must' as const,
+          demandCents: 25_000,
+          cents: 25_000,
+          shortBy: 0,
+          paidBy: [],
+        },
+      ],
+    },
+  };
+  const after = deriveBalances({
+    startDate: start,
+    moves,
+    records: [confirmedRecord],
+    arrivedOn: new Map([['d', start + DAY_MS]]),
+    kinds,
+  });
+  assert.equal(after.moneyOnHandCents, 140_000);
+  assert.equal(after.assignedByItem.goal, 30_000);
+  assert.equal(after.assignedByItem.food, 25_000);
+  assert.equal(
+    after.freeToSpendCents,
+    50_000 + 5_000,
+    'free to spend is the start free plus what the day left',
+  );
+  assert.equal(
+    after.freeToSpendCents,
+    after.moneyOnHandCents -
+      after.assignedToBillsCents -
+      after.assignedToGoalsCents -
+      after.assignedToEnvelopesCents,
+    'free to spend is the sum of the ledger',
+  );
+  assert.equal(
+    deriveBalances({
+      startDate: start,
+      moves,
+      records: [confirmedRecord],
+      arrivedOn: new Map([['d', start - DAY_MS]]),
+      kinds,
+    }).moneyOnHandCents,
+    100_000,
+    'a day that arrived before the starting point is not counted',
+  );
+  const paid: OpenMove = {
+    id: 'paid_rent_1',
+    kind: 'billPaid',
+    date: start + 5 * DAY_MS,
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 6,
+    payload: {
+      amountCents: 40_000,
+      paidOn: start + DAY_MS,
+      fromFreeCents: 10_000,
+    },
+  };
+  const paidBalances = deriveBalances({
+    startDate: start,
+    moves: [...moves, paid],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+  });
+  assert.equal(
+    paidBalances.assignedByItem.rent,
+    0,
+    'a paid bill uses up its set-aside',
+  );
+  assert.equal(
+    paidBalances.freeToSpendCents,
+    40_000,
+    'the part beyond what was set aside draws Free to spend',
+  );
+  const undo: OpenMove = {
+    ...paid,
+    id: 'unpaid_paid_rent_1',
+    reversesMoveId: 'paid_rent_1',
+    createdAt: 7,
+  };
+  assert.equal(
+    deriveBalances({
+      startDate: start,
+      moves: [...moves, paid, undo],
+      records: [],
+      arrivedOn: new Map(),
+      kinds,
+    }).freeToSpendCents,
+    50_000,
+    'undoing the mark puts it back',
+  );
+  const over = deriveBalances({
+    startDate: start,
+    moves: [
+      startMove('m', null, 10_000, 1, 'money'),
+      startMove('g', 'goal', 20_000, 1, 'goal'),
+    ],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+  });
+  assert.deepEqual(
+    getFreeToSpendFigure(over),
+    { kind: 'over', cents: 10_000 },
+    'over-assigned is shown, never blocked',
+  );
+  assert.deepEqual(
+    getFreeToSpendFigure(
+      deriveBalances({
+        startDate: start,
+        moves: [startMove('g', 'goal', 20_000, 1, 'goal')],
+        records: [],
+        arrivedOn: new Map(),
+        kinds,
+      }),
+    ),
+    { kind: 'unknown' },
+    'no money on hand is unknown, not zero',
+  );
+  assert.deepEqual(
+    getFreeToSpendFigure(
+      deriveBalances({
+        startDate: null,
+        moves,
+        records: [],
+        arrivedOn: new Map(),
+        kinds,
+      }),
+    ),
+    { kind: 'unknown' },
+    'no starting point is unknown',
+  );
+
+  // A bill's starting set-aside feeds its payment but is not a funded day.
+  const dayKeyStart = [{ dayKey: 'start', on: start, cents: 30_000 }];
+  assert.equal(countFundedDays(dayKeyStart), 0);
+  const dues = planBillPayments(
+    {
+      itemId: 'rent',
+      createdAt: 0,
+      priority: 'must',
+      orderIndex: 1,
+      amount: { lowCents: 100_000, highCents: 100_000 },
+      stanceOverride: null,
+      schedule: { kind: 'once', anchor: start + 20 * DAY_MS, monthDays: [] },
+      ending: { onDate: null, afterCount: 1 },
+      fundedBy: { kind: 'suggested' },
+      progress: { funded: dayKeyStart, paid: [] },
+    },
+    [],
+    start + 60 * DAY_MS,
+  );
+  assert.equal(
+    dues[0].fundedCents,
+    30_000,
+    'the starting amount counts toward the first payment',
+  );
+  assert.equal(dues[0].fundedDays, 0);
+
+  // Coverage never reads a plan gap as a money gap.
+  const payment = (dueOn: number, parts: number, fundedCents = 0) =>
+    ({
+      dueOn,
+      totalCents: 1_000,
+      fundedCents,
+      fundedDays: 0,
+      ranged: null,
+      paid: null,
+      parts: Array.from({ length: parts }, () => ({
+        day: {
+          dayKey: 'x',
+          on: 0,
+          amount: { lowCents: 0, highCents: 0 },
+          stanceOverride: null,
+          sourceId: null,
+        },
+        cents: 1,
+      })),
+    }) as never;
+  assert.deepEqual(getBillCoverage([], {}, start, start + 365 * DAY_MS), {
+    kind: 'noBills',
+  });
+  assert.equal(
+    getBillCoverage(
+      ['a'],
+      { a: [payment(start + 5 * DAY_MS, 2)] },
+      start,
+      start + 365 * DAY_MS,
+    ).kind,
+    'covered',
+  );
+  const gap = getBillCoverage(
+    ['a', 'b'],
+    {
+      a: [payment(start + 5 * DAY_MS, 2)],
+      b: [payment(start + 9 * DAY_MS, 0)],
+    },
+    start,
+    start + 365 * DAY_MS,
+  );
+  assert.deepEqual(gap, {
+    kind: 'gap',
+    through: start + 8 * DAY_MS,
+    billId: 'b',
+    dueOn: start + 9 * DAY_MS,
+  });
+  assert.equal(
+    getBillCoverage(
+      ['a'],
+      { a: [payment(start + 5 * DAY_MS, 0, 1_000)] },
+      start,
+      start + 365 * DAY_MS,
+    ).kind,
+    'covered',
+    'a payment set aside in full is covered',
   );
 }
 

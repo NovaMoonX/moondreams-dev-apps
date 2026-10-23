@@ -306,7 +306,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [x] Keep the draft as proposed beside the confirmed split, record each difference, and allow a note on it
 - [x] After confirming, a checklist of the bills to pay
 - [x] Fund a bill across several income days, with progress shown
-- [ ] Guided setup: money on hand now, what each goal holds, and what is already set aside for each bill
+- [x] Guided setup: money on hand now, what each goal holds, and what is already set aside for each bill
 - [ ] Look ahead and plan upcoming income days, with how far the plan holds, a warning for any bill with no income before it is due, and changes that start in the future
 - [ ] Choose Plan or Track, and move either way, with a start date and starting amounts on the way up
 - [ ] Add a purchase by hand, split it, mark a refund, and see its envelope go down

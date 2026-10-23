@@ -3967,19 +3967,21 @@ service cloud.firestore {
           && data.updatedAt is number
           && data.updatedAt <= request.time.toMillis() + 3600000
           && data.stance in ['conservative', 'middle', 'optimistic']
+          && (data.get('startDate', null) == null || isDateOnly(data.startDate))
           && (data.keyId == null || data.keyId is string)
           && (data.get('sealed', null) == null || isSealed(data.sealed));
       }
 
       allow read: if isPlanOwner();
       allow create: if isPlanOwner()
-        && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId', 'sealed'])
-        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'keyId', 'sealed'])
+        && request.resource.data.startDate == null
         && isPlanValid(request.resource.data);
-      // A plan written before `sealed` existed may lack the key; it is added with the next write.
+      // A plan written before `sealed` or `startDate` existed may lack the key; it is added with the next write.
       allow update: if isPlanOwner()
         && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId'])
-        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'keyId', 'sealed'])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.createdAt == resource.data.createdAt
         && isPlanValid(request.resource.data);
@@ -4173,9 +4175,8 @@ service cloud.firestore {
       // The ledger is append-only. A bill marked paid is `paid_<bill>_<yyyymmdd of its due date>`, with `_<n>`
       // when it is marked again after an undo; an undo is `unpaid_<id of the mark>` and names that mark.
       match /moves/{moveId} {
-        function isMoveValid(data) {
-          return data.id == moveId
-            && data.kind == 'billPaid'
+        function isPaidMoveValid(data) {
+          return data.kind == 'billPaid'
             && isDateOnly(data.date)
             && data.refId is string
             && exists(planDoc('items', data.refId))
@@ -4190,6 +4191,28 @@ service cloud.firestore {
                 && get(planDoc('moves', data.reversesMoveId)).data.refId == data.refId
                 && get(planDoc('moves', data.reversesMoveId)).data.date == data.date
                 && get(planDoc('moves', data.reversesMoveId)).data.reversesMoveId == null);
+        }
+
+        // A starting holding is dated the plan's starting day, set in the same batch, and its id names the
+        // holding and when it was written, so a run appends and never replaces.
+        function isStartMoveValid(data) {
+          return data.kind == 'start'
+            && isDateOnly(data.date)
+            && existsAfter(/databases/$(database)/documents/apps/runway/plans/$(uid))
+            && getAfter(/databases/$(database)/documents/apps/runway/plans/$(uid)).data.get('startDate', null) == data.date
+            && data.reversesMoveId == null
+            && isPastOrNear(data.createdAt)
+            && isSealed(data.sealed)
+            && moveId == 'start_' + (data.refId == null ? 'money' : data.refId) + '_' + string(data.createdAt)
+            && (data.refId == null
+              || (data.refId is string
+                && exists(planDoc('items', data.refId))
+                && get(planDoc('items', data.refId)).data.kind in ['goal', 'bill']));
+        }
+
+        function isMoveValid(data) {
+          return data.id == moveId
+            && (data.kind == 'start' ? isStartMoveValid(data) : isPaidMoveValid(data));
         }
 
         allow read: if isPlanOwner();

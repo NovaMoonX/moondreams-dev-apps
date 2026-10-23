@@ -6,6 +6,7 @@ import type {
   ITEM_KINDS,
   MORE_ENTRIES,
   MOVE_KINDS,
+  START_HOLDINGS,
   DAY_STATUSES,
   HOLD_CHOICES,
   PLAN_SECTIONS,
@@ -36,6 +37,8 @@ export interface PlanDoc {
   createdAt: number;
   updatedAt: number;
   stance: Stance;
+  /** The starting point; null until the person says where things stand. A plan written before it existed has none. */
+  startDate: DateOnly | null;
   keyId: string | null;
   sealed: Sealed | null;
 }
@@ -45,6 +48,7 @@ export interface OpenPlan extends PlanSealedFields {
   createdAt: number;
   updatedAt: number;
   stance: Stance;
+  startDate: DateOnly | null;
   keyId: string | null;
 }
 
@@ -346,7 +350,7 @@ export type GoalVersion = Extract<OpenVersion, { kind: 'goal' }>;
 
 export type MoveKind = (typeof MOVE_KINDS)[number];
 
-/** Append-only: a bill marked paid (`reversesMoveId` null) or the undo of one. `date` is the due date of the payment, so a second tap names the same id. */
+/** Append-only: a bill marked paid (`reversesMoveId` null) or the undo of one, or a `start` holding. `date` is the due date of a payment, or the starting day of a `start`. */
 export interface MoveDoc {
   id: string;
   kind: MoveKind;
@@ -365,12 +369,25 @@ export interface BillPaidSealed {
   fromFreeCents: Cents;
 }
 
-export interface OpenMove {
+export type StartHolding = (typeof START_HOLDINGS)[number];
+
+/** What one holding had on the starting day: the money on hand, or what a goal holds or a bill has set aside. */
+export interface StartSealed {
+  amountCents: Cents;
+  holding: StartHolding;
+}
+
+interface OpenMoveBase {
   id: string;
-  kind: MoveKind;
   date: DateOnly;
   refId: string | null;
   reversesMoveId: string | null;
   createdAt: number;
-  payload: BillPaidSealed;
 }
+
+export type OpenMove =
+  | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
+  | (OpenMoveBase & { kind: 'start'; payload: StartSealed });
+
+export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
+export type StartMove = Extract<OpenMove, { kind: 'start' }>;

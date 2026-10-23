@@ -28,7 +28,7 @@ export const FIXTURE_USERS = {
     email: 'jamie@example.test',
     displayName: 'Jamie Chen',
     label: 'Jamie',
-    apps: ['Worth the Wait', 'Nine Lives'],
+    apps: ['Worth the Wait', 'Nine Lives', 'Runway'],
   },
   nineLivesCaretaker: {
     uid: 'seed-nine-lives-caretaker',

@@ -24,6 +24,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       createdAt: now,
       updatedAt: now,
       stance: 'conservative',
+      startDate: null,
       keyId: encryption.keyId,
       sealed,
     };

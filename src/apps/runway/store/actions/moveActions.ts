@@ -4,15 +4,22 @@ import {
   doc,
   runTransaction,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
+import { generateUuid } from '@/utils/idUtils';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { MAX_DONE_LINE_IDS } from '@apps/runway/constants';
 import { getPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { sealJson } from '@apps/runway/security';
 import type {
   BillPaidSealed,
+  ChangeDoc,
+  ChangeSealed,
+  StartHolding,
+  StartSealed,
   Cents,
   DateOnly,
   MoveDoc,
@@ -115,4 +122,72 @@ export async function setLinesDone(
   await updateDoc(doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId), {
     doneLineIds: isDone ? arrayUnion(...lineIds) : arrayRemove(...lineIds),
   });
+}
+
+export interface StartHoldingInput {
+  holding: StartHolding;
+  /** The goal or bill; null for the money on hand. */
+  refId: string | null;
+  amountCents: Cents;
+}
+
+/** The id of a starting holding written at `createdAt`; a later run writes new ones and the latest counts. */
+export const getStartMoveId = (refId: string | null, createdAt: number) =>
+  `start_${refId ?? 'money'}_${createdAt}`;
+
+/**
+ * Records where things stand on the starting day: the date, one `start` move per holding and one
+ * `start` change, in a single batch. Rerunning it appends newer moves; nothing earlier is edited.
+ */
+export async function recordStart(
+  uid: string,
+  encryption: RunwayEncryption,
+  startDate: DateOnly,
+  holdings: readonly StartHoldingInput[],
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const batch = writeBatch(db);
+  const [changeSealed, ...sealedMoves] = await Promise.all([
+    sealJson(
+      {
+        summary: `Started from ${formatDateUTC(startDate)}.`,
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+    ...holdings.map((entry) =>
+      sealJson(
+        {
+          amountCents: entry.amountCents,
+          holding: entry.holding,
+        } satisfies StartSealed,
+        encryption,
+      ),
+    ),
+  ]);
+  batch.update(doc(db, 'apps', 'runway', 'plans', uid), {
+    startDate,
+    updatedAt: now,
+  });
+  batch.set(doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId), {
+    id: changeId,
+    kind: 'start',
+    createdAt: now,
+    effectiveFrom: startDate,
+    itemIds: [],
+    sealed: changeSealed,
+  } satisfies ChangeDoc);
+  holdings.forEach((entry, index) => {
+    const id = getStartMoveId(entry.refId, now);
+    batch.set(moveRef(uid, id), {
+      id,
+      kind: 'start',
+      date: startDate,
+      refId: entry.refId,
+      reversesMoveId: null,
+      createdAt: now,
+      sealed: sealedMoves[index],
+    } satisfies MoveDoc);
+  });
+  await batch.commit();
 }
