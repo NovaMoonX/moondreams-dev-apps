@@ -1,7 +1,15 @@
-import { parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs';
+import {
+  parseAsInteger,
+  parseAsString,
+  parseAsStringLiteral,
+  useQueryState,
+} from 'nuqs';
 
 import {
+  CHANGE_LOG_SPANS,
+  DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
+  MAX_CHANGE_LOG_PAGE,
   DEFAULT_RUNWAY_TAB,
   MORE_ENTRIES,
   PLAN_SECTIONS,
@@ -34,6 +42,37 @@ export function useRunwayUrlState() {
     parseAsStringLiteral(RUNWAY_VIEWS),
   );
 
+  const [requestedSpan, setRequestedSpan] = useQueryState(
+    'logSpan',
+    parseAsStringLiteral(CHANGE_LOG_SPANS),
+  );
+  const [requestedPage, setRequestedPage] = useQueryState(
+    'logPage',
+    parseAsInteger,
+  );
+  const [requestedItem, setRequestedItem] = useQueryState(
+    'logItem',
+    parseAsString,
+  );
+
+  const logSpan = requestedSpan ?? DEFAULT_CHANGE_LOG_SPAN;
+  const logPage = Math.min(
+    MAX_CHANGE_LOG_PAGE,
+    Math.max(0, requestedPage ?? 0),
+  );
+  const setLogSpan = (span: (typeof CHANGE_LOG_SPANS)[number]) => {
+    setRequestedSpan(span === DEFAULT_CHANGE_LOG_SPAN ? null : span, {
+      history: 'replace',
+    });
+    setRequestedPage(null, { history: 'replace' });
+  };
+  const setLogPage = (page: number) =>
+    setRequestedPage(page <= 0 ? null : page, { history: 'replace' });
+  const setLogItem = (itemId: string | null) => {
+    setRequestedItem(itemId, { history: 'replace' });
+    setRequestedPage(null, { history: 'replace' });
+  };
+
   const activeTab: RunwayTab = requestedTab ?? DEFAULT_RUNWAY_TAB;
   const showTab = (tab: RunwayTab) =>
     setRequestedTab(tab === DEFAULT_RUNWAY_TAB ? null : tab, {
@@ -52,7 +91,12 @@ export function useRunwayUrlState() {
 
   const openMoreEntry = (entry: MoreEntry) =>
     setRequestedMore(entry, { history: 'replace' });
-  const closeMoreEntry = () => setRequestedMore(null, { history: 'replace' });
+  const closeMoreEntry = () => {
+    setRequestedMore(null, { history: 'replace' });
+    setRequestedSpan(null, { history: 'replace' });
+    setRequestedPage(null, { history: 'replace' });
+    setRequestedItem(null, { history: 'replace' });
+  };
 
   const openView = (view: (typeof RUNWAY_VIEWS)[number]) =>
     setRequestedView(view, { history: 'replace' });
@@ -72,5 +116,11 @@ export function useRunwayUrlState() {
     moreEntry: requestedMore,
     openMoreEntry,
     closeMoreEntry,
+    logSpan,
+    logPage,
+    logItem: requestedItem,
+    setLogSpan,
+    setLogPage,
+    setLogItem,
   };
 }

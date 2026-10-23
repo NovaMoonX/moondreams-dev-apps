@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
 import type {
+  OpenChange,
   OpenDay,
   OpenMove,
   OpenRecord,
@@ -27,6 +28,10 @@ export interface RunwayState {
   isMovesLoaded: boolean;
   /** The confirmed day ids the records were read for, as the selector joins them. */
   recordsFor: string | null;
+  /** The change log's open window: what it holds, the window key it was read for, and whether the read failed. */
+  changes: OpenChange[];
+  changesFor: string | null;
+  changesFailedFor: string | null;
 }
 
 const initialState: RunwayState = {
@@ -43,6 +48,9 @@ const initialState: RunwayState = {
   moves: [],
   isMovesLoaded: false,
   recordsFor: null,
+  changes: [],
+  changesFor: null,
+  changesFailedFor: null,
 };
 
 export const runwaySlice = createSlice({
@@ -67,6 +75,17 @@ export const runwaySlice = createSlice({
     setDays: (state, action: PayloadAction<OpenDay[]>) => {
       state.days = action.payload;
       state.isDaysLoaded = true;
+    },
+    setChanges: (
+      state,
+      action: PayloadAction<{ key: string; changes: OpenChange[] }>,
+    ) => {
+      state.changes = action.payload.changes;
+      state.changesFor = action.payload.key;
+      state.changesFailedFor = null;
+    },
+    setChangesFailed: (state, action: PayloadAction<string>) => {
+      state.changesFailedFor = action.payload;
     },
     setRecords: (
       state,
@@ -93,5 +112,7 @@ export const {
   setDays,
   setRecords,
   setMoves,
+  setChanges,
+  setChangesFailed,
 } = runwaySlice.actions;
 export const runwayReducer = runwaySlice.reducer;

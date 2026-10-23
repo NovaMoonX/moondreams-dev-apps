@@ -67,6 +67,20 @@ const isListed = (item: PlanItemDoc, on: number) =>
 const selectVersions = (state: RootState) => state.runway.versions;
 const selectOn = (_state: RootState, on: number) => on;
 
+/** Every item the plan has had, by the name on its newest version, in name order. */
+export const selectItemNames = createSelector([selectVersions], (versions) => {
+  const newest = versions.reduce<Map<string, OpenVersion>>((acc, version) => {
+    const seen = acc.get(version.itemId);
+    return seen && seen.createdAt >= version.createdAt
+      ? acc
+      : new Map(acc).set(version.itemId, version);
+  }, new Map());
+  const result = [...newest.values()]
+    .map((version) => ({ id: version.itemId, name: version.payload.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return result;
+});
+
 export const selectIsPlanItemsLoaded = (state: RootState) =>
   state.runway.isItemsLoaded && state.runway.isVersionsLoaded;
 

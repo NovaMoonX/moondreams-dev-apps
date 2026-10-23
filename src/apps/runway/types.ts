@@ -334,6 +334,18 @@ export interface ChangeDoc {
   sealed: Sealed;
 }
 
+/** A change entry as the log shows it; `isUnreadable` is set when its sealed payload would not open, and the readable fields still show. */
+export interface OpenChange {
+  id: string;
+  kind: ChangeKind;
+  createdAt: number;
+  effectiveFrom: DateOnly | null;
+  itemIds: string[];
+  summary: string;
+  note: string | null;
+  isUnreadable: boolean;
+}
+
 interface OpenVersionBase {
   id: string;
   itemId: string;
