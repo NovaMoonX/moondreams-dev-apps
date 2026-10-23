@@ -11,6 +11,7 @@ import type {
   RecipeNote,
   RecipeSnapshot,
 } from '@apps/pinch/types';
+import { isContentTweak } from '@apps/pinch/utils/recipeChanges';
 
 export interface NoteSummary {
   count: number;
@@ -42,7 +43,7 @@ export const getNoteSummaries = (notes: RecipeNote[]) => {
     summaries.set(note.recipeId, {
       count: (known?.count ?? 0) + 1,
       lastTweakAt:
-        note.kind === 'TWEAK'
+        isContentTweak(note)
           ? Math.max(known?.lastTweakAt ?? -Infinity, note.createdAt)
           : (known?.lastTweakAt ?? null),
     });
@@ -138,14 +139,14 @@ export const getMissingNoteFields = (existing: object) => ({
 });
 
 const getLatestTweaks = (notes: RecipeNote[]) => {
-  const tweaks = notes.filter((note) => note.kind === 'TWEAK');
+  const tweaks = notes.filter(isContentTweak);
   const latestAt = Math.max(...tweaks.map((note) => note.createdAt));
   const result = tweaks.filter((note) => note.createdAt === latestAt);
 
   return result;
 };
 
-/** The ids of the tweaks the recipe's last save wrote, when each can be put back: it kept what the recipe was, and the recipe has not been saved since (a later save moves its `updatedAt` past the tweak's date). Empty otherwise. */
+/** The ids of the tweaks the recipe's last save wrote (a record that only moved the photo or collections, or took a deleted source off, is not a save of the recipe and is skipped), when each can be put back: it kept what the recipe was, and the recipe has not been saved since (a later save moves its `updatedAt` past the tweak's date). Empty otherwise. */
 export const getUndoableTweakIds = (
   notes: RecipeNote[],
   recipeUpdatedAt: number | null,

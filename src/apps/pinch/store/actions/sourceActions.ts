@@ -14,6 +14,7 @@ import {
   selectTweakTracking,
 } from '@apps/pinch/store/selectors';
 import { getOutsideTweak } from '@apps/pinch/utils/notes';
+import { getSourceRemovedLine } from '@apps/pinch/utils/recipeChanges';
 import { findSourceByLabel } from '@apps/pinch/utils/sources';
 
 const sourceDoc = (uid: string, id: string) =>
@@ -94,7 +95,7 @@ export const removeSource = createAsyncThunk<
   'pinch/sources/remove',
   async ({ uid, id }, { getState, rejectWithValue }) => {
     const now = Date.now();
-    const label = selectSourcesById(getState()).get(id)?.label ?? 'a source';
+    const label = selectSourcesById(getState()).get(id)?.label ?? null;
     const targets = [
       { ref: sourceDoc(uid, id), isSource: true, note: null },
       ...getState()
@@ -107,7 +108,7 @@ export const removeSource = createAsyncThunk<
               ? getOutsideTweak({
                   id: generateUuid(),
                   recipeId: recipe.id,
-                  changes: [`Source removed: “${label}” was deleted`],
+                  changes: [getSourceRemovedLine(label)],
                   now,
                 })
               : null,

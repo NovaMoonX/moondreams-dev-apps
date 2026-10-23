@@ -1,5 +1,6 @@
 import {
   COLLECTION_NOUN,
+  COLLECTION_NOUN_PLURAL,
   DISH_CATEGORIES,
   MAX_RECIPE_NOTE_LENGTH,
   MAX_TWEAK_CHANGE_LENGTH,
@@ -460,8 +461,8 @@ const getLinkChanges = (before: Normalized, after: Normalized) => {
 /** What the form changes that is not part of a recipe's content: the cover picture and the collections it is in. */
 export interface ChangeExtras {
   photo: 'ADDED' | 'CHANGED' | 'REMOVED' | null;
-  addedCollections: string[];
-  removedCollections: string[];
+  addedCollections: (string | null)[];
+  removedCollections: (string | null)[];
 }
 
 export const NO_EXTRAS: ChangeExtras = {
@@ -477,16 +478,68 @@ const getPhotoChanges = (photo: ChangeExtras['photo']) => {
   return [];
 };
 
+const MANY_COLLECTIONS = 3;
+
+type CollectionLineKind = 'ADDED' | 'REMOVED' | 'DELETED';
+
+/** One collection's line in the history; a missing name reads "a collection", never a blank in a sentence. */
+export const getCollectionLine = (
+  kind: CollectionLineKind,
+  label: string | null,
+) => {
+  const named =
+    label === null
+      ? 'a collection'
+      : `the “${clip(label, GROUP_QUOTE_LENGTH)}” ${COLLECTION_NOUN}`;
+  if (kind === 'ADDED') return `Added to ${named}`;
+  return `Taken out of ${named}${kind === 'DELETED' ? ', which was deleted' : ''}`;
+};
+
+/** The lines for several collections at once: named one by one up to three, counted past that. */
+export const getCollectionLines = (
+  kind: Exclude<CollectionLineKind, 'DELETED'>,
+  labels: (string | null)[],
+) => {
+  if (labels.length <= MANY_COLLECTIONS) {
+    return labels.map((label) => getCollectionLine(kind, label));
+  }
+  return [
+    `${kind === 'ADDED' ? 'Added to' : 'Taken out of'} ${labels.length} ${COLLECTION_NOUN_PLURAL}`,
+  ];
+};
+
+/** A source taken off a recipe, named when the name is known. */
+export const getSourceRemovedLine = (label: string | null) =>
+  label === null
+    ? 'Source removed'
+    : `Source “${clip(label, GROUP_QUOTE_LENGTH)}” removed`;
+
 const getCollectionChanges = (extras: ChangeExtras) => [
-  ...extras.addedCollections.map(
-    (label) =>
-      `Added to the ${clip(label, GROUP_QUOTE_LENGTH)} ${COLLECTION_NOUN}`,
-  ),
-  ...extras.removedCollections.map(
-    (label) =>
-      `Taken out of the ${clip(label, GROUP_QUOTE_LENGTH)} ${COLLECTION_NOUN}`,
-  ),
+  ...getCollectionLines('ADDED', extras.addedCollections),
+  ...getCollectionLines('REMOVED', extras.removedCollections),
 ];
+
+const PHOTO_LINE = /^Photo (added|changed|removed)$/;
+const COLLECTION_LINE =
+  /^(Added to|Taken out of) (the “.*” collection|a collection|\d+ collections)(, which was deleted)?$/;
+const SOURCE_REMOVED_LINE = /^Source “.*” removed$/;
+
+/** The lines Put the recipe back doesn't put back, because the photo and the collections aren't in a snapshot. */
+export const isUnrestoredLine = (line: string) =>
+  PHOTO_LINE.test(line) || COLLECTION_LINE.test(line);
+
+/** A recorded change that says something about the recipe itself, as opposed to one that only moved its photo or collections, or took a deleted source off it (written with no snapshot). Only these date "the recipe changed", relabel older notes and take Put the recipe back. */
+export const isContentTweak = (note: {
+  kind: string;
+  changes?: string[] | null;
+  previous?: unknown;
+}) =>
+  note.kind === 'TWEAK' &&
+  (note.changes ?? []).some(
+    (line) =>
+      !isUnrestoredLine(line) &&
+      !(note.previous == null && SOURCE_REMOVED_LINE.test(line)),
+  );
 
 export const capLines = (lines: string[]) => {
   const fitted =
@@ -517,10 +570,18 @@ export const getRecipeChanges = (
     ingredientsById.get(ingredientId)?.name ?? 'Removed ingredient';
   const getSourceLine = () => {
     if (was.sourceId === now.sourceId) return [];
-    if (now.sourceId === null) return ['Source removed'];
+    if (now.sourceId === null) {
+      return [
+        getSourceRemovedLine(
+          was.sourceId === null
+            ? null
+            : (sourcesById.get(was.sourceId)?.label ?? null),
+        ),
+      ];
+    }
     const label = sourcesById.get(now.sourceId)?.label;
     return [
-      `Source ${was.sourceId === null ? 'set' : 'changed'} to ${label ?? 'another source'}`,
+      `Source ${was.sourceId === null ? 'set' : 'changed'} to ${label === undefined ? 'another source' : `“${clip(label, GROUP_QUOTE_LENGTH)}”`}`,
     ];
   };
 
@@ -625,7 +686,7 @@ export const getDraftChanges = (
     ),
   ]);
   const labelsOf = (ids: string[] | undefined) =>
-    (ids ?? []).map((id) => collectionLabels.get(id)?.label ?? 'a');
+    (ids ?? []).map((id) => collectionLabels.get(id)?.label ?? null);
   const extras: ChangeExtras = {
     photo: getPhotoExtra(existing, draft),
     addedCollections: labelsOf(draft.collectionChange?.add),

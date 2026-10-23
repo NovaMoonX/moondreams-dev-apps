@@ -30,6 +30,7 @@ import type { CollectionChange } from '@apps/pinch/utils/collections';
 import {
   getDraftChanges,
   getRecipeSnapshot,
+  isUnrestoredLine,
 } from '@apps/pinch/utils/recipeChanges';
 import { getTweakReason, planTweakUndo } from '@apps/pinch/utils/notes';
 import { getMissingIdeaFields } from '@apps/pinch/utils/ideas';
@@ -205,7 +206,9 @@ const getTweakPlan = (
     stepIndex: null,
     stepText: null,
     reason: null,
-    previous: getRecipeSnapshot(existing),
+    previous: changes.every(isUnrestoredLine)
+      ? null
+      : getRecipeSnapshot(existing),
     createdAt: now,
     updatedAt: now,
   };
@@ -409,7 +412,7 @@ interface UndoRecipeChangeInput {
   noteIds: string[];
 }
 
-/** Puts the recipe's edited fields back to how the tweak found them and takes the tweak off, in one transaction that re-reads both: it refuses when the recipe has been saved since (its `updatedAt` is no longer the tweak's date) or the tweak is gone. Only the compared fields and `updatedAt` are written, so the cover, care, links and collections stay as they are. */
+/** Puts the recipe's edited fields back to how the tweak found them and takes the tweak off, in one transaction that re-reads both: it refuses when the recipe has been saved since (its `updatedAt` is no longer the tweak's date) or the tweak is gone. Only the snapshot's fields and `updatedAt` are written (the nine compared ones, plus categories, care and links when it has them), so the photo and the collections stay as they are. */
 export const undoRecipeChange = createAsyncThunk<
   number,
   UndoRecipeChangeInput,

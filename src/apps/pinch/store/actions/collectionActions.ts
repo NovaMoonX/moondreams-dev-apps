@@ -16,7 +16,10 @@ import {
 } from '@apps/pinch/store/selectors';
 import type { Collection } from '@apps/pinch/types';
 import { getOutsideTweak } from '@apps/pinch/utils/notes';
-import { capLines } from '@apps/pinch/utils/recipeChanges';
+import {
+  getCollectionLine,
+  getCollectionLines,
+} from '@apps/pinch/utils/recipeChanges';
 import {
   findCollectionByLabel,
   getChunks,
@@ -119,7 +122,7 @@ export const removeCollection = createAsyncThunk<
   async ({ uid, id }, { getState, rejectWithValue }) => {
     const chunks = getRemovalChunks(getState().pinch.recipes.items, id);
     const state = getState();
-    const label = selectCollectionsById(state).get(id)?.label ?? 'a';
+    const label = selectCollectionsById(state).get(id)?.label ?? null;
     const now = Date.now();
 
     try {
@@ -142,9 +145,7 @@ export const removeCollection = createAsyncThunk<
                 const note = getOutsideTweak({
                   id: generateUuid(),
                   recipeId: snapshot.id,
-                  changes: [
-                    `Taken out of the ${label} ${COLLECTION_NOUN}, which was deleted`,
-                  ],
+                  changes: [getCollectionLine('DELETED', label)],
                   now,
                 });
                 transaction.set(noteDoc(uid, note.id), note);
@@ -259,11 +260,9 @@ export const addRecipesToCollections = createAsyncThunk<
                     ? getOutsideTweak({
                         id: generateUuid(),
                         recipeId: snapshot.id,
-                        changes: capLines(
-                          plan.added.map(
-                            (added) =>
-                              `Added to the ${labels.get(added) ?? 'a'} ${COLLECTION_NOUN}`,
-                          ),
+                        changes: getCollectionLines(
+                          'ADDED',
+                          plan.added.map((added) => labels.get(added) ?? null),
                         ),
                         now,
                       })
