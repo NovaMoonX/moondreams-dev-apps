@@ -6,6 +6,10 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionChips from '@/components/ActionChips';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
+import {
+  selectIsMovesLoaded,
+  selectIsRecordsReady,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { CHECKLIST_WORDS } from '@apps/runway/constants';
@@ -24,6 +28,8 @@ interface BillPaidChipProps {
   payment: BillPayment;
   /** Runs after a mark, so a checklist can tick the line it came from. */
   onMarked?: () => void;
+  /** Runs after an undo, so a checklist can untick the line it marked. */
+  onUndone?: () => void;
 }
 
 /** Marks a payment paid, ahead of its due date or not, or takes the mark back. */
@@ -32,11 +38,15 @@ function BillPaidChip({
   billName,
   payment,
   onMarked,
+  onUndone,
 }: BillPaidChipProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const moves = useAppSelector((state) => state.runway.moves);
+  const isReady = useAppSelector(
+    (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
+  );
   const [isBusy, setIsBusy] = useState(false);
   const { paid } = payment;
   const unfundedCents = Math.max(0, payment.totalCents - payment.fundedCents);
@@ -92,7 +102,10 @@ function BillPaidChip({
         paidOn: paid.paidOn,
         fromFreeCents: paid.fromFreeCents,
       });
+      onUndone?.();
     }, `${billName} was not changed`);
+
+  if (!isReady) return null;
 
   return (
     <ActionChips

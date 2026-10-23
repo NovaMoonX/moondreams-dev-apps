@@ -123,6 +123,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
                       billName={line.name}
                       payment={payment}
                       onMarked={() => setDone([line.lineId], true)}
+                      onUndone={() => setDone([line.lineId], false)}
                     />
                   </div>
                 )}
