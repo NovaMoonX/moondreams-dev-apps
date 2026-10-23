@@ -710,6 +710,14 @@ const version = (
     'chosen days come back in plan order and ignore days not listed',
   );
   assert.deepEqual(
+    selectFundedDays(
+      { kind: 'everyNth', n: 2, anchorDayKey: labels[0] },
+      [...days].reverse(),
+    ).map((day) => day.dayKey),
+    [0, 2, 4, 6].map((index) => labels[index]),
+    'input order does not change which days are selected',
+  );
+  assert.deepEqual(
     selectFundedDays({ kind: 'chosen', dayKeys: [] }, days),
     [],
     'no chosen days fund nothing',
