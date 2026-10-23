@@ -17,6 +17,7 @@ import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
+import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
 import TrackingScreen from '@apps/runway/screens/plan/TrackingScreen';
 import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
@@ -31,6 +32,19 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
+
+/** A subview that unmounts steps its own history entry back, which would undo a URL change made first; this waits for that step. */
+function leaveAfterSubviewCloses(go: () => void) {
+  const state = { isDone: false };
+  const run = () => {
+    if (state.isDone) return;
+    state.isDone = true;
+    window.removeEventListener('popstate', run);
+    go();
+  };
+  window.addEventListener('popstate', run);
+  setTimeout(run, 400);
+}
 
 function RunwayPage() {
   const { user, loading } = useAuth();
@@ -75,6 +89,27 @@ function RunwayPage() {
 
   if (!user) {
     return <AuthRequiredState message='Please sign in to use Runway.' />;
+  }
+
+  if (
+    moreEntry === 'settings' &&
+    settingsView === 'delete' &&
+    keyStatus === 'ready'
+  ) {
+    return (
+      <div className='page'>
+        <DeletePlanScreen
+          onClose={closeSettingsView}
+          onDeleted={() => {
+            setAttempt((current) => current + 1);
+            leaveAfterSubviewCloses(() => {
+              showTab('home');
+              closeMoreEntry();
+            });
+          }}
+        />
+      </div>
+    );
   }
 
   if (keyStatus === 'failed') {
