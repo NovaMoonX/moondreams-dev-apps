@@ -494,7 +494,7 @@ const getCollectionChanges = (extras: ChangeExtras) => [
   ),
 ];
 
-const capLines = (lines: string[]) => {
+export const capLines = (lines: string[]) => {
   const fitted =
     lines.length <= MAX_TWEAK_CHANGES
       ? lines

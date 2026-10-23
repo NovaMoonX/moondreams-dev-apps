@@ -4,12 +4,19 @@ import { deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import type { RootState } from '@/store';
+import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   COLLECTION_NOUN,
   MAX_COLLECTION_LABEL_LENGTH,
 } from '@apps/pinch/constants';
+import {
+  selectCollectionsById,
+  selectTweakTracking,
+} from '@apps/pinch/store/selectors';
 import type { Collection } from '@apps/pinch/types';
+import { getOutsideTweak } from '@apps/pinch/utils/notes';
+import { capLines } from '@apps/pinch/utils/recipeChanges';
 import {
   findCollectionByLabel,
   getChunks,
@@ -24,6 +31,9 @@ const collectionDoc = (uid: string, id: string) =>
 
 const recipeDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'recipes', id);
+
+const noteDoc = (uid: string, id: string) =>
+  doc(db, 'apps', 'pinch', 'kitchens', uid, 'notes', id);
 
 const OFFLINE_MESSAGE = 'Check your connection and try again.';
 
@@ -99,7 +109,7 @@ interface RemoveCollectionResult {
   recipeCount: number;
 }
 
-/** The collection document goes last, so a failed chunk leaves it to be deleted again; a recipe's `updatedAt` stays because it versions the cover. */
+/** The collection document goes last, so a failed chunk leaves it to be deleted again; a recipe's `updatedAt` stays because it versions the cover, and one with cooks gets the change in its history in the same transaction. */
 export const removeCollection = createAsyncThunk<
   RemoveCollectionResult,
   RemoveCollectionInput,
@@ -108,6 +118,9 @@ export const removeCollection = createAsyncThunk<
   'pinch/collections/remove',
   async ({ uid, id }, { getState, rejectWithValue }) => {
     const chunks = getRemovalChunks(getState().pinch.recipes.items, id);
+    const state = getState();
+    const label = selectCollectionsById(state).get(id)?.label ?? 'a';
+    const now = Date.now();
 
     try {
       const counts = await Promise.all(
@@ -125,6 +138,17 @@ export const removeCollection = createAsyncThunk<
                 : null;
               if (next === null) return count;
               transaction.update(snapshot.ref, { collectionIds: next });
+              if (selectTweakTracking(state, snapshot.id) === 'on') {
+                const note = getOutsideTweak({
+                  id: generateUuid(),
+                  recipeId: snapshot.id,
+                  changes: [
+                    `Taken out of the ${label} ${COLLECTION_NOUN}, which was deleted`,
+                  ],
+                  now,
+                });
+                transaction.set(noteDoc(uid, note.id), note);
+              }
               return count + 1;
             }, 0);
           }),
@@ -157,6 +181,8 @@ export interface AddedToRecipe {
   id: string;
   /** The collections this act put on it: all an Undo takes off. */
   added: string[];
+  /** The history entry the act wrote for it, which an Undo takes off too; null for a recipe with no cooks. */
+  noteId: string | null;
 }
 
 interface AddToCollectionsResult {
@@ -182,14 +208,21 @@ const NO_PROGRESS: Omit<AddToCollectionsResult, 'createdIds'> = {
 export const addRecipesToCollections = createAsyncThunk<
   AddToCollectionsResult,
   AddToCollectionsInput,
-  { rejectValue: string }
+  { state: RootState; rejectValue: string }
 >(
   'pinch/collections/addRecipes',
   async (
     { uid, recipeIds, collectionIds, newCollections },
-    { rejectWithValue },
+    { getState, rejectWithValue },
   ) => {
     const now = Date.now();
+    const state = getState();
+    const labels = new Map([
+      ...[...selectCollectionsById(state)].map(
+        ([key, collection]) => [key, collection.label] as const,
+      ),
+      ...newCollections.map((entry) => [entry.id, entry.label] as const),
+    ]);
     const progress = await getChunks(recipeIds).reduce(
       async (previous, chunk, index) => {
         const soFar = await previous;
@@ -220,18 +253,38 @@ export const addRecipesToCollections = createAsyncThunk<
                   snapshot.data().collectionIds,
                   collectionIds,
                 );
+                const note =
+                  plan.next !== null &&
+                  selectTweakTracking(state, snapshot.id) === 'on'
+                    ? getOutsideTweak({
+                        id: generateUuid(),
+                        recipeId: snapshot.id,
+                        changes: capLines(
+                          plan.added.map(
+                            (added) =>
+                              `Added to the ${labels.get(added) ?? 'a'} ${COLLECTION_NOUN}`,
+                          ),
+                        ),
+                        now,
+                      })
+                    : null;
                 if (plan.next !== null) {
                   transaction.update(snapshot.ref, {
                     collectionIds: plan.next,
                   });
                 }
+                if (note) transaction.set(noteDoc(uid, note.id), note);
                 return {
                   changed:
                     plan.next === null
                       ? acc.changed
                       : [
                           ...acc.changed,
-                          { id: snapshot.id, added: plan.added },
+                          {
+                            id: snapshot.id,
+                            added: plan.added,
+                            noteId: note?.id ?? null,
+                          },
                         ],
                   alreadyIn:
                     acc.alreadyIn +
@@ -329,6 +382,8 @@ export const undoAddToCollections = createAsyncThunk<
                 : null;
               if (next === null) return count;
               transaction.update(snapshot.ref, { collectionIds: next });
+              const { noteId } = chunk[index];
+              if (noteId !== null) transaction.delete(noteDoc(uid, noteId));
               return count + 1;
             }, 0);
           });

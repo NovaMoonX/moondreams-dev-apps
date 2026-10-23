@@ -94,6 +94,27 @@ const getSummaryTitle = (note: RecipeNote, day: string) => {
   return `Your latest note (${day})`;
 };
 
+/** The record of a change made outside the recipe's form (a deleted source, a collection filed in bulk): dated now, with nothing to undo, since the recipe itself isn't saved. */
+export const getOutsideTweak = (input: {
+  id: string;
+  recipeId: string;
+  changes: string[];
+  now: number;
+}): RecipeNote => ({
+  id: input.id,
+  recipeId: input.recipeId,
+  kind: 'TWEAK',
+  text: null,
+  changes: input.changes,
+  cookId: null,
+  stepIndex: null,
+  stepText: null,
+  reason: null,
+  previous: null,
+  createdAt: input.now,
+  updatedAt: input.now,
+});
+
 export const getTweakReason = (text: string) => text.trim() || null;
 
 /** A note written before the recipe's latest tweak was about the earlier version of the recipe, so it says so. */

@@ -9,6 +9,7 @@ import type {
 import { placeLineInGroup } from '../../src/apps/pinch/utils/ingredientGroups.ts';
 import {
   getMissingNoteFields,
+  getOutsideTweak,
   getUndoableTweakIds,
   planTweakUndo,
 } from '../../src/apps/pinch/utils/notes.ts';
@@ -686,6 +687,27 @@ check(
       result.some(({ changed, count }) => !changed && count > 0),
       false,
     );
+  },
+);
+
+check(
+  'a change made outside the form is a record with nothing to undo, and it is the latest',
+  () => {
+    const outside = getOutsideTweak({
+      id: 'o',
+      recipeId: 'adobo',
+      changes: ['Taken out of the Bulk collection, which was deleted'],
+      now: AT + 5,
+    });
+    assert.equal(outside.kind, 'TWEAK');
+    assert.equal(outside.previous, null);
+    const edit = tweak('e', AT, getRecipeSnapshot(before));
+    assert.deepEqual(
+      getUndoableTweakIds([edit, outside], AT),
+      [],
+      'the newer record has no undo, so the older edit is not offered either',
+    );
+    assert.deepEqual(getUndoableTweakIds([edit], AT), ['e']);
   },
 );
 
