@@ -30,6 +30,9 @@ const selectOn = (_state: RootState, on: number) => on;
 export const selectIsPlanItemsLoaded = (state: RootState) =>
   state.runway.isItemsLoaded && state.runway.isVersionsLoaded;
 
+export const selectIsDaysLoaded = (state: RootState) =>
+  state.runway.isDaysLoaded;
+
 export interface ResolvedPayLine {
   item: PlanItemDoc;
   version: PayLineVersion;

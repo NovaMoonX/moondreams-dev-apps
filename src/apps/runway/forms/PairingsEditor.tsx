@@ -294,16 +294,17 @@ function PairingsEditor({
                 </div>
               </div>
             ))}
-            {rows.length < MAX_PAIRINGS && choices.length > rows.length && (
-              <div>
-                <RevealChip
-                  icon={<Plus className='h-4 w-4' />}
-                  onClick={() => addRow(rows, props.onValueChange)}
-                >
-                  Add something to fund
-                </RevealChip>
-              </div>
-            )}
+            {rows.length + locked.length < MAX_PAIRINGS &&
+              choices.length > rows.length && (
+                <div>
+                  <RevealChip
+                    icon={<Plus className='h-4 w-4' />}
+                    onClick={() => addRow(rows, props.onValueChange)}
+                  >
+                    Add something to fund
+                  </RevealChip>
+                </div>
+              )}
             {note && <p className='text-muted-foreground text-xs'>{note}</p>}
           </div>
         );
