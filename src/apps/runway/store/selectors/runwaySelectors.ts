@@ -3,17 +3,26 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import {
   buildComingDays,
+  describeDay,
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
+import { sumConfirmedByItem } from '@apps/runway/engine/confirm';
 import { buildDraft, type Draft } from '@apps/runway/engine/draft';
-import { hashText } from '@apps/runway/engine/fingerprint';
+import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { resolve, resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import { readStance } from '@apps/runway/engine/stance';
-import { LOOKAHEAD_MONTHS, PRIORITIES } from '@apps/runway/constants';
-import { addUtcMonths } from '@apps/runway/engine/dates';
+import {
+  LOOKAHEAD_MONTHS,
+  OVERDUE_DAYS,
+  PRIORITIES,
+} from '@apps/runway/constants';
+import { addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
 import type {
   BillVersion,
   DayOverrideSealed,
+  DayStatus,
+  OpenDay,
+  OpenRecord,
   Pairing,
   EnvelopeVersion,
   GoalVersion,
@@ -82,11 +91,147 @@ export const selectResolvedPlan = createSelector(
   },
 );
 
-/** The income days ahead, computed from schedules each time the plan changes and never stored. */
+const selectSettledKey = (state: RootState) =>
+  state.runway.days
+    .filter((day) => day.status !== 'draft')
+    .map((day) => day.id)
+    .sort()
+    .join(',');
+
+const toSet = (key: string) => new Set(key === '' ? [] : key.split(','));
+
+/** The income days ahead, computed from schedules each time the plan changes and never stored. A day that is confirmed or marked not arrived is no longer coming. */
 export const selectComingDays = createSelector(
-  [selectItems, selectVersions, selectOn],
-  (items, versions, today) => buildComingDays(items, versions, today),
+  [selectItems, selectVersions, selectOn, selectSettledKey],
+  (items, versions, today, settledKey) => {
+    const settled = toSet(settledKey);
+    const result = buildComingDays(items, versions, today).filter(
+      (day) => !settled.has(day.dayKey),
+    );
+    return result;
+  },
 );
+
+/** Days from the last weeks that passed without being confirmed or marked, still waiting for the person. */
+const buildOverdueDays = (
+  items: RootState['runway']['items'],
+  versions: RootState['runway']['versions'],
+  today: number,
+  settled: ReadonlySet<string>,
+) =>
+  buildComingDays(items, versions, today, today - OVERDUE_DAYS * DAY_MS).filter(
+    (day) => day.on < today && !settled.has(day.dayKey),
+  );
+
+export type ListedStatus = 'coming' | DayStatus;
+
+export interface ListedDay extends ComingDay {
+  status: ListedStatus;
+  isOverdue: boolean;
+  arrivedOn: number | null;
+}
+
+/**
+ * Every income day the Days list shows: the ones still to settle (coming, changed, overdue and not
+ * arrived) in date order, and the confirmed ones, newest first.
+ */
+export const selectListedDays = createSelector(
+  [
+    selectItems,
+    selectVersions,
+    selectOn,
+    (state: RootState) => state.runway.days,
+  ],
+  (items, versions, today, openDays) => {
+    const byId = new Map(openDays.map((day) => [day.id, day]));
+    const settled = toSet(
+      openDays
+        .filter((day) => day.status !== 'draft')
+        .map((day) => day.id)
+        .join(','),
+    );
+    const toListed = (day: ComingDay): ListedDay => {
+      const doc = byId.get(day.dayKey);
+      return {
+        ...day,
+        status: doc?.status ?? 'coming',
+        isOverdue: day.on < today,
+        arrivedOn: doc?.arrivedOn ?? null,
+      };
+    };
+    const waiting = [
+      ...buildOverdueDays(items, versions, today, settled),
+      ...buildComingDays(items, versions, today).filter(
+        (day) => !settled.has(day.dayKey),
+      ),
+    ].map(toListed);
+    const fromDocs = (status: DayStatus, since: number) =>
+      openDays
+        .filter((doc) => doc.status === status && doc.expectedOn >= since)
+        .flatMap((doc) => {
+          const described = describeDay(versions, {
+            payLineId: doc.payLineId,
+            sourceId: doc.sourceId,
+            expectedOn: doc.expectedOn,
+          });
+          return described ? [toListed(described)] : [];
+        });
+    const notArrived = fromDocs('notArrived', today - OVERDUE_DAYS * DAY_MS);
+    const open = [...waiting, ...notArrived].sort(
+      (a, b) =>
+        a.on - b.on || (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0),
+    );
+    const confirmed = fromDocs('confirmed', 0).sort(
+      (a, b) => b.on - a.on || (a.dayKey < b.dayKey ? -1 : 1),
+    );
+    return { open, confirmed };
+  },
+);
+
+/** The confirmed days' ids as one string, or null until the days are read; the records listener restarts when it changes. */
+export const selectConfirmedDayIds = (state: RootState): string | null =>
+  state.runway.isDaysLoaded
+    ? state.runway.days
+        .filter((day) => day.status === 'confirmed')
+        .map((day) => day.id)
+        .sort()
+        .join(',')
+    : null;
+
+/** True once the records of every confirmed day in the window have been read. */
+export const selectIsRecordsReady = (state: RootState) => {
+  const ids = selectConfirmedDayIds(state);
+  return ids !== null && state.runway.recordsFor === ids;
+};
+
+const selectRecords = (state: RootState) => state.runway.records;
+
+/** What confirmed days have already given each plan item, from the records read; a goal's held money. */
+export const selectConfirmedByItem = createSelector(
+  [selectRecords],
+  (records) => sumConfirmedByItem(records),
+);
+
+export const selectProposedRecord = (state: RootState, dayId: string) => {
+  const result = state.runway.records.find(
+    (record): record is Extract<OpenRecord, { kind: 'proposed' }> =>
+      record.dayId === dayId && record.kind === 'proposed',
+  );
+  return result ?? null;
+};
+
+export const selectConfirmedRecord = (state: RootState, dayId: string) => {
+  const result = state.runway.records.find(
+    (record): record is Extract<OpenRecord, { kind: 'confirmed' }> =>
+      record.dayId === dayId && record.kind === 'confirmed',
+  );
+  return result ?? null;
+};
+
+export const selectOpenDay = (
+  state: RootState,
+  dayId: string,
+): OpenDay | null => state.runway.days.find((day) => day.id === dayId) ?? null;
 
 export interface ResolvedEnvelope {
   item: PlanItemDoc;
@@ -188,6 +333,10 @@ export interface DraftView {
   /** The set that applies when the day has none of its own: the pay line's, else the source's. */
   inheritedPairings: Pairing[];
   draft: Draft;
+  /** Names the plan and changes the draft came from; a record keeps it. */
+  fingerprint: string;
+  /** Names the day's own changes, which confirming compares against what is stored. */
+  overrideFingerprint: string;
   /** Names and emoji of the envelopes, goals and bills a draft can name, by item id. */
   items: Record<string, { name: string; emoji: string | null }>;
   sourceNames: Record<string, string>;
@@ -200,6 +349,7 @@ const selectDays = (state: RootState) => state.runway.days;
 const selectDayKey = (_state: RootState, dayKey: string) => dayKey;
 const selectToday = (_state: RootState, _dayKey: string, today: number) =>
   today;
+const selectHeldByItem = (state: RootState) => selectConfirmedByItem(state);
 
 const MAX_CACHED_DRAFTS = 24;
 const draftCaches = new WeakMap<object, Map<string, DraftView>>();
@@ -217,11 +367,32 @@ export const selectDraft = createSelector(
     selectDays,
     selectDayKey,
     selectToday,
+    selectHeldByItem,
+    selectSettledKey,
   ],
-  (items, versions, stance, openDays, dayKey, today): DraftView | null => {
-    const days = buildComingDays(items, versions, today);
-    const day = days.find((entry) => entry.dayKey === dayKey);
+  (
+    items,
+    versions,
+    stance,
+    openDays,
+    dayKey,
+    today,
+    heldByItem,
+    settledKey,
+  ): DraftView | null => {
+    const settled = toSet(settledKey);
+    const coming = buildComingDays(items, versions, today).filter(
+      (entry) => !settled.has(entry.dayKey),
+    );
+    const day =
+      coming.find((entry) => entry.dayKey === dayKey) ??
+      buildOverdueDays(items, versions, today, settled).find(
+        (entry) => entry.dayKey === dayKey,
+      );
     if (!day) return null;
+    const days = coming.some((entry) => entry.dayKey === dayKey)
+      ? coming
+      : [day, ...coming];
 
     const resolved = resolve(
       items.filter((item) => item.kind === 'envelope'),
@@ -260,6 +431,7 @@ export const selectDraft = createSelector(
         resolved.map(({ version }) => version.id),
         resolvedBills.map(({ version }) => version.id),
         resolvedGoals.map(({ version }) => version.id),
+        resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
         horizon,
       ]),
     );
@@ -294,7 +466,7 @@ export const selectDraft = createSelector(
       orderIndex: version.payload.orderIndex,
       funding: version.payload.funding,
       targetCents: version.payload.targetCents,
-      heldCents: 0,
+      heldCents: heldByItem[item.id] ?? 0,
     }));
     const draft = buildDraft({
       days: [
@@ -342,6 +514,11 @@ export const selectDraft = createSelector(
       inheritedPairings:
         payLinePairings.length > 0 ? payLinePairings : sourcePairings,
       draft,
+      fingerprint: key,
+      overrideFingerprint: hashOverride({
+        pairings: override?.pairings ?? null,
+        holdResolutions: override?.holdResolutions ?? {},
+      }),
       items: Object.fromEntries(
         [...resolved, ...resolvedBills, ...resolvedGoals].map(
           ({ item, version }) => [

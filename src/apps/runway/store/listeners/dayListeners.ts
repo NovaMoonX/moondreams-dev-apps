@@ -10,9 +10,13 @@ import { db } from '@lib/firebase/config';
 
 import { openJson } from '@apps/runway/security';
 import type {
+  ConfirmedSealed,
   DayOverrideSealed,
+  DayRecordDoc,
   IncomeDayDoc,
   OpenDay,
+  OpenRecord,
+  ProposedSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -31,6 +35,8 @@ async function openDay(
     payLineId: entry.payLineId,
     sourceId: entry.sourceId ?? null,
     expectedOn: entry.expectedOn,
+    arrivedOn: entry.arrivedOn ?? null,
+    confirmedAt: entry.confirmedAt ?? null,
     status: entry.status,
     override: {
       pairings: opened?.pairings ?? null,
@@ -78,5 +84,69 @@ export function startDaysListener(
   return () => {
     sequence.latest += 1;
     stop();
+  };
+}
+
+async function openRecord(
+  entry: DayRecordDoc,
+  encryption: RunwayEncryption,
+): Promise<OpenRecord> {
+  const base = { id: entry.id, dayId: entry.dayId, createdAt: entry.createdAt };
+  if (entry.kind === 'proposed') {
+    const payload = await openJson<ProposedSealed>(entry.sealed, encryption);
+    return { ...base, kind: 'proposed', payload };
+  }
+  const payload = await openJson<ConfirmedSealed>(entry.sealed, encryption);
+  return { ...base, kind: 'confirmed', payload };
+}
+
+/**
+ * The records of the given confirmed days, one listener per day because the records live under the
+ * day. Records are never edited, so a snapshot is the whole story of its day; each day's records are
+ * delivered once they are all opened, and the callback gets every day read so far.
+ */
+export function startRecordsListener(
+  uid: string,
+  encryption: RunwayEncryption,
+  dayIds: readonly string[],
+  onChange: (records: OpenRecord[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const state = { byDay: new Map<string, OpenRecord[]>(), isStopped: false };
+  const sequences = new Map<string, number>();
+
+  const stops = dayIds.map((dayId) =>
+    onSnapshot(
+      collection(db, 'apps', 'runway', 'plans', uid, 'days', dayId, 'records'),
+      async (snapshot) => {
+        const mine = (sequences.get(dayId) ?? 0) + 1;
+        sequences.set(dayId, mine);
+        try {
+          const opened = await Promise.all(
+            snapshot.docs.map((entry) =>
+              openRecord(
+                { ...(entry.data() as DayRecordDoc), id: entry.id },
+                encryption,
+              ),
+            ),
+          );
+          if (state.isStopped || sequences.get(dayId) !== mine) return;
+          state.byDay.set(dayId, opened);
+          if (state.byDay.size < dayIds.length) return;
+          onChange([...state.byDay.values()].flat());
+        } catch (error) {
+          if (!state.isStopped && sequences.get(dayId) === mine) {
+            onError(toError(error));
+          }
+        }
+      },
+      (error) => onError(toError(error)),
+    ),
+  );
+  if (dayIds.length === 0) onChange([]);
+
+  return () => {
+    state.isStopped = true;
+    stops.forEach((stop) => stop());
   };
 }

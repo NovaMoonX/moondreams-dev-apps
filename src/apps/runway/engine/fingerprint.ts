@@ -19,3 +19,15 @@ export function hashText(text: string): string {
   const result = (4_294_967_296 * (2_097_151 & b) + (a >>> 0)).toString(36);
   return result;
 }
+
+/** Names what the person set for one day, whatever order the sealed payload wrote its keys in. */
+export function hashOverride(override: {
+  pairings: unknown;
+  holdResolutions: Record<string, string>;
+}): string {
+  const holds = Object.entries(override.holdResolutions).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  const result = hashText(JSON.stringify([override.pairings, holds]));
+  return result;
+}

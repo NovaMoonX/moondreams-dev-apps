@@ -3,6 +3,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import { resetAllState } from '@/store/actions/globalActions';
 import type {
   OpenDay,
+  OpenRecord,
   OpenPlan,
   OpenVersion,
   PlanItemDoc,
@@ -20,6 +21,9 @@ export interface RunwayState {
   isVersionsLoaded: boolean;
   days: OpenDay[];
   isDaysLoaded: boolean;
+  records: OpenRecord[];
+  /** The confirmed day ids the records were read for, as the selector joins them. */
+  recordsFor: string | null;
 }
 
 const initialState: RunwayState = {
@@ -32,6 +36,8 @@ const initialState: RunwayState = {
   isVersionsLoaded: false,
   days: [],
   isDaysLoaded: false,
+  records: [],
+  recordsFor: null,
 };
 
 export const runwaySlice = createSlice({
@@ -57,12 +63,25 @@ export const runwaySlice = createSlice({
       state.days = action.payload;
       state.isDaysLoaded = true;
     },
+    setRecords: (
+      state,
+      action: PayloadAction<{ dayIds: string; records: OpenRecord[] }>,
+    ) => {
+      state.records = action.payload.records;
+      state.recordsFor = action.payload.dayIds;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
   },
 });
 
-export const { setKeyStatus, setPlan, setItems, setVersions, setDays } =
-  runwaySlice.actions;
+export const {
+  setKeyStatus,
+  setPlan,
+  setItems,
+  setVersions,
+  setDays,
+  setRecords,
+} = runwaySlice.actions;
 export const runwayReducer = runwaySlice.reducer;

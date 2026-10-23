@@ -37,6 +37,7 @@ export function buildComingDays(
   items: readonly PlanItemDoc[],
   versions: readonly OpenVersion[],
   today: number,
+  from: number = today,
 ): ComingDay[] {
   const payLineVersions = versions.filter(isPayLine);
   const sourceVersions = versions.filter(isSource);
@@ -45,19 +46,19 @@ export function buildComingDays(
   const result = items
     .filter((item) => item.kind === 'payLine' && item.archivedAt === null)
     .flatMap((item) => {
-      const scheduled = resolveCurrentOrNext(payLineVersions, item.id, today);
+      const scheduled = resolveCurrentOrNext(payLineVersions, item.id, from);
       if (!scheduled) return [];
       const lastDay =
         item.endedAt === null ? until : Math.min(until, item.endedAt);
       const sourceName =
         item.parentId === null
           ? null
-          : (resolveCurrentOrNext(sourceVersions, item.parentId, today)?.payload
+          : (resolveCurrentOrNext(sourceVersions, item.parentId, from)?.payload
               .name ?? null);
       return occurrences(
         scheduled.payload.schedule,
         scheduled.payload.ending,
-        today,
+        from,
         lastDay,
       ).map((on): ComingDay => {
         const inForce =
@@ -78,5 +79,37 @@ export function buildComingDays(
       (a, b) =>
         a.on - b.on || (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0),
     );
+  return result;
+}
+
+/** A day that has a document, described from the plan as it stood on its date; null when its pay line no longer resolves. */
+export function describeDay(
+  versions: readonly OpenVersion[],
+  day: { payLineId: string; sourceId: string | null; expectedOn: number },
+): ComingDay | null {
+  const payLine = resolveCurrentOrNext(
+    versions.filter(isPayLine),
+    day.payLineId,
+    day.expectedOn,
+  );
+  if (!payLine) return null;
+  const sourceVersion =
+    day.sourceId === null
+      ? null
+      : resolveCurrentOrNext(
+          versions.filter(isSource),
+          day.sourceId,
+          day.expectedOn,
+        );
+  const result: ComingDay = {
+    dayKey: toDayKey(day.payLineId, day.expectedOn),
+    payLineId: day.payLineId,
+    sourceId: day.sourceId,
+    on: day.expectedOn,
+    sourceName: sourceVersion?.payload.name ?? null,
+    payLineName: payLine.payload.name,
+    amount: payLine.payload.amount,
+    stanceOverride: payLine.payload.stanceOverride ?? null,
+  };
   return result;
 }
