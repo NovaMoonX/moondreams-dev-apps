@@ -12,6 +12,7 @@ import {
   type DraftCadence,
   type DraftDayInput,
   type DraftEnvelopeInput,
+  type DraftGoalInput,
   type DraftTieKey,
 } from './demands';
 
@@ -26,6 +27,7 @@ export interface DraftInput {
   plan: {
     envelopes: readonly DraftEnvelopeInput[];
     bills: readonly DraftBillInput[];
+    goals: readonly DraftGoalInput[];
     /** The last day schedules are generated for. */
     horizon: number;
     /** Every coming income day, which cadences count over. */
@@ -55,7 +57,7 @@ export interface DraftLine {
   tier: Priority;
   /** Set on a bill's line: the payment this day sets money aside for. */
   bill: BillShare | null;
-  /** What the envelope or bill asked for on this day. */
+  /** What the envelope, goal or bill asked for on this day. */
   demandCents: Cents;
   cents: Cents;
   shortBy: Cents;
@@ -178,6 +180,7 @@ export function buildDraft(input: DraftInput): Draft {
     input.plan.envelopes,
     input.plan.bills,
     input.plan.horizon,
+    input.plan.goals,
   )
     .filter((demand) => demand.cents > 0)
     .sort(

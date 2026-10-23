@@ -13,11 +13,16 @@ import {
   buildDemands,
   planBillPayments,
   type DraftBillInput,
+  type DraftGoalInput,
 } from '../../src/apps/runway/engine/demands.ts';
 import {
   buildDraft,
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
+import {
+  getPace,
+  planGoalContributions,
+} from '../../src/apps/runway/engine/pace.ts';
 import { allocate, percentOf } from '../../src/apps/runway/engine/money.ts';
 import {
   resolve,
@@ -770,7 +775,7 @@ const version = (
   ) =>
     buildDraft({
       days,
-      plan: { envelopes, bills: [], horizon: 0, incomeDays },
+      plan: { envelopes, bills: [], goals: [], horizon: 0, incomeDays },
       stance: 'conservative',
       overrides,
     });
@@ -1169,6 +1174,7 @@ const version = (
         },
       ],
       bills: [rent],
+      goals: [],
       horizon,
       incomeDays: incomes,
     },
@@ -1203,6 +1209,196 @@ const version = (
       ),
       expected,
       'bill demands do not depend on input order',
+    );
+  });
+}
+
+// Goals: the seeded three, worked by hand against the seed's income days.
+{
+  const today = utc(2026, 11, 1);
+  const offsets = [3, 6, 17, 20, 31, 45, 59, 73];
+  const incomes = offsets.map((offset) => {
+    const on = today + offset * DAY_MS;
+    return { dayKey: toDayKey(`line-${offset}`, on), on };
+  });
+  const exact = (cents: number) => ({ kind: 'exact' as const, cents });
+  const vacation = {
+    targetCents: 180_000,
+    targetDate: today + 50 * DAY_MS,
+    heldCents: 0,
+    funding: {
+      amount: exact(30_000),
+      cadence: { kind: 'everyIncomeDay' as const },
+    },
+  };
+  const cushion = {
+    targetCents: 60_000,
+    targetDate: null,
+    heldCents: 0,
+    funding: {
+      amount: exact(15_000),
+      cadence: {
+        kind: 'everyNth' as const,
+        n: 2 as const,
+        anchorDayKey: incomes[0].dayKey,
+      },
+    },
+  };
+  const phone = {
+    targetCents: 20_000,
+    targetDate: today + 30 * DAY_MS,
+    heldCents: 0,
+    funding: {
+      amount: exact(20_000),
+      cadence: { kind: 'everyIncomeDay' as const },
+    },
+  };
+  const dayOf = (offset: number) => incomes[offsets.indexOf(offset)];
+
+  // Vacation fund: income days through +50 are +3, +6, +17, +20, +31 and +45, six of them, so
+  // $1,800 / 6 = $300 each; six funded days at $300 reach $1,800 on the last, exactly on pace.
+  assert.deepEqual(
+    getPace(vacation, incomes),
+    {
+      isComplete: false,
+      remainingCents: 180_000,
+      dayCount: 6,
+      neededPerDayCents: 30_000,
+      plannedByDateCents: 180_000,
+      reachedOn: dayOf(45),
+      state: 'onPace',
+    },
+    'vacation fund: $300 each of six income days, on pace',
+  );
+
+  // Emergency cushion, no date: every other income day is +3, +17, +31 and +59; four times $150
+  // is $600, reached on +59.
+  assert.deepEqual(
+    getPace(cushion, incomes),
+    {
+      isComplete: false,
+      remainingCents: 60_000,
+      dayCount: 0,
+      neededPerDayCents: null,
+      plannedByDateCents: 0,
+      reachedOn: dayOf(59),
+      state: null,
+    },
+    'cushion: no date, reached on the fourth funded day',
+  );
+
+  // New phone: income days through +30 are +3, +6, +17 and +20, so $200 / 4 = $50; the first
+  // $200 contribution reaches it and three funded days are to spare.
+  assert.deepEqual(
+    getPace(phone, incomes),
+    {
+      isComplete: false,
+      remainingCents: 20_000,
+      dayCount: 4,
+      neededPerDayCents: 5_000,
+      plannedByDateCents: 20_000,
+      reachedOn: dayOf(3),
+      state: 'ahead',
+    },
+    'phone: $50 each of four income days, ahead',
+  );
+
+  // Behind: $250 each of seven income days through +59 is $1,750, short of $1,800; it needs $257.15.
+  const behind = getPace(
+    {
+      ...vacation,
+      targetDate: today + 59 * DAY_MS,
+      funding: { amount: exact(25_000), cadence: { kind: 'everyIncomeDay' } },
+    },
+    incomes,
+  );
+  assert.equal(behind.state, 'behind');
+  assert.equal(behind.neededPerDayCents, 25_715);
+  assert.equal(behind.plannedByDateCents, 175_000);
+  assert.equal(behind.reachedOn?.on, dayOf(73).on, 'reached after the date');
+
+  // A goal at its target is complete and funds nothing.
+  const complete = getPace({ ...phone, heldCents: 20_000 }, incomes);
+  assert.equal(complete.isComplete, true);
+  assert.equal(complete.state, null);
+  assert.deepEqual(
+    planGoalContributions({ ...phone, heldCents: 20_000 }, incomes),
+    [],
+  );
+  assert.deepEqual(
+    planGoalContributions({ ...phone, heldCents: 15_000 }, incomes).map(
+      (part) => part.cents,
+    ),
+    [5_000],
+    'the last contribution is cut to what is left',
+  );
+
+  // The draft stops drawing money once the target is reached.
+  const goalInput = (
+    itemId: string,
+    goal: typeof vacation | typeof phone,
+  ): DraftGoalInput => ({
+    itemId,
+    createdAt: 1_000,
+    priority: 'want',
+    orderIndex: 1,
+    funding: goal.funding,
+    targetCents: goal.targetCents,
+    heldCents: 0,
+  });
+  const goals = [goalInput('vacation', vacation), goalInput('phone', phone)];
+  const draftAt = (offset: number) =>
+    buildDraft({
+      days: [
+        {
+          ...dayOf(offset),
+          sourceId: null,
+          amount: { lowCents: 214_000, highCents: 214_000 },
+        },
+      ],
+      plan: {
+        envelopes: [],
+        bills: [],
+        goals,
+        horizon: 0,
+        incomeDays: incomes,
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    }).lines.map((line) => [line.itemId, line.cents]);
+  assert.deepEqual(draftAt(3), [
+    ['phone', 20_000],
+    ['vacation', 30_000],
+  ]);
+  assert.deepEqual(
+    draftAt(6),
+    [['vacation', 30_000]],
+    'the phone goal is full after the first day',
+  );
+  assert.deepEqual(
+    draftAt(45),
+    [['vacation', 30_000]],
+    'the sixth day still funds the vacation goal',
+  );
+  assert.deepEqual(
+    draftAt(59),
+    [],
+    'the vacation goal is full after the sixth day',
+  );
+
+  // Input order changes nothing.
+  const random = makeRandom(9);
+  Array.from({ length: 20 }).forEach(() => {
+    assert.deepEqual(
+      getPace(vacation, shuffled(incomes, random)),
+      getPace(vacation, incomes),
+      'pace does not depend on income day order',
+    );
+    assert.deepEqual(
+      planGoalContributions(cushion, shuffled(incomes, random)).map(
+        (part) => part.cents,
+      ),
+      [15_000, 15_000, 15_000, 15_000],
     );
   });
 }

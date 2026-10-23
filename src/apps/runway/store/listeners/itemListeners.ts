@@ -6,6 +6,7 @@ import { openJson } from '@apps/runway/security';
 import type {
   BillSealed,
   EnvelopeSealed,
+  GoalSealed,
   OpenVersion,
   PayLineSealed,
   PlanItemDoc,
@@ -48,6 +49,10 @@ async function openVersion(
   if (version.kind === 'bill') {
     const payload = await openJson<BillSealed>(version.sealed, encryption);
     return { ...base, kind: 'bill', payload };
+  }
+  if (version.kind === 'goal') {
+    const payload = await openJson<GoalSealed>(version.sealed, encryption);
+    return { ...base, kind: 'goal', payload };
   }
   return null;
 }
