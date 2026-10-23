@@ -11,6 +11,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import RangeNote from '@apps/runway/components/RangeNote';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
 import FundsRow from '@apps/runway/components/FundsRow';
@@ -23,11 +24,13 @@ import {
 } from '@apps/runway/store/actions/dayActions';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
+import { effectiveStance } from '@apps/runway/engine/stance';
 import type { HoldChoice } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   selectDraft,
   selectIsPlanItemsLoaded,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
 interface IncomeDayScreenProps {
@@ -44,6 +47,7 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
   const today = todayAsUtcDate(useNow(60_000));
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
+  const planStance = useAppSelector(selectStance);
 
   if (!view) {
     return (
@@ -135,6 +139,12 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
               {formatCents(draft.moneyCents)}
             </span>
           </p>
+          <RangeNote
+            range={day.amount}
+            stance={effectiveStance(planStance, day.stanceOverride)}
+            side='income'
+            isOwnStance={Boolean(day.stanceOverride)}
+          />
         </div>
         <div>
           <FundsRow

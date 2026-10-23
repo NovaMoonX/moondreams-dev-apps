@@ -11,11 +11,14 @@ import { useAppSelector } from '@/store';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
+import { effectiveStance, pick } from '@apps/runway/engine/stance';
+import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import GoalForm from '@apps/runway/forms/GoalForm';
 import {
   selectComingDays,
   selectGoals,
   selectIsPlanItemsLoaded,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
 const SEARCH_THRESHOLD = 8;
@@ -25,9 +28,13 @@ function GoalsScreen() {
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const goals = useAppSelector((state) => selectGoals(state, today));
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const stance = useAppSelector(selectStance);
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
+  const hasRangedIncome = comingDays.some(
+    (day) => day.amount.lowCents !== day.amount.highCents,
+  );
   const hasSearch = goals.length >= SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = goals
@@ -39,7 +46,14 @@ function GoalsScreen() {
       payload: version.payload,
       pace: getPace(
         { ...version.payload, heldCents: 0 },
-        comingDays.map((day) => ({ ...day, moneyCents: day.amount.lowCents })),
+        comingDays.map((day) => ({
+          ...day,
+          moneyCents: pick(
+            effectiveStance(stance, day.stanceOverride),
+            day.amount,
+            'income',
+          ),
+        })),
       ),
     }));
 
@@ -67,6 +81,7 @@ function GoalsScreen() {
             placeholder='Search goals'
           />
         )}
+        {hasRangedIncome && <RangeBasisNote stance={stance} side='income' />}
         {visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No goal matches that.</p>
         ) : (

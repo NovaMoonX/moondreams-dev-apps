@@ -7,7 +7,6 @@ import {
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import AmountField from '@/components/AmountField';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -16,7 +15,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   DEFAULT_PAY_LINE_NAME,
   INCOME_ENDING_LABELS,
@@ -32,7 +30,17 @@ import {
   createIncome,
   type CreateIncomeInput,
 } from '@apps/runway/store/actions/itemActions';
-import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
+import RangeAmountField from '@apps/runway/forms/RangeAmountField';
+import {
+  EMPTY_AMOUNT_DRAFT,
+  getStanceOverride,
+  parseAmountDraft,
+  type AmountDraft,
+} from '@apps/runway/utils/rangeInput';
+import {
+  selectResolvedPlan,
+  selectStance,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { Ending, Schedule } from '@apps/runway/types';
 
 type Frequency = (typeof INCOME_FREQUENCIES)[number];
@@ -41,7 +49,7 @@ type EndKind = (typeof INCOME_ENDINGS)[number];
 interface IncomeFormData {
   source: { choice: string; newText: string };
   payName: string;
-  amount: string;
+  amount: AmountDraft;
   frequency: Frequency | null;
   startDate: string;
   secondDay: string;
@@ -130,11 +138,14 @@ const buildEnding = (data: IncomeFormData): Ending | null => {
 const getBlocker = (
   data: IncomeFormData,
   sourceName: string,
-  amountCents: number | null,
+  hasAmount: boolean,
 ) => {
   if (sourceName === '') return 'Choose or name where it comes from.';
-  if (amountCents === null || amountCents <= 0)
-    return 'Enter the amount that lands in your account.';
+  if (!hasAmount) {
+    return data.amount.mode === 'range'
+      ? 'Enter a low amount and a higher top amount.'
+      : 'Enter the amount that lands in your account.';
+  }
   if (data.frequency === null) return 'Pick how often it arrives.';
   if (fromDateInputValue(data.startDate) === undefined) return 'Pick the date.';
   if (data.frequency === 'twiceMonthly' && buildSchedule(data) === null) {
@@ -153,10 +164,11 @@ function IncomeForm({
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const resolved = useAppSelector((state) => selectResolvedPlan(state, today));
+  const planStance = useAppSelector(selectStance);
   const [initialData] = useState<IncomeFormData>(() => ({
     source: { choice: '', newText: '' },
     payName: '',
-    amount: '',
+    amount: EMPTY_AMOUNT_DRAFT,
     frequency: defaultFrequency,
     startDate: toDateInputValue(today),
     secondDay: '',
@@ -176,8 +188,11 @@ function IncomeForm({
     label: source.version.payload.name,
   }));
   const sourceName = getSourceName(formData, sourceNames);
-  const amountCents = parseMoneyToCents(formData.amount);
-  const blocker = getBlocker(formData, sourceName, amountCents);
+  const blocker = getBlocker(
+    formData,
+    sourceName,
+    parseAmountDraft(formData.amount) !== null,
+  );
   const isOnce = formData.frequency === 'once';
 
   const fields = useMemo(() => {
@@ -318,10 +333,12 @@ function IncomeForm({
         name: 'amount',
         label: '',
         renderComponent: (props) => (
-          <AmountField
+          <RangeAmountField
             label='Take-home pay'
             hint='What lands in your account each time.'
-            value={props.value as string}
+            side='income'
+            planStance={planStance}
+            value={props.value as AmountDraft}
             onChange={(value) => props.onValueChange(value)}
           />
         ),
@@ -358,18 +375,19 @@ function IncomeForm({
     formData.endKind,
     formData.startDate,
     isOnce,
+    planStance,
   ]);
 
   const handleSubmit = async (data: IncomeFormData) => {
     const schedule = buildSchedule(data);
     const ending = buildEnding(data);
-    const cents = parseMoneyToCents(data.amount);
+    const amount = parseAmountDraft(data.amount);
     const startDate = fromDateInputValue(data.startDate);
     if (
       !user ||
       !schedule ||
       !ending ||
-      cents === null ||
+      amount === null ||
       startDate === undefined
     )
       return;
@@ -380,7 +398,8 @@ function IncomeForm({
       sourceId: existingSource ? data.source.choice : null,
       sourceName: getSourceName(data, sourceNames),
       payLineName: data.payName.trim() || DEFAULT_PAY_LINE_NAME,
-      amountCents: cents,
+      amount,
+      stanceOverride: getStanceOverride(data.amount),
       schedule,
       ending,
       startDate,

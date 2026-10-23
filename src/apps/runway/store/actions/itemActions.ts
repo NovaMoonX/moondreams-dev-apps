@@ -5,6 +5,7 @@ import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 
+import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
@@ -15,6 +16,7 @@ import type {
   EnvelopeSealed,
   GoalSealed,
   Ending,
+  MoneyRange,
   Pairing,
   PayLineSealed,
   PlanItemDoc,
@@ -22,6 +24,7 @@ import type {
   RunwayEncryption,
   Schedule,
   SourceSealed,
+  Stance,
 } from '@apps/runway/types';
 
 export interface CreateIncomeInput {
@@ -29,7 +32,8 @@ export interface CreateIncomeInput {
   sourceId: string | null;
   sourceName: string;
   payLineName: string;
-  amountCents: number;
+  amount: MoneyRange;
+  stanceOverride: Stance | null;
   schedule: Schedule;
   ending: Ending;
   /** The first day this income is in the plan. */
@@ -42,10 +46,10 @@ const itemPath = (uid: string, collectionName: string, id: string) =>
 const getSummary = ({
   sourceName,
   payLineName,
-  amountCents,
+  amount,
   startDate,
 }: CreateIncomeInput) =>
-  `Added ${payLineName} from ${sourceName}, ${formatCents(amountCents)}, from ${formatDateUTC(startDate)}.`;
+  `Added ${payLineName} from ${sourceName}, ${formatRange(amount)}, from ${formatDateUTC(startDate)}.`;
 
 /**
  * Adds a pay line, and its source when it is new, as headers, first versions and one change entry in a
@@ -69,8 +73,9 @@ export async function createIncome(
   const payLinePayload: PayLineSealed = {
     name: input.payLineName,
     schedule: input.schedule,
-    amount: { lowCents: input.amountCents, highCents: input.amountCents },
+    amount: input.amount,
     ending: input.ending,
+    stanceOverride: input.stanceOverride,
     pairings: [],
   };
   const changePayload: ChangeSealed = { summary: getSummary(input) };
@@ -219,7 +224,7 @@ export async function createBill(
   const billId = generateUuid();
   const changeId = generateUuid();
   const changePayload: ChangeSealed = {
-    summary: `Added ${bill.name}, ${formatCents(bill.amount.highCents)}. ${describeBillTiming(bill.timing.schedule)}.`,
+    summary: `Added ${bill.name}, ${formatRange(bill.amount)}. ${describeBillTiming(bill.timing.schedule)}.`,
   };
 
   const [billSealed, changeSealed] = await Promise.all([

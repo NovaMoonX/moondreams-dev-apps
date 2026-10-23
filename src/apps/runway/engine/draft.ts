@@ -5,6 +5,7 @@ import type {
 import type {
   Cents,
   HoldChoice,
+  MoneyRange,
   Pairing,
   Priority,
   Stance,
@@ -26,6 +27,7 @@ import {
   type DraftTieKey,
 } from './demands';
 import { percentOf } from './money';
+import { effectiveStance, pick } from './stance';
 
 export interface DraftOverrides {
   /** Day money the person typed in place of the plan's figure, by day key. */
@@ -44,9 +46,16 @@ export interface DraftInput {
     /** The last day schedules are generated for. */
     horizon: number;
     /** Every coming income day, which cadences count over. */
-    incomeDays: readonly { dayKey: string; on: number; moneyCents?: Cents }[];
+    incomeDays: readonly {
+      dayKey: string;
+      on: number;
+      /** Read at the stance's end when given, else `moneyCents` stands. */
+      amount?: MoneyRange;
+      stanceOverride?: Stance | null;
+      moneyCents?: Cents;
+    }[];
   };
-  /** Amounts are exact or a share of the day, so the stance does not change a figure yet. */
+  /** The plan's stance: which end of every range a figure is planned at. */
   stance: Stance;
   overrides: DraftOverrides;
 }
@@ -113,12 +122,16 @@ interface Chunk {
 }
 
 /** Day money: what the person typed, else the plan's figure, never below zero. */
-const getDayMoney = (day: DraftDayInput, overrides: DraftOverrides) => {
+const getDayMoney = (
+  day: DraftDayInput,
+  overrides: DraftOverrides,
+  stance: Stance,
+) => {
   const result = Math.max(
     0,
     Object.hasOwn(overrides.dayCents, day.dayKey)
       ? overrides.dayCents[day.dayKey]
-      : day.amount.lowCents,
+      : pick(effectiveStance(stance, day.stanceOverride), day.amount, 'income'),
   );
   return result;
 };
@@ -342,7 +355,7 @@ export function buildDraft(input: DraftInput): Draft {
   const days = [...input.days].sort(compareDays);
   const dayMoney = days.map((day) => ({
     day,
-    moneyCents: getDayMoney(day, input.overrides),
+    moneyCents: getDayMoney(day, input.overrides, input.stance),
   }));
   const dayMoneyByKey = new Map(
     dayMoney.map(({ day, moneyCents }) => [day.dayKey, moneyCents]),
@@ -352,12 +365,23 @@ export function buildDraft(input: DraftInput): Draft {
   const dayOrder = new Map(days.map((day, index) => [day.dayKey, index]));
   const allDemands = buildDemands(
     days,
-    input.plan.incomeDays,
+    input.plan.incomeDays.map((entry) => ({
+      dayKey: entry.dayKey,
+      on: entry.on,
+      moneyCents: entry.amount
+        ? pick(
+            effectiveStance(input.stance, entry.stanceOverride),
+            entry.amount,
+            'income',
+          )
+        : entry.moneyCents,
+    })),
     input.plan.envelopes,
     input.plan.bills,
     input.plan.horizon,
     input.plan.goals,
     dayMoneyByKey,
+    input.stance,
   );
 
   const targets = new Map<string, Target>(

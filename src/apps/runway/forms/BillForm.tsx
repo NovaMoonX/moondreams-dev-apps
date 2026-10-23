@@ -8,7 +8,6 @@ import {
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import AmountField from '@/components/AmountField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -18,7 +17,6 @@ import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   BILL_FREQUENCIES,
   BILL_FREQUENCY_LABELS,
@@ -36,10 +34,18 @@ import {
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
+import {
+  EMPTY_AMOUNT_DRAFT,
+  getStanceOverride,
+  parseAmountDraft,
+  type AmountDraft,
+} from '@apps/runway/utils/rangeInput';
 import {
   selectBills,
   selectComingDays,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillFundedBy, Ending, Priority } from '@apps/runway/types';
 
@@ -49,7 +55,7 @@ type EndKind = (typeof INCOME_ENDINGS)[number];
 
 interface BillFormData {
   name: string;
-  amount: string;
+  amount: AmountDraft;
   priority: Priority;
   startDate: string;
   frequency: Frequency;
@@ -113,20 +119,22 @@ const buildEnding = (data: BillFormData): Ending | null => {
 
 const getBlocker = (
   data: BillFormData,
-  amountCents: number | null,
+  hasAmount: boolean,
   today: number,
   isChosen: boolean,
   pickedCount: number,
 ) => {
   if (data.name.trim() === '') return 'Name the bill.';
-  if (amountCents === null || amountCents <= 0)
-    return 'Enter how much the bill is.';
+  if (!hasAmount) {
+    return data.amount.mode === 'range'
+      ? 'Enter a low amount and a higher top amount.'
+      : 'Enter how much the bill is.';
+  }
   const start = fromDateInputValue(data.startDate);
   if (start === undefined) return 'Pick when it is due.';
   if (start < today) return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
-  if (isChosen && pickedCount === 0)
-    return 'Pick at least one income day.';
+  if (isChosen && pickedCount === 0) return 'Pick at least one income day.';
   return null;
 };
 
@@ -137,7 +145,7 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
   const bills = useAppSelector((state) => selectBills(state, today));
   const [initialData] = useState<BillFormData>(() => ({
     name: '',
-    amount: '',
+    amount: EMPTY_AMOUNT_DRAFT,
     priority: 'should',
     startDate: toDateInputValue(today),
     frequency: 'once',
@@ -152,7 +160,7 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const amountCents = parseMoneyToCents(formData.amount);
+  const planStance = useAppSelector(selectStance);
   const isOnce = formData.frequency === 'once';
   const dueDate = fromDateInputValue(formData.startDate);
   const dueDays = comingDays.filter(
@@ -165,7 +173,7 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
   ).length;
   const blocker = getBlocker(
     formData,
-    amountCents,
+    parseAmountDraft(formData.amount) !== null,
     today,
     isChosen,
     pickedCount,
@@ -199,10 +207,12 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
         name: 'amount',
         label: '',
         renderComponent: (props) => (
-          <AmountField
+          <RangeAmountField
             label='Amount'
             hint='What you pay each time it is due.'
-            value={props.value as string}
+            side='expense'
+            planStance={planStance}
+            value={props.value as AmountDraft}
             onChange={(value) => props.onValueChange(value)}
           />
         ),
@@ -410,13 +420,14 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
     formData.startDate,
     dayOptions,
     today,
+    planStance,
   ]);
 
   const handleSubmit = async (data: BillFormData) => {
-    const cents = parseMoneyToCents(data.amount);
+    const amount = parseAmountDraft(data.amount);
     const anchor = fromDateInputValue(data.startDate);
     const ending = buildEnding(data);
-    if (!user || cents === null || anchor === undefined || !ending) return;
+    if (!user || amount === null || anchor === undefined || !ending) return;
 
     const tier = bills.filter(
       (bill) => bill.version.payload.priority === data.priority,
@@ -445,7 +456,7 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
           emoji: data.emoji?.trim() || null,
           priority: data.priority,
           orderIndex,
-          amount: { lowCents: cents, highCents: cents },
+          amount,
           timing: {
             kind: 'date',
             schedule: {
@@ -459,6 +470,7 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
           },
           ending,
           fundedBy,
+          stanceOverride: getStanceOverride(data.amount),
         },
       });
       onClose();

@@ -3,6 +3,7 @@ import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 import type {
   CHANGE_KINDS,
   ITEM_KINDS,
+  MORE_ENTRIES,
   DAY_STATUSES,
   HOLD_CHOICES,
   PLAN_SECTIONS,
@@ -16,6 +17,8 @@ export type RunwayTab = 'home' | 'days' | 'plan';
 export type PlanSection = (typeof PLAN_SECTIONS)[number];
 
 export type Stance = (typeof STANCES)[number];
+
+export type MoreEntry = (typeof MORE_ENTRIES)[number];
 
 /** Ciphertext of a JSON object, the shape `@lib/security` produces. */
 export type Sealed = EncryptedFieldPayload;
@@ -84,6 +87,8 @@ export interface PayLineSealed {
   /** Equal ends for an exact amount. */
   amount: MoneyRange;
   ending: Ending;
+  /** Replaces the plan's stance for this pay line; a version written before it existed has none. */
+  stanceOverride: Stance | null;
   pairings: Pairing[];
 }
 
@@ -164,6 +169,8 @@ export interface BillSealed {
   timing: { kind: 'date'; schedule: Schedule };
   ending: Ending;
   fundedBy: BillFundedBy;
+  /** Replaces the plan's stance for this bill; a version written before it existed has none. */
+  stanceOverride: Stance | null;
 }
 
 export interface GoalSealed {

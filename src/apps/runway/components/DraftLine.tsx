@@ -1,6 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatCents } from '@/utils/moneyUtils';
+import RangeNote from '@apps/runway/components/RangeNote';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import { DRAFT_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
@@ -93,6 +94,14 @@ function DraftLine({
         </div>
         {billShare && (
           <p className='text-muted-foreground text-sm'>{billShare}</p>
+        )}
+        {line.bill?.ranged && (
+          <RangeNote
+            range={line.bill.ranged.range}
+            stance={line.bill.ranged.stance}
+            side='expense'
+            isOwnStance={line.bill.ranged.isOwnStance}
+          />
         )}
         {pairingNote === null ? (
           <p className='text-muted-foreground text-sm'>{reason}</p>

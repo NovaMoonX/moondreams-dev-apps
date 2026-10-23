@@ -5,6 +5,7 @@ import type {
   PayLineVersion,
   PlanItemDoc,
   SourceVersion,
+  Stance,
 } from '@apps/runway/types';
 
 import { addUtcMonths, toDayKey } from './dates';
@@ -19,6 +20,8 @@ export interface ComingDay {
   sourceName: string | null;
   payLineName: string;
   amount: MoneyRange;
+  /** The pay line's own stance; null means the plan's applies. */
+  stanceOverride: Stance | null;
 }
 
 const isPayLine = (version: OpenVersion): version is PayLineVersion =>
@@ -67,6 +70,7 @@ export function buildComingDays(
           sourceName,
           payLineName: inForce.payload.name,
           amount: inForce.payload.amount,
+          stanceOverride: inForce.payload.stanceOverride ?? null,
         };
       });
     })
