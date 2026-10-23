@@ -1,7 +1,7 @@
 import { fromDateInputValue } from '@/utils/dateInputUtils';
-import { CHANGE_WORDS } from '@apps/runway/constants';
+import { CHANGE_WORDS, MAX_CHANGE_DAYS_AHEAD } from '@apps/runway/constants';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
-import { DAY_MS } from '@apps/runway/engine/dates';
+import { addUtcDays, DAY_MS } from '@apps/runway/engine/dates';
 import { getStretchEnd } from '@apps/runway/engine/stretch';
 
 export type FromWhenChoice = 'now' | 'date' | 'fromDay' | 'dayOnly' | 'stretch';
@@ -94,7 +94,11 @@ export function getChangeSpan(
   }
   if (value.choice === 'date') {
     const date = fromDateInputValue(value.date);
-    if (date === undefined || date <= today)
+    if (
+      date === undefined ||
+      date <= today ||
+      date > addUtcDays(today, MAX_CHANGE_DAYS_AHEAD)
+    )
       return none(CHANGE_WORDS.dateBlocker);
     return {
       span: { kind: 'version', effectiveFrom: date, effectiveUntil: null },

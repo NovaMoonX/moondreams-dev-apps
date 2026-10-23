@@ -162,14 +162,12 @@ export function previewChange(
   const union = new Map(
     [...daysOf(real), ...daysOf(layered)].map((day) => [day.dayKey, day]),
   );
-  const ordered = [...union.values()]
-    .sort(
-      (a, b) =>
-        a.on - b.on || (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0),
-    )
-    .slice(0, MAX_PREVIEW_DAYS);
+  const ordered = [...union.values()].sort(
+    (a, b) =>
+      a.on - b.on || (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0),
+  );
 
-  const result = ordered.flatMap((day): PreviewDay[] => {
+  const effectOf = (day: (typeof ordered)[number]): PreviewDay[] => {
     const before = draftOf(real, day.dayKey);
     const after = draftOf(layered, day.dayKey);
     const title = day.sourceName ?? day.payLineName;
@@ -222,6 +220,17 @@ export function previewChange(
       ];
     }
     return [];
-  });
+  };
+  // A change far ahead moves no early day, so the walk goes on until enough moved days are found.
+  const collect = (start: number, found: PreviewDay[]): PreviewDay[] => {
+    if (found.length >= MAX_PREVIEW_DAYS || start >= ordered.length)
+      return found.slice(0, MAX_PREVIEW_DAYS);
+    const chunk = ordered.slice(start, start + MAX_PREVIEW_DAYS);
+    return collect(start + chunk.length, [
+      ...found,
+      ...chunk.flatMap(effectOf),
+    ]);
+  };
+  const result = collect(0, []);
   return result;
 }

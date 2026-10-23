@@ -3499,6 +3499,21 @@ const version = (
     [],
     'a change past the days planned moves nothing',
   );
+  assert.ok(
+    previewChange(inputs, {
+      kind: 'version',
+      version: { ...virtual, effectiveFrom: today + 300 * DAY_MS },
+    }).length > 0,
+    'a change beyond the first days listed is still found',
+  );
+  assert.equal(
+    getChangeSpan(
+      { ...INITIAL_FROM_WHEN, choice: 'date', date: '2037-01-01' },
+      { today, days: [], presetDayKey: null },
+    ).span,
+    null,
+    'a start more than ten years out is refused here, as the rules do',
+  );
 
   // The previewed effect equals the saved result.
   const saved: OpenVersion = {

@@ -108,6 +108,12 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
             ? `after ${value.afterCount}`
             : 'never',
       ),
+      diff(
+        'Range',
+        billBefore.stanceOverride ?? null,
+        billAfter.stanceOverride ?? null,
+        (value) => value ?? 'follows the plan',
+      ),
       diff('Funded from', billBefore.fundedBy, billAfter.fundedBy, (value) =>
         value.kind === 'chosen'
           ? `${value.dayKeys.length} chosen days`

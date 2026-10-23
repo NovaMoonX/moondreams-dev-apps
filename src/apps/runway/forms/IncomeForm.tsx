@@ -211,7 +211,12 @@ const getEditingData = (editing: EditingIncome): IncomeFormData => {
         : toDateInputValue(payload.schedule.anchor),
     secondDay:
       payload.schedule.kind === 'twiceMonthly'
-        ? String(payload.schedule.monthDays[1] ?? '')
+        ? String(
+            payload.schedule.monthDays.find(
+              (day) =>
+                day !== new Date(payload.schedule.anchor ?? 0).getUTCDate(),
+            ) ?? '',
+          )
         : '',
     endKind:
       payload.ending.onDate !== null

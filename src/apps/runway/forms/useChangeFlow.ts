@@ -123,13 +123,14 @@ export function useChangeFlow({
   const changeJson = getChangeJson(itemId, kind, candidate, span);
 
   const getSummary = (name: string) => {
+    const words = summaryText || 'Updated';
     if (span?.kind === 'day') {
-      return `${name}: ${summaryText}, for ${formatDateUTC(span.day.on)} only.`;
+      return `${name}: ${words}, for ${formatDateUTC(span.day.on)} only.`;
     }
     if (span?.kind === 'version' && span.effectiveUntil !== null) {
-      return `${name}: ${summaryText}, from ${formatDateUTC(span.effectiveFrom)} through ${formatDateUTC(span.effectiveUntil - DAY_MS)}, then it goes back.`;
+      return `${name}: ${words}, from ${formatDateUTC(span.effectiveFrom)} through ${formatDateUTC(span.effectiveUntil - DAY_MS)}, then it goes back.`;
     }
-    return `${name}: ${summaryText}, from ${formatDateUTC(span?.kind === 'version' ? span.effectiveFrom : today)}.`;
+    return `${name}: ${words}, from ${formatDateUTC(span?.kind === 'version' ? span.effectiveFrom : today)}.`;
   };
 
   const save = async (reason: string | null) => {
