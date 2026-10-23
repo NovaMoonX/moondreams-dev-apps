@@ -38,7 +38,7 @@ import {
   DayChangedElsewhere,
 } from '@apps/runway/store/actions/dayActions';
 import {
-  selectConfirmedByItem,
+  selectHeldByItem,
   selectOpenDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, CorrectionChange } from '@apps/runway/types';
@@ -61,7 +61,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   const { addToast } = useToast();
   const isMounted = useRef(true);
   const items = useAppSelector((state) => state.runway.items);
-  const held = useAppSelector(selectConfirmedByItem);
+  const held = useAppSelector(selectHeldByItem);
   const openDay = useAppSelector((state) => selectOpenDay(state, dayKey));
   const [step, setStep] = useState<'edit' | 'review'>('edit');
   const [amount, setAmount] = useState(centsToInputValue(base.arrivedCents));

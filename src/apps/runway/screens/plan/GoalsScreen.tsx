@@ -16,7 +16,7 @@ import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import GoalForm from '@apps/runway/forms/GoalForm';
 import {
   selectComingDays,
-  selectConfirmedByItem,
+  selectHeldByItem,
   selectGoals,
   selectIsPlanItemsLoaded,
   selectStance,
@@ -30,7 +30,7 @@ function GoalsScreen() {
   const goals = useAppSelector((state) => selectGoals(state, today));
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const stance = useAppSelector(selectStance);
-  const heldByItem = useAppSelector(selectConfirmedByItem);
+  const heldByItem = useAppSelector(selectHeldByItem);
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
