@@ -385,7 +385,7 @@ function CookingHistorySheet({
                 onClick={() => openEdit(null)}
               >
                 <Plus className='h-4 w-4' aria-hidden='true' />
-                <span className='max-[379px]:sr-only'>Add an earlier cook</span>
+                <span className='max-[380px]:sr-only'>Add an earlier cook</span>
                 <span aria-hidden='true' className='min-[380px]:hidden'>
                   Add a cook
                 </span>

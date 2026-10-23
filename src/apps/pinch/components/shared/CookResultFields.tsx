@@ -108,6 +108,7 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
         >
           <StarRating
             size='lg'
+            isCaptionReserved={false}
             value={cook.rating ?? null}
             onChange={(rating) => void write({ rating }).catch(() => undefined)}
           />

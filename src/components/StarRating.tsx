@@ -15,6 +15,8 @@ interface StarRatingProps {
   /** Omit for a read-only display. Tap or slide across the stars; a Clear button removes the rating. */
   onChange?: (value: number | null) => void;
   size?: 'sm' | 'lg';
+  /** A large rating keeps a line under the stars for the value and Clear, so rating never moves what is below; false draws it only once there is a rating. */
+  isCaptionReserved?: boolean;
 }
 
 const getStarFill = (star: number, value: number) =>
@@ -23,7 +25,12 @@ const getStarFill = (star: number, value: number) =>
 const formatStars = (value: number) =>
   Number.isInteger(value) ? value.toString() : value.toFixed(1);
 
-function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
+function StarRating({
+  value,
+  onChange,
+  size = 'sm',
+  isCaptionReserved = true,
+}: StarRatingProps) {
   const rowRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const [preview, setPreview] = useState<number | null>(null);
@@ -169,7 +176,7 @@ function StarRating({ value, onChange, size = 'sm' }: StarRatingProps) {
       >
         {renderStars(shown, isPreviewing)}
       </div>
-      {size === 'lg' && (
+      {size === 'lg' && (isCaptionReserved || value !== null) && (
         <div className='text-muted-foreground flex h-6 items-center gap-2 text-sm'>
           {shown > 0 && (
             <span
