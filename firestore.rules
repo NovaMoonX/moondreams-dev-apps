@@ -3960,6 +3960,20 @@ service cloud.firestore {
           && value.algorithm == 'AES-256-GCM';
       }
 
+      // At most 50 periods; only the last one is shape-checked, since a per-element check would not fit the expression budget. A period closes once, and a new one opens only after it.
+      function isPeriodValid(period) {
+        return period is map
+          && period.keys().hasOnly(['from', 'to'])
+          && isDateOnly(period['from'])
+          && (period['to'] == null || (isDateOnly(period['to']) && period['to'] >= period['from']));
+      }
+
+      function isTrackingPeriodsValid(periods) {
+        return periods is list
+          && periods.size() <= 50
+          && (periods.size() == 0 || isPeriodValid(periods[periods.size() - 1]));
+      }
+
       function isPlanValid(data) {
         return data.uid == uid
           && data.createdAt is number
@@ -3968,6 +3982,7 @@ service cloud.firestore {
           && data.updatedAt <= request.time.toMillis() + 3600000
           && data.stance in ['conservative', 'middle', 'optimistic']
           && (data.get('startDate', null) == null || isDateOnly(data.startDate))
+          && isTrackingPeriodsValid(data.get('trackingPeriods', []))
           && (data.keyId == null || data.keyId is string)
           && (data.get('sealed', null) == null || isSealed(data.sealed));
       }
@@ -3975,13 +3990,14 @@ service cloud.firestore {
       allow read: if isPlanOwner();
       allow create: if isPlanOwner()
         && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'keyId', 'sealed'])
-        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'trackingPeriods', 'keyId', 'sealed'])
         && request.resource.data.startDate == null
+        && request.resource.data.get('trackingPeriods', []).size() == 0
         && isPlanValid(request.resource.data);
-      // A plan written before `sealed` or `startDate` existed may lack the key; it is added with the next write.
+      // A plan written before `sealed`, `startDate` or `trackingPeriods` existed may lack the key; it is added with the next write.
       allow update: if isPlanOwner()
         && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId'])
-        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'trackingPeriods', 'keyId', 'sealed'])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.createdAt == resource.data.createdAt
         && isPlanValid(request.resource.data);
@@ -4232,7 +4248,8 @@ service cloud.firestore {
         }
 
         // A starting holding is dated the plan's starting day, set in the same batch, and its id names the
-        // holding and when it was written, so a run appends and never replaces.
+        // holding and when it was written, so a run appends and never replaces. The item is not looked up:
+        // one write may make only 20 lookups, and a plan can start with more holdings than that.
         function isStartMoveValid(data) {
           return data.kind == 'start'
             && isDateOnly(data.date)
@@ -4243,14 +4260,33 @@ service cloud.firestore {
             && isSealed(data.sealed)
             && moveId == 'start_' + (data.refId == null ? 'money' : data.refId) + '_' + string(data.createdAt)
             && (data.refId == null
-              || (data.refId is string
-                && exists(planDoc('items', data.refId))
-                && get(planDoc('items', data.refId)).data.kind in ['goal', 'bill']));
+              || (data.refId is string && data.refId.size() <= 200));
+        }
+
+        function isPeriodEdge(periods, date) {
+          return periods.size() > 0
+            && (periods[periods.size() - 1]['from'] == date || periods[periods.size() - 1]['to'] == date);
+        }
+
+        // Tracking turned on or off: dated the first day of the newest period or the day it ended, in the same
+        // write that changed the plan's periods, with an id that names the day and when it was written.
+        function isTrackingMoveValid(data) {
+          return data.kind == 'trackingChange'
+            && isDateOnly(data.date)
+            && data.refId == null
+            && data.reversesMoveId == null
+            && isPastOrNear(data.createdAt)
+            && isSealed(data.sealed)
+            && moveId == 'tracking_' + dayStamp(data.date) + '_' + string(data.createdAt)
+            && existsAfter(/databases/$(database)/documents/apps/runway/plans/$(uid))
+            && isPeriodEdge(getAfter(/databases/$(database)/documents/apps/runway/plans/$(uid)).data.get('trackingPeriods', []), data.date);
         }
 
         function isMoveValid(data) {
           return data.id == moveId
-            && (data.kind == 'start' ? isStartMoveValid(data) : isPaidMoveValid(data));
+            && (data.kind == 'start'
+              ? isStartMoveValid(data)
+              : data.kind == 'trackingChange' ? isTrackingMoveValid(data) : isPaidMoveValid(data));
         }
 
         allow read: if isPlanOwner();

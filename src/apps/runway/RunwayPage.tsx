@@ -17,6 +17,7 @@ import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
+import TrackingScreen from '@apps/runway/screens/plan/TrackingScreen';
 import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
@@ -42,6 +43,8 @@ function RunwayPage() {
     closeMoreEntry,
     view,
     closeView,
+    settingsView,
+    closeSettingsView,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
@@ -134,6 +137,14 @@ function RunwayPage() {
     return (
       <div className='page'>
         <ChangeLogScreen onClose={closeMoreEntry} />
+      </div>
+    );
+  }
+
+  if (moreEntry === 'settings' && settingsView === 'tracking') {
+    return (
+      <div className='page'>
+        <TrackingScreen onClose={closeSettingsView} />
       </div>
     );
   }

@@ -1,6 +1,18 @@
 // Pure checks for Runway's engine; run under several time zones: `TZ=America/Los_Angeles npm run check:runway-engine`.
 import assert from 'node:assert/strict';
 
+import {
+  getEarliestTrackingStart,
+  getLevel,
+  startTrackingPeriod,
+  stopTrackingPeriod,
+} from '../../src/apps/runway/engine/level.ts';
+import {
+  deriveBalances,
+  deriveBalancesBefore,
+} from '../../src/apps/runway/engine/balances.ts';
+import type { OpenMove, OpenRecord } from '../../src/apps/runway/types.ts';
+import { getLevelWords } from '../../src/apps/runway/utils/levelText.ts';
 import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
 import { previewChange } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
 import {
@@ -4988,6 +5000,131 @@ const version = (
   console.log(
     `runway engine: 50-envelope lookahead over ${buildComingDays(manyItems, manyVersions, today).length} days median ${timings[2].toFixed(0)} ms, worst ${timings[4].toFixed(0)} ms`,
   );
+}
+
+{
+  // Tracking: moving up and down repeatedly leaves one period per stretch and never overlaps.
+  const day = (n: number) => Date.UTC(2026, 0, 1) + n * 86_400_000;
+  assert.equal(getLevel([]), 'plan', 'a plan with no periods is at Plan');
+  const up = startTrackingPeriod([], day(0));
+  assert.ok('periods' in up);
+  assert.equal(getLevel(up.periods), 'track');
+  assert.ok(
+    'error' in startTrackingPeriod(up.periods, day(1)),
+    'a stale second move up is refused',
+  );
+  assert.ok(
+    'error' in stopTrackingPeriod([], day(1)),
+    'a stale move down is refused',
+  );
+  assert.ok(
+    'error' in stopTrackingPeriod(up.periods, day(-1)),
+    'tracking cannot stop before it started',
+  );
+  const down = stopTrackingPeriod(up.periods, day(10));
+  assert.ok('periods' in down);
+  assert.equal(getLevel(down.periods), 'plan');
+  assert.equal(getEarliestTrackingStart(down.periods), day(11));
+  assert.ok(
+    'error' in startTrackingPeriod(down.periods, day(10)),
+    'the day tracking stopped is not in a new period',
+  );
+  const again = startTrackingPeriod(down.periods, day(11));
+  assert.ok('periods' in again);
+  const loop = Array.from({ length: 6 }).reduce<{
+    day: number;
+    periods: { from: number; to: number | null }[];
+  }>(
+    (state) => {
+      const opened = startTrackingPeriod(state.periods, state.day);
+      assert.ok('periods' in opened);
+      const closed = stopTrackingPeriod(
+        opened.periods,
+        state.day + 3 * 86_400_000,
+      );
+      assert.ok('periods' in closed);
+      return { day: state.day + 4 * 86_400_000, periods: closed.periods };
+    },
+    { day: day(0), periods: [] },
+  );
+  assert.equal(loop.periods.length, 6, 'one period per stretch');
+  assert.ok(
+    loop.periods.every(
+      (period, index) =>
+        period.to !== null &&
+        period.from <= period.to &&
+        (index === 0 || period.from > (loop.periods[index - 1].to ?? 0)),
+    ),
+    'periods never overlap',
+  );
+  {
+    // Starting tracking on a day money arrived or a bill was paid counts neither twice.
+    const d = (n: number) => Date.UTC(2026, 9, 1) + n * 86_400_000;
+    const move = (
+      kind: 'start' | 'billPaid',
+      refId: string | null,
+      amountCents: number,
+      createdAt: number,
+      payload: object = {},
+    ) =>
+      ({
+        id: `${kind}_${refId}_${createdAt}`,
+        kind,
+        date: d(0),
+        refId,
+        reversesMoveId: null,
+        createdAt,
+        payload: { amountCents, holding: 'envelope', ...payload },
+      }) as unknown as OpenMove;
+    const record = {
+      id: 'r',
+      dayId: 'day1',
+      kind: 'confirmed',
+      createdAt: 1,
+      payload: {
+        arrivedCents: 100_000,
+        lines: [{ itemId: 'g', cents: 30_000 }],
+      },
+    } as unknown as OpenRecord;
+    const input = {
+      startDate: d(0),
+      moves: [move('start', null, 100_000, 1), move('start', 'g', 0, 1)],
+      records: [record],
+      arrivedOn: new Map([['day1', d(19)]]),
+      kinds: { g: 'envelope' as const },
+    };
+    const now = deriveBalances(input);
+    assert.equal(now.moneyOnHandCents, 200_000);
+    const before = deriveBalancesBefore(input, d(19));
+    assert.equal(
+      before.moneyOnHandCents,
+      100_000,
+      'a day that arrives on the start day is not in the base',
+    );
+    assert.equal(before.assignedByItem.g, 0);
+    const tracked = deriveBalances({
+      ...input,
+      startDate: d(19),
+      moves: [
+        ...input.moves,
+        move('start', null, before.moneyOnHandCents, 2),
+        move('start', 'g', before.assignedByItem.g, 2),
+      ].map((m, i) => (i >= 2 ? { ...m, date: d(19) } : m)),
+    });
+    assert.equal(
+      tracked.moneyOnHandCents,
+      now.moneyOnHandCents,
+      "starting tracking today keeps today's figures",
+    );
+    assert.equal(tracked.assignedByItem.g, now.assignedByItem.g);
+    assert.equal(
+      deriveBalancesBefore(input, d(20)).moneyOnHandCents,
+      200_000,
+      'a later start keeps what arrived before it',
+    );
+  }
+  assert.equal(getLevelWords('plan').envelopeFigure, 'assigned');
+  assert.equal(getLevelWords('track').envelopeFigure, 'left');
 }
 
 console.log('runway engine: ok');

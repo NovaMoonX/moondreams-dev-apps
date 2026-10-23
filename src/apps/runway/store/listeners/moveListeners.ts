@@ -17,6 +17,7 @@ import type {
   OpenMove,
   RunwayEncryption,
   StartSealed,
+  TrackingChangeSealed,
 } from '@apps/runway/types';
 
 const toError = (error: unknown) =>
@@ -36,6 +37,13 @@ async function openMove(
   if (entry.kind === 'start') {
     const payload = await openJson<StartSealed>(entry.sealed, encryption);
     return { ...base, kind: 'start', payload };
+  }
+  if (entry.kind === 'trackingChange') {
+    const payload = await openJson<TrackingChangeSealed>(
+      entry.sealed,
+      encryption,
+    );
+    return { ...base, kind: 'trackingChange', payload };
   }
   const payload = await openJson<BillPaidSealed>(entry.sealed, encryption);
   return { ...base, kind: 'billPaid', payload };

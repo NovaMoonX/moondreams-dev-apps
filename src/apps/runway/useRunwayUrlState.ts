@@ -15,6 +15,7 @@ import {
   PLAN_SECTIONS,
   RUNWAY_TABS,
   RUNWAY_VIEWS,
+  SETTINGS_VIEWS,
 } from '@apps/runway/constants';
 import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
@@ -40,6 +41,11 @@ export function useRunwayUrlState() {
   const [requestedView, setRequestedView] = useQueryState(
     'view',
     parseAsStringLiteral(RUNWAY_VIEWS),
+  );
+
+  const [requestedSettingsView, setRequestedSettingsView] = useQueryState(
+    'settingsView',
+    parseAsStringLiteral(SETTINGS_VIEWS),
   );
 
   const [requestedSpan, setRequestedSpan] = useQueryState(
@@ -91,8 +97,13 @@ export function useRunwayUrlState() {
 
   const openMoreEntry = (entry: MoreEntry) =>
     setRequestedMore(entry, { history: 'replace' });
+  const openSettingsView = (settingsView: (typeof SETTINGS_VIEWS)[number]) =>
+    setRequestedSettingsView(settingsView, { history: 'replace' });
+  const closeSettingsView = () =>
+    setRequestedSettingsView(null, { history: 'replace' });
   const closeMoreEntry = () => {
     setRequestedMore(null, { history: 'replace' });
+    setRequestedSettingsView(null, { history: 'replace' });
     setRequestedSpan(null, { history: 'replace' });
     setRequestedPage(null, { history: 'replace' });
     setRequestedItem(null, { history: 'replace' });
@@ -113,6 +124,9 @@ export function useRunwayUrlState() {
     openDayKey: requestedDay,
     openDay,
     closeDay,
+    settingsView: requestedSettingsView,
+    openSettingsView,
+    closeSettingsView,
     moreEntry: requestedMore,
     openMoreEntry,
     closeMoreEntry,

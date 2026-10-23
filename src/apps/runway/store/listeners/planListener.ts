@@ -25,6 +25,7 @@ async function openPlan(
     updatedAt: plan.updatedAt,
     stance: readStance(plan.stance),
     startDate: plan.startDate ?? null,
+    trackingPeriods: plan.trackingPeriods ?? [],
     keyId: plan.keyId ?? null,
     currencyCode: fields.currencyCode,
   };

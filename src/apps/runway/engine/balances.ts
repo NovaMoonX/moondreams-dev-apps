@@ -136,3 +136,31 @@ export function getFreeToSpendFigure(balances: Balances): FreeToSpendFigure {
   }
   return { kind: 'amount', cents: balances.freeToSpendCents };
 }
+
+/** The figures as they stood at the start of `day`: days whose money arrived, and bills paid, from that day on are left out, because a start dated `day` adds them again. */
+export function deriveBalancesBefore(
+  input: BalancesInput,
+  day: DateOnly,
+): Balances {
+  const dropped = new Set(
+    input.moves.flatMap((move) =>
+      move.kind === 'billPaid' &&
+      !move.reversesMoveId &&
+      move.payload.paidOn >= day
+        ? [move.id]
+        : [],
+    ),
+  );
+  const result = deriveBalances({
+    ...input,
+    moves: input.moves.filter(
+      (move) =>
+        !dropped.has(move.id) &&
+        !(move.reversesMoveId && dropped.has(move.reversesMoveId)),
+    ),
+    records: input.records.filter(
+      (record) => (input.arrivedOn.get(record.dayId) ?? 0) < day,
+    ),
+  });
+  return result;
+}

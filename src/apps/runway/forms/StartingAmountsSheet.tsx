@@ -47,7 +47,7 @@ interface AmountListProps {
 }
 
 /** One-line rows that each open their own amount, capped so fifty of them stay a short list. */
-function AmountList({ label, rows, values, onChange }: AmountListProps) {
+export function AmountList({ label, rows, values, onChange }: AmountListProps) {
   const [isAll, setIsAll] = useState(false);
   const shown = isAll ? rows : rows.slice(0, START_ROWS_PREVIEW);
   const hiddenCount = rows.length - START_ROWS_PREVIEW;
