@@ -71,22 +71,26 @@ export function occurrences(
 }
 
 /**
- * Of the plan-wide chronological income days, the ones a funding cadence selects. Every Nth counts from
- * the anchor day: the anchor and every Nth day after it. An anchor that is no longer in the list (its
- * day has passed) counts from the first day listed.
+ * Of the plan-wide income days, the ones a funding cadence selects, counted in chronological order
+ * whatever order they arrive in. Every Nth counts from the anchor day: the anchor and every Nth day
+ * after it. An anchor that is no longer in the list (its day has passed) counts from the first day listed.
  */
-export function selectFundedDays<D extends { dayKey: string }>(
+export function selectFundedDays<D extends { dayKey: string; on: number }>(
   cadence: FundingRule['cadence'],
   days: readonly D[],
 ): D[] {
-  if (cadence.kind === 'everyIncomeDay') return [...days];
+  const ordered = [...days].sort(
+    (a, b) =>
+      a.on - b.on || (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0),
+  );
+  if (cadence.kind === 'everyIncomeDay') return ordered;
   if (cadence.kind === 'chosen') {
     const chosen = new Set(cadence.dayKeys);
-    return days.filter((day) => chosen.has(day.dayKey));
+    return ordered.filter((day) => chosen.has(day.dayKey));
   }
-  const found = days.findIndex((day) => day.dayKey === cadence.anchorDayKey);
+  const found = ordered.findIndex((day) => day.dayKey === cadence.anchorDayKey);
   const anchorIndex = Math.max(found, 0);
-  const result = days.filter(
+  const result = ordered.filter(
     (_, index) =>
       index >= anchorIndex && (index - anchorIndex) % cadence.n === 0,
   );
