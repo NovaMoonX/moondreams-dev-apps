@@ -30,7 +30,10 @@ const monthlyDates = (schedule: Schedule, anchor: number, to: number) => {
       const year = first.getUTCFullYear();
       const month = first.getUTCMonth() + index;
       const length = daysInUtcMonth(year, month);
-      return days.map((day) => Date.UTC(year, month, Math.min(day, length)));
+      const clamped = days.map((day) =>
+        Date.UTC(year, month, Math.min(day, length)),
+      );
+      return [...new Set(clamped)];
     })
     .filter((date) => date >= anchor && date <= to);
   return result;

@@ -216,6 +216,18 @@ assert.deepEqual(
 assert.deepEqual(
   stamps(
     occurrences(
+      { kind: 'twiceMonthly', anchor: utc(2026, 1, 30), monthDays: [30, 31] },
+      NEVER,
+      utc(2026, 1, 1),
+      utc(2026, 3, 31),
+    ),
+  ),
+  ['20260130', '20260131', '20260228', '20260330', '20260331'],
+  'twice a month never lists a clamped day twice',
+);
+assert.deepEqual(
+  stamps(
+    occurrences(
       { kind: 'twiceMonthly', anchor: utc(2026, 2, 20), monthDays: [5, 20] },
       NEVER,
       utc(2026, 2, 1),
