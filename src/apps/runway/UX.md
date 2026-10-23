@@ -45,7 +45,7 @@ Days
  │   └─ Correct a confirmed day
  └─ Expected (expense or income) → proposed changes
 
-Plan  (pills: Income · Bills · Envelopes · Goals; a pill is drawn once its screen exists, so Goals waits for its issue)
+Plan  (pills: Income · Bills · Envelopes · Goals; a pill is drawn once its screen exists)
  ├─ Income source → Pay line
  ├─ Bill
  ├─ Envelope → Purchases (Track and Link) · History
@@ -95,7 +95,7 @@ Drawn on the canvas, in these groups. Each row names what the picture does not s
 | Levels, starting out, purchases | Purchase | Notes, links and receipts never change a balance. |
 | Levels, starting out, purchases | Needs a home | A rule is offered after three identical assignments and never applied on its own. |
 
-**Not yet drawn:** the income source and pay line screens, bill and goal screens and forms, change log, Priorities, Accounts, Plan as of a date, Check an amount, Check a balance, Card reserve, Import a CSV, Free to spend in detail, Where your cash is, Cover it as its own screen, Notification settings (four switches with a one-line explanation each, Next Steps). They follow the same patterns as the drawn ones.
+**Not yet drawn:** the income source and pay line screens, bill and goal detail screens and editing, change log, Priorities, Accounts, Plan as of a date, Check an amount, Check a balance, Card reserve, Import a CSV, Free to spend in detail, Where your cash is, Cover it as its own screen, Notification settings (four switches with a one-line explanation each, Next Steps). They follow the same patterns as the drawn ones.
 
 **Where this screen set stops.** Envelopes, bills and income days stay in the tens. Purchases and history do not, so Spend and the change log load one date window at a time and search covers the window in view, not all time (encrypted fields cannot be searched on the server).
 

@@ -255,6 +255,8 @@ interface GroupSealed {
 }
 ```
 
+`GoalSealed` as built carries `name`, `emoji`, `priority`, `orderIndex`, `targetCents`, `targetDate` and `funding`; `state`, `rateBps` and `accountId` arrive with the issues that read them.
+
 `EnvelopeSealed` as built carries `name`, `emoji`, `priority`, `orderIndex` and `funding`; `spillTo` and `accountId` arrive with the issues that read them. `FundingAmount` is `exact` only and `FundingRule.cadence` offers `everyIncomeDay`, `everyNth` and `chosen`; `percent`, `rest` and `monthly` arrive with theirs. A new envelope's `orderIndex` is the tier's highest plus one. The Plan tab's pill is the `section` URL param (`income`, `envelopes`).
 
 ### PlanDoc
@@ -596,7 +598,7 @@ So the most recent decision that covers a date wins, and a temporary version tha
 - *Bill, window:* the same as suggested, counting income days before `closesOn`.
 - *Bill, paid ahead:* no demand. Whatever part of the payment was not yet set aside for it came out of Free to spend, and the money the bill would have asked for on later days stays in the pool, which is how the next drafts make it up.
 - *Envelope or goal (cadence selection is `selectFundedDays` in `engine/schedule.ts`; an anchor that has left the coming-day list counts from the first day listed, so an `everyNth` envelope never silently funds nothing):* `everyIncomeDay` is every day; `everyNth` selects days whose index since `anchorDayKey` in the plan-wide chronological income-day list is a multiple of n; `chosen` selects named day keys; `monthly` selects the first or last income day of the month in that list, or all of them with the amount split by `allocate` ("split").
-- *Goals:* a paused goal or one at its target demands nothing.
+- *Goals:* a paused goal or one at its target demands nothing. A goal's demand on a funded day is `min(amount, target − held − what earlier funded days already put in)`, worked out over the whole plan-wide income-day list (`planGoalContributions` in `engine/pace.ts`), so the last contribution is cut to what is left and nothing is asked after the target. `held` is zero until a confirmed day or a starting point exists; the draft and the pace line therefore read from the plan alone, and they assume each earlier funded day is fully funded.
 - *Loan payment:* a bill with `LoanTerms`; the demand is `paymentCents`, capped at the balance plus estimated interest, and the loan ends when the balance reaches zero.
 - *Overspend:* the engine never changes a demand's size for an overspent envelope. It marks the first `min(line, −balance)` cents of that envelope's line as repaying the overspend.
 
@@ -668,6 +670,8 @@ Pending deposits are never matched, because a pending amount can change. A day c
 Each step is one `runTransaction` that re-reads the purchase and aborts if another device already changed it. A rule is suggested only after the same merchant key goes to the same envelope three assignments in a row.
 
 **Properties the matching check asserts** (`scripts/checks/runwayEngine.ts`). A deposit never links to a day another deposit is linked to. A deposit that posts after its day was confirmed links to that day, changes no confirmed amount and sends no push. A deposit two weeks from any day asks. Two equal candidates ask, and the same input in any order gives the same result. A pending deposit produces no match.
+
+**Goal pace (Issue 9).** `engine/pace.ts` is pure: `getPace({ targetCents, targetDate, heldCents, funding }, incomeDays)` returns `{ isComplete, remainingCents, dayCount, neededPerDayCents, plannedByDateCents, reachedOn, state }`. With a date, `dayCount` is the income days on or before it and `neededPerDayCents = ceil(remaining / dayCount)`, null when none comes first. Let `n = ceil(remaining / amount)` funded days and `have` the funded days on or before the date: `state` is `behind` when `have < n`, `onPace` when `have = n` and `ahead` when `have > n` (the target is reached at least one funded day early). A goal with no date has `state: null` and says which income day the plan reaches it on, or that the days ahead never do. `completed` is derived (`remaining` is zero) and never stored. Before any day is confirmed contributions are zero, so the pace line reads from the plan alone; `selectDraft` and the Goals screen pass `heldCents: 0` until confirmed days exist. The Goals pill is the `section=goals` URL param; goals and their rows come from `selectGoals`, `createGoal` writes the header, first version and change in one batch like the other creators, the form refuses a date past `LOOKAHEAD_MONTHS`, since the coming income days stop there and a later date would read as behind for want of days to count, and and the rules needed no change because `goal` was already an allowed item and version kind.
 
 ### Lifecycles
 

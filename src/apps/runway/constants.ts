@@ -1,13 +1,18 @@
 import type { RunwayTab } from '@apps/runway/types';
 
-export const PLAN_SECTIONS = ['income', 'bills', 'envelopes'] as const;
+export const PLAN_SECTIONS = ['income', 'bills', 'envelopes', 'goals'] as const;
 
 export const DEFAULT_PLAN_SECTION = 'income' as const;
 
 export const PLAN_SECTION_LABELS: Record<
   (typeof PLAN_SECTIONS)[number],
   string
-> = { income: 'Income', bills: 'Bills', envelopes: 'Envelopes' };
+> = {
+  income: 'Income',
+  bills: 'Bills',
+  envelopes: 'Envelopes',
+  goals: 'Goals',
+};
 
 export const RUNWAY_TABS = [
   'home',
@@ -200,3 +205,12 @@ export const DRAFT_WORDS = {
   billFallback: 'Bill',
   and: 'and',
 } as const;
+
+/** The pace line's three answers for a goal with a date. */
+export const PACE_STATES = ['ahead', 'onPace', 'behind'] as const;
+
+export const PACE_STATE_LABELS: Record<(typeof PACE_STATES)[number], string> = {
+  ahead: 'Ahead',
+  onPace: 'On pace',
+  behind: 'Behind',
+};
