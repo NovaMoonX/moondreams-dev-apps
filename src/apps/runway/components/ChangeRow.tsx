@@ -48,7 +48,7 @@ function ChangeRow({ change, confirmedDayKey, onOpenRecord }: ChangeRowProps) {
               key: 'record',
               icon: <FileText className='h-4 w-4' />,
               label: 'Planned and confirmed',
-              description: 'Open the income day this change shaped',
+              description: 'The first income day confirmed after this change',
               onClick: () => onOpenRecord(confirmedDayKey),
             },
           ]}
