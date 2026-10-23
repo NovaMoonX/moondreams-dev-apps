@@ -11,6 +11,7 @@ import { db } from '@lib/firebase/config';
 import { openJson } from '@apps/runway/security';
 import type {
   ConfirmedSealed,
+  CorrectionSealed,
   DayOverrideSealed,
   DayRecordDoc,
   IncomeDayDoc,
@@ -96,6 +97,15 @@ async function openRecord(
   if (entry.kind === 'proposed') {
     const payload = await openJson<ProposedSealed>(entry.sealed, encryption);
     return { ...base, kind: 'proposed', payload };
+  }
+  if (entry.kind === 'correction') {
+    const payload = await openJson<CorrectionSealed>(entry.sealed, encryption);
+    return {
+      ...base,
+      kind: 'correction',
+      supersedesId: entry.supersedesId ?? '',
+      payload,
+    };
   }
   const payload = await openJson<ConfirmedSealed>(entry.sealed, encryption);
   return { ...base, kind: 'confirmed', payload };

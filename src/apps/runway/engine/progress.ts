@@ -1,5 +1,6 @@
 import type { Cents, DateOnly, OpenMove, OpenRecord } from '@apps/runway/types';
 
+import { getEffectiveSplits } from './correct';
 import { toDayStamp } from './dates';
 
 /** What a confirmed day set aside for a bill. */
@@ -73,20 +74,22 @@ export const countMarks = (
       move.date === dueOn,
   ).length;
 
-/** What the confirmed days' lines gave each plan item, with the day each line was for; `onByDay` is a day's scheduled date. */
+/** What the confirmed days' lines gave each plan item (a corrected day's latest split), with the day each line was for; `onByDay` is a day's scheduled date. */
 export function collectFunded(
   records: readonly OpenRecord[],
   onByDay: ReadonlyMap<string, DateOnly>,
 ): Record<string, FundedDay[]> {
-  const result = records.reduce<Record<string, FundedDay[]>>((acc, record) => {
-    const on = onByDay.get(record.dayId);
-    if (record.kind !== 'confirmed' || on === undefined) return acc;
-    return record.payload.lines.reduce(
+  const result = getEffectiveSplits(records).reduce<
+    Record<string, FundedDay[]>
+  >((acc, split) => {
+    const on = onByDay.get(split.dayId);
+    if (on === undefined) return acc;
+    return split.lines.reduce(
       (sums, line) => ({
         ...sums,
         [line.itemId]: [
           ...(sums[line.itemId] ?? []),
-          { dayKey: record.dayId, on, cents: line.cents },
+          { dayKey: split.dayId, on, cents: line.cents },
         ],
       }),
       acc,

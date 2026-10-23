@@ -2,12 +2,18 @@ import { doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { CONFIRM_WORDS } from '@apps/runway/constants';
+import { CONFIRM_WORDS, CORRECT_WORDS } from '@apps/runway/constants';
 import {
   buildRecords,
   countUnresolvedHolds,
   type ItemNames,
 } from '@apps/runway/engine/confirm';
+import {
+  buildCorrection,
+  getCorrectionId,
+  keepTicks,
+  type EffectiveSplit,
+} from '@apps/runway/engine/correct';
 import { toDayKey } from '@apps/runway/engine/dates';
 import type { Draft } from '@apps/runway/engine/draft';
 import { hashOverride } from '@apps/runway/engine/fingerprint';
@@ -17,7 +23,6 @@ import type {
   DateOnly,
   DayOverrideSealed,
   DayRecordDoc,
-  DayRecordKind,
   DayStatus,
   IncomeDayDoc,
   RunwayEncryption,
@@ -100,18 +105,8 @@ const asRaceMessage = (error: unknown, message: string) =>
 const dayRef = (uid: string, dayId: string) =>
   doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId);
 
-const recordRef = (uid: string, dayId: string, kind: DayRecordKind) =>
-  doc(
-    db,
-    'apps',
-    'runway',
-    'plans',
-    uid,
-    'days',
-    dayId,
-    'records',
-    `${dayId}_${kind}`,
-  );
+const recordRef = (uid: string, dayId: string, recordId: string) =>
+  doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId, 'records', recordId);
 
 export interface ConfirmDayInput {
   day: DayRef;
@@ -197,19 +192,21 @@ export async function confirmDay(
       );
     }
     const now = Date.now();
-    transaction.set(recordRef(uid, dayId, 'proposed'), {
+    transaction.set(recordRef(uid, dayId, `${dayId}_proposed`), {
       id: `${dayId}_proposed`,
       dayId,
       kind: 'proposed',
       createdAt: now,
       sealed: sealedProposed,
+      supersedesId: null,
     } satisfies DayRecordDoc);
-    transaction.set(recordRef(uid, dayId, 'confirmed'), {
+    transaction.set(recordRef(uid, dayId, `${dayId}_confirmed`), {
       id: `${dayId}_confirmed`,
       dayId,
       kind: 'confirmed',
       createdAt: now,
       sealed: sealedConfirmed,
+      supersedesId: null,
     } satisfies DayRecordDoc);
     if (existing) {
       transaction.update(ref, {
@@ -311,4 +308,80 @@ export function undoNotArrived(
     'draft',
     'This day is no longer marked as not arrived.',
   );
+}
+
+export interface CorrectDayInput {
+  dayId: string;
+  /** The split the person looked at; the correction replaces exactly this record. */
+  base: EffectiveSplit;
+  arrivedCents: Cents;
+  /** The amounts the person gave lines in place of the current ones, by line id. */
+  edits: Record<string, Cents>;
+  note: string | null;
+}
+
+/**
+ * Corrects a confirmed day by writing a new record that replaces the split the person looked at. The
+ * original is never touched. The record's id comes from the one it replaces, so a device that looked
+ * at an older split cannot write a second correction beside the first. Lines whose amount changed
+ * are unticked on the checklist in the same write.
+ */
+export async function correctDay(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: CorrectDayInput,
+): Promise<void> {
+  const { dayId, base } = input;
+  const sealedPayload = buildCorrection({
+    base,
+    arrivedCents: input.arrivedCents,
+    edits: input.edits,
+    note: input.note,
+  });
+  if (
+    sealedPayload.freeToSpendCents < 0 ||
+    sealedPayload.lines.some((line) => line.cents < 0)
+  ) {
+    throw new Error(CONFIRM_WORDS.linesTakeTooMuch);
+  }
+  if (
+    sealedPayload.changes.length === 0 &&
+    sealedPayload.arrivedCents === base.arrivedCents
+  ) {
+    throw new Error('Nothing was changed, so there is nothing to correct.');
+  }
+  const sealed = await sealJson(sealedPayload, encryption);
+  const id = getCorrectionId(base.recordId);
+  const ref = dayRef(uid, dayId);
+  await runTransaction(db, async (transaction) => {
+    const [daySnapshot, replaced, existing] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(recordRef(uid, dayId, base.recordId)),
+      transaction.get(recordRef(uid, dayId, id)),
+    ]);
+    const day = daySnapshot.exists()
+      ? (daySnapshot.data() as Partial<IncomeDayDoc>)
+      : null;
+    if (day?.status !== 'confirmed' || !replaced.exists()) {
+      throw new Error('Only a confirmed day can be corrected.');
+    }
+    if (existing.exists()) {
+      throw new DayChangedElsewhere(CORRECT_WORDS.elsewhere);
+    }
+    transaction.set(recordRef(uid, dayId, id), {
+      id,
+      dayId,
+      kind: 'correction',
+      createdAt: Date.now(),
+      sealed,
+      supersedesId: base.recordId,
+    } satisfies DayRecordDoc);
+    const ticks = day.doneLineIds ?? [];
+    const kept = keepTicks(ticks, sealedPayload.changes);
+    if (kept.length !== ticks.length) {
+      transaction.update(ref, { doneLineIds: kept });
+    }
+  }).catch((error: unknown) => {
+    throw asRaceMessage(error, CORRECT_WORDS.elsewhere);
+  });
 }

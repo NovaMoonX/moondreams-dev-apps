@@ -211,7 +211,11 @@ export const MAX_EMOJI_LENGTH = 8;
 export const HOLD_CHOICES = ['topUp', 'leaveShort'] as const;
 export const DAY_STATUSES = ['draft', 'confirmed', 'notArrived'] as const;
 /** The records a confirmed day keeps: the draft as proposed and the split that was confirmed. */
-export const DAY_RECORD_KINDS = ['proposed', 'confirmed'] as const;
+export const DAY_RECORD_KINDS = [
+  'proposed',
+  'confirmed',
+  'correction',
+] as const;
 /** The kinds of ledger entry the client writes; a bill marked paid, and its undo (a `billPaid` that names the one it reverses). */
 export const MOVE_KINDS = ['billPaid'] as const;
 /** The most checklist ticks a day keeps; the rules cap the list at the same size. */
@@ -266,6 +270,32 @@ export const CONFIRM_WORDS = {
   recordDoor: 'Planned and confirmed',
   unchanged: 'Everything else matched the draft.',
   missingRecords: 'The record of this day could not be read.',
+} as const;
+
+export const CORRECT_WORDS = {
+  door: 'Correct this day',
+  doorHint: 'Fix an amount you confirmed. The original stays on record.',
+  sheetTitle: 'Correct this day',
+  intro:
+    'Change what arrived or what a line got. Free to spend is what is left.',
+  review: 'See what changes',
+  reviewTitle: 'What this changes',
+  confirmed: 'Confirmed',
+  corrected: 'Corrected',
+  before: 'Before',
+  save: 'Correct this day',
+  note: 'Add a note',
+  notePlaceholder: 'Why it changed',
+  nothingChanged: 'Change an amount to continue.',
+  offline:
+    'Correcting needs a connection. Nothing was saved. Try again when you are back online.',
+  elsewhere:
+    'This day was corrected on another device. Close this and open the day again to see its latest split.',
+  history: 'Corrections',
+  current: 'Current split',
+  original: 'As confirmed',
+  currentTag: 'Current',
+  untickedNote: 'Lines you change are unticked on the checklist.',
 } as const;
 export const MAX_PAIRINGS = 20;
 

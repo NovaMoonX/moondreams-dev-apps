@@ -313,7 +313,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [ ] "Left" for every envelope, Free to spend, and check an amount against an envelope
 - [ ] Change the plan for one income day, from now on, from a date ahead, for a stretch, or end it, with the effect shown first
 - [ ] Change log, with an optional note on every change
-- [ ] Each confirmed income day kept as confirmed, and correctable with the original viewable
+- [x] Each confirmed income day kept as confirmed, and correctable with the original viewable
 
 ### Next Steps
 
