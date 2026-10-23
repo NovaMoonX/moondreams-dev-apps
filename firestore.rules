@@ -3984,6 +3984,76 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && isPlanValid(request.resource.data);
       allow delete: if false;
+
+      function planDoc(collectionName, id) {
+        return /databases/$(database)/documents/apps/runway/plans/$(uid)/$(collectionName)/$(id);
+      }
+
+      function isPastOrNear(value) {
+        return value is number && value <= request.time.toMillis() + 3600000;
+      }
+
+      // Plan items are created and read. Ending, archiving and deleting arrive with the issues that use them.
+      match /items/{itemId} {
+        function isItemValid(data) {
+          return data.id == itemId
+            && data.kind in ['source', 'payLine', 'bill', 'envelope', 'goal', 'group']
+            && (data.parentId == null || data.parentId is string)
+            && isPastOrNear(data.createdAt)
+            && data.endedAt == null
+            && data.archivedAt == null;
+        }
+
+        allow read: if isPlanOwner();
+        allow create: if isPlanOwner()
+          && request.resource.data.keys().hasAll(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
+          && request.resource.data.keys().hasOnly(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
+          && isItemValid(request.resource.data);
+      }
+
+      // A version is a whole payload and is never edited: a mistake is superseded by a later one.
+      match /versions/{versionId} {
+        function isVersionValid(data) {
+          return data.id == versionId
+            && data.itemId is string
+            && data.kind in ['source', 'payLine', 'bill', 'envelope', 'goal', 'group']
+            && existsAfter(planDoc('items', data.itemId))
+            && getAfter(planDoc('items', data.itemId)).data.kind == data.kind
+            && existsAfter(planDoc('changes', data.changeId))
+            && isPastOrNear(data.createdAt)
+            && data.effectiveFrom is number
+            && (data.effectiveUntil == null || data.effectiveUntil is number)
+            && data.changeId is string
+            && isSealed(data.sealed);
+        }
+
+        allow read: if isPlanOwner();
+        allow create: if isPlanOwner()
+          && request.resource.data.keys().hasAll(['id', 'itemId', 'kind', 'createdAt', 'effectiveFrom', 'effectiveUntil', 'changeId', 'sealed'])
+          && request.resource.data.keys().hasOnly(['id', 'itemId', 'kind', 'createdAt', 'effectiveFrom', 'effectiveUntil', 'changeId', 'sealed'])
+          && isVersionValid(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      // The change log is append-only.
+      match /changes/{changeId} {
+        function isChangeValid(data) {
+          return data.id == changeId
+            && data.kind in ['planChange', 'start', 'levelMove', 'whatIfApplied', 'ended', 'correction']
+            && isPastOrNear(data.createdAt)
+            && (data.effectiveFrom == null || data.effectiveFrom is number)
+            && data.itemIds is list
+            && data.itemIds.size() <= 20
+            && isSealed(data.sealed);
+        }
+
+        allow read: if isPlanOwner();
+        allow create: if isPlanOwner()
+          && request.resource.data.keys().hasAll(['id', 'kind', 'createdAt', 'effectiveFrom', 'itemIds', 'sealed'])
+          && request.resource.data.keys().hasOnly(['id', 'kind', 'createdAt', 'effectiveFrom', 'itemIds', 'sealed'])
+          && isChangeValid(request.resource.data);
+        allow update, delete: if false;
+      }
     }
 
     match /users/{userId} {

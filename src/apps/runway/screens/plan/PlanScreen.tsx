@@ -1,14 +1,7 @@
-import { ListChecks } from 'lucide-react';
-
-import EmptyCard from '@/components/EmptyCard';
+import IncomeScreen from '@apps/runway/screens/plan/IncomeScreen';
 
 function PlanScreen() {
-  return (
-    <EmptyCard icon={<ListChecks className='h-5 w-5' />}>
-      Income, bills, envelopes and goals live here. Start with where your money
-      comes from.
-    </EmptyCard>
-  );
+  return <IncomeScreen />;
 }
 
 export default PlanScreen;

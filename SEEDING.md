@@ -136,7 +136,7 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run seed:waypoint`                          | Upsert core data and Waypoint trip fixtures.                                                     |
 | `npm run seed:a-list`                            | Upsert core data and A-List Tracker fixtures.                                                    |
 | `npm run seed:pinch`                             | Upsert core data and Pinch kitchen fixtures.                                                     |
-| `npm run seed:runway`                            | Upsert core data and Alex's Runway plan and its wrapped key.                                     |
+| `npm run seed:runway`                            | Upsert core data and Alex's Runway plan, income and wrapped key.                                 |
 | `npm run seed:pinch-scale`                       | Upsert core data and Taylor's oversized "Big Kitchen (scale test)" for Pinch performance checks.   |
 | `npm run seed:reset`                             | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures.                                |
 | `npm run emulators:seed`                         | Start emulators, seed all fixtures, and exit.                                                    |
@@ -211,7 +211,7 @@ its owned collection path, call the module from `scripts/seed.ts`, and document 
 scope here. Keep fixed fixture UIDs in `scripts/seeds/types.ts` so global and
 app-specific records always agree.
 
-`runway` writes Alex's plan at `apps/runway/plans/seed-worth-the-wait-one` (a sealed currency payload) and
+`runway` writes Alex's plan at `apps/runway/plans/seed-worth-the-wait-one` (a sealed currency payload), one income source with two pay lines (a paycheck every other week that ends after six, and a one-time bonus) as sealed items, versions and changes beneath it, and
 its wrapped data key at `apps/runway/server/seed-worth-the-wait-one/keys/data`, so Alex's Runway opens at once, plus one canary per master key at `apps/runway/keyChecks/{masterKeyId}` so `verifyRunwayKeys` reports healthy.
 Every other account has no plan: its first open calls `getRunwayKey` and creates one. The seed derives Alex's data
 key from the emulator keyring and wraps it the way `getRunwayKey` does. That keyring is the `RUNWAY_MASTER_KEYS`
