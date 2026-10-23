@@ -2,6 +2,17 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isCreatedAtKept() { return request.resource.data.createdAt == resource.data.createdAt; }
+    function isCreatedByKept() { return request.resource.data.createdBy == resource.data.createdBy; }
+    function isCreatedByMe() { return request.resource.data.createdBy == request.auth.uid; }
+    function isCreatedAtTimestamp() { return isTimestampNumber(request.resource.data.createdAt); }
+    function isLastEditedAtTimestamp() { return isTimestampNumber(request.resource.data.lastEditedAt); }
+    function isIdKept() { return request.resource.data.id == resource.data.id; }
+    function isHouseholdIdKept() { return request.resource.data.householdId == resource.data.householdId; }
+    function isHouseholdIdMatch(householdId) { return request.resource.data.householdId == householdId; }
+    function isTripIdKept() { return request.resource.data.tripId == resource.data.tripId; }
+    function getTrip(tripId) { return get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data; }
     function isAdmin() {
       return request.auth != null && (
         (('admin' in request.auth.token) && request.auth.token.admin == true) ||
@@ -141,7 +152,7 @@ service cloud.firestore {
       allow create: if isMembershipOwner() && isMembershipValid(request.resource.data);
       allow update: if isMembershipOwner() && isMembershipValid(request.resource.data)
         && request.resource.data.setupCompletedAt == resource.data.setupCompletedAt
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && isCreatedAtKept();
       allow delete: if false;
 
       function isOptionalText(value, maxSize) {
@@ -186,7 +197,7 @@ service cloud.firestore {
         allow read, delete: if isMembershipOwner();
         allow create: if isMembershipOwner() && isTheatreValid(request.resource.data);
         allow update: if isMembershipOwner() && isTheatreValid(request.resource.data)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       function isMovieValid(movie) {
@@ -248,7 +259,7 @@ service cloud.firestore {
         allow read, delete: if isMembershipOwner();
         allow create: if isMembershipOwner() && isWatchlistItemValid(request.resource.data);
         allow update: if isMembershipOwner() && isWatchlistItemValid(request.resource.data)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       match /viewings/{viewingId} {
@@ -285,7 +296,7 @@ service cloud.firestore {
         allow update: if isMembershipOwner() && isViewingValid(request.resource.data)
           && request.resource.data.movieKey == resource.data.movieKey
           && request.resource.data.movie == resource.data.movie
-          && request.resource.data.createdAt == resource.data.createdAt
+          && isCreatedAtKept()
           // A seen viewing never goes back to planned; planned only becomes seen once it has ended.
           && (resource.data.status == 'SEEN'
             ? request.resource.data.status == 'SEEN'
@@ -395,7 +406,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId} {
       function isHouseholdIdentityValid() {
         return request.resource.data.id == householdId
-          && request.resource.data.createdBy == request.auth.uid;
+          && isCreatedByMe();
       }
 
       function isHouseholdBaseShapeValid() {
@@ -404,8 +415,8 @@ service cloud.firestore {
           && request.resource.data.members == [request.auth.uid]
           && request.resource.data.inviteCode is string
           && request.resource.data.inviteCode.size() > 0
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       // A member being added must correspond to a real pending request that
@@ -419,16 +430,16 @@ service cloud.firestore {
       }
 
       function isHouseholdUpdateValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt
+        return isIdKept()
+          && isCreatedByKept()
+          && isCreatedAtKept()
           && request.resource.data.members.hasAll(resource.data.members)
           && (
             request.resource.data.members == resource.data.members
               || isApprovedMemberAddition()
           )
           && (request.resource.data.inviteCode == resource.data.inviteCode || resource.data.inviteCode == null)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isLastEditedAtTimestamp();
       }
 
       function isHouseholdCreateValid() {
@@ -491,7 +502,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/cats/{catId} {
       function isCatIdentityValid() {
         return request.resource.data.id == catId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isCatBaseShapeValid() {
@@ -499,20 +510,20 @@ service cloud.firestore {
           && isTimestampNumber(request.resource.data.dateOfBirth)
           && request.resource.data.isDateOfBirthEstimated is bool
           && isNonEmptyString(request.resource.data.breed)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isLastEditedAtTimestamp();
       }
 
       function isCatCreateOwnershipValid() {
-        return request.resource.data.createdBy == request.auth.uid
-          && isTimestampNumber(request.resource.data.createdAt);
+        return isCreatedByMe()
+          && isCreatedAtTimestamp();
       }
 
       function isCatImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       function isCatCreateValid() {
@@ -559,8 +570,8 @@ service cloud.firestore {
           && (request.resource.data.description == null || request.resource.data.description is string)
           && request.resource.data.linkedVisitIds is list
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp()
           && (
             (request.resource.data.source == 'library' && request.resource.data.libraryConditionId is string && request.resource.data.libraryConditionId.size() > 0)
               || (request.resource.data.source == 'custom' && request.resource.data.libraryConditionId == null)
@@ -568,10 +579,10 @@ service cloud.firestore {
       }
 
       function isConditionImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
+        return isIdKept()
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -579,7 +590,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isConditionIdentityValid()
         && isConditionBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isConditionImmutableFieldsValid()
@@ -590,7 +601,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/vaccinations/{vaccinationId} {
       function isVaccinationIdentityValid() {
         return request.resource.data.id == vaccinationId
-          && request.resource.data.householdId == householdId
+          && isHouseholdIdMatch(householdId)
           && request.resource.data.catId is string;
       }
 
@@ -602,18 +613,18 @@ service cloud.firestore {
           && isTimestampNumber(request.resource.data.lastAdministeredAt)
           && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       function isVaccinationImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
           && request.resource.data.catId == resource.data.catId
           && request.resource.data.firstAdministeredAt == resource.data.firstAdministeredAt
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -621,7 +632,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isVaccinationIdentityValid()
         && isVaccinationBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isVaccinationImmutableFieldsValid()
@@ -632,7 +643,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/preventives/{preventiveId} {
       function isPreventiveIdentityValid() {
         return request.resource.data.id == preventiveId
-          && request.resource.data.householdId == householdId
+          && isHouseholdIdMatch(householdId)
           && request.resource.data.catIds is list
           && request.resource.data.catIds.size() > 0;
       }
@@ -648,8 +659,8 @@ service cloud.firestore {
           && isTimestampNumber(request.resource.data.lastAdministeredAt)
           && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp()
           && (
             request.resource.data.customProductId == null
               || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customPreventiveProducts/$(request.resource.data.customProductId))
@@ -662,12 +673,12 @@ service cloud.firestore {
       }
 
       function isPreventiveImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
           && request.resource.data.firstAdministeredAt == resource.data.firstAdministeredAt
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -675,7 +686,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isPreventiveIdentityValid()
         && isPreventiveBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isPreventiveImmutableFieldsValid()
@@ -696,14 +707,14 @@ service cloud.firestore {
           && isTimestampNumber(request.resource.data.measuredAt)
           && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       function isWeightEntryImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
+        return isIdKept()
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -711,7 +722,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isWeightEntryIdentityValid()
         && isWeightEntryBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isWeightEntryImmutableFieldsValid()
@@ -734,15 +745,15 @@ service cloud.firestore {
           && (request.resource.data.linkedConditionId == null || request.resource.data.linkedConditionId is string)
           && (request.resource.data.resolvedAt == null || isTimestampNumber(request.resource.data.resolvedAt))
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       function isSymptomImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
+        return isIdKept()
           && request.resource.data.catId == resource.data.catId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -750,7 +761,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isSymptomIdentityValid()
         && isSymptomBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isSymptomImmutableFieldsValid()
@@ -761,7 +772,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/vetClinics/{clinicId} {
       function isVetClinicIdentityValid() {
         return request.resource.data.id == clinicId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isVetClinicBaseShapeValid() {
@@ -770,15 +781,15 @@ service cloud.firestore {
           && (request.resource.data.address == null || request.resource.data.address is string)
           && (request.resource.data.isEmergency24Hour == null || request.resource.data.isEmergency24Hour is bool)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       function isVetClinicImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedAtKept();
       }
 
       function isVetClinicCreateValid() {
@@ -804,7 +815,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/doctors/{doctorId} {
       function isDoctorIdentityValid() {
         return request.resource.data.id == doctorId
-          && request.resource.data.householdId == householdId
+          && isHouseholdIdMatch(householdId)
           && request.resource.data.clinicId is string
           && request.resource.data.clinicId.size() > 0;
       }
@@ -812,15 +823,15 @@ service cloud.firestore {
       function isDoctorBaseShapeValid() {
         return isNonEmptyString(request.resource.data.name)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       function isDoctorImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
           && request.resource.data.clinicId == resource.data.clinicId
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       function isDoctorCreateValid() {
@@ -846,21 +857,21 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/customHealthRecordTypes/{typeId} {
       function isCustomHealthRecordTypeIdentityValid() {
         return request.resource.data.id == typeId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isCustomHealthRecordTypeShapeValid() {
         return isNonEmptyString(request.resource.data.label)
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       function isCustomHealthRecordTypeImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -868,7 +879,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isCustomHealthRecordTypeIdentityValid()
         && isCustomHealthRecordTypeShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isCustomHealthRecordTypeImmutableFieldsValid()
@@ -879,21 +890,21 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/customPreventiveProducts/{productId} {
       function isCustomPreventiveProductIdentityValid() {
         return request.resource.data.id == productId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isCustomPreventiveProductShapeValid() {
         return isNonEmptyString(request.resource.data.label)
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       function isCustomPreventiveProductImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -901,7 +912,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isCustomPreventiveProductIdentityValid()
         && isCustomPreventiveProductShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isCustomPreventiveProductImmutableFieldsValid()
@@ -912,21 +923,21 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/customPreventiveTypes/{typeId} {
       function isCustomPreventiveTypeIdentityValid() {
         return request.resource.data.id == typeId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isCustomPreventiveTypeShapeValid() {
         return isNonEmptyString(request.resource.data.label)
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       function isCustomPreventiveTypeImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -934,7 +945,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isCustomPreventiveTypeIdentityValid()
         && isCustomPreventiveTypeShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isCustomPreventiveTypeImmutableFieldsValid()
@@ -945,21 +956,21 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/customSymptomQuickTags/{tagId} {
       function isCustomSymptomQuickTagIdentityValid() {
         return request.resource.data.id == tagId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isCustomSymptomQuickTagShapeValid() {
         return isNonEmptyString(request.resource.data.label)
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       function isCustomSymptomQuickTagImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -967,7 +978,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isCustomSymptomQuickTagIdentityValid()
         && isCustomSymptomQuickTagShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isCustomSymptomQuickTagImmutableFieldsValid()
@@ -978,7 +989,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/healthRecords/{recordId} {
       function isHealthRecordIdentityValid() {
         return request.resource.data.id == recordId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isHealthRecordShapeValid() {
@@ -994,8 +1005,8 @@ service cloud.firestore {
           && (request.resource.data.linkedVisitId == null || request.resource.data.linkedVisitId is string)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && request.resource.data.uploadedBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp()
           && (
             request.resource.data.customRecordTypeId == null
               || exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/customHealthRecordTypes/$(request.resource.data.customRecordTypeId))
@@ -1004,14 +1015,14 @@ service cloud.firestore {
       }
 
       function isHealthRecordImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
           && request.resource.data.fileURL == resource.data.fileURL
           && request.resource.data.fileType == resource.data.fileType
           && request.resource.data.fileName == resource.data.fileName
           && request.resource.data.uploadedBy == resource.data.uploadedBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -1030,8 +1041,8 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/ingestionDrafts/{draftId} {
       function isIngestionDraftIdentityValid() {
         return request.resource.data.id == draftId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == request.auth.uid;
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByMe();
       }
 
       function isIngestionDraftShapeValid() {
@@ -1051,14 +1062,14 @@ service cloud.firestore {
           && (request.resource.data.proposedRecordType == null || request.resource.data.proposedRecordType is string)
           && request.resource.data.suggestKeepAsRecord is bool
           && (request.resource.data.confidence == null || request.resource.data.confidence is number)
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       function isIngestionDraftImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -1076,7 +1087,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/visits/{visitId} {
       function isVisitIdentityValid() {
         return request.resource.data.id == visitId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isVisitBaseShapeValid() {
@@ -1097,18 +1108,18 @@ service cloud.firestore {
           && request.resource.data.linkedVaccinationIds is list
           && request.resource.data.linkedWeightEntryIds is list
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp()
           && (request.resource.data.reason != 'custom' || request.resource.data.customReasonLabel is string)
           && (request.resource.data.reason != 'follow_up' || request.resource.data.followUpOfVisitId is string);
       }
 
       function isVisitImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -1116,7 +1127,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isVisitIdentityValid()
         && isVisitBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isVisitImmutableFieldsValid()
@@ -1127,7 +1138,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/expenses/{expenseId} {
       function isExpenseIdentityValid() {
         return request.resource.data.id == expenseId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isExpenseBaseShapeValid() {
@@ -1151,16 +1162,16 @@ service cloud.firestore {
           && (request.resource.data.visitId == null || request.resource.data.visitId is string)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       function isExpenseImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -1168,7 +1179,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isExpenseIdentityValid()
         && isExpenseBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isExpenseImmutableFieldsValid()
@@ -1179,7 +1190,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/litterBoxes/{litterBoxId} {
       function isLitterBoxIdentityValid() {
         return request.resource.data.id == litterBoxId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isLitterBoxBaseShapeValid() {
@@ -1187,16 +1198,16 @@ service cloud.firestore {
           && (request.resource.data.location == null || request.resource.data.location is string)
           && request.resource.data.isActive is bool
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       function isLitterBoxImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -1204,7 +1215,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isLitterBoxIdentityValid()
         && isLitterBoxBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isLitterBoxImmutableFieldsValid()
@@ -1215,21 +1226,21 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/customLitterTypes/{typeId} {
       function isCustomLitterTypeIdentityValid() {
         return request.resource.data.id == typeId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isCustomLitterTypeShapeValid() {
         return isNonEmptyString(request.resource.data.label)
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       function isCustomLitterTypeImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -1237,7 +1248,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isCustomLitterTypeIdentityValid()
         && isCustomLitterTypeShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isCustomLitterTypeImmutableFieldsValid()
@@ -1248,7 +1259,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/litters/{litterId} {
       function isLitterIdentityValid() {
         return request.resource.data.id == litterId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isLitterBaseShapeValid() {
@@ -1263,8 +1274,8 @@ service cloud.firestore {
           && request.resource.data.weightUnit in ['lb', 'kg']
           && (request.resource.data.cost == null || (request.resource.data.cost is number && request.resource.data.cost >= 0))
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp()
           && (request.resource.data.litterType != 'custom' || isNonEmptyString(request.resource.data.customLitterTypeId))
           && (
             request.resource.data.customLitterTypeId == null
@@ -1273,11 +1284,11 @@ service cloud.firestore {
       }
 
       function isLitterImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -1285,7 +1296,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isLitterIdentityValid()
         && isLitterBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isLitterImmutableFieldsValid()
@@ -1296,7 +1307,7 @@ service cloud.firestore {
     match /apps/nine-lives/households/{householdId}/litterEntries/{entryId} {
       function isLitterEntryIdentityValid() {
         return request.resource.data.id == entryId
-          && request.resource.data.householdId == householdId;
+          && isHouseholdIdMatch(householdId);
       }
 
       function isLitterEntryBaseShapeValid() {
@@ -1311,18 +1322,18 @@ service cloud.firestore {
           && isTimestampNumber(request.resource.data.loggedAt)
           && (request.resource.data.notes == null || request.resource.data.notes is string)
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp()
           && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/litterBoxes/$(request.resource.data.litterBoxId))
           && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)/litters/$(request.resource.data.litterId));
       }
 
       function isLitterEntryImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.householdId == resource.data.householdId
-          && request.resource.data.householdId == householdId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isHouseholdIdKept()
+          && isHouseholdIdMatch(householdId)
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       allow read: if isHouseholdMember(householdId);
@@ -1330,7 +1341,7 @@ service cloud.firestore {
         && isHouseholdMember(householdId)
         && isLitterEntryIdentityValid()
         && isLitterEntryBaseShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if request.auth != null
         && isHouseholdMember(householdId)
         && isLitterEntryImmutableFieldsValid()
@@ -1803,20 +1814,20 @@ service cloud.firestore {
       allow read, delete: if isKitchenOwner();
       allow create: if isKitchenOwner() && isSettings(request.resource.data);
       allow update: if isKitchenOwner() && isSettings(request.resource.data)
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && isCreatedAtKept();
 
       match /ingredients/{id} {
         allow read, delete: if isKitchenOwner();
         allow create, update: if isKitchenOwner() && isIngredient(request.resource.data, id)
           && (request.method == 'create'
             || (request.resource.data.catalogId == resource.data.catalogId
-              && request.resource.data.createdAt == resource.data.createdAt));
+              && isCreatedAtKept()));
       }
 
       match /recipes/{id} {
         allow read, delete: if isKitchenOwner();
         allow create, update: if isKitchenOwner() && isRecipe(request.resource.data, id)
-          && (request.method == 'create' || request.resource.data.createdAt == resource.data.createdAt);
+          && (request.method == 'create' || isCreatedAtKept());
       }
 
       // A saved meal written before favorites has no `isFavorite`, and one written before categories has no `categories`, so neither is required.
@@ -1834,14 +1845,14 @@ service cloud.firestore {
       match /meals/{id} {
         allow read, delete: if isKitchenOwner();
         allow create, update: if isKitchenOwner() && isMeal(request.resource.data, id)
-          && (request.method == 'create' || request.resource.data.createdAt == resource.data.createdAt);
+          && (request.method == 'create' || isCreatedAtKept());
       }
 
       match /plannedMeals/{id} {
         allow read, delete: if isKitchenOwner();
         allow create, update: if isKitchenOwner() && isPlannedMeal(request.resource.data, id)
           && (request.method == 'create'
-            || (request.resource.data.createdAt == resource.data.createdAt
+            || (isCreatedAtKept()
               && (resource.data.get('snapshot', null) == null
                 || request.resource.data.snapshot == resource.data.snapshot
                 || isRepricedFrom(resource.data, request.resource.data))));
@@ -1852,7 +1863,7 @@ service cloud.firestore {
         allow create: if isKitchenOwner() && isProduct(request.resource.data, id);
         allow update: if isKitchenOwner() && isProduct(request.resource.data, id)
           && request.resource.data.ingredientId == resource.data.ingredientId
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       match /stores/{id} {
@@ -1860,21 +1871,21 @@ service cloud.firestore {
         allow create: if isKitchenOwner() && isStore(request.resource.data, id);
         allow update: if isKitchenOwner() && isStore(request.resource.data, id)
           && request.resource.data.catalogStoreId == resource.data.catalogStoreId
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       match /sources/{id} {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isSource(request.resource.data, id);
         allow update: if isKitchenOwner() && isSource(request.resource.data, id)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       match /collections/{id} {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isCollection(request.resource.data, id);
         allow update: if isKitchenOwner() && isCollection(request.resource.data, id)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       match /shoppingItems/{id} {
@@ -1883,7 +1894,7 @@ service cloud.firestore {
         allow update: if isKitchenOwner() && isShoppingItem(request.resource.data, id)
           && request.resource.data.ingredientId == resource.data.ingredientId
           && request.resource.data.unit == resource.data.unit
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       match /ideas/{id} {
@@ -1891,7 +1902,7 @@ service cloud.firestore {
         allow create: if isKitchenOwner() && isIdea(request.resource.data, id);
         allow update: if isKitchenOwner() && isIdea(request.resource.data, id)
           && request.resource.data.kind == resource.data.kind
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       match /cooks/{id} {
@@ -1900,7 +1911,7 @@ service cloud.firestore {
         allow update: if isKitchenOwner() && isCook(request.resource.data, id)
           && request.resource.data.recipeId == resource.data.recipeId
           && request.resource.data.plannedMealId == resource.data.get('plannedMealId', null)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
 
       match /notes/{id} {
@@ -1915,7 +1926,7 @@ service cloud.firestore {
               && ((request.resource.data.kind == resource.data.kind
                   && request.resource.data.changes == resource.data.get('changes', [])
                   && request.resource.data.get('previous', null) == resource.data.get('previous', null)
-                  && request.resource.data.createdAt == resource.data.createdAt)
+                  && isCreatedAtKept())
                 || (resource.data.kind == 'CHANGE' && request.resource.data.kind == 'TWEAK'))));
       }
 
@@ -1927,7 +1938,7 @@ service cloud.firestore {
             : (request.resource.data.recipeId == resource.data.recipeId
               && request.resource.data.mealId == resource.data.mealId
               && request.resource.data.cookId == resource.data.cookId
-              && request.resource.data.createdAt == resource.data.createdAt));
+              && isCreatedAtKept()));
       }
 
       match /packages/{id} {
@@ -1936,14 +1947,14 @@ service cloud.firestore {
           && (request.method == 'create'
             ? request.resource.data.status == 'IN_STOCK'
             : (request.resource.data.ingredientId == resource.data.ingredientId
-              && request.resource.data.createdAt == resource.data.createdAt));
+              && isCreatedAtKept()));
       }
 
       match /families/{id} {
         allow read, delete: if isKitchenOwner();
         allow create: if isKitchenOwner() && isFamily(request.resource.data, id);
         allow update: if isKitchenOwner() && isFamily(request.resource.data, id)
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && isCreatedAtKept();
       }
     }
 
@@ -2115,7 +2126,7 @@ service cloud.firestore {
 
       function isCreateValid() {
         return request.auth != null
-          && request.resource.data.createdBy == request.auth.uid
+          && isCreatedByMe()
           && request.resource.data.createdAt is number
           && request.resource.data.updatedAt is number
           && request.resource.data.members is list
@@ -2143,9 +2154,9 @@ service cloud.firestore {
         return request.auth != null
           && request.auth.uid == resource.data.createdBy
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'inviteCode', 'activeAction', 'welcomeSeenBy', 'updatedAt'])
-          && request.resource.data.id == resource.data.id
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt
+          && isIdKept()
+          && isCreatedByKept()
+          && isCreatedAtKept()
           && request.resource.data.inviteCode == null
           && request.resource.data.activeAction == null
           && request.resource.data.encryption == resource.data.encryption
@@ -2159,9 +2170,9 @@ service cloud.firestore {
         return request.auth != null
           && request.auth.uid in resource.data.members
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['welcomeSeenBy', 'updatedAt'])
-          && request.resource.data.id == resource.data.id
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt
+          && isIdKept()
+          && isCreatedByKept()
+          && isCreatedAtKept()
           && request.resource.data.members == resource.data.members
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.activeAction == resource.data.activeAction
@@ -2174,7 +2185,7 @@ service cloud.firestore {
       function isActiveActionStartValid() {
         return request.auth != null
           && request.auth.uid in resource.data.members
-          && request.resource.data.createdBy == resource.data.createdBy
+          && isCreatedByKept()
           && request.resource.data.members == resource.data.members
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.activeAction != null
@@ -2195,7 +2206,7 @@ service cloud.firestore {
         (
           isMember(resource.data)
           && request.resource.data.members == resource.data.members
-          && request.resource.data.createdBy == resource.data.createdBy
+          && isCreatedByKept()
           && request.resource.data.inviteCode == resource.data.inviteCode
           && request.resource.data.activeAction == resource.data.activeAction
           && isEncryptionConfigValid()
@@ -2303,7 +2314,7 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.inviteCode == inviteCode;
       allow update: if request.auth != null
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])
-        && request.resource.data.tripId == resource.data.tripId
+        && isTripIdKept()
         && isNonEmptyString(request.resource.data.title)
         && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId))
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId)).data.title == request.resource.data.title
@@ -2414,7 +2425,7 @@ service cloud.firestore {
           && request.resource.data.get('timeModel', null) == 'RELATIVE'
           && isNonEmptyString(request.resource.data.get('timezone', null))
           && request.resource.data.isArchived == false
-          && request.resource.data.createdBy == request.auth.uid
+          && isCreatedByMe()
           && request.resource.data.members.keys().hasOnly([request.auth.uid])
           && isTripMemberEntryValid(
             request.resource.data.members[request.auth.uid],
@@ -2430,9 +2441,9 @@ service cloud.firestore {
       function isTripUpdateValid() {
         return isTripFieldSetValid(request.resource.data)
           && isTimeModelUnchanged()
-          && request.resource.data.id == resource.data.id
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt
+          && isIdKept()
+          && isCreatedByKept()
+          && isCreatedAtKept()
           && request.resource.data.members == resource.data.members;
       }
 
@@ -2448,7 +2459,7 @@ service cloud.firestore {
             'lastEditedAt'
           ])
           && request.resource.data.isArchived is bool
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isLastEditedAtTimestamp();
       }
 
       function isTripGeneralUpdate() {
@@ -2512,9 +2523,9 @@ service cloud.firestore {
         return isTripAdmin()
           && isTripFieldSetValid(request.resource.data)
           && isTimeModelUnchanged()
-          && request.resource.data.id == resource.data.id
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt
+          && isIdKept()
+          && isCreatedByKept()
+          && isCreatedAtKept()
           && request.resource.data.members.keys().hasAll(resource.data.members.keys())
           && request.resource.data.members.size() == resource.data.members.size() + 1
           && addedUids.size() == 1
@@ -2532,9 +2543,9 @@ service cloud.firestore {
         return isTripAdmin()
           && isTripFieldSetValid(request.resource.data)
           && isTimeModelUnchanged()
-          && request.resource.data.id == resource.data.id
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt
+          && isIdKept()
+          && isCreatedByKept()
+          && isCreatedAtKept()
           && request.resource.data.members.keys().hasAll([request.auth.uid, resource.data.createdBy])
           && request.resource.data.members[request.auth.uid]
             == resource.data.members[request.auth.uid]
@@ -2561,7 +2572,7 @@ service cloud.firestore {
           && email != ''
           && !(uid in resource.data.members)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'lastEditedAt'])
-          && isTimestampNumber(request.resource.data.lastEditedAt)
+          && isLastEditedAtTimestamp()
           && request.resource.data.members.keys().hasAll(resource.data.members.keys())
           && addedUids.size() == 1
           && addedUids[0] == uid
@@ -2596,7 +2607,7 @@ service cloud.firestore {
         function isChecklistMember() {
           return request.auth != null
             && tripExists()
-            && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+            && request.auth.uid in getTrip(tripId).members;
         }
 
         function hasChecklistRole(role) {
@@ -2609,7 +2620,7 @@ service cloud.firestore {
         }
 
         function isChecklistAdminOnlyWhileActive() {
-          let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+          let trip = getTrip(tripId);
           return request.auth != null && request.auth.uid in trip.members && (
             isTripActive(trip)
               ? trip.members[request.auth.uid].role == 'ADMIN'
@@ -2669,15 +2680,15 @@ service cloud.firestore {
           return isChecklistEditor()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedTo', 'lastEditedAt'])
             && isChecklistLinkValid(request.resource.data.get('linkedTo', null))
-            && isTimestampNumber(request.resource.data.lastEditedAt);
+            && isLastEditedAtTimestamp();
         }
 
         function isChecklistImmutableFieldsValid() {
-          return request.resource.data.id == resource.data.id
-            && request.resource.data.tripId == resource.data.tripId
+          return isIdKept()
+            && isTripIdKept()
             && request.resource.data.tripId == tripId
-            && request.resource.data.createdBy == resource.data.createdBy
-            && request.resource.data.createdAt == resource.data.createdAt;
+            && isCreatedByKept()
+            && isCreatedAtKept();
         }
 
         function isChecklistAssignedToggleValid() {
@@ -2697,13 +2708,13 @@ service cloud.firestore {
                 : request.resource.data.markedCompletedByUid == request.auth.uid
                   && isTimestampNumber(request.resource.data.markedCompletedAt)
             )
-            && isTimestampNumber(request.resource.data.lastEditedAt);
+            && isLastEditedAtTimestamp();
         }
 
         allow read: if isChecklistMember();
         allow create: if isChecklistEditor()
           && isChecklistShapeValid(request.resource.data)
-          && request.resource.data.createdBy == request.auth.uid;
+          && isCreatedByMe();
         allow update: if (
           isChecklistAdminOnlyWhileActive()
           && isChecklistShapeValid(request.resource.data)
@@ -2717,19 +2728,14 @@ service cloud.firestore {
     match /apps/waypoint/trips/{tripId}/events/{eventId} {
       function isTripSubcollectionMember() {
         return request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+          && request.auth.uid in getTrip(tripId).members;
       }
 
-      function isTripSubcollectionEditor() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
-        return isTripSubcollectionMember()
-          && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
-      }
 
       // Creating a brand-new event stays open to Editors before the trip starts, but
       // narrows to Admin-only once it has — same rationale as editing an existing one.
       function isTripCreateAllowed() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isTripSubcollectionMember()
           && (
             hasTripStarted(trip)
@@ -2739,7 +2745,7 @@ service cloud.firestore {
       }
 
       function isTripAdminOnlyWhileActive() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return request.auth != null && request.auth.uid in trip.members && (
           isTripActive(trip)
             ? trip.members[request.auth.uid].role == 'ADMIN'
@@ -2784,7 +2790,7 @@ service cloud.firestore {
       }
 
       function isEventTimeValid(data) {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isRelativeTrip(trip) ? isRelativeEventTimeValid(data) : isAbsoluteEventTimeValid(data);
       }
 
@@ -2889,19 +2895,19 @@ service cloud.firestore {
           && (request.resource.data.archivedAt == null || isTimestampNumber(request.resource.data.archivedAt))
           && request.resource.data.seenBy is map
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       function isEventImmutableFieldsValid() {
-        return request.resource.data.id == resource.data.id
-          && request.resource.data.tripId == resource.data.tripId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt;
+        return isIdKept()
+          && isTripIdKept()
+          && isCreatedByKept()
+          && isCreatedAtKept();
       }
 
       function isTripAdminMember() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isTripSubcollectionMember() && trip.members[request.auth.uid].role == 'ADMIN';
       }
 
@@ -2929,7 +2935,7 @@ service cloud.firestore {
       allow read: if isTripSubcollectionMember();
       allow create: if isTripCreateAllowed()
         && isEventShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if (
         isTripAdminOnlyWhileActive()
         && isEventShapeValid()
@@ -2942,11 +2948,11 @@ service cloud.firestore {
     match /apps/waypoint/trips/{tripId}/eventSuggestions/{suggestionId} {
       function isTripSubcollectionMember() {
         return request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+          && request.auth.uid in getTrip(tripId).members;
       }
 
       function isTripAdminMember() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isTripSubcollectionMember() && trip.members[request.auth.uid].role == 'ADMIN';
       }
 
@@ -2971,7 +2977,7 @@ service cloud.firestore {
       }
 
       function isSuggestedTimeValid(data) {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isRelativeTrip(trip)
           ? isRelativeSuggestedTimeValid(data)
           : isAbsoluteSuggestedTimeValid(data);
@@ -3011,7 +3017,7 @@ service cloud.firestore {
           && (request.resource.data.note == null || request.resource.data.note is string)
           && request.resource.data.upvotedBy is list
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       // Any trip member can upvote/un-upvote — but only their own uid, never anyone else's.
@@ -3032,18 +3038,18 @@ service cloud.firestore {
         return isTripSubcollectionMember()
           && resource.data.createdBy == request.auth.uid
           && isSuggestionShapeValid()
-          && request.resource.data.id == resource.data.id
-          && request.resource.data.tripId == resource.data.tripId
+          && isIdKept()
+          && isTripIdKept()
           && request.resource.data.eventId == resource.data.eventId
-          && request.resource.data.createdBy == resource.data.createdBy
-          && request.resource.data.createdAt == resource.data.createdAt
+          && isCreatedByKept()
+          && isCreatedAtKept()
           && request.resource.data.upvotedBy == resource.data.upvotedBy;
       }
 
       allow read: if isTripSubcollectionMember();
       allow create: if isTripSubcollectionMember()
         && isSuggestionShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if isSuggestionUpvoteUpdateValid() || isSuggestionOwnerUpdateValid();
       allow delete: if isTripAdminMember();
     }
@@ -3051,11 +3057,11 @@ service cloud.firestore {
     match /apps/waypoint/trips/{tripId}/announcements/{announcementId} {
       function isTripSubcollectionMember() {
         return request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+          && request.auth.uid in getTrip(tripId).members;
       }
 
       function isTripAdminMember() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isTripSubcollectionMember() && trip.members[request.auth.uid].role == 'ADMIN';
       }
 
@@ -3079,7 +3085,7 @@ service cloud.firestore {
           && (request.resource.data.expiresAt == null || isTimestampNumber(request.resource.data.expiresAt))
           && request.resource.data.dismissedBy is map
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt);
+          && isCreatedAtTimestamp();
       }
 
       // Any trip member except the announcement's own author can dismiss it — and only
@@ -3096,7 +3102,7 @@ service cloud.firestore {
       allow read: if isTripSubcollectionMember();
       allow create: if isTripAdminMember()
         && isAnnouncementShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if isAnnouncementDismissUpdateValid();
       allow delete: if isTripAdminMember();
     }
@@ -3104,7 +3110,7 @@ service cloud.firestore {
     match /apps/waypoint/trips/{tripId}/ideas/{ideaId} {
       function isTripSubcollectionMember() {
         return request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+          && request.auth.uid in getTrip(tripId).members;
       }
 
       // Rules can't check each list element's type, so the lists are bounded and the enum ones
@@ -3153,8 +3159,8 @@ service cloud.firestore {
           && request.resource.data.addedByUid is string
           && request.resource.data.voterUids is list
           && (request.resource.data.convertedToEntityId == null || request.resource.data.convertedToEntityId is string)
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       // Anyone on the trip can post an idea, before or during the trip — never on another member's
@@ -3189,7 +3195,7 @@ service cloud.firestore {
 
       // An Admin can also remove someone else's idea.
       function isIdeaDeleteAllowed() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isIdeaPoster()
           || (isTripSubcollectionMember() && trip.members[request.auth.uid].role == 'ADMIN');
       }
@@ -3204,7 +3210,7 @@ service cloud.firestore {
       // Adding an idea to the itinerary is the same permission as creating an event, and only
       // ever lands together with that event in one commit.
       function isIdeaConversionValid() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isTripSubcollectionMember()
           && (
             hasTripStarted(trip)
@@ -3228,19 +3234,14 @@ service cloud.firestore {
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {
       function isTripSubcollectionMember() {
         return request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+          && request.auth.uid in getTrip(tripId).members;
       }
 
-      function isTripSubcollectionEditor() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
-        return isTripSubcollectionMember()
-          && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
-      }
 
       // Creating a brand-new stay stays open to Editors before the trip starts, but
       // narrows to Admin-only once it has — same rationale as editing an existing one.
       function isTripCreateAllowed() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isTripSubcollectionMember()
           && (
             hasTripStarted(trip)
@@ -3250,7 +3251,7 @@ service cloud.firestore {
       }
 
       function isTripAdminOnlyWhileActive() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return request.auth != null && request.auth.uid in trip.members && (
           isTripActive(trip)
             ? trip.members[request.auth.uid].role == 'ADMIN'
@@ -3304,7 +3305,7 @@ service cloud.firestore {
       }
 
       function isStayTimeValid(data) {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isRelativeTrip(trip) ? isRelativeStayTimeValid(data) : isAbsoluteStayTimeValid(data);
       }
 
@@ -3367,8 +3368,8 @@ service cloud.firestore {
           && request.resource.data.changeHistory is list
           && request.resource.data.seenBy is map
           && request.resource.data.createdBy is string
-          && isTimestampNumber(request.resource.data.createdAt)
-          && isTimestampNumber(request.resource.data.lastEditedAt);
+          && isCreatedAtTimestamp()
+          && isLastEditedAtTimestamp();
       }
 
       // Every trip member (not just editors/admins) can mark a stay "seen" for
@@ -3384,7 +3385,7 @@ service cloud.firestore {
       allow read: if isTripSubcollectionMember();
       allow create: if isTripCreateAllowed()
         && isStayShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       // `seenBy` is only ever a member's own key, so an edit may touch it solely to give a
       // stay saved before the field existed its empty starting map.
       function isStayEditKeySetValid() {
@@ -3432,13 +3433,13 @@ service cloud.firestore {
     match /apps/waypoint/trips/{tripId}/rentals/{rentalId} {
       function isTripSubcollectionMember() {
         return request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+          && request.auth.uid in getTrip(tripId).members;
       }
 
       // Creating a brand-new rental stays open to Editors before the trip starts, but
       // narrows to Admin-only once it has — same rule as stays.
       function isTripCreateAllowed() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isTripSubcollectionMember()
           && (
             hasTripStarted(trip)
@@ -3448,7 +3449,7 @@ service cloud.firestore {
       }
 
       function isTripAdminOnlyWhileActive() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return request.auth != null && request.auth.uid in trip.members && (
           isTripActive(trip)
             ? trip.members[request.auth.uid].role == 'ADMIN'
@@ -3560,7 +3561,7 @@ service cloud.firestore {
       allow read: if isTripSubcollectionMember();
       allow create: if isTripCreateAllowed()
         && isRentalShapeValid()
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if isTripAdminOnlyWhileActive()
         && isRentalEditKeySetValid()
         && isRentalShapeValid();
@@ -3570,11 +3571,11 @@ service cloud.firestore {
     match /apps/waypoint/trips/{tripId}/expenses/{expenseId} {
       function isTripExpenseMember() {
         return request.auth != null
-          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+          && request.auth.uid in getTrip(tripId).members;
       }
 
       function isTripExpenseEditor() {
-        let trip = get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+        let trip = getTrip(tripId);
         return isTripExpenseMember()
           && trip.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
       }
@@ -3699,13 +3700,13 @@ service cloud.firestore {
         && isTripExpenseValid(request.resource.data)
         && isNewExpenseTargetValid(request.resource.data)
         && earlyPaymentsOf(request.resource.data).size() == 0
-        && request.resource.data.createdBy == request.auth.uid;
+        && isCreatedByMe();
       allow update: if isTripExpenseEditor()
         && isTripExpenseValid(request.resource.data)
-        && request.resource.data.id == resource.data.id
-        && request.resource.data.tripId == resource.data.tripId
-        && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.createdAt == resource.data.createdAt
+        && isIdKept()
+        && isTripIdKept()
+        && isCreatedByKept()
+        && isCreatedAtKept()
         && earlyPaymentsOf(request.resource.data) == earlyPaymentsOf(resource.data);
       allow update: if isTripExpenseMember()
         && (resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
@@ -3762,8 +3763,8 @@ service cloud.firestore {
       allow update: if request.auth != null
         && request.auth.uid == uid
         && isPersonalExpenseValid(request.resource.data)
-        && request.resource.data.tripId == resource.data.tripId
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && isTripIdKept()
+        && isCreatedAtKept();
     }
 
     // Private to its owner, like personalExpenses: never on Overview, never read by another member.
@@ -3801,8 +3802,8 @@ service cloud.firestore {
       allow update: if request.auth != null
         && request.auth.uid == uid
         && isPersonalChecklistValid(request.resource.data)
-        && request.resource.data.tripId == resource.data.tripId
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && isTripIdKept()
+        && isCreatedAtKept();
     }
 
     match /apps/waypoint/pendingRequests/{requestId} {
@@ -3813,7 +3814,7 @@ service cloud.firestore {
       function isMemberOfTrip(tripId) {
         return request.auth != null
           && exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId))
-          && request.auth.uid in get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data.members;
+          && request.auth.uid in getTrip(tripId).members;
       }
 
       allow read: if request.auth != null && (
@@ -3886,7 +3887,7 @@ service cloud.firestore {
         && isAdminOfTrip(request.resource.data.tripId);
       allow update: if isAdminOfTrip(resource.data.tripId)
         && isInviteShapeValid(request.resource.data)
-        && request.resource.data.tripId == resource.data.tripId
+        && isTripIdKept()
         && request.resource.data.email == resource.data.email
         && request.resource.data.invitedBy == request.auth.uid;
       allow delete: if isInvitee(resource.data.email) || isAdminOfTrip(resource.data.tripId);
