@@ -221,13 +221,7 @@ const getIngredientChanges = (
       ? []
       : [INGREDIENTS_REORDERED];
 
-  return [
-    ...changed,
-    ...added,
-    ...removed,
-    ...getGroupChanges(beforeLines, afterLines, getName),
-    ...reordered,
-  ];
+  return [...changed, ...added, ...removed, ...reordered];
 };
 
 const GROUP_QUOTE_LENGTH = 40;
@@ -538,6 +532,7 @@ export const getRecipeChanges = (
     ...getPhotoChanges(extras.photo),
     ...getSourceLine(),
     ...getIngredientChanges(before.ingredients, after.ingredients, getName),
+    ...getGroupChanges(before.ingredients, after.ingredients, getName),
     ...getStepChanges(was.steps, now.steps),
     ...getCareChanges(was, now),
     ...getNutritionChanges(was.nutrition, now.nutrition),

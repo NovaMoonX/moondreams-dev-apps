@@ -14,6 +14,7 @@ import {
   planTweakUndo,
 } from '../../src/apps/pinch/utils/notes.ts';
 import {
+  getChangeTopics,
   getDraftChanges,
   getRecipeChanges,
   getRecipeSnapshot,
@@ -470,6 +471,18 @@ check(
     );
   },
 );
+
+check('moving or renaming a heading is recorded but never asks why', () => {
+  const topics = getChangeTopics(grouped, {
+    ...grouped,
+    ingredients: regroup({ b: 'For the bird', c: 'For the bird' }),
+  });
+  assert.deepEqual(topics, { hasIngredients: false, hasSteps: false });
+  assert.equal(
+    getChangeTopics(grouped, { ...grouped, steps: ['Only this.'] }).hasSteps,
+    true,
+  );
+});
 
 check(
   "the photo and the collections come from the draft, in the form's words",

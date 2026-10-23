@@ -1110,7 +1110,7 @@ A recipe's ingredient lines can sit under headings, the way recipes are written 
 ### Success Criteria
 - [x] A recipe with no groups looks the same in the drawer, the form and cooking mode; a recipe written before this (no `group` key) opens, cooks, shops and saves, and its save writes `group: null`; checked in the browser over a legacy-shaped document.
 - [x] Two lines of one ingredient in two groups are never merged by the form, the reader or the save, sum on the shopping list and in cost and nutrition, and say their group where they show away from their heading.
-- [x] Moving lines between groups records no tweak on a cooked recipe.
+- [x] Moving lines between groups, and renaming or removing a heading, are recorded like any other edit on a cooked recipe (the owner reversed the first rule).
 - [x] The rules matrix (owner, another user, signed out; with groups, null and a legacy document) gives the same outcome on the new rules as on the previous ones.
 - [x] `npx tsc -b --force` and `npx eslint` pass; `check:pinch-math` and `check:pinch-ingest` cover the order, the moves, the step sharing and the reader's groups; driven in a real browser at 390×844, 320×568 and 1280 in light and dark, with 1, 5 and 30 lines and 1, 3 and 8 groups.
 - [x] `UX.md`, `TECHNICAL.md` and the README match what shipped.
