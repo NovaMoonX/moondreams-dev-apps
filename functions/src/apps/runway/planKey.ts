@@ -1,8 +1,10 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHash,
   createHmac,
   randomBytes,
+  timingSafeEqual,
 } from 'node:crypto';
 
 import type { Firestore } from 'firebase-admin/firestore';
@@ -259,4 +261,68 @@ export async function sealForPlan(
   const data = await unwrapPlanKey(firestore, keyring, uid);
   const result = sealWithKey(data, fields, schemaVersion);
   return result;
+}
+
+/** What a master key's canary seals: a fixed value, so a wrong key or a damaged document is told apart from a healthy one. */
+const KEY_CHECK_VALUE = 'runway-master-key-check-v1';
+
+/** Lets `verifyRunwayKeys` prove a master key still works, without touching any plan. */
+export interface KeyCheckDoc {
+  masterKeyId: string;
+  createdAt: number;
+  wrapped: string;
+  nonce: string;
+  expectedDigest: string;
+}
+
+export const keyCheckPath = (masterKeyId: string) =>
+  `apps/runway/keyChecks/${masterKeyId}`;
+
+const sha256Hex = (value: Buffer) =>
+  createHash('sha256').update(value).digest('hex');
+
+export function makeKeyCheck(
+  keyring: Keyring,
+  masterKeyId: string,
+  now: number,
+): KeyCheckDoc {
+  const plain = Buffer.from(KEY_CHECK_VALUE);
+  const { ciphertext, nonce } = gcmEncrypt(
+    masterKeyBytes(keyring, masterKeyId),
+    plain,
+    Buffer.from(masterKeyId),
+  );
+  const result: KeyCheckDoc = {
+    masterKeyId,
+    createdAt: now,
+    wrapped: ciphertext,
+    nonce,
+    expectedDigest: sha256Hex(plain),
+  };
+  return result;
+}
+
+/** True only when the keyring's key for this id opens the canary to the fixed value. Never throws. */
+export function keyCheckOpens(
+  keyring: Keyring,
+  masterKeyId: string,
+  check: KeyCheckDoc,
+) {
+  try {
+    const plain = gcmDecrypt(
+      masterKeyBytes(keyring, masterKeyId),
+      check.wrapped,
+      check.nonce,
+      Buffer.from(masterKeyId),
+    );
+    const actual = Buffer.from(sha256Hex(plain));
+    const expected = Buffer.from(String(check.expectedDigest));
+    const result =
+      actual.length === expected.length &&
+      timingSafeEqual(actual, expected) &&
+      plain.toString() === KEY_CHECK_VALUE;
+    return result;
+  } catch {
+    return false;
+  }
 }

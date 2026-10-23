@@ -7,6 +7,7 @@
     "./lan.ts",
     "./fbDeploySmart.ts",
     "./fbInvoker.ts",
-    "./checkFirestoreIndexes.ts"
+    "./checkFirestoreIndexes.ts",
+    "./runway/publishKeyring.ts"
   ]
 }

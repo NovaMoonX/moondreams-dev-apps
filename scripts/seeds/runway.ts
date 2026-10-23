@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import {
   DEV_KEYRING,
   deriveSeedDataKey,
+  keyCheckPath,
+  makeKeyCheck,
   readKeyring,
   wrapDataKey,
 } from '../../functions/src/apps/runway/planKey.ts';
@@ -65,7 +67,14 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     keyId: data.keyId,
     sealed,
   });
+  const masterKeyIds = Object.keys(keyring.keys);
+  masterKeyIds.forEach((masterKeyId) =>
+    batch.set(
+      context.firestore.doc(keyCheckPath(masterKeyId)),
+      makeKeyCheck(keyring, masterKeyId, createdAt),
+    ),
+  );
   await batch.commit();
 
-  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 2 };
+  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 2 + masterKeyIds.length };
 }

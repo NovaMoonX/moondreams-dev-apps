@@ -212,7 +212,7 @@ scope here. Keep fixed fixture UIDs in `scripts/seeds/types.ts` so global and
 app-specific records always agree.
 
 `runway` writes Alex's plan at `apps/runway/plans/seed-worth-the-wait-one` (a sealed currency payload) and
-its wrapped data key at `apps/runway/server/seed-worth-the-wait-one/keys/data`, so Alex's Runway opens at once.
+its wrapped data key at `apps/runway/server/seed-worth-the-wait-one/keys/data`, so Alex's Runway opens at once, plus one canary per master key at `apps/runway/keyChecks/{masterKeyId}` so `verifyRunwayKeys` reports healthy.
 Every other account has no plan: its first open calls `getRunwayKey` and creates one. The seed derives Alex's data
 key from the emulator keyring and wraps it the way `getRunwayKey` does. That keyring is the `RUNWAY_MASTER_KEYS`
 line in `functions/.secret.local` (git-ignored), for example
