@@ -3,10 +3,11 @@ import { parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs';
 import {
   DEFAULT_PLAN_SECTION,
   DEFAULT_RUNWAY_TAB,
+  MORE_ENTRIES,
   PLAN_SECTIONS,
   RUNWAY_TABS,
 } from '@apps/runway/constants';
-import type { PlanSection, RunwayTab } from '@apps/runway/types';
+import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
 /** Runway's open tab and income day, kept in the URL so a reload and a return from another app land on the same tab. */
 export function useRunwayUrlState() {
@@ -21,6 +22,11 @@ export function useRunwayUrlState() {
   );
 
   const [requestedDay, setRequestedDay] = useQueryState('day', parseAsString);
+
+  const [requestedMore, setRequestedMore] = useQueryState(
+    'more',
+    parseAsStringLiteral(MORE_ENTRIES),
+  );
 
   const activeTab: RunwayTab = requestedTab ?? DEFAULT_RUNWAY_TAB;
   const showTab = (tab: RunwayTab) =>
@@ -38,6 +44,10 @@ export function useRunwayUrlState() {
     setRequestedDay(dayKey, { history: 'replace' });
   const closeDay = () => setRequestedDay(null, { history: 'replace' });
 
+  const openMoreEntry = (entry: MoreEntry) =>
+    setRequestedMore(entry, { history: 'replace' });
+  const closeMoreEntry = () => setRequestedMore(null, { history: 'replace' });
+
   return {
     activeTab,
     showTab,
@@ -46,5 +56,8 @@ export function useRunwayUrlState() {
     openDayKey: requestedDay,
     openDay,
     closeDay,
+    moreEntry: requestedMore,
+    openMoreEntry,
+    closeMoreEntry,
   };
 }

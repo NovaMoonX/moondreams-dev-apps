@@ -14,10 +14,12 @@ import type {
   Pairing,
   Priority,
   Schedule,
+  Stance,
 } from '@apps/runway/types';
 
 import { allocate, percentOf, percentShares } from './money';
 import { planGoalContributions } from './pace';
+import { effectiveStance, pick } from './stance';
 import { occurrences, selectFundedDays } from './schedule';
 
 export type DraftCadence =
@@ -31,6 +33,8 @@ export interface DraftDayInput {
   sourceId: string | null;
   on: DateOnly;
   amount: MoneyRange;
+  /** This day's own stance, from its pay line; the plan's applies when null. */
+  stanceOverride?: Stance | null;
   /** Pairing sets from the day, its pay line and its source; the narrowest non-empty one applies. */
   pairings?: {
     day: readonly Pairing[] | null;
@@ -58,7 +62,9 @@ export interface DraftBillInput {
   createdAt: number;
   priority: Priority;
   orderIndex: number;
-  amountCents: Cents;
+  /** Equal ends for an exact amount. */
+  amount: MoneyRange;
+  stanceOverride?: Stance | null;
   schedule: Schedule;
   ending: Ending;
   fundedBy: BillFundedBy;
@@ -74,6 +80,12 @@ export type DraftAsk =
 export interface BillShare {
   dueOn: DateOnly;
   totalCents: Cents;
+  /** The bill's range and the stance that picked the total (the bill's own, else the plan's); null when it is exact. */
+  ranged: {
+    range: MoneyRange;
+    stance: Stance;
+    isOwnStance: boolean;
+  } | null;
 }
 
 /** What one day owes one envelope, goal or bill before the money is walked. */
@@ -176,6 +188,7 @@ export function buildDemands(
   horizon = 0,
   goals: readonly DraftGoalInput[] = [],
   dayMoney: ReadonlyMap<string, Cents> = new Map(),
+  stance: Stance = 'conservative',
 ): Demand[] {
   const planned = new Set(days.map((day) => day.dayKey));
   const moneyOf = (day: { dayKey: string; moneyCents?: Cents }) =>
@@ -220,7 +233,7 @@ export function buildDemands(
   );
   const result = [
     ...sharePercentDemands([...envelopeDemands, ...goalDemands], dayMoney),
-    ...buildBillDemands(planned, chronological, bills, horizon),
+    ...buildBillDemands(planned, chronological, bills, horizon, stance),
   ];
   return result;
 }
@@ -245,6 +258,7 @@ export interface BillPayment {
   totalCents: Cents;
   /** What each income day sets aside, in day order. */
   parts: { day: IncomeDayRef; cents: Cents }[];
+  ranged: BillShare['ranged'];
 }
 
 /**
@@ -256,7 +270,18 @@ export function planBillPayments(
   bill: DraftBillInput,
   chronological: readonly IncomeDayRef[],
   horizon: number,
+  stance: Stance = 'conservative',
 ): BillPayment[] {
+  const billStance = effectiveStance(stance, bill.stanceOverride);
+  const amountCents = pick(billStance, bill.amount, 'expense');
+  const ranged =
+    bill.amount.lowCents === bill.amount.highCents
+      ? null
+      : {
+          range: bill.amount,
+          stance: billStance,
+          isOwnStance: Boolean(bill.stanceOverride),
+        };
   const dues = occurrences(
     bill.schedule,
     bill.ending,
@@ -267,13 +292,14 @@ export function planBillPayments(
     const chosen = new Set(bill.fundedBy.dayKeys);
     const days = chronological.filter((day) => chosen.has(day.dayKey));
     const shares = allocate(
-      bill.amountCents,
+      amountCents,
       days.map(() => 1),
       days.map((day) => day.dayKey),
     );
     return dues.slice(0, 1).map((dueOn) => ({
       dueOn,
-      totalCents: bill.amountCents,
+      totalCents: amountCents,
+      ranged,
       parts: days.map((day, index) => ({ day, cents: shares[index] })),
     }));
   }
@@ -282,10 +308,11 @@ export function planBillPayments(
     const window = chronological.filter(
       (day) => day.on > previous && day.on <= dueOn,
     );
-    const shares = spreadShares(bill.amountCents, window.length);
+    const shares = spreadShares(amountCents, window.length);
     return {
       dueOn,
-      totalCents: bill.amountCents,
+      totalCents: amountCents,
+      ranged,
       parts: window.map((day, position) => ({
         day,
         cents: shares[position],
@@ -301,12 +328,13 @@ function buildBillDemands(
   chronological: readonly IncomeDayRef[],
   bills: readonly DraftBillInput[],
   horizon: number,
+  stance: Stance,
 ): Demand[] {
   const nextAfter = (on: number) =>
     chronological.find((day) => day.on > on)?.on ?? Infinity;
 
   const result = bills.flatMap((bill) =>
-    planBillPayments(bill, chronological, horizon).flatMap((payment) =>
+    planBillPayments(bill, chronological, horizon, stance).flatMap((payment) =>
       payment.parts
         .filter((part) => planned.has(part.day.dayKey))
         .map((part): Demand => ({
@@ -319,7 +347,11 @@ function buildBillDemands(
           cents: part.cents,
           cadence:
             bill.fundedBy.kind === 'chosen' ? 'billChosen' : 'billSuggested',
-          bill: { dueOn: payment.dueOn, totalCents: payment.totalCents },
+          bill: {
+            dueOn: payment.dueOn,
+            totalCents: payment.totalCents,
+            ranged: payment.ranged,
+          },
           ask: { kind: 'exact' },
           capCents: null,
         })),

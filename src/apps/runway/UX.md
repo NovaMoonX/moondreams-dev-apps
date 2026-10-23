@@ -163,7 +163,7 @@ Container for every form: `FormSheet`. "Other" means the field offers "Other —
 | Tax or deduction *(Next Steps)* | Name, percentage or exact amount | Whether it builds an asset | Inline reveal | One `Disclosure` per group on the pay line | Type: tax, deduction. Other allows a custom name. |
 
 Notes on the table:
-- "Amount" is always `AmountField`: exact by default, with a quiet "Use a range" switch beside the label. A range shows both ends and the plan's stance ("Planned at the low end").
+- "Amount" is always `AmountField`: exact by default, with Exact or A range pills above it. A range shows both ends and the plan's stance ("Planned at the low end").
 - "Priority" is Must, Should or Want on a bill, envelope or goal. "Funding rule" is when an envelope receives money. They are different fields and never share a row.
 - No entity has an initial set long enough to need steps or `Disclosure`, apart from the later tax and deduction list.
 - Priority is not asked at creation. Items start at Should, and priority is a field on the detail screen from the start.

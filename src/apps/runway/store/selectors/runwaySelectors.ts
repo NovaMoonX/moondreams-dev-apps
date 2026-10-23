@@ -8,6 +8,7 @@ import {
 import { buildDraft, type Draft } from '@apps/runway/engine/draft';
 import { hashText } from '@apps/runway/engine/fingerprint';
 import { resolve, resolveCurrentOrNext } from '@apps/runway/engine/resolve';
+import { readStance } from '@apps/runway/engine/stance';
 import { LOOKAHEAD_MONTHS, PRIORITIES } from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import type {
@@ -192,8 +193,9 @@ export interface DraftView {
   sourceNames: Record<string, string>;
 }
 
-const selectStance = (state: RootState) =>
-  state.runway.plan?.stance ?? 'conservative';
+/** The plan's stance; an unknown or missing one reads as conservative. */
+export const selectStance = (state: RootState) =>
+  readStance(state.runway.plan?.stance);
 const selectDays = (state: RootState) => state.runway.days;
 const selectDayKey = (_state: RootState, dayKey: string) => dayKey;
 const selectToday = (_state: RootState, _dayKey: string, today: number) =>
@@ -254,7 +256,7 @@ export const selectDraft = createSelector(
         sourcePairings,
         stance,
         dayKey,
-        days.map((entry) => [entry.dayKey, entry.amount]),
+        days.map((entry) => [entry.dayKey, entry.amount, entry.stanceOverride]),
         resolved.map(({ version }) => version.id),
         resolvedBills.map(({ version }) => version.id),
         resolvedGoals.map(({ version }) => version.id),
@@ -279,7 +281,8 @@ export const selectDraft = createSelector(
       createdAt: item.createdAt,
       priority: version.payload.priority,
       orderIndex: version.payload.orderIndex,
-      amountCents: version.payload.amount.highCents,
+      amount: version.payload.amount,
+      stanceOverride: version.payload.stanceOverride ?? null,
       schedule: version.payload.timing.schedule,
       ending: version.payload.ending,
       fundedBy: version.payload.fundedBy,
@@ -312,7 +315,8 @@ export const selectDraft = createSelector(
         incomeDays: days.map((entry) => ({
           dayKey: entry.dayKey,
           on: entry.on,
-          moneyCents: entry.amount.lowCents,
+          amount: entry.amount,
+          stanceOverride: entry.stanceOverride,
         })),
       },
       stance,
