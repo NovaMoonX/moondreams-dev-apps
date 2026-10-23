@@ -1318,6 +1318,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           key={historyId}
           uid={uid}
           recipeId={historyId}
+          onLeaveForForm={() => {
+            setHistoryId(null);
+            setOrigin(null);
+          }}
           onClose={() => {
             setHistoryId(null);
             returnToDrawer();

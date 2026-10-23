@@ -2231,38 +2231,6 @@ function CookingSession({
       return done(`Showing ${target.title}`);
     },
   });
-  const getDictationCard = () => {
-    if (pending?.kind === 'DICTATE' && isDictationHere(pending)) {
-      return (
-        <CookDictationCard
-          word={ENTRY_WORDS[pending.entryKind]}
-          stepNumber={index + 1}
-          phase='WAITING'
-          heard={voice.heardWords}
-          isListening={voice.status === 'listening'}
-          savedText=''
-          onCancel={() => setPending(null)}
-          onUndo={() => undefined}
-        />
-      );
-    }
-    if (saved?.recipeId === recipe.id && saved.stepIndex === index) {
-      return (
-        <CookDictationCard
-          word={saved.word}
-          stepNumber={index + 1}
-          phase='SAVED'
-          heard=''
-          isListening={false}
-          savedText={saved.text}
-          onCancel={() => undefined}
-          onUndo={() => makeVoiceActions().undoEntry()}
-        />
-      );
-    }
-    return null;
-  };
-  const dictationCard = getDictationCard();
   const voiceStepMatch =
     matchesByRecipe.get(voiceStep.recipe.id)?.[voiceStep.stepNumber - 1] ??
     null;
@@ -2295,6 +2263,38 @@ function CookingSession({
           isConfirm: pending.isConfirm === true,
         };
   };
+  const getDictationCard = () => {
+    if (pending?.kind === 'DICTATE' && isDictationHere(pending)) {
+      return (
+        <CookDictationCard
+          word={ENTRY_WORDS[pending.entryKind]}
+          stepNumber={index + 1}
+          phase='WAITING'
+          heard={voice.heardWords}
+          isListening={voice.status === 'listening'}
+          savedText=''
+          onCancel={() => setPending(null)}
+          onUndo={() => undefined}
+        />
+      );
+    }
+    if (saved?.recipeId === recipe.id && saved.stepIndex === index) {
+      return (
+        <CookDictationCard
+          word={saved.word}
+          stepNumber={index + 1}
+          phase='SAVED'
+          heard=''
+          isListening={false}
+          savedText={saved.text}
+          onCancel={() => undefined}
+          onUndo={() => makeVoiceActions().undoEntry()}
+        />
+      );
+    }
+    return null;
+  };
+  const dictationCard = getDictationCard();
   const voiceContext = {
     recipes: entries.map((candidate) => ({
       id: candidate.recipe.id,

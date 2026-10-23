@@ -87,6 +87,7 @@ function PantryRecipeDrawer({
         <CookingHistorySheet
           uid={uid}
           recipeId={side.recipeId}
+          onLeaveForForm={onClose}
           onClose={() => setSide(null)}
         />
       )}
