@@ -53,8 +53,9 @@ async function deleteCollection(
     const snapshots = await firestore.getAll(...chunk, { fieldMask: [] });
     const existing = snapshots.filter((snapshot) => snapshot.exists);
     const writer = firestore.bulkWriter();
-    existing.forEach((snapshot) => void writer.delete(snapshot.ref));
+    const deletions = existing.map((snapshot) => writer.delete(snapshot.ref));
     await writer.close();
+    await Promise.all(deletions);
     counts.push(existing.length + below.reduce((sum, value) => sum + value, 0));
   }
   return counts.reduce((sum, value) => sum + value, 0);
@@ -140,9 +141,9 @@ export const deleteRunwayPlan = onCall(
       const result = { deleted: documents, receipts };
       return result;
     } catch (error) {
+      const code = (error as { code?: unknown } | null)?.code;
       logger.error('runway.plan.deleteFailed', {
-        message:
-          error instanceof Error ? error.message.slice(0, 120) : 'unknown',
+        code: typeof code === 'string' || typeof code === 'number' ? code : 'unknown',
       });
       throw new HttpsError(
         'internal',
