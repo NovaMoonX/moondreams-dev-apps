@@ -139,6 +139,7 @@ function FromWhenPicker({
               variant='outline'
               aria-label={CHANGE_WORDS.stretchDateLabel}
               min={toDateInputValue(today)}
+              max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
               value={value.until}
               disabled={isDisabled}
               onChange={(event) =>

@@ -376,7 +376,7 @@ export const CHANGE_WORDS = {
   stretchDateLabel: 'Last day of the change',
   stretchCountBlocker: 'Enter how many income days, at least 1.',
   stretchTooFar: 'Only {n} income days are planned ahead. Pick fewer.',
-  stretchDateBlocker: 'Pick the last day, today or later.',
+  stretchDateBlocker: 'Pick the last day, from today to ten years ahead.',
   dayBlocker: 'Pick an income day.',
   dayOnlyFields:
     'For one income day only the amount, how often and how much it matters can change.',
@@ -399,7 +399,7 @@ export const LIFECYCLE_WORDS = {
     'It leaves your lists and the days ahead. Its history stays, and it cannot be brought back from here.',
   endHeading: 'Last day',
   endDateLabel: 'Last day it counts',
-  endBlocker: 'Pick the last day, today or later.',
+  endBlocker: 'Pick the last day, from today to ten years ahead.',
   endConfirm: 'End it',
   archiveConfirm: 'Archive',
   pauseConfirm: 'Pause',
