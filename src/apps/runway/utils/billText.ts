@@ -42,6 +42,6 @@ export function describeBillFunding(
       : `of the next ${count} income days`;
   const isEven = amounts.every((cents) => cents === amounts[0]);
   if (isEven) return `${first} from each ${scope}`;
-  const result = `${first} from each ${scope}, ${formatCents(last)} at the end`;
+  const result = `Up to ${first} from each ${scope}, ${formatCents(last)} on the last`;
   return result;
 }

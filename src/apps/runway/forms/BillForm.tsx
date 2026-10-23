@@ -116,6 +116,7 @@ const getBlocker = (
   amountCents: number | null,
   today: number,
   isChosen: boolean,
+  pickedCount: number,
 ) => {
   if (data.name.trim() === '') return 'Name the bill.';
   if (amountCents === null || amountCents <= 0)
@@ -124,7 +125,7 @@ const getBlocker = (
   if (start === undefined) return 'Pick when it is due.';
   if (start < today) return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
-  if (isChosen && data.dayKeys.length === 0)
+  if (isChosen && pickedCount === 0)
     return 'Pick at least one income day.';
   return null;
 };
@@ -159,7 +160,16 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
   );
   const canChoose = isOnce && dueDays.length > 0;
   const isChosen = canChoose && formData.funding === 'chosen';
-  const blocker = getBlocker(formData, amountCents, today, isChosen);
+  const pickedCount = dueDays.filter((day) =>
+    formData.dayKeys.includes(day.dayKey),
+  ).length;
+  const blocker = getBlocker(
+    formData,
+    amountCents,
+    today,
+    isChosen,
+    pickedCount,
+  );
 
   const dayOptions = dueDays.map((day) => ({
     value: day.dayKey,
