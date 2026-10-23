@@ -1807,17 +1807,16 @@ service cloud.firestore {
 
       match /ingredients/{id} {
         allow read, delete: if isKitchenOwner();
-        allow create: if isKitchenOwner() && isIngredient(request.resource.data, id);
-        allow update: if isKitchenOwner() && isIngredient(request.resource.data, id)
-          && request.resource.data.catalogId == resource.data.catalogId
-          && request.resource.data.createdAt == resource.data.createdAt;
+        allow create, update: if isKitchenOwner() && isIngredient(request.resource.data, id)
+          && (request.method == 'create'
+            || (request.resource.data.catalogId == resource.data.catalogId
+              && request.resource.data.createdAt == resource.data.createdAt));
       }
 
       match /recipes/{id} {
         allow read, delete: if isKitchenOwner();
-        allow create: if isKitchenOwner() && isRecipe(request.resource.data, id);
-        allow update: if isKitchenOwner() && isRecipe(request.resource.data, id)
-          && request.resource.data.createdAt == resource.data.createdAt;
+        allow create, update: if isKitchenOwner() && isRecipe(request.resource.data, id)
+          && (request.method == 'create' || request.resource.data.createdAt == resource.data.createdAt);
       }
 
       // A saved meal written before favorites has no `isFavorite`, and one written before categories has no `categories`, so neither is required.
@@ -1834,19 +1833,18 @@ service cloud.firestore {
 
       match /meals/{id} {
         allow read, delete: if isKitchenOwner();
-        allow create: if isKitchenOwner() && isMeal(request.resource.data, id);
-        allow update: if isKitchenOwner() && isMeal(request.resource.data, id)
-          && request.resource.data.createdAt == resource.data.createdAt;
+        allow create, update: if isKitchenOwner() && isMeal(request.resource.data, id)
+          && (request.method == 'create' || request.resource.data.createdAt == resource.data.createdAt);
       }
 
       match /plannedMeals/{id} {
         allow read, delete: if isKitchenOwner();
-        allow create: if isKitchenOwner() && isPlannedMeal(request.resource.data, id);
-        allow update: if isKitchenOwner() && isPlannedMeal(request.resource.data, id)
-          && request.resource.data.createdAt == resource.data.createdAt
-          && (resource.data.get('snapshot', null) == null
-            || request.resource.data.snapshot == resource.data.snapshot
-            || isRepricedFrom(resource.data, request.resource.data));
+        allow create, update: if isKitchenOwner() && isPlannedMeal(request.resource.data, id)
+          && (request.method == 'create'
+            || (request.resource.data.createdAt == resource.data.createdAt
+              && (resource.data.get('snapshot', null) == null
+                || request.resource.data.snapshot == resource.data.snapshot
+                || isRepricedFrom(resource.data, request.resource.data))));
       }
 
       match /products/{id} {
@@ -1907,38 +1905,38 @@ service cloud.firestore {
 
       match /notes/{id} {
         allow read, delete: if isKitchenOwner();
-        allow create: if isKitchenOwner() && isRecipeNote(request.resource.data, id);
         // An edit keeps the kind, the changes and the date, and the cook once it has one: an entry written during a cook is tied to that cook when the cook is recorded, which sets it once, or again when that cook has since been deleted (a tip never has one). An edit keeps `previous` too. The one kind change is a CHANGE the recipe form applied: the same document becomes the TWEAK that records the edit (its lines and what the recipe was before, dated when it was applied), so applying a change leaves one entry and not two.
-        allow update: if isKitchenOwner() && isRecipeNote(request.resource.data, id)
-          && request.resource.data.recipeId == resource.data.recipeId
-          && (request.resource.data.cookId == resource.data.get('cookId', null)
-            || resource.data.get('cookId', null) == null
-            || !exists(/databases/$(database)/documents/apps/pinch/kitchens/$(uid)/cooks/$(resource.data.cookId)))
-          && ((request.resource.data.kind == resource.data.kind
-              && request.resource.data.changes == resource.data.get('changes', [])
-              && request.resource.data.get('previous', null) == resource.data.get('previous', null)
-              && request.resource.data.createdAt == resource.data.createdAt)
-            || (resource.data.kind == 'CHANGE' && request.resource.data.kind == 'TWEAK'));
+        allow create, update: if isKitchenOwner() && isRecipeNote(request.resource.data, id)
+          && (request.method == 'create'
+            || (request.resource.data.recipeId == resource.data.recipeId
+              && (request.resource.data.cookId == resource.data.get('cookId', null)
+                || resource.data.get('cookId', null) == null
+                || !exists(/databases/$(database)/documents/apps/pinch/kitchens/$(uid)/cooks/$(resource.data.cookId)))
+              && ((request.resource.data.kind == resource.data.kind
+                  && request.resource.data.changes == resource.data.get('changes', [])
+                  && request.resource.data.get('previous', null) == resource.data.get('previous', null)
+                  && request.resource.data.createdAt == resource.data.createdAt)
+                || (resource.data.kind == 'CHANGE' && request.resource.data.kind == 'TWEAK'))));
       }
 
       match /containers/{id} {
         allow read, delete: if isKitchenOwner();
-        allow create: if isKitchenOwner() && isContainer(request.resource.data, id)
-          && request.resource.data.status == 'IN_STOCK';
-        allow update: if isKitchenOwner() && isContainer(request.resource.data, id)
-          && request.resource.data.recipeId == resource.data.recipeId
-          && request.resource.data.mealId == resource.data.mealId
-          && request.resource.data.cookId == resource.data.cookId
-          && request.resource.data.createdAt == resource.data.createdAt;
+        allow create, update: if isKitchenOwner() && isContainer(request.resource.data, id)
+          && (request.method == 'create'
+            ? request.resource.data.status == 'IN_STOCK'
+            : (request.resource.data.recipeId == resource.data.recipeId
+              && request.resource.data.mealId == resource.data.mealId
+              && request.resource.data.cookId == resource.data.cookId
+              && request.resource.data.createdAt == resource.data.createdAt));
       }
 
       match /packages/{id} {
         allow read, delete: if isKitchenOwner();
-        allow create: if isKitchenOwner() && isPackage(request.resource.data, id)
-          && request.resource.data.status == 'IN_STOCK';
-        allow update: if isKitchenOwner() && isPackage(request.resource.data, id)
-          && request.resource.data.ingredientId == resource.data.ingredientId
-          && request.resource.data.createdAt == resource.data.createdAt;
+        allow create, update: if isKitchenOwner() && isPackage(request.resource.data, id)
+          && (request.method == 'create'
+            ? request.resource.data.status == 'IN_STOCK'
+            : (request.resource.data.ingredientId == resource.data.ingredientId
+              && request.resource.data.createdAt == resource.data.createdAt));
       }
 
       match /families/{id} {
