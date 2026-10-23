@@ -62,6 +62,11 @@ const probeRulesRelease = async () => {
       console.error(
         `${method} ${path.split('?')[0]} -> ${response.status} ${text.slice(0, 600)}`,
       );
+      if (text.includes('Total size of compiled executables')) {
+        console.error(
+          'The Firestore rules are too big once compiled. Run `npm run check:rules-size`, then shrink firestore.rules (README Troubleshooting).',
+        );
+      }
       return response.ok ? (JSON.parse(text) as Record<string, unknown>) : null;
     };
     const rulesets = await call('GET', 'rulesets?pageSize=5');
