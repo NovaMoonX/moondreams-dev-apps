@@ -51,7 +51,7 @@ function AmountField({
       <p className='text-muted-foreground text-xs'>{label}</p>
       {modes && modes.length > 1 && onModeChange && (
         <PillGroup
-          label={label}
+          label={`${label}, kind`}
           isThin
           options={modes}
           value={mode}

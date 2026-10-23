@@ -45,7 +45,11 @@ export function describeLineReason(
   ];
   const cadence = DRAFT_CADENCE_WORDS[line.reason.cadence];
   const ask = describeLineAsk(line, sourceNames);
-  const result = `${ask ? `${ask}, ${cadence.toLowerCase()}` : cadence}, ${DRAFT_WORDS.fundedFrom} ${joinNames(names)}`;
+  const funded = `${DRAFT_WORDS.fundedFrom} ${joinNames(names)}`;
+  if (line.ask.kind === 'percent') {
+    return `${ask}, ${cadence.toLowerCase()}`;
+  }
+  const result = `${ask ? `${ask}, ${cadence.toLowerCase()}` : cadence}, ${funded}`;
   return result;
 }
 
