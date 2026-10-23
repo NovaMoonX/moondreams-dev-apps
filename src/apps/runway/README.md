@@ -299,7 +299,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [ ] Point a source, a pay line or one income day at the envelopes, bills and goals it funds
 - [ ] Planning stance (conservative by default), with an override per source or bill
 - [ ] Add bills: one time, repeating, or repeating until an ending, exact or a range, funded from the income days you choose, and marked paid, including ahead of time
-- [ ] Add envelopes funded every income day, every other, or on chosen days
+- [x] Add envelopes funded every income day, every other, or on chosen days
 - [ ] Add, pause, complete and archive savings goals, with a pace line
 - [ ] A priority (Must, Should, Want) on every bill, envelope and goal, used to order drafts and flag what is unfunded
 - [ ] A draft for every coming income day, each line saying why, confirmed when the money is in with the amount that arrived and its date, every amount adjustable, with a way to mark a day as not arrived

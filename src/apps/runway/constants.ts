@@ -1,5 +1,14 @@
 import type { RunwayTab } from '@apps/runway/types';
 
+export const PLAN_SECTIONS = ['income', 'envelopes'] as const;
+
+export const DEFAULT_PLAN_SECTION = 'income' as const;
+
+export const PLAN_SECTION_LABELS: Record<
+  (typeof PLAN_SECTIONS)[number],
+  string
+> = { income: 'Income', envelopes: 'Envelopes' };
+
 export const RUNWAY_TABS = [
   'home',
   'days',
@@ -86,3 +95,33 @@ export const MAX_CHANGE_ITEM_IDS = 20;
 export const COMING_DAYS_PREVIEW = 3;
 /** Occurrences generated for one pay line before the generator stops, a guard against a runaway ending. */
 export const MAX_OCCURRENCES = 2_000;
+
+export const PRIORITIES = ['must', 'should', 'want'] as const;
+
+export const PRIORITY_LABELS: Record<(typeof PRIORITIES)[number], string> = {
+  must: 'Must',
+  should: 'Should',
+  want: 'Want',
+};
+
+/** Every income day, or every Nth: the cadences the envelope form offers. */
+export const FUNDING_CADENCES = [
+  'everyIncomeDay',
+  'every2',
+  'every3',
+  'chosen',
+] as const;
+
+export const FUNDING_CADENCE_LABELS: Record<
+  (typeof FUNDING_CADENCES)[number],
+  string
+> = {
+  everyIncomeDay: 'Every income day',
+  every2: 'Every other',
+  every3: 'Every third',
+  chosen: 'Chosen days',
+};
+
+export const ENVELOPE_ORDER_STEP = 1;
+export const MAX_CHOSEN_DAYS = 60;
+export const MAX_EMOJI_LENGTH = 8;

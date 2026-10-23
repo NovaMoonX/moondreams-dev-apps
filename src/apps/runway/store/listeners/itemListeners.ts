@@ -4,6 +4,7 @@ import { db } from '@lib/firebase/config';
 
 import { openJson } from '@apps/runway/security';
 import type {
+  EnvelopeSealed,
   OpenVersion,
   PayLineSealed,
   PlanItemDoc,
@@ -38,6 +39,10 @@ async function openVersion(
   if (version.kind === 'payLine') {
     const payload = await openJson<PayLineSealed>(version.sealed, encryption);
     return { ...base, kind: 'payLine', payload };
+  }
+  if (version.kind === 'envelope') {
+    const payload = await openJson<EnvelopeSealed>(version.sealed, encryption);
+    return { ...base, kind: 'envelope', payload };
   }
   return null;
 }

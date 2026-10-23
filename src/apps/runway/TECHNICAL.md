@@ -255,6 +255,8 @@ interface GroupSealed {
 }
 ```
 
+`EnvelopeSealed` as built carries `name`, `emoji`, `priority`, `orderIndex` and `funding`; `spillTo` and `accountId` arrive with the issues that read them. `FundingAmount` is `exact` only and `FundingRule.cadence` offers `everyIncomeDay`, `everyNth` and `chosen`; `percent`, `rest` and `monthly` arrive with theirs. A new envelope's `orderIndex` is the tier's highest plus one. The Plan tab's pill is the `section` URL param (`income`, `envelopes`).
+
 ### PlanDoc
 
 ```ts
@@ -593,7 +595,7 @@ So the most recent decision that covers a date wins, and a temporary version tha
 - *Bill, suggested:* with `remaining = amount − funded so far` and `n` = income days from this one through the last income day on or before the due date, demand `Math.ceil(remaining / n)`; the last such day demands exactly what remains. A bill due before the next income day demands all of `remaining` (n is 1).
 - *Bill, window:* the same as suggested, counting income days before `closesOn`.
 - *Bill, paid ahead:* no demand. Whatever part of the payment was not yet set aside for it came out of Free to spend, and the money the bill would have asked for on later days stays in the pool, which is how the next drafts make it up.
-- *Envelope or goal:* `everyIncomeDay` is every day; `everyNth` selects days whose index since `anchorDayKey` in the plan-wide chronological income-day list is a multiple of n; `chosen` selects named day keys; `monthly` selects the first or last income day of the month in that list, or all of them with the amount split by `allocate` ("split").
+- *Envelope or goal (cadence selection is `selectFundedDays` in `engine/schedule.ts`; an anchor that has left the coming-day list counts from the first day listed, so an `everyNth` envelope never silently funds nothing):* `everyIncomeDay` is every day; `everyNth` selects days whose index since `anchorDayKey` in the plan-wide chronological income-day list is a multiple of n; `chosen` selects named day keys; `monthly` selects the first or last income day of the month in that list, or all of them with the amount split by `allocate` ("split").
 - *Goals:* a paused goal or one at its target demands nothing.
 - *Loan payment:* a bill with `LoanTerms`; the demand is `paymentCents`, capped at the balance plus estimated interest, and the loan ends when the balance reaches zero.
 - *Overspend:* the engine never changes a demand's size for an overspent envelope. It marks the first `min(line, −balance)` cents of that envelope's line as repaying the overspend.

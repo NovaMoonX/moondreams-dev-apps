@@ -9,10 +9,15 @@ import {
   wrapDataKey,
 } from '../../functions/src/apps/runway/planKey.ts';
 import { DEFAULT_CURRENCY_CODE } from '../../src/apps/runway/constants.ts';
-import { DAY_MS, startOfUtcDay } from '../../src/apps/runway/engine/dates.ts';
+import {
+  DAY_MS,
+  startOfUtcDay,
+  toDayKey,
+} from '../../src/apps/runway/engine/dates.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
   ChangeSealed,
+  EnvelopeSealed,
   PayLineSealed,
   SourceSealed,
 } from '../../src/apps/runway/types.ts';
@@ -41,6 +46,52 @@ function readEmulatorKeyring() {
     throw error;
   }
 }
+
+const header = (
+  id: string,
+  kind: string,
+  parentId: string | null,
+  createdAt: number,
+) => ({
+  id,
+  kind,
+  parentId,
+  createdAt,
+  endedAt: null,
+  archivedAt: null,
+});
+const version = (
+  id: string,
+  itemId: string,
+  kind: string,
+  createdAt: number,
+  effectiveFrom: number,
+  changeId: string,
+  sealed: unknown,
+) => ({
+  id,
+  itemId,
+  kind,
+  createdAt,
+  effectiveFrom,
+  effectiveUntil: null,
+  changeId,
+  sealed,
+});
+const change = (
+  id: string,
+  createdAt: number,
+  effectiveFrom: number,
+  itemIds: string[],
+  sealed: unknown,
+) => ({
+  id,
+  kind: 'planChange',
+  createdAt,
+  effectiveFrom,
+  itemIds,
+  sealed,
+});
 
 /** Alex has a plan that opens like a real one; every other account has none, so its first open creates one. */
 export async function seedRunway(context: SeedContext): Promise<SeedResult> {
@@ -74,6 +125,11 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     sealed,
   });
   const incomeDocuments = await writeSeedIncome(context, owner.uid, encryption);
+  const envelopeDocuments = await writeSeedEnvelopes(
+    context,
+    owner.uid,
+    encryption,
+  );
   const masterKeyIds = Object.keys(keyring.keys);
   masterKeyIds.forEach((masterKeyId) =>
     batch.set(
@@ -85,7 +141,8 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 2 + incomeDocuments + masterKeyIds.length,
+    firestoreDocuments:
+      2 + incomeDocuments + envelopeDocuments + masterKeyIds.length,
   };
 }
 
@@ -135,52 +192,6 @@ async function writeSeedIncome(
     firstChange: 'seed-change-paycheck',
     secondChange: 'seed-change-bonus',
   };
-  const header = (
-    id: string,
-    kind: string,
-    parentId: string | null,
-    createdAt: number,
-  ) => ({
-    id,
-    kind,
-    parentId,
-    createdAt,
-    endedAt: null,
-    archivedAt: null,
-  });
-  const version = (
-    id: string,
-    itemId: string,
-    kind: string,
-    createdAt: number,
-    effectiveFrom: number,
-    changeId: string,
-    sealed: unknown,
-  ) => ({
-    id,
-    itemId,
-    kind,
-    createdAt,
-    effectiveFrom,
-    effectiveUntil: null,
-    changeId,
-    sealed,
-  });
-  const change = (
-    id: string,
-    createdAt: number,
-    effectiveFrom: number,
-    itemIds: string[],
-    sealed: unknown,
-  ) => ({
-    id,
-    kind: 'planChange',
-    createdAt,
-    effectiveFrom,
-    itemIds,
-    sealed,
-  });
-
   const batch = context.firestore.batch();
   batch.set(
     context.firestore.doc(`${plan}/items/${ids.source}`),
@@ -252,4 +263,124 @@ async function writeSeedIncome(
   );
   await batch.commit();
   return 8;
+}
+
+/** Five envelopes across Must, Should and Want and all three cadences, sealed the way the app seals them. */
+async function writeSeedEnvelopes(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const addedAt = context.now - 12 * DAY_MS;
+  const firstPayday = today + 3 * DAY_MS;
+  const paydayKey = (index: number) =>
+    toDayKey('seed-income-paycheck', firstPayday + index * 14 * DAY_MS);
+  const exact = (cents: number) => ({ kind: 'exact' as const, cents });
+
+  const envelopes: { id: string; payload: EnvelopeSealed }[] = [
+    {
+      id: 'seed-envelope-groceries',
+      payload: {
+        name: 'Groceries',
+        emoji: '🛒',
+        priority: 'must',
+        orderIndex: 1,
+        funding: { amount: exact(15_000), cadence: { kind: 'everyIncomeDay' } },
+      },
+    },
+    {
+      id: 'seed-envelope-gas',
+      payload: {
+        name: 'Gas',
+        emoji: null,
+        priority: 'must',
+        orderIndex: 2,
+        funding: {
+          amount: exact(6_000),
+          cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
+        },
+      },
+    },
+    {
+      id: 'seed-envelope-dining',
+      payload: {
+        name: 'Dining out',
+        emoji: '🍜',
+        priority: 'should',
+        orderIndex: 1,
+        funding: { amount: exact(5_000), cadence: { kind: 'everyIncomeDay' } },
+      },
+    },
+    {
+      id: 'seed-envelope-gifts',
+      payload: {
+        name: 'Birthday and holiday gifts',
+        emoji: '🎁',
+        priority: 'should',
+        orderIndex: 2,
+        funding: {
+          amount: exact(4_000),
+          cadence: { kind: 'everyNth', n: 3, anchorDayKey: paydayKey(0) },
+        },
+      },
+    },
+    {
+      id: 'seed-envelope-trip',
+      payload: {
+        name: 'Weekend away',
+        emoji: null,
+        priority: 'want',
+        orderIndex: 1,
+        funding: {
+          amount: exact(20_000),
+          cadence: {
+            kind: 'chosen',
+            dayKeys: [paydayKey(0), paydayKey(2), paydayKey(4)],
+          },
+        },
+      },
+    },
+  ];
+
+  const sealedChanges = await Promise.all(
+    envelopes.map(({ payload }) =>
+      sealJson(
+        { summary: `Added ${payload.name}.` } satisfies ChangeSealed,
+        encryption,
+      ),
+    ),
+  );
+  const sealedEnvelopes = await Promise.all(
+    envelopes.map(({ payload }) => sealJson(payload, encryption)),
+  );
+
+  const batch = context.firestore.batch();
+  envelopes.forEach(({ id }, index) => {
+    const createdAt = addedAt + index * 1000;
+    const changeId = `seed-change-${id}`;
+    batch.set(
+      context.firestore.doc(`${plan}/items/${id}`),
+      header(id, 'envelope', null, createdAt),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${id}`),
+      version(
+        `seed-version-${id}`,
+        id,
+        'envelope',
+        createdAt,
+        today,
+        changeId,
+        sealedEnvelopes[index],
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${changeId}`),
+      change(changeId, createdAt, today, [id], sealedChanges[index]),
+    );
+  });
+  await batch.commit();
+  return envelopes.length * 3;
 }
