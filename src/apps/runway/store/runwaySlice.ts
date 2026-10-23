@@ -60,6 +60,7 @@ export const runwaySlice = createSlice({
     setKeyStatus: (state, action: PayloadAction<RunwayKeyStatus>) => {
       state.keyStatus = action.payload;
     },
+    clearRunway: () => initialState,
     setPlan: (state, action: PayloadAction<OpenPlan | null>) => {
       state.plan = action.payload;
       state.isLoaded = true;
@@ -106,6 +107,7 @@ export const runwaySlice = createSlice({
 
 export const {
   setKeyStatus,
+  clearRunway,
   setPlan,
   setItems,
   setVersions,
