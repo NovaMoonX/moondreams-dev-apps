@@ -1109,6 +1109,31 @@ const version = (
     'a day never asks twice for one bill',
   );
 
+  // Shares re-divide what is left, so they never pass the bill and always sum to it.
+  const uneven = planBillPayments(
+    makeBill({ amountCents: 10, schedule: once(utc(2027, 1, 1)) }),
+    [...incomes, day(utc(2026, 12, 15), 'd')],
+    horizon,
+  );
+  assert.deepEqual(
+    uneven[0].parts.map((part) => part.cents),
+    [4, 3, 3],
+    'ceil of what is left over the days left, summing to the bill',
+  );
+
+  // A monthly bill on the 31st lands on the last day of shorter months.
+  assert.deepEqual(
+    planBillPayments(
+      makeBill({ schedule: monthly(utc(2026, 12, 31)) }),
+      biweekly,
+      horizon,
+    )
+      .slice(0, 3)
+      .map((payment) => toDayStamp(payment.dueOn)),
+    ['20261231', '20270131', '20270228'],
+    'day 31 clamps to the month length',
+  );
+
   // Endings reuse the schedule machinery.
   const sixTimes = makeBill({
     schedule: monthly(utc(2026, 12, 1)),
