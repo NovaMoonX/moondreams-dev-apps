@@ -18,7 +18,7 @@ import {
   MAX_CHANGE_LOG_PAGE,
   MAX_WINDOW_CHANGES,
 } from '@apps/runway/constants';
-import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import RecordScreen from '@apps/runway/screens/days/RecordScreen';
 import { selectItemNames } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenChange, OpenDay } from '@apps/runway/types';
@@ -92,7 +92,7 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
     { value: ALL_ITEMS, label: 'All items' },
     ...itemNames.map((item) => ({ value: item.id, label: item.name })),
   ];
-  const range = `${formatDateUTC(window.from)} to ${formatDateUTC(window.to - DAY_MS)}`;
+  const range = `${formatDateUTC(window.firstDay)} to ${formatDateUTC(window.lastDay)}`;
 
   const getBody = () => {
     if (isFailed) {
