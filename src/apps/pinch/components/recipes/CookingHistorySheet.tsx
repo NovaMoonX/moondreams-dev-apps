@@ -7,7 +7,6 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight, NotebookPen, Plus } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
-import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import { PillGroup } from '@/components/PillGroup';
@@ -76,6 +75,7 @@ const getWrittenLine = (kinds: string[] | undefined) => {
   const line = parts.join(' and ');
   return line === '' ? null : `${line[0].toUpperCase()}${line.slice(1)}`;
 };
+const BACK_LABEL = 'Back to the recipe';
 const HIDDEN_WORTH_A_BUTTON = 3;
 /** Photos drawn at once: the grid is the latest ones, and every cook with a photo is also a row of All cooks. */
 const PHOTOS_SHOWN = 30;
@@ -353,38 +353,48 @@ function CookingHistorySheet({
         />
       );
     }
-    if (loadError !== null) {
+    if (loadError !== null || !isLoaded) {
       return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
-          Your cooking history couldn't load just now.
-        </p>
-      );
-    }
-    if (!isLoaded) {
-      return (
-        <p className='text-muted-foreground py-6 text-center text-sm'>
-          Loading your cooking history…
-        </p>
+        <div className='space-y-2'>
+          <BackLink onBack={onClose} label={BACK_LABEL} />
+          <p className='text-muted-foreground py-4 text-center text-sm'>
+            {loadError !== null
+              ? "Your cooking history couldn't load just now."
+              : 'Loading your cooking history…'}
+          </p>
+        </div>
       );
     }
 
     return (
       <div className='flex max-h-[max(12rem,calc(92dvh-14rem))] flex-col'>
-        <div className='shrink-0 space-y-1 pb-1'>
-          <p className='font-medium wrap-break-word'>
-            {recipe?.title ?? 'This recipe'}
-          </p>
-          {shownMode === 'changes' ? null : isFull ? (
+        <div className='shrink-0 space-y-2 pb-1'>
+          <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+            <BackLink onBack={onClose} label={BACK_LABEL} />
+            {shownMode === 'changes' || isFull ? null : (
+              <Button
+                type='button'
+                size='sm'
+                rounded='full'
+                className="relative order-2 ml-auto h-7 min-h-0 shrink-0 gap-1 px-3 whitespace-nowrap after:absolute after:-inset-1.5 after:content-[''] [@media(max-height:500px)]:order-3"
+                onClick={() => openEdit(null)}
+              >
+                <Plus className='h-4 w-4' aria-hidden='true' />
+                <span className='max-[379px]:sr-only'>Add an earlier cook</span>
+                <span aria-hidden='true' className='min-[380px]:hidden'>
+                  Add a cook
+                </span>
+              </Button>
+            )}
+            <p className='order-3 w-full font-medium wrap-break-word [@media(max-height:500px)]:order-2 [@media(max-height:500px)]:w-auto [@media(max-height:500px)]:min-w-0 [@media(max-height:500px)]:flex-1 [@media(max-height:500px)]:truncate'>
+              {recipe?.title ?? 'This recipe'}
+            </p>
+          </div>
+          {shownMode !== 'changes' && isFull && (
             <p className='text-muted-foreground text-sm'>
               A recipe's history holds up to {SOFT_MAX_COOKS_PER_RECIPE} cooks.
               Delete an older one to add more.
             </p>
-          ) : (
-            <ActionRow
-              icon={<Plus className='h-4 w-4' />}
-              label='Add an earlier cook'
-              onClick={() => openEdit(null)}
-            />
           )}
           {resultsLine !== null && (
             <p className='text-muted-foreground text-sm'>{resultsLine}</p>
