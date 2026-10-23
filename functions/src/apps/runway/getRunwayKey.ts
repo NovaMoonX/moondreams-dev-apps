@@ -36,7 +36,7 @@ function readSecretValue() {
 let cached: { raw: string; keyring: Keyring } | null = null;
 
 /** Validated on an instance's first call and again whenever the secret's text changes. */
-function loadKeyring(): Keyring {
+export function loadKeyring(): Keyring {
   const raw = readSecretValue();
   if (cached && cached.raw === raw) return cached.keyring;
   const keyring = !raw && isEmulator() ? DEV_KEYRING : readKeyring(raw);
