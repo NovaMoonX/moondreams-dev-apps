@@ -2366,8 +2366,13 @@ assert.deepEqual(
     withCare({ fridgeDays: 5, freezerDays: null, reheat: null, tip: 'B.' }),
     names,
   ),
-  [],
-  'a change to the storage notes alone records nothing: the dish is the same',
+  [
+    'Keeping it: fridge time 3 days → 5 days',
+    'Keeping it: freezer time removed',
+    'Keeping it: reheating removed',
+    'Keeping it: tip changed',
+  ],
+  'a change to the storage notes is recorded, one line for each part',
 );
 assert.deepEqual(
   [
@@ -2375,8 +2380,22 @@ assert.deepEqual(
     getRecipeChanges(withCare(fullCare), withCare(null), names),
     getRecipeChanges(withCare(null), withCare(undefined), names),
   ],
-  [[], [], []],
-  'adding, removing and a missing key are all nothing to record',
+  [
+    [
+      'Keeping it: fridge time set to 3 days',
+      'Keeping it: freezer time set to 3 months',
+      'Keeping it: reheating added',
+      'Keeping it: tip added',
+    ],
+    [
+      'Keeping it: fridge time removed',
+      'Keeping it: freezer time removed',
+      'Keeping it: reheating removed',
+      'Keeping it: tip removed',
+    ],
+    [],
+  ],
+  'adding and removing the storage notes are recorded, and a missing key reads as none',
 );
 assert.deepEqual(
   getRecipeChanges(
@@ -2384,8 +2403,14 @@ assert.deepEqual(
     { ...withCare(fullCare), servings: 6 } as RecipeContent,
     names,
   ),
-  ['Serves 4 → 6'],
-  'storage notes changed beside a real change leave only the real line',
+  [
+    'Serves 4 → 6',
+    'Keeping it: fridge time set to 3 days',
+    'Keeping it: freezer time set to 3 months',
+    'Keeping it: reheating added',
+    'Keeping it: tip added',
+  ],
+  'storage notes changed beside a real change are listed after it',
 );
 
 const fuzzRandom = ((seed) => () => {
@@ -10052,14 +10077,14 @@ assert.equal(
       ),
     ],
     [
-      [],
-      [],
+      ['Removed the group “For the chicken”'],
+      ['Moved Removed ingredient to “For the sauce”'],
       [
         'Added Soy sauce (for the SAUCE), 3 tbsp',
         'Removed Soy sauce (For the sauce)',
       ],
     ],
-    'moving lines between groups (to the front or the end of one) records no tweak, and a change to an ingredient in several groups names its group',
+    'removing a group and moving a line to another group are recorded, and a change to an ingredient in several groups names its group',
   );
 
   const read = getDataFromExtracted(

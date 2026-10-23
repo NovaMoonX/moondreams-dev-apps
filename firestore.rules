@@ -1623,7 +1623,7 @@ service cloud.firestore {
           && (data.get('stepIndex', null) == null || (data.stepIndex is int && data.stepIndex >= 0 && data.stepIndex < 60))
           && (data.get('stepText', null) == null || isShortText(data.stepText, 120))
           && (data.get('reason', null) == null || (data.kind == 'CHANGE' && isShortText(data.reason, 2000)))
-          && (data.get('previous', null) == null || (data.kind == 'TWEAK' && isTweakPrevious(data.previous)))
+          && (data.get('previous', null) == null || (data.kind == 'TWEAK' && ((resource != null && data.previous == resource.data.get('previous', null)) || isTweakPrevious(data.previous))))
           && data.createdAt is int && data.updatedAt is int;
       }
 
