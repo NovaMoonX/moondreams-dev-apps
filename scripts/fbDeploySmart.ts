@@ -1,5 +1,5 @@
 import { execSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const targets: string[] = [];
 
@@ -36,6 +36,22 @@ const INVOKER_FAILURES = [
   'Failed to set invoker function',
 ];
 
+// The CLI swallows the real error of its release update and then tries to create the release, so only this follow-up shows; the cause is in its debug log.
+const RELEASE_EXISTS = /Release projects\/\S+\/releases\/\S+ already exists/;
+const RELEASE_RETRY_WAIT_MS = 20_000;
+
+const printRulesLog = () => {
+  try {
+    const lines = readFileSync('firebase-debug.log', 'utf8')
+      .split('\n')
+      .filter((line) => /firebaserules|\[rules\]/i.test(line))
+      .slice(-40);
+    console.error(`\nThe rules lines of firebase-debug.log:\n${lines.join('\n')}`);
+  } catch {
+    console.error('\nfirebase-debug.log could not be read.');
+  }
+};
+
 const deploy = () =>
   new Promise<{ code: number; output: string }>((resolve) => {
     const chunks: string[] = [];
@@ -71,10 +87,18 @@ const openCallables = () => {
 
 const run = async () => {
   const first = await deploy();
-  if (
-    first.code === 0 ||
-    !INVOKER_FAILURES.some((message) => first.output.includes(message))
-  ) {
+  if (first.code === 0) return 0;
+  if (RELEASE_EXISTS.test(first.output)) {
+    printRulesLog();
+    console.log(
+      `\nThe rules release failed. Deploying once more in ${RELEASE_RETRY_WAIT_MS / 1000} seconds.\n`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, RELEASE_RETRY_WAIT_MS));
+    const retry = await deploy();
+    if (retry.code !== 0) printRulesLog();
+    return retry.code;
+  }
+  if (!INVOKER_FAILURES.some((message) => first.output.includes(message))) {
     return first.code;
   }
   console.log(
