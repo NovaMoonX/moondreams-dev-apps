@@ -53,8 +53,7 @@ const MAX_QUOTE_CHARS = 22;
 
 export type CookVoiceResult =
   | { ok: true; show?: string; speak?: string }
-  /** `isSpoken`: said aloud even with Read steps aloud off (it answers a question or a ringing timer). */
-  | { ok: false; reason: string; spoken?: string; isSpoken?: boolean };
+  | { ok: false; reason: string; spoken?: string };
 
 /** What a spoken command can do on the cooking screen: the same things a tap does, and nothing that writes. */
 export interface CookVoiceActions {
@@ -87,6 +86,8 @@ export interface CookVoiceActions {
   readChanges: () => CookVoiceResult;
   showEntries: (kind: CookEntryKind) => CookVoiceResult;
   closeEntries: () => CookVoiceResult;
+  showStepAmounts: () => CookVoiceResult;
+  showLastNote: () => CookVoiceResult;
   addEntry: (kind: CookEntryKind) => CookVoiceResult;
   dictation: (text: string) => CookVoiceResult;
   undoEntry: () => CookVoiceResult;
@@ -154,6 +155,10 @@ export const runCookCommand = (
       return actions.readChanges();
     case 'SHOW_ENTRIES':
       return actions.showEntries(command.entryKind);
+    case 'SHOW_STEP_AMOUNTS':
+      return actions.showStepAmounts();
+    case 'SHOW_LAST_NOTE':
+      return actions.showLastNote();
     case 'CLOSE_ENTRIES':
       return actions.closeEntries();
     case 'ADD_ENTRY':
@@ -202,6 +207,8 @@ interface UseCookVoiceOptions {
   /** How many timers run now, and when the latest one rang: the wait for the wake phrase does not count the time a timer runs or the two minutes after one rings. */
   runningTimers: number;
   lastRingAt: number | null;
+  /** The next thing said is written down as a tip, note or change: the words picked up are kept to show, and a chime marks when to start saying them. */
+  isDictating?: boolean;
   /** A timer has rung and waits to be dismissed: the listening chime stays quiet so it never masks the alarm. */
   isAlarmRinging: boolean;
 }
@@ -216,6 +223,7 @@ export function useCookVoice({
   runningTimers,
   lastRingAt,
   isAlarmRinging,
+  isDictating = false,
 }: UseCookVoiceOptions) {
   const { settings, save: saveSettings } = usePinchSettings(uid);
   const [localAgreed, setLocalAgreed] = useLocalStoragePreference(
@@ -261,6 +269,7 @@ export function useCookVoice({
   const [shouldAutoWait] = useState(() => isWaitingPreferred && hasAgreed);
   const [isExplainerOpen, setIsExplainerOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [heardWords, setHeardWords] = useState('');
   const [message, setMessage] = useState<CookVoiceMessage | null>(null);
   const [expiredStop, setExpiredStop] = useState<VoiceStop | null>(null);
   const [langs] = useState(() => ({
@@ -353,22 +362,22 @@ export function useCookVoice({
     const result = run(command);
     if (!result.ok) {
       show(result.reason, 'PROBLEM');
-      if (isReadingAloud || result.isSpoken) {
-        notesQueue.current = null;
-        controls.current.say(result.spoken ?? result.reason);
-      }
+      notesQueue.current = null;
+      controls.current.say(result.spoken ?? result.reason);
       return true;
     }
     if (result.show) show(result.show, 'ANSWER');
     else show(`Heard “${transcript}”`, 'HEARD');
-    if (result.speak) {
+    const spoken = result.speak ?? result.show;
+    if (spoken) {
       notesQueue.current = null;
-      controls.current.say(result.speak);
+      controls.current.say(spoken);
     }
     return true;
   };
 
   const handleTranscript = (alternatives: string[]) => {
+    setHeardWords('');
     if (handlers.current === null) return false;
     const { context: shown, run } = handlers.current;
     const plan = planHeard(machineRef.current.phase, alternatives, shown);
@@ -399,12 +408,25 @@ export function useCookVoice({
     lang: langs.listen,
     speechLang: langs.speak,
     onFinalTranscript: handleTranscript,
+    onInterimTranscript: (text) => {
+      if (isDictatingRef.current) setHeardWords(text);
+    },
     isNaturalVoice: natural.isOn,
     onHalt: (error) => {
       if (error !== 'idle') send({ type: 'ENGINE_STOPPED', reason: error });
     },
   });
   const { say, quiet, stop, start, cue } = speech;
+  const isDictatingRef = useRef(isDictating);
+  const lastStatus = useRef(speech.status);
+  useEffect(() => {
+    isDictatingRef.current = isDictating;
+    const wasSpeaking = lastStatus.current === 'speaking';
+    lastStatus.current = speech.status;
+    if (isDictating && wasSpeaking && speech.status === 'listening') {
+      if (!isAlarmRinging) cue('start');
+    }
+  }, [isDictating, speech.status, isAlarmRinging, cue]);
 
   const begin = () => {
     readStepKey.current = null;
@@ -645,6 +667,7 @@ export function useCookVoice({
     /** The stop the line still mentions: for a few seconds after it happens. */
     shownError: stopped === expiredStop ? null : stopped,
     message,
+    heardWords: isDictating ? heardWords : '',
     isExplainerOpen,
     closeExplainer: () => setIsExplainerOpen(false),
     isSheetOpen,

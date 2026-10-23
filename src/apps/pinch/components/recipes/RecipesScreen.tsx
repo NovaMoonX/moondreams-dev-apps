@@ -285,6 +285,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [putAway, setPutAway] = useState<ContainerSubject | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMealId, setOpenMealId] = useState<string | null>(null);
+  const [origin, setOrigin] = useState<{
+    kind: 'recipe' | 'meal';
+    id: string;
+  } | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [noteTarget, setNoteTarget] = useState<{
     recipeId: string;
@@ -295,6 +299,18 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
   const [isPickingCollections, setIsPickingCollections] = useState(false);
   const [fillIn, setFillIn] = useState<Gap[] | null>(null);
   const [shopping, setShopping] = useState<ShoppingRequest | null>(null);
+  const openFromDrawer = (kind: 'recipe' | 'meal', id: string) => {
+    setOpenId(null);
+    setOpenMealId(null);
+    setOrigin({ kind, id });
+  };
+  const returnToDrawer = () => {
+    if (origin) {
+      if (origin.kind === 'recipe') setOpenId(origin.id);
+      else setOpenMealId(origin.id);
+    }
+    setOrigin(null);
+  };
   const [isIdeaAddOpen, setIsIdeaAddOpen] = useState(false);
   const [revealId, setRevealId] = useState<string | null>(null);
 
@@ -1246,11 +1262,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             openSubview({ kind: 'recipe', id });
           }}
           onFillIn={(gaps) => {
-            setOpenId(null);
+            openFromDrawer('recipe', openId);
             setFillIn(gaps);
           }}
           onAddToShopping={(request) => {
-            setOpenId(null);
+            openFromDrawer('recipe', openId);
             setShopping(request);
           }}
           onShowSource={(sourceId) => {
@@ -1264,7 +1280,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             scrollToTopAfterSheetCloses();
           }}
           onOpenHistory={(id) => {
-            setOpenId(null);
+            openFromDrawer('recipe', id);
             setHistoryId(id);
           }}
           onOpenStock={(id, place) => {
@@ -1272,11 +1288,11 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             openSubview({ kind: 'containers', recipeId: id, place });
           }}
           onPutAway={(id) => {
-            setOpenId(null);
+            openFromDrawer('recipe', id);
             setPutAway({ kind: 'recipe', id });
           }}
           onOpenNote={(recipeId, noteId, kind = null) => {
-            setOpenId(null);
+            openFromDrawer('recipe', recipeId);
             setNoteTarget({ recipeId, noteId, kind });
           }}
         />
@@ -1289,11 +1305,12 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           noteId={noteTarget.noteId}
           initialCookId={null}
           initialKind={noteTarget.kind}
-          onClose={() =>
+          onClose={() => {
             setNoteTarget((current) =>
               current === noteTarget ? null : current,
-            )
-          }
+            );
+            returnToDrawer();
+          }}
         />
       )}
       {historyId && (
@@ -1301,7 +1318,10 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           key={historyId}
           uid={uid}
           recipeId={historyId}
-          onClose={() => setHistoryId(null)}
+          onClose={() => {
+            setHistoryId(null);
+            returnToDrawer();
+          }}
         />
       )}
       {openMealId && (
@@ -1326,7 +1346,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             openSubview({ kind: 'meal', id });
           }}
           onAddToShopping={(request) => {
-            setOpenMealId(null);
+            openFromDrawer('meal', openMealId);
             setShopping(request);
           }}
           onOpenStock={(id, place) => {
@@ -1334,7 +1354,7 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
             openSubview({ kind: 'containers', mealId: id, place });
           }}
           onPutAway={(id) => {
-            setOpenMealId(null);
+            openFromDrawer('meal', id);
             setPutAway({ kind: 'meal', id });
           }}
           onToggleFavorite={toggleFavorite}
@@ -1375,19 +1395,30 @@ function RecipesScreen({ uid }: RecipesScreenProps) {
           key={`${putAway.kind}-${putAway.kind === 'typed' ? putAway.name : putAway.id}`}
           uid={uid}
           initial={putAway}
-          onClose={() =>
-            setPutAway((current) => (current === putAway ? null : current))
-          }
+          onClose={() => {
+            setPutAway((current) => (current === putAway ? null : current));
+            returnToDrawer();
+          }}
         />
       )}
       {fillIn && (
-        <FillInSheet uid={uid} gaps={fillIn} onClose={() => setFillIn(null)} />
+        <FillInSheet
+          uid={uid}
+          gaps={fillIn}
+          onClose={() => {
+            setFillIn(null);
+            returnToDrawer();
+          }}
+        />
       )}
       {shopping && (
         <AddToShoppingSheet
           uid={uid}
           request={shopping}
-          onClose={() => setShopping(null)}
+          onClose={() => {
+            setShopping(null);
+            returnToDrawer();
+          }}
         />
       )}
     </div>

@@ -44,13 +44,16 @@ interface CookStepViewProps {
   /** What was written for this step, tips first. */
   entries: RecipeNote[];
   onEditEntry: (id: string) => void;
-  onApplyChange: (id: string) => void;
+  onApplyChange: ((id: string) => void) | null;
   onReadEntries: ((kind: 'TIP' | 'NOTE' | 'CHANGE') => void) | null;
   /** The view open above the step's bubbles, if any. */
   shownView: DockView | null;
   onShowView: (view: DockView | null) => void;
+  onDockGone: () => void;
   /** Starts a new tip, note or change for this step; null where none can be written. */
   onAddEntry: (() => void) | null;
+  /** A tip, note or change being written by voice, above the step's bubbles. */
+  dictation: ReactNode | null;
   dishes: ReactNode;
   /** The times the step mentions that have no timer yet. */
   timerSlots: StepTimerSlot[];
@@ -93,7 +96,9 @@ function CookStepView({
   onReadEntries,
   shownView,
   onShowView,
+  onDockGone,
   onAddEntry,
+  dictation,
   dishes,
   timerSlots,
   isTimersFull,
@@ -192,6 +197,7 @@ function CookStepView({
             SIDE_BY_SIDE.column,
           )}
         >
+          {dictation}
           <CookStepDock
             key={stepNumber}
             rows={ingredients}
@@ -204,6 +210,7 @@ function CookStepView({
             lastTime={lastTime}
             shown={shownView}
             onShow={onShowView}
+            onGone={onDockGone}
           />
         </div>
       </div>

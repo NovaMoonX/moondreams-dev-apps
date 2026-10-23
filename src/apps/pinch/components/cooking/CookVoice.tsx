@@ -378,6 +378,8 @@ function CookVoiceSheet({
     {
       label: 'Tips and notes',
       rows: [
+        ['ingredients for this step', 'Opens what this step uses, and reads it'],
+        ['note from last time', 'Opens it on the first step, and reads it'],
         ['show me the tips', 'Opens this step’s tips on screen'],
         ['show my notes', 'Opens your notes for this step'],
         ['show the changes', 'Opens the changes you planned'],

@@ -10,19 +10,13 @@ import { formatDateShort } from '@/utils/formatUtils';
 import type { CookRow } from '@apps/pinch/components/cooking/CookIngredientsView';
 import { CookAmountRows } from '@apps/pinch/components/cooking/CookStepAmounts';
 import { NOTE_KIND_EMOJIS } from '@apps/pinch/constants';
+import { useLastTimeNote } from '@apps/pinch/hooks/useLastTimeNote';
 import {
   selectNoteSummaries,
-  selectNotesByRecipe,
-  selectNotesLoadError,
-  selectRecipesById,
 } from '@apps/pinch/store/selectors';
 import type { RecipeNote } from '@apps/pinch/types';
 import { getAmountsSummary } from '@apps/pinch/utils/cooks';
-import {
-  getLastTimeNote,
-  getNoteSummary,
-  leadWithAdvice,
-} from '@apps/pinch/utils/notes';
+import { getNoteSummary, leadWithAdvice } from '@apps/pinch/utils/notes';
 
 export type DockKind = 'TIP' | 'NOTE' | 'CHANGE';
 export type DockView = 'LAST' | 'AMOUNTS' | DockKind;
@@ -36,9 +30,6 @@ const KIND_WORDS: Record<DockKind, { one: string; many: string }> = {
 };
 
 const ADD_LABEL = 'Add a tip, note or change for this step';
-
-const NO_NOTES: RecipeNote[] = [];
-const NO_STEPS: string[] = [];
 
 interface BubbleProps {
   label: string;
@@ -114,7 +105,8 @@ interface CookStepDockProps {
   /** Opens one entry to read in full and change. */
   onEdit: (id: string) => void;
   /** Opens the recipe's form to make a planned change. */
-  onApplyChange: (id: string) => void;
+  /** Opens the recipe's form to make a planned change; null where leaving the step for it isn't offered. */
+  onApplyChange: ((id: string) => void) | null;
   /** Reads one kind's entries aloud; null where the browser cannot speak. */
   onRead: ((kind: DockKind) => void) | null;
   /** Starts a new tip, note or change for this step; null where none can be written. */
@@ -128,6 +120,8 @@ interface CookStepDockProps {
   /** Which view is open above the bubbles; the screen holds it so a spoken "show me the tips" opens the same one. */
   shown: DockView | null;
   onShow: (view: DockView | null) => void;
+  /** The dock went away (another step, the ingredient list, the recipe form). */
+  onGone: () => void;
   className?: string;
 }
 
@@ -145,21 +139,13 @@ function CookStepDock({
   lastTime,
   shown,
   onShow,
+  onGone,
   className,
 }: CookStepDockProps) {
   const recipeId = lastTime?.recipeId ?? '';
-  const notes = useAppSelector(selectNotesByRecipe).get(recipeId) ?? NO_NOTES;
   const lastTweakAt =
     useAppSelector(selectNoteSummaries).get(recipeId)?.lastTweakAt ?? null;
-  const isNotesReady = useAppSelector(
-    (state) =>
-      state.pinch.notes.isLoaded && selectNotesLoadError(state) === null,
-  );
-  const steps =
-    useAppSelector(selectRecipesById).get(recipeId)?.steps ?? NO_STEPS;
-
-  const lastNote =
-    lastTime !== null && isNotesReady ? getLastTimeNote(notes, steps) : null;
+  const lastNote = useLastTimeNote(lastTime?.recipeId ?? null);
   const kinds = KINDS.filter((kind) =>
     entries.some((entry) => entry.kind === kind),
   );
@@ -171,12 +157,12 @@ function CookStepDock({
   const open: DockView | null =
     shown !== null && views.includes(shown) ? shown : null;
   const groupRef = useRef<HTMLDivElement>(null);
-  const onShowRef = useRef(onShow);
+  const onGoneRef = useRef(onGone);
   useEffect(() => {
-    onShowRef.current = onShow;
+    onGoneRef.current = onGone;
   });
-  // The screen holds which view is open, so a dock that goes away (another step, the ingredient list, the recipe form) takes it down with it instead of leaving it to come back.
-  useEffect(() => () => onShowRef.current(null), []);
+  // The screen holds which view is open, so a dock that goes away takes it down with it instead of leaving it to come back.
+  useEffect(() => () => onGoneRef.current(), []);
   const close = () => {
     const opener = open;
     onShow(null);
@@ -281,7 +267,7 @@ function CookStepDock({
                   </span>
                 )}
               </Button>
-              {isChange && (
+              {isChange && onApplyChange !== null && (
                 <div className='flex items-start pt-1.5 pr-1.5'>
                   <Bubble
                     isInline
@@ -306,7 +292,7 @@ function CookStepDock({
           id={panelId}
           aria-label={getTitle()}
           data-no-swipe=''
-          className='bg-popover text-popover-foreground border-border absolute inset-x-0 bottom-full z-20 mb-2 space-y-1 rounded-2xl border p-2 shadow-lg [@media(max-height:500px)_and_(min-width:640px)]:top-full [@media(max-height:500px)_and_(min-width:640px)]:bottom-auto [@media(max-height:500px)_and_(min-width:640px)]:mt-2 [@media(max-height:500px)_and_(min-width:640px)]:mb-0'
+          className='bg-popover text-popover-foreground border-border absolute inset-x-0 bottom-full z-20 mb-2 lg:[@media(min-height:701px)]:static space-y-1 rounded-2xl border p-2 shadow-lg [@media(max-height:500px)_and_(min-width:640px)]:top-full [@media(max-height:500px)_and_(min-width:640px)]:bottom-auto [@media(max-height:500px)_and_(min-width:640px)]:mt-2 [@media(max-height:500px)_and_(min-width:640px)]:mb-0'
         >
           <div className='flex min-h-8 items-center justify-between gap-2 px-1'>
             <p className='text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium'>
@@ -342,7 +328,7 @@ function CookStepDock({
               </Bubble>
             </div>
           </div>
-          <div className='max-h-44 overflow-y-auto [@media(max-height:700px)]:max-h-32'>
+          <div className='max-h-44 overflow-y-auto lg:[@media(min-height:701px)]:max-h-72 [@media(max-height:700px)]:max-h-32'>
             {getBody()}
           </div>
         </section>

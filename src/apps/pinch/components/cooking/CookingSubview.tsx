@@ -48,6 +48,8 @@ import CookReview, {
 } from '@apps/pinch/components/cooking/CookReview';
 import CookResultCard from '@apps/pinch/components/cooking/CookResultCard';
 import type { DockView } from '@apps/pinch/components/cooking/CookStepDock';
+import { useLastTimeNote } from '@apps/pinch/hooks/useLastTimeNote';
+import CookDictationCard from '@apps/pinch/components/cooking/CookDictationCard';
 import CookStepView, {
   type StepTimerSlot,
 } from '@apps/pinch/components/cooking/CookStepView';
@@ -260,6 +262,7 @@ const toVoiceTimerRef = (timer: CookTimer): CookVoiceTimer => ({
 });
 
 const MAX_TOLD_TIMERS = 4;
+const SAVED_DICTATION_MS = 7000;
 
 const LIST_FORMAT = new Intl.ListFormat('en-US', { type: 'conjunction' });
 const CHOICE_FORMAT = new Intl.ListFormat('en-US', { type: 'disjunction' });
@@ -269,17 +272,11 @@ const done = (show?: string, speak?: string): CookVoiceResult => ({
   show,
   speak,
 });
+/** A refusal is shown and said aloud, whatever Read steps aloud is set to. */
 const refuse = (reason: string, spoken?: string): CookVoiceResult => ({
   ok: false,
   reason,
   spoken,
-});
-/** A refusal said aloud whatever Read steps aloud is set to, because it answers a question or a ringing timer. */
-const answerNo = (reason: string, spoken?: string): CookVoiceResult => ({
-  ok: false,
-  reason,
-  spoken,
-  isSpoken: true,
 });
 
 const createLiveCount = () => {
@@ -415,6 +412,13 @@ function CookingSession({
     EMPTY_KITCHEN_TIMER_DRAFT,
   );
   const [pending, setPending] = useState<PendingQuestion | null>(null);
+  const [saved, setSaved] = useState<{
+    id: string;
+    word: string;
+    recipeId: string;
+    stepIndex: number;
+    text: string;
+  } | null>(null);
   const [currentId, setCurrentId] = useState(() =>
     resume && entries.some((entry) => entry.recipe.id === resume.currentId)
       ? resume.currentId
@@ -457,6 +461,8 @@ function CookingSession({
   const editBackStepRef = useRef<(() => boolean) | null>(null);
   const isAskingToLeaveEdit = useRef(false);
   const scrollBeforeEdit = useRef(0);
+  const scrollAtTap = useRef(0);
+  const wasDraftOpen = useRef(false);
   const isEditing = edit !== null;
   const entry =
     entries.find((candidate) => candidate.recipe.id === currentId) ??
@@ -470,7 +476,7 @@ function CookingSession({
   const isPlate = entries.length > 1;
   const [isFinished, setIsFinished] = useState(false);
   const [gotItNotes, setGotItNotes] = useState<string[]>([]);
-  const [dockOpen, setDockOpen] = useState<{ key: string; view: DockView } | null>(null);
+  const [dockOpen, setDockOpen] = useState<{ key: string; view: DockView | null } | null>(null);
   const [isMarking, setIsMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
   /** The cooks this screen wrote, by recipe: only these can be taken back with Undo. */
@@ -791,7 +797,7 @@ function CookingSession({
   /** What is read after a step when the person asked for it, one view at a time and only the views the step's bubbles draw, each with the entries its panel lists, so what is heard is what is on screen. */
   const getSpokenSegments = () => {
     const lastEntry =
-      isWide || index !== 0
+      index !== 0
         ? null
         : getLastTimeNote(notesByRecipe.get(recipe.id) ?? NO_RECIPE_NOTES, recipe.steps);
     return [
@@ -805,11 +811,26 @@ function CookingSession({
   };
   const isOnStep = focused === null && isStepsView && hasSteps && !isFinishShown;
   const dockKey = `${recipe.id}:${index}`;
-  const shownView = dockOpen?.key === dockKey ? dockOpen.view : null;
+  const leadingNote = useLastTimeNote(index === 0 ? recipe.id : null);
+  const isLeadingNoteOpen =
+    isOnStep &&
+    !isEditing &&
+    !capture.isOpen &&
+    leadingNote !== null &&
+    isCookNoteShown(index, gotItNotes, recipe.id);
+  const shownView =
+    dockOpen?.key === dockKey
+      ? dockOpen.view
+      : isLeadingNoteOpen
+        ? 'LAST'
+        : null;
   const showDockView = (view: DockView | null) =>
-    setDockOpen(view === null ? null : { key: dockKey, view });
+    setDockOpen({ key: dockKey, view });
+  const clearDockView = () =>
+    setDockOpen((current) => (current?.view === null ? current : null));
   const voice = useCookVoice({
     uid,
+    isDictating: pending?.kind === 'DICTATE',
     onShowView: (view) => showDockView(view),
     openView: shownView === 'AMOUNTS' ? null : shownView,
     step:
@@ -1093,6 +1114,13 @@ function CookingSession({
 
   const chooseNothing = (recipeId: string) =>
     setFollowUps((current) => ({ ...current, [recipeId]: 'NOTHING' }));
+
+  useLayoutEffect(() => {
+    if (wasDraftOpen.current && !isDraftOpen && isFinishShown) {
+      getOverlay()?.scrollTo({ top: scrollAtTap.current });
+    }
+    wasDraftOpen.current = isDraftOpen;
+  }, [isDraftOpen, isFinishShown]);
 
   useLayoutEffect(() => {
     if (edit === null) {
@@ -1494,13 +1522,13 @@ function CookingSession({
   type VoiceTimer = ReturnType<typeof getVoiceTimers>[number];
   const noTimer = (target: CookTimerTarget, state: string) => {
     if (target.name !== null) {
-      return answerNo(`No ${target.name} timer is ${state}.`);
+      return refuse(`No ${target.name} timer is ${state}.`);
     }
     return target.seconds === null
       ? refuse(`No timer is ${state}.`)
       : refuse(`No ${formatDuration(target.seconds)} timer is ${state}.`);
   };
-  const capRefusal = answerNo(
+  const capRefusal = refuse(
     `${MAX_COOK_TIMERS} timers are going already.`,
     `${MAX_COOK_TIMERS} timers are already going. Reset or finish one first.`,
   );
@@ -1520,23 +1548,23 @@ function CookingSession({
   const isJustRung = () =>
     isRingingInFront && isBeforeDeadline(voiceGuardedUntil.current);
   const justRang = (goal: string) =>
-    answerNo(
+    refuse(
       `Just rang: say that again ${goal}.`,
       `The timer just rang. Say that again ${goal}.`,
     );
-  const ringingRefusal = answerNo(
+  const ringingRefusal = refuse(
     'That timer is ringing. Say “dismiss”.',
     'That timer is ringing. Say dismiss.',
   );
   const finishRefusal = () => {
     if (!hasSteps) return refuse('This recipe has no steps yet.');
     if (next.kind === 'FINISH') {
-      return answerNo(
+      return refuse(
         'Last step: tap Finish yourself.',
         "That's the last step. Tap Finish when you're done.",
       );
     }
-    return answerNo(
+    return refuse(
       'Finish is on the last step.',
       "Finish is on the last step. Tap it yourself when you're done.",
     );
@@ -1762,7 +1790,7 @@ function CookingSession({
         return done(backLabel);
       }
       if (focused !== null) {
-        return answerNo(
+        return refuse(
           "Time's up: say “dismiss” first.",
           'The timer is ringing. Say dismiss to go back to your step.',
         );
@@ -1952,7 +1980,7 @@ function CookingSession({
       const told = getTold();
       if (told.length === 0) {
         return isUntargeted(target) || target.isAll
-          ? answerNo('No timer is going.')
+          ? refuse('No timer is going.')
           : noTimer(target, 'going');
       }
       const { show, speak } = describeTimersLeft(
@@ -2003,7 +2031,7 @@ function CookingSession({
         voiceRows.filter((row) => row.id === id),
       );
       if (found.length === 0) {
-        return answerNo(
+        return refuse(
           `I can't find “${query}” in this recipe's ingredients.`,
           `I can't find ${query} in this recipe's ingredients.`,
         );
@@ -2016,7 +2044,7 @@ function CookingSession({
         const titles = entries
           .filter((candidate) => candidates.includes(candidate.recipe.id))
           .map((candidate) => candidate.recipe.title);
-        return answerNo(
+        return refuse(
           `Which one: ${CHOICE_FORMAT.format(titles)}?`,
           `Say more of the name: ${CHOICE_FORMAT.format(titles)}.`,
         );
@@ -2037,7 +2065,7 @@ function CookingSession({
         'TIPS',
         formatDateShort,
       );
-      if (text === null) return answerNo('No tips for this step.');
+      if (text === null) return refuse('No tips for this step.');
       if (isOnStep && stepEntries.some((entry) => entry.kind === 'TIP')) {
         showDockView('TIP');
       }
@@ -2049,7 +2077,7 @@ function CookingSession({
         'NOTES',
         formatDateShort,
       );
-      if (text === null) return answerNo('No notes for this step.');
+      if (text === null) return refuse('No notes for this step.');
       if (isOnStep && stepEntries.some((entry) => entry.kind === 'NOTE')) {
         showDockView('NOTE');
       }
@@ -2061,7 +2089,7 @@ function CookingSession({
         'CHANGES',
         formatDateShort,
       );
-      if (text === null) return answerNo('No planned changes for this step.');
+      if (text === null) return refuse('No planned changes for this step.');
       if (isOnStep && stepEntries.some((entry) => entry.kind === 'CHANGE')) {
         showDockView('CHANGE');
       }
@@ -2072,14 +2100,36 @@ function CookingSession({
       if (!isOnStep) return refuse('Go to a step to see that.');
       const count = stepEntries.filter((entry) => entry.kind === kind).length;
       if (count === 0) {
-        return answerNo(`No ${word}s for this step.`);
+        return refuse(`No ${word}s for this step.`);
       }
       showDockView(kind);
       const label = `${count} ${count === 1 ? word : `${word}s`}`;
       return done(`Showing ${label}`, `Showing ${label}.`);
     },
+    showStepAmounts: () => {
+      if (!isOnStep) return refuse('Go to a step to see that.');
+      if (stepRows.length === 0) {
+        return refuse("This step doesn't name any ingredients.");
+      }
+      if (!isWide) showDockView('AMOUNTS');
+      const { show, speak } = describeAmounts(stepRows);
+      return done(show, `For this step: ${speak}`);
+    },
+    showLastNote: () => {
+      if (!isOnStep) return refuse('Go to a step to see that.');
+      if (index !== 0) {
+        return refuse('The note from last time is on the first step.');
+      }
+      const text =
+        leadingNote === null
+          ? null
+          : getSpokenEntries([leadingNote], 'NOTES', formatDateShort);
+      if (text === null) return refuse("You haven't left a note from last time.");
+      showDockView('LAST');
+      return done('Last time', text);
+    },
     closeEntries: () => {
-      if (shownView === null) return answerNo('Nothing is open.');
+      if (shownView === null) return refuse('Nothing is open.');
       showDockView(null);
       return done('Closed');
     },
@@ -2109,9 +2159,19 @@ function CookingSession({
       if (!isDictationHere(question)) return refuse('That step is no longer open.');
       const word = ENTRY_WORDS[question.entryKind];
       const id = generateUuid();
+      setSaved({
+        id,
+        word,
+        recipeId: question.recipeId,
+        stepIndex: question.stepIndex,
+        text,
+      });
+      window.setTimeout(
+        () => setSaved((current) => (current?.id === id ? null : current)),
+        SAVED_DICTATION_MS,
+      );
       lastDictated.current = {
         id,
-         
         at: Date.now(),
         recipeId: question.recipeId,
         stepIndex: question.stepIndex,
@@ -2126,6 +2186,7 @@ function CookingSession({
         })
         .catch(() => {
           lastDictated.current = null;
+          setSaved(null);
           voice.speak(`Sorry, I couldn't save that ${word}.`);
         });
       const coaching = hasCoachedUndo.current ? '' : ' Say undo that to take it back.';
@@ -2153,6 +2214,7 @@ function CookingSession({
         return refuse('There is nothing to undo.');
       }
       lastDictated.current = null;
+      setSaved(null);
       void capture
         .removeById(last.id)
         .catch(() => voice.speak("Sorry, I couldn't take that back."));
@@ -2169,6 +2231,38 @@ function CookingSession({
       return done(`Showing ${target.title}`);
     },
   });
+  const getDictationCard = () => {
+    if (pending?.kind === 'DICTATE' && isDictationHere(pending)) {
+      return (
+        <CookDictationCard
+          word={ENTRY_WORDS[pending.entryKind]}
+          stepNumber={index + 1}
+          phase='WAITING'
+          heard={voice.heardWords}
+          isListening={voice.status === 'listening'}
+          savedText=''
+          onCancel={() => setPending(null)}
+          onUndo={() => undefined}
+        />
+      );
+    }
+    if (saved?.recipeId === recipe.id && saved.stepIndex === index) {
+      return (
+        <CookDictationCard
+          word={saved.word}
+          stepNumber={index + 1}
+          phase='SAVED'
+          heard=''
+          isListening={false}
+          savedText={saved.text}
+          onCancel={() => undefined}
+          onUndo={() => makeVoiceActions().undoEntry()}
+        />
+      );
+    }
+    return null;
+  };
+  const dictationCard = getDictationCard();
   const voiceStepMatch =
     matchesByRecipe.get(voiceStep.recipe.id)?.[voiceStep.stepNumber - 1] ??
     null;
@@ -2362,7 +2456,7 @@ function CookingSession({
   const openStepCapture = () =>
     capture.open({ recipeId: recipe.id, stepIndex: index, kind: 'TIP' });
   const lastTime =
-    !isWide && index === 0
+    index === 0
       ? {
           recipeId: recipe.id,
           isDismissed: !isCookNoteShown(index, gotItNotes, recipe.id),
@@ -2422,13 +2516,15 @@ function CookingSession({
       lastTime={lastTime}
       entries={stepEntries}
       onEditEntry={capture.edit}
-      onApplyChange={(id) => void startEdit(recipe.id, [id])}
+      onApplyChange={isWide ? null : (id) => void startEdit(recipe.id, [id])}
       onReadEntries={voice.isSupported ? readEntries : null}
       shownView={shownView}
       onShowView={showDockView}
+      onDockGone={clearDockView}
       onAddEntry={
         capture.isAvailable(recipe.id) && !isRemoved ? openStepCapture : null
       }
+      dictation={dictationCard}
       dishes={isDishStripInStep ? dishStrip : null}
       onStartTimer={(stepNumber, seconds, label) =>
         startTimer(recipe, stepNumber, seconds, label)
@@ -2659,6 +2755,9 @@ function CookingSession({
     >
       <div
         ref={rootRef}
+        onClickCapture={() => {
+          if (!isDraftOpen) scrollAtTap.current = getOverlay()?.scrollTop ?? 0;
+        }}
         className={join(
           'flex flex-1 flex-col gap-4 [@media(max-height:500px)]:gap-2',
           isEditing && 'hidden!',
@@ -2806,7 +2905,6 @@ function CookingSession({
             <div className='flex flex-col gap-4'>{stepContent}</div>
             <div className='border-border space-y-6 border-l pl-8'>
               {ingredientsContent}
-              {notesDoor}
             </div>
           </div>
         ) : isStepsView ? (

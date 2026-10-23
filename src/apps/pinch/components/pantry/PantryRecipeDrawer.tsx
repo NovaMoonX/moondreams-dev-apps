@@ -26,7 +26,7 @@ type Side =
 interface PantryRecipeDrawerProps {
   uid: string;
   recipeId: string;
-  /** The drawer, or the sheet it handed over to, closed: back to the pantry. */
+  /** The drawer closed: back to the pantry. */
   onClose: () => void;
 }
 
@@ -70,27 +70,31 @@ function PantryRecipeDrawer({
         />
       )}
       {side?.kind === 'fillIn' && (
-        <FillInSheet uid={uid} gaps={side.gaps} onClose={onClose} />
+        <FillInSheet
+          uid={uid}
+          gaps={side.gaps}
+          onClose={() => setSide(null)}
+        />
       )}
       {side?.kind === 'shopping' && (
         <AddToShoppingSheet
           uid={uid}
           request={side.request}
-          onClose={onClose}
+          onClose={() => setSide(null)}
         />
       )}
       {side?.kind === 'history' && (
         <CookingHistorySheet
           uid={uid}
           recipeId={side.recipeId}
-          onClose={onClose}
+          onClose={() => setSide(null)}
         />
       )}
       {side?.kind === 'putAway' && (
         <ContainerFormSheet
           uid={uid}
           initial={{ kind: 'recipe', id: side.recipeId }}
-          onClose={onClose}
+          onClose={() => setSide(null)}
         />
       )}
       {side?.kind === 'note' && (
@@ -100,7 +104,7 @@ function PantryRecipeDrawer({
           noteId={side.noteId}
           initialCookId={null}
           initialKind={side.noteKind}
-          onClose={onClose}
+          onClose={() => setSide(null)}
         />
       )}
     </>

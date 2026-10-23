@@ -133,6 +133,8 @@ export type CookCommand =
   | { kind: 'BACK' }
   | { kind: 'REPEAT' }
   | { kind: 'SHOW_INGREDIENTS' }
+  | { kind: 'SHOW_STEP_AMOUNTS' }
+  | { kind: 'SHOW_LAST_NOTE' }
   | { kind: 'SHOW_STEPS' }
   | { kind: 'FINISH' }
   | { kind: 'SHOW_TIMERS' }
@@ -190,6 +192,8 @@ type PlainKind =
   | 'BACK'
   | 'REPEAT'
   | 'SHOW_INGREDIENTS'
+  | 'SHOW_STEP_AMOUNTS'
+  | 'SHOW_LAST_NOTE'
   | 'SHOW_STEPS'
   | 'SHOW_TIMERS'
   | 'READ_TIPS'
@@ -269,6 +273,33 @@ const PHRASES: Record<PlainKind, string[]> = {
     'go to the ingredients',
     'open ingredients',
     'open the ingredients',
+  ],
+  SHOW_STEP_AMOUNTS: [
+    'ingredients for this step',
+    'the ingredients for this step',
+    'show the ingredients for this step',
+    'show me the ingredients for this step',
+    'show ingredients for this step',
+    'show the step ingredients',
+    'step ingredients',
+    'what do i need for this step',
+    'what does this step use',
+    'what does this step need',
+    'show what this step uses',
+  ],
+  SHOW_LAST_NOTE: [
+    'note from last time',
+    'the note from last time',
+    'show the note from last time',
+    'show me the note from last time',
+    'show my note from last time',
+    'show last time',
+    'show me last time',
+    'show the last note',
+    'show my last note',
+    'what did i note last time',
+    'what was my note from last time',
+    'read the note from last time',
   ],
   SHOW_STEPS: [
     'steps',

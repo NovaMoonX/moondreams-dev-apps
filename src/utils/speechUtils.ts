@@ -1,6 +1,9 @@
 const MIN_SPEAK_GUARD_MS = 4000;
 const MAX_SPEAK_GUARD_MS = 60_000;
 const SPEAK_MS_PER_CHAR = 90;
+// Chrome drops a reading started in the same moment as a cancel, so one that follows another waits a beat and a silent one is tried once more.
+const CANCEL_SETTLE_MS = 80;
+const MAX_SPEAK_ATTEMPTS = 2;
 
 interface SpeakOptions {
   lang: string;
@@ -74,29 +77,64 @@ export function speakText(
     return () => undefined;
   }
 
+  const wasBusy = synth.speaking || synth.pending;
   synth.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang;
   const voice = pickVoice(synth.getVoices(), lang);
-  if (voice !== null) utterance.voice = voice;
 
-  const state = { isEnded: false, guardId: 0, startId: 0 };
+  const state = {
+    isEnded: false,
+    guardId: 0,
+    startId: 0,
+    speakId: 0,
+    attempts: 0,
+    utterance: null as SpeechSynthesisUtterance | null,
+  };
   const finish = () => {
     if (state.isEnded) return;
     state.isEnded = true;
     window.clearTimeout(state.guardId);
     window.clearTimeout(state.startId);
-    if (reading.current === utterance) reading.current = null;
+    window.clearTimeout(state.speakId);
+    if (reading.current === state.utterance) reading.current = null;
     onEnd?.();
   };
-  if (startTimeoutMs !== undefined) {
-    state.startId = window.setTimeout(() => {
-      if (state.isEnded) return;
-      synth.cancel();
-      onNoStart?.();
+  const speakOnce = () => {
+    if (state.isEnded) return;
+    state.attempts += 1;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    if (voice !== null) utterance.voice = voice;
+    utterance.onstart = () => {
+      window.clearTimeout(state.startId);
+      onStart?.();
+    };
+    utterance.onend = finish;
+    utterance.onerror = finish;
+    state.utterance = utterance;
+    reading.current = utterance;
+    if (startTimeoutMs !== undefined) {
+      state.startId = window.setTimeout(() => {
+        if (state.isEnded) return;
+        utterance.onend = null;
+        utterance.onerror = null;
+        synth.cancel();
+        if (state.attempts < MAX_SPEAK_ATTEMPTS) {
+          state.speakId = window.setTimeout(speakOnce, CANCEL_SETTLE_MS);
+          return;
+        }
+        onNoStart?.();
+        finish();
+      }, startTimeoutMs);
+    }
+    try {
+      synth.resume();
+      synth.speak(utterance);
+    } catch (error) {
+      console.error('Text could not be read aloud', error);
       finish();
-    }, startTimeoutMs);
-  }
+    }
+  };
+
   state.guardId = window.setTimeout(
     finish,
     Math.min(
@@ -104,20 +142,8 @@ export function speakText(
       MIN_SPEAK_GUARD_MS + text.length * SPEAK_MS_PER_CHAR,
     ),
   );
-  utterance.onstart = () => {
-    window.clearTimeout(state.startId);
-    onStart?.();
-  };
-  utterance.onend = finish;
-  utterance.onerror = finish;
-  reading.current = utterance;
-
-  try {
-    synth.speak(utterance);
-  } catch (error) {
-    console.error('Text could not be read aloud', error);
-    finish();
-  }
+  if (wasBusy) state.speakId = window.setTimeout(speakOnce, CANCEL_SETTLE_MS);
+  else speakOnce();
 
   return () => {
     if (state.isEnded) return;

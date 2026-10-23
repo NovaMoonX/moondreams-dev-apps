@@ -1308,6 +1308,20 @@ assert.deepEqual(
   'tips, notes and changes are put on screen by asking to see them',
 );
 expectKind(
+  [
+    'ingredients for this step',
+    'show me the ingredients for this step',
+    'what do I need for this step',
+  ],
+  { kind: 'SHOW_STEP_AMOUNTS' },
+  'what a step uses is shown by asking for the ingredients for this step, apart from the whole list',
+);
+expectKind(
+  ['note from last time', 'show the note from last time', 'what did I note last time'],
+  { kind: 'SHOW_LAST_NOTE' },
+  'the note the first step leads with is shown by asking for last time',
+);
+expectKind(
   ['close the note', 'close the tips', 'close my notes', 'hide the changes', 'close that', 'close it', 'hide that'],
   { kind: 'CLOSE_ENTRIES' },
   'what is open above the step is closed by saying so',
