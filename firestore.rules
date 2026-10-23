@@ -3932,6 +3932,60 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Runway: one private tree per person under apps/runway/plans/{uid}.
+    // Server-only paths (the wrapped data key, key canaries) are written by
+    // Functions through the Admin SDK, which bypasses these rules.
+    match /apps/runway/server/{path=**} {
+      allow read, write: if false;
+    }
+
+    match /apps/runway/keyChecks/{path=**} {
+      allow read, write: if false;
+    }
+
+    match /apps/runway/plans/{uid} {
+      function isPlanOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      // The shape of a sealed value, never its contents.
+      function isSealed(value) {
+        return value is map
+          && value.keys().hasAll(['value', 'nonce', 'keyId', 'keyVersion', 'algorithm'])
+          && value.keys().hasOnly(['value', 'ciphertext', 'nonce', 'keyId', 'keyVersion', 'algorithm'])
+          && value.value is string
+          && value.nonce is string
+          && value.keyId is string
+          && value.keyVersion is number
+          && value.algorithm == 'AES-256-GCM';
+      }
+
+      function isPlanValid(data) {
+        return data.uid == uid
+          && data.createdAt is number
+          && data.createdAt <= request.time.toMillis() + 3600000
+          && data.updatedAt is number
+          && data.updatedAt <= request.time.toMillis() + 3600000
+          && data.stance in ['conservative', 'middle', 'optimistic']
+          && (data.keyId == null || data.keyId is string)
+          && (data.get('sealed', null) == null || isSealed(data.sealed));
+      }
+
+      allow read: if isPlanOwner();
+      allow create: if isPlanOwner()
+        && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId', 'sealed'])
+        && isPlanValid(request.resource.data);
+      // A plan written before `sealed` existed may lack the key; it is added with the next write.
+      allow update: if isPlanOwner()
+        && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId', 'sealed'])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isPlanValid(request.resource.data);
+      allow delete: if false;
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;

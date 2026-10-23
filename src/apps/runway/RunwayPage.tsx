@@ -1,3 +1,10 @@
+import { useState } from 'react';
+import { Loader, LockKeyhole } from 'lucide-react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import EmptyCard from '@/components/EmptyCard';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import AuthRequiredState from '@/ui/AuthRequiredState';
@@ -9,13 +16,25 @@ import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { RUNWAY_TAB_LABELS } from '@apps/runway/constants';
+import { setKeyStatus } from '@apps/runway/store/runwaySlice';
+import { useRunwaySync } from '@apps/runway/useRunwaySync';
 
 function RunwayPage() {
   const { user, loading } = useAuth();
   const { activeTab, showTab } = useRunwayUrlState();
+  const dispatch = useAppDispatch();
+  const keyStatus = useAppSelector((state) => state.runway.keyStatus);
+  const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);
+  const [attempt, setAttempt] = useState(0);
 
   useRunwayTheme();
   useTrackAppUsage('runway', user?.uid ?? null);
+  useRunwaySync(user?.uid ?? null, attempt);
+
+  const tryAgain = () => {
+    dispatch(setKeyStatus('loading'));
+    setAttempt((current) => current + 1);
+  };
 
   if (loading) {
     return <Loading />;
@@ -23,6 +42,38 @@ function RunwayPage() {
 
   if (!user) {
     return <AuthRequiredState message='Please sign in to use Runway.' />;
+  }
+
+  if (keyStatus === 'failed') {
+    return (
+      <div className='page'>
+        <div className='mx-auto max-w-4xl py-6'>
+          <EmptyCard
+            icon={<LockKeyhole className='h-5 w-5' />}
+            action={
+              <Button variant='secondary' size='sm' onClick={tryAgain}>
+                Try again
+              </Button>
+            }
+          >
+            Your plan cannot be opened right now. Nothing has been changed or
+            lost.
+          </EmptyCard>
+        </div>
+      </div>
+    );
+  }
+
+  if (keyStatus !== 'ready' || !isPlanLoaded) {
+    return (
+      <div className='page'>
+        <div className='mx-auto max-w-4xl py-6'>
+          <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
+            Getting your plan ready.
+          </EmptyCard>
+        </div>
+      </div>
+    );
   }
 
   const getScreen = () => {

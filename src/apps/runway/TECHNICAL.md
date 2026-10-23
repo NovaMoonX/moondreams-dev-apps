@@ -273,6 +273,8 @@ interface PlanDoc {
 }
 ```
 
+The first issue to ship the plan document writes only `uid`, `createdAt`, `updatedAt`, `stance`, `keyId` and `sealed` (`{ currencyCode }`, opened when the plan loads: a payload that does not open puts the screen in its failed state); every other field arrives with the issue that reads it, and the rules allow only these keys until then.
+
 `stance`, `trackingPeriods` and `notify` are readable on purpose: the rules, listener bounds and server functions need them, and none contains an amount or a name. Level is derived: Track is on when the last period has `to == null`; Link is on when any account has a live link.
 
 ### PlanItemDoc
@@ -455,9 +457,10 @@ Server-only:
 
 ```ts
 interface WrappedKeyDoc {
-  keyId: string; keyVersion: number; createdAt: number;
+  uid: string; keyId: string; keyVersion: number; createdAt: number; updatedAt: number;
   masterKeyId: string;                      // which keyring entry wrapped it
-  wrapped: string; nonce: string;           // data key sealed under that master key
+  algorithm: 'AES-256-GCM';
+  ciphertext: string; nonce: string;        // data key sealed under that master key, tag appended, uid as authenticated data
 }
 
 interface ProviderGrantDoc {
@@ -757,6 +760,7 @@ export function runwayKeyQueryOptions(uid: string) {
     queryKey: runwayQueryKeys.key(uid),
     queryFn: () => callGetRunwayKey().then(normalizeRunwayEncryption),   // AppEncryption<'runway'>
     staleTime: Infinity,                                                  // written once, never rotated in the MVP
+    retry: false,                                                         // a failure shows the failed state; "Try again" asks once more
   });
 }
 ```
