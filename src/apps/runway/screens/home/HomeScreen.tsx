@@ -20,7 +20,9 @@ import {
   selectBills,
   selectEnvelopes,
   selectIsDaysLoaded,
+  selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
+  selectIsRecordsReady,
   selectListedDays,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeFreeToSpend } from '@apps/runway/utils/balanceText';
@@ -30,6 +32,9 @@ function HomeScreen() {
   const today = todayAsUtcDate(useNow(60_000));
   const isItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
+  const isLedgerReady = useAppSelector(
+    (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
+  );
   const isLoaded = isItemsLoaded && isDaysLoaded;
   const hasIncome = useAppSelector((state) =>
     state.runway.items.some(
@@ -44,6 +49,10 @@ function HomeScreen() {
   const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
 
   if (!isLoaded) {
+    return <p className='text-muted-foreground text-sm'>Getting your plan.</p>;
+  }
+
+  if (hasIncome && !isLedgerReady) {
     return <p className='text-muted-foreground text-sm'>Getting your plan.</p>;
   }
 
