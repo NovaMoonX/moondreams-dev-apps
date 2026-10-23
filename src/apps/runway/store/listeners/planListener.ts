@@ -29,7 +29,7 @@ async function openPlan(
   return result;
 }
 
-/** Each snapshot is opened before it is delivered; a slow open never overwrites a newer snapshot. */
+/** Each snapshot is opened before it is delivered; a slow open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startPlanListener(
   uid: string,
   encryption: RunwayEncryption,
@@ -38,7 +38,7 @@ export function startPlanListener(
 ): Unsubscribe {
   const sequence = { latest: 0 };
 
-  return onSnapshot(
+  const stop = onSnapshot(
     doc(db, 'apps', 'runway', 'plans', uid),
     async (snapshot) => {
       sequence.latest += 1;
@@ -60,4 +60,9 @@ export function startPlanListener(
     },
     onError,
   );
+
+  return () => {
+    sequence.latest += 1;
+    stop();
+  };
 }

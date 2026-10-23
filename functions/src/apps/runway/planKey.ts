@@ -128,6 +128,7 @@ function gcmDecrypt(
     'aes-256-gcm',
     key,
     Buffer.from(nonce, 'base64'),
+    { authTagLength: TAG_BYTES },
   );
   if (aad) decipher.setAAD(aad);
   decipher.setAuthTag(body.subarray(body.length - TAG_BYTES));
