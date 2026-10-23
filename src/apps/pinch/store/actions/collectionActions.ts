@@ -379,10 +379,10 @@ export const undoAddToCollections = createAsyncThunk<
                     chunk[index].added,
                   )
                 : null;
-              if (next === null) return count;
-              transaction.update(snapshot.ref, { collectionIds: next });
               const { noteId } = chunk[index];
               if (noteId !== null) transaction.delete(noteDoc(uid, noteId));
+              if (next === null) return count;
+              transaction.update(snapshot.ref, { collectionIds: next });
               return count + 1;
             }, 0);
           });

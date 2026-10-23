@@ -51,6 +51,7 @@ import {
 } from '@apps/pinch/utils/cooks';
 import { formatDayTitle, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { getUndoableTweakIds } from '@apps/pinch/utils/notes';
+import { isUnrestoredLine } from '@apps/pinch/utils/recipeChanges';
 import { formatServings } from '@apps/pinch/utils/recipeFormat';
 
 const NO_COOKS: Cook[] = [];
@@ -209,11 +210,15 @@ function CookingHistorySheet({
   const askUndo = async () => {
     const undone = tweaks.filter((entry) => undoableIds.includes(entry.id));
     if (undone.length === 0) return;
-    const lines = undone.flatMap((entry) => entry.changes ?? []);
+    const allLines = undone.flatMap((entry) => entry.changes ?? []);
+    const lines = allLines.filter((line) => !isUnrestoredLine(line));
+    const staysText = allLines.some(isUnrestoredLine)
+      ? 'Its photo and collections stay as they are, '
+      : '';
     const day = formatDateShort(undone[0].createdAt);
     const confirmed = await confirm({
       title: 'Put the recipe back?',
-      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}, which takes back: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}. Its photo and collections stay as they are, this record of the change is removed, and a change you had planned is not planned again.`,
+      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}, which takes back: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}. ${staysText === '' ? 'T' : staysText + 't'}his record of the change is removed, and a change you had planned is not planned again.`,
       confirmText: 'Put it back',
       destructive: true,
     });

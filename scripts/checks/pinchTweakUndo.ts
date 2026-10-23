@@ -9,15 +9,25 @@ import type {
 import { placeLineInGroup } from '../../src/apps/pinch/utils/ingredientGroups.ts';
 import {
   getMissingNoteFields,
+  getNoteSummaries,
   getOutsideTweak,
   getUndoableTweakIds,
   planTweakUndo,
 } from '../../src/apps/pinch/utils/notes.ts';
 import {
+  COLLECTION_BATCH_SIZE,
+  SOURCE_BATCH_SIZE,
+} from '../../src/apps/pinch/constants.ts';
+import {
   getChangeTopics,
+  getCollectionLine,
+  getCollectionLines,
   getDraftChanges,
   getRecipeChanges,
   getRecipeSnapshot,
+  getSourceRemovedLine,
+  isContentTweak,
+  isUnrestoredLine,
 } from '../../src/apps/pinch/utils/recipeChanges.ts';
 
 let passed = 0;
@@ -455,8 +465,22 @@ check(
       lines({
         ingredients: regroup({ b: 'for the chicken', c: 'For  the chicken' }),
       }),
+      ['Renamed the group “For the chicken” to “for the chicken”'],
+      'a heading spelled in another case is a rename, and stray spaces are not',
+    );
+    assert.deepEqual(
+      lines({
+        ingredients: regroup({ d: 'For The Sauce' }),
+      }),
+      ['Renamed the group “For the sauce” to “For The Sauce”'],
+      'a case-only rename is recorded',
+    );
+    assert.deepEqual(
+      lines({
+        ingredients: regroup({ b: 'For the  chicken', c: ' For the chicken ' }),
+      }),
       [],
-      'two spellings of one heading are one heading',
+      'spaces alone are not a change',
     );
     const swapped = [
       grouped.ingredients[0],
@@ -536,9 +560,9 @@ check(
         labels,
       ),
       [
-        'Added to the Weeknight collection',
-        'Added to the Party collection',
-        'Taken out of the Bulk collection',
+        'Added to the “Weeknight” collection',
+        'Added to the “Party” collection',
+        'Taken out of the “Bulk” collection',
       ],
     );
     assert.deepEqual(
@@ -704,12 +728,12 @@ check(
 );
 
 check(
-  'a change made outside the form is a record with nothing to undo, and it is the latest',
+  'a change made outside the form is a record with nothing to undo, and it does not take the edit before it',
   () => {
     const outside = getOutsideTweak({
       id: 'o',
       recipeId: 'adobo',
-      changes: ['Taken out of the Bulk collection, which was deleted'],
+      changes: [getCollectionLine('DELETED', 'Bulk')],
       now: AT + 5,
     });
     assert.equal(outside.kind, 'TWEAK');
@@ -717,10 +741,196 @@ check(
     const edit = tweak('e', AT, getRecipeSnapshot(before));
     assert.deepEqual(
       getUndoableTweakIds([edit, outside], AT),
-      [],
-      'the newer record has no undo, so the older edit is not offered either',
+      ['e'],
+      'the outside record leaves updatedAt alone, so the edit before it is still the recipe as it left',
     );
     assert.deepEqual(getUndoableTweakIds([edit], AT), ['e']);
+  },
+);
+
+check(
+  'every line a writer outside the form builds is classified as not put back, from the same builders',
+  () => {
+    const built = [
+      getCollectionLine('ADDED', 'Weeknight'),
+      getCollectionLine('ADDED', null),
+      getCollectionLine('REMOVED', 'Bulk'),
+      getCollectionLine('REMOVED', null),
+      getCollectionLine('DELETED', 'Bulk'),
+      getCollectionLine('DELETED', null),
+      ...getCollectionLines('ADDED', ['a', 'b', 'c', 'd', 'e']),
+      ...getCollectionLines('REMOVED', ['a', 'b', 'c', 'd']),
+      ...getCollectionLines('ADDED', ['a', null]),
+      getCollectionLine('ADDED', 'x'.repeat(100)),
+      'Photo added',
+      'Photo changed',
+      'Photo removed',
+    ];
+    built.forEach((text) => assert.equal(isUnrestoredLine(text), true, text));
+    assert.deepEqual(getCollectionLines('ADDED', ['a', 'b', 'c', 'd', 'e']), [
+      'Added to 5 collections',
+    ]);
+    assert.equal(getCollectionLine('ADDED', null), 'Added to a collection');
+    assert.equal(
+      getCollectionLine('DELETED', null),
+      'Taken out of a collection, which was deleted',
+    );
+    assert.equal(
+      getSourceRemovedLine('Mom’s cards'),
+      'Source “Mom’s cards” removed',
+    );
+    assert.equal(getSourceRemovedLine(null), 'Source removed');
+    [
+      'Serves 4 → 6',
+      'Added Lime juice, 2 tbsp',
+      'Added the how-to link',
+      'Categories: none → Sides',
+      'The recipe changed',
+      'and 2 more',
+      'Source removed',
+    ].forEach((text) => assert.equal(isUnrestoredLine(text), false, text));
+  },
+);
+
+check(
+  'only a tweak that says something about the recipe dates "the recipe changed", and a deleted source or a bulk filing does not',
+  () => {
+    const mk = (changes: string[], previous: RecipeSnapshot | null) => ({
+      ...tweak('x', AT, previous),
+      changes,
+    });
+    const snapshot = getRecipeSnapshot(before);
+    assert.equal(isContentTweak(mk(['Serves 4 → 6'], snapshot)), true);
+    assert.equal(
+      isContentTweak(mk(['Serves 4 → 6'], null)),
+      true,
+      'one from before undo existed',
+    );
+    assert.equal(
+      isContentTweak(mk([getCollectionLine('ADDED', 'Bulk')], null)),
+      false,
+    );
+    assert.equal(isContentTweak(mk(['Photo added'], null)), false);
+    assert.equal(
+      isContentTweak(mk([getSourceRemovedLine('Mom’s cards')], null)),
+      false,
+      'a deleted source, written with no snapshot',
+    );
+    assert.equal(
+      isContentTweak(mk([getSourceRemovedLine('Mom’s cards')], snapshot)),
+      true,
+      'a source taken off in the form',
+    );
+    assert.equal(
+      isContentTweak(mk(['Photo added', 'Serves 4 → 6'], snapshot)),
+      true,
+    );
+    assert.equal(isContentTweak(note('n', AT)), false);
+    const notes = [
+      note('n', 100),
+      mk(['Serves 4 → 6'], snapshot),
+      {
+        ...tweak('o', AT + 50, null),
+        changes: [getCollectionLine('ADDED', 'Bulk')],
+      },
+    ].map((entry, index) => ({ ...entry, id: `e${index}` }));
+    assert.equal(
+      getNoteSummaries(notes).get('adobo')?.lastTweakAt,
+      AT,
+      'bulk filing 30 recipes relabels nothing',
+    );
+  },
+);
+
+check(
+  'an edit keeps its Put back after a bulk filing, and a photo-only save ends it',
+  () => {
+    const edit = tweak('e', AT, getRecipeSnapshot(before));
+    const bulk = {
+      ...tweak('b', AT + 50, null),
+      changes: [getCollectionLine('ADDED', 'Bulk')],
+    };
+    assert.deepEqual(getUndoableTweakIds([edit, bulk], AT), ['e']);
+    const photoOnly = {
+      ...tweak('p', AT + 100, null),
+      changes: ['Photo added'],
+    };
+    assert.deepEqual(
+      getUndoableTweakIds([edit, photoOnly], AT + 100),
+      [],
+      'the photo-only save moved updatedAt, so the edit before it is not the recipe as it left',
+    );
+    assert.deepEqual(
+      getUndoableTweakIds([edit, photoOnly], AT),
+      ['e'],
+      'updatedAt is what ends it',
+    );
+  },
+);
+
+check(
+  'a form save that only moves the photo or collections keeps no snapshot, and a mix keeps it',
+  () => {
+    const draftOf = (extra: object) => ({
+      ...grouped,
+      newIngredients: [],
+      newSource: null,
+      ...extra,
+    });
+    const changesOf = (extra: object) =>
+      getDraftChanges(
+        grouped,
+        draftOf(extra),
+        names,
+        new Map(),
+        new Map([['w', { label: 'Weeknight' }]]),
+      ).changes;
+    const photoOnly = changesOf({ coverFile: {} });
+    const collectionOnly = changesOf({
+      collectionChange: { add: ['w'], remove: [] },
+    });
+    const both = changesOf({
+      coverFile: {},
+      collectionChange: { add: ['w'], remove: [] },
+    });
+    const mixed = changesOf({ coverFile: {}, title: 'New name' });
+    assert.deepEqual(
+      [photoOnly, collectionOnly, both].map((c) => c.every(isUnrestoredLine)),
+      [true, true, true],
+    );
+    assert.equal(mixed.every(isUnrestoredLine), false);
+  },
+);
+
+check('the confirm lists only what Put back restores', () => {
+  const lines = [
+    'Serves 4 → 6',
+    'Photo added',
+    getCollectionLine('ADDED', 'Bulk'),
+  ];
+  assert.deepEqual(
+    lines.filter((l) => !isUnrestoredLine(l)),
+    ['Serves 4 → 6'],
+  );
+  assert.equal(
+    lines.some(isUnrestoredLine),
+    true,
+    'so the sentence about the photo and collections is shown',
+  );
+  assert.equal(['Serves 4 → 6'].some(isUnrestoredLine), false);
+});
+
+check(
+  'a batch of recipes and their history entries stays under 500 writes, with room for new collections',
+  () => {
+    assert.ok(
+      2 * COLLECTION_BATCH_SIZE + 20 <= 500,
+      'collections: a recipe update and an entry each, plus new collections',
+    );
+    assert.ok(
+      (SOURCE_BATCH_SIZE / 2) * 2 + 1 <= 500,
+      'sources: a recipe update and an entry each, plus the source',
+    );
   },
 );
 

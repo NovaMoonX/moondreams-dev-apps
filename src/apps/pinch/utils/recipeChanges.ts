@@ -18,6 +18,7 @@ import type {
 import { getCategories } from '@apps/pinch/utils/categories';
 import type { CollectionChange } from '@apps/pinch/utils/collections';
 import {
+  cleanGroupName,
   getGroupKey,
   getRepeatedLineGroups,
 } from '@apps/pinch/utils/ingredientGroups';
@@ -102,7 +103,7 @@ const normalize = (content: RecipeContent) => ({
   })),
   groups: Object.fromEntries(
     content.ingredients
-      .map((line) => [line.id, getGroupKey(line.group)] as const)
+      .map((line) => [line.id, cleanGroupName(line.group) ?? ''] as const)
       .sort(([a], [b]) => a.localeCompare(b)),
   ),
   groupOrder: [
@@ -250,7 +251,19 @@ const getGroupChanges = (
     return acc.set(key, [...(acc.get(key) ?? []), line]);
   }, new Map<string, RecipeIngredient[]>());
 
-  return [...buckets.entries()].flatMap(([key, lines]) => {
+  const caseRenames = [
+    ...new Map(
+      kept.flatMap((line) => {
+        const was = cleanGroupName(beforeById.get(line.id)?.group);
+        const now = cleanGroupName(line.group);
+        return was !== null && now !== null && was !== now
+          ? [[`${was}\u0000${now}`, [was, now] as const] as const]
+          : [];
+      }),
+    ).values(),
+  ].filter(([was, now]) => was.toLowerCase() === now.toLowerCase());
+
+  const moves = [...buckets.entries()].flatMap(([key, lines]) => {
     const [from, to] = key.split('\u0000');
     const fromName = beforeLines.find((line) => keyOf(line) === from)?.group;
     const toName = lines[0].group;
@@ -289,6 +302,14 @@ const getGroupChanges = (
         ]
       : [`Moved ${lines.length} ingredients to ${quoteGroup(toName ?? '')}`];
   });
+
+  return [
+    ...caseRenames.map(
+      ([was, now]) =>
+        `Renamed the group ${quoteGroup(was)} to ${quoteGroup(now)}`,
+    ),
+    ...moves,
+  ];
 };
 
 const getStepChanges = (before: string[], after: string[]) => {

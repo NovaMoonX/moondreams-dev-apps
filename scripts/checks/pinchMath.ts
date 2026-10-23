@@ -2183,7 +2183,7 @@ assert.deepEqual(
   'an override with nothing typed is the same as none',
 );
 assert.deepEqual(changesFor({ sourceId: 's1' }), [
-  'Source set to Serious Eats',
+  'Source set to “Serious Eats”',
 ]);
 assert.deepEqual(
   getRecipeChanges(
@@ -2192,7 +2192,7 @@ assert.deepEqual(
     names,
     sourceNames,
   ),
-  ["Source changed to Mom's recipe cards"],
+  ["Source changed to “Mom's recipe cards”"],
 );
 assert.deepEqual(
   getRecipeChanges(
@@ -2201,7 +2201,7 @@ assert.deepEqual(
     names,
     sourceNames,
   ),
-  ['Source removed'],
+  ['Source “Serious Eats” removed'],
 );
 assert.deepEqual(
   getRecipeChanges(baseRecipe, { ...baseRecipe, sourceId: 'gone' }, names),
