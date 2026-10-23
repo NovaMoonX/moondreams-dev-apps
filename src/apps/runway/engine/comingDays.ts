@@ -8,7 +8,7 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
-import { addUtcMonths, toDayKey } from './dates';
+import { addUtcMonths, DAY_MS, toDayKey } from './dates';
 import { resolveCurrentOrNext, resolveVersion } from './resolve';
 import { occurrences } from './schedule';
 
@@ -30,6 +30,32 @@ const isSource = (version: OpenVersion): version is SourceVersion =>
   version.kind === 'source';
 
 /**
+ * Splits `from`..`to` where an item's version in force can change, so a schedule that changes from a
+ * date ahead applies from that date and the old one stops the day before.
+ */
+function getSegments(
+  versions: readonly { effectiveFrom: number; effectiveUntil: number | null }[],
+  from: number,
+  to: number,
+) {
+  const starts = [
+    ...new Set([
+      from,
+      ...versions
+        .flatMap((entry) => [entry.effectiveFrom, entry.effectiveUntil])
+        .filter(
+          (date): date is number => date !== null && date > from && date <= to,
+        ),
+    ]),
+  ].sort((a, b) => a - b);
+  const result = starts.map((start, index) => ({
+    start,
+    end: index + 1 < starts.length ? starts[index + 1] - DAY_MS : to,
+  }));
+  return result;
+}
+
+/**
  * The income days from `today` through `LOOKAHEAD_MONTHS` ahead, computed from each pay line's
  * schedule and never stored. Each day takes its amount from the version in force on that date.
  */
@@ -46,8 +72,7 @@ export function buildComingDays(
   const result = items
     .filter((item) => item.kind === 'payLine' && item.archivedAt === null)
     .flatMap((item) => {
-      const scheduled = resolveCurrentOrNext(payLineVersions, item.id, from);
-      if (!scheduled) return [];
+      const own = payLineVersions.filter((entry) => entry.itemId === item.id);
       const lastDay =
         item.endedAt === null ? until : Math.min(until, item.endedAt);
       const sourceName =
@@ -55,24 +80,27 @@ export function buildComingDays(
           ? null
           : (resolveCurrentOrNext(sourceVersions, item.parentId, from)?.payload
               .name ?? null);
-      return occurrences(
-        scheduled.payload.schedule,
-        scheduled.payload.ending,
-        from,
-        lastDay,
-      ).map((on): ComingDay => {
-        const inForce =
-          resolveVersion(payLineVersions, item.id, on) ?? scheduled;
-        return {
-          dayKey: toDayKey(item.id, on),
-          payLineId: item.id,
-          sourceId: item.parentId,
-          on,
-          sourceName,
-          payLineName: inForce.payload.name,
-          amount: inForce.payload.amount,
-          stanceOverride: inForce.payload.stanceOverride ?? null,
-        };
+      return getSegments(own, from, lastDay).flatMap(({ start, end }) => {
+        const scheduled = resolveCurrentOrNext(own, item.id, start);
+        if (!scheduled) return [];
+        return occurrences(
+          scheduled.payload.schedule,
+          scheduled.payload.ending,
+          start,
+          end,
+        ).map((on): ComingDay => {
+          const inForce = resolveVersion(own, item.id, on) ?? scheduled;
+          return {
+            dayKey: toDayKey(item.id, on),
+            payLineId: item.id,
+            sourceId: item.parentId,
+            on,
+            sourceName,
+            payLineName: inForce.payload.name,
+            amount: inForce.payload.amount,
+            stanceOverride: inForce.payload.stanceOverride ?? null,
+          };
+        });
       });
     })
     .sort(

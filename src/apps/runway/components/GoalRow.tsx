@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
@@ -10,10 +12,12 @@ import { describePace } from '@apps/runway/utils/paceText';
 interface GoalRowProps {
   goal: GoalSealed;
   pace: Pace;
+  /** The row's change door. */
+  footer?: ReactNode;
 }
 
 /** A goal in the plan: its name and target, how it is funded, and the pace line. */
-function GoalRow({ goal, pace }: GoalRowProps) {
+function GoalRow({ goal, pace, footer }: GoalRowProps) {
   const words = describePace(goal, pace);
   const dateText =
     goal.targetDate === null ? '' : ` · by ${formatDateUTC(goal.targetDate)}`;
@@ -46,6 +50,7 @@ function GoalRow({ goal, pace }: GoalRowProps) {
         <div className='pt-1'>
           <PriorityBadge priority={goal.priority} />
         </div>
+        {footer && <div className='pt-2'>{footer}</div>}
       </div>
     </li>
   );

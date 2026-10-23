@@ -17,14 +17,24 @@ import RevealChip from '@/components/RevealChip';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
-import { MAX_PAIRINGS } from '@apps/runway/constants';
+import { CHANGE_WORDS, MAX_PAIRINGS } from '@apps/runway/constants';
+import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import ChangeReason from '@apps/runway/components/ChangeReason';
+import { changeField } from '@apps/runway/forms/changeField';
+import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
+import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   selectBills,
   selectEnvelopes,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { FundingAmount, Pairing } from '@apps/runway/types';
+import type {
+  FundingAmount,
+  Pairing,
+  PayLineSealed,
+  SourceSealed,
+} from '@apps/runway/types';
 import { describeAmount } from '@apps/runway/utils/fundingText';
 
 type Of = 'dayMoney' | 'remaining';
@@ -52,12 +62,21 @@ interface PairingsEditorProps {
   locked: readonly Pairing[];
   /** The pairings to change; they start as rows. */
   initial: readonly Pairing[];
-  onSave: (pairings: Pairing[]) => Promise<void>;
+  /** Saves a day's own set. */
+  onSave?: (pairings: Pairing[]) => Promise<void>;
+  /** A source or pay line whose set this changes: a version from a date, with the effect shown first. */
+  change?: {
+    itemId: string;
+    kind: 'source' | 'payLine';
+    current: SourceSealed | PayLineSealed;
+  };
   /** Shown when a set of pairings can be cleared back to the plan. */
   note?: string;
 }
 
 const { custom } = FormFactories;
+
+const EMPTY_SOURCE: SourceSealed = { name: '', pairings: [] };
 
 const blankRow = (key: number): PairingRow => ({
   key,
@@ -106,8 +125,9 @@ const toRow = (pairing: Pairing, key: number): PairingRow => {
   };
 };
 
-const getBlocker = (rows: PairingRow[]) => {
-  if (rows.length === 0) return 'Add something this money should fund.';
+const getBlocker = (rows: PairingRow[], canBeEmpty: boolean) => {
+  if (rows.length === 0)
+    return canBeEmpty ? null : 'Add something this money should fund.';
   if (rows.some((row) => row.targetItemId === null))
     return 'Pick what each one funds.';
   const ids = rows.map((row) => row.targetItemId);
@@ -129,6 +149,7 @@ function PairingsEditor({
   locked,
   initial,
   onSave,
+  change,
   note,
 }: PairingsEditorProps) {
   const today = todayAsUtcDate();
@@ -136,7 +157,7 @@ function PairingsEditor({
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const [initialData] = useState<PairingsFormData>(() => ({
-    rows: initial.length > 0 ? initial.map(toRow) : [blankRow(0)],
+    rows: initial.length > 0 || change ? initial.map(toRow) : [blankRow(0)],
   }));
   const [formData, setFormData] = useState<PairingsFormData>(initialData);
   const [nextKey, setNextKey] = useState(initialData.rows.length);
@@ -161,10 +182,10 @@ function PairingsEditor({
       description:
         kind === 'bill' ? 'Bill' : kind === 'goal' ? 'Goal' : 'Envelope',
     }));
-  const blocker = getBlocker(formData.rows);
+  const blocker = getBlocker(formData.rows, change !== undefined);
 
-  const handleSave = async () => {
-    const pairings = formData.rows.flatMap((row): Pairing[] => {
+  const buildPairings = (rows: PairingRow[]) =>
+    rows.flatMap((row): Pairing[] => {
       const amount = toAmount(row);
       return row.targetItemId === null || amount === null
         ? []
@@ -176,10 +197,29 @@ function PairingsEditor({
             },
           ];
     });
+
+  const candidate =
+    change && blocker === null
+      ? {
+          ...change.current,
+          pairings: [...locked, ...buildPairings(formData.rows)],
+        }
+      : null;
+  const flow = useChangeFlow({
+    itemId: change?.itemId ?? '',
+    kind: change?.kind ?? 'payLine',
+    current: change?.current ?? EMPTY_SOURCE,
+    candidate,
+    onDone: onClose,
+  });
+  const editBlocker = flow.getBlocker(blocker);
+
+  const handleSave = async () => {
+    const pairings = buildPairings(formData.rows);
     setError(null);
     setIsSaving(true);
     try {
-      await onSave(pairings);
+      await onSave?.(pairings);
       onClose();
     } catch (saveError) {
       setError(
@@ -312,42 +352,63 @@ function PairingsEditor({
     }),
   ];
 
+  const flowValue = {
+    flow,
+    itemId: change?.itemId ?? '',
+    kind: change?.kind ?? 'payLine',
+    candidate,
+  };
+  const formFields = change ? [...fields, changeField] : fields;
+
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
-      <Form
-        id='runway-pairings'
-        form={fields}
-        initialData={initialData}
-        columns={1}
-        onDataChange={(data) => setFormData(data as PairingsFormData)}
-        onSubmit={() => {
-          void handleSave();
-        }}
-        submitButton={
-          <ModalFooterActions
-            note={error ?? blocker}
-            cancelAction={
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={onClose}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-            }
-            rightActions={
-              <Button
-                type='submit'
-                loading={isSaving}
-                disabled={isSaving || blocker !== null}
-              >
-                Save
-              </Button>
+      <ChangeSteps
+        isReason={flow.step === 'reason'}
+        reason={<ChangeReason flow={flow} onClose={onClose} />}
+      >
+        <ChangeFlowContext value={flowValue}>
+          <Form
+            id='runway-pairings'
+            form={formFields}
+            initialData={initialData}
+            columns={1}
+            onDataChange={(data) => setFormData(data as PairingsFormData)}
+            onSubmit={() => {
+              if (change) {
+                flow.setStep('reason');
+                return;
+              }
+              void handleSave();
+            }}
+            submitButton={
+              <ModalFooterActions
+                note={error ?? (change ? editBlocker : blocker)}
+                cancelAction={
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={onClose}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </Button>
+                }
+                rightActions={
+                  <Button
+                    type='submit'
+                    loading={isSaving}
+                    disabled={
+                      isSaving || (change ? editBlocker : blocker) !== null
+                    }
+                  >
+                    {change ? CHANGE_WORDS.review : 'Save'}
+                  </Button>
+                }
+              />
             }
           />
-        }
-      />
+        </ChangeFlowContext>
+      </ChangeSteps>
     </FormSheet>
   );
 }

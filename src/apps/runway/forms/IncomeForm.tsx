@@ -16,6 +16,7 @@ import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
+  CHANGE_WORDS,
   DEFAULT_PAY_LINE_NAME,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
@@ -30,18 +31,29 @@ import {
   createIncome,
   type CreateIncomeInput,
 } from '@apps/runway/store/actions/itemActions';
+import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import ChangeReason from '@apps/runway/components/ChangeReason';
+import { changeField } from '@apps/runway/forms/changeField';
+import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
+import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import {
   EMPTY_AMOUNT_DRAFT,
   getStanceOverride,
   parseAmountDraft,
+  toAmountDraft,
   type AmountDraft,
 } from '@apps/runway/utils/rangeInput';
 import {
   selectResolvedPlan,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { Ending, Schedule } from '@apps/runway/types';
+import type {
+  Ending,
+  PayLineSealed,
+  Schedule,
+  SourceSealed,
+} from '@apps/runway/types';
 
 type Frequency = (typeof INCOME_FREQUENCIES)[number];
 type EndKind = (typeof INCOME_ENDINGS)[number];
@@ -64,7 +76,13 @@ interface IncomeFormProps {
   title: string;
   /** What the sheet starts on; the income form leaves it open and an expected income starts on once. */
   defaultFrequency: Frequency | null;
+  /** A pay line or source to change; its saved values start the form and a save adds a version from a date. */
+  editing?: EditingIncome;
 }
+
+export type EditingIncome =
+  | { itemId: string; kind: 'payLine'; payload: PayLineSealed }
+  | { itemId: string; kind: 'source'; payload: SourceSealed };
 
 const { custom } = FormFactories;
 
@@ -90,6 +108,15 @@ const parseCount = (value: string) => {
       ? count
       : null;
   return result;
+};
+
+const EMPTY_PAY_LINE: PayLineSealed = {
+  name: '',
+  schedule: { kind: 'once', anchor: null, monthDays: [] },
+  amount: { lowCents: 0, highCents: 0 },
+  ending: { onDate: null, afterCount: null },
+  stanceOverride: null,
+  pairings: [],
 };
 
 const getSourceName = (data: IncomeFormData, names: Record<string, string>) =>
@@ -139,8 +166,10 @@ const getBlocker = (
   data: IncomeFormData,
   sourceName: string,
   hasAmount: boolean,
+  isEditing: boolean,
 ) => {
-  if (sourceName === '') return 'Choose or name where it comes from.';
+  if (!isEditing && sourceName === '')
+    return 'Choose or name where it comes from.';
   if (!hasAmount) {
     return data.amount.mode === 'range'
       ? 'Enter a low amount and a higher top amount.'
@@ -155,27 +184,78 @@ const getBlocker = (
   return null;
 };
 
+const getEditingData = (editing: EditingIncome): IncomeFormData => {
+  const blank: IncomeFormData = {
+    source: { choice: '', newText: '' },
+    payName: editing.payload.name,
+    amount: EMPTY_AMOUNT_DRAFT,
+    frequency: null,
+    startDate: '',
+    secondDay: '',
+    endKind: 'never',
+    endDate: '',
+    endCount: '',
+  };
+  if (editing.kind === 'source') return blank;
+  const { payload } = editing;
+  const frequency = INCOME_FREQUENCIES.find(
+    (kind) => kind === payload.schedule.kind,
+  );
+  return {
+    ...blank,
+    amount: toAmountDraft(payload.amount, payload.stanceOverride),
+    frequency: frequency ?? null,
+    startDate:
+      payload.schedule.anchor === null
+        ? ''
+        : toDateInputValue(payload.schedule.anchor),
+    secondDay:
+      payload.schedule.kind === 'twiceMonthly'
+        ? String(payload.schedule.monthDays[1] ?? '')
+        : '',
+    endKind:
+      payload.ending.onDate !== null
+        ? 'date'
+        : payload.ending.afterCount !== null
+          ? 'count'
+          : 'never',
+    endDate:
+      payload.ending.onDate === null
+        ? ''
+        : toDateInputValue(payload.ending.onDate),
+    endCount:
+      payload.ending.afterCount === null
+        ? ''
+        : String(payload.ending.afterCount),
+  };
+};
+
 function IncomeForm({
   isOpen,
   onClose,
   title,
   defaultFrequency,
+  editing,
 }: IncomeFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const resolved = useAppSelector((state) => selectResolvedPlan(state, today));
   const planStance = useAppSelector(selectStance);
-  const [initialData] = useState<IncomeFormData>(() => ({
-    source: { choice: '', newText: '' },
-    payName: '',
-    amount: EMPTY_AMOUNT_DRAFT,
-    frequency: defaultFrequency,
-    startDate: toDateInputValue(today),
-    secondDay: '',
-    endKind: 'never',
-    endDate: '',
-    endCount: '',
-  }));
+  const [initialData] = useState<IncomeFormData>(() =>
+    editing
+      ? getEditingData(editing)
+      : {
+          source: { choice: '', newText: '' },
+          payName: '',
+          amount: EMPTY_AMOUNT_DRAFT,
+          frequency: defaultFrequency,
+          startDate: toDateInputValue(today),
+          secondDay: '',
+          endKind: 'never',
+          endDate: '',
+          endCount: '',
+        },
+  );
   const [formData, setFormData] = useState<IncomeFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -188,11 +268,18 @@ function IncomeForm({
     label: source.version.payload.name,
   }));
   const sourceName = getSourceName(formData, sourceNames);
-  const blocker = getBlocker(
-    formData,
-    sourceName,
-    parseAmountDraft(formData.amount) !== null,
-  );
+  const isEditing = editing !== undefined;
+  const isEditingSource = editing?.kind === 'source';
+  const blocker = isEditingSource
+    ? formData.payName.trim() === ''
+      ? 'Name the source.'
+      : null
+    : getBlocker(
+        formData,
+        sourceName,
+        parseAmountDraft(formData.amount) !== null,
+        isEditing,
+      );
   const isOnce = formData.frequency === 'once';
 
   const fields = useMemo(() => {
@@ -283,7 +370,7 @@ function IncomeForm({
       ),
     });
 
-    const result = [
+    const all = [
       custom({
         name: 'source',
         label: '',
@@ -368,8 +455,30 @@ function IncomeForm({
         ? [endCountField]
         : []),
     ];
+    const sourceNameField = custom({
+      name: 'payName',
+      label: '',
+      renderComponent: (props) => (
+        <div className='space-y-1.5'>
+          <p className='text-muted-foreground text-xs'>Name</p>
+          <Input
+            variant='outline'
+            aria-label='Source name'
+            placeholder='Employer or source'
+            maxLength={MAX_NAME_LENGTH}
+            value={props.value as string}
+            onChange={(event) => props.onValueChange(event.target.value)}
+          />
+        </div>
+      ),
+    });
+    const result = isEditingSource
+      ? [sourceNameField]
+      : all.filter((field) => !(isEditing && field.name === 'source'));
     return result;
   }, [
+    isEditing,
+    isEditingSource,
     sourceOptions,
     formData.frequency,
     formData.endKind,
@@ -377,6 +486,38 @@ function IncomeForm({
     isOnce,
     planStance,
   ]);
+
+  const buildPayLine = (data: IncomeFormData): PayLineSealed | null => {
+    const schedule = buildSchedule(data);
+    const ending = buildEnding(data);
+    const amount = parseAmountDraft(data.amount);
+    if (!editing || editing.kind !== 'payLine') return null;
+    if (!schedule || !ending || amount === null) return null;
+    const result: PayLineSealed = {
+      ...editing.payload,
+      name: data.payName.trim() || DEFAULT_PAY_LINE_NAME,
+      schedule,
+      amount,
+      ending,
+      stanceOverride: getStanceOverride(data.amount),
+    };
+    return result;
+  };
+
+  const candidate =
+    blocker !== null || !editing
+      ? null
+      : editing.kind === 'source'
+        ? { ...editing.payload, name: formData.payName.trim() }
+        : buildPayLine(formData);
+  const flow = useChangeFlow({
+    itemId: editing?.itemId ?? '',
+    kind: editing?.kind ?? 'payLine',
+    current: editing?.payload ?? EMPTY_PAY_LINE,
+    candidate,
+    onDone: onClose,
+  });
+  const editBlocker = flow.getBlocker(blocker);
 
   const handleSubmit = async (data: IncomeFormData) => {
     const schedule = buildSchedule(data);
@@ -423,42 +564,63 @@ function IncomeForm({
     }
   };
 
+  const flowValue = {
+    flow,
+    itemId: editing?.itemId ?? '',
+    kind: editing?.kind ?? 'payLine',
+    candidate,
+  };
+  const formFields = editing ? [...fields, changeField] : fields;
+
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
-      <Form
-        id='runway-income'
-        form={fields}
-        initialData={initialData}
-        columns={1}
-        onDataChange={(data) => setFormData(data as IncomeFormData)}
-        onSubmit={(data) => {
-          void handleSubmit(data as IncomeFormData);
-        }}
-        submitButton={
-          <ModalFooterActions
-            note={error ?? blocker}
-            cancelAction={
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={onClose}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-            }
-            rightActions={
-              <Button
-                type='submit'
-                loading={isSaving}
-                disabled={isSaving || blocker !== null}
-              >
-                Add
-              </Button>
+      <ChangeSteps
+        isReason={flow.step === 'reason'}
+        reason={<ChangeReason flow={flow} onClose={onClose} />}
+      >
+        <ChangeFlowContext value={flowValue}>
+          <Form
+            id='runway-income'
+            form={formFields}
+            initialData={initialData}
+            columns={1}
+            onDataChange={(data) => setFormData(data as IncomeFormData)}
+            onSubmit={(data) => {
+              if (editing) {
+                flow.setStep('reason');
+                return;
+              }
+              void handleSubmit(data as IncomeFormData);
+            }}
+            submitButton={
+              <ModalFooterActions
+                note={error ?? (editing ? editBlocker : blocker)}
+                cancelAction={
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={onClose}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </Button>
+                }
+                rightActions={
+                  <Button
+                    type='submit'
+                    loading={isSaving}
+                    disabled={
+                      isSaving || (editing ? editBlocker : blocker) !== null
+                    }
+                  >
+                    {editing ? CHANGE_WORDS.review : 'Add'}
+                  </Button>
+                }
+              />
             }
           />
-        }
-      />
+        </ChangeFlowContext>
+      </ChangeSteps>
     </FormSheet>
   );
 }

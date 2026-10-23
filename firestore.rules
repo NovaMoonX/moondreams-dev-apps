@@ -4006,6 +4006,11 @@ service cloud.firestore {
         return value is number && value % 86400000 == 0;
       }
 
+      // A change may start on any day, a future one included, but not years out.
+      function isDateAhead(value) {
+        return isDateOnly(value) && value <= request.time.toMillis() + 315360000000;
+      }
+
       // Plan items are created and read. Ending, archiving and deleting arrive with the issues that use them.
       match /items/{itemId} {
         function isItemValid(data) {
@@ -4034,7 +4039,7 @@ service cloud.firestore {
             && getAfter(planDoc('items', data.itemId)).data.kind == data.kind
             && existsAfter(planDoc('changes', data.changeId))
             && isPastOrNear(data.createdAt)
-            && data.effectiveFrom is number
+            && isDateAhead(data.effectiveFrom)
             && (data.effectiveUntil == null || data.effectiveUntil is number)
             && data.changeId is string
             && isSealed(data.sealed);
@@ -4054,7 +4059,7 @@ service cloud.firestore {
           return data.id == changeId
             && data.kind in ['planChange', 'start', 'levelMove', 'whatIfApplied', 'ended', 'correction']
             && isPastOrNear(data.createdAt)
-            && (data.effectiveFrom == null || data.effectiveFrom is number)
+            && (data.effectiveFrom == null || isDateAhead(data.effectiveFrom))
             && data.itemIds is list
             && data.itemIds.size() <= 20
             && isSealed(data.sealed);

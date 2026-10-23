@@ -19,6 +19,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
+  CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
   FUNDING_CADENCE_LABELS,
   FUNDING_CADENCES,
@@ -31,11 +32,22 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createEnvelope } from '@apps/runway/store/actions/itemActions';
+import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import ChangeReason from '@apps/runway/components/ChangeReason';
+import { changeField } from '@apps/runway/forms/changeField';
+import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
+import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
+import { toFundingInput } from '@apps/runway/utils/fundingInput';
 import {
   selectComingDays,
   selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { FundingAmount, FundingRule, Priority } from '@apps/runway/types';
+import type {
+  FundingAmount,
+  FundingRule,
+  EnvelopeSealed,
+  Priority,
+} from '@apps/runway/types';
 
 type Cadence = (typeof FUNDING_CADENCES)[number];
 
@@ -53,6 +65,8 @@ interface EnvelopeFormProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  /** The envelope to change; its saved values start the form and a save adds a version from a date. */
+  editing?: { itemId: string; payload: EnvelopeSealed };
 }
 
 const { custom } = FormFactories;
@@ -85,6 +99,29 @@ const cadenceOptions = FUNDING_CADENCES.map((value) => ({
   label: FUNDING_CADENCE_LABELS[value],
 }));
 
+const EMPTY_ENVELOPE: EnvelopeSealed = {
+  name: '',
+  emoji: null,
+  priority: 'should',
+  orderIndex: 0,
+  funding: {
+    amount: { kind: 'exact', cents: 0 },
+    cadence: { kind: 'everyIncomeDay' },
+  },
+};
+
+const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => {
+  const { amount, cadence, dayKeys } = toFundingInput(payload.funding);
+  return {
+    name: payload.name,
+    priority: payload.priority,
+    amount,
+    cadence,
+    dayKeys,
+    emoji: payload.emoji,
+  };
+};
+
 const INITIAL_DATA: EnvelopeFormData = {
   name: '',
   priority: null,
@@ -113,16 +150,21 @@ const getBlocker = (
   return null;
 };
 
-function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
+function EnvelopeForm({ isOpen, onClose, title, editing }: EnvelopeFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
-  const [formData, setFormData] = useState<EnvelopeFormData>(INITIAL_DATA);
+  const [initialData] = useState<EnvelopeFormData>(() =>
+    editing ? getEditingData(editing.payload) : INITIAL_DATA,
+  );
+  const [formData, setFormData] = useState<EnvelopeFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [amountMode, setAmountMode] = useState<AmountMode>('exact');
+  const [amountMode, setAmountMode] = useState<AmountMode>(
+    editing ? toFundingInput(editing.payload.funding).mode : 'exact',
+  );
   const amount = getFundingAmount(amountMode, formData.amount);
   const blocker = getBlocker(
     formData,
@@ -277,14 +319,18 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
   }, [amountMode, formData.cadence, dayOptions]);
 
   const buildFunding = (data: EnvelopeFormData, amount: FundingAmount) => {
-    const anchorDayKey = comingDays[0]?.dayKey ?? '';
+    const saved = editing?.payload.funding.cadence;
     if (data.cadence === 'every2' || data.cadence === 'every3') {
+      const n = data.cadence === 'every2' ? 2 : 3;
       const funding: FundingRule = {
         amount,
         cadence: {
           kind: 'everyNth',
-          n: data.cadence === 'every2' ? 2 : 3,
-          anchorDayKey,
+          n,
+          anchorDayKey:
+            saved?.kind === 'everyNth' && saved.n === n
+              ? saved.anchorDayKey
+              : (comingDays[0]?.dayKey ?? ''),
         },
       };
       return funding;
@@ -309,18 +355,43 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
     return funding;
   };
 
-  const handleSubmit = async (data: EnvelopeFormData) => {
+  const buildEnvelope = (data: EnvelopeFormData): EnvelopeSealed | null => {
     const amount = getFundingAmount(amountMode, data.amount);
-    if (!user || data.priority === null || amount === null) return;
+    if (data.priority === null || amount === null) return null;
 
     const tier = envelopes.filter(
       (envelope) => envelope.version.payload.priority === data.priority,
     );
     const orderIndex =
-      Math.max(
-        0,
-        ...tier.map((envelope) => envelope.version.payload.orderIndex),
-      ) + ENVELOPE_ORDER_STEP;
+      editing && editing.payload.priority === data.priority
+        ? editing.payload.orderIndex
+        : Math.max(
+            0,
+            ...tier.map((envelope) => envelope.version.payload.orderIndex),
+          ) + ENVELOPE_ORDER_STEP;
+    const result: EnvelopeSealed = {
+      name: data.name.trim(),
+      emoji: data.emoji?.trim() || null,
+      priority: data.priority,
+      orderIndex,
+      funding: buildFunding(data, amount),
+    };
+    return result;
+  };
+
+  const candidate = blocker === null ? buildEnvelope(formData) : null;
+  const flow = useChangeFlow({
+    itemId: editing?.itemId ?? '',
+    kind: 'envelope',
+    current: editing?.payload ?? EMPTY_ENVELOPE,
+    candidate,
+    onDone: onClose,
+  });
+  const editBlocker = flow.getBlocker(blocker);
+
+  const handleSubmit = async (data: EnvelopeFormData) => {
+    const envelope = buildEnvelope(data);
+    if (!user || !envelope) return;
 
     setError(null);
     setIsSaving(true);
@@ -328,13 +399,7 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
       const encryption = await getRunwayEncryption(user.uid);
       await createEnvelope(user.uid, encryption, {
         startDate: today,
-        envelope: {
-          name: data.name.trim(),
-          emoji: data.emoji?.trim() || null,
-          priority: data.priority,
-          orderIndex,
-          funding: buildFunding(data, amount),
-        },
+        envelope,
       });
       onClose();
     } catch (saveError) {
@@ -349,42 +414,63 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
     }
   };
 
+  const flowValue = {
+    flow,
+    itemId: editing?.itemId ?? '',
+    kind: 'envelope' as const,
+    candidate,
+  };
+  const formFields = editing ? [...fields, changeField] : fields;
+
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
-      <Form
-        id='runway-envelope'
-        form={fields}
-        initialData={INITIAL_DATA}
-        columns={1}
-        onDataChange={(data) => setFormData(data as EnvelopeFormData)}
-        onSubmit={(data) => {
-          void handleSubmit(data as EnvelopeFormData);
-        }}
-        submitButton={
-          <ModalFooterActions
-            note={error ?? blocker}
-            cancelAction={
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={onClose}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-            }
-            rightActions={
-              <Button
-                type='submit'
-                loading={isSaving}
-                disabled={isSaving || blocker !== null}
-              >
-                Add
-              </Button>
+      <ChangeSteps
+        isReason={flow.step === 'reason'}
+        reason={<ChangeReason flow={flow} onClose={onClose} />}
+      >
+        <ChangeFlowContext value={flowValue}>
+          <Form
+            id='runway-envelope'
+            form={formFields}
+            initialData={initialData}
+            columns={1}
+            onDataChange={(data) => setFormData(data as EnvelopeFormData)}
+            onSubmit={(data) => {
+              if (editing) {
+                flow.setStep('reason');
+                return;
+              }
+              void handleSubmit(data as EnvelopeFormData);
+            }}
+            submitButton={
+              <ModalFooterActions
+                note={error ?? (editing ? editBlocker : blocker)}
+                cancelAction={
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={onClose}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </Button>
+                }
+                rightActions={
+                  <Button
+                    type='submit'
+                    loading={isSaving}
+                    disabled={
+                      isSaving || (editing ? editBlocker : blocker) !== null
+                    }
+                  >
+                    {editing ? CHANGE_WORDS.review : 'Add'}
+                  </Button>
+                }
+              />
             }
           />
-        }
-      />
+        </ChangeFlowContext>
+      </ChangeSteps>
     </FormSheet>
   );
 }

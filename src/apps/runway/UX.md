@@ -88,7 +88,7 @@ Drawn on the canvas, in these groups. Each row names what the picture does not s
 | Payday | Planned and confirmed | Reached from the confirmed income day. Money and Free to spend each show what was planned and what arrived, "What differed" lists the amount with its note, and the lines that matched the draft fold behind one row. Only differing lines are marked, each as planned against confirmed with its note, and the rest fold behind one row. |
 | Changing the plan | Envelope, over | "Cover it" is drawn only while the envelope is over and no overflow is set. An envelope with an overflow target pays an overspend from it on its own, and the fallback balances are listed under the envelope as separate lines. Overflow target and funding rule open the Change flow. |
 | Changing the plan | Overflow | Opened from the envelope's "overflow goes to" row. Two choices: nothing (Cover it applies) or an ordered list of envelopes, any number of steps. The example shows how a purchase splits across the steps. Money moves only when a purchase goes over, each move appears in the change log, and fallback balances are never added into one number. |
-| Changing the plan | Change | The effect list shows the first affected days with "Show all". "Top up" and "Cover it" appear only when a day goes short. |
+| Changing the plan | Change | Each income, bill, envelope and goal row has a "Change" chip that opens its form with the saved values (a pay line, a source's name, what it funds). Under the fields: "From when" (From now on, From a date ahead with a date) and "What this changes", the first three affected income days with Free to spend now and after and the lines that move, then "Show all N". "Next" swaps in "Why the change?" (starter chips, one note) with "Save without a reason". A change that has not started shows on its row ("From December 1: Amount $1,250.00 to $1,300.00"). "Top up" and "Cover it" appear only when a day goes short (later issues). |
 | Changing the plan | What if | A banner stays on every screen while one is open. Apply turns each change into an ordinary change with its own "from when". |
 | Levels, starting out, purchases | Tracking and linking | The accounts block appears only while tracking is on. It lists every account by name and kind. Each one is linked on its own, or shows that linking is not available for that institution and the balance stays by hand. |
 | Levels, starting out, purchases | Where is your money now? | One row per account, with its institution and kind, and "+ Add an account". Each account is counted toward the total or left out, so a brokerage or retirement account can be listed without being spent. Reads "Over-assigned $X" when more is assigned than held. Used again when tracking starts and when an account is linked. |
@@ -96,7 +96,7 @@ Drawn on the canvas, in these groups. Each row names what the picture does not s
 | Levels, starting out, purchases | Purchase | Notes, links and receipts never change a balance. |
 | Levels, starting out, purchases | Needs a home | A rule is offered after three identical assignments and never applied on its own. |
 
-**Not yet drawn:** the income source and pay line screens, bill and goal detail screens and editing, change log, Priorities, Accounts, Plan as of a date, Check an amount, Check a balance, Card reserve, Import a CSV, Where your cash is, Cover it as its own screen, Notification settings (four switches with a one-line explanation each, Next Steps). They follow the same patterns as the drawn ones.
+**Not yet drawn:** the income source and pay line detail screens, bill and goal detail screens, change log, Priorities, Accounts, Plan as of a date, Check an amount, Check a balance, Card reserve, Import a CSV, Where your cash is, Cover it as its own screen, Notification settings (four switches with a one-line explanation each, Next Steps). They follow the same patterns as the drawn ones.
 
 **Where this screen set stops.** Envelopes, bills and income days stay in the tens. Purchases and history do not, so Spend and the change log load one date window at a time and search covers the window in view, not all time (encrypted fields cannot be searched on the server).
 
@@ -120,7 +120,7 @@ Existing repo components are used as they are. A new component whose props name 
 | `UnderlineTabs` | Envelope, Income source | One tab bar per detail screen | Existing |
 | `AmountField` | Pay line, Bill, Envelope, Goal | Exact amount, range, or rate × hours, with a stance label; a percentage of a caller-named thing (whole and half percents) and the rest are modes on the envelope and goal forms | New, in the app |
 | `EffectPreview` | Change, What if, Expected | Before and after for each affected income day | New, in the app |
-| `FromWhenPicker` | Change | This day, from now on, from a date, for a stretch, end it | New, in the app |
+| `FromWhenPicker` | Change | From now on, from a date ahead (this day, for a stretch and end it arrive with Issue 19) | New, in the app |
 | `IncomeDayCard` | Home, Days | Date, source, amount, status | New, in the app |
 | `DraftLine` | Income day, Record | Name, amount, reason | New, in the app |
 | `PriorityBadge` | Plan lists, Income day | Must, Should, Want as a soft tint | New, in the app |

@@ -311,6 +311,43 @@ export const CORRECT_WORDS = {
 } as const;
 export const MAX_PAIRINGS = 20;
 
+/** Income days the effect of a change is worked out for, and how many show before "Show all". */
+export const MAX_PREVIEW_DAYS = 26;
+export const PREVIEW_SHOWN = 3;
+
+export const CHANGE_WORDS = {
+  fromHeading: 'From when',
+  fromNow: 'From now on',
+  fromDate: 'From a date ahead',
+  dateLabel: 'Starts on',
+  dateBlocker: 'Pick a day after today.',
+  previewHeading: 'What this changes',
+  previewNone:
+    'No income day in the next year moves. Earlier days stay as they are.',
+  previewWaiting: 'Finish the form to see what it changes.',
+  freeNow: 'Free to spend now',
+  freeAfter: 'After',
+  added: 'This income day is added.',
+  removed: 'This income day goes away.',
+  review: 'Next',
+  whyHeading: 'Why the change?',
+  whyHint: 'A note for your own records. You can leave it out.',
+  whyPlaceholder: 'Why it changed',
+  saveWithNote: 'Save',
+  saveWithoutNote: 'Save without a reason',
+  unchanged: 'Change something to continue.',
+  change: 'Change',
+  scheduled: 'From',
+} as const;
+
+export const CHANGE_REASON_CHIPS = [
+  'Price went up',
+  'Price went down',
+  'New job or raise',
+  'Changed my mind',
+  'Fixing a mistake',
+] as const;
+
 /** What happened to a pairing that its own pay could not cover. */
 export const PAIRING_STATES = [
   'funded',

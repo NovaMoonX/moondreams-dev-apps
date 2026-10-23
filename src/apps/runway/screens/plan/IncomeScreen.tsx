@@ -13,12 +13,10 @@ import RangeNote from '@apps/runway/components/RangeNote';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import FundsRow from '@apps/runway/components/FundsRow';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
-import { useAuth } from '@/hooks/useAuth';
-import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { setPairings } from '@apps/runway/store/actions/itemActions';
+import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
 import { SCHEDULE_LABELS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import IncomeForm from '@apps/runway/forms/IncomeForm';
+import IncomeForm, { type EditingIncome } from '@apps/runway/forms/IncomeForm';
 import {
   selectBills,
   selectEnvelopes,
@@ -74,7 +72,6 @@ interface EditingFunds {
 }
 
 function IncomeScreen() {
-  const { user } = useAuth();
   const today = todayAsUtcDate(useNow(60_000));
   const stance = useAppSelector(selectStance);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -91,6 +88,7 @@ function IncomeScreen() {
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
   const [formKey, setFormKey] = useState<number | null>(null);
+  const [changing, setChanging] = useState<EditingIncome | null>(null);
 
   const getBody = () => {
     if (!isLoaded) {
@@ -116,6 +114,21 @@ function IncomeScreen() {
             <h3 className='line-clamp-2 font-medium break-words'>
               {source.version.payload.name}
             </h3>
+            <div className='py-1'>
+              <ItemChangeControls
+                itemId={source.item.id}
+                current={source.version.payload}
+                today={today}
+                name={source.version.payload.name}
+                onChange={() =>
+                  setChanging({
+                    itemId: source.item.id,
+                    kind: 'source',
+                    payload: source.version.payload,
+                  })
+                }
+              />
+            </div>
             <FundsRow
               names={namesOf(source.version.payload.pairings)}
               ariaLabel={`What ${source.version.payload.name} funds`}
@@ -169,6 +182,19 @@ function IncomeScreen() {
                       <p className='text-muted-foreground text-sm'>
                         {describeTiming(version.payload)}
                       </p>
+                      <ItemChangeControls
+                        itemId={item.id}
+                        current={version.payload}
+                        today={today}
+                        name={version.payload.name}
+                        onChange={() =>
+                          setChanging({
+                            itemId: item.id,
+                            kind: 'payLine',
+                            payload: version.payload,
+                          })
+                        }
+                      />
                       <FundsRow
                         names={namesOf(version.payload.pairings)}
                         ariaLabel={`What ${version.payload.name} funds`}
@@ -207,26 +233,30 @@ function IncomeScreen() {
         }
       />
       {getBody()}
-      {editing !== null && user && (
+      {editing !== null && (
         <PairingsEditor
           key={editing.itemId}
           isOpen
           title='Funds'
           fromLabel={editing.name}
-          locked={editing.current.pairings}
-          initial={[]}
-          onClose={() => setEditing(null)}
-          onSave={async (added) => {
-            const encryption = await getRunwayEncryption(user.uid);
-            await setPairings(user.uid, encryption, {
-              itemId: editing.itemId,
-              kind: editing.kind,
-              name: editing.name,
-              current: editing.current,
-              pairings: [...editing.current.pairings, ...added],
-              startDate: today,
-            });
+          locked={[]}
+          initial={editing.current.pairings ?? []}
+          change={{
+            itemId: editing.itemId,
+            kind: editing.kind,
+            current: editing.current,
           }}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {changing !== null && (
+        <IncomeForm
+          key={changing.itemId}
+          isOpen
+          title='Income'
+          defaultFrequency={null}
+          editing={changing}
+          onClose={() => setChanging(null)}
         />
       )}
       {formKey !== null && (

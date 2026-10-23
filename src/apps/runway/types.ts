@@ -315,6 +315,8 @@ export interface PlanVersionDoc {
 
 export interface ChangeSealed {
   summary: string;
+  /** The person's reason; a change written before notes existed has none. */
+  note?: string | null;
 }
 
 export interface ChangeDoc {
