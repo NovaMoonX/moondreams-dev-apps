@@ -1,4 +1,5 @@
 import type { RootState } from '@/store';
+import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { buildComingDays } from '@apps/runway/engine/comingDays';
 import { type BillProgressInput } from '@apps/runway/engine/progress';
 import {
@@ -7,6 +8,7 @@ import {
   type DayEffect,
 } from '@apps/runway/engine/whatIf';
 import { MAX_PREVIEW_DAYS } from '@apps/runway/constants';
+import { selectLookahead } from '@apps/runway/store/selectors/lookaheadSelectors';
 import { computeDraftView } from '@apps/runway/store/selectors/runwaySelectors';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
 import type {
@@ -71,7 +73,10 @@ const layerDay = (
   return [...openDays.filter((entry) => entry.id !== day.dayKey), layered];
 };
 
-const layerPlan = (inputs: PreviewInputs, change: PreviewChange) => {
+const layerPlan = (
+  inputs: Pick<PreviewInputs, 'items' | 'versions' | 'openDays'>,
+  change: PreviewChange,
+) => {
   const { items, versions, openDays } = inputs;
   if (change.kind === 'version') {
     return {
@@ -232,5 +237,30 @@ export function previewChange(
     ]);
   };
   const result = collect(0, []);
+  return result;
+}
+
+/** How far the plan holds as it stands and with the change layered over it, from the same lookahead Home reads. */
+export function previewLookahead(
+  state: RootState,
+  today: number,
+  change: PreviewChange,
+): { before: Lookahead; after: Lookahead } {
+  const { items, versions, openDays } = layerPlan(
+    {
+      items: state.runway.items,
+      versions: state.runway.versions,
+      openDays: state.runway.days,
+    },
+    change,
+  );
+  const layeredState = {
+    ...state,
+    runway: { ...state.runway, items, versions, days: openDays },
+  };
+  const result = {
+    before: selectLookahead(state, today),
+    after: selectLookahead(layeredState, today),
+  };
   return result;
 }

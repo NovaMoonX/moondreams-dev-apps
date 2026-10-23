@@ -75,7 +75,12 @@ import {
   deriveBalances,
   getFreeToSpendFigure,
 } from '../../src/apps/runway/engine/balances.ts';
-import { getBillCoverage } from '../../src/apps/runway/engine/coverage.ts';
+import {
+  getStanceCushion,
+  lookahead,
+  type LookaheadDraft,
+} from '../../src/apps/runway/engine/lookahead.ts';
+import { computeLookahead } from '../../src/apps/runway/store/selectors/lookaheadSelectors.ts';
 import {
   collectStarted,
   countFundedDays,
@@ -3346,64 +3351,6 @@ const version = (
     'the starting amount counts toward the first payment',
   );
   assert.equal(dues[0].fundedDays, 0);
-
-  // Coverage never reads a plan gap as a money gap.
-  const payment = (dueOn: number, parts: number, fundedCents = 0) =>
-    ({
-      dueOn,
-      totalCents: 1_000,
-      fundedCents,
-      fundedDays: 0,
-      ranged: null,
-      paid: null,
-      parts: Array.from({ length: parts }, () => ({
-        day: {
-          dayKey: 'x',
-          on: 0,
-          amount: { lowCents: 0, highCents: 0 },
-          stanceOverride: null,
-          sourceId: null,
-        },
-        cents: 1,
-      })),
-    }) as never;
-  assert.deepEqual(getBillCoverage([], {}, start, start + 365 * DAY_MS), {
-    kind: 'noBills',
-  });
-  assert.equal(
-    getBillCoverage(
-      ['a'],
-      { a: [payment(start + 5 * DAY_MS, 2)] },
-      start,
-      start + 365 * DAY_MS,
-    ).kind,
-    'covered',
-  );
-  const gap = getBillCoverage(
-    ['a', 'b'],
-    {
-      a: [payment(start + 5 * DAY_MS, 2)],
-      b: [payment(start + 9 * DAY_MS, 0)],
-    },
-    start,
-    start + 365 * DAY_MS,
-  );
-  assert.deepEqual(gap, {
-    kind: 'gap',
-    through: start + 8 * DAY_MS,
-    billId: 'b',
-    dueOn: start + 9 * DAY_MS,
-  });
-  assert.equal(
-    getBillCoverage(
-      ['a'],
-      { a: [payment(start + 5 * DAY_MS, 0, 1_000)] },
-      start,
-      start + 365 * DAY_MS,
-    ).kind,
-    'covered',
-    'a payment set aside in full is covered',
-  );
 }
 
 // Change an item from a date (Issue 18).
@@ -4501,6 +4448,545 @@ const version = (
     ).span,
     null,
     'a last day past the ten years the rules allow is refused',
+  );
+}
+
+// Lookahead: how far the plan holds (Issue 21).
+{
+  const today = utc(2026, 10, 23);
+  const horizon = addUtcMonths(today, 12);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const never = { onDate: null, afterCount: null };
+  const emptyDraft = (lines: LookaheadDraft['draft']['lines'] = []) =>
+    ({
+      days: [],
+      moneyCents: 0,
+      lines,
+      heldCents: 0,
+      freeToSpend: { cents: 0, bySource: [] },
+    }) as LookaheadDraft['draft'];
+  const day = (on: number, key = `pay:${on}`) =>
+    ({
+      dayKey: key,
+      payLineId: 'pay',
+      sourceId: 'src',
+      on,
+      sourceName: 'Acme',
+      payLineName: 'Paycheck',
+      amount: exact(100_000),
+      stanceOverride: null,
+    }) as never;
+  const run = (
+    days: ReturnType<typeof day>[],
+    over: Partial<Parameters<typeof lookahead>[0]> = {},
+  ) =>
+    lookahead({
+      today,
+      horizon,
+      days,
+      bills: [],
+      payments: {},
+      draftOf: () => ({ draft: emptyDraft(), names: {} }),
+      ...over,
+    });
+
+  // Horizon edges: with no problem the plan holds to the horizon, or to the last income day when income ends.
+  const weekly = Array.from({ length: 53 }, (_, i) =>
+    day(today + i * 7 * DAY_MS),
+  );
+  assert.equal(
+    run(weekly.filter((entry) => entry.on <= horizon)).holdsThrough,
+    horizon,
+    'a plan with nothing wrong holds to the horizon',
+  );
+  const endsEarly = run(weekly.slice(0, 10));
+  assert.equal(endsEarly.incomeEndsOn, today + 9 * 7 * DAY_MS);
+  assert.equal(
+    endsEarly.holdsThrough,
+    today + 9 * 7 * DAY_MS,
+    'income that ends stops the plan at its last day',
+  );
+  assert.equal(
+    run(weekly.slice(0, 51)).incomeEndsOn,
+    null,
+    'a last income day near the horizon is not an ending',
+  );
+  assert.equal(run([]).problems.length, 0);
+  assert.equal(run([]).hasBills, false);
+
+  const payment = (dueOn: number, parts: number, fundedCents = 0) =>
+    ({
+      dueOn,
+      totalCents: 1_000,
+      fundedCents,
+      fundedDays: 0,
+      ranged: null,
+      paid: null,
+      parts: Array.from({ length: parts }, () => ({
+        day: day(today),
+        cents: 1,
+      })),
+    }) as never;
+  const billsOf = (...ids: string[]) =>
+    ids.map((id) => ({ id, name: id, since: 0 }));
+
+  // A bill with no income day before it is due warns, naming the bill and the date.
+  const noIncome = run(weekly.slice(0, 3), {
+    bills: billsOf('rent', 'car'),
+    payments: {
+      rent: [payment(today + 40 * DAY_MS, 0)],
+      car: [payment(today + 5 * DAY_MS, 2)],
+    },
+  });
+  assert.deepEqual(
+    noIncome.problems.map((problem) => [problem.kind, problem.on]),
+    [['noIncome', today + 40 * DAY_MS]],
+  );
+  assert.equal(
+    noIncome.holdsThrough,
+    today + 39 * DAY_MS,
+    'the plan holds through the day before a bill with no income',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: { rent: [payment(today + 40 * DAY_MS, 0, 1_000)] },
+    }).problems.length,
+    0,
+    'a payment set aside in full needs no income day',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: { rent: [payment(horizon, 0)] },
+    }).problems.length,
+    1,
+    'a payment due on the horizon is checked',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: { rent: [payment(horizon + DAY_MS, 0)] },
+    }).problems.length,
+    0,
+    'a payment past the horizon is not',
+  );
+
+  // An overdue unpaid bill stops "covered" and holds through nothing; one before the bill began is ignored.
+  const overdue = run(weekly.slice(0, 3), {
+    bills: billsOf('rent'),
+    payments: {
+      rent: [payment(today - 3 * DAY_MS, 0), payment(today + 9 * DAY_MS, 2)],
+    },
+  });
+  assert.equal(overdue.problems[0].kind, 'overdue');
+  assert.equal(overdue.holdsThrough, null);
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: [{ id: 'rent', name: 'rent', since: today }],
+      payments: { rent: [payment(today - 3 * DAY_MS, 0)] },
+    }).problems.length,
+    0,
+    'a due date before the bill was tracked is not overdue',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: {
+        rent: [
+          {
+            ...(payment(today - 3 * DAY_MS, 0) as object),
+            paid: { moveId: 'm' },
+          } as never,
+        ],
+      },
+    }).problems.length,
+    0,
+    'a bill marked paid is not overdue',
+  );
+
+  // The walk carries what each day gave a bill into the next, and names the item that runs short.
+  const seen: number[] = [];
+  const line = (shortBy: number, tier: 'must' | 'want' = 'must') =>
+    ({
+      lineId: 'x',
+      dayKey: 'x',
+      itemId: 'rent',
+      tier,
+      bill: { dueOn: today + 3 * DAY_MS, totalCents: 1_000, ranged: null },
+      cents: 400,
+      shortBy,
+    }) as never;
+  const chained = run(
+    [day(today), day(today + 7 * DAY_MS), day(today + 14 * DAY_MS)],
+    {
+      draftOf: (entry, carry) => {
+        seen.push(
+          (carry.funded.rent ?? []).reduce((sum, f) => sum + f.cents, 0),
+        );
+        return {
+          draft: emptyDraft([line(entry.on === today + 14 * DAY_MS ? 250 : 0)]),
+          names: { rent: { name: 'Rent' } },
+        };
+      },
+    },
+  );
+  assert.deepEqual(
+    seen,
+    [0, 400, 800],
+    'each day starts from what the days before set aside',
+  );
+  assert.equal(chained.problems.length, 1);
+  assert.equal(chained.problems[0].kind, 'short');
+  assert.equal(chained.problems[0].name, 'Rent');
+  assert.equal(
+    chained.holdsThrough,
+    today + 7 * DAY_MS,
+    'holds through the last income day before the first short one',
+  );
+  assert.equal(
+    run([day(today)], {
+      draftOf: () => ({ draft: emptyDraft([line(100, 'want')]), names: {} }),
+    }).problems.length,
+    1,
+    'a bill due before the next income day that is not set aside in full is a gap, whatever its priority',
+  );
+  assert.equal(
+    run([day(today), day(today + 2 * DAY_MS)], {
+      draftOf: (entry) => ({
+        draft: emptyDraft(
+          entry.on === today
+            ? [
+                {
+                  ...(line(100, 'want') as object),
+                  bill: {
+                    dueOn: today + 20 * DAY_MS,
+                    totalCents: 1,
+                    ranged: null,
+                  },
+                } as never,
+              ]
+            : [],
+        ),
+        names: {},
+      }),
+    }).problems.length,
+    0,
+    'a short Want bill due after the next income day is not yet a gap',
+  );
+
+  // A change that starts in two months shows early, and leaves every earlier draft alone.
+  const planItems: PlanItemDoc[] = [
+    item('pay', 1, { kind: 'payLine', parentId: 'src' }),
+    item('src', 1),
+    item('groc', 2, { kind: 'envelope' }),
+  ];
+  const envelope = (
+    id: string,
+    itemId: string,
+    from: number,
+    cents: number,
+    until: number | null = null,
+  ) =>
+    ({
+      id,
+      itemId,
+      kind: 'envelope',
+      createdAt: 1,
+      effectiveFrom: from,
+      effectiveUntil: until,
+      changeId: 'c',
+      payload: {
+        name: itemId,
+        emoji: null,
+        priority: 'must',
+        orderIndex: 1,
+        funding: {
+          amount: { kind: 'exact', cents },
+          cadence: { kind: 'everyIncomeDay' },
+        },
+      },
+    }) as unknown as OpenVersion;
+  const baseVersions: OpenVersion[] = [
+    {
+      id: 'vsrc',
+      itemId: 'src',
+      kind: 'source',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: { name: 'Acme', pairings: [] },
+    } as unknown as OpenVersion,
+    {
+      id: 'vpay',
+      itemId: 'pay',
+      kind: 'payLine',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Paycheck',
+        schedule: { kind: 'weekly', anchor: today, monthDays: [] },
+        amount: exact(100_000),
+        ending: never,
+        stanceOverride: null,
+        pairings: [],
+      },
+    } as unknown as OpenVersion,
+    envelope('vg', 'groc', today, 90_000),
+  ];
+  const lookaheadOf = (
+    items: PlanItemDoc[],
+    versions: OpenVersion[],
+    billProgress: Record<string, never> = {},
+  ) => {
+    const comingDays = buildComingDays(items, versions, today);
+    const bills = items
+      .filter((entry) => entry.kind === 'bill')
+      .map((entry) => ({
+        item: entry,
+        version: versions.find((v) => v.itemId === entry.id) as never,
+      })) as never[];
+    const payments = Object.fromEntries(
+      bills.map(({ item: entry, version: v }: never) => {
+        const payload = (v as { payload: never }).payload as {
+          priority: 'must';
+          orderIndex: number;
+          amount: { lowCents: number; highCents: number };
+          timing: { schedule: never };
+          ending: typeof never;
+          fundedBy: { kind: 'suggested' };
+        };
+        return [
+          (entry as PlanItemDoc).id,
+          planBillPayments(
+            {
+              itemId: (entry as PlanItemDoc).id,
+              createdAt: 1,
+              priority: payload.priority,
+              orderIndex: payload.orderIndex,
+              amount: payload.amount,
+              schedule: payload.timing.schedule,
+              ending: payload.ending,
+              fundedBy: payload.fundedBy,
+              progress: billProgress[(entry as PlanItemDoc).id],
+            },
+            comingDays,
+            horizon,
+            'conservative',
+          ),
+        ];
+      }),
+    );
+    return computeLookahead(
+      { items, versions, openDays: [] },
+      {
+        stance: 'conservative',
+        today,
+        heldByItem: {},
+        settledKey: '',
+        billProgress,
+        startDate: null,
+        comingDays,
+        bills: bills.map(({ item: entry, version: v }: never) => ({
+          item: entry,
+          version: v,
+        })) as never,
+        payments,
+      },
+    );
+  };
+  const steady = lookaheadOf(planItems, baseVersions);
+  assert.equal(steady.problems.length, 0);
+  assert.equal(
+    steady.holdsThrough,
+    horizon,
+    'a steady plan holds to the horizon',
+  );
+  const raiseOn = today + 60 * DAY_MS;
+  const raised = lookaheadOf(planItems, [
+    envelope('vg', 'groc', today, 90_000, raiseOn - DAY_MS),
+    envelope('vg2', 'groc', raiseOn, 120_000),
+    ...baseVersions.filter((entry) => entry.kind !== 'envelope'),
+  ]);
+  assert.equal(
+    raised.problems.length > 0,
+    true,
+    'a change in two months shows now',
+  );
+  assert.equal(raised.problems[0].kind, 'short');
+  assert.equal(
+    raised.problems[0].on >= raiseOn,
+    true,
+    'and starts on or after its date',
+  );
+  assert.equal(
+    raised.holdsThrough !== null && raised.holdsThrough < raiseOn,
+    true,
+    'the plan holds through the income day before it',
+  );
+  assert.equal(
+    Object.keys(raised.shortByDay).every((key) =>
+      raised.problems.some(
+        (problem) =>
+          problem.on >= raiseOn &&
+          'dayKey' in problem &&
+          problem.dayKey === key,
+      ),
+    ),
+    true,
+  );
+  const draftOnDay = (versions: OpenVersion[], dayKey: string) =>
+    computeDraftView(
+      planItems,
+      versions,
+      'conservative',
+      [],
+      dayKey,
+      today,
+      {},
+      '',
+      {},
+    )?.draft;
+  const allDays = buildComingDays(planItems, baseVersions, today);
+  const before = allDays.filter((entry) => entry.on < raiseOn).at(-1);
+  assert.deepEqual(
+    draftOnDay(
+      [
+        envelope('vg', 'groc', today, 90_000, raiseOn - DAY_MS),
+        envelope('vg2', 'groc', raiseOn, 120_000),
+        ...baseVersions.filter((entry) => entry.kind !== 'envelope'),
+      ],
+      before?.dayKey ?? '',
+    ),
+    draftOnDay(baseVersions, before?.dayKey ?? ''),
+    'a draft before the change date is the same with or without it',
+  );
+
+  // A bill due the 5th with income on the 1st and 8th: the 1st funds it, so there is no warning; with only the 8th there is.
+  const rentVersion = (anchor: number) =>
+    ({
+      id: 'vrent',
+      itemId: 'rent',
+      kind: 'bill',
+      createdAt: 4,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Rent',
+        emoji: null,
+        priority: 'must',
+        orderIndex: 1,
+        amount: exact(50_000),
+        timing: {
+          kind: 'date',
+          schedule: { kind: 'once', anchor, monthDays: [] },
+        },
+        ending: { onDate: null, afterCount: 1 },
+        fundedBy: { kind: 'suggested' },
+        stanceOverride: null,
+      },
+    }) as unknown as OpenVersion;
+  const twiceMonthly = (monthDays: number[]) =>
+    ({
+      ...(baseVersions[1] as object),
+      payload: {
+        ...(baseVersions[1] as unknown as { payload: object }).payload,
+        schedule: { kind: 'twiceMonthly', anchor: today, monthDays },
+      },
+    }) as unknown as OpenVersion;
+  const rentItems = [...planItems, item('rent', 4, { kind: 'bill' })];
+  const nov5 = utc(2026, 11, 5);
+  const withFirst = lookaheadOf(rentItems, [
+    baseVersions[0],
+    twiceMonthly([1, 8]),
+    baseVersions[2],
+    rentVersion(nov5),
+  ]);
+  assert.equal(
+    withFirst.problems.some((problem) => problem.kind === 'noIncome'),
+    false,
+    'the 1st can fund a bill due the 5th',
+  );
+  const onlyEighth = lookaheadOf(rentItems, [
+    baseVersions[0],
+    twiceMonthly([8]),
+    baseVersions[2],
+    rentVersion(utc(2026, 11, 5)),
+  ]);
+  assert.equal(
+    onlyEighth.problems.some(
+      (problem) => problem.kind === 'noIncome' && problem.on === nov5,
+    ),
+    true,
+    'with income only on the 8th, nothing before the 5th can fund it',
+  );
+
+  // The stance cushion adds the difference between the planned figure and the middle of each range.
+  const rangeDay = (on: number, low: number, high: number, sourceId: string) =>
+    ({
+      ...(day(on) as object),
+      sourceId,
+      amount: { lowCents: low, highCents: high },
+    }) as never;
+  const cushion = getStanceCushion(
+    'conservative',
+    today,
+    [
+      rangeDay(today + 3 * DAY_MS, 100_000, 120_000, 's1'),
+      rangeDay(today + 5 * DAY_MS, 50_000, 60_000, 's2'),
+      rangeDay(today + 90 * DAY_MS, 50_000, 60_000, 's3'),
+    ],
+    {
+      b1: [
+        {
+          dueOn: today + 4 * DAY_MS,
+          totalCents: 20_000,
+          ranged: {
+            range: { lowCents: 10_000, highCents: 20_000 },
+            stance: 'conservative',
+            isOwnStance: false,
+          },
+          paid: null,
+        },
+      ] as never,
+    },
+  );
+  assert.deepEqual(cushion, {
+    cents: 10_000 + 5_000 + 5_000,
+    sourceCount: 2,
+    billCount: 1,
+  });
+  assert.equal(
+    getStanceCushion('middle', today, [rangeDay(today, 1, 3, 's')], {}),
+    null,
+    'a middle stance holds nothing back',
+  );
+
+  // 50 envelopes and 10 bills over a year of weekly income.
+  const manyItems: PlanItemDoc[] = [
+    ...planItems.filter((entry) => entry.kind !== 'envelope'),
+    ...Array.from({ length: 50 }, (_, i) =>
+      item(`e${i}`, i + 2, { kind: 'envelope' }),
+    ),
+  ];
+  const manyVersions: OpenVersion[] = [
+    ...baseVersions.filter((entry) => entry.kind !== 'envelope'),
+    ...Array.from({ length: 50 }, (_, i) =>
+      envelope(`ve${i}`, `e${i}`, today, 1_000 + i),
+    ),
+  ];
+  const timings = Array.from({ length: 5 }, () => {
+    const started = performance.now();
+    lookaheadOf(manyItems, manyVersions);
+    return performance.now() - started;
+  }).sort((a, b) => a - b);
+  assert.ok(timings[2] < 1_500, `50-envelope lookahead median ${timings[2]}ms`);
+  console.log(
+    `runway engine: 50-envelope lookahead over ${buildComingDays(manyItems, manyVersions, today).length} days median ${timings[2].toFixed(0)} ms, worst ${timings[4].toFixed(0)} ms`,
   );
 }
 

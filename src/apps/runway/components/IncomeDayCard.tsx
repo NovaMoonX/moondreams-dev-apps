@@ -32,22 +32,21 @@ const getStatusLabel = (day: ListedDay) => {
 
 interface IncomeDayCardProps {
   day: ListedDay;
+  /** A line the lookahead has for this day, such as the item that runs short. */
+  note?: string;
   onOpen: () => void;
 }
 
 /** One coming income day: the date, where it comes from and the take-home amount; it opens that day's draft. */
-function IncomeDayCard({ day, onOpen }: IncomeDayCardProps) {
+function IncomeDayCard({ day, note, onOpen }: IncomeDayCardProps) {
   const stance = effectiveStance(
     useAppSelector(selectStance),
     day.stanceOverride,
   );
   const record = useAppSelector((state) =>
-    day.status === 'confirmed'
-      ? selectEffectiveSplit(state, day.dayKey)
-      : null,
+    day.status === 'confirmed' ? selectEffectiveSplit(state, day.dayKey) : null,
   );
-  const cents =
-    record?.arrivedCents ?? pick(stance, day.amount, 'income');
+  const cents = record?.arrivedCents ?? pick(stance, day.amount, 'income');
   const statusLabel = getStatusLabel(day);
   const title = day.sourceName ?? day.payLineName;
   const detail = day.sourceName ? day.payLineName : null;
@@ -57,7 +56,7 @@ function IncomeDayCard({ day, onOpen }: IncomeDayCardProps) {
       <Button
         variant='tertiary'
         className='h-auto w-full items-start justify-start gap-3 rounded-2xl p-3 text-left font-normal whitespace-normal'
-        aria-label={`${formatDateUTC(day.on)}, ${[title, detail, statusLabel].filter(Boolean).join(', ')}, ${formatCents(cents)}${day.status === 'confirmed' || day.amount.lowCents === day.amount.highCents ? '' : ' planned'}. Open this day`}
+        aria-label={`${formatDateUTC(day.on)}, ${[title, detail, statusLabel, note].filter(Boolean).join(', ')}, ${formatCents(cents)}${day.status === 'confirmed' || day.amount.lowCents === day.amount.highCents ? '' : ' planned'}. Open this day`}
         onClick={onOpen}
       >
         <span
@@ -88,6 +87,11 @@ function IncomeDayCard({ day, onOpen }: IncomeDayCardProps) {
               )}
             >
               {statusLabel}
+            </span>
+          )}
+          {note && (
+            <span className='text-muted-foreground block text-xs break-words'>
+              {note}
             </span>
           )}
           {day.status !== 'confirmed' && (
