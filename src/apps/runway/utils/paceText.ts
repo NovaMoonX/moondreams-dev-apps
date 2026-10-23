@@ -19,7 +19,14 @@ export function describePace(goal: GoalSealed, pace: Pace): PaceWords {
     ? `The plan reaches it on ${formatDateUTC(pace.reachedOn.on)}.`
     : 'The income days ahead do not reach it.';
   if (pace.isComplete) {
-    return { need: `${target} is saved.`, standing: '', stateLabel: null };
+    return {
+      need: `${target} is saved.`,
+      standing: '',
+      stateLabel: PACE_WORDS.completed,
+    };
+  }
+  if (goal.state === 'paused') {
+    return { need: '', standing: PACE_WORDS.paused, stateLabel: null };
   }
   if (goal.funding.amount.kind === 'rest') {
     return { need: '', standing: PACE_WORDS.rest, stateLabel: null };

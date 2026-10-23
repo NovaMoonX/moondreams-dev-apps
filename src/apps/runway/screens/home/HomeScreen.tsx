@@ -38,7 +38,10 @@ function HomeScreen() {
   const isLoaded = isItemsLoaded && isDaysLoaded;
   const hasIncome = useAppSelector((state) =>
     state.runway.items.some(
-      (item) => item.kind === 'payLine' && item.archivedAt === null,
+      (item) =>
+        item.kind === 'payLine' &&
+        item.archivedAt === null &&
+        (item.endedAt === null || item.endedAt >= today),
     ),
   );
   const balances = useAppSelector(selectBalances);

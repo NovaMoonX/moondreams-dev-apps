@@ -9,7 +9,16 @@ import {
   isSamePayload,
   type ItemPayload,
 } from '../../src/apps/runway/utils/changeText.ts';
-import { getEffectiveFrom } from '../../src/apps/runway/utils/fromWhen.ts';
+import {
+  getChangeSpan,
+  INITIAL_FROM_WHEN,
+} from '../../src/apps/runway/utils/fromWhen.ts';
+import { describeLineReason } from '../../src/apps/runway/utils/draftText.ts';
+import { findReachedEnding } from '../../src/apps/runway/engine/endings.ts';
+import {
+  findReturning,
+  getStretchEnd,
+} from '../../src/apps/runway/engine/stretch.ts';
 
 import {
   buildComingDays,
@@ -3470,7 +3479,7 @@ const version = (
     changeId: 'what-if',
     payload: payload(15_000),
   };
-  const preview = previewChange(inputs, virtual);
+  const preview = previewChange(inputs, { kind: 'version', version: virtual });
   assert.ok(preview.length > 0, 'a raise from a date moves later days');
   assert.ok(
     preview.every((day) => day.on >= from),
@@ -3483,7 +3492,10 @@ const version = (
     'each later day gives $50 more to the envelope',
   );
   assert.deepEqual(
-    previewChange(inputs, { ...virtual, effectiveFrom: today + 400 * DAY_MS }),
+    previewChange(inputs, {
+      kind: 'version',
+      version: { ...virtual, effectiveFrom: today + 400 * DAY_MS },
+    }),
     [],
     'a change past the days planned moves nothing',
   );
@@ -3670,16 +3682,31 @@ const version = (
     ),
     true,
   );
-  assert.deepEqual(
-    getEffectiveFrom({ choice: 'date', date: '2026-10-23' }, today),
+  const spanContext = (presetDayKey: string | null = null) => ({
+    today,
+    days: buildComingDays(planItems, base, today),
+    presetDayKey,
+  });
+  assert.equal(
+    getChangeSpan(
+      { ...INITIAL_FROM_WHEN, choice: 'date', date: '2026-10-23' },
+      spanContext(),
+    ).span,
     null,
     'a date that is not after today is refused',
   );
-  assert.equal(
-    getEffectiveFrom({ choice: 'date', date: '2026-10-24' }, today),
-    today + DAY_MS,
+  assert.deepEqual(
+    getChangeSpan(
+      { ...INITIAL_FROM_WHEN, choice: 'date', date: '2026-10-24' },
+      spanContext(),
+    ).span,
+    { kind: 'version', effectiveFrom: today + DAY_MS, effectiveUntil: null },
   );
-  assert.equal(getEffectiveFrom({ choice: 'now', date: '' }, today), today);
+  assert.deepEqual(getChangeSpan(INITIAL_FROM_WHEN, spanContext()).span, {
+    kind: 'version',
+    effectiveFrom: today,
+    effectiveUntil: null,
+  });
 
   // 50 envelopes: the preview of one change over every coming day stays quick.
   const many = Array.from({ length: 50 }, (_, index) => index);
@@ -3705,7 +3732,10 @@ const version = (
   const startedAt = performance.now();
   const manyPreview = previewChange(
     { ...inputs, items: manyItems, versions: manyVersions },
-    { ...virtual, itemId: 'e7', payload: payload(5_000) },
+    {
+      kind: 'version',
+      version: { ...virtual, itemId: 'e7', payload: payload(5_000) },
+    },
   );
   const elapsed = performance.now() - startedAt;
   assert.ok(manyPreview.length > 0);
@@ -3715,6 +3745,627 @@ const version = (
   );
   console.log(
     `runway engine: 50-envelope change preview over ${manyPreview.length} days ${elapsed.toFixed(0)} ms`,
+  );
+}
+
+// Change for a stretch, for one income day, or end it (Issue 19).
+{
+  const today = utc(2026, 10, 23);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const weekly = { kind: 'weekly', anchor: today, monthDays: [] } as const;
+  const planItems: PlanItemDoc[] = [
+    item('pay', 1, { kind: 'payLine', parentId: 'src' }),
+    item('src', 1),
+    item('vac', 2, { kind: 'envelope' }),
+    item('fun', 3, { kind: 'goal' }),
+  ];
+  const envelope = (cents: number) => ({
+    name: 'Vacation fund',
+    emoji: null,
+    priority: 'must' as const,
+    orderIndex: 1,
+    funding: {
+      amount: { kind: 'exact' as const, cents },
+      cadence: { kind: 'everyIncomeDay' as const },
+    },
+  });
+  const goalPayload = (state?: 'active' | 'paused') =>
+    ({
+      name: 'Laptop',
+      emoji: null,
+      priority: 'should' as const,
+      orderIndex: 1,
+      targetCents: 100_000,
+      targetDate: null,
+      funding: {
+        amount: { kind: 'exact' as const, cents: 5_000 },
+        cadence: { kind: 'everyIncomeDay' as const },
+      },
+      ...(state ? { state } : {}),
+    }) as never;
+  const make = (
+    id: string,
+    itemId: string,
+    kind: 'envelope' | 'goal',
+    createdAt: number,
+    payload: unknown,
+    over: { effectiveFrom?: number; effectiveUntil?: number | null } = {},
+  ): OpenVersion =>
+    ({
+      id,
+      itemId,
+      kind,
+      createdAt,
+      effectiveFrom: over.effectiveFrom ?? today,
+      effectiveUntil: over.effectiveUntil ?? null,
+      changeId: 'c',
+      payload,
+    }) as OpenVersion;
+  const base: OpenVersion[] = [
+    {
+      id: 'vsrc',
+      itemId: 'src',
+      kind: 'source',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: { name: 'Acme', pairings: [] },
+    },
+    {
+      id: 'vpay',
+      itemId: 'pay',
+      kind: 'payLine',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Paycheck',
+        schedule: weekly,
+        amount: exact(100_000),
+        ending: NEVER,
+        stanceOverride: null,
+        pairings: [],
+      },
+    },
+    make('vvac', 'vac', 'envelope', 2, envelope(30_000)),
+  ];
+  const coming = buildComingDays(planItems, base, today);
+  const dayKeys = coming.map((day) => day.dayKey);
+  const draftFor = (
+    items: PlanItemDoc[],
+    versions: OpenVersion[],
+    dayKey: string,
+    openDays: never[] = [],
+    settledKey = '',
+  ) =>
+    computeDraftView(
+      items,
+      versions,
+      'conservative',
+      openDays,
+      dayKey,
+      today,
+      {},
+      settledKey,
+      {},
+    );
+  const lineOf = (view: ReturnType<typeof draftFor>, itemId: string) =>
+    view?.draft.lines.find((line) => line.itemId === itemId) ?? null;
+
+  // A stretch of N income days: the earlier amount returns after it with nothing written, and says so once.
+  const end = getStretchEnd(coming, today, 3);
+  assert.equal(
+    end,
+    coming[2].on + DAY_MS,
+    'three income days end after the third',
+  );
+  assert.equal(
+    getStretchEnd(coming, today, 0),
+    null,
+    'a count below one is no stretch',
+  );
+  assert.equal(
+    getStretchEnd(coming.slice(0, 2), today, 3),
+    null,
+    'a count past the days planned is refused',
+  );
+  const stretch = make('vstretch', 'vac', 'envelope', 10, envelope(10_000), {
+    effectiveUntil: end,
+  });
+  const stretched = [...base, stretch];
+  const cents = (index: number) =>
+    lineOf(draftFor(planItems, stretched, dayKeys[index]), 'vac')?.cents;
+  assert.deepEqual(
+    [0, 1, 2, 3, 4].map(cents),
+    [10_000, 10_000, 10_000, 30_000, 30_000],
+    'the stretch covers its days and the earlier amount returns on the next',
+  );
+  assert.deepEqual(
+    [0, 1, 2, 3, 4].map(
+      (index) =>
+        lineOf(draftFor(planItems, stretched, dayKeys[index]), 'vac')?.reason
+          .code,
+    ),
+    ['funded', 'funded', 'funded', 'returns', 'funded'],
+    'the first day back at the earlier amount says it returns, once',
+  );
+  assert.equal(
+    describeLineReason(
+      lineOf(draftFor(planItems, stretched, dayKeys[3]), 'vac')!,
+      {},
+      'Vacation fund',
+    ),
+    'Vacation fund returns to $300.00 this time',
+  );
+  assert.equal(
+    lineOf(draftFor(planItems, base, dayKeys[3]), 'vac')?.reason.code,
+    'funded',
+    'an item with no stretch never says it returns',
+  );
+  assert.deepEqual(
+    [...findReturning(stretched, ['vac', 'fun'], coming[3].on, coming[2].on)],
+    ['vac'],
+  );
+  assert.deepEqual(
+    [...findReturning(stretched, ['vac'], coming[4].on, coming[3].on)],
+    [],
+    'it returns only on the first day after the stretch',
+  );
+  const later = make('vlater', 'vac', 'envelope', 11, envelope(20_000), {
+    effectiveFrom: today,
+  });
+  assert.deepEqual(
+    [
+      ...findReturning(
+        [...stretched, later],
+        ['vac'],
+        coming[3].on,
+        coming[2].on,
+      ),
+    ],
+    [],
+    'a later permanent change that wins the whole time leaves nothing to return',
+  );
+
+  // Until a date: the last day is included.
+  const until = getChangeSpan(
+    {
+      ...INITIAL_FROM_WHEN,
+      choice: 'stretch',
+      stretch: 'until',
+      until: '2026-11-06',
+    },
+    { today, days: coming, presetDayKey: null },
+  );
+  assert.deepEqual(until.span, {
+    kind: 'version',
+    effectiveFrom: today,
+    effectiveUntil: utc(2026, 11, 7),
+  });
+  assert.equal(
+    getChangeSpan(
+      {
+        ...INITIAL_FROM_WHEN,
+        choice: 'stretch',
+        stretch: 'until',
+        until: '2026-10-22',
+      },
+      { today, days: coming, presetDayKey: null },
+    ).span,
+    null,
+    'a last day before today is refused',
+  );
+  assert.equal(
+    getChangeSpan(
+      {
+        ...INITIAL_FROM_WHEN,
+        choice: 'stretch',
+        stretch: 'count',
+        count: '999',
+      },
+      { today, days: coming, presetDayKey: null },
+    ).span,
+    null,
+  );
+  assert.deepEqual(
+    getChangeSpan(
+      { ...INITIAL_FROM_WHEN, choice: 'stretch', stretch: 'count', count: '3' },
+      { today, days: coming, presetDayKey: null },
+    ).span,
+    { kind: 'version', effectiveFrom: today, effectiveUntil: end },
+  );
+
+  // The previewed stretch is the saved one.
+  const stretchPreview = previewChange(
+    {
+      items: planItems,
+      versions: base,
+      openDays: [],
+      stance: 'conservative',
+      today,
+      heldByItem: {},
+      settledKey: '',
+      billProgress: {},
+    },
+    {
+      kind: 'version',
+      version: {
+        itemId: 'vac',
+        kind: 'envelope',
+        effectiveFrom: today,
+        effectiveUntil: end,
+        changeId: 'what-if',
+        payload: envelope(10_000),
+      },
+    },
+  );
+  assert.deepEqual(
+    stretchPreview.map((day) => day.dayKey),
+    dayKeys.slice(0, 3),
+    'a stretch of three days moves three days and none after',
+  );
+  assert.ok(
+    stretchPreview.every(
+      (day) =>
+        day.effect.freeAfterCents - day.effect.freeBeforeCents === 20_000,
+    ),
+  );
+  assert.deepEqual(
+    stretchPreview.map((day) => day.effect.freeAfterCents),
+    dayKeys
+      .slice(0, 3)
+      .map(
+        (key) => draftFor(planItems, stretched, key)?.draft.freeToSpend.cents,
+      ),
+    'the previewed stretch equals the saved result',
+  );
+
+  // One income day only: a day's own payload, no version.
+  const target = coming[1];
+  const dayOverride = {
+    id: target.dayKey,
+    payLineId: 'pay',
+    sourceId: 'src',
+    expectedOn: target.on,
+    arrivedOn: null,
+    confirmedAt: null,
+    status: 'draft' as const,
+    doneLineIds: [],
+    override: {
+      pairings: null,
+      holdResolutions: {},
+      payloads: { vac: envelope(5_000) },
+    },
+  };
+  const withDay = [dayOverride] as never[];
+  assert.deepEqual(
+    dayKeys
+      .slice(0, 4)
+      .map(
+        (key) => lineOf(draftFor(planItems, base, key, withDay), 'vac')?.cents,
+      ),
+    [30_000, 5_000, 30_000, 30_000],
+    'one income day takes its own amount and its neighbours keep the plan',
+  );
+  assert.equal(
+    lineOf(draftFor(planItems, base, dayKeys[2], withDay), 'vac')?.reason.code,
+    'funded',
+    'a day-only change does not say the next day returns',
+  );
+  const legacyDay = [
+    { ...dayOverride, override: { pairings: null, holdResolutions: {} } },
+  ] as never[];
+  assert.equal(
+    lineOf(draftFor(planItems, base, target.dayKey, legacyDay), 'vac')?.cents,
+    30_000,
+    'a day written before payloads existed follows the plan',
+  );
+  const dayPreview = previewChange(
+    {
+      items: planItems,
+      versions: base,
+      openDays: [],
+      stance: 'conservative',
+      today,
+      heldByItem: {},
+      settledKey: '',
+      billProgress: {},
+    },
+    {
+      kind: 'day',
+      day: {
+        dayKey: target.dayKey,
+        payLineId: 'pay',
+        sourceId: 'src',
+        on: target.on,
+      },
+      itemId: 'vac',
+      payload: envelope(5_000),
+    },
+  );
+  assert.deepEqual(
+    dayPreview.map((day) => day.dayKey),
+    [target.dayKey],
+    'a day-only change moves that day and no other',
+  );
+  assert.equal(
+    dayPreview[0].effect.freeAfterCents,
+    draftFor(planItems, base, target.dayKey, withDay)?.draft.freeToSpend.cents,
+    'the previewed day equals the saved day',
+  );
+  assert.notEqual(
+    hashOverride({
+      pairings: null,
+      holdResolutions: {},
+      payloads: { vac: envelope(5_000) },
+    }),
+    hashOverride({ pairings: null, holdResolutions: {} }),
+    'a day-only payload changes the day fingerprint',
+  );
+  assert.equal(
+    hashOverride({ pairings: null, holdResolutions: {}, payloads: {} }),
+    hashOverride({ pairings: null, holdResolutions: {} }),
+    'an empty set of payloads is the legacy fingerprint',
+  );
+
+  // Confirmed days never move: a settled day is not in any preview.
+  const settledPreview = previewChange(
+    {
+      items: planItems,
+      versions: base,
+      openDays: [],
+      stance: 'conservative',
+      today,
+      heldByItem: {},
+      settledKey: dayKeys[0],
+      billProgress: {},
+    },
+    { kind: 'end', itemId: 'vac', endedAt: today - DAY_MS },
+  );
+  assert.ok(
+    !settledPreview.some((day) => day.dayKey === dayKeys[0]),
+    'a confirmed day is left out of what a change shows',
+  );
+  assert.ok(settledPreview.length > 0);
+
+  // End at a date: the item counts through that day and is gone the next.
+  const endedOn = coming[2].on;
+  const endedItems = planItems.map((entry) =>
+    entry.id === 'vac' ? { ...entry, endedAt: endedOn } : entry,
+  );
+  assert.deepEqual(
+    [0, 2, 3].map(
+      (index) =>
+        lineOf(draftFor(endedItems, base, dayKeys[index]), 'vac')?.cents ??
+        null,
+    ),
+    [30_000, 30_000, null],
+    'an ended envelope funds through its last day and not after',
+  );
+  assert.equal(
+    resolveVersion(base, 'vac', coming[5].on)?.id,
+    'vvac',
+    'its versions still resolve for any date',
+  );
+  const endPreview = previewChange(
+    {
+      items: planItems,
+      versions: base,
+      openDays: [],
+      stance: 'conservative',
+      today,
+      heldByItem: {},
+      settledKey: '',
+      billProgress: {},
+    },
+    { kind: 'end', itemId: 'vac', endedAt: endedOn },
+  );
+  assert.ok(endPreview.every((day) => day.on > endedOn));
+  assert.deepEqual(
+    endPreview.slice(0, 3).map((day) => day.effect.freeAfterCents),
+    dayKeys
+      .slice(3, 6)
+      .map((key) => draftFor(endedItems, base, key)?.draft.freeToSpend.cents),
+    'the previewed ending equals the saved one',
+  );
+  const endedPayLine = planItems.map((entry) =>
+    entry.id === 'pay' ? { ...entry, endedAt: coming[3].on } : entry,
+  );
+  assert.equal(
+    buildComingDays(endedPayLine, base, today).at(-1)?.on,
+    coming[3].on,
+    'an ended pay line has no income days after its last',
+  );
+
+  // Archive: gone from today on, still resolved for the days before it.
+  const archived = planItems.map((entry) =>
+    entry.id === 'vac' ? { ...entry, archivedAt: today } : entry,
+  );
+  assert.equal(
+    resolve(
+      archived.filter((e) => e.id === 'vac'),
+      base.filter((v) => v.itemId === 'vac'),
+      today,
+    ).length,
+    0,
+    'an archived envelope is off the lists from today',
+  );
+  assert.equal(
+    resolve(
+      archived
+        .filter((e) => e.id === 'vac')
+        .map((e) => ({ ...e, archivedAt: today + 2 * DAY_MS })),
+      base.filter((v) => v.itemId === 'vac'),
+      today + DAY_MS,
+    ).length,
+    1,
+    'an archived envelope still resolves for earlier days',
+  );
+  assert.equal(
+    lineOf(draftFor(archived, base, dayKeys[0]), 'vac'),
+    null,
+    'the coming drafts no longer fund it',
+  );
+  const record = {
+    id: 'r1',
+    dayId: 'pay_20261016',
+    createdAt: 1,
+    kind: 'confirmed' as const,
+    payload: {
+      fingerprint: 'f',
+      stance: 'conservative' as const,
+      arrivedCents: 100_000,
+      expectedCents: 100_000,
+      freeToSpendCents: 70_000,
+      differences: [],
+      lines: [
+        {
+          lineId: 'pay_20261016:vac',
+          itemId: 'vac',
+          name: 'Vacation fund',
+          emoji: null,
+          tier: 'must' as const,
+          demandCents: 30_000,
+          cents: 30_000,
+          shortBy: 0,
+          paidBy: [],
+        },
+      ],
+    },
+  };
+  assert.deepEqual(
+    sumConfirmedByItem([record]),
+    { vac: 30_000 },
+    'what a confirmed day gave an archived item still counts',
+  );
+  const archivePreview = previewChange(
+    {
+      items: planItems,
+      versions: base,
+      openDays: [],
+      stance: 'conservative',
+      today,
+      heldByItem: {},
+      settledKey: '',
+      billProgress: {},
+    },
+    { kind: 'archive', itemId: 'vac', archivedAt: today },
+  );
+  assert.deepEqual(
+    archivePreview.map((day) => day.effect.freeAfterCents),
+    archivePreview.map((day) => day.effect.freeBeforeCents + 30_000),
+    'archiving shows each coming day giving its money back to Free to spend',
+  );
+
+  // Pause and resume a goal: a paused goal demands nothing, a legacy one is active.
+  const goalBase = [...base, make('vfun', 'fun', 'goal', 3, goalPayload())];
+  assert.equal(
+    lineOf(draftFor(planItems, goalBase, dayKeys[0]), 'fun')?.cents,
+    5_000,
+    'a goal written before states existed is active',
+  );
+  const paused = [
+    ...goalBase,
+    make('vpause', 'fun', 'goal', 20, goalPayload('paused')),
+  ];
+  assert.equal(
+    lineOf(draftFor(planItems, paused, dayKeys[0]), 'fun'),
+    null,
+    'a paused goal gets nothing',
+  );
+  const resumed = [
+    ...paused,
+    make('vresume', 'fun', 'goal', 21, goalPayload('active'), {
+      effectiveFrom: coming[2].on,
+    }),
+  ];
+  assert.deepEqual(
+    [1, 2].map(
+      (index) =>
+        lineOf(draftFor(planItems, resumed, dayKeys[index]), 'fun')?.cents ??
+        null,
+    ),
+    [null, 5_000],
+    'resuming gives it money again from its date',
+  );
+  const pausePreview = previewChange(
+    {
+      items: planItems,
+      versions: goalBase,
+      openDays: [],
+      stance: 'conservative',
+      today,
+      heldByItem: {},
+      settledKey: '',
+      billProgress: {},
+    },
+    {
+      kind: 'version',
+      version: {
+        itemId: 'fun',
+        kind: 'goal',
+        effectiveFrom: today,
+        effectiveUntil: null,
+        changeId: 'what-if',
+        payload: goalPayload('paused'),
+      },
+    },
+  );
+  assert.ok(
+    pausePreview.every(
+      (day) => day.effect.freeAfterCents - day.effect.freeBeforeCents === 5_000,
+    ) && pausePreview.length > 0,
+    'pausing shows $50 returning to Free to spend on each day',
+  );
+
+  // A pay line's ending, reached.
+  const threeTimes = { onDate: null, afterCount: 3 };
+  const isNever = () => false;
+  assert.equal(
+    findReachedEnding(weekly, threeTimes, today + 14 * DAY_MS, isNever),
+    null,
+    'the last income day is today and not confirmed yet',
+  );
+  assert.equal(
+    findReachedEnding(weekly, threeTimes, today + 14 * DAY_MS, () => true),
+    today + 14 * DAY_MS,
+    'confirming the last income day reaches the ending',
+  );
+  assert.equal(
+    findReachedEnding(weekly, threeTimes, today + 15 * DAY_MS, isNever),
+    today + 14 * DAY_MS,
+    'the first load after the last income day reaches it',
+  );
+  assert.equal(
+    findReachedEnding(weekly, threeTimes, today + 7 * DAY_MS, () => true),
+    null,
+    'income days still to come mean it has not ended',
+  );
+  assert.equal(
+    findReachedEnding(weekly, NEVER, today + 900 * DAY_MS, isNever),
+    null,
+  );
+  assert.equal(
+    findReachedEnding(
+      weekly,
+      { onDate: today + 10 * DAY_MS, afterCount: null },
+      today + 11 * DAY_MS,
+      isNever,
+    ),
+    today + 7 * DAY_MS,
+    'an end date ends it on its last income day before the date',
+  );
+  assert.equal(
+    findReachedEnding(
+      { ...weekly, kind: 'once' },
+      NEVER,
+      today + DAY_MS,
+      isNever,
+    ),
+    today,
+    'a one-time pay line ends after its day',
   );
 }
 

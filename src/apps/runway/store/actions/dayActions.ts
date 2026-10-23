@@ -1,6 +1,7 @@
 import { doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { generateUuid } from '@/utils/idUtils';
 
 import { CONFIRM_WORDS, CORRECT_WORDS } from '@apps/runway/constants';
 import {
@@ -19,6 +20,8 @@ import type { Draft } from '@apps/runway/engine/draft';
 import { hashOverride } from '@apps/runway/engine/fingerprint';
 import { openJson, sealJson } from '@apps/runway/security';
 import type {
+  ChangeDoc,
+  ChangeSealed,
   Cents,
   DateOnly,
   DayOverrideSealed,
@@ -32,6 +35,7 @@ import type {
 export const EMPTY_OVERRIDE: DayOverrideSealed = {
   pairings: null,
   holdResolutions: {},
+  payloads: {},
 };
 
 export interface DayRef {
@@ -50,8 +54,15 @@ export async function saveDayOverride(
   encryption: RunwayEncryption,
   day: DayRef,
   change: (current: DayOverrideSealed) => DayOverrideSealed,
+  log?: { itemId: string; summary: string; note: string | null },
 ): Promise<void> {
   const dayKey = toDayKey(day.payLineId, day.expectedOn);
+  const changeSealed = log
+    ? await sealJson<ChangeSealed>(
+        { summary: log.summary, note: log.note },
+        encryption,
+      )
+    : null;
   const ref = doc(db, 'apps', 'runway', 'plans', uid, 'days', dayKey);
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
@@ -69,8 +80,24 @@ export async function saveDayOverride(
     const current: DayOverrideSealed = {
       pairings: opened?.pairings ?? null,
       holdResolutions: opened?.holdResolutions ?? {},
+      payloads: opened?.payloads ?? {},
     };
     const sealed = await sealJson(change(current), encryption);
+    if (log && changeSealed) {
+      const changeId = generateUuid();
+      const entry: ChangeDoc = {
+        id: changeId,
+        kind: 'planChange',
+        createdAt: Date.now(),
+        effectiveFrom: day.expectedOn,
+        itemIds: [log.itemId],
+        sealed: changeSealed,
+      };
+      transaction.set(
+        doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+        entry,
+      );
+    }
     if (existing) {
       transaction.update(ref, { sealed });
       return;
@@ -185,6 +212,7 @@ export async function confirmDay(
     const current = hashOverride({
       pairings: stored?.pairings ?? null,
       holdResolutions: stored?.holdResolutions ?? {},
+      payloads: stored?.payloads,
     });
     if (current !== input.overrideFingerprint) {
       throw new DayChangedElsewhere(

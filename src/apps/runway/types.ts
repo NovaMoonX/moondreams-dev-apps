@@ -8,6 +8,7 @@ import type {
   MOVE_KINDS,
   START_HOLDINGS,
   DAY_STATUSES,
+  GOAL_STATES,
   HOLD_CHOICES,
   PLAN_SECTIONS,
   PRIORITIES,
@@ -113,12 +114,15 @@ export interface Pairing {
 
 export type HoldChoice = (typeof HOLD_CHOICES)[number];
 export type DayStatus = (typeof DAY_STATUSES)[number];
+export type GoalState = (typeof GOAL_STATES)[number];
 
 /** What the person changed for one income day. `pairings` null means the pay line's set applies. */
 export interface DayOverrideSealed {
   pairings: Pairing[] | null;
   /** The choice for a short pairing, by the target's item id. */
   holdResolutions: Record<string, HoldChoice>;
+  /** An envelope's or goal's whole payload for this income day only, by item id; a day written before it existed has none. */
+  payloads: Record<string, EnvelopeSealed | GoalSealed>;
 }
 
 export interface IncomeDayDoc {
@@ -291,6 +295,8 @@ export interface GoalSealed {
   targetCents: Cents;
   targetDate: DateOnly | null;
   funding: FundingRule;
+  /** Paused stops new money and keeps the balance; a version written before it existed has none and reads as active. */
+  state: GoalState;
 }
 
 export interface PlanItemDoc {

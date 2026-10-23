@@ -25,7 +25,13 @@ import {
   type BillPayment,
 } from '@apps/runway/engine/demands';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
-import { resolve, resolveCurrentOrNext } from '@apps/runway/engine/resolve';
+import { findReachedEnding } from '@apps/runway/engine/endings';
+import { findReturning } from '@apps/runway/engine/stretch';
+import {
+  resolve,
+  resolveCurrentOrNext,
+  resolveVersion,
+} from '@apps/runway/engine/resolve';
 import { readStance } from '@apps/runway/engine/stance';
 import {
   LOOKAHEAD_MONTHS,
@@ -33,7 +39,7 @@ import {
   PRIORITIES,
   START_DAY_KEY,
 } from '@apps/runway/constants';
-import { addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
+import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
 import type {
   BillVersion,
   DayOverrideSealed,
@@ -41,7 +47,9 @@ import type {
   OpenDay,
   OpenRecord,
   Pairing,
+  EnvelopeSealed,
   EnvelopeVersion,
+  GoalSealed,
   GoalVersion,
   OpenVersion,
   PayLineVersion,
@@ -51,6 +59,11 @@ import type {
 } from '@apps/runway/types';
 
 const selectItems = (state: RootState) => state.runway.items;
+
+/** On the lists on `on`: not archived and not ended before it. An older day still resolves what has since gone. */
+const isListed = (item: PlanItemDoc, on: number) =>
+  (item.archivedAt === null || on < item.archivedAt) &&
+  (item.endedAt === null || on <= item.endedAt);
 const selectVersions = (state: RootState) => state.runway.versions;
 const selectOn = (_state: RootState, on: number) => on;
 
@@ -83,7 +96,7 @@ export const selectResolvedPlan = createSelector(
     const sourceVersions = versions.filter(isSource);
     const payLineVersions = versions.filter(isPayLine);
     const live = [...items]
-      .filter((item) => item.archivedAt === null)
+      .filter((item) => isListed(item, on))
       .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 
     const result = live
@@ -369,7 +382,7 @@ export const selectEnvelopes = createSelector(
   (items, versions, on): ResolvedEnvelope[] => {
     const envelopeVersions = versions.filter(isEnvelope);
     const result = items
-      .filter((item) => item.kind === 'envelope' && item.archivedAt === null)
+      .filter((item) => item.kind === 'envelope' && isListed(item, on))
       .flatMap((item) => {
         const version = resolveCurrentOrNext(envelopeVersions, item.id, on);
         return version ? [{ item, version }] : [];
@@ -400,7 +413,7 @@ export const selectBills = createSelector(
   (items, versions, on): ResolvedBill[] => {
     const billVersions = versions.filter(isBill);
     const result = items
-      .filter((item) => item.kind === 'bill' && item.archivedAt === null)
+      .filter((item) => item.kind === 'bill' && isListed(item, on))
       .flatMap((item) => {
         const version = resolveCurrentOrNext(billVersions, item.id, on);
         return version ? [{ item, version }] : [];
@@ -431,7 +444,7 @@ export const selectGoals = createSelector(
   (items, versions, on): ResolvedGoal[] => {
     const goalVersions = versions.filter(isGoal);
     const result = items
-      .filter((item) => item.kind === 'goal' && item.archivedAt === null)
+      .filter((item) => item.kind === 'goal' && isListed(item, on))
       .flatMap((item) => {
         const version = resolveCurrentOrNext(goalVersions, item.id, on);
         return version ? [{ item, version }] : [];
@@ -514,10 +527,22 @@ export function computeDraftView(
     items.filter((item) => item.kind === 'goal'),
     versions.filter(isGoal),
     day.on,
-  );
+  ).filter(({ version }) => (version.payload.state ?? 'active') === 'active');
   const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
   const override =
     openDays.find((entry) => entry.id === dayKey)?.override ?? null;
+  const dayPayloads = override?.payloads ?? {};
+  const previousOn = days.reduce(
+    (latest, entry) =>
+      entry.on < day.on ? Math.max(latest, entry.on) : latest,
+    day.on - OVERDUE_DAYS * DAY_MS,
+  );
+  const returning = findReturning(
+    versions,
+    [...resolved, ...resolvedGoals].map(({ item }) => item.id),
+    day.on,
+    previousOn,
+  );
   const payLinePairings =
     resolveCurrentOrNext(versions.filter(isPayLine), day.payLineId, day.on)
       ?.payload.pairings ?? [];
@@ -538,6 +563,7 @@ export function computeDraftView(
       resolvedBills.map(({ version }) => version.id),
       resolvedGoals.map(({ version }) => version.id),
       resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
+      [...returning].sort(),
       resolvedBills.map(({ item }) => billProgress[item.id] ?? null),
       horizon,
     ]),
@@ -547,13 +573,21 @@ export function computeDraftView(
   const cached = draftCache.get(key);
   if (cached) return cached;
 
-  const envelopes = resolved.map(({ item, version }) => ({
-    itemId: item.id,
-    createdAt: item.createdAt,
-    priority: version.payload.priority,
-    orderIndex: version.payload.orderIndex,
-    funding: version.payload.funding,
-  }));
+  const payloadOf = <P extends EnvelopeSealed | GoalSealed>(
+    itemId: string,
+    own: P,
+  ): P =>
+    Object.hasOwn(dayPayloads, itemId) ? (dayPayloads[itemId] as P) : own;
+  const envelopes = resolved.map(({ item, version }) => {
+    const payload = payloadOf(item.id, version.payload);
+    return {
+      itemId: item.id,
+      createdAt: item.createdAt,
+      priority: payload.priority,
+      orderIndex: payload.orderIndex,
+      funding: payload.funding,
+    };
+  });
   const bills = resolvedBills.map(({ item, version }) => ({
     itemId: item.id,
     createdAt: item.createdAt,
@@ -566,15 +600,18 @@ export function computeDraftView(
     fundedBy: version.payload.fundedBy,
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
-  const goals = resolvedGoals.map(({ item, version }) => ({
-    itemId: item.id,
-    createdAt: item.createdAt,
-    priority: version.payload.priority,
-    orderIndex: version.payload.orderIndex,
-    funding: version.payload.funding,
-    targetCents: version.payload.targetCents,
-    heldCents: heldByItem[item.id] ?? 0,
-  }));
+  const goals = resolvedGoals.map(({ item, version }) => {
+    const payload = payloadOf(item.id, version.payload);
+    return {
+      itemId: item.id,
+      createdAt: item.createdAt,
+      priority: payload.priority,
+      orderIndex: payload.orderIndex,
+      funding: payload.funding,
+      targetCents: version.payload.targetCents,
+      heldCents: heldByItem[item.id] ?? 0,
+    };
+  });
   const draft = buildDraft({
     days: [
       {
@@ -591,6 +628,7 @@ export function computeDraftView(
       bills,
       goals,
       horizon,
+      returns: [...returning].map((itemId) => `${dayKey}:${itemId}`),
       incomeDays: days.map((entry) => ({
         dayKey: entry.dayKey,
         on: entry.on,
@@ -625,6 +663,7 @@ export function computeDraftView(
     overrideFingerprint: hashOverride({
       pairings: override?.pairings ?? null,
       holdResolutions: override?.holdResolutions ?? {},
+      payloads: override?.payloads,
     }),
     items: Object.fromEntries(
       [...resolved, ...resolvedBills, ...resolvedGoals].map(
@@ -700,3 +739,52 @@ export const selectBillPayments = createSelector(
     return result;
   },
 );
+
+const CHANGEABLE_KINDS = new Set(['envelope', 'goal', 'bill']);
+const changeableCache = new WeakMap<object, ReadonlySet<string>>();
+
+/** The ids of the envelopes, goals and bills a draft line can open to change; one set per items array. */
+export const selectChangeableKey = (state: RootState): ReadonlySet<string> => {
+  const items = state.runway.items;
+  const cached = changeableCache.get(items);
+  if (cached) return cached;
+  const result = new Set(
+    items
+      .filter((item) => CHANGEABLE_KINDS.has(item.kind))
+      .map((item) => item.id),
+  );
+  changeableCache.set(items, result);
+  return result;
+};
+
+/** The pay lines whose ending has been reached and whose header is not yet marked ended, as JSON of `[itemId, lastDay, name]` rows ('' when none), so a consumer re-runs only when the set changes. */
+export const selectReachedEndingsKey = (state: RootState, today: number) => {
+  const { items, versions, days } = state.runway;
+  const confirmed = new Set(
+    days.filter((day) => day.status === 'confirmed').map((day) => day.id),
+  );
+  const candidates = items.filter(
+    (item) =>
+      item.kind === 'payLine' &&
+      item.endedAt === null &&
+      item.archivedAt === null,
+  );
+  const payLineVersions =
+    candidates.length === 0 ? [] : versions.filter(isPayLine);
+  const rows = candidates.flatMap((item) => {
+    const own = payLineVersions.filter((v) => v.itemId === item.id);
+    const version =
+      resolveVersion(own, item.id, today) ??
+      [...own].sort((a, b) => b.effectiveFrom - a.effectiveFrom)[0];
+    if (!version) return [];
+    const last = findReachedEnding(
+      version.payload.schedule,
+      version.payload.ending,
+      today,
+      (on) => confirmed.has(toDayKey(item.id, on)),
+    );
+    return last === null ? [] : [[item.id, last, version.payload.name]];
+  });
+  const result = rows.length === 0 ? '' : JSON.stringify(rows);
+  return result;
+};

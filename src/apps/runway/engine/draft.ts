@@ -45,6 +45,8 @@ export interface DraftInput {
     goals: readonly DraftGoalInput[];
     /** The last day schedules are generated for. */
     horizon: number;
+    /** Line ids (`dayKey:itemId`) whose stretch just ran out: a funded one says it returns. */
+    returns?: readonly string[];
     /** Every coming income day, which cadences count over. */
     incomeDays: readonly {
       dayKey: string;
@@ -525,7 +527,12 @@ export function buildDraft(input: DraftInput): Draft {
   const pairingLines = paired.flatMap((entry) =>
     entry.outcomes.map(({ line }) => walked.pairingLines[line.lineId]),
   );
-  const lines = [...pairingLines, ...ordinaryLines];
+  const returning = new Set(input.plan.returns ?? []);
+  const lines = [...pairingLines, ...ordinaryLines].map((line) =>
+    returning.has(line.lineId) && line.reason.code === 'funded'
+      ? { ...line, reason: { ...line.reason, code: 'returns' as const } }
+      : line,
+  );
 
   const bySource = [
     ...walked.pool

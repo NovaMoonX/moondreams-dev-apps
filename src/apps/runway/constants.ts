@@ -338,6 +338,55 @@ export const CHANGE_WORDS = {
   unchanged: 'Change something to continue.',
   change: 'Change',
   scheduled: 'From',
+  fromDay: 'From this income day on',
+  dayOnly: 'This income day only',
+  stretch: 'For a stretch',
+  dayPick: 'Which income day',
+  stretchHeading: 'How long',
+  stretchCount: 'By income days',
+  stretchDate: 'Until a date',
+  stretchCountLabel: 'How many income days',
+  stretchDateLabel: 'Last day of the change',
+  stretchCountBlocker: 'Enter how many income days, at least 1.',
+  stretchTooFar: 'Only {n} income days are planned ahead. Pick fewer.',
+  stretchDateBlocker: 'Pick the last day, today or later.',
+  dayBlocker: 'Pick an income day.',
+  dayOnlyFields:
+    'For one income day only the amount, how often and how much it matters can change.',
+  stretchNote: 'Then it goes back to what it was.',
+} as const;
+
+export const LIFECYCLE_WORDS = {
+  more: 'More',
+  moreAria: 'More about',
+  sheetHeading: 'What would you like to do?',
+  pause: 'Pause saving',
+  pauseSub: 'Nothing new goes in. The balance and history stay.',
+  resume: 'Start saving again',
+  resumeSub: 'It gets money again from the next income day.',
+  end: 'End it',
+  endSub: 'It stops after the last day you pick. Its history stays.',
+  archive: 'Archive',
+  archiveSub: 'Takes it off your lists. Its history stays.',
+  archiveNote:
+    'It leaves your lists and the days ahead. Its history stays, and it cannot be brought back from here.',
+  endHeading: 'Last day',
+  endDateLabel: 'Last day it counts',
+  endBlocker: 'Pick the last day, today or later.',
+  endConfirm: 'End it',
+  archiveConfirm: 'Archive',
+  pauseConfirm: 'Pause',
+  resumeConfirm: 'Start again',
+  whyEnd: 'Why is it ending?',
+  paused: 'Paused',
+  endsAfter: 'Ends after',
+  backAfter: 'then it goes back',
+  until: 'Until',
+  alreadyEnded: 'This was already ended, so nothing changed.',
+  alreadyArchived: 'This was already archived, so nothing changed.',
+  chipsEnd: ['Paid off', 'No longer needed', 'Changed my mind', 'Job ended'],
+  chipsArchive: ['No longer needed', 'Replaced by another', 'Changed my mind'],
+  chipsPause: ['Focusing on another goal', 'Money is tight', 'Changed my mind'],
 } as const;
 
 export const CHANGE_REASON_CHIPS = [
@@ -365,6 +414,7 @@ export const DRAFT_REASON_CODES = [
   'funded',
   'poolExhausted',
   'nothingLeft',
+  'returns',
 ] as const;
 
 /** The key that decided which of two otherwise equal demands went first. */
@@ -391,6 +441,9 @@ export const DRAFT_WORDS = {
   outOfMoney: "This day's money ran out first",
   restEmpty: "Nothing was left of this day's money for the rest",
   restAsk: 'The rest',
+  dayOnly: 'Changed for this income day only.',
+  returnsTo: 'returns to',
+  returnsThisTime: 'this time',
   percentOf: 'of',
   nothingFunded: 'Nothing funded',
   fundedOf: 'Funded',
@@ -420,7 +473,11 @@ export const DRAFT_WORDS = {
 
 export const PACE_WORDS = {
   rest: 'Takes what is left of each funded day, so there is no fixed pace.',
+  paused: 'Paused. Nothing is added until you start saving again.',
+  completed: 'Completed',
 } as const;
+
+export const GOAL_STATES = ['active', 'paused'] as const;
 
 /** The pace line's three answers for a goal with a date. */
 export const PACE_STATES = ['ahead', 'onPace', 'behind'] as const;

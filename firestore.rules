@@ -4011,7 +4011,7 @@ service cloud.firestore {
         return isDateOnly(value) && value <= request.time.toMillis() + 315360000000;
       }
 
-      // Plan items are created and read. Ending, archiving and deleting arrive with the issues that use them.
+      // Plan items are created and read; ending and archiving are one-way writes to their own field, and deleting arrives with the issue that uses it.
       match /items/{itemId} {
         function isItemValid(data) {
           return data.id == itemId
@@ -4022,11 +4022,43 @@ service cloud.firestore {
             && data.archivedAt == null;
         }
 
+        // `endedAt` goes from null to a date once, with the entry whose id names the item; `archivedAt` from null to a time once.
+        function isEndOnly(before, after) {
+          return before.get('endedAt', null) == null
+            && isDateAhead(after.endedAt)
+            && existsAfter(planDoc('changes', 'ended_' + itemId))
+            && getAfter(planDoc('changes', 'ended_' + itemId)).data.kind == 'ended';
+        }
+
+        function isArchiveOnly(before, after) {
+          return before.get('archivedAt', null) == null
+            && isPastOrNear(after.archivedAt);
+        }
+
+        function isEndingValid(before, after) {
+          return after.endedAt == before.get('endedAt', null)
+            || isEndOnly(before, after);
+        }
+
+        function isArchivingValid(before, after) {
+          return after.archivedAt == before.get('archivedAt', null)
+            || isArchiveOnly(before, after);
+        }
+
         allow read: if isPlanOwner();
         allow create: if isPlanOwner()
           && request.resource.data.keys().hasAll(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
           && request.resource.data.keys().hasOnly(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
           && isItemValid(request.resource.data);
+        allow update: if isPlanOwner()
+          && request.resource.data.keys().hasAll(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
+          && request.resource.data.keys().hasOnly(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.kind == resource.data.kind
+          && request.resource.data.parentId == resource.data.parentId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && isEndingValid(resource.data, request.resource.data)
+          && isArchivingValid(resource.data, request.resource.data);
       }
 
       // A version is a whole payload and is never edited: a mistake is superseded by a later one.
@@ -4040,7 +4072,8 @@ service cloud.firestore {
             && existsAfter(planDoc('changes', data.changeId))
             && isPastOrNear(data.createdAt)
             && isDateAhead(data.effectiveFrom)
-            && (data.effectiveUntil == null || data.effectiveUntil is number)
+            && (data.effectiveUntil == null
+              || (isDateAhead(data.effectiveUntil) && data.effectiveUntil > data.effectiveFrom))
             && data.changeId is string
             && isSealed(data.sealed);
         }

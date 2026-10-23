@@ -8,7 +8,14 @@ import {
 } from '@apps/runway/engine/whatIf';
 import { MAX_PREVIEW_DAYS } from '@apps/runway/constants';
 import { computeDraftView } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenVersion, Stance } from '@apps/runway/types';
+import type { ComingDay } from '@apps/runway/engine/comingDays';
+import type {
+  EnvelopeSealed,
+  GoalSealed,
+  OpenDay,
+  OpenVersion,
+  Stance,
+} from '@apps/runway/types';
 
 type Slice = RootState['runway'];
 
@@ -24,6 +31,77 @@ export interface PreviewInputs {
 }
 
 export type PreviewVersion = Parameters<typeof layerVersion<OpenVersion>>[1];
+
+/** What is layered over the real plan to see its effect: a version, an item that ends or is archived, or one income day's own payload. */
+export type PreviewChange =
+  | { kind: 'version'; version: PreviewVersion }
+  | { kind: 'end'; itemId: string; endedAt: number }
+  | { kind: 'archive'; itemId: string; archivedAt: number }
+  | {
+      kind: 'day';
+      day: Pick<ComingDay, 'dayKey' | 'payLineId' | 'sourceId' | 'on'>;
+      itemId: string;
+      payload: EnvelopeSealed | GoalSealed;
+    };
+
+const layerDay = (
+  openDays: Slice['days'],
+  change: Extract<PreviewChange, { kind: 'day' }>,
+): OpenDay[] => {
+  const { day, itemId, payload } = change;
+  const existing = openDays.find((entry) => entry.id === day.dayKey);
+  const base: OpenDay = existing ?? {
+    id: day.dayKey,
+    payLineId: day.payLineId,
+    sourceId: day.sourceId,
+    expectedOn: day.on,
+    arrivedOn: null,
+    confirmedAt: null,
+    status: 'draft',
+    doneLineIds: [],
+    override: { pairings: null, holdResolutions: {}, payloads: {} },
+  };
+  const layered: OpenDay = {
+    ...base,
+    override: {
+      ...base.override,
+      payloads: { ...base.override.payloads, [itemId]: payload },
+    },
+  };
+  return [...openDays.filter((entry) => entry.id !== day.dayKey), layered];
+};
+
+const layerPlan = (inputs: PreviewInputs, change: PreviewChange) => {
+  const { items, versions, openDays } = inputs;
+  if (change.kind === 'version') {
+    return {
+      items,
+      versions: layerVersion<OpenVersion>(versions, change.version),
+      openDays,
+    };
+  }
+  if (change.kind === 'end') {
+    return {
+      items: items.map((item) =>
+        item.id === change.itemId ? { ...item, endedAt: change.endedAt } : item,
+      ),
+      versions,
+      openDays,
+    };
+  }
+  if (change.kind === 'archive') {
+    return {
+      items: items.map((item) =>
+        item.id === change.itemId
+          ? { ...item, archivedAt: change.archivedAt }
+          : item,
+      ),
+      versions,
+      openDays,
+    };
+  }
+  return { items, versions, openDays: layerDay(openDays, change) };
+};
 
 export interface PreviewDay {
   dayKey: string;
@@ -54,31 +132,35 @@ const emptyEffect = (
  */
 export function previewChange(
   inputs: PreviewInputs,
-  virtual: PreviewVersion,
+  change: PreviewChange,
 ): PreviewDay[] {
   const { items, versions, openDays, stance, today } = inputs;
-  const layered = layerVersion<OpenVersion>(versions, virtual);
+  const layered = layerPlan(inputs, change);
   const settled = new Set(
     inputs.settledKey === '' ? [] : inputs.settledKey.split(','),
   );
-  const daysOf = (source: Slice['versions']) =>
-    buildComingDays(items, source, today).filter(
+  const daysOf = (source: {
+    items: Slice['items'];
+    versions: Slice['versions'];
+  }) =>
+    buildComingDays(source.items, source.versions, today).filter(
       (day) => !settled.has(day.dayKey),
     );
-  const draftOf = (source: Slice['versions'], dayKey: string) =>
+  const draftOf = (source: typeof layered, dayKey: string) =>
     computeDraftView(
-      items,
-      source,
+      source.items,
+      source.versions,
       stance,
-      openDays,
+      source.openDays,
       dayKey,
       today,
       inputs.heldByItem,
       inputs.settledKey,
       inputs.billProgress,
     );
+  const real = { items, versions, openDays };
   const union = new Map(
-    [...daysOf(versions), ...daysOf(layered)].map((day) => [day.dayKey, day]),
+    [...daysOf(real), ...daysOf(layered)].map((day) => [day.dayKey, day]),
   );
   const ordered = [...union.values()]
     .sort(
@@ -88,7 +170,7 @@ export function previewChange(
     .slice(0, MAX_PREVIEW_DAYS);
 
   const result = ordered.flatMap((day): PreviewDay[] => {
-    const before = draftOf(versions, day.dayKey);
+    const before = draftOf(real, day.dayKey);
     const after = draftOf(layered, day.dayKey);
     const title = day.sourceName ?? day.payLineName;
     const names = { ...before?.items, ...after?.items };
