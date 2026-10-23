@@ -4,24 +4,38 @@ import { Loader, LockKeyhole } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
+import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
+import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { RUNWAY_TAB_LABELS } from '@apps/runway/constants';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  selectComingDays,
+  selectIsPlanItemsLoaded,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
 
 function RunwayPage() {
   const { user, loading } = useAuth();
-  const { activeTab, showTab } = useRunwayUrlState();
+  const { activeTab, showTab, openDayKey, closeDay } = useRunwayUrlState();
+  const today = todayAsUtcDate(useNow(60_000));
+  const isItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const hasOpenDay = useAppSelector(
+    (state) =>
+      openDayKey !== null &&
+      selectComingDays(state, today).some((day) => day.dayKey === openDayKey),
+  );
   const dispatch = useAppDispatch();
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
   const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);
@@ -72,6 +86,14 @@ function RunwayPage() {
             Getting your plan ready.
           </EmptyCard>
         </div>
+      </div>
+    );
+  }
+
+  if (openDayKey !== null && (hasOpenDay || !isItemsLoaded)) {
+    return (
+      <div className='page'>
+        <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
       </div>
     );
   }

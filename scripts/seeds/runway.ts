@@ -157,6 +157,7 @@ async function writeSeedIncome(
   const addedAt = context.now - 13 * DAY_MS;
   const firstPayday = today + 3 * DAY_MS;
   const bonusDay = today + 20 * DAY_MS;
+  const freelanceDay = today + 6 * DAY_MS;
 
   const source: SourceSealed = { name: 'Northwind Studio' };
   const paycheck: PayLineSealed = {
@@ -171,19 +172,35 @@ async function writeSeedIncome(
     amount: { lowCents: 90_000, highCents: 90_000 },
     ending: { onDate: null, afterCount: null },
   };
+  const freelance: PayLineSealed = {
+    name: 'Freelance payment',
+    schedule: { kind: 'once', anchor: freelanceDay, monthDays: [] },
+    amount: { lowCents: 12_000, highCents: 12_000 },
+    ending: { onDate: null, afterCount: null },
+  };
   const summaries: ChangeSealed[] = [
     { summary: 'Added Paycheck from Northwind Studio, $2,140.00.' },
     { summary: 'Added Spring bonus from Northwind Studio, $900.00.' },
+    { summary: 'Added Freelance payment from Northwind Studio, $120.00.' },
   ];
 
-  const [sourceSealed, paycheckSealed, bonusSealed, firstChange, secondChange] =
-    await Promise.all([
-      sealJson(source, encryption),
-      sealJson(paycheck, encryption),
-      sealJson(bonus, encryption),
-      sealJson(summaries[0], encryption),
-      sealJson(summaries[1], encryption),
-    ]);
+  const [
+    sourceSealed,
+    paycheckSealed,
+    bonusSealed,
+    freelanceSealed,
+    firstChange,
+    secondChange,
+    thirdChange,
+  ] = await Promise.all([
+    sealJson(source, encryption),
+    sealJson(paycheck, encryption),
+    sealJson(bonus, encryption),
+    sealJson(freelance, encryption),
+    sealJson(summaries[0], encryption),
+    sealJson(summaries[1], encryption),
+    sealJson(summaries[2], encryption),
+  ]);
 
   const ids = {
     source: 'seed-income-source',
@@ -191,6 +208,8 @@ async function writeSeedIncome(
     bonus: 'seed-income-bonus',
     firstChange: 'seed-change-paycheck',
     secondChange: 'seed-change-bonus',
+    freelance: 'seed-income-freelance',
+    thirdChange: 'seed-change-freelance',
   };
   const batch = context.firestore.batch();
   batch.set(
@@ -204,6 +223,10 @@ async function writeSeedIncome(
   batch.set(
     context.firestore.doc(`${plan}/items/${ids.bonus}`),
     header(ids.bonus, 'payLine', ids.source, addedAt + DAY_MS),
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/items/${ids.freelance}`),
+    header(ids.freelance, 'payLine', ids.source, addedAt + 2 * DAY_MS),
   );
   batch.set(
     context.firestore.doc(`${plan}/versions/seed-version-source`),
@@ -242,6 +265,18 @@ async function writeSeedIncome(
     ),
   );
   batch.set(
+    context.firestore.doc(`${plan}/versions/seed-version-freelance`),
+    version(
+      'seed-version-freelance',
+      ids.freelance,
+      'payLine',
+      addedAt + 2 * DAY_MS,
+      freelanceDay,
+      ids.thirdChange,
+      freelanceSealed,
+    ),
+  );
+  batch.set(
     context.firestore.doc(`${plan}/changes/${ids.firstChange}`),
     change(
       ids.firstChange,
@@ -261,8 +296,18 @@ async function writeSeedIncome(
       secondChange,
     ),
   );
+  batch.set(
+    context.firestore.doc(`${plan}/changes/${ids.thirdChange}`),
+    change(
+      ids.thirdChange,
+      addedAt + 2 * DAY_MS,
+      freelanceDay,
+      [ids.freelance],
+      thirdChange,
+    ),
+  );
   await batch.commit();
-  return 8;
+  return 11;
 }
 
 /** Five envelopes across Must, Should and Want and all three cadences, sealed the way the app seals them. */
