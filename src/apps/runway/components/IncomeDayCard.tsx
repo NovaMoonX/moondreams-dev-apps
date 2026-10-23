@@ -45,7 +45,7 @@ function IncomeDayCard({ day, onOpen }: IncomeDayCardProps) {
           </span>
         </span>
         <span className='block min-h-11 min-w-0 flex-1'>
-          <span className='line-clamp-2 block font-medium break-words'>
+          <span className='line-clamp-2 font-medium break-words'>
             {title}
           </span>
           <span className='text-muted-foreground block text-sm'>
