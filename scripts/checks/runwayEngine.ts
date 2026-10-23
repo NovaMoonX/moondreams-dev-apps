@@ -15,7 +15,10 @@ import {
   resolveCurrentOrNext,
   resolveVersion,
 } from '../../src/apps/runway/engine/resolve.ts';
-import { occurrences } from '../../src/apps/runway/engine/schedule.ts';
+import {
+  occurrences,
+  selectFundedDays,
+} from '../../src/apps/runway/engine/schedule.ts';
 import type {
   Ending,
   OpenVersion,
@@ -594,6 +597,110 @@ const version = (
     ),
     [],
     'nothing past the lookahead is listed',
+  );
+}
+
+// Funding cadences.
+{
+  const everyOther = (anchor: number): Schedule => ({
+    kind: 'everyOtherWeek',
+    anchor,
+    monthDays: [],
+  });
+  const today = utc(2026, 10, 1);
+  const pay = (id: string, schedule: Schedule): OpenVersion => ({
+    id: `v_${id}`,
+    itemId: id,
+    kind: 'payLine',
+    createdAt: 1,
+    effectiveFrom: utc(2026, 1, 1),
+    effectiveUntil: null,
+    changeId: 'c',
+    payload: {
+      name: id,
+      schedule,
+      amount: { lowCents: 1, highCents: 1 },
+      ending: { onDate: null, afterCount: 4 },
+    },
+  });
+  const header = (id: string): PlanItemDoc => ({
+    id,
+    kind: 'payLine',
+    parentId: null,
+    createdAt: 1,
+    endedAt: null,
+    archivedAt: null,
+  });
+  // Two pay lines, each every other week, a week apart: A on Oct 2, 16, 30 ...; B on Oct 9, 23, Nov 6 ...
+  const days = buildComingDays(
+    [header('A'), header('B')],
+    [
+      pay('A', everyOther(utc(2026, 10, 2))),
+      pay('B', everyOther(utc(2026, 10, 9))),
+    ],
+    today,
+  );
+  const labels = days.map((day) => day.dayKey);
+  assert.equal(days.length, 8, 'two lines of four payments interleave');
+  assert.deepEqual(
+    days.map((day) => day.payLineId),
+    ['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B'],
+    'the plan-wide list alternates between the lines',
+  );
+  assert.deepEqual(
+    selectFundedDays(
+      { kind: 'everyNth', n: 2, anchorDayKey: labels[0] },
+      days,
+    ).map((day) => day.dayKey),
+    [0, 2, 4, 6].map((index) => labels[index]),
+    'every other income day is the alternate days of the combined list',
+  );
+  assert.deepEqual(
+    selectFundedDays(
+      { kind: 'everyNth', n: 2, anchorDayKey: labels[1] },
+      days,
+    ).map((day) => day.dayKey),
+    [1, 3, 5, 7].map((index) => labels[index]),
+    'the anchor sets which alternate days',
+  );
+  assert.deepEqual(
+    selectFundedDays(
+      { kind: 'everyNth', n: 3, anchorDayKey: labels[1] },
+      days,
+    ).map((day) => day.dayKey),
+    [1, 4, 7].map((index) => labels[index]),
+    'every third counts from the anchor',
+  );
+  assert.deepEqual(
+    selectFundedDays(
+      { kind: 'everyNth', n: 2, anchorDayKey: 'gone' },
+      days,
+    ).map((day) => day.dayKey),
+    [0, 2, 4, 6].map((index) => labels[index]),
+    'an anchor no longer listed counts from the first day',
+  );
+  assert.deepEqual(
+    selectFundedDays({ kind: 'everyIncomeDay' }, days).map((day) => day.dayKey),
+    labels,
+    'every income day selects them all',
+  );
+  assert.deepEqual(
+    selectFundedDays(
+      { kind: 'chosen', dayKeys: [labels[5], labels[2], 'gone'] },
+      days,
+    ).map((day) => day.dayKey),
+    [labels[2], labels[5]],
+    'chosen days come back in plan order and ignore days not listed',
+  );
+  assert.deepEqual(
+    selectFundedDays({ kind: 'chosen', dayKeys: [] }, days),
+    [],
+    'no chosen days fund nothing',
+  );
+  assert.deepEqual(
+    selectFundedDays({ kind: 'everyNth', n: 2, anchorDayKey: 'x' }, []),
+    [],
+    'no income days, no funded days',
   );
 }
 

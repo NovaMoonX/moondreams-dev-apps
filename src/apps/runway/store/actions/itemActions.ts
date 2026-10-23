@@ -5,10 +5,12 @@ import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 
+import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
 import type {
   ChangeDoc,
   ChangeSealed,
+  EnvelopeSealed,
   Ending,
   PayLineSealed,
   PlanItemDoc,
@@ -125,4 +127,67 @@ export async function createIncome(
   await batch.commit();
 
   return { sourceId, payLineId };
+}
+
+export interface CreateEnvelopeInput {
+  envelope: EnvelopeSealed;
+  /** The first day this envelope is in the plan. */
+  startDate: number;
+}
+
+/**
+ * Adds an envelope as a header, a first version and one change entry in a single batch. Items and
+ * versions are created and never updated; nothing is written to `days`.
+ */
+export async function createEnvelope(
+  uid: string,
+  encryption: RunwayEncryption,
+  { envelope, startDate }: CreateEnvelopeInput,
+): Promise<{ envelopeId: string }> {
+  const now = Date.now();
+  const envelopeId = generateUuid();
+  const changeId = generateUuid();
+  const changePayload: ChangeSealed = {
+    summary: `Added ${envelope.name}, ${describeFunding(envelope.funding)}.`,
+  };
+
+  const [envelopeSealed, changeSealed] = await Promise.all([
+    sealJson(envelope, encryption),
+    sealJson(changePayload, encryption),
+  ]);
+
+  const header: PlanItemDoc = {
+    id: envelopeId,
+    kind: 'envelope',
+    parentId: null,
+    createdAt: now,
+    endedAt: null,
+    archivedAt: null,
+  };
+  const version: PlanVersionDoc = {
+    id: generateUuid(),
+    itemId: envelopeId,
+    kind: 'envelope',
+    createdAt: now,
+    effectiveFrom: startDate,
+    effectiveUntil: null,
+    changeId,
+    sealed: envelopeSealed,
+  };
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: startDate,
+    itemIds: [envelopeId],
+    sealed: changeSealed,
+  };
+
+  const batch = writeBatch(db);
+  batch.set(itemPath(uid, 'items', envelopeId), header);
+  batch.set(itemPath(uid, 'versions', version.id), version);
+  batch.set(itemPath(uid, 'changes', changeId), change);
+  await batch.commit();
+
+  return { envelopeId };
 }

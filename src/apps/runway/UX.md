@@ -45,7 +45,7 @@ Days
  │   └─ Correct a confirmed day
  └─ Expected (expense or income) → proposed changes
 
-Plan  (pills: Income · Bills · Envelopes · Goals)
+Plan  (pills: Income · Bills · Envelopes · Goals; a pill is drawn once its screen exists, so Bills and Goals wait for their issues)
  ├─ Income source → Pay line
  ├─ Bill
  ├─ Envelope → Purchases (Track and Link) · History

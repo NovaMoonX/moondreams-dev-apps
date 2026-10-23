@@ -3,7 +3,9 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { buildComingDays } from '@apps/runway/engine/comingDays';
 import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
+import { PRIORITIES } from '@apps/runway/constants';
 import type {
+  EnvelopeVersion,
   OpenVersion,
   PayLineVersion,
   PlanItemDoc,
@@ -70,4 +72,35 @@ export const selectResolvedPlan = createSelector(
 export const selectComingDays = createSelector(
   [selectItems, selectVersions, selectOn],
   (items, versions, today) => buildComingDays(items, versions, today),
+);
+
+export interface ResolvedEnvelope {
+  item: PlanItemDoc;
+  version: EnvelopeVersion;
+}
+
+const isEnvelope = (version: OpenVersion): version is EnvelopeVersion =>
+  version.kind === 'envelope';
+
+/** The envelopes in the plan on a date, in plan order: Must before Should before Want, then rank, then creation. */
+export const selectEnvelopes = createSelector(
+  [selectItems, selectVersions, selectOn],
+  (items, versions, on): ResolvedEnvelope[] => {
+    const envelopeVersions = versions.filter(isEnvelope);
+    const result = items
+      .filter((item) => item.kind === 'envelope' && item.archivedAt === null)
+      .flatMap((item) => {
+        const version = resolveCurrentOrNext(envelopeVersions, item.id, on);
+        return version ? [{ item, version }] : [];
+      })
+      .sort(
+        (a, b) =>
+          PRIORITIES.indexOf(a.version.payload.priority) -
+            PRIORITIES.indexOf(b.version.payload.priority) ||
+          a.version.payload.orderIndex - b.version.payload.orderIndex ||
+          a.item.createdAt - b.item.createdAt ||
+          a.item.id.localeCompare(b.item.id),
+      );
+    return result;
+  },
 );
