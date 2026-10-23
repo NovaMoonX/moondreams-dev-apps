@@ -18,6 +18,13 @@ import type {
 } from '@apps/runway/types';
 
 import { allocate, percentOf, percentShares } from './money';
+import {
+  fundedInWindow,
+  NO_PROGRESS,
+  sumFunded,
+  type BillProgressInput,
+  type PaidPayment,
+} from './progress';
 import { planGoalContributions } from './pace';
 import { effectiveStance, pick } from './stance';
 import { occurrences, selectFundedDays } from './schedule';
@@ -68,6 +75,8 @@ export interface DraftBillInput {
   schedule: Schedule;
   ending: Ending;
   fundedBy: BillFundedBy;
+  /** What confirmed days and payments already say about this bill; none until a day is confirmed. */
+  progress?: BillProgressInput;
 }
 
 /** How a demand was asked for: money, a share of the day's money, or the rest of it. */
@@ -259,6 +268,12 @@ export interface BillPayment {
   /** What each income day sets aside, in day order. */
   parts: { day: IncomeDayRef; cents: Cents }[];
   ranged: BillShare['ranged'];
+  /** Set aside by confirmed days so far. */
+  fundedCents: Cents;
+  /** Confirmed days that set money aside for it. */
+  fundedDays: number;
+  /** The mark that paid it, or null while it is unpaid; a paid payment asks nothing more. */
+  paid: PaidPayment | null;
 }
 
 /**
@@ -272,6 +287,7 @@ export function planBillPayments(
   horizon: number,
   stance: Stance = 'conservative',
 ): BillPayment[] {
+  const progress = bill.progress ?? NO_PROGRESS;
   const billStance = effectiveStance(stance, bill.stanceOverride);
   const amountCents = pick(billStance, bill.amount, 'expense');
   const ranged =
@@ -291,32 +307,52 @@ export function planBillPayments(
   if (bill.fundedBy.kind === 'chosen') {
     const chosen = new Set(bill.fundedBy.dayKeys);
     const days = chronological.filter((day) => chosen.has(day.dayKey));
-    const shares = allocate(
-      amountCents,
-      days.map(() => 1),
-      days.map((day) => day.dayKey),
-    );
-    return dues.slice(0, 1).map((dueOn) => ({
-      dueOn,
-      totalCents: amountCents,
-      ranged,
-      parts: days.map((day, index) => ({ day, cents: shares[index] })),
-    }));
+    return dues.slice(0, 1).map((dueOn) => {
+      const paid = progress.paid.find((entry) => entry.dueOn === dueOn) ?? null;
+      const fundedCents = sumFunded(progress.funded);
+      const shares = allocate(
+        paid ? 0 : Math.max(0, amountCents - fundedCents),
+        days.map(() => 1),
+        days.map((day) => day.dayKey),
+      );
+      return {
+        dueOn,
+        totalCents: amountCents,
+        ranged,
+        parts: paid
+          ? []
+          : days.map((day, index) => ({ day, cents: shares[index] })),
+        fundedCents,
+        fundedDays: progress.funded.length,
+        paid,
+      };
+    });
   }
   const result = dues.map((dueOn, index): BillPayment => {
     const previous = index === 0 ? -Infinity : dues[index - 1];
     const window = chronological.filter(
       (day) => day.on > previous && day.on <= dueOn,
     );
-    const shares = spreadShares(amountCents, window.length);
+    const confirmed = fundedInWindow(progress.funded, previous, dueOn);
+    const fundedCents = sumFunded(confirmed);
+    const paid = progress.paid.find((entry) => entry.dueOn === dueOn) ?? null;
+    const shares = spreadShares(
+      paid ? 0 : Math.max(0, amountCents - fundedCents),
+      window.length,
+    );
     return {
       dueOn,
       totalCents: amountCents,
       ranged,
-      parts: window.map((day, position) => ({
-        day,
-        cents: shares[position],
-      })),
+      parts: paid
+        ? []
+        : window.map((day, position) => ({
+            day,
+            cents: shares[position],
+          })),
+      fundedCents,
+      fundedDays: confirmed.length,
+      paid,
     };
   });
   return result;

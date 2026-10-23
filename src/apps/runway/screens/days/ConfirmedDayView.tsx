@@ -12,6 +12,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import RecordLineRow from '@apps/runway/components/RecordLineRow';
 import { CONFIRM_WORDS, DRAFT_WORDS } from '@apps/runway/constants';
+import ChecklistScreen from '@apps/runway/screens/days/ChecklistScreen';
 import RecordScreen from '@apps/runway/screens/days/RecordScreen';
 import {
   selectConfirmedRecord,
@@ -53,6 +54,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           freeCents={freeToSpendCents}
           moneyCents={arrivedCents}
         />
+        <ChecklistScreen day={day} lines={lines} />
         <Button
           type='button'
           variant='tertiary'

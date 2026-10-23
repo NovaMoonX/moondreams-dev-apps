@@ -36,6 +36,7 @@ import {
   selectDraft,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
+  selectIsMovesLoaded,
   selectIsRecordsReady,
   selectListedDays,
   selectStance,
@@ -56,7 +57,9 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
-  const isRecordsReady = useAppSelector(selectIsRecordsReady);
+  const isRecordsReady = useAppSelector(
+    (state) => selectIsRecordsReady(state) && selectIsMovesLoaded(state),
+  );
   const isLoaded = isPlanLoaded && isDaysLoaded && isRecordsReady;
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
   const planStance = useAppSelector(selectStance);
