@@ -315,12 +315,15 @@ export const MAX_PAIRINGS = 20;
 export const MAX_PREVIEW_DAYS = 26;
 export const PREVIEW_SHOWN = 3;
 
+/** The rules refuse a change that starts more than ten years out; this stays inside that for a viewer ahead of UTC. */
+export const MAX_CHANGE_DAYS_AHEAD = 3600;
+
 export const CHANGE_WORDS = {
   fromHeading: 'From when',
   fromNow: 'From now on',
   fromDate: 'From a date ahead',
   dateLabel: 'Starts on',
-  dateBlocker: 'Pick a day after today.',
+  dateBlocker: 'Pick a day after today, within ten years.',
   previewHeading: 'What this changes',
   previewNone:
     'No income day in the next year moves. Earlier days stay as they are.',

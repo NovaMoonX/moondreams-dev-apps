@@ -2,7 +2,7 @@ import { Input } from '@moondreamsdev/dreamer-ui/components';
 
 import { PillGroup } from '@/components/PillGroup';
 import { toDateInputValue } from '@/utils/dateInputUtils';
-import { CHANGE_WORDS } from '@apps/runway/constants';
+import { CHANGE_WORDS, MAX_CHANGE_DAYS_AHEAD } from '@apps/runway/constants';
 import { addUtcDays } from '@apps/runway/engine/dates';
 import type { FromWhenValue } from '@apps/runway/utils/fromWhen';
 
@@ -42,6 +42,7 @@ function FromWhenPicker({
           variant='outline'
           aria-label={CHANGE_WORDS.dateLabel}
           min={toDateInputValue(addUtcDays(today, 1))}
+          max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
           value={value.date}
           disabled={isDisabled}
           onChange={(event) => onChange({ ...value, date: event.target.value })}

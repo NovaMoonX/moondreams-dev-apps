@@ -3487,6 +3487,16 @@ const version = (
     [],
     'a change past the days planned moves nothing',
   );
+  assert.ok(
+    previewChange(inputs, { ...virtual, effectiveFrom: today + 300 * DAY_MS })
+      .length > 0,
+    'a change beyond the first days listed is still found',
+  );
+  assert.equal(
+    getEffectiveFrom({ choice: 'date', date: '2037-01-01' }, today),
+    null,
+    'a start more than ten years out is refused here, as the rules do',
+  );
 
   // The previewed effect equals the saved result.
   const saved: OpenVersion = {

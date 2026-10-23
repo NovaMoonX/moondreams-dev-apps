@@ -66,7 +66,7 @@ export function useChangeFlow({
         itemId,
         kind,
         payload: candidate,
-        summary: `${candidate.name}: ${summaryText}, from ${formatDateUTC(effectiveFrom)}.`,
+        summary: `${candidate.name}: ${summaryText || 'Updated'}, from ${formatDateUTC(effectiveFrom)}.`,
         note: reason,
         effectiveFrom,
       });
