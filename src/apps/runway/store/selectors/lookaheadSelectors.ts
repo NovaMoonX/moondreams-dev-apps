@@ -1,8 +1,8 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
-import { addUtcMonths, startOfUtcDay } from '@apps/runway/engine/dates';
+import { LOOKAHEAD_MONTHS, RECENT_DAYS_WINDOW } from '@apps/runway/constants';
+import { addUtcMonths, DAY_MS, startOfUtcDay } from '@apps/runway/engine/dates';
 import {
   getStanceCushion,
   lookahead,
@@ -88,7 +88,11 @@ export function computeLookahead(
     bills: inputs.bills.map(({ item, version }) => ({
       id: item.id,
       name: version.payload.name,
-      since: Math.max(startOfUtcDay(item.createdAt), inputs.startDate ?? 0),
+      since: Math.max(
+        startOfUtcDay(item.createdAt),
+        inputs.startDate ?? 0,
+        today - RECENT_DAYS_WINDOW * DAY_MS,
+      ),
     })),
     payments: inputs.payments,
     draftOf: (day, carry) => {
