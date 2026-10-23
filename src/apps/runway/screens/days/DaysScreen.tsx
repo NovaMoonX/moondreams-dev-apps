@@ -10,16 +10,26 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import {
+  COMING_DAYS_CAP,
   COMING_DAYS_PREVIEW,
   SETTLED_DAYS_PREVIEW,
 } from '@apps/runway/constants';
+import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
+import LookaheadWarnings from '@apps/runway/components/LookaheadWarnings';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import ExpectedScreen from '@apps/runway/screens/days/ExpectedScreen';
 import {
+  selectLookahead,
+  selectRangeSides,
+  selectStanceCushion,
+} from '@apps/runway/store/selectors/lookaheadSelectors';
+import {
   selectIsDaysLoaded,
+  selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
+  selectIsRecordsReady,
   selectListedDays,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
@@ -28,9 +38,20 @@ function DaysScreen() {
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
   const isLoaded = isPlanLoaded && isDaysLoaded;
-  const { open: days, confirmed } = useAppSelector((state) =>
+  const { open: allDays, confirmed } = useAppSelector((state) =>
     selectListedDays(state, today),
   );
+  const isLedgerReady = useAppSelector(
+    (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
+  );
+  const lookahead = useAppSelector((state) =>
+    isLoaded && isLedgerReady && allDays.length > 0
+      ? selectLookahead(state, today)
+      : null,
+  );
+  const cushion = useAppSelector((state) => selectStanceCushion(state, today));
+  const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
+  const days = allDays.slice(0, COMING_DAYS_CAP);
   const { openDay } = useRunwayUrlState();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSettledExpanded, setIsSettledExpanded] = useState(false);
@@ -70,11 +91,25 @@ function DaysScreen() {
           </p>
         ) : (
           <div className='space-y-2'>
+            {lookahead && (
+              <div className='space-y-2'>
+                <HoldsThroughLine
+                  lookahead={lookahead}
+                  rangeSides={rangeSides}
+                />
+                <LookaheadWarnings lookahead={lookahead} cushion={cushion} />
+              </div>
+            )}
             <ul className='space-y-2'>
               {visibleDays.map((day) => (
                 <IncomeDayCard
                   key={day.dayKey}
                   day={day}
+                  note={
+                    lookahead?.shortByDay[day.dayKey]
+                      ? `Runs short on ${lookahead.shortByDay[day.dayKey].name}`
+                      : undefined
+                  }
                   onOpen={() => openDay(day.dayKey)}
                 />
               ))}
@@ -88,6 +123,12 @@ function DaysScreen() {
                   ? 'Show fewer'
                   : `Show ${days.length - COMING_DAYS_PREVIEW} more`}
               </ShowMoreButton>
+            )}
+            {allDays.length > COMING_DAYS_CAP && (
+              <p className='text-muted-foreground text-sm'>
+                Showing the next {COMING_DAYS_CAP} of {allDays.length} income
+                days.
+              </p>
             )}
           </div>
         )}
