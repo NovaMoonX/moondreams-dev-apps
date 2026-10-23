@@ -9,6 +9,8 @@ import { useAppSelector } from '@/store';
 import { HOME_WORDS } from '@apps/runway/constants';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { getLevelWords } from '@apps/runway/utils/levelText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectIsMovesLoaded,
@@ -23,6 +25,7 @@ interface FreeToSpendScreenProps {
 /** Free to spend in detail: the money on hand and what has a job, so the figure can be followed to its parts. */
 function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const balances = useAppSelector(selectBalances);
+  const words = getLevelWords(useAppSelector(selectLevel));
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
@@ -36,7 +39,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     ['Money on hand', formatCents(balances.moneyOnHandCents)],
     ['Assigned to bills', formatCents(balances.assignedToBillsCents)],
     ['Assigned to goals', formatCents(balances.assignedToGoalsCents)],
-    ['Assigned to envelopes', formatCents(balances.assignedToEnvelopesCents)],
+    [words.envelopesRow, formatCents(balances.assignedToEnvelopesCents)],
   ];
 
   return (

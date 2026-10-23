@@ -9,6 +9,7 @@ import type {
   START_HOLDINGS,
   DAY_STATUSES,
   GOAL_STATES,
+  LEVELS,
   HOLD_CHOICES,
   PLAN_SECTIONS,
   PRIORITIES,
@@ -22,6 +23,8 @@ export type PlanSection = (typeof PLAN_SECTIONS)[number];
 
 export type Stance = (typeof STANCES)[number];
 
+export type Level = (typeof LEVELS)[number];
+
 export type MoreEntry = (typeof MORE_ENTRIES)[number];
 
 /** Ciphertext of a JSON object, the shape `@lib/security` produces. */
@@ -33,6 +36,12 @@ export interface PlanSealedFields {
   currencyCode: string;
 }
 
+/** A stretch of tracking: Track is on while the last period has `to` null. A period is closed by the day tracking stopped. */
+export interface TrackingPeriod {
+  from: DateOnly;
+  to: DateOnly | null;
+}
+
 export interface PlanDoc {
   uid: string;
   createdAt: number;
@@ -40,6 +49,8 @@ export interface PlanDoc {
   stance: Stance;
   /** The starting point; null until the person says where things stand. A plan written before it existed has none. */
   startDate: DateOnly | null;
+  /** Oldest first, never overlapping; a plan written before tracking existed has none and reads as Plan. */
+  trackingPeriods: TrackingPeriod[];
   keyId: string | null;
   sealed: Sealed | null;
 }
@@ -50,6 +61,7 @@ export interface OpenPlan extends PlanSealedFields {
   updatedAt: number;
   stance: Stance;
   startDate: DateOnly | null;
+  trackingPeriods: TrackingPeriod[];
   keyId: string | null;
 }
 
@@ -391,10 +403,15 @@ export interface BillPaidSealed {
 
 export type StartHolding = (typeof START_HOLDINGS)[number];
 
-/** What one holding had on the starting day: the money on hand, or what a goal holds or a bill has set aside. */
+/** What one holding had on the starting day: the money on hand, or what an envelope or goal holds or a bill has set aside. */
 export interface StartSealed {
   amountCents: Cents;
   holding: StartHolding;
+}
+
+/** Tracking turned on (`up`, on the first day of the period) or off (`down`, on the last day it counted). */
+export interface TrackingChangeSealed {
+  direction: 'up' | 'down';
 }
 
 interface OpenMoveBase {
@@ -407,7 +424,8 @@ interface OpenMoveBase {
 
 export type OpenMove =
   | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
-  | (OpenMoveBase & { kind: 'start'; payload: StartSealed });
+  | (OpenMoveBase & { kind: 'start'; payload: StartSealed })
+  | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed });
 
 export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
 export type StartMove = Extract<OpenMove, { kind: 'start' }>;
