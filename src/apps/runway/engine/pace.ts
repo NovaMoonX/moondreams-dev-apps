@@ -1,13 +1,25 @@
 import type { PACE_STATES } from '@apps/runway/constants';
 import type { Cents, DateOnly, FundingRule } from '@apps/runway/types';
 
+import { percentOf } from './money';
 import { selectFundedDays } from './schedule';
+
+/** What one funded day asks of an exact or percentage goal; a `rest` goal's ask is not known ahead. */
+const getDayAsk = (funding: FundingRule, day: PaceDay) => {
+  const { amount } = funding;
+  if (amount.kind === 'exact') return amount.cents;
+  const result =
+    amount.kind === 'percent' ? percentOf(day.moneyCents ?? 0, amount.bps) : 0;
+  return result;
+};
 
 export type PaceState = (typeof PACE_STATES)[number];
 
 export interface PaceDay {
   dayKey: string;
   on: number;
+  /** The day's money, which a percentage reads; a day without it asks nothing. */
+  moneyCents?: Cents;
 }
 
 export interface PaceGoal {
@@ -33,7 +45,11 @@ export interface Pace {
   state: PaceState | null;
 }
 
-/** What the goal's cadence puts in on each income day it selects, the last one cut to what is left, nothing after the target. */
+/**
+ * What the goal's cadence puts in on each income day it selects, the last one cut to what is left,
+ * nothing after the target. A `rest` goal takes what its day then holds, which only the draft
+ * knows, so each funded day lists the whole target left as its ceiling.
+ */
 export function planGoalContributions<D extends PaceDay>(
   goal: Pick<PaceGoal, 'targetCents' | 'heldCents' | 'funding'>,
   incomeDays: readonly D[],
@@ -44,9 +60,12 @@ export function planGoalContributions<D extends PaceDay>(
     parts: { day: D; cents: Cents }[];
   }>(
     (acc, day) => {
-      const cents = Math.min(goal.funding.amount.cents, acc.left);
+      const isRest = goal.funding.amount.kind === 'rest';
+      const cents = isRest
+        ? acc.left
+        : Math.min(getDayAsk(goal.funding, day), acc.left);
       return {
-        left: acc.left - cents,
+        left: isRest ? acc.left : acc.left - cents,
         parts: cents > 0 ? [...acc.parts, { day, cents }] : acc.parts,
       };
     },
@@ -55,14 +74,15 @@ export function planGoalContributions<D extends PaceDay>(
   return result;
 }
 
+/** Behind when the plan falls short by the date, else ahead when funded days are left over once the target is reached. */
 const getState = (
+  contributionCount: number,
+  plannedByDate: Cents,
   remaining: Cents,
-  amount: Cents,
   fundedByDate: number,
 ): PaceState => {
-  const needed = amount > 0 ? Math.ceil(remaining / amount) : Infinity;
-  if (fundedByDate < needed) return 'behind';
-  return fundedByDate === needed ? 'onPace' : 'ahead';
+  if (plannedByDate < remaining) return 'behind';
+  return fundedByDate > contributionCount ? 'ahead' : 'onPace';
 };
 
 /**
@@ -76,8 +96,12 @@ export function getPace(goal: PaceGoal, incomeDays: readonly PaceDay[]): Pace {
   const date = goal.targetDate;
   const counted =
     date === null ? [] : incomeDays.filter((day) => day.on <= date);
-  const contributions = planGoalContributions(goal, incomeDays);
+  const isRest = goal.funding.amount.kind === 'rest';
+  const contributions = isRest ? [] : planGoalContributions(goal, incomeDays);
   const planned = contributions.reduce((sum, part) => sum + part.cents, 0);
+  const plannedByDateCents = contributions
+    .filter((part) => date !== null && part.day.on <= date)
+    .reduce((sum, part) => sum + part.cents, 0);
   const funded = selectFundedDays(goal.funding.cadence, incomeDays);
   const fundedByDate =
     date === null ? 0 : funded.filter((day) => day.on <= date).length;
@@ -90,17 +114,20 @@ export function getPace(goal: PaceGoal, incomeDays: readonly PaceDay[]): Pace {
       isComplete || counted.length === 0
         ? null
         : Math.ceil(remaining / counted.length),
-    plannedByDateCents: contributions
-      .filter((part) => date !== null && part.day.on <= date)
-      .reduce((sum, part) => sum + part.cents, 0),
+    plannedByDateCents,
     reachedOn:
       !isComplete && planned >= remaining
         ? (contributions[contributions.length - 1]?.day ?? null)
         : null,
     state:
-      date === null || isComplete
+      date === null || isComplete || isRest
         ? null
-        : getState(remaining, goal.funding.amount.cents, fundedByDate),
+        : getState(
+            contributions.length,
+            plannedByDateCents,
+            remaining,
+            fundedByDate,
+          ),
   };
   return result;
 }

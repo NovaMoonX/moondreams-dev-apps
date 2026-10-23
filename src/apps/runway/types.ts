@@ -83,8 +83,11 @@ export interface PayLineSealed {
   ending: Ending;
 }
 
-/** What a funding line asks for. Exact only so far. */
-export type FundingAmount = { kind: 'exact'; cents: Cents };
+/** What a funding line asks for: money, basis points of the day's money, or what the pool then holds. */
+export type FundingAmount =
+  | { kind: 'exact'; cents: Cents }
+  | { kind: 'percent'; bps: number; of: 'dayMoney' }
+  | { kind: 'rest' };
 
 export interface FundingRule {
   amount: FundingAmount;

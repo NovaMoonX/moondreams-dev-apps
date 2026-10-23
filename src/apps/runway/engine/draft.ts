@@ -7,6 +7,7 @@ import {
   compareDemands,
   compareText,
   type BillShare,
+  type DraftAsk,
   type Demand,
   type DraftBillInput,
   type DraftCadence,
@@ -31,9 +32,9 @@ export interface DraftInput {
     /** The last day schedules are generated for. */
     horizon: number;
     /** Every coming income day, which cadences count over. */
-    incomeDays: readonly { dayKey: string; on: number }[];
+    incomeDays: readonly { dayKey: string; on: number; moneyCents?: Cents }[];
   };
-  /** Amounts are exact so far, so the stance does not change a figure yet. */
+  /** Amounts are exact or a share of the day, so the stance does not change a figure yet. */
   stance: Stance;
   overrides: DraftOverrides;
 }
@@ -57,6 +58,10 @@ export interface DraftLine {
   tier: Priority;
   /** Set on a bill's line: the payment this day sets money aside for. */
   bill: BillShare | null;
+  /** The income source of the day this line is on. */
+  sourceId: string | null;
+  /** How the line asked: money, a share of the day's money, or the rest. */
+  ask: DraftAsk;
   /** What the envelope, goal or bill asked for on this day. */
   demandCents: Cents;
   cents: Cents;
@@ -68,7 +73,7 @@ export interface DraftLine {
 }
 
 export interface Draft {
-  days: { dayKey: string; moneyCents: Cents }[];
+  days: { dayKey: string; sourceId: string | null; moneyCents: Cents }[];
   moneyCents: Cents;
   lines: DraftLine[];
   freeToSpend: {
@@ -94,11 +99,16 @@ const getDayMoney = (day: DraftDayInput, overrides: DraftOverrides) => {
   return result;
 };
 
-/** Takes `wanted` cents from the front of the pool, first in first out. */
-function takeFromPool(pool: readonly Chunk[], wanted: Cents) {
+/** Takes `wanted` cents from the front of the pool, first in first out; `onlyDayKey` limits it to one day's money. */
+function takeFromPool(
+  pool: readonly Chunk[],
+  wanted: Cents,
+  onlyDayKey: string | null = null,
+) {
   const result = pool.reduce<{ left: Cents; paidBy: PaidBy[]; rest: Chunk[] }>(
     (acc, chunk) => {
-      const taken = Math.min(acc.left, chunk.cents);
+      const isEligible = onlyDayKey === null || chunk.dayKey === onlyDayKey;
+      const taken = isEligible ? Math.min(acc.left, chunk.cents) : 0;
       return {
         left: acc.left - taken,
         paidBy:
@@ -122,6 +132,11 @@ function takeFromPool(pool: readonly Chunk[], wanted: Cents) {
   );
   return result;
 }
+
+const getReasonCode = (shortBy: Cents, isRest: boolean, cents: Cents) => {
+  if (shortBy > 0) return 'poolExhausted' as const;
+  return isRest && cents === 0 ? ('nothingLeft' as const) : ('funded' as const);
+};
 
 const getTieKey = (demand: Demand) =>
   `${demand.tier}|${demand.dueBeforeNext}|${demand.orderIndex}`;
@@ -173,6 +188,7 @@ export function buildDraft(input: DraftInput): Draft {
       : [],
   );
 
+  const sourceByDay = new Map(days.map((day) => [day.dayKey, day.sourceId]));
   const dayOrder = new Map(days.map((day, index) => [day.dayKey, index]));
   const demands = buildDemands(
     days,
@@ -181,8 +197,9 @@ export function buildDraft(input: DraftInput): Draft {
     input.plan.bills,
     input.plan.horizon,
     input.plan.goals,
+    new Map(dayMoney.map(({ day, moneyCents }) => [day.dayKey, moneyCents])),
   )
-    .filter((demand) => demand.cents > 0)
+    .filter((demand) => demand.cents > 0 || demand.ask.kind === 'rest')
     .sort(
       (a, b) =>
         compareDemands(a, b) ||
@@ -191,20 +208,33 @@ export function buildDraft(input: DraftInput): Draft {
 
   const walked = demands.reduce<{ pool: Chunk[]; lines: DraftLine[] }>(
     (acc, demand) => {
-      const taken = takeFromPool(acc.pool, demand.cents);
-      const cents = demand.cents - taken.left;
+      const isRest = demand.ask.kind === 'rest';
+      const held = acc.pool
+        .filter((chunk) => chunk.dayKey === demand.dayKey)
+        .reduce((sum, chunk) => sum + chunk.cents, 0);
+      const wanted = isRest
+        ? Math.min(held, demand.capCents ?? held)
+        : demand.cents;
+      const taken = takeFromPool(
+        acc.pool,
+        wanted,
+        isRest ? demand.dayKey : null,
+      );
+      const cents = wanted - taken.left;
       const line: DraftLine = {
         lineId: `${demand.dayKey}:${demand.itemId}`,
         dayKey: demand.dayKey,
         itemId: demand.itemId,
         tier: demand.tier,
         bill: demand.bill,
-        demandCents: demand.cents,
+        sourceId: sourceByDay.get(demand.dayKey) ?? null,
+        ask: demand.ask,
+        demandCents: wanted,
         cents,
         shortBy: taken.left,
         paidBy: taken.paidBy,
         reason: {
-          code: taken.left > 0 ? 'poolExhausted' : 'funded',
+          code: getReasonCode(taken.left, isRest, cents),
           tier: demand.tier,
           cadence: demand.cadence,
         },
@@ -235,6 +265,7 @@ export function buildDraft(input: DraftInput): Draft {
   const result: Draft = {
     days: dayMoney.map(({ day, moneyCents }) => ({
       dayKey: day.dayKey,
+      sourceId: day.sourceId,
       moneyCents,
     })),
     moneyCents: dayMoney.reduce((sum, entry) => sum + entry.moneyCents, 0),

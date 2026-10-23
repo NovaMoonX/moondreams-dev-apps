@@ -5,6 +5,22 @@ export function percentOf(cents: number, bps: number): number {
 }
 
 /**
+ * What each of several percentage lines on one day gets: `percentOf(money, total bps)` shared out by
+ * `allocate`, so the lines add to that one rounded figure and never to more than the money. Over
+ * 100% in all, each rounds on its own and the walk of the pool cuts the later lines short.
+ */
+export function percentShares(
+  money: number,
+  bps: readonly number[],
+  ids: readonly string[],
+): number[] {
+  const total = bps.reduce((sum, value) => sum + value, 0);
+  if (total > 10_000) return bps.map((value) => percentOf(money, value));
+  const result = allocate(percentOf(money, total), bps, ids);
+  return result;
+}
+
+/**
  * Splits `total` cents across `weights` by largest remainder, ties broken by ascending id, so the
  * shares always add up to the total and always come out the same. Shares are returned in input order.
  */

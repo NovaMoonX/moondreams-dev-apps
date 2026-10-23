@@ -37,7 +37,10 @@ function GoalsScreen() {
     .map(({ item, version }) => ({
       item,
       payload: version.payload,
-      pace: getPace({ ...version.payload, heldCents: 0 }, comingDays),
+      pace: getPace(
+        { ...version.payload, heldCents: 0 },
+        comingDays.map((day) => ({ ...day, moneyCents: day.amount.lowCents })),
+      ),
     }));
 
   const getBody = () => {

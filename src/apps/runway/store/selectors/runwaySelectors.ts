@@ -265,7 +265,17 @@ export const selectDraft = createSelector(
     }));
     const draft = buildDraft({
       days: [day],
-      plan: { envelopes, bills, goals, horizon, incomeDays: days },
+      plan: {
+        envelopes,
+        bills,
+        goals,
+        horizon,
+        incomeDays: days.map((entry) => ({
+          dayKey: entry.dayKey,
+          on: entry.on,
+          moneyCents: entry.amount.lowCents,
+        })),
+      },
       stance,
       overrides: { dayCents: {} },
     });

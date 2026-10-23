@@ -72,7 +72,7 @@ function EnvelopesScreen() {
                   <p className='line-clamp-2 font-medium break-words'>
                     {version.payload.name}
                   </p>
-                  <p className='text-muted-foreground text-sm'>
+                  <p className='text-muted-foreground text-sm first-letter:uppercase'>
                     {describeFunding(version.payload.funding)}
                   </p>
                 </div>

@@ -30,7 +30,7 @@ function GoalRow({ goal, pace }: GoalRowProps) {
             {formatCents(goal.targetCents)}
           </p>
         </div>
-        <p className='text-muted-foreground text-sm'>
+        <p className='text-muted-foreground text-sm first-letter:uppercase'>
           {describeFunding(goal.funding)}
           {dateText}
         </p>
