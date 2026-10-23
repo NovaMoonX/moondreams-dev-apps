@@ -16,6 +16,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import MoneyInput from '@/components/MoneyInput';
 import RevealChip from '@/components/RevealChip';
+import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
@@ -48,6 +49,8 @@ import type { DraftView } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, Stance } from '@apps/runway/types';
 
 const { custom } = FormFactories;
+
+const LINE_SEARCH_THRESHOLD = 8;
 
 interface ConfirmFormData {
   amount: string;
@@ -92,6 +95,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const [formData, setFormData] = useState<ConfirmFormData>(initialData);
   const [isNoting, setIsNoting] = useState(false);
   const [isChoosing, setIsChoosing] = useState(false);
+  const [lineSearch, setLineSearch] = useState('');
   const [lineInputs, setLineInputs] = useState<Record<string, string>>({});
   const [lineNotes, setLineNotes] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -122,6 +126,17 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const changedCount = adjusted.filter(
     (line, index) => line.cents !== lines[index].cents,
   ).length;
+  const searchText = lineSearch.trim().toLowerCase();
+  const visibleLines = adjusted
+    .map((line, index) => ({ line, index }))
+    .filter(
+      ({ line, index }) =>
+        searchText === '' ||
+        line.cents !== lines[index].cents ||
+        (lines[index].name === '' ? 'bill' : lines[index].name)
+          .toLowerCase()
+          .includes(searchText),
+    );
   const remainder =
     arrivedCents === null ? 0 : getRemainder(arrivedCents, adjusted);
 
@@ -359,8 +374,20 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
               </RevealChip>
             )}
           </div>
+          {adjusted.length >= LINE_SEARCH_THRESHOLD && (
+            <SearchInput
+              value={lineSearch}
+              onChange={setLineSearch}
+              placeholder='Find a line'
+            />
+          )}
+          {visibleLines.length === 0 && (
+            <p className='text-muted-foreground text-sm'>
+              No line matches that.
+            </p>
+          )}
           <ul className='border-border divide-border divide-y rounded-2xl border'>
-            {adjusted.map((line, index) => {
+            {visibleLines.map(({ line, index }) => {
               const original = lines[index];
               const isChanged = line.cents !== original.cents;
               const name = original.name === '' ? 'Bill' : original.name;
@@ -397,6 +424,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
                         maxLength={MAX_NOTE_LENGTH}
                         placeholder={CONFIRM_WORDS.lineNotePlaceholder}
                         value={lineNotes[line.lineId] ?? ''}
+                        disabled={isSaving}
                         onChange={(event) =>
                           setLineNotes((current) => ({
                             ...current,
