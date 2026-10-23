@@ -14,7 +14,7 @@ import type {
   Schedule,
 } from '@apps/runway/types';
 
-import { allocate } from './money';
+import { allocate, percentOf, percentShares } from './money';
 import { planGoalContributions } from './pace';
 import { occurrences, selectFundedDays } from './schedule';
 
@@ -54,6 +54,10 @@ export interface DraftBillInput {
   fundedBy: BillFundedBy;
 }
 
+/** How a demand was asked for: money, a share of the day's money, or the rest of it. */
+export type DraftAsk =
+  { kind: 'exact' } | { kind: 'percent'; bps: number } | { kind: 'rest' };
+
 /** A bill's demand names the payment it is saving toward. */
 export interface BillShare {
   dueOn: DateOnly;
@@ -71,6 +75,9 @@ export interface Demand {
   cents: Cents;
   cadence: DraftCadence;
   bill: BillShare | null;
+  ask: DraftAsk;
+  /** A `rest` demand's ceiling (a goal's target left); null for no ceiling. */
+  capCents: Cents | null;
 }
 
 export const TIER_RANK: Record<Priority, number> = {
@@ -88,9 +95,10 @@ export const compareDays = (
   b: { on: number; dayKey: string },
 ) => a.on - b.on || compareText(a.dayKey, b.dayKey);
 
-/** The order demands are funded in; the last two keys only separate items, so they are never "ties". */
+/** The order demands are funded in; a `rest` demand goes last in its tier, and the last two keys only separate items, so they are never "ties". */
 export const compareDemands = (a: Demand, b: Demand) =>
   TIER_RANK[a.tier] - TIER_RANK[b.tier] ||
+  Number(a.ask.kind === 'rest') - Number(b.ask.kind === 'rest') ||
   Number(b.dueBeforeNext) - Number(a.dueBeforeNext) ||
   a.orderIndex - b.orderIndex ||
   a.createdAt - b.createdAt ||
@@ -101,6 +109,52 @@ const cadenceCode = (cadence: FundingRule['cadence']): DraftCadence => {
   return cadence.kind === 'chosen' ? 'chosen' : 'everyIncomeDay';
 };
 
+/** An exact amount, or a percentage of the day's money rounded down; a `rest` demand is sized when the pool is walked. */
+const getDemandCents = (funding: FundingRule, moneyCents: Cents) => {
+  const { amount } = funding;
+  if (amount.kind === 'exact') return amount.cents;
+  const result =
+    amount.kind === 'percent' ? percentOf(moneyCents, amount.bps) : 0;
+  return result;
+};
+
+const getAsk = (funding: FundingRule): DraftAsk =>
+  funding.amount.kind === 'percent'
+    ? { kind: 'percent', bps: funding.amount.bps }
+    : { kind: funding.amount.kind === 'rest' ? 'rest' : 'exact' };
+
+/** Percentage demands on one day, rounded once and shared out so they add to at most the day's money; a goal cut short by its target keeps the cut. */
+function sharePercentDemands(
+  demands: readonly Demand[],
+  dayMoney: ReadonlyMap<string, Cents>,
+): Demand[] {
+  const byDay = demands.reduce((acc, demand) => {
+    if (demand.ask.kind !== 'percent') return acc;
+    return acc.set(demand.dayKey, [...(acc.get(demand.dayKey) ?? []), demand]);
+  }, new Map<string, Demand[]>());
+  const shares = new Map(
+    [...byDay.entries()].flatMap(([dayKey, lines]) => {
+      const shared = percentShares(
+        dayMoney.get(dayKey) ?? 0,
+        lines.map((line) => (line.ask.kind === 'percent' ? line.ask.bps : 0)),
+        lines.map((line) => line.itemId),
+      );
+      return lines.map((line, index): [string, Cents] => [
+        `${line.dayKey}:${line.itemId}`,
+        line.ask.kind === 'percent' &&
+        line.cents < percentOf(dayMoney.get(dayKey) ?? 0, line.ask.bps)
+          ? line.cents
+          : shared[index],
+      ]);
+    }),
+  );
+  const result = demands.map((demand) => {
+    const cents = shares.get(`${demand.dayKey}:${demand.itemId}`);
+    return cents === undefined ? demand : { ...demand, cents };
+  });
+  return result;
+}
+
 /** What each planned day owes: an envelope or goal asks for its amount on every day its cadence selects, counted over the plan-wide income days (a goal stops at its target), and a bill asks for its share of each payment. */
 export function buildDemands(
   days: readonly DraftDayInput[],
@@ -109,9 +163,14 @@ export function buildDemands(
   bills: readonly DraftBillInput[] = [],
   horizon = 0,
   goals: readonly DraftGoalInput[] = [],
+  dayMoney: ReadonlyMap<string, Cents> = new Map(),
 ): Demand[] {
   const planned = new Set(days.map((day) => day.dayKey));
-  const chronological = [...incomeDays].sort(compareDays);
+  const moneyOf = (day: { dayKey: string; moneyCents?: Cents }) =>
+    dayMoney.get(day.dayKey) ?? day.moneyCents ?? 0;
+  const chronological = [...incomeDays]
+    .sort(compareDays)
+    .map((day) => ({ ...day, moneyCents: moneyOf(day) }));
 
   const envelopeDemands = envelopes.flatMap((envelope) =>
     selectFundedDays(envelope.funding.cadence, chronological)
@@ -123,9 +182,11 @@ export function buildDemands(
         dueBeforeNext: false,
         orderIndex: envelope.orderIndex,
         createdAt: envelope.createdAt,
-        cents: envelope.funding.amount.cents,
+        cents: getDemandCents(envelope.funding, moneyOf(day)),
         cadence: cadenceCode(envelope.funding.cadence),
         bill: null,
+        ask: getAsk(envelope.funding),
+        capCents: null,
       })),
   );
   const goalDemands = goals.flatMap((goal) =>
@@ -138,14 +199,15 @@ export function buildDemands(
         dueBeforeNext: false,
         orderIndex: goal.orderIndex,
         createdAt: goal.createdAt,
-        cents,
+        cents: goal.funding.amount.kind === 'rest' ? 0 : cents,
         cadence: cadenceCode(goal.funding.cadence),
         bill: null,
+        ask: getAsk(goal.funding),
+        capCents: goal.funding.amount.kind === 'rest' ? cents : null,
       })),
   );
   const result = [
-    ...envelopeDemands,
-    ...goalDemands,
+    ...sharePercentDemands([...envelopeDemands, ...goalDemands], dayMoney),
     ...buildBillDemands(planned, chronological, bills, horizon),
   ];
   return result;
@@ -246,6 +308,8 @@ function buildBillDemands(
           cadence:
             bill.fundedBy.kind === 'chosen' ? 'billChosen' : 'billSuggested',
           bill: { dueOn: payment.dueOn, totalCents: payment.totalCents },
+          ask: { kind: 'exact' },
+          capCents: null,
         })),
     ),
   );

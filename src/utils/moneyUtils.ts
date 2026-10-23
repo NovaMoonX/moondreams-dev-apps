@@ -27,6 +27,27 @@ export function parseMoneyToCents(input: string): number | null {
   return result;
 }
 
+const PERCENT_PATTERN = /^(\d{1,3})(?:\.(\d{0,2}))?%?$/;
+
+/** Parses a typed percentage in whole or half percents ("10", "12.5") into basis points (1,000, 1,250); null for anything else, zero and above 100% included. */
+export function parsePercentToBps(input: string): number | null {
+  const match = input.trim().match(PERCENT_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const fraction = (match[2] ?? '').padEnd(2, '0');
+  const bps = Number(match[1]) * 100 + Number(fraction);
+  const isValid = bps > 0 && bps <= 10_000 && bps % 50 === 0;
+  return isValid ? bps : null;
+}
+
+/** Basis points as a typed percentage ("10", "12.5"). */
+export function formatBps(bps: number): string {
+  const result = String(bps / 100);
+  return result;
+}
+
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',

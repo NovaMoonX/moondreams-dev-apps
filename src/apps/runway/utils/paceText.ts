@@ -1,4 +1,4 @@
-import { PACE_STATE_LABELS } from '@apps/runway/constants';
+import { PACE_STATE_LABELS, PACE_WORDS } from '@apps/runway/constants';
 import type { Pace } from '@apps/runway/engine/pace';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -20,6 +20,9 @@ export function describePace(goal: GoalSealed, pace: Pace): PaceWords {
     : 'The income days ahead do not reach it.';
   if (pace.isComplete) {
     return { need: `${target} is saved.`, standing: '', stateLabel: null };
+  }
+  if (goal.funding.amount.kind === 'rest') {
+    return { need: '', standing: PACE_WORDS.rest, stateLabel: null };
   }
   if (goal.targetDate === null || pace.state === null) {
     return { need: '', standing: reached, stateLabel: null };

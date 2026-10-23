@@ -8,7 +8,7 @@ import {
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import AmountField from '@/components/AmountField';
+import AmountField, { type AmountMode } from '@/components/AmountField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { parseMoneyToCents } from '@/utils/moneyUtils';
+import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
   ENVELOPE_ORDER_STEP,
   FUNDING_CADENCE_LABELS,
@@ -35,7 +35,7 @@ import {
   selectComingDays,
   selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { FundingRule, Priority } from '@apps/runway/types';
+import type { FundingAmount, FundingRule, Priority } from '@apps/runway/types';
 
 type Cadence = (typeof FUNDING_CADENCES)[number];
 
@@ -57,6 +57,25 @@ interface EnvelopeFormProps {
 
 const { custom } = FormFactories;
 
+const AMOUNT_MODES = [
+  { value: 'exact', label: 'Exact amount' },
+  { value: 'percent', label: "% of the day's money" },
+  { value: 'rest', label: 'The rest' },
+] as const;
+
+const getFundingAmount = (
+  mode: AmountMode,
+  text: string,
+): FundingAmount | null => {
+  if (mode === 'rest') return { kind: 'rest' };
+  if (mode === 'percent') {
+    const bps = parsePercentToBps(text);
+    return bps === null ? null : { kind: 'percent', bps, of: 'dayMoney' };
+  }
+  const cents = parseMoneyToCents(text);
+  return cents === null || cents <= 0 ? null : { kind: 'exact', cents };
+};
+
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
   label: PRIORITY_LABELS[value],
@@ -77,13 +96,16 @@ const INITIAL_DATA: EnvelopeFormData = {
 
 const getBlocker = (
   data: EnvelopeFormData,
-  amountCents: number | null,
+  amount: FundingAmount | null,
+  mode: AmountMode,
   hasDays: boolean,
 ) => {
   if (data.name.trim() === '') return 'Name the envelope.';
   if (data.priority === null) return 'Pick how much it matters.';
-  if (amountCents === null || amountCents <= 0)
-    return 'Enter how much it gets each time.';
+  if (amount === null)
+    return mode === 'percent'
+      ? 'Enter a whole or half percent, up to 100.'
+      : 'Enter how much it gets each time.';
   if (data.cadence !== 'everyIncomeDay' && !hasDays)
     return 'Add an income source first, so there are days to count.';
   if (data.cadence === 'chosen' && data.dayKeys.length === 0)
@@ -100,8 +122,14 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const amountCents = parseMoneyToCents(formData.amount);
-  const blocker = getBlocker(formData, amountCents, comingDays.length > 0);
+  const [amountMode, setAmountMode] = useState<AmountMode>('exact');
+  const amount = getFundingAmount(amountMode, formData.amount);
+  const blocker = getBlocker(
+    formData,
+    amount,
+    amountMode,
+    comingDays.length > 0,
+  );
 
   const dayOptions = comingDays.map((day) => ({
     value: day.dayKey,
@@ -149,6 +177,14 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
           <AmountField
             label='Each time'
             hint='What it gets on each income day it is funded.'
+            mode={amountMode}
+            modes={AMOUNT_MODES}
+            onModeChange={(mode) => {
+              setAmountMode(mode);
+              props.onValueChange('');
+            }}
+            percentOfLabel="of the day's money"
+            restHint='Whatever is left of the day after the lines above it.'
             value={props.value as string}
             onChange={(value) => props.onValueChange(value)}
           />
@@ -238,10 +274,9 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
       }),
     ];
     return result;
-  }, [formData.cadence, dayOptions]);
+  }, [amountMode, formData.cadence, dayOptions]);
 
-  const buildFunding = (data: EnvelopeFormData, cents: number) => {
-    const amount = { kind: 'exact' as const, cents };
+  const buildFunding = (data: EnvelopeFormData, amount: FundingAmount) => {
     const anchorDayKey = comingDays[0]?.dayKey ?? '';
     if (data.cadence === 'every2' || data.cadence === 'every3') {
       const funding: FundingRule = {
@@ -275,8 +310,8 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
   };
 
   const handleSubmit = async (data: EnvelopeFormData) => {
-    const cents = parseMoneyToCents(data.amount);
-    if (!user || data.priority === null || cents === null) return;
+    const amount = getFundingAmount(amountMode, data.amount);
+    if (!user || data.priority === null || amount === null) return;
 
     const tier = envelopes.filter(
       (envelope) => envelope.version.payload.priority === data.priority,
@@ -298,7 +333,7 @@ function EnvelopeForm({ isOpen, onClose, title }: EnvelopeFormProps) {
           emoji: data.emoji?.trim() || null,
           priority: data.priority,
           orderIndex,
-          funding: buildFunding(data, cents),
+          funding: buildFunding(data, amount),
         },
       });
       onClose();

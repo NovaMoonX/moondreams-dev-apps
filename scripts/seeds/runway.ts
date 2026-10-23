@@ -319,7 +319,7 @@ async function writeSeedIncome(
   return 11;
 }
 
-/** Five envelopes across Must, Should and Want and all three cadences, sealed the way the app seals them. */
+/** Seven envelopes across Must, Should and Want, all three cadences, a percentage of the day and the rest, sealed the way the app seals them. */
 async function writeSeedEnvelopes(
   context: SeedContext,
   uid: string,
@@ -393,6 +393,32 @@ async function writeSeedEnvelopes(
             kind: 'chosen',
             dayKeys: [paydayKey(0), paydayKey(2), paydayKey(4)],
           },
+        },
+      },
+    },
+    {
+      id: 'seed-envelope-savings',
+      payload: {
+        name: 'Savings',
+        emoji: '💰',
+        priority: 'should',
+        orderIndex: 3,
+        funding: {
+          amount: { kind: 'percent', bps: 1_000, of: 'dayMoney' },
+          cadence: { kind: 'everyIncomeDay' },
+        },
+      },
+    },
+    {
+      id: 'seed-envelope-everyday',
+      payload: {
+        name: 'Everyday spending',
+        emoji: null,
+        priority: 'want',
+        orderIndex: 2,
+        funding: {
+          amount: { kind: 'rest' },
+          cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
         },
       },
     },
@@ -637,6 +663,21 @@ async function writeSeedGoals(
         targetCents: 20_000,
         targetDate: today + 30 * DAY_MS,
         funding: { amount: exact(20_000), cadence: { kind: 'everyIncomeDay' } },
+      },
+    },
+    {
+      id: 'seed-goal-repairs',
+      payload: {
+        name: 'Home repairs',
+        emoji: null,
+        priority: 'should',
+        orderIndex: 3,
+        targetCents: 200_000,
+        targetDate: null,
+        funding: {
+          amount: { kind: 'percent', bps: 500, of: 'dayMoney' },
+          cadence: { kind: 'everyIncomeDay' },
+        },
       },
     },
   ];

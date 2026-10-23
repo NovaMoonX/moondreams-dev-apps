@@ -168,7 +168,7 @@ export const MAX_CHOSEN_DAYS = 60;
 export const MAX_EMOJI_LENGTH = 8;
 
 /** Why a draft line got the money it did: funded in full, or cut short because the day's money ran out. */
-export const DRAFT_REASON_CODES = ['funded', 'poolExhausted'] as const;
+export const DRAFT_REASON_CODES = ['funded', 'poolExhausted', 'nothingLeft'] as const;
 
 /** The key that decided which of two otherwise equal demands went first. */
 export const DRAFT_TIE_KEYS = ['createdAt', 'itemId'] as const;
@@ -189,6 +189,9 @@ export const DRAFT_WORDS = {
   fundedFrom: 'funded from',
   shortBy: 'Short by',
   outOfMoney: "This day's money ran out first",
+  restEmpty: "Nothing was left of this day's money for the rest",
+  restAsk: 'The rest',
+  percentOf: 'of',
   nothingFunded: 'Nothing funded',
   fundedOf: 'Funded',
   of: 'of',
@@ -204,6 +207,10 @@ export const DRAFT_WORDS = {
   setAsideOf: 'of',
   billFallback: 'Bill',
   and: 'and',
+} as const;
+
+export const PACE_WORDS = {
+  rest: 'Takes what is left of each funded day, so there is no fixed pace.',
 } as const;
 
 /** The pace line's three answers for a goal with a date. */
