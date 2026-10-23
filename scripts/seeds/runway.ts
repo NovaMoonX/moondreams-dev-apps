@@ -691,10 +691,7 @@ async function writeSeedGoals(
         orderIndex: 1,
         targetCents: 180_000,
         targetDate: today + 50 * DAY_MS,
-        funding: {
-          amount: { lowCents: 30_000, highCents: 36_000 },
-          cadence: { kind: 'everyIncomeDay' },
-        },
+        funding: { amount: exact(30_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
     {
