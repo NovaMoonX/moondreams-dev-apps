@@ -36,19 +36,49 @@ const INVOKER_FAILURES = [
   'Failed to set invoker function',
 ];
 
-// The CLI swallows the real error of its release update and then tries to create the release, so only this follow-up shows; the cause is in its debug log.
+// The CLI hides the error of its release update and then tries to create the release, so only this follow-up shows; the update is repeated here to read its answer.
 const RELEASE_EXISTS = /Release projects\/\S+\/releases\/\S+ already exists/;
 const RELEASE_RETRY_WAIT_MS = 20_000;
+const RULES_API = 'https://firebaserules.googleapis.com/v1';
 
-const printRulesLog = () => {
+const probeRulesRelease = async () => {
   try {
-    const lines = readFileSync('firebase-debug.log', 'utf8')
-      .split('\n')
-      .filter((line) => /firebaserules|\[rules\]/i.test(line))
-      .slice(-40);
-    console.error(`\nThe rules lines of firebase-debug.log:\n${lines.join('\n')}`);
-  } catch {
-    console.error('\nfirebase-debug.log could not be read.');
+    const project = (
+      JSON.parse(readFileSync('.firebaserc', 'utf8')) as {
+        projects: { default: string };
+      }
+    ).projects.default;
+    const token = execSync('gcloud auth print-access-token').toString().trim();
+    const call = async (method: string, path: string, body?: unknown) => {
+      const response = await fetch(`${RULES_API}/projects/${project}/${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      console.error(
+        `${method} ${path.split('?')[0]} -> ${response.status} ${text.slice(0, 600)}`,
+      );
+      return response.ok ? (JSON.parse(text) as Record<string, unknown>) : null;
+    };
+    const rulesets = await call('GET', 'rulesets?pageSize=5');
+    const newest = (
+      (rulesets?.rulesets ?? []) as { name: string; createTime: string }[]
+    ).sort((x, y) => y.createTime.localeCompare(x.createTime))[0];
+    await call('GET', 'releases/cloud.firestore');
+    if (newest) {
+      await call('PATCH', 'releases/cloud.firestore', {
+        release: {
+          name: `projects/${project}/releases/cloud.firestore`,
+          rulesetName: newest.name,
+        },
+      });
+    }
+  } catch (error) {
+    console.error('The rules release could not be probed.', error);
   }
 };
 
@@ -89,13 +119,15 @@ const run = async () => {
   const first = await deploy();
   if (first.code === 0) return 0;
   if (RELEASE_EXISTS.test(first.output)) {
-    printRulesLog();
+    console.error(
+      '\nThe rules release failed. Repeating its update to read the answer:\n',
+    );
+    await probeRulesRelease();
     console.log(
-      `\nThe rules release failed. Deploying once more in ${RELEASE_RETRY_WAIT_MS / 1000} seconds.\n`,
+      `\nDeploying once more in ${RELEASE_RETRY_WAIT_MS / 1000} seconds.\n`,
     );
     await new Promise((resolve) => setTimeout(resolve, RELEASE_RETRY_WAIT_MS));
     const retry = await deploy();
-    if (retry.code !== 0) printRulesLog();
     return retry.code;
   }
   if (!INVOKER_FAILURES.some((message) => first.output.includes(message))) {
