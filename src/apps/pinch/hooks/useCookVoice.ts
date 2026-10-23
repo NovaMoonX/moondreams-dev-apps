@@ -48,6 +48,8 @@ const MESSAGE_MS = {
 const STOP_LINE_MS = 8000;
 const NOTES_PAUSE_MS = 1000;
 const NO_SEGMENTS: CookReadingSegment[] = [];
+/** How long the "Go ahead" prompt may take to start before the chime stands in for it (a voice that can't speak never starts). */
+const DICTATION_PROMPT_WAIT_MS = 1600;
 const NOTES_LEAD = 'Your tips and notes for this step.';
 const MAX_QUOTE_CHARS = 22;
 
@@ -208,7 +210,7 @@ interface UseCookVoiceOptions {
   runningTimers: number;
   lastRingAt: number | null;
   /** The next thing said is written down as a tip, note or change: the words picked up are kept to show, and a chime marks when to start saying them. */
-  isDictating?: boolean;
+  dictationKey?: string | null;
   /** A timer has rung and waits to be dismissed: the listening chime stays quiet so it never masks the alarm. */
   isAlarmRinging: boolean;
 }
@@ -223,7 +225,7 @@ export function useCookVoice({
   runningTimers,
   lastRingAt,
   isAlarmRinging,
-  isDictating = false,
+  dictationKey = null,
 }: UseCookVoiceOptions) {
   const { settings, save: saveSettings } = usePinchSettings(uid);
   const [localAgreed, setLocalAgreed] = useLocalStoragePreference(
@@ -269,7 +271,9 @@ export function useCookVoice({
   const [shouldAutoWait] = useState(() => isWaitingPreferred && hasAgreed);
   const [isExplainerOpen, setIsExplainerOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [heardWords, setHeardWords] = useState('');
+  const [heard, setHeard] = useState<{ key: string; text: string } | null>(
+    null,
+  );
   const [message, setMessage] = useState<CookVoiceMessage | null>(null);
   const [expiredStop, setExpiredStop] = useState<VoiceStop | null>(null);
   const [langs] = useState(() => ({
@@ -377,7 +381,7 @@ export function useCookVoice({
   };
 
   const handleTranscript = (alternatives: string[]) => {
-    setHeardWords('');
+    setHeard(null);
     if (handlers.current === null) return false;
     const { context: shown, run } = handlers.current;
     const plan = planHeard(machineRef.current.phase, alternatives, shown);
@@ -409,7 +413,8 @@ export function useCookVoice({
     speechLang: langs.speak,
     onFinalTranscript: handleTranscript,
     onInterimTranscript: (text) => {
-      if (isDictatingRef.current) setHeardWords(text);
+      const key = dictationKeyRef.current;
+      if (key !== null) setHeard({ key, text });
     },
     isNaturalVoice: natural.isOn,
     onHalt: (error) => {
@@ -417,16 +422,35 @@ export function useCookVoice({
     },
   });
   const { say, quiet, stop, start, cue } = speech;
-  const isDictatingRef = useRef(isDictating);
-  const lastStatus = useRef(speech.status);
+  const dictationKeyRef = useRef(dictationKey);
+  const chime = useRef({
+    isArmed: false,
+    hasSpoken: false,
+    timeoutId: 0,
+  });
   useEffect(() => {
-    isDictatingRef.current = isDictating;
-    const wasSpeaking = lastStatus.current === 'speaking';
-    lastStatus.current = speech.status;
-    if (isDictating && wasSpeaking && speech.status === 'listening') {
+    dictationKeyRef.current = dictationKey;
+    const state = chime.current;
+    const fire = () => {
+      window.clearTimeout(state.timeoutId);
+      state.isArmed = false;
       if (!isAlarmRinging) cue('start');
+    };
+    if (dictationKey === null) {
+      window.clearTimeout(state.timeoutId);
+      state.isArmed = false;
+      return;
     }
-  }, [isDictating, speech.status, isAlarmRinging, cue]);
+    if (!state.isArmed) {
+      state.isArmed = true;
+      state.hasSpoken = false;
+      state.timeoutId = window.setTimeout(() => {
+        if (state.isArmed && !state.hasSpoken) fire();
+      }, DICTATION_PROMPT_WAIT_MS);
+    }
+    if (speech.status === 'speaking') state.hasSpoken = true;
+    if (speech.status === 'listening' && state.hasSpoken) fire();
+  }, [dictationKey, speech.status, isAlarmRinging, cue]);
 
   const begin = () => {
     readStepKey.current = null;
@@ -667,7 +691,7 @@ export function useCookVoice({
     /** The stop the line still mentions: for a few seconds after it happens. */
     shownError: stopped === expiredStop ? null : stopped,
     message,
-    heardWords: isDictating ? heardWords : '',
+    heardWords: heard !== null && heard.key === dictationKey ? heard.text : '',
     isExplainerOpen,
     closeExplainer: () => setIsExplainerOpen(false),
     isSheetOpen,

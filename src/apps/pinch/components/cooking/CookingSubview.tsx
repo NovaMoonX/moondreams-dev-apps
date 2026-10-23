@@ -217,7 +217,13 @@ type PendingQuestion =
     }
   | { kind: 'LENGTH'; name: string | null }
   /** Waiting for the words of a tip, note or change to write for the step on screen. */
-  | { kind: 'DICTATE'; entryKind: CookEntryKind; recipeId: string; stepIndex: number };
+  | {
+      kind: 'DICTATE';
+      token: string;
+      entryKind: CookEntryKind;
+      recipeId: string;
+      stepIndex: number;
+    };
 
 const TIMER_VERB_WORDS: Record<PendingTimerVerb, string> = {
   PAUSE: 'pause',
@@ -830,7 +836,7 @@ function CookingSession({
     setDockOpen((current) => (current?.view === null ? current : null));
   const voice = useCookVoice({
     uid,
-    isDictating: pending?.kind === 'DICTATE',
+    dictationKey: pending?.kind === 'DICTATE' ? pending.token : null,
     onShowView: (view) => showDockView(view),
     openView: shownView === 'AMOUNTS' ? null : shownView,
     step:
@@ -1783,11 +1789,11 @@ function CookingSession({
         const crossesTo =
           timerNext?.kind === 'RECIPE' ? getTitle(timerNext.recipeId) : null;
         goNextFromTimer();
-        return done(crossesTo === null ? undefined : `Showing ${crossesTo}`);
+        return done(crossesTo === null ? undefined : `Showing ${crossesTo}`, '');
       }
       if (timerSecondary === 'BACK') {
         backToStep();
-        return done(backLabel);
+        return done(backLabel, '');
       }
       if (focused !== null) {
         return refuse(
@@ -1803,7 +1809,7 @@ function CookingSession({
       }
       showRecipe(next.recipeId);
       focusPrimary();
-      return done(`Showing ${getTitle(next.recipeId)}`);
+      return done(`Showing ${getTitle(next.recipeId)}`, '');
     },
     back: () => {
       if (focused !== null) {
@@ -2057,7 +2063,7 @@ function CookingSession({
         return done(`You're on ${recipe.title}`);
       }
       showDish(target.recipe.id);
-      return done(`Showing ${target.recipe.title}`);
+      return done(`Showing ${target.recipe.title}`, '');
     },
     readTips: () => {
       const text = getSpokenEntries(
@@ -2143,6 +2149,7 @@ function CookingSession({
       }
       setPending({
         kind: 'DICTATE',
+        token: generateUuid(),
         entryKind: kind,
         recipeId: recipe.id,
         stepIndex: index,
@@ -2228,7 +2235,7 @@ function CookingSession({
       const target =
         entries[(at + direction + entries.length) % entries.length].recipe;
       showDish(target.id);
-      return done(`Showing ${target.title}`);
+      return done(`Showing ${target.title}`, '');
     },
   });
   const voiceStepMatch =

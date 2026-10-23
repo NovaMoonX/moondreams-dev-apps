@@ -34,6 +34,7 @@ const MAX_ALTERNATIVES = 3;
 const SPEECH_START_TIMEOUT_MS = 1500;
 // A voice that stays silent this many readings in a row is given up on; one silent reading is a hiccup.
 const MAX_NO_STARTS = 2;
+const REPEATED_FINAL_MS = 700;
 
 export type SpeechCommandsStatus =
   'off' | 'starting' | 'listening' | 'speaking';
@@ -48,6 +49,7 @@ interface Session {
   isFailed: boolean;
   isAborted: boolean;
   handled: Set<number>;
+  lastFinal: { text: string; at: number } | null;
 }
 
 interface ListenerOptions {
@@ -171,6 +173,19 @@ export const createSpeechListener = (
         const alternatives = Array.from({ length: result.length }, (_, at) =>
           result[at].transcript.trim(),
         ).filter((transcript) => transcript !== '');
+        const now = Date.now();
+        const last = session.lastFinal;
+        // Some browsers re-send a finished phrase under a new index once interim results are on.
+        if (
+          last !== null &&
+          now - last.at < REPEATED_FINAL_MS &&
+          alternatives[0] === last.text
+        ) {
+          return;
+        }
+        if (alternatives.length > 0) {
+          session.lastFinal = { text: alternatives[0], at: now };
+        }
         if (
           alternatives.length > 0 &&
           state.options?.onFinalTranscript(alternatives)
@@ -271,6 +286,7 @@ export const createSpeechListener = (
       isFailed: false,
       isAborted: false,
       handled: new Set(),
+      lastFinal: null,
     };
     state.isRunning = true;
     try {
