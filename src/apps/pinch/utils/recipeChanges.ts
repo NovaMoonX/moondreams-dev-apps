@@ -1,4 +1,6 @@
 import {
+  COLLECTION_NOUN,
+  DISH_CATEGORIES,
   MAX_RECIPE_NOTE_LENGTH,
   MAX_TWEAK_CHANGE_LENGTH,
   MAX_TWEAK_CHANGES,
@@ -7,16 +9,22 @@ import {
 } from '@apps/pinch/constants';
 import type {
   NutritionValues,
+  Recipe,
   RecipeIngredient,
+  RecipeLink,
   RecipeSnapshot,
 } from '@apps/pinch/types';
+import { getCategories } from '@apps/pinch/utils/categories';
+import type { CollectionChange } from '@apps/pinch/utils/collections';
 import {
   getGroupKey,
   getRepeatedLineGroups,
 } from '@apps/pinch/utils/ingredientGroups';
+import { formatCareDays, getRecipeCare } from '@apps/pinch/utils/recipeCare';
 import { formatMinutes } from '@apps/pinch/utils/recipeFormat';
+import { getRecipeLinks } from '@apps/pinch/utils/recipeLinks';
 
-/** What a tweak looks at: everything a recipe's form edits except the cover picture. */
+/** What a tweak looks at: everything a recipe's form edits except the cover picture and the collections, which `ChangeExtras` carries. */
 export type RecipeContent = RecipeSnapshot;
 
 /** The recipe as a tweak keeps it, every key present so it can be written to Firestore. */
@@ -30,6 +38,9 @@ export const getRecipeSnapshot = (recipe: RecipeContent): RecipeSnapshot => ({
   steps: recipe.steps,
   nutritionOverride: recipe.nutritionOverride ?? null,
   sourceId: recipe.sourceId ?? null,
+  categories: getCategories(recipe),
+  care: getRecipeCare(recipe),
+  links: getRecipeLinks(recipe),
 });
 
 const INGREDIENTS_REORDERED = 'Ingredients reordered';
@@ -82,6 +93,20 @@ const normalize = (content: RecipeContent) => ({
     METRIC_KEYS.map((key) => [key, content.nutritionOverride?.[key] ?? null]),
   ) as unknown as NutritionValues,
   sourceId: content.sourceId ?? null,
+  categories: getCategories(content),
+  care: getRecipeCare(content),
+  links: getRecipeLinks(content).map((link) => ({
+    ...link,
+    label: link.label?.trim() || null,
+  })),
+  groups: Object.fromEntries(
+    content.ingredients
+      .map((line) => [line.id, getGroupKey(line.group)] as const)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  ),
+  groupOrder: [
+    ...new Set(content.ingredients.map((line) => getGroupKey(line.group))),
+  ],
 });
 
 type Normalized = ReturnType<typeof normalize>;
@@ -128,7 +153,7 @@ const getLineChanges = (
   return [...(isAmountChanged ? [amountLine] : []), ...noteLine()];
 };
 
-/** Lines are compared without their group, and order only among lines that stayed in their group: moving a line to another heading reorganizes the list without changing the dish, so on its own it records no tweak. A line whose ingredient sits in several groups is named with its group. */
+/** Lines are compared without their group; moving a line to another heading, and renaming, removing or reordering a heading, have their own lines, and order is compared only among lines that stayed in their group. A line whose ingredient sits in several groups is named with its group. */
 const getIngredientChanges = (
   beforeLines: RecipeIngredient[],
   afterLines: RecipeIngredient[],
@@ -181,10 +206,94 @@ const getIngredientChanges = (
   const keptAfter = after
     .filter((line) => isStill(line.id))
     .map((line) => line.id);
+  const keptGroupKeys = (keys: Map<string, string>) =>
+    [...new Set(keys.values())].filter(
+      (key) =>
+        key !== '' && beforeGroupKeys.has(key) && afterGroupKeys.has(key),
+    );
+  const beforeGroupKeys = new Set(beforeKeys.values());
+  const afterGroupKeys = new Set(afterKeys.values());
+  const isGroupsReordered =
+    keptGroupKeys(beforeKeys).join('\u0000') !==
+    keptGroupKeys(afterKeys).join('\u0000');
   const reordered =
-    inGroups(keptBefore) === inGroups(keptAfter) ? [] : [INGREDIENTS_REORDERED];
+    inGroups(keptBefore) === inGroups(keptAfter) && !isGroupsReordered
+      ? []
+      : [INGREDIENTS_REORDERED];
 
-  return [...changed, ...added, ...removed, ...reordered];
+  return [
+    ...changed,
+    ...added,
+    ...removed,
+    ...getGroupChanges(beforeLines, afterLines, getName),
+    ...reordered,
+  ];
+};
+
+const GROUP_QUOTE_LENGTH = 40;
+
+const quoteGroup = (name: string) => `“${clip(name, GROUP_QUOTE_LENGTH)}”`;
+
+/** The headings an edit renamed, removed or moved lines between: a heading whose every line went to one new heading is a rename, one whose lines all lost their heading is a removal, and the rest are lines moved (several to one heading read as one line). */
+const getGroupChanges = (
+  beforeLines: RecipeIngredient[],
+  afterLines: RecipeIngredient[],
+  getName: (ingredientId: string) => string,
+) => {
+  const beforeById = new Map(beforeLines.map((line) => [line.id, line]));
+  const kept = afterLines.filter((line) => beforeById.has(line.id));
+  const moved = kept.filter(
+    (line) =>
+      getGroupKey(beforeById.get(line.id)?.group) !== getGroupKey(line.group),
+  );
+  const keyOf = (line: RecipeIngredient) => getGroupKey(line.group);
+  const beforeKeys = new Set(beforeLines.map(keyOf));
+  const afterKeys = new Set(afterLines.map(keyOf));
+  const buckets = moved.reduce((acc, line) => {
+    const from = getGroupKey(beforeById.get(line.id)?.group);
+    const key = `${from}\u0000${keyOf(line)}`;
+    return acc.set(key, [...(acc.get(key) ?? []), line]);
+  }, new Map<string, RecipeIngredient[]>());
+
+  return [...buckets.entries()].flatMap(([key, lines]) => {
+    const [from, to] = key.split('\u0000');
+    const fromName = beforeLines.find((line) => keyOf(line) === from)?.group;
+    const toName = lines[0].group;
+    const isWholeHeading =
+      from !== '' &&
+      kept.filter(
+        (line) => getGroupKey(beforeById.get(line.id)?.group) === from,
+      ).length === lines.length &&
+      beforeLines.filter((line) => keyOf(line) === from).length ===
+        lines.length;
+    if (isWholeHeading && to === '' && !afterKeys.has(from)) {
+      return [`Removed the group ${quoteGroup(fromName ?? '')}`];
+    }
+    if (
+      isWholeHeading &&
+      to !== '' &&
+      !afterKeys.has(from) &&
+      !beforeKeys.has(to)
+    ) {
+      return [
+        `Renamed the group ${quoteGroup(fromName ?? '')} to ${quoteGroup(toName ?? '')}`,
+      ];
+    }
+    if (to === '') {
+      return lines.length === 1
+        ? [
+            `Took ${getName(lines[0].ingredientId)} out of ${quoteGroup(fromName ?? '')}`,
+          ]
+        : [
+            `Took ${lines.length} ingredients out of ${quoteGroup(fromName ?? '')}`,
+          ];
+    }
+    return lines.length === 1
+      ? [
+          `Moved ${getName(lines[0].ingredientId)} to ${quoteGroup(toName ?? '')}`,
+        ]
+      : [`Moved ${lines.length} ingredients to ${quoteGroup(toName ?? '')}`];
+  });
 };
 
 const getStepChanges = (before: string[], after: string[]) => {
@@ -268,6 +377,123 @@ const getTextChanges = (before: Normalized, after: Normalized) => {
   return [...titleChange, ...servingsChange, ...getDescriptionChange()];
 };
 
+const formatCategories = (categories: Recipe['categories']) => {
+  const labels = DISH_CATEGORIES.filter((category) =>
+    categories.includes(category.value),
+  ).map((category) => category.label);
+  return labels.length === 0 ? 'none' : labels.join(', ');
+};
+
+const getCategoryChanges = (before: Normalized, after: Normalized) =>
+  before.categories.join() === after.categories.join()
+    ? []
+    : [
+        `Categories: ${formatCategories(before.categories)} → ${formatCategories(after.categories)}`,
+      ];
+
+const getTextPartLine = (
+  label: string,
+  before: string | null | undefined,
+  after: string | null | undefined,
+) => {
+  if ((before ?? null) === (after ?? null)) return [];
+  if (!before) return [`${label} added`];
+  if (!after) return [`${label} removed`];
+  return [`${label} changed`];
+};
+
+const getDaysLine = (
+  label: string,
+  before: number | null | undefined,
+  after: number | null | undefined,
+) => {
+  if ((before ?? null) === (after ?? null)) return [];
+  if (before == null) return [`${label} set to ${formatCareDays(after ?? 0)}`];
+  if (after == null) return [`${label} removed`];
+  return [`${label} ${formatCareDays(before)} → ${formatCareDays(after)}`];
+};
+
+const getCareChanges = (before: Normalized, after: Normalized) => {
+  const lines = [
+    ...getDaysLine(
+      'fridge time',
+      before.care?.fridgeDays,
+      after.care?.fridgeDays,
+    ),
+    ...getDaysLine(
+      'freezer time',
+      before.care?.freezerDays,
+      after.care?.freezerDays,
+    ),
+    ...getTextPartLine('reheating', before.care?.reheat, after.care?.reheat),
+    ...getTextPartLine('tip', before.care?.tip, after.care?.tip),
+  ];
+  return lines.map((line) => `Keeping it: ${line}`);
+};
+
+const getLinkName = (link: RecipeLink) =>
+  link.kind === 'HOW_TO' ? 'the how-to link' : 'a link';
+
+const getLinkChanges = (before: Normalized, after: Normalized) => {
+  const beforeById = new Map(before.links.map((link) => [link.id, link]));
+  const afterById = new Map(after.links.map((link) => [link.id, link]));
+  const added = after.links
+    .filter((link) => !beforeById.has(link.id))
+    .map((link) => `Added ${getLinkName(link)}`);
+  const removed = before.links
+    .filter((link) => !afterById.has(link.id))
+    .map((link) => `Removed ${getLinkName(link)}`);
+  const changed = after.links.flatMap((link) => {
+    const was = beforeById.get(link.id);
+    return was && JSON.stringify(was) !== JSON.stringify(link)
+      ? [`Changed ${getLinkName(link)}`]
+      : [];
+  });
+  const kept = (links: Normalized['links'], other: Map<string, unknown>) =>
+    links.filter((link) => other.has(link.id)).map((link) => link.id);
+  const isReordered =
+    kept(before.links, afterById).join() !==
+    kept(after.links, beforeById).join();
+
+  return [
+    ...added,
+    ...removed,
+    ...changed,
+    ...(isReordered ? ['Links reordered'] : []),
+  ];
+};
+
+/** What the form changes that is not part of a recipe's content: the cover picture and the collections it is in. */
+export interface ChangeExtras {
+  photo: 'ADDED' | 'CHANGED' | 'REMOVED' | null;
+  addedCollections: string[];
+  removedCollections: string[];
+}
+
+export const NO_EXTRAS: ChangeExtras = {
+  photo: null,
+  addedCollections: [],
+  removedCollections: [],
+};
+
+const getPhotoChanges = (photo: ChangeExtras['photo']) => {
+  if (photo === 'ADDED') return ['Photo added'];
+  if (photo === 'CHANGED') return ['Photo changed'];
+  if (photo === 'REMOVED') return ['Photo removed'];
+  return [];
+};
+
+const getCollectionChanges = (extras: ChangeExtras) => [
+  ...extras.addedCollections.map(
+    (label) =>
+      `Added to the ${clip(label, GROUP_QUOTE_LENGTH)} ${COLLECTION_NOUN}`,
+  ),
+  ...extras.removedCollections.map(
+    (label) =>
+      `Taken out of the ${clip(label, GROUP_QUOTE_LENGTH)} ${COLLECTION_NOUN}`,
+  ),
+];
+
 const capLines = (lines: string[]) => {
   const fitted =
     lines.length <= MAX_TWEAK_CHANGES
@@ -289,6 +515,7 @@ export const getRecipeChanges = (
   after: RecipeContent,
   ingredientsById: Map<string, { name: string }>,
   sourcesById: Map<string, { label: string }> = new Map(),
+  extras: ChangeExtras = NO_EXTRAS,
 ) => {
   const was = normalize(before);
   const now = normalize(after);
@@ -305,12 +532,17 @@ export const getRecipeChanges = (
 
   const lines = [
     ...getTextChanges(was, now),
+    ...getCategoryChanges(was, now),
     ...getMinutesLine('Prep time', was.prepMinutes, now.prepMinutes),
     ...getMinutesLine('Cook time', was.cookMinutes, now.cookMinutes),
+    ...getPhotoChanges(extras.photo),
     ...getSourceLine(),
     ...getIngredientChanges(before.ingredients, after.ingredients, getName),
     ...getStepChanges(was.steps, now.steps),
+    ...getCareChanges(was, now),
     ...getNutritionChanges(was.nutrition, now.nutrition),
+    ...getCollectionChanges(extras),
+    ...getLinkChanges(was, now),
   ];
   const hasMissedChange =
     lines.length === 0 && JSON.stringify(was) !== JSON.stringify(now);
@@ -351,14 +583,32 @@ export const getChangeTopics = (
 type DraftContent = RecipeContent & {
   newIngredients: { id: string; name: string }[];
   newSource: { id: string; label: string } | null;
+  coverFile?: File | null;
+  coverUrl?: string | null;
+  removeCover?: boolean;
+  collectionChange?: CollectionChange | null;
+  newCollections?: { id: string; label: string }[];
 };
 
-/** The lines and topics of a form's draft against the recipe it edits, naming an ingredient and a source the draft is about to create. */
+const getPhotoExtra = (
+  existing: Partial<Pick<Recipe, 'coverPath' | 'coverUrl'>>,
+  draft: DraftContent,
+): ChangeExtras['photo'] => {
+  const hadCover = Boolean(existing.coverPath || existing.coverUrl);
+  const isNewPhoto =
+    draft.coverFile != null ||
+    (draft.coverUrl != null && draft.coverUrl !== existing.coverUrl);
+  if (isNewPhoto) return hadCover ? 'CHANGED' : 'ADDED';
+  return draft.removeCover === true && hadCover ? 'REMOVED' : null;
+};
+
+/** The lines and topics of a form's draft against the recipe it edits, naming an ingredient, a source and a collection the draft is about to create. */
 export const getDraftChanges = (
-  existing: RecipeContent,
+  existing: RecipeContent & Partial<Pick<Recipe, 'coverPath' | 'coverUrl'>>,
   draft: DraftContent,
   ingredientsById: ReadonlyMap<string, { name: string }>,
   sourcesById: ReadonlyMap<string, { label: string }>,
+  collectionsById: ReadonlyMap<string, { label: string }> = new Map(),
 ) => {
   const ingredientNames = new Map([
     ...ingredientsById,
@@ -373,8 +623,27 @@ export const getDraftChanges = (
       ? [[draft.newSource.id, draft.newSource] as const]
       : []),
   ]);
+  const collectionLabels = new Map([
+    ...collectionsById,
+    ...(draft.newCollections ?? []).map(
+      (collection) => [collection.id, collection] as const,
+    ),
+  ]);
+  const labelsOf = (ids: string[] | undefined) =>
+    (ids ?? []).map((id) => collectionLabels.get(id)?.label ?? 'a');
+  const extras: ChangeExtras = {
+    photo: getPhotoExtra(existing, draft),
+    addedCollections: labelsOf(draft.collectionChange?.add),
+    removedCollections: labelsOf(draft.collectionChange?.remove),
+  };
   const result = {
-    changes: getRecipeChanges(existing, draft, ingredientNames, sourceLabels),
+    changes: getRecipeChanges(
+      existing,
+      draft,
+      ingredientNames,
+      sourceLabels,
+      extras,
+    ),
     topics: getChangeTopics(existing, draft),
   };
 

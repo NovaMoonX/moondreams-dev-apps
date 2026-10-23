@@ -21,6 +21,7 @@ import { deleteNotes } from '@apps/pinch/store/actions/noteActions';
 import { stopSharingDeleted } from '@apps/pinch/store/actions/shareActions';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import {
+  selectCollectionsById,
   selectIngredientsById,
   selectSourcesById,
   selectTweakTracking,
@@ -190,6 +191,7 @@ const getTweakPlan = (
     draft,
     selectIngredientsById(state),
     selectSourcesById(state),
+    selectCollectionsById(state),
   );
   if (changes.length === 0) return { kind: 'NONE' };
 

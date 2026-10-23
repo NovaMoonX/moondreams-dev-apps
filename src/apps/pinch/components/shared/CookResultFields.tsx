@@ -74,8 +74,10 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
     <div className='space-y-3'>
       <div
         className={join(
-          'flex gap-4',
-          isLarge ? 'flex-col' : 'items-center max-[359px]:flex-col',
+          'flex',
+          isLarge
+            ? 'flex-col gap-4'
+            : 'items-center justify-center gap-3 max-[359px]:flex-col min-[390px]:gap-4',
         )}
       >
         <span
@@ -83,7 +85,7 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
             'bg-accent text-accent-foreground relative grid shrink-0 place-items-center overflow-hidden rounded-2xl',
             isLarge
               ? 'aspect-4/3 max-h-44 w-full text-5xl'
-              : 'size-24 text-3xl',
+              : 'size-20 text-3xl min-[390px]:size-24',
           )}
           aria-hidden={shownUrl === null ? true : undefined}
         >
@@ -100,8 +102,8 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
         </span>
         <div
           className={join(
-            'flex min-w-0 flex-1 flex-col gap-2',
-            isLarge ? 'items-start' : 'items-start max-[359px]:items-center',
+            'flex min-w-0 flex-col',
+            isLarge ? 'flex-1 items-start gap-2' : 'items-center gap-1',
           )}
         >
           <StarRating

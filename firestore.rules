@@ -1589,11 +1589,12 @@ service cloud.firestore {
           && isNoteChangeAt(changes, 6) && isNoteChangeAt(changes, 7);
       }
 
-      // The recipe as a TWEAK found it, so the edit can be undone. Rules can't walk the lines or steps, so only the counts and the scalar fields are checked here; the client shapes each line and step the way the recipe's own write does.
+      // The recipe as a TWEAK found it, so the edit can be undone. Rules can't walk the lines or steps, so only the counts and the scalar fields are checked here; the client shapes each line, step and link the way the recipe's own write does. The nine keys are the first shape; a tweak written later also keeps `categories`, `care` and `links` (all three or none, read with get(key, default) like the recipe's own rule).
       function isTweakPrevious(value) {
         return value is map
-          && value.keys().hasOnly(['title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'ingredients', 'steps', 'nutritionOverride', 'sourceId'])
+          && value.keys().hasOnly(['title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'ingredients', 'steps', 'nutritionOverride', 'sourceId', 'categories', 'care', 'links'])
           && value.keys().hasAll(['title', 'description', 'servings', 'prepMinutes', 'cookMinutes', 'ingredients', 'steps', 'nutritionOverride', 'sourceId'])
+          && (value.keys().hasAll(['categories', 'care', 'links']) || !value.keys().hasAny(['categories', 'care', 'links']))
           && isShortText(value.title, 200)
           && (value.description == null || isShortText(value.description, 2000))
           && isPositiveAmount(value.servings)
@@ -1601,7 +1602,10 @@ service cloud.firestore {
           && isNutrition(value.nutritionOverride)
           && value.ingredients is list && value.ingredients.size() >= 1 && value.ingredients.size() <= 60
           && value.steps is list && value.steps.size() <= 60
-          && (value.sourceId == null || isShortText(value.sourceId, 80));
+          && (value.sourceId == null || isShortText(value.sourceId, 80))
+          && isDishCategories(value.get('categories', []))
+          && isRecipeCare(value.get('care', null))
+          && value.get('links', []) is list && value.get('links', []).size() <= 8;
       }
 
       // A NOTE is the person's own words about a cook; a TIP is advice for the dish itself; a CHANGE is a change the person means to make, with the reason in `reason`; a TWEAK records what an edit to the recipe changed, with an optional reason in `text`. A NOTE, TIP or CHANGE may name one step (`stepIndex`, with `stepText` to find it again once steps move); a document written before them lacks all three keys, which read as null.

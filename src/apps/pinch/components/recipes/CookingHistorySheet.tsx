@@ -75,7 +75,7 @@ const getWrittenLine = (kinds: string[] | undefined) => {
   const line = parts.join(' and ');
   return line === '' ? null : `${line[0].toUpperCase()}${line.slice(1)}`;
 };
-const BACK_LABEL = 'Back to the recipe';
+const BACK_LABEL = 'Back to recipe';
 const HIDDEN_WORTH_A_BUTTON = 3;
 /** Photos drawn at once: the grid is the latest ones, and every cook with a photo is also a row of All cooks. */
 const PHOTOS_SHOWN = 30;

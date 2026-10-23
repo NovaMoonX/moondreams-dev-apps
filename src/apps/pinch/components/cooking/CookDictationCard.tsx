@@ -42,32 +42,32 @@ function CookDictationCard({
       ref={cardRef}
       role='status'
       aria-live='polite'
-      className='border-border bg-accent flex scroll-mb-40 items-start gap-3 rounded-2xl border p-3'
+      className='border-border bg-accent flex scroll-mb-40 items-start gap-3 rounded-2xl border p-3 sm:[@media(min-height:701px)]:p-4'
     >
       <span
         aria-hidden='true'
-        className='bg-background text-primary mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full'
+        className='bg-background text-primary mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full sm:[@media(min-height:701px)]:h-11 sm:[@media(min-height:701px)]:w-11'
       >
         {isWaiting ? (
           <Mic
             className={join(
-              'h-4 w-4',
+              'h-4 w-4 sm:[@media(min-height:701px)]:h-5 sm:[@media(min-height:701px)]:w-5',
               isListening && 'motion-safe:animate-pulse',
             )}
           />
         ) : (
-          <Check className='h-4 w-4' />
+          <Check className='h-4 w-4 sm:[@media(min-height:701px)]:h-5 sm:[@media(min-height:701px)]:w-5' />
         )}
       </span>
       <div className='min-w-0 flex-1'>
-        <p className='text-sm font-medium'>
+        <p className='text-sm font-medium sm:[@media(min-height:701px)]:text-base'>
           {isWaiting
             ? `Say your ${word}`
             : `Saved as a ${word} for step ${stepNumber}`}
         </p>
         <p
           className={join(
-            'mt-0.5 line-clamp-3 text-sm wrap-break-word [@media(max-height:700px)]:line-clamp-2',
+            'mt-0.5 line-clamp-3 text-sm wrap-break-word sm:[@media(min-height:701px)]:text-base [@media(max-height:700px)]:line-clamp-2',
             heard === '' && isWaiting
               ? 'text-muted-foreground'
               : 'text-foreground',
@@ -85,7 +85,7 @@ function CookDictationCard({
       <Button
         variant='secondary'
         size='sm'
-        className='border-border relative shrink-0 border before:absolute before:-inset-[6px] before:content-[""]'
+        className='bg-background! relative shrink-0 shadow-none! before:absolute before:-inset-[6px] before:content-[""] sm:[@media(min-height:701px)]:h-10 sm:[@media(min-height:701px)]:px-4 sm:[@media(min-height:701px)]:text-base'
         onClick={isWaiting ? onCancel : onUndo}
       >
         {isWaiting ? 'Cancel' : 'Undo'}

@@ -54,20 +54,14 @@ const CookIngredientRow = memo(function CookIngredientRow({
         <span className='mt-0.5 inline-flex shrink-0'>
           <Checkbox
             aria-label={`Got out ${name}`}
+            data-tick='mark'
             checked={isOut}
             onCheckedChange={(checked) => onToggle(id, checked === true)}
             className="relative after:absolute after:-inset-2.5 after:content-['']"
           />
         </span>
         <span className='min-w-0 flex-1'>
-          <span
-            className={join(
-              'block text-base wrap-break-word',
-              isOut && 'text-muted-foreground line-through',
-            )}
-          >
-            {name}
-          </span>
+          <span className='block text-base wrap-break-word'>{name}</span>
           {note && (
             <span className='text-muted-foreground block text-xs wrap-break-word'>
               {note}
@@ -80,7 +74,6 @@ const CookIngredientRow = memo(function CookIngredientRow({
             isMeasured
               ? 'shrink-0 font-medium whitespace-nowrap'
               : 'text-muted-foreground max-w-[50%] text-right wrap-break-word',
-            isOut && 'text-muted-foreground line-through',
           )}
         >
           {amountText}

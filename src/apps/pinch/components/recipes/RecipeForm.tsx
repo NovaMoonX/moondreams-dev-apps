@@ -92,6 +92,7 @@ import {
   selectIdeas,
   selectIngredients,
   selectIngredientsById,
+  selectCollectionsById,
   selectIsCollectionsReady,
   selectNotesByRecipe,
   selectRecipesById,
@@ -211,6 +212,7 @@ function RecipeForm({
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
+  const collectionsById = useAppSelector(selectCollectionsById);
   const sourceCounts = useAppSelector(selectSourceCounts);
   const showNutrition = useAppSelector(selectShowNutrition);
   const isNutritionShown = NUTRITION_METRICS.some(
@@ -902,6 +904,7 @@ function RecipeForm({
         getDraft(data, ''),
         ingredientsById,
         sourcesById,
+        collectionsById,
       );
       if (changes.length > 0 && isWhyAsked(topics)) {
         setAsk({ data, changes, choices: getWhyChoices(topics) });

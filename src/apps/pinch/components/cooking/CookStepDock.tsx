@@ -31,6 +31,9 @@ const KIND_WORDS: Record<DockKind, { one: string; many: string }> = {
 
 const ADD_LABEL = 'Add a tip, note or change for this step';
 
+const ICON_CLASS =
+  'h-4 w-4 sm:[@media(min-height:701px)]:h-5 sm:[@media(min-height:701px)]:w-5';
+
 interface BubbleProps {
   label: string;
   isOn?: boolean;
@@ -44,7 +47,7 @@ interface BubbleProps {
   children: ReactNode;
 }
 
-/** A round button: 36px to see (32px inside the panel), 40px to hit, its count a small badge on the corner. */
+/** A round button: 36px to see (32px inside the panel), 40px to hit, its count a small badge on the corner; on a tall screen from `sm` it is 48px (40px inside the panel) with a larger emoji. */
 function Bubble({
   label,
   isOn,
@@ -69,11 +72,13 @@ function Bubble({
       aria-label={label}
       title={label}
       className={join(
-        'text-foreground! relative shrink-0 rounded-full px-0! py-0! text-base before:absolute before:content-[""]',
-        isInline ? 'size-8 min-w-8' : 'size-9 min-w-9',
+        'text-foreground! relative shrink-0 rounded-full px-0! py-0! text-base before:absolute before:content-[""] sm:[@media(min-height:701px)]:text-xl',
+        isInline
+          ? 'size-8 min-w-8 sm:[@media(min-height:701px)]:size-10 sm:[@media(min-height:701px)]:min-w-10'
+          : 'size-9 min-w-9 sm:[@media(min-height:701px)]:size-12 sm:[@media(min-height:701px)]:min-w-12',
         isBordered ? 'before:-inset-[3px]' : isInline ? 'before:-inset-1' : 'before:-inset-0.5',
         isOn && 'bg-accent! border-primary! border',
-        isNudged && !isOn && 'bg-accent! border-border border',
+        isNudged && !isOn && 'bg-accent!',
         isDashed && 'border-muted-foreground/80 border border-dashed',
       )}
       onClick={onClick}
@@ -82,13 +87,13 @@ function Bubble({
       {isNudged && !isOn && (
         <span
           aria-hidden='true'
-          className='bg-primary absolute -top-0.5 -right-0.5 size-2.5 rounded-full'
+          className='bg-primary absolute -top-0.5 -right-0.5 size-2.5 rounded-full sm:[@media(min-height:701px)]:size-3'
         />
       )}
       {count !== undefined && (
         <span
           aria-hidden='true'
-          className='bg-primary text-primary-foreground absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-medium'
+          className='bg-primary text-primary-foreground absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-medium sm:[@media(min-height:701px)]:-top-1.5 sm:[@media(min-height:701px)]:-right-1.5 sm:[@media(min-height:701px)]:h-5 sm:[@media(min-height:701px)]:min-w-5 sm:[@media(min-height:701px)]:text-xs'
         >
           {count}
         </span>
@@ -202,11 +207,11 @@ function CookStepDock({
         lastTweakAt !== null && lastTweakAt > lastNote.createdAt;
       return (
         <div className='space-y-1 px-1'>
-          <p className='text-sm wrap-break-word whitespace-pre-wrap'>
+          <p className='text-sm wrap-break-word whitespace-pre-wrap sm:[@media(min-height:701px)]:text-base'>
             {leadWithAdvice(body)}
           </p>
           {isChangedSince && (
-            <p className='text-muted-foreground text-xs'>
+            <p className='text-muted-foreground text-xs sm:[@media(min-height:701px)]:text-sm'>
               You've changed the recipe since.
             </p>
           )}
@@ -218,7 +223,7 @@ function CookStepDock({
         <div className='px-1'>
           <CookAmountRows rows={rows} className='border-border border-t' />
           {isAmountNoteShown && (
-            <p className='text-muted-foreground pt-1 text-xs'>
+            <p className='text-muted-foreground pt-1 text-xs sm:[@media(min-height:701px)]:text-sm'>
               Amounts written in this step stay as they are.
             </p>
           )}
@@ -246,7 +251,7 @@ function CookStepDock({
             <li
               key={entry.id}
               className={join(
-                'bg-background/70 border-border flex shrink-0 snap-start items-stretch rounded-xl border',
+                'bg-accent flex shrink-0 snap-start items-stretch rounded-xl',
                 isMany ? 'w-[88%]' : 'w-full',
               )}
             >
@@ -254,27 +259,27 @@ function CookStepDock({
                 type='button'
                 variant='tertiary'
                 aria-label={`Open your ${kindWord}: ${entry.text ?? ''}`}
-                className='text-foreground! h-auto min-w-0 flex-1 flex-col items-start justify-start gap-0.5 rounded-xl px-3 py-2 text-left font-normal whitespace-normal'
+                className='text-foreground! h-auto min-w-0 flex-1 flex-col items-start justify-start gap-0.5 rounded-xl px-3 py-2 text-left font-normal whitespace-normal sm:[@media(min-height:701px)]:px-4 sm:[@media(min-height:701px)]:py-3'
                 onClick={() => onEdit(entry.id)}
               >
-                <span className='line-clamp-3 w-full text-sm wrap-break-word'>
+                <span className='line-clamp-3 w-full text-sm wrap-break-word sm:[@media(min-height:701px)]:text-base'>
                   <span aria-hidden='true'>{NOTE_KIND_EMOJIS[entry.kind]} </span>
                   {entry.text}
                 </span>
                 {isChange && (entry.reason ?? '') !== '' && (
-                  <span className='text-muted-foreground line-clamp-1 w-full text-xs'>
+                  <span className='text-muted-foreground line-clamp-1 w-full text-xs sm:[@media(min-height:701px)]:text-sm'>
                     Why: {entry.reason}
                   </span>
                 )}
               </Button>
               {isChange && onApplyChange !== null && (
-                <div className='flex items-start pt-1.5 pr-1.5'>
+                <div className='flex items-start pt-1.5 pr-1.5 sm:[@media(min-height:701px)]:pt-2 sm:[@media(min-height:701px)]:pr-2'>
                   <Bubble
                     isInline
                     label='Update the recipe with this change'
                     onClick={() => onApplyChange(entry.id)}
                   >
-                    <PenLine className='h-4 w-4' aria-hidden='true' />
+                    <PenLine className={ICON_CLASS} aria-hidden='true' />
                   </Bubble>
                 </div>
               )}
@@ -292,10 +297,10 @@ function CookStepDock({
           id={panelId}
           aria-label={getTitle()}
           data-no-swipe=''
-          className='bg-popover text-popover-foreground border-border absolute inset-x-0 bottom-full z-20 mb-2 lg:[@media(min-height:701px)]:static space-y-1 rounded-2xl border p-2 shadow-lg [@media(max-height:500px)_and_(min-width:640px)]:top-full [@media(max-height:500px)_and_(min-width:640px)]:bottom-auto [@media(max-height:500px)_and_(min-width:640px)]:mt-2 [@media(max-height:500px)_and_(min-width:640px)]:mb-0'
+          className='bg-popover text-popover-foreground border-border absolute inset-x-0 bottom-full z-20 mb-2 lg:[@media(min-height:701px)]:static space-y-1 rounded-2xl border p-2 shadow-lg sm:[@media(min-height:701px)]:space-y-2 sm:[@media(min-height:701px)]:p-3 [@media(max-height:500px)_and_(min-width:640px)]:top-full [@media(max-height:500px)_and_(min-width:640px)]:bottom-auto [@media(max-height:500px)_and_(min-width:640px)]:mt-2 [@media(max-height:500px)_and_(min-width:640px)]:mb-0'
         >
-          <div className='flex min-h-8 items-center justify-between gap-2 px-1'>
-            <p className='text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium'>
+          <div className='flex min-h-8 items-center justify-between gap-2 px-1 sm:[@media(min-height:701px)]:min-h-10'>
+            <p className='text-muted-foreground min-w-0 flex-1 truncate text-xs font-medium sm:[@media(min-height:701px)]:text-base'>
               {getTitle()}
             </p>
             <div className='flex shrink-0 items-center gap-2'>
@@ -303,14 +308,14 @@ function CookStepDock({
                 <Button
                   type='button'
                   variant='secondary'
-                  className='relative h-8 shrink-0 gap-1 rounded-full px-3 text-xs before:absolute before:-inset-1 before:content-[""]'
+                  className='relative h-8 shrink-0 gap-1 rounded-full px-3 text-xs before:absolute before:-inset-1 before:content-[""] sm:[@media(min-height:701px)]:h-10 sm:[@media(min-height:701px)]:px-4 sm:[@media(min-height:701px)]:text-sm'
                   aria-label='Got it'
                   onClick={() => {
                     lastTime?.onGotIt();
                     close();
                   }}
                 >
-                  <Check className='h-3.5 w-3.5' aria-hidden='true' />
+                  <Check className='h-3.5 w-3.5 sm:[@media(min-height:701px)]:h-4 sm:[@media(min-height:701px)]:w-4' aria-hidden='true' />
                   Got it
                 </Button>
               )}
@@ -320,15 +325,15 @@ function CookStepDock({
                     label={`Read the ${KIND_WORDS[openKind].many.split(' ')[0]} aloud`}
                     onClick={() => onRead(openKind)}
                   >
-                    <Volume2 className='h-4 w-4' aria-hidden='true' />
+                    <Volume2 className={ICON_CLASS} aria-hidden='true' />
                   </Bubble>
                 )}
               <Bubble isInline label='Close' onClick={close}>
-                <X className='h-4 w-4' aria-hidden='true' />
+                <X className={ICON_CLASS} aria-hidden='true' />
               </Bubble>
             </div>
           </div>
-          <div className='max-h-44 overflow-y-auto lg:[@media(min-height:701px)]:max-h-72 [@media(max-height:700px)]:max-h-32'>
+          <div className='max-h-44 overflow-y-auto sm:[@media(min-height:701px)]:max-h-56 lg:[@media(min-height:701px)]:max-h-72 [@media(max-height:700px)]:max-h-32'>
             {getBody()}
           </div>
         </section>
@@ -337,7 +342,7 @@ function CookStepDock({
         ref={groupRef}
         role='group'
         aria-label='Written and used in this step'
-        className='flex min-h-10 items-center justify-end gap-2'
+        className='flex min-h-10 items-center justify-end gap-2 sm:[@media(min-height:701px)]:min-h-12 sm:[@media(min-height:701px)]:gap-3'
       >
         {lastNote !== null && (
           <Bubble
@@ -381,7 +386,7 @@ function CookStepDock({
         })}
         {onAdd && (
           <Bubble label={ADD_LABEL} isDashed onClick={onAdd}>
-            <Plus className='h-4 w-4' aria-hidden='true' />
+            <Plus className={ICON_CLASS} aria-hidden='true' />
           </Bubble>
         )}
       </div>

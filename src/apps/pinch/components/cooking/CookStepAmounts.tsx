@@ -15,12 +15,12 @@ export function CookAmountRows({
       {rows.map((row) => (
         <li
           key={row.id}
-          className='flex items-baseline justify-between gap-3 py-1.5 text-sm'
+          className='flex items-baseline justify-between gap-3 py-1.5 text-sm sm:[@media(min-height:701px)]:py-2 sm:[@media(min-height:701px)]:text-base'
         >
           <span className='min-w-0 wrap-break-word'>
             {row.name}
             {row.groupLabel && (
-              <span className='text-muted-foreground text-xs'>
+              <span className='text-muted-foreground text-xs sm:[@media(min-height:701px)]:text-sm'>
                 {' '}
                 · {row.groupLabel}
               </span>
