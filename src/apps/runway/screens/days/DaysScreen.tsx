@@ -11,6 +11,7 @@ import { useAppSelector } from '@/store';
 import { COMING_DAYS_PREVIEW } from '@apps/runway/constants';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import IncomeForm from '@apps/runway/forms/IncomeForm';
 import {
   selectComingDays,
@@ -21,6 +22,7 @@ function DaysScreen() {
   const today = todayAsUtcDate(useNow(60_000));
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const days = useAppSelector((state) => selectComingDays(state, today));
+  const { openDay } = useRunwayUrlState();
   const [isExpanded, setIsExpanded] = useState(false);
   const [formKey, setFormKey] = useState<number | null>(null);
 
@@ -48,7 +50,11 @@ function DaysScreen() {
       <div className='space-y-2'>
         <ul className='space-y-2'>
           {visibleDays.map((day) => (
-            <IncomeDayCard key={day.dayKey} day={day} />
+            <IncomeDayCard
+              key={day.dayKey}
+              day={day}
+              onOpen={() => openDay(day.dayKey)}
+            />
           ))}
         </ul>
         {hasFold && (

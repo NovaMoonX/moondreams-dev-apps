@@ -1,8 +1,13 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { buildComingDays } from '@apps/runway/engine/comingDays';
-import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
+import {
+  buildComingDays,
+  type ComingDay,
+} from '@apps/runway/engine/comingDays';
+import { buildDraft, type Draft } from '@apps/runway/engine/draft';
+import { hashText } from '@apps/runway/engine/fingerprint';
+import { resolve, resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import { PRIORITIES } from '@apps/runway/constants';
 import type {
   EnvelopeVersion,
@@ -101,6 +106,90 @@ export const selectEnvelopes = createSelector(
           a.item.createdAt - b.item.createdAt ||
           a.item.id.localeCompare(b.item.id),
       );
+    return result;
+  },
+);
+
+export interface DraftView {
+  day: ComingDay;
+  draft: Draft;
+  envelopes: Record<string, { name: string; emoji: string | null }>;
+  sourceNames: Record<string, string>;
+}
+
+const selectStance = (state: RootState) =>
+  state.runway.plan?.stance ?? 'conservative';
+const selectDayKey = (_state: RootState, dayKey: string) => dayKey;
+const selectToday = (_state: RootState, _dayKey: string, today: number) =>
+  today;
+
+const MAX_CACHED_DRAFTS = 24;
+const draftCaches = new WeakMap<object, Map<string, DraftView>>();
+
+/**
+ * The draft for one coming income day, computed from the plan and never stored. Drafts are kept by a
+ * hash of the resolved versions and held against the versions array itself, so an unrelated change
+ * returns the same object and a sign-out frees every draft with the plan it came from.
+ */
+export const selectDraft = createSelector(
+  [selectItems, selectVersions, selectStance, selectDayKey, selectToday],
+  (items, versions, stance, dayKey, today): DraftView | null => {
+    const days = buildComingDays(items, versions, today);
+    const day = days.find((entry) => entry.dayKey === dayKey);
+    if (!day) return null;
+
+    const resolved = resolve(
+      items.filter((item) => item.kind === 'envelope'),
+      versions.filter(isEnvelope),
+      day.on,
+    );
+    const key = hashText(
+      JSON.stringify([
+        stance,
+        dayKey,
+        days.map((entry) => [entry.dayKey, entry.amount]),
+        resolved.map(({ version }) => version.id),
+      ]),
+    );
+    const draftCache =
+      draftCaches.get(versions) ?? new Map<string, DraftView>();
+    draftCaches.set(versions, draftCache);
+    const cached = draftCache.get(key);
+    if (cached) return cached;
+
+    const envelopes = resolved.map(({ item, version }) => ({
+      itemId: item.id,
+      createdAt: item.createdAt,
+      priority: version.payload.priority,
+      orderIndex: version.payload.orderIndex,
+      funding: version.payload.funding,
+    }));
+    const draft = buildDraft({
+      days: [day],
+      plan: { envelopes, incomeDays: days },
+      stance,
+      overrides: { dayCents: {} },
+    });
+    const sourceNames = days.reduce<Record<string, string>>(
+      (acc, entry) =>
+        entry.sourceId !== null && entry.sourceName !== null
+          ? { ...acc, [entry.sourceId]: entry.sourceName }
+          : acc,
+      {},
+    );
+    const result: DraftView = {
+      day,
+      draft,
+      envelopes: Object.fromEntries(
+        resolved.map(({ item, version }) => [
+          item.id,
+          { name: version.payload.name, emoji: version.payload.emoji },
+        ]),
+      ),
+      sourceNames,
+    };
+    if (draftCache.size >= MAX_CACHED_DRAFTS) draftCache.clear();
+    draftCache.set(key, result);
     return result;
   },
 );

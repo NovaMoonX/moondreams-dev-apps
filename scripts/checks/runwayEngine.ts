@@ -9,6 +9,11 @@ import {
   toDayStamp,
   todayAsUtcDate,
 } from '../../src/apps/runway/engine/dates.ts';
+import { buildDemands } from '../../src/apps/runway/engine/demands.ts';
+import {
+  buildDraft,
+  type DraftInput,
+} from '../../src/apps/runway/engine/draft.ts';
 import { allocate, percentOf } from '../../src/apps/runway/engine/money.ts';
 import {
   resolve,
@@ -713,6 +718,265 @@ const version = (
     selectFundedDays({ kind: 'everyNth', n: 2, anchorDayKey: 'x' }, []),
     [],
     'no income days, no funded days',
+  );
+}
+
+// Draft: the day's money walked through the envelopes in priority order.
+{
+  const PRIORITY_NAMES = ['must', 'should', 'want'] as const;
+  const makeDays = (count: number, cents: number) =>
+    Array.from({ length: count }, (_, index) => {
+      const on = utc(2026, 11, 6) + index * 14 * DAY_MS;
+      return {
+        dayKey: toDayKey('line-a', on),
+        sourceId: index % 2 === 0 ? 'src-a' : 'src-b',
+        on,
+        amount: { lowCents: cents, highCents: cents },
+      };
+    });
+  const makeEnvelope = (
+    id: string,
+    priority: (typeof PRIORITY_NAMES)[number],
+    orderIndex: number,
+    cents: number,
+    createdAt = 1_000,
+    cadence: DraftInput['plan']['envelopes'][number]['funding']['cadence'] = {
+      kind: 'everyIncomeDay',
+    },
+  ) => ({
+    itemId: id,
+    createdAt,
+    priority,
+    orderIndex,
+    funding: { amount: { kind: 'exact' as const, cents }, cadence },
+  });
+  const draftOf = (
+    envelopes: DraftInput['plan']['envelopes'],
+    days = makeDays(1, 100_000),
+    overrides: DraftInput['overrides'] = { dayCents: {} },
+    incomeDays = makeDays(8, 100_000),
+  ) =>
+    buildDraft({
+      days,
+      plan: { envelopes, incomeDays },
+      stance: 'conservative',
+      overrides,
+    });
+
+  const random = makeRandom(7);
+  const randomEnvelopes = (count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      makeEnvelope(
+        `env-${String(index).padStart(3, '0')}`,
+        PRIORITY_NAMES[Math.floor(random() * 3)],
+        Math.floor(random() * 4),
+        Math.floor(random() * 30_000) + 1,
+        1_000 + Math.floor(random() * 3),
+        random() < 0.5
+          ? { kind: 'everyIncomeDay' }
+          : { kind: 'everyNth', n: random() < 0.5 ? 2 : 3, anchorDayKey: 'x' },
+      ),
+    );
+
+  // Must is funded before Should before Want, and what ran short is named.
+  const tight = draftOf(
+    [
+      makeEnvelope('want', 'want', 1, 20_000),
+      makeEnvelope('should', 'should', 1, 20_000),
+      makeEnvelope('must', 'must', 1, 50_000),
+    ],
+    makeDays(1, 60_000),
+  );
+  assert.deepEqual(
+    tight.lines.map((line) => [line.itemId, line.cents, line.shortBy]),
+    [
+      ['must', 50_000, 0],
+      ['should', 10_000, 10_000],
+      ['want', 0, 20_000],
+    ],
+    'Must before Should before Want, with the shortfall named',
+  );
+  assert.deepEqual(
+    tight.lines.map((line) => line.reason.code),
+    ['funded', 'poolExhausted', 'poolExhausted'],
+  );
+  assert.equal(tight.freeToSpend.cents, 0);
+  assert.equal(
+    tight.lines[0].lineId,
+    `${tight.days[0].dayKey}:must`,
+    'a line id is the day key and the item id',
+  );
+  assert.deepEqual(tight.lines[0].paidBy, [
+    { dayKey: tight.days[0].dayKey, sourceId: 'src-a', cents: 50_000 },
+  ]);
+
+  // Free to spend is what is left, by source; a typed amount replaces the plan's.
+  const roomy = draftOf([makeEnvelope('a', 'must', 1, 30_000)]);
+  assert.equal(roomy.freeToSpend.cents, 70_000);
+  assert.deepEqual(roomy.freeToSpend.bySource, [
+    { sourceId: 'src-a', cents: 70_000 },
+  ]);
+  const typed = draftOf([makeEnvelope('a', 'must', 1, 30_000)], undefined, {
+    dayCents: { [roomy.days[0].dayKey]: 10_000 },
+  });
+  assert.equal(typed.moneyCents, 10_000, 'a typed day amount is used');
+  assert.equal(typed.lines[0].cents, 10_000);
+  assert.equal(typed.lines[0].shortBy, 20_000);
+  assert.equal(
+    draftOf([], undefined, { dayCents: { [roomy.days[0].dayKey]: -5 } })
+      .moneyCents,
+    0,
+    'day money is never negative',
+  );
+  assert.deepEqual(draftOf([]).lines, [], 'no envelopes, no lines');
+
+  // Two demands equal on tier, order and date added: the same one first every run, and it says so.
+  const tie = [
+    makeEnvelope('zeta', 'should', 1, 60_000),
+    makeEnvelope('alpha', 'should', 1, 60_000),
+  ];
+  const tieRuns = [tie, [...tie].reverse()].map((order) =>
+    draftOf(order, makeDays(1, 80_000)),
+  );
+  assert.equal(JSON.stringify(tieRuns[0]), JSON.stringify(tieRuns[1]));
+  assert.deepEqual(
+    tieRuns[0].lines.map((line) => [line.itemId, line.cents, line.tieBrokenBy]),
+    [
+      ['alpha', 60_000, 'itemId'],
+      ['zeta', 20_000, null],
+    ],
+    'an exact tie goes to the lower id and the first line says so',
+  );
+  const earlier = draftOf(
+    [
+      makeEnvelope('b', 'should', 1, 60_000, 2_000),
+      makeEnvelope('a', 'should', 1, 60_000, 3_000),
+    ],
+    makeDays(1, 80_000),
+  );
+  assert.deepEqual(
+    earlier.lines.map((line) => [line.itemId, line.tieBrokenBy]),
+    [
+      ['b', 'createdAt'],
+      ['a', null],
+    ],
+    'the envelope added first goes first and names the date added',
+  );
+  assert.equal(
+    draftOf(tie, makeDays(1, 200_000)).lines.every(
+      (line) => line.tieBrokenBy === null,
+    ),
+    true,
+    'no tie is claimed when the money covers both',
+  );
+
+  // Cadences pick days from the plan-wide list.
+  const eight = makeDays(8, 100_000);
+  const everyOther = (anchor: number) =>
+    makeEnvelope('n', 'must', 1, 1_000, 1_000, {
+      kind: 'everyNth',
+      n: 2,
+      anchorDayKey: eight[anchor].dayKey,
+    });
+  assert.deepEqual(
+    eight.map((day) => buildDemands([day], eight, [everyOther(0)]).length),
+    [1, 0, 1, 0, 1, 0, 1, 0],
+    'every other day funds the anchor and every second day after it',
+  );
+
+  // Properties over random plans.
+  const planned = makeDays(3, 90_000);
+  Array.from({ length: 40 }, (_, round) => {
+    const envelopes = randomEnvelopes(5 + (round % 20));
+    const days = round % 2 === 0 ? planned.slice(0, 1) : planned;
+    const baseline = draftOf(envelopes, days, { dayCents: {} }, planned);
+    const json = JSON.stringify(baseline);
+
+    assert.equal(
+      JSON.stringify(draftOf(envelopes, days, { dayCents: {} }, planned)),
+      json,
+      'the same inputs give identical JSON',
+    );
+    assert.equal(
+      JSON.stringify(
+        draftOf(
+          shuffled(envelopes, random),
+          shuffled(days, random),
+          { dayCents: {} },
+          shuffled(planned, random),
+        ),
+      ),
+      json,
+      'shuffling the inputs changes nothing',
+    );
+    assert.equal(
+      baseline.lines.reduce((sum, line) => sum + line.cents, 0) +
+        baseline.freeToSpend.cents,
+      baseline.moneyCents,
+      'line cents plus Free to spend equal the day money',
+    );
+    assert.equal(
+      baseline.freeToSpend.cents,
+      baseline.freeToSpend.bySource.reduce(
+        (sum, entry) => sum + entry.cents,
+        0,
+      ),
+    );
+    baseline.lines.forEach((line) => {
+      assert.ok(line.cents >= 0 && line.shortBy >= 0, 'no line is negative');
+      assert.equal(line.cents + line.shortBy, line.demandCents);
+      assert.equal(
+        line.paidBy.reduce((sum, part) => sum + part.cents, 0),
+        line.cents,
+        'paidBy adds up to the line',
+      );
+    });
+
+    // Dropping a lower-priority demand never reduces a higher one.
+    baseline.lines.forEach((dropped, droppedIndex) => {
+      const without = draftOf(
+        envelopes.filter((envelope) => envelope.itemId !== dropped.itemId),
+        days,
+        { dayCents: {} },
+        planned,
+      );
+      const after = new Map(
+        without.lines.map((line) => [line.lineId, line.cents]),
+      );
+      baseline.lines.slice(0, droppedIndex).forEach((higher) => {
+        if (higher.itemId === dropped.itemId) return;
+        assert.ok(
+          (after.get(higher.lineId) ?? 0) >= higher.cents,
+          'dropping a later demand does not reduce an earlier line',
+        );
+      });
+    });
+
+    // A priority never loses money to a lower one while it is short.
+    const firstShort = baseline.lines.findIndex((line) => line.shortBy > 0);
+    if (firstShort >= 0) {
+      baseline.lines.slice(firstShort + 1).forEach((line) => {
+        assert.equal(
+          line.cents,
+          0,
+          'nothing is funded after the money runs out',
+        );
+      });
+      assert.equal(baseline.freeToSpend.cents, 0);
+    }
+  });
+
+  // 50 envelopes over a year of income days recompute well inside the budget.
+  const yearDays = makeDays(26, 250_000);
+  const fifty = randomEnvelopes(50);
+  const timings = Array.from({ length: 30 }, () => {
+    const started = performance.now();
+    draftOf(fifty, yearDays.slice(0, 1), { dayCents: {} }, yearDays);
+    return performance.now() - started;
+  }).sort((a, b) => a - b);
+  assert.ok(timings[15] < 30, `50-envelope draft median ${timings[15]}ms`);
+  console.log(
+    `runway engine: 50-envelope draft median ${timings[15].toFixed(2)} ms, worst ${timings[29].toFixed(2)} ms`,
   );
 }
 
