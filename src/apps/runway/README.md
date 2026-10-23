@@ -296,7 +296,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [ ] Add income sources with one or more pay lines, each with a schedule, an exact or range amount, and an ending by date or number of times, including one-time income
 - [x] Income entered as the amount that lands in the account (take-home), with room to add a gross breakdown later
 - [x] Amounts that are exact, a percentage of the income day's money, or the rest (envelopes and goals; bills stay exact or a range)
-- [ ] Point a source, a pay line or one income day at the envelopes, bills and goals it funds
+- [x] Point a source, a pay line or one income day at the envelopes, bills and goals it funds
 - [ ] Planning stance (conservative by default), with an override per source or bill
 - [ ] Add bills: one time, repeating, or repeating until an ending, exact or a range, funded from the income days you choose, and marked paid, including ahead of time
 - [x] Add envelopes funded every income day, every other, or on chosen days

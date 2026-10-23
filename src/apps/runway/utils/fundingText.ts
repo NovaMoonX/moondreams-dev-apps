@@ -27,7 +27,9 @@ export function normalizeFunding(funding: FundingRule): FundingRule {
 export function describeAmount(amount: FundingAmount, of?: string) {
   if (amount.kind === 'exact') return formatCents(amount.cents);
   if (amount.kind === 'rest') return 'the rest';
-  const result = `${formatBps(amount.bps)}% of ${of ?? "the day's money"}`;
+  const target =
+    amount.of === 'remaining' ? 'what is left' : (of ?? "the day's money");
+  const result = `${formatBps(amount.bps)}% of ${target}`;
   return result;
 }
 

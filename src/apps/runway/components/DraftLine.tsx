@@ -1,7 +1,10 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import { DRAFT_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
+import type { HoldChoice } from '@apps/runway/types';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import {
   describeBillShare,
@@ -14,14 +17,53 @@ interface DraftLineProps {
   name: string;
   emoji: string | null;
   sourceNames: Record<string, string>;
+  /** Answers a short pairing; absent where the line cannot be answered. */
+  onChoose?: (line: DraftLineData, choice: HoldChoice) => void;
+  isChoosing?: boolean;
 }
 
 /** One envelope's line in a draft: what it got, the priority it was funded at and why. */
-function DraftLine({ line, name, emoji, sourceNames }: DraftLineProps) {
+function DraftLine({
+  line,
+  name,
+  emoji,
+  sourceNames,
+  onChoose,
+  isChoosing = false,
+}: DraftLineProps) {
   const reason = describeLineReason(line, sourceNames);
   const tieNote = describeTieBreak(line);
   const billShare = describeBillShare(line);
   const isShort = line.shortBy > 0;
+  const state = line.pairing?.state ?? null;
+  const source =
+    line.sourceId !== null && Object.hasOwn(sourceNames, line.sourceId)
+      ? sourceNames[line.sourceId]
+      : DRAFT_WORDS.unnamedSource;
+  const shortSentence = `${name} is ${formatCents(line.shortBy)} short from ${source}.`;
+  const getPairingNote = () => {
+    if (state === 'held') {
+      const held = line.pairing?.heldCents ?? 0;
+      return held > 0
+        ? `${shortSentence} ${formatCents(held)} is held until you choose.`
+        : `${shortSentence} It stays short until you choose.`;
+    }
+    if (state === 'offered') return shortSentence;
+    if (state === 'leftShort')
+      return `${DRAFT_WORDS.leftShort}. ${shortSentence}`;
+    if (state === 'toppedUp' && isShort) return DRAFT_WORDS.toppedUp;
+    return null;
+  };
+  const pairingNote = getPairingNote();
+  const choices: { choice: HoldChoice; label: string }[] =
+    state === 'held'
+      ? [
+          { choice: 'topUp', label: DRAFT_WORDS.topUp },
+          { choice: 'leaveShort', label: DRAFT_WORDS.leaveShort },
+        ]
+      : state === 'offered' || state === 'leftShort'
+        ? [{ choice: 'topUp', label: DRAFT_WORDS.topUp }]
+        : [];
   const shortText = isShort
     ? `${DRAFT_WORDS.shortBy} ${formatCents(line.shortBy)}`
     : null;
@@ -52,9 +94,28 @@ function DraftLine({ line, name, emoji, sourceNames }: DraftLineProps) {
         {billShare && (
           <p className='text-muted-foreground text-sm'>{billShare}</p>
         )}
-        <p className='text-muted-foreground text-sm'>{reason}</p>
-        {shortText && (
+        {pairingNote === null ? (
+          <p className='text-muted-foreground text-sm'>{reason}</p>
+        ) : (
+          <p className='text-foreground text-sm'>{pairingNote}</p>
+        )}
+        {shortText && pairingNote === null && (
           <p className='text-foreground text-sm font-medium'>{shortText}</p>
+        )}
+        {onChoose && choices.length > 0 && (
+          <div className='flex flex-wrap gap-2 pt-2'>
+            {choices.map(({ choice, label }) => (
+              <Button
+                key={choice}
+                type='button'
+                variant='secondary'
+                disabled={isChoosing}
+                onClick={() => onChoose(line, choice)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
         )}
         {tieNote && <p className='text-muted-foreground text-xs'>{tieNote}</p>}
       </div>

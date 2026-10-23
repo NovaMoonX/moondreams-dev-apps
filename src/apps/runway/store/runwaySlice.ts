@@ -1,7 +1,12 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
-import type { OpenPlan, OpenVersion, PlanItemDoc } from '@apps/runway/types';
+import type {
+  OpenDay,
+  OpenPlan,
+  OpenVersion,
+  PlanItemDoc,
+} from '@apps/runway/types';
 
 export type RunwayKeyStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
@@ -13,6 +18,8 @@ export interface RunwayState {
   versions: OpenVersion[];
   isItemsLoaded: boolean;
   isVersionsLoaded: boolean;
+  days: OpenDay[];
+  isDaysLoaded: boolean;
 }
 
 const initialState: RunwayState = {
@@ -23,6 +30,8 @@ const initialState: RunwayState = {
   versions: [],
   isItemsLoaded: false,
   isVersionsLoaded: false,
+  days: [],
+  isDaysLoaded: false,
 };
 
 export const runwaySlice = createSlice({
@@ -44,12 +53,16 @@ export const runwaySlice = createSlice({
       state.versions = action.payload;
       state.isVersionsLoaded = true;
     },
+    setDays: (state, action: PayloadAction<OpenDay[]>) => {
+      state.days = action.payload;
+      state.isDaysLoaded = true;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
   },
 });
 
-export const { setKeyStatus, setPlan, setItems, setVersions } =
+export const { setKeyStatus, setPlan, setItems, setVersions, setDays } =
   runwaySlice.actions;
 export const runwayReducer = runwaySlice.reducer;

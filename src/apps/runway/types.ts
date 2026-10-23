@@ -3,6 +3,8 @@ import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 import type {
   CHANGE_KINDS,
   ITEM_KINDS,
+  DAY_STATUSES,
+  HOLD_CHOICES,
   PLAN_SECTIONS,
   PRIORITIES,
   SCHEDULE_KINDS,
@@ -73,6 +75,7 @@ export interface Schedule {
 
 export interface SourceSealed {
   name: string;
+  pairings: Pairing[];
 }
 
 export interface PayLineSealed {
@@ -81,13 +84,53 @@ export interface PayLineSealed {
   /** Equal ends for an exact amount. */
   amount: MoneyRange;
   ending: Ending;
+  pairings: Pairing[];
 }
 
 /** What a funding line asks for: money, basis points of the day's money, or what the pool then holds. */
 export type FundingAmount =
   | { kind: 'exact'; cents: Cents }
-  | { kind: 'percent'; bps: number; of: 'dayMoney' }
+  | { kind: 'percent'; bps: number; of: 'dayMoney' | 'remaining' }
   | { kind: 'rest' };
+
+/** Sends part of one income day's money to a named bill, envelope or goal. */
+export interface Pairing {
+  targetItemId: string;
+  amount: FundingAmount;
+  topUpFromAnySource: boolean;
+}
+
+export type HoldChoice = (typeof HOLD_CHOICES)[number];
+export type DayStatus = (typeof DAY_STATUSES)[number];
+
+/** What the person changed for one income day. `pairings` null means the pay line's set applies. */
+export interface DayOverrideSealed {
+  pairings: Pairing[] | null;
+  /** The choice for a short pairing, by the target's item id. */
+  holdResolutions: Record<string, HoldChoice>;
+}
+
+export interface IncomeDayDoc {
+  id: string;
+  payLineId: string;
+  sourceId: string | null;
+  expectedOn: DateOnly;
+  arrivedOn: DateOnly | null;
+  status: DayStatus;
+  createdAt: number;
+  confirmedAt: number | null;
+  doneLineIds: string[];
+  sealed: Sealed | null;
+}
+
+export interface OpenDay {
+  id: string;
+  payLineId: string;
+  sourceId: string | null;
+  expectedOn: DateOnly;
+  status: DayStatus;
+  override: DayOverrideSealed;
+}
 
 export interface FundingRule {
   amount: FundingAmount;
