@@ -228,9 +228,25 @@ const selectMoves = (state: RootState) => state.runway.moves;
 const selectStartDate = (state: RootState) =>
   state.runway.plan?.startDate ?? null;
 
+const selectOpenDays = (state: RootState) => state.runway.days;
+
+/** The records a starting amount does not already include: those of days whose money arrived on or after the starting day. */
+const selectRecordsSinceStart = createSelector(
+  [selectRecords, selectOpenDays, selectStartDate],
+  (records, days, startDate) => {
+    if (startDate === null) return records;
+    const arrivedOn = new Map(
+      days.map((day) => [day.id, day.arrivedOn ?? day.expectedOn]),
+    );
+    return records.filter(
+      (record) => (arrivedOn.get(record.dayId) ?? 0) >= startDate,
+    );
+  },
+);
+
 /** What each plan item holds from the ledger: its starting amount plus what confirmed days gave it; a goal's held money. */
 export const selectHeldByItem = createSelector(
-  [selectRecords, selectMoves, selectStartDate],
+  [selectRecordsSinceStart, selectMoves, selectStartDate],
   (records, moves, startDate) => {
     const confirmed = sumConfirmedByItem(records);
     const { byItem } = collectStarted(moves, startDate);
@@ -240,11 +256,9 @@ export const selectHeldByItem = createSelector(
     );
   },
 );
-const selectOpenDays = (state: RootState) => state.runway.days;
-
 /** What confirmed days set aside for each item and which payments were marked paid, from the records and moves read. */
 export const selectBillProgress = createSelector(
-  [selectRecords, selectOpenDays, selectMoves, selectStartDate],
+  [selectRecordsSinceStart, selectOpenDays, selectMoves, selectStartDate],
   (records, days, moves, startDate): Record<string, BillProgressInput> => {
     const confirmedFunded = collectFunded(
       records,
