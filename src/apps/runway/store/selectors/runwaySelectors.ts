@@ -25,7 +25,7 @@ import {
   type BillPayment,
 } from '@apps/runway/engine/demands';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
-import { findReachedEnding } from '@apps/runway/engine/endings';
+import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
   resolve,
@@ -564,7 +564,10 @@ export function computeDraftView(
       resolvedGoals.map(({ version }) => version.id),
       resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
       [...returning].sort(),
-      resolvedBills.map(({ item }) => billProgress[item.id] ?? null),
+      resolvedBills.map(({ item }) => [
+        item.endedAt,
+        billProgress[item.id] ?? null,
+      ]),
       horizon,
     ]),
   );
@@ -596,7 +599,7 @@ export function computeDraftView(
     amount: version.payload.amount,
     stanceOverride: version.payload.stanceOverride ?? null,
     schedule: version.payload.timing.schedule,
-    ending: version.payload.ending,
+    ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
@@ -725,7 +728,7 @@ export const selectBillPayments = createSelector(
               amount: payload.amount,
               stanceOverride: payload.stanceOverride ?? null,
               schedule: payload.timing.schedule,
-              ending: payload.ending,
+              ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
               progress: progress[item.id] ?? NO_PROGRESS,
             },
@@ -776,7 +779,7 @@ export const selectReachedEndingsKey = (state: RootState, today: number) => {
     const version =
       resolveVersion(own, item.id, today) ??
       [...own].sort((a, b) => b.effectiveFrom - a.effectiveFrom)[0];
-    if (!version) return [];
+    if (!version || own.some((entry) => entry.effectiveFrom > today)) return [];
     const last = findReachedEnding(
       version.payload.schedule,
       version.payload.ending,

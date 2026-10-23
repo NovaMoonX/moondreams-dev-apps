@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 
 import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
 import { previewChange } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
-import { computeDraftView } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
+import {
+  computeDraftView,
+  selectReachedEndingsKey,
+} from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
 import {
   describeChange,
   isSamePayload,
@@ -14,7 +17,10 @@ import {
   INITIAL_FROM_WHEN,
 } from '../../src/apps/runway/utils/fromWhen.ts';
 import { describeLineReason } from '../../src/apps/runway/utils/draftText.ts';
-import { findReachedEnding } from '../../src/apps/runway/engine/endings.ts';
+import {
+  capEnding,
+  findReachedEnding,
+} from '../../src/apps/runway/engine/endings.ts';
 import {
   findReturning,
   getStretchEnd,
@@ -4381,6 +4387,120 @@ const version = (
     ),
     today,
     'a one-time pay line ends after its day',
+  );
+  // A bill ended before its next due date plans nothing for that date.
+  const rentItems: PlanItemDoc[] = [
+    ...planItems,
+    item('rent', 4, { kind: 'bill' }),
+  ];
+  const rent = {
+    id: 'vrent',
+    itemId: 'rent',
+    kind: 'bill',
+    createdAt: 4,
+    effectiveFrom: today,
+    effectiveUntil: null,
+    changeId: 'c',
+    payload: {
+      name: 'Rent',
+      emoji: null,
+      priority: 'must',
+      orderIndex: 1,
+      amount: exact(50_000),
+      timing: {
+        kind: 'date',
+        schedule: {
+          kind: 'monthly',
+          anchor: today + 14 * DAY_MS,
+          monthDays: [6],
+        },
+      },
+      ending: NEVER,
+      fundedBy: { kind: 'suggested' },
+      stanceOverride: null,
+    },
+  } as unknown as OpenVersion;
+  const rentLine = (items: PlanItemDoc[]) =>
+    lineOf(draftFor(items, [...base, rent], dayKeys[0]), 'rent')?.cents ?? null;
+  assert.ok((rentLine(rentItems) ?? 0) > 0, 'a live bill is funded');
+  assert.equal(
+    rentLine(
+      rentItems.map((entry) =>
+        entry.id === 'rent' ? { ...entry, endedAt: today } : entry,
+      ),
+    ),
+    null,
+    'a bill ended before its next due date is not funded for it',
+  );
+  assert.deepEqual(capEnding(NEVER, null), NEVER);
+  assert.deepEqual(
+    capEnding({ onDate: today + DAY_MS, afterCount: 2 }, today),
+    {
+      onDate: today,
+      afterCount: 2,
+    },
+  );
+
+  // The sweep leaves a pay line alone while a later version is scheduled.
+  const sweepItems: PlanItemDoc[] = [item('p2', 1, { kind: 'payLine' })];
+  const sweepVersion = (
+    id: string,
+    effectiveFrom: number,
+    afterCount: number | null,
+  ) =>
+    ({
+      id,
+      itemId: 'p2',
+      kind: 'payLine',
+      createdAt: 1,
+      effectiveFrom,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Gig',
+        schedule: {
+          kind: 'weekly',
+          anchor: today - 21 * DAY_MS,
+          monthDays: [],
+        },
+        amount: exact(10_000),
+        ending: { onDate: null, afterCount },
+        stanceOverride: null,
+        pairings: [],
+      },
+    }) as unknown as OpenVersion;
+  const sweepKey = (versions: OpenVersion[]) =>
+    selectReachedEndingsKey(
+      { runway: { items: sweepItems, versions, days: [] } } as never,
+      today,
+    );
+  assert.notEqual(
+    sweepKey([sweepVersion('s1', today - 30 * DAY_MS, 2)]),
+    '',
+    'a reached ending is swept',
+  );
+  assert.equal(
+    sweepKey([
+      sweepVersion('s1', today - 30 * DAY_MS, 2),
+      sweepVersion('s2', today + 30 * DAY_MS, null),
+    ]),
+    '',
+    'a scheduled later version means it has not ended',
+  );
+
+  // A stretch or an ending reaches no further than ten years ahead.
+  assert.equal(
+    getChangeSpan(
+      {
+        ...INITIAL_FROM_WHEN,
+        choice: 'stretch',
+        stretch: 'until',
+        until: '2060-01-01',
+      },
+      { today, days: coming, presetDayKey: null },
+    ).span,
+    null,
+    'a last day past the ten years the rules allow is refused',
   );
 }
 

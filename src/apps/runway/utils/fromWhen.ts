@@ -55,7 +55,11 @@ const getStretch = (
 ): ChangeSpanResult => {
   if (value.stretch === 'until') {
     const last = fromDateInputValue(value.until);
-    if (last === undefined || last < today)
+    if (
+      last === undefined ||
+      last < today ||
+      last > addUtcDays(today, MAX_CHANGE_DAYS_AHEAD)
+    )
       return none(CHANGE_WORDS.stretchDateBlocker);
     return {
       span: {

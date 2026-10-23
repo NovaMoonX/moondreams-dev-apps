@@ -2,6 +2,16 @@ import type { Ending, Schedule } from '@apps/runway/types';
 
 import { occurrences } from './schedule';
 
+/** An ending that also stops after the day its item was ended, so nothing is planned for a date past it. */
+export function capEnding(ending: Ending, endedAt: number | null): Ending {
+  if (endedAt === null) return ending;
+  const result: Ending = {
+    ...ending,
+    onDate: ending.onDate === null ? endedAt : Math.min(ending.onDate, endedAt),
+  };
+  return result;
+}
+
 /**
  * The last income day of a pay line whose ending has been reached: every occurrence it will ever have
  * is behind `today`, or it is `today` and has been confirmed. Null while it still has days to come,

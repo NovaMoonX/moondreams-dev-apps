@@ -22,9 +22,10 @@ import {
   CHANGE_WORDS,
   LIFECYCLE_WORDS,
   LOOKAHEAD_MONTHS,
+  MAX_CHANGE_DAYS_AHEAD,
   MAX_NOTE_LENGTH,
 } from '@apps/runway/constants';
-import { addUtcMonths } from '@apps/runway/engine/dates';
+import { addUtcDays, addUtcMonths } from '@apps/runway/engine/dates';
 import { occurrences } from '@apps/runway/engine/schedule';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -111,7 +112,10 @@ function ItemActionsSheet({
   ];
   const endOn =
     endPick === LAST_DAY_OTHER ? fromDateInputValue(endDate) : Number(endPick);
-  const isEndValid = endOn !== undefined && endOn >= today;
+  const isEndValid =
+    endOn !== undefined &&
+    endOn >= today &&
+    endOn <= addUtcDays(today, MAX_CHANGE_DAYS_AHEAD);
 
   const goTo = (next: View) => {
     setError(null);
@@ -281,6 +285,7 @@ function ItemActionsSheet({
               variant='outline'
               aria-label={LIFECYCLE_WORDS.endDateLabel}
               min={toDateInputValue(today)}
+              max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
             />
