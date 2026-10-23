@@ -38,6 +38,13 @@ import {
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
 import {
+  collectFunded,
+  collectPaid,
+  countMarks,
+  getPaidMoveId,
+  getUndoMoveId,
+} from '../../src/apps/runway/engine/progress.ts';
+import {
   getPace,
   planGoalContributions,
 } from '../../src/apps/runway/engine/pace.ts';
@@ -69,6 +76,7 @@ import type {
   ConfirmedSealed,
   Ending,
   MoneyRange,
+  OpenMove,
   OpenRecord,
   OpenVersion,
   PlanItemDoc,
@@ -2621,6 +2629,265 @@ const version = (
     }),
     null,
     'a day whose pay line is gone is not described',
+  );
+}
+
+// Bill progress: confirmed days and marks paid decide what a bill still asks for.
+{
+  const income = (stamp: number) => ({
+    dayKey: `pay_${toDayStamp(stamp)}`,
+    on: stamp,
+  });
+  const nov10 = utc(2026, 11, 10);
+  const nov17 = utc(2026, 11, 17);
+  const nov24 = utc(2026, 11, 24);
+  const dec1 = utc(2026, 12, 1);
+  const horizon = utc(2027, 3, 1);
+  const rent = (over: Partial<DraftBillInput> = {}): DraftBillInput => ({
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    amount: { lowCents: 120_000, highCents: 120_000 },
+    schedule: { kind: 'once', anchor: dec1, monthDays: [] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    ...over,
+  });
+  const funded = (on: number, cents: number) => ({
+    dayKey: `pay_${toDayStamp(on)}`,
+    on,
+    cents,
+  });
+  const paidMark = (dueOn: number, over = {}) => ({
+    moveId: getPaidMoveId('rent', dueOn, 0),
+    dueOn,
+    amountCents: 120_000,
+    paidOn: nov10,
+    fromFreeCents: 0,
+    ...over,
+  });
+  const sum = (parts: { cents: number }[]) =>
+    parts.reduce((total, part) => total + part.cents, 0);
+
+  const untouched = planBillPayments(
+    rent(),
+    [income(nov10), income(nov17), income(nov24)],
+    horizon,
+  )[0];
+  assert.deepEqual(
+    untouched.parts.map((part) => part.cents),
+    [40_000, 40_000, 40_000],
+    'with nothing confirmed a bill spreads over every coming day',
+  );
+  assert.equal(untouched.fundedCents, 0);
+  assert.equal(untouched.paid, null);
+
+  const afterFirst = planBillPayments(
+    rent({ progress: { funded: [funded(nov10, 40_000)], paid: [] } }),
+    [income(nov17), income(nov24)],
+    horizon,
+  )[0];
+  assert.deepEqual(
+    afterFirst.parts.map((part) => part.cents),
+    [40_000, 40_000],
+    'a day already confirmed is not asked for again',
+  );
+  assert.equal(afterFirst.fundedCents, 40_000);
+  assert.equal(
+    afterFirst.fundedDays + afterFirst.parts.length,
+    3,
+    'a 3-day bill reads 1 of 3 after the first confirmed day',
+  );
+  assert.equal(afterFirst.fundedDays, 1);
+  assert.equal(
+    afterFirst.fundedCents + sum(afterFirst.parts),
+    afterFirst.totalCents,
+    'what is set aside plus what is still asked is the bill',
+  );
+
+  const half = planBillPayments(
+    rent({ progress: { funded: [funded(nov10, 60_000)], paid: [] } }),
+    [income(nov24)],
+    horizon,
+  )[0];
+  assert.deepEqual(
+    half.parts.map((part) => part.cents),
+    [60_000],
+    'a half-funded bill asks only for the other half',
+  );
+  const stranded = planBillPayments(
+    rent({ progress: { funded: [funded(nov10, 60_000)], paid: [] } }),
+    [],
+    horizon,
+  )[0];
+  assert.ok(
+    stranded.parts.length === 0 && stranded.fundedCents < stranded.totalCents,
+    'a half-funded bill with no income day left waits',
+  );
+
+  const over = planBillPayments(
+    rent({ progress: { funded: [funded(nov10, 150_000)], paid: [] } }),
+    [income(nov17)],
+    horizon,
+  )[0];
+  assert.deepEqual(
+    over.parts.map((part) => part.cents),
+    [0],
+    'a bill set aside in full asks nothing more',
+  );
+
+  const lateDay = planBillPayments(
+    rent({
+      progress: { funded: [funded(utc(2026, 12, 3), 50_000)], paid: [] },
+    }),
+    [income(nov17)],
+    horizon,
+  )[0];
+  assert.equal(
+    lateDay.fundedCents,
+    0,
+    'a day after the due date funds a later payment, not this one',
+  );
+
+  const paidAhead = planBillPayments(
+    rent({
+      progress: { funded: [funded(nov10, 40_000)], paid: [paidMark(dec1)] },
+    }),
+    [income(nov17), income(nov24)],
+    horizon,
+  )[0];
+  assert.equal(paidAhead.parts.length, 0, 'a bill paid ahead asks nothing');
+  assert.equal(paidAhead.paid?.dueOn, dec1);
+  assert.deepEqual(
+    buildDemands(
+      [
+        {
+          ...income(nov17),
+          sourceId: null,
+          amount: { lowCents: 1, highCents: 1 },
+        },
+      ],
+      [income(nov17), income(nov24)],
+      [],
+      [rent({ progress: { funded: [], paid: [paidMark(dec1)] } })],
+      horizon,
+    ),
+    [],
+    'a paid bill makes no demand on any later day',
+  );
+
+  const monthlyRent = rent({
+    schedule: { kind: 'monthly', anchor: dec1, monthDays: [1] },
+  });
+  const days = [
+    income(nov24),
+    income(utc(2026, 12, 15)),
+    income(utc(2027, 1, 1)),
+  ];
+  const before = planBillPayments(monthlyRent, days, horizon);
+  const paidOne = planBillPayments(
+    { ...monthlyRent, progress: { funded: [], paid: [paidMark(dec1)] } },
+    days,
+    horizon,
+  );
+  assert.deepEqual(
+    paidOne[1],
+    { ...before[1], paid: null },
+    'paying one payment leaves the next one as it was',
+  );
+  assert.equal(paidOne[0].paid?.moveId, 'paid_rent_20261201');
+
+  const chosen = planBillPayments(
+    rent({
+      fundedBy: { kind: 'chosen', dayKeys: days.map((entry) => entry.dayKey) },
+      progress: { funded: [funded(nov10, 30_000)], paid: [] },
+    }),
+    days,
+    horizon,
+  )[0];
+  assert.equal(
+    sum(chosen.parts),
+    90_000,
+    'chosen days share only what is left of the bill',
+  );
+
+  // Moves: the ids, the undo and the second mark.
+  assert.equal(getPaidMoveId('rent', dec1, 0), 'paid_rent_20261201');
+  assert.equal(getPaidMoveId('rent', dec1, 1), 'paid_rent_20261201_2');
+  assert.equal(
+    getUndoMoveId('paid_rent_20261201'),
+    'unpaid_paid_rent_20261201',
+  );
+  const move = (id: string, over: Partial<OpenMove> = {}): OpenMove => ({
+    id,
+    kind: 'billPaid',
+    date: dec1,
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: 120_000, paidOn: nov10, fromFreeCents: 20_000 },
+    ...over,
+  });
+  const mark = move('paid_rent_20261201');
+  const undo = move('unpaid_paid_rent_20261201', {
+    reversesMoveId: mark.id,
+  });
+  assert.deepEqual(
+    collectPaid([mark]).rent.map((entry) => entry.fromFreeCents),
+    [20_000],
+    'a mark is a paid payment and keeps what came from Free to spend',
+  );
+  assert.deepEqual(collectPaid([mark, undo]), {}, 'an undone mark is not paid');
+  assert.equal(countMarks([mark, undo], 'rent', dec1), 1);
+  const second = move(
+    getPaidMoveId('rent', dec1, countMarks([mark, undo], 'rent', dec1)),
+  );
+  assert.equal(second.id, 'paid_rent_20261201_2');
+  assert.deepEqual(
+    collectPaid([mark, undo, second]).rent.map((entry) => entry.moveId),
+    ['paid_rent_20261201_2'],
+    'marking again after an undo is a new move beside the reversal',
+  );
+  assert.equal(
+    countMarks([mark], 'rent', utc(2027, 1, 1)),
+    0,
+    'marks are counted for their own payment',
+  );
+
+  // Funded so far comes from confirmed records only.
+  const record = (dayId: string, cents: number): OpenRecord => ({
+    id: `${dayId}_confirmed`,
+    dayId,
+    createdAt: 1,
+    kind: 'confirmed',
+    payload: {
+      fingerprint: 'x',
+      stance: 'conservative',
+      arrivedCents: 100_000,
+      expectedCents: 100_000,
+      freeToSpendCents: 0,
+      differences: [],
+      lines: [
+        {
+          lineId: `${dayId}:rent`,
+          itemId: 'rent',
+          name: 'Rent',
+          emoji: null,
+          tier: 'must',
+          demandCents: cents,
+          cents,
+          shortBy: 0,
+          paidBy: [],
+        },
+      ],
+    },
+  });
+  const records = [record('pay_a', 40_000), record('pay_b', 20_000)];
+  assert.deepEqual(
+    collectFunded(records, new Map([['pay_a', nov10]])).rent,
+    [{ dayKey: 'pay_a', on: nov10, cents: 40_000 }],
+    'a record whose day is not known is left out',
   );
 }
 

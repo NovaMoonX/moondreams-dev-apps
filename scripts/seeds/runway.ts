@@ -19,9 +19,11 @@ import {
   getLineDifferences,
   getRemainder,
 } from '../../src/apps/runway/engine/differences.ts';
+import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
   ChangeSealed,
+  BillPaidSealed,
   BillSealed,
   ConfirmedSealed,
   DayOverrideSealed,
@@ -30,6 +32,7 @@ import type {
   EnvelopeSealed,
   GoalSealed,
   IncomeDayDoc,
+  MoveDoc,
   PayLineSealed,
   SourceSealed,
 } from '../../src/apps/runway/types.ts';
@@ -424,18 +427,21 @@ async function writeSeedConfirmedDays(
       arrivedCents: 214_000,
       note: null,
       withCushion: true,
+      withBills: true,
     },
     {
       on: when.today - 25 * DAY_MS,
       arrivedCents: 226_000,
       note: 'Overtime',
       withCushion: false,
+      withBills: false,
     },
     {
       on: when.today - 39 * DAY_MS,
       arrivedCents: 224_000,
       note: 'Bonus from the quarter',
       withCushion: false,
+      withBills: false,
       edits: {
         'seed-envelope-groceries': 12_000,
         'seed-goal-vacation': 40_000,
@@ -447,7 +453,7 @@ async function writeSeedConfirmedDays(
   ];
   const docs = await Promise.all(
     days.map(async (entry) => {
-      const { on, arrivedCents, note, withCushion } = entry;
+      const { on, arrivedCents, note, withCushion, withBills } = entry;
       const byLine = (
         values: Record<string, never> | Record<string, number | string | null>,
       ) =>
@@ -487,6 +493,27 @@ async function writeSeedConfirmedDays(
           'want',
           30_000,
         ),
+        ...(withBills
+          ? [
+              seedLine(dayId, 'seed-bill-rent', 'Rent', '🏠', 'must', 62_500),
+              seedLine(
+                dayId,
+                'seed-bill-car',
+                'Car registration',
+                null,
+                'must',
+                18_500,
+              ),
+              seedLine(
+                dayId,
+                'seed-bill-laptop',
+                'Laptop payment plan',
+                null,
+                'should',
+                5_000,
+              ),
+            ]
+          : []),
       ];
       const funded = lines.reduce((sum, line) => sum + line.cents, 0);
       const proposed: ProposedSealed = {
@@ -533,6 +560,7 @@ async function writeSeedConfirmedDays(
         dayId,
         on,
         arrivedCents,
+        doneLineIds: withBills ? [`${dayId}:seed-bill-laptop`] : [],
         sealedDay: await sealJson(EMPTY_SEED_OVERRIDE, encryption),
         sealedProposed: await sealJson(proposed, encryption),
         sealedConfirmed: await sealJson(confirmed, encryption),
@@ -550,7 +578,7 @@ async function writeSeedConfirmedDays(
       status: 'confirmed',
       createdAt: confirmedAt,
       confirmedAt,
-      doneLineIds: [],
+      doneLineIds: entry.doneLineIds,
       sealed: entry.sealedDay,
     };
     batch.set(context.firestore.doc(`${plan}/days/${entry.dayId}`), day);
@@ -570,7 +598,43 @@ async function writeSeedConfirmedDays(
       ),
     );
   });
-  return docs.length * 3;
+  const paidAhead = await writeSeedPaidAhead(
+    context,
+    plan,
+    encryption,
+    batch,
+    when.today,
+  );
+  return docs.length * 3 + paidAhead;
+}
+
+/** The laptop plan's next payment, marked paid ahead of its due date: $50.00 of it was set aside by the confirmed day, so $39.00 came from Free to spend (planned at the bill's own optimistic end, $89.00). */
+async function writeSeedPaidAhead(
+  context: SeedContext,
+  plan: string,
+  encryption: Parameters<typeof sealJson>[1],
+  batch: ReturnType<SeedContext['firestore']['batch']>,
+  today: number,
+) {
+  const now = new Date(today);
+  const dueOn = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 15);
+  const id = getPaidMoveId('seed-bill-laptop', dueOn, 0);
+  const payload: BillPaidSealed = {
+    amountCents: 8_900,
+    paidOn: today - 2 * DAY_MS,
+    fromFreeCents: 3_900,
+  };
+  const move: MoveDoc = {
+    id,
+    kind: 'billPaid',
+    date: dueOn,
+    refId: 'seed-bill-laptop',
+    reversesMoveId: null,
+    createdAt: today - 2 * DAY_MS + 10 * 3_600_000,
+    sealed: await sealJson(payload, encryption),
+  };
+  batch.set(context.firestore.doc(`${plan}/moves/${id}`), move);
+  return 1;
 }
 
 const EMPTY_SEED_OVERRIDE: DayOverrideSealed = {

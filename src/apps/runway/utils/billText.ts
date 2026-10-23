@@ -1,4 +1,5 @@
 import {
+  BILL_WORDS,
   BILL_FREQUENCY_LABELS,
   BILL_FREQUENCIES,
 } from '@apps/runway/constants';
@@ -44,4 +45,22 @@ export function describeBillFunding(
   if (isEven) return `${first} from each ${scope}`;
   const result = `Up to ${first} from each ${scope}, ${formatCents(last)} on the last`;
   return result;
+}
+
+/** Where a payment stands: paid, set aside in part ("$400.00 of $1,200.00 set aside · 1 of 3 days"), set aside in full, or nothing yet (null). */
+export function describeBillProgress(payment: BillPayment) {
+  const { paid, fundedCents, totalCents } = payment;
+  if (paid) {
+    const when =
+      paid.paidOn < payment.dueOn
+        ? `Paid ahead on ${formatDateUTC(paid.paidOn)}`
+        : `Paid ${formatDateUTC(paid.paidOn)}`;
+    return paid.fromFreeCents > 0
+      ? `${when} · ${formatCents(paid.fromFreeCents)} came from Free to spend`
+      : when;
+  }
+  if (fundedCents <= 0) return null;
+  if (fundedCents >= totalCents) return BILL_WORDS.readyToPay;
+  const days = payment.fundedDays + payment.parts.length;
+  return `${formatCents(fundedCents)} of ${formatCents(totalCents)} set aside · ${payment.fundedDays} of ${days} days`;
 }

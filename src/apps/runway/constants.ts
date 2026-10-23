@@ -212,6 +212,10 @@ export const HOLD_CHOICES = ['topUp', 'leaveShort'] as const;
 export const DAY_STATUSES = ['draft', 'confirmed', 'notArrived'] as const;
 /** The records a confirmed day keeps: the draft as proposed and the split that was confirmed. */
 export const DAY_RECORD_KINDS = ['proposed', 'confirmed'] as const;
+/** The kinds of ledger entry the client writes; a bill marked paid, and its undo (a `billPaid` that names the one it reverses). */
+export const MOVE_KINDS = ['billPaid'] as const;
+/** The most checklist ticks a day keeps; the rules cap the list at the same size. */
+export const MAX_DONE_LINE_IDS = 200;
 /** How far back the Days list and the confirmed-day records are read. */
 export const RECENT_DAYS_WINDOW = 180;
 /** Days an unconfirmed income day stays on the list after its date. */
@@ -350,3 +354,20 @@ export const PACE_STATE_LABELS: Record<(typeof PACE_STATES)[number], string> = {
   onPace: 'On pace',
   behind: 'Behind',
 };
+
+export const CHECKLIST_WORDS = {
+  title: 'Checklist',
+  everything: 'Mark everything done',
+  billsGroup: 'Bills to pay',
+  waitingGroup: 'Waiting for more money',
+  markPaid: 'Mark paid',
+  undoPaid: 'Undo',
+  tickFailed: 'That tick did not save. Try again.',
+} as const;
+
+export const BILL_WORDS = {
+  paid: 'Paid',
+  paidAhead: 'Paid ahead',
+  waiting: 'Waiting for the rest',
+  readyToPay: 'Set aside in full',
+} as const;

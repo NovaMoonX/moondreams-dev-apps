@@ -3993,6 +3993,17 @@ service cloud.firestore {
         return value is number && value <= request.time.toMillis() + 3600000;
       }
 
+      // `yyyymmdd` of a date-only value, the part of a day's or a payment's id that names its date.
+      function dayStamp(date) {
+        return string(timestamp.value(date).year() * 10000
+          + timestamp.value(date).month() * 100
+          + timestamp.value(date).day());
+      }
+
+      function isDateOnly(value) {
+        return value is number && value % 86400000 == 0;
+      }
+
       // Plan items are created and read. Ending, archiving and deleting arrive with the issues that use them.
       match /items/{itemId} {
         function isItemValid(data) {
@@ -4060,16 +4071,6 @@ service cloud.firestore {
       // can change its override; it moves to confirmed once, together with its two records, or to not
       // arrived and back. After that only the checklist ticks can change.
       match /days/{dayId} {
-        function dayStamp(expectedOn) {
-          return string(timestamp.value(expectedOn).year() * 10000
-            + timestamp.value(expectedOn).month() * 100
-            + timestamp.value(expectedOn).day());
-        }
-
-        function isDateOnly(value) {
-          return value is number && value % 86400000 == 0;
-        }
-
         function dayRecord(kind) {
           return /databases/$(database)/documents/apps/runway/plans/$(uid)/days/$(dayId)/records/$(dayId + '_' + kind);
         }
@@ -4145,6 +4146,36 @@ service cloud.firestore {
             && isRecordValid(request.resource.data);
           allow update, delete: if false;
         }
+      }
+
+      // The ledger is append-only. A bill marked paid is `paid_<bill>_<yyyymmdd of its due date>`, with `_<n>`
+      // when it is marked again after an undo; an undo is `unpaid_<id of the mark>` and names that mark.
+      match /moves/{moveId} {
+        function isMoveValid(data) {
+          return data.id == moveId
+            && data.kind == 'billPaid'
+            && isDateOnly(data.date)
+            && data.refId is string
+            && exists(planDoc('items', data.refId))
+            && get(planDoc('items', data.refId)).data.kind == 'bill'
+            && isPastOrNear(data.createdAt)
+            && isSealed(data.sealed)
+            && (data.reversesMoveId == null
+              ? moveId.matches('paid_' + data.refId + '_' + dayStamp(data.date) + '(_[0-9]+)?')
+              : data.reversesMoveId is string
+                && moveId == 'unpaid_' + data.reversesMoveId
+                && exists(planDoc('moves', data.reversesMoveId))
+                && get(planDoc('moves', data.reversesMoveId)).data.refId == data.refId
+                && get(planDoc('moves', data.reversesMoveId)).data.date == data.date
+                && get(planDoc('moves', data.reversesMoveId)).data.reversesMoveId == null);
+        }
+
+        allow read: if isPlanOwner();
+        allow create: if isPlanOwner()
+          && request.resource.data.keys().hasAll(['id', 'kind', 'date', 'refId', 'reversesMoveId', 'createdAt', 'sealed'])
+          && request.resource.data.keys().hasOnly(['id', 'kind', 'date', 'refId', 'reversesMoveId', 'createdAt', 'sealed'])
+          && isMoveValid(request.resource.data);
+        allow update, delete: if false;
       }
     }
 

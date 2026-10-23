@@ -1,3 +1,4 @@
+import BillPaidChip from '@apps/runway/components/BillPaidChip';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
@@ -8,10 +9,12 @@ import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
 import {
   describeBillFunding,
+  describeBillProgress,
   describeBillRepeat,
 } from '@apps/runway/utils/billText';
 
 interface BillRowProps {
+  billId: string;
   bill: BillSealed;
   /** The next payment and what each income day sets aside for it; null once the bill has no payment left. */
   payment: BillPayment | null;
@@ -19,7 +22,7 @@ interface BillRowProps {
 }
 
 /** A bill in the plan: its name and amount, when it is next due, and how that payment is funded. */
-function BillRow({ bill, payment, planStance }: BillRowProps) {
+function BillRow({ billId, bill, payment, planStance }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const { schedule } = bill.timing;
   const repeats =
@@ -29,6 +32,11 @@ function BillRow({ bill, payment, planStance }: BillRowProps) {
   const dueText = payment
     ? `Next due ${formatDateUTC(payment.dueOn)}${repeats}`
     : 'No payment left';
+
+  const progressText = payment ? describeBillProgress(payment) : null;
+  const isSettled =
+    payment !== null &&
+    (payment.paid !== null || payment.fundedCents >= payment.totalCents);
 
   return (
     <li className='flex items-start gap-3 p-3'>
@@ -49,13 +57,21 @@ function BillRow({ bill, payment, planStance }: BillRowProps) {
           isOwnStance={Boolean(bill.stanceOverride)}
         />
         <p className='text-muted-foreground text-sm'>{dueText}</p>
-        {payment && (
+        {progressText && <p className='text-sm font-medium'>{progressText}</p>}
+        {payment && !isSettled && (
           <p className='text-muted-foreground text-sm'>
             {describeBillFunding(payment, bill.fundedBy)}
           </p>
         )}
-        <div className='pt-1'>
+        <div className='flex flex-wrap items-center gap-2 pt-1'>
           <PriorityBadge priority={bill.priority} />
+          {payment && (
+            <BillPaidChip
+              billId={billId}
+              billName={bill.name}
+              payment={payment}
+            />
+          )}
         </div>
       </div>
     </li>
