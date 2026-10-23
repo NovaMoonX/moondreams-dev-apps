@@ -16,6 +16,7 @@ import {
   selectOpenDay,
   selectProposedRecord,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import type { RecordDifference } from '@apps/runway/types';
 
 interface RecordScreenProps {
   dayKey: string;
@@ -53,6 +54,29 @@ function Figure({ label, planned, confirmed, confirmedWord }: FigureProps) {
   );
 }
 
+const describeDifference = (
+  difference: RecordDifference,
+  hasLineChanges: boolean,
+) => {
+  if (difference.kind === 'amount') {
+    return `${formatCents(difference.actualCents)} arrived against ${formatCents(difference.plannedCents)} expected.${
+      hasLineChanges
+        ? ''
+        : ` ${
+            difference.actualCents > difference.plannedCents
+              ? CONFIRM_WORDS.extraTo
+              : CONFIRM_WORDS.shortFrom
+          }`
+    }`;
+  }
+  const change = difference.actualCents - difference.plannedCents;
+  const name =
+    difference.name === '' ? DRAFT_WORDS.billFallback : difference.name;
+  return change > 0
+    ? `${formatCents(change)} more went to ${name}.`
+    : `${formatCents(-change)} came out of ${name}.`;
+};
+
 /** A confirmed day as it was planned and as it was confirmed: the figures, each difference with its note, and the lines that matched folded away. */
 function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
   const [isMatchedOpen, setIsMatchedOpen] = useState(false);
@@ -84,6 +108,14 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
     const differing = rows.filter((row) => row.plannedCents !== row.line.cents);
     const matched = rows.filter((row) => row.plannedCents === row.line.cents);
     const { differences } = confirmed.payload;
+    const hasLineChanges = differences.some((d) => d.kind === 'line');
+    const notes = new Map(
+      differences.flatMap((difference) =>
+        difference.kind === 'line'
+          ? [[difference.lineId, difference.note]]
+          : [],
+      ),
+    );
 
     return (
       <div className='space-y-4'>
@@ -106,17 +138,16 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
             <SectionDivider label='What differed' />
             <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
               {differences.map((difference) => (
-                <li key={difference.kind} className='space-y-1 p-3 text-sm'>
-                  <p>
-                    {formatCents(difference.actualCents)} arrived against{' '}
-                    {formatCents(difference.plannedCents)} expected.
-                  </p>
-                  <p className='text-muted-foreground'>
-                    {difference.actualCents > difference.plannedCents
-                      ? CONFIRM_WORDS.extraTo
-                      : CONFIRM_WORDS.shortFrom}
-                  </p>
-                  {difference.note && (
+                <li
+                  key={
+                    difference.kind === 'line'
+                      ? difference.lineId
+                      : difference.kind
+                  }
+                  className='space-y-1 p-3 text-sm'
+                >
+                  <p>{describeDifference(difference, hasLineChanges)}</p>
+                  {difference.kind === 'amount' && difference.note && (
                     <p className='break-words'>{difference.note}</p>
                   )}
                 </li>
@@ -131,6 +162,7 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
                 key={line.lineId}
                 line={line}
                 plannedCents={plannedCents}
+                note={notes.get(line.lineId) ?? null}
               />
             ))}
           </ul>

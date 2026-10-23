@@ -9,9 +9,15 @@ import {
   buildRecords,
   countUnresolvedHolds,
   getFreeAfterArrival,
-  getLeastArrival,
   sumConfirmedByItem,
 } from '../../src/apps/runway/engine/confirm.ts';
+import {
+  applyLineEdits,
+  getLineDifferences,
+  getRemainder,
+  sumLines,
+  suggestShortfall,
+} from '../../src/apps/runway/engine/differences.ts';
 import { hashOverride } from '../../src/apps/runway/engine/fingerprint.ts';
 import {
   DAY_MS,
@@ -2242,11 +2248,6 @@ const version = (
 
   assert.equal(draft.freeToSpend.cents, 40_000);
   assert.equal(
-    getLeastArrival(draft),
-    60_000,
-    'the least is what the lines take',
-  );
-  assert.equal(
     getFreeAfterArrival(draft, 100_000),
     40_000,
     'as expected leaves free to spend alone',
@@ -2338,6 +2339,126 @@ const version = (
     0,
     'a chosen line does not block',
   );
+
+  // Adjusting lines at confirmation.
+  {
+    const lines = same.proposed.lines;
+    const food = lines.find((l) => l.itemId === 'food')!;
+    const rent = lines.find((l) => l.itemId === 'rent')!;
+    const extra = buildRecords({
+      ...input,
+      arrivedCents: 110_000,
+      note: 'Bonus',
+      edits: { [food.lineId]: 25_000, [rent.lineId]: 45_000 },
+      lineNotes: { [food.lineId]: 'Stock up' },
+    });
+    assert.deepEqual(
+      extra.confirmed.differences.map((d) =>
+        d.kind === 'line'
+          ? [d.kind, d.itemId, d.plannedCents, d.actualCents, d.note]
+          : [d.kind, d.plannedCents, d.actualCents, d.note],
+      ),
+      [
+        ['amount', 100_000, 110_000, 'Bonus'],
+        ['line', 'food', 20_000, 25_000, 'Stock up'],
+        ['line', 'rent', 40_000, 45_000, null],
+      ],
+      'exactly the changed lines are differences, with their notes',
+    );
+    assert.equal(
+      sumLines(extra.confirmed.lines) + extra.confirmed.freeToSpendCents,
+      110_000,
+      'lines and free to spend add to the amount',
+    );
+    assert.equal(extra.confirmed.freeToSpendCents, 40_000);
+    assert.deepEqual(
+      extra.proposed.lines,
+      lines,
+      'the proposal keeps the draft lines',
+    );
+    assert.deepEqual(
+      sumConfirmedByItem([
+        {
+          id: 'x',
+          dayId: dayKey,
+          createdAt: 1,
+          kind: 'confirmed',
+          payload: extra.confirmed,
+        },
+      ]),
+      { food: 25_000, rent: 45_000 },
+      'what a line was given counts toward its goal or envelope once',
+    );
+    const unchanged = buildRecords({
+      ...input,
+      arrivedCents: 100_000,
+      edits: { [food.lineId]: 20_000 },
+    });
+    assert.deepEqual(
+      unchanged.confirmed.differences,
+      [],
+      'an edit equal to the draft is no difference',
+    );
+    const lowered = applyLineEdits(lines, { [food.lineId]: 5_000 }, dayKey);
+    const loweredFood = lowered.find((l) => l.itemId === 'food')!;
+    assert.equal(
+      loweredFood.shortBy,
+      15_000,
+      'a line cut below its demand is short by the rest',
+    );
+    assert.equal(
+      loweredFood.paidBy.reduce((sum, p) => sum + p.cents, 0),
+      5_000,
+      'the days that paid for a line add to its amount',
+    );
+    const toBill = applyLineEdits(lines, { [food.lineId]: 0 }, dayKey).find(
+      (l) => l.itemId === 'food',
+    )!;
+    assert.deepEqual(toBill.paidBy, [], 'a line at zero has no paying day');
+
+    // A shortfall deeper than free to spend is taken from the lowest priority first.
+    const mixed = [
+      { ...rent, lineId: 'a', cents: 30_000, tier: 'must' as const },
+      { ...rent, lineId: 'b', cents: 10_000, tier: 'want' as const },
+      { ...rent, lineId: 'c', cents: 15_000, tier: 'should' as const },
+      { ...rent, lineId: 'd', cents: 5_000, tier: 'want' as const },
+    ];
+    assert.deepEqual(suggestShortfall(mixed, 0), {});
+    assert.deepEqual(
+      suggestShortfall(mixed, 12_000),
+      { d: 0, b: 3_000 },
+      'later of the lowest tier first, never below zero',
+    );
+    const big = suggestShortfall(mixed, 40_000);
+    assert.deepEqual(big, { d: 0, b: 0, c: 0, a: 20_000 });
+    assert.equal(
+      getRemainder(60_000 - 40_000, applyLineEdits(mixed, big, dayKey)),
+      0,
+      'a suggested shortfall leaves nothing negative',
+    );
+    // Every shuffle of the lines gives the same amounts per line.
+    const shuffled = [mixed[2], mixed[0], mixed[3], mixed[1]];
+    assert.deepEqual(
+      suggestShortfall(shuffled, 12_000),
+      { b: 0, d: 3_000 },
+      'a lower tier is always taken before a higher one, whatever the order',
+    );
+    const lineSums = [0, 1_000, 33_333, 59_999, 60_000].map((need) => {
+      const edits = suggestShortfall(mixed, need);
+      const applied = applyLineEdits(mixed, edits, dayKey);
+      return getRemainder(60_000 - need, applied);
+    });
+    assert.deepEqual(
+      lineSums,
+      [0, 0, 0, 0, 0],
+      'taking exactly the shortfall leaves free to spend at zero',
+    );
+    assert.deepEqual(
+      getLineDifferences(lines, lines, {}),
+      [],
+      'identical lines have no differences',
+    );
+  }
 
   // Confirmed lines count toward a goal's held money, from the confirmed record only.
   const record = (

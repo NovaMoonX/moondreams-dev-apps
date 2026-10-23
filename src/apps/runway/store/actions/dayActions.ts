@@ -2,12 +2,10 @@ import { doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { formatCents } from '@/utils/moneyUtils';
 import { CONFIRM_WORDS } from '@apps/runway/constants';
 import {
   buildRecords,
   countUnresolvedHolds,
-  getLeastArrival,
   type ItemNames,
 } from '@apps/runway/engine/confirm';
 import { toDayKey } from '@apps/runway/engine/dates';
@@ -127,6 +125,10 @@ export interface ConfirmDayInput {
   arrivedOn: DateOnly;
   arrivedCents: Cents;
   note: string | null;
+  /** The amounts the person gave lines in place of the draft's, by line id. */
+  edits: Record<string, Cents>;
+  /** The notes on changed lines, by line id. */
+  lineNotes: Record<string, string | null>;
 }
 
 /**
@@ -144,11 +146,6 @@ export async function confirmDay(
   if (countUnresolvedHolds(draft) > 0) {
     throw new Error(CONFIRM_WORDS.holds);
   }
-  if (input.arrivedCents < getLeastArrival(draft)) {
-    throw new Error(
-      `${CONFIRM_WORDS.tooLittle} ${formatCents(getLeastArrival(draft))}.`,
-    );
-  }
   const { proposed, confirmed } = buildRecords({
     draft,
     names: input.names,
@@ -156,7 +153,15 @@ export async function confirmDay(
     fingerprint: input.fingerprint,
     arrivedCents: input.arrivedCents,
     note: input.note,
+    edits: input.edits,
+    lineNotes: input.lineNotes,
   });
+  if (
+    confirmed.freeToSpendCents < 0 ||
+    confirmed.lines.some((line) => line.cents < 0)
+  ) {
+    throw new Error(CONFIRM_WORDS.linesTakeTooMuch);
+  }
   const [sealedProposed, sealedConfirmed, sealedEmpty] = await Promise.all([
     sealJson(proposed, encryption),
     sealJson(confirmed, encryption),
