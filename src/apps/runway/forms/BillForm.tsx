@@ -22,6 +22,7 @@ import {
   BILL_FREQUENCY_LABELS,
   BILL_FUNDING_LABELS,
   BILL_FUNDINGS,
+  CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
@@ -36,10 +37,16 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
+import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import ChangeReason from '@apps/runway/components/ChangeReason';
+import { changeField } from '@apps/runway/forms/changeField';
+import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
+import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import {
   EMPTY_AMOUNT_DRAFT,
   getStanceOverride,
   parseAmountDraft,
+  toAmountDraft,
   type AmountDraft,
 } from '@apps/runway/utils/rangeInput';
 import {
@@ -47,7 +54,12 @@ import {
   selectComingDays,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { BillFundedBy, Ending, Priority } from '@apps/runway/types';
+import type {
+  BillFundedBy,
+  BillSealed,
+  Ending,
+  Priority,
+} from '@apps/runway/types';
 
 type Frequency = (typeof BILL_FREQUENCIES)[number];
 type Funding = (typeof BILL_FUNDINGS)[number];
@@ -72,9 +84,26 @@ interface BillFormProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  /** The bill to change; its saved values start the form and a save adds a version from a date. */
+  editing?: { itemId: string; payload: BillSealed };
 }
 
 const { custom } = FormFactories;
+
+const EMPTY_BILL: BillSealed = {
+  name: '',
+  emoji: null,
+  priority: 'should',
+  orderIndex: 0,
+  amount: { lowCents: 0, highCents: 0 },
+  timing: {
+    kind: 'date',
+    schedule: { kind: 'once', anchor: null, monthDays: [] },
+  },
+  ending: { onDate: null, afterCount: null },
+  fundedBy: { kind: 'suggested' },
+  stanceOverride: null,
+};
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
@@ -123,6 +152,7 @@ const getBlocker = (
   today: number,
   isChosen: boolean,
   pickedCount: number,
+  isEditing: boolean,
 ) => {
   if (data.name.trim() === '') return 'Name the bill.';
   if (!hasAmount) {
@@ -132,30 +162,64 @@ const getBlocker = (
   }
   const start = fromDateInputValue(data.startDate);
   if (start === undefined) return 'Pick when it is due.';
-  if (start < today) return 'Pick today or a day to come.';
+  if (!isEditing && start < today) return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
   if (isChosen && pickedCount === 0) return 'Pick at least one income day.';
   return null;
 };
 
-function BillForm({ isOpen, onClose, title }: BillFormProps) {
+const getEditingData = (payload: BillSealed): BillFormData => {
+  const { schedule } = payload.timing;
+  const frequency = BILL_FREQUENCIES.find((kind) => kind === schedule.kind);
+  return {
+    name: payload.name,
+    amount: toAmountDraft(payload.amount, payload.stanceOverride),
+    priority: payload.priority,
+    startDate:
+      schedule.anchor === null ? '' : toDateInputValue(schedule.anchor),
+    frequency: frequency ?? 'once',
+    endKind:
+      payload.ending.onDate !== null
+        ? 'date'
+        : payload.ending.afterCount !== null
+          ? 'count'
+          : 'never',
+    endDate:
+      payload.ending.onDate === null
+        ? ''
+        : toDateInputValue(payload.ending.onDate),
+    endCount:
+      payload.ending.afterCount === null
+        ? ''
+        : String(payload.ending.afterCount),
+    funding: payload.fundedBy.kind === 'chosen' ? 'chosen' : 'suggested',
+    dayKeys: payload.fundedBy.kind === 'chosen' ? payload.fundedBy.dayKeys : [],
+    emoji: payload.emoji,
+  };
+};
+
+function BillForm({ isOpen, onClose, title, editing }: BillFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
-  const [initialData] = useState<BillFormData>(() => ({
-    name: '',
-    amount: EMPTY_AMOUNT_DRAFT,
-    priority: 'should',
-    startDate: toDateInputValue(today),
-    frequency: 'once',
-    endKind: 'never',
-    endDate: '',
-    endCount: '',
-    funding: 'suggested',
-    dayKeys: [],
-    emoji: null,
-  }));
+  const [initialData] = useState<BillFormData>(() =>
+    editing
+      ? getEditingData(editing.payload)
+      : {
+          name: '',
+          amount: EMPTY_AMOUNT_DRAFT,
+          priority: 'should',
+          startDate: toDateInputValue(today),
+          frequency: 'once',
+          endKind: 'never',
+          endDate: '',
+          endCount: '',
+          funding: 'suggested',
+          dayKeys: [],
+          emoji: null,
+        },
+  );
   const [formData, setFormData] = useState<BillFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -177,14 +241,18 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
     today,
     isChosen,
     pickedCount,
+    editing !== undefined,
   );
 
-  const dayOptions = dueDays.map((day) => ({
-    value: day.dayKey,
-    label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
-  }));
+  const startMin = editing ? undefined : toDateInputValue(today);
 
   const fields = useMemo(() => {
+    const dayOptions = comingDays
+      .filter((day) => dueDate !== undefined && day.on <= dueDate)
+      .map((day) => ({
+        value: day.dayKey,
+        label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
+      }));
     const result = [
       custom({
         name: 'name',
@@ -244,7 +312,7 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
               type='date'
               variant='outline'
               aria-label={isOnce ? 'Due' : 'Starts'}
-              min={toDateInputValue(today)}
+              min={startMin}
               value={props.value as string}
               onChange={(event) => props.onValueChange(event.target.value)}
             />
@@ -418,61 +486,80 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
     canChoose,
     formData.endKind,
     formData.startDate,
-    dayOptions,
-    today,
+    comingDays,
+    dueDate,
+    startMin,
     planStance,
   ]);
 
-  const handleSubmit = async (data: BillFormData) => {
+  const getChosenKeys = (picked: string[]) =>
+    comingDays
+      .filter(
+        (day) =>
+          dueDate !== undefined &&
+          day.on <= dueDate &&
+          picked.includes(day.dayKey),
+      )
+      .map((day) => day.dayKey);
+
+  const buildBill = (data: BillFormData): BillSealed | null => {
     const amount = parseAmountDraft(data.amount);
     const anchor = fromDateInputValue(data.startDate);
     const ending = buildEnding(data);
-    if (!user || amount === null || anchor === undefined || !ending) return;
+    if (amount === null || anchor === undefined || !ending) return null;
 
     const tier = bills.filter(
       (bill) => bill.version.payload.priority === data.priority,
     );
     const orderIndex =
-      Math.max(0, ...tier.map((bill) => bill.version.payload.orderIndex)) +
-      ENVELOPE_ORDER_STEP;
-    const chosen = new Set(data.dayKeys);
+      editing && editing.payload.priority === data.priority
+        ? editing.payload.orderIndex
+        : Math.max(0, ...tier.map((bill) => bill.version.payload.orderIndex)) +
+          ENVELOPE_ORDER_STEP;
     const fundedBy: BillFundedBy = isChosen
-      ? {
-          kind: 'chosen',
-          dayKeys: dueDays
-            .filter((day) => chosen.has(day.dayKey))
-            .map((day) => day.dayKey),
-        }
+      ? { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }
       : { kind: 'suggested' };
+    const result: BillSealed = {
+      name: data.name.trim(),
+      emoji: data.emoji?.trim() || null,
+      priority: data.priority,
+      orderIndex,
+      amount,
+      timing: {
+        kind: 'date',
+        schedule: {
+          kind: data.frequency,
+          anchor,
+          monthDays:
+            data.frequency === 'monthly' ? [new Date(anchor).getUTCDate()] : [],
+        },
+      },
+      ending,
+      fundedBy,
+      stanceOverride: getStanceOverride(data.amount),
+    };
+    return result;
+  };
+
+  const candidate = blocker === null ? buildBill(formData) : null;
+  const flow = useChangeFlow({
+    itemId: editing?.itemId ?? '',
+    kind: 'bill',
+    current: editing?.payload ?? EMPTY_BILL,
+    candidate,
+    onDone: onClose,
+  });
+  const editBlocker = flow.getBlocker(blocker);
+
+  const handleSubmit = async (data: BillFormData) => {
+    const bill = buildBill(data);
+    if (!user || !bill) return;
 
     setError(null);
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await createBill(user.uid, encryption, {
-        startDate: today,
-        bill: {
-          name: data.name.trim(),
-          emoji: data.emoji?.trim() || null,
-          priority: data.priority,
-          orderIndex,
-          amount,
-          timing: {
-            kind: 'date',
-            schedule: {
-              kind: data.frequency,
-              anchor,
-              monthDays:
-                data.frequency === 'monthly'
-                  ? [new Date(anchor).getUTCDate()]
-                  : [],
-            },
-          },
-          ending,
-          fundedBy,
-          stanceOverride: getStanceOverride(data.amount),
-        },
-      });
+      await createBill(user.uid, encryption, { startDate: today, bill });
       onClose();
     } catch (saveError) {
       setError(
@@ -486,42 +573,63 @@ function BillForm({ isOpen, onClose, title }: BillFormProps) {
     }
   };
 
+  const flowValue = {
+    flow,
+    itemId: editing?.itemId ?? '',
+    kind: 'bill' as const,
+    candidate,
+  };
+  const formFields = editing ? [...fields, changeField] : fields;
+
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
-      <Form
-        id='runway-bill'
-        form={fields}
-        initialData={initialData}
-        columns={1}
-        onDataChange={(data) => setFormData(data as BillFormData)}
-        onSubmit={(data) => {
-          void handleSubmit(data as BillFormData);
-        }}
-        submitButton={
-          <ModalFooterActions
-            note={error ?? blocker}
-            cancelAction={
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={onClose}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-            }
-            rightActions={
-              <Button
-                type='submit'
-                loading={isSaving}
-                disabled={isSaving || blocker !== null}
-              >
-                Add
-              </Button>
+      <ChangeSteps
+        isReason={flow.step === 'reason'}
+        reason={<ChangeReason flow={flow} onClose={onClose} />}
+      >
+        <ChangeFlowContext value={flowValue}>
+          <Form
+            id='runway-bill'
+            form={formFields}
+            initialData={initialData}
+            columns={1}
+            onDataChange={(data) => setFormData(data as BillFormData)}
+            onSubmit={(data) => {
+              if (editing) {
+                flow.setStep('reason');
+                return;
+              }
+              void handleSubmit(data as BillFormData);
+            }}
+            submitButton={
+              <ModalFooterActions
+                note={error ?? (editing ? editBlocker : blocker)}
+                cancelAction={
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={onClose}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </Button>
+                }
+                rightActions={
+                  <Button
+                    type='submit'
+                    loading={isSaving}
+                    disabled={
+                      isSaving || (editing ? editBlocker : blocker) !== null
+                    }
+                  >
+                    {editing ? CHANGE_WORDS.review : 'Add'}
+                  </Button>
+                }
+              />
             }
           />
-        }
-      />
+        </ChangeFlowContext>
+      </ChangeSteps>
     </FormSheet>
   );
 }

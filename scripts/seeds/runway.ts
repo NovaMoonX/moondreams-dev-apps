@@ -901,7 +901,7 @@ async function writeSeedEnvelopes(
   return envelopes.length * 3;
 }
 
-/** Four bills: rent that repeats monthly, a one-time bill, a bill chosen across three paydays and a bill that ends after six payments. */
+/** Four bills: rent that repeats monthly and goes up from a date two months ahead, a one-time bill, a bill chosen across three paydays and a bill that ends after six payments. */
 async function writeSeedBills(
   context: SeedContext,
   uid: string,
@@ -1047,8 +1047,56 @@ async function writeSeedBills(
       change(changeId, createdAt, today, [id], sealedChanges[index]),
     );
   });
+  const raise = {
+    ...bills[0].payload,
+    amount: exact(130_000),
+  } satisfies BillSealed;
+  const raiseFromStart = Date.UTC(
+    new Date(today).getUTCFullYear(),
+    new Date(today).getUTCMonth() + 2,
+    1,
+  );
+  const raiseText = new Date(raiseFromStart).toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const [raiseSealed, raiseChangeSealed] = await Promise.all([
+    sealJson(raise, encryption),
+    sealJson(
+      {
+        summary: `Rent: Amount $1,250.00 to $1,300.00, from ${raiseText}.`,
+        note: 'Lease renewal',
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+  ]);
+  const raiseCreatedAt = context.now - 2 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/versions/seed-version-rent-raise`),
+    version(
+      'seed-version-rent-raise',
+      'seed-bill-rent',
+      'bill',
+      raiseCreatedAt,
+      raiseFromStart,
+      'seed-change-rent-raise',
+      raiseSealed,
+    ),
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/changes/seed-change-rent-raise`),
+    change(
+      'seed-change-rent-raise',
+      raiseCreatedAt,
+      raiseFromStart,
+      ['seed-bill-rent'],
+      raiseChangeSealed,
+    ),
+  );
   await batch.commit();
-  return bills.length * 3;
+  return bills.length * 3 + 2;
 }
 
 /** Three goals: one with a date that lands exactly on pace, one with no date, and one the plan fills on the first income day. */

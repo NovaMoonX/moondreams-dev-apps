@@ -1,6 +1,16 @@
 // Pure checks for Runway's engine; run under several time zones: `TZ=America/Los_Angeles npm run check:runway-engine`.
 import assert from 'node:assert/strict';
 
+import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
+import { previewChange } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
+import { computeDraftView } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
+import {
+  describeChange,
+  isSamePayload,
+  type ItemPayload,
+} from '../../src/apps/runway/utils/changeText.ts';
+import { getEffectiveFrom } from '../../src/apps/runway/utils/fromWhen.ts';
+
 import {
   buildComingDays,
   describeDay,
@@ -77,6 +87,7 @@ import {
 import {
   resolve,
   resolveCurrentOrNext,
+  resolveNextChange,
   resolveVersion,
 } from '../../src/apps/runway/engine/resolve.ts';
 import {
@@ -3377,6 +3388,343 @@ const version = (
     ).kind,
     'covered',
     'a payment set aside in full is covered',
+  );
+}
+
+// Change an item from a date (Issue 18).
+{
+  const today = utc(2026, 10, 23);
+  const exactRange = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const never = { onDate: null, afterCount: null };
+  const weekly = { kind: 'weekly', anchor: today, monthDays: [] } as const;
+  const planItems: PlanItemDoc[] = [
+    item('pay', 1, { kind: 'payLine', parentId: 'src' }),
+    item('src', 1),
+    item('groc', 2, { kind: 'envelope' }),
+  ];
+  const payload = (cents: number) => ({
+    name: 'Groceries',
+    emoji: null,
+    priority: 'must' as const,
+    orderIndex: 1,
+    funding: {
+      amount: { kind: 'exact' as const, cents },
+      cadence: { kind: 'everyIncomeDay' as const },
+    },
+  });
+  const base: OpenVersion[] = [
+    {
+      id: 'vsrc',
+      itemId: 'src',
+      kind: 'source',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: { name: 'Acme', pairings: [] },
+    },
+    {
+      id: 'vpay',
+      itemId: 'pay',
+      kind: 'payLine',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Paycheck',
+        schedule: weekly,
+        amount: exactRange(100_000),
+        ending: never,
+        stanceOverride: null,
+        pairings: [],
+      },
+    },
+    {
+      id: 'vgroc',
+      itemId: 'groc',
+      kind: 'envelope',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: payload(10_000),
+    },
+  ];
+  const from = today + 21 * DAY_MS;
+  const inputs = {
+    items: planItems,
+    versions: base,
+    openDays: [],
+    stance: 'conservative' as const,
+    today,
+    heldByItem: {},
+    settledKey: '',
+    billProgress: {},
+  };
+  const virtual = {
+    itemId: 'groc',
+    kind: 'envelope' as const,
+    effectiveFrom: from,
+    effectiveUntil: null,
+    changeId: 'what-if',
+    payload: payload(15_000),
+  };
+  const preview = previewChange(inputs, virtual);
+  assert.ok(preview.length > 0, 'a raise from a date moves later days');
+  assert.ok(
+    preview.every((day) => day.on >= from),
+    'a change from a date ahead leaves every earlier day alone',
+  );
+  assert.ok(
+    preview.every(
+      (day) => day.effect.freeAfterCents === day.effect.freeBeforeCents - 5_000,
+    ),
+    'each later day gives $50 more to the envelope',
+  );
+  assert.deepEqual(
+    previewChange(inputs, { ...virtual, effectiveFrom: today + 400 * DAY_MS }),
+    [],
+    'a change past the days planned moves nothing',
+  );
+  assert.ok(
+    previewChange(inputs, { ...virtual, effectiveFrom: today + 300 * DAY_MS })
+      .length > 0,
+    'a change beyond the first days listed is still found',
+  );
+  assert.equal(
+    getEffectiveFrom({ choice: 'date', date: '2037-01-01' }, today),
+    null,
+    'a start more than ten years out is refused here, as the rules do',
+  );
+
+  // The previewed effect equals the saved result.
+  const saved: OpenVersion = {
+    ...virtual,
+    id: 'vsaved',
+    createdAt: 5,
+  } as OpenVersion;
+  const layered = layerVersion<OpenVersion>(base, virtual);
+  const dayKeys = buildComingDays(planItems, base, today).map(
+    (day) => day.dayKey,
+  );
+  const draftsOf = (versions: OpenVersion[]) =>
+    dayKeys.map(
+      (dayKey) =>
+        computeDraftView(
+          planItems,
+          versions,
+          'conservative',
+          [],
+          dayKey,
+          today,
+          {},
+          '',
+          {},
+        )?.draft,
+    );
+  assert.deepEqual(
+    draftsOf(layered),
+    draftsOf([...base, saved]),
+    'the preview is the saved result for the same inputs',
+  );
+
+  // Two devices: both versions stay and the later one wins, whatever the order.
+  const first = {
+    ...saved,
+    id: 'dev1',
+    createdAt: 10,
+    payload: payload(12_000),
+  };
+  const second = {
+    ...saved,
+    id: 'dev2',
+    createdAt: 11,
+    payload: payload(14_000),
+  };
+  const cents = (list: OpenVersion[]) => {
+    const found = resolveVersion(list, 'groc', from + 7 * DAY_MS);
+    return found?.kind === 'envelope' &&
+      found.payload.funding.amount.kind === 'exact'
+      ? found.payload.funding.amount.cents
+      : null;
+  };
+  assert.equal(
+    cents([...base, first as OpenVersion, second as OpenVersion]),
+    14_000,
+  );
+  assert.equal(
+    cents([...base, second as OpenVersion, first as OpenVersion]),
+    14_000,
+  );
+  assert.equal(cents([...base, first as OpenVersion]), 12_000);
+  assert.equal(
+    resolveVersion([...base, second as OpenVersion], 'groc', today)?.id,
+    'vgroc',
+    'before the date the earlier version still stands',
+  );
+
+  // The next change that has not started.
+  assert.equal(
+    resolveNextChange([...base, saved], 'groc', today)?.id,
+    'vsaved',
+  );
+  assert.equal(resolveNextChange([...base, saved], 'groc', from), null);
+  assert.equal(resolveNextChange(base, 'groc', today), null);
+  assert.equal(
+    resolveNextChange(base, 'groc', today - 10 * DAY_MS),
+    null,
+    'an item that has not begun has no change scheduled, only a start',
+  );
+  assert.equal(
+    resolveNextChange(
+      [
+        ...base,
+        {
+          ...saved,
+          id: 'hidden',
+          createdAt: 3,
+          effectiveFrom: from + DAY_MS,
+        } as OpenVersion,
+        {
+          ...saved,
+          id: 'wins',
+          createdAt: 9,
+          effectiveFrom: from,
+        } as OpenVersion,
+      ],
+      'groc',
+      today,
+    )?.id,
+    'wins',
+  );
+
+  // A schedule that changes from a date: the old one stops the day before.
+  const monthly: OpenVersion = {
+    id: 'vpay2',
+    itemId: 'pay',
+    kind: 'payLine',
+    createdAt: 2,
+    effectiveFrom: from,
+    effectiveUntil: null,
+    changeId: 'c2',
+    payload: {
+      name: 'Paycheck',
+      schedule: {
+        kind: 'monthly',
+        anchor: from,
+        monthDays: [new Date(from).getUTCDate()],
+      },
+      amount: exactRange(100_000),
+      ending: never,
+      stanceOverride: null,
+      pairings: [],
+    },
+  };
+  const days = buildComingDays(planItems, [...base, monthly], today);
+  assert.deepEqual(
+    days.filter((day) => day.on < from).map((day) => day.on),
+    [today, today + 7 * DAY_MS, today + 14 * DAY_MS],
+    'days before the change keep the weekly schedule',
+  );
+  const after = days.filter((day) => day.on >= from);
+  assert.ok(
+    after.length > 0 && after.length <= 14,
+    'days from the change are monthly',
+  );
+  assert.ok(
+    after.every(
+      (day) =>
+        new Date(day.on).getUTCDate() === new Date(from).getUTCDate() ||
+        day.on === from,
+    ),
+    'monthly on the new day',
+  );
+
+  // A day that was already described keeps what it had.
+  assert.equal(
+    describeDay([...base, monthly], {
+      payLineId: 'pay',
+      sourceId: 'src',
+      expectedOn: today + 7 * DAY_MS,
+    })?.amount.lowCents,
+    100_000,
+  );
+  assert.equal(
+    describeChange(
+      payload(10_000) as ItemPayload,
+      payload(15_000) as ItemPayload,
+    ),
+    'Funding $100.00 every income day to $150.00 every income day',
+  );
+  const legacyLine = {
+    name: 'Paycheck',
+    schedule: weekly,
+    amount: exactRange(100_000),
+    ending: never,
+  } as unknown as ItemPayload;
+  assert.equal(
+    describeChange(legacyLine, {
+      ...legacyLine,
+      amount: exactRange(120_000),
+      pairings: [],
+      stanceOverride: null,
+    } as ItemPayload),
+    'Amount $1,000.00 to $1,200.00',
+    'a pay line written before pairings and ranges existed can be changed',
+  );
+  assert.equal(
+    isSamePayload(
+      payload(10_000) as ItemPayload,
+      payload(10_000) as ItemPayload,
+    ),
+    true,
+  );
+  assert.deepEqual(
+    getEffectiveFrom({ choice: 'date', date: '2026-10-23' }, today),
+    null,
+    'a date that is not after today is refused',
+  );
+  assert.equal(
+    getEffectiveFrom({ choice: 'date', date: '2026-10-24' }, today),
+    today + DAY_MS,
+  );
+  assert.equal(getEffectiveFrom({ choice: 'now', date: '' }, today), today);
+
+  // 50 envelopes: the preview of one change over every coming day stays quick.
+  const many = Array.from({ length: 50 }, (_, index) => index);
+  const manyItems = [
+    ...planItems.filter((entry) => entry.kind !== 'envelope'),
+    ...many.map((index) =>
+      item(`e${index}`, index + 2, { kind: 'envelope' as const }),
+    ),
+  ];
+  const manyVersions: OpenVersion[] = [
+    ...base.filter((entry) => entry.kind !== 'envelope'),
+    ...many.map((index): OpenVersion => ({
+      id: `ve${index}`,
+      itemId: `e${index}`,
+      kind: 'envelope',
+      createdAt: index + 2,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: { ...payload(1_000 + index), name: `Envelope ${index}` },
+    })),
+  ];
+  const startedAt = performance.now();
+  const manyPreview = previewChange(
+    { ...inputs, items: manyItems, versions: manyVersions },
+    { ...virtual, itemId: 'e7', payload: payload(5_000) },
+  );
+  const elapsed = performance.now() - startedAt;
+  assert.ok(manyPreview.length > 0);
+  assert.ok(
+    elapsed < 1_500,
+    `50-envelope preview took ${elapsed.toFixed(0)} ms`,
+  );
+  console.log(
+    `runway engine: 50-envelope change preview over ${manyPreview.length} days ${elapsed.toFixed(0)} ms`,
   );
 }
 

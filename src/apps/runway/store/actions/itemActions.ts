@@ -9,6 +9,7 @@ import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
+import type { ItemPayload } from '@apps/runway/utils/changeText';
 import type {
   BillSealed,
   ChangeDoc,
@@ -17,7 +18,7 @@ import type {
   GoalSealed,
   Ending,
   MoneyRange,
-  Pairing,
+  ItemKind,
   PayLineSealed,
   PlanItemDoc,
   PlanVersionDoc,
@@ -333,30 +334,35 @@ export async function createGoal(
   return { goalId };
 }
 
-export interface SetPairingsInput {
+export interface ChangeItemInput {
   itemId: string;
-  kind: 'source' | 'payLine';
-  /** The version in force; its payload is copied with the new pairings. */
-  current: SourceSealed | PayLineSealed;
-  pairings: Pairing[];
-  name: string;
-  /** The first day the new set applies. */
-  startDate: number;
+  kind: ItemKind;
+  /** The item's whole payload from `effectiveFrom` on, not a diff. */
+  payload: ItemPayload;
+  /** What changed, from and to, in the change entry's words. */
+  summary: string;
+  note: string | null;
+  effectiveFrom: number;
 }
 
-/** Saves a source's or pay line's pairings as a new version of it plus one change entry in a single batch; the old version stays as it was. */
-export async function setPairings(
+/**
+ * Saves an edit as a new whole-payload version of the item plus one change entry in a single batch.
+ * Nothing already written is touched, so an earlier day stays as it was and a second device's edit of
+ * the same item is kept beside this one, the later `createdAt` winning where both cover a date.
+ */
+export async function changeItem(
   uid: string,
   encryption: RunwayEncryption,
-  input: SetPairingsInput,
+  input: ChangeItemInput,
 ): Promise<void> {
   const now = Date.now();
   const changeId = generateUuid();
   const changePayload: ChangeSealed = {
-    summary: `Changed what ${input.name} funds, from ${formatDateUTC(input.startDate)}.`,
+    summary: input.summary,
+    note: input.note,
   };
   const [versionSealed, changeSealed] = await Promise.all([
-    sealJson({ ...input.current, pairings: input.pairings }, encryption),
+    sealJson(input.payload, encryption),
     sealJson(changePayload, encryption),
   ]);
   const version: PlanVersionDoc = {
@@ -364,7 +370,7 @@ export async function setPairings(
     itemId: input.itemId,
     kind: input.kind,
     createdAt: now,
-    effectiveFrom: input.startDate,
+    effectiveFrom: input.effectiveFrom,
     effectiveUntil: null,
     changeId,
     sealed: versionSealed,
@@ -373,7 +379,7 @@ export async function setPairings(
     id: changeId,
     kind: 'planChange',
     createdAt: now,
-    effectiveFrom: input.startDate,
+    effectiveFrom: input.effectiveFrom,
     itemIds: [input.itemId],
     sealed: changeSealed,
   };

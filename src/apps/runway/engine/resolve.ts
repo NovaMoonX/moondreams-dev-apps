@@ -92,3 +92,28 @@ export function resolve<
     });
   return result;
 }
+
+/**
+ * The next change to an item that has been made but has not started: the earliest version after `on`
+ * that wins on its own first day. Null when nothing is scheduled, or when the item has not begun, since
+ * its first version is a start and not a change.
+ */
+export function resolveNextChange<V extends Versioned & { id: string }>(
+  versions: readonly V[],
+  itemId: string,
+  on: number,
+): V | null {
+  const own = versions.filter((version) => version.itemId === itemId);
+  if (!resolveVersion(own, itemId, on)) return null;
+  const result =
+    own
+      .filter((version) => version.effectiveFrom > on)
+      .sort(
+        (a, b) => a.effectiveFrom - b.effectiveFrom || byCreatedAtThenId(a, b),
+      )
+      .find(
+        (version) =>
+          resolveVersion(own, itemId, version.effectiveFrom)?.id === version.id,
+      ) ?? null;
+  return result;
+}
