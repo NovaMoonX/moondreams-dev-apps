@@ -149,10 +149,17 @@ Each phase ends in something that can ship and be rolled back.
 - [ ] App code, functions, rules, indexes, seed and docs removed from the site
 - [ ] Root README and `functions/README.md` updated; rules size re-checked
 
-## Open decisions
+## Decisions so far
 
-- Does the beta tier apply to all five apps, and does Waypoint's shared-trip data stay strict?
-- Option A first, as recommended, or straight to B for any app?
-- Copy or publish the shared UI?
-- One name and brand for graduated apps, or each its own?
-- Does a graduated app keep appearing in this site's menu as a link out?
+Answered by the owner; the rest stay open.
+
+- **Beta tier:** every app here is a beta app, so the beta-tier rules apply to all five, Waypoint's shared-trip data included. A later change will spell out what beta means.
+- **Same project or new:** undecided. Option A stays the recommendation.
+- **Shared UI:** copy it into the graduated app for now; a package only when two graduated apps need the same fix.
+- **Brand:** each graduated app has its own name and brand.
+- **This site's menu:** a graduated app stays in the menu as a link out.
+
+## Still open
+
+- Option A or B for the first app to graduate.
+- What "beta" promises people, written down once (the later change above).
