@@ -1,0 +1,693 @@
+rules_version = '2';
+
+// Beta tier: every app here is a beta app, so these rules keep what protects people from each
+// other (sign-in, ownership, membership, roles, who may change whose entry, invite and approval
+// flows, immutable ownership fields) and leave the shape of a document to the client. Tighten
+// them per app when it graduates (GRADUATING.md). The compiled size is capped, see
+// `npm run check:rules-size`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isUser(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return request.auth != null && (
+        (('admin' in request.auth.token) && request.auth.token.admin == true) ||
+        request.auth.token.email == 'nova@moondreams.dev'
+      );
+    }
+
+    // Only ever set by scripts/seeds/core.ts, which refuses to run against anything but a local
+    // emulator, so it never appears on a production token.
+    function isDevUser() {
+      return request.auth != null && 'dev' in request.auth.token && request.auth.token.dev == true;
+    }
+
+    // Each is its own `allow read`: Firestore's list() safety check can't prove a combined expression.
+    function isUnrestrictedPublicApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted != true;
+    }
+
+    function isUidAllowedApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted == true
+        && request.auth != null
+        && request.auth.uid in appData.allowedUsers;
+    }
+
+    function isEmailAllowedApp(appData) {
+      return ('status' in appData) && appData.status == 'public' && appData.isRestricted == true
+        && request.auth != null && ('email' in request.auth.token)
+        && request.auth.token.email in appData.allowedUsers;
+    }
+
+    function isCreatedByKept() { return request.resource.data.createdBy == resource.data.createdBy; }
+    function isCreatedByMe() { return request.resource.data.createdBy == request.auth.uid; }
+    function isTripIdKept() { return request.resource.data.tripId == resource.data.tripId; }
+
+    function isHouseholdMember(householdId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId))
+        && request.auth.uid in get(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)).data.members;
+    }
+
+    // Trips are judged by calendar day, and `endDate` is the UTC midnight that starts the last day.
+    function isTripActive(trip) {
+      return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate + 86400000;
+    }
+
+    function hasTripStarted(trip) {
+      return request.time.toMillis() >= trip.startDate;
+    }
+
+    function getTrip(tripId) {
+      return get(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)).data;
+    }
+
+    function isTripMemberOf(tripId) {
+      return request.auth != null && request.auth.uid in getTrip(tripId).members;
+    }
+
+    function tripRoleOf(tripId) {
+      return getTrip(tripId).members[request.auth.uid].role;
+    }
+
+    function isTripAdminOf(tripId) {
+      return isTripMemberOf(tripId) && tripRoleOf(tripId) == 'ADMIN';
+    }
+
+    function isTripEditorOf(tripId) {
+      return isTripMemberOf(tripId) && tripRoleOf(tripId) in ['ADMIN', 'EDITOR'];
+    }
+
+    // Once a trip has started, only an Admin adds to its plan; before, Editors do too.
+    function canAddToTrip(tripId) {
+      return isTripMemberOf(tripId) && (
+        hasTripStarted(getTrip(tripId))
+          ? tripRoleOf(tripId) == 'ADMIN'
+          : tripRoleOf(tripId) in ['ADMIN', 'EDITOR']
+      );
+    }
+
+    // While a trip is on, only an Admin changes or removes what is planned; otherwise Editors do too.
+    function canEditTripPlan(tripId) {
+      return isTripMemberOf(tripId) && (
+        isTripActive(getTrip(tripId))
+          ? tripRoleOf(tripId) == 'ADMIN'
+          : tripRoleOf(tripId) in ['ADMIN', 'EDITOR']
+      );
+    }
+
+    // A member marks their own key and nobody else's.
+    function changesOnlyOwnKey(field) {
+      return request.resource.data[field].diff(resource.data.get(field, {})).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    // --- Apps: the app document itself (catalog entry) ---
+
+    match /apps/{appId} {
+      allow read: if isAdmin() || isDevUser();
+      allow read: if isUnrestrictedPublicApp(resource.data);
+      allow read: if isUidAllowedApp(resource.data);
+      allow read: if isEmailAllowedApp(resource.data);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Cross-app: when each member started using an app and when they were last active. Only the
+    // `registerAppUsage` Function creates a record, so `startedAt` can't be forged.
+    match /apps/{appId}/usage/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow update: if isUser(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActiveAt']);
+    }
+
+    // --- App: a-list ---
+
+    // Everything of a member's is private to them and nests under their uid.
+    match /apps/a-list/memberships/{uid}/{document=**} {
+      allow read, write: if isUser(uid);
+    }
+
+    // A share is addressed by an unguessable id; visitors never read it, a Function does.
+    match /apps/a-list/calendarShares/{shareId} {
+      function isShareOwner() {
+        return request.auth != null && resource.data.ownerUid == request.auth.uid;
+      }
+
+      allow read, delete: if isShareOwner();
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && shareId.matches('^[2-9a-hj-np-z]{26}$')
+        && exists(/databases/$(database)/documents/apps/a-list/memberships/$(request.auth.uid));
+      allow update: if isShareOwner() && request.resource.data.ownerUid == resource.data.ownerUid;
+    }
+
+    // --- App: nine-lives ---
+
+    // get() only: a household is joined by knowing its exact code, never by listing codes.
+    match /apps/nine-lives/inviteCodes/{inviteCode} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null
+        && inviteCode.size() == 6
+        && !exists(/databases/$(database)/documents/apps/nine-lives/inviteCodes/$(inviteCode))
+        && existsAfter(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId))
+        && getAfter(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)).data.createdBy == request.auth.uid
+        && request.auth.uid in getAfter(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)).data.members
+        && getAfter(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)).data.inviteCode == inviteCode;
+    }
+
+    match /apps/nine-lives/households/{householdId} {
+      // A member being added must match a real pending request that existed before this write and
+      // is deleted in the same commit; the client batch is not itself a security boundary.
+      function isApprovedMemberAddition() {
+        let addedUids = request.resource.data.members.removeAll(resource.data.members);
+        return addedUids.size() == 1
+          && exists(/databases/$(database)/documents/apps/nine-lives/pendingRequests/$(addedUids[0] + '_' + householdId))
+          && !existsAfter(/databases/$(database)/documents/apps/nine-lives/pendingRequests/$(addedUids[0] + '_' + householdId));
+      }
+
+      allow read: if request.auth != null && request.auth.uid in resource.data.members;
+      allow create: if request.auth != null
+        && isCreatedByMe()
+        && request.resource.data.members == [request.auth.uid];
+      allow update: if isHouseholdMember(householdId)
+        && isCreatedByKept()
+        && request.resource.data.members.hasAll(resource.data.members)
+        && (request.resource.data.members == resource.data.members || isApprovedMemberAddition())
+        && (request.resource.data.inviteCode == resource.data.inviteCode || resource.data.inviteCode == null);
+    }
+
+    match /apps/nine-lives/pendingRequests/{requestId} {
+      function requestUid() {
+        return requestId.split('_')[0];
+      }
+
+      // The path form covers get() on a request that doesn't exist yet; the data form lets a list query prove it is safe.
+      allow read: if request.auth != null && (
+        request.auth.uid == requestUid()
+          || (resource != null && resource.data.uid == request.auth.uid)
+          || (resource != null && isHouseholdMember(resource.data.householdId))
+      );
+      // The code must be the household's real one: knowing a householdId alone is never enough.
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.uid
+        && requestId == request.resource.data.uid + '_' + request.resource.data.householdId
+        && exists(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId))
+        && !isHouseholdMember(request.resource.data.householdId)
+        && request.resource.data.inviteCode is string
+        && get(/databases/$(database)/documents/apps/nine-lives/households/$(request.resource.data.householdId)).data.inviteCode == request.resource.data.inviteCode;
+      allow delete: if request.auth != null && (
+        request.auth.uid == requestUid()
+          || (resource != null && isHouseholdMember(resource.data.householdId))
+      );
+    }
+
+    match /apps/nine-lives/conditionLibrary/{conditionId} {
+      allow read: if request.auth != null;
+    }
+
+    // Cats, records, visits, expenses, litter and the rest: any member of the household.
+    match /apps/nine-lives/households/{householdId}/{collection}/{docId=**} {
+      allow read, write: if isHouseholdMember(householdId);
+    }
+
+    // --- App: pinch ---
+
+    // The shared copy and the caches are written only by Functions (admin SDK), so no rule opens them.
+    match /apps/pinch/shares/{shareId} {
+      allow read: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Everything in a kitchen is private to one person and nests under their uid.
+    match /apps/pinch/kitchens/{uid}/{document=**} {
+      allow read, write: if isUser(uid);
+    }
+
+    match /apps/pinch/settings/{uid} {
+      allow read, write: if isUser(uid);
+    }
+
+    // --- App: waypoint ---
+
+    match /apps/waypoint/inviteCodes/{inviteCode} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId))
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.createdBy == request.auth.uid
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.inviteCode == inviteCode;
+      allow update: if request.auth != null
+        && isTripIdKept()
+        && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId))
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+    }
+
+    match /apps/waypoint/trips/{tripId} {
+      function isTripMember() {
+        return request.auth != null && request.auth.uid in resource.data.members;
+      }
+
+      function isTripAdmin() {
+        return isTripMember() && resource.data.members[request.auth.uid].role == 'ADMIN';
+      }
+
+      function isTripEditorOrAdmin() {
+        return isTripMember() && resource.data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+      }
+
+      function isMemberEntryValid(member, uid) {
+        return member.uid == uid && member.role in ['ADMIN', 'EDITOR', 'COMMENTER', 'VIEWER'];
+      }
+
+      function changedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      // Editors change what the trip is about; members, ownership, archiving, the invite code and the album are not theirs.
+      function isContentUpdate() {
+        return changedKeys().hasOnly(['title', 'coverImageUrl', 'startDate', 'endDate', 'timezone', 'city', 'defaultCurrency', 'noExpenseKeys', 'lastEditedAt']);
+      }
+
+      function isAlbumUpdate() {
+        return changedKeys().hasOnly(['sharedAlbumUrl', 'sharedAlbumSetByUid', 'sharedAlbumSetAt', 'lastEditedAt']);
+      }
+
+      function isArchiveUpdate() {
+        return changedKeys().hasOnly(['isArchived', 'lastEditedAt']);
+      }
+
+      function isMembershipApprovalValid() {
+        let addedUids = request.resource.data.members.keys().removeAll(resource.data.members.keys());
+        return isTripAdmin()
+          && isCreatedByKept()
+          && request.resource.data.members.keys().hasAll(resource.data.members.keys())
+          && addedUids.size() == 1
+          && request.resource.data.members.size() == resource.data.members.size() + 1
+          && isMemberEntryValid(request.resource.data.members[addedUids[0]], addedUids[0])
+          && exists(/databases/$(database)/documents/apps/waypoint/pendingRequests/$(addedUids[0] + '_' + tripId))
+          && get(/databases/$(database)/documents/apps/waypoint/pendingRequests/$(addedUids[0] + '_' + tripId)).data.uid == addedUids[0]
+          && !existsAfter(/databases/$(database)/documents/apps/waypoint/pendingRequests/$(addedUids[0] + '_' + tripId));
+      }
+
+      // An Admin can change roles or remove one member, never themselves or the creator.
+      function isMembershipManagementValid() {
+        return isTripAdmin()
+          && isCreatedByKept()
+          && request.resource.data.members.keys().hasAll([request.auth.uid, resource.data.createdBy])
+          && request.resource.data.members[request.auth.uid] == resource.data.members[request.auth.uid]
+          && request.resource.data.members[resource.data.createdBy] == resource.data.members[resource.data.createdBy]
+          && (
+            (request.resource.data.members.keys().hasAll(resource.data.members.keys())
+              && resource.data.members.keys().hasAll(request.resource.data.members.keys()))
+            || request.resource.data.members.size() == resource.data.members.size() - 1
+          );
+      }
+
+      // Someone an Admin invited by email joins themselves, as the invited role, and uses up the invitation in the same commit.
+      function isTripEmailInviteJoinValid() {
+        let uid = request.auth.uid;
+        let email = request.auth.token.get('email', '').lower();
+        let invitePath = /databases/$(database)/documents/apps/waypoint/emailInvites/$(tripId + '_' + email);
+        let addedUids = request.resource.data.members.keys().removeAll(resource.data.members.keys());
+        return request.auth.token.get('email_verified', false) == true
+          && email != ''
+          && !(uid in resource.data.members)
+          && changedKeys().hasOnly(['members', 'lastEditedAt'])
+          && request.resource.data.members.keys().hasAll(resource.data.members.keys())
+          && addedUids.size() == 1
+          && addedUids[0] == uid
+          && request.resource.data.members.diff(resource.data.members).affectedKeys().hasOnly([uid])
+          && isMemberEntryValid(request.resource.data.members[uid], uid)
+          && exists(invitePath)
+          && get(invitePath).data.tripId == tripId
+          && get(invitePath).data.invitedBy in resource.data.members
+          && resource.data.members[get(invitePath).data.invitedBy].role == 'ADMIN'
+          && get(invitePath).data.role == request.resource.data.members[uid].role
+          && !existsAfter(invitePath);
+      }
+
+      allow read: if isTripMember();
+      allow create: if request.auth != null
+        && isCreatedByMe()
+        && request.resource.data.members.keys().hasOnly([request.auth.uid])
+        && isMemberEntryValid(request.resource.data.members[request.auth.uid], request.auth.uid)
+        && request.resource.data.members[request.auth.uid].role == 'ADMIN';
+      allow update: if (isTripMember() && (
+        (isTripEditorOrAdmin() && isContentUpdate())
+          || isAlbumUpdate()
+          || (isTripAdmin() && isArchiveUpdate())
+          || isMembershipApprovalValid()
+          || isMembershipManagementValid()
+      ))
+        || (request.auth != null && !(request.auth.uid in resource.data.members) && isTripEmailInviteJoinValid());
+      allow delete: if isTripAdmin();
+
+      match /checklist/{checklistId} {
+        allow read: if isTripMemberOf(tripId);
+        allow create: if isTripEditorOf(tripId) && isCreatedByMe();
+        allow update: if (canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept())
+          // An assignee ticks their own item; an Editor links or unlinks it, whatever the phase.
+          || (isTripMemberOf(tripId)
+            && request.auth.uid in resource.data.assignedToUids
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isCompleted', 'markedCompletedByUid', 'markedCompletedAt', 'lastEditedAt'])
+            && (request.resource.data.markedCompletedByUid == null || request.resource.data.markedCompletedByUid == request.auth.uid))
+          || (isTripEditorOf(tripId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedTo', 'lastEditedAt']));
+        allow delete: if canEditTripPlan(tripId);
+      }
+    }
+
+    match /apps/waypoint/trips/{tripId}/events/{eventId} {
+      // Archiving or restoring is Admin-only, whatever the phase.
+      function isArchiveKept() {
+        return request.resource.data.get('isArchived', false) == resource.data.get('isArchived', false)
+          && request.resource.data.get('archivedBy', null) == resource.data.get('archivedBy', null)
+          && request.resource.data.get('archivedAt', null) == resource.data.get('archivedAt', null);
+      }
+
+      allow read: if isTripMemberOf(tripId);
+      allow create: if canAddToTrip(tripId) && isCreatedByMe();
+      allow update: if (canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept() && (isArchiveKept() || isTripAdminOf(tripId)))
+        // Every member marks an event seen for themselves.
+        || (isTripMemberOf(tripId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenBy'])
+          && changesOnlyOwnKey('seenBy'));
+      allow delete: if canEditTripPlan(tripId);
+    }
+
+    match /apps/waypoint/trips/{tripId}/eventSuggestions/{suggestionId} {
+      allow read: if isTripMemberOf(tripId);
+      allow create: if isTripMemberOf(tripId) && isCreatedByMe();
+      allow update: if (isTripMemberOf(tripId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotedBy'])
+          && request.resource.data.upvotedBy.removeAll(resource.data.upvotedBy).removeAll([request.auth.uid]).size() == 0
+          && resource.data.upvotedBy.removeAll(request.resource.data.upvotedBy).removeAll([request.auth.uid]).size() == 0)
+        || (isTripMemberOf(tripId)
+          && resource.data.createdBy == request.auth.uid
+          && isCreatedByKept()
+          && isTripIdKept()
+          && request.resource.data.upvotedBy == resource.data.upvotedBy);
+      allow delete: if isTripAdminOf(tripId);
+    }
+
+    match /apps/waypoint/trips/{tripId}/announcements/{announcementId} {
+      allow read: if isTripMemberOf(tripId);
+      allow create: if isTripAdminOf(tripId) && isCreatedByMe();
+      allow update: if isTripMemberOf(tripId)
+        && resource.data.createdBy != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dismissedBy'])
+        && changesOnlyOwnKey('dismissedBy');
+      allow delete: if isTripAdminOf(tripId);
+    }
+
+    match /apps/waypoint/trips/{tripId}/ideas/{ideaId} {
+      function isIdeaPoster() {
+        return isTripMemberOf(tripId) && resource.data.addedByUid == request.auth.uid;
+      }
+
+      allow read: if isTripMemberOf(tripId);
+      allow create: if isTripMemberOf(tripId)
+        && request.resource.data.addedByUid == request.auth.uid
+        && request.resource.data.convertedToEntityId == null
+        && request.resource.data.voterUids.removeAll([request.auth.uid]).size() == 0;
+      allow update: if (isTripMemberOf(tripId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voterUids'])
+          && request.resource.data.voterUids.removeAll(resource.data.voterUids).removeAll([request.auth.uid]).size() == 0
+          && resource.data.voterUids.removeAll(request.resource.data.voterUids).removeAll([request.auth.uid]).size() == 0)
+        || (isIdeaPoster()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ideaType', 'title', 'notes', 'linkUrl', 'ideaDetails', 'lastEditedAt']))
+        // Turning an idea into an event is the creator of that event's call, with the event written in the same commit.
+        || (canAddToTrip(tripId)
+          && resource.data.get('convertedToEntityId', null) == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['convertedToEntityId'])
+          && request.resource.data.convertedToEntityId is string
+          && !exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
+          && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
+          && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId)).data.createdBy == request.auth.uid);
+      allow delete: if isIdeaPoster() || isTripAdminOf(tripId);
+    }
+
+    // Stays and rentals share the events' phase rules; every member may mark a stay seen for themselves.
+    match /apps/waypoint/trips/{tripId}/stays/{stayId} {
+      allow read: if isTripMemberOf(tripId);
+      allow create: if canAddToTrip(tripId) && isCreatedByMe();
+      allow update: if (canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept())
+        || (isTripMemberOf(tripId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenBy'])
+          && changesOnlyOwnKey('seenBy'));
+      allow delete: if canEditTripPlan(tripId);
+    }
+
+    match /apps/waypoint/trips/{tripId}/rentals/{rentalId} {
+      allow read: if isTripMemberOf(tripId);
+      allow create: if canAddToTrip(tripId) && isCreatedByMe();
+      allow update: if canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept();
+      allow delete: if canEditTripPlan(tripId);
+    }
+
+    match /apps/waypoint/trips/{tripId}/expenses/{expenseId} {
+      function earlyPaymentsOf(data) {
+        return data.get('earlyPayments', {});
+      }
+
+      // A member writes only their own early-payment entry, to another member of the trip.
+      function isOwnEarlyPaymentChangeValid() {
+        let after = earlyPaymentsOf(request.resource.data);
+        return after.diff(earlyPaymentsOf(resource.data)).affectedKeys().hasOnly([request.auth.uid])
+          && (!(request.auth.uid in after)
+            || (after[request.auth.uid].toUid != request.auth.uid
+              && after[request.auth.uid].toUid in getTrip(tripId).members
+              && after[request.auth.uid].amount > 0));
+      }
+
+      allow read: if isTripMemberOf(tripId);
+      allow create: if isTripEditorOf(tripId)
+        && isCreatedByMe()
+        && earlyPaymentsOf(request.resource.data).size() == 0;
+      allow update: if isTripEditorOf(tripId)
+        && isTripIdKept()
+        && isCreatedByKept()
+        && earlyPaymentsOf(request.resource.data) == earlyPaymentsOf(resource.data);
+      // A member marks their own share paid, and only their own.
+      allow update: if isTripMemberOf(tripId)
+        && (resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
+          || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidMemberStatus'])
+        && changesOnlyOwnKey('paidMemberStatus');
+      allow update: if isTripMemberOf(tripId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
+        && isOwnEarlyPaymentChangeValid();
+      // An editor can take an early payment off an expense, never add or change one.
+      allow update: if isTripEditorOf(tripId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
+        && earlyPaymentsOf(request.resource.data).diff(earlyPaymentsOf(resource.data)).affectedKeys()
+          .intersection(earlyPaymentsOf(request.resource.data).keys().toSet()).size() == 0;
+      allow delete: if isTripEditorOf(tripId) && earlyPaymentsOf(resource.data).size() == 0;
+    }
+
+    // Private to its owner: no one else on the trip can read or change it.
+    match /apps/waypoint/{collection}/{uid}/{document=**} {
+      allow read, write: if (collection == 'personalExpenses' || collection == 'personalChecklist') && isUser(uid);
+    }
+
+    match /apps/waypoint/pendingRequests/{requestId} {
+      function requestUid() {
+        return requestId.split('_')[0];
+      }
+
+      function isMemberOfTrip(tripId) {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId))
+          && request.auth.uid in getTrip(tripId).members;
+      }
+
+      allow read: if request.auth != null && (
+        request.auth.uid == requestUid()
+        || (resource != null && resource.data.uid == request.auth.uid)
+        || (resource != null && isMemberOfTrip(resource.data.tripId))
+      );
+      allow create: if request.auth != null
+        && requestId == request.resource.data.uid + '_' + request.resource.data.tripId
+        && request.resource.data.uid == request.auth.uid
+        && exists(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId))
+        && !isMemberOfTrip(request.resource.data.tripId);
+      allow delete: if request.auth != null && (
+        request.auth.uid == requestUid()
+        || (resource != null && isMemberOfTrip(resource.data.tripId))
+      );
+    }
+
+    // An Admin's standing approval for an email address. The person it is for reads and uses it
+    // (with a verified email, so a made-up account can't claim it); the trip's members read it;
+    // only the trip's Admins create, re-role or withdraw it.
+    match /apps/waypoint/emailInvites/{inviteId} {
+      function isInvitee(email) {
+        return request.auth != null
+          && request.auth.token.get('email_verified', false) == true
+          && request.auth.token.get('email', '').lower() == email;
+      }
+
+      allow read: if resource != null && isInvitee(resource.data.email);
+      allow read: if resource != null && isTripMemberOf(resource.data.tripId);
+      allow create: if isTripAdminOf(request.resource.data.tripId)
+        && inviteId == request.resource.data.tripId + '_' + request.resource.data.email
+        && request.resource.data.email == request.resource.data.email.lower()
+        && request.resource.data.role in ['EDITOR', 'COMMENTER', 'VIEWER']
+        && request.resource.data.invitedBy == request.auth.uid;
+      allow update: if isTripAdminOf(resource.data.tripId)
+        && request.resource.data.role in ['EDITOR', 'COMMENTER', 'VIEWER']
+        && isTripIdKept()
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.invitedBy == request.auth.uid;
+      allow delete: if isInvitee(resource.data.email) || isTripAdminOf(resource.data.tripId);
+    }
+
+    // --- App: worth-the-wait ---
+
+    // get() only: a space is joined by knowing its exact code, never by listing codes.
+    match /apps/worth-the-wait/inviteCodes/{inviteCode} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null
+        && inviteCode.size() == 6
+        && !exists(/databases/$(database)/documents/apps/worth-the-wait/inviteCodes/$(inviteCode))
+        && existsAfter(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId))
+        && getAfter(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId)).data.createdBy == request.auth.uid
+        && getAfter(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId)).data.inviteCode == inviteCode;
+      allow delete: if request.auth != null
+        && exists(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(resource.data.spaceId))
+        && get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(resource.data.spaceId)).data.createdBy == request.auth.uid;
+    }
+
+    match /apps/worth-the-wait/pendingRequests/{uid} {
+      function isSpaceMemberForRequest(spaceId) {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId))
+          && request.auth.uid in get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId)).data.members;
+      }
+
+      allow read: if request.auth != null && (
+        request.auth.uid == uid
+          || (resource != null && isSpaceMemberForRequest(resource.data.spaceId))
+      );
+      // The code must be the space's real one, and a space holds two people.
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && exists(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId))
+        && !isSpaceMemberForRequest(request.resource.data.spaceId)
+        && get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId)).data.members.size() < 2
+        && get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(request.resource.data.spaceId)).data.inviteCode == request.resource.data.inviteCode;
+      allow delete: if request.auth != null && (
+        request.auth.uid == uid || (resource != null && isSpaceMemberForRequest(resource.data.spaceId))
+      );
+    }
+
+    match /apps/worth-the-wait/spaces/{spaceId} {
+      function isCreator(data) {
+        return request.auth != null && request.auth.uid == data.createdBy;
+      }
+
+      function isMember(data) {
+        return request.auth != null && request.auth.uid in data.members;
+      }
+
+      // A member being added must match a real pending request that existed before this write and is deleted in the same commit.
+      function isApprovedMemberAddition() {
+        let addedUids = request.resource.data.members.removeAll(resource.data.members);
+        return addedUids.size() == 1
+          && exists(/databases/$(database)/documents/apps/worth-the-wait/pendingRequests/$(addedUids[0]))
+          && !existsAfter(/databases/$(database)/documents/apps/worth-the-wait/pendingRequests/$(addedUids[0]));
+      }
+
+      // Member-only: this document carries the encryption key, so a pending requester must never read it.
+      allow read: if isMember(resource.data);
+      allow create: if request.auth != null
+        && isCreatedByMe()
+        && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.inviteCode.size() == 6
+        && request.resource.data.activeAction == null;
+      allow update: if (isCreator(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'inviteCode', 'activeAction', 'welcomeSeenBy', 'updatedAt'])
+          && request.resource.data.inviteCode == null
+          && request.resource.data.activeAction == null
+          && request.resource.data.members.size() == resource.data.members.size() + 1
+          && request.resource.data.members.hasAll(resource.data.members)
+          && isApprovedMemberAddition())
+        || (isMember(resource.data)
+          && isCreatedByKept()
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.activeAction == resource.data.activeAction)
+        || (isMember(resource.data)
+          && isCreatedByKept()
+          && request.resource.data.members == resource.data.members
+          && request.resource.data.inviteCode == resource.data.inviteCode
+          && request.resource.data.activeAction.initiatedBy == request.auth.uid);
+      allow delete: if isCreator(resource.data);
+
+      match /memberUpdates/{userId} {
+        allow read, create, update: if request.auth != null
+          && request.auth.uid == userId
+          && request.auth.uid in get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId)).data.members;
+      }
+
+      match /boxes/{boxId} {
+        function isSpaceMember() {
+          return request.auth != null
+            && request.auth.uid in get(/databases/$(database)/documents/apps/worth-the-wait/spaces/$(spaceId)).data.members;
+        }
+
+        function isBoxCreator() {
+          return resource.data.createdBy == request.auth.uid;
+        }
+
+        allow read, create: if isSpaceMember();
+        allow update: if isSpaceMember() && (
+          (isBoxCreator() && !resource.data.isDefault)
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealRequestedBy', 'revealHistory'])
+        );
+        allow delete: if isSpaceMember() && isBoxCreator() && !resource.data.isDefault;
+
+        match /items/{itemId} {
+          function isAuthor() {
+            return request.auth != null && resource.data.authorId == request.auth.uid;
+          }
+
+          allow read: if isSpaceMember();
+          allow create: if isSpaceMember() && request.resource.data.authorId == request.auth.uid;
+          allow update: if isAuthor() && request.resource.data.authorId == request.auth.uid;
+          allow delete: if isAuthor();
+        }
+      }
+    }
+
+    // --- Site-wide ---
+
+    // The last time a member loaded the site, kept out of `users` because that collection is
+    // readable by every signed-in member. Admins read them all; a member only writes their own.
+    match /siteVisits/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, update: if isUser(uid);
+    }
+
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if isUser(userId);
+    }
+
+    // Central, cross-app: every mini-app schedules and reads its own reminders. Only the scheduled
+    // Function (admin SDK) marks one `sent` or rolls a recurring one forward.
+    match /reminders/{reminderId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.targetUids;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.createdBy
+        && request.auth.uid in request.resource.data.targetUids
+        // A path inside the app, never another site: a notification opens it on tap.
+        && (request.resource.data.get('link', null) == null || request.resource.data.link.matches('/[a-z0-9].*'));
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.targetUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'cancelled';
+    }
+  }
+}
