@@ -149,7 +149,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
 ### Runway: `deleteRunwayPlan`
 
 - **Secrets:** none.
-- **Flow:** checks the phrase and `auth_time`, lists and deletes each plan collection recursively in chunks, then the plan document, the `server/{uid}` tree and the receipt prefix; logs `runway.plan.deleted` (documents, receipts) or `runway.plan.deleteFailed` (a short message, never a path or id).
+- **Flow:** checks the phrase and `auth_time`, lists and deletes each plan collection recursively in chunks, then the plan document, the `server/{uid}` tree and the receipt prefix; logs `runway.plan.deleted` (documents, receipts) or `runway.plan.deleteFailed` (an error code, never a message, path or id).
 - **Later issues extend it:** link revocation and any link or grant documents, and receipt documents, are added by the issues that create them. The `apps/runway/usage/{uid}` record is left alone.
 - **Emulator check:** deleting the seeded Alex plan removed 160 documents and left nothing under either path.
 
