@@ -9,14 +9,27 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import FundsRow from '@apps/runway/components/FundsRow';
+import PairingsEditor from '@apps/runway/forms/PairingsEditor';
+import { useAuth } from '@/hooks/useAuth';
+import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { setPairings } from '@apps/runway/store/actions/itemActions';
 import { SCHEDULE_LABELS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import IncomeForm from '@apps/runway/forms/IncomeForm';
 import {
+  selectBills,
+  selectEnvelopes,
+  selectGoals,
   selectIsPlanItemsLoaded,
   selectResolvedPlan,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { PayLineSealed, Schedule } from '@apps/runway/types';
+import type {
+  Pairing,
+  PayLineSealed,
+  Schedule,
+  SourceSealed,
+} from '@apps/runway/types';
 
 const ordinalRules = new Intl.PluralRules('en-US', { type: 'ordinal' });
 const ORDINAL_SUFFIXES: Record<string, string> = {
@@ -50,8 +63,27 @@ const describeTiming = ({ schedule, ending }: PayLineSealed) => {
   return pattern;
 };
 
+interface EditingFunds {
+  itemId: string;
+  kind: 'source' | 'payLine';
+  name: string;
+  current: SourceSealed | PayLineSealed;
+}
+
 function IncomeScreen() {
+  const { user } = useAuth();
   const today = todayAsUtcDate(useNow(60_000));
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const bills = useAppSelector((state) => selectBills(state, today));
+  const goals = useAppSelector((state) => selectGoals(state, today));
+  const [editing, setEditing] = useState<EditingFunds | null>(null);
+  const namesOf = (pairings: Pairing[]) =>
+    pairings.flatMap((pairing) => {
+      const target = [...envelopes, ...bills, ...goals].find(
+        ({ item }) => item.id === pairing.targetItemId,
+      );
+      return target ? [target.version.payload.name] : [];
+    });
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -80,6 +112,18 @@ function IncomeScreen() {
             <h3 className='line-clamp-2 font-medium break-words'>
               {source.version.payload.name}
             </h3>
+            <FundsRow
+              names={namesOf(source.version.payload.pairings)}
+              ariaLabel={`What ${source.version.payload.name} funds`}
+              onOpen={() =>
+                setEditing({
+                  itemId: source.item.id,
+                  kind: 'source',
+                  name: source.version.payload.name,
+                  current: source.version.payload,
+                })
+              }
+            />
             {source.payLines.length === 0 ? (
               <p className='text-muted-foreground mt-1 text-sm'>
                 No pay added yet.
@@ -103,6 +147,18 @@ function IncomeScreen() {
                       <p className='text-muted-foreground text-sm'>
                         {describeTiming(version.payload)}
                       </p>
+                      <FundsRow
+                        names={namesOf(version.payload.pairings)}
+                        ariaLabel={`What ${version.payload.name} funds`}
+                        onOpen={() =>
+                          setEditing({
+                            itemId: item.id,
+                            kind: 'payLine',
+                            name: version.payload.name,
+                            current: version.payload,
+                          })
+                        }
+                      />
                     </li>
                   );
                 })}
@@ -129,6 +185,28 @@ function IncomeScreen() {
         }
       />
       {getBody()}
+      {editing !== null && user && (
+        <PairingsEditor
+          key={editing.itemId}
+          isOpen
+          title='Funds'
+          fromLabel={editing.name}
+          locked={editing.current.pairings}
+          initial={[]}
+          onClose={() => setEditing(null)}
+          onSave={async (added) => {
+            const encryption = await getRunwayEncryption(user.uid);
+            await setPairings(user.uid, encryption, {
+              itemId: editing.itemId,
+              kind: editing.kind,
+              name: editing.name,
+              current: editing.current,
+              pairings: [...editing.current.pairings, ...added],
+              startDate: today,
+            });
+          }}
+        />
+      )}
       {formKey !== null && (
         <IncomeForm
           key={formKey}

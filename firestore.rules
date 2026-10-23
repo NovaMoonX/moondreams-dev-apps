@@ -4054,6 +4054,43 @@ service cloud.firestore {
           && isChangeValid(request.resource.data);
         allow update, delete: if false;
       }
+
+      // An income day gets a document the first time the person overrides it. Its id is the pay
+      // line and the day (`<payLineId>_yyyymmdd`), so a duplicate or a spoofed id fails. While it is a
+      // draft the override can change; confirming and marking a day arrive with the issues that use them.
+      match /days/{dayId} {
+        function dayStamp(expectedOn) {
+          return string(timestamp.value(expectedOn).year() * 10000
+            + timestamp.value(expectedOn).month() * 100
+            + timestamp.value(expectedOn).day());
+        }
+
+        function isDayValid(data) {
+          return data.payLineId is string
+            && (data.sourceId == null || data.sourceId is string)
+            && data.expectedOn is number
+            && data.id == dayId
+            && dayId == data.payLineId + '_' + dayStamp(data.expectedOn)
+            && data.status == 'draft'
+            && data.arrivedOn == null
+            && data.confirmedAt == null
+            && isPastOrNear(data.createdAt)
+            && data.doneLineIds is list
+            && data.doneLineIds.size() <= 200
+            && isSealed(data.sealed);
+        }
+
+        allow read: if isPlanOwner();
+        allow create: if isPlanOwner()
+          && request.resource.data.keys().hasAll(['id', 'payLineId', 'sourceId', 'expectedOn', 'arrivedOn', 'status', 'createdAt', 'confirmedAt', 'doneLineIds', 'sealed'])
+          && request.resource.data.keys().hasOnly(['id', 'payLineId', 'sourceId', 'expectedOn', 'arrivedOn', 'status', 'createdAt', 'confirmedAt', 'doneLineIds', 'sealed'])
+          && isDayValid(request.resource.data);
+        allow update: if isPlanOwner()
+          && resource.data.status == 'draft'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sealed'])
+          && isSealed(request.resource.data.sealed);
+        allow delete: if false;
+      }
     }
 
     match /users/{userId} {

@@ -1,14 +1,17 @@
 import { useEffect } from 'react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { ensurePlan } from '@apps/runway/store/actions/planActions';
 import {
   startItemsListener,
   startVersionsListener,
 } from '@apps/runway/store/listeners/itemListeners';
+import { startDaysListener } from '@apps/runway/store/listeners/dayListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
 import {
+  setDays,
   setItems,
   setKeyStatus,
   setPlan,
@@ -62,6 +65,13 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (versions) => dispatch(setVersions(versions)),
+          fail,
+        ),
+        startDaysListener(
+          uid,
+          encryption,
+          todayAsUtcDate(),
+          (days) => dispatch(setDays(days)),
           fail,
         ),
       ];

@@ -15,6 +15,7 @@ import type {
   EnvelopeSealed,
   GoalSealed,
   Ending,
+  Pairing,
   PayLineSealed,
   PlanItemDoc,
   PlanVersionDoc,
@@ -61,12 +62,16 @@ export async function createIncome(
   const changeId = generateUuid();
   const itemIds = input.sourceId ? [payLineId] : [sourceId, payLineId];
 
-  const sourcePayload: SourceSealed = { name: input.sourceName };
+  const sourcePayload: SourceSealed = {
+    name: input.sourceName,
+    pairings: [],
+  };
   const payLinePayload: PayLineSealed = {
     name: input.payLineName,
     schedule: input.schedule,
     amount: { lowCents: input.amountCents, highCents: input.amountCents },
     ending: input.ending,
+    pairings: [],
   };
   const changePayload: ChangeSealed = { summary: getSummary(input) };
 
@@ -321,4 +326,54 @@ export async function createGoal(
   await batch.commit();
 
   return { goalId };
+}
+
+export interface SetPairingsInput {
+  itemId: string;
+  kind: 'source' | 'payLine';
+  /** The version in force; its payload is copied with the new pairings. */
+  current: SourceSealed | PayLineSealed;
+  pairings: Pairing[];
+  name: string;
+  /** The first day the new set applies. */
+  startDate: number;
+}
+
+/** Saves a source's or pay line's pairings as a new version of it plus one change entry in a single batch; the old version stays as it was. */
+export async function setPairings(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: SetPairingsInput,
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const changePayload: ChangeSealed = {
+    summary: `Changed what ${input.name} funds, from ${formatDateUTC(input.startDate)}.`,
+  };
+  const [versionSealed, changeSealed] = await Promise.all([
+    sealJson({ ...input.current, pairings: input.pairings }, encryption),
+    sealJson(changePayload, encryption),
+  ]);
+  const version: PlanVersionDoc = {
+    id: generateUuid(),
+    itemId: input.itemId,
+    kind: input.kind,
+    createdAt: now,
+    effectiveFrom: input.startDate,
+    effectiveUntil: null,
+    changeId,
+    sealed: versionSealed,
+  };
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: input.startDate,
+    itemIds: [input.itemId],
+    sealed: changeSealed,
+  };
+  const batch = writeBatch(db);
+  batch.set(itemPath(uid, 'versions', version.id), version);
+  batch.set(itemPath(uid, 'changes', changeId), change);
+  await batch.commit();
 }

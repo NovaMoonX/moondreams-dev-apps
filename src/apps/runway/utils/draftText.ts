@@ -21,7 +21,7 @@ export function describeLineAsk(
       ? sourceNames[line.sourceId]
       : DRAFT_WORDS.unnamedSource;
   const result = describeAmount(
-    { kind: 'percent', bps: line.ask.bps, of: 'dayMoney' },
+    { kind: 'percent', bps: line.ask.bps, of: line.ask.of },
     source,
   );
   return result;

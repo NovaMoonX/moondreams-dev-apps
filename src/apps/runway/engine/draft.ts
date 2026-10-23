@@ -1,5 +1,14 @@
-import type { DRAFT_REASON_CODES } from '@apps/runway/constants';
-import type { Cents, Priority, Stance } from '@apps/runway/types';
+import type {
+  DRAFT_REASON_CODES,
+  PAIRING_STATES,
+} from '@apps/runway/constants';
+import type {
+  Cents,
+  HoldChoice,
+  Pairing,
+  Priority,
+  Stance,
+} from '@apps/runway/types';
 
 import {
   buildDemands,
@@ -16,10 +25,13 @@ import {
   type DraftGoalInput,
   type DraftTieKey,
 } from './demands';
+import { percentOf } from './money';
 
 export interface DraftOverrides {
   /** Day money the person typed in place of the plan's figure, by day key. */
   dayCents: Record<string, Cents>;
+  /** The person's choice for a short pairing, by line id (`dayKey:itemId`). */
+  holdResolutions?: Record<string, HoldChoice>;
 }
 
 export interface DraftInput {
@@ -51,6 +63,15 @@ export interface DraftReason {
   cadence: DraftCadence;
 }
 
+export type PairingState = (typeof PAIRING_STATES)[number];
+
+/** Set on a line a pairing funded: what became of the part its own pay could not cover. */
+export interface LinePairing {
+  state: PairingState;
+  /** Pool money reserved for the line while the person has not chosen. */
+  heldCents: Cents;
+}
+
 export interface DraftLine {
   lineId: string;
   dayKey: string;
@@ -70,12 +91,15 @@ export interface DraftLine {
   reason: DraftReason;
   /** Set on the line placed first when an equal demand got less. */
   tieBrokenBy: DraftTieKey | null;
+  pairing: LinePairing | null;
 }
 
 export interface Draft {
   days: { dayKey: string; sourceId: string | null; moneyCents: Cents }[];
   moneyCents: Cents;
   lines: DraftLine[];
+  /** Pool money reserved by holds: not funded and not free to spend. */
+  heldCents: Cents;
   freeToSpend: {
     cents: Cents;
     bySource: { sourceId: string | null; cents: Cents }[];
@@ -171,10 +195,148 @@ function findTieBrokenBy(
   return result;
 }
 
+/** The narrowest pairing set: the day's own, else its pay line's, else its source's. */
+export function pickPairings(day: DraftDayInput): readonly Pairing[] {
+  const sets = day.pairings;
+  if (!sets) return [];
+  if (sets.day !== null) return sets.day;
+  return sets.payLine.length > 0 ? sets.payLine : sets.source;
+}
+
+type WalkMode = 'ordinary' | 'topUp' | 'hold';
+type WalkItem = Demand & { mode: WalkMode };
+
+interface PairingOutcome {
+  line: DraftLine;
+  items: WalkItem[];
+}
+
+interface Target {
+  itemId: string;
+  tier: Priority;
+  orderIndex: number;
+  createdAt: number;
+}
+
+const pairingTail = (pairing: Pairing) =>
+  Number(pairing.amount.kind === 'rest');
+
 /**
- * The draft for one or more income days: every envelope funded in priority order from the day's
- * money, what is left as Free to spend, and what ran short. Pure: the same input gives the same
- * output, whatever order the arrays arrive in.
+ * Funds one day's pairings, in the step 4 order with `rest` last, only from that day's own money.
+ * A short pairing becomes a top-up demand, a hold, or a plain short line by its target's tier.
+ */
+function fundPairings(
+  day: DraftDayInput,
+  moneyCents: Cents,
+  targets: ReadonlyMap<string, Target>,
+  replaced: ReadonlyMap<string, Demand>,
+  resolutions: Record<string, HoldChoice>,
+): { outcomes: PairingOutcome[]; leftCents: Cents } {
+  const seen = new Set<string>();
+  const asDemand = (pairing: Pairing): Demand => {
+    const target = targets.get(pairing.targetItemId) as Target;
+    const own = replaced.get(`${day.dayKey}:${pairing.targetItemId}`);
+    return {
+      dayKey: day.dayKey,
+      itemId: target.itemId,
+      tier: target.tier,
+      dueBeforeNext: own?.dueBeforeNext ?? false,
+      orderIndex: target.orderIndex,
+      createdAt: target.createdAt,
+      cents: 0,
+      cadence: 'pairing',
+      bill: own?.bill ?? null,
+      ask:
+        pairing.amount.kind === 'percent'
+          ? { kind: 'percent', bps: pairing.amount.bps, of: pairing.amount.of }
+          : { kind: pairing.amount.kind },
+      capCents: null,
+    };
+  };
+  const ordered = pickPairings(day)
+    .filter((pairing) => {
+      const isNew =
+        targets.has(pairing.targetItemId) && !seen.has(pairing.targetItemId);
+      seen.add(pairing.targetItemId);
+      return isNew;
+    })
+    .map((pairing) => ({ pairing, demand: asDemand(pairing) }))
+    .sort(
+      (a, b) =>
+        pairingTail(a.pairing) - pairingTail(b.pairing) ||
+        compareDemands(a.demand, b.demand),
+    );
+
+  const result = ordered.reduce<{ outcomes: PairingOutcome[]; left: Cents }>(
+    (acc, { pairing, demand }) => {
+      const { amount } = pairing;
+      const wanted =
+        amount.kind === 'exact'
+          ? amount.cents
+          : amount.kind === 'rest'
+            ? acc.left
+            : percentOf(
+                amount.of === 'remaining' ? acc.left : moneyCents,
+                amount.bps,
+              );
+      if (wanted <= 0 && amount.kind !== 'rest') return acc;
+      const taken = Math.min(wanted, acc.left);
+      const shortBy = wanted - taken;
+      const lineId = `${day.dayKey}:${demand.itemId}`;
+      const choice = Object.hasOwn(resolutions, lineId)
+        ? resolutions[lineId]
+        : null;
+      const getState = (): PairingState => {
+        if (shortBy === 0) return 'funded';
+        if (pairing.topUpFromAnySource) return 'autoTopUp';
+        if (choice === 'topUp') return 'toppedUp';
+        if (choice === 'leaveShort') return 'leftShort';
+        return demand.tier === 'want' ? 'offered' : 'held';
+      };
+      const state = getState();
+      const line: DraftLine = {
+        lineId,
+        dayKey: day.dayKey,
+        itemId: demand.itemId,
+        tier: demand.tier,
+        bill: demand.bill,
+        sourceId: day.sourceId,
+        ask: demand.ask,
+        demandCents: wanted,
+        cents: taken,
+        shortBy,
+        paidBy:
+          taken > 0
+            ? [{ dayKey: day.dayKey, sourceId: day.sourceId, cents: taken }]
+            : [],
+        reason: {
+          code: getReasonCode(shortBy, amount.kind === 'rest', taken),
+          tier: demand.tier,
+          cadence: 'pairing',
+        },
+        tieBrokenBy: null,
+        pairing: { state, heldCents: 0 },
+      };
+      const items: WalkItem[] =
+        state === 'autoTopUp' || state === 'toppedUp'
+          ? [{ ...demand, cents: shortBy, mode: 'topUp' }]
+          : state === 'held'
+            ? [{ ...demand, cents: shortBy, mode: 'hold' }]
+            : [];
+      return {
+        outcomes: [...acc.outcomes, { line, items }],
+        left: acc.left - taken,
+      };
+    },
+    { outcomes: [], left: moneyCents },
+  );
+  return { outcomes: result.outcomes, leftCents: result.left };
+}
+
+/**
+ * The draft for one or more income days: pairings first, then every envelope funded in priority
+ * order from the day's money, what is left as Free to spend, and what ran short. Pure: the same
+ * input gives the same output, whatever order the arrays arrive in.
  */
 export function buildDraft(input: DraftInput): Draft {
   const days = [...input.days].sort(compareDays);
@@ -182,74 +344,164 @@ export function buildDraft(input: DraftInput): Draft {
     day,
     moneyCents: getDayMoney(day, input.overrides),
   }));
-  const pool = dayMoney.flatMap(({ day, moneyCents }): Chunk[] =>
-    moneyCents > 0
-      ? [{ dayKey: day.dayKey, sourceId: day.sourceId, cents: moneyCents }]
-      : [],
+  const dayMoneyByKey = new Map(
+    dayMoney.map(({ day, moneyCents }) => [day.dayKey, moneyCents]),
   );
 
   const sourceByDay = new Map(days.map((day) => [day.dayKey, day.sourceId]));
   const dayOrder = new Map(days.map((day, index) => [day.dayKey, index]));
-  const demands = buildDemands(
+  const allDemands = buildDemands(
     days,
     input.plan.incomeDays,
     input.plan.envelopes,
     input.plan.bills,
     input.plan.horizon,
     input.plan.goals,
-    new Map(dayMoney.map(({ day, moneyCents }) => [day.dayKey, moneyCents])),
-  )
-    .filter((demand) => demand.cents > 0 || demand.ask.kind === 'rest')
-    .sort(
-      (a, b) =>
-        compareDemands(a, b) ||
-        (dayOrder.get(a.dayKey) ?? 0) - (dayOrder.get(b.dayKey) ?? 0),
-    );
-
-  const walked = demands.reduce<{ pool: Chunk[]; lines: DraftLine[] }>(
-    (acc, demand) => {
-      const isRest = demand.ask.kind === 'rest';
-      const held = acc.pool
-        .filter((chunk) => chunk.dayKey === demand.dayKey)
-        .reduce((sum, chunk) => sum + chunk.cents, 0);
-      const wanted = isRest
-        ? Math.min(held, demand.capCents ?? held)
-        : demand.cents;
-      const taken = takeFromPool(
-        acc.pool,
-        wanted,
-        isRest ? demand.dayKey : null,
-      );
-      const cents = wanted - taken.left;
-      const line: DraftLine = {
-        lineId: `${demand.dayKey}:${demand.itemId}`,
-        dayKey: demand.dayKey,
-        itemId: demand.itemId,
-        tier: demand.tier,
-        bill: demand.bill,
-        sourceId: sourceByDay.get(demand.dayKey) ?? null,
-        ask: demand.ask,
-        demandCents: wanted,
-        cents,
-        shortBy: taken.left,
-        paidBy: taken.paidBy,
-        reason: {
-          code: getReasonCode(taken.left, isRest, cents),
-          tier: demand.tier,
-          cadence: demand.cadence,
-        },
-        tieBrokenBy: null,
-      };
-      return { pool: taken.rest, lines: [...acc.lines, line] };
-    },
-    { pool, lines: [] },
+    dayMoneyByKey,
   );
 
-  const tieKeys = findTieBrokenBy(demands, walked.lines);
-  const lines = walked.lines.map((line, index) => ({
+  const targets = new Map<string, Target>(
+    [...input.plan.envelopes, ...input.plan.bills, ...input.plan.goals].map(
+      (item) => [
+        item.itemId,
+        {
+          itemId: item.itemId,
+          tier: item.priority,
+          orderIndex: item.orderIndex,
+          createdAt: item.createdAt,
+        },
+      ],
+    ),
+  );
+  const replaced = new Map(
+    allDemands.map((demand) => [`${demand.dayKey}:${demand.itemId}`, demand]),
+  );
+  const resolutions = input.overrides.holdResolutions ?? {};
+  const paired = dayMoney.map(({ day, moneyCents }) => ({
+    day,
+    ...fundPairings(day, moneyCents, targets, replaced, resolutions),
+  }));
+  const pairedKeys = new Set(
+    paired.flatMap((entry) =>
+      pickPairings(entry.day)
+        .filter((pairing) => targets.has(pairing.targetItemId))
+        .map((pairing) => `${entry.day.dayKey}:${pairing.targetItemId}`),
+    ),
+  );
+
+  const pool = paired.flatMap(({ day, leftCents }): Chunk[] =>
+    leftCents > 0
+      ? [{ dayKey: day.dayKey, sourceId: day.sourceId, cents: leftCents }]
+      : [],
+  );
+  const ordinary = allDemands
+    .filter(
+      (demand) =>
+        !pairedKeys.has(`${demand.dayKey}:${demand.itemId}`) &&
+        (demand.cents > 0 || demand.ask.kind === 'rest'),
+    )
+    .map((demand): WalkItem => ({ ...demand, mode: 'ordinary' }));
+  const walkItems = [
+    ...ordinary,
+    ...paired.flatMap((entry) => entry.outcomes.flatMap(({ items }) => items)),
+  ].sort(
+    (a, b) =>
+      compareDemands(a, b) ||
+      (dayOrder.get(a.dayKey) ?? 0) - (dayOrder.get(b.dayKey) ?? 0),
+  );
+
+  interface Walk {
+    pool: Chunk[];
+    ordinaryItems: WalkItem[];
+    ordinaryLines: DraftLine[];
+    pairingLines: Record<string, DraftLine>;
+  }
+  const start: Walk = {
+    pool,
+    ordinaryItems: [],
+    ordinaryLines: [],
+    pairingLines: Object.fromEntries(
+      paired.flatMap((entry) =>
+        entry.outcomes.map(({ line }): [string, DraftLine] => [
+          line.lineId,
+          line,
+        ]),
+      ),
+    ),
+  };
+  const walked = walkItems.reduce<Walk>((acc, demand) => {
+    if (demand.mode !== 'ordinary') {
+      const base = acc.pairingLines[`${demand.dayKey}:${demand.itemId}`];
+      const taken = takeFromPool(acc.pool, demand.cents);
+      const got = demand.cents - taken.left;
+      const merged: DraftLine =
+        demand.mode === 'hold'
+          ? {
+              ...base,
+              pairing: { state: 'held', heldCents: got },
+            }
+          : {
+              ...base,
+              cents: base.cents + got,
+              shortBy: taken.left,
+              paidBy: [...base.paidBy, ...taken.paidBy],
+              reason: {
+                ...base.reason,
+                code: getReasonCode(taken.left, false, base.cents + got),
+              },
+            };
+      return {
+        ...acc,
+        pool: taken.rest,
+        pairingLines: { ...acc.pairingLines, [base.lineId]: merged },
+      };
+    }
+    const isRest = demand.ask.kind === 'rest';
+    const held = acc.pool
+      .filter((chunk) => chunk.dayKey === demand.dayKey)
+      .reduce((sum, chunk) => sum + chunk.cents, 0);
+    const wanted = isRest
+      ? Math.min(held, demand.capCents ?? held)
+      : demand.cents;
+    const taken = takeFromPool(acc.pool, wanted, isRest ? demand.dayKey : null);
+    const cents = wanted - taken.left;
+    const line: DraftLine = {
+      lineId: `${demand.dayKey}:${demand.itemId}`,
+      dayKey: demand.dayKey,
+      itemId: demand.itemId,
+      tier: demand.tier,
+      bill: demand.bill,
+      sourceId: sourceByDay.get(demand.dayKey) ?? null,
+      ask: demand.ask,
+      demandCents: wanted,
+      cents,
+      shortBy: taken.left,
+      paidBy: taken.paidBy,
+      reason: {
+        code: getReasonCode(taken.left, isRest, cents),
+        tier: demand.tier,
+        cadence: demand.cadence,
+      },
+      tieBrokenBy: null,
+      pairing: null,
+    };
+    return {
+      ...acc,
+      pool: taken.rest,
+      ordinaryItems: [...acc.ordinaryItems, demand],
+      ordinaryLines: [...acc.ordinaryLines, line],
+    };
+  }, start);
+
+  const tieKeys = findTieBrokenBy(walked.ordinaryItems, walked.ordinaryLines);
+  const ordinaryLines = walked.ordinaryLines.map((line, index) => ({
     ...line,
     tieBrokenBy: tieKeys[index],
   }));
+  const pairingLines = paired.flatMap((entry) =>
+    entry.outcomes.map(({ line }) => walked.pairingLines[line.lineId]),
+  );
+  const lines = [...pairingLines, ...ordinaryLines];
 
   const bySource = [
     ...walked.pool
@@ -270,6 +522,10 @@ export function buildDraft(input: DraftInput): Draft {
     })),
     moneyCents: dayMoney.reduce((sum, entry) => sum + entry.moneyCents, 0),
     lines,
+    heldCents: lines.reduce(
+      (sum, line) => sum + (line.pairing?.heldCents ?? 0),
+      0,
+    ),
     freeToSpend: {
       cents: walked.pool.reduce((sum, chunk) => sum + chunk.cents, 0),
       bySource,

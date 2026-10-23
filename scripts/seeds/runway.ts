@@ -18,8 +18,10 @@ import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
   ChangeSealed,
   BillSealed,
+  DayOverrideSealed,
   EnvelopeSealed,
   GoalSealed,
+  IncomeDayDoc,
   PayLineSealed,
   SourceSealed,
 } from '../../src/apps/runway/types.ts';
@@ -168,24 +170,50 @@ async function writeSeedIncome(
   const bonusDay = today + 20 * DAY_MS;
   const freelanceDay = today + 6 * DAY_MS;
 
-  const source: SourceSealed = { name: 'Northwind Studio' };
+  const source: SourceSealed = { name: 'Northwind Studio', pairings: [] };
   const paycheck: PayLineSealed = {
     name: 'Paycheck',
     schedule: { kind: 'everyOtherWeek', anchor: firstPayday, monthDays: [] },
     amount: { lowCents: 214_000, highCents: 214_000 },
     ending: { onDate: null, afterCount: 6 },
+    pairings: [
+      {
+        targetItemId: 'seed-envelope-groceries',
+        amount: { kind: 'exact', cents: 30_000 },
+        topUpFromAnySource: false,
+      },
+    ],
   };
   const bonus: PayLineSealed = {
     name: 'Spring bonus',
     schedule: { kind: 'once', anchor: bonusDay, monthDays: [] },
     amount: { lowCents: 90_000, highCents: 90_000 },
     ending: { onDate: null, afterCount: null },
+    pairings: [
+      {
+        targetItemId: 'seed-envelope-savings',
+        amount: { kind: 'exact', cents: 95_000 },
+        topUpFromAnySource: true,
+      },
+      {
+        targetItemId: 'seed-envelope-trip',
+        amount: { kind: 'exact', cents: 20_000 },
+        topUpFromAnySource: false,
+      },
+    ],
   };
   const freelance: PayLineSealed = {
     name: 'Freelance payment',
     schedule: { kind: 'once', anchor: freelanceDay, monthDays: [] },
     amount: { lowCents: 12_000, highCents: 12_000 },
     ending: { onDate: null, afterCount: null },
+    pairings: [
+      {
+        targetItemId: 'seed-bill-rent',
+        amount: { kind: 'exact', cents: 15_000 },
+        topUpFromAnySource: false,
+      },
+    ],
   };
   const summaries: ChangeSealed[] = [
     { summary: 'Added Paycheck from Northwind Studio, $2,140.00.' },
@@ -315,8 +343,26 @@ async function writeSeedIncome(
       thirdChange,
     ),
   );
+  const override: DayOverrideSealed = {
+    pairings: null,
+    holdResolutions: { 'seed-envelope-trip': 'leaveShort' },
+  };
+  const bonusDayId = toDayKey(ids.bonus, bonusDay);
+  const overrideDoc: IncomeDayDoc = {
+    id: bonusDayId,
+    payLineId: ids.bonus,
+    sourceId: ids.source,
+    expectedOn: bonusDay,
+    arrivedOn: null,
+    status: 'draft',
+    createdAt: addedAt + 3 * DAY_MS,
+    confirmedAt: null,
+    doneLineIds: [],
+    sealed: await sealJson(override, encryption),
+  };
+  batch.set(context.firestore.doc(`${plan}/days/${bonusDayId}`), overrideDoc);
   await batch.commit();
-  return 11;
+  return 12;
 }
 
 /** Seven envelopes across Must, Should and Want, all three cadences, a percentage of the day and the rest, sealed the way the app seals them. */
