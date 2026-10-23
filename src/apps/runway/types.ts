@@ -163,12 +163,23 @@ export interface ProposedSealed {
 }
 
 /** What differs from the proposed draft, each with an optional note. */
-export interface RecordDifference {
-  kind: 'amount';
-  plannedCents: Cents;
-  actualCents: Cents;
-  note: string | null;
-}
+export type RecordDifference =
+  | {
+      kind: 'amount';
+      plannedCents: Cents;
+      actualCents: Cents;
+      note: string | null;
+    }
+  | {
+      /** A line given more or less than the draft proposed: where the extra went or the shortfall came from. */
+      kind: 'line';
+      lineId: string;
+      itemId: string;
+      name: string;
+      plannedCents: Cents;
+      actualCents: Cents;
+      note: string | null;
+    };
 
 export interface ConfirmedSealed {
   fingerprint: string;

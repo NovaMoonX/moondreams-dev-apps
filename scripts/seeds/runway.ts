@@ -14,6 +14,11 @@ import {
   startOfUtcDay,
   toDayKey,
 } from '../../src/apps/runway/engine/dates.ts';
+import {
+  applyLineEdits,
+  getLineDifferences,
+  getRemainder,
+} from '../../src/apps/runway/engine/differences.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
   ChangeSealed,
@@ -426,9 +431,32 @@ async function writeSeedConfirmedDays(
       note: 'Overtime',
       withCushion: false,
     },
+    {
+      on: when.today - 39 * DAY_MS,
+      arrivedCents: 224_000,
+      note: 'Bonus from the quarter',
+      withCushion: false,
+      edits: {
+        'seed-envelope-groceries': 12_000,
+        'seed-goal-vacation': 40_000,
+      },
+      lineNotes: {
+        'seed-goal-vacation': 'Sent the bonus to the trip',
+      } as Record<string, string | null>,
+    },
   ];
   const docs = await Promise.all(
-    days.map(async ({ on, arrivedCents, note, withCushion }) => {
+    days.map(async (entry) => {
+      const { on, arrivedCents, note, withCushion } = entry;
+      const byLine = (
+        values: Record<string, never> | Record<string, number | string | null>,
+      ) =>
+        Object.fromEntries(
+          Object.entries(values).map(([itemId, value]) => [
+            `${dayId}:${itemId}`,
+            value,
+          ]),
+        );
       const dayId = toDayKey(ids.paycheck, on);
       const lines = [
         seedLine(
@@ -468,24 +496,38 @@ async function writeSeedConfirmedDays(
         freeToSpendCents: 214_000 - funded,
         lines,
       };
+      const confirmedLines = applyLineEdits(
+        lines,
+        byLine('edits' in entry ? entry.edits : {}) as Record<string, number>,
+        dayId,
+      );
       const confirmed: ConfirmedSealed = {
         fingerprint: 'seed',
         stance: 'conservative',
         arrivedCents,
         expectedCents: 214_000,
-        freeToSpendCents: arrivedCents - funded,
-        lines,
-        differences:
-          arrivedCents === 214_000
+        freeToSpendCents: getRemainder(arrivedCents, confirmedLines),
+        lines: confirmedLines,
+        differences: [
+          ...(arrivedCents === 214_000
             ? []
             : [
                 {
-                  kind: 'amount',
+                  kind: 'amount' as const,
                   plannedCents: 214_000,
                   actualCents: arrivedCents,
                   note,
                 },
-              ],
+              ]),
+          ...getLineDifferences(
+            lines,
+            confirmedLines,
+            byLine('lineNotes' in entry ? entry.lineNotes : {}) as Record<
+              string,
+              string | null
+            >,
+          ),
+        ],
       };
       return {
         dayId,

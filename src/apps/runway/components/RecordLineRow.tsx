@@ -1,19 +1,48 @@
+import BeforeAfterRow from '@/components/BeforeAfterRow';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PriorityBadge from '@apps/runway/components/PriorityBadge';
-import { DRAFT_WORDS } from '@apps/runway/constants';
+import { CONFIRM_WORDS, DRAFT_WORDS } from '@apps/runway/constants';
 import type { RecordLine } from '@apps/runway/types';
 
 interface RecordLineRowProps {
   line: RecordLine;
   /** What the line was planned at, shown when it differs from what was confirmed. */
   plannedCents?: number;
+  /** The person's note on the change. */
+  note?: string | null;
 }
 
 /** One line of a confirmed day, as it was kept with the name it had then. */
-function RecordLineRow({ line, plannedCents }: RecordLineRowProps) {
+function RecordLineRow({ line, plannedCents, note }: RecordLineRowProps) {
   const name = line.name === '' ? DRAFT_WORDS.billFallback : line.name;
   const isChanged = plannedCents !== undefined && plannedCents !== line.cents;
+
+  if (isChanged) {
+    return (
+      <BeforeAfterRow
+        title={name}
+        leading={<ItemBadge name={name} emoji={line.emoji} />}
+        before={formatCents(plannedCents)}
+        after={formatCents(line.cents)}
+        beforeLabel={CONFIRM_WORDS.planned}
+        afterLabel={CONFIRM_WORDS.confirmed}
+        detail={
+          <div className='space-y-1'>
+            <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+              <PriorityBadge priority={line.tier} />
+              {line.shortBy > 0 && (
+                <span className='text-foreground text-sm font-medium'>
+                  {DRAFT_WORDS.shortBy} {formatCents(line.shortBy)}
+                </span>
+              )}
+            </div>
+            {note && <p className='text-sm break-words'>{note}</p>}
+          </div>
+        }
+      />
+    );
+  }
 
   return (
     <li
@@ -35,11 +64,6 @@ function RecordLineRow({ line, plannedCents }: RecordLineRowProps) {
           {line.shortBy > 0 && (
             <span className='text-foreground text-sm font-medium'>
               {DRAFT_WORDS.shortBy} {formatCents(line.shortBy)}
-            </span>
-          )}
-          {isChanged && (
-            <span className='text-muted-foreground text-sm'>
-              Planned {formatCents(plannedCents)}
             </span>
           )}
         </div>
