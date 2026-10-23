@@ -18,7 +18,10 @@ import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
   ChangeSealed,
   BillSealed,
+  ConfirmedSealed,
   DayOverrideSealed,
+  ProposedSealed,
+  RecordLine,
   EnvelopeSealed,
   GoalSealed,
   IncomeDayDoc,
@@ -367,9 +370,171 @@ async function writeSeedIncome(
     sealed: await sealJson(override, encryption),
   };
   batch.set(context.firestore.doc(`${plan}/days/${bonusDayId}`), overrideDoc);
+  const pastDays = await writeSeedConfirmedDays(
+    context,
+    plan,
+    ids,
+    encryption,
+    batch,
+    {
+      addedAt,
+      today,
+    },
+  );
   await batch.commit();
-  return 12;
+  return 12 + pastDays;
 }
+
+const seedLine = (
+  dayId: string,
+  itemId: string,
+  name: string,
+  emoji: string | null,
+  tier: RecordLine['tier'],
+  cents: number,
+): RecordLine => ({
+  lineId: `${dayId}:${itemId}`,
+  itemId,
+  name,
+  emoji,
+  tier,
+  demandCents: cents,
+  cents,
+  shortBy: 0,
+  paidBy: [{ dayId, cents }],
+});
+
+/** Two paydays that already arrived, sealed the way a confirmation seals them: one as expected, one with more than expected and a note. The first funds the emergency cushion, so that goal starts partly held. */
+async function writeSeedConfirmedDays(
+  context: SeedContext,
+  plan: string,
+  ids: { source: string; paycheck: string },
+  encryption: Parameters<typeof sealJson>[1],
+  batch: ReturnType<SeedContext['firestore']['batch']>,
+  when: { addedAt: number; today: number },
+) {
+  const days = [
+    {
+      on: when.today - 11 * DAY_MS,
+      arrivedCents: 214_000,
+      note: null,
+      withCushion: true,
+    },
+    {
+      on: when.today - 25 * DAY_MS,
+      arrivedCents: 226_000,
+      note: 'Overtime',
+      withCushion: false,
+    },
+  ];
+  const docs = await Promise.all(
+    days.map(async ({ on, arrivedCents, note, withCushion }) => {
+      const dayId = toDayKey(ids.paycheck, on);
+      const lines = [
+        seedLine(
+          dayId,
+          'seed-envelope-groceries',
+          'Groceries',
+          '🛒',
+          'must',
+          15_000,
+        ),
+        ...(withCushion
+          ? [
+              seedLine(
+                dayId,
+                'seed-goal-cushion',
+                'Emergency cushion',
+                null,
+                'should',
+                15_000,
+              ),
+            ]
+          : []),
+        seedLine(
+          dayId,
+          'seed-goal-vacation',
+          'Vacation fund',
+          '🏖️',
+          'want',
+          30_000,
+        ),
+      ];
+      const funded = lines.reduce((sum, line) => sum + line.cents, 0);
+      const proposed: ProposedSealed = {
+        fingerprint: 'seed',
+        stance: 'conservative',
+        expectedCents: 214_000,
+        freeToSpendCents: 214_000 - funded,
+        lines,
+      };
+      const confirmed: ConfirmedSealed = {
+        fingerprint: 'seed',
+        stance: 'conservative',
+        arrivedCents,
+        expectedCents: 214_000,
+        freeToSpendCents: arrivedCents - funded,
+        lines,
+        differences:
+          arrivedCents === 214_000
+            ? []
+            : [
+                {
+                  kind: 'amount',
+                  plannedCents: 214_000,
+                  actualCents: arrivedCents,
+                  note,
+                },
+              ],
+      };
+      return {
+        dayId,
+        on,
+        arrivedCents,
+        sealedDay: await sealJson(EMPTY_SEED_OVERRIDE, encryption),
+        sealedProposed: await sealJson(proposed, encryption),
+        sealedConfirmed: await sealJson(confirmed, encryption),
+      };
+    }),
+  );
+  docs.forEach((entry) => {
+    const confirmedAt = entry.on + 9 * 3_600_000;
+    const day: IncomeDayDoc = {
+      id: entry.dayId,
+      payLineId: ids.paycheck,
+      sourceId: ids.source,
+      expectedOn: entry.on,
+      arrivedOn: entry.on,
+      status: 'confirmed',
+      createdAt: confirmedAt,
+      confirmedAt,
+      doneLineIds: [],
+      sealed: entry.sealedDay,
+    };
+    batch.set(context.firestore.doc(`${plan}/days/${entry.dayId}`), day);
+    (['proposed', 'confirmed'] as const).forEach((kind) =>
+      batch.set(
+        context.firestore.doc(
+          `${plan}/days/${entry.dayId}/records/${entry.dayId}_${kind}`,
+        ),
+        {
+          id: `${entry.dayId}_${kind}`,
+          dayId: entry.dayId,
+          kind,
+          createdAt: confirmedAt,
+          sealed:
+            kind === 'proposed' ? entry.sealedProposed : entry.sealedConfirmed,
+        },
+      ),
+    );
+  });
+  return docs.length * 3;
+}
+
+const EMPTY_SEED_OVERRIDE: DayOverrideSealed = {
+  pairings: null,
+  holdResolutions: {},
+};
 
 /** Seven envelopes across Must, Should and Want, all three cadences, a percentage of the day and the rest, sealed the way the app seals them. */
 async function writeSeedEnvelopes(

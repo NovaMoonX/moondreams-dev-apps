@@ -1,14 +1,19 @@
 import { ChevronRight } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import RangeNote from '@apps/runway/components/RangeNote';
-import type { ComingDay } from '@apps/runway/engine/comingDays';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
-import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
+import { DAY_STATUS_LABELS } from '@apps/runway/constants';
+import {
+  selectConfirmedRecord,
+  selectStance,
+  type ListedDay,
+} from '@apps/runway/store/selectors/runwaySelectors';
 
 const monthFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -19,8 +24,14 @@ const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC',
 });
 
+const getStatusLabel = (day: ListedDay) => {
+  if (day.status === 'confirmed') return DAY_STATUS_LABELS.confirmed;
+  if (day.status === 'notArrived') return DAY_STATUS_LABELS.notArrived;
+  return day.isOverdue ? DAY_STATUS_LABELS.overdue : null;
+};
+
 interface IncomeDayCardProps {
-  day: ComingDay;
+  day: ListedDay;
   onOpen: () => void;
 }
 
@@ -30,7 +41,14 @@ function IncomeDayCard({ day, onOpen }: IncomeDayCardProps) {
     useAppSelector(selectStance),
     day.stanceOverride,
   );
-  const cents = pick(stance, day.amount, 'income');
+  const record = useAppSelector((state) =>
+    day.status === 'confirmed'
+      ? selectConfirmedRecord(state, day.dayKey)
+      : null,
+  );
+  const cents =
+    record?.payload.arrivedCents ?? pick(stance, day.amount, 'income');
+  const statusLabel = getStatusLabel(day);
   const title = day.sourceName ?? day.payLineName;
   const detail = day.sourceName ? day.payLineName : null;
 
@@ -39,7 +57,7 @@ function IncomeDayCard({ day, onOpen }: IncomeDayCardProps) {
       <Button
         variant='tertiary'
         className='h-auto w-full items-start justify-start gap-3 rounded-2xl p-3 text-left font-normal whitespace-normal'
-        aria-label={`${formatDateUTC(day.on)}, ${[title, detail].filter(Boolean).join(', ')}, ${formatCents(cents)}${day.amount.lowCents === day.amount.highCents ? '' : ' planned'}. Open this day`}
+        aria-label={`${formatDateUTC(day.on)}, ${[title, detail, statusLabel].filter(Boolean).join(', ')}, ${formatCents(cents)}${day.status === 'confirmed' || day.amount.lowCents === day.amount.highCents ? '' : ' planned'}. Open this day`}
         onClick={onOpen}
       >
         <span
@@ -60,13 +78,27 @@ function IncomeDayCard({ day, onOpen }: IncomeDayCardProps) {
             {detail && <span className='max-sm:hidden'> · </span>}
             {detail && <span className='max-sm:block'>{detail}</span>}
           </span>
-          <RangeNote
-            range={day.amount}
-            stance={stance}
-            side='income'
-            isOwnStance={Boolean(day.stanceOverride)}
-            className='text-xs'
-          />
+          {statusLabel && (
+            <span
+              className={join(
+                'mt-1 inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium',
+                day.status === 'confirmed'
+                  ? 'border-primary/40 bg-primary/15 text-foreground'
+                  : 'border-border bg-muted/50 text-muted-foreground',
+              )}
+            >
+              {statusLabel}
+            </span>
+          )}
+          {day.status !== 'confirmed' && (
+            <RangeNote
+              range={day.amount}
+              stance={stance}
+              side='income'
+              isOwnStance={Boolean(day.stanceOverride)}
+              className='text-xs'
+            />
+          )}
         </span>
         <span className='flex h-11 shrink-0 items-center gap-1'>
           <span className='font-semibold whitespace-nowrap tabular-nums'>

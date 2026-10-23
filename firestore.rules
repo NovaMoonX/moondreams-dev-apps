@@ -4055,14 +4055,27 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
-      // An income day gets a document the first time the person overrides it. Its id is the pay
-      // line and the day (`<payLineId>_yyyymmdd`), so a duplicate or a spoofed id fails. While it is a
-      // draft the override can change; confirming and marking a day arrive with the issues that use them.
+      // An income day gets a document the first time the person overrides, confirms or marks it. Its id is
+      // the pay line and the day (`<payLineId>_yyyymmdd`), so a duplicate or a spoofed id fails. A draft
+      // can change its override; it moves to confirmed once, together with its two records, or to not
+      // arrived and back. After that only the checklist ticks can change.
       match /days/{dayId} {
         function dayStamp(expectedOn) {
           return string(timestamp.value(expectedOn).year() * 10000
             + timestamp.value(expectedOn).month() * 100
             + timestamp.value(expectedOn).day());
+        }
+
+        function isDateOnly(value) {
+          return value is number && value % 86400000 == 0;
+        }
+
+        function dayRecord(kind) {
+          return /databases/$(database)/documents/apps/runway/plans/$(uid)/days/$(dayId)/records/$(dayId + '_' + kind);
+        }
+
+        function hasBothRecordsAfter() {
+          return existsAfter(dayRecord('proposed')) && existsAfter(dayRecord('confirmed'));
         }
 
         function isDayValid(data) {
@@ -4071,13 +4084,18 @@ service cloud.firestore {
             && data.expectedOn is number
             && data.id == dayId
             && dayId == data.payLineId + '_' + dayStamp(data.expectedOn)
-            && data.status == 'draft'
-            && data.arrivedOn == null
-            && data.confirmedAt == null
+            && data.status in ['draft', 'confirmed', 'notArrived']
+            && (data.status == 'confirmed'
+              ? isDateOnly(data.arrivedOn) && isPastOrNear(data.confirmedAt) && hasBothRecordsAfter()
+              : data.arrivedOn == null && data.confirmedAt == null)
             && isPastOrNear(data.createdAt)
             && data.doneLineIds is list
             && data.doneLineIds.size() <= 200
             && isSealed(data.sealed);
+        }
+
+        function onlyChanges(keys) {
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
         }
 
         allow read: if isPlanOwner();
@@ -4085,11 +4103,48 @@ service cloud.firestore {
           && request.resource.data.keys().hasAll(['id', 'payLineId', 'sourceId', 'expectedOn', 'arrivedOn', 'status', 'createdAt', 'confirmedAt', 'doneLineIds', 'sealed'])
           && request.resource.data.keys().hasOnly(['id', 'payLineId', 'sourceId', 'expectedOn', 'arrivedOn', 'status', 'createdAt', 'confirmedAt', 'doneLineIds', 'sealed'])
           && isDayValid(request.resource.data);
-        allow update: if isPlanOwner()
-          && resource.data.status == 'draft'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sealed'])
-          && isSealed(request.resource.data.sealed);
+        allow update: if isPlanOwner() && (
+          (resource.data.status == 'draft'
+            && onlyChanges(['sealed'])
+            && isSealed(request.resource.data.sealed))
+          || (resource.data.status == 'draft'
+            && onlyChanges(['status', 'arrivedOn', 'confirmedAt'])
+            && request.resource.data.status == 'confirmed'
+            && isDateOnly(request.resource.data.arrivedOn)
+            && isPastOrNear(request.resource.data.confirmedAt)
+            && hasBothRecordsAfter())
+          || (resource.data.status == 'draft'
+            && onlyChanges(['status'])
+            && request.resource.data.status == 'notArrived')
+          || (resource.data.status == 'notArrived'
+            && onlyChanges(['status'])
+            && request.resource.data.status == 'draft')
+          || (resource.data.status == 'confirmed'
+            && onlyChanges(['doneLineIds'])
+            && request.resource.data.doneLineIds is list
+            && request.resource.data.doneLineIds.size() <= 200));
         allow delete: if false;
+
+        // The draft as proposed and the split confirmed, written once with the day's move to confirmed.
+        match /records/{recordId} {
+          function isRecordValid(data) {
+            return data.id == recordId
+              && data.dayId == dayId
+              && data.kind in ['proposed', 'confirmed']
+              && recordId == dayId + '_' + data.kind
+              && isPastOrNear(data.createdAt)
+              && isSealed(data.sealed)
+              && getAfter(planDoc('days', dayId)).data.status == 'confirmed'
+              && (!exists(planDoc('days', dayId)) || get(planDoc('days', dayId)).data.status == 'draft');
+          }
+
+          allow read: if isPlanOwner();
+          allow create: if isPlanOwner()
+            && request.resource.data.keys().hasAll(['id', 'dayId', 'kind', 'createdAt', 'sealed'])
+            && request.resource.data.keys().hasOnly(['id', 'dayId', 'kind', 'createdAt', 'sealed'])
+            && isRecordValid(request.resource.data);
+          allow update, delete: if false;
+        }
       }
     }
 

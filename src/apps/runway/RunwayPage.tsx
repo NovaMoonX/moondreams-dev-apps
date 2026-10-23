@@ -21,7 +21,8 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { RUNWAY_TAB_LABELS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
-  selectComingDays,
+  selectIsDaysLoaded,
+  selectListedDays,
   selectIsPlanItemsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
@@ -38,12 +39,14 @@ function RunwayPage() {
     closeMoreEntry,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
-  const isItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
-  const hasOpenDay = useAppSelector(
-    (state) =>
-      openDayKey !== null &&
-      selectComingDays(state, today).some((day) => day.dayKey === openDayKey),
-  );
+  const isPlanItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
+  const isItemsLoaded = isPlanItemsLoaded && isDaysLoaded;
+  const hasOpenDay = useAppSelector((state) => {
+    if (openDayKey === null) return false;
+    const { open, confirmed } = selectListedDays(state, today);
+    return [...open, ...confirmed].some((day) => day.dayKey === openDayKey);
+  });
   const dispatch = useAppDispatch();
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
   const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);

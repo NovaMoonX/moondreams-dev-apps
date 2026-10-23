@@ -2,6 +2,7 @@ import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
 import type {
   CHANGE_KINDS,
+  DAY_RECORD_KINDS,
   ITEM_KINDS,
   MORE_ENTRIES,
   DAY_STATUSES,
@@ -128,11 +129,74 @@ export interface IncomeDayDoc {
   sealed: Sealed | null;
 }
 
+export type DayRecordKind = (typeof DAY_RECORD_KINDS)[number];
+
+/** Append-only: the draft as it stood and the split that was confirmed, one each per day. */
+export interface DayRecordDoc {
+  id: string;
+  dayId: string;
+  kind: DayRecordKind;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+/** One funded line of a day, with the names it had when the day was confirmed. */
+export interface RecordLine {
+  lineId: string;
+  itemId: string;
+  name: string;
+  emoji: string | null;
+  tier: Priority;
+  demandCents: Cents;
+  cents: Cents;
+  shortBy: Cents;
+  paidBy: { dayId: string; cents: Cents }[];
+}
+
+export interface ProposedSealed {
+  /** Names the plan and the day's changes the draft was computed from. */
+  fingerprint: string;
+  stance: Stance;
+  expectedCents: Cents;
+  freeToSpendCents: Cents;
+  lines: RecordLine[];
+}
+
+/** What differs from the proposed draft, each with an optional note. */
+export interface RecordDifference {
+  kind: 'amount';
+  plannedCents: Cents;
+  actualCents: Cents;
+  note: string | null;
+}
+
+export interface ConfirmedSealed {
+  fingerprint: string;
+  stance: Stance;
+  arrivedCents: Cents;
+  expectedCents: Cents;
+  freeToSpendCents: Cents;
+  lines: RecordLine[];
+  differences: RecordDifference[];
+}
+
+interface OpenRecordBase {
+  id: string;
+  dayId: string;
+  createdAt: number;
+}
+
+export type OpenRecord =
+  | (OpenRecordBase & { kind: 'proposed'; payload: ProposedSealed })
+  | (OpenRecordBase & { kind: 'confirmed'; payload: ConfirmedSealed });
+
 export interface OpenDay {
   id: string;
   payLineId: string;
   sourceId: string | null;
   expectedOn: DateOnly;
+  arrivedOn: DateOnly | null;
+  confirmedAt: number | null;
   status: DayStatus;
   override: DayOverrideSealed;
 }
