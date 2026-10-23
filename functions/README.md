@@ -143,6 +143,7 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
   - A-List: membership, viewings and watchlist `createdAt`.
   - Nine Lives: `createdAt` of what the member wrote in their households (`createdBy`), plus a household they created. Joining leaves no timestamp.
   - Pinch: the oldest `createdAt` in their kitchen's collections (recipes, ingredients, meals, plans, shopping and the rest), plus the kitchen itself.
+  - Runway: `createdAt` of their plan document (`apps/runway/plans/{uid}`).
   - Waypoint: their `joinedAt` on each trip, plus trips they created.
   - Worth the Wait: their space, boxes and items, plus when they first saw the welcome.
 - **Lazy by design:** nothing runs for existing members until they next open an app, so counts start from when tracking began, and a member who only joined a Nine Lives household starts at their first visit after launch.

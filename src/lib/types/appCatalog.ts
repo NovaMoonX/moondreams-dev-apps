@@ -4,6 +4,7 @@ export type AppId =
   | 'waypoint'
   | 'a-list'
   | 'pinch'
+  | 'runway'
   | (string & {});
 
 export type AppStatus = 'draft' | 'public' | 'removed';
