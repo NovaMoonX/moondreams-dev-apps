@@ -195,6 +195,7 @@ Everything a new mini-app has to touch, so nothing is found missing after merge.
 - **Docs and rules:** `README.md`, `UX.md`, `TECHNICAL.md` and `ISSUES.md` under `src/apps/<id>/`, and the app's rules file (`.github/instructions/<id>.instructions.md` with the identical `.claude/rules/<id>.md`), plus a theme stylesheet and `useXTheme()` if it has its own look, which sets `--color-popover`, `--color-popover-foreground`, `--color-tooltip`, `--color-tooltip-foreground` and `--subview-backdrop` in its light and dark blocks (`npm run check:apps` enforces it).
 - **Optional wiring, when the app uses it:** `usePresence(…, hereLocation)` for where a member is, and the app id on any `reminders` it schedules.
 - **Release:** bump `SITE_VERSION`.
+- **Later:** an app that leaves the site follows `GRADUATING.md`; keeping the app free of the site's chrome and shared files it doesn't need makes that shorter.
 
 ### Documentation quality
 - Keep the root `README.md` and relevant mini-app docs current and minimal whenever code or behavior changes.
