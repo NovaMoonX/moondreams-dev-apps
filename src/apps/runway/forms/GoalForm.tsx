@@ -23,13 +23,14 @@ import {
   ENVELOPE_ORDER_STEP,
   FUNDING_CADENCE_LABELS,
   FUNDING_CADENCES,
+  LOOKAHEAD_MONTHS,
   MAX_CHOSEN_DAYS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createGoal } from '@apps/runway/store/actions/itemActions';
 import {
@@ -88,6 +89,7 @@ const getBlocker = (
   hasDays: boolean,
   today: number,
 ) => {
+  const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
   if (data.name.trim() === '') return 'Name the goal.';
   if (data.priority === null) return 'Pick how much it matters.';
   if (targetCents === null || targetCents <= 0)
@@ -96,6 +98,8 @@ const getBlocker = (
     const date = fromDateInputValue(data.date);
     if (date === undefined || date < today)
       return 'Pick a date that has not passed, or remove it.';
+    if (date > lastDate)
+      return `Pick a date within the next ${LOOKAHEAD_MONTHS} months, which is as far as the income days are planned, or remove it.`;
   }
   if (amountCents === null || amountCents <= 0)
     return 'Enter how much it gets each time.';
@@ -203,6 +207,9 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
                     variant='outline'
                     aria-label='Reach it by'
                     min={toDateInputValue(today)}
+                    max={toDateInputValue(
+                      addUtcMonths(today, LOOKAHEAD_MONTHS),
+                    )}
                     value={date}
                     onChange={(event) =>
                       props.onValueChange(event.target.value)
