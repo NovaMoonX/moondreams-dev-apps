@@ -1,4 +1,6 @@
 import { DRAFT_CADENCE_WORDS, DRAFT_WORDS } from '@apps/runway/constants';
+import { formatDateUTC } from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import type { DraftLine } from '@apps/runway/engine/draft';
 
 const joinNames = (names: string[]) =>
@@ -22,6 +24,13 @@ export function describeLineReason(
     ),
   ];
   const result = `${DRAFT_CADENCE_WORDS[line.reason.cadence]}, ${DRAFT_WORDS.fundedFrom} ${joinNames(names)}`;
+  return result;
+}
+
+/** A bill line's second sentence: "Due Dec 1 · $500.00 of $1,200.00". */
+export function describeBillShare(line: DraftLine) {
+  if (line.bill === null) return null;
+  const result = `${DRAFT_WORDS.dueOn} ${formatDateUTC(line.bill.dueOn)} · ${formatCents(line.cents)} ${DRAFT_WORDS.setAsideOf} ${formatCents(line.bill.totalCents)}`;
   return result;
 }
 
