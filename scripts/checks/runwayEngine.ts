@@ -7,6 +7,11 @@ import {
   startTrackingPeriod,
   stopTrackingPeriod,
 } from '../../src/apps/runway/engine/level.ts';
+import {
+  deriveBalances,
+  deriveBalancesBefore,
+} from '../../src/apps/runway/engine/balances.ts';
+import type { OpenMove, OpenRecord } from '../../src/apps/runway/types.ts';
 import { getLevelWords } from '../../src/apps/runway/utils/levelText.ts';
 import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
 import { previewChange } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
@@ -5052,6 +5057,72 @@ const version = (
     ),
     'periods never overlap',
   );
+  {
+    // Starting tracking on a day money arrived or a bill was paid counts neither twice.
+    const d = (n: number) => Date.UTC(2026, 9, 1) + n * 86_400_000;
+    const move = (
+      kind: 'start' | 'billPaid',
+      refId: string | null,
+      amountCents: number,
+      createdAt: number,
+      payload: object = {},
+    ) =>
+      ({
+        id: `${kind}_${refId}_${createdAt}`,
+        kind,
+        date: d(0),
+        refId,
+        reversesMoveId: null,
+        createdAt,
+        payload: { amountCents, holding: 'envelope', ...payload },
+      }) as unknown as OpenMove;
+    const record = {
+      id: 'r',
+      dayId: 'day1',
+      kind: 'confirmed',
+      createdAt: 1,
+      payload: {
+        arrivedCents: 100_000,
+        lines: [{ itemId: 'g', cents: 30_000 }],
+      },
+    } as unknown as OpenRecord;
+    const input = {
+      startDate: d(0),
+      moves: [move('start', null, 100_000, 1), move('start', 'g', 0, 1)],
+      records: [record],
+      arrivedOn: new Map([['day1', d(19)]]),
+      kinds: { g: 'envelope' as const },
+    };
+    const now = deriveBalances(input);
+    assert.equal(now.moneyOnHandCents, 200_000);
+    const before = deriveBalancesBefore(input, d(19));
+    assert.equal(
+      before.moneyOnHandCents,
+      100_000,
+      'a day that arrives on the start day is not in the base',
+    );
+    assert.equal(before.assignedByItem.g, 0);
+    const tracked = deriveBalances({
+      ...input,
+      startDate: d(19),
+      moves: [
+        ...input.moves,
+        move('start', null, before.moneyOnHandCents, 2),
+        move('start', 'g', before.assignedByItem.g, 2),
+      ].map((m, i) => (i >= 2 ? { ...m, date: d(19) } : m)),
+    });
+    assert.equal(
+      tracked.moneyOnHandCents,
+      now.moneyOnHandCents,
+      "starting tracking today keeps today's figures",
+    );
+    assert.equal(tracked.assignedByItem.g, now.assignedByItem.g);
+    assert.equal(
+      deriveBalancesBefore(input, d(20)).moneyOnHandCents,
+      200_000,
+      'a later start keeps what arrived before it',
+    );
+  }
   assert.equal(getLevelWords('plan').envelopeFigure, 'assigned');
   assert.equal(getLevelWords('track').envelopeFigure, 'left');
 }

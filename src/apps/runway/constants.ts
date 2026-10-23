@@ -574,7 +574,7 @@ export const TRACKING_WORDS = {
   history: 'Tracking history',
   lineUpTitle: 'Where is your money now?',
   lineUpHelp:
-    'Say what you have and what each envelope, goal and bill holds today. Runway starts from the plan; correct what is off.',
+    'Say what you have and what each envelope, goal and bill holds at the start of the day tracking begins. Money that arrives or is paid from that day on is added to it. The amounts start from the plan; correct what is off.',
   startsOn: 'Tracking starts',
   moneyOnHand: 'Money on hand',
   moneyHint: 'One total for all of it. Named accounts come later.',

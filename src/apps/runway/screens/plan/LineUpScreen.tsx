@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import MoneyInput from '@/components/MoneyInput';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -13,7 +14,10 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { TRACKING_WORDS } from '@apps/runway/constants';
-import type { FreeToSpendFigure } from '@apps/runway/engine/balances';
+import {
+  deriveBalancesBefore,
+  type FreeToSpendFigure,
+} from '@apps/runway/engine/balances';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getEarliestTrackingStart } from '@apps/runway/engine/level';
 import { collectStarted } from '@apps/runway/engine/progress';
@@ -21,7 +25,7 @@ import { AmountList } from '@apps/runway/forms/StartingAmountsSheet';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type { StartHoldingInput } from '@apps/runway/store/actions/moveActions';
 import { moveToTrack } from '@apps/runway/store/actions/planActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalanceInputs } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectBills,
   selectEnvelopes,
@@ -41,29 +45,36 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate(useNow(60_000));
   const plan = useAppSelector((state) => state.runway.plan);
-  const balances = useAppSelector(selectBalances);
+  const { confirm } = useActionModal();
+  const balanceInputs = useAppSelector(selectBalanceInputs);
   const moves = useAppSelector((state) => state.runway.moves);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const earliest = getEarliestTrackingStart(plan?.trackingPeriods ?? []);
 
-  const [date, setDate] = useState(toDateInputValue(today));
-  const [money, setMoney] = useState(
-    balances.hasMoney ? toText(balances.moneyOnHandCents) : '',
-  );
-  const [amounts, setAmounts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      Object.entries(balances.assignedByItem).map(([id, cents]) => [
-        id,
-        toText(cents),
-      ]),
-    ),
-  );
+  const defaultDate = toDateInputValue(today);
+  const [date, setDate] = useState(defaultDate);
+  const [moneyEdit, setMoneyEdit] = useState<string | null>(null);
+  const [edits, setEdits] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const startDate = fromDateInputValue(date) ?? null;
+  const asOf = deriveBalancesBefore(balanceInputs, startDate ?? today);
+  const money =
+    moneyEdit ?? (asOf.hasMoney ? toText(asOf.moneyOnHandCents) : '');
+  const amounts: Record<string, string> = {
+    ...Object.fromEntries(
+      Object.entries(asOf.assignedByItem).map(([id, cents]) => [
+        id,
+        toText(cents),
+      ]),
+    ),
+    ...edits,
+  };
+  const isDirty =
+    date !== defaultDate || moneyEdit !== null || Object.keys(edits).length > 0;
   const started = collectStarted(moves, startDate);
   const rows = [
     ...envelopes.map(({ item, version }) => ({
@@ -112,14 +123,34 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
         : [{ holding: row.holding, refId: row.id, amountCents: 0 }];
     }),
   ];
+  const planStart = plan?.startDate ?? null;
+  const floor = Math.max(earliest ?? 0, planStart ?? 0);
   const note =
     startDate === null || startDate > today
       ? 'Pick today or an earlier day.'
       : earliest !== null && startDate < earliest
         ? `Tracking stopped on ${formatDateUTC(earliest - DAY_MS)}. You can start again from ${formatDateUTC(earliest)}.`
-        : moneyCents === null
-          ? 'Say how much money you have on hand.'
-          : null;
+        : planStart !== null && startDate < planStart
+          ? `Your plan's figures begin on ${formatDateUTC(planStart)}. Pick that day or a later one.`
+          : moneyCents === null
+            ? 'Say how much money you have on hand.'
+            : null;
+
+  const close = async () => {
+    if (isSaving) return;
+    if (!isDirty) {
+      onClose();
+      return;
+    }
+    const isDiscarded = await confirm({
+      title: 'Discard these amounts?',
+      message: 'What you typed here will not be saved.',
+      confirmText: 'Discard',
+      cancelText: 'Keep editing',
+      destructive: true,
+    });
+    if (isDiscarded) onClose();
+  };
 
   const save = async () => {
     if (!user || startDate === null) return;
@@ -138,7 +169,7 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
   };
 
   const setAmount = (id: string, value: string) =>
-    setAmounts((current) => ({ ...current, [id]: value }));
+    setEdits((current) => ({ ...current, [id]: value }));
   const pick = (holding: string) =>
     rows
       .filter((row) => row.holding === holding)
@@ -149,7 +180,7 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
       overlay
       isTitleWrapped
       title={TRACKING_WORDS.lineUpTitle}
-      onClose={onClose}
+      onClose={() => void close()}
     >
       <div className='flex flex-1 flex-col gap-4'>
         <p className='text-muted-foreground text-sm text-pretty'>
@@ -163,7 +194,7 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
             type='date'
             variant='outline'
             aria-label={TRACKING_WORDS.startsOn}
-            min={earliest === null ? undefined : toDateInputValue(earliest)}
+            min={floor === 0 ? undefined : toDateInputValue(floor)}
             max={toDateInputValue(today)}
             value={date}
             onChange={(event) => setDate(event.target.value)}
@@ -182,8 +213,8 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
             variant='outline'
             ariaLabel={TRACKING_WORDS.moneyOnHand}
             value={money}
-            onChange={setMoney}
-            placeholder='What you have right now'
+            onChange={setMoneyEdit}
+            placeholder='What you have on that day'
           />
           <p className='text-muted-foreground text-xs'>
             {TRACKING_WORDS.moneyHint}
@@ -234,7 +265,7 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
             <Button
               type='button'
               variant='secondary'
-              onClick={onClose}
+              onClick={() => void close()}
               disabled={isSaving}
             >
               Cancel
