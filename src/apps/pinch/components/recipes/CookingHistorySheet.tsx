@@ -213,12 +213,12 @@ function CookingHistorySheet({
     const allLines = undone.flatMap((entry) => entry.changes ?? []);
     const lines = allLines.filter((line) => !isUnrestoredLine(line));
     const staysText = allLines.some(isUnrestoredLine)
-      ? 'Its photo and collections stay as they are, '
+      ? ' Its photo and collections stay as they are.'
       : '';
     const day = formatDateShort(undone[0].createdAt);
     const confirmed = await confirm({
       title: 'Put the recipe back?',
-      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}, which takes back: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}. ${staysText === '' ? 'T' : staysText + 't'}his record of the change is removed, and a change you had planned is not planned again.`,
+      message: `${recipe?.title ?? 'The recipe'} goes back to how it was before ${day}, which takes back: ${lines.slice(0, UNDO_LINES_SHOWN).join('; ')}${lines.length > UNDO_LINES_SHOWN ? `; and ${lines.length - UNDO_LINES_SHOWN} more` : ''}.${staysText} This record of the change is removed, and a change you had planned is not planned again.`,
       confirmText: 'Put it back',
       destructive: true,
     });

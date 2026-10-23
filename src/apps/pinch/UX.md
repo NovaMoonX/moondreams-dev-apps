@@ -1931,7 +1931,7 @@ flowchart LR
     H --> I["Recipe form · the change and its reason quoted at the top"]
     I --> J["Change the vinegar · Save (the reason is already there, so no question)"]
     J --> K["The same entry is now: Changed on Oct 20: White vinegar 0.5 → 0.25 cup"]
-    K --> L["Older notes read: Written before your Oct 20 tweak"]
+    K --> L["Older notes read: Written before you changed the recipe on Oct 20"]
 ```
 
 **Say how to keep a recipe**
