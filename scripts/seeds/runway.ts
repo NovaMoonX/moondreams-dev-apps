@@ -38,6 +38,9 @@ import type {
   IncomeDayDoc,
   MoveDoc,
   PayLineSealed,
+  PurchaseDoc,
+  PurchaseLine,
+  PurchaseSealed,
   SourceSealed,
   StartHolding,
   StartSealed,
@@ -1564,8 +1567,10 @@ async function seedTrackingPlan(
     sealed: await sealJson({ direction: 'up' }, encryption),
   } satisfies MoveDoc);
   const envelopeStarts = [
-    ['seed-envelope-groceries', 12_000],
+    ['seed-envelope-groceries', 40_000],
     ['seed-envelope-gas', 4_000],
+    ['seed-envelope-dining', 2_000],
+    ['seed-envelope-gifts', 5_000],
   ] as const;
   await Promise.all(
     envelopeStarts.map(async ([refId, cents]) => {
@@ -1613,5 +1618,137 @@ async function seedTrackingPlan(
     startBatch,
   );
   await startBatch.commit();
-  return 2 + 1 + envelopeStarts.length + 1 + documents + startDocuments;
+  const purchaseDocuments = await writeSeedPurchases(
+    context,
+    owner.uid,
+    encryption,
+  );
+  return (
+    2 +
+    1 +
+    envelopeStarts.length +
+    1 +
+    documents +
+    startDocuments +
+    purchaseDocuments
+  );
+}
+
+/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, and nine rows in all so the Spend tab shows its search. */
+async function writeSeedPurchases(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const groceries = 'seed-envelope-groceries';
+  const gifts = 'seed-envelope-gifts';
+  const line = (envelopeId: string, cents: number): PurchaseLine => ({
+    envelopeId,
+    cents,
+    via: 'chosen',
+  });
+  const purchases: {
+    id: string;
+    daysAgo: number;
+    merchant: string | null;
+    note: string | null;
+    lines: PurchaseLine[];
+    refundOfId?: string;
+  }[] = [
+    {
+      id: 'seed-purchase-safeway',
+      daysAgo: 3,
+      merchant: 'Safeway',
+      note: null,
+      lines: [line(groceries, 6_418)],
+    },
+    {
+      id: 'seed-purchase-shell',
+      daysAgo: 5,
+      merchant: 'Shell',
+      note: null,
+      lines: [line('seed-envelope-gas', 3_850)],
+    },
+    {
+      id: 'seed-purchase-ramen',
+      daysAgo: 2,
+      merchant: 'Ramen Ya',
+      note: 'Dinner with Sam',
+      lines: [line('seed-envelope-dining', 3_800)],
+    },
+    {
+      id: 'seed-purchase-target',
+      daysAgo: 6,
+      merchant: 'Target',
+      note: 'Groceries and a birthday gift',
+      lines: [line(groceries, 6_000), line(gifts, 4_000)],
+    },
+    {
+      id: 'seed-purchase-target-refund',
+      daysAgo: 1,
+      merchant: 'Target',
+      note: 'Returned the gift set',
+      lines: [line(groceries, -1_200), line(gifts, -800)],
+      refundOfId: 'seed-purchase-target',
+    },
+    {
+      id: 'seed-purchase-traderjoes',
+      daysAgo: 12,
+      merchant: "Trader Joe's",
+      note: null,
+      lines: [line(groceries, 4_210)],
+    },
+    {
+      id: 'seed-purchase-costco',
+      daysAgo: 18,
+      merchant: 'Costco',
+      note: null,
+      lines: [line(groceries, 8_800)],
+    },
+    {
+      id: 'seed-purchase-card',
+      daysAgo: 9,
+      merchant: null,
+      note: 'Birthday card',
+      lines: [line(gifts, 650)],
+    },
+    {
+      id: 'seed-purchase-market',
+      daysAgo: 24,
+      merchant: 'Farmers market',
+      note: null,
+      lines: [line(groceries, 1_800)],
+    },
+  ];
+
+  const batch = context.firestore.batch();
+  await Promise.all(
+    purchases.map(async (entry) => {
+      const date = today - entry.daysAgo * DAY_MS;
+      const createdAt = date + 12 * 3_600_000;
+      const amountCents = entry.lines.reduce((sum, l) => sum + l.cents, 0);
+      batch.set(context.firestore.doc(`${plan}/purchases/${entry.id}`), {
+        id: entry.id,
+        date,
+        source: 'manual',
+        needsHome: false,
+        createdAt,
+        updatedAt: createdAt,
+        sealed: await sealJson(
+          {
+            amountCents,
+            merchant: entry.merchant,
+            note: entry.note,
+            lines: entry.lines,
+            refundOfId: entry.refundOfId ?? null,
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      } satisfies PurchaseDoc);
+    }),
+  );
+  await batch.commit();
+  return purchases.length;
 }

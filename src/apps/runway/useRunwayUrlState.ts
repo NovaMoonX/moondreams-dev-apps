@@ -61,6 +61,11 @@ export function useRunwayUrlState() {
     parseAsString,
   );
 
+  const [requestedSpendEnvelope, setRequestedSpendEnvelope] = useQueryState(
+    'spendEnvelope',
+    parseAsString,
+  );
+
   const logSpan = requestedSpan ?? DEFAULT_CHANGE_LOG_SPAN;
   const logPage = Math.min(
     MAX_CHANGE_LOG_PAGE,
@@ -84,6 +89,13 @@ export function useRunwayUrlState() {
     setRequestedTab(tab === DEFAULT_RUNWAY_TAB ? null : tab, {
       history: 'replace',
     });
+
+  const showSpend = (envelopeId: string | null) => {
+    setRequestedSpendEnvelope(envelopeId, { history: 'replace' });
+    setRequestedTab('spend', { history: 'replace' });
+  };
+  const showSpendEnvelope = (envelopeId: string | null) =>
+    setRequestedSpendEnvelope(envelopeId, { history: 'replace' });
 
   const planSection: PlanSection = requestedSection ?? DEFAULT_PLAN_SECTION;
   const showPlanSection = (section: PlanSection) =>
@@ -119,6 +131,9 @@ export function useRunwayUrlState() {
     openView,
     closeView,
     showTab,
+    showSpend,
+    spendEnvelope: requestedSpendEnvelope,
+    showSpendEnvelope,
     planSection,
     showPlanSection,
     openDayKey: requestedDay,

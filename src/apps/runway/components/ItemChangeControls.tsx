@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -22,9 +22,11 @@ interface ItemChangeControlsProps {
   today: number;
   name: string;
   onChange: () => void;
+  /** More chips after Change and More, for what only some levels offer. */
+  extra?: ReactNode;
 }
 
-const buttonClass =
+export const ITEM_CHIP_CLASS =
   "text-foreground! relative h-7! min-h-0! w-fit px-3! py-0! before:absolute before:-inset-1.5 before:content-['']";
 
 /** The "Change" and "More" doors on an item's row, and a line for each thing that is made but not finished: a change that has not started, a stretch that goes back, an ending ahead. */
@@ -35,6 +37,7 @@ function ItemChangeControls({
   today,
   name,
   onChange,
+  extra,
 }: ItemChangeControlsProps) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const next = useAppSelector((state) =>
@@ -80,7 +83,7 @@ function ItemChangeControls({
           variant='secondary'
           size='sm'
           rounded='full'
-          className={buttonClass}
+          className={ITEM_CHIP_CLASS}
           aria-label={`${CHANGE_WORDS.change} ${name}`}
           onClick={onChange}
         >
@@ -92,13 +95,14 @@ function ItemChangeControls({
             variant='secondary'
             size='sm'
             rounded='full'
-            className={buttonClass}
+            className={ITEM_CHIP_CLASS}
             aria-label={`${LIFECYCLE_WORDS.moreAria} ${name}`}
             onClick={() => setIsMoreOpen(true)}
           >
             {LIFECYCLE_WORDS.more}
           </Button>
         )}
+        {extra}
       </div>
       {isMoreOpen && (
         <ItemActionsSheet

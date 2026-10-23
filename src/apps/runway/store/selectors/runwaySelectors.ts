@@ -326,8 +326,9 @@ export const selectBillProgress = createSelector(
   },
 );
 
+/** The ledger the balances are summed from is read: the moves and the purchases of the recent window. */
 export const selectIsMovesLoaded = (state: RootState) =>
-  state.runway.isMovesLoaded;
+  state.runway.isMovesLoaded && state.runway.isPurchasesLoaded;
 
 export const selectProposedRecord = (state: RootState, dayId: string) => {
   const result = state.runway.records.find(
@@ -823,3 +824,39 @@ export const selectReachedEndingsKey = (state: RootState, today: number) => {
   const result = rows.length === 0 ? '' : JSON.stringify(rows);
   return result;
 };
+
+/** Every item's name and emoji by id, from its newest version, so a purchase still names an envelope that was renamed or archived. */
+export const selectItemLooks = createSelector([selectVersions], (versions) => {
+  const newest = versions.reduce<Map<string, OpenVersion>>((acc, version) => {
+    const seen = acc.get(version.itemId);
+    return seen && seen.createdAt >= version.createdAt
+      ? acc
+      : acc.set(version.itemId, version);
+  }, new Map());
+  const result = new Map(
+    [...newest.entries()].map(([id, version]) => [
+      id,
+      {
+        name: version.payload.name,
+        emoji: 'emoji' in version.payload ? version.payload.emoji : null,
+      },
+    ]),
+  );
+  return result;
+});
+
+const selectPurchases = (state: RootState) => state.runway.purchases;
+
+/** The recent window's purchases, newest day first and, within a day, the last one added first. */
+export const selectSpendPurchases = createSelector(
+  [selectPurchases],
+  (purchases) => {
+    const result = [...purchases].sort(
+      (a, b) =>
+        b.date - a.date ||
+        b.createdAt - a.createdAt ||
+        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    );
+    return result;
+  },
+);

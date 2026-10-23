@@ -6,6 +6,8 @@ import type {
   ITEM_KINDS,
   MORE_ENTRIES,
   MOVE_KINDS,
+  PURCHASE_LINE_VIAS,
+  PURCHASE_SOURCES,
   START_HOLDINGS,
   DAY_STATUSES,
   GOAL_STATES,
@@ -17,7 +19,7 @@ import type {
   STANCES,
 } from '@apps/runway/constants';
 
-export type RunwayTab = 'home' | 'days' | 'plan';
+export type RunwayTab = 'home' | 'days' | 'spend' | 'plan';
 
 export type PlanSection = (typeof PLAN_SECTIONS)[number];
 
@@ -429,3 +431,45 @@ export type OpenMove =
 
 export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
 export type StartMove = Extract<OpenMove, { kind: 'start' }>;
+
+export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
+export type PurchaseLineVia = (typeof PURCHASE_LINE_VIAS)[number];
+
+/** Part of a purchase: the envelope it comes out of, or null when it comes out of Free to spend. */
+export interface PurchaseLine {
+  envelopeId: string | null;
+  /** Negative on a refund. */
+  cents: Cents;
+  via: PurchaseLineVia;
+}
+
+export interface PurchaseSealed {
+  /** Negative for a refund. */
+  amountCents: Cents;
+  merchant: string | null;
+  note: string | null;
+  /** Adds up to `amountCents`. */
+  lines: PurchaseLine[];
+  /** The purchase a refund returns money for; null for a purchase or a refund that names none. */
+  refundOfId: string | null;
+}
+
+/** `date` is the spending day, date-only; `createdAt` is the instant it was added. */
+export interface PurchaseDoc {
+  id: string;
+  date: DateOnly;
+  source: PurchaseSource;
+  needsHome: boolean;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+export interface OpenPurchase extends PurchaseSealed {
+  id: string;
+  date: DateOnly;
+  source: PurchaseSource;
+  needsHome: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
