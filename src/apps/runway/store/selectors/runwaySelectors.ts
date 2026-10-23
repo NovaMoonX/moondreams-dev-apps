@@ -8,8 +8,10 @@ import {
 import { buildDraft, type Draft } from '@apps/runway/engine/draft';
 import { hashText } from '@apps/runway/engine/fingerprint';
 import { resolve, resolveCurrentOrNext } from '@apps/runway/engine/resolve';
-import { PRIORITIES } from '@apps/runway/constants';
+import { LOOKAHEAD_MONTHS, PRIORITIES } from '@apps/runway/constants';
+import { addUtcMonths } from '@apps/runway/engine/dates';
 import type {
+  BillVersion,
   EnvelopeVersion,
   OpenVersion,
   PayLineVersion,
@@ -110,10 +112,42 @@ export const selectEnvelopes = createSelector(
   },
 );
 
+export interface ResolvedBill {
+  item: PlanItemDoc;
+  version: BillVersion;
+}
+
+const isBill = (version: OpenVersion): version is BillVersion =>
+  version.kind === 'bill';
+
+/** The bills in the plan on a date, in plan order: Must before Should before Want, then rank, then creation. */
+export const selectBills = createSelector(
+  [selectItems, selectVersions, selectOn],
+  (items, versions, on): ResolvedBill[] => {
+    const billVersions = versions.filter(isBill);
+    const result = items
+      .filter((item) => item.kind === 'bill' && item.archivedAt === null)
+      .flatMap((item) => {
+        const version = resolveCurrentOrNext(billVersions, item.id, on);
+        return version ? [{ item, version }] : [];
+      })
+      .sort(
+        (a, b) =>
+          PRIORITIES.indexOf(a.version.payload.priority) -
+            PRIORITIES.indexOf(b.version.payload.priority) ||
+          a.version.payload.orderIndex - b.version.payload.orderIndex ||
+          a.item.createdAt - b.item.createdAt ||
+          a.item.id.localeCompare(b.item.id),
+      );
+    return result;
+  },
+);
+
 export interface DraftView {
   day: ComingDay;
   draft: Draft;
-  envelopes: Record<string, { name: string; emoji: string | null }>;
+  /** Names and emoji of the envelopes and bills a draft can name, by item id. */
+  items: Record<string, { name: string; emoji: string | null }>;
   sourceNames: Record<string, string>;
 }
 
@@ -143,12 +177,20 @@ export const selectDraft = createSelector(
       versions.filter(isEnvelope),
       day.on,
     );
+    const resolvedBills = resolve(
+      items.filter((item) => item.kind === 'bill'),
+      versions.filter(isBill),
+      day.on,
+    );
+    const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
     const key = hashText(
       JSON.stringify([
         stance,
         dayKey,
         days.map((entry) => [entry.dayKey, entry.amount]),
         resolved.map(({ version }) => version.id),
+        resolvedBills.map(({ version }) => version.id),
+        horizon,
       ]),
     );
     const draftCache =
@@ -164,9 +206,19 @@ export const selectDraft = createSelector(
       orderIndex: version.payload.orderIndex,
       funding: version.payload.funding,
     }));
+    const bills = resolvedBills.map(({ item, version }) => ({
+      itemId: item.id,
+      createdAt: item.createdAt,
+      priority: version.payload.priority,
+      orderIndex: version.payload.orderIndex,
+      amountCents: version.payload.amount.highCents,
+      schedule: version.payload.timing.schedule,
+      ending: version.payload.ending,
+      fundedBy: version.payload.fundedBy,
+    }));
     const draft = buildDraft({
       days: [day],
-      plan: { envelopes, incomeDays: days },
+      plan: { envelopes, bills, horizon, incomeDays: days },
       stance,
       overrides: { dayCents: {} },
     });
@@ -180,8 +232,8 @@ export const selectDraft = createSelector(
     const result: DraftView = {
       day,
       draft,
-      envelopes: Object.fromEntries(
-        resolved.map(({ item, version }) => [
+      items: Object.fromEntries(
+        [...resolved, ...resolvedBills].map(({ item, version }) => [
           item.id,
           { name: version.payload.name, emoji: version.payload.emoji },
         ]),

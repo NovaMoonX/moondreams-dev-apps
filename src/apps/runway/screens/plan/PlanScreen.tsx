@@ -1,5 +1,6 @@
 import { PillGroup } from '@/components/PillGroup';
 import { PLAN_SECTION_LABELS, PLAN_SECTIONS } from '@apps/runway/constants';
+import BillsScreen from '@apps/runway/screens/plan/BillsScreen';
 import EnvelopesScreen from '@apps/runway/screens/plan/EnvelopesScreen';
 import IncomeScreen from '@apps/runway/screens/plan/IncomeScreen';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -21,7 +22,9 @@ function PlanScreen() {
         isThin
         onChange={showPlanSection}
       />
-      {planSection === 'envelopes' ? <EnvelopesScreen /> : <IncomeScreen />}
+      {planSection === 'envelopes' && <EnvelopesScreen />}
+      {planSection === 'bills' && <BillsScreen />}
+      {planSection === 'income' && <IncomeScreen />}
     </div>
   );
 }

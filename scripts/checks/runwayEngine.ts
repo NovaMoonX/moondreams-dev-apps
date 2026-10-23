@@ -9,7 +9,11 @@ import {
   toDayStamp,
   todayAsUtcDate,
 } from '../../src/apps/runway/engine/dates.ts';
-import { buildDemands } from '../../src/apps/runway/engine/demands.ts';
+import {
+  buildDemands,
+  planBillPayments,
+  type DraftBillInput,
+} from '../../src/apps/runway/engine/demands.ts';
 import {
   buildDraft,
   type DraftInput,
@@ -766,7 +770,7 @@ const version = (
   ) =>
     buildDraft({
       days,
-      plan: { envelopes, incomeDays },
+      plan: { envelopes, bills: [], horizon: 0, incomeDays },
       stance: 'conservative',
       overrides,
     });
@@ -986,6 +990,221 @@ const version = (
   console.log(
     `runway engine: 50-envelope draft median ${timings[15].toFixed(2)} ms, worst ${timings[29].toFixed(2)} ms`,
   );
+}
+
+// Bills: suggested spreads a payment over the income days before it is due, chosen days split it.
+{
+  const day = (stamp: number, key = String(stamp)) => ({
+    dayKey: `pay_${key}`,
+    sourceId: 'src',
+    on: stamp,
+    amount: { lowCents: 500_000, highCents: 500_000 },
+  });
+  const makeBill = (
+    over: Partial<DraftBillInput> & Pick<DraftBillInput, 'schedule'>,
+  ): DraftBillInput => ({
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    amountCents: 150_000,
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    ...over,
+  });
+  const once = (on: number): Schedule => ({
+    kind: 'once',
+    anchor: on,
+    monthDays: [],
+  });
+  const monthly = (on: number): Schedule => ({
+    kind: 'monthly',
+    anchor: on,
+    monthDays: [new Date(on).getUTCDate()],
+  });
+  const horizon = utc(2027, 10, 1);
+  const demandsOf = (
+    bills: DraftBillInput[],
+    incomeDays: ReturnType<typeof day>[],
+    planned = incomeDays,
+  ) =>
+    buildDemands(planned, incomeDays, [], bills, horizon)
+      .sort(
+        (a, b) =>
+          a.dayKey.localeCompare(b.dayKey) ||
+          a.itemId.localeCompare(b.itemId) ||
+          (a.bill?.dueOn ?? 0) - (b.bill?.dueOn ?? 0),
+      )
+      .map((d) => [d.dayKey, d.cents, d.dueBeforeNext, d.bill?.dueOn]);
+
+  // Rent due the 1st with income on the 24th, 31st and 7th.
+  const incomes = [
+    day(utc(2026, 11, 24), 'a'),
+    day(utc(2026, 12, 31), 'b'),
+    day(utc(2027, 1, 7), 'c'),
+  ];
+  const rent = makeBill({
+    amountCents: 150_001,
+    schedule: once(utc(2027, 1, 1)),
+  });
+  assert.deepEqual(
+    demandsOf([rent], incomes),
+    [
+      ['pay_a', 75_001, false, utc(2027, 1, 1)],
+      ['pay_b', 75_000, true, utc(2027, 1, 1)],
+    ],
+    'rent funds across the first two income days and the third is not needed',
+  );
+
+  // A payment due before the next income day demands all of it on the day before.
+  assert.deepEqual(
+    demandsOf(
+      [makeBill({ schedule: once(utc(2026, 12, 1)) })],
+      [day(utc(2026, 11, 24), 'a'), day(utc(2026, 12, 7), 'c')],
+    ),
+    [['pay_a', 150_000, true, utc(2026, 12, 1)]],
+    'one income day before the due date takes it all',
+  );
+  assert.deepEqual(
+    demandsOf([makeBill({ schedule: once(utc(2026, 11, 1)) })], incomes),
+    [],
+    'a bill due before any income day asks nothing',
+  );
+  assert.deepEqual(
+    demandsOf([makeBill({ schedule: once(utc(2026, 11, 24)) })], incomes),
+    [['pay_a', 150_000, true, utc(2026, 11, 24)]],
+    'income on the due date itself counts',
+  );
+
+  // A monthly bill: each payment is funded by the days after the one before it.
+  const biweekly = Array.from({ length: 8 }, (_, index) =>
+    day(utc(2026, 11, 6) + index * 14 * DAY_MS, String(index)),
+  );
+  const monthlyRent = makeBill({
+    amountCents: 100_000,
+    schedule: monthly(utc(2026, 12, 1)),
+  });
+  const payments = planBillPayments(monthlyRent, biweekly, horizon);
+  assert.deepEqual(
+    payments.slice(0, 3).map((p) => [toDayStamp(p.dueOn), p.parts.length]),
+    [
+      ['20261201', 2],
+      ['20270101', 3],
+      ['20270201', 2],
+    ],
+    'monthly payments take the income days between their dues',
+  );
+  assert.ok(
+    payments.every(
+      (payment) =>
+        payment.parts.reduce((sum, part) => sum + part.cents, 0) ===
+          payment.totalCents || payment.parts.length === 0,
+    ),
+    'every payment is set aside in full',
+  );
+  const ordered = demandsOf([monthlyRent], biweekly);
+  assert.equal(
+    new Set(ordered.map((entry) => entry[0])).size,
+    ordered.length,
+    'a day never asks twice for one bill',
+  );
+
+  // Endings reuse the schedule machinery.
+  const sixTimes = makeBill({
+    schedule: monthly(utc(2026, 12, 1)),
+    ending: { onDate: null, afterCount: 6 },
+  });
+  assert.equal(
+    planBillPayments(sixTimes, biweekly, horizon).length,
+    6,
+    'a bill ending after 6 payments has 6',
+  );
+  assert.equal(
+    planBillPayments(
+      makeBill({
+        schedule: monthly(utc(2026, 12, 1)),
+        ending: { onDate: utc(2027, 2, 1), afterCount: null },
+      }),
+      biweekly,
+      horizon,
+    ).length,
+    3,
+    'an end date covers its whole day',
+  );
+
+  // Chosen days split the amount with allocate, ignoring days that have passed.
+  const chosen = makeBill({
+    amountCents: 100,
+    schedule: once(utc(2027, 1, 1)),
+    fundedBy: { kind: 'chosen', dayKeys: ['pay_c', 'pay_a', 'pay_b', 'gone'] },
+  });
+  assert.deepEqual(
+    demandsOf([chosen], [...incomes].reverse()).map((entry) => entry[1]),
+    [34, 33, 33],
+    'three chosen days split with the extra cent first',
+  );
+  assert.deepEqual(
+    demandsOf(
+      [{ ...chosen, fundedBy: { kind: 'chosen', dayKeys: [] } }],
+      incomes,
+    ),
+    [],
+    'no chosen days fund nothing',
+  );
+
+  // A bill competes with envelopes by priority and urgency in the draft.
+  const draft = buildDraft({
+    days: [incomes[1]],
+    plan: {
+      envelopes: [
+        {
+          itemId: 'dining',
+          createdAt: 1,
+          priority: 'want',
+          orderIndex: 1,
+          funding: {
+            amount: { kind: 'exact', cents: 500_000 },
+            cadence: { kind: 'everyIncomeDay' },
+          },
+        },
+      ],
+      bills: [rent],
+      horizon,
+      incomeDays: incomes,
+    },
+    stance: 'conservative',
+    overrides: { dayCents: {} },
+  });
+  assert.deepEqual(
+    draft.lines.map((line) => [line.itemId, line.cents, line.shortBy]),
+    [
+      ['rent', 75_000, 0],
+      ['dining', 425_000, 75_000],
+    ],
+    'a Must bill is set aside before a Want envelope',
+  );
+  assert.equal(draft.lines[0].bill?.totalCents, 150_001);
+  assert.equal(draft.freeToSpend.cents, 0);
+
+  // The same bills give the same demands whatever order they arrive in.
+  const random = makeRandom(5);
+  const bills = [
+    rent,
+    { ...chosen, itemId: 'chosen' },
+    { ...monthlyRent, itemId: 'monthly' },
+    makeBill({ itemId: 'a', schedule: once(utc(2027, 3, 1)) }),
+    makeBill({ itemId: 'b', schedule: monthly(utc(2026, 12, 15)) }),
+  ];
+  const expected = JSON.stringify(demandsOf(bills, biweekly));
+  Array.from({ length: 20 }).forEach(() => {
+    assert.equal(
+      JSON.stringify(
+        demandsOf(shuffled(bills, random), shuffled(biweekly, random)),
+      ),
+      expected,
+      'bill demands do not depend on input order',
+    );
+  });
 }
 
 console.log('runway engine: ok');

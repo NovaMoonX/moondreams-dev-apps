@@ -5,9 +5,11 @@ import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 
+import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
 import type {
+  BillSealed,
   ChangeDoc,
   ChangeSealed,
   EnvelopeSealed,
@@ -190,4 +192,67 @@ export async function createEnvelope(
   await batch.commit();
 
   return { envelopeId };
+}
+
+export interface CreateBillInput {
+  bill: BillSealed;
+  /** The first day this bill is in the plan. */
+  startDate: number;
+}
+
+/**
+ * Adds a bill as a header, a first version and one change entry in a single batch. Items and
+ * versions are created and never updated; nothing is written to `days`.
+ */
+export async function createBill(
+  uid: string,
+  encryption: RunwayEncryption,
+  { bill, startDate }: CreateBillInput,
+): Promise<{ billId: string }> {
+  const now = Date.now();
+  const billId = generateUuid();
+  const changeId = generateUuid();
+  const changePayload: ChangeSealed = {
+    summary: `Added ${bill.name}, ${formatCents(bill.amount.highCents)}. ${describeBillTiming(bill.timing.schedule)}.`,
+  };
+
+  const [billSealed, changeSealed] = await Promise.all([
+    sealJson(bill, encryption),
+    sealJson(changePayload, encryption),
+  ]);
+
+  const header: PlanItemDoc = {
+    id: billId,
+    kind: 'bill',
+    parentId: null,
+    createdAt: now,
+    endedAt: null,
+    archivedAt: null,
+  };
+  const version: PlanVersionDoc = {
+    id: generateUuid(),
+    itemId: billId,
+    kind: 'bill',
+    createdAt: now,
+    effectiveFrom: startDate,
+    effectiveUntil: null,
+    changeId,
+    sealed: billSealed,
+  };
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: startDate,
+    itemIds: [billId],
+    sealed: changeSealed,
+  };
+
+  const batch = writeBatch(db);
+  batch.set(itemPath(uid, 'items', billId), header);
+  batch.set(itemPath(uid, 'versions', version.id), version);
+  batch.set(itemPath(uid, 'changes', changeId), change);
+  await batch.commit();
+
+  return { billId };
 }

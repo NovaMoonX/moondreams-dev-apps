@@ -12,7 +12,7 @@ import { COMING_DAYS_PREVIEW } from '@apps/runway/constants';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import IncomeForm from '@apps/runway/forms/IncomeForm';
+import ExpectedScreen from '@apps/runway/screens/days/ExpectedScreen';
 import {
   selectComingDays,
   selectIsPlanItemsLoaded,
@@ -87,13 +87,7 @@ function DaysScreen() {
       />
       {getBody()}
       {formKey !== null && (
-        <IncomeForm
-          key={formKey}
-          isOpen
-          title='Expected'
-          defaultFrequency='once'
-          onClose={() => setFormKey(null)}
-        />
+        <ExpectedScreen key={formKey} onClose={() => setFormKey(null)} />
       )}
     </div>
   );

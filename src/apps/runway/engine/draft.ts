@@ -6,7 +6,9 @@ import {
   compareDays,
   compareDemands,
   compareText,
+  type BillShare,
   type Demand,
+  type DraftBillInput,
   type DraftCadence,
   type DraftDayInput,
   type DraftEnvelopeInput,
@@ -23,6 +25,9 @@ export interface DraftInput {
   days: readonly DraftDayInput[];
   plan: {
     envelopes: readonly DraftEnvelopeInput[];
+    bills: readonly DraftBillInput[];
+    /** The last day schedules are generated for. */
+    horizon: number;
     /** Every coming income day, which cadences count over. */
     incomeDays: readonly { dayKey: string; on: number }[];
   };
@@ -48,7 +53,9 @@ export interface DraftLine {
   dayKey: string;
   itemId: string;
   tier: Priority;
-  /** What the envelope asked for on this day. */
+  /** Set on a bill's line: the payment this day sets money aside for. */
+  bill: BillShare | null;
+  /** What the envelope or bill asked for on this day. */
   demandCents: Cents;
   cents: Cents;
   shortBy: Cents;
@@ -169,6 +176,8 @@ export function buildDraft(input: DraftInput): Draft {
     days,
     input.plan.incomeDays,
     input.plan.envelopes,
+    input.plan.bills,
+    input.plan.horizon,
   )
     .filter((demand) => demand.cents > 0)
     .sort(
@@ -186,6 +195,7 @@ export function buildDraft(input: DraftInput): Draft {
         dayKey: demand.dayKey,
         itemId: demand.itemId,
         tier: demand.tier,
+        bill: demand.bill,
         demandCents: demand.cents,
         cents,
         shortBy: taken.left,

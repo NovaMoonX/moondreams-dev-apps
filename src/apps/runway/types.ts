@@ -103,6 +103,23 @@ export interface EnvelopeSealed {
   funding: FundingRule;
 }
 
+/** How a bill is funded: spread over the income days before it is due, or on days the person picked. */
+export type BillFundedBy =
+  { kind: 'suggested' } | { kind: 'chosen'; dayKeys: string[] };
+
+export interface BillSealed {
+  name: string;
+  emoji: string | null;
+  priority: Priority;
+  /** A fractional rank inside the priority tier. */
+  orderIndex: number;
+  /** Equal ends for an exact amount. */
+  amount: MoneyRange;
+  timing: { kind: 'date'; schedule: Schedule };
+  ending: Ending;
+  fundedBy: BillFundedBy;
+}
+
 export interface PlanItemDoc {
   id: string;
   kind: ItemKind;
@@ -148,8 +165,10 @@ interface OpenVersionBase {
 export type OpenVersion =
   | (OpenVersionBase & { kind: 'source'; payload: SourceSealed })
   | (OpenVersionBase & { kind: 'payLine'; payload: PayLineSealed })
-  | (OpenVersionBase & { kind: 'envelope'; payload: EnvelopeSealed });
+  | (OpenVersionBase & { kind: 'envelope'; payload: EnvelopeSealed })
+  | (OpenVersionBase & { kind: 'bill'; payload: BillSealed });
 
 export type PayLineVersion = Extract<OpenVersion, { kind: 'payLine' }>;
 export type SourceVersion = Extract<OpenVersion, { kind: 'source' }>;
 export type EnvelopeVersion = Extract<OpenVersion, { kind: 'envelope' }>;
+export type BillVersion = Extract<OpenVersion, { kind: 'bill' }>;

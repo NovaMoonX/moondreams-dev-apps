@@ -17,6 +17,7 @@ import {
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
   ChangeSealed,
+  BillSealed,
   EnvelopeSealed,
   PayLineSealed,
   SourceSealed,
@@ -130,6 +131,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     owner.uid,
     encryption,
   );
+  const billDocuments = await writeSeedBills(context, owner.uid, encryption);
   const masterKeyIds = Object.keys(keyring.keys);
   masterKeyIds.forEach((masterKeyId) =>
     batch.set(
@@ -142,7 +144,11 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
-      2 + incomeDocuments + envelopeDocuments + masterKeyIds.length,
+      2 +
+      incomeDocuments +
+      envelopeDocuments +
+      billDocuments +
+      masterKeyIds.length,
   };
 }
 
@@ -428,4 +434,150 @@ async function writeSeedEnvelopes(
   });
   await batch.commit();
   return envelopes.length * 3;
+}
+
+/** Four bills: rent that repeats monthly, a one-time bill, a bill chosen across three paydays and a bill that ends after six payments. */
+async function writeSeedBills(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const addedAt = context.now - 11 * DAY_MS;
+  const firstPayday = today + 3 * DAY_MS;
+  const paydayKey = (index: number) =>
+    toDayKey('seed-income-paycheck', firstPayday + index * 14 * DAY_MS);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const never = { onDate: null, afterCount: null };
+  const dayOfNextMonth = (day: number) => {
+    const now = new Date(today);
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, day);
+  };
+
+  const bills: { id: string; payload: BillSealed }[] = [
+    {
+      id: 'seed-bill-rent',
+      payload: {
+        name: 'Rent',
+        emoji: '🏠',
+        priority: 'must',
+        orderIndex: 1,
+        amount: exact(125_000),
+        timing: {
+          kind: 'date',
+          schedule: {
+            kind: 'monthly',
+            anchor: dayOfNextMonth(1),
+            monthDays: [1],
+          },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' },
+      },
+    },
+    {
+      id: 'seed-bill-car',
+      payload: {
+        name: 'Car registration',
+        emoji: null,
+        priority: 'must',
+        orderIndex: 2,
+        amount: exact(18_500),
+        timing: {
+          kind: 'date',
+          schedule: {
+            kind: 'once',
+            anchor: today + 40 * DAY_MS,
+            monthDays: [],
+          },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' },
+      },
+    },
+    {
+      id: 'seed-bill-dentist',
+      payload: {
+        name: 'Dentist',
+        emoji: '🦷',
+        priority: 'should',
+        orderIndex: 1,
+        amount: exact(30_000),
+        timing: {
+          kind: 'date',
+          schedule: {
+            kind: 'once',
+            anchor: today + 36 * DAY_MS,
+            monthDays: [],
+          },
+        },
+        ending: never,
+        fundedBy: {
+          kind: 'chosen',
+          dayKeys: [paydayKey(0), paydayKey(1), paydayKey(2)],
+        },
+      },
+    },
+    {
+      id: 'seed-bill-laptop',
+      payload: {
+        name: 'Laptop payment plan',
+        emoji: null,
+        priority: 'should',
+        orderIndex: 2,
+        amount: exact(8_900),
+        timing: {
+          kind: 'date',
+          schedule: {
+            kind: 'monthly',
+            anchor: dayOfNextMonth(15),
+            monthDays: [15],
+          },
+        },
+        ending: { onDate: null, afterCount: 6 },
+        fundedBy: { kind: 'suggested' },
+      },
+    },
+  ];
+
+  const sealedChanges = await Promise.all(
+    bills.map(({ payload }) =>
+      sealJson(
+        { summary: `Added ${payload.name}.` } satisfies ChangeSealed,
+        encryption,
+      ),
+    ),
+  );
+  const sealedBills = await Promise.all(
+    bills.map(({ payload }) => sealJson(payload, encryption)),
+  );
+
+  const batch = context.firestore.batch();
+  bills.forEach(({ id }, index) => {
+    const createdAt = addedAt + index * 1000;
+    const changeId = `seed-change-${id}`;
+    batch.set(
+      context.firestore.doc(`${plan}/items/${id}`),
+      header(id, 'bill', null, createdAt),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${id}`),
+      version(
+        `seed-version-${id}`,
+        id,
+        'bill',
+        createdAt,
+        today,
+        changeId,
+        sealedBills[index],
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${changeId}`),
+      change(changeId, createdAt, today, [id], sealedChanges[index]),
+    );
+  });
+  await batch.commit();
+  return bills.length * 3;
 }
