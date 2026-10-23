@@ -5,6 +5,7 @@ import type {
   OpenChange,
   OpenDay,
   OpenMove,
+  OpenPurchase,
   OpenRecord,
   OpenPlan,
   OpenVersion,
@@ -26,6 +27,9 @@ export interface RunwayState {
   records: OpenRecord[];
   moves: OpenMove[];
   isMovesLoaded: boolean;
+  /** The purchases of the recent window. */
+  purchases: OpenPurchase[];
+  isPurchasesLoaded: boolean;
   /** The confirmed day ids the records were read for, as the selector joins them. */
   recordsFor: string | null;
   /** The change log's open window: what it holds, the window key it was read for, and whether the read failed. */
@@ -47,6 +51,8 @@ const initialState: RunwayState = {
   records: [],
   moves: [],
   isMovesLoaded: false,
+  purchases: [],
+  isPurchasesLoaded: false,
   recordsFor: null,
   changes: [],
   changesFor: null,
@@ -99,6 +105,10 @@ export const runwaySlice = createSlice({
       state.moves = action.payload;
       state.isMovesLoaded = true;
     },
+    setPurchases: (state, action: PayloadAction<OpenPurchase[]>) => {
+      state.purchases = action.payload;
+      state.isPurchasesLoaded = true;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
@@ -114,6 +124,7 @@ export const {
   setDays,
   setRecords,
   setMoves,
+  setPurchases,
   setChanges,
   setChangesFailed,
 } = runwaySlice.actions;

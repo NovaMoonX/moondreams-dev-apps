@@ -4226,6 +4226,37 @@ service cloud.firestore {
         }
       }
 
+      // A purchase is created by the owner with a readable day, source and flag and one sealed payload;
+      // editing and removing arrive with the issue that uses them. The day must fall inside the span the
+      // plan has tracked (first period's start to the last period's end), and the device checks each period.
+      match /purchases/{purchaseId} {
+        function isTrackedDay(date) {
+          let periods = get(/databases/$(database)/documents/apps/runway/plans/$(uid)).data.get('trackingPeriods', []);
+          return periods.size() > 0
+            && date >= periods[0]['from']
+            && (periods[periods.size() - 1]['to'] == null || date <= periods[periods.size() - 1]['to']);
+        }
+
+        function isPurchaseValid(data) {
+          return data.id == purchaseId
+            && isDateOnly(data.date)
+            && data.date <= request.time.toMillis() + 86400000
+            && data.source in ['manual', 'csv', 'link']
+            && data.needsHome is bool
+            && isPastOrNear(data.createdAt)
+            && isPastOrNear(data.updatedAt)
+            && isSealed(data.sealed)
+            && isTrackedDay(data.date);
+        }
+
+        allow read: if isPlanOwner();
+        allow create: if isPlanOwner()
+          && request.resource.data.keys().hasAll(['id', 'date', 'source', 'needsHome', 'createdAt', 'updatedAt', 'sealed'])
+          && request.resource.data.keys().hasOnly(['id', 'date', 'source', 'needsHome', 'createdAt', 'updatedAt', 'sealed'])
+          && isPurchaseValid(request.resource.data);
+        allow update, delete: if false;
+      }
+
       // The ledger is append-only. A bill marked paid is `paid_<bill>_<yyyymmdd of its due date>`, with `_<n>`
       // when it is marked again after an undo; an undo is `unpaid_<id of the mark>` and names that mark.
       match /moves/{moveId} {

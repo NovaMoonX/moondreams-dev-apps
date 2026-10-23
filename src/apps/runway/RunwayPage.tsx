@@ -25,6 +25,8 @@ import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { RUNWAY_TAB_LABELS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import SpendScreen from '@apps/runway/screens/spend/SpendScreen';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectIsDaysLoaded,
   selectListedDays,
@@ -49,7 +51,7 @@ function leaveAfterSubviewCloses(go: () => void) {
 function RunwayPage() {
   const { user, loading } = useAuth();
   const {
-    activeTab,
+    activeTab: requestedTab,
     showTab,
     openDayKey,
     closeDay,
@@ -69,6 +71,9 @@ function RunwayPage() {
     const { open, confirmed } = selectListedDays(state, today);
     return [...open, ...confirmed].some((day) => day.dayKey === openDayKey);
   });
+  const level = useAppSelector(selectLevel);
+  const activeTab =
+    requestedTab === 'spend' && level === 'plan' ? 'home' : requestedTab;
   const dispatch = useAppDispatch();
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
   const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);
@@ -194,6 +199,7 @@ function RunwayPage() {
 
   const getScreen = () => {
     if (activeTab === 'days') return <DaysScreen />;
+    if (activeTab === 'spend') return <SpendScreen />;
     if (activeTab === 'plan') return <PlanScreen />;
     return <HomeScreen />;
   };

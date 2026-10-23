@@ -11,7 +11,22 @@ import {
   deriveBalances,
   deriveBalancesBefore,
 } from '../../src/apps/runway/engine/balances.ts';
-import type { OpenMove, OpenRecord } from '../../src/apps/runway/types.ts';
+import {
+  getLineEffect,
+  getPurchaseEffect,
+  getRefundableCents,
+  getRefundLines,
+  isInTrackingPeriods,
+  splitEvenly,
+  sumLines,
+  toChosenLines,
+} from '../../src/apps/runway/engine/purchases.ts';
+import type {
+  OpenMove,
+  OpenPurchase,
+  OpenRecord,
+} from '../../src/apps/runway/types.ts';
+import { describeEnvelopeFigure } from '../../src/apps/runway/utils/purchaseText.ts';
 import { getLevelWords } from '../../src/apps/runway/utils/levelText.ts';
 import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
 import { previewChange } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
@@ -5125,6 +5140,276 @@ const version = (
   }
   assert.equal(getLevelWords('plan').envelopeFigure, 'assigned');
   assert.equal(getLevelWords('track').envelopeFigure, 'left');
+}
+
+// Purchases (Issue 24): left and over, the split and the refund.
+{
+  const start = Date.UTC(2026, 9, 1);
+  const day = (n: number) => start + n * 86_400_000;
+  const startMove = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    holding: 'money' | 'envelope',
+  ) =>
+    ({
+      id,
+      kind: 'start',
+      date: start,
+      refId,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: cents, holding },
+    }) as unknown as OpenMove;
+  const purchase = (
+    id: string,
+    on: number,
+    lines: { envelopeId: string | null; cents: number }[],
+    refundOfId: string | null = null,
+  ): OpenPurchase => {
+    const chosen = toChosenLines(lines);
+    return {
+      id,
+      date: on,
+      source: 'manual',
+      needsHome: false,
+      createdAt: on,
+      updatedAt: on,
+      amountCents: sumLines(chosen),
+      merchant: null,
+      note: null,
+      lines: chosen,
+      refundOfId,
+    };
+  };
+  const base = {
+    startDate: start,
+    moves: [
+      startMove('m', null, 100_000, 'money'),
+      startMove('f', 'food', 10_000, 'envelope'),
+      startMove('g', 'gifts', 5_000, 'envelope'),
+    ],
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds: { food: 'envelope', gifts: 'envelope' } as const,
+  };
+  const before = deriveBalances(base);
+  assert.equal(before.assignedByItem.food, 10_000);
+  assert.equal(before.freeToSpendCents, 85_000);
+
+  const over = deriveBalances({
+    ...base,
+    purchases: [
+      purchase('p1', day(1), [{ envelopeId: 'food', cents: 12_000 }]),
+    ],
+  });
+  assert.equal(
+    over.assignedByItem.food,
+    -2_000,
+    '$120 against $100 left is $20 over',
+  );
+  assert.deepEqual(describeEnvelopeFigure('track', over.assignedByItem.food), {
+    value: '\u2212$20.00',
+    word: 'over',
+  });
+  assert.deepEqual(describeEnvelopeFigure('track', 3_100), {
+    value: '$31.00',
+    word: 'left',
+  });
+  assert.equal(describeEnvelopeFigure('plan', 10_000).word, 'assigned');
+  assert.equal(
+    over.freeToSpendCents,
+    before.freeToSpendCents - 2_000,
+    'Free to spend falls by exactly the overspend',
+  );
+  assert.equal(over.spentCents, 12_000);
+  assert.equal(
+    over.assignedToEnvelopesCents,
+    5_000,
+    'an envelope that is over holds nothing',
+  );
+
+  const within = deriveBalances({
+    ...base,
+    purchases: [purchase('p2', day(1), [{ envelopeId: 'food', cents: 4_000 }])],
+  });
+  assert.equal(within.assignedByItem.food, 6_000);
+  assert.equal(
+    within.freeToSpendCents,
+    before.freeToSpendCents,
+    'spending inside an envelope leaves Free to spend alone',
+  );
+
+  const overAgain = deriveBalances({
+    ...base,
+    purchases: [
+      purchase('p1', day(1), [{ envelopeId: 'food', cents: 12_000 }]),
+      purchase('p3', day(2), [{ envelopeId: 'food', cents: 500 }]),
+    ],
+  });
+  assert.equal(overAgain.assignedByItem.food, -2_500);
+  assert.equal(
+    overAgain.freeToSpendCents,
+    before.freeToSpendCents - 2_500,
+    'spending from an envelope that is already over draws Free to spend by all of it',
+  );
+
+  const refunded = deriveBalances({
+    ...base,
+    purchases: [
+      purchase('p1', day(1), [{ envelopeId: 'food', cents: 12_000 }]),
+      purchase('r1', day(2), [{ envelopeId: 'food', cents: -3_000 }], 'p1'),
+    ],
+  });
+  assert.equal(refunded.assignedByItem.food, 1_000);
+  assert.equal(
+    refunded.freeToSpendCents,
+    before.freeToSpendCents,
+    'a refund after an overspend restores Free to spend with no extra step',
+  );
+
+  const toFree = deriveBalances({
+    ...base,
+    purchases: [purchase('r2', day(1), [{ envelopeId: null, cents: -2_000 }])],
+  });
+  assert.equal(toFree.freeToSpendCents, before.freeToSpendCents + 2_000);
+  assert.equal(toFree.assignedByItem.food, 10_000);
+
+  const early = purchase('p0', start - 86_400_000, [
+    { envelopeId: 'food', cents: 9_000 },
+  ]);
+  assert.equal(
+    deriveBalances({ ...base, purchases: [early] }).assignedByItem.food,
+    10_000,
+    'a purchase from before the starting point is not counted',
+  );
+  assert.equal(
+    deriveBalancesBefore(
+      {
+        ...base,
+        purchases: [
+          purchase('p4', day(3), [{ envelopeId: 'food', cents: 1_000 }]),
+        ],
+      },
+      day(3),
+    ).assignedByItem.food,
+    10_000,
+    'figures as of a day leave out purchases from that day on',
+  );
+
+  const effect = getLineEffect(10_000, 12_000);
+  assert.deepEqual(effect, {
+    afterCents: -2_000,
+    overCents: 2_000,
+    freeDropCents: 2_000,
+  });
+  assert.deepEqual(getLineEffect(-1_000, 500), {
+    afterCents: -1_500,
+    overCents: 1_500,
+    freeDropCents: 500,
+  });
+  assert.equal(getLineEffect(5_000, 3_000).freeDropCents, 0);
+  assert.equal(getLineEffect(-2_000, -3_000).freeDropCents, -2_000);
+  assert.deepEqual(
+    getPurchaseEffect(
+      toChosenLines([
+        { envelopeId: 'food', cents: 12_000 },
+        { envelopeId: 'gifts', cents: 1_000 },
+      ]),
+      { food: 10_000, gifts: 5_000 },
+    ),
+    { freeDropCents: 2_000, over: [{ envelopeId: 'food', overCents: 2_000 }] },
+  );
+
+  assert.equal(
+    getPurchaseEffect(toChosenLines([{ envelopeId: null, cents: -500 }]), {})
+      .freeDropCents,
+    -500,
+    'a refund to Free to spend raises it by all of it',
+  );
+  assert.equal(
+    getPurchaseEffect(toChosenLines([{ envelopeId: null, cents: 700 }]), {})
+      .freeDropCents,
+    700,
+  );
+
+  assert.deepEqual(splitEvenly(10_000, ['a', 'b', 'c']), [3_334, 3_333, 3_333]);
+  assert.deepEqual(
+    splitEvenly(10_000, ['c', 'a', 'b']),
+    [3_333, 3_334, 3_333],
+    'the odd cent goes to the lowest id, not the first row',
+  );
+  assert.equal(
+    splitEvenly(10_000, ['a', 'b', 'c']).reduce((a, b) => a + b, 0),
+    10_000,
+  );
+  assert.deepEqual(splitEvenly(1, ['a', 'b']), [1, 0]);
+  assert.deepEqual(
+    splitEvenly(-10_000, ['a', 'b', 'c']),
+    [-3_334, -3_333, -3_333],
+  );
+
+  const target = purchase('t', day(1), [
+    { envelopeId: 'food', cents: 6_000 },
+    { envelopeId: 'gifts', cents: 4_000 },
+  ]);
+  const everyone = () => true;
+  const back = getRefundLines(2_000, target, everyone);
+  assert.deepEqual(
+    back.kind === 'lines' ? back.lines.map((l) => l.cents) : null,
+    [-1_200, -800],
+  );
+  const odd = purchase('o', day(1), [
+    { envelopeId: 'a', cents: 3_334 },
+    { envelopeId: 'b', cents: 3_333 },
+    { envelopeId: 'c', cents: 3_333 },
+  ]);
+  const oddBack = getRefundLines(5_001, odd, everyone);
+  assert.equal(oddBack.kind, 'lines');
+  assert.equal(
+    oddBack.kind === 'lines' ? sumLines(oddBack.lines) : 0,
+    -5_001,
+    'a split refund returns exactly the amount refunded',
+  );
+  assert.equal(
+    getRefundLines(2_000, target, (id) => id !== 'gifts').kind,
+    'pick',
+    'a refund of a purchase from an archived envelope asks where it goes',
+  );
+  assert.equal(
+    getRefundLines(
+      2_000,
+      purchase('n', day(1), [{ envelopeId: null, cents: 0 }]),
+      everyone,
+    ).kind,
+    'pick',
+    'a purchase with no envelope lines asks where the refund goes',
+  );
+  assert.equal(
+    getRefundableCents(target, [
+      target,
+      purchase(
+        'r',
+        day(2),
+        [
+          { envelopeId: 'food', cents: -1_200 },
+          { envelopeId: 'gifts', cents: -800 },
+        ],
+        't',
+      ),
+    ]),
+    8_000,
+    'refunds already made come off what can still be refunded',
+  );
+
+  const periods = [
+    { from: day(0), to: day(9) },
+    { from: day(20), to: null },
+  ];
+  assert.equal(isInTrackingPeriods(periods, day(9)), true);
+  assert.equal(isInTrackingPeriods(periods, day(10)), false);
+  assert.equal(isInTrackingPeriods(periods, day(40)), true);
+  assert.equal(isInTrackingPeriods([], day(1)), false);
 }
 
 console.log('runway engine: ok');
