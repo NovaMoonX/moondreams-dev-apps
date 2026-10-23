@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, FileText } from 'lucide-react';
+import { ChevronRight, FileText, Pencil } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -11,11 +11,16 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import RecordLineRow from '@apps/runway/components/RecordLineRow';
-import { CONFIRM_WORDS, DRAFT_WORDS } from '@apps/runway/constants';
+import {
+  CONFIRM_WORDS,
+  CORRECT_WORDS,
+  DRAFT_WORDS,
+} from '@apps/runway/constants';
+import CorrectSheet from '@apps/runway/screens/days/CorrectSheet';
 import ChecklistScreen from '@apps/runway/screens/days/ChecklistScreen';
 import RecordScreen from '@apps/runway/screens/days/RecordScreen';
 import {
-  selectConfirmedRecord,
+  selectEffectiveSplit,
   selectIsRecordsReady,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -29,8 +34,9 @@ interface ConfirmedDayViewProps {
 function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
   const [isRecordOpen, setIsRecordOpen] = useState(false);
   const isReady = useAppSelector(selectIsRecordsReady);
+  const [isCorrecting, setIsCorrecting] = useState(false);
   const record = useAppSelector((state) =>
-    selectConfirmedRecord(state, day.dayKey),
+    selectEffectiveSplit(state, day.dayKey),
   );
   const title = day.sourceName ?? day.payLineName;
 
@@ -45,7 +51,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
         </EmptyCard>
       );
     }
-    const { arrivedCents, freeToSpendCents, lines } = record.payload;
+    const { arrivedCents, freeToSpendCents, lines } = record;
     const funded = lines.filter((line) => line.shortBy === 0);
     const unfunded = lines.filter((line) => line.shortBy > 0);
     return (
@@ -63,6 +69,21 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
         >
           <span className='min-w-0 flex-1 break-words'>
             {CONFIRM_WORDS.recordDoor}
+          </span>
+          <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
+        </Button>
+        <Button
+          type='button'
+          variant='tertiary'
+          className='border-border h-auto min-h-11 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left font-normal whitespace-normal'
+          onClick={() => setIsCorrecting(true)}
+        >
+          <Pencil className='text-muted-foreground h-4 w-4 shrink-0' />
+          <span className='min-w-0 flex-1'>
+            <span className='block break-words'>{CORRECT_WORDS.door}</span>
+            <span className='text-muted-foreground block text-sm break-words'>
+              {CORRECT_WORDS.doorHint}
+            </span>
           </span>
           <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
         </Button>
@@ -115,12 +136,21 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           </p>
           {record && (
             <p className='text-muted-foreground text-sm'>
-              {formatCents(record.payload.arrivedCents)} arrived
+              {formatCents(record.arrivedCents)} arrived
+              {record.kind === 'correction' && ` · ${CORRECT_WORDS.corrected}`}
             </p>
           )}
         </div>
         {getBody()}
       </div>
+      {isCorrecting && record && (
+        <CorrectSheet
+          key={record.recordId}
+          dayKey={day.dayKey}
+          base={record}
+          onClose={() => setIsCorrecting(false)}
+        />
+      )}
       {isRecordOpen && (
         <RecordScreen
           dayKey={day.dayKey}

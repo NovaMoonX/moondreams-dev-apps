@@ -4126,23 +4126,45 @@ service cloud.firestore {
             && request.resource.data.doneLineIds.size() <= 200));
         allow delete: if false;
 
-        // The draft as proposed and the split confirmed, written once with the day's move to confirmed.
+        // The draft as proposed and the split confirmed, written once with the day's move to confirmed. A
+        // correction is a new record that replaces the one it names; its id is that record's id plus
+        // `_corrected`, so a record can be corrected once and a second device holding the older split is refused.
         match /records/{recordId} {
+          function isFirstRecordValid(data) {
+            return data.kind in ['proposed', 'confirmed']
+              && recordId == dayId + '_' + data.kind
+              && data.get('supersedesId', null) == null
+              && getAfter(planDoc('days', dayId)).data.status == 'confirmed'
+              && (!exists(planDoc('days', dayId)) || get(planDoc('days', dayId)).data.status == 'draft');
+          }
+
+          function recordById(id) {
+            return /databases/$(database)/documents/apps/runway/plans/$(uid)/days/$(dayId)/records/$(id);
+          }
+
+          function isCorrectionValid(data) {
+            return data.kind == 'correction'
+              && data.supersedesId is string
+              && recordId == data.supersedesId + '_corrected'
+              && exists(planDoc('days', dayId))
+              && get(planDoc('days', dayId)).data.status == 'confirmed'
+              && exists(recordById(data.supersedesId))
+              && get(recordById(data.supersedesId)).data.kind in ['confirmed', 'correction'];
+          }
+
           function isRecordValid(data) {
             return data.id == recordId
               && data.dayId == dayId
-              && data.kind in ['proposed', 'confirmed']
-              && recordId == dayId + '_' + data.kind
               && isPastOrNear(data.createdAt)
               && isSealed(data.sealed)
-              && getAfter(planDoc('days', dayId)).data.status == 'confirmed'
-              && (!exists(planDoc('days', dayId)) || get(planDoc('days', dayId)).data.status == 'draft');
+              && (data.kind == 'correction' ? isCorrectionValid(data) : isFirstRecordValid(data));
           }
 
           allow read: if isPlanOwner();
           allow create: if isPlanOwner()
             && request.resource.data.keys().hasAll(['id', 'dayId', 'kind', 'createdAt', 'sealed'])
-            && request.resource.data.keys().hasOnly(['id', 'dayId', 'kind', 'createdAt', 'sealed'])
+            && request.resource.data.keys().hasOnly(['id', 'dayId', 'kind', 'createdAt', 'sealed', 'supersedesId'])
+            && (request.resource.data.kind != 'correction' || request.resource.data.keys().hasAll(['supersedesId']))
             && isRecordValid(request.resource.data);
           allow update, delete: if false;
         }

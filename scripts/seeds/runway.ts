@@ -19,6 +19,10 @@ import {
   getLineDifferences,
   getRemainder,
 } from '../../src/apps/runway/engine/differences.ts';
+import {
+  buildCorrection,
+  getCorrectionId,
+} from '../../src/apps/runway/engine/correct.ts';
 import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
@@ -449,6 +453,10 @@ async function writeSeedConfirmedDays(
       lineNotes: {
         'seed-goal-vacation': 'Sent the bonus to the trip',
       } as Record<string, string | null>,
+      correction: {
+        edits: { 'seed-goal-vacation': 30_000 },
+        note: 'Only $300 went to the trip',
+      },
     },
   ];
   const docs = await Promise.all(
@@ -556,10 +564,30 @@ async function writeSeedConfirmedDays(
           ),
         ],
       };
+      const correction =
+        'correction' in entry
+          ? buildCorrection({
+              base: {
+                recordId: `${dayId}_confirmed`,
+                dayId,
+                kind: 'confirmed',
+                stance: 'conservative',
+                arrivedCents,
+                freeToSpendCents: confirmed.freeToSpendCents,
+                lines: confirmedLines,
+              },
+              arrivedCents,
+              edits: byLine(entry.correction.edits) as Record<string, number>,
+              note: entry.correction.note,
+            })
+          : null;
       return {
         dayId,
         on,
         arrivedCents,
+        sealedCorrection: correction
+          ? await sealJson(correction, encryption)
+          : null,
         doneLineIds: withBills ? [`${dayId}:seed-bill-laptop`] : [],
         sealedDay: await sealJson(EMPTY_SEED_OVERRIDE, encryption),
         sealedProposed: await sealJson(proposed, encryption),
@@ -594,9 +622,24 @@ async function writeSeedConfirmedDays(
           createdAt: confirmedAt,
           sealed:
             kind === 'proposed' ? entry.sealedProposed : entry.sealedConfirmed,
+          supersedesId: null,
         },
       ),
     );
+    if (entry.sealedCorrection) {
+      const id = getCorrectionId(`${entry.dayId}_confirmed`);
+      batch.set(
+        context.firestore.doc(`${plan}/days/${entry.dayId}/records/${id}`),
+        {
+          id,
+          dayId: entry.dayId,
+          kind: 'correction',
+          createdAt: confirmedAt + 2 * DAY_MS,
+          sealed: entry.sealedCorrection,
+          supersedesId: `${entry.dayId}_confirmed`,
+        },
+      );
+    }
   });
   const paidAhead = await writeSeedPaidAhead(
     context,
@@ -605,7 +648,11 @@ async function writeSeedConfirmedDays(
     batch,
     when.today,
   );
-  return docs.length * 3 + paidAhead;
+  return (
+    docs.length * 3 +
+    docs.filter((entry) => entry.sealedCorrection).length +
+    paidAhead
+  );
 }
 
 /** The laptop plan's next payment, marked paid ahead of its due date: $50.00 of it was set aside by the confirmed day, so $39.00 came from Free to spend (planned at the bill's own optimistic end, $89.00). */

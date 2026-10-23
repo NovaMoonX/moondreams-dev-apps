@@ -6,6 +6,15 @@ import {
   describeDay,
 } from '../../src/apps/runway/engine/comingDays.ts';
 import {
+  buildCorrection,
+  getCorrectionId,
+  getEffectiveSplit,
+  getEffectiveSplits,
+  getRecordChain,
+  keepTicks,
+  toSplit,
+} from '../../src/apps/runway/engine/correct.ts';
+import {
   buildRecords,
   countUnresolvedHolds,
   getFreeAfterArrival,
@@ -2888,6 +2897,182 @@ const version = (
     collectFunded(records, new Map([['pay_a', nov10]])).rent,
     [{ dayKey: 'pay_a', on: nov10, cents: 40_000 }],
     'a record whose day is not known is left out',
+  );
+}
+
+// Corrections: the latest one no later correction supersedes is the day's split; the original stays.
+{
+  const line = (itemId: string, cents: number) => ({
+    lineId: `d:${itemId}`,
+    itemId,
+    name: itemId,
+    emoji: null,
+    tier: 'must' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [{ dayId: 'd', cents }],
+  });
+  const confirmed: OpenRecord = {
+    id: 'd_confirmed',
+    dayId: 'd',
+    createdAt: 1,
+    kind: 'confirmed',
+    payload: {
+      fingerprint: 'x',
+      stance: 'conservative',
+      arrivedCents: 100_000,
+      expectedCents: 100_000,
+      freeToSpendCents: 30_000,
+      differences: [],
+      lines: [line('goal', 40_000), line('rent', 30_000)],
+    },
+  };
+  const base = getEffectiveSplit([confirmed]);
+  assert.ok(base, 'a confirmed day has a split');
+  const sealedOf = (
+    from: NonNullable<typeof base>,
+    edits: Record<string, number>,
+    arrived = from.arrivedCents,
+  ) =>
+    buildCorrection({ base: from, arrivedCents: arrived, edits, note: null });
+  const correct = (
+    id: string,
+    supersedesId: string,
+    createdAt: number,
+    payload: ReturnType<typeof sealedOf>,
+  ): OpenRecord => ({
+    id,
+    dayId: 'd',
+    createdAt,
+    kind: 'correction',
+    supersedesId,
+    payload,
+  });
+
+  const first = sealedOf(base, { 'd:goal': 25_000 });
+  assert.equal(
+    first.arrivedCents - first.lines.reduce((sum, l) => sum + l.cents, 0),
+    first.freeToSpendCents,
+    'a correction still adds up to the amount that arrived',
+  );
+  assert.equal(
+    first.freeToSpendCents,
+    45_000,
+    'lowering a line raises Free to spend',
+  );
+  assert.deepEqual(
+    first.changes.map((c) => [c.lineId, c.beforeCents, c.afterCents]),
+    [['d:goal', 40_000, 25_000]],
+    'only the changed line is listed',
+  );
+  const c1 = correct('d_confirmed_corrected', 'd_confirmed', 2, first);
+  assert.equal(
+    sumConfirmedByItem([confirmed, c1]).goal,
+    25_000,
+    'a correction that lowers a goal line lowers its balance',
+  );
+  assert.equal(
+    sumConfirmedByItem([confirmed, c1]).rent,
+    30_000,
+    'lines a correction leaves alone keep their amount',
+  );
+
+  const onDay = new Map([['d', utc(2027, 1, 10)]]);
+  const rentRecords = [
+    confirmed,
+    correct(
+      'd_confirmed_corrected',
+      'd_confirmed',
+      2,
+      sealedOf(base, { 'd:rent': 12_000 }),
+    ),
+  ];
+  assert.equal(
+    collectFunded([confirmed], onDay).rent[0].cents,
+    30_000,
+    'before the correction a bill has what was confirmed',
+  );
+  assert.equal(
+    collectFunded(rentRecords, onDay).rent[0].cents,
+    12_000,
+    'a correction that changes a bill line changes its funded progress',
+  );
+
+  const second = sealedOf(
+    toSplit(c1 as Extract<OpenRecord, { kind: 'correction' }>),
+    { 'd:goal': 10_000 },
+    90_000,
+  );
+  const c2 = correct(
+    'd_confirmed_corrected_corrected',
+    'd_confirmed_corrected',
+    3,
+    second,
+  );
+  const chain = [c2, confirmed, c1];
+  assert.deepEqual(
+    getRecordChain(chain).map((r) => r.id),
+    ['d_confirmed', 'd_confirmed_corrected', 'd_confirmed_corrected_corrected'],
+    'a chain of two corrections resolves oldest to newest whatever order they are read in',
+  );
+  assert.equal(
+    getEffectiveSplit(chain)?.recordId,
+    c2.id,
+    'the second correction is current',
+  );
+  assert.equal(getEffectiveSplit(chain)?.arrivedCents, 90_000);
+  assert.equal(
+    sumConfirmedByItem(chain).goal,
+    10_000,
+    'balances read the latest correction only',
+  );
+  assert.equal(
+    getEffectiveSplit([
+      confirmed,
+      c1,
+      c2,
+      correct('stray', 'nothing', 9, first),
+    ])?.recordId,
+    c2.id,
+    'a correction that replaces nothing on the chain is ignored',
+  );
+  const rival = correct(
+    'rival',
+    'd_confirmed',
+    5,
+    sealedOf(base, { 'd:goal': 1 }),
+  );
+  assert.equal(
+    getEffectiveSplit([rival, c1, confirmed])?.recordId,
+    c1.id,
+    'two corrections of one record resolve to the earlier, the same on every device',
+  );
+  assert.equal(getEffectiveSplit([]), null, 'no confirmed record, no split');
+  assert.deepEqual(
+    getEffectiveSplits([
+      confirmed,
+      c1,
+      { ...confirmed, id: 'e_confirmed', dayId: 'e' },
+    ])
+      .map((split) => [split.dayId, split.recordId])
+      .sort(),
+    [
+      ['d', c1.id],
+      ['e', 'e_confirmed'],
+    ],
+    'each day has one split',
+  );
+  assert.equal(getCorrectionId('d_confirmed'), 'd_confirmed_corrected');
+  assert.deepEqual(
+    keepTicks(['d:goal', 'd:rent', 'gone'], first.changes),
+    ['d:rent', 'gone'],
+    'a changed line is unticked and other ticks stay',
+  );
+  assert.deepEqual(
+    keepTicks(['d:goal'], sealedOf(base, { 'd:goal': 0 }).changes),
+    [],
+    'a line corrected down to nothing is unticked',
   );
 }
 
