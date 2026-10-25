@@ -5,7 +5,11 @@ import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { MAX_PURCHASE_LINES } from '@apps/runway/constants';
-import { isInTrackingPeriods, sumLines } from '@apps/runway/engine/purchases';
+import {
+  getCountedFrom,
+  isInTrackingPeriods,
+  sumLines,
+} from '@apps/runway/engine/purchases';
 import { sealJson } from '@apps/runway/security';
 import type {
   Cents,
@@ -78,6 +82,14 @@ export async function addPurchase(
     if (!isInTrackingPeriods(periods, input.date)) {
       throw new Error(
         `Tracking was not on for ${formatDateUTC(input.date)}. Pick a day you were tracking.`,
+      );
+    }
+    const countedFrom = getCountedFrom(periods);
+    if (countedFrom === null || input.date < countedFrom) {
+      throw new Error(
+        countedFrom === null
+          ? 'Tracking is off, probably from another device. Reopen Runway to see where it stands.'
+          : `Tracking started again on ${formatDateUTC(countedFrom)}, and an earlier day is not counted. Pick that day or a later one.`,
       );
     }
     const isGone = envelopes.some((snapshot) => {

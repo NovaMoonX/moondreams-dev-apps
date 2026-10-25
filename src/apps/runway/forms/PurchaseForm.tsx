@@ -33,6 +33,7 @@ import {
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  getCountedFrom,
   getPurchaseEffect,
   getRefundableCents,
   getRefundLines,
@@ -154,8 +155,11 @@ function PurchaseForm({
     if (amount === null) return null;
     if (isRefund) {
       if (original !== null && returnsToOriginal) {
-        const result = getRefundLines(amount, original, (id) =>
-          liveIds.has(id),
+        const result = getRefundLines(
+          amount,
+          original,
+          (id) => liveIds.has(id),
+          purchases,
         );
         return result.kind === 'lines' ? result.lines : null;
       }
@@ -199,6 +203,10 @@ function PurchaseForm({
     if (date === null || date > today) return SPEND_WORDS.needsDay;
     if (!isInTrackingPeriods(periods, date)) {
       return `Tracking was not on for ${formatDateUTC(date)}.`;
+    }
+    const countedFrom = getCountedFrom(periods);
+    if (countedFrom !== null && date < countedFrom) {
+      return `Tracking started again on ${formatDateUTC(countedFrom)}. Pick that day or later.`;
     }
     return null;
   };
