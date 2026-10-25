@@ -144,7 +144,295 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
   5. **Add a key (rotation, or restoring one):** `npx tsx scripts/runway/publishKeyring.ts --project moondreams-dev-apps --new-id m2` (add `--dry-run` to see what would change, `--keep-current` to add the key without making it current; a restored key comes in `RUNWAY_NEW_KEY`, 64 hex, never as an argument). It needs `gcloud` signed in as a maintainer and Admin SDK credentials for the project. It reads the latest version, refuses a result that drops or changes an id, names a `current` that is not in `keys`, reuses an id or holds a key that is not 32 bytes, writes the new key's canary, then adds the secret version (and removes the canary again if adding fails). It prints the ids and which is current, never key bytes. Afterwards save the new keyring to escrow.
   6. **The daily check:** the scheduler runs `verifyRunwayKeys`; run it by hand from the Cloud Scheduler console ("Force run"), or locally against the emulators with `npm run check:runway-keys` (fake keyrings, every refusal and failure). Read it with the log filter `jsonPayload.event="runway.keys.ok"` or `"runway.keys.failed"`.
   7. **What each `reason` means:** `missing-canary` (an id in the keyring has no canary: a publish stopped half way, or the document was deleted; the key is untested until it is restored), `unwrap-failed` (the canary does not open under that id's key: the keyring holds a different key or the canary was altered; treat as a lost key), `missing-id` (a canary exists for an id the keyring no longer has: an id was dropped, restore it from escrow now), `keyring-invalid` (the latest version is malformed, its `current` is not in `keys` or a key is not 32 bytes), `secret-unreadable` (the version could not be read, for example it is disabled or destroyed: re-enable it within the delay), `check-error` (the canaries could not be read). If the function does not run at all, for example because the latest version is disabled so the instance cannot start, no entry is written; the missing-heartbeat alert in Issue 26 is what catches that.
-  8. **Not done here:** the alert policies, the audit alert and the deny policy are created and proven in Issue 26. Until then the log events exist but nothing notifies anyone.
+  8. **Alerts, deny policy, escrow and the recovery drill** are in "Runway: master keyring protection runbook" below. Until the owner has run it and filled in its record table, the log events exist but nothing notifies anyone.
+
+### Runway: master keyring protection runbook
+
+Run by the owner, in this order, before any real person's plan exists. Nothing here has been run from the repo's sandbox: every box below stays empty until the owner ticks it and fills the record tables at the end. The commands are written from Google's documentation and the repo's own scripts; where a Google behaviour is not confirmed, the step says so and what to do either way.
+
+**Who holds what (fill in).** One person holds everything until the Succession issue (Issue 75) ships: the Google Cloud project, the billing account, the break-glass account and both escrow copies. If that person is unavailable and billing lapses or the project is closed, the secret and every wrapped data key go with it, and there is no second person who can recover them. That is a deliberate limit of the MVP, not an oversight.
+
+| Role | Held by | Where |
+| --- | --- | --- |
+| Escrow holder (both copies) | `<name>` | Password manager vault `<name>`; second cloud account `<provider and account>` (not the Firebase project's Google account) |
+| Alert recipients | `<email>`, phone push through the Google Cloud mobile app `<yes/no>` | One email notification channel in the real project and one in the scratch project |
+| Break-glass account (deny policy exception) | `<account>` | Credentials in the password manager vault only |
+
+Set these once (replace the values; no command below embeds a secret):
+
+```bash
+export PROJECT=moondreams-dev-apps
+export SCRATCH=<your scratch project id>   # a throwaway project with billing; never PROJECT
+export OWNER_EMAIL=<alert email>
+```
+
+#### 1. Destruction delay, no expiry, least privilege (real project)
+
+- [ ] Set the delay (applies to every enabled and disabled version already there):
+
+  ```bash
+  gcloud secrets update RUNWAY_MASTER_KEYS --version-destroy-ttl=90d --project=$PROJECT
+  ```
+
+- [ ] Confirm it, and confirm there is no expiry, TTL or rotation schedule. `versionDestroyTtl` must read `7776000s` and `expireTime`, `ttl` and `rotation` must be absent:
+
+  ```bash
+  gcloud secrets describe RUNWAY_MASTER_KEYS --project=$PROJECT \
+    --format="yaml(name,versionDestroyTtl,expireTime,ttl,rotation)"
+  ```
+
+- [ ] Secret-level access. Only the runtime service account (`<project-number>-compute@developer.gserviceaccount.com`, see Service accounts) may hold `roles/secretmanager.secretAccessor`, and nobody holds `secretmanager.admin` or `secretmanager.secretVersionManager`:
+
+  ```bash
+  gcloud secrets get-iam-policy RUNWAY_MASTER_KEYS --project=$PROJECT
+  ```
+
+- [ ] Project-level access. Owner, Editor, Secret Manager Admin and Secret Version Manager at the project all include destroy, and they apply to this secret. List them and write down every member in the audit table:
+
+  ```bash
+  gcloud projects get-iam-policy $PROJECT --flatten="bindings[].members" \
+    --format="table(bindings.role,bindings.members)" \
+    --filter="bindings.role:(roles/owner OR roles/editor OR roles/secretmanager.admin OR roles/secretmanager.secretVersionManager)"
+  ```
+
+  Two members need a decision, not just a note. The default compute service account (the runtime) has historically been granted Editor on the project, and the code running as it could then destroy a version; remove Editor from it if it holds it (the function needs only `secretAccessor`, `datastore.user` and what its deploy grants; test a deploy afterwards). The GitHub Actions deployer is granted `secretmanager.admin` per secret (see Service accounts above) so it can set IAM policies; if it holds it on this secret, record that as a known exception (its key is a GitHub secret) or narrow it. Humans: keep the everyday account out of Owner if you can, and use a separate account for administration.
+
+#### 2. Deny policy (scratch project first)
+
+The design wants an IAM deny policy on `secretmanager.googleapis.com/secrets.delete` and `secretmanager.googleapis.com/versions.destroy` so that even a project Owner cannot destroy the secret except through a named break-glass account. Three things are unconfirmed; settle each in `$SCRATCH` and write the answer in the record table:
+
+1. **Is Secret Manager supported by deny policies, and under which permission names?** Google keeps a list of deny-supported permissions; look up `secretmanager.googleapis.com/secrets.delete` and `secretmanager.googleapis.com/versions.destroy` in it (and decide whether `versions.disable` should be denied too; it is reversible and the audit alert covers it).
+2. **Can a deny policy be created at the organization or project this account has?** The Deny Admin role (`roles/iam.denyAdmin`) is documented as grantable on an organization. Check whether the scratch project and the real project sit under one: `gcloud projects get-ancestors $PROJECT` lists an `organization` entry when they do. A project owned by a personal account has none.
+3. **Does Owner bypass it, and what is the break-glass exception?**
+
+Steps (needs `roles/iam.denyAdmin` for you on the attachment point):
+
+```bash
+cat > /tmp/runway-deny.json <<JSON
+{
+  "displayName": "Protect the Runway master keyring",
+  "rules": [
+    {
+      "denyRule": {
+        "deniedPrincipals": ["principalSet://goog/public:all"],
+        "exceptionPrincipals": ["principal://goog/subject/<break-glass-email>"],
+        "deniedPermissions": [
+          "secretmanager.googleapis.com/secrets.delete",
+          "secretmanager.googleapis.com/versions.destroy"
+        ],
+        "denialCondition": {
+          "title": "Only the Runway master keyring",
+          "expression": "resource.name.contains('/secrets/RUNWAY_MASTER_KEYS')"
+        }
+      }
+    }
+  ]
+}
+JSON
+gcloud iam policies create runway-protect-keyring --kind=denypolicies \
+  --attachment-point=cloudresourcemanager.googleapis.com/projects/$SCRATCH \
+  --policy-file=/tmp/runway-deny.json
+```
+
+The JSON follows Google's deny-policy format from its documentation and has not been run here. If `resource.name` is refused as a condition, drop `denialCondition` in the scratch project to test the principle (the policy then covers every secret in that project), and record that the real policy cannot be scoped to one secret. Allow several minutes for a new policy to take effect.
+
+- [ ] In the scratch project, create `RUNWAY_MASTER_KEYS` (step 5 below) and a throwaway version. With the policy in place, as the Owner (not the break-glass account): `gcloud secrets versions destroy 1 --secret=RUNWAY_MASTER_KEYS --project=$SCRATCH` and `gcloud secrets delete RUNWAY_MASTER_KEYS --project=$SCRATCH` must both answer `PERMISSION_DENIED` mentioning the deny policy. That settles whether Owner bypasses it.
+- [ ] As the Owner, try to remove the policy: `gcloud iam policies delete runway-protect-keyring --kind=denypolicies --attachment-point=cloudresourcemanager.googleapis.com/projects/$SCRATCH`. Record whether it works without the Deny Admin role. A policy an Owner can remove with no extra step is a speed bump, not a lock; say so in the record.
+- [ ] As the break-glass account the same destroy must succeed. Note the exact steps and who may use them.
+
+Record one outcome in the table (section 8) and, in the real project, apply it:
+
+- **In place:** the policy exists in the real project (same `create` command with `--attachment-point=.../projects/$PROJECT`), the destroy test above was repeated against a throwaway secret named `RUNWAY_MASTER_KEYS_DENY_TEST` (the condition matches by name), and the break-glass account's use is written down.
+- **Impossible, with compensating controls:** name which of the three answers failed. The compensating controls are the ones above that need no deny policy: the 90-day delay, no human with version-manager or admin, the audit alert, the failure and heartbeat alerts, escrow outside Google Cloud, and administering from a separate account kept out of everyday use. State that an Owner can still delete the whole secret immediately (the delay does not cover that) and that only the audit alert and escrow protect against it.
+- **Deferred:** write the reason and the date to revisit. Do not mark it done.
+
+#### 3. The three alerts (scratch project first, then the real one)
+
+Create one email channel per project, then the three policies. Run the whole of section 3 for `$SCRATCH` (set `P=$SCRATCH`), test each alert, then repeat for `$PROJECT` (`P=$PROJECT`) and test again.
+
+```bash
+export P=$SCRATCH
+gcloud beta monitoring channels create --project=$P \
+  --display-name="Runway owner email" --type=email \
+  --channel-labels=email_address=$OWNER_EMAIL
+gcloud beta monitoring channels list --project=$P --format="table(displayName,name)"
+export CHANNEL=<the name column: projects/.../notificationChannels/...>
+```
+
+A phone push is added in the console: Monitoring, Alerting, Edit notification channels, "Google Cloud Mobile App", after signing in to the Google Cloud app on the phone. An email channel may need verifying from the message Google sends; check it in the console before relying on it.
+
+**Alert A: failure.** Fires on any `runway.keys.failed` entry from the daily check (also on the `gcloud logging write` test entry below).
+
+```bash
+cat > /tmp/runway-alert-failed.json <<JSON
+{
+  "displayName": "Runway: key check failed",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "runway.keys.failed logged",
+    "conditionMatchedLog": { "filter": "jsonPayload.event=\"runway.keys.failed\"" }
+  }],
+  "alertStrategy": { "notificationRateLimit": { "period": "300s" }, "autoClose": "604800s" },
+  "notificationChannels": ["$CHANNEL"]
+}
+JSON
+gcloud alpha monitoring policies create --project=$P --policy-from-file=/tmp/runway-alert-failed.json
+```
+
+- [ ] Test: write a fake entry (it is not key material): `gcloud logging write runway-alert-test '{"event":"runway.keys.failed","checked":0,"failures":[],"drill":true}' --payload-type=json --severity=ERROR --project=$P`. The email must arrive within a few minutes. Also test the real thing once in the scratch project if you deploy `verifyRunwayKeys` there: disable the latest secret version (`gcloud secrets versions disable <n> --secret=RUNWAY_MASTER_KEYS`), force-run the job from Cloud Scheduler, expect `secret-unreadable`, then re-enable it.
+
+**Alert B: missing heartbeat.** A log-based metric counts `runway.keys.ok`, and a policy fires when the metric is absent. The check runs at 06:17 UTC daily, so the design says 26 hours.
+
+```bash
+gcloud logging metrics create runway_keys_ok --project=$P \
+  --description="Daily Runway key check passed" \
+  --log-filter='jsonPayload.event="runway.keys.ok"'
+```
+
+The metric has no time series until a matching entry has been logged, and an absence condition only watches a series that existed. In the scratch project write one (`gcloud logging write runway-alert-test '{"event":"runway.keys.ok","checked":1}' --payload-type=json --project=$P`); in the real project force-run `verifyRunwayKeys` from Cloud Scheduler once. Then:
+
+```bash
+cat > /tmp/runway-alert-heartbeat.json <<JSON
+{
+  "displayName": "Runway: key check heartbeat missing",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "No runway.keys.ok for 26 hours",
+    "conditionAbsent": {
+      "filter": "metric.type=\"logging.googleapis.com/user/runway_keys_ok\"",
+      "duration": "93600s",
+      "aggregations": [{ "alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_SUM" }]
+    }
+  }],
+  "notificationChannels": ["$CHANNEL"]
+}
+JSON
+gcloud alpha monitoring policies create --project=$P --policy-from-file=/tmp/runway-alert-heartbeat.json
+```
+
+**Open point to settle while creating it.** Google's documentation of metric-absence conditions, as remembered when this was written and not confirmed, caps the absence duration at 23.5 hours, which is shorter than the 24-hour cadence and would fire every day. If the API refuses `93600s`, or accepts only a shorter duration, do not shorten it to 23.5 hours. Choose one and record which: (a) a threshold condition on the same metric that fires when the sum over a one-day alignment period is below 1 (`conditionThreshold`, `COMPARISON_LT`, `thresholdValue` 1, `duration` `3600s`), accepting up to an hour of extra lag; (b) a PromQL condition with a 26-hour range; or (c) a code change that runs `verifyRunwayKeys` every six hours so that a 23-hour absence means four missed runs (a change to the function, to be made in its own PR). The option chosen is recorded in the table.
+
+- [ ] Test in the scratch project: pause the job that runs the check (or, with the metric only, stop writing entries) and wait past the window; the email must arrive; resume and confirm the incident closes. In the real project: `gcloud scheduler jobs list --location=us-central1 --project=$PROJECT` shows the job (its name starts `firebase-schedule-verifyRunwayKeys`); `gcloud scheduler jobs pause <name> --location=us-central1 --project=$PROJECT`, wait past the window, check the email, then `gcloud scheduler jobs resume ...` and force-run it once. The pause lasts more than a day, so do it before the first real user.
+
+**Alert C: Secret Manager audit.** Fires when a version of the secret is destroyed or disabled, or the secret is deleted (Admin Activity logs, always on). The filter matches any secret whose name begins `RUNWAY_MASTER_KEYS`, which is what lets the real project be tested without touching the real keyring.
+
+```bash
+cat > /tmp/runway-alert-audit.json <<JSON
+{
+  "displayName": "Runway: master keyring changed",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "Destroy, disable or delete on RUNWAY_MASTER_KEYS",
+    "conditionMatchedLog": {
+      "filter": "protoPayload.serviceName=\"secretmanager.googleapis.com\" AND protoPayload.methodName=(\"google.cloud.secretmanager.v1.SecretManagerService.DestroySecretVersion\" OR \"google.cloud.secretmanager.v1.SecretManagerService.DisableSecretVersion\" OR \"google.cloud.secretmanager.v1.SecretManagerService.DeleteSecret\") AND protoPayload.resourceName:\"/secrets/RUNWAY_MASTER_KEYS\""
+    }
+  }],
+  "alertStrategy": { "notificationRateLimit": { "period": "300s" }, "autoClose": "604800s" },
+  "notificationChannels": ["$CHANNEL"]
+}
+JSON
+gcloud alpha monitoring policies create --project=$P --policy-from-file=/tmp/runway-alert-audit.json
+```
+
+- [ ] Test in either project with a throwaway secret (the dummy value is the word `alert-test`, not a key). Each of the three steps must send its own email; wait for each:
+
+  ```bash
+  printf 'alert-test' | gcloud secrets create RUNWAY_MASTER_KEYS_ALERT_TEST --data-file=- --project=$P
+  gcloud secrets versions disable 1 --secret=RUNWAY_MASTER_KEYS_ALERT_TEST --project=$P
+  gcloud secrets versions destroy 1 --secret=RUNWAY_MASTER_KEYS_ALERT_TEST --project=$P
+  gcloud secrets delete RUNWAY_MASTER_KEYS_ALERT_TEST --project=$P
+  ```
+
+  If a deny policy covers the throwaway secret by name, the destroy and delete are denied and no entry is written that way; test those two before applying the policy, or as the break-glass account.
+- [ ] If the log shows the method names differently from the filter, open Logs Explorer, find the entry, copy its `protoPayload.methodName` and correct the filter here and in `TECHNICAL.md`.
+
+Finish by deleting the temp files (`rm /tmp/runway-*.json`) and confirming each alert fired once per test in the record table.
+
+#### 4. Escrow
+
+The keyring is saved after it is first created and after every rotation (a key added). Two copies, one holder, none in this repository or in any CI secret. The keyring is the only thing that opens every plan; the ids in it are not secret, the key values are.
+
+- [ ] Encrypt and save (the passphrase is generated by the password manager and stored in its own entry, separate from the encrypted file):
+
+  ```bash
+  gcloud secrets versions access latest --secret=RUNWAY_MASTER_KEYS --project=$PROJECT \
+    | gpg --symmetric --cipher-algo AES256 --armor -o runway-keyring-$(date +%F).asc
+  gcloud secrets versions access latest --secret=RUNWAY_MASTER_KEYS --project=$PROJECT | sha256sum
+  ```
+
+  The second command prints a fingerprint of the keyring text; it is safe to write on the escrow entries because the keys inside are 256 random bits each. Label each entry with the date, the ids in the keyring (not the values) and that fingerprint.
+- [ ] Copy 1: attach the `.asc` file to a password manager entry. Copy 2: upload the same file to the second secure cloud account, which is not the Firebase project's Google account and has its own two-step sign-in.
+- [ ] Delete the local `.asc` (`shred -u` or the platform's equivalent) and clear the terminal's history of the passphrase if one was typed. Check `git status` in the repo shows nothing new.
+- [ ] Prove each copy opens: fetch it, `gpg -d` it, pipe the output to `sha256sum` and compare with the fingerprint. Do this once now and again at each drill.
+- [ ] Keep keyring files out of the repo: `*.asc` and keyring JSON are never committed. If one is, treat the keyring as leaked and follow "Retiring a master key" in `TECHNICAL.md`.
+
+#### 5. Recovery drill (scratch project)
+
+Done before the first real user and after each rotation. It proves that the escrow copy alone restores a plan key after the secret is gone. Time it from the moment the secret is deleted until the unwrap succeeds, and write down every point that was unclear.
+
+`scripts/runway/drillKeyring.ts` seeds a test plan's wrapped key and later says only whether a keyring opens it; it refuses the real project and never prints key bytes. It needs Admin SDK credentials for the scratch project (`gcloud auth application-default login`) and a Firestore database there.
+
+- [ ] Prepare the scratch project: enable Secret Manager and Firestore (`gcloud services enable secretmanager.googleapis.com firestore.googleapis.com --project=$SCRATCH`; `gcloud firestore databases create --location=nam5 --project=$SCRATCH`).
+- [ ] Create a scratch keyring and secret, with the same delay as production:
+
+  ```bash
+  gcloud secrets create RUNWAY_MASTER_KEYS --replication-policy=automatic --version-destroy-ttl=90d --project=$SCRATCH
+  printf '{"current":"d1","keys":{"d1":"%s"}}' "$(openssl rand -hex 32)" \
+    | gcloud secrets versions add RUNWAY_MASTER_KEYS --data-file=- --project=$SCRATCH
+  ```
+
+- [ ] Seed the test plan: `npx tsx scripts/runway/drillKeyring.ts seed --project $SCRATCH --from-secret` prints `Seeded the test plan's wrapped key under d1.`
+- [ ] Escrow the scratch keyring exactly as in section 4 (with `$SCRATCH` in place of `$PROJECT`, and file names that say drill).
+- [ ] Lose it. Start the stopwatch. `gcloud secrets delete RUNWAY_MASTER_KEYS --project=$SCRATCH` (answer yes). If a deny policy covers the scratch project, do this as the break-glass account.
+- [ ] Open from escrow alone, with nothing from Google Cloud but the database: decrypt and pass the keyring on a pipe, for example `npx tsx scripts/runway/drillKeyring.ts open --project $SCRATCH --keyring-file <(gpg -d runway-keyring-drill.asc)`. Expect `Opened: the test plan's key unwrapped under d1.` If the shell has no `<(...)`, decrypt to a file in a private temporary directory and delete it straight afterwards.
+- [ ] Restore the secret from the escrow file, which holds the whole keyring with every id, so wrapped keys keep opening:
+
+  ```bash
+  gcloud secrets create RUNWAY_MASTER_KEYS --replication-policy=automatic --version-destroy-ttl=90d --project=$SCRATCH
+  gpg -d runway-keyring-drill.asc | gcloud secrets versions add RUNWAY_MASTER_KEYS --data-file=- --project=$SCRATCH
+  ```
+
+- [ ] Publish on the restored secret: `npx tsx scripts/runway/publishKeyring.ts --project $SCRATCH --new-id d2`. It adds `d2` as current, keeps `d1`, writes `d2`'s canary and prints ids only.
+- [ ] Unwrap again from the secret now in Google Cloud: `npx tsx scripts/runway/drillKeyring.ts open --project $SCRATCH --from-secret`. Expect `Opened ... under d1` (an old wrapped key opens after a rotation). Stop the stopwatch.
+- [ ] Clean up: delete the scratch project (or its secret and the `server/drill-test-plan` document), the decrypted files and the temp files. Write the record.
+
+What this does and does not prove. It proves that an escrow file restores the keyring, that the publish tool works on a restored secret and that the keyring opens a wrapped key made under it, with the same unwrap code `getRunwayKey` uses. It does not run the deployed `getRunwayKey` function. `publishKeyring.ts` refuses an id the keyring already holds and refuses to change the key behind an id, so `RUNWAY_NEW_KEY` (a supplied key) adds a key you hold under a new id; it cannot restore a key under its old id, because a wrapped key names the old id. Restoring is therefore always from the whole keyring file, as above. After restoring the secret in a new project, each id's canary (`apps/runway/keyChecks/{id}`) must exist or `verifyRunwayKeys` reports `missing-canary`; they come back with a restore of the database, and no tool recreates one for an id the keyring already holds.
+
+#### 6. The incident order, when an alert arrives
+
+1. **Master key failure (A):** read the `failures` in the entry. `secret-unreadable` with a disabled version: re-enable it (`gcloud secrets versions enable <n> --secret=RUNWAY_MASTER_KEYS --project=$PROJECT`) within the 90 days. Anything else: stop, do not rotate, restore from escrow as in section 5 and compare.
+2. **Heartbeat (B):** check Cloud Scheduler for a paused job, then the function's last deploy; a disabled latest version can also keep the instance from starting.
+3. **Audit (C):** if it was not you, treat the keyring as exposed: re-enable the version, check IAM, and follow "Retiring a master key" in `TECHNICAL.md`.
+
+#### 7. Not proven by any of this
+
+An Owner can delete the whole secret immediately unless a deny policy stops them; the delay applies to versions only. Anyone who holds the keyring and read access to the database can decrypt every plan. One person holding both escrow copies is a single point of failure until Issue 75. A phone push depends on the Google Cloud mobile app being installed and signed in.
+
+#### 8. Operator record
+
+Filled in by the owner. A row left blank means it has not been done. Never write a key, a wrapped key, a passphrase or escrow content here.
+
+| Item | Date | Result | Who |
+| --- | --- | --- | --- |
+| `--version-destroy-ttl=90d` set; no expiry, TTL or rotation (section 1) | | | |
+| Secret IAM: only runtime `secretAccessor` | | | |
+| Project-level audit (Owner, Editor, Admin, Version Manager members; compute service account Editor removed? deployer exception?) | | | |
+| Deny policy: service supported / permission names | | | |
+| Deny policy: organization present | | | |
+| Deny policy: Owner bypass / can remove it | | | |
+| Deny policy outcome (in place / impossible with controls / deferred) | | | |
+| Alert A tested in scratch, email arrived | | | |
+| Alert A tested in real project, email arrived | | | |
+| Alert B tested in scratch, email arrived; option chosen for the 26-hour window | | | |
+| Alert B tested in real project, email arrived | | | |
+| Alert C tested in scratch (disable, destroy, delete), emails arrived | | | |
+| Alert C tested in real project, emails arrived | | | |
+| Escrow copy 1 saved and opens (fingerprint matched) | | | |
+| Escrow copy 2 saved and opens (fingerprint matched) | | | |
+| Recovery drill: time from loss to unwrap | | | |
+| Recovery drill: unclear points | | | |
+| Re-drill after next rotation | | | |
+
 
 ### Runway: `deleteRunwayPlan`
 
