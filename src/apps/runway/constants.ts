@@ -60,7 +60,7 @@ export const STANCE_FOLLOW_PLAN = 'plan' as const;
 export const MORE_ENTRIES = ['settings', 'changeLog'] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
-export const RUNWAY_VIEWS = ['start', 'freeToSpend'] as const;
+export const RUNWAY_VIEWS = ['start', 'freeToSpend', 'checkAmount'] as const;
 
 /** The screens Settings opens, kept in the URL as `settingsView`. */
 export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
@@ -95,6 +95,7 @@ export const CHANGE_KIND_LABELS: Record<(typeof CHANGE_KINDS)[number], string> =
     whatIfApplied: 'What-if',
     ended: 'Ended',
     correction: 'Correction',
+    purchaseChange: 'Purchase',
   };
 
 export const RANGE_END_WORDS = {
@@ -132,6 +133,7 @@ export const CHANGE_KINDS = [
   'whatIfApplied',
   'ended',
   'correction',
+  'purchaseChange',
 ] as const;
 
 export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
@@ -256,6 +258,7 @@ export const DAY_RECORD_KINDS = [
   'proposed',
   'confirmed',
   'correction',
+  'purchaseChange',
 ] as const;
 /** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding and a `trackingChange` (tracking turned on or off). */
 export const MOVE_KINDS = ['billPaid', 'start', 'trackingChange'] as const;
@@ -662,6 +665,25 @@ export const SPEND_WORDS = {
   needsDay: 'Pick a day you were tracking, not one ahead.',
   needsShares: 'Say how much each envelope takes.',
   offline: 'This needs a connection. Nothing was saved.',
+  detailTitle: 'Purchase',
+  edit: 'Change this purchase',
+  save: 'Save',
+  removeLabel: 'Remove purchase',
+  removeTitle: 'Remove this purchase?',
+  removeConfirm: 'Remove',
+  notFound: 'That purchase is no longer here.',
+  changedElsewhere:
+    'This purchase changed on another device. Open it again to see the latest.',
+  belowRefunds: 'Refunds already returned more than that.',
+} as const;
+
+export const CHECK_WORDS = {
+  title: 'Check an amount',
+  open: 'Check an amount',
+  envelope: 'Envelope',
+  amount: 'Amount',
+  prompt: 'Pick an envelope and type an amount. Nothing is spent or moved.',
+  noEnvelopes: 'Add an envelope to check an amount against it.',
 } as const;
 
 export const START_WORDS = {

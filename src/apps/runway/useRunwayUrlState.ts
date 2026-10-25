@@ -66,6 +66,24 @@ export function useRunwayUrlState() {
     parseAsString,
   );
 
+  const [requestedPurchase, setRequestedPurchase] = useQueryState(
+    'purchase',
+    parseAsString,
+  );
+  const openPurchase = (purchaseId: string) =>
+    setRequestedPurchase(purchaseId, { history: 'replace' });
+  const closePurchase = () =>
+    setRequestedPurchase(null, { history: 'replace' });
+
+  const [requestedCheckEnvelope, setRequestedCheckEnvelope] = useQueryState(
+    'checkEnvelope',
+    parseAsString,
+  );
+  const openCheckAmount = (envelopeId: string | null) => {
+    setRequestedCheckEnvelope(envelopeId, { history: 'replace' });
+    setRequestedView('checkAmount', { history: 'replace' });
+  };
+
   const logSpan = requestedSpan ?? DEFAULT_CHANGE_LOG_SPAN;
   const logPage = Math.min(
     MAX_CHANGE_LOG_PAGE,
@@ -123,7 +141,10 @@ export function useRunwayUrlState() {
 
   const openView = (view: (typeof RUNWAY_VIEWS)[number]) =>
     setRequestedView(view, { history: 'replace' });
-  const closeView = () => setRequestedView(null, { history: 'replace' });
+  const closeView = () => {
+    setRequestedView(null, { history: 'replace' });
+    setRequestedCheckEnvelope(null, { history: 'replace' });
+  };
 
   return {
     activeTab,
@@ -133,6 +154,11 @@ export function useRunwayUrlState() {
     showTab,
     showSpend,
     spendEnvelope: requestedSpendEnvelope,
+    purchaseId: requestedPurchase,
+    checkEnvelope: requestedCheckEnvelope,
+    openCheckAmount,
+    openPurchase,
+    closePurchase,
     showSpendEnvelope,
     planSection,
     showPlanSection,

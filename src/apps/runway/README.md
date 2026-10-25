@@ -310,7 +310,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [x] Look ahead and plan upcoming income days, with how far the plan holds, a warning for any bill with no income before it is due, and changes that start in the future
 - [x] Choose Plan or Track, and move either way, with a start date and starting amounts on the way up
 - [x] Add a purchase by hand, split it, mark a refund, and see its envelope go down
-- [ ] "Left" for every envelope, Free to spend, and check an amount against an envelope
+- [x] "Left" for every envelope, Free to spend, and check an amount against an envelope
 - [x] Change the plan for one income day, from now on, from a date ahead, for a stretch, or end it, with the effect shown first
 - [x] Change log, with an optional note on every change
 - [x] Each confirmed income day kept as confirmed, and correctable with the original viewable

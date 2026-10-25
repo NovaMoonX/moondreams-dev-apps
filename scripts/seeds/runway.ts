@@ -26,6 +26,7 @@ import {
 import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
+  ChangeDoc,
   ChangeSealed,
   BillPaidSealed,
   BillSealed,
@@ -1656,6 +1657,7 @@ async function writeSeedPurchases(
     note: string | null;
     lines: PurchaseLine[];
     refundOfId?: string;
+    editedAt?: number;
   }[] = [
     {
       id: 'seed-purchase-safeway',
@@ -1663,6 +1665,7 @@ async function writeSeedPurchases(
       merchant: 'Safeway',
       note: null,
       lines: [line(groceries, 6_418)],
+      editedAt: 3_600_000,
     },
     {
       id: 'seed-purchase-shell',
@@ -1735,7 +1738,7 @@ async function writeSeedPurchases(
         source: 'manual',
         needsHome: false,
         createdAt,
-        updatedAt: createdAt,
+        updatedAt: createdAt + (entry.editedAt ?? 0),
         sealed: await sealJson(
           {
             amountCents,
@@ -1749,6 +1752,35 @@ async function writeSeedPurchases(
       } satisfies PurchaseDoc);
     }),
   );
+  const safewayDate = today - 3 * DAY_MS;
+  const removedDate = today - 8 * DAY_MS;
+  const changes = [
+    {
+      id: 'seed-change-purchase-edited',
+      createdAt: safewayDate + 13 * 3_600_000,
+      summary: 'Purchase changed: Safeway, amount $54.18 to $64.18.',
+    },
+    {
+      id: 'seed-change-purchase-removed',
+      createdAt: removedDate + 14 * 3_600_000,
+      summary: `Purchase removed: Walgreens, $12.40 on ${new Date(removedDate).toISOString().slice(0, 10)}.`,
+    },
+  ];
+  await Promise.all(
+    changes.map(async (entry) => {
+      batch.set(context.firestore.doc(`${plan}/changes/${entry.id}`), {
+        id: entry.id,
+        kind: 'purchaseChange',
+        createdAt: entry.createdAt,
+        effectiveFrom: null,
+        itemIds: [groceries],
+        sealed: await sealJson(
+          { summary: entry.summary, note: null } satisfies ChangeSealed,
+          encryption,
+        ),
+      } satisfies ChangeDoc);
+    }),
+  );
   await batch.commit();
-  return purchases.length;
+  return purchases.length + changes.length;
 }
