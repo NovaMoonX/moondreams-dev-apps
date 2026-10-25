@@ -1,3 +1,4 @@
+import { getOpenPeriod } from '@apps/runway/engine/level';
 import { allocate } from '@apps/runway/engine/money';
 import type {
   Cents,
@@ -36,6 +37,14 @@ export function toChosenLines(
   return result;
 }
 
+/** The day the figures count purchases from: the start of the stretch tracking is on for now. An earlier stretch has its own, older base, so a day there would be listed and never counted. */
+export function getCountedFrom(
+  periods: readonly TrackingPeriod[],
+): DateOnly | null {
+  const result = getOpenPeriod(periods)?.from ?? null;
+  return result;
+}
+
 /** A day inside any stretch of tracking, either end included. */
 export function isInTrackingPeriods(
   periods: readonly TrackingPeriod[],
@@ -63,11 +72,12 @@ export function getRefundableCents(
 export type RefundReturn =
   { kind: 'lines'; lines: PurchaseLine[] } | { kind: 'pick' };
 
-/** A refund (a positive amount) goes back to the envelopes the purchase took from, in the proportions it took them; otherwise the person picks. */
+/** A refund (a positive amount) goes back to the envelopes the purchase took from, in the proportions of what each still has to get back after the refunds already made; otherwise the person picks. */
 export function getRefundLines(
   refundCents: Cents,
   original: OpenPurchase,
   isLive: (envelopeId: string) => boolean,
+  purchases: readonly OpenPurchase[] = [],
 ): RefundReturn {
   const taken = original.lines.filter((line) => line.cents > 0);
   const isReturnable =
@@ -75,10 +85,24 @@ export function getRefundLines(
     taken.every((line) => line.envelopeId === null || isLive(line.envelopeId));
   if (!isReturnable) return { kind: 'pick' };
 
+  const returned = purchases
+    .filter((purchase) => purchase.refundOfId === original.id)
+    .flatMap((purchase) => purchase.lines);
+  const remaining = taken.map((line) =>
+    Math.max(
+      0,
+      line.cents +
+        returned
+          .filter((back) => back.envelopeId === line.envelopeId)
+          .reduce((sum, back) => sum + back.cents, 0),
+    ),
+  );
+  const canFollowRemaining =
+    remaining.reduce((sum, cents) => sum + cents, 0) >= refundCents;
   const ids = taken.map((line) => line.envelopeId ?? FREE_ID);
   const shares = allocate(
     refundCents,
-    taken.map((line) => line.cents),
+    canFollowRemaining ? remaining : taken.map((line) => line.cents),
     ids,
   );
   const lines = taken.flatMap((line, index) =>

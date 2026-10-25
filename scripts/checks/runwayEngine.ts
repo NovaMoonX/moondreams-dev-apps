@@ -20,6 +20,7 @@ import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
   getLineEffect,
   getPurchaseEffect,
+  getCountedFrom,
   getRefundableCents,
   getRefundLines,
   isInTrackingPeriods,
@@ -5408,10 +5409,42 @@ const version = (
     'refunds already made come off what can still be refunded',
   );
 
+  {
+    // Many small refunds follow what each envelope still has to get back, never one envelope's share twice.
+    const pair = purchase('pair', day(1), [
+      { envelopeId: 'a', cents: 1 },
+      { envelopeId: 'b', cents: 1 },
+    ]);
+    const first = getRefundLines(1, pair, everyone, [pair]);
+    assert.deepEqual(
+      first.kind === 'lines'
+        ? first.lines.map((l) => [l.envelopeId, l.cents])
+        : null,
+      [['a', -1]],
+    );
+    const second = getRefundLines(1, pair, everyone, [
+      pair,
+      purchase('r1', day(2), first.kind === 'lines' ? first.lines : [], 'pair'),
+    ]);
+    assert.deepEqual(
+      second.kind === 'lines'
+        ? second.lines.map((l) => [l.envelopeId, l.cents])
+        : null,
+      [['b', -1]],
+      'the second cent goes to the envelope that has had nothing back',
+    );
+  }
+
   const periods = [
     { from: day(0), to: day(9) },
     { from: day(20), to: null },
   ];
+  assert.equal(
+    getCountedFrom(periods),
+    day(20),
+    'figures count from the open stretch',
+  );
+  assert.equal(getCountedFrom([{ from: day(0), to: day(9) }]), null);
   assert.equal(isInTrackingPeriods(periods, day(9)), true);
   assert.equal(isInTrackingPeriods(periods, day(10)), false);
   assert.equal(isInTrackingPeriods(periods, day(40)), true);
