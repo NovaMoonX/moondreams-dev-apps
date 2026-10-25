@@ -83,3 +83,6 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - **Backend & Realtime:** Firebase (Firestore, Auth, Cloud Functions), private to each member unless they share a calendar snapshot on purpose (no invites).
 - **State Management:** Redux Toolkit, consistent with the platform's other mini apps.
 - **Deployment:** Ships as a mini-app within the existing platform, under `src/apps/a-list`.
+
+- **Ticket price:** showtimes show Adult prices unless the member picks Senior or Child under Membership settings → Ticket prices.
+- **Archive:** a watchlist movie can be archived with a reason (suggestions such as "No longer in theaters", or their own words) from its drawer; archived movies live under the Archived pill and can be put back.

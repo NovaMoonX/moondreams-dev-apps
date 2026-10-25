@@ -14,6 +14,7 @@ import type { WatchlistFilter } from '@apps/a-list/types';
 interface WatchlistFiltersProps {
   value: WatchlistFilter[];
   openingCount: number;
+  archivedCount: number;
   /** True while the search, a filter or the sort differs from the default. */
   canReset: boolean;
   onToggle: (filter: WatchlistFilter) => void;
@@ -23,6 +24,7 @@ interface WatchlistFiltersProps {
 function getFilterView(filter: WatchlistFilter) {
   if (filter === 'opening') return { emoji: '🎬', label: 'Opening' };
   if (filter === 'seen') return { emoji: '👀', label: 'Seen' };
+  if (filter === 'archived') return { emoji: '🗄️', label: 'Archived' };
   return { emoji: WATCH_PRIORITY_EMOJIS[filter], label: WATCH_PRIORITY_LABELS[filter] };
 }
 
@@ -43,6 +45,7 @@ function centerClickedPill(event: MouseEvent<HTMLDivElement>) {
 function WatchlistFilters({
   value,
   openingCount,
+  archivedCount,
   canReset,
   onToggle,
   onReset,
@@ -66,7 +69,10 @@ function WatchlistFilters({
           <RotateCcw className='h-3.5 w-3.5' /> Reset
         </Button>
       )}
-      {WATCHLIST_FILTERS.map((filter) => {
+      {WATCHLIST_FILTERS.filter(
+        (filter) =>
+          filter !== 'archived' || archivedCount > 0 || value.includes(filter),
+      ).map((filter) => {
         const { emoji, label } = getFilterView(filter);
         return (
           <Pill
@@ -79,6 +85,11 @@ function WatchlistFilters({
             {filter === 'opening' && openingCount > 0 && (
               <span className='bg-background/30 rounded-full px-1.5 text-[11px] font-semibold'>
                 {openingCount}
+              </span>
+            )}
+            {filter === 'archived' && archivedCount > 0 && (
+              <span className='bg-background/30 rounded-full px-1.5 text-[11px] font-semibold'>
+                {archivedCount}
               </span>
             )}
           </Pill>

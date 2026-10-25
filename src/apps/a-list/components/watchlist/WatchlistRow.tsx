@@ -23,7 +23,7 @@ interface WatchlistRowProps {
 function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
   const { item, isSeen, seenCount, nextPlannedAt, lastWatchedAt } = row;
   const { movie } = item;
-  const hasTopBadge = !isSeen && item.priority !== 'IF_I_HAVE_TIME';
+  const hasTopBadge = !isSeen && !row.isArchived && item.priority !== 'IF_I_HAVE_TIME';
 
   const getReleaseText = () => {
     if (movie.releaseDate === null || daysUntil === undefined)
@@ -51,7 +51,11 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
       </span>
       <div className='min-w-0 flex-1 space-y-1 py-0.5'>
         <p className='line-clamp-2 font-medium'>{movie.title}</p>
-        <p className='text-muted-foreground text-xs'>{getReleaseText()}</p>
+        <p className='text-muted-foreground text-xs'>
+          {row.isArchived
+            ? `Archived · ${item.archiveReason ?? ''}`
+            : getReleaseText()}
+        </p>
         {(item.preferredFormat !== null || lastWatchedAt !== null) && (
           <div className='flex flex-wrap items-center gap-1.5'>
             {item.preferredFormat !== null && (

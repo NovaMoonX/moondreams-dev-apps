@@ -34,13 +34,15 @@ const titleCollator = new Intl.Collator();
 function WatchlistScreen() {
   const { openOverlay } = useAListOverlay();
   const now = useNow();
-  const rows = useAppSelector((state) => selectWatchlistRows(state, now));
+  const allRows = useAppSelector((state) => selectWatchlistRows(state, now));
+  const rows = allRows.filter((row) => !row.isArchived);
+  const archivedRows = allRows.filter((row) => row.isArchived);
   const openingRows = useAppSelector((state) => selectOpeningRows(state, now));
   const [filters, setFilters] = useState<WatchlistFilter[]>([]);
   const [query, setQuery] = useState('');
   const [chosenSort, setSort] = useState<WatchlistSort>('default');
   const [order, setOrder] = useState<SortOrder>('natural');
-  const sort = rows.length > 1 ? chosenSort : 'default';
+  const sort = allRows.length > 1 ? chosenSort : 'default';
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
 
   const toggleFilter = (filter: WatchlistFilter) =>
@@ -92,7 +94,24 @@ function WatchlistScreen() {
     );
     const isOpeningOn = filters.includes('opening');
     const isSeenOn = filters.includes('seen');
+    const isArchivedOn = filters.includes('archived');
     const normalizedQuery = normalizeString(query);
+    if (isArchivedOn) {
+      const archived = archivedRows.filter(
+        (row) =>
+          normalizeString(row.item.movie.title).includes(normalizedQuery) &&
+          (priorities.length === 0 ||
+            (priorities as string[]).includes(row.item.priority)),
+      );
+      const result =
+        sort === 'default'
+          ? [...archived].sort(
+              (left, right) =>
+                (right.item.archivedAt ?? 0) - (left.item.archivedAt ?? 0),
+            )
+          : [...archived].sort(compareRows);
+      return result;
+    }
     const matches = rows.filter(
       (row) =>
         normalizeString(row.item.movie.title).includes(normalizedQuery) &&
@@ -173,6 +192,12 @@ function WatchlistScreen() {
 
   const getEmptyState = () => {
     const typed = query.trim();
+    if (filters.includes('archived'))
+      return {
+        emoji: '🗄️',
+        title: 'Nothing archived',
+        body: 'Movies you set aside, with the reason, show up here.',
+      };
     if (rows.length === 0)
       return {
         emoji: '🎬',
@@ -238,7 +263,7 @@ function WatchlistScreen() {
           </Button>
         }
       />
-      {rows.length > 0 && (
+      {allRows.length > 0 && (
         <div className='flex items-center gap-2'>
           <div className='min-w-0 flex-1'>
             <SearchInput
@@ -247,7 +272,7 @@ function WatchlistScreen() {
               onChange={setQuery}
             />
           </div>
-          {rows.length > 1 && (
+          {allRows.length > 1 && (
             <SortControl
               label='Sort your watchlist'
               options={WATCHLIST_SORT_OPTIONS}
@@ -267,6 +292,7 @@ function WatchlistScreen() {
       <WatchlistFilters
         value={filters}
         openingCount={openingRows.length}
+        archivedCount={archivedRows.length}
         canReset={canReset}
         onToggle={toggleFilter}
         onReset={resetAll}

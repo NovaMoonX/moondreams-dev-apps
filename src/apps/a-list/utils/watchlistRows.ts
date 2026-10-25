@@ -3,6 +3,8 @@ import type { Viewing, WatchlistItem } from '@apps/a-list/types';
 export interface WatchlistRowData {
   item: WatchlistItem;
   isSeen: boolean;
+  /** Derived from the item; older items lack the field. */
+  isArchived: boolean;
   seenCount: number;
   /** The earliest planned showing still ahead, if any. */
   nextPlannedAt: number | null;
@@ -37,6 +39,7 @@ export function buildWatchlistRows(
     return {
       item,
       isSeen: seenTimes.length > 0,
+      isArchived: (item.archivedAt ?? null) !== null,
       seenCount: seenTimes.length,
       nextPlannedAt: plannedTimes.length > 0 ? Math.min(...plannedTimes) : null,
       lastWatchedAt: seenTimes.length > 0 ? Math.max(...seenTimes) : null,

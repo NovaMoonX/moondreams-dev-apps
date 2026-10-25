@@ -132,8 +132,9 @@ service cloud.firestore {
       function isMembershipValid(data) {
         let keys = ['uid', 'monthlyCostCents', 'monthlyTotalCents', 'taxRate', 'startDate',
                     'weeklyGoal', 'monthlyGoal', 'setupCompletedAt', 'createdAt', 'lastEditedAt'];
-        // `favoriteTheatreId` arrived later: legacy documents lack it, so it is allowed but not required.
-        return data.keys().hasOnly(keys.concat(['favoriteTheatreId'])) && data.keys().hasAll(keys)
+        // `favoriteTheatreId` and `ticketPriceKind` arrived later: legacy documents lack them, so they are allowed but not required.
+        return data.keys().hasOnly(keys.concat(['favoriteTheatreId', 'ticketPriceKind'])) && data.keys().hasAll(keys)
+          && data.get('ticketPriceKind', null) in [null, 'ADULT', 'SENIOR', 'CHILD']
           && (data.get('favoriteTheatreId', null) == null || isTheatreId(data.favoriteTheatreId))
           && data.uid == uid
           && isCents(data.monthlyCostCents) && data.monthlyCostCents > 0
@@ -246,7 +247,12 @@ service cloud.firestore {
       match /watchlist/{movieKey} {
         function isWatchlistItemValid(data) {
           let keys = ['movieKey', 'movie', 'priority', 'preferredFormat', 'createdAt', 'lastEditedAt'];
-          return data.keys().hasOnly(keys) && data.keys().hasAll(keys)
+          // `archivedAt` and `archiveReason` arrived later: older items lack them. They are set together or not at all.
+          return data.keys().hasOnly(keys.concat(['archivedAt', 'archiveReason'])) && data.keys().hasAll(keys)
+            && (data.get('archivedAt', null) == null) == (data.get('archiveReason', null) == null)
+            && (data.get('archivedAt', null) == null || data.archivedAt is int)
+            && (data.get('archiveReason', null) == null
+              || (data.archiveReason is string && data.archiveReason.size() > 0 && data.archiveReason.size() <= 80))
             && data.movieKey == movieKey
             && movieKey.matches('^(imdb-tt[0-9]{7,10}|tmdb-[0-9]{1,9}|manual-[A-Za-z0-9-]{8,40})$')
             && isMovieValid(data.movie)

@@ -9,6 +9,7 @@ import type {
   WatchPriority,
 } from '@apps/a-list/types';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { MAX_ARCHIVE_REASON_LENGTH } from '@apps/a-list/constants';
 
 function getItemRef(uid: string, movieKey: string) {
   const itemRef = doc(
@@ -31,7 +32,7 @@ interface AddWatchlistItemInput {
   preferredFormat: AmcFormat | null;
 }
 
-/** Resolves `created: false` when the movie was already on the list; its priority is left alone. */
+/** Resolves `created: false` when the movie was already on the list; its priority is left alone. An archived movie comes back instead. */
 export const addWatchlistItem = createAsyncThunk<
   { created: boolean },
   AddWatchlistItemInput,
@@ -48,7 +49,16 @@ export const addWatchlistItem = createAsyncThunk<
       const created = await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(itemRef);
         if (snapshot.exists()) {
-          return false;
+          if (snapshot.get('archivedAt') == null) {
+            return false;
+          }
+          // Adding a movie that was archived brings it back as it was.
+          transaction.update(itemRef, {
+            archivedAt: null,
+            archiveReason: null,
+            lastEditedAt: Date.now(),
+          });
+          return true;
         }
 
         const now = Date.now();
@@ -63,6 +73,8 @@ export const addWatchlistItem = createAsyncThunk<
           },
           priority,
           preferredFormat: preferredFormat ?? null,
+          archivedAt: null,
+          archiveReason: null,
           createdAt: now,
           lastEditedAt: now,
         };
@@ -148,3 +160,44 @@ export const refreshWatchlistMovie = createAsyncThunk<
     }
   },
 );
+
+/** Moves a movie off the active list with the reason it left; its viewings stay on the calendar. */
+export const archiveWatchlistItem = createAsyncThunk<
+  void,
+  { uid: string; movieKey: string; reason: string },
+  { rejectValue: string }
+>(
+  'aList/watchlist/archive',
+  async ({ uid, movieKey, reason }, { rejectWithValue }) => {
+    const now = Date.now();
+    try {
+      await updateDoc(getItemRef(uid, movieKey), {
+        archivedAt: now,
+        archiveReason: reason.trim().slice(0, MAX_ARCHIVE_REASON_LENGTH),
+        lastEditedAt: now,
+      });
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to archive this movie.'),
+      );
+    }
+  },
+);
+
+export const restoreWatchlistItem = createAsyncThunk<
+  void,
+  { uid: string; movieKey: string },
+  { rejectValue: string }
+>('aList/watchlist/restore', async ({ uid, movieKey }, { rejectWithValue }) => {
+  try {
+    await updateDoc(getItemRef(uid, movieKey), {
+      archivedAt: null,
+      archiveReason: null,
+      lastEditedAt: Date.now(),
+    });
+  } catch (error) {
+    return rejectWithValue(
+      getErrorMessage(error, 'Unable to restore this movie.'),
+    );
+  }
+});

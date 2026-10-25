@@ -285,7 +285,7 @@ export const selectOpeningRows = createSelector(
     const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
     const result = rows
       .flatMap((row) => {
-        const daysUntil = row.isSeen
+        const daysUntil = row.isSeen || row.isArchived
           ? null
           : getDaysUntilOpening(row.item.movie.releaseDate, todayDay);
         return daysUntil === null ? [] : [{ ...row, daysUntil }];

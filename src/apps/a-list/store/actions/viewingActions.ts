@@ -77,6 +77,8 @@ export const addViewing = createAsyncThunk<
             movie: snapshot,
             priority: DEFAULT_WATCH_PRIORITY,
             preferredFormat: null,
+            archivedAt: null,
+            archiveReason: null,
             createdAt: now,
             lastEditedAt: now,
           };

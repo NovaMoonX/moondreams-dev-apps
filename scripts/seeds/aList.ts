@@ -85,6 +85,14 @@ function getWatchlistFixtures(now: number) {
       priority: 'WANT_TO_SEE',
       preferredFormat: null,
     },
+    {
+      movieKey: 'imdb-tt99000005',
+      movie: movie('Winter Lanterns', getDayUtcAhead(now, -40), 104, 'PG'),
+      priority: 'WANT_TO_SEE',
+      preferredFormat: null,
+      archivedAt: now - 3 * DAY_MS,
+      archiveReason: 'No longer in theaters',
+    },
   ];
 }
 
@@ -418,6 +426,7 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     weeklyGoal: 2,
     monthlyGoal: 6,
     favoriteTheatreId: SEED_THEATRES[0].theatreId,
+    ticketPriceKind: 'ADULT',
     setupCompletedAt: setupAt,
     createdAt: setupAt,
     lastEditedAt: setupAt,
@@ -439,6 +448,8 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
         .collection('watchlist')
         .doc(item.movieKey)
         .set({
+          archivedAt: null,
+          archiveReason: null,
           ...item,
           createdAt: setupAt + index * 60_000,
           lastEditedAt: setupAt + index * 60_000,

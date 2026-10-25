@@ -1,7 +1,7 @@
 import { defineSecret } from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 
-import type { AmcFormat, ShowtimeOption, TheatreResult } from './types.js';
+import type { AmcFormat, ShowtimeOption, TheatreResult, TicketPriceKind, TicketPrices } from './types.js';
 
 export const AMC_API_KEY = defineSecret('AMC_API_KEY');
 
@@ -295,7 +295,7 @@ interface AmcShowtime {
   purchaseUrl?: string;
   mobilePurchaseUrl?: string;
   attributes?: Array<{ code?: string; name?: string }>;
-  ticketPrices?: Array<{ type?: string; price?: number }>;
+  ticketPrices?: Array<{ type?: string; agePolicy?: string; name?: string; price?: number }>;
 }
 
 interface AmcShowtimesResponse {
@@ -338,9 +338,25 @@ function toFormat(showtime: AmcShowtime): AmcFormat {
   return match ? match[1] : 'STANDARD';
 }
 
-function toAdultPriceCents(showtime: AmcShowtime) {
-  const adult = (showtime.ticketPrices ?? []).find((entry) => entry.type?.toLowerCase() === 'adult');
-  return typeof adult?.price === 'number' && adult.price >= 0 ? Math.round(adult.price * 100) : null;
+const NO_PRICES: TicketPrices = { ADULT: null, SENIOR: null, CHILD: null };
+
+function toTicketKind(entry: { type?: string; agePolicy?: string; name?: string }): TicketPriceKind | null {
+  const text = [entry.type, entry.agePolicy, entry.name].join(' ').toLowerCase();
+  if (/senior/.test(text)) return 'SENIOR';
+  if (/child|kid|youth/.test(text)) return 'CHILD';
+  return /adult/.test(text) ? 'ADULT' : null;
+}
+
+// An exact "Adult" entry wins over a variant of it; the first entry of each kind otherwise.
+function toTicketPrices(showtime: AmcShowtime): TicketPrices {
+  const entries = (showtime.ticketPrices ?? []).filter((entry) => typeof entry.price === 'number' && entry.price >= 0);
+  const priceOf = (kind: TicketPriceKind) => {
+    const ofKind = entries.filter((entry) => toTicketKind(entry) === kind);
+    const exact = ofKind.find((entry) => entry.type?.trim().toLowerCase() === kind.toLowerCase());
+    const entry = exact ?? ofKind[0];
+    return entry ? Math.round((entry.price as number) * 100) : null;
+  };
+  return { ADULT: priceOf('ADULT'), SENIOR: priceOf('SENIOR'), CHILD: priceOf('CHILD') };
 }
 
 function toHttpsUrl(value: string | undefined) {
@@ -371,6 +387,8 @@ function fixtureDay(date: string): DayShowtime[] {
     format: format as AmcFormat,
     priceCents: priceCents as number,
     standardPriceCents: null,
+    prices: { ADULT: priceCents as number, SENIOR: (priceCents as number) - 300, CHILD: (priceCents as number) - 400 },
+    standardPrices: NO_PRICES,
     purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
     isSoldOut: index === 9,
     // Matches every title, so any movie the emulator is asked about has showings.
@@ -401,14 +419,17 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
     .flatMap((showtime) => {
       const startsAt = Date.parse(showtime.showDateTimeUtc ?? '');
       const purchaseUrl = toHttpsUrl(showtime.purchaseUrl) ?? toHttpsUrl(showtime.mobilePurchaseUrl);
+      const prices = toTicketPrices(showtime);
       return Number.isFinite(startsAt) && purchaseUrl && showtime.id !== undefined && showtime.movieName
         ? [
             {
               showtimeId: String(showtime.id),
               startsAt,
               format: toFormat(showtime),
-              priceCents: toAdultPriceCents(showtime),
+              priceCents: prices.ADULT,
               standardPriceCents: null,
+              prices,
+              standardPrices: NO_PRICES,
               purchaseUrl,
               isSoldOut: Boolean(showtime.isSoldOut),
               movieTitle: showtime.movieName,
@@ -427,20 +448,25 @@ export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeO
   const standards = matches.filter(
     (showtime) => showtime.format === 'STANDARD' && showtime.priceCents !== null && !showtime.isSoldOut && showtime.startsAt > now,
   );
-  const getBaseline = (startsAt: number) => {
+  const getBaseline = (startsAt: number): TicketPrices => {
     const nearest = [...standards].sort(
       (left, right) => Math.abs(left.startsAt - startsAt) - Math.abs(right.startsAt - startsAt) || left.startsAt - right.startsAt,
     )[0];
-    return nearest ? nearest.priceCents : null;
+    return nearest ? nearest.prices : NO_PRICES;
   };
-  const result = matches.map((showtime) => ({
-    showtimeId: showtime.showtimeId,
-    startsAt: showtime.startsAt,
-    format: showtime.format,
-    priceCents: showtime.priceCents,
-    standardPriceCents: showtime.format === 'STANDARD' ? null : getBaseline(showtime.startsAt),
-    purchaseUrl: showtime.purchaseUrl,
-    isSoldOut: showtime.isSoldOut,
-  }));
+  const result = matches.map((showtime) => {
+    const standardPrices = showtime.format === 'STANDARD' ? NO_PRICES : getBaseline(showtime.startsAt);
+    return {
+      showtimeId: showtime.showtimeId,
+      startsAt: showtime.startsAt,
+      format: showtime.format,
+      priceCents: showtime.priceCents,
+      standardPriceCents: standardPrices.ADULT,
+      prices: showtime.prices,
+      standardPrices,
+      purchaseUrl: showtime.purchaseUrl,
+      isSoldOut: showtime.isSoldOut,
+    };
+  });
   return result;
 }

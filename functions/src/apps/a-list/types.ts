@@ -43,6 +43,11 @@ export interface TheatreResult {
 
 export type AmcFormat = 'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
 
+export type TicketPriceKind = 'ADULT' | 'SENIOR' | 'CHILD';
+
+/** AMC's list price for each kind of ticket, before tax and fees; null when AMC lists none. */
+export type TicketPrices = Record<TicketPriceKind, number | null>;
+
 export interface ShowtimeOption {
   /** AMC's showtime id. */
   showtimeId: string;
@@ -53,6 +58,10 @@ export interface ShowtimeOption {
   priceCents: number | null;
   /** The cheapest Standard showing of the same movie that day, for a premium showing; null otherwise or when there is none. */
   standardPriceCents: number | null;
+  /** The list price of every kind of ticket AMC lists; `priceCents` is the adult one. */
+  prices: TicketPrices;
+  /** The nearest Standard showing's price of every kind, for a premium showing; all null otherwise. */
+  standardPrices: TicketPrices;
   /** https link to buy this showing on amctheatres.com. */
   purchaseUrl: string;
   isSoldOut: boolean;
