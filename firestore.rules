@@ -46,6 +46,12 @@ service cloud.firestore {
     function isCreatedByMe() { return request.resource.data.createdBy == request.auth.uid; }
     function isTripIdKept() { return request.resource.data.tripId == resource.data.tripId; }
 
+    // A link other members open from the trip is a web address, never a javascript: or data: one.
+    function hasSafeLinkUrl() {
+      return request.resource.data.get('linkUrl', null) == null
+        || (request.resource.data.linkUrl is string && request.resource.data.linkUrl.matches('^https?://.*'));
+    }
+
     function isHouseholdMember(householdId) {
       return request.auth != null
         && exists(/databases/$(database)/documents/apps/nine-lives/households/$(householdId))
@@ -208,8 +214,17 @@ service cloud.firestore {
     }
 
     // Cats, records, visits, expenses, litter and the rest: any member of the household.
-    match /apps/nine-lives/households/{householdId}/{collection}/{docId=**} {
+    match /apps/nine-lives/households/{householdId}/cats/{catId} {
+      allow read, create, update: if isHouseholdMember(householdId);
+      allow delete: if isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
+    }
+
+    match /apps/nine-lives/households/{householdId}/cats/{catId}/{collection}/{docId=**} {
       allow read, write: if isHouseholdMember(householdId);
+    }
+
+    match /apps/nine-lives/households/{householdId}/{collection}/{docId=**} {
+      allow read, write: if collection != 'cats' && isHouseholdMember(householdId);
     }
 
     // --- App: pinch ---
@@ -268,8 +283,13 @@ service cloud.firestore {
         return changedKeys().hasOnly(['title', 'coverImageUrl', 'startDate', 'endDate', 'timezone', 'city', 'defaultCurrency', 'noExpenseKeys', 'lastEditedAt']);
       }
 
+      // Any member sets the album once; changing or clearing it is an editor's, and the setter is always the caller.
       function isAlbumUpdate() {
-        return changedKeys().hasOnly(['sharedAlbumUrl', 'sharedAlbumSetByUid', 'sharedAlbumSetAt', 'lastEditedAt']);
+        let url = request.resource.data.get('sharedAlbumUrl', null);
+        return changedKeys().hasOnly(['sharedAlbumUrl', 'sharedAlbumSetByUid', 'sharedAlbumSetAt', 'lastEditedAt'])
+          && (url == null || (url is string && url.matches('^https?://[^\\s]+$')))
+          && request.resource.data.get('sharedAlbumSetByUid', null) in [null, request.auth.uid]
+          && (resource.data.get('sharedAlbumUrl', null) == null || isTripEditorOrAdmin());
       }
 
       function isArchiveUpdate() {
@@ -366,8 +386,8 @@ service cloud.firestore {
       }
 
       allow read: if isTripMemberOf(tripId);
-      allow create: if canAddToTrip(tripId) && isCreatedByMe();
-      allow update: if (canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept() && (isArchiveKept() || isTripAdminOf(tripId)))
+      allow create: if canAddToTrip(tripId) && isCreatedByMe() && hasSafeLinkUrl();
+      allow update: if (canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept() && hasSafeLinkUrl() && (isArchiveKept() || isTripAdminOf(tripId)))
         // Every member marks an event seen for themselves.
         || (isTripMemberOf(tripId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenBy'])
@@ -408,6 +428,7 @@ service cloud.firestore {
       allow read: if isTripMemberOf(tripId);
       allow create: if isTripMemberOf(tripId)
         && request.resource.data.addedByUid == request.auth.uid
+        && hasSafeLinkUrl()
         && request.resource.data.convertedToEntityId == null
         && request.resource.data.voterUids.removeAll([request.auth.uid]).size() == 0;
       allow update: if (isTripMemberOf(tripId)
@@ -415,6 +436,7 @@ service cloud.firestore {
           && request.resource.data.voterUids.removeAll(resource.data.voterUids).removeAll([request.auth.uid]).size() == 0
           && resource.data.voterUids.removeAll(request.resource.data.voterUids).removeAll([request.auth.uid]).size() == 0)
         || (isIdeaPoster()
+          && hasSafeLinkUrl()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ideaType', 'title', 'notes', 'linkUrl', 'ideaDetails', 'lastEditedAt']))
         // Turning an idea into an event is the creator of that event's call, with the event written in the same commit.
         || (canAddToTrip(tripId)
@@ -430,8 +452,8 @@ service cloud.firestore {
     // Stays and rentals share the events' phase rules; every member may mark a stay seen for themselves.
     match /apps/waypoint/trips/{tripId}/stays/{stayId} {
       allow read: if isTripMemberOf(tripId);
-      allow create: if canAddToTrip(tripId) && isCreatedByMe();
-      allow update: if (canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept())
+      allow create: if canAddToTrip(tripId) && isCreatedByMe() && hasSafeLinkUrl();
+      allow update: if (canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept() && hasSafeLinkUrl())
         || (isTripMemberOf(tripId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenBy'])
           && changesOnlyOwnKey('seenBy'));
@@ -440,8 +462,8 @@ service cloud.firestore {
 
     match /apps/waypoint/trips/{tripId}/rentals/{rentalId} {
       allow read: if isTripMemberOf(tripId);
-      allow create: if canAddToTrip(tripId) && isCreatedByMe();
-      allow update: if canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept();
+      allow create: if canAddToTrip(tripId) && isCreatedByMe() && hasSafeLinkUrl();
+      allow update: if canEditTripPlan(tripId) && isTripIdKept() && isCreatedByKept() && hasSafeLinkUrl();
       allow delete: if canEditTripPlan(tripId);
     }
 
@@ -450,14 +472,28 @@ service cloud.firestore {
         return data.get('earlyPayments', {});
       }
 
-      // A member writes only their own early-payment entry, to another member of the trip.
+      // Everyone-expenses cover whoever is on the trip now; the other targets list their people.
+      function isEarlyPaymentPartOfSplit() {
+        let targetType = resource.data.targetType;
+        return targetType in ['EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE']
+          || (targetType == 'SPECIFIC_MEMBERS' && request.auth.uid in resource.data.targetMemberIds)
+          || (targetType == 'JUST_ME' && request.auth.uid == resource.data.payerUid);
+      }
+
+      // A member writes only their own early-payment entry, to another member of the trip, on an expense
+      // they are part of; once the expense is paid, only the entry's returned flag can change.
       function isOwnEarlyPaymentChangeValid() {
+        let before = earlyPaymentsOf(resource.data);
         let after = earlyPaymentsOf(request.resource.data);
-        return after.diff(earlyPaymentsOf(resource.data)).affectedKeys().hasOnly([request.auth.uid])
+        return after.diff(before).affectedKeys().hasOnly([request.auth.uid])
           && (!(request.auth.uid in after)
             || (after[request.auth.uid].toUid != request.auth.uid
               && after[request.auth.uid].toUid in getTrip(tripId).members
-              && after[request.auth.uid].amount > 0));
+              && after[request.auth.uid].amount > 0
+              && isEarlyPaymentPartOfSplit()
+              && (resource.data.status == 'EXPECTED'
+                || (request.auth.uid in before
+                  && after[request.auth.uid].diff(before[request.auth.uid]).affectedKeys().hasOnly(['isReturned', 'returnedAt'])))));
       }
 
       allow read: if isTripMemberOf(tripId);
