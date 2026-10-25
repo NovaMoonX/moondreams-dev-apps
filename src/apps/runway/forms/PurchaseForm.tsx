@@ -162,17 +162,39 @@ function PurchaseForm({
     };
   }, []);
 
+  const countedFrom = getCountedFrom(periods);
+  const isEditingCounted =
+    editing !== undefined &&
+    countedFrom !== null &&
+    editing.date >= countedFrom;
   const ownCents = (id: string) =>
-    editingLines.reduce(
-      (sum, line) => (line.envelopeId === id ? sum + line.cents : sum),
-      0,
-    );
-  const options = envelopes.map(({ item, version }) => ({
+    !isEditingCounted
+      ? 0
+      : editingLines.reduce(
+          (sum, line) => (line.envelopeId === id ? sum + line.cents : sum),
+          0,
+        );
+  const liveOptions = envelopes.map(({ item, version }) => ({
     id: item.id,
     name: version.payload.name,
     emoji: version.payload.emoji,
     leftCents: (balances.assignedByItem[item.id] ?? 0) + ownCents(item.id),
   }));
+  const keptOptions = [
+    ...new Set(
+      editingLines.flatMap((line) =>
+        line.envelopeId === null ? [] : [line.envelopeId],
+      ),
+    ),
+  ]
+    .filter((id) => !liveOptions.some((option) => option.id === id))
+    .map((id) => ({
+      id,
+      name: looks.get(id)?.name ?? 'An envelope',
+      emoji: looks.get(id)?.emoji ?? null,
+      leftCents: ownCents(id),
+    }));
+  const options = [...liveOptions, ...keptOptions];
   const others = purchases.filter((purchase) => purchase.id !== editing?.id);
   const refundedCents = editing
     ? others
@@ -197,6 +219,17 @@ function PurchaseForm({
       : (others.find((purchase) => purchase.id === originalId) ?? null);
   const refundable =
     original === null ? null : getRefundableCents(original, others);
+  const refundedBy = others
+    .filter((purchase) => editing && purchase.refundOfId === editing.id)
+    .flatMap((purchase) => purchase.lines)
+    .reduce<Record<string, number>>((acc, line) => {
+      const key = line.envelopeId ?? FREE_VALUE;
+      return { ...acc, [key]: (acc[key] ?? 0) - line.cents };
+    }, {});
+  const centsAt = (set: readonly PurchaseLine[], key: string) =>
+    set
+      .filter((line) => (line.envelopeId ?? FREE_VALUE) === key)
+      .reduce((sum, line) => sum + line.cents, 0);
   const returnsToOriginal =
     isRefund &&
     original !== null &&
@@ -206,12 +239,19 @@ function PurchaseForm({
   const getLines = (): PurchaseLine[] | null => {
     if (amount === null) return null;
     if (isRefund) {
+      const keepsStored =
+        editing !== undefined &&
+        amount === -editing.amountCents &&
+        originalId === editing.refundOfId &&
+        (returnsToOriginal ||
+          returnTo === (editingLines[0]?.envelopeId ?? FREE_VALUE));
+      if (keepsStored) return editingLines;
       if (original !== null && returnsToOriginal) {
         const result = getRefundLines(
           amount,
           original,
           (id) => liveIds.has(id),
-          purchases,
+          others,
         );
         return result.kind === 'lines' ? result.lines : null;
       }
@@ -253,19 +293,31 @@ function PurchaseForm({
       if (isSplit && !isRefund) return SPEND_WORDS.needsShares;
       return SPEND_WORDS.needsEnvelope;
     }
+    const shortKey = isRefund
+      ? undefined
+      : Object.keys(refundedBy).find(
+          (key) =>
+            centsAt(lines, key) <
+            Math.min(refundedBy[key], centsAt(editingLines, key)),
+        );
+    if (shortKey !== undefined) {
+      return `${shortKey === FREE_VALUE ? SPEND_WORDS.freeToSpend : nameOf(shortKey)} already got back more than that from refunds.`;
+    }
     if (date === null || date > today) return SPEND_WORDS.needsDay;
     if (!isInTrackingPeriods(periods, date)) {
       return `Tracking was not on for ${formatDateUTC(date)}.`;
     }
-    const countedFrom = getCountedFrom(periods);
-    if (countedFrom !== null && date < countedFrom) {
+    if (countedFrom !== null && date < countedFrom && date !== editing?.date) {
       return `Tracking started again on ${formatDateUTC(countedFrom)}. Pick that day or later.`;
     }
     return null;
   };
   const blocker = getBlocker();
 
-  const effect = lines === null ? null : getPurchaseEffect(lines, leftById);
+  const isCounted =
+    date !== null && countedFrom !== null && date >= countedFrom;
+  const effect =
+    lines === null || !isCounted ? null : getPurchaseEffect(lines, leftById);
   const getEffectLine = () => {
     if (effect === null || lines === null) return null;
     if (effect.over.length === 1) {

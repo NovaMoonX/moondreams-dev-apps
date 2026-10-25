@@ -4,7 +4,7 @@ import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { MAX_PURCHASE_LINES } from '@apps/runway/constants';
+import { MAX_PURCHASE_LINES, SPEND_WORDS } from '@apps/runway/constants';
 import {
   getCountedFrom,
   isInTrackingPeriods,
@@ -71,6 +71,7 @@ export async function addPurchase(
       input.date,
       input.lines,
       new Set(),
+      null,
     );
 
     const now = Date.now();
@@ -87,16 +88,14 @@ export async function addPurchase(
   return id;
 }
 
-const changedElsewhere =
-  'This purchase changed on another device. Open it again to see the latest.';
-
-/** Reads the plan and each envelope named, and refuses a day outside tracking or an envelope that is gone; `known` envelopes (already on the purchase) may be archived since. */
+/** Reads the plan and each envelope named, and refuses a day outside tracking or an envelope that is gone; `known` envelopes (already on the purchase) may be archived since. `keptDate` is the day an edited purchase already has: keeping it is allowed even when that day is in an earlier stretch, which is listed but never counted, while moving to such a day is refused like adding one. */
 async function checkDayAndEnvelopes(
   transaction: Transaction,
   uid: string,
   date: DateOnly,
   lines: readonly PurchaseLine[],
   known: ReadonlySet<string>,
+  keptDate: DateOnly | null,
 ) {
   const envelopeIds = [
     ...new Set(
@@ -122,7 +121,8 @@ async function checkDayAndEnvelopes(
     );
   }
   const countedFrom = getCountedFrom(periods);
-  if (countedFrom === null || date < countedFrom) {
+  const isKept = keptDate === date && countedFrom !== null;
+  if (!isKept && (countedFrom === null || date < countedFrom)) {
     throw new Error(
       countedFrom === null
         ? 'Tracking is off, probably from another device. Reopen Runway to see where it stands.'
@@ -151,7 +151,7 @@ async function readUnchanged(
     throw new Error('This purchase was already removed on another device.');
   }
   if ((snapshot.data() as PurchaseDoc).updatedAt !== previous.updatedAt) {
-    throw new Error(changedElsewhere);
+    throw new Error(SPEND_WORDS.changedElsewhere);
   }
 }
 
@@ -209,6 +209,7 @@ export async function editPurchase(
       input.date,
       input.lines,
       known,
+      previous.date,
     );
     const now = Math.max(Date.now(), previous.updatedAt + 1);
     transaction.update(purchaseRef(uid, previous.id), {
