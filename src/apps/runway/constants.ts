@@ -258,7 +258,6 @@ export const DAY_RECORD_KINDS = [
   'proposed',
   'confirmed',
   'correction',
-  'purchaseChange',
 ] as const;
 /** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding and a `trackingChange` (tracking turned on or off). */
 export const MOVE_KINDS = ['billPaid', 'start', 'trackingChange'] as const;
