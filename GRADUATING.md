@@ -12,11 +12,12 @@ How a mini-app that lives inside this site becomes an app of its own, with its o
 
 The site's catalog already has `status` (`draft`, `public`, `removed`), `isRestricted` and `allowedUsers` (`src/lib/types/appCatalog.ts`); "beta" is the stage this plan gives to a public app that still lives in the site. Nothing in the code is named beta yet.
 
-**Beta tier rules (proposed, not yet in the rules file).** While an app is in the site, `firestore.rules` keeps what protects people from each other and loosens what only protects the data from our own client's mistakes, because the whole file has to compile under 256,000 bytes (`npm run check:rules-size`; about 243,000 today, and Waypoint is 37% of it, Nine Lives 24%, Pinch 19%, A-List 7%, Worth the Wait 6%):
+**Beta tier rules (in `firestore.rules` now).** While an app is in the site, the rules keep what protects people from each other and leave out what only protects the data from our own client's mistakes. The file shrank from about 243,000 to about 47,000 estimated bytes (limit 256,000, `npm run check:rules-size`), so there is room for every app to grow without touching the limit.
 
-- Keep: sign-in, ownership, membership and role gates, immutable ids (`createdBy`, `tripId`, `householdId`), the `members`, invite-code and paid-status maps, the `hasOnly` key list, `createdAt` bounded by `request.time`, caps on list sizes.
-- Loosen: per-field type, length and enum checks on data only its owner reads.
-- Cost: a document written under loose rules may not pass the full rules later, so graduation includes a check over the existing data (phase 2).
+- Kept: sign-in, ownership, membership and role gates, trip phase rules, invite, pending-request and approval flows, immutable ownership fields (`createdBy`, `tripId`, `householdId`, `ownerUid`), own-key-only writes to shared maps (`seenBy`, paid status), the unguessable share-id format, the reminder link check, and the admin and app-catalog rules.
+- Dropped: per-field type, length and enum checks, the `hasOnly` and `hasAll` key lists, list caps and timestamp bounds. A person who can write a document can write any shape into it, so the client's types and caps are the only guard.
+- Loosened as a side effect: Nine Lives members can delete any document in their household's subcollections (cats were creator-delete only) and reach the legacy `catConditions` collection; an A-List calendar share's owner can rewrite their own share (only `ownerUid` is fixed); a Waypoint editor can write any non-membership, non-archive field of the trip's content, and any member can write the album fields.
+- Cost: a document written under loose rules may not pass the strict rules later, so graduation includes a check over the existing data (phase 2). The strict file is in git history at `c784e89` (the version #480 merged).
 
 ## When an app is ready
 
@@ -36,7 +37,7 @@ This is the list to walk for any app. "Moves" means it has to exist on the other
 |---|---|---|
 | **Accounts** | One Firebase Auth project (`moondreams-dev-apps`); one sign-in works in every app; `users/{uid}`, `siteVisits/{uid}`, the `admin` claim | Stays if the app stays in this project (option A below). Moves if it gets its own project (option B), and uids must be kept |
 | **Data** | Firestore under `apps/<id>/…`, Realtime Database `status/{uid}` presence, Storage paths that mirror Firestore | Stays (A) or is copied (B) |
-| **Rules and indexes** | One `firestore.rules`, `storage.rules`, `database.rules.json`, `firestore.indexes.json` | The app's blocks move to the new repo's own files at full strictness; the site's file shrinks |
+| **Rules and indexes** | One `firestore.rules`, `storage.rules`, `database.rules.json`, `firestore.indexes.json` | The app's blocks move to the new repo's own files at full strictness; the site's file shrinks further |
 | **Functions** | `functions/src/apps/<id>/`, plus site-wide ones: `fetchLinkMetadata`, `fetchPageContent`, `registerAppUsage`, the push sender and reminder pruner, `getFirebaseUsage`. Callables are opened with `npm run fb:invoker` | The app's own move. A site-wide function it uses is copied, or called across projects only if there is a reason |
 | **Secrets** | Functions secrets and env (TMDB, OMDB, AMC, image-search keys), reCAPTCHA and Places keys restricted to `apps.moondreams.dev` | Recreated for the new project and domain |
 | **Hosting and domain** | One Hosting site, `apps.moondreams.dev` (also the auth domain), a Cloudflare worker for link previews, `manifest-main.json` (the site installs as one app) | A new site and domain, its own manifest, icons and service worker |
@@ -74,7 +75,7 @@ Each phase ends in something that can ship and be rolled back.
 
 - Name, domain and brand (logo, icons, banner, colors); whether the Moondreams name stays.
 - Option A or B, above.
-- What "full rules" means for this app: the strictness it had before the beta tier, or new.
+- What "full rules" means for this app: the strictness it had before the beta tier (`git show c784e89:firestore.rules`, the app's blocks), or new.
 - Who is told, and how existing links (invite codes, share links, calendar shares) keep working.
 
 ### Phase 1: make it stand alone inside this repo
