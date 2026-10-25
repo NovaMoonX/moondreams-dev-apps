@@ -30,14 +30,17 @@ export function findReturning<V extends Versioned & { id: string }>(
   on: number,
   previousOn: number,
 ): Set<string> {
+  const stretched = versions.filter(
+    (version): version is V & { effectiveUntil: number } =>
+      version.effectiveUntil !== null &&
+      version.effectiveUntil > previousOn &&
+      version.effectiveUntil <= on,
+  );
   const result = new Set(
     itemIds.filter((itemId) =>
-      versions.some(
+      stretched.some(
         (version) =>
           version.itemId === itemId &&
-          version.effectiveUntil !== null &&
-          version.effectiveUntil > previousOn &&
-          version.effectiveUntil <= on &&
           resolveVersion(versions, itemId, version.effectiveUntil - DAY_MS)
             ?.id === version.id &&
           resolveVersion(versions, itemId, on)?.id !== version.id,

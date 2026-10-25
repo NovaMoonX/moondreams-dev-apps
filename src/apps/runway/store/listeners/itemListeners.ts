@@ -2,7 +2,7 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { openJson } from '@apps/runway/security';
+import { createSealedReader, type SealedReader } from '@apps/runway/security';
 import type {
   BillSealed,
   EnvelopeSealed,
@@ -30,7 +30,7 @@ const toError = (error: unknown) =>
 /** A kind this build does not read yet is left out rather than failing the whole plan. */
 async function openVersion(
   version: PlanVersionDoc,
-  encryption: RunwayEncryption,
+  read: SealedReader,
 ): Promise<OpenVersion | null> {
   const base = {
     id: version.id,
@@ -41,9 +41,8 @@ async function openVersion(
     changeId: version.changeId,
   };
   if (version.kind === 'source') {
-    const payload = await openJson<Partial<SourceSealed> & { name: string }>(
+    const payload = await read<Partial<SourceSealed> & { name: string }>(
       version.sealed,
-      encryption,
     );
     return {
       ...base,
@@ -52,9 +51,9 @@ async function openVersion(
     };
   }
   if (version.kind === 'payLine') {
-    const payload = await openJson<
+    const payload = await read<
       Omit<PayLineSealed, 'pairings'> & { pairings?: Pairing[] }
-    >(version.sealed, encryption);
+    >(version.sealed);
     return {
       ...base,
       kind: 'payLine',
@@ -62,7 +61,7 @@ async function openVersion(
     };
   }
   if (version.kind === 'envelope') {
-    const payload = await openJson<EnvelopeSealed>(version.sealed, encryption);
+    const payload = await read<EnvelopeSealed>(version.sealed);
     return {
       ...base,
       kind: 'envelope',
@@ -70,11 +69,11 @@ async function openVersion(
     };
   }
   if (version.kind === 'bill') {
-    const payload = await openJson<BillSealed>(version.sealed, encryption);
+    const payload = await read<BillSealed>(version.sealed);
     return { ...base, kind: 'bill', payload };
   }
   if (version.kind === 'goal') {
-    const payload = await openJson<GoalSealed>(version.sealed, encryption);
+    const payload = await read<GoalSealed>(version.sealed);
     return {
       ...base,
       kind: 'goal',
@@ -118,6 +117,7 @@ export function startVersionsListener(
   onError: (error: Error) => void,
 ): Unsubscribe {
   const sequence = { latest: 0 };
+  const read = createSealedReader(encryption);
 
   const stop = onSnapshot(
     planPath(uid, 'versions'),
@@ -129,7 +129,7 @@ export function startVersionsListener(
           snapshot.docs.map((entry) =>
             openVersion(
               { ...(entry.data() as PlanVersionDoc), id: entry.id },
-              encryption,
+              read,
             ),
           ),
         );

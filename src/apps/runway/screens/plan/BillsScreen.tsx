@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Receipt } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
+import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
@@ -21,6 +22,8 @@ import {
 import type { BillSealed } from '@apps/runway/types';
 
 const SEARCH_THRESHOLD = 8;
+const ROWS_PER_CHUNK = 12;
+const ESTIMATED_ROW_HEIGHT = 190;
 
 function BillsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -73,27 +76,55 @@ function BillsScreen() {
         {visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No bill matches that.</p>
         ) : (
-          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {visible.map(({ item, payload, payment }) => (
-              <BillRow
-                key={item.id}
-                billId={item.id}
-                bill={payload}
-                payment={payment}
-                planStance={stance}
-                footer={
-                  <ItemChangeControls
-                    kind='bill'
-                    itemId={item.id}
-                    current={payload}
-                    today={today}
-                    name={payload.name}
-                    onChange={() => setEditing({ itemId: item.id, payload })}
-                  />
+          <div className='border-border divide-border bg-card divide-y rounded-2xl border'>
+            {Array.from(
+              { length: Math.ceil(visible.length / ROWS_PER_CHUNK) },
+              (_, index) =>
+                visible.slice(
+                  index * ROWS_PER_CHUNK,
+                  (index + 1) * ROWS_PER_CHUNK,
+                ),
+            ).map((rows, index) => (
+              <div
+                key={rows[0].item.id}
+                className='defer-offscreen'
+                style={
+                  {
+                    '--defer-size': `${rows.length * ESTIMATED_ROW_HEIGHT}px`,
+                  } as CSSProperties
                 }
-              />
+              >
+                <LazyMount
+                  eager={index === 0}
+                  estimatedHeight={rows.length * ESTIMATED_ROW_HEIGHT}
+                >
+                  <ul className='divide-border divide-y'>
+                    {rows.map(({ item, payload, payment }) => (
+                      <BillRow
+                        key={item.id}
+                        billId={item.id}
+                        bill={payload}
+                        payment={payment}
+                        planStance={stance}
+                        footer={
+                          <ItemChangeControls
+                            kind='bill'
+                            itemId={item.id}
+                            current={payload}
+                            today={today}
+                            name={payload.name}
+                            onChange={() =>
+                              setEditing({ itemId: item.id, payload })
+                            }
+                          />
+                        }
+                      />
+                    ))}
+                  </ul>
+                </LazyMount>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     );

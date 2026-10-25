@@ -46,18 +46,30 @@ export function formatDate(timestamp: number) {
   });
 }
 
+const utcDayFormatters = {
+  currentYear: new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+  otherYear: new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+};
+
 /** Like `formatDate`, but reads UTC fields — for a `fromDateInputValue` timestamp
  * (e.g. a trip's `startDate`/`endDate`), where local fields shift the day for viewers behind UTC. */
 export function formatDateUTC(timestamp: number) {
   const date = new Date(timestamp);
   const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const formatter = isCurrentYear
+    ? utcDayFormatters.currentYear
+    : utcDayFormatters.otherYear;
 
-  return date.toLocaleDateString(undefined, {
-    ...(isCurrentYear ? {} : { year: 'numeric' }),
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+  return formatter.format(date);
 }
 
 /** "Sep 24" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */

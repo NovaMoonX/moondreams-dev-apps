@@ -114,16 +114,11 @@ export function buildRecords(input: BuildRecordsInput): {
 export function sumConfirmedByItem(
   records: readonly OpenRecord[],
 ): Record<string, Cents> {
-  const result = getEffectiveSplits(records).reduce<Record<string, Cents>>(
-    (acc, split) =>
-      split.lines.reduce(
-        (sums, line) => ({
-          ...sums,
-          [line.itemId]: (sums[line.itemId] ?? 0) + line.cents,
-        }),
-        acc,
-      ),
-    {},
-  );
+  const result = getEffectiveSplits(records)
+    .flatMap((split) => split.lines)
+    .reduce<Record<string, Cents>>((sums, line) => {
+      sums[line.itemId] = (sums[line.itemId] ?? 0) + line.cents;
+      return sums;
+    }, {});
   return result;
 }

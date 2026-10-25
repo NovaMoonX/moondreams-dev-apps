@@ -8,7 +8,11 @@ import {
 
 import { db } from '@lib/firebase/config';
 
-import { openJson } from '@apps/runway/security';
+import {
+  createSealedReader,
+  openJson,
+  type SealedReader,
+} from '@apps/runway/security';
 import type {
   ConfirmedSealed,
   CorrectionSealed,
@@ -26,10 +30,10 @@ const toError = (error: unknown) =>
 
 async function openDay(
   entry: IncomeDayDoc,
-  encryption: RunwayEncryption,
+  read: SealedReader,
 ): Promise<OpenDay> {
   const opened = entry.sealed
-    ? await openJson<Partial<DayOverrideSealed>>(entry.sealed, encryption)
+    ? await read<Partial<DayOverrideSealed>>(entry.sealed)
     : null;
   const result: OpenDay = {
     id: entry.id,
@@ -58,6 +62,7 @@ export function startDaysListener(
   onError: (error: Error) => void,
 ): Unsubscribe {
   const sequence = { latest: 0 };
+  const read = createSealedReader(encryption);
 
   const stop = onSnapshot(
     query(
@@ -70,10 +75,7 @@ export function startDaysListener(
       try {
         const opened = await Promise.all(
           snapshot.docs.map((entry) =>
-            openDay(
-              { ...(entry.data() as IncomeDayDoc), id: entry.id },
-              encryption,
-            ),
+            openDay({ ...(entry.data() as IncomeDayDoc), id: entry.id }, read),
           ),
         );
         if (mine === sequence.latest) onChange(opened);

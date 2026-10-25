@@ -10,7 +10,7 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { MOVE_KINDS } from '@apps/runway/constants';
-import { openJson } from '@apps/runway/security';
+import { createSealedReader, type SealedReader } from '@apps/runway/security';
 import type {
   BillPaidSealed,
   MoveDoc,
@@ -23,10 +23,7 @@ import type {
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
 
-async function openMove(
-  entry: MoveDoc,
-  encryption: RunwayEncryption,
-): Promise<OpenMove> {
+async function openMove(entry: MoveDoc, read: SealedReader): Promise<OpenMove> {
   const base = {
     id: entry.id,
     date: entry.date,
@@ -35,17 +32,14 @@ async function openMove(
     createdAt: entry.createdAt,
   };
   if (entry.kind === 'start') {
-    const payload = await openJson<StartSealed>(entry.sealed, encryption);
+    const payload = await read<StartSealed>(entry.sealed);
     return { ...base, kind: 'start', payload };
   }
   if (entry.kind === 'trackingChange') {
-    const payload = await openJson<TrackingChangeSealed>(
-      entry.sealed,
-      encryption,
-    );
+    const payload = await read<TrackingChangeSealed>(entry.sealed);
     return { ...base, kind: 'trackingChange', payload };
   }
-  const payload = await openJson<BillPaidSealed>(entry.sealed, encryption);
+  const payload = await read<BillPaidSealed>(entry.sealed);
   return { ...base, kind: 'billPaid', payload };
 }
 
@@ -64,6 +58,7 @@ export function startMovesListener(
   onError: (error: Error) => void,
 ): Unsubscribe {
   const run = { isStopped: false };
+  const read = createSealedReader(encryption);
   const parts: { recent: OpenMove[] | null; start: OpenMove[] | null } = {
     recent: null,
     start: null,
@@ -90,7 +85,7 @@ export function startMovesListener(
             snapshot.docs
               .map((entry) => ({ ...(entry.data() as MoveDoc), id: entry.id }))
               .filter((entry) => KNOWN_KINDS.includes(entry.kind))
-              .map((entry) => openMove(entry, encryption)),
+              .map((entry) => openMove(entry, read)),
           );
           if (current !== mine.latest || run.isStopped) return;
           parts[key] = opened;

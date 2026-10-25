@@ -2,6 +2,10 @@
 import assert from 'node:assert/strict';
 
 import {
+  createSealedReader,
+  sealJson,
+} from '../../src/apps/runway/security.ts';
+import {
   getEarliestTrackingStart,
   getLevel,
   startTrackingPeriod,
@@ -5022,6 +5026,138 @@ const version = (
   console.log(
     `runway engine: 50-envelope lookahead over ${buildComingDays(manyItems, manyVersions, today).length} days median ${timings[2].toFixed(0)} ms, worst ${timings[4].toFixed(0)} ms`,
   );
+
+  const fiveYearsAgo = today - 1_826 * DAY_MS;
+  const longBills = Array.from({ length: 60 }, (_, i) =>
+    item(`lb${i}`, fiveYearsAgo + i, { kind: 'bill' }),
+  );
+  const longBillVersions = longBills.map(
+    (entry, i) =>
+      ({
+        id: `v${entry.id}`,
+        itemId: entry.id,
+        kind: 'bill',
+        createdAt: fiveYearsAgo + i,
+        effectiveFrom: fiveYearsAgo,
+        effectiveUntil: null,
+        changeId: 'c',
+        payload: {
+          name: `Bill ${i}`,
+          emoji: null,
+          priority: 'must',
+          orderIndex: i,
+          amount: exact(1_500 + i * 700),
+          timing: {
+            kind: 'date',
+            schedule: {
+              kind: 'monthly',
+              anchor: utc(2021, 10, 1 + (i % 28)),
+              monthDays: [1 + (i % 28)],
+            },
+          },
+          ending: never,
+          fundedBy: { kind: 'suggested' },
+          stanceOverride: null,
+        },
+      }) as unknown as OpenVersion,
+  );
+  const longItems = [...manyItems, ...longBills];
+  const longVersions = [...manyVersions, ...longBillVersions];
+  const longTimings = Array.from({ length: 3 }, () => {
+    const started = performance.now();
+    lookaheadOf(longItems, longVersions);
+    return performance.now() - started;
+  }).sort((a, b) => a - b);
+  assert.ok(
+    longTimings[1] < 250,
+    `50 envelopes and 60 bills of five years: lookahead median ${longTimings[1]}ms`,
+  );
+  console.log(
+    `runway engine: 50 envelopes and 60 five-year bills, lookahead over ${buildComingDays(longItems, longVersions, today).length} days median ${longTimings[1].toFixed(0)} ms, worst ${longTimings[2].toFixed(0)} ms`,
+  );
+
+  const longDays = buildComingDays(longItems, longVersions, today);
+  const referencePayments = (
+    bill: Parameters<typeof planBillPayments>[0],
+    days: typeof longDays,
+  ) => {
+    const dues = occurrences(
+      bill.schedule,
+      bill.ending,
+      bill.schedule.anchor ?? 0,
+      horizon,
+    );
+    return dues.map((dueOn, index) => {
+      const previous = index === 0 ? -Infinity : dues[index - 1];
+      const window = days.filter(
+        (entry) => entry.on > previous && entry.on <= dueOn,
+      );
+      const total = bill.amount.highCents;
+      const share = window.length === 0 ? 0 : Math.ceil(total / window.length);
+      return { dueOn, window: window.map((entry) => entry.dayKey), share };
+    });
+  };
+  const sample = longBillVersions.slice(0, 12).map((entry) => {
+    const payload = (entry as unknown as { payload: never }).payload as {
+      priority: 'must';
+      orderIndex: number;
+      amount: { lowCents: number; highCents: number };
+      timing: { schedule: never };
+    };
+    return {
+      itemId: entry.itemId,
+      createdAt: 1,
+      priority: payload.priority,
+      orderIndex: payload.orderIndex,
+      amount: payload.amount,
+      schedule: payload.timing.schedule,
+      ending: never,
+      fundedBy: { kind: 'suggested' as const },
+    };
+  });
+  sample.forEach((bill) => {
+    const planned = planBillPayments(bill, longDays, horizon).map(
+      (payment) => ({
+        dueOn: payment.dueOn,
+        window: payment.parts.map((part) => part.day.dayKey),
+        share: payment.parts[0]?.cents ?? 0,
+      }),
+    );
+    const expected = referencePayments(bill, longDays);
+    assert.deepEqual(
+      planned.map(({ dueOn, window }) => ({ dueOn, window })),
+      expected.map(({ dueOn, window }) => ({ dueOn, window })),
+      'each payment is funded by the income days after the previous one through its due date, however far back the bill began',
+    );
+    assert.deepEqual(
+      planned.map((entry) => entry.share),
+      expected.map((entry) => entry.share),
+      'and the first day of a window takes its ceiling share',
+    );
+  });
+  sample.forEach((bill) => {
+    const funded = (payments: ReturnType<typeof planBillPayments>) =>
+      payments.filter((payment) => payment.parts.length > 0);
+    assert.deepEqual(
+      funded(
+        planBillPayments(bill, longDays, horizon, 'conservative', {
+          firstDayOn: longDays[0].on,
+        }),
+      ),
+      funded(planBillPayments(bill, longDays, horizon)),
+      'starting at the first income day leaves every funded payment as it was',
+    );
+  });
+  const shuffled = [...longDays].reverse();
+  assert.deepEqual(
+    planBillPayments(sample[0], shuffled, horizon).map(
+      (payment) => payment.parts.length,
+    ),
+    planBillPayments(sample[0], longDays, horizon).map(
+      (payment) => payment.parts.length,
+    ),
+    'days given in another order fund the same windows',
+  );
 }
 
 {
@@ -5536,6 +5672,27 @@ const version = (
     describePurchaseRemoval(before, (id) => id),
     /^Purchase removed: Safeway, \$40\.00 on /,
   );
+}
+
+{
+  // A sealed reader opens each payload once, so a snapshot that changes one document opens one.
+  const encryption = {
+    appId: 'runway' as const,
+    keyId: 'check',
+    keyVersion: 1,
+    key: 'ab'.repeat(32),
+  };
+  const first = await sealJson({ name: 'Rent' }, encryption);
+  const second = await sealJson({ name: 'Rent' }, encryption);
+  const read = createSealedReader(encryption);
+  const [again, once, other] = await Promise.all([
+    read<{ name: string }>(first),
+    read<{ name: string }>(first),
+    read<{ name: string }>(second),
+  ]);
+  assert.equal(again, once, 'the same sealed payload is opened once');
+  assert.notEqual(again, other, 'a payload sealed again is opened on its own');
+  assert.equal(other.name, 'Rent');
 }
 
 console.log('runway engine: ok');

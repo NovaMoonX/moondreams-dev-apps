@@ -18,10 +18,7 @@ import {
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import {
-  selectLookahead,
-  selectRangeSides,
-} from '@apps/runway/store/selectors/lookaheadSelectors';
+import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
   selectEnvelopes,
   selectIsDaysLoaded,
@@ -31,6 +28,7 @@ import {
   selectListedDays,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeFreeToSpend } from '@apps/runway/utils/balanceText';
+import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 function HomeScreen() {
@@ -50,9 +48,7 @@ function HomeScreen() {
     ),
   );
   const balances = useAppSelector(selectBalances);
-  const lookahead = useAppSelector((state) =>
-    isLedgerReady ? selectLookahead(state, today) : null,
-  );
+  const lookahead = useDeferredLookahead(today, isLedgerReady);
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
@@ -108,12 +104,14 @@ function HomeScreen() {
             aria-hidden='true'
           />
         </Button>
-        {lookahead && (
+        {lookahead ? (
           <HoldsThroughLine
             lookahead={lookahead}
             rangeSides={rangeSides}
             isFirstProblemShown
           />
+        ) : (
+          <div className='min-h-5' aria-hidden='true' />
         )}
       </div>
       {nextDay && (

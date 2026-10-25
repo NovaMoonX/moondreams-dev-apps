@@ -258,10 +258,38 @@ const spreadShares = (totalCents: Cents, count: number) =>
   Array.from({ length: count }).reduce<{ left: Cents; shares: Cents[] }>(
     (acc, _, index) => {
       const share = Math.min(acc.left, Math.ceil(acc.left / (count - index)));
-      return { left: acc.left - share, shares: [...acc.shares, share] };
+      acc.shares.push(share);
+      return { left: acc.left - share, shares: acc.shares };
     },
     { left: totalCents, shares: [] },
   ).shares;
+
+/** The first index whose day is after `on`, in a list ordered by day. */
+const indexAfter = (
+  days: readonly IncomeDayRef[],
+  on: number,
+  low = 0,
+  high = days.length,
+): number => {
+  if (low >= high) return low;
+  const middle = (low + high) >> 1;
+  return days[middle].on > on
+    ? indexAfter(days, on, low, middle)
+    : indexAfter(days, on, middle + 1, high);
+};
+
+/** Where to start in a bill's due dates when nothing before the first income day can be funded: the payment before the first one due on or after it, whose date opens that one's window. */
+const getFirstNeeded = (
+  dues: readonly number[],
+  firstDayOn: number | undefined,
+) => {
+  if (firstDayOn === undefined) return 0;
+  const found = dues.findIndex((dueOn) => dueOn >= firstDayOn);
+  return found === -1 ? dues.length : Math.max(0, found - 1);
+};
+
+const isInDayOrder = (days: readonly IncomeDayRef[]) =>
+  days.every((day, index) => index === 0 || days[index - 1].on <= day.on);
 
 export interface BillPayment {
   dueOn: DateOnly;
@@ -287,6 +315,7 @@ export function planBillPayments(
   chronological: readonly IncomeDayRef[],
   horizon: number,
   stance: Stance = 'conservative',
+  options: { firstDayOn?: number } = {},
 ): BillPayment[] {
   const progress = bill.progress ?? NO_PROGRESS;
   const billStance = effectiveStance(stance, bill.stanceOverride);
@@ -329,14 +358,23 @@ export function planBillPayments(
       };
     });
   }
-  const result = dues.map((dueOn, index): BillPayment => {
+  const ordered = isInDayOrder(chronological);
+  const paidByDue = new Map(
+    [...progress.paid].reverse().map((entry) => [entry.dueOn, entry]),
+  );
+  const first = getFirstNeeded(dues, options.firstDayOn);
+  const result = dues.slice(first).map((dueOn, offset): BillPayment => {
+    const index = first + offset;
     const previous = index === 0 ? -Infinity : dues[index - 1];
-    const window = chronological.filter(
-      (day) => day.on > previous && day.on <= dueOn,
-    );
+    const window = ordered
+      ? chronological.slice(
+          indexAfter(chronological, previous),
+          indexAfter(chronological, dueOn),
+        )
+      : chronological.filter((day) => day.on > previous && day.on <= dueOn);
     const confirmed = fundedInWindow(progress.funded, previous, dueOn);
     const fundedCents = sumFunded(confirmed);
-    const paid = progress.paid.find((entry) => entry.dueOn === dueOn) ?? null;
+    const paid = paidByDue.get(dueOn) ?? null;
     const shares = spreadShares(
       paid ? 0 : Math.max(0, amountCents - fundedCents),
       window.length,
@@ -371,7 +409,9 @@ function buildBillDemands(
     chronological.find((day) => day.on > on)?.on ?? Infinity;
 
   const result = bills.flatMap((bill) =>
-    planBillPayments(bill, chronological, horizon, stance).flatMap((payment) =>
+    planBillPayments(bill, chronological, horizon, stance, {
+      firstDayOn: chronological[0]?.on ?? Infinity,
+    }).flatMap((payment) =>
       payment.parts
         .filter((part) => planned.has(part.day.dayKey))
         .map((part): Demand => ({

@@ -37,4 +37,11 @@ export const FIXTURE_USERS = {
     label: 'Taylor',
     apps: ['Nine Lives', 'Waypoint'],
   },
+  runwayScale: {
+    uid: 'seed-runway-scale',
+    email: 'morgan@example.test',
+    displayName: 'Morgan Ellis',
+    label: 'Morgan',
+    apps: ['Runway'],
+  },
 } satisfies Record<string, FixtureAccount>;
