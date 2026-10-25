@@ -16,6 +16,7 @@ import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import {
+  selectIsMovesLoaded,
   selectItemLooks,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -36,6 +37,7 @@ function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const purchases = useAppSelector(selectSpendPurchases);
+  const isLoaded = useAppSelector(selectIsMovesLoaded);
   const looks = useAppSelector(selectItemLooks);
   const [editTarget, setEditTarget] = useState<{
     key: number;
@@ -51,7 +53,9 @@ function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
   if (purchase === null) {
     return (
       <Subview title={SPEND_WORDS.detailTitle} onClose={onClose}>
-        <p className='text-muted-foreground text-sm'>{SPEND_WORDS.notFound}</p>
+        <p className='text-muted-foreground text-sm'>
+          {isLoaded ? SPEND_WORDS.notFound : 'Getting your plan.'}
+        </p>
       </Subview>
     );
   }
