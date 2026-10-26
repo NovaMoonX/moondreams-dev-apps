@@ -6,6 +6,7 @@ import {
   MAX_RECEIPT_ADDRESS_LENGTH,
   MAX_RECEIPT_LINES,
   MAX_RECEIPT_NAME_LENGTH,
+  MAX_RECEIPT_QUANTITY,
   MAX_RECEIPT_SUGGESTED_TIPS,
   RECEIPT_KINDS,
   type ReceiptReading,
@@ -21,7 +22,7 @@ const lineSchema = {
   type: SchemaType.OBJECT,
   properties: {
     name: text(`What the line is, as printed, shortened to at most ${MAX_RECEIPT_NAME_LENGTH} characters.`),
-    quantity: number('How many were bought. 1 when no quantity is printed.'),
+    quantity: number(`How many were bought, at most ${MAX_RECEIPT_QUANTITY}. 1 when no quantity is printed.`),
     unitPriceCents: cents('The price of one in cents, when the receipt shows it.'),
     priceCents: cents('The line total in cents: the price already multiplied by the quantity. Null when no price is printed for it.'),
   },
@@ -41,7 +42,7 @@ const suggestedTipSchema = {
 const responseSchema = {
   type: SchemaType.OBJECT,
   properties: {
-    merchant: text('Name of the shop, restaurant or business.'),
+    merchant: text(`Name of the shop, restaurant or business, at most ${MAX_RECEIPT_NAME_LENGTH} characters.`),
     kind: { type: SchemaType.STRING, nullable: true, enum: [...RECEIPT_KINDS], description: 'What kind of purchase this is.' },
     address: text(`Street address or location of the business, as printed, at most ${MAX_RECEIPT_ADDRESS_LENGTH} characters.`),
     date: text('The date on the receipt as YYYY-MM-DD, exactly as printed.'),

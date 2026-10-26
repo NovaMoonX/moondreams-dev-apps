@@ -152,6 +152,11 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
 
   return (
     <div className='space-y-6'>
+      {reading?.currency && reading.currency !== 'USD' && (
+        <p className='text-warning text-sm' role='status'>
+          This looks like a {reading.currency} bill. Expenses here are in USD, so check the amounts before you add it.
+        </p>
+      )}
       <ReceiptSplitEditor split={split} />
       <section className='space-y-4'>
         <div className='space-y-1.5'>

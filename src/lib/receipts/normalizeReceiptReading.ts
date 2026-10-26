@@ -1,7 +1,9 @@
 import {
   MAX_RECEIPT_ADDRESS_LENGTH,
+  MAX_RECEIPT_CENTS,
   MAX_RECEIPT_LINES,
   MAX_RECEIPT_NAME_LENGTH,
+  MAX_RECEIPT_QUANTITY,
   MAX_RECEIPT_SUGGESTED_TIPS,
   RECEIPT_KINDS,
   type ReceiptKind,
@@ -12,7 +14,14 @@ import { clipAtWord } from '@/utils/stringUtils';
 type Raw = Record<string, unknown>;
 
 const toCents = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : null;
+  typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= MAX_RECEIPT_CENTS ? Math.round(value) : null;
+
+const toQuantity = (value: unknown): number => {
+  const quantity = typeof value === 'string' ? Number(value) : value;
+  return typeof quantity === 'number' && Number.isFinite(quantity) && quantity > 0 && quantity <= MAX_RECEIPT_QUANTITY
+    ? Math.round(quantity * 10) / 10
+    : 1;
+};
 
 const toNonNegativeCents = (value: unknown): number | null => {
   const cents = toCents(value);
@@ -33,7 +42,7 @@ export function normalizeReceiptReading(parsed: Raw): ReceiptReading {
   const priced = rawLines.flatMap((line) => {
     const name = toText(line?.name, MAX_RECEIPT_NAME_LENGTH);
     const priceCents = toNonNegativeCents(line?.priceCents);
-    const quantity = typeof line?.quantity === 'number' && line.quantity > 0 ? line.quantity : 1;
+    const quantity = toQuantity(line?.quantity);
     return name !== null && priceCents !== null
       ? [{ name, quantity, unitPriceCents: toNonNegativeCents(line?.unitPriceCents), priceCents }]
       : [];
@@ -44,6 +53,8 @@ export function normalizeReceiptReading(parsed: Raw): ReceiptReading {
         ? [{ percent: tip.percent, tipCents: toNonNegativeCents(tip.tipCents), totalCents: toNonNegativeCents(tip.totalCents) }]
         : [],
     )
+    .filter((tip, index, all) => all.findIndex((other) => other.percent === tip.percent) === index)
+    .sort((a, b) => a.percent - b.percent)
     .slice(0, MAX_RECEIPT_SUGGESTED_TIPS);
 
   const reading: ReceiptReading = {

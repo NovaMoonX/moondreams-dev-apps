@@ -42,7 +42,7 @@ export interface ReceiptReading {
   /** 3-letter ISO code. */
   currency: string | null;
   lines: ReceiptLineReading[];
-  /** Lines the reader saw but couldn't price. */
+  /** Lines the reader saw but couldn't price or keep (over the line cap). */
   unpricedLineCount: number;
   subtotalCents: number | null;
   /** All tax lines added together. */
@@ -62,3 +62,6 @@ export const MAX_RECEIPT_LINES = 80;
 export const MAX_RECEIPT_NAME_LENGTH = 60;
 export const MAX_RECEIPT_ADDRESS_LENGTH = 120;
 export const MAX_RECEIPT_SUGGESTED_TIPS = 5;
+export const MAX_RECEIPT_QUANTITY = 999;
+/** Any one amount above this reads as unstated. */
+export const MAX_RECEIPT_CENTS = 100_000_000;

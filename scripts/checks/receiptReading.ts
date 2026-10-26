@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { normalizeReceiptReading } from '../../src/lib/receipts/normalizeReceiptReading.ts';
-import { MAX_RECEIPT_LINES, MAX_RECEIPT_NAME_LENGTH } from '../../src/lib/receipts/receiptTypes.ts';
+import { MAX_RECEIPT_ADDRESS_LENGTH, MAX_RECEIPT_LINES, MAX_RECEIPT_NAME_LENGTH } from '../../src/lib/receipts/receiptTypes.ts';
 
 const full = normalizeReceiptReading({
   merchant: 'Ichiran Seattle',
@@ -56,5 +56,27 @@ assert.equal(long.lines.length, MAX_RECEIPT_LINES);
 assert.equal(long.unpricedLineCount, 5);
 assert.ok((long.merchant ?? '').length <= MAX_RECEIPT_NAME_LENGTH);
 assert.ok(!(long.merchant ?? '').endsWith('Limi'));
+
+// Quantities, huge amounts, tip suggestions and the address are settled too
+const odd = normalizeReceiptReading({
+  address: 'A '.repeat(200),
+  lines: [
+    { name: 'Beer', quantity: '3', unitPriceCents: null, priceCents: 900 },
+    { name: 'Half', quantity: 0.55, unitPriceCents: null, priceCents: 100 },
+    { name: 'Lots', quantity: 100000, unitPriceCents: null, priceCents: 100 },
+    { name: 'Huge', quantity: 1, unitPriceCents: null, priceCents: 1e15 },
+    'not a line',
+  ],
+  taxCents: 1e15,
+  suggestedTips: [20, 15, 15, 18, 25, 30, 10].map((percent) => ({ percent, tipCents: null, totalCents: null })),
+  merchant: 42,
+});
+assert.deepEqual(odd.lines.map((line) => line.quantity), [3, 0.6, 1]);
+assert.equal(odd.lines.length, 3);
+assert.equal(odd.unpricedLineCount, 2);
+assert.equal(odd.taxCents, null);
+assert.equal(odd.merchant, null);
+assert.ok((odd.address ?? '').length <= MAX_RECEIPT_ADDRESS_LENGTH);
+assert.deepEqual(odd.suggestedTips.map((tip) => tip.percent), [10, 15, 18, 20, 25]);
 
 console.log('receiptReading checks passed');

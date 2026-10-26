@@ -24,7 +24,7 @@ const DEFAULT_TIP_PERCENTS = [15, 18, 20];
 /** The percents the bill itself suggests, else the usual three. */
 const getTipPercents = (reading: ReceiptReading | null) => {
   const suggested = Array.from(new Set((reading?.suggestedTips ?? []).map((tip) => tip.percent))).sort((a, b) => a - b);
-  return suggested.length > 0 ? suggested.slice(0, 4) : DEFAULT_TIP_PERCENTS;
+  return suggested.length > 0 ? suggested : DEFAULT_TIP_PERCENTS;
 };
 
 interface ReceiptSplitState {
