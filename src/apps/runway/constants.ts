@@ -751,9 +751,9 @@ export const START_WORDS = {
     'Say what you have on hand and what is already set aside, so the first numbers start true.',
   doneAsk: 'Your next income day is ready',
   billsEmpty: 'No bills yet. The ones you add are listed here.',
-  envelopesEmpty: 'No envelopes or goals yet. The ones you add are listed here.',
-  standEmpty:
-    'Not entered yet. Until you do, Free to spend reads Not set yet.',
+  envelopesEmpty:
+    'No envelopes or goals yet. The ones you add are listed here.',
+  standEmpty: 'Not entered yet. Until you do, Free to spend reads Not set yet.',
 } as const;
 
 export const DELETE_PLAN_PHRASE = 'delete my plan';

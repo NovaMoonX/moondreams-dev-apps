@@ -117,7 +117,7 @@ function HomeScreen() {
       <div className='space-y-2'>
         <Button
           variant='tertiary'
-          className='border-border bg-accent text-foreground! h-auto w-full items-center sm:max-w-md justify-start gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal'
+          className='border-border bg-accent text-foreground! h-auto w-full items-center justify-start gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal sm:max-w-md'
           aria-label={`${free.label}, ${free.value}. See it in detail`}
           onClick={() => openView('freeToSpend')}
         >
