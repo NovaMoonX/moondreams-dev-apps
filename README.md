@@ -27,7 +27,7 @@ Then open the local Vite app in your browser to explore the collection.
 
 `npm run dev` only listens on your machine. To try the app (and the emulators) from a phone on your home Wi-Fi, run `npm run lan:trust -- Home` once (`lan:list` and `lan:untrust` manage the list), then `npm run dev:lan` and `npm run emulators:lan`; they refuse to start on a network you haven't trusted. See [SEEDING.md](SEEDING.md#phone-testing). To let a friend try the app on their phone from anywhere, run `npm run share` (it starts everything and copies a private Tailscale link); setup and troubleshooting are in [SEEDING.md](SEEDING.md#sharing-with-a-friend).
 
-For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md). For every Cloud Function (what it does, its secrets, and local testing), see [functions/README.md](functions/README.md).
+For how an app leaves this site and becomes its own, see [GRADUATING.md](GRADUATING.md). For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md). For every Cloud Function (what it does, its secrets, and local testing), see [functions/README.md](functions/README.md).
 
 For a production build:
 
@@ -154,6 +154,14 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 ## Troubleshooting
 
 Problems we've hit before, so we don't hit them again.
+
+### The merge deploy fails with `Release … cloud.firestore already exists`
+
+- **Symptom:** "Deploy to Firebase Hosting on merge" stops in "Deploy Firebase resources" with `Error: Request to https://firebaserules.googleapis.com/v1/projects/…/releases had HTTP Error: 409, Release projects/…/releases/cloud.firestore already exists.`, after the log has already shown the Database and Storage rules released. Re-running fails identically, so Hosting and Functions never deploy, and the app can call a Function or a rule that the merge expected. The Firestore indexes, uploaded earlier, did deploy.
+- **Cause:** the 409 is a decoy. The Firebase CLI updates the `cloud.firestore` release first, hides any error from that, then tries to create it, and the create is what answers 409. The real answer is `400 INVALID_ARGUMENT: Total size of compiled executables must be smaller than 256000 bytes (actual: 258960 bytes)`. Neither the CLI's compile check nor the emulator applies that limit. The compiled size is the rules' own text: two real answers gave 1.73775 bytes per character of code (comments removed, whitespace collapsed), 149,020 characters to 258,960 bytes and 148,773 to 258,529. A function's body counts once however many rules call it, so merging the create and update rules of seven collections (#477, thought to save 24 KB) saved 431 bytes and the next deploy failed the same way. #395 grew the rules by 2,449 characters and crossed the limit.
+- **Fix:** write less rules text. The repeated clauses (an unchanged `createdAt` or `createdBy`, `isTimestampNumber(request.resource.data.createdAt)`, the Waypoint trip `get(...)`) became ten helper functions at the top of the rules and two unused functions were deleted, which took the estimate from 258,530 to 242,656 bytes. Behaviour was checked by running every seeded document's writes (update unchanged and with each identity field changed, create a copy, an extra key, a read) as each of the four seeded users and signed out against the old and the new rules in the emulator and diffing the results.
+- **Telling it apart:** `scripts/fbDeploySmart.ts` repeats the release update on this 409 and prints the Rules API's own answer under "Repeating its update to read the answer"; a 400 naming a size is this problem, anything else is a different one. `npm run check:rules-size` estimates the size on every PR that touches `firestore.rules` and fails at 250,000 bytes (warns from 240,000); it matched the real 258,529 for the old rules at 258,530.
+- **Verified:** the estimate for the failing rules is 258,530 against the real 258,529. After the change it was 242,656, and the merge deploy of #480 is the real proof. The rules were later cut to the beta tier (about 54,000), which leaves most of the limit free; the strict version is in git history at `c784e89`.
 
 ### Every AI call fails with `401 Firebase App Check token is invalid`
 
