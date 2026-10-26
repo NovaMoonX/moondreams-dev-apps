@@ -1,19 +1,15 @@
 import { useState } from 'react';
 
-import { formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import RangeNote from '@apps/runway/components/RangeNote';
-import { PRIORITY_LABELS } from '@apps/runway/constants';
+import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
-import {
-  describeBillFunding,
-  describeBillProgress,
-  describeBillRepeat,
-} from '@apps/runway/utils/billText';
+import { describeBillRepeat } from '@apps/runway/utils/billText';
+import { describeRange } from '@apps/runway/utils/rangeText';
 
 interface BillRowProps {
   billId: string;
@@ -26,8 +22,20 @@ interface BillRowProps {
 
 const getDueLine = (payment: BillPayment | null) => {
   if (!payment) return 'No payment left';
-  const due = `Due ${formatDateUTC(payment.dueOn)}`;
-  return payment.paid ? `Paid, due ${formatDateUTC(payment.dueOn)}` : due;
+  const due = `Due ${formatDateShortUTC(payment.dueOn)}`;
+  return payment.paid ? `Paid · ${due.toLowerCase()}` : due;
+};
+
+/** Where the next payment stands, short: "$1,075 of $1,250 set aside". */
+const getProgress = (payment: BillPayment | null) => {
+  if (!payment) return null;
+  const { paid, fundedCents, totalCents } = payment;
+  if (paid) {
+    return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateShortUTC(paid.paidOn)}`;
+  }
+  if (fundedCents <= 0) return 'Nothing set aside yet';
+  if (fundedCents >= totalCents) return 'Set aside in full';
+  return `${formatCentsShort(fundedCents)} of ${formatCentsShort(totalCents)} set aside`;
 };
 
 /** A bill in the plan: its name, when it is next due and its amount; it opens the bill's sheet. */
@@ -37,17 +45,22 @@ function BillRow({ billId, bill, payment, planStance, today }: BillRowProps) {
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const dueLine = getDueLine(payment);
   const { schedule } = bill.timing;
-  const isSettled =
-    payment !== null &&
-    (payment.paid !== null || payment.fundedCents >= payment.totalCents);
-  const progress = payment
-    ? (describeBillProgress(payment) ??
-      (isSettled ? null : describeBillFunding(payment, bill.fundedBy)))
-    : null;
-  const when =
-    schedule.kind === 'once'
-      ? dueLine
-      : `${describeBillRepeat(schedule.kind)}. ${dueLine}`;
+  const repeat =
+    schedule.kind === 'once' ? null : describeBillRepeat(schedule.kind);
+  const fact = [
+    PRIORITY_LABELS[bill.priority],
+    repeat,
+    payment ? `due ${formatDateShortUTC(payment.dueOn)}` : 'No payment left',
+    getProgress(payment),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const rangeText = describeRange(
+    bill.amount,
+    stance,
+    'expense',
+    Boolean(bill.stanceOverride),
+  );
 
   return (
     <>
@@ -66,15 +79,12 @@ function BillRow({ billId, bill, payment, planStance, today }: BillRowProps) {
           today={today}
           figureLabel={payment ? 'Next payment' : 'Each payment'}
           figure={amount}
-          facts={[`${PRIORITY_LABELS[bill.priority]}. ${when}`, progress]}
-          note={
-            <RangeNote
-              range={bill.amount}
-              stance={stance}
-              side='expense'
-              isOwnStance={Boolean(bill.stanceOverride)}
-            />
-          }
+          fact={fact}
+          help={rangeText}
+          quickChange={{
+            label: ITEM_SHEET_R2_WORDS.changeAmount,
+            step: 'amount',
+          }}
           payment={payment}
           onClose={() => setIsOpen(false)}
         />

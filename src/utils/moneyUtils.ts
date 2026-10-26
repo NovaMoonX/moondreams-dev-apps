@@ -58,6 +58,15 @@ export function formatCents(cents: number): string {
   return result;
 }
 
+/** "$600" for a whole amount and "$87.50" otherwise, for a figure inside a short line of text. */
+export function formatCentsShort(cents: number): string {
+  const result =
+    cents % 100 === 0
+      ? currencyFormatter.format(cents / 100).replace(/\.00$/, '')
+      : currencyFormatter.format(cents / 100);
+  return result;
+}
+
 /** The value a money input shows for a stored amount ("25.99"). */
 export function centsToInputValue(cents: number | null): string {
   if (cents === null) {

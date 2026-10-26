@@ -1,5 +1,5 @@
-import { formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import type {
   Lookahead,
   LookaheadProblem,
@@ -49,5 +49,17 @@ export function describeHoldsChange(before: Lookahead, after: Lookahead) {
       ? ''
       : ` instead of ${formatDateUTC(before.holdsThrough)}`;
   const result = `Your plan would hold through ${formatDateUTC(after.holdsThrough)}${was}.`;
+  return result;
+}
+
+/** One problem in a few words, in the plan's terms: "The plan leaves Rent $30 short on Nov 1". */
+export function describeProblemShort(problem: LookaheadProblem) {
+  const name = problem.name === '' ? 'A bill' : problem.name;
+  const on = formatDateShortUTC(problem.on).replace(/ /g, '\u00a0');
+  if (problem.kind === 'overdue')
+    return `${name} was due ${on}, not marked paid`;
+  if (problem.kind === 'noIncome')
+    return `${name} on ${on} has no income before it`;
+  const result = `The plan leaves ${name} ${formatCentsShort(problem.shortBy)} short on ${on}`;
   return result;
 }

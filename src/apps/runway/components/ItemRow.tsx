@@ -44,37 +44,32 @@ function ItemRow({
     ? null
     : (leading ?? <ItemBadge name={name} emoji={emoji} />);
   const text = (
-    <span className='flex min-w-0 flex-1 items-start gap-3'>
-      <span className={join('block min-w-0 flex-1', !hasDetail && 'pt-2')}>
-        <span className='block font-medium break-words'>
+    <span className={join('block min-w-0 flex-1', !hasDetail && 'pt-2')}>
+      <span className='flex items-start justify-between gap-3'>
+        <span className='block min-w-0 font-medium break-words'>
           <span className='line-clamp-2'>{name}</span>
         </span>
-        {hasDetail && (
-          <span
-            className={join(
-              'block truncate text-sm',
-              isDetailStrong ? 'text-foreground' : 'text-muted-foreground',
+        {figure && (
+          <span className='block shrink-0 text-right'>
+            <span className='block font-semibold whitespace-nowrap tabular-nums'>
+              {figure}
+            </span>
+            {figureWord && (
+              <span className='text-muted-foreground block text-xs'>
+                {figureWord}
+              </span>
             )}
-          >
-            {detail}
           </span>
         )}
       </span>
-      {figure && (
+      {hasDetail && (
         <span
           className={join(
-            'block shrink-0 text-right',
-            !hasDetail && !figureWord && 'pt-2',
+            'block text-sm break-words',
+            isDetailStrong ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
-          <span className='block font-semibold whitespace-nowrap tabular-nums'>
-            {figure}
-          </span>
-          {figureWord && (
-            <span className='text-muted-foreground block text-xs'>
-              {figureWord}
-            </span>
-          )}
+          <span className='line-clamp-2'>{detail}</span>
         </span>
       )}
     </span>

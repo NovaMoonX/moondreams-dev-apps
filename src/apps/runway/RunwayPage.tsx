@@ -14,7 +14,6 @@ import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
 import CheckAmountScreen from '@apps/runway/screens/home/CheckAmountScreen';
-import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
@@ -124,8 +123,6 @@ function RunwayPage() {
     closeView,
     settingsView,
     closeSettingsView,
-    purchaseId,
-    closePurchase,
     checkEnvelope,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
@@ -253,14 +250,6 @@ function RunwayPage() {
     return (
       <div>
         <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
-      </div>
-    );
-  }
-
-  if (purchaseId !== null && level === 'track') {
-    return (
-      <div>
-        <PurchaseScreen purchaseId={purchaseId} onClose={closePurchase} />
       </div>
     );
   }

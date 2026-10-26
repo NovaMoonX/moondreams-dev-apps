@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react';
 import { CircleCheck } from 'lucide-react';
 
+import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { DRAFT_WORDS, HOME_WORDS } from '@apps/runway/constants';
+import {
+  DRAFT_WORDS,
+  HOME_WORDS,
+  ITEM_SHEET_R2_WORDS,
+} from '@apps/runway/constants';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
-import { describeHoldsThrough } from '@apps/runway/utils/lookaheadText';
 
 interface CoverageHeadlineProps {
   freeCents: number;
@@ -35,8 +39,8 @@ export function HoldsThroughLine({ lookahead, help }: HoldsThroughLineProps) {
       <p className='text-muted-foreground text-sm'>{HOME_WORDS.noBills}</p>
     );
   }
-  const headline = describeHoldsThrough(lookahead);
-  if (!headline) return null;
+  if (lookahead.holdsThrough === null) return null;
+  const headline = `${ITEM_SHEET_R2_WORDS.holdsThrough} ${formatDateShortUTC(lookahead.holdsThrough).replace(/ /g, '\u00a0')}`;
   const isClear = lookahead.problems.length === 0;
   return (
     <div className='flex min-h-10 items-center gap-2'>

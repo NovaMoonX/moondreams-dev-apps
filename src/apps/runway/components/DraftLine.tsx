@@ -3,19 +3,20 @@ import { ArrowUpToLine, Hourglass, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import RangeNote from '@apps/runway/components/RangeNote';
 import {
   DRAFT_WORDS,
+  ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type { HoldChoice, ItemKind } from '@apps/runway/types';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import {
-  describeBillShare,
   describeLineReason,
   describeTieBreak,
 } from '@apps/runway/utils/draftText';
@@ -40,6 +41,9 @@ interface DraftLineProps {
   canChange?: boolean;
   /** This income day takes its own version of the line. */
   isDayOnly?: boolean;
+  /** Set where the day opens the line's sheet itself (a door from the footer). */
+  isOpen?: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 /** One line of a draft as a row: what it got and the one fact that matters most. It opens the line's sheet, with its reason, its choices and the item's changes. */
@@ -57,11 +61,14 @@ function DraftLine({
   isChoosing = false,
   canChange = false,
   isDayOnly = false,
+  isOpen: isOpenProp,
+  onOpenChange,
 }: DraftLineProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOwnOpen, setIsOwnOpen] = useState(false);
+  const isOpen = isOpenProp ?? isOwnOpen;
+  const setIsOpen = onOpenChange ?? setIsOwnOpen;
   const reason = describeLineReason(line, sourceNames, name, daySourceId);
   const tieNote = describeTieBreak(line);
-  const billShare = describeBillShare(line);
   const isShort = line.shortBy > 0;
   const state = line.pairing?.state ?? null;
   const source =
@@ -86,16 +93,55 @@ function DraftLine({
   };
   const pairingNote = getPairingNote();
   const shortText = isShort
-    ? `${DRAFT_WORDS.shortBy} ${formatCents(line.shortBy)}`
+    ? `${DRAFT_WORDS.shortBy} ${formatCentsShort(line.shortBy)}`
+    : null;
+  const heldCents = line.pairing?.heldCents ?? 0;
+  const getPairingShort = () => {
+    if (state === 'held')
+      return heldCents > 0
+        ? `${formatCentsShort(heldCents)} held · ${formatCentsShort(line.shortBy)} short`
+        : `${formatCentsShort(line.shortBy)} short`;
+    if (state === 'offered') return `${formatCentsShort(line.shortBy)} short`;
+    if (state === 'leftShort')
+      return `${DRAFT_WORDS.leftShort} · ${formatCentsShort(line.shortBy)} short`;
+    if (state === 'toppedUp')
+      return isShort
+        ? `${ITEM_SHEET_R2_WORDS.toppedUp} · still ${formatCentsShort(line.shortBy)} short`
+        : ITEM_SHEET_R2_WORDS.toppedUp;
+    return null;
+  };
+  const pairingShort = getPairingShort();
+  const billShareShort = line.bill
+    ? `${formatCentsShort(line.cents)} of ${formatCentsShort(line.bill.totalCents)} · due ${formatDateShortUTC(line.bill.dueOn)}`
     : null;
   const getDetail = () => {
     if (state === 'held')
-      return { text: ITEM_SHEET_WORDS.heldFlag, isStrong: true };
+      return {
+        text:
+          heldCents > 0
+            ? ITEM_SHEET_R2_WORDS.heldDetail(formatCentsShort(heldCents))
+            : `${formatCentsShort(line.shortBy)} short · choose`,
+        isStrong: true,
+      };
     if (shortText) return { text: shortText, isStrong: true };
-    return { text: billShare ?? reason, isStrong: false };
+    return { text: billShareShort ?? reason, isStrong: false };
   };
   const detail = getDetail();
   const amount = formatCents(line.cents);
+  const helpLines = [
+    pairingShort || billShareShort ? reason : null,
+    pairingNote,
+    line.bill?.ranged
+      ? describeRange(
+          line.bill.ranged.range,
+          line.bill.ranged.stance,
+          'expense',
+          line.bill.ranged.isOwnStance,
+        )
+      : null,
+    isDayOnly ? DRAFT_WORDS.dayOnly : null,
+    tieNote,
+  ].filter((text): text is string => Boolean(text));
   const canChoose = Boolean(onChoose);
   const choices: {
     choice: HoldChoice;
@@ -133,12 +179,11 @@ function DraftLine({
     Boolean(onUndoChoice) && (state === 'toppedUp' || state === 'leftShort');
   const extra =
     choices.length > 0 || canUndo ? (
-      <ActionGroup isRoomy caption={ITEM_SHEET_WORDS.lineHeading}>
+      <ActionGroup caption={ITEM_SHEET_WORDS.lineHeading}>
         {choices.map(({ choice, label, subtitle, icon }) => (
           <ActionRow
             key={choice}
             isGrouped
-            isRoomy
             icon={icon}
             label={label}
             subtitle={subtitle}
@@ -149,7 +194,6 @@ function DraftLine({
         {canUndo && (
           <ActionRow
             isGrouped
-            isRoomy
             icon={<Undo2 />}
             label={DRAFT_WORDS.undoChoice}
             subtitle={ITEM_SHEET_WORDS.undoChoiceSub}
@@ -178,19 +222,16 @@ function DraftLine({
           today={today}
           figureLabel={ITEM_SHEET_WORDS.fromThisDay}
           figure={amount}
-          facts={[
-            `${PRIORITY_LABELS[line.tier]}. ${reason}`,
-            pairingNote ?? shortText ?? billShare,
-            isDayOnly ? DRAFT_WORDS.dayOnly : tieNote,
-          ]}
-          note={
-            line.bill?.ranged ? (
-              <RangeNote
-                range={line.bill.ranged.range}
-                stance={line.bill.ranged.stance}
-                side='expense'
-                isOwnStance={line.bill.ranged.isOwnStance}
-              />
+          fact={`${PRIORITY_LABELS[line.tier]} · ${pairingShort ?? billShareShort ?? reason}`}
+          help={
+            helpLines.length > 0 ? (
+              <span className='block space-y-2'>
+                {helpLines.map((text) => (
+                  <span key={text} className='block'>
+                    {text}
+                  </span>
+                ))}
+              </span>
             ) : undefined
           }
           presetDayKey={dayKey}

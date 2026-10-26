@@ -72,6 +72,31 @@ export function formatDateUTC(timestamp: number) {
   return formatter.format(date);
 }
 
+const utcShortDayFormatters = {
+  currentYear: new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+  otherYear: new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+};
+
+/** "Nov 1" (with the year when it isn't this one): `formatDateUTC` with the short month, for a date-only value in a tight line. */
+export function formatDateShortUTC(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const formatter = isCurrentYear
+    ? utcShortDayFormatters.currentYear
+    : utcShortDayFormatters.otherYear;
+  const result = formatter.format(date);
+  return result;
+}
+
 /** "Sep 24" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */
 export function formatDateShort(timestamp: number) {
   const date = new Date(timestamp);

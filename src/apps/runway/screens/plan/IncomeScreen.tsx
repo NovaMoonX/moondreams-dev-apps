@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Banknote } from 'lucide-react';
+import { Banknote, ChevronRight } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -7,12 +7,16 @@ import EmptyCard from '@/components/EmptyCard';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import RangeNote from '@apps/runway/components/RangeNote';
-import { DRAFT_WORDS, SCHEDULE_LABELS } from '@apps/runway/constants';
+import {
+  DRAFT_WORDS,
+  ITEM_SHEET_R2_WORDS,
+  SCHEDULE_LABELS,
+} from '@apps/runway/constants';
+import { describeRange } from '@apps/runway/utils/rangeText';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import IncomeForm from '@apps/runway/forms/IncomeForm';
@@ -55,13 +59,14 @@ const describePattern = (schedule: Schedule) => {
 
 const describeTiming = ({ schedule }: PayLineSealed) =>
   schedule.kind === 'once' && schedule.anchor !== null
-    ? `Arrives ${formatDateUTC(schedule.anchor)}`
+    ? `Arrives ${formatDateShortUTC(schedule.anchor)}`
     : describePattern(schedule);
 
 const describeEnding = ({ ending }: PayLineSealed) => {
   if (ending.afterCount !== null)
     return `Ends after ${ending.afterCount} payments`;
-  if (ending.onDate !== null) return `Ends ${formatDateUTC(ending.onDate)}`;
+  if (ending.onDate !== null)
+    return `Ends ${formatDateShortUTC(ending.onDate)}`;
   return null;
 };
 
@@ -89,19 +94,37 @@ function SourceRow({ itemId, source, funds, payCount, today }: SourceRowProps) {
 
   return (
     <>
-      <ItemRow
-        name={source.name}
-        detail={detail}
-        ariaLabel={`${source.name}. ${detail}. Open`}
-        onOpen={() => setIsOpen(true)}
-      />
+      <Button
+        type='button'
+        variant='tertiary'
+        className='text-foreground! h-auto min-h-10 w-full items-center justify-start gap-2 px-0! py-1 text-left font-normal whitespace-normal'
+        aria-label={`${source.name}. ${detail}. Open`}
+        onClick={() => setIsOpen(true)}
+      >
+        <span className='min-w-0 flex-1'>
+          <span className='block text-lg font-semibold break-words'>
+            {source.name}
+          </span>
+          <span className='text-muted-foreground block text-sm break-words'>
+            {detail}
+          </span>
+        </span>
+        <ChevronRight
+          className='text-muted-foreground h-4 w-4 shrink-0'
+          aria-hidden='true'
+        />
+      </Button>
       {isOpen && (
         <ItemSheet
           itemId={itemId}
           kind='source'
           today={today}
           figureLabel='Income source'
-          facts={[pays, fundsLine]}
+          fact={funds.length > 0 ? `${pays} · ${fundsLine}` : pays}
+          quickChange={{
+            label: ITEM_SHEET_R2_WORDS.changeName,
+            step: 'sourceName',
+          }}
           onClose={() => setIsOpen(false)}
         />
       )}
@@ -146,19 +169,23 @@ function PayLineRow({
           today={today}
           figureLabel='Each pay'
           figure={amount}
-          facts={[
+          fact={[
             timing,
             describeEnding(payLine),
             funds.length > 0 ? describeFunds(funds) : null,
-          ]}
-          note={
-            <RangeNote
-              range={payLine.amount}
-              stance={stance}
-              side='income'
-              isOwnStance={Boolean(payLine.stanceOverride)}
-            />
-          }
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          help={describeRange(
+            payLine.amount,
+            stance,
+            'income',
+            Boolean(payLine.stanceOverride),
+          )}
+          quickChange={{
+            label: ITEM_SHEET_R2_WORDS.changeAmount,
+            step: 'amount',
+          }}
           onClose={() => setIsOpen(false)}
         />
       )}
@@ -198,12 +225,9 @@ function IncomeScreen() {
       );
     }
     return (
-      <div className='space-y-3'>
+      <div className='space-y-5'>
         {sources.map((source) => (
-          <ul
-            key={source.item.id}
-            className='border-border divide-border bg-card divide-y rounded-2xl border'
-          >
+          <section key={source.item.id} className='space-y-1'>
             <SourceRow
               itemId={source.item.id}
               source={source.version.payload}
@@ -212,22 +236,22 @@ function IncomeScreen() {
               today={today}
             />
             {source.payLines.length === 0 ? (
-              <li className='text-muted-foreground p-3 text-sm'>
-                No pay added yet.
-              </li>
+              <p className='text-muted-foreground text-sm'>No pay added yet.</p>
             ) : (
-              source.payLines.map(({ item, version }) => (
-                <PayLineRow
-                  key={item.id}
-                  itemId={item.id}
-                  payLine={version.payload}
-                  planStance={stance}
-                  funds={namesOf(version.payload.pairings)}
-                  today={today}
-                />
-              ))
+              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                {source.payLines.map(({ item, version }) => (
+                  <PayLineRow
+                    key={item.id}
+                    itemId={item.id}
+                    payLine={version.payload}
+                    planStance={stance}
+                    funds={namesOf(version.payload.pairings)}
+                    today={today}
+                  />
+                ))}
+              </ul>
             )}
-          </ul>
+          </section>
         ))}
       </div>
     );

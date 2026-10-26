@@ -889,3 +889,28 @@ export const FORM_FLOW_WORDS = {
   asOf: 'As of',
   moneyOnHand: 'Money on hand',
 } as const;
+
+// Lists and screens, round 2: one fact per sheet head, short action rows, the payday tick and the problems row.
+export const ITEM_SHEET_R2_WORDS = {
+  changeElse: 'Change something else',
+  pauseSub: 'Nothing new goes in',
+  resumeSub: 'Money goes in again from the next income day',
+  endSub: 'It stops after the day you pick',
+  archiveSub: 'Off your lists. Its history stays',
+  checkSub: 'Nothing is spent',
+  paidFromFreeText: (amount: string) => `${amount} comes out of Free to spend`,
+  changeAmount: 'Change amount',
+  eachTime: 'Each time',
+  changeTarget: 'Change target',
+  changeName: 'Change name',
+  heldDetail: (amount: string) => `${amount} held · choose`,
+  toppedUp: 'Topped up',
+  heldNote: (name: string, amount: string) =>
+    `${name}: ${amount} held · choose before confirming`,
+  setAsideHeading: 'Set aside from this pay',
+  holdsThrough: 'Your plan holds through',
+  everythingPaid: 'Mark all paid',
+  markedPaid: (name: string) => `Marked ${name} paid`,
+  unmarkedPaid: (name: string) => `${name} is not marked paid`,
+  undo: 'Undo',
+} as const;
