@@ -488,7 +488,7 @@ service cloud.firestore {
         return data.get('earlyPayments', {});
       }
 
-      // Everyone-expenses cover whoever is on the trip now; the other targets list their people.
+      // Everyone-expenses cover whoever is on the trip now (as the app splits them); the other targets list their people.
       function isEarlyPaymentPartOfSplit() {
         let targetType = resource.data.targetType;
         return targetType in ['EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE']
@@ -509,13 +509,15 @@ service cloud.firestore {
         let after = earlyPaymentsOf(request.resource.data);
         return after.diff(before).affectedKeys().hasOnly([request.auth.uid])
           && (!(request.auth.uid in after)
-            || (after[request.auth.uid].toUid != request.auth.uid
+            // Marking it returned stays open after the split changes or the person paid leaves.
+            || (request.auth.uid in before
+              && after[request.auth.uid].diff(before[request.auth.uid]).affectedKeys().hasOnly(['isReturned', 'returnedAt']))
+            || (resource.data.status == 'EXPECTED'
+              && after[request.auth.uid].toUid != request.auth.uid
               && after[request.auth.uid].toUid in getTrip(tripId).members
               && after[request.auth.uid].amount > 0
               && isEarlyPaymentPartOfSplit()
-              && ((resource.data.status == 'EXPECTED' && isEarlyPaymentAmountBounded(after[request.auth.uid]))
-                || (request.auth.uid in before
-                  && after[request.auth.uid].diff(before[request.auth.uid]).affectedKeys().hasOnly(['isReturned', 'returnedAt'])))));
+              && isEarlyPaymentAmountBounded(after[request.auth.uid])));
       }
 
       allow read: if isTripMemberOf(tripId);
@@ -529,7 +531,7 @@ service cloud.firestore {
       // A member marks their own share paid, and only their own.
       allow update: if isTripMemberOf(tripId)
         && (resource.data.get('paidMemberStatus', {}).keys().hasAll([request.auth.uid])
-          || resource.data.targetType == 'EVERYONE_INCLUDING_FUTURE')
+          || resource.data.targetType in ['EVERYONE_CURRENT', 'EVERYONE_INCLUDING_FUTURE'])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paidMemberStatus'])
         && changesOnlyOwnKey('paidMemberStatus');
       allow update: if isTripMemberOf(tripId)
@@ -753,10 +755,10 @@ service cloud.firestore {
           : '';
       }
 
-      // Someone on the trip or in the household the reminder is about (they may schedule or cancel it for the others).
+      // A trip's Admin or Editor, or anyone in the household, the reminder is about (who may schedule or cancel it for the others).
       function isRelatedGroupMember(data) {
         let id = data.get('relatedEntityPath', '').split('/')[3];
-        return (relatedGroupOf(data) == 'trip' && isTripMemberOf(id))
+        return (relatedGroupOf(data) == 'trip' && isTripEditorOf(id))
           || (relatedGroupOf(data) == 'household' && isHouseholdMember(id));
       }
 
@@ -765,7 +767,7 @@ service cloud.firestore {
         let data = request.resource.data;
         let id = data.get('relatedEntityPath', '').split('/')[3];
         return (data.targetUids.hasOnly([request.auth.uid]) && request.auth.uid in data.targetUids)
-          || (relatedGroupOf(data) == 'trip' && isTripMemberOf(id)
+          || (relatedGroupOf(data) == 'trip' && isTripEditorOf(id)
             && data.targetUids.hasOnly(getTrip(id).members.keys()))
           || (relatedGroupOf(data) == 'household' && isHouseholdMember(id)
             && data.targetUids.hasOnly(get(/databases/$(database)/documents/apps/nine-lives/households/$(id)).data.members));
