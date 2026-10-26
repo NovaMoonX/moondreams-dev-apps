@@ -10,7 +10,11 @@ import { formatCents } from '@/utils/moneyUtils';
 import BillPaidChip from '@apps/runway/components/BillPaidChip';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import { BILL_WORDS, CHECKLIST_WORDS } from '@apps/runway/constants';
+import {
+  BILL_WORDS,
+  CHECKLIST_WORDS,
+  TICK_HIT_CLASS,
+} from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { setLinesDone } from '@apps/runway/store/actions/moveActions';
 import {
@@ -77,6 +81,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
       {ready.length > 0 && (
         <div className='border-border bg-card flex min-h-12 items-center gap-3 rounded-2xl border px-3'>
           <Checkbox
+            className={TICK_HIT_CLASS}
             checked={doneCount === ready.length}
             indeterminate={doneCount > 0 && doneCount < ready.length}
             onCheckedChange={(next) => setDone(readyIds, Boolean(next))}
@@ -98,6 +103,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
             <li key={line.lineId} className='flex items-start gap-3 p-3'>
               <div className='flex h-10 shrink-0 items-center'>
                 <Checkbox
+                  className={TICK_HIT_CLASS}
                   checked={done.has(line.lineId)}
                   onCheckedChange={(next) =>
                     setDone([line.lineId], Boolean(next))

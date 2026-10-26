@@ -280,6 +280,9 @@ export const START_HOLDINGS = ['money', 'goal', 'bill', 'envelope'] as const;
 export const START_DAY_KEY = 'start';
 /** Envelope tiles Home draws before it points at the full list. */
 export const HOME_ENVELOPE_TILES = 6;
+/** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
+export const TICK_HIT_CLASS =
+  "relative before:absolute before:-inset-[11px] before:content-['']";
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 
