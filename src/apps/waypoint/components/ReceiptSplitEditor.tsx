@@ -9,9 +9,9 @@ import MoneyInput from '@/components/MoneyInput';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
 import SectionHeader from '@/components/SectionHeader';
-import { TIP_PERCENTS, type ReceiptSplit, type TipChoice } from '@/hooks/useReceiptSplit';
+import { type ReceiptSplit, type TipChoice } from '@apps/waypoint/hooks/useReceiptSplit';
 import { centsToInputValue, formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
-import type { ReceiptLine, TipSplit } from '@/utils/receiptSplitUtils';
+import type { ReceiptLine, TipSplit } from '@apps/waypoint/utils/receiptSplit';
 
 interface ReceiptSplitEditorProps {
   split: ReceiptSplit;
@@ -132,18 +132,18 @@ function LineRow({ line, holders, split }: LineRowProps) {
 }
 
 function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
-  const { state, result, people, itemsCents, taxCents, tipCents, receiptTipCents, printedTotalCents, patch, addLine } = split;
+  const { state, result, people, itemsCents, taxCents, tipCents, receiptTipCents, tipPercents, printedTotalCents, patch, addLine } = split;
   const [showFees, setShowFees] = useState(state.fees !== '');
   const [showDiscount, setShowDiscount] = useState(state.discount !== '');
   const nameOf = (uid: string) => people.find((person) => person.id === uid)?.name ?? 'Someone';
   const unclaimedCount = result.unclaimedLineIds.length;
   const tipBasisCents = Math.max(0, itemsCents - split.discountCents);
-  const hasPercentTip = (TIP_PERCENTS as readonly number[]).includes(Number(state.tipChoice));
+  const hasPercentTip = !['NONE', 'RECEIPT', 'CUSTOM'].includes(state.tipChoice);
 
   const tipOptions: { value: TipChoice; label: string }[] = [
     { value: 'NONE', label: 'No tip' },
     ...(receiptTipCents > 0 ? [{ value: 'RECEIPT' as const, label: `On the receipt · ${formatCents(receiptTipCents)}` }] : []),
-    ...TIP_PERCENTS.map((percent) => ({ value: String(percent) as TipChoice, label: `${percent}%` })),
+    ...tipPercents.map((percent) => ({ value: `${percent}` as const, label: `${percent}%` })),
     { value: 'CUSTOM', label: 'Other amount' },
   ];
   const tipSplitOptions: { value: TipSplit; label: string; detail: string }[] = [

@@ -57,4 +57,4 @@ jobs:
       - run: npm run check:option-match
       - run: npm run check:waypoint-pushes
       - run: npm run check:a-list
-      - run: npm run check:receipt-split
+      - run: npm run check:receipts

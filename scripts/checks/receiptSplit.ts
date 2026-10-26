@@ -6,7 +6,7 @@ import {
   getTipFromPercent,
   splitReceipt,
   type ReceiptLine,
-} from '../../src/utils/receiptSplitUtils.ts';
+} from '../../src/apps/waypoint/utils/receiptSplit.ts';
 
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
 

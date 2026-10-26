@@ -5,12 +5,12 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
-import ReceiptPhotoStep from '@/components/receipt/ReceiptPhotoStep';
-import ReceiptSplitEditor from '@/components/receipt/ReceiptSplitEditor';
+import ReceiptPhotoStep from '@apps/waypoint/components/ReceiptPhotoStep';
+import ReceiptSplitEditor from '@apps/waypoint/components/ReceiptSplitEditor';
 import Subview from '@/components/Subview';
-import { useReceiptSplit } from '@/hooks/useReceiptSplit';
+import { useReceiptSplit } from '@apps/waypoint/hooks/useReceiptSplit';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import type { ReceiptReading } from '@/lib/receipts/receiptTypes';
+import type { ReceiptKind, ReceiptReading } from '@/lib/receipts/receiptTypes';
 import { useAppDispatch } from '@/store';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getDayCount } from '@/utils/dateRangeUtils';
@@ -40,6 +40,18 @@ interface SplitStepProps extends ReceiptSplitScreenProps {
   reading: ReceiptReading | null;
   isDirtyRef: { current: boolean };
 }
+
+const RECEIPT_KIND_CATEGORIES: Record<ReceiptKind, ExpenseCategory> = {
+  RESTAURANT: 'FOOD',
+  GROCERY: 'FOOD',
+  TRANSPORT: 'TRANSPORT',
+  LODGING: 'LODGING',
+  ENTERTAINMENT: 'ACTIVITIES',
+  SHOPPING: 'SHOPPING',
+  OTHER: 'OTHER',
+};
+
+const getReceiptCategory = (kind: ReceiptKind | null): ExpenseCategory => (kind ? RECEIPT_KIND_CATEGORIES[kind] : 'FOOD');
 
 /** A receipt's date as a trip day, when it falls on the trip or just around it. */
 function getReceiptDay(trip: TripSpace, date: string | null) {
@@ -113,9 +125,9 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
         payerUid,
         status: 'PAID',
         dayIndex: prefill?.dayIndex ?? getReceiptDay(trip, reading?.date ?? null),
-        category: prefill?.category ?? 'FOOD',
+        category: prefill?.category ?? getReceiptCategory(reading?.kind ?? null),
         customCategoryLabel: prefill?.customCategoryLabel ?? null,
-        note: null,
+        note: reading?.address ?? null,
         groupLabel: null,
         isPerPerson: false,
         linkedTo: prefill?.link ?? null,

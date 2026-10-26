@@ -10,16 +10,22 @@ import {
   type ReceiptLine,
   type ReceiptSplitResult,
   type TipSplit,
-} from '@/utils/receiptSplitUtils';
+} from '@apps/waypoint/utils/receiptSplit';
 
 export interface ReceiptPerson {
   id: string;
   name: string;
 }
 
-export type TipChoice = 'NONE' | 'RECEIPT' | '15' | '18' | '20' | 'CUSTOM';
+export type TipChoice = 'NONE' | 'RECEIPT' | 'CUSTOM' | `${number}`;
 
-export const TIP_PERCENTS = [15, 18, 20] as const;
+const DEFAULT_TIP_PERCENTS = [15, 18, 20];
+
+/** The percents the bill itself suggests, else the usual three. */
+const getTipPercents = (reading: ReceiptReading | null) => {
+  const suggested = Array.from(new Set((reading?.suggestedTips ?? []).map((tip) => tip.percent))).sort((a, b) => a - b);
+  return suggested.length > 0 ? suggested.slice(0, 4) : DEFAULT_TIP_PERCENTS;
+};
 
 interface ReceiptSplitState {
   lines: ReceiptLine[];
@@ -37,7 +43,11 @@ const toMoneyText = (cents: number | null) => (cents ? centsToInputValue(cents) 
 const toCents = (text: string) => parseMoneyToCents(text) ?? 0;
 
 function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
-  const lines = (reading?.lines ?? []).map((line) => ({ id: generateUuid(), ...line }));
+  const lines = (reading?.lines ?? []).map((line) => ({
+    id: generateUuid(),
+    name: line.quantity > 1 ? `${line.name} ×${line.quantity}` : line.name,
+    priceCents: line.priceCents,
+  }));
   return {
     lines,
     claims: {},
@@ -56,6 +66,7 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
   const [state, setState] = useState(() => getInitialState(reading));
   const peopleIds = useMemo(() => people.map((person) => person.id), [people]);
   const receiptTipCents = reading?.tipCents ?? 0;
+  const tipPercents = useMemo(() => getTipPercents(reading), [reading]);
 
   const taxCents = toCents(state.tax);
   const feesCents = toCents(state.fees);
@@ -136,6 +147,7 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
     discountCents,
     tipCents,
     receiptTipCents,
+    tipPercents,
     printedTotalCents,
     hasUnnamedLine,
     hasUnpricedLine,
