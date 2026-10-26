@@ -57,6 +57,12 @@ const getSizeClass = (length: number, isRange: boolean) => {
 };
 
 /** "12345.67" as money reads, "12,345.67"; anything that isn't plain digits is left as typed. */
+// Focus given from code selects the figure, so typing replaces it as a tap or Tab would.
+const focusWhole = (field: HTMLInputElement | null) => {
+  field?.focus();
+  field?.select();
+};
+
 const groupDigits = (value: string) => {
   const match = /^(\d+)(\.\d*)?$/.exec(value);
   if (!match) return value;
@@ -213,7 +219,7 @@ function AmountHero({
   const [isFocusingOnOpen] = useState(focusOnOpen);
 
   useEffect(() => {
-    if (isFocusingOnOpen) inputRef.current?.focus();
+    if (isFocusingOnOpen) focusWhole(inputRef.current);
   }, [isFocusingOnOpen]);
 
   const [focusRequest, setFocusRequest] = useState<{
@@ -221,13 +227,13 @@ function AmountHero({
   } | null>(null);
   useEffect(() => {
     if (focusRequest === null) return;
-    (focusRequest.end === 'high' ? highRef : inputRef).current?.focus();
+    focusWhole((focusRequest.end === 'high' ? highRef : inputRef).current);
   }, [focusRequest]);
 
   useEffect(() => {
     if (!shouldFocus) return;
     const timer = window.setTimeout(
-      () => inputRef.current?.focus(),
+      () => focusWhole(inputRef.current),
       PHONE_FOCUS_DELAY_MS,
     );
     return () => window.clearTimeout(timer);

@@ -398,20 +398,13 @@ function IncomeForm({
         formData.frequency === 'twiceMonthly' && formData.secondDay !== ''
           ? FORM_FLOW_WORDS.otherPayday
           : null,
-      render: ({ moveOn }) => (
+      render: () => (
         <div className='space-y-4'>
           <PillGroup
             label='How often'
             options={frequencyOptions}
             value={formData.frequency}
-            onChange={(frequency) => {
-              set({ frequency });
-              if (
-                frequency !== 'twiceMonthly' &&
-                buildSchedule({ ...formData, frequency }) !== null
-              )
-                moveOn();
-            }}
+            onChange={(frequency) => set({ frequency })}
           />
           {formData.frequency !== null && (
             <div className='space-y-1.5'>

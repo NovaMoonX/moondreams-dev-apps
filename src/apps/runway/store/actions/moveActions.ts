@@ -153,6 +153,29 @@ export type WrittenPaidMark = {
  * and skips one already paid, and ticks the checklist lines in the first. Returns the marks it wrote,
  * so an Undo can take back exactly those.
  */
+/** A later chunk of a bulk mark failed after earlier chunks were written; `written` holds what did land. */
+export class PartlyMarkedError extends Error {
+  constructor(
+    readonly written: WrittenPaidMark[],
+    readonly cause: unknown,
+  ) {
+    super('Some bills were marked paid before a later write failed.');
+  }
+}
+
+const runChunk = async <T>(
+  before: WrittenPaidMark[],
+  write: () => Promise<T>,
+): Promise<T> => {
+  try {
+    const result = await write();
+    return result;
+  } catch (chunkError) {
+    if (before.length === 0) throw chunkError;
+    throw new PartlyMarkedError(before, chunkError);
+  }
+};
+
 export async function markBillsPaid(
   uid: string,
   encryption: RunwayEncryption,
@@ -175,62 +198,66 @@ export async function markBillsPaid(
   const written = await chunks.reduce<Promise<WrittenPaidMark[]>>(
     async (previous, chunk, chunkIndex) => {
       const before = await previous;
-      const wrote = await runTransaction(db, async (transaction) => {
-        const plan = await transaction.get(planDoc);
-        const findOpenMark = async (
-          input: MarkBillPaidInput,
-          marks: number,
-        ): Promise<string | null> => {
-          if (marks >= input.marks + MAX_MARK_PROBES) return null;
-          const id = getPaidMoveId(input.billId, input.dueOn, marks);
-          const existing = await transaction.get(moveRef(uid, id));
-          if (!existing.exists()) return id;
-          const undone = await transaction.get(moveRef(uid, getUndoMoveId(id)));
-          return undone.exists() ? findOpenMark(input, marks + 1) : null;
-        };
-        const ids = await chunk.reduce<Promise<(string | null)[]>>(
-          async (found, entry) => [
-            ...(await found),
-            await findOpenMark(entry.input, entry.input.marks),
-          ],
-          Promise.resolve([]),
-        );
-        const open = chunk.flatMap((entry, index) => {
-          const id = ids[index];
-          return id === null ? [] : [{ ...entry, id }];
-        });
-        if (open.length > 0) {
-          markLedgerWrite(
-            transaction,
-            uid,
-            plan.data(),
-            open.map((entry) => entry.input.dueOn),
+      const wrote = await runChunk(before, () =>
+        runTransaction(db, async (transaction) => {
+          const plan = await transaction.get(planDoc);
+          const findOpenMark = async (
+            input: MarkBillPaidInput,
+            marks: number,
+          ): Promise<string | null> => {
+            if (marks >= input.marks + MAX_MARK_PROBES) return null;
+            const id = getPaidMoveId(input.billId, input.dueOn, marks);
+            const existing = await transaction.get(moveRef(uid, id));
+            if (!existing.exists()) return id;
+            const undone = await transaction.get(
+              moveRef(uid, getUndoMoveId(id)),
+            );
+            return undone.exists() ? findOpenMark(input, marks + 1) : null;
+          };
+          const ids = await chunk.reduce<Promise<(string | null)[]>>(
+            async (found, entry) => [
+              ...(await found),
+              await findOpenMark(entry.input, entry.input.marks),
+            ],
+            Promise.resolve([]),
           );
-        }
-        open.forEach((entry) =>
-          transaction.set(moveRef(uid, entry.id), {
-            id: entry.id,
-            kind: 'billPaid',
-            date: entry.input.dueOn,
-            refId: entry.input.billId,
-            reversesMoveId: null,
-            createdAt: Date.now(),
-            sealed: entry.sealed,
-          } satisfies MoveDoc),
-        );
-        if (chunkIndex === 0 && lines !== null && lines.lineIds.length > 0) {
-          transaction.update(
-            doc(db, 'apps', 'runway', 'plans', uid, 'days', lines.dayId),
-            { doneLineIds: arrayUnion(...lines.lineIds) },
+          const open = chunk.flatMap((entry, index) => {
+            const id = ids[index];
+            return id === null ? [] : [{ ...entry, id }];
+          });
+          if (open.length > 0) {
+            markLedgerWrite(
+              transaction,
+              uid,
+              plan.data(),
+              open.map((entry) => entry.input.dueOn),
+            );
+          }
+          open.forEach((entry) =>
+            transaction.set(moveRef(uid, entry.id), {
+              id: entry.id,
+              kind: 'billPaid',
+              date: entry.input.dueOn,
+              refId: entry.input.billId,
+              reversesMoveId: null,
+              createdAt: Date.now(),
+              sealed: entry.sealed,
+            } satisfies MoveDoc),
           );
-        }
-        return open.map((entry): WrittenPaidMark => ({
-          moveId: entry.id,
-          billId: entry.input.billId,
-          dueOn: entry.input.dueOn,
-          ...entry.payload,
-        }));
-      });
+          if (chunkIndex === 0 && lines !== null && lines.lineIds.length > 0) {
+            transaction.update(
+              doc(db, 'apps', 'runway', 'plans', uid, 'days', lines.dayId),
+              { doneLineIds: arrayUnion(...lines.lineIds) },
+            );
+          }
+          return open.map((entry): WrittenPaidMark => ({
+            moveId: entry.id,
+            billId: entry.input.billId,
+            dueOn: entry.input.dueOn,
+            ...entry.payload,
+          }));
+        }),
+      );
       return [...before, ...wrote];
     },
     Promise.resolve([]),

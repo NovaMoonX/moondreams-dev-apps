@@ -76,6 +76,9 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
             TYPED_FIELD,
           ) ?? headingRef.current;
         field?.focus({ preventScroll: true });
+        // A filled answer reopened to change is replaced by typing, as a tap or Tab would.
+        if (field instanceof HTMLInputElement && field.type === 'text')
+          field.select();
       },
       isFirst ? FIRST_FOCUS_DELAY_MS : STEP_FOCUS_DELAY_MS,
     );

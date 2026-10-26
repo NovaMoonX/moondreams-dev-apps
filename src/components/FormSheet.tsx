@@ -9,6 +9,14 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const SHORT_SCREEN_MAX_HEIGHT = 599;
 
+// A title that is an element loses the dialog's label (it points at a heading that is never drawn),
+// so the heading names the dialog itself.
+const labelDialog = (heading: HTMLHeadingElement | null) => {
+  heading
+    ?.closest('[role="dialog"]')
+    ?.setAttribute('aria-labelledby', heading.id);
+};
+
 interface FormSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -52,7 +60,11 @@ function FormSheet({
         onClose={onDialogClose}
         title={
           isShort ? (
-            <h2 id={`${dialogId}-title`} className='text-xl font-semibold'>
+            <h2
+              ref={labelDialog}
+              id={`${dialogId}-title`}
+              className='text-xl font-semibold'
+            >
               {title}
             </h2>
           ) : (

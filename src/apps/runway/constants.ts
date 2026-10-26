@@ -942,4 +942,8 @@ export const CHECKLIST_R3_WORDS = {
   heldNote: (name: string, amount: string) =>
     `${name}: ${amount} held · choose before confirming`,
   notStarted: 'Not started',
+  partlyMarked: (marked: number, of: number) =>
+    `Marked ${marked} of ${of} bills paid`,
+  restNeedsConnection: 'The rest need a connection.',
+  restNotSaved: 'The rest did not save. Try them again.',
 } as const;

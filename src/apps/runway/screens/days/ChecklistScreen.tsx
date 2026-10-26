@@ -25,6 +25,7 @@ import { countMarks } from '@apps/runway/engine/progress';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   markBillsPaid,
+  PartlyMarkedError,
   setLinesDone,
   undoBillsPaid,
 } from '@apps/runway/store/actions/moveActions';
@@ -240,6 +241,21 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
               },
       });
     } catch (markError) {
+      if (markError instanceof PartlyMarkedError) {
+        const marked = markError.written;
+        addToast({
+          title: CHECKLIST_R3_WORDS.partlyMarked(marked.length, unpaid.length),
+          description: isOffline(markError.cause)
+            ? CHECKLIST_R3_WORDS.restNeedsConnection
+            : CHECKLIST_R3_WORDS.restNotSaved,
+          type: 'error',
+          action: {
+            label: ITEM_SHEET_R2_WORDS.undo,
+            onClick: () => void undoAll(marked, dayLines),
+          },
+        });
+        return;
+      }
       addToast({
         title: CHECKLIST_R3_WORDS.markAllFailed,
         description: isOffline(markError)
