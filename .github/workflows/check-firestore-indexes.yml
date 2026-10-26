@@ -5,6 +5,8 @@ on:
       - 'src/**'
       - 'functions/src/**'
       - 'firestore.indexes.json'
+      - 'firestore.rules'
+      - 'scripts/checkRulesSize.ts'
       - 'scripts/checkFirestoreIndexes.ts'
       - 'scripts/checks/**'
       - 'scripts/seeds/**'
@@ -19,6 +21,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:indexes
+      - run: npm run check:rules-size
   check_pinch:
     runs-on: ubuntu-latest
     steps:

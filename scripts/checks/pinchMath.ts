@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 import {
   getEntryGrams,
@@ -50,7 +49,6 @@ import {
   toWebLink,
 } from '../../src/utils/urlUtils.ts';
 import {
-  CONTAINER_EVENT_KINDS,
   MAX_CONTAINERS_PER_PUT_AWAY,
   MAX_CONTAINER_HISTORY,
   MAX_CONTAINER_NOTE_LENGTH,
@@ -3979,27 +3977,6 @@ assert.deepEqual(
     '3 planned meals and 1 box in your fridge or freezer',
   ],
   'a recipe whose only use is food in the fridge or freezer is archived, not erased',
-);
-
-const rulesText = readFileSync('firestore.rules', 'utf8');
-assert.ok(
-  rulesText.includes(
-    `isShortText(data.title, ${MAX_CONTAINER_TITLE_LENGTH})`,
-  ) &&
-    rulesText.includes(
-      `e.kind.matches('${CONTAINER_EVENT_KINDS.join('|')}')`,
-    ) &&
-    rulesText.includes(`n <= ${MAX_CONTAINER_HISTORY}`) &&
-    rulesText.includes(`data.servings <= ${MAX_CONTAINER_SERVINGS}`) &&
-    rulesText.includes(`data.eatBy >= ${MIN_EAT_BY_DATE}`) &&
-    rulesText.includes(`data.eatBy <= ${MAX_EAT_BY_DATE}`) &&
-    rulesText.includes(`e.note.size() <= ${MAX_CONTAINER_NOTE_LENGTH}`) &&
-    rulesText.includes(`e.servings < ${MAX_CONTAINER_SERVINGS + 1}`) &&
-    Array.from({ length: MAX_CONTAINER_HISTORY }).every((_, index) =>
-      rulesText.includes(`isContainerEvent(history[${index}])`),
-    ) &&
-    !rulesText.includes(`isContainerEvent(history[${MAX_CONTAINER_HISTORY}])`),
-  "the rules' title length, event kinds, history cap, servings and eat-by bounds and note length match the constants, and every slot up to the cap is checked",
 );
 
 const stocked = [
