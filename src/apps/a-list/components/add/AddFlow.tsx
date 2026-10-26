@@ -63,7 +63,7 @@ import {
   selectTheatres,
   selectPreviewsWindowViewing,
   selectSeenCountByMovieKey,
-  selectWatchlistItems,
+  selectActiveWatchlistItems,
 } from '@apps/a-list/store/selectors';
 import type {
   AListOverlay,
@@ -151,7 +151,7 @@ export function AddFlow({
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const membership = useAppSelector(selectMembership);
   const theatres = useAppSelector(selectTheatres);
-  const watchlist = useAppSelector(selectWatchlistItems);
+  const watchlist = useAppSelector(selectActiveWatchlistItems);
   const previewsViewing = useAppSelector((state) =>
     selectPreviewsWindowViewing(state, now),
   );

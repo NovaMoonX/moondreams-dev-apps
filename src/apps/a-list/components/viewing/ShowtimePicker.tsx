@@ -259,7 +259,7 @@ function ShowtimePicker({
       )}
       {open.length > 0 && (
         <p className='text-muted-foreground text-xs'>
-          {TICKET_PRICE_KIND_LABELS[priceKind]} prices are AMC's list price before tax and fees.
+          Showing AMC&apos;s {TICKET_PRICE_KIND_LABELS[priceKind]} price, before tax and fees.
         </p>
       )}
     </div>

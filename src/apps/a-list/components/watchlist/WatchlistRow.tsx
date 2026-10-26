@@ -51,9 +51,9 @@ function WatchlistRow({ row, todayDay, daysUntil }: WatchlistRowProps) {
       </span>
       <div className='min-w-0 flex-1 space-y-1 py-0.5'>
         <p className='line-clamp-2 font-medium'>{movie.title}</p>
-        <p className='text-muted-foreground text-xs'>
+        <p className='text-muted-foreground line-clamp-2 text-xs break-words'>
           {row.isArchived
-            ? `Archived · ${item.archiveReason ?? ''}`
+            ? ['Archived', item.archiveReason].filter(Boolean).join(' · ')
             : getReleaseText()}
         </p>
         {(item.preferredFormat !== null || lastWatchedAt !== null) && (

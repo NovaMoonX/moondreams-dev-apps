@@ -22,7 +22,7 @@ import {
 } from '@apps/a-list/queries/movieQueries';
 import {
   selectSeenCountByMovieKey,
-  selectWatchlistItems,
+  selectActiveWatchlistItems,
 } from '@apps/a-list/store/selectors';
 import type {
   MovieSearchResult,
@@ -71,7 +71,7 @@ function MoviePicker({
   showPopular,
   isDisabled = false,
 }: MoviePickerProps) {
-  const watchlist = useAppSelector(selectWatchlistItems);
+  const watchlist = useAppSelector(selectActiveWatchlistItems);
   const seenCounts = useAppSelector(selectSeenCountByMovieKey);
   const debouncedQuery = useDebouncedValue(
     query.trim(),

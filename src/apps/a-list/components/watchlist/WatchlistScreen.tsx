@@ -46,11 +46,12 @@ function WatchlistScreen() {
   const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
 
   const toggleFilter = (filter: WatchlistFilter) =>
-    setFilters((current) =>
-      current.includes(filter)
-        ? current.filter((candidate) => candidate !== filter)
-        : [...current, filter],
-    );
+    setFilters((current) => {
+      if (current.includes(filter))
+        return current.filter((candidate) => candidate !== filter);
+      if (filter === 'archived') return [filter];
+      return [...current.filter((candidate) => candidate !== 'archived'), filter];
+    });
 
   const canReset =
     filters.length > 0 ||
@@ -192,11 +193,17 @@ function WatchlistScreen() {
 
   const getEmptyState = () => {
     const typed = query.trim();
-    if (filters.includes('archived'))
+    if (filters.includes('archived') && typed === '')
       return {
         emoji: '🗄️',
         title: 'Nothing archived',
         body: 'Movies you set aside, with the reason, show up here.',
+      };
+    if (rows.length === 0 && archivedRows.length > 0)
+      return {
+        emoji: '🗄️',
+        title: 'Your watchlist is clear',
+        body: 'Everything is archived. Find it under the Archived pill, or add something new.',
       };
     if (rows.length === 0)
       return {

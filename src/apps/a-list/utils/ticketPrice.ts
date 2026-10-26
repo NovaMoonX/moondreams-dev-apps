@@ -22,5 +22,6 @@ export function applyTicketPriceKind(
     standardPriceCents:
       option.standardPrices?.[kind] ??
       (option.standardPrices ? null : option.standardPriceCents),
+    taxCents: option.taxes?.[kind] ?? null,
   };
 }

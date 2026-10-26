@@ -12,7 +12,7 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
     format: option.format,
     priceCents: option.priceCents,
     standardPriceCents: option.standardPriceCents,
-    taxCents: option.taxCents,
+    taxCents: option.taxCents ?? null,
     purchaseUrl: option.purchaseUrl,
     startedAt: null,
   };

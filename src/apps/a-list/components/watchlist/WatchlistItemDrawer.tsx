@@ -7,7 +7,6 @@ import {
   Archive,
   ArchiveRestore,
   CalendarPlus,
-  ChevronLeft,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -269,6 +268,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
           </div>
           {error && <p className='text-destructive text-sm'>{error}</p>}
           <ModalFooterActions
+            note={finalReason === '' ? 'Pick a reason to archive.' : undefined}
             rightActions={
               <>
                 <Button
@@ -299,15 +299,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
     if (view === 'edit') {
       return (
         <div className='space-y-4'>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='gap-1 px-0'
-            onClick={() => showView('details')}
-          >
-            <ChevronLeft className='h-4 w-4' /> Back to movie
-          </Button>
+          <BackLink label='Back to movie' onBack={() => showView('details')} />
           <div className='flex items-center gap-3'>
             <span className='h-24 w-16 shrink-0 overflow-hidden rounded-xl shadow-md'>
               <PosterCover
@@ -360,13 +352,8 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
           item.movie.contentRating,
         ].filter((part): part is string => part !== null),
       },
-      ...(row.isArchived
-        ? [
-            {
-              emoji: '🗄️',
-              parts: [`Archived: ${item.archiveReason ?? ''}`],
-            },
-          ]
+      ...(row.isArchived && item.archiveReason
+        ? [{ emoji: '🗄️', parts: [`Archived: ${item.archiveReason}`] }]
         : []),
       ...(row.nextPlannedAt === null
         ? []
@@ -415,7 +402,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
                   <span className='w-5 shrink-0 text-center' aria-hidden='true'>
                     {line.emoji}
                   </span>
-                  <span className='min-w-0 flex-1'>
+                  <span className='min-w-0 flex-1 break-words'>
                     {line.parts.map((part, index) => (
                       <span key={part} className={join(index > 0 && 'whitespace-nowrap')}>
                         {index > 0 && '· '}

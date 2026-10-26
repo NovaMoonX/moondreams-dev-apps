@@ -341,10 +341,12 @@ function toFormat(showtime: AmcShowtime): AmcFormat {
 const NO_PRICES: TicketPrices = { ADULT: null, SENIOR: null, CHILD: null };
 
 function toTicketKind(entry: { type?: string; agePolicy?: string; name?: string }): TicketPriceKind | null {
-  const text = [entry.type, entry.agePolicy, entry.name].join(' ').toLowerCase();
-  if (/senior/.test(text)) return 'SENIOR';
-  if (/child|kid|youth/.test(text)) return 'CHILD';
-  return /adult/.test(text) ? 'ADULT' : null;
+  const read = (text: string) => {
+    if (/\bsenior/.test(text)) return 'SENIOR';
+    if (/\b(child|kid|youth)/.test(text)) return 'CHILD';
+    return /\badult/.test(text) ? 'ADULT' : null;
+  };
+  return read((entry.type ?? '').toLowerCase()) ?? read([entry.agePolicy, entry.name].join(' ').toLowerCase());
 }
 
 // An exact "Adult" entry wins over a variant of it; the first entry of each kind otherwise.
@@ -389,7 +391,7 @@ function fixtureDay(date: string): DayShowtime[] {
     format: format as AmcFormat,
     priceCents: priceCents as number,
     standardPriceCents: null,
-    prices: { ADULT: priceCents as number, SENIOR: (priceCents as number) - 300, CHILD: (priceCents as number) - 400 },
+    prices: { ADULT: priceCents as number, SENIOR: Math.max(0, (priceCents as number) - 300), CHILD: Math.max(0, (priceCents as number) - 400) },
     standardPrices: NO_PRICES,
     taxes: { ADULT: Math.round((priceCents as number) * 0.08), SENIOR: Math.round((priceCents as number) * 0.08), CHILD: Math.round((priceCents as number) * 0.08) },
     purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
