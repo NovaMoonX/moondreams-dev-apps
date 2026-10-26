@@ -31,7 +31,7 @@ Runway is one app with three levels. Nothing from a level shows until you use it
 
 | Level | What you do | What it needs | What you get |
 |---|---|---|---|
-| **Plan** | Income, bills, envelopes, goals, priorities, lookahead, what-ifs, changes and history | Nothing | A draft for every income day, what each envelope is assigned, Free to spend, how far ahead the plan holds |
+| **Plan** | Income, bills, envelopes, goals, lookahead, changes and history (priorities view and what-ifs come later) | Nothing | A draft for every income day, what each envelope is assigned, Free to spend, how far ahead the plan holds |
 | **Track** | Add purchases by hand, import a CSV, attach notes, links and receipts, group purchases, check a balance | What you type or import | Envelopes that go down as you spend ("left"), check an amount, card reserves, a record of what each purchase was for |
 | **Link** | Link accounts | A link to your accounts | Purchases that arrive on their own, "safe to spend" backed by real cash |
 
@@ -136,7 +136,7 @@ This applies to pay lines, bills, envelope and goal funding, and deductions. An 
 
 Money going out comes in three shapes, by how well you know the date:
 
-- **On a date.** One time (a deposit, a flight), repeating (rent, a subscription: weekly, every N weeks, monthly, yearly), or repeating until it ends (a loan with six payments left, a bill that runs six months). The amount is fixed, or a range you narrow when the real amount is known (an electric bill).
+- **On a date.** One time (a deposit, a flight), repeating (rent, a subscription: weekly, every other week or monthly; every N weeks and yearly come later), or repeating until it ends (a loan with six payments left, a bill that runs six months). The amount is fixed, or a range you narrow when the real amount is known (an electric bill).
 - **Within a window.** You know roughly when: car registration in March, a dentist visit this fall. Runway spreads the funding across the income days before the window closes, and you can reshape it. Setting the date or marking it paid completes it.
 - **No date.** Car repairs, vet visits, gifts. Give it an envelope. The envelope keeps its balance until the money is needed.
 
@@ -291,9 +291,11 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 ## The Build Plan
 
+**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "+ Expected" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; groups, hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Spend and Days list the months since the newest monthly closing, so older purchases and income days count in every figure but cannot be opened until a history window is built.
+
 ### Core MVP
 
-- [ ] Add income sources with one or more pay lines, each with a schedule, an exact or range amount, and an ending by date or number of times, including one-time income
+- [x] Add income sources with one or more pay lines, each with a schedule, an exact or range amount, and an ending by date or number of times, including one-time income
 - [x] Income entered as the amount that lands in the account (take-home), with room to add a gross breakdown later
 - [x] Amounts that are exact, a percentage of the income day's money, or the rest (envelopes and goals; bills stay exact or a range)
 - [x] Point a source, a pay line or one income day at the envelopes, bills and goals it funds
@@ -363,7 +365,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 ## Under the Hood
 
-- **Stack:** React with Redux Toolkit for state, Firestore for data, Storage for receipt images, Cloud Functions for anything that talks to a bank-data provider.
+- **Stack:** React with Redux Toolkit for state, Firestore for data, Storage for receipt images (Next Steps), Cloud Functions for the key, for deleting a plan and, later, for anything that talks to a bank-data provider.
 - **Data:** Each person's plan is private under their own path in the app's data. Money is stored as whole cents. Income days and bill due dates are date-only values.
 - **Draft:** A draft is computed from the plan, never edited in place. The same plan and overrides always produce the same draft, in a fixed order of operations written down in the technical design (pairings first, then priority order, with percentages resolved at their turn). At confirmation the draft as proposed and the confirmed split are both stored.
 - **History:** Plan items (income sources, pay lines, bills, envelope rules, goals, priorities) are stored as dated versions, each with the date it takes effect, so the plan on any past date can be rebuilt. A confirmed income day is stored as the assignment that was confirmed, and a correction is a new record beside it. Nothing in history is overwritten.
