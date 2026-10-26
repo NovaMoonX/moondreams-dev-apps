@@ -2386,7 +2386,7 @@ Someone else can see a plan read-only. This changes the key model (a plan key pe
 **Prerequisites:** Core MVP complete
 **Target PR Size:** Its own app
 **Files:**
-- a new app, planned with `plan-mini-app`
+- a new app, planned with `plan-mdd-app`
 
 **Context:** Read the README's Beyond list.
 
